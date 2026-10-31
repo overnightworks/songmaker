@@ -6,16 +6,13 @@ import importlib
 
 from alembic import command
 from sqlalchemy import inspect, text
-from support.migration_chain import is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
 from support.reference_link_migration import execute, seed_users
 
 MIGRATION_MODULE = "songmaker_cli.db.migrations.versions.e3a91c5d7f20_jobs_remember_their_version"
 PREVIOUS_REVISION = "c4d7e1a9b3f6"
 COLUMN = "version_id"
-
-
-def _migration():
-    return importlib.import_module(MIGRATION_MODULE)
+MIGRATION = importlib.import_module(MIGRATION_MODULE)
 
 
 def _seed_job_at_the_previous_revision(engine) -> None:
@@ -38,7 +35,8 @@ def _seed_job_at_the_previous_revision(engine) -> None:
     )
     # The SQLite chain builds a narrower jobs table than PostgreSQL's, so the row names
     # only the columns both have plus the timestamps where they exist.
-    timestamps = [name for name in ("heartbeat_at", "started_at") if name in _job_columns(engine)]
+    present = column_names(engine, "jobs")
+    timestamps = [name for name in ("heartbeat_at", "started_at") if name in present]
     execute(
         engine,
         "INSERT INTO jobs (id, type, status, progress"
@@ -49,10 +47,6 @@ def _seed_job_at_the_previous_revision(engine) -> None:
     )
 
 
-def _job_columns(engine) -> set[str]:
-    return {column["name"] for column in inspect(engine).get_columns("jobs")}
-
-
 def _job_count(engine) -> int:
     with engine.connect() as connection:
         return connection.execute(text("SELECT count(*) FROM jobs")).scalar_one()
@@ -60,13 +54,13 @@ def _job_count(engine) -> int:
 
 def _upgraded_with_a_job(database):
     return seeded_then_upgraded(
-        database, PREVIOUS_REVISION, _migration().revision, _seed_job_at_the_previous_revision
+        database, PREVIOUS_REVISION, MIGRATION.revision, _seed_job_at_the_previous_revision
     )
 
 
 def test_the_migration_follows_the_previous_revision_on_the_single_chain():
-    assert _migration().down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(_migration().revision)
+    assert MIGRATION.down_revision == PREVIOUS_REVISION
+    assert is_on_the_single_chain(MIGRATION.revision)
 
 
 def test_upgrade_adds_an_indexed_nullable_key_that_the_database_sets_null(
@@ -102,10 +96,10 @@ def test_downgrade_drops_the_key_and_keeps_the_job(reference_link_database):
     config, _ = reference_link_database
     engine = _upgraded_with_a_job(reference_link_database)
     command.downgrade(config, PREVIOUS_REVISION)
-    assert COLUMN not in _job_columns(engine)
+    assert COLUMN not in column_names(engine, "jobs")
     assert not any(
         index["column_names"] == [COLUMN] for index in inspect(engine).get_indexes("jobs")
     )
     assert _job_count(engine) == 1
-    command.upgrade(config, _migration().revision)
-    assert COLUMN in _job_columns(engine)
+    command.upgrade(config, MIGRATION.revision)
+    assert COLUMN in column_names(engine, "jobs")

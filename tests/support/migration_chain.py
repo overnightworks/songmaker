@@ -7,6 +7,7 @@ from collections.abc import Callable
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
+from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 from support.repository_root import REPOSITORY_ROOT
 
@@ -32,3 +33,7 @@ def seeded_then_upgraded(
     seed(engine)
     command.upgrade(config, revision)
     return engine
+
+
+def column_names(engine: Engine, table: str) -> set[str]:
+    return {column["name"] for column in inspect(engine).get_columns(table)}

@@ -8,20 +8,13 @@ import pytest
 from alembic import command
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
-from support.migration_chain import is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
 from support.reference_link_migration import execute, seed_users
 
 MIGRATION_MODULE = "songmaker_cli.db.migrations.versions.d8b4f2a6c1e9_users_choose_their_theme"
 PREVIOUS_REVISION = "e3a91c5d7f20"
 COLUMN = "theme"
-
-
-def _theme_migration():
-    return importlib.import_module(MIGRATION_MODULE)
-
-
-def _users_table_columns(engine) -> set[str]:
-    return {column["name"] for column in inspect(engine).get_columns("users")}
+MIGRATION = importlib.import_module(MIGRATION_MODULE)
 
 
 def _themes(engine) -> list[str]:
@@ -30,14 +23,12 @@ def _themes(engine) -> list[str]:
 
 
 def _upgraded_with_two_people(database):
-    return seeded_then_upgraded(
-        database, PREVIOUS_REVISION, _theme_migration().revision, seed_users
-    )
+    return seeded_then_upgraded(database, PREVIOUS_REVISION, MIGRATION.revision, seed_users)
 
 
 def test_the_migration_follows_the_previous_revision_on_the_single_chain():
-    assert _theme_migration().down_revision == PREVIOUS_REVISION
-    assert is_on_the_single_chain(_theme_migration().revision)
+    assert MIGRATION.down_revision == PREVIOUS_REVISION
+    assert is_on_the_single_chain(MIGRATION.revision)
 
 
 def test_upgrade_gives_every_existing_person_the_device_choice(reference_link_database):
@@ -71,12 +62,12 @@ def test_downgrade_drops_the_column_and_its_check_and_keeps_the_people(reference
     config, _ = reference_link_database
     engine = _upgraded_with_two_people(reference_link_database)
     command.downgrade(config, PREVIOUS_REVISION)
-    assert COLUMN not in _users_table_columns(engine)
+    assert COLUMN not in column_names(engine, "users")
     assert not any(
         constraint["name"] == "ck_users_theme"
         for constraint in inspect(engine).get_check_constraints("users")
     )
     with engine.connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM users")).scalar_one() == 2
-    command.upgrade(config, _theme_migration().revision)
-    assert COLUMN in _users_table_columns(engine)
+    command.upgrade(config, MIGRATION.revision)
+    assert COLUMN in column_names(engine, "users")

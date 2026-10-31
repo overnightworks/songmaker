@@ -37,9 +37,9 @@ from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
+from songmaker_cli.theme_types import ThemeChoice
 from songmaker_cli.timestamps import aware_timestamp as aware_timestamp
 from songmaker_cli.timestamps import utcnow
-from songmaker_cli.theme_types import ThemeChoice
 from songmaker_cli.whisper_cues import stored_whisper_cues
 
 SONG_SLUG_MAX_LENGTH: Final = 220

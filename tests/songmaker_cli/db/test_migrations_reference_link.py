@@ -8,7 +8,7 @@ import pytest
 from alembic import command
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
-from support.migration_chain import is_on_the_single_chain
+from support.migration_chain import column_names, is_on_the_single_chain
 from support.reference_link_migration import (
     RECORDING_COLUMN,
     RECORDING_PATH,
@@ -125,10 +125,6 @@ def _linked_row(engine, case: LinkCase) -> tuple[str | None, dict | None]:
     return key, _decoded_json(params)
 
 
-def _column_names(engine, case: LinkCase) -> set[str]:
-    return {column["name"] for column in inspect(engine).get_columns(case.table)}
-
-
 @link_cases
 def test_the_migration_follows_the_previous_link_revision_on_the_single_chain(case):
     assert case.migration.down_revision == case.previous_revision
@@ -227,7 +223,7 @@ def test_upgrade_fails_loud_with_counts_and_ids_and_changes_nothing(
     assert f"{failure}: 1 (ids {case.failing_id})" in str(refusal.value)
     assert "nothing was changed" in str(refusal.value)
     assert "refs/" not in str(refusal.value)
-    assert RECORDING_COLUMN not in _column_names(engine, case)
+    assert RECORDING_COLUMN not in column_names(engine, case.table)
 
 
 @link_cases
@@ -241,7 +237,7 @@ def test_downgrade_writes_the_path_back_and_drops_the_column(reference_link_data
     command.downgrade(config, case.previous_revision)
     with engine.connect() as connection:
         params = connection.execute(text(f"SELECT generation_params FROM {case.table}")).scalar()
-    assert RECORDING_COLUMN not in _column_names(engine, case)
+    assert RECORDING_COLUMN not in column_names(engine, case.table)
     assert _decoded_json(params) == {"reference_audio_path": RECORDING_PATH, "shift": 3.0}
     command.upgrade(config, case.migration.revision)
     assert _linked_row(engine, case) == ("recording", {"shift": 3.0})
