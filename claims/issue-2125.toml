@@ -1,0 +1,7 @@
+claim_id = "7254efc0cc974a429482a4f2d98f33b8"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "fc7e062a56487b3ea1b07f3d6c35061d128efcff"
+branch = "claude/issue-2125-the-resource-stream-deadline-test-races"
+scope = ["tests/songmaker_cli/test_resource_event_api.py"]
+opened_commit = "9586e894683ad018bb37f6e3399bf99c094ad0b0"
