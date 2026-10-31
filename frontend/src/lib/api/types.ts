@@ -971,6 +971,10 @@ export interface StatusResponse {
 	status: string;
 }
 
+export interface ThemeSettings {
+	theme: 'light' | 'dark' | 'system';
+}
+
 export interface TitleUpdateRequest {
 	title: string;
 }

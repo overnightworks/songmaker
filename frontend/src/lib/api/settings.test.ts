@@ -8,12 +8,14 @@ vi.mock('$app/navigation', async () =>
 
 import {
 	fetchDefaultConfig,
+	fetchTheme,
 	toggleModel,
 	updateCoverSettings,
 	updateCowriterSettings,
 	updateDefaultConfig,
 	updateGenerationDefaults,
-	updateRateLimits
+	updateRateLimits,
+	updateTheme
 } from './settings';
 
 function acceptRequests(): void {
@@ -74,6 +76,20 @@ describe('settings API contract', () => {
 		expect(url).toBe('/api/settings/models/acestep-1.5?active=false');
 		expect(init.method).toBe('PUT');
 		expect(init.body).toBeUndefined();
+	});
+
+	it("reads and writes the person's theme as its public JSON", async () => {
+		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ theme: 'dark' }) });
+
+		expect(await fetchTheme()).toEqual({ theme: 'dark' });
+		expect(request()[0]).toBe('/api/settings/theme');
+
+		mockFetch.mockClear();
+		await updateTheme('light');
+		const [url, init] = request();
+		expect(url).toBe('/api/settings/theme');
+		expect(init.method).toBe('PUT');
+		expect(JSON.parse(String(init.body))).toEqual({ theme: 'light' });
 	});
 
 	it('#1882 wire bytes unchanged: reads and writes the default config as its response type', async () => {

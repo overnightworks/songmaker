@@ -48,7 +48,7 @@ for (const address of ['root', 'album'] as const) {
 				address === 'root' ? HOME_PATH : `/album/${readSeededLibrary().songPhoneAlbumId}`;
 			await page.emulateMedia({ colorScheme: device });
 			if (choice) {
-				await page.addInitScript((value) => localStorage.setItem('theme', value), choice);
+				await page.addInitScript((value) => localStorage.setItem('songmaker.theme', value), choice);
 			}
 			await page.goto(path);
 			await waitForServiceWorkerControl(page);

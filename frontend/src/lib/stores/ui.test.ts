@@ -6,7 +6,16 @@ import {
 	removePhoneViewport
 } from '#lib/test-utils/on-screen-keyboard.ts';
 
+const mockFetchTheme = vi.fn();
+const mockUpdateTheme = vi.fn();
+vi.mock('#lib/api/settings.ts', () => ({
+	fetchTheme: (...args: unknown[]) => mockFetchTheme(...args),
+	updateTheme: (...args: unknown[]) => mockUpdateTheme(...args)
+}));
+
 beforeEach(() => {
+	mockFetchTheme.mockReset();
+	mockUpdateTheme.mockReset();
 	localStorage.clear();
 	vi.resetModules();
 });
@@ -298,6 +307,8 @@ it('imports with the defaults when browser storage throws', async () => {
 });
 
 describe('theme', () => {
+	const COPY_KEY = 'songmaker.theme';
+
 	function stubDevice(scheme: 'dark' | 'light' | 'unsupported') {
 		if (scheme === 'unsupported') {
 			vi.stubGlobal('matchMedia', undefined);
@@ -317,14 +328,18 @@ describe('theme', () => {
 	});
 
 	it.each([
-		['follows a dark device when there is no choice', 'dark', null, 'dark'],
-		['follows a light device when there is no choice', 'light', null, 'light'],
+		['follows a dark device when there is no copy', 'dark', null, 'dark'],
+		['follows a light device when there is no copy', 'light', null, 'light'],
 		['is light when the browser cannot tell the device', 'unsupported', null, 'light'],
-		['keeps a stored light choice on a dark device', 'dark', 'light', 'light'],
-		['keeps a stored dark choice on a light device', 'light', 'dark', 'dark']
-	] as const)('%s', async (_, device, stored, expected) => {
+		['keeps a light copy on a dark device', 'dark', 'light', 'light'],
+		['keeps a dark copy on a light device', 'light', 'dark', 'dark'],
+		['follows a dark device under a system copy', 'dark', 'system', 'dark'],
+		['follows a light device under a system copy', 'light', 'system', 'light'],
+		['ignores the legacy key', 'light', null, 'light']
+	] as const)('%s', async (_, device, copy, expected) => {
 		stubDevice(device);
-		if (stored) localStorage.setItem('theme', stored);
+		if (copy) localStorage.setItem(COPY_KEY, copy);
+		localStorage.setItem('theme', 'dark');
 		const { theme } = await import('./ui');
 
 		expect(get(theme)).toBe(expected);
@@ -337,7 +352,7 @@ describe('theme', () => {
 		expect(get(theme)).toBe('light');
 	});
 
-	it('leaves data-theme unset and removes a stale one when there is no choice', async () => {
+	it('leaves data-theme unset and removes a stale one when there is no copy', async () => {
 		stubDevice('dark');
 		const { initTheme } = await import('./ui');
 		document.documentElement.dataset.theme = 'light';
@@ -347,24 +362,109 @@ describe('theme', () => {
 		expect(document.documentElement.dataset.theme).toBeUndefined();
 	});
 
-	it('writes data-theme for a stored choice', async () => {
+	it.each([
+		['light', 'light'],
+		['dark', 'dark'],
+		['system', undefined]
+	] as const)('a %s copy sets data-theme to %s', async (copy, expected) => {
 		stubDevice('light');
-		localStorage.setItem('theme', 'dark');
+		localStorage.setItem(COPY_KEY, copy);
 		const { initTheme } = await import('./ui');
+		document.documentElement.dataset.theme = copy === 'system' ? 'dark' : 'light';
 
 		initTheme();
 
-		expect(document.documentElement.dataset.theme).toBe('dark');
+		expect(document.documentElement.dataset.theme).toBe(expected);
 	});
 
-	it('stores the choice and writes data-theme when toggled', async () => {
-		stubDevice('light');
-		const { theme, toggleTheme } = await import('./ui');
+	describe("loading the person's choice", () => {
+		it("paints the server's answer, writes the copy and wins over a different copy", async () => {
+			stubDevice('light');
+			localStorage.setItem(COPY_KEY, 'light');
+			mockFetchTheme.mockResolvedValue({ theme: 'dark' });
+			const { theme, loadThemeChoice } = await import('./ui');
 
-		toggleTheme();
+			await loadThemeChoice();
 
-		expect(get(theme)).toBe('dark');
-		expect(localStorage.getItem('theme')).toBe('dark');
-		expect(document.documentElement.dataset.theme).toBe('dark');
+			expect(get(theme)).toBe('dark');
+			expect(document.documentElement.dataset.theme).toBe('dark');
+			expect(localStorage.getItem(COPY_KEY)).toBe('dark');
+		});
+
+		it('mirrors a system answer as a system copy and follows the device again', async () => {
+			stubDevice('light');
+			localStorage.setItem(COPY_KEY, 'dark');
+			mockFetchTheme.mockResolvedValue({ theme: 'system' });
+			const { theme, loadThemeChoice } = await import('./ui');
+
+			await loadThemeChoice();
+
+			expect(get(theme)).toBe('light');
+			expect(document.documentElement.dataset.theme).toBeUndefined();
+			expect(localStorage.getItem(COPY_KEY)).toBe('system');
+		});
+
+		it('keeps the copy when the server cannot be asked', async () => {
+			stubDevice('light');
+			localStorage.setItem(COPY_KEY, 'dark');
+			mockFetchTheme.mockRejectedValue(new Error('offline'));
+			const { theme, loadThemeChoice } = await import('./ui');
+
+			await loadThemeChoice();
+
+			expect(get(theme)).toBe('dark');
+			expect(localStorage.getItem(COPY_KEY)).toBe('dark');
+		});
+	});
+
+	describe('toggling', () => {
+		it('applies and stores the other way at once, then sends it to the server', async () => {
+			stubDevice('light');
+			mockUpdateTheme.mockResolvedValue({ theme: 'dark' });
+			const { theme, toggleTheme } = await import('./ui');
+
+			const saved = toggleTheme();
+
+			expect(get(theme)).toBe('dark');
+			expect(localStorage.getItem(COPY_KEY)).toBe('dark');
+			expect(document.documentElement.dataset.theme).toBe('dark');
+			await saved;
+			expect(mockUpdateTheme).toHaveBeenCalledWith('dark');
+		});
+
+		it('sends light when the person follows a dark device', async () => {
+			stubDevice('dark');
+			localStorage.setItem(COPY_KEY, 'system');
+			mockUpdateTheme.mockResolvedValue({ theme: 'light' });
+			const { toggleTheme } = await import('./ui');
+
+			await toggleTheme();
+
+			expect(mockUpdateTheme).toHaveBeenCalledWith('light');
+		});
+
+		it('reverts the theme and the copy and tells the person when the server refuses', async () => {
+			stubDevice('light');
+			localStorage.setItem(COPY_KEY, 'light');
+			mockUpdateTheme.mockRejectedValue(new Error('refused'));
+			const { theme, toggleTheme } = await import('./ui');
+			const { toasts } = await import('./toast');
+
+			await toggleTheme();
+
+			expect(get(theme)).toBe('light');
+			expect(localStorage.getItem(COPY_KEY)).toBe('light');
+			expect(document.documentElement.dataset.theme).toBe('light');
+			expect(get(toasts).map((toast) => toast.type)).toEqual(['error']);
+		});
+	});
+
+	it('forgets the copy', async () => {
+		localStorage.setItem(COPY_KEY, 'dark');
+		const { forgetThemeChoice } = await import('./ui');
+
+		forgetThemeChoice();
+
+		expect(localStorage.getItem(COPY_KEY)).toBeNull();
 	});
 });

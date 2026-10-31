@@ -9,7 +9,8 @@
 				// Inline so it runs before first paint; it cannot import the storage helper.
 				var t = null;
 				try {
-					t = localStorage.getItem('theme');
+					localStorage.removeItem('theme');
+					t = localStorage.getItem('songmaker.theme');
 				} catch (e) {}
 				if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
 				if (typeof window.matchMedia !== 'function') {

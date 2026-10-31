@@ -1,10 +1,13 @@
 import type { ComponentProps } from 'svelte';
 import type ShareButton from '#lib/components/ShareButton.svelte';
 import type SongMenu from '#lib/components/editor/SongMenu.svelte';
-import { readonly, writable } from 'svelte/store';
+import { get, readonly, writable } from 'svelte/store';
+import { fetchTheme, updateTheme } from '#lib/api/settings.ts';
+import { describeFailure } from '#lib/api/fetch.ts';
+import { addToast } from '#lib/stores/toast.ts';
 import { LIBRARY_WALL_ORDERS, type LibraryWallOrder } from '#lib/constants.ts';
 import { isEditableElement } from '#lib/utils/escape-level-up.ts';
-import { readStorage, writeStorage } from '#lib/utils/storage.ts';
+import { readStorage, removeStorage, writeStorage } from '#lib/utils/storage.ts';
 
 interface PhoneAppBarState {
 	kind: 'song';
@@ -103,8 +106,9 @@ export function watchTypingOnPhone(root: Document, compact: boolean): () => void
 }
 
 type Theme = 'dark' | 'light';
+type ThemeChoice = Theme | 'system';
 
-const STORAGE_KEY = 'theme';
+const STORAGE_KEY = 'songmaker.theme';
 const RAIL_COLLAPSED_STORAGE_KEY = 'songmaker.rail-collapsed';
 const RAIL_WIDTH_STORAGE_KEY = 'songmaker.rail-width';
 const LIBRARY_WALL_ORDER_STORAGE_KEY = 'songmaker.library-wall-order';
@@ -115,20 +119,27 @@ export const RAIL_MAX_WIDTH_PX = 360;
 export const RAIL_WIDTH_STEP_PX = 8;
 const DEFAULT_RAIL_WIDTH_PX = 264;
 
-const VALID_THEMES: ReadonlySet<string> = new Set<Theme>(['dark', 'light']);
+const VALID_THEME_CHOICES: ReadonlySet<string> = new Set<ThemeChoice>(['dark', 'light', 'system']);
 
-function getStoredTheme(): Theme | null {
+function getStoredChoice(): ThemeChoice | null {
 	if (typeof window === 'undefined') return null;
 	const stored = readStorage(STORAGE_KEY);
-	return stored && VALID_THEMES.has(stored) ? (stored as Theme) : null;
+	return stored && VALID_THEME_CHOICES.has(stored) ? (stored as ThemeChoice) : null;
+}
+
+function getStoredTheme(): Theme | null {
+	const choice = getStoredChoice();
+	return choice === 'system' ? null : choice;
+}
+
+function deviceTheme(): Theme {
+	if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light';
+	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 /** The theme in effect: the stored choice, else the device, else the kit's light default. */
 function getInitialTheme(): Theme {
-	const stored = getStoredTheme();
-	if (stored) return stored;
-	if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light';
-	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+	return getStoredTheme() ?? deviceTheme();
 }
 
 export const theme = writable<Theme>(getInitialTheme());
@@ -203,18 +214,43 @@ export function initRailCollapsed(): void {
 	railCollapsed.set(getInitialRailCollapsed());
 }
 
-export function toggleTheme(): void {
-	theme.update((t) => {
-		const next: Theme = t === 'dark' ? 'light' : 'dark';
-		writeStorage(STORAGE_KEY, next);
-		document.documentElement.dataset.theme = next;
-		return next;
-	});
+function applyChoice(choice: ThemeChoice): void {
+	if (choice === 'system') delete document.documentElement.dataset.theme;
+	else document.documentElement.dataset.theme = choice;
+	theme.set(choice === 'system' ? deviceTheme() : choice);
+}
+
+function rememberChoice(choice: ThemeChoice): void {
+	writeStorage(STORAGE_KEY, choice);
+	applyChoice(choice);
+}
+
+/** The server holds the person's choice; the copy only paints before it answers. */
+export async function loadThemeChoice(): Promise<void> {
+	try {
+		rememberChoice((await fetchTheme()).theme);
+	} catch {
+		// The copy stays in effect; the next load asks again.
+	}
+}
+
+/** Switches light and dark at once, then saves it; a refused save puts the previous choice back. */
+export async function toggleTheme(): Promise<void> {
+	const previous = getStoredChoice() ?? 'system';
+	const next: Theme = get(theme) === 'dark' ? 'light' : 'dark';
+	rememberChoice(next);
+	try {
+		await updateTheme(next);
+	} catch (error) {
+		rememberChoice(previous);
+		addToast(describeFailure(error, 'Saving the theme failed'), 'error');
+	}
+}
+
+export function forgetThemeChoice(): void {
+	removeStorage(STORAGE_KEY);
 }
 
 export function initTheme(): void {
-	const stored = getStoredTheme();
-	if (stored) document.documentElement.dataset.theme = stored;
-	else delete document.documentElement.dataset.theme;
-	theme.set(getInitialTheme());
+	applyChoice(getStoredChoice() ?? 'system');
 }

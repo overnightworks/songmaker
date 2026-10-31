@@ -6,12 +6,13 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import (
     AuditLog,
     ResourceEventCursor,
+    ThemeChoice,
     User,
     UserSession,
 )
@@ -32,6 +33,15 @@ def get_user_by_username(session: Session, username: str) -> User | None:
 
 def get_user(session: Session, user_id: str) -> User | None:
     return session.query(User).filter_by(id=user_id).first()
+
+
+def get_user_theme(session: Session, user_id: str) -> ThemeChoice:
+    return ThemeChoice(session.execute(select(User.theme).where(User.id == user_id)).scalar_one())
+
+
+def set_user_theme(session: Session, user_id: str, theme: ThemeChoice) -> None:
+    session.execute(update(User).where(User.id == user_id).values(theme=theme))
+    session.flush()
 
 
 def create_user(session: Session, user_id: str, username: str, role: str) -> User:
