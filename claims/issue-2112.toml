@@ -1,0 +1,7 @@
+claim_id = "ca7f7be42775445ab5a8e0ea644b4908"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2862d617504f0afea193259b282c2852ce96db36"
+branch = "claude/issue-2112-songmaker-moves-to-appkit-v0-10-0"
+scope = ["frontend/package.json", "frontend/pnpm-lock.yaml"]
+opened_commit = "d45e9cb8b62c87ac3dff13fcea9c8d8da2bdd82d"
