@@ -100,8 +100,7 @@ export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 
 /**
  * 1354_65_A1: the desktop rail disclosure/pin flow's API ceiling. Its measured
- * 34 to 35 requests (with the theme read) set the 35 ceiling; this flow no
- * longer runs on mobile.
+ * 34 to 35 requests set the 35 ceiling; this flow no longer runs on mobile.
  * It shares the IP rate-limit window with the separate Library flow.
  */
 export const RAIL_FLOW_API_REQUEST_BUDGET = 35;

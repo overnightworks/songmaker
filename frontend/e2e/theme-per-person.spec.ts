@@ -134,7 +134,7 @@ test("16: a fresh browser paints by the device, then switches once to the person
 			(window as unknown as { recordPaint(v: string | null): void }).recordPaint(
 				document.documentElement.dataset.theme ?? null
 			)
-		).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+		).observe(document, { attributes: true, subtree: true, attributeFilter: ['data-theme'] });
 	});
 
 	await page.goto(HOME_PATH);
