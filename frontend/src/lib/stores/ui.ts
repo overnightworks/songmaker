@@ -251,7 +251,7 @@ export async function loadThemeChoice(): Promise<void> {
 	}
 }
 
-/** Switches light and dark at once, then saves it; a refused save puts the server's choice back. */
+/** Switches light and dark at once, then saves it; once every save has settled, the confirmed choice is shown. */
 export async function toggleTheme(): Promise<void> {
 	const startedIn = session;
 	const previous = getStoredChoice() ?? 'system';
@@ -260,15 +260,17 @@ export async function toggleTheme(): Promise<void> {
 	savesPending += 1;
 	try {
 		await updateTheme(next);
-		if (!current(startedIn)) return;
-		savesSucceeded += 1;
-		serverChoice = next;
+		if (current(startedIn)) {
+			savesSucceeded += 1;
+			serverChoice = next;
+		}
 	} catch (error) {
-		if (!current(startedIn)) return;
-		rememberChoice(serverChoice ?? previous);
-		addToast(describeFailure(error, 'Saving the theme failed'), 'error');
+		if (current(startedIn)) addToast(describeFailure(error, 'Saving the theme failed'), 'error');
 	} finally {
-		if (current(startedIn)) savesPending -= 1;
+		if (current(startedIn)) {
+			savesPending -= 1;
+			if (savesPending === 0) rememberChoice(serverChoice ?? previous);
+		}
 	}
 }
 

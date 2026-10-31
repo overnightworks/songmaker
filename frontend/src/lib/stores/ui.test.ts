@@ -482,6 +482,39 @@ describe('theme', () => {
 			}
 		);
 
+		it.each([
+			['the second fails, then the first succeeds', 1, 'dark'],
+			['the first fails, then the second succeeds', 0, 'light']
+		] as const)(
+			'ends on the saved choice when two toggles overlap and %s',
+			async (_name, failingSave, expected) => {
+				stubDevice('light');
+				localStorage.setItem(COPY_KEY, 'light');
+				const settle: Array<(succeed: boolean) => void> = [];
+				mockUpdateTheme.mockImplementation(
+					(choice: string) =>
+						new Promise((resolve, reject) =>
+							settle.push((succeed) =>
+								succeed ? resolve({ theme: choice }) : reject(new Error('no'))
+							)
+						)
+				);
+				const { theme, loadThemeChoice, toggleTheme } = await import('./ui');
+				mockFetchTheme.mockResolvedValue({ theme: 'light' });
+				await loadThemeChoice();
+
+				const toggles = [toggleTheme(), toggleTheme()];
+				settle[failingSave](false);
+				await toggles[failingSave];
+				settle[1 - failingSave](true);
+				await toggles[1 - failingSave];
+
+				expect(get(theme)).toBe(expected);
+				expect(document.documentElement.dataset.theme).toBe(expected);
+				expect(localStorage.getItem(COPY_KEY)).toBe(expected);
+			}
+		);
+
 		it('keeps the copy when the server cannot be asked', async () => {
 			stubDevice('light');
 			localStorage.setItem(COPY_KEY, 'dark');
