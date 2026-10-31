@@ -30,7 +30,7 @@ const LOOKS = {
 
 type Scheme = keyof typeof LOOKS;
 
-/** The device's scheme and the person's stored choice (none, or the same or the other scheme) decide the look. */
+/** The device's scheme and the browser copy this spec seeds (none, or the same or the other scheme) decide the look. */
 const THEME_CASES: ReadonlyArray<{ device: Scheme; choice: Scheme | null; shown: Scheme }> = [
 	{ device: 'light', choice: null, shown: 'light' },
 	{ device: 'dark', choice: null, shown: 'dark' },
@@ -40,7 +40,7 @@ const THEME_CASES: ReadonlyArray<{ device: Scheme; choice: Scheme | null; shown:
 
 for (const address of ['root', 'album'] as const) {
 	for (const { device, choice, shown } of THEME_CASES) {
-		test(`1160-F42-boot: an offline reload at the ${address} address on a ${device} device with ${choice ? `a stored ${choice} choice` : 'no choice'} shows the offline strip in the kit's faces and the ${shown} colours`, async ({
+		test(`1160-F42-boot: an offline reload at the ${address} address on a ${device} device with ${choice ? `a seeded ${choice} copy` : 'no choice'} shows the offline strip in the kit's faces and the ${shown} colours`, async ({
 			page,
 			context
 		}) => {

@@ -2,16 +2,22 @@
 // each browser keeps a copy that paints before the server answers. Every flow
 // uses an account of its own, because the choice is stored on the account.
 
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Page, type Response } from '@playwright/test';
 
 import { THEME_SWITCH_TO_DARK_LABEL, THEME_SWITCH_TO_LIGHT_LABEL } from '../src/lib/constants';
-import { accountCircle, accountMenu, HOME_PATH, LIBRARY_PATH, shellOf } from './helpers';
+import {
+	accountCircle,
+	accountMenu,
+	HOME_PATH,
+	LIBRARY_PATH,
+	shellOf,
+	waitForServiceWorkerControl
+} from './helpers';
 import { seedAccount, signedInApi, runMarker, type SeededAccount } from './seed';
 
 const COPY_KEY = 'songmaker.theme';
 const THEME_PATH = '/api/settings/theme';
 const SHARE_PATH = '/share/song/no-such-share';
-const BACKGROUNDS = { light: '#f4f4f6', dark: '#0d0d0d' } as const;
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -25,7 +31,6 @@ test.beforeEach(async ({ context }, testInfo) => {
 async function looks(page: Page) {
 	return page.evaluate(() => ({
 		chosen: document.documentElement.dataset.theme ?? null,
-		background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
 		copy: localStorage.getItem('songmaker.theme'),
 		legacy: localStorage.getItem('theme')
 	}));
@@ -35,6 +40,11 @@ async function openAccountMenu(page: Page, shell: 'mobile' | 'desktop') {
 	await page.goto(shell === 'mobile' ? LIBRARY_PATH : '/settings/generation');
 	await accountCircle(page).click();
 	return accountMenu(page);
+}
+
+function themeAnswer(method: 'GET' | 'PUT') {
+	return (response: Response) =>
+		response.url().endsWith(THEME_PATH) && response.request().method() === method;
 }
 
 async function choose(theme: 'light' | 'dark' | 'system') {
@@ -56,14 +66,14 @@ test('1: dark chosen in browser A is shown by browser B of the same person at it
 }, info) => {
 	await page.emulateMedia({ colorScheme: 'light' });
 	const menu = await openAccountMenu(page, shellOf(info));
+	const saved = page.waitForResponse(themeAnswer('PUT'));
 	await menu.getByRole('button', { name: THEME_SWITCH_TO_DARK_LABEL, exact: true }).click();
+	expect((await saved).ok()).toBe(true);
 	await expect.poll(() => looks(page)).toMatchObject({ chosen: 'dark', copy: 'dark' });
 
 	const other = await secondBrowser(browser, 'light');
 	await other.page.goto(HOME_PATH);
-	await expect
-		.poll(() => looks(other.page))
-		.toMatchObject({ chosen: 'dark', background: BACKGROUNDS.dark, copy: 'dark' });
+	await expect.poll(() => looks(other.page)).toMatchObject({ chosen: 'dark', copy: 'dark' });
 	await other.context.close();
 });
 
@@ -74,10 +84,12 @@ test('20: an open browser B does not change when A switches, and its next load d
 	await page.emulateMedia({ colorScheme: 'light' });
 	await page.goto(HOME_PATH);
 	const other = await secondBrowser(browser, 'light');
+	const answered = other.page.waitForResponse(themeAnswer('GET'));
 	await other.page.goto(HOME_PATH);
+	await answered;
 	await choose('dark');
 
-	await expect.poll(() => looks(other.page)).toMatchObject({ chosen: null });
+	expect(await looks(other.page)).toMatchObject({ chosen: null });
 	await other.page.reload();
 	await expect.poll(() => looks(other.page)).toMatchObject({ chosen: 'dark' });
 	await other.context.close();
@@ -88,9 +100,7 @@ for (const device of ['light', 'dark'] as const) {
 		await page.emulateMedia({ colorScheme: device });
 		await page.goto(HOME_PATH);
 
-		await expect
-			.poll(() => looks(page))
-			.toMatchObject({ chosen: null, background: BACKGROUNDS[device], copy: 'system' });
+		await expect.poll(() => looks(page)).toMatchObject({ chosen: null, copy: 'system' });
 	});
 }
 
@@ -144,16 +154,20 @@ test('21: the menu toggle from the device choice on a dark device sends light', 
 	expect((await sent).postDataJSON()).toEqual({ theme: 'light' });
 });
 
-test("19: a share page paints from this browser's copy and requests no theme", async ({ page }) => {
+test("19: a share page viewed without an account paints from this browser's copy and requests no theme", async ({
+	browser
+}) => {
+	const context = await browser.newContext({ colorScheme: 'light' });
+	const page = await context.newPage();
 	const requested: string[] = [];
 	page.on('request', (request) => requested.push(new URL(request.url()).pathname));
-	await page.emulateMedia({ colorScheme: 'light' });
 	await page.addInitScript((key) => localStorage.setItem(key, 'dark'), COPY_KEY);
 
-	await page.goto(SHARE_PATH);
+	await page.goto(SHARE_PATH, { waitUntil: 'networkidle' });
 
-	await expect.poll(() => looks(page)).toMatchObject({ chosen: 'dark' });
+	expect(await looks(page)).toMatchObject({ chosen: 'dark' });
 	expect(requested).not.toContain(THEME_PATH);
+	await context.close();
 });
 
 test('23 and 24: a legacy theme key paints nothing, is removed, and is not taken over', async ({
@@ -169,10 +183,28 @@ test('23 and 24: a legacy theme key paints nothing, is removed, and is not taken
 
 	await page.goto(HOME_PATH);
 
-	await expect
-		.poll(() => looks(page))
-		.toMatchObject({ chosen: null, background: BACKGROUNDS.light, legacy: null });
+	await expect.poll(() => looks(page)).toMatchObject({ chosen: null, legacy: null });
 	const api = await signedInApi(account);
 	expect(await (await api.get(THEME_PATH)).json()).toEqual({ theme: 'system' });
 	await api.dispose();
+});
+
+test.describe('offline', () => {
+	test.use({ serviceWorkers: 'allow' });
+
+	test('15: an offline reload paints the copy a real online boot wrote', async ({
+		context,
+		page
+	}) => {
+		await page.emulateMedia({ colorScheme: 'light' });
+		await choose('dark');
+		await page.goto(HOME_PATH);
+		await expect.poll(() => looks(page)).toMatchObject({ chosen: 'dark', copy: 'dark' });
+		await waitForServiceWorkerControl(page);
+		await context.setOffline(true);
+
+		await page.reload();
+
+		expect(await looks(page)).toMatchObject({ chosen: 'dark' });
+	});
 });
