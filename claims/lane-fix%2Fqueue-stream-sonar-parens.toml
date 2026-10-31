@@ -1,7 +1,0 @@
-claim_id = "5d720a0844fd43a1a326c8c22b0c894f"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "1ac681da7b95871bace0895bd58f034c11a68f6e"
-branch = "fix/queue-stream-sonar-parens"
-scope = ["src/songmaker_cli/queue_streams.py"]
-opened_commit = "bd323a2b7d32aee810107adf17f0b681d2973956"
