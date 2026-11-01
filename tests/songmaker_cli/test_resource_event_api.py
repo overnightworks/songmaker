@@ -939,7 +939,8 @@ class _OuterDeadlineArmedAtResponseStart:
         return self._outer_timeout
 
     def response_started(self) -> None:
-        assert self._outer_timeout is not None and self._outer_delay is not None
+        assert self._outer_timeout is not None
+        assert self._outer_delay is not None
         self.response_started_at = asyncio.get_running_loop().time()
         self._outer_timeout.reschedule(self.response_started_at + self._outer_delay)
 
