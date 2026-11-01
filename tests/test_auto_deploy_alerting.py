@@ -27,7 +27,7 @@ from auto_deploy_support import (
     ACESTEP_SUBMODULE_PATH,
     ALERT_REPEAT_SECONDS,
     CHECK_RUN_APPEARANCE_GRACE_SECONDS,
-    CHECK_RUN_FIELD_SEPARATOR,
+    CI_CHECK_SUITE_ID,
     FAILURE_ALERT_THRESHOLD,
     GIT_FETCH_TIMEOUT_SECONDS,
     GRAFANA_PASSWORD_REFUSAL,
@@ -41,6 +41,7 @@ from auto_deploy_support import (
     AcestepFork,
     ComposeConfigRefusal,
     FailingTransport,
+    check_runs_response,
     git,
     git_output,
     has_commit,
@@ -770,12 +771,14 @@ def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidat
                     "name": REQUIRED_ACTIONS_JOB_NAME,
                     "status": "completed",
                     "conclusion": "success",
+                    "check_suite": {"id": int(CI_CHECK_SUITE_ID)},
                 },
                 {
                     "app": {"slug": app_slug},
                     "name": name,
                     "status": "completed",
                     "conclusion": "failure",
+                    "check_suite": {"id": int(CI_CHECK_SUITE_ID)},
                 },
             ],
         }))
@@ -802,11 +805,7 @@ def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip()
     checkout.set_check_runs_response(
-        f"envelope{CHECK_RUN_FIELD_SEPARATOR}1\n"
-        + CHECK_RUN_FIELD_SEPARATOR.join(
-            ("check", "", REQUIRED_ACTIONS_JOB_NAME, "completed", "failure"),
-        )
-        + "\n",
+        check_runs_response(("", REQUIRED_ACTIONS_JOB_NAME, "completed", "failure")),
     )
 
     result = checkout.tick()
@@ -825,11 +824,12 @@ def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
     [
         pytest.param(
             r'{"app":{"slug":"github-actions"},"name":"Backend",'
-            r'"status":"completed","conclusion":"suc\u0000cess"}',
+            r'"status":"completed","conclusion":"suc\u0000cess","check_suite":{"id":1}}',
             id="nul-in-conclusion",
         ),
         pytest.param(
-            r'{"app":{"slug":"github-actions"},"status":"completed","conclusion":"success"}',
+            r'{"app":{"slug":"github-actions"},"status":"completed",'
+            r'"conclusion":"success","check_suite":{"id":1}}',
             id="missing-job-name",
         ),
     ],
@@ -1209,12 +1209,8 @@ def test_malformed_check_status_refuses_to_pull_with_a_named_failure(tmp_path: P
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
-    checkout.set_check_runs_response(
-        CHECK_RUN_FIELD_SEPARATOR.join(
-            ("check", "github-actions", REQUIRED_ACTIONS_JOB_NAME, "completed", "success"),
-        )
-        + "\n",
-    )
+    envelope_free = check_runs_response(("completed", "success")).split("\n", 1)[1]
+    checkout.set_check_runs_response(envelope_free)
 
     result = checkout.tick()
 

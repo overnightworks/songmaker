@@ -33,8 +33,8 @@ import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from repo_path import prepend_own_checkout_src
 from pydantic import BaseModel, ValidationError
+from repo_path import prepend_own_checkout_src
 from sqlalchemy.orm import Session
 
 prepend_own_checkout_src(__file__)
