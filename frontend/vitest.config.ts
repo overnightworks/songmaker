@@ -10,6 +10,8 @@ export default defineConfig({
 	test: {
 		include: ['src/**/*.test.ts'],
 		environment: 'jsdom',
+		// Node 26's built-in localStorage shadows jsdom's; the negated flag is accepted by Node 24 too.
+		execArgv: ['--no-experimental-webstorage'],
 		setupFiles: ['src/tests/setup.ts'],
 		coverage: {
 			provider: 'v8',
