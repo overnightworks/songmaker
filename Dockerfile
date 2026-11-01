@@ -5,7 +5,7 @@ FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d
 FROM node:26.13.0-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS frontend-builder
 WORKDIR /app/frontend
 
-RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
+RUN npm install --global pnpm@10.32.1
 
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.npmrc ./
 COPY frontend/patches/ ./patches/
