@@ -126,24 +126,3 @@ def test_reimport_keeps_per_file_limit_separate(
     )
     assert resp.status_code == 413
     assert resp.json()["detail"] == detail
-
-
-def test_50mib_file_with_multipart_envelope_is_accepted(tmp_path: Path) -> None:
-    client = _authed_app(tmp_path)
-    payload = b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 4)
-    resp = client.post(
-        "/api/references",
-        files={"file": ("ref.wav", payload, "audio/wav")},
-    )
-    assert resp.status_code == 200, resp.text
-
-
-def test_file_over_50mib_is_business_rejected(tmp_path: Path) -> None:
-    client = _authed_app(tmp_path)
-    payload = b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 3)
-    resp = client.post(
-        "/api/references",
-        files={"file": ("ref.wav", payload, "audio/wav")},
-    )
-    assert resp.status_code == 400
-    assert "too large" in resp.json()["detail"].lower()

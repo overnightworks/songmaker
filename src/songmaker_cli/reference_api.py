@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
@@ -34,8 +35,8 @@ router = APIRouter()
 )
 async def api_upload_reference(
     file: UploadFile,
-    user: AuthenticatedUser = Depends(get_current_user),
-    ctx: AppContext = Depends(get_app_context),
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    ctx: Annotated[AppContext, Depends(get_app_context)],
 ) -> ReferenceRecordingResponse:
     if not file.filename:
         raise HTTPException(400, "No filename provided")
@@ -73,6 +74,12 @@ async def api_upload_reference(
     except ReferenceAudioStorageError as exc:
         raise HTTPException(500, str(exc)) from exc
 
+    return await run_in_threadpool(_stored_reference_response, ctx, user.id, stored.id)
+
+
+def _stored_reference_response(
+    ctx: AppContext, user_id: str, recording_id: str,
+) -> ReferenceRecordingResponse:
     with ctx.db() as session:
-        recording = get_owned_reference_recording(session, user.id, stored.id)
+        recording = get_owned_reference_recording(session, user_id, recording_id)
         return ReferenceRecordingResponse.from_orm(recording)
