@@ -39,7 +39,7 @@ const REMOVED_SAVE_OFFLINE_LABEL = 'Save offline';
  * own, with no songs, and adds its one save. The Share row flow adds a share,
  * an unshare and a share: 16 on desktop locally, with a cold open of 13.
  */
-const ALBUM_MENU_FLOW_API_REQUEST_BUDGET = 17;
+const ALBUM_MENU_FLOW_API_REQUEST_BUDGET = 18;
 
 type CollectionKind = 'album' | 'playlist';
 

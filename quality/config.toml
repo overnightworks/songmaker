@@ -161,3 +161,9 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1139 -> 11
 item = "#2089"
 date = 2026-10-30
 reason = "the job answer gains the generated version_id field so the editor predicts the version a save makes during a render; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1144"
+item = "#2107"
+date = 2026-10-31
+reason = "the person's theme choice gains the generated ThemeSettings interface (an inline union of the three choices); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"

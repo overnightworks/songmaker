@@ -37,6 +37,7 @@ from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
+from songmaker_cli.theme_types import ThemeChoice
 from songmaker_cli.timestamps import aware_timestamp as aware_timestamp
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.whisper_cues import stored_whisper_cues
@@ -433,12 +434,24 @@ class AlbumCoverSuggestion(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "theme IN (" + ", ".join(repr(choice.value) for choice in ThemeChoice) + ")",
+            name="ck_users_theme",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     username: Mapped[str] = mapped_column(String(USERNAME_MAX_LENGTH))
     role: Mapped[str] = mapped_column(String(20), default="user")
     default_generation_config: Mapped[str | None] = mapped_column(
         String(36), nullable=True, default=None,
+    )
+    theme: Mapped[str] = mapped_column(
+        String(6),
+        nullable=False,
+        default=ThemeChoice.SYSTEM,
+        server_default=ThemeChoice.SYSTEM.value,
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)

@@ -142,6 +142,7 @@ export async function logout(): Promise<void> {
 		}
 	}
 	audioPlayer.unload();
+	(await import('#lib/stores/ui.ts')).forgetThemeChoice();
 	if (user) {
 		forgetPlaybackResume(user.id);
 	}
