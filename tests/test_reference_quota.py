@@ -22,7 +22,7 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 
 from songmaker_cli.db.models import Album, ReferenceRecording, Song, User
 from songmaker_cli.db.queries.reference_recordings import create_reference_recording
-from songmaker_cli.generation_api import api_upload_reference_audio
+from songmaker_cli.reference_api import api_upload_reference
 from songmaker_cli.reference_audio import (
     ReferenceAudioQuotaExceeded,
     ReferenceAudioStorageError,
@@ -195,7 +195,7 @@ def test_upload_refusals_are_exact_and_add_nothing(quota_context, state, status,
     app = make_router_app(ctx, user=make_authenticated_user("owner"))
     with TestClient(app) as client:
         result = client.post(
-            "/api/audio/upload",
+            "/api/references",
             files={"file": ("ref.txt" if state == "invalid" else "ref.wav", b"a" * 100)},
         )
     assert result.status_code == status
@@ -361,7 +361,7 @@ def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
 
     async def cancel_upload():
         task = asyncio.create_task(
-            api_upload_reference_audio(
+            api_upload_reference(
                 UploadFile(filename="ref.wav", file=BytesIO(b"a" * 100)),
                 make_authenticated_user("owner"),
                 ctx,

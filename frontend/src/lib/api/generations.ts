@@ -1,4 +1,4 @@
-import type { BulkDeleteResponse, RateResult, ReferenceAudioResponse, ShareResult } from './types';
+import type { BulkDeleteResponse, RateResult, ShareResult } from './types';
 import { apiFetch, type JobStatus } from './fetch';
 
 export async function generateSong(
@@ -93,15 +93,6 @@ export async function coverGeneration(
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(payload)
-	});
-}
-
-export async function uploadReferenceAudio(file: File): Promise<ReferenceAudioResponse> {
-	const formData = new FormData();
-	formData.append('file', file);
-	return apiFetch<ReferenceAudioResponse>('/api/audio/upload', {
-		method: 'POST',
-		body: formData
 	});
 }
 

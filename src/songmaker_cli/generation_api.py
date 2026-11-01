@@ -9,10 +9,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from starlette.concurrency import run_in_threadpool
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
@@ -36,7 +35,6 @@ from songmaker_cli.api_models import (
     LastFailedGenerationResponse,
     RateRequest,
     RateResponse,
-    ReferenceAudioResponse,
     RepaintRequest,
     RepaintTaskParams,
     ScoreRequest,
@@ -93,7 +91,6 @@ from songmaker_cli.jobs.generation_failure import (
     musician_job_response,
 )
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
-from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)
@@ -174,74 +171,6 @@ def _generation_version_or_error(gen: Generation, version_id: str | None) -> Ver
     if not version:
         raise HTTPException(400, "Generation has no linked version")
     return version
-
-
-# ── Reference audio upload ───────────────────────────────────────────
-
-
-@router.post(
-    "/audio/upload",
-    responses={
-        400: {"description": "Reference audio upload is invalid"},
-        409: {"description": "Reference audio storage limit reached"},
-        500: {"description": "Reference audio storage could not be checked"},
-    },
-)
-async def api_upload_reference_audio(
-    file: UploadFile,
-    user: AuthenticatedUser = Depends(get_current_user),
-    ctx: AppContext = Depends(get_app_context),
-) -> ReferenceAudioResponse:
-    from songmaker_cli.constants import (
-        REFERENCE_AUDIO_EXTENSIONS,
-        REFERENCE_AUDIO_MAX_BYTES,
-    )
-    from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH
-    from songmaker_cli.reference_audio import (
-        ReferenceAudioQuotaExceeded,
-        ReferenceAudioStorageError,
-        store_reference_audio,
-    )
-
-    if not file.filename:
-        raise HTTPException(400, "No filename provided")
-
-    original_filename = Path(file.filename).name
-    if len(original_filename) > REFERENCE_FILENAME_MAX_LENGTH:
-        raise HTTPException(
-            400, f"Filename too long (max {REFERENCE_FILENAME_MAX_LENGTH} characters)",
-        )
-    ext = Path(original_filename).suffix.lower()
-    if ext not in REFERENCE_AUDIO_EXTENSIONS:
-        accepted = ", ".join(sorted(REFERENCE_AUDIO_EXTENSIONS))
-        raise HTTPException(400, f"Unsupported format '{ext}'. Accepted: {accepted}")
-
-    content = await file.read()
-    if len(content) > REFERENCE_AUDIO_MAX_BYTES:
-        max_mb = REFERENCE_AUDIO_MAX_BYTES // 1024 // 1024
-        raise HTTPException(400, f"File too large (max {max_mb}MB)")
-    if len(content) < 100:
-        raise HTTPException(400, "File is empty or too small")
-
-    try:
-        stored = await run_in_threadpool(
-            store_reference_audio,
-            ctx.db,
-            ctx.audio_dir,
-            user.id,
-            ext,
-            content,
-            get_settings(),
-            original_filename,
-        )
-    except ReferenceAudioQuotaExceeded as exc:
-        raise HTTPException(409, str(exc)) from exc
-    except ReferenceAudioStorageError as exc:
-        raise HTTPException(500, str(exc)) from exc
-
-    return ReferenceAudioResponse(
-        id=stored.id, path=stored.storage_path, filename=file.filename,
-    )
 
 
 # ── Generations ──────────────────────────────────────────────────────

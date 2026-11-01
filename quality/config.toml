@@ -167,3 +167,9 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 11
 item = "#2107"
 date = 2026-10-31
 reason = "the person's theme choice gains the generated ThemeSettings interface (an inline union of the three choices); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"
+item = "#2086"
+date = 2026-11-02
+reason = "the reference upload answers the stored record: the generated API types swap ReferenceAudioResponse for ReferenceRecordingResponse; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"

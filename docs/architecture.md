@@ -118,7 +118,7 @@ User clicks "Generate"                    User clicks "Score"
 
   Repaint: POST /generations/{id}/repaint
   Cover:   POST /generations/{id}/cover
-  Upload:  POST /api/audio/upload (reference audio; answers the row's id, which a version save links as `reference_recording_id`)
+  Upload:  POST /api/references (reference audio; answers the stored record, whose `id` a version save links as `reference_recording_id`)
   Art:     POST /api/albums/{id}/cover and POST /api/songs/{id}/cover (files on the audio volume)
 
   User clicks "Chat"
