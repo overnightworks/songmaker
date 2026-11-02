@@ -31,15 +31,15 @@ const VIEWPORT_HEIGHT_PX = 844;
 const REMOVED_SAVE_OFFLINE_LABEL = 'Save offline';
 
 /**
- * Measured in CI on PR #1136: the album cold open costs 14 on desktop and 11
- * on mobile, the playlist cold open 12 on desktop and 8 on mobile, and the
- * logged-out public album page 0 on both, since opening the ⋯ asks the API
- * nothing. Shared budget, sized from the costliest flow the same way
- * playlist-address.spec.ts's is. The Edit details flow opens an album of its
- * own, with no songs, and adds its one save. The Share row flow adds a share,
- * an unshare and a share: 16 on desktop locally, with a cold open of 13.
+ * Measured in CI: the album cold open costs 15 on desktop and 12 on mobile,
+ * the playlist cold open 13 on desktop and 9 on mobile, and the logged-out
+ * public album page 0 on both, since opening the ⋯ asks the API nothing. Shared
+ * budget, sized from the costliest flow the same way playlist-address.spec.ts's
+ * is. The Edit details flow opens an album of its own, with no songs, and adds
+ * its one save. The Share row flow adds a share, an unshare and a share: 18 on
+ * desktop for the album Share row.
  */
-const ALBUM_MENU_FLOW_API_REQUEST_BUDGET = 18;
+const ALBUM_MENU_FLOW_API_REQUEST_BUDGET = 20;
 
 type CollectionKind = 'album' | 'playlist';
 

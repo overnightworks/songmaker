@@ -28,8 +28,8 @@ import { archiveOwnedAlbum, runMarker, seedSongPhoneSong } from './seed';
 const PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET = 56;
 
 /**
- * Measured in CI: up to 72 requests on either shell for the album flow that
- * plays into its second song, then reloads twice and plays on.
+ * Measured in CI: 65 to 72 requests on desktop and 54 to 57 on mobile for the
+ * album flow that plays into its second song, then reloads twice and plays on.
  */
 const PLAYBACK_RESTORE_TWICE_FLOW_API_REQUEST_BUDGET = 78;
 
