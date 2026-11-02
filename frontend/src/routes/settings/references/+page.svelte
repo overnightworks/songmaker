@@ -52,7 +52,7 @@
 
 	function fail(referenceId: string | null) {
 		if (referenceId === null) return;
-		previewId = null;
+		if (previewId === referenceId) previewId = null;
 		if (referenceId !== activeId) return;
 		activeId = null;
 		faultId = referenceId;

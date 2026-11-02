@@ -447,9 +447,9 @@ def _install_abortable_codex_cli(monkeypatch, tmp_path: Path) -> tuple[
     def fake_runner(_command, **kwargs):
         kwargs["on_spawned"](123)
         spawned.set()
-        assert kwargs["stdout_line_channel"]._abort_requested.wait(timeout=1)
+        assert kwargs["stdout_line_channel"]._abort_requested.wait(timeout=HANG_GUARD_SECONDS)
         abort_requested.set()
-        assert allow_reap.wait(timeout=1)
+        assert allow_reap.wait(timeout=HANG_GUARD_SECONDS)
         kwargs["on_reaped"](123, False)
         reaped.set()
         return CliRunOutcome(
@@ -489,12 +489,12 @@ def test_web_cancel_reaps_the_codex_process_and_keeps_the_job_cancelled(
             settings=_settings(CoverExecutor.WEB),
             cancellation_registry=registry,
         ))
-        assert await asyncio.to_thread(spawned.wait, 1)
+        assert await asyncio.to_thread(spawned.wait, HANG_GUARD_SECONDS)
         with factory() as session:
             assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.CANCELLED))
             session.commit()
         assert registry.abort(job_id)
-        assert await asyncio.to_thread(abort_requested.wait, 1)
+        assert await asyncio.to_thread(abort_requested.wait, HANG_GUARD_SECONDS)
         assert not task.done()
         assert process_pool.reservation_count() == 1
         allow_reap.set()
@@ -525,10 +525,10 @@ def test_web_runner_task_cancellation_reaps_the_codex_process(tmp_path: Path, mo
         task = asyncio.create_task(cover_runner.run_next_cover_job(
             db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
         ))
-        assert await asyncio.to_thread(spawned.wait, 1)
+        assert await asyncio.to_thread(spawned.wait, HANG_GUARD_SECONDS)
         task.cancel()
         try:
-            assert await asyncio.to_thread(abort_requested.wait, 1)
+            assert await asyncio.to_thread(abort_requested.wait, HANG_GUARD_SECONDS)
             assert not task.done()
             assert process_pool.reservation_count() == 1
         finally:

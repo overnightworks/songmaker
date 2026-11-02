@@ -369,6 +369,25 @@ describe('references page', () => {
 			expect(referenceButtonLabels(target)[0]).toBe('Pause voice-memo.mp3');
 		});
 
+		it('keeps the new row loaded when the play of the row before it is rejected late', async () => {
+			const target = await renderTwoReferences();
+			let rejectFirstPlay: (reason: Error) => void = () => {};
+			playSpy.mockImplementationOnce(
+				() => new Promise<void>((_resolve, reject) => (rejectFirstPlay = reject))
+			);
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+			await pressReferenceControl(referencePlayButton(target, 'storytime-drums.wav'));
+			rejectFirstPlay(new DOMException('interrupted by a new load', 'AbortError'));
+			await tick();
+			const sourceSet = vi.spyOn(HTMLMediaElement.prototype, 'src', 'set');
+
+			await pressReferenceControl(referencePlayButton(target, 'storytime-drums.wav'));
+			await pressReferenceControl(referencePlayButton(target, 'storytime-drums.wav'));
+
+			expect(sourceSet).not.toHaveBeenCalled();
+			expect(referenceButtonLabels(target)[1]).toBe('Pause storytime-drums.wav');
+		});
+
 		it('stops the sound when the person leaves the page', async () => {
 			const target = await renderTwoReferences();
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
