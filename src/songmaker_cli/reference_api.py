@@ -1,4 +1,4 @@
-"""Reference recording endpoints: the upload and its stored record."""
+"""Reference recording endpoints: the upload, its stored record and the owner's list."""
 
 from __future__ import annotations
 
@@ -6,15 +6,19 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_models import ReferenceRecordingResponse
-from songmaker_cli.app_context import AppContext, get_app_context
+from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import REFERENCE_AUDIO_EXTENSIONS, REFERENCE_AUDIO_MAX_BYTES
 from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH
-from songmaker_cli.db.queries.reference_recordings import get_owned_reference_recording
+from songmaker_cli.db.queries.reference_recordings import (
+    get_owned_reference_recording,
+    list_owned_reference_recordings,
+)
 from songmaker_cli.reference_audio import (
     ReferenceAudioQuotaExceeded,
     ReferenceAudioStorageError,
@@ -23,6 +27,17 @@ from songmaker_cli.reference_audio import (
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()
+
+
+@router.get("/references")
+def api_list_references(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_db_session)],
+) -> list[ReferenceRecordingResponse]:
+    return [
+        ReferenceRecordingResponse.from_orm(recording)
+        for recording in list_owned_reference_recordings(session, user.id)
+    ]
 
 
 @router.post(

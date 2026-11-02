@@ -1,4 +1,4 @@
-type SettingsSectionId = 'generation' | 'voices' | 'admin' | 'about';
+type SettingsSectionId = 'generation' | 'voices' | 'references' | 'admin' | 'about';
 
 interface SettingsSection {
 	readonly id: SettingsSectionId;
@@ -17,6 +17,13 @@ const SETTINGS_SECTIONS = [
 		adminOnly: false
 	},
 	{ id: 'voices', href: '/settings/voices', label: 'Voices', icon: 'mic', adminOnly: false },
+	{
+		id: 'references',
+		href: '/settings/references',
+		label: 'References',
+		icon: 'audio-lines',
+		adminOnly: false
+	},
 	{ id: 'admin', href: '/settings/users', label: 'Admin', icon: 'shield', adminOnly: true },
 	{ id: 'about', href: '/settings/about', label: 'About', icon: 'info', adminOnly: false }
 ] as const satisfies readonly SettingsSection[];
