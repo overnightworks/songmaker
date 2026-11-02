@@ -166,3 +166,37 @@ test('Settings › References plays a recording again after its first audio answ
 		await api.dispose();
 	}
 });
+
+test('Settings › References uploads a recording through the file chooser, lists it first and plays it', async ({
+	context,
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	await signInFreshAccount(context, 'references-upload', testInfo.project.name);
+	await page.goto('/settings/references');
+	await expect(workspace(page).getByText(EMPTY_SENTENCE)).toBeVisible();
+
+	const chooser = page.waitForEvent('filechooser');
+	await workspace(page).getByRole('button', { name: 'Upload' }).click();
+	await (
+		await chooser
+	).setFiles({
+		name: 'synth-hook.mp3',
+		mimeType: 'audio/mpeg',
+		buffer: readFileSync(TAKE_FIXTURE)
+	});
+
+	const row = workspace(page).getByRole('listitem').filter({ hasText: 'synth-hook.mp3' });
+	await expect(row).toBeVisible();
+	await expect(row.locator('.reference-meta')).toHaveText(LENGTH_AND_DAY);
+	await expect(workspace(page).getByRole('button', { name: 'Upload' })).toBeEnabled();
+	const served = page.waitForResponse(
+		(response) => /\/api\/references\/[^/]+\/audio$/.test(response.url()) && response.ok()
+	);
+
+	await row.getByRole('button', { name: 'Play synth-hook.mp3' }).click();
+
+	await served;
+	await expect(row).toHaveClass(/playing/);
+	guard.assertClean();
+});

@@ -9,6 +9,7 @@ vi.mock('$app/navigation', async () =>
 
 import {
 	apiFetch,
+	apiUpload,
 	fetchMediaBytes,
 	sseFetch,
 	ApiError,
@@ -20,6 +21,45 @@ import {
 } from './fetch';
 import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants.ts';
 import { hangsUntilAborted } from '#lib/test-utils/network.ts';
+
+interface UploadAnswer {
+	status: number;
+	body: string;
+	retryAfter?: string;
+}
+
+// The upload transport runs on XMLHttpRequest; this stands in for the browser's.
+class FakeUploadRequest {
+	static last: FakeUploadRequest;
+	static answer: UploadAnswer = { status: 200, body: '{}' };
+	opened: string[] = [];
+	withCredentials = false;
+	sentBody: unknown = null;
+	upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null };
+	onload: (() => void) | null = null;
+	onerror: (() => void) | null = null;
+	ontimeout: (() => void) | null = null;
+	status = FakeUploadRequest.answer.status;
+	responseText = FakeUploadRequest.answer.body;
+
+	open(...opened: string[]) {
+		this.opened = opened;
+	}
+	getResponseHeader(name: string) {
+		return name === 'Retry-After' ? (FakeUploadRequest.answer.retryAfter ?? null) : null;
+	}
+	send(body: unknown) {
+		this.sentBody = body;
+		FakeUploadRequest.last = this;
+	}
+}
+
+function uploadAnswers(answer: UploadAnswer) {
+	FakeUploadRequest.answer = answer;
+	vi.stubGlobal('XMLHttpRequest', FakeUploadRequest);
+}
+
+const sentUpload = () => FakeUploadRequest.last;
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -270,9 +310,15 @@ describe('apiFetch 429 classification', () => {
 describe('refusal reactions', () => {
 	const throughApiFetch = (path: string) => apiFetch(path);
 	const throughSseFetch = (path: string) => sseFetch(path, { method: 'POST' }).next();
+	const throughApiUpload = async (path: string) => {
+		const settled = apiUpload(path, new FormData(), () => undefined);
+		sentUpload().onload?.();
+		return settled;
+	};
 	const clients = [
 		{ client: 'apiFetch', request: throughApiFetch },
-		{ client: 'sseFetch', request: throughSseFetch }
+		{ client: 'sseFetch', request: throughSseFetch },
+		{ client: 'apiUpload', request: throughApiUpload }
 	];
 
 	const NOTHING_HAPPENS = {
@@ -281,6 +327,7 @@ describe('refusal reactions', () => {
 	};
 
 	function serverRefusesWith(status: number) {
+		uploadAnswers({ status, body: '{"detail":"refused"}' });
 		mockFetch.mockImplementation(async () => ({
 			ok: false,
 			status,
@@ -431,6 +478,77 @@ describe('refusal reactions', () => {
 
 		expect(happened).toEqual(['reaction told', 'reaction settled', 'request rejected']);
 	});
+});
+
+describe('apiUpload', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.stubGlobal('fetch', mockFetch);
+	});
+
+	const upload = (onProgress: (fraction: number) => void = () => undefined) => {
+		const form = new FormData();
+		const settled = apiUpload<{ id: string }>('/api/references', form, onProgress);
+		return { settled, form, request: sentUpload() };
+	};
+
+	it('posts the form with the session cookie, reports the share sent and resolves with the answer', async () => {
+		uploadAnswers({ status: 200, body: '{"id":"r1"}' });
+		const fractions: number[] = [];
+		const { settled, form, request } = upload((fraction) => fractions.push(fraction));
+		const sentSoFar = (loaded: number, total: number, lengthComputable = true) =>
+			request.upload.onprogress?.({ lengthComputable, loaded, total } as ProgressEvent);
+
+		sentSoFar(25, 100);
+		sentSoFar(50, 0, false);
+		sentSoFar(100, 100);
+		request.onload?.();
+
+		await expect(settled).resolves.toEqual({ id: 'r1' });
+		expect(fractions).toEqual([0.25, 1]);
+		expect(request).toMatchObject({
+			opened: ['POST', '/api/references'],
+			withCredentials: true,
+			sentBody: form
+		});
+	});
+
+	it('rejects a refusal as the ApiError apiFetch would raise, with the server detail and Retry-After', async () => {
+		uploadAnswers({
+			status: 409,
+			body: '{"detail":"Reference audio storage limit reached."}',
+			retryAfter: '7'
+		});
+		const { settled, request } = upload();
+
+		request.onload?.();
+		const failure = await settled.catch((e: unknown) => e);
+
+		expect(failure).toBeInstanceOf(ApiError);
+		expect(failure).toMatchObject({
+			status: 409,
+			detail: 'Reference audio storage limit reached.',
+			path: '/api/references',
+			retryAfterSeconds: 7
+		});
+	});
+
+	it.each([
+		{ failed: 'onerror', reason: 'unreachable' },
+		{ failed: 'ontimeout', reason: 'timeout' }
+	] as const)(
+		'rejects as a $reason NetworkError when the request fails by $failed',
+		async ({ failed, reason }) => {
+			uploadAnswers({ status: 0, body: '' });
+			const { settled, request } = upload();
+
+			request[failed]?.();
+
+			const failure = await settled.catch((e: unknown) => e);
+			expect(failure).toBeInstanceOf(NetworkError);
+			expect(failure).toMatchObject({ path: '/api/references', reason });
+		}
+	);
 });
 
 describe('a request that gets no answer', () => {

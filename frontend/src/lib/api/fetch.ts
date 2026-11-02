@@ -287,6 +287,47 @@ export async function apiFetch<T>(
 	}
 }
 
+/**
+ * A POST of a form that reports how much of it has gone out: `fetch` cannot,
+ * so this runs on XMLHttpRequest. The answer is judged by the same refusal
+ * path as `apiFetch`'s, so a refusal rejects with the same ApiError and the
+ * same reactions, and a request without an answer with the same NetworkError.
+ */
+export function apiUpload<T>(
+	path: string,
+	body: FormData,
+	onProgress: (fractionSent: number) => void,
+	timeoutMs?: number
+): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const request = new XMLHttpRequest();
+		request.open('POST', path);
+		request.withCredentials = true;
+		request.timeout = timeoutMs ?? API_TIMEOUT_MS;
+		request.upload.onprogress = (event) => {
+			if (event.lengthComputable) onProgress(event.loaded / event.total);
+		};
+		request.onerror = () => reject(new NetworkError(path, new TypeError('Network request failed')));
+		request.ontimeout = () =>
+			reject(
+				new NetworkError(path, new DOMException('Upload timed out', 'TimeoutError'), 'timeout')
+			);
+		request.onload = () => {
+			const headers = new Headers();
+			const retryAfter = request.getResponseHeader('Retry-After');
+			if (retryAfter !== null) headers.set('Retry-After', retryAfter);
+			const response = new Response(request.responseText || null, {
+				status: request.status,
+				headers
+			});
+			throwForFailedResponse(response, path)
+				.then(() => response.json() as Promise<T>)
+				.then(resolve, reject);
+		};
+		request.send(body);
+	});
+}
+
 // The waveform read draws audio rather than sending a person's request. Its
 // failure already shows as flat bars, so it must not trigger refusal reactions.
 export async function fetchMediaBytes(url: string): Promise<ArrayBuffer> {

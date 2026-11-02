@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.api_models import ReferenceRecordingResponse
+from songmaker_cli.api_models import (
+    ReferenceListResponse,
+    ReferenceRecordingResponse,
+    ReferenceUsageResponse,
+)
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -24,6 +28,7 @@ from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH
 from songmaker_cli.db.queries.reference_recordings import (
     get_owned_reference_recording,
     list_owned_reference_recordings,
+    owner_reference_usage,
 )
 from songmaker_cli.reference_audio import (
     ReferenceAudioQuotaExceeded,
@@ -42,11 +47,21 @@ router = APIRouter()
 def api_list_references(
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_db_session)],
-) -> list[ReferenceRecordingResponse]:
-    return [
-        ReferenceRecordingResponse.from_orm(recording)
-        for recording in list_owned_reference_recordings(session, user.id)
-    ]
+) -> ReferenceListResponse:
+    settings = get_settings()
+    usage = owner_reference_usage(session, user.id)
+    return ReferenceListResponse(
+        references=[
+            ReferenceRecordingResponse.from_orm(recording)
+            for recording in list_owned_reference_recordings(session, user.id)
+        ],
+        usage=ReferenceUsageResponse(
+            files=usage.files,
+            bytes=usage.bytes,
+            file_limit=settings.reference_audio_quota_files,
+            byte_limit=settings.reference_audio_quota_bytes,
+        ),
+    )
 
 
 @router.get(

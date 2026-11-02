@@ -1,18 +1,19 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import type { ReferenceRecordingResponse } from '#lib/api/types.ts';
+import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 
-const mocks = vi.hoisted(() => ({ listReferences: vi.fn() }));
+const mocks = vi.hoisted(() => ({ listReferences: vi.fn(), uploadReference: vi.fn() }));
 
 vi.mock('#lib/api/references.ts', async (importActual) => ({
 	...(await importActual<typeof import('#lib/api/references.ts')>()),
-	listReferences: (...args: unknown[]) => mocks.listReferences(...args)
+	listReferences: (...args: unknown[]) => mocks.listReferences(...args),
+	uploadReference: (...args: unknown[]) => mocks.uploadReference(...args)
 }));
 
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
@@ -31,6 +32,16 @@ function referenceRecording(
 		duration_sec: 31.4,
 		created_at: '2026-10-27T10:00:00Z',
 		...overrides
+	};
+}
+
+function listAnswer(
+	references: ReferenceRecordingResponse[],
+	usage: Partial<ReferenceUsageResponse> = {}
+) {
+	return {
+		references,
+		usage: { files: references.length, bytes: 0, file_limit: 50, byte_limit: 500_000_000, ...usage }
 	};
 }
 
@@ -72,10 +83,12 @@ function referenceButtonLabels(target: HTMLElement): string[] {
 }
 
 async function renderTwoReferences(): Promise<HTMLElement> {
-	mocks.listReferences.mockResolvedValue([
-		referenceRecording({ id: 'a', filename: 'voice-memo.mp3' }),
-		referenceRecording({ id: 'b', filename: 'storytime-drums.wav' })
-	]);
+	mocks.listReferences.mockResolvedValue(
+		listAnswer([
+			referenceRecording({ id: 'a', filename: 'voice-memo.mp3' }),
+			referenceRecording({ id: 'b', filename: 'storytime-drums.wav' })
+		])
+	);
 	const target = await renderReferencesPage();
 	await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
 	return target;
@@ -99,6 +112,7 @@ beforeEach(() => {
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(new Date('2026-11-02T09:00:00Z'));
 	mocks.listReferences.mockReset();
+	mocks.uploadReference.mockReset();
 });
 
 afterEach(async () => {
@@ -114,15 +128,17 @@ afterEach(async () => {
 
 describe('references page', () => {
 	it('lists each reference with its filename, length and upload day, in the order served', async () => {
-		mocks.listReferences.mockResolvedValue([
-			referenceRecording({ id: 'a', filename: 'voice-memo.mp3', duration_sec: 31.4 }),
-			referenceRecording({
-				id: 'b',
-				filename: 'storytime-drums.wav',
-				duration_sec: 62,
-				created_at: '2026-10-14T08:00:00Z'
-			})
-		]);
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([
+				referenceRecording({ id: 'a', filename: 'voice-memo.mp3', duration_sec: 31.4 }),
+				referenceRecording({
+					id: 'b',
+					filename: 'storytime-drums.wav',
+					duration_sec: 62,
+					created_at: '2026-10-14T08:00:00Z'
+				})
+			])
+		);
 		const target = await renderReferencesPage();
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
 
@@ -140,7 +156,9 @@ describe('references page', () => {
 	});
 
 	it('shows a dash for a reference whose length is unknown', async () => {
-		mocks.listReferences.mockResolvedValue([referenceRecording({ duration_sec: null })]);
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([referenceRecording({ duration_sec: null })])
+		);
 		const target = await renderReferencesPage();
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
 
@@ -158,7 +176,7 @@ describe('references page', () => {
 	});
 
 	it('says what references are for once the read answered with none', async () => {
-		mocks.listReferences.mockResolvedValue([]);
+		mocks.listReferences.mockResolvedValue(listAnswer([]));
 		const target = await renderReferencesPage();
 
 		await vi.waitFor(() =>
@@ -203,7 +221,7 @@ describe('references page', () => {
 		refuseRetry(new ApiError(500, 'boom', '/api/references'));
 		await vi.waitFor(() => expect(retry()).not.toBeNull());
 
-		mocks.listReferences.mockResolvedValue([referenceRecording({})]);
+		mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({})]));
 		clickRetry();
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
 
@@ -223,7 +241,7 @@ describe('references page', () => {
 		);
 		expect(target.querySelector('.empty')).toBeNull();
 
-		mocks.listReferences.mockResolvedValue([referenceRecording({})]);
+		mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({})]));
 		reportResourceStreamReachable(false);
 		reportResourceStreamReachable(true);
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
@@ -442,6 +460,256 @@ describe('references page', () => {
 
 			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
 			expect(target.querySelector('.reference-row.playing')).toBeNull();
+		});
+	});
+
+	describe('storage meter', () => {
+		const MB = 1_000_000;
+		const meterFigures = (target: HTMLElement) =>
+			Array.from(target.querySelectorAll('.quota span'), (figure) => figure.textContent);
+
+		async function renderWithUsage(usage: Partial<ReferenceUsageResponse>): Promise<HTMLElement> {
+			mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({})], usage));
+			const target = await renderReferencesPage();
+			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
+			return target;
+		}
+
+		it.each([
+			{ case: 'files below 80 %', usage: { files: 39 } },
+			{ case: 'bytes below 80 %', usage: { bytes: 399 * MB } }
+		])('stays away with $case of its limit', async ({ usage }) => {
+			const target = await renderWithUsage(usage);
+
+			expect(target.querySelector('.quota')).toBeNull();
+		});
+
+		it.each([
+			{
+				case: 'files',
+				usage: { files: 40, bytes: 10 * MB },
+				figures: ['40 of 50 files', '10 of 500 MB']
+			},
+			{
+				case: 'bytes',
+				usage: { files: 3, bytes: 400 * MB },
+				figures: ['3 of 50 files', '400 of 500 MB']
+			}
+		])('shows both figures from 80 % of the limit on $case alone', async ({ usage, figures }) => {
+			const target = await renderWithUsage(usage);
+
+			expect(meterFigures(target)).toEqual(figures);
+			expect(
+				target
+					.querySelector('.quota')
+					?.compareDocumentPosition(target.querySelector('.reference-list') as Element)
+			).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+		});
+
+		it('draws no red for a meter below 100 %', async () => {
+			const target = await renderWithUsage({ files: 49 });
+
+			expect(target.querySelector('.quota')).not.toBeNull();
+			expect(target.querySelector('.upload-button.failed')).toBeNull();
+			expect(target.querySelector('.upload-reason')).toBeNull();
+		});
+
+		it.each([
+			{
+				limit: 'files',
+				usage: { files: 50 },
+				reason: 'Reference storage is full (50 of 50 files) — delete one first.'
+			},
+			{
+				limit: 'bytes',
+				usage: { bytes: 500 * MB },
+				reason: 'Reference storage is full (500 of 500 MB) — delete one first.'
+			}
+		])(
+			'says at the button that storage is full at 100 % of $limit, and the button stays pressable',
+			async ({ usage, reason }) => {
+				const target = await renderWithUsage(usage);
+
+				const button = target.querySelector<HTMLButtonElement>('.upload-button');
+				expect(button?.classList.contains('failed')).toBe(true);
+				expect(button?.disabled).toBe(false);
+				expect(target.querySelector('.upload-reason')?.textContent?.trim()).toBe(reason);
+			}
+		);
+	});
+
+	describe('uploading', () => {
+		const NEW_FILE = new File(['x'.repeat(200)], 'synth-hook.wav', { type: 'audio/wav' });
+
+		function uploadButton(target: HTMLElement): HTMLButtonElement {
+			return target.querySelector('.upload-button') as HTMLButtonElement;
+		}
+
+		async function choose(target: HTMLElement, file = NEW_FILE): Promise<void> {
+			const input = target.querySelector<HTMLInputElement>(
+				'input[type="file"]'
+			) as HTMLInputElement;
+			Object.defineProperty(input, 'files', { value: [file], configurable: true });
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+			await tick();
+		}
+
+		async function renderReady(usage: Partial<ReferenceUsageResponse> = {}): Promise<HTMLElement> {
+			mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({ id: 'a' })], usage));
+			const target = await renderReferencesPage();
+			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
+			return target;
+		}
+
+		it('offers Upload as one button, for the same file types as the recipe picker', async () => {
+			const target = await renderReady();
+
+			expect(uploadButton(target).textContent?.trim()).toBe('Upload');
+			expect(target.querySelector('input[type="file"]')?.getAttribute('accept')).toBe(
+				'.mp3,.wav,.flac,.ogg'
+			);
+		});
+
+		it('offers Upload on an empty list too', async () => {
+			mocks.listReferences.mockResolvedValue(listAnswer([]));
+			const target = await renderReferencesPage();
+			await vi.waitFor(() => expect(target.querySelector('.empty')).not.toBeNull());
+
+			expect(uploadButton(target).textContent?.trim()).toBe('Upload');
+		});
+
+		it('shows the name and the share sent on the button while the file travels', async () => {
+			const sent = Promise.withResolvers<ReferenceRecordingResponse>();
+			let report: (fraction: number) => void = () => undefined;
+			mocks.uploadReference.mockImplementation((_file: File, onProgress: typeof report) => {
+				report = onProgress;
+				return sent.promise;
+			});
+			const target = await renderReady();
+
+			await choose(target);
+			report(0.64);
+			await tick();
+
+			expect(uploadButton(target).textContent?.trim()).toBe('Uploading synth-hook.wav · 64%');
+			expect(uploadButton(target).style.getPropertyValue('--progress')).toBe('64%');
+			expect(uploadButton(target).disabled).toBe(true);
+			expect(mocks.uploadReference.mock.calls[0][0]).toBe(NEW_FILE);
+		});
+
+		it('puts the new row first and refreshes the meter once the upload is done', async () => {
+			mocks.uploadReference.mockResolvedValue(referenceRecording({ id: 'new' }));
+			const target = await renderReady();
+			expect(target.querySelector('.quota')).toBeNull();
+			mocks.listReferences.mockResolvedValue(
+				listAnswer(
+					[
+						referenceRecording({ id: 'new', filename: 'synth-hook.wav' }),
+						referenceRecording({ id: 'a' })
+					],
+					{ files: 41 }
+				)
+			);
+
+			await choose(target);
+
+			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
+			expect(listedReferences(target)[0].name).toBe('synth-hook.wav');
+			expect(target.querySelector('.quota')?.textContent).toContain('41 of 50 files');
+			expect(uploadButton(target).textContent?.trim()).toBe('Upload');
+		});
+
+		it('keeps a playing preview and its source through the reload that follows an upload', async () => {
+			mocks.uploadReference.mockResolvedValue(referenceRecording({ id: 'new' }));
+			const target = await renderReady();
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+			const preview = referenceElement() as HTMLAudioElement;
+			const playingSource = preview.src;
+			const pauses = vi.mocked(HTMLMediaElement.prototype.pause).mock.calls.length;
+			mocks.listReferences.mockResolvedValue(
+				listAnswer([
+					referenceRecording({ id: 'new', filename: 'synth-hook.wav' }),
+					referenceRecording({ id: 'a' })
+				])
+			);
+
+			await choose(target);
+			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
+
+			expect(vi.mocked(HTMLMediaElement.prototype.pause).mock.calls.length).toBe(pauses);
+			expect(target.querySelector('.reference-row.playing .reference-name')?.textContent).toBe(
+				'voice-memo.mp3'
+			);
+			expect(preview.src).toBe(playingSource);
+
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+			expect(preview.src).toBe(playingSource);
+
+			await pressReferenceControl(referencePlayButton(target, 'synth-hook.wav'));
+			expect(preview.src).toMatch(/\/api\/references\/new\/audio$/);
+		});
+
+		it('says at the button that the file does not fit, composed from the usage, on a 409 with room left', async () => {
+			mocks.uploadReference.mockRejectedValue(
+				new ApiError(409, 'Reference audio storage limit reached.', '/api/references')
+			);
+			const target = await renderReady({ files: 5, bytes: 431_900_000 });
+
+			await choose(target);
+			await vi.waitFor(() => expect(target.querySelector('.upload-reason')).not.toBeNull());
+
+			expect(target.querySelector('.upload-reason')?.textContent?.trim()).toBe(
+				"That file doesn't fit (431 of 500 MB used) — delete one first."
+			);
+			expect(uploadButton(target).classList.contains('failed')).toBe(true);
+			expect(listedReferences(target)).toHaveLength(1);
+			expect(mocks.listReferences).toHaveBeenCalledTimes(1);
+		});
+
+		it.each([
+			{
+				case: "the server's detail",
+				error: new ApiError(400, 'Unsupported format', '/api/references'),
+				reason: 'Unsupported format'
+			},
+			{
+				case: 'the fallback for a server without detail',
+				error: new ApiError(500, '', '/api/references'),
+				reason: "Couldn't upload this file"
+			},
+			{
+				case: 'the fallback for a lost connection',
+				error: new NetworkError('/api/references', new TypeError('x')),
+				reason: "Couldn't upload this file"
+			}
+		])(
+			'stands at the button with $case when the upload fails, and the list stays',
+			async ({ error, reason }) => {
+				mocks.uploadReference.mockRejectedValue(error);
+				const target = await renderReady();
+
+				await choose(target);
+				await vi.waitFor(() => expect(target.querySelector('.upload-reason')).not.toBeNull());
+
+				expect(target.querySelector('.upload-reason')?.textContent?.trim()).toBe(reason);
+				expect(uploadButton(target).classList.contains('failed')).toBe(true);
+				expect(listedReferences(target).map((row) => row.name)).toEqual(['voice-memo.mp3']);
+				expect(mocks.listReferences).toHaveBeenCalledTimes(1);
+			}
+		);
+
+		it('clears an earlier failure when the next upload starts', async () => {
+			mocks.uploadReference.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/references'));
+			const target = await renderReady();
+			await choose(target);
+			await vi.waitFor(() => expect(target.querySelector('.upload-reason')).not.toBeNull());
+
+			mocks.uploadReference.mockReturnValue(new Promise(() => {}));
+			await choose(target);
+
+			expect(target.querySelector('.upload-reason')).toBeNull();
+			expect(uploadButton(target).classList.contains('failed')).toBe(false);
 		});
 	});
 });

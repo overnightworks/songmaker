@@ -784,3 +784,15 @@ class ReferenceRecordingResponse(BaseModel):
             duration_sec=recording.duration_sec,
             created_at=recording.created_at.isoformat(),
         )
+
+
+class ReferenceUsageResponse(BaseModel):
+    files: int
+    bytes: int
+    file_limit: int
+    byte_limit: int
+
+
+class ReferenceListResponse(BaseModel):
+    references: list[ReferenceRecordingResponse]
+    usage: ReferenceUsageResponse
