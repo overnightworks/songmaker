@@ -1,8 +1,0 @@
-claim_id = "eb5a6aba36854981a47b863b495dc297"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "8eb7fadb92ca26390370c23d8171435bf9bca9f7"
-branch = "claude/issue-2120-songmaker-builds-its-frontend-on-node-26"
-scope = [".github/workflows/ci.yml", ".github/workflows/e2e.yml", "AGENTS.md", "Dockerfile", "frontend/.node-version", "frontend/package.json", "frontend/vitest.config.ts", "quality/config.toml"]
-opened_commit = "7a5a118bd670c8ba236a6a0bd10bebeac7101ba8"
-whole_reason = "One toolchain version moves through its pin file, the CI legs that read it, the image and the gate's job name; no part has a caller without the others."
