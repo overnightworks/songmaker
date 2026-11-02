@@ -277,35 +277,11 @@ stack. It starts the test-only worker at
 `tests/e2e_fixtures/fake_training_worker.py`; the Library E2E continues to use
 only `docker/docker-compose.ci.yml`.
 
-Run it under the probe lock with the isolated project and port:
+Run the proof as one capped command under the probe lock; the script starts the
+isolated stack, runs `e2e/voices.spec.ts` against it and tears the stack down:
 
 ```bash
-secret_file="$(mktemp)" && echo e2e-ci-client-secret > "$secret_file"
-flock /tmp/probe-stack.lock env \
-  COMPOSE_PROJECT_NAME=songmaker-i689-probe \
-  WEB_PORT=18080 \
-  POSTGRES_PASSWORD=e2e-ci-postgres-password \
-  SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else \
-  SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token \
-  E2E_ADMIN_USERNAME=e2e-ci-admin \
-  OIDC_ISSUER=https://keycloak.invalid/realms/e2e \
-  KEYCLOAK_CLIENT_SECRET_FILE="$secret_file" \
-  GRAFANA_PASSWORD=e2e-ci-grafana-password \
-  PUBLIC_BASE_URL=http://localhost:18080 \
-  E2E_BASE_URL=http://localhost:18080 \
-  docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
-  -f docker/docker-compose.e2e-voices.yml up -d --build --wait \
-  postgres redis migrate songmaker-web songmaker-music-worker \
-  songmaker-voices-e2e-worker
-```
-
-Run its browser proof with the same stack marker, so the normal Library E2E
-run never tries to exercise the Voices-only worker:
-
-```bash
-cd frontend
-E2E_ADMIN_USERNAME=e2e-ci-admin E2E_VOICES_STACK=1 E2E_BASE_URL=http://localhost:18080 \
-  pnpm exec playwright test e2e/voices.spec.ts
+flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 120 1700 scripts/voices_e2e_probe.sh
 ```
 
 The fake worker uses the same internal worker registration, Redis heartbeat,
@@ -320,8 +296,7 @@ through the normal lifecycle, then proves the ready-mode chip, a foreign-mode
 picker option named `not available for this model`, distinct WAV bytes with and
 without the adapter, and that deleting the used voice leaves a playable take
 named `voice deleted` after reload. It does not seed a ready status or adapter
-storage path. Tear the isolated stack down afterwards with the same environment
-and `docker compose ... down -v`.
+storage path.
 
 ## Test Structure
 
