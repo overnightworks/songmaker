@@ -48,6 +48,8 @@ function listedReferences(target: HTMLElement): { name: string; meta: string }[]
 
 beforeEach(() => {
 	vi.stubEnv('TZ', 'UTC');
+	vi.useFakeTimers({ toFake: ['Date'] });
+	vi.setSystemTime(new Date('2026-11-02T09:00:00Z'));
 	mocks.listReferences.mockReset();
 });
 
@@ -78,6 +80,12 @@ describe('references page', () => {
 			{ name: 'voice-memo.mp3', meta: '0:31 · 27 Oct' },
 			{ name: 'storytime-drums.wav', meta: '1:02 · 14 Oct' }
 		]);
+	});
+
+	it('titles the page References', async () => {
+		mocks.listReferences.mockReturnValue(new Promise(() => {}));
+		const target = await renderReferencesPage();
+
 		expect(target.querySelector('h1')?.textContent).toBe('References');
 	});
 
@@ -89,11 +97,13 @@ describe('references page', () => {
 		expect(listedReferences(target)[0].meta).toBe('— · 27 Oct');
 	});
 
-	it('shows the loading line until the read answers', async () => {
+	it('shows skeleton rows with the loading caption until the read answers', async () => {
 		mocks.listReferences.mockReturnValue(new Promise(() => {}));
 		const target = await renderReferencesPage();
 
-		expect(target.querySelector('.loading')?.textContent).toBe('Loading references...');
+		const status = target.querySelector('[role="status"]');
+		expect(status?.textContent?.trim()).toBe('Loading references…');
+		expect(status?.querySelectorAll('.skeleton-row').length).toBeGreaterThan(0);
 		expect(target.querySelector('.empty')).toBeNull();
 	});
 
@@ -106,19 +116,39 @@ describe('references page', () => {
 				"No references yet — upload a recording to guide a song's sound."
 			)
 		);
-		expect(target.querySelector('.loading')).toBeNull();
+		expect(target.querySelector('[role="status"]')).toBeNull();
 	});
 
-	it('names a read the server refused in its own words and claims no empty list', async () => {
-		mocks.listReferences.mockRejectedValue(
-			new ApiError(503, 'Reference storage is offline', '/api/references')
-		);
+	it('names a refused read with the fixed sentence, not the server text, and claims no empty list', async () => {
+		mocks.listReferences.mockRejectedValue(new ApiError(500, 'boom', '/api/references'));
 		const target = await renderReferencesPage();
 
 		await vi.waitFor(() =>
-			expect(target.querySelector('.error')?.textContent).toBe('Reference storage is offline')
+			expect(target.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+				'Failed to load references'
+			)
 		);
+		expect(target.textContent).not.toContain('boom');
 		expect(target.querySelector('.empty')).toBeNull();
+	});
+
+	it('reloads on "Try again", stays usable after a failed retry and lists once the read answers', async () => {
+		mocks.listReferences.mockRejectedValue(new ApiError(500, 'boom', '/api/references'));
+		const target = await renderReferencesPage();
+		const retry = () => target.querySelector<HTMLButtonElement>('button[aria-label="Try again"]');
+		const clickRetry = () => retry()?.click();
+		await vi.waitFor(() => expect(retry()).not.toBeNull());
+
+		clickRetry();
+		await vi.waitFor(() => expect(mocks.listReferences).toHaveBeenCalledTimes(2));
+		await tick();
+		expect(retry()).not.toBeNull();
+
+		mocks.listReferences.mockResolvedValue([referenceRecording({})]);
+		clickRetry();
+		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
+
+		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
 
 	it('names the failed read when the server stays unreachable, then lists once back online', async () => {
@@ -129,7 +159,9 @@ describe('references page', () => {
 		const target = await renderReferencesPage();
 		for (const delay of UNREACHABLE_RELOAD_DELAYS_MS) await vi.advanceTimersByTimeAsync(delay);
 
-		expect(target.querySelector('.error')?.textContent).toBe('Failed to load references');
+		expect(target.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+			'Failed to load references'
+		);
 		expect(target.querySelector('.empty')).toBeNull();
 
 		mocks.listReferences.mockResolvedValue([referenceRecording({})]);
@@ -137,6 +169,6 @@ describe('references page', () => {
 		reportResourceStreamReachable(true);
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
 
-		expect(target.querySelector('.error')).toBeNull();
+		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
 });

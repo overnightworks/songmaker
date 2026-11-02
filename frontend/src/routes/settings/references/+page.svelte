@@ -8,6 +8,9 @@
 	import { formatTime, localDayAndMonth } from '#lib/utils/format.ts';
 
 	const LOAD_FAILED = 'Failed to load references';
+	const LOADING = 'Loading references…';
+	const RETRY_LABEL = 'Try again';
+	const SKELETON_ROWS = 3;
 	const NO_LENGTH = '—';
 
 	let references = $state<ReferenceRecordingResponse[] | null>(null);
@@ -40,15 +43,36 @@
 	<title>References — {APP_NAME}</title>
 </svelte:head>
 
-<h1 class="page-title">References</h1>
-
-{#if $loadFailure}
-	<p class="error">{$loadFailure}</p>
-{/if}
+<header class="page-head">
+	<h1>References</h1>
+</header>
 
 {#if references === null}
-	{#if !$loadFailure}
-		<p class="loading">Loading references...</p>
+	{#if $loadFailure}
+		<div class="load-error" role="alert">
+			<span>{LOAD_FAILED}</span>
+			<button
+				type="button"
+				class="retry-btn"
+				data-hitbox="frequent"
+				data-hitbox-face
+				onclick={() => void load()}
+				aria-label={RETRY_LABEL}
+				title={RETRY_LABEL}
+			>
+				<Icon name="refresh-cw" size={16} />
+			</button>
+		</div>
+	{:else}
+		<div class="skeleton" role="status">
+			{#each { length: SKELETON_ROWS } as _, index (index)}
+				<div class="skeleton-row">
+					<span class="skeleton-bar skeleton-name"></span>
+					<span class="skeleton-bar skeleton-meta"></span>
+				</div>
+			{/each}
+			<p class="skeleton-caption">{LOADING}</p>
+		</div>
 	{/if}
 {:else if references.length === 0}
 	<div class="empty">
@@ -68,24 +92,103 @@
 {/if}
 
 <style>
-	.page-title {
-		margin: 0 0 1rem;
-		font-family: var(--font-display);
-		font-size: 1.4rem;
-		font-weight: 400;
-		letter-spacing: 1px;
-		text-transform: uppercase;
-		color: var(--text);
+	.page-head {
+		margin-bottom: 1.5rem;
 	}
 
-	.error {
+	h1 {
+		margin: 0;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+		font-size: 1.5rem;
+	}
+
+	.load-error {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.7rem;
+		padding: 0.6rem 0.8rem;
 		color: var(--score-bad);
 		font-size: 0.85rem;
 	}
 
-	.loading {
+	.retry-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		padding: 0;
+		background: none;
+		border: none;
+		color: inherit;
+		cursor: pointer;
+	}
+
+	.retry-btn:hover {
+		color: var(--primary);
+	}
+
+	.skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		padding: 0.9rem 0.6rem;
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		background: var(--surface);
+	}
+
+	.skeleton-row {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.skeleton-bar {
+		height: 12px;
+		border-radius: 4px;
+		background: linear-gradient(
+			110deg,
+			var(--surface-hover) 20%,
+			var(--border) 45%,
+			var(--surface-hover) 70%
+		);
+		background-size: 220% 100%;
+		animation: references-skeleton-shimmer 1.2s linear infinite;
+	}
+
+	.skeleton-name {
+		width: 60%;
+	}
+
+	.skeleton-meta {
+		width: 25%;
+	}
+
+	.skeleton-caption {
+		margin: 0.4rem 0 0;
+		text-align: center;
+		font-size: var(--label-font-size);
+		font-style: italic;
 		color: var(--text-subtle);
-		font-size: 0.9rem;
+	}
+
+	@keyframes references-skeleton-shimmer {
+		to {
+			background-position: -220% 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-bar {
+			animation: none;
+		}
 	}
 
 	.empty {
@@ -133,7 +236,7 @@
 	}
 
 	.reference-name {
-		font-size: 0.95rem;
+		font-size: 15px;
 		color: var(--text);
 		white-space: nowrap;
 		overflow: hidden;
@@ -141,7 +244,7 @@
 	}
 
 	.reference-meta {
-		font-size: 0.8rem;
+		font-size: 12.5px;
 		color: var(--text-muted);
 		font-variant-numeric: tabular-nums;
 	}

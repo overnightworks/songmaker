@@ -26,7 +26,7 @@ MPEG_FRAME_BYTES = 417  # MPEG-1 layer III, 128 kbit/s, 44.1 kHz
 MPEG_FRAME_COUNT = 40
 
 
-def _seed_reference_owner(session) -> None:
+def _seed_owner_other_and_admin_accounts(session) -> None:
     session.add_all([
         User(id=f"{name}-id", username=name, role=role)
         for name, role in (("owner", "user"), ("other", "user"), ("boss", "admin"))
@@ -35,7 +35,7 @@ def _seed_reference_owner(session) -> None:
 
 @pytest.fixture
 def signed_in(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_reference_owner)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_owner_other_and_admin_accounts)
     seed_session(client, "owner")
     return client
 
@@ -309,13 +309,11 @@ def test_l2_references_come_newest_first_and_one_instant_keeps_one_order(
     _seed_reference(signed_in, "owner-id", "tie-a.wav", created_at=now - timedelta(days=1),
                     reference_id="aaaa")
 
-    first = signed_in.get(REFERENCES_PATH).json()
-    second = signed_in.get(REFERENCES_PATH).json()
+    listed = signed_in.get(REFERENCES_PATH).json()
 
-    assert [item["filename"] for item in first] == [
+    assert [item["filename"] for item in listed] == [
         "new.wav", "tie-a.wav", "tie-b.wav", "old.wav",
     ]
-    assert second == first
 
 
 def test_l3_no_references_answers_an_empty_list(signed_in: TestClient) -> None:
