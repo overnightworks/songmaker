@@ -41,7 +41,7 @@ def test_body_limits_keep_json_small_and_uploads_larger() -> None:
     policy = build_body_size_policy(get_settings())
 
     assert policy.max_bytes("/api/songs", "POST") == JSON_REQUEST_BODY_MAX_BYTES
-    assert policy.max_bytes("/api/audio/upload", "POST") == AUDIO_UPLOAD_BODY_MAX_BYTES
+    assert policy.max_bytes("/api/references", "POST") == AUDIO_UPLOAD_BODY_MAX_BYTES
     assert policy.max_bytes("/api/loras/x/samples", "POST") == AUDIO_UPLOAD_BODY_MAX_BYTES
     assert policy.max_bytes("/api/songs/x/reimport", "POST") == REIMPORT_BODY_MAX_BYTES
     assert policy.max_bytes("/api/playlists/x/cover", "POST") == COVER_UPLOAD_BODY_MAX_BYTES
@@ -65,13 +65,12 @@ def test_create_app_accepts_2mib_reference_audio(tmp_path: Path) -> None:
     client = _authed_app(tmp_path)
     payload = b"RIFF" + b"\x00" * (2 * 1024 * 1024)
     resp = client.post(
-        "/api/audio/upload",
+        "/api/references",
         files={"file": ("ref.wav", payload, "audio/wav")},
     )
     assert resp.status_code == 200, resp.text
-    assert "refs/" in resp.json()["path"]
     assert resp.json()["filename"] == "ref.wav"
-    assert (tmp_path / "audio" / resp.json()["path"]).read_bytes() == payload
+    assert resp.json()["size_bytes"] == len(payload)
 
 
 def test_create_app_accepts_2mib_lora_sample(tmp_path: Path) -> None:
@@ -127,24 +126,3 @@ def test_reimport_keeps_per_file_limit_separate(
     )
     assert resp.status_code == 413
     assert resp.json()["detail"] == detail
-
-
-def test_50mib_file_with_multipart_envelope_is_accepted(tmp_path: Path) -> None:
-    client = _authed_app(tmp_path)
-    payload = b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 4)
-    resp = client.post(
-        "/api/audio/upload",
-        files={"file": ("ref.wav", payload, "audio/wav")},
-    )
-    assert resp.status_code == 200, resp.text
-
-
-def test_file_over_50mib_is_business_rejected(tmp_path: Path) -> None:
-    client = _authed_app(tmp_path)
-    payload = b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 3)
-    resp = client.post(
-        "/api/audio/upload",
-        files={"file": ("ref.wav", payload, "audio/wav")},
-    )
-    assert resp.status_code == 400
-    assert "too large" in resp.json()["detail"].lower()

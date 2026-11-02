@@ -1,7 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { tick, type Snippet } from 'svelte';
-	import { uploadReferenceAudio } from '#lib/api/client.ts';
+	import { uploadReference } from '#lib/api/client.ts';
 	import { describeFailure } from '#lib/api/fetch.ts';
 	import {
 		activeModels,
@@ -137,14 +137,14 @@
 		onchange({ ...values, [field]: raw === '' ? 0 : Number(raw) });
 	}
 
-	async function uploadReference(event: Event): Promise<void> {
+	async function attachReference(event: Event): Promise<void> {
 		const input = event.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
 		referenceUploading = true;
 		referenceError = null;
 		try {
-			const result = await uploadReferenceAudio(file);
+			const result = await uploadReference(file);
 			onchange({ ...values, reference: { id: result.id, filename: result.filename } });
 		} catch (error) {
 			referenceError = describeFailure(error, RECIPE_REFERENCE_UPLOAD_ERROR);
@@ -240,7 +240,7 @@
 				type="file"
 				accept=".mp3,.wav,.flac,.ogg"
 				disabled={referenceUploading}
-				onchange={uploadReference}
+				onchange={attachReference}
 			/></label
 		>
 	{/if}

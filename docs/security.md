@@ -398,7 +398,7 @@ JSON API requests are capped at 1 MiB (`MAX_REQUEST_BODY_BYTES`). Large multipar
 | Path | File budget | Multipart body budget |
 |---|---|---|
 | Default JSON | — | 1 MiB |
-| `POST /api/audio/upload` | 50 MiB per file | 50 MiB + 1 MiB envelope |
+| `POST /api/references` | 50 MiB per file | 50 MiB + 1 MiB envelope |
 | `POST /api/loras/{lora_id}/samples` | 50 MiB per file | 50 MiB + 1 MiB envelope |
 | `POST /api/songs/{song_id}/reimport` | two audio files | 100 MiB + 1 MiB envelope |
 | `POST /api/albums/{album_id}/cover` | 8 MiB per image | 8 MiB + 1 MiB envelope |
@@ -409,7 +409,7 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 
 ### Reference audio upload
 
-`POST /api/audio/upload` accepts audio files (.mp3, .wav, .flac, .ogg) up to 50 MiB (52,428,800 bytes) per file. Files are stored in `{audio_dir}/{user_id}/refs/{uuid}.{ext}` — the UUID filename prevents name collisions and path injection. Each user also has a positive aggregate quota: `reference_audio_quota_bytes=500_000_000` (decimal 500 MB) and `reference_audio_quota_files=50`. Every upload is a `reference_recordings` row (owner, `storage_path`, original filename, size, duration) and the file is the row's `storage_path`; admission counts the owner's rows, never a directory listing. A file without a row (a remnant) counts nowhere, blocks nothing and is never touched by an upload. Existing overage refuses additions without deleting anything. The exact quota refusal is HTTP 409, `{"detail":"Reference audio storage limit reached."}`; the previous draft reference survives. A full user has no self-service cleanup in this slice (#1301 R2 owns cleanup); the operator can raise these settings.
+`POST /api/references` accepts audio files (.mp3, .wav, .flac, .ogg) up to 50 MiB (52,428,800 bytes) per file. Files are stored in `{audio_dir}/{user_id}/refs/{uuid}.{ext}` — the UUID filename prevents name collisions and path injection. Each user also has a positive aggregate quota: `reference_audio_quota_bytes=500_000_000` (decimal 500 MB) and `reference_audio_quota_files=50`. Every upload is a `reference_recordings` row (owner, `storage_path`, original filename, size, duration) and the file is the row's `storage_path`; admission counts the owner's rows, never a directory listing. A file without a row (a remnant) counts nowhere, blocks nothing and is never touched by an upload. Existing overage refuses additions without deleting anything. The exact quota refusal is HTTP 409, `{"detail":"Reference audio storage limit reached."}`; the previous draft reference survives. A full user has no self-service cleanup in this slice (#1301 R2 owns cleanup); the operator can raise these settings.
 
 `reference_audio.py` owns the synchronous operation and its database session. A PostgreSQL transaction-scoped advisory lock keyed by namespace and user (SQLite: `BEGIN IMMEDIATE`) covers the row count through the commit of the new row, including after request cancellation. It is also the lock the later reconciliation of remnants takes (#1988 V6). It does not lock the user row, so unrelated writes referencing that user can proceed. Waiting uploads hold database connections; the existing upload rate limit bounds this accepted cost. Future reference cleanup must acquire the same owner lock.
 

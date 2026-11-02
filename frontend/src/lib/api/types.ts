@@ -718,10 +718,12 @@ export interface RateResult {
 	rating: number;
 }
 
-export interface ReferenceAudioResponse {
+export interface ReferenceRecordingResponse {
 	id: string;
-	path: string;
 	filename: string;
+	size_bytes: number;
+	duration_sec: number | null;
+	created_at: string;
 }
 
 export interface ReferenceResponse {

@@ -169,7 +169,7 @@ def test_a_commit_whose_confirmation_is_lost_leaves_row_and_file_in_agreement(ct
 )
 def test_the_stored_filename_is_the_basename_of_the_client_name(ctx, client_name, stored_name):
     with TestClient(make_router_app(ctx, user=make_authenticated_user("owner"))) as client:
-        response = client.post("/api/audio/upload", files={"file": (client_name, b"a" * 100)})
+        response = client.post("/api/references", files={"file": (client_name, b"a" * 100)})
     assert response.status_code == 200
     [row] = _rows(ctx)
     assert row.original_filename == stored_name
@@ -179,7 +179,7 @@ def test_a_filename_of_256_characters_is_refused_and_adds_nothing(ctx):
     """N3."""
     with TestClient(make_router_app(ctx, user=make_authenticated_user("owner"))) as client:
         response = client.post(
-            "/api/audio/upload", files={"file": ("a" * 252 + ".wav", b"a" * 100)},
+            "/api/references", files={"file": ("a" * 252 + ".wav", b"a" * 100)},
         )
     assert response.status_code == 400
     assert _rows(ctx) == []
@@ -192,12 +192,10 @@ def test_a_successful_upload_logs_user_reference_and_bytes_only(ctx, caplog):
         make_router_app(ctx, user=make_authenticated_user("owner"))
     ) as client:
         response = client.post(
-            "/api/audio/upload", files={"file": ("private-name.wav", b"a" * 100)},
+            "/api/references", files={"file": ("private-name.wav", b"a" * 100)},
         )
     [row] = _rows(ctx)
-    assert response.json() == {
-        "id": row.id, "path": row.storage_path, "filename": "private-name.wav",
-    }
+    assert (response.json()["id"], response.json()["filename"]) == (row.id, "private-name.wav")
     message = next(
         r.getMessage() for r in caplog.records if r.name == "songmaker_cli.reference_audio"
     )

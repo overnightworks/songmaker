@@ -4,11 +4,11 @@ import {
 	createPreset,
 	fetchActiveModels,
 	fetchGenerationDefaults,
-	uploadReferenceAudio
+	uploadReference
 } from '#lib/api/client.ts';
 import { goto } from '$app/navigation';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import type { PresetItem } from '#lib/api/types.ts';
+import type { PresetItem, ReferenceRecordingResponse } from '#lib/api/types.ts';
 import {
 	activeModels,
 	activeModelsError,
@@ -33,7 +33,7 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 	fetchActiveModels: vi.fn().mockResolvedValue([{ id: 'turbo', is_active: true }]),
 	fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
 	fetchVersions: vi.fn().mockResolvedValue([]),
-	uploadReferenceAudio: vi.fn(),
+	uploadReference: vi.fn(),
 	createPreset: vi.fn()
 }));
 vi.mock('#lib/api/loras.ts', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
@@ -324,15 +324,21 @@ describe('RecipeTabs', () => {
 	});
 
 	it('puts the uploaded reference into the draft, with the input disabled while uploading', async () => {
-		const response = Promise.withResolvers<{ id: string; path: string; filename: string }>();
-		vi.mocked(uploadReferenceAudio).mockReturnValueOnce(response.promise);
+		const response = Promise.withResolvers<ReferenceRecordingResponse>();
+		vi.mocked(uploadReference).mockReturnValueOnce(response.promise);
 		const target = await renderTabs();
 		const input = target.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
 		Object.defineProperty(input, 'files', { value: [new File(['x'], 'ref.wav')] });
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 		await tick();
 		expect(input.disabled).toBe(true);
-		response.resolve({ id: 'reference-1', path: '/reference.wav', filename: 'ref.wav' });
+		response.resolve({
+			id: 'reference-1',
+			filename: 'ref.wav',
+			size_bytes: 1,
+			duration_sec: null,
+			created_at: '2026-11-02T10:00:00+00:00'
+		});
 		await vi.waitFor(() =>
 			expect(props.values.reference).toEqual({ id: 'reference-1', filename: 'ref.wav' })
 		);
@@ -342,23 +348,23 @@ describe('RecipeTabs', () => {
 	it.each([
 		{
 			failure: 'with no network answer',
-			error: new NetworkError('/api/audio/upload', new TypeError('Failed to fetch')),
+			error: new NetworkError('/api/references', new TypeError('Failed to fetch')),
 			shown: 'Upload failed'
 		},
 		{
 			failure: 'refused by the server',
-			error: new ApiError(413, 'That file is too large', '/api/audio/upload'),
+			error: new ApiError(413, 'That file is too large', '/api/references'),
 			shown: 'That file is too large'
 		},
 		{
 			failure: 'over the storage quota',
-			error: new ApiError(409, 'Reference audio storage limit reached.', '/api/audio/upload'),
+			error: new ApiError(409, 'Reference audio storage limit reached.', '/api/references'),
 			shown: 'Reference audio storage limit reached.'
 		}
 	])(
 		'says $shown in the Reference row when the upload fails $failure and keeps the draft',
 		async ({ error, shown }) => {
-			vi.mocked(uploadReferenceAudio).mockRejectedValueOnce(error);
+			vi.mocked(uploadReference).mockRejectedValueOnce(error);
 			const start = atStandard({ genParams: { user_lora_id: 'mara' } });
 			const target = await renderTabs(start);
 			const file = new File(['x'], 'ref.wav', { type: 'audio/wav' });
