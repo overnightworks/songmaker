@@ -1578,6 +1578,7 @@ close the stream.
 | POST/DELETE | `/api/generations/{id}/share` | user | Enable/revoke generation sharing. POST answers 409 "Restore this take first." on an archived take. |
 | POST/DELETE | `/api/playlists/{id}/share` | user | Enable/revoke playlist sharing |
 | GET | `/api/references` | user | The caller's own reference recordings (a bare list; an admin gets only their own), newest first with the id ordering rows of one instant; Settings › References shows them. `duration_sec` is `null` when unmeasured. |
+| GET | `/api/references/{id}/audio` | user | The caller's own reference recording as audio, with Range (206, 416). Only the owner reads it: a foreign or unknown id, a missing file and a rejected path all answer the global 404, and an admin has no bypass. Media rate class. |
 | GET | `/shared/{slug}` | public | Read-only album JSON (no auth, rate-limited). `cover` is present only while shared and the file exists. |
 | GET | `/shared/song/{slug}` | public | Read-only song JSON (no auth, rate-limited). `cover` is present only while shared and the song file exists; `album_cover` is the parent album art, gated by this song share. |
 | GET | `/shared/gen/{slug}` | public | Read-only generation JSON (no auth, rate-limited). `album_cover` is the parent album art, gated by this generation share. A take whose song (or album) was deleted answers 404 here and on its audio and album-cover routes, like an unshared one (`sharing_api.py#_get_presented_generation`). |
