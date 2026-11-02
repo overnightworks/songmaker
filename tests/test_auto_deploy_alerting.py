@@ -747,7 +747,7 @@ def test_a_candidate_is_passed_over_unless_its_actions_checks_prove_it_green(
     ],
 )
 @pytest.mark.parametrize(
-    "through_github_api_filter", [False, True], ids=["projected", "raw-api-response"],
+    "through_github_api_filter", [False, True], ids=["with-suite", "without-suite"],
 )
 def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidate(
     tmp_path: Path,
@@ -756,7 +756,7 @@ def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidat
     advisory_log: str,
     through_github_api_filter: bool,
 ) -> None:
-    """A2: an external app failure is ignored for projected and raw API answers."""
+    """A2: an external app failure is ignored whether or not its run carries a check suite."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
