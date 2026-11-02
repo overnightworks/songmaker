@@ -8,6 +8,7 @@ a tag ``vYYYY.MM.DD.N`` on a green main commit does, checked out detached.
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 
 import pytest
@@ -566,12 +567,6 @@ def test_only_the_check_suites_of_dependabot_update_runs_leave_the_deploy_guard(
     assert (f"{candidate} is not green: failed" in checkout.journal) == (outcome == "failed")
 
 
-FOLLOWING_PAGE_PATHS = [
-    ("1", DEPENDABOT_UPDATES_WORKFLOW_PATH),
-    ("2", CODE_SCANNING_WORKFLOW_PATH),
-]
-
-
 @pytest.mark.parametrize("other_run_failed", [False, True], ids=["update-only", "other-path"])
 def test_a_paginated_workflow_answer_leaves_only_the_matching_suites(
     checkout: Checkout, other_run_failed: bool,
@@ -628,7 +623,7 @@ VALID_RUN = _run_record("2000", DEPENDABOT_UPDATES_WORKFLOW_PATH)
         pytest.param(_workflow_page(VALID_RUN, total_count=2), id="truncated"),
         pytest.param(_workflow_page(VALID_RUN, VALID_RUN, total_count=1), id="surplus"),
         pytest.param(
-            _workflow_page(VALID_RUN, total_count=2) + _workflow_page(VALID_RUN, total_count=3),
+            _workflow_page(VALID_RUN, total_count=3) + _workflow_page(VALID_RUN, total_count=2),
             id="page-totals-disagree",
         ),
         pytest.param(
@@ -649,7 +644,7 @@ def test_a_malformed_workflow_run_answer_refuses_the_whole_tick(
     checkout.move_main_forward()
     checkout.move_main_forward()
     before = checkout.head
-    checkout.set_workflow_runs_raw_response(raw_response)
+    checkout.set_workflow_runs_raw_response(raw_response, checkout.remote_main_sha())
 
     result = checkout.tick()
 
@@ -675,11 +670,12 @@ def test_a_failed_workflow_run_lookup_refuses_the_tick_without_an_older_release(
     checkout.move_main_forward()
     checkout.move_main_forward()
     before = checkout.head
+    newest = checkout.remote_main_sha()
     if lookup_fault == "fail":
-        checkout.make_workflow_lookup_fail()
+        checkout.make_workflow_lookup_fail(newest)
     else:
         checkout.check_run_lookup_timeout_seconds = 3
-        checkout.make_workflow_lookup_terminate(kill=lookup_fault == "kill")
+        checkout.make_workflow_lookup_terminate(kill=lookup_fault == "kill", commit_sha=newest)
 
     result = checkout.tick()
 
@@ -688,3 +684,82 @@ def test_a_failed_workflow_run_lookup_refuses_the_tick_without_an_older_release(
     assert "cannot determine GitHub check status" in checkout.journal
     assert checkout.head == before
     assert _deployed_sha(checkout) == before
+
+
+def _api_check_run(app_slug: str, conclusion: str, check_suite: str) -> str:
+    return (
+        f'{{"app":{{"slug":"{app_slug}"}},"name":"job","status":"completed",'
+        f'"conclusion":"{conclusion}"{check_suite}}}'
+    )
+
+
+@pytest.mark.parametrize(
+    ("suite_field", "deploys"),
+    [
+        pytest.param("", False, id="actions-run-without-suite"),
+        pytest.param(',"check_suite":null', False, id="actions-run-with-null-suite"),
+        pytest.param(',"check_suite":{"id":"x"}', False, id="actions-run-with-text-suite"),
+        pytest.param(',"check_suite":{"id":1000}', True, id="actions-run-with-suite"),
+    ],
+)
+def test_a_github_actions_run_whose_suite_cannot_be_read_is_never_passed_over(
+    checkout: Checkout, suite_field: str, deploys: bool,
+) -> None:
+    """defect:#2128 cell D8e -- unknown still blocks; a readable suite is judged as before."""
+
+    checkout.move_main_forward()
+    candidate = checkout.remote_main_sha()
+    run = _api_check_run("github-actions", "success", suite_field)
+    checkout.set_check_runs_response(f'{{"total_count":1,"check_runs":[{run}]}}')
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (_deployed_sha(checkout) == candidate) == deploys
+    assert ("cannot determine GitHub check status" in checkout.journal) == (not deploys)
+
+
+@pytest.mark.parametrize("suite_field", ["", ',"check_suite":null'])
+def test_a_failed_other_app_run_without_a_suite_stays_advisory(
+    checkout: Checkout, suite_field: str,
+) -> None:
+    """defect:#2128 cell D9 -- an other-app run is judged as today whatever its suite."""
+
+    checkout.move_main_forward()
+    candidate = checkout.remote_main_sha()
+    runs = [
+        _api_check_run("github-actions", "success", ',"check_suite":{"id":1000}'),
+        _api_check_run("sonarqubecloud", "failure", suite_field),
+    ]
+    checkout.set_check_runs_response(f'{{"total_count":2,"check_runs":[{",".join(runs)}]}}')
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert _deployed_sha(checkout) == candidate
+
+
+def test_the_update_run_lookup_runs_after_the_check_run_lookup(checkout: Checkout) -> None:
+    """defect:#2128 -- an update run that appears once the check runs are read stays unjudged."""
+
+    checkout.move_main_forward()
+    candidate = checkout.remote_main_sha()
+    checkout.set_check_runs(PASSED_CI, UPDATE_RUN)
+    answer = json.dumps({
+        "total_count": 1,
+        "workflow_runs": [
+            {
+                "check_suite_id": int(UPDATE_CHECK_SUITE_ID),
+                "path": DEPENDABOT_UPDATES_WORKFLOW_PATH,
+            },
+        ],
+    })
+    answer_file = checkout.workflow_runs_directory / "default"
+    checkout.run_after_check_lookup(
+        f"printf %s {shlex.quote(answer)} > {shlex.quote(str(answer_file))}\n",
+    )
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert _deployed_sha(checkout) == candidate

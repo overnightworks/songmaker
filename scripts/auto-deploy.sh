@@ -1059,8 +1059,8 @@ github_lookup() {
 # Dependabot update runs on commit $1. Every workflow record is counted against
 # the envelope and validated before any is selected, so a record without a
 # suite id can never match one. GitHub gives no snapshot across this lookup and
-# the check-run lookup: an update run that appears between them stays judged
-# like any other run.
+# the check-run lookup: an update run this lookup misses stays judged like any
+# other run.
 lookup_update_suites() {
     local commit_sha="$1"
     local -n update_suites_by_id="$2"
@@ -1136,7 +1136,7 @@ remote_check_status() {
     fi
     github_lookup check_runs check-run \
         "repos/$CHECK_RUN_REPOSITORY/commits/$commit_sha/check-runs?per_page=100" \
-        'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.name | record_field) and (.status | record_field) and (.conclusion | optional_record_field) and (.check_suite | type == "object") and (.check_suite.id | type == "number")) then "check\u001f\(.app.slug)\u001f\(.name)\u001f\(.status)\u001f\(.conclusion // "")\u001f\(.check_suite.id)" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' \
+        'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.name | record_field) and (.status | record_field) and (.conclusion | optional_record_field)) then "check\u001f\(.app.slug)\u001f\(.name)\u001f\(.status)\u001f\(.conclusion // "")\u001f\(.check_suite.id // "")" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' \
         || return 1
     local -A update_suites=()
     lookup_update_suites "$commit_sha" update_suites || return 1
@@ -1152,7 +1152,7 @@ remote_check_status() {
     while IFS="$CHECK_RUN_FIELD_SEPARATOR" read -r record app_slug name status conclusion check_suite_id; do
         case "$record" in
             envelope)
-                if [[ ! "$app_slug" =~ ^[0-9]+$ || -n "$name" || -n "$status" || -n "$conclusion" ]]; then
+                if [[ ! "$app_slug" =~ ^[0-9]+$ || -n "$name" || -n "$status" || -n "$conclusion" || -n "$check_suite_id" ]]; then
                     printf 'GitHub returned a malformed check-runs envelope'
                     return 1
                 fi
@@ -1165,13 +1165,17 @@ remote_check_status() {
                 ;;
             check)
                 ((observed_check_count += 1))
-                if [[ -z "$app_slug" || -z "$name" || -z "$status" || ! "$check_suite_id" =~ ^[0-9]+$ ]]; then
+                if [[ -z "$app_slug" || -z "$name" || -z "$status" ]]; then
                     printf 'GitHub returned an incomplete check-run status'
                     return 1
                 fi
                 if [[ "$app_slug" != "$REQUIRED_CHECK_RUN_APP_SLUG" ]]; then
                     log_info "GitHub check run from app '$app_slug' is advisory, ignored"
                     continue
+                fi
+                if [[ ! "$check_suite_id" =~ ^[0-9]+$ ]]; then
+                    printf 'GitHub returned an incomplete check-run status'
+                    return 1
                 fi
                 if [[ -n "${update_suites[$check_suite_id]:-}" ]]; then
                     log_info "GitHub check run '$name' belongs to a Dependabot update run, ignored"

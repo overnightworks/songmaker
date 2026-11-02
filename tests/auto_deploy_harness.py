@@ -53,10 +53,11 @@ class Checkout:
         self.docker_release_env_file = tmp_path / "docker-release-env.txt"
         self.curl_calls_file = tmp_path / "curl-calls.txt"
         self.check_runs_file = tmp_path / "check-runs.txt"
-        self.check_runs_raw_response_file = tmp_path / "check-runs-response.json"
         self.check_runs_directory = tmp_path / "check-runs"
         self.check_runs_directory.mkdir()
-        self.workflow_runs_raw_response_file = tmp_path / "workflow-runs-response.json"
+        self.workflow_runs_directory = tmp_path / "workflow-runs"
+        self.workflow_runs_directory.mkdir()
+        self._workflow_runs_fault_commit = ""
         self._check_runs_fault = ""
         self._workflow_runs_fault = ""
         self.post_merge_marker = tmp_path / "post-merge-ran.txt"
@@ -329,7 +330,7 @@ class Checkout:
         self.set_check_runs_response(check_runs_response(*runs))
 
     def set_check_runs_response(self, response: str) -> None:
-        """Make the fake gh process return an already-projected API response."""
+        """Make the fake gh process apply its jq filter to a raw API response."""
         self.check_runs_file.write_text(response)
 
     def _write_gh_stub(self) -> None:
@@ -354,7 +355,10 @@ class Checkout:
             '        echo "unexpected gh api invocation: $*" >&2\n'
             "        exit 2\n"
             "    fi\n"
+            '    workflow_commit="${3#"$workflow_runs_prefix"}"\n'
+            '    workflow_commit="${workflow_commit%"$workflow_runs_suffix"}"\n'
             '    fault="$GH_WORKFLOW_RUNS_FAULT"\n'
+            '    [[ -z $GH_FAULT_COMMIT || $workflow_commit = $GH_FAULT_COMMIT ]] || fault=""\n'
             "fi\n"
             'case "$fault" in\n'
             '    fail) echo "GitHub API unavailable" >&2; exit 1 ;;\n'
@@ -362,22 +366,17 @@ class Checkout:
             '    hang) exec sleep "$GH_LOOKUP_HANG_SECONDS" ;;\n'
             "esac\n"
             'if [[ "$3" == "$workflow_runs_prefix"*"$workflow_runs_suffix" ]]; then\n'
-            '    jq -r "$5" "$GH_WORKFLOW_RUNS_RAW_RESPONSE_FILE"\n'
+            '    response_file="${GH_WORKFLOW_RUNS_DIRECTORY}/${workflow_commit}"\n'
+            '    [[ -f "$response_file" ]] || response_file="${response_file%/*}/default"\n'
+            '    jq -r "$5" "$response_file"\n'
             "    exit $?\n"
             "fi\n"
             'if [[ -n "${GH_CHECK_RUNS_STDERR:-}" ]]; then\n'
             '    printf "%s\\n" "$GH_CHECK_RUNS_STDERR" >&2\n'
             "fi\n"
-            'if [[ -f "$GH_CHECK_RUNS_RAW_RESPONSE_FILE" ]]; then\n'
-            '    jq -r "$5" "$GH_CHECK_RUNS_RAW_RESPONSE_FILE"\n'
-            "    exit $?\n"
-            "fi\n"
             'response_file="${GH_CHECK_RUNS_DIRECTORY}/${commit_sha}"\n'
-            'if [[ -f "$response_file" ]]; then\n'
-            '    cat "$response_file"\n'
-            "else\n"
-            '    cat "$GH_CHECK_RUNS_FILE"\n'
-            "fi\n"
+            '[[ -f "$response_file" ]] || response_file="$GH_CHECK_RUNS_FILE"\n'
+            'jq -r "$5" "$response_file" || exit $?\n'
             'if [[ -n "${GH_AFTER_CHECK_LOOKUP_SCRIPT:-}" ]]; then\n'
             '    "$GH_AFTER_CHECK_LOOKUP_SCRIPT"\n'
             "fi\n",
@@ -386,10 +385,6 @@ class Checkout:
     def set_check_runs_for_commit(self, commit_sha: str, *runs: tuple[str, ...]) -> None:
         """Make GitHub report app/status/conclusion pairs for one commit only."""
         (self.check_runs_directory / commit_sha).write_text(check_runs_response(*runs))
-
-    def set_check_runs_raw_response(self, response: str) -> None:
-        """Make the fake gh process apply its jq filter to a raw API response."""
-        self.check_runs_raw_response_file.write_text(response)
 
     def set_workflow_runs(self, *runs: tuple[str, str]) -> None:
         """Make GitHub list these (check suite id, workflow path) dynamic runs."""
@@ -402,9 +397,9 @@ class Checkout:
             }),
         )
 
-    def set_workflow_runs_raw_response(self, response: str) -> None:
+    def set_workflow_runs_raw_response(self, response: str, commit_sha: str | None = None) -> None:
         """Make the fake gh process apply its jq filter to a raw API response."""
-        self.workflow_runs_raw_response_file.write_text(response)
+        (self.workflow_runs_directory / (commit_sha or "default")).write_text(response)
 
     def make_check_lookup_fail(self) -> None:
         self._check_runs_fault = "fail"
@@ -412,11 +407,13 @@ class Checkout:
     def make_check_lookup_terminate(self, *, kill: bool) -> None:
         self._check_runs_fault = "kill" if kill else "hang"
 
-    def make_workflow_lookup_fail(self) -> None:
+    def make_workflow_lookup_fail(self, commit_sha: str = "") -> None:
         self._workflow_runs_fault = "fail"
+        self._workflow_runs_fault_commit = commit_sha
 
-    def make_workflow_lookup_terminate(self, *, kill: bool) -> None:
+    def make_workflow_lookup_terminate(self, *, kill: bool, commit_sha: str = "") -> None:
         self._workflow_runs_fault = "kill" if kill else "hang"
+        self._workflow_runs_fault_commit = commit_sha
 
     def write_alert_config(self, content: str = VALID_ALERT_ENV) -> None:
         (self.root / ".env").write_text(content)
@@ -569,18 +566,21 @@ class Checkout:
         git(clone, "commit", "-m", "change compose file")
         self._land(clone, release=release)
 
+    def run_after_check_lookup(self, body: str) -> None:
+        """Run this shell body in the fake gh once the check-run lookup has answered."""
+        self._after_check_lookup_script = self._bin / "after-check-lookup"
+        write_executable(
+            self._after_check_lookup_script, "#!/bin/bash\nset -euo pipefail\n" + body,
+        )
+
     def move_main_forward_after_check_lookup(self) -> None:
         """Advance origin after the deploy script has checked its current SHA."""
         clone = self.root.parent / "pusher"
         assert clone.exists()
-        self._after_check_lookup_script = self._bin / "move-main-after-check-lookup"
         clone_text = shlex.quote(str(clone))
         readme_text = shlex.quote(str(clone / "README.md"))
         late_tag = f"v2026.10.25.{self._releases_cut + 1000}"
-        write_executable(
-            self._after_check_lookup_script,
-            "#!/bin/bash\n"
-            "set -euo pipefail\n"
+        self.run_after_check_lookup(
             f"printf 'moved after check lookup\\n' > {readme_text}\n"
             f"/usr/bin/git -C {clone_text} commit -am "
             "'move main after check lookup' >/dev/null 2>&1\n"
@@ -686,9 +686,9 @@ class Checkout:
                 "CURL_CALLS_FILE": str(self.curl_calls_file),
                 "GH_CHECK_RUNS_FILE": str(self.check_runs_file),
                 "GH_CHECK_RUNS_DIRECTORY": str(self.check_runs_directory),
-                "GH_CHECK_RUNS_RAW_RESPONSE_FILE": str(self.check_runs_raw_response_file),
                 "GH_CHECK_RUNS_STDERR": self.check_runs_stderr,
-                "GH_WORKFLOW_RUNS_RAW_RESPONSE_FILE": str(self.workflow_runs_raw_response_file),
+                "GH_WORKFLOW_RUNS_DIRECTORY": str(self.workflow_runs_directory),
+                "GH_FAULT_COMMIT": self._workflow_runs_fault_commit,
                 "GH_CHECK_RUNS_FAULT": self._check_runs_fault,
                 "GH_WORKFLOW_RUNS_FAULT": self._workflow_runs_fault,
                 "GH_LOOKUP_HANG_SECONDS": "10",

@@ -763,7 +763,7 @@ def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidat
     checkout.move_main_forward()
     expected_head = checkout.remote_main_sha()
     if through_github_api_filter:
-        checkout.set_check_runs_raw_response(json.dumps({
+        checkout.set_check_runs_response(json.dumps({
             "total_count": 2,
             "check_runs": [
                 {
@@ -778,7 +778,7 @@ def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidat
                     "name": name,
                     "status": "completed",
                     "conclusion": "failure",
-                    "check_suite": {"id": int(CI_CHECK_SUITE_ID)},
+                    "check_suite": None,
                 },
             ],
         }))
@@ -812,7 +812,7 @@ def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert "cannot determine GitHub check status" in checkout.journal
-    assert "incomplete check-run status" in checkout.journal
+    assert "malformed check-run record" in checkout.journal
     assert subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip() == local_head_before
@@ -845,7 +845,7 @@ def test_a_malformed_check_run_record_refuses_to_deploy(
     local_head_before = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip()
-    checkout.set_check_runs_raw_response(
+    checkout.set_check_runs_response(
         f'{{"total_count":1,"check_runs":[{check_run_record}]}}',
     )
 
@@ -1209,14 +1209,13 @@ def test_malformed_check_status_refuses_to_pull_with_a_named_failure(tmp_path: P
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
-    envelope_free = check_runs_response(("completed", "success")).split("\n", 1)[1]
-    checkout.set_check_runs_response(envelope_free)
+    checkout.set_check_runs_response(json.dumps({"check_runs": []}))
 
     result = checkout.tick()
 
     assert result.returncode == 0
     assert "cannot determine GitHub check status" in checkout.journal
-    assert "incomplete check-runs response" in checkout.journal
+    assert "malformed check-runs response" in checkout.journal
     assert "failure count now 1" in checkout.journal
     assert "compose build" not in checkout.docker_calls
 
