@@ -127,12 +127,11 @@ def build_bearer_gate(
     if not settings.token_client_ids:
         return None
     return BearerGate(
-        paths=PathRules(),
         relying_party=oidc_sign_in.relying_party,
         admission=oidc_sign_in.admission,
-        authorized_parties=AuthorizedParties(settings.token_client_ids),
         person_paths=PersonPaths(
             PathRules(prefixes=(API_PATH_PREFIX, MEDIA_PATH_PREFIX)),
+            AuthorizedParties(settings.token_client_ids),
             DatabaseSignInTransaction(database),
         ),
     )
