@@ -33,7 +33,7 @@
 	{#if look}<Icon name={look.icon} size={18} />{/if}
 	<span class="text">{text}</span>
 	{#if problem === 'sign_in_again'}
-		<a class="signin" href={signInHref} data-sveltekit-reload>Sign in</a>
+		<a class="signin" href={signInHref} data-sveltekit-reload>Log in</a>
 	{:else if problem !== 'not_enabled'}
 		<button type="button" class="retry-turn" disabled={remaining > 0} onclick={onretry}>
 			Try again{#if remaining > 0}

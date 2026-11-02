@@ -244,7 +244,7 @@ def test_t13_the_co_writer_turn_refuses_a_token_before_writing_any_chat_state(
     )
 
     assert (response.status_code, response.json()) == (
-        403, {"detail": "The co-writer needs a browser sign-in."},
+        403, {"detail": "The co-writer needs a browser login."},
     )
     assert token_world.rows(Job, "id") == []
     assert token_world.rows(ChatMessage, "id") == []

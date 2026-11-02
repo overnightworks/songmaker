@@ -82,7 +82,7 @@ const COWRITER_PROBLEM_TEXTS: Record<CowriterProblem, string> = {
 	unavailable: COWRITER_UNAVAILABLE_TEXT,
 	busy: 'The co-writer is busy',
 	not_enabled: 'The co-writer is not enabled for your account',
-	sign_in_again: 'Sign in again to use the co-writer'
+	sign_in_again: 'Log in again to use the co-writer'
 };
 
 export function cowriterTurnError(

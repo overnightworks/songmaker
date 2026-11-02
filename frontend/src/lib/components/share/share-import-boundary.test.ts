@@ -27,8 +27,7 @@ const ENTRY_FILES = [
 	'lib/components/NowPlayingFrame.svelte',
 	'lib/components/NowPlayingQueue.svelte',
 	'lib/components/NowPlayingLyrics.svelte',
-	'lib/components/SeekSlider.svelte',
-	'lib/components/LegalLinks.svelte'
+	'lib/components/SeekSlider.svelte'
 ].map((relative) => `/src/${relative}`);
 
 const FORBIDDEN_MODULES = [

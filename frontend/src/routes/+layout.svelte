@@ -326,7 +326,7 @@
 	</div>
 {:else if me}
 	{#if compact}
-		<PhoneAppBar username={me.username} onlogout={logout} />
+		<PhoneAppBar username={me.username} accountHref={me.account_console_url} onlogout={logout} />
 		{#if phoneTabsShown}
 			<PhoneTabs {pathname} onSelect={selectPhoneTab} />
 		{/if}
@@ -343,7 +343,13 @@
 		>
 			<Rail collapsed={$railCollapsed} />
 			<div class="app-shell desktop">
-				<div class="desktop-topbar"><AccountMenu username={me.username} onlogout={logout} /></div>
+				<div class="desktop-topbar">
+					<AccountMenu
+						username={me.username}
+						accountHref={me.account_console_url}
+						onlogout={logout}
+					/>
+				</div>
 				{@render children()}
 			</div>
 			{@render nowPlayingView()}

@@ -310,16 +310,23 @@ describe('theme', () => {
 	const COPY_KEY = 'songmaker.theme';
 
 	function stubDevice(scheme: 'dark' | 'light' | 'unsupported') {
+		const device = {
+			matches: scheme === 'dark',
+			listeners: [] as Array<() => void>,
+			addEventListener: (_type: string, listener: () => void) => device.listeners.push(listener)
+		};
 		if (scheme === 'unsupported') {
 			vi.stubGlobal('matchMedia', undefined);
-			return;
+			return device;
 		}
 		vi.stubGlobal(
 			'matchMedia',
 			vi.fn((query: string) => ({
-				matches: query === '(prefers-color-scheme: dark)' && scheme === 'dark'
+				matches: query === '(prefers-color-scheme: dark)' && device.matches,
+				addEventListener: device.addEventListener
 			}))
 		);
+		return device;
 	}
 
 	afterEach(() => {
@@ -344,6 +351,24 @@ describe('theme', () => {
 
 		expect(get(theme)).toBe(expected);
 	});
+
+	it.each([
+		{ choice: 'system', expected: 'dark' },
+		{ choice: 'light', expected: 'light' }
+	])(
+		'with the choice $choice, a device flip to dark gives $expected',
+		async ({ choice, expected }) => {
+			const device = stubDevice('light');
+			localStorage.setItem(COPY_KEY, choice);
+			const { theme, initTheme } = await import('./ui');
+			initTheme();
+
+			device.matches = true;
+			for (const listener of device.listeners) listener();
+
+			expect(get(theme)).toBe(expected);
+		}
+	);
 
 	it('is light without a window', async () => {
 		vi.stubGlobal('window', undefined);
@@ -404,15 +429,15 @@ describe('theme', () => {
 			expect(localStorage.getItem(COPY_KEY)).toBe('system');
 		});
 
-		it("does not undo a toggle made while the load is pending when the load's answer arrives", async () => {
+		it("does not undo a choice made while the load is pending when the load's answer arrives", async () => {
 			stubDevice('light');
 			let answerLoad: (answer: { theme: string }) => void = () => {};
 			mockFetchTheme.mockReturnValue(new Promise((resolve) => (answerLoad = resolve)));
 			mockUpdateTheme.mockResolvedValue({ theme: 'dark' });
-			const { theme, loadThemeChoice, toggleTheme } = await import('./ui');
+			const { theme, loadThemeChoice, chooseTheme } = await import('./ui');
 
 			const loaded = loadThemeChoice();
-			await toggleTheme();
+			await chooseTheme('dark');
 			answerLoad({ theme: 'system' });
 			await loaded;
 
@@ -441,9 +466,9 @@ describe('theme', () => {
 			stubDevice('light');
 			let refuseSave: (error: Error) => void = () => {};
 			mockUpdateTheme.mockReturnValue(new Promise((_, reject) => (refuseSave = reject)));
-			const { toggleTheme, forgetThemeChoice } = await import('./ui');
+			const { chooseTheme, forgetThemeChoice } = await import('./ui');
 
-			const toggled = toggleTheme();
+			const toggled = chooseTheme('dark');
 			forgetThemeChoice();
 			refuseSave(new Error('refused'));
 			await toggled;
@@ -460,10 +485,10 @@ describe('theme', () => {
 				let refuseSave: (error: Error) => void = () => {};
 				mockFetchTheme.mockReturnValue(new Promise((resolve) => (answerLoad = resolve)));
 				mockUpdateTheme.mockReturnValue(new Promise((_, reject) => (refuseSave = reject)));
-				const { theme, loadThemeChoice, toggleTheme } = await import('./ui');
+				const { theme, loadThemeChoice, chooseTheme } = await import('./ui');
 
 				const loaded = loadThemeChoice();
-				const toggled = toggleTheme();
+				const toggled = chooseTheme('dark');
 				if (order === 'the save fails first') {
 					refuseSave(new Error('refused'));
 					await toggled;
@@ -486,7 +511,7 @@ describe('theme', () => {
 			['the second fails, then the first succeeds', 1, 'dark'],
 			['the first fails, then the second succeeds', 0, 'light']
 		] as const)(
-			'ends on the saved choice when two toggles overlap and %s',
+			'ends on the saved choice when two choices overlap and %s',
 			async (_name, failingSave, expected) => {
 				stubDevice('light');
 				localStorage.setItem(COPY_KEY, 'light');
@@ -499,11 +524,11 @@ describe('theme', () => {
 							)
 						)
 				);
-				const { theme, loadThemeChoice, toggleTheme } = await import('./ui');
+				const { theme, loadThemeChoice, chooseTheme } = await import('./ui');
 				mockFetchTheme.mockResolvedValue({ theme: 'light' });
 				await loadThemeChoice();
 
-				const toggles = [toggleTheme(), toggleTheme()];
+				const toggles = [chooseTheme('dark'), chooseTheme('light')];
 				settle[failingSave](false);
 				await toggles[failingSave];
 				settle[1 - failingSave](true);
@@ -528,42 +553,48 @@ describe('theme', () => {
 		});
 	});
 
-	describe('toggling', () => {
-		it('applies and stores the other way at once, then sends it to the server', async () => {
+	describe('choosing', () => {
+		it('applies and stores the choice at once, then sends it to the server', async () => {
 			stubDevice('light');
 			mockUpdateTheme.mockResolvedValue({ theme: 'dark' });
-			const { theme, toggleTheme } = await import('./ui');
+			const { theme, themeChoice, chooseTheme } = await import('./ui');
 
-			const saved = toggleTheme();
+			const saved = chooseTheme('dark');
 
 			expect(get(theme)).toBe('dark');
+			expect(get(themeChoice)).toBe('dark');
 			expect(localStorage.getItem(COPY_KEY)).toBe('dark');
 			expect(document.documentElement.dataset.theme).toBe('dark');
 			await saved;
 			expect(mockUpdateTheme).toHaveBeenCalledWith('dark');
 		});
 
-		it('sends light when the person follows a dark device', async () => {
+		it('follows the device again when the person chooses system', async () => {
 			stubDevice('dark');
-			localStorage.setItem(COPY_KEY, 'system');
-			mockUpdateTheme.mockResolvedValue({ theme: 'light' });
-			const { toggleTheme } = await import('./ui');
+			localStorage.setItem(COPY_KEY, 'light');
+			mockUpdateTheme.mockResolvedValue({ theme: 'system' });
+			const { theme, themeChoice, chooseTheme } = await import('./ui');
 
-			await toggleTheme();
+			await chooseTheme('system');
 
-			expect(mockUpdateTheme).toHaveBeenCalledWith('light');
+			expect(get(themeChoice)).toBe('system');
+			expect(get(theme)).toBe('dark');
+			expect(document.documentElement.dataset.theme).toBeUndefined();
+			expect(localStorage.getItem(COPY_KEY)).toBe('system');
+			expect(mockUpdateTheme).toHaveBeenCalledWith('system');
 		});
 
-		it('reverts the theme and the copy and tells the person when the server refuses', async () => {
+		it('returns to the previous choice and tells the person when the server refuses', async () => {
 			stubDevice('light');
 			localStorage.setItem(COPY_KEY, 'light');
 			mockUpdateTheme.mockRejectedValue(new Error('refused'));
-			const { theme, toggleTheme } = await import('./ui');
+			const { theme, themeChoice, chooseTheme } = await import('./ui');
 			const { toasts } = await import('./toast');
 
-			await toggleTheme();
+			await chooseTheme('dark');
 
 			expect(get(theme)).toBe('light');
+			expect(get(themeChoice)).toBe('light');
 			expect(localStorage.getItem(COPY_KEY)).toBe('light');
 			expect(document.documentElement.dataset.theme).toBe('light');
 			expect(get(toasts).map((toast) => toast.type)).toEqual(['error']);

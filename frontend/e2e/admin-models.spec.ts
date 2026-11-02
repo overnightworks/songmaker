@@ -68,7 +68,7 @@ const DESKTOP_HEIGHT = 900;
 // before any request: "sign in again". That it is a named problem, and never a silent switch
 // to a local provider, is the ruled behaviour (#820, line 8; #1476).
 const NAMED_TURN_FAILURES =
-	/The co-writer is unavailable|The co-writer is busy|The co-writer is not enabled for your account|Sign in again to use the co-writer/;
+	/The co-writer is unavailable|The co-writer is busy|The co-writer is not enabled for your account|Log in again to use the co-writer/;
 
 // The co-writer row of the Agents table: words, no control, no model and no status (#1949):
 // the agent service decides the model, so the row says so.

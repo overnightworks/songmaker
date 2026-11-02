@@ -104,7 +104,7 @@ export interface AuthUser {
 	id: string;
 	username: string;
 	role: 'admin' | 'user';
-	account_console_url?: string | null;
+	account_console_url: string;
 }
 
 export interface AvailableModel {

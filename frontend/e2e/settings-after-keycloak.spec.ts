@@ -9,12 +9,10 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import {
-	ACCOUNT_MENU_LOGOUT_LABEL,
 	ADMIN_TABS_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SETTINGS_LABEL,
-	SETTINGS_NAV_LABEL,
-	THEME_SWITCH_TO_DARK_LABEL
+	SETTINGS_NAV_LABEL
 } from '../src/lib/constants';
 import {
 	accountCircle,
@@ -25,6 +23,7 @@ import {
 	shellOf,
 	type Shell
 } from './helpers';
+import { LOG_OUT_NAME, themeChoiceRadio } from './account-menu-words';
 import { runMarker, seedAccount } from './seed';
 
 const PREVIEW_PATH = '**/api/admin/generation-retention/preview';
@@ -53,7 +52,7 @@ async function openAccountMenu(page: Page, shell: Shell): Promise<Locator> {
 	return menu;
 }
 
-test('the account circle opens a menu with the name, Settings, the theme, Sign out and the legal links, on both shells', async ({
+test('the account circle opens a menu with the name, Settings, the theme, Log out and the legal links, on both shells', async ({
 	page
 }, info) => {
 	const shell = shellOf(info);
@@ -64,26 +63,15 @@ test('the account circle opens a menu with the name, Settings, the theme, Sign o
 	await expect(name).toHaveAttribute('href', ACCOUNT_CONSOLE_PATH);
 	await expect(name).toHaveAttribute('target', '_blank');
 	await expect(menu.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true })).toBeVisible();
-	await expect(
-		menu.getByRole('button', { name: THEME_SWITCH_TO_DARK_LABEL, exact: true })
-	).toBeVisible();
-	await expect(
-		menu.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true })
-	).toBeVisible();
+	for (const choice of ['Follow system', 'Light', 'Dark'] as const) {
+		await expect(themeChoiceRadio(menu, choice)).toBeVisible();
+	}
+	await expect(menu.getByRole('button', { name: LOG_OUT_NAME, exact: true })).toBeVisible();
 	for (const legal of ['Impressum', 'Datenschutz', 'Nutzungsbedingungen']) {
 		const link = menu.getByRole('link', { name: legal, exact: true });
 		await expect(link).toBeVisible();
 		await expect(link).toHaveAttribute('target', '_blank');
 		await expect(link).toHaveAttribute('rel', /noopener/);
-	}
-	// The separator trails its item, so no line of the legal row starts on one:
-	// each link stands at the left edge of its own item.
-	const items = menu.locator('.legal-item');
-	for (let index = 0; index < (await items.count()); index += 1) {
-		const item = items.nth(index);
-		const itemBox = await item.boundingBox();
-		const linkBox = await item.getByRole('link').boundingBox();
-		expect(linkBox?.x).toBe(itemBox?.x);
 	}
 	await expect(menu.getByText('Signed in as')).toHaveCount(0);
 

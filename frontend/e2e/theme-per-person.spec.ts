@@ -4,7 +4,6 @@
 
 import { expect, test, type Browser, type Page, type Response } from '@playwright/test';
 
-import { THEME_SWITCH_TO_DARK_LABEL, THEME_SWITCH_TO_LIGHT_LABEL } from '../src/lib/constants';
 import {
 	accountCircle,
 	accountMenu,
@@ -13,6 +12,7 @@ import {
 	shellOf,
 	waitForServiceWorkerControl
 } from './helpers';
+import { themeChoiceRadio } from './account-menu-words';
 import { BASE_URL, seedAccount, signedInApi, runMarker, type SeededAccount } from './seed';
 
 const COPY_KEY = 'songmaker.theme';
@@ -70,7 +70,7 @@ test('1: dark chosen in browser A is shown by browser B of the same person at it
 	await page.emulateMedia({ colorScheme: 'light' });
 	const menu = await openAccountMenu(page, shellOf(info));
 	const saved = page.waitForResponse(themeAnswer('PUT'));
-	await menu.getByRole('button', { name: THEME_SWITCH_TO_DARK_LABEL, exact: true }).click();
+	await themeChoiceRadio(menu, 'Dark').check();
 	expect((await saved).ok()).toBe(true);
 	await expect.poll(() => looks(page)).toMatchObject({ chosen: 'dark', copy: 'dark' });
 
@@ -143,7 +143,7 @@ test("16: a fresh browser paints by the device, then switches once to the person
 	expect(paints).toEqual(['dark']);
 });
 
-test('21: the menu toggle from the device choice on a dark device sends light', async ({
+test('21: choosing Light from the device choice on a dark device sends light', async ({
 	page
 }, info) => {
 	await page.emulateMedia({ colorScheme: 'dark' });
@@ -152,7 +152,7 @@ test('21: the menu toggle from the device choice on a dark device sends light', 
 		(request) => request.url().endsWith(THEME_PATH) && request.method() === 'PUT'
 	);
 
-	await menu.getByRole('button', { name: THEME_SWITCH_TO_LIGHT_LABEL, exact: true }).click();
+	await themeChoiceRadio(menu, 'Light').check();
 
 	expect((await sent).postDataJSON()).toEqual({ theme: 'light' });
 });
