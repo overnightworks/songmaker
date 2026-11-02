@@ -167,3 +167,9 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 11
 item = "#2086"
 date = 2026-11-02
 reason = "the reference upload answers the stored record: the generated API types swap ReferenceAudioResponse for ReferenceRecordingResponse; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "import contract \"The application's layers point downward and routes stay apart\" changes layers"
+item = "#2086"
+date = 2026-11-02
+reason = "reference_api joins the route layer as one more independent sibling, so no import direction opens; the gate reads any change of the layers field as a loosening"
