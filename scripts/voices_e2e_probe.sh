@@ -48,5 +48,4 @@ trap 'teardown; exit 143' TERM
     postgres redis migrate songmaker-web songmaker-music-worker \
     songmaker-voices-e2e-worker
 
-cd frontend
-pnpm exec playwright test e2e/voices.spec.ts
+pnpm --dir frontend exec playwright test e2e/voices.spec.ts
