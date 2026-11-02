@@ -1,6 +1,7 @@
 import type { JobItem } from '#lib/api/types.ts';
 
 export const APP_NAME = 'Hallucinai';
+export const APP_REPOSITORY_URL = 'https://github.com/overnightworks/songmaker';
 
 export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 
@@ -197,6 +198,7 @@ export const TAKE_PICK_LABEL = 'Pick';
 export const TAKE_OVERFLOW_LABEL = 'More';
 export const TAKE_SHARE_LABEL = 'Share';
 export const TAKE_PLAYLIST_LABEL = 'Add to playlist';
+export const TAKE_RESTORE_LABEL = 'Restore';
 export const TAKE_ARCHIVED_TITLE = 'Archived take';
 export const TAKE_DELETE_LABEL = 'Delete';
 export const TAKE_KEEP_LABEL = 'Keep';
@@ -588,6 +590,7 @@ export const SONG_PREVIOUS_LABEL = 'Previous song';
 export const SONG_NEXT_LABEL = 'Next song';
 
 export const SETTINGS_NAV_LABEL = 'Settings sections';
+export const SETTINGS_ADMIN_ONLY_HINT = 'admins only';
 export const ADMIN_TABS_LABEL = 'Admin sections';
 
 // The account circle and the menu it opens (issue #1158).

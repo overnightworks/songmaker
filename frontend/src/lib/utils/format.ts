@@ -70,11 +70,31 @@ export function localWeekday(moment: Date): string {
 
 // Day before month ("21 Sep") is composed by hand: the one locale that orders
 // it so, en-GB, abbreviates September as "Sept".
+function dayAndMonth(moment: Date): string {
+	return `${moment.getDate()} ${moment.toLocaleDateString(DAY_LABEL_LOCALE, { month: 'short' })}`;
+}
+
 function localDayAndMonth(moment: Date, now: Date): string {
-	const dayAndMonth = `${moment.getDate()} ${moment.toLocaleDateString(DAY_LABEL_LOCALE, { month: 'short' })}`;
 	return moment.getFullYear() === now.getFullYear()
-		? dayAndMonth
-		: `${dayAndMonth} ${moment.getFullYear()}`;
+		? dayAndMonth(moment)
+		: `${dayAndMonth(moment)} ${moment.getFullYear()}`;
+}
+
+const RELEASE_TAG_DAY = /^v(\d{4})\.(\d{2})\.(\d{2})\.\d+$/;
+
+/**
+ * The calendar day a release tag names, "28 Oct 2026" for "v2026.10.28.4", or
+ * null when the tag has no such day. The day is read as written, with no time
+ * zone conversion.
+ */
+export function releaseDayLabel(tag: string): string | null {
+	const match = RELEASE_TAG_DAY.exec(tag);
+	if (!match) return null;
+	const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+	const moment = new Date(year, month - 1, day);
+	const isRealDay =
+		moment.getFullYear() === year && moment.getMonth() === month - 1 && moment.getDate() === day;
+	return isRealDay ? `${dayAndMonth(moment)} ${year}` : null;
 }
 
 /** When a place was last worked in: "today 05:47", "yesterday 23:40", "Thu 20:31", "21 Sep". */

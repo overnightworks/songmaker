@@ -1,7 +1,7 @@
 # Measured by `quality baseline write`. Entries only ever go down.
 
 [ccn."src/songmaker_cli/db/queries/songs.py"]
-"update_song" = 14
+"update_song" = 12
 
 [ccn."src/songmaker_cli/scoring/pipeline.py"]
 "run_scoring_pipeline" = 16
@@ -20,14 +20,14 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1241
-"frontend/e2e/helpers.ts" = 836
+"frontend/e2e/back-closes-overlay.spec.ts" = 1238
+"frontend/e2e/helpers.ts" = 833
 "frontend/e2e/library.spec.ts" = 1304
 "frontend/e2e/offline.spec.ts" = 807
 "frontend/e2e/seed.ts" = 1180
-"frontend/e2e/song-phone.spec.ts" = 865
+"frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1137
+"frontend/src/lib/api/types.ts" = 1146
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 975
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -38,11 +38,11 @@
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1109
 "frontend/src/lib/components/PlayerBar.test.ts" = 1645
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
-"frontend/src/lib/components/SongDetailView.svelte" = 1034
+"frontend/src/lib/components/SongDetailView.svelte" = 1027
 "frontend/src/lib/components/SongDetailView.test.ts" = 2306
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
-"frontend/src/lib/history/historyController.test.ts" = 910
+"frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
@@ -50,32 +50,32 @@
 "frontend/src/lib/share/sharePlayback.test.ts" = 837
 "frontend/src/lib/stores/generateAction.test.ts" = 817
 "frontend/src/lib/stores/jobs.test.ts" = 906
-"frontend/src/lib/stores/libraryContext.test.ts" = 2195
-"frontend/src/lib/stores/libraryContext.ts" = 1267
-"frontend/src/lib/stores/navigation.test.ts" = 3044
+"frontend/src/lib/stores/libraryContext.test.ts" = 2193
+"frontend/src/lib/stores/libraryContext.ts" = 1266
+"frontend/src/lib/stores/navigation.test.ts" = 3043
 "frontend/src/lib/stores/player.test.ts" = 5286
 "frontend/src/lib/stores/player.ts" = 2242
 "frontend/src/lib/stores/resourceSync.test.ts" = 2039
 "frontend/src/lib/stores/resourceSync.ts" = 1073
-"frontend/src/routes/layout.test.ts" = 1416
+"frontend/src/routes/layout.test.ts" = 1415
 "frontend/src/routes/settings/users/+page.svelte" = 1123
 "frontend/src/routes/settings/users/page.test.ts" = 861
 "src/acestep_worker/wrapper.py" = 1089
 "src/songmaker_cli/constants.py" = 814
-"src/songmaker_cli/conversation_api.py" = 975
-"src/songmaker_cli/jobs/generation.py" = 1200
+"src/songmaker_cli/conversation_api.py" = 972
+"src/songmaker_cli/jobs/generation.py" = 1151
 "src/songmaker_cli/jobs/lora_training.py" = 1552
-"src/songmaker_cli/queue_streams.py" = 976
-"src/songmaker_cli/sharing_api.py" = 868
+"src/songmaker_cli/queue_streams.py" = 963
+"src/songmaker_cli/sharing_api.py" = 861
 "tests/acestep_engine/test_client.py" = 870
 "tests/acestep_worker/test_wrapper.py" = 1631
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
 "tests/songmaker_cli/test_admin_api.py" = 1055
 "tests/test_api.py" = 4751
-"tests/test_auto_deploy_alerting.py" = 1389
+"tests/test_auto_deploy_alerting.py" = 1384
 "tests/songmaker_cli/test_conversation_api.py" = 853
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
-"tests/songmaker_cli/test_db.py" = 3624
+"tests/songmaker_cli/test_db.py" = 3623
 "tests/test_jobs.py" = 3215
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_library_api.py" = 1627
@@ -83,10 +83,10 @@
 "tests/songmaker_cli/test_playlist_api.py" = 1105
 "tests/songmaker_cli/test_db_postgresql.py" = 858
 "tests/songmaker_cli/test_queue_streams.py" = 2417
-"tests/songmaker_cli/test_resource_event_api.py" = 1239
+"tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1285
 "tests/songmaker_cli/test_server.py" = 1955
-"tests/songmaker_cli/test_sharing_api.py" = 2554
+"tests/songmaker_cli/test_sharing_api.py" = 2499
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
 "main" = 65
@@ -98,7 +98,7 @@
 "_register_protected_routes" = 76
 
 [function_lines."src/songmaker_cli/api_helpers.py"]
-"create_job_with_rate_limit" = 64
+"create_job_with_rate_limit" = 48
 
 [function_lines."src/songmaker_cli/config.py"]
 "build_ace_config" = 65
@@ -136,7 +136,6 @@
 "metrics_endpoint" = 70
 
 [function_lines."src/songmaker_cli/jobs/generation.py"]
-"_build_generation_context" = 58
 "post_process_generation" = 79
 "run_generation_job" = 109
 
@@ -168,7 +167,7 @@
 
 [function_lines."src/songmaker_cli/server.py"]
 "_lifespan" = 84
-"create_app" = 180
+"create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
 "_make_deps" = 64
@@ -242,10 +241,6 @@
 [function_lines."tests/test_reference_quota.py"]
 "test_postgresql_failed_reference_write_releases_admission" = 75
 "test_postgresql_reference_admission_is_atomic" = 66
-
-[function_lines."tests/songmaker_cli/test_resource_event_api.py"]
-"test_outer_app_deadline_bounds_blocked_synthetic_terminal_and_releases_lease" = 68
-"test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases_lease" = 78
 
 [function_lines."tests/songmaker_cli/test_server.py"]
 "test_lifespan_shutdown_order_drains_pending_lease_releases" = 60

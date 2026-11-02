@@ -51,6 +51,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries.generations import create_generation, get_generation
 from songmaker_cli.db.queries.jobs import create_job, lock_active_job
+from songmaker_cli.db.queries.reference_recordings import get_owned_reference_recording
 from songmaker_cli.db.queries.resource_events import create_generation_created_event
 from songmaker_cli.db.queries.sentinels import unset_if_none
 from songmaker_cli.db.queries.settings import get_default_preset
@@ -61,7 +62,7 @@ from songmaker_cli.generate import (
     _splice_repaint_raw,
     _write_output,
 )
-from songmaker_cli.generation_params import BaseGenerationParams
+from songmaker_cli.generation_params import BaseGenerationParams, stored_config_options
 from songmaker_cli.parser import AlbumMeta, SongMeta
 from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_linked_reference_audio
 from songmaker_cli.scheduler import (
@@ -72,7 +73,9 @@ from songmaker_cli.scheduler import (
 )
 
 from ._runtime import (
+    JOB_ERROR_REFERENCE_DELETED_DURING_TAKE,
     GenerationSetupError,
+    ReferenceDeletedDuringTake,
     _job_is_terminal,
     _sanitize_error,
     _touch_heartbeat,
@@ -246,7 +249,7 @@ class GenerationContext:
     audio_dir: Path
     user_id: str
     model_name: str
-    reference_audio_path: str
+    reference_recording_id: str | None
     base_params: dict = field(default_factory=dict)
     src_generation_id: str | None = None
     raw_src_audio: str | None = None
@@ -418,12 +421,12 @@ def _build_generation_context(
     ace_config = replace(ace_config, model=model_name)
 
     try:
-        reference = resolve_linked_reference_audio(
+        reference_audio_path = resolve_linked_reference_audio(
             db_factory, audio_dir, user_id, reference_recording_id,
         )
     except ReferenceAudioRejected as exc:
         raise GenerationSetupError(JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND) from exc
-    ace_config = replace(ace_config, reference_audio_path=reference.absolute_path)
+    ace_config = replace(ace_config, reference_audio_path=reference_audio_path)
 
     ace_config = _apply_user_lora_path(
         ace_config,
@@ -443,7 +446,7 @@ def _build_generation_context(
         audio_dir=audio_dir,
         user_id=user_id,
         model_name=model_name,
-        reference_audio_path=reference.storage_path,
+        reference_recording_id=reference_recording_id,
         base_params=meta.generation_params,
     )
 
@@ -550,6 +553,7 @@ def _persist_generation_row(
             if lock_active_job(session, job_id) is None:
                 _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel, raw_wav_rel)
                 return None
+            _lock_reference_or_fail(session, ctx)
             generation = create_generation(
                 session,
                 song_id=ctx.song_id,
@@ -562,6 +566,7 @@ def _persist_generation_row(
                 src_generation_id=ctx.src_generation_id,
                 audio_dir=ctx.audio_dir,
                 created_by=ctx.user_id,
+                reference_recording_id=ctx.reference_recording_id,
             )
             persisted_id = generation.id
             create_generation_created_event(
@@ -577,6 +582,15 @@ def _persist_generation_row(
 
     log.info("Generated: %s (seed=%s)", mp3_rel, seed)
     return persisted_id
+
+
+def _lock_reference_or_fail(session: Session, ctx: GenerationContext) -> None:
+    """Hold the take's reference row until the take is saved; a row gone ends the job."""
+    reference_id = ctx.reference_recording_id
+    if reference_id is None:
+        return
+    if get_owned_reference_recording(session, ctx.user_id, reference_id, lock=True) is None:
+        raise ReferenceDeletedDuringTake(JOB_ERROR_REFERENCE_DELETED_DURING_TAKE)
 
 
 def _stored_generation_params(
@@ -597,77 +611,12 @@ def _stored_generation_params(
         lm_temperature=config.lm_temperature,
         infer_method=config.infer_method,
         thinking=config.thinking,
-        **_stored_generation_options(config),
-        **_stored_task_options(config),
+        **stored_config_options(config, delivered_batch_size),
         cot_caption=cot_caption or None,
         cot_lyrics=cot_lyrics or None,
         user_lora_id=_extract_user_lora_id(ctx.base_params),
-        **_stored_batch_options(config, delivered_batch_size),
-        reference_audio_path=ctx.reference_audio_path,
     )
     return stored.model_dump(exclude_none=True)
-
-
-def _stored_generation_options(config: AceStepConfig) -> dict:
-    return {
-        "lm_repetition_penalty": _unless_close(config.lm_repetition_penalty, 1.0),
-        "use_cot_caption": False if not config.use_cot_caption else None,
-        "use_cot_language": False if not config.use_cot_language else None,
-        "use_adg": True if config.use_adg else None,
-        "cfg_interval_start": (
-            config.cfg_interval_start if config.cfg_interval_start > 0.0 else None
-        ),
-        "cfg_interval_end": config.cfg_interval_end if config.cfg_interval_end < 1.0 else None,
-        "constrained_decoding": True if config.constrained_decoding else None,
-        "sampler_mode": config.sampler_mode if config.sampler_mode != "euler" else None,
-        "velocity_norm_threshold": (
-            config.velocity_norm_threshold if config.velocity_norm_threshold > 0 else None
-        ),
-        "velocity_ema_factor": (
-            config.velocity_ema_factor if config.velocity_ema_factor > 0 else None
-        ),
-        "latent_shift": config.latent_shift if config.latent_shift != 0 else None,
-        "latent_rescale": _unless_close(config.latent_rescale, 1.0),
-        "timesteps": config.timesteps or None,
-        "task_type": config.task_type if config.task_type != "text2music" else None,
-        "audio_cover_strength": _unless_close(config.audio_cover_strength, 1.0),
-    }
-
-
-def _stored_task_options(config: AceStepConfig) -> dict:
-    if config.task_type == "repaint":
-        return {
-            "repainting_start": config.repainting_start,
-            "repainting_end": config.repainting_end,
-            "repaint_mode": config.repaint_mode or None,
-            "repaint_strength": config.repaint_strength if config.repaint_mode else None,
-            "repaint_latent_crossfade_frames": (
-                config.repaint_latent_crossfade_frames
-                if config.repaint_latent_crossfade_frames > 0
-                else None
-            ),
-            "repaint_wav_crossfade_sec": (
-                config.repaint_wav_crossfade_sec if config.repaint_wav_crossfade_sec > 0 else None
-            ),
-        }
-    if config.task_type == "cover" and config.cover_noise_strength > 0:
-        return {"cover_noise_strength": config.cover_noise_strength}
-    return {}
-
-
-def _stored_batch_options(config: AceStepConfig, delivered_batch_size: int | None) -> dict:
-    return {
-        "batch_size": config.batch_size if config.batch_size != 1 else None,
-        "delivered_batch_size": (
-            delivered_batch_size
-            if delivered_batch_size is not None and delivered_batch_size != config.batch_size
-            else None
-        ),
-    }
-
-
-def _unless_close(value: float, default: float) -> float | None:
-    return value if not math.isclose(value, default) else None
 
 
 def _finalize_generation_job(
@@ -1174,6 +1123,8 @@ async def _generate_variant(
             job_id=job_id,
         )
         return persisted_gen_id, None
+    except ReferenceDeletedDuringTake:
+        raise
     except (NoCapacityError, WorkerTaskFailed) as exc:
         log.warning("Generation %d/%d failed: %s", index + 1, count, exc)
         return None, exc

@@ -1,11 +1,22 @@
 [gate]
 mandatory_jobs = [
-    "Backend (Python 3.12)",
     "Backend (Python 3.14)",
     "Alert rules (promtool)",
     "PostgreSQL contract (serial)",
-    "Frontend (Node 22)",
+    "Frontend",
 ]
+
+[[gate.loosened]]
+what = 'mandatory job "Frontend (Node 22)" removed'
+item = "#2120"
+date = 2026-11-02
+reason = "the operator ruled on 31.10.2026 that the frontend moves to Node 26 and allows 24 as aco does; the job loses its version in its name"
+
+[[gate.loosened]]
+what = 'mandatory job "Backend (Python 3.12)" removed'
+item = "#2102"
+date = 2026-10-31
+reason = "the floor is 3.14 and no image runs 3.12 since #2098; overnightworks/quality#38"
 
 [[gate.loosened]]
 what = 'mandatory job "Acceptance evidence (integration)" removed'
@@ -20,22 +31,10 @@ date = 2026-10-24
 reason = "the co-writer stream frames become generated types (six interfaces, minus ChatTurnV2Result); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
 
 [[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"
-item = "#1784"
-date = 2026-10-22
-reason = "generated API types gain two optional fields (account_console_url, scheduled_hour_utc); the generator's --check gates the file; quality is asked to exempt linguist-generated files (operator question, 22.10.2026)"
-
-[[gate.loosened]]
 what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1145"
 item = "#1914"
 date = 2026-10-27
 reason = "the co-writer offer response becomes a generated type (CowriterOfferResponse); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1139 -> 1140"
-item = "#1958"
-date = 2026-10-28
-reason = "the health response gains the generated acestep_reason field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
 
 [[gate.loosened]]
 what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1141"
@@ -150,3 +149,33 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1127 -> 11
 item = "#2045"
 date = 2026-10-30
 reason = "versions link references by key: the generated API types gain ReferenceResponse, the upload id and the reference field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1137 -> 1139"
+item = "#2070"
+date = 2026-10-30
+reason = "the song summary and the song item gain the generated share_url field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1139 -> 1140"
+item = "#2089"
+date = 2026-10-30
+reason = "the job answer gains the generated version_id field so the editor predicts the version a save makes during a render; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1144"
+item = "#2107"
+date = 2026-10-31
+reason = "the person's theme choice gains the generated ThemeSettings interface (an inline union of the three choices); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"
+item = "#2086"
+date = 2026-11-02
+reason = "the reference upload answers the stored record: the generated API types swap ReferenceAudioResponse for ReferenceRecordingResponse; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "import contract \"The application's layers point downward and routes stay apart\" changes layers"
+item = "#2086"
+date = 2026-11-02
+reason = "reference_api joins the route layer as one more independent sibling, so no import direction opens; the gate reads any change of the layers field as a loosening"

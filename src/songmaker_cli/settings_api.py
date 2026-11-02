@@ -23,6 +23,7 @@ from songmaker_cli.api_models import (
     RateLimitUpdateRequest,
     StatusResponse,
 )
+from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.api_models.settings import (
     AvailableModelResponse,
     CoverSettingsRequest,
@@ -34,6 +35,7 @@ from songmaker_cli.api_models.settings import (
     ProviderRouteReadiness,
     ProviderRouteStatusResponse,
     ProviderStatusResponse,
+    ThemeSettings,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user, require_admin
@@ -46,7 +48,7 @@ from songmaker_cli.constants import (
     AuditAction,
     ResourceType,
 )
-from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.auth import get_user_theme, record_audit, set_user_theme
 from songmaker_cli.db.queries.rate_limits import (
     get_all_global_rate_limits,
     upsert_rate_limit_setting,
@@ -278,6 +280,28 @@ def api_toggle_model(
     return AvailableModelResponse(id=model.id, is_active=model.is_active)
 
 
+# ── Theme ──────────────────────────────────────────────────────────
+
+
+@router.get("/settings/theme")
+def api_get_theme(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> ThemeSettings:
+    return ThemeSettings(theme=get_user_theme(session, user.id))
+
+
+@router.put("/settings/theme")
+def api_set_theme(
+    req: ThemeSettings,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> ThemeSettings:
+    set_user_theme(session, user.id, req.theme)
+    session.commit()
+    return req
+
+
 # ── Default generation config ──────────────────────────────────────
 
 
@@ -344,6 +368,14 @@ def api_capabilities(
         scoring=True,
         chat_model=get_claude_chat_model(session),
     )
+
+
+# ── Release ──────────────────────────────────────────────────────
+
+
+@router.get("/release")
+def api_release(_user: AuthenticatedUser = Depends(get_current_user)) -> ReleaseInfo:
+    return ReleaseInfo.from_settings(get_settings())
 
 
 # ── Provider reachability (shared by Co-Writer and Scoring) ────────

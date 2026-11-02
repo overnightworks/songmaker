@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Final, Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -57,6 +58,16 @@ _RELEASE_FIELD_DEFAULTS: Final = {
 
 # RFC 6749 section 3.3 scope-token: printable ASCII without space, double quote and backslash.
 _SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5b\x5d-\x7e]+")
+
+_PUBLIC_BASE_URL_SCHEMES: Final = frozenset({"http", "https"})
+# urlsplit hands back a nonsense netloc verbatim ("http://https://host" splits
+# into netloc "https:"), so the whole netloc must be a plain hostname or a
+# bracketed IPv6 address with an optional numeric port. Credentials never
+# match: a public base address carries none.
+_PUBLIC_BASE_URL_NETLOC: Final = re.compile(
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*"
+    r"|\[[0-9A-Fa-f:]+\])(?::[0-9]{1,5})?",
+)
 
 
 @dataclass(frozen=True)
@@ -171,6 +182,28 @@ class Settings(BaseSettings):
             raise ValueError("AGENT_SERVICE_AUDIENCE_SCOPE is not one RFC 6749 scope-token")
         return value
 
+    @field_validator("public_base_url")
+    @classmethod
+    def public_base_url_is_a_bare_origin(cls, value: str) -> str:
+        """Store scheme://host[:port]; a query or fragment is dropped, a path refused."""
+        raw = value.strip()
+        if not raw:
+            return ""
+        parsed = urlsplit(raw)
+        if parsed.scheme not in _PUBLIC_BASE_URL_SCHEMES or not _PUBLIC_BASE_URL_NETLOC.fullmatch(
+            parsed.netloc,
+        ):
+            raise ValueError(
+                f"PUBLIC_BASE_URL={raw!r} is not an absolute http:// or https:// URL "
+                "with a plain host[:port]",
+            )
+        if parsed.path not in ("", "/"):
+            raise ValueError(
+                f"PUBLIC_BASE_URL={raw!r} carries a path ({parsed.path!r}); configure the "
+                "bare origin (scheme://host[:port]), a subdirectory deployment is not supported",
+            )
+        return f"{parsed.scheme}://{parsed.netloc}"
+
     @property
     def token_client_ids(self) -> frozenset[str]:
         """The admitted `azp` values, trimmed; matched exactly and case-sensitively."""
@@ -228,10 +261,11 @@ class Settings(BaseSettings):
     # reach the person paths as the person behind them. Empty admits no token.
     token_clients: str = ""
     trusted_proxies: str = ""
-    # The one owner of "what address am I reachable at from outside" for
-    # share links (#339). Empty means unconfigured: share endpoints then
-    # fail loudly (api_helpers.resolve_public_base_url()) instead of
-    # guessing a scheme from the request.
+    # The one owner of "what address am I reachable at from outside": the bare
+    # origin of every share link and sign-in redirect. Behind a TLS-terminating
+    # proxy the request's own scheme is wrong, so nothing derives it from the
+    # request. Empty means unconfigured; the web app's sign-in refuses to start
+    # without it.
     public_base_url: str = ""
     max_request_body_bytes: int = Field(default=JSON_REQUEST_BODY_MAX_BYTES)
     reference_audio_quota_bytes: int = Field(default=500_000_000, gt=0)

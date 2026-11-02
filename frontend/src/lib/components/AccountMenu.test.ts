@@ -9,7 +9,13 @@ vi.mock('$app/state', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
 );
 
+vi.mock('#lib/api/settings.ts', () => ({
+	fetchTheme: vi.fn(),
+	updateTheme: vi.fn().mockResolvedValue({ theme: 'light' })
+}));
+
 import { goto } from '$app/navigation';
+import { updateTheme } from '#lib/api/settings.ts';
 import {
 	ACCOUNT_MENU_CLOSE_LABEL,
 	ACCOUNT_MENU_LABEL,
@@ -138,6 +144,7 @@ describe('AccountMenu', () => {
 
 		expect(get(theme)).toBe('light');
 		expect(getByRoleButton(panel, THEME_SWITCH_TO_DARK_LABEL)).toBeDefined();
+		expect(updateTheme).toHaveBeenCalledWith('light');
 	});
 
 	it('opens the Settings list and closes', async () => {

@@ -415,15 +415,15 @@ describe('SongDetailView header — one row, every state', () => {
 });
 
 describe('SongDetailView share link', () => {
-	it('shows a copy-link chip instead of the raw share URL when the song is shared', async () => {
-		songList.set([song({ ...editableSongDefaults(), is_shared: true, share_slug: 'abc123' })]);
+	it('shows a copy-link chip for the public share address, whatever origin the app is opened at', async () => {
+		const share_url = 'https://songmaker.example/share/song/abc123';
+		songList.set([song({ ...editableSongDefaults(), is_shared: true, share_url })]);
 		const target = await renderView();
 
 		const chip = target.querySelector<HTMLButtonElement>('.share-link-chip');
-		expect(chip).not.toBeNull();
 		expect(chip?.textContent?.trim()).toBe('Copy link');
-		expect(chip?.title).toBe(`${window.location.origin}/share/song/abc123`);
-		expect(target.textContent).not.toContain(`${window.location.origin}/share/song/abc123`);
+		expect(chip?.title).toBe(share_url);
+		expect(target.textContent).not.toContain(share_url);
 	});
 
 	it('shows no share chip when the song is not shared', async () => {

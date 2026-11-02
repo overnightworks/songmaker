@@ -6,6 +6,7 @@ import {
 	pickGeneration,
 	rateGeneration,
 	scoreGeneration,
+	unarchiveGeneration,
 	unkeepGeneration,
 	unpickGeneration
 } from '#lib/api/client.ts';
@@ -49,6 +50,15 @@ export async function setKeep(songId: string, genId: string, kept: boolean): Pro
 		await refreshSong(songId);
 	} catch (e) {
 		addToast(describeFailure(e, 'Keep failed'), 'error');
+	}
+}
+
+export async function restoreTake(songId: string, genId: string): Promise<void> {
+	try {
+		await unarchiveGeneration(genId);
+		await refreshSong(songId);
+	} catch (e) {
+		addToast(describeFailure(e, 'Restore failed'), 'error');
 	}
 }
 

@@ -44,7 +44,6 @@ export {
 	generateSong,
 	repaintGeneration,
 	coverGeneration,
-	uploadReferenceAudio,
 	rateGeneration,
 	scoreGeneration,
 	deleteGeneration,
@@ -53,9 +52,11 @@ export {
 	unpickGeneration,
 	keepGeneration,
 	unkeepGeneration,
+	unarchiveGeneration,
 	shareGeneration,
 	unshareGeneration
 } from './generations';
+export { uploadReference } from './references';
 export { fetchJob, cancelJob } from './jobs';
 export { fetchHealth } from './health';
 export {

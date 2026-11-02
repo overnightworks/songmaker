@@ -399,7 +399,7 @@ def rate_limit_policy():
     ("/api/jobs/some-job-id/stream", STREAM_BUDGET_NAME),
     ("/this-path-does-not-exist", API_BUDGET_NAME),
     ("/api/auth/check", API_BUDGET_NAME),
-    ("/api/audio/upload", API_BUDGET_NAME),
+    ("/api/references", API_BUDGET_NAME),
     ("/api/queue-streams", API_BUDGET_NAME),
     ("/api/queue-streams/library", API_BUDGET_NAME),
     ("/shared/realslug", API_BUDGET_NAME),

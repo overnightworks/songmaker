@@ -60,10 +60,7 @@ vi.mock('$app/navigation', async () => {
 		})
 	};
 });
-// Like the real `resolve`, a route ID loses its route groups and keeps a leading slash.
-vi.mock('$app/paths', () => ({
-	resolve: vi.fn((routeId: string) => routeId.replace(/\/\([^/)]+\)/g, '').replace(/^(?!\/)/, '/'))
-}));
+vi.mock('$app/paths', async () => (await import('#lib/test-utils/app-paths.ts')).fakeAppPaths());
 vi.mock('#lib/api/songs.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/api/songs.ts')>()),
 	fetchSong: api.fetchSong,
@@ -326,9 +323,8 @@ describe('a legacy /?song= address redirects', () => {
 
 		await vi.waitFor(() =>
 			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replaceState: true,
-				noScroll: true,
-				keepFocus: true
+				replace: true,
+				reset: false
 			})
 		);
 		expect(window.location.pathname).toBe(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
@@ -377,7 +373,7 @@ describe('a legacy /?song= address redirects', () => {
 		await vi.waitFor(() =>
 			expect(goto).toHaveBeenCalledWith(
 				`/album/${ALBUM_SLUG}/${SONG_SLUG}/take/3`,
-				expect.objectContaining({ replaceState: true })
+				expect.objectContaining({ replace: true })
 			)
 		);
 	});
@@ -458,9 +454,8 @@ describe('a legacy /?song= address whose history entry already carries the answe
 
 		await vi.waitFor(() =>
 			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replaceState: true,
-				noScroll: true,
-				keepFocus: true
+				replace: true,
+				reset: false
 			})
 		);
 	});
@@ -536,9 +531,8 @@ describe('a legacy /?song= address whose song cannot be reached', () => {
 
 		await vi.waitFor(() =>
 			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replaceState: true,
-				noScroll: true,
-				keepFocus: true
+				replace: true,
+				reset: false
 			})
 		);
 	});
@@ -561,9 +555,8 @@ describe('a legacy /?song= address whose song cannot be reached', () => {
 
 		await vi.waitFor(() =>
 			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replaceState: true,
-				noScroll: true,
-				keepFocus: true
+				replace: true,
+				reset: false
 			})
 		);
 	});
@@ -615,9 +608,8 @@ describe('a legacy /?song=&gen= address whose take is gone', () => {
 
 		await vi.waitFor(() =>
 			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replaceState: true,
-				noScroll: true,
-				keepFocus: true
+				replace: true,
+				reset: false
 			})
 		);
 		// The redirect has landed (goto was called and the address already

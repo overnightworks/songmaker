@@ -1,4 +1,4 @@
-import type { NavigationTarget } from '@sveltejs/kit';
+import type { NavigationTarget } from '$app/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
@@ -401,16 +401,14 @@ describe('history adapter', () => {
 		const page = await landed(pushEntry('/album/a', {}));
 
 		await navigateTo('/album/a/song', {
-			replaceState: true,
-			noScroll: true,
-			keepFocus: true,
+			replace: true,
+			reset: false,
 			state: {}
 		});
 		const replaced = standingHistoryEntry();
 		await navigateTo('/settings', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true,
+			replace: false,
+			reset: false,
 			state: {}
 		});
 
@@ -559,7 +557,7 @@ describe('history adapter', () => {
 			await stepBackOrGoTo('/login');
 
 			expect(back).not.toHaveBeenCalled();
-			expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
+			expect(goto).toHaveBeenCalledWith('/login', { replace: true });
 			expect(location.pathname).toBe('/login');
 		}
 	);
@@ -652,7 +650,7 @@ describe('history adapter', () => {
 		await landed(pushEntry('/album/b/song', {}));
 		await traverse(() => history.back());
 
-		await vi.mocked(goto)('/album/c', { replaceState: true });
+		await vi.mocked(goto)('/album/c', { replace: true });
 		stampNavigatedEntry('goto');
 
 		expect(standingHistoryEntry()).toBeNull();
@@ -775,9 +773,8 @@ describe('route convergence after a landing', () => {
 	it('a page pushed while a route mounts stands at once, and the mount issued over it lands on it', async () => {
 		const routesLoaded = holdRouteLoads();
 		const albumMounted = navigateTo(location.href, {
-			replaceState: true,
-			noScroll: true,
-			keepFocus: true,
+			replace: true,
+			reset: false,
 			state: {}
 		});
 
@@ -879,9 +876,8 @@ describe('route convergence after a landing', () => {
 		});
 		const releaseRouteLoads = holdRouteLoads();
 		const navigated = navigateTo('/album/b', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true,
+			replace: false,
+			reset: false,
 			state: {}
 		});
 

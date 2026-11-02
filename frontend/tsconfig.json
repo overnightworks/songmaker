@@ -1,23 +1,11 @@
 {
-	"extends": "./.svelte-kit/tsconfig.json",
+	"extends": "$app/tsconfig",
 	"compilerOptions": {
-		"allowImportingTsExtensions": true,
-		"allowJs": true,
-		"checkJs": true,
-		"esModuleInterop": true,
-		"forceConsistentCasingInFileNames": true,
-		"resolveJsonModule": true,
-		"skipLibCheck": true,
 		"sourceMap": true,
-		"strict": true,
-		"moduleResolution": "bundler"
+		"strict": true
 	},
-	// Restated from the generated config (paths there are relative to
-	// .svelte-kit/, these to the project root) so the Playwright harness in
-	// e2e/ is type-checked by `pnpm check` as well.
+	// What `pnpm check` covers, the Playwright harness in e2e/ included.
 	"include": [
-		".svelte-kit/ambient.d.ts",
-		".svelte-kit/non-ambient.d.ts",
 		".svelte-kit/types/**/$types.d.ts",
 		"vite.config.ts",
 		"playwright.config.ts",

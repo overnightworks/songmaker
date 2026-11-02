@@ -1,7 +1,7 @@
 """arq music worker — runs GPU-bound generation jobs.
 
 Started as a separate process:
-    arq songmaker_cli.music_worker.MusicWorkerSettings
+    python -m songmaker_cli.arq_worker songmaker_cli.music_worker.MusicWorkerSettings
 """
 
 from __future__ import annotations

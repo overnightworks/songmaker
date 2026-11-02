@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { goto } from '$app/navigation';
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
+
+import { goto, pushState, replaceState } from '$app/navigation';
 import {
 	attachLandingHandler,
 	historyComesToRest,
 	installHistoryController,
+	loadHistoryPageForTests,
+	mountAddressOver,
 	navigateTo,
 	pushEntry,
 	replaceEntry,
@@ -13,9 +19,27 @@ import {
 	stepBackOffStandingEntry
 } from '#lib/history/historyController.ts';
 import { pageStateOfHistoryState } from '#lib/history/routerHistoryState.ts';
-import { holdLayer, resetLayersForTests } from '#lib/stores/layers.ts';
-import { holdShallowWrites, laterTask, startFakeRouter } from '#lib/test-utils/app-navigation.ts';
-import { standingHistoryEntry, watchBack } from '#lib/test-utils/library-history.ts';
+import {
+	closeTopLayer,
+	holdLayer,
+	resetLayersForTests,
+	stackedLayers
+} from '#lib/stores/layers.ts';
+import {
+	fakePage,
+	holdShallowWrites,
+	laterTask,
+	renderNoRouteAddresses,
+	reportedNavigations,
+	startFakeRouter
+} from '#lib/test-utils/app-navigation.ts';
+import {
+	pressBack,
+	pressForward,
+	pushHistoryEntry,
+	standingHistoryEntry,
+	watchBack
+} from '#lib/test-utils/library-history.ts';
 
 // SvelteKit 3 writes a shallow entry a few microtasks after the call. Until it
 // has, the controller answers where history stands from what it wrote, and
@@ -60,9 +84,8 @@ describe('writes the router has not landed yet', () => {
 		const second = replaceEntry('/album/b?filter=x', {});
 		const third = pushEntry('/album/c', {});
 		const moved = navigateTo('/settings', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true,
+			replace: false,
+			reset: false,
 			state: {}
 		});
 
@@ -116,9 +139,8 @@ describe('writes the router has not landed yet', () => {
 			move: 'a navigation',
 			start: () =>
 				void navigateTo('/settings', {
-					replaceState: false,
-					noScroll: true,
-					keepFocus: true,
+					replace: false,
+					reset: false,
 					state: {}
 				}),
 			started: () => vi.mocked(goto).mock.calls.length
@@ -151,5 +173,176 @@ describe('writes the router has not landed yet', () => {
 		await releaseWrites();
 
 		await vi.waitFor(() => expect(backs.presses()).toBe(1));
+	});
+});
+
+describe('a rejected shallow write', () => {
+	beforeEach(async () => {
+		sessionStorage.clear();
+		history.replaceState(null, '', '/');
+		resetHistoryControllerForTests();
+		startFakeRouter();
+		installHistoryController();
+		attachLandingHandler(() => undefined);
+		await vi.mocked(goto)('/album/a');
+		stampNavigatedEntry('goto');
+	});
+
+	afterEach(() => {
+		resetHistoryControllerForTests();
+		vi.restoreAllMocks();
+	});
+
+	it('leaves the next move to build on the history that stands, not on the write that failed', async () => {
+		renderNoRouteAddresses('/gone');
+		pushEntry('/gone', {});
+		await historyComesToRest();
+
+		const next = pushEntry('/album/b', {});
+		await historyComesToRest();
+
+		expect(next.below).toBe(`${location.origin}/album/a`);
+		expect(location.pathname).toBe('/album/b');
+	});
+});
+
+describe('an address no route matches', () => {
+	const NOT_FOUND = '/nonsense';
+	const close = vi.fn();
+
+	beforeEach(async () => {
+		sessionStorage.clear();
+		history.replaceState(null, '', '/');
+		resetHistoryControllerForTests();
+		startFakeRouter();
+		installHistoryController();
+		attachLandingHandler(() => undefined);
+		await vi.mocked(goto)('/album/a');
+		stampNavigatedEntry('goto');
+		await historyComesToRest();
+		pushHistoryEntry(NOT_FOUND);
+		startFakeRouter();
+		renderNoRouteAddresses(NOT_FOUND);
+		loadHistoryPageForTests();
+		stampNavigatedEntry('enter');
+		await laterTask();
+		vi.mocked(goto).mockClear();
+		vi.mocked(pushState).mockClear();
+		vi.mocked(replaceState).mockClear();
+		close.mockClear();
+	});
+
+	afterEach(() => {
+		resetHistoryControllerForTests();
+		resetLayersForTests();
+		vi.restoreAllMocks();
+	});
+
+	it('is started without a write the router would refuse', async () => {
+		const entries = history.length;
+
+		stampNavigatedEntry('enter');
+		await laterTask();
+
+		expect(replaceState).not.toHaveBeenCalled();
+		expect(history).toHaveLength(entries);
+	});
+
+	it('opens a layer with no entry of its own and no remount, and Escape closes it', async () => {
+		const entries = history.length;
+		const backs = watchBack();
+
+		holdLayer('account-menu', close);
+		await laterTask();
+		expect(pushState).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+		expect(history).toHaveLength(entries);
+
+		expect(closeTopLayer()).toBe(true);
+		await laterTask();
+		expect(close).toHaveBeenCalledOnce();
+		expect(backs.presses()).toBe(0);
+		backs.stop();
+	});
+
+	it('closes the layer when a navigation lands on a valid page', async () => {
+		holdLayer('account-menu', close);
+		await laterTask();
+
+		await navigateTo('/library', { replace: false, reset: false, state: {} });
+		stampNavigatedEntry('goto');
+
+		expect(close).toHaveBeenCalledOnce();
+		expect(stackedLayers()).toHaveLength(0);
+		expect(location.pathname).toBe('/library');
+	});
+
+	it('leaves the page on Back with the layer closed, and again after Forward', async () => {
+		holdLayer('account-menu', close);
+		await laterTask();
+
+		await pressBack();
+		expect(close).toHaveBeenCalledOnce();
+		await laterTask();
+		expect(location.pathname).toBe('/album/a');
+
+		await pressForward();
+		expect(location.pathname).toBe(NOT_FOUND);
+		holdLayer('account-menu', close);
+		await laterTask();
+		await pressBack();
+		await laterTask();
+
+		expect(close).toHaveBeenCalledTimes(2);
+		expect(location.pathname).toBe('/album/a');
+	});
+
+	it('mounts the address history already stands on while the page still describes the error page', () => {
+		history.replaceState(null, '', '/album/b');
+
+		mountAddressOver('/album/c');
+
+		expect(goto).toHaveBeenCalledWith(
+			`${location.origin}/album/b`,
+			expect.objectContaining({ replace: true })
+		);
+	});
+
+	it('mounts nothing over the error page itself', () => {
+		mountAddressOver('/elsewhere');
+
+		expect(goto).not.toHaveBeenCalled();
+	});
+});
+
+describe('a Back onto an entry written over another address', () => {
+	beforeEach(async () => {
+		sessionStorage.clear();
+		history.replaceState(null, '', '/');
+		resetHistoryControllerForTests();
+		startFakeRouter();
+		installHistoryController();
+		attachLandingHandler(() => undefined);
+		await vi.mocked(goto)('/album/a');
+		stampNavigatedEntry('goto');
+	});
+
+	afterEach(() => {
+		resetHistoryControllerForTests();
+		vi.restoreAllMocks();
+	});
+
+	it('loads the page the entry was written over, and reports the address it landed on', async () => {
+		pushEntry('/album/b', {});
+		await historyComesToRest();
+		await vi.mocked(goto)('/settings');
+		stampNavigatedEntry('goto');
+		await historyComesToRest();
+
+		await pressBack();
+
+		expect(fakePage.url.pathname).toBe('/album/a');
+		expect(location.pathname).toBe('/album/b');
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/album/b' });
 	});
 });

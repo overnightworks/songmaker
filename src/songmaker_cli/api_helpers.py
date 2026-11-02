@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Final, NoReturn, Protocol
-from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Query, Request
 from slugify import slugify as _slugify
@@ -59,10 +57,11 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.playlists import get_playlist
 from songmaker_cli.db.queries.rate_limits import resolve_rate_limit
 from songmaker_cli.db.queries.songs import get_song
+from songmaker_cli.db.queries.versions import lock_song_and_find_version
 from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.settings import get_settings
-from songmaker_cli.worker_liveness import read_worker_liveness
+from songmaker_cli.worker_liveness import WorkerLiveness, read_worker_liveness
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -140,75 +139,6 @@ def lock_lora_capacity(session: Session) -> None:
     _begin_exclusive(session, _LORA_CAPACITY_LOCK_ID)
 
 
-_PUBLIC_BASE_URL_SCHEMES = frozenset({"http", "https"})
-
-# A netloc urlsplit hands back verbatim even when it is nonsense: e.g.
-# "http://https://host" splits into scheme="http", netloc="https:" -- a
-# non-empty netloc that is not a host. Requiring the whole netloc to match a
-# plain hostname (or bracketed IPv6) with an optional numeric port closes
-# that gap; credentials ("user:pass@host") are rejected the same way, since
-# a public base address has no business carrying any.
-_PUBLIC_BASE_URL_HOSTNAME = (
-    r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*"
-)
-_PUBLIC_BASE_URL_IPV6 = r"\[[0-9A-Fa-f:]+\]"
-_PUBLIC_BASE_URL_NETLOC_RE = re.compile(
-    rf"^(?:{_PUBLIC_BASE_URL_HOSTNAME}|{_PUBLIC_BASE_URL_IPV6})(?::[0-9]{{1,5}})?$",
-)
-
-
-def resolve_public_base_url() -> str:
-    """The one owner of "what address am I reachable at from outside".
-
-    Every share endpoint (album/song/generation/playlist) calls this instead
-    of trusting ``request.base_url``. ``base_url`` reflects the scheme of the
-    literal ASGI transport — always ``http`` behind a TLS-terminating proxy
-    (Cloudflare Tunnel today), because ``run_server()`` intentionally runs
-    uvicorn with ``proxy_headers=False`` (see #328 and ``auth.py``) so no
-    second, unaudited trust decision rewrites it. A deployment's public
-    address does not change per request, so there is nothing to negotiate at
-    request time: it is validated configuration, the same way
-    ``TRUSTED_PROXIES`` and ``ALLOWED_HOSTS`` are.
-
-    Callers must call this *before* mutating anything: it is the first thing
-    a share endpoint does, ahead of ``enable_*_sharing()`` and the commit
-    that follows it, so a resource is never flipped public on a request that
-    goes on to fail here (#339).
-
-    Raises ``HTTPException(500)`` — named, not a half-built link — when
-    ``PUBLIC_BASE_URL`` is unset, is not an absolute ``http(s)`` URL with a
-    plain ``host[:port]``, or carries a path (a subdirectory deployment is
-    not supported — silently dropping the path would build exactly the
-    half-link this function exists to prevent). A query string or fragment
-    is discarded rather than rejected: neither belongs in an origin, and
-    dropping them is unambiguous, unlike a path.
-    """
-    raw = get_settings().public_base_url.strip()
-    if not raw:
-        raise HTTPException(
-            500,
-            "PUBLIC_BASE_URL is not configured — cannot build a share link "
-            "without knowing the address this server is reachable at.",
-        )
-    parsed = urlsplit(raw)
-    if parsed.scheme not in _PUBLIC_BASE_URL_SCHEMES or not _PUBLIC_BASE_URL_NETLOC_RE.match(
-        parsed.netloc
-    ):
-        raise HTTPException(
-            500,
-            f"PUBLIC_BASE_URL={raw!r} is not an absolute http:// or https:// URL "
-            "with a plain host[:port].",
-        )
-    if parsed.path not in ("", "/"):
-        raise HTTPException(
-            500,
-            f"PUBLIC_BASE_URL={raw!r} carries a path ({parsed.path!r}). Configure "
-            "the bare origin (scheme://host[:port]) — a subdirectory deployment "
-            "is not supported here.",
-        )
-    return f"{parsed.scheme}://{parsed.netloc}"
-
-
 def _job_type_rate_limit(job_type: JobType) -> tuple[int, str]:
     """Return (env_limit, db_setting_key) for a job type."""
     settings = get_settings()
@@ -224,40 +154,13 @@ def _job_type_rate_limit(job_type: JobType) -> tuple[int, str]:
 _QUEUEABLE_JOB_TYPES = frozenset({JobType.GENERATE, JobType.SCORE})
 
 
-def create_job_with_rate_limit(
+def _enforce_job_limits(
     session: Session,
     user: AuthenticatedUser,
     job_type: JobType,
-    song_id: str | None = None,
-    *,
-    redis: Redis,
-) -> Job:
-    """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
-
-    Prevents TOCTOU races where two concurrent requests both pass the rate
-    limit check before either creates a job.
-
-    Liveness is observed before the initial commit and exclusive write lock so
-    Redis round trips do not extend the serialized section. The initial commit
-    closes the implicit transaction opened by the auth
-    dependency (session renewal, IP/UA audit records) so that BEGIN IMMEDIATE
-    can acquire an exclusive write lock.  This means auth-layer mutations are
-    committed even when the rate limit rejects the request — that is correct
-    because session renewal and audit logging must persist regardless.
-
-    Callers must not perform any additional mutations between dependency
-    injection and this function; such mutations would be committed
-    unconditionally by the commit() here.
-    """
-    assert not session.new and not session.dirty and not session.deleted, (
-        "create_job_with_rate_limit: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
-    )
-    worker_ids = [worker.id for worker in list_worker_identities(session)]
-    worker_liveness = read_worker_liveness(redis, worker_ids)
-    session.commit()
-    _begin_exclusive(session)
-
+    worker_liveness: WorkerLiveness,
+) -> None:
+    """Recover stale jobs, then roll back with 429 when a queue or rate limit is reached."""
     settings = get_settings()
     max_queue_depth = resolve_rate_limit(
         session, user.id, SETTING_MAX_QUEUE_DEPTH, settings.max_queue_depth,
@@ -287,7 +190,55 @@ def create_job_with_rate_limit(
         session.rollback()
         raise HTTPException(429, f"Rate limit reached ({limit}/{job_type}s per hour).")
 
-    return create_job(session, job_type, user_id=user.id, song_id=song_id)
+
+def create_job_with_rate_limit(
+    session: Session,
+    user: AuthenticatedUser,
+    job_type: JobType,
+    song_id: str | None = None,
+    *,
+    version_id: str | None = None,
+    redis: Redis,
+) -> Job:
+    """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
+
+    Prevents TOCTOU races where two concurrent requests both pass the rate
+    limit check before either creates a job.
+
+    Liveness is observed before the initial commit and exclusive write lock so
+    Redis round trips do not extend the serialized section. The initial commit
+    closes the implicit transaction opened by the auth
+    dependency (session renewal, IP/UA audit records) so that BEGIN IMMEDIATE
+    can acquire an exclusive write lock.  This means auth-layer mutations are
+    committed even when the rate limit rejects the request — that is correct
+    because session renewal and audit logging must persist regardless.
+
+    Callers must not perform any additional mutations between dependency
+    injection and this function; such mutations would be committed
+    unconditionally by the commit() here.
+    """
+    assert not session.new and not session.dirty and not session.deleted, (
+        "create_job_with_rate_limit: session has uncommitted mutations — "
+        "the commit() below would persist them unconditionally"
+    )
+    worker_ids = [worker.id for worker in list_worker_identities(session)]
+    worker_liveness = read_worker_liveness(redis, worker_ids)
+    session.commit()
+    _begin_exclusive(session)
+
+    _enforce_job_limits(session, user, job_type, worker_liveness)
+    if version_id is not None:
+        # Inside the exclusive section and before the insert: a lock taken earlier is
+        # released by the commit above, and one taken after the insert lets a delete that
+        # won the song row fail the insert's version key with a 500 instead of a 404.
+        assert song_id is not None
+        if lock_song_and_find_version(session, song_id, version_id) is None:
+            session.rollback()
+            raise HTTPException(404, "Version not found")
+
+    return create_job(
+        session, job_type, user_id=user.id, song_id=song_id, version_id=version_id,
+    )
 
 
 def gen_params_to_json(params: BaseGenerationParams | None) -> dict | None:
@@ -304,6 +255,15 @@ def gen_params_to_json(params: BaseGenerationParams | None) -> dict | None:
 def slugify(value: str, max_length: int = _UNBOUNDED_SLUG_LENGTH) -> str:
     """Turn a human title into a URL-safe slug, never empty."""
     return _slugify(value, max_length=max_length) or "untitled"
+
+
+def _first_free_slug(base_slug: str, is_taken: Callable[[str], bool]) -> str:
+    candidate = base_slug
+    counter = 1
+    while is_taken(candidate):
+        counter += 1
+        candidate = f"{base_slug}-{counter}"
+    return candidate
 
 
 def _acquire_unique_slug(
@@ -323,12 +283,7 @@ def _acquire_unique_slug(
     """
     commit_auth_state_before_lock(session, caller)
     _begin_exclusive(session, lock_id)
-    candidate = base_slug
-    counter = 1
-    while is_taken(candidate):
-        counter += 1
-        candidate = f"{base_slug}-{counter}"
-    return candidate
+    return _first_free_slug(base_slug, is_taken)
 
 
 def unique_album_id(session: Session, title: str) -> str:
@@ -351,17 +306,16 @@ def unique_lora_slug_under_capacity_lock(
     keep its slug choice and per-musician capacity check in one transaction.
     """
     base_slug = slugify(name, max_length=_LORA_SLUG_BASE_MAX_LENGTH)
-    candidate = base_slug
-    counter = 1
-    while (
-        session.query(UserLora)
-        .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
-        .first()
-        is not None
-    ):
-        counter += 1
-        candidate = f"{base_slug}-{counter}"
-    return candidate
+
+    def is_taken(candidate: str) -> bool:
+        return (
+            session.query(UserLora)
+            .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
+            .first()
+            is not None
+        )
+
+    return _first_free_slug(base_slug, is_taken)
 
 
 def unique_song_slug(

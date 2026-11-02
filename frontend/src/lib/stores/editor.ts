@@ -6,7 +6,8 @@ import {
 	fetchSong
 } from '#lib/api/client.ts';
 import { replaceSongInList } from '#lib/stores/libraryData.ts';
-import { selectedSongId } from '#lib/stores/player.ts';
+import { selectedSong, selectedSongId } from '#lib/stores/player.ts';
+import { activeJobs, isActiveJobStatus } from '#lib/stores/jobs.ts';
 import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 import { addToast } from '#lib/stores/toast.ts';
 import type {
@@ -65,13 +66,20 @@ function genParamsEqual(
 	return true;
 }
 
-function songDataEqual(a: SongData, b: SongData): boolean {
+/** Lyrics, prompt, BPM, key and length: what a take is sung from and a version keeps once it has one. */
+function creativeContentEqual(a: SongData, b: SongData): boolean {
 	return (
 		a.lyrics === b.lyrics &&
 		a.prompt === b.prompt &&
 		a.bpm === b.bpm &&
 		a.audio_duration === b.audio_duration &&
-		a.key_scale === b.key_scale &&
+		a.key_scale === b.key_scale
+	);
+}
+
+function songDataEqual(a: SongData, b: SongData): boolean {
+	return (
+		creativeContentEqual(a, b) &&
 		genParamsEqual(a.genParams, b.genParams) &&
 		a.reference?.id === b.reference?.id
 	);
@@ -98,7 +106,7 @@ export const isDirty = derived(editorState, draftAwaitsSave);
 export const draftLoadedFrom = derived(editorState, (s) => s?.provenance?.version ?? null);
 
 /** A draft loaded from an older version is saved as the next version, never over the latest. */
-export const draftSavesAsNewVersion = derived(draftLoadedFrom, (from) => from !== null);
+const draftSavesAsNewVersion = derived(draftLoadedFrom, (from) => from !== null);
 
 export const editLyrics = derived(editorState, (s) => s?.draft.lyrics ?? EMPTY_SONG_DATA.lyrics);
 export const editPrompt = derived(editorState, (s) => s?.draft.prompt ?? EMPTY_SONG_DATA.prompt);
@@ -411,23 +419,47 @@ export function retireVersionLoadUndo(): void {
 
 /**
  * Predicts the version number a save will produce, mirroring the backend's
- * `update_song()`: the highest existing version is overwritten in place
- * (its own number, no increment) when it has no takes yet and the save does
- * not ask for a new version; otherwise a save creates `version_number + 1`. `versions` must be newest-first, matching
- * `fetchVersions()`. Never derive this from `song.version_count` — that is a
- * *count* of surviving versions, not the highest version number, and the two
- * diverge as soon as any version has been deleted.
+ * `update_song()`: the highest existing version is overwritten in place (its
+ * own number) unless the draft came from an older version, a queued or running
+ * job renders the latest, or the latest has takes and the change is creative;
+ * then a save creates `version_number + 1`. `versions` must be newest-first,
+ * matching `fetchVersions()`. Never derive this from `song.version_count` --
+ * that is a *count* of surviving versions, not the highest version number, and
+ * the two diverge as soon as any version has been deleted.
  */
-export function computeDraftVersionNumber(
+function computeDraftVersionNumber(
 	versions: VersionItem[],
 	generations: GenerationItem[],
-	savesAsNewVersion: boolean
+	renderingVersionIds: ReadonlySet<string>,
+	savesAsNewVersion: boolean,
+	changesCreativeContent: boolean
 ): number {
 	const latest = versions[0];
 	if (!latest) return 1;
 	const latestHasTakes = generations.some((g) => g.version_number === latest.version_number);
-	return latestHasTakes || savesAsNewVersion ? latest.version_number + 1 : latest.version_number;
+	const makesNextVersion =
+		savesAsNewVersion ||
+		renderingVersionIds.has(latest.id) ||
+		(latestHasTakes && changesCreativeContent);
+	return makesNextVersion ? latest.version_number + 1 : latest.version_number;
 }
+
+/** The version number a save of the draft would produce; see {@link computeDraftVersionNumber}. */
+export const draftVersionNumber = derived(
+	[editorState, versions, selectedSong, activeJobs, draftSavesAsNewVersion],
+	([$state, $versions, $song, $activeJobs, $savesAsNew]) =>
+		computeDraftVersionNumber(
+			$versions,
+			$song?.generations ?? [],
+			new Set(
+				$activeJobs
+					.filter(({ job }) => isActiveJobStatus(job.status) && job.version_id)
+					.map(({ job }) => job.version_id as string)
+			),
+			$savesAsNew,
+			$state !== null && !creativeContentEqual($state.draft, $state.saved)
+		)
+);
 
 /**
  * Persists the draft as a new version. Fails loud: a rejected `updateSong`

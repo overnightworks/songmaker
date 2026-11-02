@@ -22,7 +22,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    entrypoint: ["/app/.venv/bin/arq"]
+    entrypoint: ["/app/.venv/bin/python", "-m", "songmaker_cli.arq_worker"]
     command: ["songmaker_cli.music_worker.MusicWorkerSettings"]
 
   songmaker-voices-e2e-worker:

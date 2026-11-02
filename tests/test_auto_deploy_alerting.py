@@ -27,7 +27,7 @@ from auto_deploy_support import (
     ACESTEP_SUBMODULE_PATH,
     ALERT_REPEAT_SECONDS,
     CHECK_RUN_APPEARANCE_GRACE_SECONDS,
-    CHECK_RUN_FIELD_SEPARATOR,
+    CI_CHECK_SUITE_ID,
     FAILURE_ALERT_THRESHOLD,
     GIT_FETCH_TIMEOUT_SECONDS,
     GRAFANA_PASSWORD_REFUSAL,
@@ -41,6 +41,7 @@ from auto_deploy_support import (
     AcestepFork,
     ComposeConfigRefusal,
     FailingTransport,
+    check_runs_response,
     git,
     git_output,
     has_commit,
@@ -746,23 +747,23 @@ def test_a_candidate_is_passed_over_unless_its_actions_checks_prove_it_green(
     ],
 )
 @pytest.mark.parametrize(
-    "through_github_api_filter", [False, True], ids=["projected", "raw-api-response"],
+    "suite_is_null", [False, True], ids=["with-suite", "without-suite"],
 )
 def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidate(
     tmp_path: Path,
     app_slug: str,
     name: str,
     advisory_log: str,
-    through_github_api_filter: bool,
+    suite_is_null: bool,
 ) -> None:
-    """A2: an external app failure is ignored for projected and raw API answers."""
+    """A2: an external app failure is ignored whether or not its run carries a check suite."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
     expected_head = checkout.remote_main_sha()
-    if through_github_api_filter:
-        checkout.set_check_runs_raw_response(json.dumps({
+    if suite_is_null:
+        checkout.set_check_runs_response(json.dumps({
             "total_count": 2,
             "check_runs": [
                 {
@@ -770,12 +771,14 @@ def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidat
                     "name": REQUIRED_ACTIONS_JOB_NAME,
                     "status": "completed",
                     "conclusion": "success",
+                    "check_suite": {"id": int(CI_CHECK_SUITE_ID)},
                 },
                 {
                     "app": {"slug": app_slug},
                     "name": name,
                     "status": "completed",
                     "conclusion": "failure",
+                    "check_suite": None,
                 },
             ],
         }))
@@ -802,18 +805,14 @@ def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip()
     checkout.set_check_runs_response(
-        f"envelope{CHECK_RUN_FIELD_SEPARATOR}1\n"
-        + CHECK_RUN_FIELD_SEPARATOR.join(
-            ("check", "", REQUIRED_ACTIONS_JOB_NAME, "completed", "failure"),
-        )
-        + "\n",
+        check_runs_response(("", REQUIRED_ACTIONS_JOB_NAME, "completed", "failure")),
     )
 
     result = checkout.tick()
 
     assert result.returncode == 0
     assert "cannot determine GitHub check status" in checkout.journal
-    assert "incomplete check-run status" in checkout.journal
+    assert "malformed check-run record" in checkout.journal
     assert subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip() == local_head_before
@@ -825,11 +824,12 @@ def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
     [
         pytest.param(
             r'{"app":{"slug":"github-actions"},"name":"Backend",'
-            r'"status":"completed","conclusion":"suc\u0000cess"}',
+            r'"status":"completed","conclusion":"suc\u0000cess","check_suite":{"id":1}}',
             id="nul-in-conclusion",
         ),
         pytest.param(
-            r'{"app":{"slug":"github-actions"},"status":"completed","conclusion":"success"}',
+            r'{"app":{"slug":"github-actions"},"status":"completed",'
+            r'"conclusion":"success","check_suite":{"id":1}}',
             id="missing-job-name",
         ),
     ],
@@ -845,7 +845,7 @@ def test_a_malformed_check_run_record_refuses_to_deploy(
     local_head_before = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip()
-    checkout.set_check_runs_raw_response(
+    checkout.set_check_runs_response(
         f'{{"total_count":1,"check_runs":[{check_run_record}]}}',
     )
 
@@ -1209,18 +1209,13 @@ def test_malformed_check_status_refuses_to_pull_with_a_named_failure(tmp_path: P
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
-    checkout.set_check_runs_response(
-        CHECK_RUN_FIELD_SEPARATOR.join(
-            ("check", "github-actions", REQUIRED_ACTIONS_JOB_NAME, "completed", "success"),
-        )
-        + "\n",
-    )
+    checkout.set_check_runs_response(json.dumps({"check_runs": []}))
 
     result = checkout.tick()
 
     assert result.returncode == 0
     assert "cannot determine GitHub check status" in checkout.journal
-    assert "incomplete check-runs response" in checkout.journal
+    assert "malformed check-runs response" in checkout.journal
     assert "failure count now 1" in checkout.journal
     assert "compose build" not in checkout.docker_calls
 

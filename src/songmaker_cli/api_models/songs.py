@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from enum import StrEnum
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -193,6 +194,31 @@ class UnplayableSongSummary(BaseModel):
     title: str
 
 
+class ShareKind(StrEnum):
+    ALBUM = "album"
+    SONG = "song"
+    GENERATION = "generation"
+    PLAYLIST = "playlist"
+
+
+# The page each kind of share address opens; the web router's `addresses.ts`
+# holds the same prefixes for its relative paths.
+SHARE_PAGE_PREFIXES: Final[dict[ShareKind, str]] = {
+    ShareKind.ALBUM: "/share/",
+    ShareKind.SONG: "/share/song/",
+    ShareKind.GENERATION: "/share/gen/",
+    ShareKind.PLAYLIST: "/share/playlist/",
+}
+
+
+def public_share_url(kind: ShareKind, slug: str) -> str:
+    """The absolute address a shared resource opens at, for anyone anywhere."""
+    origin = get_settings().public_base_url
+    if not origin:
+        raise RuntimeError("PUBLIC_BASE_URL is not configured; no share address can be built")
+    return f"{origin}{SHARE_PAGE_PREFIXES[kind]}{slug}"
+
+
 class ShareResponse(BaseModel):
     status: str = "ok"
     share_url: str
@@ -279,6 +305,21 @@ def generation_expiry(gen: Generation) -> datetime | None:
     return gen.created_at + timedelta(days=settings.generation_retention_days)
 
 
+class ReferenceResponse(BaseModel):
+    id: str
+    filename: str
+
+    @classmethod
+    def from_orm(cls, recording: ReferenceRecording) -> ReferenceResponse:
+        return cls(id=recording.id, filename=recording.original_filename)
+
+
+def _reference_of(linking_row: Version | Generation | None) -> ReferenceResponse | None:
+    if linking_row is None or linking_row.reference_recording is None:
+        return None
+    return ReferenceResponse.from_orm(linking_row.reference_recording)
+
+
 class GenerationResponse(BaseModel):
     id: str
     song_id: str
@@ -305,6 +346,7 @@ class GenerationResponse(BaseModel):
     version_lyrics: str | None
     scores: dict | None
     generation_params: dict | None
+    reference: ReferenceResponse | None = None
     audio_duration_sec: float | None
     created_at: str
 
@@ -350,6 +392,7 @@ class GenerationResponse(BaseModel):
             version_lyrics=generation_version_lyrics(gen),
             scores=scores if scores else None,
             generation_params=generation_params,
+            reference=_reference_of(gen),
             audio_duration_sec=gen.audio_duration_sec,
             created_at=gen.created_at.isoformat(),
         )
@@ -410,21 +453,6 @@ def public_song_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
     )
 
 
-class ReferenceResponse(BaseModel):
-    id: str
-    filename: str
-
-    @classmethod
-    def from_orm(cls, recording: ReferenceRecording) -> ReferenceResponse:
-        return cls(id=recording.id, filename=recording.original_filename)
-
-
-def _reference_of(version: Version | None) -> ReferenceResponse | None:
-    if version is None or version.reference_recording is None:
-        return None
-    return ReferenceResponse.from_orm(version.reference_recording)
-
-
 class VersionResponse(BaseModel):
     id: str
     version_number: int
@@ -474,6 +502,7 @@ class SongSummaryResponse(BaseModel):
     generation_count: int = 0
     is_shared: bool = False
     share_slug: str | None = None
+    share_url: str | None = None
     best_scores: dict | None = None
     best_rating: float | None = None
     cover: AlbumCoverUrls | None = None
@@ -507,6 +536,11 @@ class SongSummaryResponse(BaseModel):
             generation_count=generation_count,
             is_shared=song.is_shared,
             share_slug=song.share_slug,
+            share_url=(
+                public_share_url(ShareKind.SONG, song.share_slug)
+                if song.is_shared and song.share_slug
+                else None
+            ),
             cover=cover,
             created_at=song.created_at.isoformat(),
         )
@@ -733,7 +767,20 @@ class BulkDeleteResponse(BaseModel):
     deleted: int
 
 
-class ReferenceAudioResponse(BaseModel):
+class ReferenceRecordingResponse(BaseModel):
     id: str
-    path: str
     filename: str
+    size_bytes: int
+    duration_sec: float | None
+    created_at: str
+
+    @classmethod
+    def from_orm(cls, recording: ReferenceRecording) -> ReferenceRecordingResponse:
+        link = ReferenceResponse.from_orm(recording)
+        return cls(
+            id=link.id,
+            filename=link.filename,
+            size_bytes=recording.size_bytes,
+            duration_sec=recording.duration_sec,
+            created_at=recording.created_at.isoformat(),
+        )

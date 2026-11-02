@@ -17,7 +17,6 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     page_has_more,
     parse_optional_search_query,
-    resolve_public_base_url,
     unique_album_id,
 )
 from songmaker_cli.api_models import (
@@ -33,7 +32,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
-from songmaker_cli.api_models.songs import UnplayableSongSummary
+from songmaker_cli.api_models.songs import ShareKind, UnplayableSongSummary, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool, is_music_worker_healthy
 from songmaker_cli.audio_paths import AudioPathRejectedError
@@ -342,13 +341,13 @@ def api_share_album(
 ) -> ShareResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    base_url = resolve_public_base_url()
     album = enable_album_sharing(session, album_id)
     missing = songs_without_playable_take(session, album_id)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.ALBUM, album_id)
+    share_url = public_share_url(ShareKind.ALBUM, album.share_slug)
     session.commit()
     return ShareResponse(
-        share_url=f"{base_url}/share/{album.share_slug}",
+        share_url=share_url,
         share_slug=album.share_slug,
         songs_without_playable_take=[
             UnplayableSongSummary(id=song.id, title=song.title) for song in missing

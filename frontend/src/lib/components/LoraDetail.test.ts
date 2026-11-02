@@ -61,8 +61,11 @@ vi.mock('#lib/api/jobs.ts', () => ({
 	cancelJob: (...args: unknown[]) => cancelJob(...args)
 }));
 
-vi.mock('#lib/stores/jobs.ts', () => ({
+vi.mock('#lib/stores/jobs.ts', async () => ({
 	activeJobs: jobStore.activeJobs,
+	isActiveJobStatus: (
+		await vi.importActual<typeof import('#lib/stores/jobs.ts')>('#lib/stores/jobs.ts')
+	).isActiveJobStatus,
 	trackJob: (...args: unknown[]) => trackJob(...args),
 	removeJob: (...args: unknown[]) => removeJob(...args)
 }));

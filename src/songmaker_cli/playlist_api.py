@@ -16,7 +16,6 @@ from songmaker_cli.api_helpers import (
     check_generation_access,
     check_playlist_access,
     check_song_access,
-    resolve_public_base_url,
     unique_playlist_slug,
 )
 from songmaker_cli.api_models import (
@@ -34,6 +33,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
+from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
 from songmaker_cli.auth_dependencies import get_current_user
@@ -56,6 +56,7 @@ from songmaker_cli.covers import (
 from songmaker_cli.db.models import Generation
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.generations import ARCHIVED_TAKE_DETAIL, ArchivedTakeError
 from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
@@ -235,7 +236,10 @@ def api_delete_playlist_cover(
 
 @router.post(
     "/playlists/{playlist_id}/entries/generation",
-    responses={404: {"description": "Playlist or generation not found"}},
+    responses={
+        404: {"description": "Playlist or generation not found"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
+    },
 )
 def api_add_generation_to_playlist(
     playlist_id: str,
@@ -249,6 +253,8 @@ def api_add_generation_to_playlist(
         entry = add_generation_to_playlist(session, playlist_id, req.generation_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
+    except ArchivedTakeError:
+        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
     session.commit()
     entry = session.merge(entry)
     playlist = get_playlist(session, playlist_id)
@@ -261,6 +267,7 @@ def api_add_generation_to_playlist(
     responses={
         400: {"description": "Song has no playable take"},
         404: {"description": "Playlist or song not found"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
     },
 )
 def api_add_song_to_playlist(
@@ -283,6 +290,8 @@ def api_add_song_to_playlist(
         add_song_to_playlist(session, playlist_id, req.song_id)
     except ValueError:
         raise HTTPException(404, "Song not found")
+    except ArchivedTakeError:
+        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
     session.commit()
     return StatusResponse()
 
@@ -378,15 +387,15 @@ def api_share_playlist(
     session: Session = Depends(get_db_session),
 ) -> ShareResponse:
     check_playlist_access(session, playlist_id, user)
-    base_url = resolve_public_base_url()
     try:
         playlist = enable_playlist_sharing(session, playlist_id)
     except ValueError:
         raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.PLAYLIST, playlist_id)
+    share_url = public_share_url(ShareKind.PLAYLIST, playlist.share_slug)
     session.commit()
     return ShareResponse(
-        share_url=f"{base_url}/share/playlist/{playlist.share_slug}",
+        share_url=share_url,
         share_slug=playlist.share_slug,
     )
 

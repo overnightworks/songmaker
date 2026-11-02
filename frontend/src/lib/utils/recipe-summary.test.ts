@@ -241,27 +241,28 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 });
 
 describe('buildTakeRecipe reference', () => {
-	const recordedPath = 'u1/refs/x.wav';
-	const buildRecipe = async (params: Record<string, string | undefined>) => {
+	const buildRecipe = async (reference: GenerationItem['reference']) => {
 		const { buildTakeRecipe } = await import('./recipe-summary');
 		return buildTakeRecipe(
-			generation({ seed: null, model_mode: '', generation_params: params }),
+			generation({ seed: null, model_mode: '', generation_params: {}, reference }),
 			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 	};
 
-	it('shows a recorded reference as used in the Version group without its path', async () => {
-		const groups = await buildRecipe({ reference_audio_path: recordedPath });
+	it('shows the linked reference by its filename in the Version group', async () => {
+		const groups = await buildRecipe({ id: 'r1', filename: 'demo take.wav' });
 		expect(groups).toEqual([
-			{ label: 'Version', entries: [{ label: RECIPE_REFERENCE_LABEL, value: 'used' }] }
+			{
+				label: 'Version',
+				entries: [{ label: RECIPE_REFERENCE_LABEL, value: 'demo take.wav' }]
+			}
 		]);
-		expect(JSON.stringify(groups)).not.toContain(recordedPath);
 	});
 
 	it.each([
-		{ name: 'an empty reference', params: { reference_audio_path: '' } },
-		{ name: 'no reference key', params: {} }
-	])('shows no reference row for $name', async ({ params }) => {
-		expect(await buildRecipe(params)).toEqual([]);
+		{ name: 'a null reference', reference: null },
+		{ name: 'no reference', reference: undefined }
+	])('shows no reference row for $name', async ({ reference }) => {
+		expect(await buildRecipe(reference)).toEqual([]);
 	});
 });

@@ -1,4 +1,4 @@
-import type { AfterNavigate, BeforeNavigate, NavigationTarget } from '@sveltejs/kit';
+import type { AfterNavigate, BeforeNavigate, NavigationTarget } from '$app/navigation';
 import { flushSync, onMount } from 'svelte';
 import { vi } from 'vitest';
 import { routerHistoryEntry, routerHistoryEntryOf } from '#lib/test-utils/router-history-layout.ts';
@@ -10,7 +10,7 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 //   vi.mock('$app/state', async () =>
 //     (await import('#lib/test-utils/app-navigation.ts')).fakeAppState());
 // It writes history the way SvelteKit does: `goto` adds (or, with
-// `replaceState`, rewrites) a router entry once its route has loaded -- at
+// `replace`, rewrites) a router entry once its route has loaded -- at
 // once, unless a test holds route loads -- and tells every mounted
 // `afterNavigate` callback; a Back or Forward that navigates tells every
 // mounted `beforeNavigate` callback first, and a `goto` one of them starts
@@ -19,13 +19,15 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 // the page it was written over beside it. Like SvelteKit 3, whose shallow
 // writes are async, they land a microtask after the call -- the history entry
 // and the page state change then, not before -- unless a test holds them. Like
-// SvelteKit, it keeps
-// its place in history in memory and reads it back from an entry only when it
-// starts or a Back or Forward lands, and a landing on the entry of another
-// navigation is a navigation of its own -- and so is a landing on an entry of
-// the same navigation while nothing has navigated or pushed since the start,
-// unless it only changes the hash: after a reload the router cannot tell that
-// entry's page from the one it started on.
+// SvelteKit, it keeps its place in history in memory and reads it back from an
+// entry only when it starts or a Back or Forward lands. A landing is shallow
+// only on an entry of the navigation the page shows, once something has
+// navigated or pushed since the start, and only when the entry's page is the
+// address landed on (or the landing only changes the hash); any other landing
+// is a navigation to the page the entry was written over, while the router
+// reports the landed address as its target. An address a test declares
+// unmatched (`renderNoRouteAddresses`) shows the error page, and a write or
+// `goto` to it rejects.
 //
 // It also owns every raw write into the test browser's history, which tests
 // reach through library-history.ts. It imports no store: the stores import
@@ -34,8 +36,20 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 type HistoryWriteMode = 'push' | 'replace';
 
 interface GotoOptions {
-	replaceState?: boolean;
+	replace?: boolean;
 	state?: App.PageState;
+}
+
+const FAKE_ROUTE_ID = '/fake-route';
+const unmatchedPathnames = new Set<string>();
+
+function routeShownAt(url: URL): { id: string | null } {
+	return { id: unmatchedPathnames.has(url.pathname) ? null : FAKE_ROUTE_ID };
+}
+
+function refuseUnmatched(url: string | URL): void {
+	const { pathname } = new URL(url, location.href);
+	if (unmatchedPathnames.has(pathname)) throw new Error(`No route matches ${pathname}`);
 }
 
 export function writeHistoryEntry(entry: unknown, url: string | URL, mode: HistoryWriteMode): void {
@@ -45,10 +59,28 @@ export function writeHistoryEntry(entry: unknown, url: string | URL, mode: Histo
 
 // The page the fake router shows, as `$app/state` hands it out: a navigation
 // moves its url, shallow routing only its state.
-export const fakePage = stateProxy<{ url: URL; state: App.PageState }>({
+export const fakePage = stateProxy<{
+	url: URL;
+	state: App.PageState;
+	route: { id: string | null };
+}>({
 	url: new URL(location.href),
-	state: {}
+	state: {},
+	route: { id: FAKE_ROUTE_ID }
 });
+
+// The navigation under way, as `$app/state` hands it out: kit 3 sets it for
+// every navigation but the router's start, and clears it right after the
+// `afterNavigate` callbacks ran.
+const fakeNavigating = stateProxy<{ to: NavigationTarget | null }>({ to: null });
+
+// Declares the addresses no route matches: the page at one shows the error
+// page (no route ID), and a `goto` or shallow write to one rejects.
+export function renderNoRouteAddresses(...pathnames: string[]): void {
+	unmatchedPathnames.clear();
+	for (const pathname of pathnames) unmatchedPathnames.add(pathname);
+	fakePage.route = routeShownAt(fakePage.url);
+}
 
 let currentHistoryIndex = 0;
 let currentNavigationIndex = 0;
@@ -78,16 +110,21 @@ function navigationTarget(url: URL): NavigationTarget {
 	return { params: {}, route: { id: null }, url, scroll: null };
 }
 
-function reportNavigation(type: 'enter' | 'goto' | 'popstate', from: URL | null): void {
+function reportNavigation(
+	type: 'enter' | 'goto' | 'popstate',
+	from: URL | null,
+	to: URL = fakePage.url
+): void {
 	const navigation = {
 		type,
 		from: from && navigationTarget(from),
-		to: navigationTarget(fakePage.url),
+		to: navigationTarget(to),
 		willUnload: false,
 		complete: Promise.resolve()
 	} as AfterNavigate;
-	reportedNavigations.push({ type, pathname: fakePage.url.pathname });
+	reportedNavigations.push({ type, pathname: to.pathname });
 	for (const callback of afterNavigateCallbacks) callback(navigation);
+	fakeNavigating.to = null;
 }
 
 // SvelteKit's single-page start: it takes its place from the entry the page
@@ -95,6 +132,8 @@ function reportNavigation(type: 'enter' | 'goto' | 'popstate', from: URL | null)
 // keeping the place and dropping whatever state the entry carried.
 export function startFakeRouter(): void {
 	hasNavigated = false;
+	unmatchedPathnames.clear();
+	fakeNavigating.to = null;
 	reportedNavigations.length = 0;
 	const loaded = routerHistoryEntryOf(history.state);
 	currentHistoryIndex = loaded?.historyIndex ?? highestHistoryIndex + 1;
@@ -110,6 +149,7 @@ export function startFakeRouter(): void {
 	);
 	fakePage.url = new URL(location.href);
 	fakePage.state = {};
+	fakePage.route = routeShownAt(fakePage.url);
 }
 
 // The `enter` navigation SvelteKit reports once the page it started on is
@@ -162,13 +202,15 @@ export async function landed<T>(write: T): Promise<T> {
 }
 
 async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<void> {
+	refuseUnmatched(url);
 	navigationsStarted += 1;
+	fakeNavigating.to = navigationTarget(new URL(url, location.href));
 	const navigation = navigationsStarted;
 	if (heldRouteLoad !== null) {
 		await heldRouteLoad;
 		if (navigation !== navigationsStarted) return;
 	}
-	if (!options.replaceState) {
+	if (!options.replace) {
 		stepHistoryIndexUp();
 		currentNavigationIndex += 1;
 	}
@@ -179,11 +221,12 @@ async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<v
 			navigationIndex: currentNavigationIndex
 		}),
 		url,
-		options.replaceState ? 'replace' : 'push'
+		options.replace ? 'replace' : 'push'
 	);
 	const from = fakePage.url;
 	fakePage.url = new URL(location.href);
 	fakePage.state = state;
+	fakePage.route = routeShownAt(fakePage.url);
 	hasNavigated = true;
 	reportNavigation('goto', from);
 }
@@ -194,6 +237,7 @@ async function writeShallowEntry(
 	mode: HistoryWriteMode
 ): Promise<void> {
 	await heldShallowWrites;
+	refuseUnmatched(url);
 	if (mode === 'push') {
 		stepHistoryIndexUp();
 		hasNavigated = true;
@@ -214,10 +258,12 @@ function withoutHash(url: URL | Location): string {
 	return url.href.split('#')[0];
 }
 
-// A Back or Forward: onto an entry of the navigation the page shows, only the
-// page state and address follow; onto another navigation's entry -- or onto
-// any entry before anything has navigated since the start, see above -- the
-// router navigates to the page that entry was written over.
+// A Back or Forward: onto an entry of the navigation the page shows, written
+// over the address it lands on, only the page state and address follow; onto
+// any other entry -- another navigation's, one before anything has navigated
+// since the start, or one written over another address -- the router
+// navigates to the page that entry was written over, and reports the address
+// it landed on as the target.
 //
 // A browser drains its microtasks between the listeners of a real popstate,
 // so Svelte runs the effects that read the page this listener moved before
@@ -236,23 +282,29 @@ function moveWithTraversal(event: PopStateEvent): void {
 		return;
 	}
 	const from = fakePage.url;
-	const landedPage = new URL(landing.pageUrl ?? location.href);
+	const landedAddress = new URL(location.href);
+	const entryPage = new URL(landing.pageUrl ?? location.href);
 	const landedState = (landing.pageState ?? {}) as App.PageState;
 	const navigationIndex = landing.navigationIndex;
-	const onlyHashChanges = withoutHash(location) === withoutHash(from);
-	const shallow = navigationIndex === currentNavigationIndex && (hasNavigated || onlyHashChanges);
+	const hashChanges =
+		(location.href + from.href).includes('#') && withoutHash(location) === withoutHash(from);
+	const shallow =
+		navigationIndex === currentNavigationIndex &&
+		((hasNavigated && entryPage.href === landedAddress.href) || hashChanges);
 	currentHistoryIndex = historyIndex;
 	if (shallow || navigationIndex === undefined) {
-		fakePage.url = landedPage;
+		fakePage.url = entryPage;
 		fakePage.state = landedState;
 		return;
 	}
 	currentNavigationIndex = navigationIndex;
 	hasNavigated = true;
-	if (supersededBeforeLoading(from, landedPage)) return;
-	fakePage.url = landedPage;
+	if (supersededBeforeLoading(from, landedAddress)) return;
+	fakePage.url = entryPage;
 	fakePage.state = landedState;
-	reportNavigation('popstate', from);
+	fakePage.route = routeShownAt(entryPage);
+	fakeNavigating.to = navigationTarget(landedAddress);
+	reportNavigation('popstate', from, landedAddress);
 }
 
 function supersededBeforeLoading(from: URL, to: URL): boolean {
@@ -304,5 +356,5 @@ export function fakeAppNavigation() {
 }
 
 export function fakeAppState() {
-	return { page: fakePage };
+	return { page: fakePage, navigating: fakeNavigating };
 }

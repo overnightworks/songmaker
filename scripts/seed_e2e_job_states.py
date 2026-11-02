@@ -200,6 +200,14 @@ def cmd_create_song(session: Session, args: argparse.Namespace) -> None:
     print(song_id)
 
 
+def _latest_version_id(session: Session, song_id: str) -> str:
+    """The version a generate request without a named version renders."""
+    song = get_song(session, song_id)
+    if song is None or song.latest_version is None:
+        raise SystemExit(f"Song {song_id} does not exist or has no version")
+    return song.latest_version.id
+
+
 def cmd_set_running(session: Session, args: argparse.Namespace) -> None:
     """Attach a fresh running generate job to a song.
 
@@ -216,7 +224,10 @@ def cmd_set_running(session: Session, args: argparse.Namespace) -> None:
     owner = get_user_by_username(session, args.owner_username)
     if owner is None:
         raise SystemExit(f"No user named {args.owner_username!r}")
-    job = create_job(session, JobType.GENERATE, user_id=owner.id, song_id=args.song_id)
+    job = create_job(
+        session, JobType.GENERATE, user_id=owner.id, song_id=args.song_id,
+        version_id=_latest_version_id(session, args.song_id),
+    )
     update_job_status(
         session,
         job.id,
@@ -285,27 +296,23 @@ def complete_generation_job(
     """Commit the declared batch and completion together, without resource events.
 
     Omitting generation.created proves the terminal job refresh recovers takes
-    when the phone missed the resource stream. Takes use the latest version.
+    when the phone missed the resource stream. Takes use the job's version.
     """
     job = get_job(session, job_id)
     if job is None or job.type != JobType.GENERATE or job.status != JobStatus.RUNNING:
         raise SystemExit(f"Job {job_id} is not a running generate job")
-    if job.song_id is None or job.user_id is None:
-        raise SystemExit(f"Job {job_id} belongs to no song or owner")
+    if job.song_id is None or job.user_id is None or job.version_id is None:
+        raise SystemExit(f"Job {job_id} belongs to no song, owner or version")
     if type(job.take_count) is not int or job.take_count <= 0:
         raise SystemExit(f"Job {job_id} has no positive take count")
     if not mp3_bytes:
         raise SystemExit("No MP3 bytes received on stdin")
-    song = get_song(session, job.song_id)
-    version = song.latest_version if song is not None else None
-    if version is None:
-        raise SystemExit(f"Song {job.song_id} does not exist or has no version")
     written_files: list[Path] = []
     try:
         for _ in range(job.take_count):
             take = add_take(
                 session, audio_dir, mp3_bytes,
-                song_id=job.song_id, version_id=version.id, owner_id=job.user_id,
+                song_id=job.song_id, version_id=job.version_id, owner_id=job.user_id,
             )
             written_files.append(audio_dir / take.mp3_path)
         if not update_job_status(
@@ -331,7 +338,10 @@ def cmd_set_queued(session: Session, args: argparse.Namespace) -> None:
     owner = get_user_by_username(session, args.owner_username)
     if owner is None:
         raise SystemExit(f"No user named {args.owner_username!r}")
-    job = create_job(session, JobType.GENERATE, user_id=owner.id, song_id=args.song_id)
+    job = create_job(
+        session, JobType.GENERATE, user_id=owner.id, song_id=args.song_id,
+        version_id=_latest_version_id(session, args.song_id),
+    )
     session.commit()
     print(job.id)
 

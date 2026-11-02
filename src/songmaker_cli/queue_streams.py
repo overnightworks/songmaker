@@ -76,6 +76,13 @@ QUEUE_STREAM_MANIFEST_GLOB: Final = "*.json"
 QUEUE_STREAM_MANIFEST_SUFFIX: Final = ".json"
 QUEUE_STREAM_TEMP_AUDIO_SUFFIX: Final = ".tmp.mp3"
 QUEUE_STREAM_CONCAT_SUFFIX: Final = ".concat.txt"
+# Longer suffixes first: ".tmp.mp3" also ends with ".mp3".
+_SNAPSHOT_FILE_SUFFIXES: Final = (
+    QUEUE_STREAM_TEMP_AUDIO_SUFFIX,
+    QUEUE_STREAM_CONCAT_SUFFIX,
+    QUEUE_STREAM_MANIFEST_SUFFIX,
+    ".mp3",
+)
 QUEUE_STREAM_NOT_FOUND_DETAIL: Final = "Queue stream not found"
 QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL: Final = "Queue stream audio not found"
 
@@ -504,16 +511,7 @@ def _remove_expired_queue_stream_orphans(
 
 
 def delete_snapshot_files(ctx: AppContext, snapshot_id: str) -> None:
-    if not _valid_snapshot_id(snapshot_id):
-        return
-    root = _stream_dir(ctx)
-    for suffix in (
-        QUEUE_STREAM_MANIFEST_SUFFIX,
-        ".mp3",
-        QUEUE_STREAM_TEMP_AUDIO_SUFFIX,
-        QUEUE_STREAM_CONCAT_SUFFIX,
-    ):
-        (root / f"{snapshot_id}{suffix}").unlink(missing_ok=True)
+    delete_snapshot_files_from_dir(_stream_dir(ctx), snapshot_id)
 
 
 def probe_audio_duration(audio_path: Path) -> float:
@@ -567,7 +565,7 @@ def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
         raise HTTPException(504, "Queue stream build timed out") from exc
     except subprocess.CalledProcessError as exc:
         output_path.unlink(missing_ok=True)
-        detail = (exc.stderr or exc.stdout or "").strip()
+        detail = str.strip(exc.stderr or exc.stdout or "")
         log.warning("ffmpeg queue stream build failed: %s", detail)
         raise HTTPException(422, "Could not build queue stream") from exc
 
@@ -657,23 +655,12 @@ def _enforce_cache_quota(
 def delete_snapshot_files_from_dir(stream_dir: Path, snapshot_id: str) -> None:
     if not _valid_snapshot_id(snapshot_id):
         return
-    for suffix in (
-        QUEUE_STREAM_MANIFEST_SUFFIX,
-        ".mp3",
-        QUEUE_STREAM_TEMP_AUDIO_SUFFIX,
-        QUEUE_STREAM_CONCAT_SUFFIX,
-    ):
+    for suffix in _SNAPSHOT_FILE_SUFFIXES:
         (stream_dir / f"{snapshot_id}{suffix}").unlink(missing_ok=True)
 
 
 def _snapshot_id_from_cache_file(path: Path) -> str | None:
-    for suffix in (
-        QUEUE_STREAM_TEMP_AUDIO_SUFFIX,
-        QUEUE_STREAM_CONCAT_SUFFIX,
-        ".json.tmp",
-        QUEUE_STREAM_MANIFEST_SUFFIX,
-        ".mp3",
-    ):
+    for suffix in (*_SNAPSHOT_FILE_SUFFIXES, ".json.tmp"):
         if not path.name.endswith(suffix):
             continue
         snapshot_id = path.name[: -len(suffix)]

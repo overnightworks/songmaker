@@ -9,6 +9,7 @@ import {
 	TAKE_DELETE_LABEL,
 	TAKE_PLAYLIST_LABEL,
 	TAKE_REPAINT_LABEL,
+	TAKE_RESTORE_LABEL,
 	TAKE_SHARE_LABEL
 } from '#lib/constants.ts';
 import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
@@ -58,6 +59,7 @@ function defaultProps() {
 		})),
 		onunshare: vi.fn(async () => undefined),
 		onaddtoplaylist: vi.fn(),
+		onrestore: vi.fn(),
 		ondelete: vi.fn()
 	};
 }
@@ -108,7 +110,7 @@ describe('TakeMenu', () => {
 		'915_C3: offers ordered actions with an icon each, Use seed third only for a take with seed $seed, Delete last in red',
 		async ({ seed, rows: seedRows }) => {
 			const { target } = await render({
-				gen: gen({ is_kept: true, is_shared: true, is_archived: true, seed })
+				gen: gen({ is_kept: true, is_shared: true, is_archived: false, seed })
 			});
 			expect(menuRowLabels(target)).toEqual([
 				TAKE_REPAINT_LABEL,
@@ -126,6 +128,42 @@ describe('TakeMenu', () => {
 			]);
 		}
 	);
+
+	it.each([
+		{ shared: false, rows: [] as string[] },
+		{ shared: true, rows: [TAKE_SHARE_LABEL] }
+	])(
+		'offers Restore in place of Add to playlist on an archived take, with Share only while shared is $shared',
+		async ({ shared, rows: shareRows }) => {
+			const { target } = await render({
+				gen: gen({
+					is_archived: true,
+					is_shared: shared,
+					share_slug: shared ? 'take' : null,
+					seed: null
+				})
+			});
+			expect(menuRowLabels(target)).toEqual([
+				TAKE_REPAINT_LABEL,
+				TAKE_COVER_LABEL,
+				TAKE_RESTORE_LABEL,
+				...shareRows,
+				TAKE_DELETE_LABEL
+			]);
+		}
+	);
+
+	it('unshares a shared archived take from its Share row and stays open', async () => {
+		const { target, props } = await render({
+			gen: gen({ is_archived: true, is_shared: true, share_slug: 'take' })
+		});
+
+		menuRow(target, TAKE_SHARE_LABEL).click();
+		await tick();
+
+		expect(props.onunshare).toHaveBeenCalledOnce();
+		expect(target.querySelector('.menu-panel')).not.toBeNull();
+	});
 
 	it('C4: shows the seed as the Use seed row hint', async () => {
 		const { target } = await render({ gen: gen({ seed: 4127730 }) });
@@ -147,11 +185,14 @@ describe('TakeMenu', () => {
 		['Cover', 'oncover'],
 		['Use seed', 'onuseseed'],
 		['Add to playlist', 'onaddtoplaylist'],
-		['Delete', 'ondelete']
+		['Delete', 'ondelete'],
+		['Restore', 'onrestore']
 	] as const)(
 		'915_C3: runs %s and closes the menu, handing focus back to More',
 		async (label, callback) => {
-			const { target, props } = await render({ gen: gen({ seed: 4127730 }) });
+			const { target, props } = await render({
+				gen: gen({ seed: 4127730, is_archived: label === TAKE_RESTORE_LABEL })
+			});
 			menuRow(target, label).click();
 			await vi.waitFor(() => expect(document.activeElement).toBe(moreButtonIn(target)));
 			expect(props[callback]).toHaveBeenCalledOnce();

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
@@ -22,6 +23,8 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.activity import record_song_edit
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
+from songmaker_cli.db.queries.generations import ArchivedTakeError, lock_unarchived_generation
+from songmaker_cli.db.queries.jobs import has_active_job_for_version
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
@@ -333,6 +336,28 @@ class _VersionContent:
         )
 
 
+def _rewrites_in_place(
+    session: Session, previous: Version, content: _VersionContent, force_new_version: bool,
+) -> bool:
+    """Whether a save rewrites the latest version instead of making the next one.
+
+    A take keeps the lyrics, prompt, BPM, key and length it was sung with, and a queued
+    or running job reads its version's content when it starts. So a changed version that
+    an active job references is never rewritten, and neither is one with a take when the
+    change is creative; a change to only generation settings or the reference of a version
+    with finished takes still rewrites it. A save that changes nothing makes no version.
+    The caller holds the song row lock, so the job check sees every job enqueued before it.
+    The take check must read after the job check; a job ends only after its takes commit.
+    """
+    if force_new_version:
+        return False
+    if not content.differs_from(previous):
+        return True
+    if has_active_job_for_version(session, previous.id):
+        return False
+    return not (previous.generations and content.creative_differs_from(previous))
+
+
 def update_song(
     session: Session,
     song_id: str,
@@ -384,7 +409,7 @@ def update_song(
             kind=_content_edit_kind(lyrics, prev),
         )
 
-    if prev and not force_new_version and (not prev.generations or not creative_changed):
+    if prev and _rewrites_in_place(session, prev, content, force_new_version):
         for field, value in asdict(content).items():
             setattr(prev, field, value)
         session.flush()
@@ -581,8 +606,9 @@ def enable_song_sharing(session: Session, song_id: str) -> Song:
     song = enable_sharing(session, Song, song_id)
     picked = next((g for g in song.generations if g.is_picked), None)
     if picked:
-        picked.is_kept = True
-        session.flush()
+        with contextlib.suppress(ArchivedTakeError):
+            lock_unarchived_generation(session, picked.id).is_kept = True
+            session.flush()
     return song
 
 

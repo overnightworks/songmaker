@@ -16,7 +16,6 @@ from webauth.sign_in_routes import (
     install_sign_in_routes,
 )
 
-from songmaker_cli.api_helpers import resolve_public_base_url
 from songmaker_cli.api_models import AuthMeResponse
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.auth_stores import DatabaseSignInTransaction
@@ -44,7 +43,7 @@ class BackchannelHostMismatch(Exception):  # noqa: N818
 
 def backchannel_logout_host() -> str:
     """The Host the realm's call carries: the public host on the container port."""
-    return f"{urlsplit(resolve_public_base_url()).hostname}:{DEFAULT_SERVER_PORT}"
+    return f"{urlsplit(get_settings().public_base_url).hostname}:{DEFAULT_SERVER_PORT}"
 
 
 def _require_backchannel_host(request: Request) -> None:

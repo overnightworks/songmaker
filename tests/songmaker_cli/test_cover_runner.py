@@ -7,6 +7,7 @@ import json
 import threading
 from io import BytesIO
 from pathlib import Path
+from typing import Final
 
 import pytest
 from agent_providers.catalog import ProviderRoute
@@ -31,6 +32,8 @@ from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
 from songmaker_cli.settings import CoverExecutor, Settings
+
+HANG_GUARD_SECONDS: Final = 30
 
 
 def _settings(executor: CoverExecutor) -> Settings:
@@ -147,7 +150,7 @@ def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_on
         assert deadline > 0
         image_calls.append(_prompt)
         image_started.set()
-        assert allow_image_return.wait(timeout=2)
+        assert allow_image_return.wait(timeout=HANG_GUARD_SECONDS)
         return _png_bytes()
 
     monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fake_image_generator)
@@ -159,7 +162,7 @@ def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_on
         winner = asyncio.create_task(cover_runner.run_next_cover_job(
             db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
         ))
-        assert await asyncio.to_thread(image_started.wait, 1)
+        assert await asyncio.to_thread(image_started.wait, HANG_GUARD_SECONDS)
         loser = await cover_runner.run_next_cover_job(
             db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
         )

@@ -17,8 +17,9 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from support.migration_chain import is_on_the_single_chain
+from support.reference_link_migration import seed_users
 
-from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Score, Song, Version
 
 MIGRATION = (
     "songmaker_cli.db.migrations.versions.c4e8a1f72d95_stored_coherence_verdicts_are_deleted"
@@ -67,10 +68,9 @@ def migration():
 def _seed(
     engine, values: dict[str, dict | list | None], scorers: dict[str, str] | None = None,
 ) -> None:
+    seed_users(engine)
     factory = sessionmaker(bind=engine)
     with factory() as session:
-        session.add(User(id="u1", username="u1"))
-        session.flush()
         session.add(Album(id="a1", title="Album", artist="Band", created_by="u1"))
         session.add(Song(id="s1", title="Song", album_id="a1", track_number=1))
         session.flush()
@@ -78,8 +78,10 @@ def _seed(
             id="v1", song_id="s1", version_number=1, lyrics="x", prompt="y", bpm=120,
             audio_duration=0, key_scale="", created_at=datetime.now(UTC),
         ))
-        session.add(Generation(
+        session.execute(Generation.__table__.insert().values(
             id="g1", song_id="s1", version_id="v1", generation_number=1, mp3_path="g1.mp3", seed=1,
+            status="completed", is_archived=False, is_picked=False, is_kept=False,
+            model_mode="sft", is_shared=False, created_at=datetime.now(UTC),
         ))
         session.flush()
         for name, value in values.items():

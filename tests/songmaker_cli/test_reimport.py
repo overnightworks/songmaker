@@ -273,4 +273,6 @@ def test_reimported_take_records_no_reference(seeded_db, tmp_path: Path) -> None
         session.commit()
 
     with seeded_db() as session:
-        assert get_generation(session, gen_id).generation_params["reference_audio_path"] == ""
+        take = get_generation(session, gen_id)
+        assert take.reference_recording_id is None
+        assert "reference_audio_path" not in (take.generation_params or {})

@@ -70,14 +70,7 @@ const VERSION_PARAM_FIELDS: { key: 'bpm' | 'audio_duration' | 'key_scale'; label
 //     it isn't an editable knob (ParamControls never lets a user set it), so
 //     it doesn't belong in KNOWN_PARAM_FIELDS, but the generic Other fallback
 //     would still bury it away from the number it's a reduction of.
-//   - reference_audio_path is shown as a "used" row in the Version group, so the
-//     generic Other fallback never prints a storage path or the internal key.
-const DUPLICATE_PARAM_KEYS = new Set([
-	'acestep_model',
-	'seed',
-	'delivered_batch_size',
-	'reference_audio_path'
-]);
+const DUPLICATE_PARAM_KEYS = new Set(['acestep_model', 'seed', 'delivered_batch_size']);
 
 function formatParamValue(key: string, rawValue: GenerationParamValue): string | null {
 	if (rawValue === null || rawValue === undefined || rawValue === '') return null;
@@ -107,7 +100,10 @@ export function buildTakeRecipe(generation: GenerationItem, song: SongItem): Rec
 			label: RECIPE_TAKE_GROUP_REPRODUCIBILITY_LABEL,
 			entries: buildReproducibilityEntries(generation, paramEntries)
 		},
-		{ label: RECIPE_TAKE_GROUP_VERSION_LABEL, entries: buildVersionEntries(song, paramEntries) },
+		{
+			label: RECIPE_TAKE_GROUP_VERSION_LABEL,
+			entries: buildVersionEntries(generation, song, paramEntries)
+		},
 		{ label: RECIPE_TAKE_GROUP_OTHER_LABEL, entries: buildOtherEntries(paramEntries) }
 	];
 
@@ -154,7 +150,11 @@ function buildReproducibilityEntries(
 	return reproducibilityEntries;
 }
 
-function buildVersionEntries(song: SongItem, paramEntries: ParamEntries): RecipeEntry[] {
+function buildVersionEntries(
+	generation: GenerationItem,
+	song: SongItem,
+	paramEntries: ParamEntries
+): RecipeEntry[] {
 	const versionEntries: RecipeEntry[] = [];
 	for (const field of VERSION_PARAM_FIELDS) {
 		const value = formatParamValue(field.key, paramEntries.get(field.key));
@@ -163,10 +163,8 @@ function buildVersionEntries(song: SongItem, paramEntries: ParamEntries): Recipe
 	if (song.vocal_language) {
 		versionEntries.push({ label: 'Language', value: song.vocal_language });
 	}
-	// The recorded reference may come from a preset or a default, not only from
-	// the song; only the fact is shown, never the storage path.
-	if (paramEntries.get('reference_audio_path')) {
-		versionEntries.push({ label: RECIPE_REFERENCE_LABEL, value: 'used' });
+	if (generation.reference) {
+		versionEntries.push({ label: RECIPE_REFERENCE_LABEL, value: generation.reference.filename });
 	}
 	return versionEntries;
 }

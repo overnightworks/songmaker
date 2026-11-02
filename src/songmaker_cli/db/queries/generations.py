@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
 
+from sqlalchemy import ColumnElement, exists
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from songmaker_cli import audio_files
@@ -26,6 +27,11 @@ log = logging.getLogger(__name__)
 INITIAL_GENERATION_NUMBER: Final[int] = 1
 COHERENCE_SCORE_KEY: Final = "lyrical_coherence"
 COHERENCE_SUMMARY_KEY: Final = "lyrical_summary"
+ARCHIVED_TAKE_DETAIL: Final = "Restore this take first."
+
+
+class ArchivedTakeError(Exception):
+    """The take is archived; keep, pick, share and playlist add need it restored first."""
 
 
 def _probe_audio_duration_or_none(audio_dir: Path, mp3_rel: str) -> float | None:
@@ -133,6 +139,7 @@ def create_generation(
     generation_id: str | None = None,
     *,
     created_by: str,
+    reference_recording_id: str | None = None,
 ) -> Generation:
     """Create the row for a completed generation, naming the user who made it.
 
@@ -164,6 +171,7 @@ def create_generation(
         model_mode=model_mode,
         src_generation_id=src_generation_id,
         created_by=created_by,
+        reference_recording_id=reference_recording_id,
         status=JobStatus.COMPLETED,
     )
     if generation_id is not None:
@@ -255,9 +263,36 @@ def _require_generation(session: Session, generation_id: str) -> Generation:
     return gen
 
 
+def _lock_generation(session: Session, generation_id: str) -> Generation:
+    """Lock the take and reload it, so a concurrent archive or restore is seen.
+
+    The lock is limited to the take (`of=Generation`) because the eager join to its
+    reference recording is an outer join, which PostgreSQL cannot lock.
+    """
+    gen = (
+        session.query(Generation)
+        .filter_by(id=generation_id)
+        .with_for_update(of=Generation)
+        .populate_existing()
+        .first()
+    )
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    return gen
+
+
+def lock_unarchived_generation(session: Session, generation_id: str) -> Generation:
+    """The one refusal of an archived take: lock it, or raise `ArchivedTakeError`."""
+    gen = _lock_generation(session, generation_id)
+    if gen.is_archived:
+        raise ArchivedTakeError(generation_id)
+    return gen
+
+
 def pick_generation(session: Session, generation_id: str) -> None:
     gen = _require_generation(session, generation_id)
     session.query(Generation).filter_by(song_id=gen.song_id).update({"is_picked": False})
+    gen = lock_unarchived_generation(session, generation_id)
     gen.is_picked = True
     session.flush()
 
@@ -269,7 +304,7 @@ def unpick_generation(session: Session, generation_id: str) -> None:
 
 
 def keep_generation(session: Session, generation_id: str) -> None:
-    gen = _require_generation(session, generation_id)
+    gen = lock_unarchived_generation(session, generation_id)
     gen.is_kept = True
     session.flush()
 
@@ -280,8 +315,30 @@ def unkeep_generation(session: Session, generation_id: str) -> None:
     session.flush()
 
 
-def archive_generation(session: Session, generation_id: str) -> Generation:
-    gen = _require_generation(session, generation_id)
+def _expired_for_archive_filters() -> tuple[ColumnElement[bool], ...]:
+    """What makes a take archivable by retention: neither picked, kept nor archived."""
+    return (
+        Generation.is_picked.is_(False),
+        Generation.is_kept.is_(False),
+        Generation.is_archived.is_(False),
+    )
+
+
+def archive_generation(session: Session, generation_id: str) -> Generation | None:
+    """Archive the take, or return None when no such take is archivable any more.
+
+    The row lock is limited to the take (`of=Generation`) because the eager join to
+    its reference recording is an outer join, which PostgreSQL cannot lock.
+    """
+    gen = (
+        session.query(Generation)
+        .filter(Generation.id == generation_id, *_expired_for_archive_filters())
+        .with_for_update(of=Generation)
+        .populate_existing()
+        .first()
+    )
+    if gen is None:
+        return None
     gen.is_archived = True
     gen.archived_at = datetime.now(timezone.utc)
     session.flush()
@@ -301,35 +358,57 @@ def list_generations_expired_for_archive(
 ) -> list[Generation]:
     return (
         session.query(Generation)
-        .filter(
-            Generation.is_picked.is_(False),
-            Generation.is_kept.is_(False),
-            Generation.is_archived.is_(False),
-            Generation.created_at < cutoff,
-        )
+        .filter(*_expired_for_archive_filters(), Generation.created_at < cutoff)
         .all()
+    )
+
+
+def _expired_for_delete_filters(cutoff: datetime) -> tuple[ColumnElement[bool], ...]:
+    """What makes an archived take deletable by retention: archived before the cutoff,
+    neither picked nor kept, and not the anchor of another take."""
+    child = aliased(Generation)
+    is_anchor = exists().where(child.src_generation_id == Generation.id)
+    return (
+        Generation.is_archived.is_(True),
+        Generation.archived_at.isnot(None),
+        Generation.archived_at < cutoff,
+        Generation.is_picked.is_(False),
+        Generation.is_kept.is_(False),
+        ~is_anchor,
     )
 
 
 def list_generations_expired_for_delete(
     session: Session, cutoff: datetime,
 ) -> list[Generation]:
-    child = aliased(Generation)
-    anchor_subq = (
-        session.query(child.id)
-        .filter(child.src_generation_id == Generation.id)
-        .exists()
-    )
-    return (
+    return session.query(Generation).filter(*_expired_for_delete_filters(cutoff)).all()
+
+
+def _delete_locked_generation(session: Session, gen: Generation) -> list[str]:
+    paths = [p for p in [gen.mp3_path, gen.wav_path] if p]
+    session.delete(gen)
+    session.flush()
+    return paths
+
+
+def delete_expired_generation(
+    session: Session, generation_id: str, cutoff: datetime,
+) -> list[str] | None:
+    """Delete the take if it still qualifies for retention's final deletion.
+
+    Returns its file paths for post-commit cleanup, or None when it no longer
+    qualifies or no longer exists.
+    """
+    gen = (
         session.query(Generation)
-        .filter(
-            Generation.is_archived.is_(True),
-            Generation.archived_at.isnot(None),
-            Generation.archived_at < cutoff,
-            ~anchor_subq,
-        )
-        .all()
+        .filter(Generation.id == generation_id, *_expired_for_delete_filters(cutoff))
+        .with_for_update(of=Generation)
+        .populate_existing()
+        .first()
     )
+    if gen is None:
+        return None
+    return _delete_locked_generation(session, gen)
 
 
 def get_generations(session: Session, generation_ids: list[str]) -> list[Generation]:
@@ -360,15 +439,10 @@ def delete_generation(session: Session, generation_id: str) -> list[str]:
     Callers must delete files AFTER committing the transaction to avoid
     inconsistency if the commit fails.
     """
-    gen = session.query(Generation).filter_by(id=generation_id).first()
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
-
-    paths = [p for p in [gen.mp3_path, gen.wav_path] if p]
-    session.delete(gen)
-    session.flush()
-
-    return paths
+    # Lock the take before the ORM delete removes its scores and ratings, the order
+    # retention's final deletion uses, so the two never wait on each other in a cycle.
+    gen = _lock_generation(session, generation_id)
+    return _delete_locked_generation(session, gen)
 
 
 def get_generation_by_slug(session: Session, slug: str) -> Generation | None:
@@ -386,6 +460,7 @@ def get_generation_by_slug(session: Session, slug: str) -> Generation | None:
 
 
 def enable_generation_sharing(session: Session, generation_id: str) -> Generation:
+    lock_unarchived_generation(session, generation_id)
     gen = enable_sharing(session, Generation, generation_id)
     gen.is_kept = True
     session.flush()

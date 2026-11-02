@@ -9,10 +9,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from starlette.concurrency import run_in_threadpool
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
@@ -23,7 +22,6 @@ from songmaker_cli.api_helpers import (
     check_song_access,
     cleanup_generation_files,
     create_job_with_rate_limit,
-    resolve_public_base_url,
 )
 from songmaker_cli.api_models import (
     BulkDeleteRequest,
@@ -37,7 +35,6 @@ from songmaker_cli.api_models import (
     LastFailedGenerationResponse,
     RateRequest,
     RateResponse,
-    ReferenceAudioResponse,
     RepaintRequest,
     RepaintTaskParams,
     ScoreRequest,
@@ -45,6 +42,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
+from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import (
     get_arq_pool,
@@ -64,6 +62,8 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import Generation, Version
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.generations import (
+    ARCHIVED_TAKE_DETAIL,
+    ArchivedTakeError,
     bulk_delete_generations,
     delete_generation,
     disable_generation_sharing,
@@ -91,7 +91,6 @@ from songmaker_cli.jobs.generation_failure import (
     musician_job_response,
 )
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
-from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)
@@ -172,74 +171,6 @@ def _generation_version_or_error(gen: Generation, version_id: str | None) -> Ver
     if not version:
         raise HTTPException(400, "Generation has no linked version")
     return version
-
-
-# ── Reference audio upload ───────────────────────────────────────────
-
-
-@router.post(
-    "/audio/upload",
-    responses={
-        400: {"description": "Reference audio upload is invalid"},
-        409: {"description": "Reference audio storage limit reached"},
-        500: {"description": "Reference audio storage could not be checked"},
-    },
-)
-async def api_upload_reference_audio(
-    file: UploadFile,
-    user: AuthenticatedUser = Depends(get_current_user),
-    ctx: AppContext = Depends(get_app_context),
-) -> ReferenceAudioResponse:
-    from songmaker_cli.constants import (
-        REFERENCE_AUDIO_EXTENSIONS,
-        REFERENCE_AUDIO_MAX_BYTES,
-    )
-    from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH
-    from songmaker_cli.reference_audio import (
-        ReferenceAudioQuotaExceeded,
-        ReferenceAudioStorageError,
-        store_reference_audio,
-    )
-
-    if not file.filename:
-        raise HTTPException(400, "No filename provided")
-
-    original_filename = Path(file.filename).name
-    if len(original_filename) > REFERENCE_FILENAME_MAX_LENGTH:
-        raise HTTPException(
-            400, f"Filename too long (max {REFERENCE_FILENAME_MAX_LENGTH} characters)",
-        )
-    ext = Path(original_filename).suffix.lower()
-    if ext not in REFERENCE_AUDIO_EXTENSIONS:
-        accepted = ", ".join(sorted(REFERENCE_AUDIO_EXTENSIONS))
-        raise HTTPException(400, f"Unsupported format '{ext}'. Accepted: {accepted}")
-
-    content = await file.read()
-    if len(content) > REFERENCE_AUDIO_MAX_BYTES:
-        max_mb = REFERENCE_AUDIO_MAX_BYTES // 1024 // 1024
-        raise HTTPException(400, f"File too large (max {max_mb}MB)")
-    if len(content) < 100:
-        raise HTTPException(400, "File is empty or too small")
-
-    try:
-        stored = await run_in_threadpool(
-            store_reference_audio,
-            ctx.db,
-            ctx.audio_dir,
-            user.id,
-            ext,
-            content,
-            get_settings(),
-            original_filename,
-        )
-    except ReferenceAudioQuotaExceeded as exc:
-        raise HTTPException(409, str(exc)) from exc
-    except ReferenceAudioStorageError as exc:
-        raise HTTPException(500, str(exc)) from exc
-
-    return ReferenceAudioResponse(
-        id=stored.id, path=stored.storage_path, filename=file.filename,
-    )
 
 
 # ── Generations ──────────────────────────────────────────────────────
@@ -334,7 +265,8 @@ async def api_generate_song(
     _check_version_lora_ready(session, version, user)
 
     job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song_id, redis=ctx.redis,
+        session, user, JobType.GENERATE, song_id=song_id, version_id=version.id,
+        redis=ctx.redis,
     )
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
@@ -437,7 +369,7 @@ async def api_repaint_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis,
+        session, user, JobType.GENERATE, song_id=song.id, version_id=version.id, redis=ctx.redis,
     )
     record_audit(
         session, user.id, AuditAction.REPAINT, ResourceType.GENERATION, gen_id,
@@ -506,7 +438,7 @@ async def api_cover_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis,
+        session, user, JobType.GENERATE, song_id=song.id, version_id=version.id, redis=ctx.redis,
     )
     record_audit(
         session, user.id, AuditAction.COVER, ResourceType.GENERATION, gen_id,
@@ -609,16 +541,30 @@ def _toggle_generation(
     return StatusResponse()
 
 
+def _mark_generation(
+    gen_id: str, user: AuthenticatedUser, session: Session,
+    action: Callable[[Session, str], None],
+) -> StatusResponse:
+    """Toggle a mark that an archived take refuses with 409."""
+    try:
+        return _toggle_generation(gen_id, user, session, action)
+    except ArchivedTakeError:
+        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
+
+
 @router.post(
     "/generations/{gen_id}/pick",
-    responses={404: {"description": "Generation does not exist"}},
+    responses={
+        404: {"description": "Generation does not exist"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
+    },
 )
 def api_pick_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    return _toggle_generation(gen_id, user, session, pick_generation)
+    return _mark_generation(gen_id, user, session, pick_generation)
 
 
 @router.post(
@@ -635,14 +581,17 @@ def api_unpick_generation(
 
 @router.post(
     "/generations/{gen_id}/keep",
-    responses={404: {"description": "Generation does not exist"}},
+    responses={
+        404: {"description": "Generation does not exist"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
+    },
 )
 def api_keep_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    return _toggle_generation(gen_id, user, session, keep_generation)
+    return _mark_generation(gen_id, user, session, keep_generation)
 
 
 @router.post(
@@ -671,7 +620,10 @@ def api_unarchive_generation(
 
 @router.post(
     "/generations/{gen_id}/share",
-    responses={404: {"description": "Generation does not exist"}},
+    responses={
+        404: {"description": "Generation does not exist"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
+    },
 )
 def api_share_generation(
     gen_id: str,
@@ -679,15 +631,17 @@ def api_share_generation(
     session: Session = Depends(get_db_session),
 ) -> ShareResponse:
     check_generation_access(session, gen_id, user)
-    base_url = resolve_public_base_url()
     try:
         gen = enable_generation_sharing(session, gen_id)
     except ValueError:
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
+    except ArchivedTakeError:
+        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
+    share_url = public_share_url(ShareKind.GENERATION, gen.share_slug)
     session.commit()
     return ShareResponse(
-        share_url=f"{base_url}/share/gen/{gen.share_slug}",
+        share_url=share_url,
         share_slug=gen.share_slug,
     )
 

@@ -24,7 +24,7 @@ jobs:
       UV_PYTHON: ${{ matrix.python-version }} # why: .python-version would otherwise win over the matrix leg.
     strategy:
       matrix:
-        python-version: ["3.12", "3.14"]
+        python-version: ["3.14"]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
@@ -97,7 +97,7 @@ jobs:
           echo "### Backend: ${passed} passed, ${skipped:-0} skipped — ${total} coverage" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload backend coverage
-        if: ${{ !cancelled() && matrix.python-version == '3.14' }} # why: one leg owns the single Sonar coverage report.
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
           name: sonar-coverage-backend
@@ -158,11 +158,14 @@ jobs:
         tests/test_auth_write_lock_postgres.py
         tests/test_person_token_paths_postgres.py
         tests/test_reference_attach_lock_postgres.py
+        tests/test_generation_retention_lock_postgres.py
         tests/test_song_version_lock_postgres.py
         tests/songmaker_cli/mcp_server/test_tools_coherence_verdict_lock_postgres.py
         tests/songmaker_cli/db/test_migrations_coherence_verdict.py
         tests/songmaker_cli/db/test_migrations_reference_recordings.py
-        tests/songmaker_cli/db/test_migrations_version_reference_link.py
+        tests/songmaker_cli/db/test_migrations_reference_link.py
+        tests/songmaker_cli/db/test_migrations_job_version.py
+        tests/songmaker_cli/db/test_migrations_user_theme.py
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -208,13 +211,9 @@ jobs:
           PYTHON
 
   frontend:
-    name: Frontend (Node ${{ matrix.node-version }})
+    name: Frontend
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      matrix:
-        node-version: ["22"]
-
     defaults:
       run:
         working-directory: frontend
@@ -230,7 +229,8 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.x
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: frontend/.node-version
+          check-latest: true
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 

@@ -9,6 +9,7 @@ vi.mock('#lib/api/client.ts', () => ({
 	unpickGeneration: vi.fn(),
 	keepGeneration: vi.fn(),
 	unkeepGeneration: vi.fn(),
+	unarchiveGeneration: vi.fn(),
 	rateGeneration: vi.fn(),
 	scoreGeneration: vi.fn()
 }));
@@ -21,13 +22,14 @@ import {
 	pickGeneration,
 	rateGeneration,
 	scoreGeneration,
+	unarchiveGeneration,
 	unkeepGeneration,
 	unpickGeneration
 } from '#lib/api/client.ts';
 import { songList } from '#lib/stores/libraryData.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
-import { rate, rescore, rescoringTakeIds, setKeep, setPick } from './takeActions';
+import { rate, rescore, rescoringTakeIds, restoreTake, setKeep, setPick } from './takeActions';
 
 const unreachableServer = () =>
 	new NetworkError('/api/generations/g1', new TypeError('Failed to fetch'));
@@ -163,6 +165,28 @@ describe('setKeep', () => {
 		await setKeep('s1', 'g1', false);
 
 		expect(unkeepGeneration).toHaveBeenCalledWith('g1');
+	});
+});
+
+describe('restoreTake', () => {
+	it('unarchives the take and refreshes the song into songList', async () => {
+		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
+
+		await restoreTake('s1', 'g1');
+
+		expect(unarchiveGeneration).toHaveBeenCalledWith('g1');
+		expect(get(songList)).toEqual([song(actionSongDefaults())]);
+	});
+
+	it('toasts the server detail when the restore is refused', async () => {
+		vi.mocked(unarchiveGeneration).mockRejectedValue(
+			new ApiError(404, 'Generation not found', '/api/generations/g1/unarchive')
+		);
+
+		await restoreTake('s1', 'g1');
+
+		expect(fetchSong).not.toHaveBeenCalled();
+		expect(get(toasts).map((toast) => toast.message)).toEqual(['Generation not found']);
 	});
 });
 

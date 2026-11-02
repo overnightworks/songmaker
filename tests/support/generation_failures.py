@@ -11,6 +11,7 @@ GENERATION_SETUP_MESSAGES = [
     "Song not found",
     "Version not found",
     "Reference audio not found",
+    "The reference track was deleted while this take was generating.",
     "Selected voice is unavailable for this generation",
 ]
 

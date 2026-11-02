@@ -8,12 +8,18 @@ import type {
 	PresetUpdateRequest,
 	ProviderStatus,
 	RateLimitsResponse,
+	ReleaseInfo,
+	ThemeSettings,
 	VersionGenerationParams
 } from './types';
 import { apiFetch } from './fetch';
 
 export async function fetchCapabilities(): Promise<Capabilities> {
 	return apiFetch<Capabilities>('/api/capabilities');
+}
+
+export async function fetchRelease(): Promise<ReleaseInfo> {
+	return apiFetch<ReleaseInfo>('/api/release');
 }
 
 export async function fetchGenerationDefaults(): Promise<Record<string, VersionGenerationParams>> {
@@ -27,6 +33,18 @@ export async function updateGenerationDefaults(
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(data)
+	});
+}
+
+export async function fetchTheme(): Promise<ThemeSettings> {
+	return apiFetch<ThemeSettings>('/api/settings/theme');
+}
+
+export async function updateTheme(theme: ThemeSettings['theme']): Promise<ThemeSettings> {
+	return apiFetch<ThemeSettings>('/api/settings/theme', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ theme })
 	});
 }
 

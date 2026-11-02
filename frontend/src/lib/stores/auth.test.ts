@@ -241,6 +241,24 @@ describe('logout', () => {
 		expect(documentLoads.replace).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		{ answer: 'the server answers', reply: () => Promise.resolve(KNOWN_USER), keeps: false },
+		{
+			answer: 'the server cannot be reached',
+			reply: () => Promise.reject(new NetworkError(AUTH_ME_PATH, new TypeError('Failed to fetch'))),
+			keeps: true
+		}
+	])('H4: when $answer, the theme copy is kept: $keeps', async ({ reply, keeps }) => {
+		onTestFinished(() => localStorage.clear());
+		localStorage.setItem('songmaker.theme', 'dark');
+		currentUser.set(KNOWN_USER);
+		mockFetchMe.mockImplementationOnce(reply);
+
+		await logout();
+
+		expect(localStorage.getItem('songmaker.theme')).toBe(keeps ? 'dark' : null);
+	});
+
 	// Only an unreachable server keeps the person signed in, and says so: the
 	// check is about reaching the server, so a session already gone (a 401) or
 	// any other answer still leaves, because the identity provider's session
@@ -310,7 +328,7 @@ describe('a request refused as a lost session', () => {
 		lyrics: null
 	};
 	const openingTheAlbum = () =>
-		navigateTo('/album/b2', { replaceState: false, noScroll: true, keepFocus: true, state: {} });
+		navigateTo('/album/b2', { replace: false, reset: false, state: {} });
 	// The refusal travels through promises only, so one task later it has been
 	// handed to the reaction and nothing further is pending without history.
 	const refusalIsHandedOver = () => new Promise<void>((resolve) => setTimeout(resolve, 0));

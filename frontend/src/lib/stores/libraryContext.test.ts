@@ -881,9 +881,8 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		expect(historyEntry()).toEqual(libraryRootState());
 		await written;
 		expect(goto).toHaveBeenCalledWith(songRoutePath('a1', 's1'), {
-			replaceState: true,
-			noScroll: true,
-			keepFocus: true,
+			replace: true,
+			reset: false,
 			state: stampedLibrary(libraryRootState())
 		});
 		expect(historyLength()).toBe(lengthBefore + 1);
@@ -1006,9 +1005,8 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		await writeLibraryHistory(libraryRootState(), LIBRARY_ROUTE_PATH, 'push');
 
 		expect(goto).toHaveBeenCalledWith(LIBRARY_ROUTE_PATH, {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true,
+			replace: false,
+			reset: false,
 			state: stampedLibrary(libraryRootState())
 		});
 	});

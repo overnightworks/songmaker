@@ -2016,20 +2016,20 @@ def test_endpoint_rejects_inactive_model(
 def test_upload_reference_audio(client: TestClient) -> None:
     import io
     resp = client.post(
-        "/api/audio/upload",
+        "/api/references",
         files={"file": ("ref.wav", io.BytesIO(b"RIFF" + b"\x00" * 200), "audio/wav")},
     )
     assert resp.status_code == 200
     data = resp.json()
     assert data["filename"] == "ref.wav"
-    assert data["path"].endswith(".wav")
-    assert "refs/" in data["path"]
+    assert data["size_bytes"] == 204
+    assert "path" not in data
 
 
 def test_upload_reference_audio_bad_format(client: TestClient) -> None:
     import io
     resp = client.post(
-        "/api/audio/upload",
+        "/api/references",
         files={"file": ("ref.txt", io.BytesIO(b"hello world" * 20), "text/plain")},
     )
     assert resp.status_code == 400
@@ -2039,7 +2039,7 @@ def test_upload_reference_audio_bad_format(client: TestClient) -> None:
 def test_upload_reference_audio_too_small(client: TestClient) -> None:
     import io
     resp = client.post(
-        "/api/audio/upload",
+        "/api/references",
         files={"file": ("ref.wav", io.BytesIO(b"tiny"), "audio/wav")},
     )
     assert resp.status_code == 400

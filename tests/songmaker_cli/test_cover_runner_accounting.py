@@ -312,6 +312,34 @@ def test_album_deletion_retains_cover_history(accounting_factory, running_cover,
         assert session.query(AlbumCoverSuggestion).count() == 0
 
 
+def _seed_owner_with_jobs_on_two_albums(factory) -> None:
+    with factory() as session:
+        # The revision under test predates the cutover: its users carry a password hash.
+        session.execute(text(
+            "INSERT INTO users (id, username, password_hash, role, is_active, created_at,"
+            " updated_at) VALUES ('owner', 'owner', 'x', 'user', true, now(), now())"
+        ))
+        session.add_all([
+            Album(id=album_id, title=album_id, artist="Artist", created_by="owner")
+            for album_id in ("deleted", "retained")
+        ])
+        session.flush()
+        # Named columns only: the ORM Job also writes columns later revisions add.
+        session.execute(
+            text(
+                "INSERT INTO jobs (id, type, status, progress, user_id, album_id,"
+                " heartbeat_at, started_at) VALUES (:id, :type, :status, 0.0, 'owner',"
+                " :album_id, :started_at, :started_at)"
+            ),
+            [
+                {"id": f"{album_id}-{status}", "type": JobType.COVER, "status": status,
+                 "album_id": album_id, "started_at": STARTED}
+                for album_id in ("deleted", "retained") for status in JobStatus
+            ],
+        )
+        session.commit()
+
+
 def test_migration_preserves_usage_across_upgrade_album_deletion_and_downgrade(accounting_pg_url):
     """1301-F3-C1-DURABLE: change the FK without erasing existing or orphaned jobs."""
     config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
@@ -323,26 +351,10 @@ def test_migration_preserves_usage_across_upgrade_album_deletion_and_downgrade(a
     engine = create_engine(accounting_pg_url)
     factory = sessionmaker(bind=engine)
     try:
-        with factory() as session:
-            # The revision under test predates the cutover: its users carry a password hash.
-            session.execute(text(
-                "INSERT INTO users (id, username, password_hash, role, is_active, created_at,"
-                " updated_at) VALUES ('owner', 'owner', 'x', 'user', true, now(), now())"
-            ))
-            session.add_all([
-                Album(id=album_id, title=album_id, artist="Artist", created_by="owner")
-                for album_id in ("deleted", "retained")
-            ])
-            session.flush()
-            session.add_all([
-                Job(id=f"{album_id}-{status}", type=JobType.COVER, status=status,
-                    user_id="owner", album_id=album_id, started_at=STARTED)
-                for album_id in ("deleted", "retained") for status in JobStatus
-            ])
-            session.commit()
+        _seed_owner_with_jobs_on_two_albums(factory)
         command.upgrade(config, ACCOUNTING_REVISION)
         with factory() as session:
-            assert session.query(Job).count() == 2 * len(JobStatus)
+            assert session.execute(text("SELECT count(*) FROM jobs")).scalar() == 2 * len(JobStatus)
             session.execute(delete(Album).where(Album.id == "deleted"))
             session.commit()
         for revision in (ACCOUNTING_REVISION, PREVIOUS_REVISION, ACCOUNTING_REVISION):
@@ -358,8 +370,11 @@ def test_migration_preserves_usage_across_upgrade_album_deletion_and_downgrade(a
                 "CASCADE" if revision == PREVIOUS_REVISION else "SET NULL"
             )
             with factory() as session:
-                assert session.query(Job).count() == 2 * len(JobStatus)
-                for job in session.query(Job):
+                jobs = session.execute(text(
+                    "SELECT id, album_id, status, user_id, started_at FROM jobs"
+                )).all()
+                assert len(jobs) == 2 * len(JobStatus)
+                for job in jobs:
                     original_album, original_status = job.id.split("-", 1)
                     assert job.album_id == (None if original_album == "deleted" else "retained")
                     assert job.status == original_status

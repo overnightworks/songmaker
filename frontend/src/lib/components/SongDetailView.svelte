@@ -60,8 +60,7 @@
 		versionLoadUndoOutstanding,
 		handleDeleteVersion,
 		handleSave,
-		computeDraftVersionNumber,
-		draftSavesAsNewVersion,
+		draftVersionNumber,
 		discardDraft
 	} from '#lib/stores/editor.ts';
 	import type { VersionDeleteEditorLoss } from '#lib/stores/editor.ts';
@@ -112,7 +111,6 @@
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
 	} from '#lib/constants.ts';
-	import { sharePagePath } from '#lib/routes/addresses.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
@@ -193,12 +191,6 @@
 			: []
 	);
 	const dirty = $derived($isDirty);
-	// song.version_count is a *count* of surviving versions, not the highest
-	// version number — the two diverge once any version has been deleted, so
-	// neither label below may use it. See computeDraftVersionNumber().
-	const draftVersionNumber = $derived(
-		computeDraftVersionNumber($versions, song?.generations ?? [], $draftSavesAsNewVersion)
-	);
 	const latestVersionNumber = $derived($versions[0]?.version_number ?? song?.version_count ?? 1);
 
 	let editorSongId: string | null = null;
@@ -400,7 +392,7 @@
 					loadStatus: takesStatus,
 					loadError: takesError,
 					dirty,
-					draftVersionNumber,
+					draftVersionNumber: $draftVersionNumber,
 					latestVersionNumber,
 					onsource: setSourceFromGeneration,
 					onretry: () => {
@@ -521,15 +513,18 @@
 		if (!song) throw new Error('No song');
 		const songId = song.id;
 		const result = await shareSong(songId);
-		updateSongInList(songId, (s) => ({ ...s, is_shared: true, share_slug: result.share_slug }));
+		const { share_slug, share_url } = result;
+		updateSongInList(songId, (s) => ({ ...s, is_shared: true, share_slug, share_url }));
 		return result;
 	}
+
+	const SONG_UNSHARED = { is_shared: false, share_slug: null, share_url: null };
 
 	async function onSongShareDisable() {
 		if (!song) return;
 		const songId = song.id;
 		await unshareSong(songId);
-		updateSongInList(songId, (s) => ({ ...s, is_shared: false, share_slug: null }));
+		updateSongInList(songId, (s) => ({ ...s, ...SONG_UNSHARED }));
 	}
 
 	async function onDeleteSong(): Promise<void> {
@@ -737,9 +732,7 @@
 	{/snippet}
 
 	{#snippet sharedLink()}
-		{#if song.is_shared && song.share_slug}
-			<ShareLinkChip url={`${window.location.origin}${sharePagePath('song', song.share_slug)}`} />
-		{/if}
+		{#if song.share_url}<ShareLinkChip url={song.share_url} />{/if}
 	{/snippet}
 
 	{#snippet phoneEdit()}

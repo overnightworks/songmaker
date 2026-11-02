@@ -10,8 +10,7 @@ import {
 	bulkDeleteGenerations,
 	coverGeneration,
 	generateSong,
-	repaintGeneration,
-	uploadReferenceAudio
+	repaintGeneration
 } from './generations';
 
 function acceptRequests(): void {
@@ -132,20 +131,6 @@ describe('generation API contract', () => {
 });
 
 describe('generation API wire bytes (#1882 done-when: wire bytes unchanged)', () => {
-	it('uploads the reference audio as multipart form data and returns the stored file', async () => {
-		const stored = { id: 'reference-1', path: '/audio/ref.wav', filename: 'ref.wav' };
-		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(stored) });
-		const file = new File(['wav'], 'ref.wav', { type: 'audio/wav' });
-
-		const result = await uploadReferenceAudio(file);
-
-		const [url, init] = request();
-		expect(url).toBe('/api/audio/upload');
-		expect(init.method).toBe('POST');
-		expect((init.body as FormData).get('file')).toBe(file);
-		expect(result).toEqual(stored);
-	});
-
 	it('bulk-deletes the given generation ids as a JSON body and returns the deleted count', async () => {
 		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ deleted: 2 }) });
 

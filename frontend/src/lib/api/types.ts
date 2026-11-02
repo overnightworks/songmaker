@@ -314,6 +314,7 @@ export interface GenerationItem {
 	version_lyrics: string | null;
 	scores: TrackScores | null;
 	generation_params: GenerationParams | null;
+	reference?: ReferenceResponse | null;
 	audio_duration_sec: number | null;
 	created_at: string;
 }
@@ -345,7 +346,6 @@ export interface GenerationParams {
 	latent_rescale?: number | null;
 	audio_cover_strength?: number | null;
 	user_lora_id?: string | null;
-	reference_audio_path?: string | null;
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;
@@ -405,6 +405,7 @@ export interface JobItem {
 	id: string;
 	type: string;
 	status: string;
+	version_id?: string | null;
 	progress: number;
 	phase?: 'loading_model' | 'writing' | 'rendering' | 'saving_take' | null;
 	take_index?: number | null;
@@ -717,10 +718,12 @@ export interface RateResult {
 	rating: number;
 }
 
-export interface ReferenceAudioResponse {
+export interface ReferenceRecordingResponse {
 	id: string;
-	path: string;
 	filename: string;
+	size_bytes: number;
+	duration_sec: number | null;
+	created_at: string;
 }
 
 export interface ReferenceResponse {
@@ -912,6 +915,7 @@ export interface SongItem {
 	generation_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	share_url?: string | null;
 	best_scores?: TrackScores | null;
 	best_rating?: number | null;
 	cover?: AlbumCoverUrls | null;
@@ -947,6 +951,7 @@ export interface SongSummaryResponse {
 	generation_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	share_url?: string | null;
 	best_scores?: Record<string, unknown> | null;
 	best_rating?: number | null;
 	cover?: AlbumCoverUrls | null;
@@ -967,6 +972,10 @@ export interface SongUpdateRequest {
 
 export interface StatusResponse {
 	status: string;
+}
+
+export interface ThemeSettings {
+	theme: 'light' | 'dark' | 'system';
 }
 
 export interface TitleUpdateRequest {

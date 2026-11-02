@@ -141,7 +141,7 @@ def test_song_cover_upload_path_is_cover_sized_and_reimport_unchanged() -> None:
     assert policy.max_bytes("/api/songs/alice-song/reimport", "POST") == REIMPORT_BODY_MAX_BYTES
     assert COVER_UPLOAD_BODY_MAX_BYTES != REIMPORT_BODY_MAX_BYTES
     assert COVER_UPLOAD_BODY_MAX_BYTES > COVER_MAX_BYTES
-    assert policy.max_bytes("/api/audio/upload", "POST") == AUDIO_UPLOAD_BODY_MAX_BYTES
+    assert policy.max_bytes("/api/references", "POST") == AUDIO_UPLOAD_BODY_MAX_BYTES
     assert AUDIO_UPLOAD_BODY_MAX_BYTES != COVER_UPLOAD_BODY_MAX_BYTES
 
 

@@ -10,7 +10,7 @@ import {
 	namesNothing,
 	releaseCoverSuggestions
 } from '#lib/stores/coverRuns.ts';
-import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
+import { activeJobs, isActiveJobStatus, trackJob } from '#lib/stores/jobs.ts';
 
 /**
  * The one owner of the watched album's cover state: its suggestions, its run
@@ -62,7 +62,7 @@ export const coverStanding = derived(
 		if (!activity) return null;
 		const active = jobs.find((entry) => entry.albumId === activity.albumId) ?? null;
 		const latest = activity.data?.job ?? null;
-		const running = Boolean(active) || (latest !== null && isRunning(latest));
+		const running = Boolean(active) || (latest !== null && isActiveJobStatus(latest.status));
 		return {
 			albumId: activity.albumId,
 			running,
@@ -94,10 +94,6 @@ function isNewestRead(albumId: string, read: number): boolean {
 /** The unreachable reloads belong to the watched album alone. */
 function reloadsOf(albumId: string): ReturnType<typeof reloadWhileUnreachable> | null {
 	return albumId === watchedAlbumId ? unreachableReloads : null;
-}
-
-function isRunning(job: JobItem): boolean {
-	return job.status === 'queued' || job.status === 'running';
 }
 
 /**
@@ -165,7 +161,7 @@ export async function readCoverActivity(albumId: string): Promise<void> {
 	try {
 		const response = await fetchAlbumCoverSuggestions(albumId);
 		if (!isNewestRead(albumId, read)) return;
-		const running = response.job && isRunning(response.job) ? response.job : null;
+		const running = response.job && isActiveJobStatus(response.job.status) ? response.job : null;
 		coverActivity.update((state) => ({
 			albumId,
 			data: response,

@@ -142,6 +142,7 @@ export async function logout(): Promise<void> {
 		}
 	}
 	audioPlayer.unload();
+	(await import('#lib/stores/ui.ts')).forgetThemeChoice();
 	if (user) {
 		forgetPlaybackResume(user.id);
 	}
@@ -160,11 +161,9 @@ function hasSessionToLose(): boolean {
 let sessionLostRun: Promise<void> | null = null;
 
 export function handleSessionLost(): Promise<void> {
-	if (!sessionLostRun) {
-		sessionLostRun = reactToSessionLost().finally(() => {
-			sessionLostRun = null;
-		});
-	}
+	sessionLostRun ??= reactToSessionLost().finally(() => {
+		sessionLostRun = null;
+	});
 	return sessionLostRun;
 }
 

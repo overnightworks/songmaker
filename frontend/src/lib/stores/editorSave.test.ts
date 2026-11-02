@@ -15,7 +15,8 @@ vi.mock('#lib/stores/libraryData.ts', () => ({
 vi.mock('#lib/stores/player.ts', async () => {
 	const { writable } = await import('svelte/store');
 	return {
-		selectedSongId: writable('s1')
+		selectedSongId: writable('s1'),
+		selectedSong: writable(null)
 	};
 });
 

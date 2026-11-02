@@ -37,6 +37,7 @@ from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
+from songmaker_cli.theme_types import ThemeChoice
 from songmaker_cli.timestamps import aware_timestamp as aware_timestamp
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.whisper_cues import stored_whisper_cues
@@ -51,6 +52,8 @@ ALBUMS_ID: Final = "albums.id"
 SONGS_ID: Final = "songs.id"
 GENERATIONS_ID: Final = "generations.id"
 SET_NULL: Final = "SET NULL"
+RESTRICT: Final = "RESTRICT"
+REFERENCE_RECORDINGS_ID: Final = "reference_recordings.id"
 DELETE_ORPHANS: Final = "all, delete-orphan"
 
 
@@ -185,7 +188,7 @@ class UserSongWork(Base):
 
 
 class Version(Base):
-    """A content snapshot — lyrics, prompt, params. Each save = new version."""
+    """A content snapshot: lyrics, prompt, params. ``update_song`` decides when a save makes one."""
 
     __tablename__ = "versions"
 
@@ -199,7 +202,7 @@ class Version(Base):
     key_scale: Mapped[str] = mapped_column(String(10), default="")
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     reference_recording_id: Mapped[str | None] = mapped_column(
-        ForeignKey("reference_recordings.id", ondelete="RESTRICT"), nullable=True, index=True,
+        ForeignKey(REFERENCE_RECORDINGS_ID, ondelete=RESTRICT), nullable=True, index=True,
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
@@ -246,6 +249,9 @@ class Generation(ShareMixin, Base):
         ForeignKey(GENERATIONS_ID, ondelete=SET_NULL), nullable=True,
     )
     audio_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reference_recording_id: Mapped[str | None] = mapped_column(
+        ForeignKey(REFERENCE_RECORDINGS_ID, ondelete=RESTRICT), nullable=True, index=True,
+    )
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
@@ -253,6 +259,7 @@ class Generation(ShareMixin, Base):
 
     song: Mapped[Song] = relationship(back_populates="generations")
     version: Mapped[Version | None] = relationship(back_populates="generations")
+    reference_recording: Mapped[ReferenceRecording | None] = relationship(lazy="joined")
     src_generation: Mapped[Generation | None] = relationship(
         remote_side=[id], foreign_keys=[src_generation_id],
     )
@@ -394,6 +401,9 @@ class Job(Base):
     album_id: Mapped[str | None] = mapped_column(
         ForeignKey(ALBUMS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
+    version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("versions.id", ondelete=SET_NULL), nullable=True, index=True,
+    )
     worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     heartbeat_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     started_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
@@ -424,12 +434,24 @@ class AlbumCoverSuggestion(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "theme IN (" + ", ".join(repr(choice.value) for choice in ThemeChoice) + ")",
+            name="ck_users_theme",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     username: Mapped[str] = mapped_column(String(USERNAME_MAX_LENGTH))
     role: Mapped[str] = mapped_column(String(20), default="user")
     default_generation_config: Mapped[str | None] = mapped_column(
         String(36), nullable=True, default=None,
+    )
+    theme: Mapped[str] = mapped_column(
+        String(6),
+        nullable=False,
+        default=ThemeChoice.SYSTEM,
+        server_default=ThemeChoice.SYSTEM.value,
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
@@ -449,7 +471,7 @@ class ReferenceRecording(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        ForeignKey(USERS_ID, ondelete="RESTRICT"), nullable=False, index=True,
+        ForeignKey(USERS_ID, ondelete=RESTRICT), nullable=False, index=True,
     )
     storage_path: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     original_filename: Mapped[str] = mapped_column(

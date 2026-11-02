@@ -1,4 +1,4 @@
-import type { BulkDeleteResponse, RateResult, ReferenceAudioResponse, ShareResult } from './types';
+import type { BulkDeleteResponse, RateResult, ShareResult } from './types';
 import { apiFetch, type JobStatus } from './fetch';
 
 export async function generateSong(
@@ -96,15 +96,6 @@ export async function coverGeneration(
 	});
 }
 
-export async function uploadReferenceAudio(file: File): Promise<ReferenceAudioResponse> {
-	const formData = new FormData();
-	formData.append('file', file);
-	return apiFetch<ReferenceAudioResponse>('/api/audio/upload', {
-		method: 'POST',
-		body: formData
-	});
-}
-
 export async function rateGeneration(
 	genId: string,
 	rating: number,
@@ -151,6 +142,10 @@ export async function keepGeneration(genId: string): Promise<void> {
 
 export async function unkeepGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}/unkeep`, { method: 'POST' });
+}
+
+export async function unarchiveGeneration(genId: string): Promise<void> {
+	await apiFetch(`/api/generations/${genId}/unarchive`, { method: 'POST' });
 }
 
 export async function shareGeneration(genId: string): Promise<ShareResult> {

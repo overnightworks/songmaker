@@ -9,8 +9,11 @@
 				// Inline so it runs before first paint; it cannot import the storage helper.
 				var t = null;
 				try {
-					t = localStorage.getItem('theme');
-				} catch (e) {}
+					localStorage.removeItem('theme');
+					t = localStorage.getItem('songmaker.theme');
+				} catch (e) {
+					// Storage can be blocked (private mode, blocked site data); the device's scheme paints instead.
+				}
 				if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
 				if (typeof window.matchMedia !== 'function') {
 					document.documentElement.dataset.pointer = 'fine';
