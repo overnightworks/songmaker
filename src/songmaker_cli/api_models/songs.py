@@ -32,6 +32,8 @@ log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, Version
+    from songmaker_cli.db.queries.reference_recordings import ReferenceUsage
+    from songmaker_cli.settings import Settings
 
 
 def generation_version_lyrics(gen: Generation) -> str | None:
@@ -791,6 +793,15 @@ class ReferenceUsageResponse(BaseModel):
     bytes: int
     file_limit: int
     byte_limit: int
+
+    @classmethod
+    def from_orm(cls, usage: ReferenceUsage, settings: Settings) -> ReferenceUsageResponse:
+        return cls(
+            files=usage.files,
+            bytes=usage.bytes,
+            file_limit=settings.reference_audio_quota_files,
+            byte_limit=settings.reference_audio_quota_bytes,
+        )
 
 
 class ReferenceListResponse(BaseModel):

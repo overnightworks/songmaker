@@ -79,7 +79,10 @@ describe('reference API', () => {
 				}
 			);
 		});
-		afterEach(() => vi.stubGlobal('fetch', mockFetch));
+		afterEach(() => {
+			vi.unstubAllGlobals();
+			vi.stubGlobal('fetch', mockFetch);
+		});
 
 		const file = new File(['wav'], 'ref.wav', { type: 'audio/wav' });
 

@@ -4,7 +4,12 @@
 	import { listReferences, referenceAudioUrl, uploadReference } from '#lib/api/references.ts';
 	import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
 	import Icon from '#lib/components/Icon.svelte';
-	import { APP_NAME, TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
+	import {
+		APP_NAME,
+		REFERENCE_AUDIO_ACCEPT,
+		TRANSPORT_PAUSE_LABEL,
+		TRANSPORT_PLAY_LABEL
+	} from '#lib/constants.ts';
 	import { audioPlayer, transportOffersPause } from '#lib/services/audioPlayer.svelte.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { formatTime, localDayAndMonth } from '#lib/utils/format.ts';
@@ -18,8 +23,6 @@
 	const UPLOAD_LABEL = 'Upload';
 	const PROGRESS_SEPARATOR = ' · ';
 	const UPLOAD_FAILED = "Couldn't upload this file";
-	// The recipe's picker takes the same files.
-	const UPLOAD_ACCEPT = '.mp3,.wav,.flac,.ogg';
 	const METER_FROM_SHARE = 0.8;
 	const STORAGE_CONFLICT_STATUS = 409;
 	const BYTES_PER_MB = 1_000_000;
@@ -73,11 +76,17 @@
 			(fullFigure === null ? null : `Reference storage is full (${fullFigure}) — delete one first.`)
 	);
 
-	function failureWording(error: unknown): string {
-		if (error instanceof ApiError && error.status === STORAGE_CONFLICT_STATUS && usage) {
-			return `That file doesn't fit (${sizeFigure(usage)} used) — delete one first.`;
+	// A conflict is worded from the usage the list now reports; a full storage
+	// leaves the words to `uploadReason`.
+	async function failureWording(error: unknown): Promise<string | null> {
+		if (!(error instanceof ApiError) || error.status !== STORAGE_CONFLICT_STATUS) {
+			return describeFailure(error, UPLOAD_FAILED);
 		}
-		return describeFailure(error, UPLOAD_FAILED);
+		await load();
+		if (fullFigure !== null) return null;
+		return usage
+			? `That file doesn't fit (${sizeFigure(usage)} used) — delete one first.`
+			: describeFailure(error, UPLOAD_FAILED);
 	}
 
 	async function upload(file: File) {
@@ -88,7 +97,7 @@
 				uploading = { name: file.name, percent: Math.round(fraction * 100) };
 			});
 		} catch (error) {
-			uploadFailure = failureWording(error);
+			uploadFailure = await failureWording(error);
 			return;
 		} finally {
 			uploading = null;
@@ -193,13 +202,16 @@
 						>{PROGRESS_SEPARATOR}{uploading.percent}%</span
 					>
 				{:else}
-					{#if uploadReason !== null}<Icon name="triangle-alert" size={16} />{/if}{UPLOAD_LABEL}
+					<Icon
+						name={uploadReason !== null ? 'triangle-alert' : 'arrow-up'}
+						size={16}
+					/>{UPLOAD_LABEL}
 				{/if}
 			</button>
 			<input
 				bind:this={fileInput}
 				type="file"
-				accept={UPLOAD_ACCEPT}
+				accept={REFERENCE_AUDIO_ACCEPT}
 				hidden
 				onchange={fileChosen}
 			/>
@@ -220,27 +232,29 @@
 		</div>
 	{/if}
 
-	{#if references === null}
-		{#if $loadFailure}
-			<div class="load-error" role="alert">
-				<span class="load-error-title">
-					<Icon name="triangle-alert" size={16} />{LOAD_FAILED}
-				</span>
-				<div class="load-error-foot">
-					<button
-						type="button"
-						class="retry-btn"
-						data-hitbox="frequent"
-						data-hitbox-face
-						onclick={retry}
-						aria-label={RETRY_LABEL}
-						title={RETRY_LABEL}
-					>
-						<Icon name="refresh-cw" size={16} />
-					</button>
-				</div>
+	{#if $loadFailure}
+		<div class="load-error" role="alert">
+			<span class="load-error-title">
+				<Icon name="triangle-alert" size={16} />{LOAD_FAILED}
+			</span>
+			<div class="load-error-foot">
+				<button
+					type="button"
+					class="retry-btn"
+					data-hitbox="frequent"
+					data-hitbox-face
+					onclick={retry}
+					aria-label={RETRY_LABEL}
+					title={RETRY_LABEL}
+				>
+					<Icon name="refresh-cw" size={16} />
+				</button>
 			</div>
-		{:else}
+		</div>
+	{/if}
+
+	{#if references === null}
+		{#if !$loadFailure}
 			<div class="skeleton" role="status">
 				{#each { length: SKELETON_ROWS } as _, index (index)}
 					<div class="skeleton-row">
@@ -621,22 +635,24 @@
 	}
 
 	@media (max-width: 640px) {
-		.page > .page-head {
-			grid-column: 1 / -1;
+		.page {
+			/* The settings layout's padding around this page, cancelled for the bar. */
+			--layout-padding: 2rem;
+			display: flex;
+			flex-direction: column;
+			min-height: 100%;
 		}
 
 		.page > .upload-area {
-			grid-column: 1 / -1;
-			grid-row: auto;
 			order: 1;
 			position: sticky;
-			bottom: 0;
+			bottom: calc(-1 * var(--layout-padding));
 			z-index: 1;
 			align-items: stretch;
 			max-width: none;
-			margin-top: 12px;
-			padding: 8px 0;
-			background: var(--bg);
+			margin: auto calc(-1 * var(--layout-padding)) calc(-1 * var(--layout-padding));
+			padding: 8px 12px;
+			background: var(--header-bg);
 			border-top: 1px solid var(--border);
 		}
 

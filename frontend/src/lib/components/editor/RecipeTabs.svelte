@@ -29,7 +29,11 @@
 		type RecipeTab,
 		type RecipeValues
 	} from '#lib/utils/recipe-standard.ts';
-	import { RECIPE_PANEL_LABEL, VOICE_PICKER_NONE_LABEL } from '#lib/constants.ts';
+	import {
+		RECIPE_PANEL_LABEL,
+		REFERENCE_AUDIO_ACCEPT,
+		VOICE_PICKER_NONE_LABEL
+	} from '#lib/constants.ts';
 	import {
 		RECIPE_AUTO_LABEL,
 		RECIPE_BPM_LABEL,
@@ -238,7 +242,7 @@
 		<label class="upload"
 			>{referenceUploading ? RECIPE_REFERENCE_UPLOADING : RECIPE_REFERENCE_UPLOAD}<input
 				type="file"
-				accept=".mp3,.wav,.flac,.ogg"
+				accept={REFERENCE_AUDIO_ACCEPT}
 				disabled={referenceUploading}
 				onchange={attachReference}
 			/></label

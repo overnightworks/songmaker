@@ -292,6 +292,7 @@ export async function apiFetch<T>(
  * so this runs on XMLHttpRequest. The answer is judged by the same refusal
  * path as `apiFetch`'s, so a refusal rejects with the same ApiError and the
  * same reactions, and a request without an answer with the same NetworkError.
+ * A request that sends and receives nothing for the timeout is aborted.
  */
 export function apiUpload<T>(
 	path: string,
@@ -303,16 +304,35 @@ export function apiUpload<T>(
 		const request = new XMLHttpRequest();
 		request.open('POST', path);
 		request.withCredentials = true;
-		request.timeout = timeoutMs ?? API_TIMEOUT_MS;
+		const silenceLimitMs = timeoutMs ?? API_TIMEOUT_MS;
+		let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+		let silenceEnded = false;
+		const rearmSilenceTimer = () => {
+			clearTimeout(silenceTimer);
+			silenceTimer = setTimeout(() => {
+				silenceEnded = true;
+				request.abort();
+			}, silenceLimitMs);
+		};
+		rearmSilenceTimer();
 		request.upload.onprogress = (event) => {
+			rearmSilenceTimer();
 			if (event.lengthComputable) onProgress(event.loaded / event.total);
 		};
-		request.onerror = () => reject(new NetworkError(path, new TypeError('Network request failed')));
-		request.ontimeout = () =>
+		request.onerror = () => {
+			clearTimeout(silenceTimer);
+			reject(new NetworkError(path, new TypeError('Network request failed')));
+		};
+		request.onabort = () => {
+			clearTimeout(silenceTimer);
 			reject(
-				new NetworkError(path, new DOMException('Upload timed out', 'TimeoutError'), 'timeout')
+				silenceEnded
+					? new NetworkError(path, new DOMException('Upload timed out', 'TimeoutError'), 'timeout')
+					: new NetworkError(path, new DOMException('Upload aborted', 'AbortError'))
 			);
+		};
 		request.onload = () => {
+			clearTimeout(silenceTimer);
 			const headers = new Headers();
 			const retryAfter = request.getResponseHeader('Retry-After');
 			if (retryAfter !== null) headers.set('Retry-After', retryAfter);

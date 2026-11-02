@@ -48,18 +48,13 @@ def api_list_references(
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_db_session)],
 ) -> ReferenceListResponse:
-    settings = get_settings()
-    usage = owner_reference_usage(session, user.id)
     return ReferenceListResponse(
         references=[
             ReferenceRecordingResponse.from_orm(recording)
             for recording in list_owned_reference_recordings(session, user.id)
         ],
-        usage=ReferenceUsageResponse(
-            files=usage.files,
-            bytes=usage.bytes,
-            file_limit=settings.reference_audio_quota_files,
-            byte_limit=settings.reference_audio_quota_bytes,
+        usage=ReferenceUsageResponse.from_orm(
+            owner_reference_usage(session, user.id), get_settings()
         ),
     )
 

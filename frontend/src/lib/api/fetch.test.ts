@@ -29,37 +29,58 @@ interface UploadAnswer {
 }
 
 // The upload transport runs on XMLHttpRequest; this stands in for the browser's.
+let sentUploads: FakeUploadRequest[] = [];
+
 class FakeUploadRequest {
-	static last: FakeUploadRequest;
-	static answer: UploadAnswer = { status: 200, body: '{}' };
 	opened: string[] = [];
 	withCredentials = false;
 	sentBody: unknown = null;
 	upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null };
 	onload: (() => void) | null = null;
 	onerror: (() => void) | null = null;
-	ontimeout: (() => void) | null = null;
-	status = FakeUploadRequest.answer.status;
-	responseText = FakeUploadRequest.answer.body;
+	onabort: (() => void) | null = null;
 
+	constructor(private readonly answer: UploadAnswer) {}
+
+	get status() {
+		return this.answer.status;
+	}
+	get responseText() {
+		return this.answer.body;
+	}
 	open(...opened: string[]) {
 		this.opened = opened;
 	}
 	getResponseHeader(name: string) {
-		return name === 'Retry-After' ? (FakeUploadRequest.answer.retryAfter ?? null) : null;
+		return name === 'Retry-After' ? (this.answer.retryAfter ?? null) : null;
 	}
 	send(body: unknown) {
 		this.sentBody = body;
-		FakeUploadRequest.last = this;
+		sentUploads.push(this);
+	}
+	abort() {
+		this.onabort?.();
 	}
 }
 
 function uploadAnswers(answer: UploadAnswer) {
-	FakeUploadRequest.answer = answer;
-	vi.stubGlobal('XMLHttpRequest', FakeUploadRequest);
+	sentUploads = [];
+	vi.stubGlobal(
+		'XMLHttpRequest',
+		class extends FakeUploadRequest {
+			constructor() {
+				super(answer);
+			}
+		}
+	);
 }
 
-const sentUpload = () => FakeUploadRequest.last;
+const sentUpload = () => sentUploads[sentUploads.length - 1];
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.stubGlobal('fetch', mockFetch);
+});
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -481,11 +502,6 @@ describe('refusal reactions', () => {
 });
 
 describe('apiUpload', () => {
-	afterEach(() => {
-		vi.unstubAllGlobals();
-		vi.stubGlobal('fetch', mockFetch);
-	});
-
 	const upload = (onProgress: (fraction: number) => void = () => undefined) => {
 		const form = new FormData();
 		const settled = apiUpload<{ id: string }>('/api/references', form, onProgress);
@@ -535,7 +551,7 @@ describe('apiUpload', () => {
 
 	it.each([
 		{ failed: 'onerror', reason: 'unreachable' },
-		{ failed: 'ontimeout', reason: 'timeout' }
+		{ failed: 'onabort', reason: 'unreachable' }
 	] as const)(
 		'rejects as a $reason NetworkError when the request fails by $failed',
 		async ({ failed, reason }) => {
@@ -549,6 +565,53 @@ describe('apiUpload', () => {
 			expect(failure).toMatchObject({ path: '/api/references', reason });
 		}
 	);
+});
+
+describe('apiUpload silence limit', () => {
+	const LIMIT_MS = 30_000;
+
+	function startUpload() {
+		vi.useFakeTimers();
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		uploadAnswers({ status: 200, body: '{}' });
+		const settled = apiUpload('/api/references', new FormData(), () => undefined, LIMIT_MS);
+		return { settled, request: sentUpload() };
+	}
+	const progress = (request: FakeUploadRequest) =>
+		request.upload.onprogress?.({ lengthComputable: true, loaded: 1, total: 2 } as ProgressEvent);
+
+	it('stays alive past the limit in total while progress keeps arriving, the last event included', async () => {
+		const { settled, request } = startUpload();
+		let outcome = 'pending';
+		void settled.then(
+			() => (outcome = 'resolved'),
+			() => (outcome = 'rejected')
+		);
+
+		for (let sent = 0; sent < 4; sent += 1) {
+			await vi.advanceTimersByTimeAsync(LIMIT_MS - 1);
+			progress(request);
+		}
+		await vi.advanceTimersByTimeAsync(LIMIT_MS - 1);
+
+		expect(outcome).toBe('pending');
+		request.onload?.();
+		await expect(settled).resolves.toEqual({});
+	});
+
+	it('ends as a timeout NetworkError after the limit without progress', async () => {
+		const { settled, request } = startUpload();
+		await vi.advanceTimersByTimeAsync(LIMIT_MS - 1);
+		progress(request);
+
+		const failure = settled.catch((e: unknown) => e);
+		await vi.advanceTimersByTimeAsync(LIMIT_MS);
+
+		expect(await failure).toBeInstanceOf(NetworkError);
+		expect(await failure).toMatchObject({ path: '/api/references', reason: 'timeout' });
+	});
 });
 
 describe('a request that gets no answer', () => {

@@ -650,21 +650,106 @@ describe('references page', () => {
 			expect(preview.src).toMatch(/\/api\/references\/new\/audio$/);
 		});
 
-		it('says at the button that the file does not fit, composed from the usage, on a 409 with room left', async () => {
-			mocks.uploadReference.mockRejectedValue(
-				new ApiError(409, 'Reference audio storage limit reached.', '/api/references')
-			);
-			const target = await renderReady({ files: 5, bytes: 431_900_000 });
+		const STORAGE_FULL = new ApiError(
+			409,
+			'Reference audio storage limit reached.',
+			'/api/references'
+		);
+
+		it.each([
+			{
+				case: 'the file limit',
+				known: { files: 50 },
+				reloaded: { files: 50 } as Partial<ReferenceUsageResponse> | null,
+				reason: 'Reference storage is full (50 of 50 files) — delete one first.'
+			},
+			{
+				case: 'the byte limit',
+				known: { bytes: 500_000_000 },
+				reloaded: { bytes: 500_000_000 } as Partial<ReferenceUsageResponse> | null,
+				reason: 'Reference storage is full (500 of 500 MB) — delete one first.'
+			},
+			{
+				case: 'a stale 49 whose reload answers 50',
+				known: { files: 49 },
+				reloaded: { files: 50 } as Partial<ReferenceUsageResponse> | null,
+				reason: 'Reference storage is full (50 of 50 files) — delete one first.'
+			},
+			{
+				case: 'room left',
+				known: { files: 5, bytes: 431_900_000 },
+				reloaded: { files: 5, bytes: 431_900_000 } as Partial<ReferenceUsageResponse> | null,
+				reason: "That file doesn't fit (431 of 500 MB used) — delete one first."
+			},
+			{
+				case: 'room left when the reload fails',
+				known: { files: 5, bytes: 431_900_000 },
+				reloaded: null,
+				reason: "That file doesn't fit (431 of 500 MB used) — delete one first."
+			}
+		])(
+			'words a 409 from the usage the reload brings back: $case',
+			async ({ known, reloaded, reason }) => {
+				mocks.uploadReference.mockRejectedValue(STORAGE_FULL);
+				const target = await renderReady(known);
+				if (reloaded === null) {
+					mocks.listReferences.mockRejectedValue(new ApiError(500, 'down', '/api/references'));
+				} else {
+					mocks.listReferences.mockResolvedValue(
+						listAnswer([referenceRecording({ id: 'a' })], reloaded)
+					);
+				}
+
+				await choose(target);
+				await vi.waitFor(() => expect(target.querySelector('.upload-reason')).not.toBeNull());
+
+				expect(target.querySelector('.upload-reason')?.textContent?.trim()).toBe(reason);
+				expect(uploadButton(target).classList.contains('failed')).toBe(true);
+				expect(listedReferences(target)).toHaveLength(1);
+			}
+		);
+
+		it('shows the load failure with its retry beside the kept rows when the reload after a stored upload fails', async () => {
+			mocks.uploadReference.mockResolvedValue(referenceRecording({ id: 'new' }));
+			const target = await renderReady();
+			mocks.listReferences.mockRejectedValue(new ApiError(500, 'down', '/api/references'));
 
 			await choose(target);
-			await vi.waitFor(() => expect(target.querySelector('.upload-reason')).not.toBeNull());
+			await vi.waitFor(() => expect(target.querySelector('.load-error')).not.toBeNull());
 
-			expect(target.querySelector('.upload-reason')?.textContent?.trim()).toBe(
-				"That file doesn't fit (431 of 500 MB used) — delete one first."
+			expect(target.querySelector('.load-error')?.textContent).toContain(
+				'Failed to load references'
 			);
-			expect(uploadButton(target).classList.contains('failed')).toBe(true);
-			expect(listedReferences(target)).toHaveLength(1);
-			expect(mocks.listReferences).toHaveBeenCalledTimes(1);
+			expect(target.querySelector('.retry-btn')).not.toBeNull();
+			expect(listedReferences(target).map((row) => row.name)).toEqual(['voice-memo.mp3']);
+
+			mocks.listReferences.mockResolvedValue(
+				listAnswer([
+					referenceRecording({ id: 'new', filename: 'synth-hook.wav' }),
+					referenceRecording({ id: 'a' })
+				])
+			);
+			(target.querySelector('.retry-btn') as HTMLButtonElement).click();
+			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
+			expect(target.querySelector('.load-error')).toBeNull();
+		});
+
+		it('clears the file input after a choice, so the same file can be chosen again', async () => {
+			mocks.uploadReference.mockReturnValue(new Promise(() => {}));
+			const target = await renderReady();
+			const input = target.querySelector<HTMLInputElement>(
+				'input[type="file"]'
+			) as HTMLInputElement;
+			const assigned: string[] = [];
+			Object.defineProperty(input, 'value', {
+				get: () => assigned.at(-1) ?? '',
+				set: (value: string) => assigned.push(value),
+				configurable: true
+			});
+
+			await choose(target);
+
+			expect(assigned.at(-1)).toBe('');
 		});
 
 		it.each([
@@ -695,7 +780,6 @@ describe('references page', () => {
 				expect(target.querySelector('.upload-reason')?.textContent?.trim()).toBe(reason);
 				expect(uploadButton(target).classList.contains('failed')).toBe(true);
 				expect(listedReferences(target).map((row) => row.name)).toEqual(['voice-memo.mp3']);
-				expect(mocks.listReferences).toHaveBeenCalledTimes(1);
 			}
 		);
 
