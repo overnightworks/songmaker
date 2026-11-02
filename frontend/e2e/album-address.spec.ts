@@ -33,10 +33,10 @@ import { readSeededLibrary } from './seed';
  * cold page loads (that page, then the bookmark): 27 to 29. The third is one
  * cold load held while its lookup is in flight: 15. Those counts are not fixed
  * costs: the second load's own snapshot bootstrap can lose its race against the
- * redirect's own fetch the way a cold take open's already does. One shared ceiling, sized to the largest
- * with the same headroom the library flow carries — all of this file's flows
- * share one 60-second IP rate-limit window, so a jump here is a regression to
- * find, not a number to raise.
+ * redirect's own fetch the way a cold take open's already does. One shared
+ * ceiling, sized to the largest with the same headroom the library flow
+ * carries — all of this file's flows share one 60-second IP rate-limit window,
+ * so a jump here is a regression to find, not a number to raise.
  */
 const ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET = 33;
 
