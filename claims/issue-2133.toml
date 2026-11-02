@@ -1,0 +1,8 @@
+claim_id = "2a727bcd026a4c8d9fda1c4b9a1e92b7"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "8eb7fadb92ca26390370c23d8171435bf9bca9f7"
+branch = "claude/issue-2133-the-e2e-flow-budgets-are-re-measured-aft"
+scope = ["frontend/e2e/album-address.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/playback-restore.spec.ts", "frontend/e2e/playlist-address.spec.ts"]
+opened_commit = "64c5f7523b4db89e07f3a2f29893a8d98ccebdc4"
+whole_reason = "One re-measurement of the flow budgets a page-load request pushed to their limits; the same reason changes each constant."
