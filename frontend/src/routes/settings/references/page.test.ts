@@ -139,10 +139,19 @@ describe('references page', () => {
 		const clickRetry = () => retry()?.click();
 		await vi.waitFor(() => expect(retry()).not.toBeNull());
 
+		let refuseRetry: (reason: Error) => void = () => {};
+		mocks.listReferences.mockReturnValueOnce(
+			new Promise((_, reject) => {
+				refuseRetry = reject;
+			})
+		);
 		clickRetry();
-		await vi.waitFor(() => expect(mocks.listReferences).toHaveBeenCalledTimes(2));
 		await tick();
-		expect(retry()).not.toBeNull();
+		expect(target.querySelector('[role="status"]')).not.toBeNull();
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+
+		refuseRetry(new ApiError(500, 'boom', '/api/references'));
+		await vi.waitFor(() => expect(retry()).not.toBeNull());
 
 		mocks.listReferences.mockResolvedValue([referenceRecording({})]);
 		clickRetry();

@@ -35,6 +35,11 @@
 		return `${lengthLabel(reference.duration_sec)} · ${uploaded}`;
 	}
 
+	function retry() {
+		referenceReloads.stop();
+		void load();
+	}
+
 	onMount(() => void load());
 	onDestroy(() => referenceReloads.dispose());
 </script>
@@ -50,18 +55,22 @@
 {#if references === null}
 	{#if $loadFailure}
 		<div class="load-error" role="alert">
-			<span>{LOAD_FAILED}</span>
-			<button
-				type="button"
-				class="retry-btn"
-				data-hitbox="frequent"
-				data-hitbox-face
-				onclick={() => void load()}
-				aria-label={RETRY_LABEL}
-				title={RETRY_LABEL}
-			>
-				<Icon name="refresh-cw" size={16} />
-			</button>
+			<span class="load-error-title">
+				<Icon name="triangle-alert" size={16} />{LOAD_FAILED}
+			</span>
+			<div class="load-error-foot">
+				<button
+					type="button"
+					class="retry-btn"
+					data-hitbox="frequent"
+					data-hitbox-face
+					onclick={retry}
+					aria-label={RETRY_LABEL}
+					title={RETRY_LABEL}
+				>
+					<Icon name="refresh-cw" size={16} />
+				</button>
+			</div>
 		</div>
 	{:else}
 		<div class="skeleton" role="status">
@@ -110,12 +119,26 @@
 
 	.load-error {
 		display: flex;
+		flex-direction: column;
+		gap: 9px;
+		padding: 12px;
+		background: var(--surface);
+		border: 1px solid var(--score-bad);
+		border-radius: var(--card-radius);
+	}
+
+	.load-error-title {
+		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 0.7rem;
-		padding: 0.6rem 0.8rem;
+		gap: 6px;
+		font-size: 15px;
 		color: var(--score-bad);
-		font-size: 0.85rem;
+	}
+
+	.load-error-foot {
+		display: flex;
+		justify-content: flex-end;
+		color: var(--score-bad);
 	}
 
 	.retry-btn {
