@@ -21,7 +21,7 @@
 
 [file_lines]
 "frontend/e2e/back-closes-overlay.spec.ts" = 1238
-"frontend/e2e/helpers.ts" = 836
+"frontend/e2e/helpers.ts" = 833
 "frontend/e2e/library.spec.ts" = 1304
 "frontend/e2e/offline.spec.ts" = 807
 "frontend/e2e/seed.ts" = 1180
@@ -72,7 +72,7 @@
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
 "tests/songmaker_cli/test_admin_api.py" = 1055
 "tests/test_api.py" = 4751
-"tests/test_auto_deploy_alerting.py" = 1389
+"tests/test_auto_deploy_alerting.py" = 1384
 "tests/songmaker_cli/test_conversation_api.py" = 853
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
 "tests/songmaker_cli/test_db.py" = 3623

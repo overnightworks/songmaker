@@ -25,13 +25,14 @@ import { readSeededLibrary, seedPlaylist } from './seed';
 
 /**
  * What this flow costs the API, measured on a green run against an isolated
- * stack: 11 for the cold playlist open (resolving the slug against the
+ * stack: 13 for the cold playlist open (resolving the slug against the
  * playlist list, loading the playlist detail, plus the browse listing every
- * cold library-workspace load fetches alongside it) and 9 for the unknown-
- * slug open (no detail fetch — nothing to load once the list lookup misses).
- * Shared budget, headroom sized the same way album-address.spec.ts's is.
+ * cold library-workspace load fetches alongside it), 10 for the unknown-
+ * slug open (no detail fetch — nothing to load once the list lookup misses)
+ * and 15 for Back onto an unknown slug. Shared budget, headroom sized the same
+ * way album-address.spec.ts's is.
  */
-const PLAYLIST_ADDRESS_FLOW_API_REQUEST_BUDGET = 15;
+const PLAYLIST_ADDRESS_FLOW_API_REQUEST_BUDGET = 17;
 
 const WORKSPACE_LOADING_TEXT = 'Loading...';
 
