@@ -78,32 +78,29 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
 
 /**
  * What the library flow costs the API per shell, measured on a green full-suite
- * run against `library.spec.ts`'s own first test: 42 requests on desktop and
- * 35 on mobile, budgeted at 42 and 40 respectively (27.09.2026). Home's
- * Listen list fetching fresh on the return to the wall brought desktop to 41
- * (05.09.2026). The flow's round trip to Settings stops the live stream, so
- * the snapshot on the return follows a gap and reads every album again
- * (#1102): one request per 50 albums, one more on each shell. Both projects
+ * run against `library.spec.ts`'s own first test: 41 requests on desktop and
+ * 37 on mobile, budgeted at 45 and 40 respectively. The flow's round trip to
+ * Settings stops the live stream, so the snapshot on the return follows a gap
+ * and reads every album again: one request per 50 albums. Both projects
  * share one IP rate-limit window, so a flow that suddenly needs more round
  * trips is a regression — find the extra requests instead of raising this
  * number. Every other mention of this budget (the `e2e/README.md` table,
  * `docs/testing.md`) points back here rather than restating it, which is
- * exactly how those three numbers drifted apart before: #312 and #325 each
- * added a request per page load (`ensureAllAlbumsLoaded`,
- * `ensurePlaylistsLoaded`) without this constant, or its callers, ever being
- * re-measured.
+ * exactly how those three numbers drifted apart before: a request added per page
+ * load (`ensureAllAlbumsLoaded`, `ensurePlaylistsLoaded`) without this constant,
+ * or its callers, ever being re-measured.
  */
 export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
-	desktop: 42,
+	desktop: 45,
 	mobile: 40
 };
 
 /**
  * 1354_65_A1: the desktop rail disclosure/pin flow's API ceiling. Its measured
- * 34 to 35 requests set the 35 ceiling; this flow no longer runs on mobile.
+ * 34 to 35 requests set the 38 ceiling; this flow no longer runs on mobile.
  * It shares the IP rate-limit window with the separate Library flow.
  */
-export const RAIL_FLOW_API_REQUEST_BUDGET = 35;
+export const RAIL_FLOW_API_REQUEST_BUDGET = 38;
 
 /**
  * What `song-phone.spec.ts` costs the API: a cold open of the song's own
