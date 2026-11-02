@@ -1,6 +1,6 @@
-// Settings › References lists a person's uploaded recordings (picture
-// docs/design/references.html): filename, length and upload day, and an
-// empty state before the first upload. Every flow uses an account of its own
+// Settings › References lists a person's uploaded recordings and plays each one (picture
+// docs/design/references.html): filename, length and upload day, a play button, and an empty
+// state before the first upload. Every flow uses an account of its own
 // so the list starts empty and holds only what the flow uploads.
 
 import { readFileSync } from 'node:fs';
@@ -80,4 +80,35 @@ test('Settings › References says what references are for before the first uplo
 	await expect(workspace(page).getByText(EMPTY_SENTENCE)).toBeVisible();
 	await expect(workspace(page).getByRole('listitem')).toHaveCount(0);
 	guard.assertClean();
+});
+
+test('Settings › References plays a recording from its button and pauses it again', async ({
+	context,
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const account = await signInFreshAccount(context, 'references-play', testInfo.project.name);
+	const api = await signedInApi(account);
+	try {
+		await postReferenceAudio(api, 'storytime-drums.mp3');
+		await page.goto('/settings/references');
+		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
+		const served = page.waitForResponse(
+			(response) => /\/api\/references\/[^/]+\/audio$/.test(response.url()) && response.ok()
+		);
+
+		await row.getByRole('button', { name: 'Play storytime-drums.mp3' }).click();
+
+		await served;
+		await expect(row.getByRole('button', { name: 'Pause storytime-drums.mp3' })).toBeVisible();
+		await expect(row).toHaveClass(/playing/);
+
+		await row.getByRole('button', { name: 'Pause storytime-drums.mp3' }).click();
+
+		await expect(row.getByRole('button', { name: 'Play storytime-drums.mp3' })).toBeVisible();
+		await expect(row).not.toHaveClass(/playing/);
+		guard.assertClean();
+	} finally {
+		await api.dispose();
+	}
 });

@@ -13,3 +13,7 @@ export async function uploadReference(file: File): Promise<ReferenceRecordingRes
 export async function listReferences(): Promise<ReferenceRecordingResponse[]> {
 	return apiFetch<ReferenceRecordingResponse[]>('/api/references');
 }
+
+export function referenceAudioUrl(referenceId: string): string {
+	return `/api/references/${encodeURIComponent(referenceId)}/audio`;
+}

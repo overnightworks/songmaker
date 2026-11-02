@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import type { ReferenceRecordingResponse } from '#lib/api/types.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
@@ -10,10 +10,13 @@ import {
 
 const mocks = vi.hoisted(() => ({ listReferences: vi.fn() }));
 
-vi.mock('#lib/api/references.ts', () => ({
+vi.mock('#lib/api/references.ts', async (importActual) => ({
+	...(await importActual<typeof import('#lib/api/references.ts')>()),
 	listReferences: (...args: unknown[]) => mocks.listReferences(...args)
 }));
 
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { makeGeneration } from '#lib/test-utils/factories.ts';
 import ReferencesPage from './+page.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -46,7 +49,51 @@ function listedReferences(target: HTMLElement): { name: string; meta: string }[]
 	}));
 }
 
+let playSpy: MockInstance<HTMLMediaElement['play']>;
+let playOutcome: Promise<void>;
+
+function referenceElement(): HTMLAudioElement | undefined {
+	return playSpy.mock.contexts.find((element: unknown) =>
+		(element as HTMLAudioElement).src.includes('/api/references/')
+	) as HTMLAudioElement | undefined;
+}
+
+function referencePlayButton(target: HTMLElement, filename: string): HTMLButtonElement {
+	const row = Array.from(target.querySelectorAll('.reference-row')).find((candidate) =>
+		candidate.textContent?.includes(filename)
+	);
+	return row?.querySelector('button') as HTMLButtonElement;
+}
+
+function referenceButtonLabels(target: HTMLElement): string[] {
+	return Array.from(target.querySelectorAll('.reference-row button')).map(
+		(button) => button.getAttribute('aria-label') ?? ''
+	);
+}
+
+async function renderTwoReferences(): Promise<HTMLElement> {
+	mocks.listReferences.mockResolvedValue([
+		referenceRecording({ id: 'a', filename: 'voice-memo.mp3' }),
+		referenceRecording({ id: 'b', filename: 'storytime-drums.wav' })
+	]);
+	const target = await renderReferencesPage();
+	await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
+	return target;
+}
+
+async function pressReferenceControl(button: Element): Promise<void> {
+	(button as HTMLElement).click();
+	await tick();
+}
+
 beforeEach(() => {
+	playOutcome = Promise.resolve();
+	playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => playOutcome);
+	vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (
+		this: HTMLMediaElement
+	) {
+		this.dispatchEvent(new Event('pause'));
+	});
 	vi.stubEnv('TZ', 'UTC');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(new Date('2026-11-02T09:00:00Z'));
@@ -54,6 +101,8 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+	vi.restoreAllMocks();
+	audioPlayer.destroy();
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
@@ -179,5 +228,183 @@ describe('references page', () => {
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
 
 		expect(target.querySelector('[role="alert"]')).toBeNull();
+	});
+
+	describe('playing a reference', () => {
+		it('plays a reference from its button and pauses it from the same button', async () => {
+			const target = await renderTwoReferences();
+
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			expect(referenceElement()?.src).toMatch(/\/api\/references\/a\/audio$/);
+			expect(referenceButtonLabels(target)).toEqual([
+				'Pause voice-memo.mp3',
+				'Play storytime-drums.wav'
+			]);
+			expect(target.querySelector('.reference-row.playing .reference-name')?.textContent).toBe(
+				'voice-memo.mp3'
+			);
+
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			expect(referenceButtonLabels(target)).toEqual([
+				'Play voice-memo.mp3',
+				'Play storytime-drums.wav'
+			]);
+			expect(target.querySelector('.reference-row.playing')).toBeNull();
+		});
+
+		it('plays a reference when its row is tapped, and a button press does not toggle twice', async () => {
+			const target = await renderTwoReferences();
+			const row = target.querySelectorAll('.reference-row')[1];
+
+			await pressReferenceControl(row);
+			expect(referenceButtonLabels(target)).toEqual([
+				'Play voice-memo.mp3',
+				'Pause storytime-drums.wav'
+			]);
+			await pressReferenceControl(row);
+			expect(referenceButtonLabels(target)).toEqual([
+				'Play voice-memo.mp3',
+				'Play storytime-drums.wav'
+			]);
+
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			expect(referenceButtonLabels(target)).toEqual([
+				'Pause voice-memo.mp3',
+				'Play storytime-drums.wav'
+			]);
+			expect(playSpy).toHaveBeenCalledTimes(2);
+		});
+
+		it('gives the row no focus stop of its own beside the play button', async () => {
+			const target = await renderTwoReferences();
+
+			for (const row of target.querySelectorAll('.reference-row')) {
+				expect(row.hasAttribute('tabindex')).toBe(false);
+				expect(row.querySelectorAll('button')).toHaveLength(1);
+			}
+		});
+
+		it('stops the first reference when a second one starts', async () => {
+			const target = await renderTwoReferences();
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			await pressReferenceControl(referencePlayButton(target, 'storytime-drums.wav'));
+
+			expect(referenceButtonLabels(target)).toEqual([
+				'Play voice-memo.mp3',
+				'Pause storytime-drums.wav'
+			]);
+			expect(referenceElement()?.src).toMatch(/\/api\/references\/b\/audio$/);
+			expect(target.querySelectorAll('.reference-row.playing')).toHaveLength(1);
+		});
+
+		it('resets the row when the recording ends', async () => {
+			const target = await renderTwoReferences();
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			referenceElement()?.dispatchEvent(new Event('ended'));
+			await tick();
+
+			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
+			expect(target.querySelector('.reference-row.playing')).toBeNull();
+		});
+
+		it('resets the row and says it cannot play when the file fails to load', async () => {
+			const target = await renderTwoReferences();
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			referenceElement()?.dispatchEvent(new Event('error'));
+			await tick();
+
+			const rows = target.querySelectorAll('.reference-row');
+			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
+			expect(rows[0].textContent).toContain("Can't play this recording");
+			expect(rows[1].textContent).not.toContain("Can't play this recording");
+		});
+
+		it('resets the row and says it cannot play when the browser refuses to start it', async () => {
+			playOutcome = Promise.reject(new DOMException('refused', 'NotSupportedError'));
+			playOutcome.catch(() => {});
+			const target = await renderTwoReferences();
+
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+			await vi.waitFor(() =>
+				expect(target.querySelector('.reference-row')?.textContent).toContain(
+					"Can't play this recording"
+				)
+			);
+
+			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
+		});
+
+		it('clears the fault when the row is tried again', async () => {
+			const target = await renderTwoReferences();
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+			referenceElement()?.dispatchEvent(new Event('error'));
+			await tick();
+
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			expect(target.textContent).not.toContain("Can't play this recording");
+			expect(referenceButtonLabels(target)[0]).toBe('Pause voice-memo.mp3');
+		});
+
+		it('stops the sound when the person leaves the page', async () => {
+			const target = await renderTwoReferences();
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+			const element = referenceElement() as HTMLAudioElement;
+			const stopped = vi.fn();
+			element.addEventListener('pause', stopped);
+
+			await unmount(mounted as ReturnType<typeof mount>);
+			mounted = undefined;
+
+			expect(stopped).toHaveBeenCalled();
+		});
+	});
+
+	describe('beside the global player', () => {
+		function startGlobalPlayer(): HTMLAudioElement {
+			audioPlayer.load(
+				{
+					generation: makeGeneration({ mp3_path: 'take.mp3' }),
+					songId: 's1',
+					songTitle: 'Opening Move',
+					artist: 'Artist',
+					albumTitle: 'Album',
+					lyrics: null
+				},
+				{ autoplay: false }
+			);
+			const element = audioPlayer.getElement() as HTMLAudioElement;
+			audioPlayer.play();
+			element.dispatchEvent(new Event('playing'));
+			return element;
+		}
+
+		it('pauses the global player when a reference starts', async () => {
+			const target = await renderTwoReferences();
+			startGlobalPlayer();
+			expect(audioPlayer.transport).toBe('playing');
+
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			expect(audioPlayer.transport).toBe('paused');
+			expect(referenceButtonLabels(target)[0]).toBe('Pause voice-memo.mp3');
+		});
+
+		it('stops the reference when the global player starts', async () => {
+			const target = await renderTwoReferences();
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			startGlobalPlayer();
+			await tick();
+
+			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
+			expect(target.querySelector('.reference-row.playing')).toBeNull();
+		});
 	});
 });
