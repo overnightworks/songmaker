@@ -1,8 +1,0 @@
-claim_id = "de61cfc8bdef45ffbe80ddf015bd1be0"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "e5c1a4a15b0292cebac61e7720cb968ce5b0e89a"
-branch = "claude/issue-2144-a-person-plays-their-references-in-setti"
-scope = ["docs/architecture.md", "docs/security.md", "frontend/e2e/references-list.spec.ts", "frontend/src/lib/api/references.test.ts", "frontend/src/lib/api/references.ts", "frontend/src/routes/settings/references/+page.svelte", "frontend/src/routes/settings/references/page.test.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/constants.py", "src/songmaker_cli/reference_api.py", "src/songmaker_cli/reference_audio.py", "src/songmaker_cli/request_policies.py", "tests/songmaker_cli/test_cover_runner.py", "tests/songmaker_cli/test_reference_api.py", "tests/songmaker_cli/test_request_policies_rate_limit.py"]
-opened_commit = "ec085814ad909f2d760efc17745db71587d7898e"
-whole_reason = "One capability: the route, its rate class, its only client and their proofs are not honest apart."
