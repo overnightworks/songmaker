@@ -3,6 +3,7 @@ import {
 	accountInitial,
 	activityTimeLabel,
 	formatTime,
+	localDayAndMonth,
 	localWeekday,
 	releaseDayLabel,
 	songCountLabel,
@@ -101,6 +102,18 @@ describe('localWeekday', () => {
 
 	it('names the local weekday, not the UTC one', () => {
 		expect(localWeekday(new Date('2026-09-26T22:30:00Z'))).toBe('Sun');
+	});
+});
+
+describe('localDayAndMonth', () => {
+	beforeAll(() => vi.stubEnv('TZ', 'Europe/Berlin'));
+	afterAll(() => vi.unstubAllEnvs());
+
+	it.each([
+		{ moment: '2026-10-27T10:00:00Z', expected: '27 Oct' },
+		{ moment: '2025-10-27T10:00:00Z', expected: '27 Oct 2025' }
+	])('writes $moment as "$expected" in 2026', ({ moment, expected }) => {
+		expect(localDayAndMonth(new Date(moment), new Date('2026-11-02T09:00:00Z'))).toBe(expected);
 	});
 });
 

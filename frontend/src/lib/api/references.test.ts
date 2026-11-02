@@ -6,7 +6,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
-import { uploadReference } from './references';
+import { listReferences, uploadReference } from './references';
 
 describe('reference API', () => {
 	beforeEach(() => mockFetch.mockReset());
@@ -28,6 +28,24 @@ describe('reference API', () => {
 		expect(url).toBe('/api/references');
 		expect(init.method).toBe('POST');
 		expect((init.body as FormData).get('file')).toBe(file);
+		expect(result).toEqual(stored);
+	});
+
+	it('lists the stored records as the server answers them', async () => {
+		const stored = [
+			{
+				id: 'reference-1',
+				filename: 'ref.wav',
+				size_bytes: 3,
+				duration_sec: 31,
+				created_at: '2026-10-27T10:00:00+00:00'
+			}
+		];
+		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(stored) });
+
+		const result = await listReferences();
+
+		expect(mockFetch.mock.calls[0][0]).toBe('/api/references');
 		expect(result).toEqual(stored);
 	});
 });

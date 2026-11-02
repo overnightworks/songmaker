@@ -81,10 +81,11 @@ describe('settings index on the phone', () => {
 		landOnPage();
 		await laterTask();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Admin', 'About']);
+		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'References', 'Admin', 'About']);
 		expect(listRows(target).map((row) => row.getAttribute('href'))).toEqual([
 			'/settings/generation',
 			'/settings/voices',
+			'/settings/references',
 			'/settings/users',
 			'/settings/about'
 		]);
@@ -101,6 +102,7 @@ describe('settings index on the phone', () => {
 		expect(hints).toEqual([
 			['Generation', null],
 			['Voices', null],
+			['References', null],
 			['Admin', 'admins only'],
 			['About', null]
 		]);
@@ -110,7 +112,7 @@ describe('settings index on the phone', () => {
 		currentUser.set(makeAuthUser());
 		const target = await render();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'About']);
+		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'References', 'About']);
 	});
 
 	it('names the tab after the Settings list', async () => {
