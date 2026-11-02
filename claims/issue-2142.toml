@@ -1,0 +1,7 @@
+claim_id = "88099e716de040ffa6a320bbd06db587"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "a3fd07e941efda4d503d4c44972d27493b59c9e2"
+branch = "claude/issue-2142-the-cover-s-suggest-states-and-models-ro"
+scope = ["docs/design/README.md", "docs/design/admin-models.html", "docs/design/album-cover.html"]
+opened_commit = "d46e50baff16d331c59d278e82a79b042fef2a32"
