@@ -1,8 +1,0 @@
-claim_id = "978883e54c7a41609e359da2f2189b3f"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "e5c1a4a15b0292cebac61e7720cb968ce5b0e89a"
-branch = "claude/issue-2147-the-voices-browser-proof-runs-as-one-cap"
-scope = ["AGENTS.md", "docs/testing.md", "frontend/e2e/voices.spec.ts", "scripts/voices_e2e_probe.sh"]
-opened_commit = "250dfe979697a8583cc382901d113bdf516f0ee4"
-whole_reason = "One proof: the script, the document that names it, the spec it runs and the sentence that would contradict it."
