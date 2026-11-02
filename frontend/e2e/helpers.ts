@@ -81,15 +81,14 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
  * run against `library.spec.ts`'s own first test: 41 requests on desktop and
  * 37 on mobile, budgeted at 45 and 40 respectively. The flow's round trip to
  * Settings stops the live stream, so the snapshot on the return follows a gap
- * and reads every album again (#1102): one request per 50 albums. Both projects
+ * and reads every album again: one request per 50 albums. Both projects
  * share one IP rate-limit window, so a flow that suddenly needs more round
  * trips is a regression — find the extra requests instead of raising this
  * number. Every other mention of this budget (the `e2e/README.md` table,
  * `docs/testing.md`) points back here rather than restating it, which is
- * exactly how those three numbers drifted apart before: #312 and #325 each
- * added a request per page load (`ensureAllAlbumsLoaded`,
- * `ensurePlaylistsLoaded`) without this constant, or its callers, ever being
- * re-measured.
+ * exactly how those three numbers drifted apart before: a request added per page
+ * load (`ensureAllAlbumsLoaded`, `ensurePlaylistsLoaded`) without this constant,
+ * or its callers, ever being re-measured.
  */
 export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 	desktop: 45,

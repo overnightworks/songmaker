@@ -36,8 +36,9 @@ const REMOVED_SAVE_OFFLINE_LABEL = 'Save offline';
  * public album page 0 on both, since opening the ⋯ asks the API nothing. Shared
  * budget, sized from the costliest flow the same way playlist-address.spec.ts's
  * is. The Edit details flow opens an album of its own, with no songs, and adds
- * its one save. The Share row flow adds a share, an unshare and a share: 18 on
- * desktop for the album Share row.
+ * its one save: 16 on desktop and 13 on mobile. The Share row flow adds a
+ * share, an unshare and a share: the album Share row costs 18 on desktop and 15
+ * on mobile, the playlist Share row 13 on desktop and 9 on mobile.
  */
 const ALBUM_MENU_FLOW_API_REQUEST_BUDGET = 20;
 
