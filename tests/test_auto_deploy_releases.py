@@ -699,13 +699,14 @@ def _api_check_run(app_slug: str, conclusion: str, check_suite: str) -> str:
         pytest.param("", False, id="actions-run-without-suite"),
         pytest.param(',"check_suite":null', False, id="actions-run-with-null-suite"),
         pytest.param(',"check_suite":{"id":"x"}', False, id="actions-run-with-text-suite"),
+        pytest.param(',"check_suite":{"id":"1000"}', False, id="actions-run-with-text-id"),
         pytest.param(',"check_suite":{"id":1000}', True, id="actions-run-with-suite"),
     ],
 )
 def test_a_github_actions_run_whose_suite_cannot_be_read_is_never_passed_over(
     checkout: Checkout, suite_field: str, deploys: bool,
 ) -> None:
-    """defect:#2128 cell D8e -- unknown still blocks; a readable suite is judged as before."""
+    """defect:#2128 cell D9a -- unknown still blocks; a readable suite is judged as before."""
 
     checkout.move_main_forward()
     candidate = checkout.remote_main_sha()
@@ -723,7 +724,7 @@ def test_a_github_actions_run_whose_suite_cannot_be_read_is_never_passed_over(
 def test_a_failed_other_app_run_without_a_suite_stays_advisory(
     checkout: Checkout, suite_field: str,
 ) -> None:
-    """defect:#2128 cell D9 -- an other-app run is judged as today whatever its suite."""
+    """defect:#2128 cell D9b -- an other-app run is judged as today whatever its suite."""
 
     checkout.move_main_forward()
     candidate = checkout.remote_main_sha()
@@ -737,6 +738,39 @@ def test_a_failed_other_app_run_without_a_suite_stays_advisory(
 
     assert result.returncode == 0
     assert _deployed_sha(checkout) == candidate
+
+
+@pytest.mark.parametrize(
+    ("answer", "failure"),
+    [
+        pytest.param(
+            '{"total_count":2,"check_runs":['
+            + _api_check_run("github-actions", "success", ',"check_suite":{"id":1000}')
+            + "]}",
+            "incomplete check-runs response",
+            id="fewer-records-than-total",
+        ),
+        pytest.param(
+            '{"total_count":3,"check_runs":[]}{"total_count":2,"check_runs":[]}',
+            "inconsistent paginated check-run counts",
+            id="pages-disagree-on-total",
+        ),
+    ],
+)
+def test_a_check_run_answer_that_is_incomplete_refuses_to_deploy(
+    checkout: Checkout, answer: str, failure: str,
+) -> None:
+    """defect:#2128 cell D9c -- a truncated or inconsistent answer can hide a failed run."""
+    checkout.move_main_forward()
+    before = _deployed_sha(checkout)
+    checkout.set_check_runs_response(answer)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert failure in checkout.journal
+    assert _deployed_sha(checkout) == before
+    assert "compose build" not in checkout.docker_calls
 
 
 def test_the_update_run_lookup_runs_after_the_check_run_lookup(checkout: Checkout) -> None:

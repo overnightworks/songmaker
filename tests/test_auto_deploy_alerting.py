@@ -747,14 +747,14 @@ def test_a_candidate_is_passed_over_unless_its_actions_checks_prove_it_green(
     ],
 )
 @pytest.mark.parametrize(
-    "through_github_api_filter", [False, True], ids=["with-suite", "without-suite"],
+    "suite_is_null", [False, True], ids=["with-suite", "without-suite"],
 )
 def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidate(
     tmp_path: Path,
     app_slug: str,
     name: str,
     advisory_log: str,
-    through_github_api_filter: bool,
+    suite_is_null: bool,
 ) -> None:
     """A2: an external app failure is ignored whether or not its run carries a check suite."""
     checkout = Checkout(tmp_path)
@@ -762,7 +762,7 @@ def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidat
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
     expected_head = checkout.remote_main_sha()
-    if through_github_api_filter:
+    if suite_is_null:
         checkout.set_check_runs_response(json.dumps({
             "total_count": 2,
             "check_runs": [
