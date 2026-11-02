@@ -211,13 +211,9 @@ jobs:
           PYTHON
 
   frontend:
-    name: Frontend (Node ${{ matrix.node-version }})
+    name: Frontend
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      matrix:
-        node-version: ["22"]
-
     defaults:
       run:
         working-directory: frontend
@@ -233,7 +229,8 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.x
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: frontend/.node-version
+          check-latest: true
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 

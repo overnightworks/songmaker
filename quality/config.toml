@@ -3,8 +3,14 @@ mandatory_jobs = [
     "Backend (Python 3.14)",
     "Alert rules (promtool)",
     "PostgreSQL contract (serial)",
-    "Frontend (Node 22)",
+    "Frontend",
 ]
+
+[[gate.loosened]]
+what = 'mandatory job "Frontend (Node 22)" removed'
+item = "#2120"
+date = 2026-11-02
+reason = "the operator ruled on 31.10.2026 that the frontend moves to Node 26 and allows 24 as aco does; the job loses its version in its name"
 
 [[gate.loosened]]
 what = 'mandatory job "Backend (Python 3.12)" removed'
