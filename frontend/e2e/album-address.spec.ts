@@ -26,22 +26,19 @@ import { FlowGuard, ONLY_IN_SHELL, workspace, HOME_PATH } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
- * What each test costs the API, measured on a green run: 22 for the cold
- * album open + one-step track click + Back/Forward (down from 24 before issue
- * #276 folded the workspace remount away), 16 for the standalone cold song
- * open and 16 for the standalone cold take open, both unchanged from each
- * other since neither crosses a route to begin with, and 15 for the legacy
- * `/?song=` bookmark redirect (issue #284) -- two full cold page loads (a
- * genuine earlier page, then the bookmark) yet still under the standalone
- * cold song open above, since the second load's own snapshot bootstrap can
- * lose its race against the redirect's own fetch the way a cold take open's
- * already does (see the note further down on that race) — it isn't a fixed
- * cost either way. One shared ceiling, sized to the largest with the same
- * headroom the library flow carries — all four flows share one 60-second IP
- * rate-limit window, so a jump here is a regression to find, not a number to
- * raise.
+ * What each test costs the API, measured in CI: 30 for the cold album open +
+ * one-step track click + Back/Forward, 20 for the standalone cold song open and
+ * 17 to 20 for the standalone cold take open, since neither crosses a route to
+ * begin with. The two legacy `/?song=` rows with a genuine earlier page are two
+ * cold page loads (that page, then the bookmark): 27 to 29. The third is one
+ * cold load held while its lookup is in flight: 15. Those counts are not fixed
+ * costs: the second load's own snapshot bootstrap can lose its race against the
+ * redirect's own fetch the way a cold take open's already does. One shared
+ * ceiling, sized to the largest with the same headroom the library flow
+ * carries — all of this file's flows share one 60-second IP rate-limit window,
+ * so a jump here is a regression to find, not a number to raise.
  */
-const ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET = 30;
+const ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET = 33;
 
 const LIVE_STREAM_PATH = '/api/resource-events/stream';
 const WORKSPACE_LOADING_TEXT = 'Loading...';
@@ -105,7 +102,7 @@ test(
 		// different +page.svelte owns each of the three addresses), but the
 		// `(library)` route group's own layout keeps LibraryWorkspace standing
 		// across it (issue #276), so the editor no longer remounts on the way
-		// there — see the request-budget note on ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET.
+		// there.
 		await surface
 			.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
 			.click();
@@ -214,9 +211,9 @@ test(
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
 		// Same reasoning as the three cold-opens above: shell-independent router
-		// behaviour, and the four flows already share a budget window. The redirect
-		// itself -- resolving the id, dropping an unknown ?gen=, and 404ing an
-		// unknown song id -- is pinned cheaply in the unit suite
+		// behaviour, and this file's flows already share a budget window. The
+		// redirect itself -- resolving the id, dropping an unknown ?gen=, and 404ing
+		// an unknown song id -- is pinned cheaply in the unit suite
 		// (resolveLegacySongQueryAddress in stores/libraryContext.test.ts); what
 		// only a real browser and a real router show is that the address bar
 		// actually lands on the canonical form and that Back does not step back

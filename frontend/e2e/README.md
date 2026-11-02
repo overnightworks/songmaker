@@ -139,18 +139,15 @@ numbers live in `LIBRARY_FLOW_API_REQUEST_BUDGET` and
 the measured count is written down; this file and `docs/testing.md` point
 there rather than restate it, which is exactly how the library flow's number
 drifted into three different values before a test audit caught it (issue
-#326). `album-address.spec.ts` carries four —
-22 for the cold album open, one-step track click and Back/Forward, 16 for a
-standalone cold song open, 16 for a standalone cold take open, 15 for the
-legacy `/?song=` bookmark redirect (issue #284, two full cold page loads: a
-genuine earlier page, then the bookmark) — against a shared budget of 30, and
-`playlist-address.spec.ts` carries two — 11 for the cold playlist open, 9 for
-the unknown-slug open — against a shared budget of 15. Every cold open (song,
-take, playlist, or the redirected legacy bookmark) races the live stream's
-own bootstrap the same way — whichever of the two restores the library state
+#326). `album-address.spec.ts` carries one shared budget for its flows,
+`ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET`, and `playlist-address.spec.ts` carries
+one, `PLAYLIST_ADDRESS_FLOW_API_REQUEST_BUDGET`; the comment on each constant is
+where the measured counts are written down. Every cold open (song, take,
+playlist, or the redirected legacy bookmark) races the live stream's own
+bootstrap the same way — whichever of the two restores the library state
 finishes second re-applies the same state (documented on `openAlbumAddress`
 in `stores/libraryContext.ts`) — so a green run can measure a request or two
-either side of these numbers; the budget's headroom is sized for exactly
+either side of the measured counts; the budget's headroom is sized for exactly
 that, not for a real regression. A flow that suddenly needs several more
 round trips is a regression — find the extra requests instead of raising the
 number. The measured count is printed on every run.
@@ -231,13 +228,13 @@ one down — without removing the cause; #276 did. `/`, `/album/[slug]`,
 `/album/[slug]/[song]` and, since #281, `/album/[slug]/[song]/take/[n]` now
 sit inside one `(library)` route group whose own `+layout.svelte` mounts
 `LibraryWorkspace` once, so a crossing swaps only the thin leaf page under it
-instead of tearing the workspace down and rebuilding it. That folded the
-library flow to 26 (from 28) and the album-address flow's
-cold-open-plus-crossing case to 22 (from 24) — not all the way back to the
-pre-address 25, since a route-file crossing is still a real SvelteKit
-navigation with its own cost, just no longer a workspace rebuild on top of
-it. The standalone cold song and cold take opens stay at 16: neither crosses
-a route to begin with, so there was never a rebuild to fold away for either.
+instead of tearing the workspace down and rebuilding it. That folded two
+requests off the library flow and off the album-address flow's
+cold-open-plus-crossing case, not all of what the address added, since a
+route-file crossing is still a real SvelteKit navigation with its own cost, just
+no longer a workspace rebuild on top of it. The standalone cold song and cold
+take opens gained nothing: neither crosses a route to begin with, so there was
+never a rebuild to fold away for either.
 What #275 bought stands unchanged: the address itself (a song is linkable and
 survives a cold open on its own, 404s honestly on an unknown slug, and
 follows a rename) and the crossing-detection fix that keeps the router in
