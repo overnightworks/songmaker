@@ -1,8 +1,0 @@
-claim_id = "16dff32689bc452c9881fb1a3776b735"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "f2bb1c3faec2e48bb7d0254cd1e3dd2cf9e922b7"
-branch = "claude/issue-2137-settings-lists-a-person-s-references"
-scope = ["docs/architecture.md", "frontend/e2e/references-list.spec.ts", "frontend/e2e/settings-phone.spec.ts", "frontend/src/lib/api/references.test.ts", "frontend/src/lib/api/references.ts", "frontend/src/lib/components/shell/RailSettings.test.ts", "frontend/src/lib/settingsSections.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/lib/utils/format.test.ts", "frontend/src/lib/utils/format.ts", "frontend/src/routes/settings/page.test.ts", "frontend/src/routes/settings/references/+page.svelte", "frontend/src/routes/settings/references/page.test.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/reference_api.py", "tests/songmaker_cli/test_reference_api.py"]
-opened_commit = "c8b506472c7e0de7c560e9c1fbb3004b4f8543b6"
-whole_reason = "One vertical slice of one read path: the route has no caller without the page, and the section's pins move with its row."
