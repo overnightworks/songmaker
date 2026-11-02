@@ -113,6 +113,13 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   `album-cover.html` („Suggest closed", Punkt 8; `album-browsing.html` zeigt
   C2–C9 als den Zustand, der mit Bildläufen zurückkommt, und I1 liest
   „upload") und `now-playing.html` („Coherence not available").
+- Cover-Läufe im Dienst (#2142, Bild für #2055), noch nicht gesegnet. Ein Cover
+  läuft als die Person, die fragt. Besitzer: `album-cover.html` (Abschnitt
+  „Suggest open at the service", Zustände j bis n: offen, busy, not enabled,
+  unavailable, Sign in again; Desktop und 375 px; „Suggest closed" gilt erst
+  nach der Segnung als überholt) und `admin-models.html` (Abschnitt
+  „Neu · #1895", Zustände z und z′: Cover-Zeile „Set by the agent service"
+  ohne Provider-, Route- oder Modell-Bedienelement, wie die Co-Writer-Zeile).
 - KI-Kennzeichnung nach Art. 50 der KI-Verordnung (#1906), gesegnet vom
   Operator am 27.10.2026 (P1 bis P5). Wortlaut gerult (E3, Operator 19.10.2026):
   „KI-generiert“ am Song oder Album und „Du schreibst mit einer KI“ im

@@ -2505,6 +2505,29 @@
 				</div>
 			</article>
 
+			<article class="state wide" id="agent-service-cover">
+				<div class="state-head"><h3>(z) Cover läuft im Dienst</h3><span class="tag tag-state">Read only</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">
+					Noch nicht gesegnet. Ein Cover-Lauf geht als die Person, die fragt, an den Dienst (#2055). Die
+					Cover-Zeile gleicht der Co-Writer-Zeile: kein Provider, keine Route, kein Modell zum Wählen, kein Status.
+					Sie überschreibt (y) und (y′).
+				</p>
+				<div class="tt-scroll"><div class="tt">
+					<div class="tt-head"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+					<div class="tt-row">
+						<span class="cell-task">Co-Writer</span>
+						<span class="ro">Set by the agent service</span><span class="ro">Agent service</span><span class="ro">Set by the agent service</span>
+					</div>
+					<div class="tt-sub"><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></div>
+					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span class="ro is-new">Set by the agent service</span>
+						<span class="ro is-new">Agent service</span>
+						<span class="ro is-new">Set by the agent service</span>
+					</div>
+				</div></div>
+			</article>
+
 			<article class="state wide">
 				<div class="state-head"><h3>(y) Nach Slice 6 · alles über den Dienst</h3><span class="tag tag-state">Read only</span><span class="proposed-tag flush">New · #1895</span></div>
 				<p class="state-note">
@@ -2573,6 +2596,29 @@
 							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
 							<div class="line"><span class="k">Model</span><span class="ro none">—</span></div>
 							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Not available yet: waits for image runs through the agent service</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(z′) Cover läuft im Dienst · gestapelt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">Noch nicht gesegnet. Dieselben Zustände wie (z); die Cover-Karte gleicht der Co-Writer-Karte.</p>
+				<div class="phone p390">
+					<div class="ph-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Provider</span><span class="ro">Set by the agent service</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
+							<div class="line"><span class="k">Model</span><span class="ro">Set by the agent service</span></div>
+							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
+						</div>
+						<div class="tcard">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Provider</span><span class="ro is-new">Set by the agent service</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro is-new">Agent service</span></div>
+							<div class="line"><span class="k">Model</span><span class="ro is-new">Set by the agent service</span></div>
 						</div>
 					</div>
 				</div>
