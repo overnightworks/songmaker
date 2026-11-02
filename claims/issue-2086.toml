@@ -1,8 +1,0 @@
-claim_id = "b89b3523de524400933be8a232964a64"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "8eb7fadb92ca26390370c23d8171435bf9bca9f7"
-branch = "claude/issue-2086-reference-uploads-move-to-post-api-refer"
-scope = [".importlinter", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "frontend/src/lib/api/client.ts", "frontend/src/lib/api/generations.test.ts", "frontend/src/lib/api/generations.ts", "frontend/src/lib/api/references.test.ts", "frontend/src/lib/api/references.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/components/editor/RecipeTabs.svelte", "frontend/src/lib/components/editor/RecipeTabs.test.ts", "quality/baseline.toml", "quality/config.toml", "scripts/dead-symbols.allow", "src/songmaker_cli/api.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/reference_api.py", "src/songmaker_cli/request_policies.py", "tests/songmaker_cli/test_covers_song.py", "tests/songmaker_cli/test_reference_api.py", "tests/songmaker_cli/test_request_policies_rate_limit.py", "tests/songmaker_cli/test_request_policies_upload_limits.py", "tests/test_api.py", "tests/test_reference_quota.py", "tests/test_reference_recordings.py"]
-opened_commit = "f7a8b5ce2c5dc05541da1ff190646f6e0c187d2e"
-whole_reason = "One route move: the route, its answer, its registration, its body rule and its one client change together, or the upload breaks between landings."
