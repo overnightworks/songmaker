@@ -74,7 +74,7 @@ mcp = [
 # tools back over it. The release wheel of an immutable tag, like the other
 # release wheels.
 agent-service = [
-    "overnightworks-agent-runtime-client[mcp-server] @ https://github.com/overnightworks/agent-runtime/releases/download/v0.12.0/overnightworks_agent_runtime_client-0.12.0-py3-none-any.whl#sha256=b4652a8b64ece25136663ce7719f8cb540905148efec896a9eecc841c2380e28",
+    "overnightworks-agent-runtime-client[mcp-server] @ https://github.com/overnightworks/agent-runtime/releases/download/v0.16.0/overnightworks_agent_runtime_client-0.16.0-py3-none-any.whl#sha256=9dc841c87da315dc678bbfd8439a38d6352a7e1ad765632593cea36fedf65e86",
 ]
 acestep-worker = [
     "fastapi>=0.100,<1",
