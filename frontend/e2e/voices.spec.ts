@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
@@ -14,8 +14,6 @@ import {
 	type QueuedJob
 } from './seed';
 
-const SCREENSHOT_DIR =
-	'/tmp/claude-1000/-home-felix-hummert-git-songmaker/b3634502-0150-4c8a-93e5-9818e2d499a2/scratchpad/issue-544';
 const FAILED_TRAINING_CAPTION = 'e2e fake training failure';
 const TAKE_FIXTURE = fileURLToPath(new URL('./fixtures/take.mp3', import.meta.url));
 
@@ -339,7 +337,8 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
 			await expect(deletedVoiceTake).toContainText(`Voice: ${voiceName} — voice deleted`);
 			const deletedVoicePlayTarget = deletedVoiceTake.getByRole('button', {
-				name: /v1.*take 1/
+				name: 'Play v1 · take 1',
+				exact: true
 			});
 			await expect(deletedVoicePlayTarget).toBeVisible();
 		}
@@ -401,9 +400,8 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 			'You have reached the limit of 10 voices.'
 		);
 
-		mkdirSync(SCREENSHOT_DIR, { recursive: true });
 		await page.screenshot({
-			path: `${SCREENSHOT_DIR}/live-s55-${isMobile ? '390' : 'desktop'}.png`,
+			path: test.info().outputPath(`live-s55-${isMobile ? '390' : 'desktop'}.png`),
 			fullPage: true
 		});
 
