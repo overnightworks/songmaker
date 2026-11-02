@@ -10,7 +10,9 @@
 # Before it checks out, it verifies through GitHub that every GitHub Actions
 # check run for the newest green release has completed successfully, skipped,
 # or neutral, with at least one success; check runs from other apps are
-# advisory. The script itself does not re-run tests.
+# advisory, and so are the check suites of Dependabot update runs, which a
+# second lookup finds by their workflow path. The script itself does not re-run
+# tests.
 #
 # Safety rules below come from real incidents, not hypotheticals:
 #   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
@@ -184,6 +186,14 @@ PROMETHEUS_HTTP_TIMEOUT_SECONDS=30
 # report check runs too, but their results are advisory rather than rollout
 # decisions.
 REQUIRED_CHECK_RUN_APP_SLUG="github-actions"
+CHECK_RUN_REPOSITORY="overnightworks/songmaker"
+# Dependabot's update jobs run as `github-actions` check runs named
+# "Dependabot", attached to whatever main's head is at that moment. They judge
+# nothing about the commit, so their check suites, and only those, leave the
+# guard. GitHub names such a suite's workflow run by this path under the
+# `dynamic` event; other managed workflows under that event (CodeQL default
+# setup) keep their other paths and stay judged.
+DEPENDABOT_UPDATE_WORKFLOW_PATH="dynamic/dependabot/dependabot-updates"
 # The one conclusion that proves a required Actions job ran and passed. A
 # deploy needs at least one such job.
 PASSED_CHECK_RUN_CONCLUSION="success"
@@ -1015,26 +1025,21 @@ checkout_acestep_pin() {
     fi
 }
 
-# Prints exactly one of green, waiting, or failed. An API/CLI failure is a
-# named error return because it is not evidence that the fetched commit is
-# safe to deploy. The API's explicit zero-run envelope waits only until the
-# commit is old enough that a workflow which never started needs attention.
-# A missing/malformed envelope is never mistaken for zero runs.
-remote_check_status() {
-    local commit_sha="$1"
-    local commit_timestamp="$2"
-    local check_runs gh_error gh_stderr_file lookup_exit termination
-    if ! command -v gh >/dev/null 2>&1; then
-        printf '%s' "GitHub CLI (gh) is unavailable on PATH"
-        return 1
-    fi
+# Runs one GitHub API lookup under the lookup time limit and stores the lines
+# its jq projection prints in the variable named by $1. On failure it prints
+# the reason, named after $2, and returns 1.
+github_lookup() {
+    local -n lookup_lines="$1"
+    local lookup_label="$2"
+    local endpoint="$3"
+    local projection="$4"
+    local gh_error gh_stderr_file lookup_exit termination
     if ! gh_stderr_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[gh-stderr]}XXXXXX" 2>/dev/null)"; then
-        printf '%s' 'cannot create temporary file for check-run lookup stderr'
+        printf 'cannot create temporary file for %s lookup stderr' "$lookup_label"
         return 1
     fi
-    if check_runs="$(timeout --kill-after="$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS" "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" gh api --paginate \
-        "repos/FlexOr2/songmaker/commits/$commit_sha/check-runs?per_page=100" \
-        --jq 'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.name | record_field) and (.status | record_field) and (.conclusion | optional_record_field)) then "check\u001f\(.app.slug)\u001f\(.name)\u001f\(.status)\u001f\(.conclusion // "")" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' 2>"$gh_stderr_file")"; then
+    if lookup_lines="$(timeout --kill-after="$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS" "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" gh api --paginate \
+        "$endpoint" --jq "$projection" 2>"$gh_stderr_file")"; then
         rm -f "$gh_stderr_file"
     else
         lookup_exit=$?
@@ -1042,14 +1047,101 @@ remote_check_status() {
         rm -f "$gh_stderr_file"
         termination="$(describe_timeout_status "$lookup_exit")"
         if [[ -n "$termination" ]]; then
-            printf 'check-run lookup %s' "$termination"
+            printf '%s lookup %s' "$lookup_label" "$termination"
         else
             printf '%s' "$gh_error"
         fi
         return 1
     fi
+}
 
-    local record app_slug name status conclusion
+# Fills the associative array named by $2 with the check suite ids of the
+# Dependabot update runs on commit $1. Every workflow record is counted against
+# the envelope and validated before any is selected, so a record without a
+# suite id can never match one. GitHub gives no snapshot across this lookup and
+# the check-run lookup: an update run this lookup misses stays judged like any
+# other run.
+lookup_update_suites() {
+    local commit_sha="$1"
+    local -n update_suites_by_id="$2"
+    local workflow_runs
+    github_lookup workflow_runs workflow-run \
+        "repos/$CHECK_RUN_REPOSITORY/actions/runs?head_sha=$commit_sha&event=dynamic&per_page=100" \
+        'def record_path: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); if (type == "object" and (.total_count | type == "number") and (.workflow_runs | type == "array")) then "envelope\u001f\(.total_count)", (.workflow_runs[] | if ((.check_suite_id | type == "number") and (.path | record_path)) then "run\u001f\(.check_suite_id)\u001f\(.path)" else error("GitHub returned malformed workflow-run record") end) else error("GitHub returned malformed workflow-runs response") end' \
+        || return 1
+
+    local record field path
+    local expected_run_count=""
+    local observed_run_count=0
+    local has_envelope=false
+    local -a run_suite_ids=()
+    local -a run_paths=()
+    while IFS="$CHECK_RUN_FIELD_SEPARATOR" read -r record field path; do
+        case "$record" in
+            envelope)
+                if [[ ! "$field" =~ ^[0-9]+$ || -n "$path" ]]; then
+                    printf 'GitHub returned a malformed workflow-runs envelope'
+                    return 1
+                fi
+                if [[ -n "$expected_run_count" && "$expected_run_count" != "$field" ]]; then
+                    printf 'GitHub returned inconsistent paginated workflow-run counts'
+                    return 1
+                fi
+                expected_run_count="$field"
+                has_envelope=true
+                ;;
+            run)
+                ((observed_run_count += 1))
+                if [[ ! "$field" =~ ^[0-9]+$ || -z "$path" ]]; then
+                    printf 'GitHub returned an incomplete workflow run'
+                    return 1
+                fi
+                run_suite_ids+=("$field")
+                run_paths+=("$path")
+                ;;
+            *)
+                printf 'GitHub returned a malformed workflow-runs response'
+                return 1
+                ;;
+        esac
+    done <<<"$workflow_runs"
+
+    if [[ "$has_envelope" != true || "$observed_run_count" != "$expected_run_count" ]]; then
+        printf 'GitHub returned an incomplete workflow-runs response'
+        return 1
+    fi
+    local run_index
+    for run_index in "${!run_paths[@]}"; do
+        if [[ "${run_paths[run_index]}" == "$DEPENDABOT_UPDATE_WORKFLOW_PATH" ]]; then
+            update_suites_by_id["${run_suite_ids[run_index]}"]=1
+        fi
+    done
+}
+
+# Prints exactly one of green, waiting, or failed. An API/CLI failure is a
+# named error return because it is not evidence that the fetched commit is
+# safe to deploy. The API's explicit zero-run envelope waits only until the
+# commit is old enough that a workflow which never started needs attention.
+# A missing/malformed envelope is never mistaken for zero runs. Check runs in
+# the suites of Dependabot update runs are fetched and counted toward the
+# envelope but judged by nothing: they are not a required check, not running,
+# failed or passed.
+remote_check_status() {
+    local commit_sha="$1"
+    local commit_timestamp="$2"
+    local check_runs
+    if ! command -v gh >/dev/null 2>&1; then
+        printf '%s' "GitHub CLI (gh) is unavailable on PATH"
+        return 1
+    fi
+    github_lookup check_runs check-run \
+        "repos/$CHECK_RUN_REPOSITORY/commits/$commit_sha/check-runs?per_page=100" \
+        'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.name | record_field) and (.status | record_field) and (.conclusion | optional_record_field)) then "check\u001f\(.app.slug)\u001f\(.name)\u001f\(.status)\u001f\(.conclusion // "")\u001f\((.check_suite | objects | .id | numbers) // "")" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' \
+        || return 1
+    local -A update_suites=()
+    lookup_update_suites "$commit_sha" update_suites || return 1
+
+    local record app_slug name status conclusion check_suite_id
     local expected_check_count=""
     local observed_check_count=0
     local observed_required_check_count=0
@@ -1057,10 +1149,10 @@ remote_check_status() {
     local has_running_check=false
     local has_failed_check=false
     local has_passed_check=false
-    while IFS="$CHECK_RUN_FIELD_SEPARATOR" read -r record app_slug name status conclusion; do
+    while IFS="$CHECK_RUN_FIELD_SEPARATOR" read -r record app_slug name status conclusion check_suite_id; do
         case "$record" in
             envelope)
-                if [[ ! "$app_slug" =~ ^[0-9]+$ || -n "$name" || -n "$status" || -n "$conclusion" ]]; then
+                if [[ ! "$app_slug" =~ ^[0-9]+$ || -n "$name" || -n "$status" || -n "$conclusion" || -n "$check_suite_id" ]]; then
                     printf 'GitHub returned a malformed check-runs envelope'
                     return 1
                 fi
@@ -1079,6 +1171,14 @@ remote_check_status() {
                 fi
                 if [[ "$app_slug" != "$REQUIRED_CHECK_RUN_APP_SLUG" ]]; then
                     log_info "GitHub check run from app '$app_slug' is advisory, ignored"
+                    continue
+                fi
+                if [[ ! "$check_suite_id" =~ ^[0-9]+$ ]]; then
+                    printf 'GitHub returned an incomplete check-run status'
+                    return 1
+                fi
+                if [[ -n "${update_suites[$check_suite_id]:-}" ]]; then
+                    log_info "GitHub check run '$name' belongs to a Dependabot update run, ignored"
                     continue
                 fi
                 ((observed_required_check_count += 1))

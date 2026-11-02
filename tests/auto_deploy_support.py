@@ -57,8 +57,10 @@ def prometheus_rules_response(alerting_rules: int) -> str:
 
 # Any fixed point in time — the script only ever reads differences.
 CLOCK_START_EPOCH = 1_756_000_000
-CHECK_RUN_FIELD_SEPARATOR = "\x1f"
 REQUIRED_ACTIONS_JOB_NAME = "Backend (Python 3.14)"
+CI_CHECK_SUITE_ID = "1000"
+UPDATE_CHECK_SUITE_ID = "2000"
+DEPENDABOT_UPDATES_WORKFLOW_PATH = "dynamic/dependabot/dependabot-updates"
 SONAR_ACTIONS_JOB_NAME = "SonarCloud scan"
 
 REQUIRED_GRAFANA_PASSWORD = (
@@ -93,14 +95,16 @@ class ComposeConfigRefusal:
 
 
 def check_runs_response(*runs: tuple[str, ...]) -> str:
-    """Project GitHub check runs as the auto-deploy script's jq query does.
+    """Build the GitHub check-runs API answer the auto-deploy script's jq query reads.
 
-    A run is status/conclusion, app/status/conclusion, or
-    app/name/status/conclusion; the omitted app is GitHub Actions and the
-    omitted name an ordinary required CI job.
+    A run is status/conclusion, app/status/conclusion,
+    app/name/status/conclusion, or app/name/status/conclusion/check-suite-id;
+    the omitted app is GitHub Actions, the omitted name an ordinary required CI
+    job and the omitted suite the CI workflow's own. An empty conclusion is null.
     """
     records = []
     for run in runs:
+        suite_id = CI_CHECK_SUITE_ID
         if len(run) == 2:
             app_slug, name = "github-actions", REQUIRED_ACTIONS_JOB_NAME
             status, conclusion = run
@@ -109,15 +113,21 @@ def check_runs_response(*runs: tuple[str, ...]) -> str:
             app_slug, status, conclusion = run
         elif len(run) == 4:
             app_slug, name, status, conclusion = run
+        elif len(run) == 5:
+            app_slug, name, status, conclusion, suite_id = run
         else:
             raise ValueError(
                 "a check run needs status/conclusion, app/status/conclusion, "
-                "or app/name/status/conclusion",
+                "app/name/status/conclusion, or app/name/status/conclusion/suite",
             )
-        records.append(
-            CHECK_RUN_FIELD_SEPARATOR.join(("check", app_slug, name, status, conclusion)) + "\n",
-        )
-    return f"envelope{CHECK_RUN_FIELD_SEPARATOR}{len(runs)}\n" + "".join(records)
+        records.append({
+            "app": {"slug": app_slug},
+            "name": name,
+            "status": status,
+            "conclusion": conclusion or None,
+            "check_suite": {"id": int(suite_id)},
+        })
+    return json.dumps({"total_count": len(records), "check_runs": records})
 
 
 def git(cwd: Path, *args: str) -> None:

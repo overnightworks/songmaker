@@ -7,6 +7,8 @@ a tag ``vYYYY.MM.DD.N`` on a green main commit does, checked out detached.
 
 from __future__ import annotations
 
+import json
+import shlex
 from pathlib import Path
 
 import pytest
@@ -14,10 +16,21 @@ from auto_deploy_harness import (
     Checkout,
 )
 from auto_deploy_support import (
+    CHECK_RUN_APPEARANCE_GRACE_SECONDS,
+    DEPENDABOT_UPDATES_WORKFLOW_PATH,
     FAILURE_ALERT_THRESHOLD,
+    UPDATE_CHECK_SUITE_ID,
     git,
     git_output,
 )
+
+CODE_SCANNING_WORKFLOW_PATH = "dynamic/github-code-scanning/codeql"
+OTHER_CHECK_SUITE_ID = "3000"
+UPDATE_RUN = ("github-actions", "Dependabot", "completed", "failure", UPDATE_CHECK_SUITE_ID)
+UPDATE_SUITE = (UPDATE_CHECK_SUITE_ID, DEPENDABOT_UPDATES_WORKFLOW_PATH)
+PASSED_UPDATE_RUN = ("github-actions", "Dependabot", "completed", "success", UPDATE_CHECK_SUITE_ID)
+PASSED_CI = ("completed", "success")
+FAILED_CI = ("completed", "failure")
 
 OFF_GRAMMAR_TAGS = ["v1.0", "v2026.1.5.1", "v2026.10.25.01", "v2026.02.30.1"]
 
@@ -492,3 +505,295 @@ def test_a_release_with_the_running_schema_is_not_backed_up(checkout: Checkout) 
     assert result.returncode == 0
     assert len(checkout.backup_calls) == calls_before
     assert _deployed_sha(checkout) == checkout.head
+
+
+@pytest.mark.parametrize(
+    ("check_runs", "workflow_runs", "grace_elapsed", "outcome"),
+    [
+        pytest.param([PASSED_CI, UPDATE_RUN], [UPDATE_SUITE], False, "deploys", id="D1"),
+        pytest.param([FAILED_CI, PASSED_UPDATE_RUN], [UPDATE_SUITE], False, "failed", id="D2"),
+        pytest.param([PASSED_UPDATE_RUN], [UPDATE_SUITE], False, "waiting", id="D3"),
+        pytest.param([PASSED_UPDATE_RUN], [UPDATE_SUITE], True, "failed", id="D4"),
+        pytest.param(
+            [PASSED_UPDATE_RUN, ("completed", "skipped"), ("completed", "neutral")],
+            [UPDATE_SUITE], False, "failed", id="D4a",
+        ),
+        pytest.param(
+            [PASSED_UPDATE_RUN, ("in_progress", "")], [UPDATE_SUITE], False, "waiting", id="D4b",
+        ),
+        pytest.param(
+            [PASSED_UPDATE_RUN, ("unheard_of", "")], [UPDATE_SUITE], False, "refused", id="D4c",
+        ),
+        pytest.param(
+            [PASSED_CI, ("github-actions", "Dependabot", "in_progress", "", UPDATE_CHECK_SUITE_ID)],
+            [UPDATE_SUITE], False, "deploys", id="D5",
+        ),
+        pytest.param(
+            [PASSED_CI, ("github-actions", "Dependabot", "completed", "failure")],
+            [UPDATE_SUITE], False, "failed", id="D6",
+        ),
+        pytest.param(
+            [PASSED_CI, ("github-actions", "CodeQL", "completed", "failure", OTHER_CHECK_SUITE_ID)],
+            [(OTHER_CHECK_SUITE_ID, CODE_SCANNING_WORKFLOW_PATH)], False, "failed", id="D7",
+        ),
+        pytest.param([PASSED_CI, ("completed", "failure")], [], False, "failed", id="D9"),
+        pytest.param([PASSED_CI], [], False, "deploys", id="D9-green"),
+    ],
+)
+def test_only_the_check_suites_of_dependabot_update_runs_leave_the_deploy_guard(
+    checkout: Checkout,
+    check_runs: list[tuple[str, ...]],
+    workflow_runs: list[tuple[str, str]],
+    grace_elapsed: bool,
+    outcome: str,
+) -> None:
+    """defect:#2128 cells D1-D7, D9 -- an update run never decides, it never loosens either."""
+
+    checkout.move_main_forward()
+    candidate = checkout.remote_main_sha()
+    checkout.set_check_runs(*check_runs)
+    checkout.set_workflow_runs(*workflow_runs)
+    if grace_elapsed:
+        assert checkout.tick().returncode == 0
+        checkout.advance_clock(CHECK_RUN_APPEARANCE_GRACE_SECONDS)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (_deployed_sha(checkout) == candidate) == (outcome == "deploys")
+    assert ("cannot determine GitHub check status" in checkout.journal) == (outcome == "refused")
+    waited = outcome == "waiting" or grace_elapsed
+    assert (f"{candidate} is not green: waiting" in checkout.journal) == waited
+    assert (f"{candidate} is not green: failed" in checkout.journal) == (outcome == "failed")
+
+
+@pytest.mark.parametrize("other_run_failed", [False, True], ids=["update-only", "other-path"])
+def test_a_paginated_workflow_answer_leaves_only_the_matching_suites(
+    checkout: Checkout, other_run_failed: bool,
+) -> None:
+    """defect:#2128 cell D8d -- only update-path suites leave the judgement across pages."""
+
+    checkout.move_main_forward()
+    candidate = checkout.remote_main_sha()
+    pages = [
+        {"total_count": 3, "workflow_runs": [
+            {"check_suite_id": 2000, "path": DEPENDABOT_UPDATES_WORKFLOW_PATH},
+            {"check_suite_id": 3000, "path": CODE_SCANNING_WORKFLOW_PATH},
+        ]},
+        {"total_count": 3, "workflow_runs": [
+            {"check_suite_id": 4000, "path": DEPENDABOT_UPDATES_WORKFLOW_PATH},
+        ]},
+    ]
+    checkout.set_workflow_runs_raw_response("\n".join(json.dumps(page) for page in pages))
+    checkout.set_check_runs(
+        PASSED_CI,
+        UPDATE_RUN,
+        ("github-actions", "Dependabot", "completed", "failure", "4000"),
+        (
+            "github-actions", "CodeQL", "completed",
+            "failure" if other_run_failed else "success", OTHER_CHECK_SUITE_ID,
+        ),
+    )
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (_deployed_sha(checkout) == candidate) == (not other_run_failed)
+
+
+def _workflow_page(*records: str, total_count: int | None = None) -> str:
+    total = len(records) if total_count is None else total_count
+    return f'{{"total_count":{total},"workflow_runs":[{",".join(records)}]}}'
+
+
+def _run_record(suite_id: str, path: str) -> str:
+    return f'{{"check_suite_id":{suite_id},"path":{json.dumps(path)}}}'
+
+
+VALID_RUN = _run_record("2000", DEPENDABOT_UPDATES_WORKFLOW_PATH)
+
+
+@pytest.mark.parametrize(
+    "raw_response",
+    [
+        pytest.param('{"workflow_runs":[]}', id="no-total"),
+        pytest.param('{"total_count":0}', id="no-records"),
+        pytest.param("[]", id="not-an-object"),
+        pytest.param("not json", id="not-json"),
+        pytest.param(_workflow_page(VALID_RUN, total_count=2), id="truncated"),
+        pytest.param(_workflow_page(VALID_RUN, VALID_RUN, total_count=1), id="surplus"),
+        pytest.param(
+            _workflow_page(VALID_RUN, total_count=3) + _workflow_page(VALID_RUN, total_count=2),
+            id="page-totals-disagree",
+        ),
+        pytest.param(
+            _workflow_page('{"path":"dynamic/dependabot/dependabot-updates"}'), id="no-suite-id",
+        ),
+        pytest.param(_workflow_page('{"check_suite_id":2000}'), id="no-path"),
+        pytest.param(_workflow_page(_run_record('"2000"', "p")), id="string-suite-id"),
+        pytest.param(_workflow_page(_run_record("2000.5", "p")), id="fractional-suite-id"),
+        pytest.param(_workflow_page(_run_record("2000", "")), id="empty-path"),
+        pytest.param(_workflow_page(_run_record("2000", "dynamic\u0000")), id="control-path"),
+    ],
+)
+def test_a_malformed_workflow_run_answer_refuses_the_whole_tick(
+    checkout: Checkout, raw_response: str,
+) -> None:
+    """defect:#2128 cells D8b, D8c -- an unusable second lookup is never read as no update runs."""
+
+    checkout.move_main_forward()
+    checkout.move_main_forward()
+    before = checkout.head
+    checkout.set_workflow_runs_raw_response(raw_response, checkout.remote_main_sha())
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "cannot determine GitHub check status" in checkout.journal
+    assert checkout.head == before
+    assert _deployed_sha(checkout) == before
+
+
+@pytest.mark.parametrize(
+    ("lookup_fault", "diagnostic"),
+    [
+        pytest.param("fail", "GitHub API unavailable", id="fail"),
+        pytest.param("term", "workflow-run lookup timed out", id="term"),
+        pytest.param("kill", "workflow-run lookup was killed by SIGKILL", id="kill"),
+    ],
+)
+def test_a_failed_workflow_run_lookup_refuses_the_tick_without_an_older_release(
+    checkout: Checkout, lookup_fault: str, diagnostic: str,
+) -> None:
+    """defect:#2128 cell D8a -- the second lookup fails like the first and blocks the fallback."""
+
+    checkout.move_main_forward()
+    checkout.move_main_forward()
+    before = checkout.head
+    newest = checkout.remote_main_sha()
+    if lookup_fault == "fail":
+        checkout.make_workflow_lookup_fail(newest)
+    else:
+        checkout.check_run_lookup_timeout_seconds = 3
+        checkout.make_workflow_lookup_terminate(kill=lookup_fault == "kill", commit_sha=newest)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert diagnostic in checkout.journal
+    assert "cannot determine GitHub check status" in checkout.journal
+    assert checkout.head == before
+    assert _deployed_sha(checkout) == before
+
+
+def _api_check_run(app_slug: str, conclusion: str, check_suite: str) -> str:
+    return (
+        f'{{"app":{{"slug":"{app_slug}"}},"name":"job","status":"completed",'
+        f'"conclusion":"{conclusion}"{check_suite}}}'
+    )
+
+
+@pytest.mark.parametrize(
+    ("suite_field", "deploys"),
+    [
+        pytest.param("", False, id="actions-run-without-suite"),
+        pytest.param(',"check_suite":null', False, id="actions-run-with-null-suite"),
+        pytest.param(',"check_suite":{"id":"x"}', False, id="actions-run-with-text-suite"),
+        pytest.param(',"check_suite":{"id":"1000"}', False, id="actions-run-with-text-id"),
+        pytest.param(',"check_suite":{"id":1000}', True, id="actions-run-with-suite"),
+    ],
+)
+def test_a_github_actions_run_whose_suite_cannot_be_read_is_never_passed_over(
+    checkout: Checkout, suite_field: str, deploys: bool,
+) -> None:
+    """defect:#2128 cell D9a -- unknown still blocks; a readable suite is judged as before."""
+
+    checkout.move_main_forward()
+    candidate = checkout.remote_main_sha()
+    run = _api_check_run("github-actions", "success", suite_field)
+    checkout.set_check_runs_response(f'{{"total_count":1,"check_runs":[{run}]}}')
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert (_deployed_sha(checkout) == candidate) == deploys
+    assert ("cannot determine GitHub check status" in checkout.journal) == (not deploys)
+
+
+@pytest.mark.parametrize("suite_field", ["", ',"check_suite":null'])
+def test_a_failed_other_app_run_without_a_suite_stays_advisory(
+    checkout: Checkout, suite_field: str,
+) -> None:
+    """defect:#2128 cell D9b -- an other-app run is judged as today whatever its suite."""
+
+    checkout.move_main_forward()
+    candidate = checkout.remote_main_sha()
+    runs = [
+        _api_check_run("github-actions", "success", ',"check_suite":{"id":1000}'),
+        _api_check_run("sonarqubecloud", "failure", suite_field),
+    ]
+    checkout.set_check_runs_response(f'{{"total_count":2,"check_runs":[{",".join(runs)}]}}')
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert _deployed_sha(checkout) == candidate
+
+
+@pytest.mark.parametrize(
+    ("answer", "failure"),
+    [
+        pytest.param(
+            '{"total_count":2,"check_runs":['
+            + _api_check_run("github-actions", "success", ',"check_suite":{"id":1000}')
+            + "]}",
+            "incomplete check-runs response",
+            id="fewer-records-than-total",
+        ),
+        pytest.param(
+            '{"total_count":3,"check_runs":[]}{"total_count":2,"check_runs":[]}',
+            "inconsistent paginated check-run counts",
+            id="pages-disagree-on-total",
+        ),
+    ],
+)
+def test_a_check_run_answer_that_is_incomplete_refuses_to_deploy(
+    checkout: Checkout, answer: str, failure: str,
+) -> None:
+    """defect:#2128 cell D9c -- a truncated or inconsistent answer can hide a failed run."""
+    checkout.move_main_forward()
+    before = _deployed_sha(checkout)
+    checkout.set_check_runs_response(answer)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert failure in checkout.journal
+    assert _deployed_sha(checkout) == before
+    assert "compose build" not in checkout.docker_calls
+
+
+def test_the_update_run_lookup_runs_after_the_check_run_lookup(checkout: Checkout) -> None:
+    """defect:#2128 -- an update run that appears once the check runs are read stays unjudged."""
+
+    checkout.move_main_forward()
+    candidate = checkout.remote_main_sha()
+    checkout.set_check_runs(PASSED_CI, UPDATE_RUN)
+    answer = json.dumps({
+        "total_count": 1,
+        "workflow_runs": [
+            {
+                "check_suite_id": int(UPDATE_CHECK_SUITE_ID),
+                "path": DEPENDABOT_UPDATES_WORKFLOW_PATH,
+            },
+        ],
+    })
+    answer_file = checkout.workflow_runs_directory / "default"
+    checkout.run_after_check_lookup(
+        f"printf %s {shlex.quote(answer)} > {shlex.quote(str(answer_file))}\n",
+    )
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert _deployed_sha(checkout) == candidate
