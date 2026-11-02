@@ -1,8 +1,0 @@
-claim_id = "cc09d46b51634f26a4a0eb5abd4c4f17"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "8eb7fadb92ca26390370c23d8171435bf9bca9f7"
-branch = "claude/issue-2128-a-failed-dependabot-update-job-blocks-th"
-scope = ["docs/architecture.md", "docs/security.md", "scripts/auto-deploy.sh", "tests/auto_deploy_harness.py", "tests/auto_deploy_support.py", "tests/test_auto_deploy_alerting.py", "tests/test_auto_deploy_releases.py"]
-opened_commit = "488f13dd87f570c0ad4206a1997d87393b17f33e"
-whole_reason = "One guard rule: the script, its fake GitHub, the fixtures that pin its lookup and the sentences that document the guard change together."
