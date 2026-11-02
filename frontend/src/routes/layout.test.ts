@@ -80,7 +80,7 @@ import {
 	NOW_PLAYING_STACKED_MAX_PX
 } from '#lib/constants/now-playing.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
-import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import { makeAuthUser, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
 import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import {
@@ -113,8 +113,7 @@ vi.mock('#lib/stores/auth.ts', async (importOriginal) => {
 	return {
 		...actual,
 		checkAuth: vi.fn(async () => {
-			const { makeAuthUser } = await import('#lib/test-utils/factories.ts');
-			const user = makeAuthUser();
+			const user = { id: 'u1', username: 'felix', role: 'user' as const, account_console_url: '' };
 			actual.currentUser.set(user);
 			actual.authLoading.set(false);
 			return user;
@@ -162,14 +161,7 @@ import { goto } from '$app/navigation';
 const appCss = readFileSync(join(process.cwd(), 'src/app.css'), 'utf8');
 
 const VIEWPORT_PX = 320;
-// The kit's panel owns this word.
-const LOG_OUT_NAME = 'Log out';
-const USER = {
-	id: 'u1',
-	username: 'felix',
-	role: 'user' as const,
-	account_console_url: 'https://login.test/realms/songmaker/account'
-};
+const USER = makeAuthUser();
 
 function extractRule(source: string, selector: string): string {
 	const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1060,7 +1052,7 @@ describe('signing out on the phone', () => {
 		const backs = vi.spyOn(history, 'back');
 		onTestFinished(() => backs.mockRestore());
 
-		getByRoleButton(target, LOG_OUT_NAME).click();
+		getByRoleButton(target, 'Log out').click();
 
 		await vi.waitFor(() => expect(documentLoads.submitPost).toHaveBeenCalledWith('/auth/logout'));
 		expect(standingHistoryEntry()?.layer).toBe('account-menu');

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { currentUser } from '#lib/stores/auth.ts';
-import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import { makeAuthUser, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
 import {
 	followPlaybackForResume,
 	forgetPlaybackResume,
@@ -10,8 +10,8 @@ import {
 	type ResumeQueueSource
 } from './playbackResume';
 
-const LISTENER = { id: 'u-listener', username: 'listener', role: 'user' as const };
-const OTHER_LISTENER = { id: 'u-other', username: 'other', role: 'user' as const };
+const LISTENER = makeAuthUser({ id: 'u-listener', username: 'listener', role: 'user' });
+const OTHER_LISTENER = makeAuthUser({ id: 'u-other', username: 'other', role: 'user' });
 const ALBUM_QUEUE: ResumeQueueSource = { type: 'album', albumId: 'a-resume' };
 
 followPlaybackForResume({

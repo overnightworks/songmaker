@@ -19,12 +19,11 @@ import {
 	accountMenu,
 	FlowGuard,
 	LIBRARY_PATH,
-	LOG_OUT_NAME,
 	nameStartingWith,
 	shellOf,
-	themeChoiceRadio,
 	type Shell
 } from './helpers';
+import { LOG_OUT_NAME, themeChoiceRadio } from './account-menu-words';
 import { runMarker, seedAccount } from './seed';
 
 const PREVIEW_PATH = '**/api/admin/generation-retention/preview';

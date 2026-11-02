@@ -72,9 +72,9 @@ import {
 	type Shell,
 	HOME_PATH,
 	LIBRARY_PATH,
-	LIBRARY_URL,
-	LOG_OUT_NAME
+	LIBRARY_URL
 } from './helpers';
+import { LOG_OUT_NAME } from './account-menu-words';
 import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 
 // The phone's mini player keeps previous · play · next in one row this tall;

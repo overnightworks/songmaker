@@ -20,9 +20,9 @@ import {
 	shellOf,
 	stubIdentityProvider,
 	workspace,
-	type Shell,
-	LOG_OUT_NAME
+	type Shell
 } from './helpers';
+import { LOG_OUT_NAME } from './account-menu-words';
 import { archiveOwnedAlbum, runMarker, seedAccount, seedOwnTakeAddress, signedInApi } from './seed';
 
 // The gate runs both configured shells: 390×844 and 1440×900. No synthetic

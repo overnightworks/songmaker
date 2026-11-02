@@ -270,7 +270,7 @@ async function choose(select: HTMLSelectElement, value: string): Promise<void> {
 
 beforeEach(() => {
 	window.history.replaceState({}, '', '/settings/users');
-	currentUser.set({ id: 'u1', username: 'felix', role: 'admin' });
+	currentUser.set({ id: 'u1', username: 'felix', role: 'admin', account_console_url: '' });
 	api.fetchAdminVoices.mockResolvedValue(VOICES);
 	api.fetchRateLimits.mockResolvedValue({ settings: [] });
 	api.fetchGenerationDefaults.mockResolvedValue({});

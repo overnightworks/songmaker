@@ -27,9 +27,9 @@ import {
 	stubIdentityProvider,
 	workspace,
 	listenRegion,
-	type Shell,
-	LOG_OUT_NAME
+	type Shell
 } from './helpers';
+import { LOG_OUT_NAME } from './account-menu-words';
 import {
 	archiveOwnedAlbum,
 	BASE_URL,

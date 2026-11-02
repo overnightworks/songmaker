@@ -10,9 +10,9 @@ import {
 	HOME_PATH,
 	LIBRARY_PATH,
 	shellOf,
-	themeChoiceRadio,
 	waitForServiceWorkerControl
 } from './helpers';
+import { themeChoiceRadio } from './account-menu-words';
 import { BASE_URL, seedAccount, signedInApi, runMarker, type SeededAccount } from './seed';
 
 const COPY_KEY = 'songmaker.theme';

@@ -18,9 +18,9 @@ import {
 	nameStartingWith,
 	nextSignInStart,
 	shellOf,
-	stubIdentityProvider,
-	LOG_OUT_NAME
+	stubIdentityProvider
 } from './helpers';
+import { LOG_OUT_NAME } from './account-menu-words';
 import { BASE_URL, runMarker, seedAccount, signedInApi, type SeededAccount } from './seed';
 
 test.use({ storageState: { cookies: [], origins: [] } });
