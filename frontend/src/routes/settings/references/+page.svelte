@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { listReferences } from '#lib/api/references.ts';
+	import { listReferences, referenceAudioUrl } from '#lib/api/references.ts';
 	import type { ReferenceRecordingResponse } from '#lib/api/types.ts';
 	import Icon from '#lib/components/Icon.svelte';
-	import { APP_NAME } from '#lib/constants.ts';
+	import { APP_NAME, TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
+	import { audioPlayer, transportOffersPause } from '#lib/services/audioPlayer.svelte.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { formatTime, localDayAndMonth } from '#lib/utils/format.ts';
 
@@ -12,6 +13,7 @@
 	const RETRY_LABEL = 'Try again';
 	const SKELETON_ROWS = 3;
 	const NO_LENGTH = '—';
+	const PLAY_FAULT = "Can't play this recording";
 
 	let references = $state<ReferenceRecordingResponse[] | null>(null);
 	const referenceReloads = reloadWhileUnreachable(() => void load());
@@ -35,13 +37,69 @@
 		return `${lengthLabel(reference.duration_sec)} · ${uploaded}`;
 	}
 
+	let activeId = $state<string | null>(null);
+	let faultId = $state<string | null>(null);
+	let preview: HTMLAudioElement | null = null;
+	let previewId: string | null = null;
+
+	function previewElement(): HTMLAudioElement {
+		if (preview) return preview;
+		preview = new Audio();
+		preview.addEventListener('ended', () => (activeId = null));
+		preview.addEventListener('error', () => fail(previewId));
+		return preview;
+	}
+
+	function fail(referenceId: string | null) {
+		if (referenceId === null) return;
+		if (previewId === referenceId) previewId = null;
+		if (referenceId !== activeId) return;
+		activeId = null;
+		faultId = referenceId;
+	}
+
+	function stop() {
+		preview?.pause();
+		activeId = null;
+	}
+
+	// Pausing keeps the download open; a source of its own is dropped on leaving.
+	function release() {
+		stop();
+		if (!preview) return;
+		preview.removeAttribute('src');
+		preview.load();
+		previewId = null;
+	}
+
+	function toggle(referenceId: string) {
+		if (activeId === referenceId) return stop();
+		if (transportOffersPause(audioPlayer.transport)) audioPlayer.pause();
+		const element = previewElement();
+		if (previewId !== referenceId) {
+			element.src = referenceAudioUrl(referenceId);
+			previewId = referenceId;
+		}
+		faultId = null;
+		activeId = referenceId;
+		element.play().catch(() => fail(referenceId));
+	}
+
+	// The global player starting ends a preview; the reverse is `toggle`.
+	$effect(() => {
+		if (transportOffersPause(audioPlayer.transport)) stop();
+	});
+
 	function retry() {
 		referenceReloads.stop();
 		void load();
 	}
 
 	onMount(() => void load());
-	onDestroy(() => referenceReloads.dispose());
+	onDestroy(() => {
+		referenceReloads.dispose();
+		release();
+	});
 </script>
 
 <svelte:head>
@@ -92,9 +150,28 @@
 	{@const now = new Date()}
 	<ul class="reference-list">
 		{#each references as reference (reference.id)}
-			<li class="reference-row">
-				<span class="reference-name" title={reference.filename}>{reference.filename}</span>
-				<span class="reference-meta">{metaLabel(reference, now)}</span>
+			{@const playing = activeId === reference.id}
+			<!-- Keyboard users reach the row through its button, so the row takes no focus. -->
+			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+			<li class="reference-row" class:playing onclick={() => toggle(reference.id)}>
+				<button
+					type="button"
+					class="reference-play"
+					aria-label={`${playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${reference.filename}`}
+					onclick={(event) => {
+						event.stopPropagation();
+						toggle(reference.id);
+					}}
+				>
+					<Icon name={playing ? 'pause' : 'play'} size={16} />
+				</button>
+				<span class="reference-text">
+					<span class="reference-name" title={reference.filename}>{reference.filename}</span>
+					<span class="reference-meta">{metaLabel(reference, now)}</span>
+					{#if faultId === reference.id}
+						<span class="reference-meta reference-fault" role="alert">{PLAY_FAULT}</span>
+					{/if}
+				</span>
 			</li>
 		{/each}
 	</ul>
@@ -246,12 +323,44 @@
 
 	.reference-row {
 		display: flex;
-		flex-direction: column;
-		gap: 2px;
+		align-items: center;
+		gap: 12px;
 		min-width: 0;
 		min-height: 56px;
-		justify-content: center;
 		padding: 6px 14px;
+		cursor: pointer;
+	}
+
+	.reference-row.playing {
+		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+	}
+
+	.reference-play {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 50%;
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	.reference-row.playing .reference-play {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.reference-text {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		flex: 1;
+		min-width: 0;
 	}
 
 	.reference-row + .reference-row {
@@ -270,5 +379,20 @@
 		font-size: 12.5px;
 		color: var(--text-muted);
 		font-variant-numeric: tabular-nums;
+	}
+
+	.reference-fault {
+		color: var(--score-bad);
+	}
+
+	@media (max-width: 640px) {
+		.reference-row {
+			min-height: 64px;
+		}
+
+		.reference-play {
+			width: 40px;
+			height: 40px;
+		}
 	}
 </style>

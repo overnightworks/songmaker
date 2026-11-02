@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from webauth.ports import AuthenticatedUser
@@ -13,7 +15,11 @@ from webauth.ports import AuthenticatedUser
 from songmaker_cli.api_models import ReferenceRecordingResponse
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
-from songmaker_cli.constants import REFERENCE_AUDIO_EXTENSIONS, REFERENCE_AUDIO_MAX_BYTES
+from songmaker_cli.constants import (
+    AUDIO_MEDIA_TYPES,
+    REFERENCE_AUDIO_EXTENSIONS,
+    REFERENCE_AUDIO_MAX_BYTES,
+)
 from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH
 from songmaker_cli.db.queries.reference_recordings import (
     get_owned_reference_recording,
@@ -21,11 +27,14 @@ from songmaker_cli.db.queries.reference_recordings import (
 )
 from songmaker_cli.reference_audio import (
     ReferenceAudioQuotaExceeded,
+    ReferenceAudioRejected,
     ReferenceAudioStorageError,
+    resolve_owned_reference_audio,
     store_reference_audio,
 )
 from songmaker_cli.settings import get_settings
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -38,6 +47,37 @@ def api_list_references(
         ReferenceRecordingResponse.from_orm(recording)
         for recording in list_owned_reference_recordings(session, user.id)
     ]
+
+
+@router.get(
+    "/references/{reference_id}/audio",
+    response_class=FileResponse,
+    responses={404: {"description": "Reference audio not found or not usable"}},
+)
+def api_reference_audio(
+    reference_id: str,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_db_session)],
+    ctx: Annotated[AppContext, Depends(get_app_context)],
+) -> FileResponse:
+    recording = get_owned_reference_recording(session, user.id, reference_id)
+    if recording is None:
+        raise HTTPException(404)
+    storage_path = recording.storage_path
+    recording_id = recording.id
+    session.commit()  # end the transaction: the pooled connection must not outlive the transfer
+    try:
+        audio_path = resolve_owned_reference_audio(ctx.audio_dir, user.id, storage_path)
+        # FileResponse opens after it sent headers, so an unreadable file is refused here.
+        with audio_path.open("rb") as audio:
+            audio.read(1)
+    except (ReferenceAudioRejected, OSError) as exc:
+        log.error(  # NOSONAR(S8572) A traceback would carry the path, which this log never holds.
+            "Reference audio unusable for user %s, reference %s: %s",
+            user.id, recording_id, type(exc).__name__,
+        )
+        raise HTTPException(404) from None
+    return FileResponse(audio_path, media_type=AUDIO_MEDIA_TYPES.get(audio_path.suffix))
 
 
 @router.post(

@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
 import pytest
+from fastapi.responses import FileResponse
 from fastapi.testclient import TestClient
 from support.token_world import TokenWorld, make_token_world
 from support.wav_files import write_wav
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session
 
+from songmaker_cli import reference_api
 from songmaker_cli.constants import (
+    AUDIO_MEDIA_TYPES,
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     AUDIO_UPLOAD_FILE_MAX_BYTES,
+    REFERENCE_AUDIO_EXTENSIONS,
 )
 from songmaker_cli.db.models import ReferenceRecording, User
 from songmaker_cli.db.queries.reference_recordings import create_reference_recording
@@ -337,3 +343,190 @@ def test_l5_listing_without_a_session_is_unauthenticated(signed_in: TestClient) 
     response = anonymous.get(REFERENCES_PATH)
 
     assert response.status_code == 401
+
+
+AUDIO_BYTES = bytes(range(256)) * 4
+SECRET_FILENAME = "private-take-name.wav"
+NOT_FOUND = {"detail": "Not Found"}
+
+
+def _seed_playable(
+    client: TestClient, user_id: str = "owner-id", name: str = SECRET_FILENAME,
+) -> str:
+    reference_id = _seed_reference(client, user_id, name)
+    refs = client.app.state.ctx.audio_dir / user_id / "refs"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / name).write_bytes(AUDIO_BYTES)
+    return reference_id
+
+
+def _audio_path(reference_id: str) -> str:
+    return f"{REFERENCES_PATH}/{reference_id}/audio"
+
+
+@pytest.mark.parametrize("extension", sorted(REFERENCE_AUDIO_EXTENSIONS))
+def test_p1_the_owner_plays_the_whole_file(signed_in: TestClient, extension: str) -> None:
+    reference_id = _seed_playable(signed_in, name=f"take{extension}")
+
+    response = signed_in.get(_audio_path(reference_id))
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == AUDIO_MEDIA_TYPES[extension]
+    assert response.content == AUDIO_BYTES
+
+
+def test_p1b_the_database_connection_is_returned_before_the_file_is_sent(
+    signed_in: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checked_out_when_sending: list[int] = []
+    engine = signed_in.app.state.ctx.db.kw["bind"]
+
+    class RecordingFileResponse(FileResponse):
+        async def __call__(self, scope, receive, send) -> None:
+            checked_out_when_sending.append(engine.pool.checkedout())
+            await super().__call__(scope, receive, send)
+
+    monkeypatch.setattr(reference_api, "FileResponse", RecordingFileResponse)
+
+    signed_in.get(_audio_path(_seed_playable(signed_in)))
+
+    assert checked_out_when_sending == [0]
+
+
+def test_p2_a_range_request_answers_a_partial_response(signed_in: TestClient) -> None:
+    response = signed_in.get(
+        _audio_path(_seed_playable(signed_in)), headers={"Range": "bytes=0-99"},
+    )
+
+    assert response.status_code == 206
+    assert response.headers["content-range"] == f"bytes 0-99/{len(AUDIO_BYTES)}"
+    assert response.content == AUDIO_BYTES[:100]
+
+
+@pytest.mark.parametrize(
+    ("range_header", "status", "expected"),
+    [
+        ("bytes=1000-", 206, AUDIO_BYTES[1000:]),
+        ("bytes=-50", 206, AUDIO_BYTES[-50:]),
+        (f"bytes={10 * len(AUDIO_BYTES)}-", 416, None),
+    ],
+)
+def test_p3_open_suffix_and_unsatisfiable_ranges(
+    signed_in: TestClient, range_header: str, status: int, expected: bytes | None,
+) -> None:
+    response = signed_in.get(
+        _audio_path(_seed_playable(signed_in)), headers={"Range": range_header},
+    )
+
+    assert response.status_code == status
+    if expected is not None:
+        assert response.content == expected
+
+
+def test_p4_another_person_gets_the_same_404_as_an_unknown_id(signed_in: TestClient) -> None:
+    reference_id = _seed_playable(signed_in)
+
+    foreign = _signed_in_as(signed_in, "other").get(_audio_path(reference_id))
+    unknown = _signed_in_as(signed_in, "other").get(_audio_path("no-such-id"))
+
+    assert foreign.status_code == unknown.status_code == 404
+    assert foreign.json() == unknown.json() == NOT_FOUND
+
+
+def test_p5_an_admin_cannot_play_another_persons_reference(signed_in: TestClient) -> None:
+    response = _signed_in_as(signed_in, "boss").get(_audio_path(_seed_playable(signed_in)))
+
+    assert response.status_code == 404
+    assert response.json() == NOT_FOUND
+
+
+def test_p6_an_unknown_id_is_not_found(signed_in: TestClient) -> None:
+    response = signed_in.get(_audio_path("no-such-id"))
+
+    assert response.status_code == 404
+    assert response.json() == NOT_FOUND
+
+
+def test_p7_a_row_whose_file_is_gone_is_not_found_and_logs_no_name_or_path(
+    signed_in: TestClient, caplog: pytest.LogCaptureFixture,
+) -> None:
+    reference_id = _seed_playable(signed_in)
+    for path in _reference_files(signed_in):
+        path.unlink()
+    audio_dir = str(signed_in.app.state.ctx.audio_dir)
+
+    with caplog.at_level(logging.ERROR):
+        response = signed_in.get(_audio_path(reference_id))
+
+    assert response.status_code == 404
+    assert response.json() == NOT_FOUND
+    errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    message = errors[0].getMessage()
+    assert "owner-id" in message
+    assert reference_id in message
+    assert "ReferenceAudioRejected" in message
+    assert SECRET_FILENAME not in message
+    assert audio_dir not in message
+    assert errors[0].exc_info is None
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root opens a file whatever its mode")
+def test_p7b_a_file_that_cannot_be_opened_is_not_found_and_logs_no_name_or_path(
+    signed_in: TestClient, caplog: pytest.LogCaptureFixture,
+) -> None:
+    reference_id = _seed_playable(signed_in)
+    (unreadable,) = _reference_files(signed_in)
+    unreadable.chmod(0)
+    audio_dir = str(signed_in.app.state.ctx.audio_dir)
+
+    with caplog.at_level(logging.ERROR):
+        response = signed_in.get(_audio_path(reference_id))
+
+    assert response.status_code == 404
+    assert response.json() == NOT_FOUND
+    errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    message = errors[0].getMessage()
+    assert SECRET_FILENAME not in message
+    assert audio_dir not in message
+    assert errors[0].exc_info is None
+
+
+def test_p8_a_symlink_leaf_out_of_the_root_is_not_found(
+    signed_in: TestClient, tmp_path: Path,
+) -> None:
+    reference_id = _seed_playable(signed_in)
+    leaf = signed_in.app.state.ctx.audio_dir / "owner-id" / "refs" / SECRET_FILENAME
+    outside = tmp_path / "outside.wav"
+    outside.write_bytes(AUDIO_BYTES)
+    leaf.unlink()
+    leaf.symlink_to(outside)
+
+    response = signed_in.get(_audio_path(reference_id))
+
+    assert response.status_code == 404
+    assert response.json() == NOT_FOUND
+
+
+def test_p9a_without_a_session_the_audio_is_unauthenticated(signed_in: TestClient) -> None:
+    reference_id = _seed_playable(signed_in)
+    anonymous = TestClient(signed_in.app, base_url=TEST_ORIGIN, raise_server_exceptions=False)
+
+    assert anonymous.get(_audio_path(reference_id)).status_code == 401
+
+
+def test_p9b_a_persons_token_plays_that_persons_reference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
+    world = make_token_world(tmp_path)
+    uploaded = _post_reference(
+        world.client, AUDIO_BYTES, "mine.wav", headers=world.bearer(TokenWorld.ALICE),
+    )
+    reference_id = uploaded.json()["id"]
+
+    response = world.client.get(_audio_path(reference_id), headers=world.bearer(TokenWorld.ALICE))
+
+    assert response.status_code == 200, response.text
+    assert response.content == AUDIO_BYTES

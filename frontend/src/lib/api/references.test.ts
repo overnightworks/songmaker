@@ -6,7 +6,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
-import { listReferences, uploadReference } from './references';
+import { listReferences, referenceAudioUrl, uploadReference } from './references';
 
 describe('reference API', () => {
 	beforeEach(() => mockFetch.mockReset());
@@ -47,5 +47,9 @@ describe('reference API', () => {
 
 		expect(mockFetch.mock.calls[0][0]).toBe('/api/references');
 		expect(result).toEqual(stored);
+	});
+
+	it('addresses a reference recording under the API with the id as one path segment', () => {
+		expect(referenceAudioUrl('a/b?c')).toBe('/api/references/a%2Fb%3Fc/audio');
 	});
 });

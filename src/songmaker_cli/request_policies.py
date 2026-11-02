@@ -52,7 +52,7 @@ MEDIA_PATH_PREFIX: Final = "/audio/"
 JOB_STREAM_PATH: Final = PathShape(starts_with="/api/jobs/", ends_with="/stream")
 
 # Every Range-served audio endpoint outside `/audio/*`, one regex per
-# literal route in sharing_api.py -- each requires
+# literal route in sharing_api.py and reference_api.py -- each requires
 # the `audio` segment at the exact position that route defines, so a slug
 # that literally reads "audio" cannot slide a real metadata route
 # (`/shared/{slug}`, `/shared/{slug}/cover`, the `/stream` manifest POSTs)
@@ -81,6 +81,7 @@ AUDIO_ROUTE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(r"^/shared/gen/[^/]+/audio/.+$"),         # /shared/gen/{slug}/audio/{filename}
     re.compile(r"^/shared/playlist/[^/]+/audio/.+$"),    # /shared/playlist/{slug}/audio/{filename}
     re.compile(r"^/shared/queue-streams/[^/]+/audio$"),  # /shared/queue-streams/{id}/audio
+    re.compile(r"^/api/references/[^/]+/audio\Z"),       # reference_api.api_reference_audio
 )
 
 # The realm calls this over the private network `hal_backchannel_songmaker`, where

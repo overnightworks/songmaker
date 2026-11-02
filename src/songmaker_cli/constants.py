@@ -469,13 +469,13 @@ JOB_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Job stream limiter unavailable"
 
 # Audio file serving
 AUDIO_MEDIA_TYPES: dict[str, str] = {
-    ".mp3": "audio/mpeg",
-    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg", ".wav": "audio/wav",
+    ".flac": "audio/flac", ".ogg": "audio/ogg",
 }
 
 # Reference audio upload
 REFERENCE_AUDIO_DIR = "refs"
-REFERENCE_AUDIO_EXTENSIONS = frozenset({".mp3", ".wav", ".flac", ".ogg"})
+REFERENCE_AUDIO_EXTENSIONS = frozenset(AUDIO_MEDIA_TYPES)
 REFERENCE_AUDIO_MAX_BYTES = 50 * 1024 * 1024
 JSON_REQUEST_BODY_MAX_BYTES = 1_048_576
 MULTIPART_ENVELOPE_MAX_BYTES = 1_048_576
