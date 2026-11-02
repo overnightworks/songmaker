@@ -11,7 +11,7 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { ACCOUNT_MENU_LOGOUT_LABEL, SETTINGS_NAV_LABEL } from '../src/lib/constants';
+import { SETTINGS_NAV_LABEL } from '../src/lib/constants';
 import {
 	FlowGuard,
 	leftTheApp,
@@ -20,6 +20,7 @@ import {
 	shellOf,
 	stubIdentityProvider
 } from './helpers';
+import { LOG_OUT_NAME } from './account-menu-words';
 import { BASE_URL, runMarker, seedAccount, signedInApi, type SeededAccount } from './seed';
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -200,7 +201,7 @@ test('with JavaScript off the logout page shows one button named like the accoun
 	await page.setContent(await logoutPage.text());
 
 	await expect(page.getByRole('button')).toHaveCount(1);
-	await expect(page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL })).toBeVisible();
+	await expect(page.getByRole('button', { name: LOG_OUT_NAME })).toBeVisible();
 	await page.context().close();
 });
 

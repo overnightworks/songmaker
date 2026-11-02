@@ -3,7 +3,8 @@ import {
 	makeGeneration as makeGen,
 	makePlaylistDetail as makeDetail,
 	makePlaylistEntry,
-	makeSong
+	makeSong,
+	makeAuthUser
 } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { flushSync } from 'svelte';
@@ -4310,8 +4311,7 @@ describe('audioPlayer onAuthLost wiring', () => {
 		});
 		standInForDocumentLoadsForTests(documentLoads);
 		documentLoads.reload.mockClear();
-		currentUser.set({ id: 'u-signed-in', username: 'listener', role: 'user' });
-
+		currentUser.set(makeAuthUser({ id: 'u-signed-in', username: 'listener', role: 'user' }));
 		await onAuthLost();
 
 		expect(documentLoads.reload).toHaveBeenCalledOnce();
@@ -4343,7 +4343,7 @@ describe('audioPlayer offline announcement wiring', () => {
 });
 
 describe('remembering what the app plays', () => {
-	const LISTENER = { id: 'u-resume', username: 'listener', role: 'user' as const };
+	const LISTENER = makeAuthUser({ id: 'u-resume', username: 'listener', role: 'user' });
 	const song = makeSong({ ...queuedSongDefaults(), id: 's-resume' });
 
 	function storedRecord(): unknown {
@@ -4462,7 +4462,7 @@ describe('remembering what the app plays', () => {
 });
 
 describe('restoring the last playback after a reload', () => {
-	const LISTENER = { id: 'u-restore', username: 'listener', role: 'user' as const };
+	const LISTENER = makeAuthUser({ id: 'u-restore', username: 'listener', role: 'user' });
 	const SAVED_POSITION = 42;
 	const ALBUM_ID = 'restored-album';
 	const PLAYLIST_ID = '0b6f4f3e-7c1a-4d2b-9e5f-1a2b3c4d5e01';
@@ -4912,7 +4912,7 @@ describe('restoring the last playback after a reload', () => {
 });
 
 describe('a share link that takes the player (#1391)', () => {
-	const LISTENER = { id: 'u-share-visit', username: 'listener', role: 'user' as const };
+	const LISTENER = makeAuthUser({ id: 'u-share-visit', username: 'listener', role: 'user' });
 	// A saved record names its takes by UUID, or the restore refuses it.
 	const PRIVATE_ALBUM_ID = '5a1e7c3d-0000-4000-8000-00000000000a';
 	const PRIVATE_PLAYLIST_ID = '5a1e7c3d-0000-4000-8000-00000000000b';

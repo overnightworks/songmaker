@@ -525,7 +525,7 @@ def _sse_format(event: BaseModel) -> str:
 @router.post(
     "/chat/turn",
     responses={
-        403: {"description": "The co-writer needs a browser sign-in"},
+        403: {"description": "The co-writer needs a browser login"},
         404: {"description": "Mentioned album or version does not exist"},
         409: {"description": "Another co-writer turn is still running"},
         422: {"description": "Chat context or co-writer configuration is invalid"},
@@ -537,7 +537,7 @@ async def api_chat_turn(
 ) -> StreamingResponse:
     session_id = session_id_from_request(request, installed_web_auth_config(request.app))
     if session_id is None:
-        raise HTTPException(status_code=403, detail="The co-writer needs a browser sign-in.")
+        raise HTTPException(status_code=403, detail="The co-writer needs a browser login.")
     prepared = _prepare_chat_turn(req, request, user, session)
     frames = _start_chat_turn(req, TurnCaller(request.app, session_id, user), prepared)
     return StreamingResponse(

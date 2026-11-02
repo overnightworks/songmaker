@@ -27,9 +27,9 @@ describe('co-writer copy', () => {
 
 	it.each([
 		[
-			'sign in again, with no wait',
+			'log in again, with no wait',
 			{ type: 'error', status: 401, problem: 'sign_in_again', retry_after_seconds: null },
-			{ problem: 'sign_in_again', text: 'Sign in again to use the co-writer', waitSeconds: 0 }
+			{ problem: 'sign_in_again', text: 'Log in again to use the co-writer', waitSeconds: 0 }
 		],
 		[
 			'busy, with the service’s own wait',

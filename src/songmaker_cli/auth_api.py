@@ -20,7 +20,6 @@ from songmaker_cli.api_models import AuthMeResponse
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.constants import NO_ACCESS_PATH
-from songmaker_cli.oidc_client import normalised_oidc_issuer
 from songmaker_cli.request_policies import SIGN_IN_PATHS
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, get_settings
 
@@ -31,7 +30,7 @@ log = logging.getLogger(__name__)
 
 SIGN_IN_FAILED_STATUS: int = 403
 # Shown on the logout page only where no script runs; the account menu words the same button.
-LOGOUT_BUTTON_LABEL: Final[str] = "Sign out"
+LOGOUT_BUTTON_LABEL: Final[str] = "Log out"
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -90,18 +89,14 @@ def install_sign_in(app: FastAPI) -> None:
     )
 
 
-def _account_console_url() -> str | None:
-    issuer = normalised_oidc_issuer(get_settings().oidc_issuer)
-    return f"{issuer}/account" if issuer else None
-
-
 @router.get("/me")
 def me(
+    request: Request,
     current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ) -> AuthMeResponse:
     return AuthMeResponse(
         id=current_user.id,
         username=current_user.username,
         role=current_user.role,
-        account_console_url=_account_console_url(),
+        account_console_url=f"{request.app.state.oidc_sign_in.admission.bound_issuer}/account",
     )

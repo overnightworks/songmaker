@@ -1,4 +1,5 @@
 import {
+	makeAuthUser,
 	makePlaylistDetail as playlistDetail,
 	makePlaylistEntry as playlistEntry,
 	makeSong as song
@@ -102,7 +103,8 @@ vi.mock('#lib/stores/auth.ts', async (importOriginal) => {
 	return {
 		...actual,
 		checkAuth: vi.fn(async () => {
-			const user = { id: 'u1', username: 'felix', role: 'user' as const };
+			const { makeAuthUser } = await import('#lib/test-utils/factories.ts');
+			const user = makeAuthUser();
 			actual.currentUser.set(user);
 			actual.authLoading.set(false);
 			return user;
@@ -389,7 +391,7 @@ beforeEach(() => {
 			dispatchEvent: vi.fn()
 		}))
 	);
-	currentUser.set({ id: 'u1', username: 'felix', role: 'user' as const });
+	currentUser.set(makeAuthUser());
 	authLoading.set(false);
 	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 });

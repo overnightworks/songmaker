@@ -1,7 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { SongItem } from '../src/lib/api/types';
 import {
-	ACCOUNT_MENU_LOGOUT_LABEL,
 	LIBRARY_PAGE_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
@@ -23,6 +22,7 @@ import {
 	workspace,
 	type Shell
 } from './helpers';
+import { LOG_OUT_NAME } from './account-menu-words';
 import { archiveOwnedAlbum, runMarker, seedAccount, seedOwnTakeAddress, signedInApi } from './seed';
 
 // The gate runs both configured shells: 390×844 and 1440×900. No synthetic
@@ -106,8 +106,8 @@ async function signOut(page: Page, shell: Shell): Promise<void> {
 		expect(await response.finished()).toBeNull();
 	}
 	await accountCircle(page).click();
-	await accountMenu(page).getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL }).click();
-	// Sign out ends at the issuer's logout address, outside the app's origin.
+	await accountMenu(page).getByRole('button', { name: LOG_OUT_NAME }).click();
+	// Log out ends at the issuer's logout address, outside the app's origin.
 	await expect.poll(() => leftTheApp(page)).toBe(true);
 }
 

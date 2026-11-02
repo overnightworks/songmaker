@@ -133,9 +133,23 @@ function getStoredTheme(): Theme | null {
 	return choice === 'system' ? null : choice;
 }
 
+const DEVICE_DARK_QUERY = '(prefers-color-scheme: dark)';
+
 function deviceTheme(): Theme {
 	if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light';
-	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+	return window.matchMedia(DEVICE_DARK_QUERY).matches ? 'dark' : 'light';
+}
+
+let followingDevice = false;
+
+// The stylesheet flips with the device by itself; `theme` is what the scripts
+// that redraw on it read, so it follows too, while the choice is to follow.
+function followDeviceChanges(): void {
+	if (followingDevice || typeof window.matchMedia !== 'function') return;
+	followingDevice = true;
+	window.matchMedia(DEVICE_DARK_QUERY).addEventListener('change', () => {
+		if (get(themeChoiceState) === 'system') theme.set(deviceTheme());
+	});
 }
 
 /** The theme in effect: the stored choice, else the device, else the kit's light default. */
@@ -144,6 +158,10 @@ function getInitialTheme(): Theme {
 }
 
 export const theme = writable<Theme>(getInitialTheme());
+
+/** What the person chose, which may be to follow the device; `theme` is the colour in effect. */
+const themeChoiceState = writable<ThemeChoice>(getStoredChoice() ?? 'system');
+export const themeChoice = readonly(themeChoiceState);
 
 function getInitialRailCollapsed(): boolean {
 	if (typeof window === 'undefined') return false;
@@ -219,6 +237,7 @@ function applyChoice(choice: ThemeChoice): void {
 	if (choice === 'system') delete document.documentElement.dataset.theme;
 	else document.documentElement.dataset.theme = choice;
 	theme.set(choice === 'system' ? deviceTheme() : choice);
+	themeChoiceState.set(choice);
 }
 
 function rememberChoice(choice: ThemeChoice): void {
@@ -251,11 +270,10 @@ export async function loadThemeChoice(): Promise<void> {
 	}
 }
 
-/** Switches light and dark at once, then saves it; once every save has settled, the confirmed choice is shown. */
-export async function toggleTheme(): Promise<void> {
+/** Applies the choice at once, then saves it; once every save has settled, the confirmed choice is shown. */
+export async function chooseTheme(next: ThemeChoice): Promise<void> {
 	const startedIn = session;
 	const previous = getStoredChoice() ?? 'system';
-	const next: Theme = get(theme) === 'dark' ? 'light' : 'dark';
 	rememberChoice(next);
 	savesPending += 1;
 	try {
@@ -282,5 +300,6 @@ export function forgetThemeChoice(): void {
 }
 
 export function initTheme(): void {
+	followDeviceChanges();
 	applyChoice(getStoredChoice() ?? 'system');
 }

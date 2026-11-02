@@ -12,6 +12,7 @@ import {
 	HITBOX_FREQUENT_PX
 } from '#lib/constants.ts';
 import { seedFromTake } from '#lib/stores/recipe.ts';
+import { makeAuthUser } from '#lib/test-utils/factories.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { failed, queued, running } from '#lib/test-utils/generate-states.ts';
@@ -233,7 +234,7 @@ describe('GenerateButton', () => {
 	)(
 		'C1 C4: shows the adjacent worker-pool link only for $role unavailable=$unavailable',
 		async ({ role, unavailable }) => {
-			currentUser.set({ id: 'u1', username: 'tester', role });
+			currentUser.set(makeAuthUser({ id: 'u1', username: 'tester', role }));
 			await render({ ...failed, cause: "Generating isn't available right now.", unavailable });
 			const link = document.body.querySelector<HTMLAnchorElement>('a');
 			expect(link?.textContent).toBe(

@@ -44,11 +44,11 @@ import { followPlaybackForResume } from '#lib/stores/playbackResume.ts';
 import { audioPlayer, type AudioPlayerCallbacks } from '#lib/services/audioPlayer.svelte.ts';
 import { holdRouteLoads } from '#lib/test-utils/app-navigation.ts';
 import { documentLoads } from '#lib/test-utils/document-loads.ts';
-import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import { makeAuthUser, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
 import { replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
 
 const AUTH_ME_PATH = '/api/auth/me';
-const KNOWN_USER = { id: 'u1', username: 'admin', role: 'admin' as const };
+const KNOWN_USER = makeAuthUser({ id: 'u1', username: 'admin', role: 'admin' });
 
 // The app's own reactions, installed as the root layout installs them: without
 // them a refused request would reach no reaction, and every test that sends
@@ -92,9 +92,9 @@ describe('auth store', () => {
 
 	it('isAdmin derived from currentUser', () => {
 		expect(get(isAdmin)).toBe(false);
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
+		currentUser.set(makeAuthUser({ id: 'u1', username: 'admin', role: 'admin' }));
 		expect(get(isAdmin)).toBe(true);
-		currentUser.set({ id: 'u2', username: 'user', role: 'user' });
+		currentUser.set(makeAuthUser({ id: 'u2', username: 'user', role: 'user' }));
 		expect(get(isAdmin)).toBe(false);
 	});
 });
@@ -122,9 +122,9 @@ describe('classifyAuthFailure', () => {
 describe('checkAuth', () => {
 	it('sets currentUser on success and clears any prior check error', async () => {
 		authCheckError.set('stale error');
-		mockFetchMe.mockResolvedValueOnce({ id: 'u1', username: 'admin', role: 'admin' });
+		mockFetchMe.mockResolvedValueOnce(makeAuthUser({ id: 'u1', username: 'admin', role: 'admin' }));
 		const user = await checkAuth(vi.fn());
-		expect(user).toEqual({ id: 'u1', username: 'admin', role: 'admin' });
+		expect(user).toEqual(makeAuthUser({ id: 'u1', username: 'admin', role: 'admin' }));
 		expect(get(currentUser)).toEqual(user);
 		expect(get(authLoading)).toBe(false);
 		expect(get(authCheckError)).toBeNull();

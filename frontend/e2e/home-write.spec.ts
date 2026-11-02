@@ -2,7 +2,6 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import type { LibraryWriteResponse, PaginatedResponse, SongItem } from '../src/lib/api/types';
 import {
 	ACCOUNT_MENU_LABEL,
-	ACCOUNT_MENU_LOGOUT_LABEL,
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_ARCHIVE_LABEL,
 	HOME_LISTEN_EMPTY,
@@ -30,6 +29,7 @@ import {
 	listenRegion,
 	type Shell
 } from './helpers';
+import { LOG_OUT_NAME } from './account-menu-words';
 import {
 	archiveOwnedAlbum,
 	BASE_URL,
@@ -283,7 +283,7 @@ for (const pending of [false, true]) {
 		const accounts: SeededAccount[] = [];
 		let release: (() => void) | undefined;
 		let accountAlbumId: string | undefined;
-		// Sign out ends at the issuer's logout address, which leaves the app's origin.
+		// Log out ends at the issuer's logout address, which leaves the app's origin.
 		await stubIdentityProvider(page.context());
 		try {
 			for (const suffix of ['a', 'b']) {
@@ -317,7 +317,7 @@ for (const pending of [false, true]) {
 					exact: true
 				})
 				.click();
-			await page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true }).click();
+			await page.getByRole('button', { name: LOG_OUT_NAME, exact: true }).click();
 			await expect.poll(() => leftTheApp(page)).toBe(true);
 			release?.();
 			await page.unrouteAll({ behavior: 'wait' });
