@@ -81,6 +81,7 @@ AUDIO_ROUTE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(r"^/shared/gen/[^/]+/audio/.+$"),         # /shared/gen/{slug}/audio/{filename}
     re.compile(r"^/shared/playlist/[^/]+/audio/.+$"),    # /shared/playlist/{slug}/audio/{filename}
     re.compile(r"^/shared/queue-streams/[^/]+/audio$"),  # /shared/queue-streams/{id}/audio
+    re.compile(r"^/api/references/[^/]+/audio\Z"),       # reference_api.api_reference_audio
 )
 
 # The realm calls this over the private network `hal_backchannel_songmaker`, where

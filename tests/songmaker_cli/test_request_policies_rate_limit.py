@@ -400,6 +400,9 @@ def rate_limit_policy():
     ("/this-path-does-not-exist", API_BUDGET_NAME),
     ("/api/auth/check", API_BUDGET_NAME),
     ("/api/references", API_BUDGET_NAME),
+    ("/api/references/x/audio", MEDIA_BUDGET_NAME),
+    ("/api/references/audio", API_BUDGET_NAME),
+    ("/api/references/x/audio/y", API_BUDGET_NAME),
     ("/api/queue-streams", API_BUDGET_NAME),
     ("/api/queue-streams/library", API_BUDGET_NAME),
     ("/shared/realslug", API_BUDGET_NAME),
@@ -455,6 +458,16 @@ def test_media_budget_exhausted_does_not_block_api_class(
 
     api_resp = class_limited_client.get("/api/auth/check")
     assert api_resp.status_code != 429
+
+
+def test_reference_audio_spends_the_media_budget_and_leaves_the_api_class(
+    class_limited_client: TestClient,
+) -> None:
+    for _ in range(3):
+        class_limited_client.get("/api/references/x/audio")
+
+    assert class_limited_client.get("/audio/someone/missing.mp3").status_code == 429
+    assert class_limited_client.get("/api/auth/check").status_code != 429
 
 
 def test_api_budget_exhausted_does_not_block_media_class(
