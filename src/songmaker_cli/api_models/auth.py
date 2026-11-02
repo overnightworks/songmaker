@@ -11,5 +11,5 @@ class AuthMeResponse(BaseModel):
     id: str
     username: str
     role: Literal["admin", "user"]
-    # The identity provider's account console; null where no issuer is configured.
-    account_console_url: str | None = None
+    # The identity provider's account console, under the issuer the app signs in at.
+    account_console_url: str

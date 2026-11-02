@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'svelte';
 import type ShareButton from '#lib/components/ShareButton.svelte';
 import type SongMenu from '#lib/components/editor/SongMenu.svelte';
-import { get, readonly, writable } from 'svelte/store';
+import { readonly, writable } from 'svelte/store';
 import { fetchTheme, updateTheme } from '#lib/api/settings.ts';
 import type { ThemeSettings } from '#lib/api/types.ts';
 import { describeFailure } from '#lib/api/fetch.ts';
@@ -145,6 +145,9 @@ function getInitialTheme(): Theme {
 
 export const theme = writable<Theme>(getInitialTheme());
 
+/** What the person chose, which may be to follow the device; `theme` is the colour in effect. */
+export const themeChoice = writable<ThemeChoice>(getStoredChoice() ?? 'system');
+
 function getInitialRailCollapsed(): boolean {
 	if (typeof window === 'undefined') return false;
 	return readStorage(RAIL_COLLAPSED_STORAGE_KEY) === 'true';
@@ -219,6 +222,7 @@ function applyChoice(choice: ThemeChoice): void {
 	if (choice === 'system') delete document.documentElement.dataset.theme;
 	else document.documentElement.dataset.theme = choice;
 	theme.set(choice === 'system' ? deviceTheme() : choice);
+	themeChoice.set(choice);
 }
 
 function rememberChoice(choice: ThemeChoice): void {
@@ -251,11 +255,10 @@ export async function loadThemeChoice(): Promise<void> {
 	}
 }
 
-/** Switches light and dark at once, then saves it; once every save has settled, the confirmed choice is shown. */
-export async function toggleTheme(): Promise<void> {
+/** Applies the choice at once, then saves it; once every save has settled, the confirmed choice is shown. */
+export async function chooseTheme(next: ThemeChoice): Promise<void> {
 	const startedIn = session;
 	const previous = getStoredChoice() ?? 'system';
-	const next: Theme = get(theme) === 'dark' ? 'light' : 'dark';
 	rememberChoice(next);
 	savesPending += 1;
 	try {

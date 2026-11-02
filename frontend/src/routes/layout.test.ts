@@ -30,7 +30,6 @@ import { get } from 'svelte/store';
 
 import {
 	ACCOUNT_MENU_LABEL,
-	ACCOUNT_MENU_LOGOUT_LABEL,
 	COMPACT_LAYOUT_MEDIA,
 	HITBOX_FREQUENT_PX,
 	OFFLINE_STRIP_MESSAGE,
@@ -114,7 +113,8 @@ vi.mock('#lib/stores/auth.ts', async (importOriginal) => {
 	return {
 		...actual,
 		checkAuth: vi.fn(async () => {
-			const user = { id: 'u1', username: 'felix', role: 'user' as const };
+			const { makeAuthUser } = await import('#lib/test-utils/factories.ts');
+			const user = makeAuthUser();
 			actual.currentUser.set(user);
 			actual.authLoading.set(false);
 			return user;
@@ -162,7 +162,14 @@ import { goto } from '$app/navigation';
 const appCss = readFileSync(join(process.cwd(), 'src/app.css'), 'utf8');
 
 const VIEWPORT_PX = 320;
-const USER = { id: 'u1', username: 'felix', role: 'user' as const };
+// The kit's panel owns this word.
+const LOG_OUT_NAME = 'Log out';
+const USER = {
+	id: 'u1',
+	username: 'felix',
+	role: 'user' as const,
+	account_console_url: 'https://login.test/realms/songmaker/account'
+};
 
 function extractRule(source: string, selector: string): string {
 	const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1053,7 +1060,7 @@ describe('signing out on the phone', () => {
 		const backs = vi.spyOn(history, 'back');
 		onTestFinished(() => backs.mockRestore());
 
-		getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click();
+		getByRoleButton(target, LOG_OUT_NAME).click();
 
 		await vi.waitFor(() => expect(documentLoads.submitPost).toHaveBeenCalledWith('/auth/logout'));
 		expect(standingHistoryEntry()?.layer).toBe('account-menu');

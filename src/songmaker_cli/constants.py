@@ -31,7 +31,7 @@ JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
 JOB_ERROR_USER_LORA_UNAVAILABLE: Final[str] = "Selected voice is unavailable for this generation"
 JOB_ERROR_COVER_CLI_LOGIN: Final[str] = (
-    "Codex CLI is not logged in. Sign in on the operator host, then try again."
+    "Codex CLI is not logged in. Log in on the operator host, then try again."
 )
 JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED: Final[str] = (
     "Image tool blocked. Ask an administrator to enable the image tool."

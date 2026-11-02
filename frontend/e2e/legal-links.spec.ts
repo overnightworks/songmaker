@@ -14,7 +14,7 @@ const EXPECTED_ADDRESSES = [
 ];
 
 function shareLegalLinks(page: Page): Locator {
-	return page.locator('.legal-links .legal-link');
+	return page.locator('footer.powered nav a');
 }
 
 async function legalLinks(links: Locator): Promise<(string | null)[][]> {

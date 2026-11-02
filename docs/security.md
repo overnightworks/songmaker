@@ -193,7 +193,7 @@ For a cookie no token is involved: the session cookie is `SameSite=Strict` and t
 - The session-bound CSRF token, its `csrf_token` cookie, the `X-CSRF-Token` header, the `Referer` fallback and the form-submit blocking are gone; the origin layer above is the only guard, and `/api/internal/` joined the exempt paths in the same change.
 - Sign-out changed from a same-origin fetch answering `{logout_url}` to a top-level form POST answering the library's page, and the logout hint cookie went with it: the ID token now lives in the session row.
 - A session opened before the upgrade holds no ID token, so its first sign-out after the deploy shows Keycloak's "Do you want to log out?" page once; every later one goes through. A sign-out whose songmaker session has already ended still reaches Keycloak and ends its session there.
-- A tab opened before the deploy still runs the old page: its sign-out fetch gets the new page where it expects JSON and shows "Couldn't sign out", although the server has ended the session; a reload ends it. Accepted for the single-user deployment.
+- A tab opened before the deploy still runs the old page: its sign-out fetch gets the new page where it expects JSON and shows "Couldn't log out", although the server has ended the session; a reload ends it. Accepted for the single-user deployment.
 
 ### History: deliberate changes with webauth v0.19.0 and v0.20.0 (#1765)
 

@@ -9,7 +9,6 @@
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-	ACCOUNT_MENU_LOGOUT_LABEL,
 	collectionActionLabel,
 	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 	COLLECTION_MENU_LABEL,
@@ -73,7 +72,8 @@ import {
 	type Shell,
 	HOME_PATH,
 	LIBRARY_PATH,
-	LIBRARY_URL
+	LIBRARY_URL,
+	LOG_OUT_NAME
 } from './helpers';
 import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 
@@ -200,7 +200,7 @@ async function openAlbumFromNavigation(page: Page, shell: Shell, title: string):
 
 /**
  * The phone's ‹ (#1354 rule 25): named after the page it goes back to, and
- * the account circle only on the Library, with Sign out one tap away in it.
+ * the account circle only on the Library, with Log out one tap away in it.
  */
 async function backOnPhone(page: Page, to: string): Promise<void> {
 	await appBar(page)
@@ -211,7 +211,7 @@ async function backOnPhone(page: Page, to: string): Promise<void> {
 async function expectAccountMenuOnTheLibrary(page: Page): Promise<void> {
 	await accountCircle(page).click();
 	await expect(
-		accountMenu(page).getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true })
+		accountMenu(page).getByRole('button', { name: LOG_OUT_NAME, exact: true })
 	).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(accountMenu(page)).toBeHidden();

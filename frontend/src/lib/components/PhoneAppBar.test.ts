@@ -13,7 +13,6 @@ import {
 } from '#lib/test-utils/hitbox.ts';
 import {
 	ACCOUNT_MENU_LABEL,
-	ACCOUNT_MENU_LOGOUT_LABEL,
 	APP_NAME,
 	HITBOX_FREQUENT_PX,
 	HOME_PAGE_LABEL,
@@ -68,6 +67,8 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
+// The kit's panel owns this word.
+const LOG_OUT_NAME = 'Log out';
 const ACCOUNT_CIRCLE_NAME = `${ACCOUNT_MENU_LABEL} · felix`;
 
 function renderBar(onlogout = vi.fn()): HTMLElement {
@@ -315,18 +316,18 @@ describe('PhoneAppBar', () => {
 		}
 	);
 
-	it('keeps Sign out off the bar and one tap away in the account menu', async () => {
+	it('keeps Log out off the bar and one tap away in the account menu', async () => {
 		const onlogout = vi.fn();
 		const target = renderBar(onlogout);
 		await tick();
 		const bar = target.querySelector('header');
 		if (!bar) throw new Error('Expected the app bar');
-		const logoutOnBar = () => getByRoleButton(bar, ACCOUNT_MENU_LOGOUT_LABEL);
+		const logoutOnBar = () => getByRoleButton(bar, LOG_OUT_NAME);
 		expect(logoutOnBar).toThrow();
 
 		getByRoleButton(target, ACCOUNT_CIRCLE_NAME).click();
 		await tick();
-		getByRoleButton(document.body, ACCOUNT_MENU_LOGOUT_LABEL).click();
+		getByRoleButton(document.body, LOG_OUT_NAME).click();
 
 		expect(onlogout).toHaveBeenCalledOnce();
 	});

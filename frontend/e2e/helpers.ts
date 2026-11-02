@@ -436,6 +436,13 @@ export function accountMenu(page: Page): Locator {
 	return page.getByRole('dialog', { name: ACCOUNT_MENU_NAME });
 }
 
+// The kit's panel owns these words.
+export const LOG_OUT_NAME = 'Log out';
+
+export function themeChoiceRadio(menu: Locator, name: 'Follow system' | 'Light' | 'Dark'): Locator {
+	return menu.getByRole('radio', { name, exact: true });
+}
+
 /** Settings from the phone's account menu: the Settings list on the phone. */
 export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
 	await accountCircle(page).click();

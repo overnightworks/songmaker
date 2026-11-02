@@ -12,7 +12,13 @@ import type {
 } from '#lib/api/types.ts';
 
 export function makeAuthUser(overrides: Partial<AuthUser> = {}): AuthUser {
-	return { id: 'u1', username: 'felix', role: 'user', ...overrides };
+	return {
+		id: 'u1',
+		username: 'felix',
+		role: 'user',
+		account_console_url: 'https://login.test/realms/songmaker/account',
+		...overrides
+	};
 }
 
 export function makeSong(overrides: Partial<SongItem> = {}): SongItem {
