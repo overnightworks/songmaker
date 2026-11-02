@@ -52,7 +52,7 @@ MEDIA_PATH_PREFIX: Final = "/audio/"
 JOB_STREAM_PATH: Final = PathShape(starts_with="/api/jobs/", ends_with="/stream")
 
 # Every Range-served audio endpoint outside `/audio/*`, one regex per
-# literal route in sharing_api.py -- each requires
+# literal route in sharing_api.py and reference_api.py -- each requires
 # the `audio` segment at the exact position that route defines, so a slug
 # that literally reads "audio" cannot slide a real metadata route
 # (`/shared/{slug}`, `/shared/{slug}/cover`, the `/stream` manifest POSTs)

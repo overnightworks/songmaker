@@ -94,6 +94,7 @@ beforeEach(() => {
 	) {
 		this.dispatchEvent(new Event('pause'));
 	});
+	vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 	vi.stubEnv('TZ', 'UTC');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(new Date('2026-11-02T09:00:00Z'));
@@ -340,14 +341,16 @@ describe('references page', () => {
 			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
 		});
 
-		it('clears the fault when the row is tried again', async () => {
+		it('loads the source again when a failed row is tried again', async () => {
 			const target = await renderTwoReferences();
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
 			referenceElement()?.dispatchEvent(new Event('error'));
 			await tick();
+			const sourceSet = vi.spyOn(HTMLMediaElement.prototype, 'src', 'set');
 
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
 
+			expect(sourceSet).toHaveBeenCalledWith(expect.stringMatching(/\/api\/references\/a\/audio$/));
 			expect(target.textContent).not.toContain("Can't play this recording");
 			expect(referenceButtonLabels(target)[0]).toBe('Pause voice-memo.mp3');
 		});
@@ -363,6 +366,7 @@ describe('references page', () => {
 			mounted = undefined;
 
 			expect(stopped).toHaveBeenCalled();
+			expect(element.getAttribute('src')).toBeNull();
 		});
 	});
 

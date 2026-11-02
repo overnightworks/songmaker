@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -14,8 +15,10 @@ from support.wav_files import write_wav
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session
 
 from songmaker_cli.constants import (
+    AUDIO_MEDIA_TYPES,
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     AUDIO_UPLOAD_FILE_MAX_BYTES,
+    REFERENCE_AUDIO_EXTENSIONS,
 )
 from songmaker_cli.db.models import ReferenceRecording, User
 from songmaker_cli.db.queries.reference_recordings import create_reference_recording
@@ -345,11 +348,13 @@ SECRET_FILENAME = "private-take-name.wav"
 NOT_FOUND = {"detail": "Not Found"}
 
 
-def _seed_playable(client: TestClient, user_id: str = "owner-id") -> str:
-    reference_id = _seed_reference(client, user_id, SECRET_FILENAME)
+def _seed_playable(
+    client: TestClient, user_id: str = "owner-id", name: str = SECRET_FILENAME,
+) -> str:
+    reference_id = _seed_reference(client, user_id, name)
     refs = client.app.state.ctx.audio_dir / user_id / "refs"
     refs.mkdir(parents=True, exist_ok=True)
-    (refs / SECRET_FILENAME).write_bytes(AUDIO_BYTES)
+    (refs / name).write_bytes(AUDIO_BYTES)
     return reference_id
 
 
@@ -357,11 +362,14 @@ def _audio_path(reference_id: str) -> str:
     return f"{REFERENCES_PATH}/{reference_id}/audio"
 
 
-def test_p1_the_owner_plays_the_whole_file(signed_in: TestClient) -> None:
-    response = signed_in.get(_audio_path(_seed_playable(signed_in)))
+@pytest.mark.parametrize("extension", sorted(REFERENCE_AUDIO_EXTENSIONS))
+def test_p1_the_owner_plays_the_whole_file(signed_in: TestClient, extension: str) -> None:
+    reference_id = _seed_playable(signed_in, name=f"take{extension}")
+
+    response = signed_in.get(_audio_path(reference_id))
 
     assert response.status_code == 200
-    assert response.headers["content-type"].startswith("audio/")
+    assert response.headers["content-type"] == AUDIO_MEDIA_TYPES[extension]
     assert response.content == AUDIO_BYTES
 
 
@@ -438,6 +446,28 @@ def test_p7_a_row_whose_file_is_gone_is_not_found_and_logs_no_name_or_path(
     assert "owner-id" in message
     assert reference_id in message
     assert "ReferenceAudioRejected" in message
+    assert SECRET_FILENAME not in message
+    assert audio_dir not in message
+    assert errors[0].exc_info is None
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root opens a file whatever its mode")
+def test_p7b_a_file_that_cannot_be_opened_is_not_found_and_logs_no_name_or_path(
+    signed_in: TestClient, caplog: pytest.LogCaptureFixture,
+) -> None:
+    reference_id = _seed_playable(signed_in)
+    (unreadable,) = _reference_files(signed_in)
+    unreadable.chmod(0)
+    audio_dir = str(signed_in.app.state.ctx.audio_dir)
+
+    with caplog.at_level(logging.ERROR):
+        response = signed_in.get(_audio_path(reference_id))
+
+    assert response.status_code == 404
+    assert response.json() == NOT_FOUND
+    errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    message = errors[0].getMessage()
     assert SECRET_FILENAME not in message
     assert audio_dir not in message
     assert errors[0].exc_info is None

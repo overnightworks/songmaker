@@ -49,7 +49,11 @@ def api_list_references(
     ]
 
 
-@router.get("/references/{reference_id}/audio", response_class=FileResponse)
+@router.get(
+    "/references/{reference_id}/audio",
+    response_class=FileResponse,
+    responses={404: {"description": "Reference audio not found or not usable"}},
+)
 def api_reference_audio(
     reference_id: str,
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
@@ -59,11 +63,14 @@ def api_reference_audio(
     recording = get_owned_reference_recording(session, user.id, reference_id)
     if recording is None:
         raise HTTPException(404)
+    storage_path = recording.storage_path
+    session.commit()  # end the transaction: the pooled connection must not outlive the transfer
     try:
-        audio_path = resolve_owned_reference_audio(
-            ctx.audio_dir, user.id, recording.storage_path,
-        )
-    except ReferenceAudioRejected as exc:
+        audio_path = resolve_owned_reference_audio(ctx.audio_dir, user.id, storage_path)
+        # FileResponse opens after it sent headers, so an unreadable file is refused here.
+        with audio_path.open("rb"):
+            pass
+    except (ReferenceAudioRejected, OSError) as exc:
         log.error(
             "Reference audio unusable for user %s, reference %s: %s",
             user.id, reference_id, type(exc).__name__,

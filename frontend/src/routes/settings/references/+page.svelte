@@ -53,12 +53,22 @@
 	function fail(referenceId: string | null) {
 		if (referenceId === null || referenceId !== activeId) return;
 		activeId = null;
+		previewId = null;
 		faultId = referenceId;
 	}
 
 	function stop() {
 		preview?.pause();
 		activeId = null;
+	}
+
+	// Pausing keeps the download open; a source of its own is dropped on leaving.
+	function release() {
+		stop();
+		if (!preview) return;
+		preview.removeAttribute('src');
+		preview.load();
+		previewId = null;
 	}
 
 	function toggle(referenceId: string) {
@@ -87,7 +97,7 @@
 	onMount(() => void load());
 	onDestroy(() => {
 		referenceReloads.dispose();
-		stop();
+		release();
 	});
 </script>
 
@@ -321,7 +331,7 @@
 	}
 
 	.reference-row.playing {
-		background: var(--surface-hover);
+		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 	}
 
 	.reference-play {
@@ -329,8 +339,8 @@
 		align-items: center;
 		justify-content: center;
 		flex: none;
-		width: 36px;
-		height: 36px;
+		width: 32px;
+		height: 32px;
 		padding: 0;
 		background: none;
 		border: 1px solid var(--border);
@@ -340,8 +350,8 @@
 	}
 
 	.reference-row.playing .reference-play {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.reference-text {
@@ -350,10 +360,6 @@
 		gap: 2px;
 		flex: 1;
 		min-width: 0;
-	}
-
-	.reference-fault {
-		color: var(--score-bad);
 	}
 
 	.reference-row + .reference-row {
@@ -372,5 +378,20 @@
 		font-size: 12.5px;
 		color: var(--text-muted);
 		font-variant-numeric: tabular-nums;
+	}
+
+	.reference-fault {
+		color: var(--score-bad);
+	}
+
+	@media (max-width: 640px) {
+		.reference-row {
+			min-height: 64px;
+		}
+
+		.reference-play {
+			width: 40px;
+			height: 40px;
+		}
 	}
 </style>

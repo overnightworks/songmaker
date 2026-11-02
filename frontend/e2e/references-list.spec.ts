@@ -112,3 +112,37 @@ test('Settings › References plays a recording from its button and pauses it ag
 		await api.dispose();
 	}
 });
+
+test('Settings › References plays a recording again after its first audio answer failed', async ({
+	context,
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page, {
+		refusalsExpectedOn: [{ path: `${REFERENCES_PATH}/`, statuses: [429] }]
+	});
+	const account = await signInFreshAccount(context, 'references-retry', testInfo.project.name);
+	const api = await signedInApi(account);
+	const audioRoute = /\/api\/references\/[^/]+\/audio$/;
+	try {
+		await postReferenceAudio(api, 'storytime-drums.mp3');
+		await page.goto('/settings/references');
+		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
+		await page.route(audioRoute, (route) => route.fulfill({ status: 429 }), { times: 1 });
+
+		await row.getByRole('button', { name: 'Play storytime-drums.mp3' }).click();
+
+		await expect(row.getByRole('alert')).toHaveText("Can't play this recording");
+		const served = page.waitForResponse(
+			(response) => audioRoute.test(response.url()) && response.ok()
+		);
+
+		await row.getByRole('button', { name: 'Play storytime-drums.mp3' }).click();
+
+		await served;
+		await expect(row.getByRole('button', { name: 'Pause storytime-drums.mp3' })).toBeVisible();
+		await expect(row.getByRole('alert')).toHaveCount(0);
+		guard.assertClean();
+	} finally {
+		await api.dispose();
+	}
+});

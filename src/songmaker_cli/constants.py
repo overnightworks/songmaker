@@ -469,8 +469,8 @@ JOB_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Job stream limiter unavailable"
 
 # Audio file serving
 AUDIO_MEDIA_TYPES: dict[str, str] = {
-    ".mp3": "audio/mpeg",
-    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg", ".wav": "audio/wav",
+    ".flac": "audio/flac", ".ogg": "audio/ogg",
 }
 
 # Reference audio upload
