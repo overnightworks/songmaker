@@ -228,13 +228,13 @@ one down — without removing the cause; #276 did. `/`, `/album/[slug]`,
 `/album/[slug]/[song]` and, since #281, `/album/[slug]/[song]/take/[n]` now
 sit inside one `(library)` route group whose own `+layout.svelte` mounts
 `LibraryWorkspace` once, so a crossing swaps only the thin leaf page under it
-instead of tearing the workspace down and rebuilding it. That folded the
-library flow to 26 (from 28) and the album-address flow's
-cold-open-plus-crossing case to 22 (from 24) — not all the way back to the
-pre-address 25, since a route-file crossing is still a real SvelteKit
-navigation with its own cost, just no longer a workspace rebuild on top of
-it. The standalone cold song and cold take opens stay at 16: neither crosses
-a route to begin with, so there was never a rebuild to fold away for either.
+instead of tearing the workspace down and rebuilding it. That folded two
+requests off the library flow and off the album-address flow's
+cold-open-plus-crossing case, not all of what the address added, since a
+route-file crossing is still a real SvelteKit navigation with its own cost, just
+no longer a workspace rebuild on top of it. The standalone cold song and cold
+take opens gained nothing: neither crosses a route to begin with, so there was
+never a rebuild to fold away for either.
 What #275 bought stands unchanged: the address itself (a song is linkable and
 survives a cold open on its own, 404s honestly on an unknown slug, and
 follows a rename) and the crossing-detection fix that keeps the router in
