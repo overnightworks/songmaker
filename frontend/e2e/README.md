@@ -139,18 +139,15 @@ numbers live in `LIBRARY_FLOW_API_REQUEST_BUDGET` and
 the measured count is written down; this file and `docs/testing.md` point
 there rather than restate it, which is exactly how the library flow's number
 drifted into three different values before a test audit caught it (issue
-#326). `album-address.spec.ts` carries four —
-22 for the cold album open, one-step track click and Back/Forward, 16 for a
-standalone cold song open, 16 for a standalone cold take open, 15 for the
-legacy `/?song=` bookmark redirect (issue #284, two full cold page loads: a
-genuine earlier page, then the bookmark) — against a shared budget of 30, and
-`playlist-address.spec.ts` carries two — 11 for the cold playlist open, 9 for
-the unknown-slug open — against a shared budget of 15. Every cold open (song,
-take, playlist, or the redirected legacy bookmark) races the live stream's
-own bootstrap the same way — whichever of the two restores the library state
+#326). `album-address.spec.ts` carries one shared budget for its flows,
+`ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET`, and `playlist-address.spec.ts` carries
+one, `PLAYLIST_ADDRESS_FLOW_API_REQUEST_BUDGET`; the comment on each constant is
+where the measured counts are written down. Every cold open (song, take,
+playlist, or the redirected legacy bookmark) races the live stream's own
+bootstrap the same way — whichever of the two restores the library state
 finishes second re-applies the same state (documented on `openAlbumAddress`
 in `stores/libraryContext.ts`) — so a green run can measure a request or two
-either side of these numbers; the budget's headroom is sized for exactly
+either side of the measured counts; the budget's headroom is sized for exactly
 that, not for a real regression. A flow that suddenly needs several more
 round trips is a regression — find the extra requests instead of raising the
 number. The measured count is printed on every run.
