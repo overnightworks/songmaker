@@ -355,6 +355,20 @@ describe('references page', () => {
 			expect(referenceButtonLabels(target)[0]).toBe('Pause voice-memo.mp3');
 		});
 
+		it('loads the source again when a load fails after the person paused', async () => {
+			const target = await renderTwoReferences();
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+			referenceElement()?.dispatchEvent(new Event('error'));
+			await tick();
+			const sourceSet = vi.spyOn(HTMLMediaElement.prototype, 'src', 'set');
+
+			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+
+			expect(sourceSet).toHaveBeenCalledWith(expect.stringMatching(/\/api\/references\/a\/audio$/));
+			expect(referenceButtonLabels(target)[0]).toBe('Pause voice-memo.mp3');
+		});
+
 		it('stops the sound when the person leaves the page', async () => {
 			const target = await renderTwoReferences();
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));

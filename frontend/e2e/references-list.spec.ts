@@ -123,6 +123,17 @@ test('Settings › References plays a recording again after its first audio answ
 	const account = await signInFreshAccount(context, 'references-retry', testInfo.project.name);
 	const api = await signedInApi(account);
 	const audioRoute = /\/api\/references\/[^/]+\/audio$/;
+	await page.addInitScript(() => {
+		const Original = window.Audio;
+		window.Audio = function (...args: ConstructorParameters<typeof Audio>) {
+			const element = new Original(...args);
+			(window as unknown as { createdAudio: HTMLAudioElement[] }).createdAudio = [
+				...((window as unknown as { createdAudio?: HTMLAudioElement[] }).createdAudio ?? []),
+				element
+			];
+			return element;
+		} as unknown as typeof Audio;
+	});
 	try {
 		await postReferenceAudio(api, 'storytime-drums.mp3');
 		await page.goto('/settings/references');
@@ -141,6 +152,15 @@ test('Settings › References plays a recording again after its first audio answ
 		await served;
 		await expect(row.getByRole('button', { name: 'Pause storytime-drums.mp3' })).toBeVisible();
 		await expect(row.getByRole('alert')).toHaveCount(0);
+		await expect
+			.poll(() =>
+				page.evaluate(() => {
+					const previews = (window as unknown as { createdAudio: HTMLAudioElement[] }).createdAudio;
+					const preview = previews[previews.length - 1];
+					return preview.currentTime > 0 && (!preview.paused || preview.ended) && !preview.error;
+				})
+			)
+			.toBe(true);
 		guard.assertClean();
 	} finally {
 		await api.dispose();

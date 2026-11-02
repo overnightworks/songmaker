@@ -9,11 +9,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from fastapi.responses import FileResponse
 from fastapi.testclient import TestClient
 from support.token_world import TokenWorld, make_token_world
 from support.wav_files import write_wav
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session
 
+from songmaker_cli import reference_api
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
     AUDIO_UPLOAD_BODY_MAX_BYTES,
@@ -371,6 +373,24 @@ def test_p1_the_owner_plays_the_whole_file(signed_in: TestClient, extension: str
     assert response.status_code == 200
     assert response.headers["content-type"] == AUDIO_MEDIA_TYPES[extension]
     assert response.content == AUDIO_BYTES
+
+
+def test_p1b_the_database_connection_is_returned_before_the_file_is_sent(
+    signed_in: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checked_out_when_sending: list[int] = []
+    engine = signed_in.app.state.ctx.db.kw["bind"]
+
+    class RecordingFileResponse(FileResponse):
+        async def __call__(self, scope, receive, send) -> None:
+            checked_out_when_sending.append(engine.pool.checkedout())
+            await super().__call__(scope, receive, send)
+
+    monkeypatch.setattr(reference_api, "FileResponse", RecordingFileResponse)
+
+    signed_in.get(_audio_path(_seed_playable(signed_in)))
+
+    assert checked_out_when_sending == [0]
 
 
 def test_p2_a_range_request_answers_a_partial_response(signed_in: TestClient) -> None:
