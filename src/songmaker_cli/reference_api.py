@@ -64,16 +64,17 @@ def api_reference_audio(
     if recording is None:
         raise HTTPException(404)
     storage_path = recording.storage_path
+    recording_id = recording.id
     session.commit()  # end the transaction: the pooled connection must not outlive the transfer
     try:
         audio_path = resolve_owned_reference_audio(ctx.audio_dir, user.id, storage_path)
         # FileResponse opens after it sent headers, so an unreadable file is refused here.
-        with audio_path.open("rb"):
-            pass
+        with audio_path.open("rb") as audio:
+            audio.read(1)
     except (ReferenceAudioRejected, OSError) as exc:
-        log.error(
+        log.error(  # NOSONAR(S8572) A traceback would carry the path, which this log never holds.
             "Reference audio unusable for user %s, reference %s: %s",
-            user.id, reference_id, type(exc).__name__,
+            user.id, recording_id, type(exc).__name__,
         )
         raise HTTPException(404) from None
     return FileResponse(audio_path, media_type=AUDIO_MEDIA_TYPES.get(audio_path.suffix))
