@@ -1,7 +1,0 @@
-claim_id = "e4565d7df1d3430a82a9eb16fc4b9baa"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "ba170b3ca4eb65b2f8b1f6c5a6f7913d7b56ecda"
-branch = "claude/issue-2150-songmaker-on-webauth-0-29-0"
-scope = ["pyproject.toml", "src/songmaker_cli/oidc_client.py", "uv.lock"]
-opened_commit = "a67a0d648fced113bb2f08aee0cf657b92cc157e"
