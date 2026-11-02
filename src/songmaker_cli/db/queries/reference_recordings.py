@@ -53,6 +53,17 @@ def get_owned_reference_recording(
     return session.execute(query).scalar_one_or_none()
 
 
+def list_owned_reference_recordings(session: Session, user_id: str) -> list[ReferenceRecording]:
+    """The owner's own rows, newest first; the id orders rows sharing an instant."""
+    return list(
+        session.execute(
+            select(ReferenceRecording)
+            .where(ReferenceRecording.user_id == user_id)
+            .order_by(ReferenceRecording.created_at.desc(), ReferenceRecording.id)
+        ).scalars()
+    )
+
+
 def owner_reference_usage(session: Session, user_id: str) -> ReferenceUsage:
     files, size = session.execute(
         select(

@@ -1,8 +1,8 @@
-"""POST /api/references through the full middleware stack."""
+"""POST and GET /api/references through the full middleware stack."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -26,13 +26,16 @@ MPEG_FRAME_BYTES = 417  # MPEG-1 layer III, 128 kbit/s, 44.1 kHz
 MPEG_FRAME_COUNT = 40
 
 
-def _seed_reference_owner(session) -> None:
-    session.add(User(id="owner-id", username="owner"))
+def _seed_owner_other_and_admin_accounts(session) -> None:
+    session.add_all([
+        User(id=f"{name}-id", username=name, role=role)
+        for name, role in (("owner", "user"), ("other", "user"), ("boss", "admin"))
+    ])
 
 
 @pytest.fixture
 def signed_in(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_reference_owner)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_owner_other_and_admin_accounts)
     seed_session(client, "owner")
     return client
 
@@ -253,3 +256,84 @@ def test_m7d_a_persons_token_without_origin_uploads_as_that_person(
 
     assert response.status_code == 200, response.text
     assert world.rows(ReferenceRecording, "user_id") == [(TokenWorld.ALICE,)]
+
+
+def _seed_reference(
+    client: TestClient, user_id: str, name: str, *, created_at: datetime | None = None,
+    reference_id: str | None = None, duration_sec: float | None = 12.5,
+) -> str:
+    with client.app.state.ctx.db() as session:
+        row = create_reference_recording(
+            session, user_id=user_id, storage_path=f"{user_id}/refs/{name}",
+            original_filename=name, size_bytes=1, duration_sec=duration_sec,
+        )
+        if created_at is not None:
+            row.created_at = created_at
+        if reference_id is not None:
+            row.id = reference_id
+        session.commit()
+        return row.id
+
+
+def _signed_in_as(signed_in: TestClient, username: str) -> TestClient:
+    client = TestClient(signed_in.app, base_url=TEST_ORIGIN, raise_server_exceptions=False)
+    seed_session(client, username)
+    return client
+
+
+@pytest.mark.parametrize(
+    ("username", "expected"),
+    [("owner", ["mine.wav"]), ("other", ["theirs.wav"]), ("boss", ["boss.wav"])],
+)
+def test_l1_a_person_lists_only_their_own_references(
+    signed_in: TestClient, username: str, expected: list[str],
+) -> None:
+    _seed_reference(signed_in, "owner-id", "mine.wav")
+    _seed_reference(signed_in, "other-id", "theirs.wav")
+    _seed_reference(signed_in, "boss-id", "boss.wav")
+
+    response = _signed_in_as(signed_in, username).get(REFERENCES_PATH)
+
+    assert response.status_code == 200
+    assert [item["filename"] for item in response.json()] == expected
+
+
+def test_l2_references_come_newest_first_and_one_instant_keeps_one_order(
+    signed_in: TestClient,
+) -> None:
+    now = datetime(2026, 10, 27, 12, 0, tzinfo=timezone.utc)
+    _seed_reference(signed_in, "owner-id", "old.wav", created_at=now - timedelta(days=9))
+    _seed_reference(signed_in, "owner-id", "new.wav", created_at=now)
+    _seed_reference(signed_in, "owner-id", "tie-b.wav", created_at=now - timedelta(days=1),
+                    reference_id="bbbb")
+    _seed_reference(signed_in, "owner-id", "tie-a.wav", created_at=now - timedelta(days=1),
+                    reference_id="aaaa")
+
+    listed = signed_in.get(REFERENCES_PATH).json()
+
+    assert [item["filename"] for item in listed] == [
+        "new.wav", "tie-a.wav", "tie-b.wav", "old.wav",
+    ]
+
+
+def test_l3_no_references_answers_an_empty_list(signed_in: TestClient) -> None:
+    response = signed_in.get(REFERENCES_PATH)
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_l4_a_reference_without_a_length_answers_null(signed_in: TestClient) -> None:
+    _seed_reference(signed_in, "owner-id", "unmeasured.wav", duration_sec=None)
+
+    [item] = signed_in.get(REFERENCES_PATH).json()
+
+    assert item["duration_sec"] is None
+
+
+def test_l5_listing_without_a_session_is_unauthenticated(signed_in: TestClient) -> None:
+    anonymous = TestClient(signed_in.app, base_url=TEST_ORIGIN, raise_server_exceptions=False)
+
+    response = anonymous.get(REFERENCES_PATH)
+
+    assert response.status_code == 401

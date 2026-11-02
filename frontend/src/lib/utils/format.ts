@@ -74,7 +74,7 @@ function dayAndMonth(moment: Date): string {
 	return `${moment.getDate()} ${moment.toLocaleDateString(DAY_LABEL_LOCALE, { month: 'short' })}`;
 }
 
-function localDayAndMonth(moment: Date, now: Date): string {
+export function localDayAndMonth(moment: Date, now: Date): string {
 	return moment.getFullYear() === now.getFullYear()
 		? dayAndMonth(moment)
 		: `${dayAndMonth(moment)} ${moment.getFullYear()}`;

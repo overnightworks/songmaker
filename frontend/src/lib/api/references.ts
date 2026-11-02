@@ -9,3 +9,7 @@ export async function uploadReference(file: File): Promise<ReferenceRecordingRes
 		body: formData
 	});
 }
+
+export async function listReferences(): Promise<ReferenceRecordingResponse[]> {
+	return apiFetch<ReferenceRecordingResponse[]>('/api/references');
+}
