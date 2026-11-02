@@ -524,6 +524,8 @@ def assert_ended_with(
         (503, RejectionCode.UNAVAILABLE, "unavailable", 503),
         (400, RejectionCode.UNSUPPORTED_VERSION, "unavailable", 503),
         (422, RejectionCode.INVALID_REQUEST, "unavailable", 503),
+        (413, RejectionCode.TOO_LARGE, "unavailable", 503),
+        (422, RejectionCode.MODEL_NOT_OFFERED, "unavailable", 503),
     ],
 )
 def test_c8_a_refusal_of_the_service_ends_the_turn_with_its_named_problem(
