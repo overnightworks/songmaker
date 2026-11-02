@@ -310,16 +310,23 @@ describe('theme', () => {
 	const COPY_KEY = 'songmaker.theme';
 
 	function stubDevice(scheme: 'dark' | 'light' | 'unsupported') {
+		const device = {
+			matches: scheme === 'dark',
+			listeners: [] as Array<() => void>,
+			addEventListener: (_type: string, listener: () => void) => device.listeners.push(listener)
+		};
 		if (scheme === 'unsupported') {
 			vi.stubGlobal('matchMedia', undefined);
-			return;
+			return device;
 		}
 		vi.stubGlobal(
 			'matchMedia',
 			vi.fn((query: string) => ({
-				matches: query === '(prefers-color-scheme: dark)' && scheme === 'dark'
+				matches: query === '(prefers-color-scheme: dark)' && device.matches,
+				addEventListener: device.addEventListener
 			}))
 		);
+		return device;
 	}
 
 	afterEach(() => {
@@ -344,6 +351,24 @@ describe('theme', () => {
 
 		expect(get(theme)).toBe(expected);
 	});
+
+	it.each([
+		{ choice: 'system', expected: 'dark' },
+		{ choice: 'light', expected: 'light' }
+	])(
+		'with the choice $choice, a device flip to dark gives $expected',
+		async ({ choice, expected }) => {
+			const device = stubDevice('light');
+			localStorage.setItem(COPY_KEY, choice);
+			const { theme, initTheme } = await import('./ui');
+			initTheme();
+
+			device.matches = true;
+			for (const listener of device.listeners) listener();
+
+			expect(get(theme)).toBe(expected);
+		}
+	);
 
 	it('is light without a window', async () => {
 		vi.stubGlobal('window', undefined);

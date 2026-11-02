@@ -21,7 +21,11 @@
 	import SongMenu from './editor/SongMenu.svelte';
 	import RailSearch from './shell/RailSearch.svelte';
 
-	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
+	let {
+		username,
+		accountHref,
+		onlogout
+	}: { username: string; accountHref: string; onlogout: () => void } = $props();
 
 	let titleEditor: { startEdit: () => void } | undefined = $state();
 	let sheet: HTMLDivElement | undefined = $state();
@@ -149,7 +153,7 @@
 			>{APP_NAME}</button
 		>
 		{@render searchButton()}
-		<AccountMenu {username} {onlogout} />
+		<AccountMenu {username} {accountHref} {onlogout} />
 	{/if}
 </header>
 

@@ -8,16 +8,19 @@
 	} from '#lib/constants.ts';
 	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 	import { page } from '$app/state';
-	import { currentUser, signOutFailed } from '#lib/stores/auth.ts';
+	import { signOutFailed } from '#lib/stores/auth.ts';
 	import { leaveForLogout, openAppPage } from '#lib/stores/navigation.ts';
 	import { chooseTheme, themeChoice } from '#lib/stores/ui.ts';
 	import { accountInitial } from '#lib/utils/format.ts';
 	import MenuPopover from './MenuPopover.svelte';
 
-	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
+	let {
+		username,
+		accountHref,
+		onlogout
+	}: { username: string; accountHref: string; onlogout: () => void } = $props();
 
 	const initial = $derived(accountInitial(username));
-	const accountConsoleUrl = $derived($currentUser?.account_console_url ?? '');
 
 	let popover: MenuPopover | undefined = $state();
 
@@ -61,7 +64,7 @@
 		<div {@attach forgetFailureOnClose}>
 			<AccountPanel
 				name={username}
-				accountHref={accountConsoleUrl}
+				{accountHref}
 				onAccountOpen={() => popover?.close(false)}
 				appRows={[{ label: RAIL_SETTINGS_LABEL, icon: 'settings', onSelect: openSettings }]}
 				theme={{ choice: KIT_CHOICE_BY_STORED[$themeChoice], onChange: chooseKitTheme }}
@@ -101,7 +104,7 @@
 		color: var(--accent);
 	}
 
-	/* The kit's panel draws its own surface, border and shadow. */
+	/* The kit's panel draws its own surface and border. */
 	.account-menu :global(.menu-panel) {
 		width: auto;
 		padding: 0;

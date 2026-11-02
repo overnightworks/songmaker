@@ -75,7 +75,12 @@ function renderBar(onlogout = vi.fn()): HTMLElement {
 	const target = document.createElement('div');
 	target.style.width = '390px';
 	document.body.append(target);
-	mounted.push(mount(PhoneAppBar, { target, props: { username: 'felix', onlogout } }));
+	mounted.push(
+		mount(PhoneAppBar, {
+			target,
+			props: { username: 'felix', accountHref: 'https://login.test/account', onlogout }
+		})
+	);
 	return target;
 }
 

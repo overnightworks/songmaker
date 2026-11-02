@@ -23,8 +23,10 @@ import {
 } from '#lib/constants.ts';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import { currentUser, signOutFailed } from '#lib/stores/auth.ts';
-import { makeAuthUser } from '#lib/test-utils/factories.ts';
-import { theme, themeChoice } from '#lib/stores/ui.ts';
+import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
+import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
+import { makeAuthUser, makeSong } from '#lib/test-utils/factories.ts';
+import { initTheme, theme, themeChoice } from '#lib/stores/ui.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
 import {
@@ -40,11 +42,15 @@ const ACCOUNT_CONSOLE_URL = 'https://login.test/realms/songmaker/account';
 const LOG_OUT_NAME = 'Log out';
 const TRIGGER_NAME = `${ACCOUNT_MENU_LABEL} · ${USERNAME}`;
 
+function storeChoice(choice: 'dark' | 'light' | 'system'): void {
+	localStorage.setItem('songmaker.theme', choice);
+	initTheme();
+}
+
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
-	theme.set('dark');
-	themeChoice.set('dark');
+	storeChoice('dark');
 	currentUser.set(makeAuthUser({ username: USERNAME, account_console_url: ACCOUNT_CONSOLE_URL }));
 	replaceHistoryEntry('/');
 	startFakeRouter();
@@ -55,13 +61,21 @@ afterEach(async () => {
 	vi.mocked(goto).mockReset();
 	signOutFailed.set(false);
 	currentUser.set(null);
+	localStorage.clear();
+	discardDraft();
+	pendingDirtyNavigation.set(null);
 	document.body.replaceChildren();
 });
 
 async function renderAccountMenu(onlogout = vi.fn()): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted.push(mount(AccountMenu, { target, props: { username: USERNAME, onlogout } }));
+	mounted.push(
+		mount(AccountMenu, {
+			target,
+			props: { username: USERNAME, accountHref: ACCOUNT_CONSOLE_URL, onlogout }
+		})
+	);
 	await tick();
 	return target;
 }
@@ -136,7 +150,7 @@ describe('AccountMenu', () => {
 	])(
 		'takes effect at once and saves $saved when $pick is picked',
 		async ({ pick, saved, shown }) => {
-			themeChoice.set(saved === 'dark' ? 'light' : 'dark');
+			storeChoice(saved === 'dark' ? 'light' : 'dark');
 			const panel = await openMenu(await renderAccountMenu());
 
 			requireElement<HTMLInputElement>(
@@ -152,7 +166,7 @@ describe('AccountMenu', () => {
 	);
 
 	it('shows the stored choice as the checked radio', async () => {
-		themeChoice.set('system');
+		storeChoice('system');
 		const panel = await openMenu(await renderAccountMenu());
 
 		expect(requireElement<HTMLInputElement>(panel, 'input[type="radio"]:checked').value).toBe(
@@ -193,6 +207,22 @@ describe('AccountMenu', () => {
 		getByRoleButton(panel, LOG_OUT_NAME).click();
 
 		await vi.waitFor(() => expect(onlogout).toHaveBeenCalledOnce());
+	});
+
+	it('asks about an unsaved draft before logging out, and logs out only once that is confirmed', async () => {
+		loadSongData(makeSong());
+		setDraftLyrics('unsaved edit');
+		const onlogout = vi.fn();
+		const panel = await openMenu(await renderAccountMenu(onlogout));
+
+		getByRoleButton(panel, LOG_OUT_NAME).click();
+		await tick();
+
+		expect(onlogout).not.toHaveBeenCalled();
+		const confirmed = get(pendingDirtyNavigation);
+		expect(confirmed).not.toBeNull();
+		await confirmed?.();
+		expect(onlogout).toHaveBeenCalledOnce();
 	});
 
 	it('stays open and says so when the server did not confirm the log-out', async () => {
