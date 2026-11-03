@@ -3,6 +3,7 @@ import { ApiError, NetworkError, describeFailure, isTransientApiFailure } from '
 import { fetchMe } from '#lib/api/auth.ts';
 import {
 	compareDecimalId,
+	openResourceEventStream,
 	parseGenerationCreated,
 	parseResourceHello,
 	parseResourceResync
@@ -14,7 +15,6 @@ import {
 	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_HELLO,
 	RESOURCE_EVENT_RESYNC,
-	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_ERROR,
@@ -44,10 +44,6 @@ import {
 	watchReconnectOpportunities
 } from '#lib/stores/sseReconnect.ts';
 
-// The browser only sends `Last-Event-ID` on its own native retry; the owner
-// reopens a dropped stream itself (see `scheduleReconnect`), so it hands the
-// server that cursor as a query parameter instead (#1020).
-const RESOURCE_EVENT_RESUME_QUERY = 'last_event_id';
 const MS_PER_SECOND = 1000;
 
 type ResourceSyncStatus =
@@ -86,7 +82,7 @@ interface ResourceEventSource {
 }
 
 interface ResourceSyncDeps {
-	createEventSource: (url: string) => ResourceEventSource;
+	openEventStream: (resumeId: string | null) => ResourceEventSource;
 	fetchSong: (songId: string) => Promise<SongItem>;
 	applySong: (song: SongItem) => void;
 	listLoadedSongIds: () => string[];
@@ -263,18 +259,12 @@ export class ResourceSyncController {
 	private openSource(): void {
 		if (leavesForFreshDocument()) return;
 		this.streamGreeted = false;
-		const source = this.deps.createEventSource(this.streamUrl());
+		const source = this.deps.openEventStream(this.lastEventId);
 		this.source = source;
 		source.addEventListener(RESOURCE_EVENT_HELLO, this.onHello);
 		source.addEventListener(RESOURCE_EVENT_RESYNC, this.onResync);
 		source.addEventListener(RESOURCE_EVENT_GENERATION_CREATED, this.onGenerationCreated);
 		source.onerror = this.onError;
-	}
-
-	private streamUrl(): string {
-		if (this.lastEventId === null) return RESOURCE_EVENT_STREAM_PATH;
-		const query = new URLSearchParams({ [RESOURCE_EVENT_RESUME_QUERY]: this.lastEventId });
-		return `${RESOURCE_EVENT_STREAM_PATH}?${query}`;
 	}
 
 	private rememberEventId(event: MessageEvent): void {
@@ -1020,7 +1010,7 @@ function cancelLibrarySnapshot(): void {
 
 function librarySyncDeps(): ResourceSyncDeps {
 	return {
-		createEventSource: (url) => new EventSource(url, { withCredentials: true }),
+		openEventStream: openResourceEventStream,
 		fetchSong,
 		applySong: applySyncedSong,
 		listLoadedSongIds,

@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { RESOURCE_EVENT_STREAM_PATH } from '#lib/constants.ts';
 
 import {
 	compareDecimalId,
+	openResourceEventStream,
 	parseGenerationCreated,
 	parseResourceHello,
 	parseResourceResync
@@ -81,5 +84,28 @@ describe('parseGenerationCreated', () => {
 		expect(() => parseGenerationCreated('{"kind":"generation.created","sequence":"1"}')).toThrow(
 			/Malformed resource event field/
 		);
+	});
+});
+
+describe('openResourceEventStream', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it.each([
+		{ resumeId: null, url: RESOURCE_EVENT_STREAM_PATH },
+		{ resumeId: '4', url: '/api/resource-events/stream?last_event_id=4' }
+	])('opens $url with credentials for cursor $resumeId', ({ resumeId, url }) => {
+		const opened: { url: string; init?: EventSourceInit }[] = [];
+		vi.stubGlobal(
+			'EventSource',
+			vi.fn(function (streamUrl: string, init?: EventSourceInit) {
+				opened.push({ url: streamUrl, init });
+			})
+		);
+
+		openResourceEventStream(resumeId);
+
+		expect(opened).toEqual([{ url, init: { withCredentials: true } }]);
 	});
 });
