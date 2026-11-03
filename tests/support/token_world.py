@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from fake_oidc_issuer import FakeIssuer, a_fake_issuer
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.fake_oidc_issuer import FakeIssuer, a_fake_issuer
 from support.web_app import TEST_ORIGIN, make_test_app, seed_user
 
 from songmaker_cli.constants import OIDC_LOGIN_GROUP

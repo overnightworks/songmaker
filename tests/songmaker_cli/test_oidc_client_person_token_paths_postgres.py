@@ -6,8 +6,8 @@ import threading
 from pathlib import Path
 
 import pytest
-from fake_oidc_issuer import Person
 from sqlalchemy.orm import sessionmaker
+from support.fake_oidc_issuer import Person
 from support.oidc_world import World
 from support.postgres_lock_harness import in_thread
 from support.token_world import TokenWorld, make_token_world
