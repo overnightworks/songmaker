@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "bbbcfb8a2dbbd7b81bb76cc2ce58707d8326e991"
 branch = "claude/issue-2191-engine-owns-scheme"
-scope = ["src/acestep_engine/__init__.py", "src/acestep_engine/client.py", "src/acestep_engine/models.py", "src/acestep_engine/settings.py", "src/acestep_engine/training_client.py", "src/acestep_worker/subprocess_runner.py", "src/acestep_worker/wrapper.py", "tests/acestep_engine/test_client.py", "tests/acestep_engine/test_client_contract.py", "tests/acestep_engine/test_client_lora.py", "tests/acestep_engine/test_training_client.py"]
+scope = ["quality/baseline.toml", "src/acestep_engine/__init__.py", "src/acestep_engine/client.py", "src/acestep_engine/models.py", "src/acestep_engine/settings.py", "src/acestep_engine/training_client.py", "src/acestep_worker/subprocess_runner.py", "src/acestep_worker/wrapper.py", "tests/acestep_engine/test_client.py", "tests/acestep_engine/test_client_contract.py", "tests/acestep_engine/test_client_lora.py", "tests/acestep_engine/test_training_client.py"]
 opened_commit = "334d2f4e7143553507e45d786a74e00e9c9f481a"
 whole_reason = "The scheme moves into the client constructors that the dead fallback also feeds, so the deletion and the opener change the same signatures and the same tests."
