@@ -60,12 +60,6 @@ INVALID_FILENAME_DETAIL: Final = "Invalid filename."
 _CONTROL_CHARACTER: Final = re.compile(r"[\x00-\x1f]")
 
 
-def _log_send_ended(exc: OSError) -> None:
-    log.error(  # NOSONAR(S8572) A traceback would carry the path, which this log never holds.
-        "Reference audio ended while it was sent: %s", type(exc).__name__,
-    )
-
-
 class OpenedFileResponse(FileResponse):
     """A file response whose ``stat_result`` the caller took from the open file.
 
@@ -83,7 +77,9 @@ class OpenedFileResponse(FileResponse):
         try:
             await super().__call__(scope, receive, send)
         except OSError as exc:
-            _log_send_ended(exc)
+            log.error(  # NOSONAR(S8572) A traceback would name the path.
+                "Reference audio ended while it was sent: %s", type(exc).__name__,
+            )
 
 
 @router.get("/references")
