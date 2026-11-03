@@ -1,17 +1,11 @@
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-	makeGeneration,
-	makeHealthResponse,
-	makeSong,
-	makeVersion
-} from '#lib/test-utils/factories.ts';
+import { makeGeneration, makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import type { JobItem } from '#lib/api/types.ts';
 import { ApiError } from '#lib/api/fetch.ts';
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
-	fetchHealth: vi.fn(),
 	fetchVersions: vi.fn(),
 	updateSong: vi.fn(),
 	generateSong: vi.fn(),
@@ -22,7 +16,6 @@ vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 
 import {
 	coverGeneration,
-	fetchHealth,
 	fetchVersions,
 	generateSong,
 	repaintGeneration,
@@ -31,7 +24,6 @@ import {
 import { discardDraft, loadSongData, setDraftLyrics } from './editor';
 import { resetConnectivityForTests } from './connectivity';
 import { generate, runSourceTask } from './generateAction';
-import { startHealthPolling, stopHealthPolling } from './health';
 import { activeJobs, generationFailures, removeJob, resetGenerationFailuresForTests } from './jobs';
 import { songList } from './libraryData';
 import { selectedSongId } from './player';
@@ -66,7 +58,6 @@ beforeEach(async () => {
 	);
 	const song = makeSong({ lyrics: 'verse', prompt: 'folk' });
 	vi.mocked(fetchVersions).mockResolvedValue([makeVersion()]);
-	vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse());
 	vi.mocked(repaintGeneration).mockResolvedValue(sourceTaskJob);
 	vi.mocked(coverGeneration).mockResolvedValue(sourceTaskJob);
 	vi.mocked(generateSong).mockResolvedValue(sourceTaskJob);
@@ -78,12 +69,9 @@ beforeEach(async () => {
 	activeModels.set([{ id: 'turbo', is_active: true }]);
 	takesPerGenerate.set(2);
 	seedFromTake.set({ seed: 42, takeNumber: 3 });
-	startHealthPolling();
-	await Promise.resolve();
 });
 
 afterEach(() => {
-	stopHealthPolling();
 	for (const { job } of get(activeJobs)) removeJob(job.id);
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();

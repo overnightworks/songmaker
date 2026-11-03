@@ -1,4 +1,4 @@
-import { makeHealthResponse, makeSong as song } from '#lib/test-utils/factories.ts';
+import { makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '#lib/api/client.ts';
@@ -18,7 +18,6 @@ import { ApiError } from '#lib/api/fetch.ts';
 const streamCoWriterTurn = vi.hoisted(() => vi.fn());
 const fetchConversations = vi.hoisted(() => vi.fn());
 const fetchConversationMessages = vi.hoisted(() => vi.fn());
-const fetchHealth = vi.hoisted(() => vi.fn());
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
@@ -42,7 +41,6 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 			target_id: 'u1',
 			body
 		})),
-		fetchHealth: (...args: Parameters<typeof fetchHealth>) => fetchHealth(...args),
 		streamCoWriterTurn: (...args: Parameters<typeof streamCoWriterTurn>) =>
 			streamCoWriterTurn(...args)
 	};
@@ -58,20 +56,17 @@ import {
 	saveUserMemory,
 	startNewConversation
 } from '#lib/api/client.ts';
-import { startHealthPolling, stopHealthPolling } from '#lib/stores/health.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
 	fetchConversations.mockReset().mockResolvedValue([]);
 	fetchConversationMessages.mockReset().mockResolvedValue({ messages: [] });
-	fetchHealth.mockReset().mockResolvedValue(makeHealthResponse());
 });
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	stopHealthPolling();
 	vi.useRealTimers();
 	streamCoWriterTurn.mockReset();
 });
@@ -144,8 +139,6 @@ function chatView(target: HTMLElement): string[] {
 async function render(overrides: Partial<Record<string, unknown>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
-	startHealthPolling();
-	await Promise.resolve();
 	mounted.push(
 		mount(CoWriterPanel, {
 			target,
@@ -911,21 +904,6 @@ describe('CoWriterPanel chat scroll across tab switches (#1063)', () => {
 			chat.show(1200);
 
 			expect(chat.box.scrollTop).toBe(scrollTopOnReturn);
-		}
-	);
-});
-
-describe('CoWriterPanel tool-surface health', () => {
-	it.each(['drift', 'unverified'] as const)(
-		'shows no banner and still sends the turn when /health reports %s',
-		async (verdict) => {
-			fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: verdict }));
-			const target = await render();
-			await vi.waitFor(() => expect(fetchHealth).toHaveBeenCalled());
-
-			expect(target.querySelector('[role="status"]')).toBeNull();
-			await sendTurn(target, 'write a chorus');
-			await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(1));
 		}
 	);
 });

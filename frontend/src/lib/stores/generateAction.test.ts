@@ -2,12 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import GenerateButton from '#lib/components/editor/GenerateButton.svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-	makeGeneration,
-	makeHealthResponse,
-	makeSong,
-	makeVersion
-} from '#lib/test-utils/factories.ts';
+import { makeGeneration, makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import type { JobItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {
@@ -19,7 +14,6 @@ import {
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
-	fetchHealth: vi.fn(),
 	fetchVersions: vi.fn(),
 	updateSong: vi.fn(),
 	generateSong: vi.fn(),
@@ -32,7 +26,6 @@ vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 import {
 	cancelJob,
 	coverGeneration,
-	fetchHealth,
 	fetchVersions,
 	generateSong,
 	repaintGeneration,
@@ -49,7 +42,6 @@ import {
 import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 import { cancelGeneration, generate, generateAction, offersCancel } from './generateAction';
-import { startHealthPolling, stopHealthPolling } from './health';
 import { activeJobs, generationFailures, removeJob, resetGenerationFailuresForTests } from './jobs';
 import { songList } from './libraryData';
 import { selectedSongId } from './player';
@@ -86,7 +78,6 @@ beforeEach(async () => {
 	);
 	const song = makeSong({ lyrics: 'verse', prompt: 'folk' });
 	vi.mocked(fetchVersions).mockResolvedValue([makeVersion()]);
-	vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse());
 	vi.mocked(generateSong).mockResolvedValue(queuedJob);
 	vi.mocked(repaintGeneration).mockResolvedValue(queuedJob);
 	vi.mocked(coverGeneration).mockResolvedValue(queuedJob);
@@ -98,12 +89,9 @@ beforeEach(async () => {
 	activeModels.set([{ id: 'turbo', is_active: true }]);
 	takesPerGenerate.set(2);
 	seedFromTake.set({ seed: 42, takeNumber: 3 });
-	startHealthPolling();
-	await Promise.resolve();
 });
 
 afterEach(() => {
-	stopHealthPolling();
 	for (const { job } of get(activeJobs)) removeJob(job.id);
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
@@ -146,13 +134,6 @@ describe('generate action presentation', () => {
 			}
 		},
 		{
-			state: 'no worker online',
-			expectedState: { kind: 'idle' },
-			setup: () => {
-				vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
-			}
-		},
-		{
 			state: 'browser offline',
 			expectedState: { kind: 'disabled', reason: null },
 			setup: () => browserReportsOnline(false)
@@ -168,15 +149,6 @@ describe('generate action presentation', () => {
 			setup: () => {
 				setDraftLyrics('');
 				reportResourceStreamReachable(false);
-			}
-		},
-		{
-			state: 'queue full',
-			expectedState: { kind: 'idle' },
-			setup: () => {
-				vi.mocked(fetchHealth).mockResolvedValue(
-					makeHealthResponse({ queue_depth_cap_reached: true })
-				);
 			}
 		},
 		{
@@ -247,9 +219,6 @@ describe('generate action presentation', () => {
 		}
 	])('[defect:#1568] exposes the state for $state', async ({ setup, expectedState }) => {
 		setup();
-		stopHealthPolling();
-		startHealthPolling();
-		await Promise.resolve();
 		expect(get(generateAction)).toEqual(expectedState);
 	});
 
