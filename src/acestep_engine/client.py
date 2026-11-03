@@ -313,7 +313,7 @@ class AceStepClient:
     """
 
     def __init__(self, host: str, port: int) -> None:
-        self.base_url = f"http://{host}:{port}"
+        self.base_url = f"http://{host}:{port}"  # NOSONAR(S5332) Loopback child without TLS.
 
     def generate(
         self, config: AceStepConfig,

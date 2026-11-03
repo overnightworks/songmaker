@@ -167,7 +167,7 @@ class AceStepTrainingClient:
         port: int,
         timeout_seconds: float = TRAINING_DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
-        self.base_url = f"http://{host}:{port}"
+        self.base_url = f"http://{host}:{port}"  # NOSONAR(S5332) Loopback child without TLS.
         self.timeout = timeout_seconds
 
     def _url(self, path: str) -> str:
