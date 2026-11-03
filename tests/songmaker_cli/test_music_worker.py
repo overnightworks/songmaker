@@ -412,9 +412,10 @@ def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_coun
     with factory() as session:
         session.add(User(id="u1", username="u1"))
         session.commit()
-    worker = MusicWorker()
+    settings = _settings(CoverExecutor.WEB).model_copy(update={"audio_dir": str(audio_dir)})
+    worker = MusicWorker(settings)
+    # init_db would run the PostgreSQL migrations, which needs a live database.
     worker.get_db_factory = MagicMock(return_value=factory)
-    worker.audio_dir = MagicMock(return_value=audio_dir)
 
     removed = _run(worker.reference_remnant_cron(_mock_ctx()))
 

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from postgres_lock_harness import CommitPause, race
 from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
+from support.postgres_lock_harness import CommitPause, race
 from support.web_app import make_router_ctx
 
 from songmaker_cli.db.models import ReferenceRecording, User
@@ -61,8 +61,15 @@ def test_a_run_waiting_behind_an_upload_reads_the_rows_after_the_commit(world):
 def test_an_upload_waiting_behind_a_run_is_admitted_after_it_and_keeps_its_file(world):
     """The run holds the lock through its unlinks, so the upload's file never meets them."""
     upload, run = (lambda: _upload_one_file(world)), (lambda: _run_reconciliation(world))
-    answers = race(world.db, run, upload, CommitPause())
+    remnant_existed_at_the_run_commit = []
 
+    def record_the_remnant_at_the_run_commit(_session):
+        remnant_existed_at_the_run_commit.append(world.remnant.exists())
+        return True
+
+    answers = race(world.db, run, upload, CommitPause(record_the_remnant_at_the_run_commit))
+
+    assert remnant_existed_at_the_run_commit == [False]
     assert answers["first"].removed == 1
     assert not world.remnant.exists()
     assert (world.audio_dir / answers["second"].storage_path).read_bytes() == b"audio"

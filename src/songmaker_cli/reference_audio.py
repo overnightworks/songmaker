@@ -283,7 +283,9 @@ class RemnantReport:
 
 def _is_owner_storage_path(user_id: str, storage_path: str) -> bool:
     parts = PurePosixPath(storage_path).parts
-    return len(parts) == 3 and _storage_path(user_id, parts[2]) == storage_path
+    return (
+        len(parts) == 3 and parts[2] != ".." and _storage_path(user_id, parts[2]) == storage_path
+    )
 
 
 def _remove_if_remnant(
@@ -310,9 +312,18 @@ def _remove_owner_remnants(session: Session, audio_dir: Path, user_id: str) -> R
         directory = _existing_reference_directory(stack, audio_dir, user_id)
         if directory is None:
             return report
-        for name in os.listdir(directory):
-            report += _remove_if_remnant(directory, user_id, name, named_paths)
+        try:
+            for name in os.listdir(directory):
+                report += _remove_if_remnant(directory, user_id, name, named_paths)
+        except OSError as exc:
+            _log_owner_failure(user_id, exc)
+            return report + RemnantReport(failed_owners=1)
     return report
+
+
+def _log_owner_failure(user_id: str, exc: Exception) -> None:
+    kind = str(exc) if isinstance(exc, ReferenceAudioStorageError) else type(exc).__name__
+    log.error("Reference audio reconciliation failed for user %s: %s", user_id, kind)
 
 
 def _reconcile_owner(
@@ -325,8 +336,7 @@ def _reconcile_owner(
             report = _remove_owner_remnants(session, audio_dir, user_id)
             session.commit()
     except (OSError, SQLAlchemyError) as exc:
-        kind = str(exc) if isinstance(exc, ReferenceAudioStorageError) else type(exc).__name__
-        log.error("Reference audio reconciliation failed for user %s: %s", user_id, kind)
+        _log_owner_failure(user_id, exc)
         return RemnantReport(failed_owners=1)
     if report.refused:
         log.warning(

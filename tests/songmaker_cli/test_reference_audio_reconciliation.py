@@ -24,12 +24,15 @@ from songmaker_cli.reference_audio import (
 from songmaker_cli.settings import Settings
 
 PRIVATE_NAME = "private-take-name"
+READ_ONLY_OWNER = "qzx81"
 
 
 @pytest.fixture
 def ctx(tmp_path):
     def seed(session):
-        session.add_all([User(id="owner", username="owner"), User(id="other", username="other")])
+        session.add_all([
+            User(id=user_id, username=user_id) for user_id in ("owner", "other", READ_ONLY_OWNER)
+        ])
 
     return make_router_ctx(tmp_path, seed_db=seed)
 
@@ -68,8 +71,10 @@ def test_remnants_go_and_every_file_a_row_names_stays(ctx):
     report = _reconcile(ctx)
 
     assert report == RemnantReport(removed=2)
-    assert kept.exists() and outside.exists()
-    assert not remnant.exists() and not other_remnant.exists()
+    assert kept.exists()
+    assert outside.exists()
+    assert not remnant.exists()
+    assert not other_remnant.exists()
 
 
 def test_a_file_named_by_another_owners_row_is_a_remnant(ctx):
@@ -94,8 +99,10 @@ def test_symlinks_directories_and_fifos_are_neither_followed_nor_removed(ctx):
     report = _reconcile(ctx)
 
     assert report == RemnantReport(removed=1, refused=3)
-    assert outside.exists() and (refs / "nested" / "inner.wav").exists()
-    assert (refs / "link.wav").is_symlink() and (refs / "pipe.wav").exists()
+    assert outside.exists()
+    assert (refs / "nested" / "inner.wav").exists()
+    assert (refs / "link.wav").is_symlink()
+    assert (refs / "pipe.wav").exists()
 
 
 @pytest.mark.parametrize("linked", ["refs", "owner"])
@@ -114,7 +121,8 @@ def test_a_symlinked_directory_refuses_that_owner_and_the_others_still_run(ctx, 
     report = _reconcile(ctx)
 
     assert report == RemnantReport(removed=1, failed_owners=1)
-    assert victim.exists() and not other_remnant.exists()
+    assert victim.exists()
+    assert not other_remnant.exists()
 
 
 def test_a_non_directory_ancestor_refuses_that_owner(ctx):
@@ -139,7 +147,10 @@ def test_an_unreadable_refs_directory_fails_that_owner_and_the_others_still_run(
 
 @pytest.mark.parametrize(
     "storage_path",
-    ["owner/refs/nested/a.wav", "other/refs/a.wav", "owner/a.wav", "owner/refs//a.wav"],
+    [
+        "owner/refs/nested/a.wav", "other/refs/a.wav", "owner/a.wav", "owner/refs//a.wav",
+        "owner/refs/..", "owner/refs/.",
+    ],
 )
 def test_an_owner_with_a_non_conforming_row_path_keeps_every_file(ctx, storage_path):
     remnant = _file(ctx, "remnant.wav")
@@ -181,11 +192,12 @@ def test_an_upload_whose_commit_raised_keeps_its_file_only_while_a_row_exists(ct
     def lose_the_confirmation(_session):
         raise OperationalError("COMMIT", {}, ConnectionError("lost"))
 
+    settings = Settings()
     event.listen(ctx.db, listener, lose_the_confirmation)
     try:
         with pytest.raises(ReferenceAudioStorageError):
             store_reference_audio(
-                ctx.db, ctx.audio_dir, "owner", ".wav", b"audio", Settings(), "x.wav",
+                ctx.db, ctx.audio_dir, "owner", ".wav", b"audio", settings, "x.wav",
             )
     finally:
         event.remove(ctx.db, listener, lose_the_confirmation)
@@ -199,15 +211,46 @@ def test_an_upload_whose_commit_raised_keeps_its_file_only_while_a_row_exists(ct
     assert has_row is (listener == "after_commit")
 
 
-def test_the_logs_carry_the_user_and_never_a_name_or_a_path(ctx, caplog):
+@pytest.fixture
+def read_only_refs(ctx):
+    """An owner whose refs directory refuses unlinks, so the failure names a file."""
+    private = _file(ctx, f"{PRIVATE_NAME}-locked.wav", READ_ONLY_OWNER)
+    refs = private.parent
+    refs.chmod(0o500)
+    try:
+        yield refs
+    finally:
+        refs.chmod(0o700)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root unlinks from a read-only directory")
+def test_the_logs_carry_the_user_and_never_a_name_or_a_path(ctx, caplog, read_only_refs):
     _file(ctx, f"{PRIVATE_NAME}.wav")
     (_refs(ctx) / f"{PRIVATE_NAME}-link.wav").symlink_to(ctx.audio_dir)
     (ctx.audio_dir / "other").write_bytes(b"x")
 
     with caplog.at_level(logging.DEBUG):
-        _reconcile(ctx)
+        report = _reconcile(ctx)
 
-    assert caplog.records
-    assert "owner" in caplog.text and "other" in caplog.text
+    assert report.failed_owners == 2
+    assert READ_ONLY_OWNER in caplog.text
+    assert "other" in caplog.text
     assert PRIVATE_NAME not in caplog.text
     assert str(ctx.audio_dir) not in caplog.text
+
+
+def test_an_owner_that_fails_partway_keeps_the_count_of_the_files_it_removed(ctx, monkeypatch):
+    _file(ctx, "one.wav")
+    _file(ctx, "two.wav")
+    real_unlink = os.unlink
+    calls = []
+
+    def fail_the_second_unlink(name, *, dir_fd):
+        calls.append(name)
+        if len(calls) == 2:
+            raise PermissionError(name)
+        real_unlink(name, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "unlink", fail_the_second_unlink)
+
+    assert _reconcile(ctx) == RemnantReport(removed=1, failed_owners=1)
