@@ -718,6 +718,11 @@ export interface RateResult {
 	rating: number;
 }
 
+export interface ReferenceListResponse {
+	references: ReferenceRecordingResponse[];
+	usage: ReferenceUsageResponse;
+}
+
 export interface ReferenceRecordingResponse {
 	id: string;
 	filename: string;
@@ -729,6 +734,13 @@ export interface ReferenceRecordingResponse {
 export interface ReferenceResponse {
 	id: string;
 	filename: string;
+}
+
+export interface ReferenceUsageResponse {
+	files: number;
+	bytes: number;
+	file_limit: number;
+	byte_limit: number;
 }
 
 export interface RegistryModelItem {
