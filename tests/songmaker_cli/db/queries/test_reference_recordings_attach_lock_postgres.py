@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 from httpx import Response
-from postgres_lock_harness import CommitPause, race
 from sqlalchemy.exc import IntegrityError
+from support.postgres_lock_harness import CommitPause, race
 from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR

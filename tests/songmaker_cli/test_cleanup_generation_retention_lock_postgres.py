@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 from httpx import Response
-from postgres_lock_harness import CommitPause, race, wrote_to_tables
+from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, Version

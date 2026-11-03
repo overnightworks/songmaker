@@ -13,7 +13,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
-from worker_http_peer import LoopbackServer
+from support.worker_http_peer import LoopbackServer
 
 from songmaker_cli.acestep_state import worker_state_key
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER, JobStatus, JobType, LoraStatus

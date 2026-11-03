@@ -4435,7 +4435,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
     import asyncio
 
     import httpx
-    from worker_http_peer import (
+    from support.worker_http_peer import (
         PEER_CLEANUP_DEADLINE_SECONDS,
         LoopbackServer,
         WorkerScenario,
@@ -4528,7 +4528,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
 
 def test_partial_oom_reload_retains_successful_take(client, generation_worker_peer):
     """S9-B, S9-D: A real saved take survives and does not hide its own OOM partial."""
-    from worker_http_peer import WorkerScenario, WorkerStream
+    from support.worker_http_peer import WorkerScenario, WorkerStream
 
     from songmaker_cli import redis_client
     from songmaker_cli.db.queries.jobs import create_job

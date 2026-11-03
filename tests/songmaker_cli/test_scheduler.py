@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import fakeredis.aioredis
 import httpx
 import pytest
-from worker_http_peer import TransportFailure, WorkerReply, WorkerScenario
+from support.worker_http_peer import TransportFailure, WorkerReply, WorkerScenario
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig

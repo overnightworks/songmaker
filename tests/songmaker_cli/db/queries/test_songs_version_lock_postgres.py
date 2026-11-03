@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.generation_job_world import worker_up
+from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.web_app import make_authenticated_user, make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR

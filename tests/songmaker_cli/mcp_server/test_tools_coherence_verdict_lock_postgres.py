@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.coherence_verdicts import add_take, save_verdict, seed_verdict_world, stored_scores
+from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
 
 
 def test_competing_first_verdicts_leave_one_row_holding_the_later_pair(pg_factory):
