@@ -1,7 +1,7 @@
 """ACE-Step music engine for Songmaker.
 
 Generates complete songs via ACE-Step 1.5 (text-to-music AI).
-REST API client talking to an ACE-Step server on localhost:8001.
+REST API client talking to an ACE-Step server at the host and port its caller passes.
 """
 
 from acestep_engine.client import AceStepClient

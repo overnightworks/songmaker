@@ -1,10 +1,6 @@
 """ACE-Step REST API client.
 
-Talks to an ACE-Step 1.5 server running on localhost. The server runs
-in a separate venv (.venv-acestep) because ACE-Step pins a different
-torch version than Songmaker.
-
-Server launch:  python scripts/start_acestep.py
+Talks to an ACE-Step 1.5 server at the host and port its caller passes.
 """
 
 from __future__ import annotations
@@ -307,7 +303,7 @@ class AceStepClient:
     the result as stereo audio at the server's native sample rate.
 
     Usage:
-        client = AceStepClient(host="localhost", port=8001)
+        client = AceStepClient(host=server_host, port=server_port)
         result = client.generate(AceStepConfig(
             prompt="female vocal, piano ballad",
             lyrics="[verse]\\nHello world",

@@ -111,7 +111,7 @@ def build_env(
 
 def is_acestep_healthy(port: int, timeout: float = 5.0) -> bool:
     try:
-        req = Request(f"http://127.0.0.1:{port}/health", method="GET")
+        req = Request(f"http://{SUBPROCESS_BIND_HOST}:{port}/health", method="GET")
         with urlopen(req, timeout=timeout) as resp:  # noqa: S310 - literal http loopback URL
             return resp.status == 200
     except OSError:
@@ -121,7 +121,7 @@ def is_acestep_healthy(port: int, timeout: float = 5.0) -> bool:
 def _read_llm_initialized(port: int, timeout: float = 5.0) -> bool | None:
     """The child's own report of its LM; None when the body gives no verdict."""
     try:
-        req = Request(f"http://127.0.0.1:{port}/health", method="GET")
+        req = Request(f"http://{SUBPROCESS_BIND_HOST}:{port}/health", method="GET")
         with urlopen(req, timeout=timeout) as resp:  # noqa: S310 - literal http loopback URL
             body = json.loads(resp.read())
         flag = body["data"]["llm_initialized"]
