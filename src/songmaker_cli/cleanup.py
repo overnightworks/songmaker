@@ -30,9 +30,8 @@ from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
-# The music worker runs the generation retention daily at this hour, in UTC;
-# the admin page names it.
-GENERATION_RETENTION_HOUR_UTC = 3
+# The music worker runs its daily cleanup jobs at this hour, in UTC; the admin page names it.
+DAILY_CLEANUP_HOUR_UTC = 3
 
 
 @dataclass(slots=True)

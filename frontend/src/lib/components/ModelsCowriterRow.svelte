@@ -1,6 +1,10 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { MODELS_SET_BY_AGENT_SERVICE_LABEL, MODELS_TASK_COWRITER_LABEL } from '#lib/constants.ts';
+	import {
+		MODELS_ROUTE_GATEWAY_LABEL,
+		MODELS_SET_BY_AGENT_FILE_LABEL,
+		MODELS_TASK_COWRITER_LABEL
+	} from '#lib/constants.ts';
 	import ModelsServiceRow from './ModelsServiceRow.svelte';
 
 	interface Props {
@@ -12,8 +16,8 @@
 
 <ModelsServiceRow
 	task={MODELS_TASK_COWRITER_LABEL}
-	provider={MODELS_SET_BY_AGENT_SERVICE_LABEL}
-	route="Agent service"
-	model={MODELS_SET_BY_AGENT_SERVICE_LABEL}
+	provider={MODELS_SET_BY_AGENT_FILE_LABEL}
+	route={MODELS_ROUTE_GATEWAY_LABEL}
+	model={MODELS_SET_BY_AGENT_FILE_LABEL}
 	{advanced}
 />

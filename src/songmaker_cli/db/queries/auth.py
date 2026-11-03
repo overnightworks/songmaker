@@ -31,6 +31,10 @@ def get_user_by_username(session: Session, username: str) -> User | None:
     return session.query(User).filter_by(username=username).order_by(User.created_at).first()
 
 
+def list_user_ids(session: Session) -> list[str]:
+    return list(session.execute(select(User.id).order_by(User.id)).scalars())
+
+
 def get_user(session: Session, user_id: str) -> User | None:
     return session.query(User).filter_by(id=user_id).first()
 

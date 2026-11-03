@@ -1,6 +1,7 @@
 import { createRawSnippet, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { MODELS_ROUTE_GATEWAY_LABEL, MODELS_SET_BY_AGENT_FILE_LABEL } from '#lib/constants.ts';
 import ModelsCowriterRow from './ModelsCowriterRow.svelte';
 
 const mounted: ReturnType<typeof mount>[] = [];
@@ -23,11 +24,11 @@ function rowText(target: HTMLElement): string {
 }
 
 describe('A1 the Co-writer row', () => {
-	it('names the agent service and no model, no offer status and no note', () => {
+	it('names the agent file and the gateway, and no model, no offer status and no note', () => {
 		const target = renderRow();
 
 		expect(rowText(target)).toBe(
-			'Co-Writer Provider Set by the agent service Route Agent service Model Set by the agent service'
+			`Co-Writer Provider ${MODELS_SET_BY_AGENT_FILE_LABEL} Route ${MODELS_ROUTE_GATEWAY_LABEL} Model ${MODELS_SET_BY_AGENT_FILE_LABEL}`
 		);
 		expect(target.querySelector('.st, .note')).toBeNull();
 	});

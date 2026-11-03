@@ -59,7 +59,7 @@ const LAST_SECTION_LABEL = '[Outro]';
 const SUBPIXEL_ROUNDING_PX = 1;
 const COWRITER_MESSAGE = 'Kürz den Refrain auf zwei Zeilen';
 const CONVERSATIONS_PATH = '/api/conversations';
-// The problem frame the server ends a turn with when the agent service did not
+// The problem frame the server ends a turn with when the agent did not
 // run it; the panel words the named problem.
 const COWRITER_TURN_REFUSAL_FRAME = {
 	type: 'error',

@@ -53,7 +53,7 @@ const SENT = 'Ja bitte, schreib den Refrain neu';
 const REPLY = 'Erledigt. Der neue Refrain steht als neue Version.';
 const THINKING = /is thinking/;
 
-// The problem frame the server ends a turn with when the agent service did not
+// The problem frame the server ends a turn with when the agent did not
 // run it; the panel words the named problem.
 const RETRY_FAILURE_FRAME = {
 	type: 'error',

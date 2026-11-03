@@ -2442,8 +2442,8 @@
 		<div class="decision">
 			<h3>Warum — #1476, „mit prio umbauen, dass der dienst genutzt wird" (26.10.2026)</h3>
 			<p>
-				Songmaker ruft keinen Anbieter mehr selbst auf. Der Co-Writer läuft über den Agent-Service, der
-				Claude unter dem einen geteilten Login betreibt; Cover kann der Dienst noch nicht und
+				Songmaker ruft keinen Anbieter mehr selbst auf. Der Co-Writer läuft über das LiteLLM-Gateway, und die
+				Agent-Datei nennt sein Modell (#2155, #2170); Cover kann der Dienst noch nicht und
 				ist bis dahin <strong>nicht verfügbar</strong>. Die Tabelle behält ihre fünf Spalten, damit jeder
 				Zwischenstand der Landung lesbar bleibt: eine alte, bedienbare Zeile neben einer neuen, die der Admin
 				nur liest.
@@ -2452,12 +2452,12 @@
 				<li><strong>Eine Zeile ohne Bedienelement ist eine Zeile ohne Wahl.</strong> Provider, Route und
 					Modell stehen als Text; es gibt nichts zu speichern, also auch kein „Saved.".</li>
 				<li><strong>Kein Licht, wo niemand prüft.</strong> Songmaker liest keine Einstellung des Dienstes
-					und prüft den Co-Writer nicht vorab; die Zeile hat keinen Status, nur „Set by the agent service"
-					für Provider und Modell (Operator, 27.10.2026, agent-runtime#494).</li>
+					und prüft den Co-Writer nicht vorab; die Zeile hat keinen Status (Operator, 27.10.2026, agent-runtime#494), nur
+					„Set by the agent file" für Provider und Modell (#2170).</li>
 				<li><strong>Nicht verfügbar ist grau, nicht rot.</strong> Cover trägt den leeren Ring
 					von Fassung 2 und sagt, worauf es wartet. Rot bleibt dem fehlgeschlagenen Speichern.</li>
-				<li><strong>Kein Modell, das der Dienst entscheidet.</strong> Songmaker liest das Angebot des
-					Dienstes nicht; das Modell wird weder gewählt noch angezeigt (#1949).</li>
+				<li><strong>Das Modell nennt die Agent-Datei.</strong> Die Zeile wählt es nicht und zeigt es
+					nicht (#1949, #2170).</li>
 			</ul>
 			<p>
 				Die Zustände folgen der Landungsreihenfolge aus #1476: (w) Slices 2–4, (y) Slice 6. Dieser Abschnitt überschreibt die Co-Writer- und Cover-Zeilen von
@@ -2469,8 +2469,8 @@
 			<article class="state wide">
 				<div class="state-head"><h3>(w) Cutover-Tag · Co-Writer neu, Cover wie heute</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1895</span></div>
 				<p class="state-note">
-					Nach Slices 2–4. Die Co-Writer-Zeile liest nur: „Set by the agent service" für Provider und Modell,
-					Agent service als Route, kein Status. Darunter Advanced mit dem History-Tail wie heute.
+					Nach Slices 2–4. Die Co-Writer-Zeile liest nur: „Set by the agent file" für Provider und Modell,
+					Gateway als Route, kein Status. Darunter Advanced mit dem History-Tail wie heute.
 					Cover läuft an diesem Tag noch auf dem alten Weg und ist bedienbar wie in (a).
 				</p>
 				<div class="screen">
@@ -2482,9 +2482,9 @@
 
 							<div class="tt-row">
 								<span class="cell-task">Co-Writer</span>
-								<span class="ro is-new">Set by the agent service</span>
-								<span class="ro is-new">Agent service</span>
-								<span class="ro is-new">Set by the agent service</span>
+								<span class="ro is-new">Set by the agent file</span>
+								<span class="ro is-new">Gateway</span>
+								<span class="ro is-new">Set by the agent file</span>
 							</div>
 							<div class="tt-sub">
 								<details class="adv"><summary>Advanced</summary>
@@ -2515,7 +2515,7 @@
 					<div class="tt-head"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
 					<div class="tt-row">
 						<span class="cell-task">Co-Writer</span>
-						<span class="ro">Set by the agent service</span><span class="ro">Agent service</span><span class="ro">Set by the agent service</span>
+						<span class="ro">Set by the agent file</span><span class="ro">Gateway</span><span class="ro">Set by the agent file</span>
 					</div>
 					<div class="tt-sub"><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></div>
 					<div class="tt-row off">
@@ -2538,9 +2538,9 @@
 					<div class="ph-body">
 						<div class="tcard">
 							<h4>Co-Writer</h4>
-							<div class="line"><span class="k">Provider</span><span class="ro">Set by the agent service</span></div>
-							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
-							<div class="line"><span class="k">Model</span><span class="ro">Set by the agent service</span></div>
+							<div class="line"><span class="k">Provider</span><span class="ro">Set by the agent file</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro">Gateway</span></div>
+							<div class="line"><span class="k">Model</span><span class="ro">Set by the agent file</span></div>
 							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
 						</div>
 						<div class="tcard">
@@ -2562,9 +2562,9 @@
 					<div class="ph-body">
 						<div class="tcard">
 							<h4>Co-Writer</h4>
-							<div class="line"><span class="k">Provider</span><span class="ro">Set by the agent service</span></div>
-							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
-							<div class="line"><span class="k">Model</span><span class="ro">Set by the agent service</span></div>
+							<div class="line"><span class="k">Provider</span><span class="ro">Set by the agent file</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro">Gateway</span></div>
+							<div class="line"><span class="k">Model</span><span class="ro">Set by the agent file</span></div>
 							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
 						</div>
 						<div class="tcard off">

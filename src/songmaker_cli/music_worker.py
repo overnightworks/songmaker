@@ -14,7 +14,7 @@ from arq import cron, func
 
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
-from songmaker_cli.cleanup import GENERATION_RETENTION_HOUR_UTC
+from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     MODEL_DEFAULT_MODE,
@@ -162,6 +162,14 @@ class MusicWorker(WorkerBase):
         )
         return report.archived_count + report.deleted_count
 
+    async def reference_remnant_cron(self, _ctx) -> int:
+        from songmaker_cli.reference_audio import reconcile_reference_remnants
+
+        report = await asyncio.to_thread(
+            reconcile_reference_remnants, self.get_db_factory(), self.audio_dir(),
+        )
+        return report.removed
+
 
 _settings = get_settings()
 _music_worker = MusicWorker(_settings)
@@ -211,7 +219,13 @@ class MusicWorkerSettings:
         ),
         cron(
             _music_worker.generation_retention_cron,
-            hour={GENERATION_RETENTION_HOUR_UTC},
+            hour={DAILY_CLEANUP_HOUR_UTC},
+            minute={0},
+            second={0},
+        ),
+        cron(
+            _music_worker.reference_remnant_cron,
+            hour={DAILY_CLEANUP_HOUR_UTC},
             minute={0},
             second={0},
         ),

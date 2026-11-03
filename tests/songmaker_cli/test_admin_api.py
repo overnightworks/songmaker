@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from support.web_app import make_test_app, seed_user
 
-from songmaker_cli.cleanup import GENERATION_RETENTION_HOUR_UTC
+from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.queries.loras import create_user_lora
 
@@ -1032,7 +1032,7 @@ def test_retention_preview_returns_counts(client: TestClient) -> None:
     assert {"archived_ids", "deleted_ids"} <= body.keys()
     assert body["retention_days"] >= 1
     assert body["hard_delete_days"] >= 1
-    assert body["scheduled_hour_utc"] == GENERATION_RETENTION_HOUR_UTC
+    assert body["scheduled_hour_utc"] == DAILY_CLEANUP_HOUR_UTC
 
 
 def test_retention_run_executes(client: TestClient) -> None:
