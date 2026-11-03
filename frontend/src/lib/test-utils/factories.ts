@@ -1,7 +1,6 @@
 import type {
 	AuthUser,
 	SongItem,
-	HealthResponse,
 	GenerationItem,
 	AlbumItem,
 	PlaylistItem,
@@ -173,36 +172,6 @@ export function makeVersion(overrides: Partial<VersionItem> = {}): VersionItem {
 		key_scale: 'Am',
 		generation_params: null,
 		created_at: '',
-		...overrides
-	};
-}
-
-export function makeHealthResponse(overrides: Partial<HealthResponse> = {}): HealthResponse {
-	return {
-		status: 'ok',
-		music_worker: 'running',
-		scoring_worker: 'running',
-		db: 'ok',
-		redis: 'ok',
-		acestep: 'healthy',
-		acestep_reason: null,
-		uptime_seconds: 60,
-		claude_cli_tool_surface: 'ok',
-		codex_image_sandbox_runtime: 'ready',
-		background_loops: {
-			cover_runner: { state: 'ok', consecutive_failures: 0, last_error: null },
-			session_cleanup: { state: 'ok', consecutive_failures: 0, last_error: null },
-			resource_event_cleanup: { state: 'ok', consecutive_failures: 0, last_error: null },
-			score_backfill: { state: 'ok', consecutive_failures: 0, last_error: null },
-			stale_job_reaper: { state: 'ok', consecutive_failures: 0, last_error: null },
-			provider_status_refresh: { state: 'ok', consecutive_failures: 0, last_error: null }
-		},
-		release: { tag: 'v2026.10.28.4', commit: 'a'.repeat(40) },
-		queue_depth_cap_reached: false,
-		music_queue_depth: 0,
-		scoring_queue_depth: 0,
-		acestep_workers_online: 1,
-		acestep_workers_total: 1,
 		...overrides
 	};
 }

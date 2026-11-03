@@ -140,7 +140,6 @@ vi.mock('#lib/api/loras.ts', async (importOriginal) => ({
 }));
 vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
-	fetchHealth: vi.fn().mockResolvedValue({ status: 'ok' }),
 	fetchActiveModels: vi.fn().mockResolvedValue([]),
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: vi

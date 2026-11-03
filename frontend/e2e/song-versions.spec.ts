@@ -21,10 +21,8 @@
 // until a test moves the clock on.
 //
 // CI's e2e stack runs no ACE-Step worker, so the song's takes are seeded
-// directly against the database (scripts/seed_e2e_job_states.py), and
-// `/health` reports one worker online for this page only, the way
-// song-phone.spec.ts stands in for a real worker's heartbeat. With no worker
-// the generate request itself is refused; the flow only needs the version
+// directly against the database (scripts/seed_e2e_job_states.py). With no
+// worker the generate request itself is refused; the flow only needs the version
 // Generate saved before it.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';

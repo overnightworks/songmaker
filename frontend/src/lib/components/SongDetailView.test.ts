@@ -2,7 +2,6 @@ import { historyEntry, historyLength } from '#lib/test-utils/library-history.ts'
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
-	makeHealthResponse,
 	makeSong as song,
 	makeVersion as version
 } from '#lib/test-utils/factories.ts';
@@ -98,7 +97,6 @@ const fetchAlbum = vi.fn();
 const uploadSongCover = vi.fn();
 const deleteSongCover = vi.fn();
 const deleteAlbumCover = vi.fn();
-const fetchHealth = vi.fn();
 const generateSong = vi.fn();
 const listLoras = vi.fn();
 
@@ -130,7 +128,6 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 	return {
 		...actual,
 		fetchVersions: vi.fn().mockResolvedValue([]),
-		fetchHealth: (...args: unknown[]) => fetchHealth(...args),
 		fetchSong: vi.fn(async (id: string) => ({
 			id,
 			title: 'Local Only',
@@ -345,8 +342,6 @@ beforeEach(() => {
 	uploadSongCover.mockReset();
 	deleteSongCover.mockReset();
 	deleteAlbumCover.mockReset();
-	fetchHealth.mockReset();
-	fetchHealth.mockResolvedValue(makeHealthResponse());
 	generateSong.mockReset();
 	listLoras.mockReset();
 	listLoras.mockResolvedValue([]);
@@ -908,17 +903,6 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 	function generateBtn(target: HTMLElement): HTMLButtonElement | null {
 		return target.querySelector<HTMLButtonElement>('.generate-action .primary-button');
 	}
-
-	it('keeps Generate pressable with no reason when no ACE-Step worker is online', async () => {
-		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
-		const target = await renderView();
-
-		const btn = generateBtn(target);
-		expect(btn?.disabled).toBe(false);
-		expect(btn?.title).toBe('');
-		expect(target.querySelector('.generate-action .reason')).toBeNull();
-		expect(btn?.textContent).toContain(EDITOR_GENERATE_LABEL);
-	});
 
 	it('[defect:#1579] shows the full failure at Generate and retries through the same button', async () => {
 		const cause = 'Generating failed — try again.';
