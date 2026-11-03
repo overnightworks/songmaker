@@ -1,8 +1,0 @@
-claim_id = "340e1b7879674bf38eebead5a5f2c894"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3faa23783bfa8856824b2b12b7aa388023d1c416"
-branch = "claude/issue-2160-test-layout-3h5"
-scope = ["docs/security.md", "frontend/e2e/cowriter-return.spec.ts", "quality/baseline.toml", "src/acestep_worker/constants.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/queries/songs.py", "tests/scripts/test_repo_path_imports_own_checkout.py", "tests/scripts/test_seed_e2e_song_takes.py", "tests/songmaker_cli/test_constants_secret_scrub_parity.py", "tests/songmaker_cli/test_db_postgresql.py", "tests/test_quality_workflow.py", "tests/test_scripts_import_own_checkout.py", "tests/test_secret_scrub_parity.py", "tests/test_seed_e2e_takes.py", "tests/workflows/test_ci_quality_gate.py"]
-opened_commit = "810f13a21a7e7b9daf341129730ad3a09c7efdf3"
-whole_reason = "Four renames, three one-line one-offs and their pins; each part is under ten lines."
