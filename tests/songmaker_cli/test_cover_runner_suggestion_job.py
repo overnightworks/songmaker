@@ -23,7 +23,7 @@ from agent_providers.images import ImagePolicy
 from agent_providers.process import CliRunOutcome, CliRunReason
 from PIL import Image
 from support.provider_runtime import override_provider_runtime, use_codex_process_pool
-from xmp_packet import read_digital_source_type
+from support.xmp_packet import read_digital_source_type
 
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.constants import (

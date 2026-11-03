@@ -29,7 +29,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    entrypoint: ["/app/.venv/bin/python", "/app/tests/e2e_fixtures/fake_training_worker.py"]
+    entrypoint: ["/app/.venv/bin/python", "/app/tests/support/fake_training_worker.py"]
     restart: "no"
     logging: *service-logging
     healthcheck:
@@ -56,8 +56,8 @@ services:
     volumes:
       - audiofiles:/app/data/audio
       - type: bind
-        source: ./tests/e2e_fixtures
-        target: /app/tests/e2e_fixtures
+        source: ./tests/support/fake_training_worker.py
+        target: /app/tests/support/fake_training_worker.py
         read_only: true
         bind:
           create_host_path: false

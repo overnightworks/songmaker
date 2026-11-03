@@ -17,8 +17,8 @@ from support.web_app import (
     seed_session,
     web_client,
 )
+from support.xmp_packet import read_digital_source_type
 from webauth.ports import AuthenticatedUser
-from xmp_packet import read_digital_source_type
 
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.cleanup import run_cleanup_expired

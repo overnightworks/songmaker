@@ -18,7 +18,7 @@ from support.generation_job_world import (
     persist_via_post_process,
     run_async,
 )
-from worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
+from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
 
 from acestep_engine.models import AceStepConfig, TaskQueryEntry
 from acestep_engine.progress import AceStepPhase, progress_from_result

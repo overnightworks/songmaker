@@ -41,7 +41,7 @@ from support.provider_runtime import (  # noqa: E402
     refresh_provider_snapshots,
 )
 from support.web_app import make_fake_redis  # noqa: E402
-from worker_http_peer import generation_worker_peer  # noqa: E402, F401
+from support.worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
 from songmaker_cli.scheduler import (  # noqa: E402
     WorkerGenerationUnavailable,
