@@ -73,7 +73,7 @@ def encode_mp3(
 
     cmd = build_ffmpeg_cmd("-", tmp_path, bitrate, metadata)
     try:
-        subprocess.run(cmd, input=wav_bytes, check=True, capture_output=True)
+        subprocess.run(cmd, input=wav_bytes, check=True, capture_output=True)  # noqa: S603 - fixed ffmpeg argv without a shell and the input arrives on stdin
         os.replace(tmp_path, mp3_path)
         log.info("Encoded MP3: %s", mp3_path)
     except subprocess.CalledProcessError as exc:

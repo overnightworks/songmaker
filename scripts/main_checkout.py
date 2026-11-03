@@ -42,7 +42,7 @@ def main_checkout_elsewhere(project_root: Path) -> Path | None:
         raise not_a_checkout
     try:
         common_dir = subprocess.run(
-            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],  # noqa: S607 - git is the operator tool found through PATH on purpose
             cwd=project_root, capture_output=True, text=True, check=False,
         )
     except OSError as exc:

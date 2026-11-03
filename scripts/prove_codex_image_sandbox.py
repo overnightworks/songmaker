@@ -21,7 +21,7 @@ WEB_SERVICE = "songmaker-web"
 DEFAULT_WEB_PROFILE = "songmaker-web"
 DEFAULT_DOCKER_PROFILE = "docker-default"
 EMPTY_CAPABILITY_MASK = "0000000000000000"
-SANDBOX_TEMP_DIRECTORY = "/tmp"  # NOSONAR(S5443) Web container path pinned by its AppArmor profile.
+SANDBOX_TEMP_DIRECTORY = "/tmp"  # NOSONAR(S5443) Web container path pinned by its AppArmor profile.  # noqa: S108 - a path inside the web container under test and no host temp directory
 SANDBOX_ROOT = f"{SANDBOX_TEMP_DIRECTORY}/{CODEX_SANDBOX_PROOF_DIRECTORY}"
 OUTSIDE_CODEX_HOME = f"{SANDBOX_TEMP_DIRECTORY}/outside-codex-home"
 SANDBOX_CODEX_HOME = f"{SANDBOX_ROOT}/{CODEX_HOME_DIRECTORY_NAME}"
@@ -168,7 +168,7 @@ def bubblewrap_probe_command() -> tuple[str, ...]:
 
 
 def _run(command: Sequence[str]) -> CommandResult:
-    completed = subprocess.run(command, capture_output=True, check=False, text=True)
+    completed = subprocess.run(command, capture_output=True, check=False, text=True)  # noqa: S603 - list argv without a shell and callers pass fixed docker commands plus ids docker printed
     return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
