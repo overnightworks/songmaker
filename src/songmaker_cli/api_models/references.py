@@ -20,9 +20,12 @@ class ReferenceRecordingResponse(BaseModel):
     size_bytes: int
     duration_sec: float | None
     created_at: str
+    in_use: bool
 
     @classmethod
-    def from_orm(cls, recording: ReferenceRecording) -> ReferenceRecordingResponse:
+    def from_orm(
+        cls, recording: ReferenceRecording, *, in_use: bool,
+    ) -> ReferenceRecordingResponse:
         link = ReferenceResponse.from_orm(recording)
         return cls(
             id=link.id,
@@ -30,6 +33,7 @@ class ReferenceRecordingResponse(BaseModel):
             size_bytes=recording.size_bytes,
             duration_sec=recording.duration_sec,
             created_at=recording.created_at.isoformat(),
+            in_use=in_use,
         )
 
 

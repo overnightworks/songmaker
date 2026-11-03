@@ -729,6 +729,7 @@ export interface ReferenceRecordingResponse {
 	size_bytes: number;
 	duration_sec: number | null;
 	created_at: string;
+	in_use: boolean;
 }
 
 export interface ReferenceResponse {

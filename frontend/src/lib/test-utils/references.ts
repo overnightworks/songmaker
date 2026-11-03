@@ -11,6 +11,7 @@ export function referenceRecording(
 		size_bytes: 1000,
 		duration_sec: 31.4,
 		created_at: '2026-10-27T10:00:00Z',
+		in_use: false,
 		...overrides
 	};
 }

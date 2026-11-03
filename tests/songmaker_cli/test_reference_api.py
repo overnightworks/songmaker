@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -9,11 +10,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from fastapi.responses import FileResponse
 from fastapi.testclient import TestClient
+from sqlalchemy import event, func, select
+from sqlalchemy.exc import OperationalError
 from support.token_world import TokenWorld, make_token_world
 from support.wav_files import write_wav
-from support.web_app import TEST_ORIGIN, make_test_app, seed_session
+from support.web_app import TEST_ORIGIN, make_test_app, seed_session, web_client
 
 from songmaker_cli import reference_api
 from songmaker_cli.constants import (
@@ -22,7 +24,15 @@ from songmaker_cli.constants import (
     AUDIO_UPLOAD_FILE_MAX_BYTES,
     REFERENCE_AUDIO_EXTENSIONS,
 )
-from songmaker_cli.db.models import ReferenceRecording, User
+from songmaker_cli.db.models import (
+    Album,
+    AuditLog,
+    Generation,
+    ReferenceRecording,
+    Song,
+    User,
+    Version,
+)
 from songmaker_cli.db.queries.reference_recordings import create_reference_recording
 from songmaker_cli.settings import get_settings
 
@@ -91,7 +101,8 @@ def test_m1_an_upload_answers_the_stored_record(
     assert response.status_code == 200, response.text
     [row] = _reference_rows(signed_in)
     body = response.json()
-    assert set(body) == {"id", "filename", "size_bytes", "duration_sec", "created_at"}
+    assert set(body) == {"id", "filename", "size_bytes", "duration_sec", "created_at", "in_use"}
+    assert body["in_use"] is False
     assert body["id"] == row.id
     assert body["filename"] == row.original_filename == f"ref.{kind}"
     assert body["size_bytes"] == len(payload) == row.size_bytes
@@ -282,7 +293,7 @@ def _seed_reference(
 
 
 def _signed_in_as(signed_in: TestClient, username: str) -> TestClient:
-    client = TestClient(signed_in.app, base_url=TEST_ORIGIN, raise_server_exceptions=False)
+    client = web_client(signed_in.app, raise_server_exceptions=False)
     seed_session(client, username)
     return client
 
@@ -421,12 +432,12 @@ def test_p1b_the_database_connection_is_returned_before_the_file_is_sent(
     checked_out_when_sending: list[int] = []
     engine = signed_in.app.state.ctx.db.kw["bind"]
 
-    class RecordingFileResponse(FileResponse):
+    class RecordingFileResponse(reference_api.OpenedFileResponse):
         async def __call__(self, scope, receive, send) -> None:
             checked_out_when_sending.append(engine.pool.checkedout())
             await super().__call__(scope, receive, send)
 
-    monkeypatch.setattr(reference_api, "FileResponse", RecordingFileResponse)
+    monkeypatch.setattr(reference_api, "OpenedFileResponse", RecordingFileResponse)
 
     signed_in.get(_audio_path(_seed_playable(signed_in)))
 
@@ -570,3 +581,329 @@ def test_p9b_a_persons_token_plays_that_persons_reference(
 
     assert response.status_code == 200, response.text
     assert response.content == AUDIO_BYTES
+
+
+def _link_reference(
+    client: TestClient, reference_id: str, *, via: str, archived: bool = False,
+    song_trashed: bool = False, album_trashed: bool = False,
+) -> None:
+    """Link the reference from a saved version (``via="version"``) or from a take."""
+    trashed_at = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    with client.app.state.ctx.db() as session:
+        album = Album(
+            id="album-link", title="A", artist="A", created_by="owner-id",
+            deleted_at=trashed_at if album_trashed else None,
+        )
+        song = Song(
+            id="song-link", title="S", album_id="album-link", track_number=1,
+            deleted_at=trashed_at if song_trashed else None,
+        )
+        version = Version(
+            id="version-link", song_id="song-link", version_number=1, lyrics="la", prompt="p",
+            reference_recording_id=reference_id if via == "version" else None,
+        )
+        session.add(album)
+        session.flush()
+        session.add_all([song, version])
+        session.flush()
+        if via == "take":
+            session.add(Generation(
+                song_id="song-link", version_id="version-link", mp3_path="owner-id/take.mp3",
+                is_archived=archived, reference_recording_id=reference_id,
+            ))
+        session.commit()
+
+
+LINKS = [
+    pytest.param({"via": "version"}, id="saved-version"),
+    pytest.param({"via": "take"}, id="take"),
+    pytest.param({"via": "take", "archived": True}, id="archived-take"),
+    pytest.param({"via": "version", "song_trashed": True}, id="version-of-trashed-song"),
+    pytest.param({"via": "take", "song_trashed": True}, id="take-of-trashed-song"),
+    pytest.param({"via": "version", "album_trashed": True}, id="version-of-trashed-album"),
+    pytest.param({"via": "take", "album_trashed": True}, id="take-of-trashed-album"),
+]
+
+
+@pytest.mark.parametrize("link", LINKS)
+def test_l8_the_list_marks_a_linked_reference_as_in_use(
+    signed_in: TestClient, link: dict,
+) -> None:
+    linked = _seed_reference(signed_in, "owner-id", "linked.wav")
+    _seed_reference(signed_in, "owner-id", "free.wav")
+    _link_reference(signed_in, linked, **link)
+
+    listed = signed_in.get(REFERENCES_PATH).json()["references"]
+
+    assert {item["filename"]: item["in_use"] for item in listed} == {
+        "linked.wav": True, "free.wav": False,
+    }
+
+
+@pytest.mark.parametrize("control", ["\x00", "\x01", "\x09", "\x1b", "\x1f"])
+def test_f1_a_filename_with_a_control_character_is_refused_and_stores_nothing(
+    signed_in: TestClient, control: str,
+) -> None:
+    boundary = "controlname"
+    body = (
+        f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
+        f'filename="re{control}f.wav"\r\nContent-Type: audio/wav\r\n\r\n'
+    ).encode() + WAV_BYTES + f"\r\n--{boundary}--\r\n".encode()
+
+    response = signed_in.post(
+        REFERENCES_PATH,
+        content=body,
+        headers={"content-type": f"multipart/form-data; boundary={boundary}"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Invalid filename."}
+    assert _reference_rows(signed_in) == []
+    assert _reference_files(signed_in) == []
+
+
+def _delete(client: TestClient, reference_id: str):
+    return client.delete(f"{REFERENCES_PATH}/{reference_id}")
+
+
+def _audit_records(client: TestClient) -> list[AuditLog]:
+    with client.app.state.ctx.db() as session:
+        return session.query(AuditLog).filter_by(action="delete", resource_type="reference").all()
+
+
+def test_d1_the_owner_deletes_an_unused_reference_row_and_file(signed_in: TestClient) -> None:
+    reference_id = _seed_playable(signed_in)
+    other_id = _seed_playable(signed_in, name="stays.wav")
+
+    response = _delete(signed_in, reference_id)
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert [row.id for row in _reference_rows(signed_in)] == [other_id]
+    assert [path.name for path in _reference_files(signed_in)] == ["stays.wav"]
+
+
+def test_d2_a_delete_writes_one_audit_record_without_a_filename(signed_in: TestClient) -> None:
+    reference_id = _seed_playable(signed_in)
+
+    _delete(signed_in, reference_id)
+
+    [record] = _audit_records(signed_in)
+    assert record.user_id == "owner-id"
+    assert record.resource_id == reference_id
+    assert SECRET_FILENAME not in f"{record.detail}{record.resource_id}"
+
+
+@pytest.mark.parametrize("who", ["other", "boss", "nobody"])
+def test_d3_a_foreign_or_missing_reference_answers_the_global_404_and_stays(
+    signed_in: TestClient, who: str,
+) -> None:
+    reference_id = _seed_playable(signed_in)
+    target = "no-such-id" if who == "nobody" else reference_id
+    caller = signed_in if who == "nobody" else _signed_in_as(signed_in, who)
+
+    response = _delete(caller, target)
+
+    assert response.status_code == 404
+    assert response.json() == NOT_FOUND
+    assert len(_reference_rows(signed_in)) == 1
+    assert len(_reference_files(signed_in)) == 1
+    assert _audit_records(signed_in) == []
+
+
+def test_d4_a_repeated_delete_answers_404_and_unlinks_nothing(signed_in: TestClient) -> None:
+    reference_id = _seed_playable(signed_in)
+    _delete(signed_in, reference_id)
+    replacement = signed_in.app.state.ctx.audio_dir / "owner-id" / "refs" / SECRET_FILENAME
+    replacement.write_bytes(AUDIO_BYTES)
+
+    response = _delete(signed_in, reference_id)
+
+    assert response.status_code == 404
+    assert replacement.exists()
+
+
+@pytest.mark.parametrize("link", LINKS)
+def test_d5_a_linked_reference_answers_409_and_stays(signed_in: TestClient, link: dict) -> None:
+    reference_id = _seed_playable(signed_in)
+    _link_reference(signed_in, reference_id, **link)
+
+    response = _delete(signed_in, reference_id)
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Reference audio is in use."}
+    assert [row.id for row in _reference_rows(signed_in)] == [reference_id]
+    assert len(_reference_files(signed_in)) == 1
+    assert _audit_records(signed_in) == []
+
+
+def test_d6_a_failed_unlink_answers_204_leaves_the_file_and_logs_no_path(
+    signed_in: TestClient, tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    reference_id = _seed_playable(signed_in)
+    audio_dir = signed_in.app.state.ctx.audio_dir
+    refs = audio_dir / "owner-id" / "refs"
+    moved = tmp_path / "elsewhere"
+    refs.rename(moved)
+    refs.symlink_to(moved)
+
+    with caplog.at_level(logging.INFO):
+        response = _delete(signed_in, reference_id)
+
+    assert response.status_code == 204
+    assert _reference_rows(signed_in) == []
+    assert (moved / SECRET_FILENAME).exists()
+    logged = caplog.text
+    assert SECRET_FILENAME not in logged
+    assert str(tmp_path) not in logged
+    assert reference_id in logged
+    assert "owner-id" in logged
+
+
+def test_d7_a_failed_commit_unlinks_nothing(signed_in: TestClient) -> None:
+    reference_id = _seed_playable(signed_in)
+    factory = signed_in.app.state.ctx.db
+
+    def refuse_commit_with_the_audit_record(session) -> None:
+        if session.execute(select(func.count(AuditLog.id))).scalar_one():
+            raise OperationalError("COMMIT", {}, Exception("commit refused"))
+
+    event.listen(factory, "before_commit", refuse_commit_with_the_audit_record)
+    try:
+        client = web_client(
+            signed_in.app, cookies=signed_in.cookies, raise_server_exceptions=False,
+        )
+        response = _delete(client, reference_id)
+    finally:
+        event.remove(factory, "before_commit", refuse_commit_with_the_audit_record)
+
+    assert response.status_code == 500
+    assert len(_reference_files(signed_in)) == 1
+    assert [row.id for row in _reference_rows(signed_in)] == [reference_id]
+
+
+@pytest.mark.parametrize(
+    "stored_path",
+    ["owner-id/refs/sub/nested.wav", "other-id/refs/theirs.wav", "owner-id/refs/../escape.wav"],
+)
+def test_d8_a_row_with_a_corrupt_path_answers_500_and_keeps_the_row_and_the_file(
+    signed_in: TestClient, caplog: pytest.LogCaptureFixture, stored_path: str,
+) -> None:
+    audio_dir = signed_in.app.state.ctx.audio_dir
+    target = audio_dir / stored_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(AUDIO_BYTES)
+    with signed_in.app.state.ctx.db() as session:
+        row = create_reference_recording(
+            session, user_id="owner-id", storage_path=stored_path,
+            original_filename="x.wav", size_bytes=4, duration_sec=None,
+        )
+        session.commit()
+        reference_id = row.id
+
+    with caplog.at_level(logging.INFO):
+        response = _delete(signed_in, reference_id)
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Reference audio storage could not be checked."}
+    assert [row.id for row in _reference_rows(signed_in)] == [reference_id]
+    assert target.exists()
+    assert stored_path not in caplog.text
+    assert _audit_records(signed_in) == []
+
+
+def test_d9_a_persons_token_deletes_that_persons_reference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
+    world = make_token_world(tmp_path)
+    uploaded = _post_reference(
+        world.client, AUDIO_BYTES, "mine.wav", headers=world.bearer(TokenWorld.ALICE),
+    )
+
+    response = world.client.delete(
+        f"{REFERENCES_PATH}/{uploaded.json()['id']}", headers=world.bearer(TokenWorld.ALICE),
+    )
+
+    assert response.status_code == 204
+    assert world.rows(ReferenceRecording, "user_id") == []
+
+
+def test_d10_without_a_session_the_delete_is_unauthenticated(signed_in: TestClient) -> None:
+    reference_id = _seed_playable(signed_in)
+    anonymous = web_client(signed_in.app, raise_server_exceptions=False)
+
+    assert _delete(anonymous, reference_id).status_code == 401
+    assert len(_reference_rows(signed_in)) == 1
+
+
+def _vanish_after_the_route_checked_the_file(
+    monkeypatch: pytest.MonkeyPatch, target: Path,
+) -> None:
+    real_fstat = os.fstat
+    target_inode = target.stat().st_ino
+
+    def fstat_then_vanish(descriptor: int) -> os.stat_result:
+        result = real_fstat(descriptor)
+        if result.st_ino == target_inode and target.exists():
+            target.unlink()
+        return result
+
+    monkeypatch.setattr(os, "fstat", fstat_then_vanish)
+
+
+def test_s1_a_file_vanishing_after_the_check_logs_the_kind_and_no_path(
+    signed_in: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    reference_id = _seed_playable(signed_in)
+    (target,) = _reference_files(signed_in)
+    audio_dir = str(signed_in.app.state.ctx.audio_dir)
+    _vanish_after_the_route_checked_the_file(monkeypatch, target)
+    client = web_client(signed_in.app, cookies=signed_in.cookies, raise_server_exceptions=False)
+
+    with caplog.at_level(logging.DEBUG):
+        response = client.get(_audio_path(reference_id))
+
+    assert response.content != AUDIO_BYTES
+    ended = [r for r in caplog.records if "ended while it was sent" in r.getMessage()]
+    assert [r.getMessage().rsplit(": ", 1)[1] for r in ended] == ["FileNotFoundError"]
+    assert SECRET_FILENAME not in caplog.text
+    assert audio_dir not in caplog.text
+
+
+def test_s1b_a_file_vanishing_after_the_headers_ends_the_body_without_an_escape(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    path = tmp_path / SECRET_FILENAME
+    path.write_bytes(AUDIO_BYTES)
+    response = reference_api.OpenedFileResponse(
+        path, stat_result=path.stat(), media_type=AUDIO_MEDIA_TYPES[".wav"],
+    )
+    path.unlink()
+    sent: list[dict] = []
+
+    async def receive() -> dict:
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict) -> None:
+        sent.append(message)
+
+    scope = {"type": "http", "method": "GET", "headers": [], "extensions": {}}
+    with caplog.at_level(logging.DEBUG):
+        asyncio.run(response(scope, receive, send))
+
+    assert [message["type"] for message in sent] == ["http.response.start"]
+    assert sent[0]["status"] == 200
+    assert SECRET_FILENAME not in caplog.text
+    assert str(tmp_path) not in caplog.text
+
+
+def test_s2_a_file_gone_before_the_check_is_not_found(signed_in: TestClient) -> None:
+    reference_id = _seed_playable(signed_in)
+    (target,) = _reference_files(signed_in)
+    target.unlink()
+
+    response = signed_in.get(_audio_path(reference_id))
+
+    assert response.status_code == 404
+    assert response.json() == NOT_FOUND

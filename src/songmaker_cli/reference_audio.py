@@ -9,6 +9,7 @@ import stat
 import uuid
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Final
 
@@ -44,7 +45,7 @@ def resolve_owned_reference_audio(
     user_id: str,
     stored_relative: str,
 ) -> Path:
-    if not stored_relative or stored_relative.startswith("/") or ".." in stored_relative:
+    if not is_owner_storage_path(user_id, stored_relative):
         raise ReferenceAudioRejected(REFERENCE_AUDIO_NOT_OWNED_DETAIL)
     root = owner_reference_audio_root(audio_dir, user_id).resolve()
     raw = audio_dir / stored_relative
@@ -281,11 +282,37 @@ class RemnantReport:
         )
 
 
-def _is_owner_storage_path(user_id: str, storage_path: str) -> bool:
+def is_owner_storage_path(user_id: str, storage_path: str) -> bool:
+    """True for exactly ``{user}/refs/{one name}``, the only path an upload ever stores."""
     parts = PurePosixPath(storage_path).parts
     return (
         len(parts) == 3 and parts[2] != ".." and _storage_path(user_id, parts[2]) == storage_path
     )
+
+
+class RemovalOutcome(StrEnum):
+    REMOVED = "removed"
+    ALREADY_GONE = "already_gone"
+    FAILED = "failed"
+
+
+def remove_reference_file(audio_dir: Path, user_id: str, storage_path: str) -> RemovalOutcome:
+    """Unlink the owner's file through the ``O_NOFOLLOW`` walk, by descriptor.
+
+    A symlinked ancestor, an invalid owner and any other ``OSError`` are ``FAILED``; the
+    daily reconciliation removes what stays.
+    """
+    if not is_owner_storage_path(user_id, storage_path):
+        return RemovalOutcome.FAILED
+    try:
+        with ExitStack() as stack:
+            directory = _walk_reference_directory(stack, audio_dir, user_id, create=False)
+            os.unlink(PurePosixPath(storage_path).name, dir_fd=directory)
+    except FileNotFoundError:
+        return RemovalOutcome.ALREADY_GONE
+    except OSError:
+        return RemovalOutcome.FAILED
+    return RemovalOutcome.REMOVED
 
 
 def _remove_if_remnant(
@@ -305,7 +332,7 @@ def _remove_if_remnant(
 
 def _remove_owner_remnants(session: Session, audio_dir: Path, user_id: str) -> RemnantReport:
     named_paths = owned_reference_storage_paths(session, user_id)
-    if not all(_is_owner_storage_path(user_id, path) for path in named_paths):
+    if not all(is_owner_storage_path(user_id, path) for path in named_paths):
         raise ReferenceAudioStorageError("non-conforming row path")
     report = RemnantReport()
     with ExitStack() as stack:

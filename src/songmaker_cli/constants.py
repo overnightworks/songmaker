@@ -722,6 +722,7 @@ class ResourceType(StrEnum):
     JOB = "job"
     SESSION = "session"
     LORA = "lora"
+    REFERENCE = "reference"
 
 
 class ResourceEventKind(StrEnum):
