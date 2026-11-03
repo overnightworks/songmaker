@@ -476,7 +476,7 @@ class ClaudeSummarizer:
                 "ANTHROPIC_API_KEY (api extra), or use --no-summaries"
             )
         try:
-            result = subprocess.run(  # noqa: S603 - list argv without a shell and the prompt goes through stdin
+            result = subprocess.run(  # noqa: S603 - list argv without a shell and the prompt goes through stdin while the operator CLI and model come from his settings
                 [
                     executable,
                     "-p",
