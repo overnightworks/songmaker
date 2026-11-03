@@ -11,6 +11,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from support.cover_escape import (
+    SIBLING_DIRECTORY,
+    assert_escape_markers_survive,
+    cover_escape_layout,
+    unsafe_cover_id,
+)
 from support.web_app import make_test_app, seed_session, seed_user, web_client
 
 from songmaker_cli.cleanup import run_cleanup_expired
@@ -50,27 +56,7 @@ from songmaker_cli.settings import get_settings
 
 ALICE_PASSWORD = "alicepass1"
 
-SIBLING_DIRECTORY = "<absolute path of the directory beside audio_dir>"
 UNSAFE_COVER_ALBUM_IDS = ("", ".", "..", SIBLING_DIRECTORY, "a/b")
-
-
-def _unsafe_id(raw_id: str, sibling_marker: Path) -> str:
-    return str(sibling_marker.parent) if raw_id == SIBLING_DIRECTORY else raw_id
-
-
-def _cover_escape_layout(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    marker = audio_dir / "marker.txt"
-    marker.write_text("keep")
-    sibling = tmp_path / "sibling"
-    sibling.mkdir()
-    sibling_marker = sibling / "marker.txt"
-    sibling_marker.write_text("keep")
-    legit = audio_dir / COVER_DIRNAME / "alice-album"
-    legit.mkdir(parents=True)
-    (legit / "keep.txt").write_text("keep")
-    return audio_dir, marker, sibling_marker, legit
 
 
 BOB_PASSWORD = "bobpass12"
@@ -434,44 +420,41 @@ def test_cleanup_expired_removes_album_cover_files(tmp_path: Path) -> None:
     assert live_dir.is_dir()
 
 
-def _assert_escape_markers_survive(
-    audio_dir: Path, marker: Path, sibling_marker: Path, legit: Path,
-) -> None:
-    assert marker.read_text() == "keep"
-    assert sibling_marker.read_text() == "keep"
-    assert (legit / "keep.txt").read_text() == "keep"
-    assert audio_dir.is_dir()
-
-
 @pytest.mark.parametrize("album_id", UNSAFE_COVER_ALBUM_IDS)
 def test_write_album_cover_rejects_unsafe_album_ids(
     tmp_path: Path, album_id: str,
 ) -> None:
-    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
-    album_id = _unsafe_id(album_id, sibling_marker)
+    audio_dir, marker, sibling_marker, legit = cover_escape_layout(
+        tmp_path, Path(COVER_DIRNAME) / "alice-album",
+    )
+    album_id = unsafe_cover_id(album_id, sibling_marker)
     image = _png_bytes()
     with pytest.raises(CoverRejectedError, match=COVER_INVALID_ALBUM_ID):
         write_album_cover(audio_dir, album_id, image)
-    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
 @pytest.mark.parametrize("album_id", UNSAFE_COVER_ALBUM_IDS)
 def test_remove_album_cover_files_rejects_unsafe_album_ids(
     tmp_path: Path, album_id: str,
 ) -> None:
-    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
-    album_id = _unsafe_id(album_id, sibling_marker)
+    audio_dir, marker, sibling_marker, legit = cover_escape_layout(
+        tmp_path, Path(COVER_DIRNAME) / "alice-album",
+    )
+    album_id = unsafe_cover_id(album_id, sibling_marker)
     remove_album_cover_files(audio_dir, album_id)
-    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
 def test_remove_album_cover_files_does_not_rmtree_audio_dir(tmp_path: Path) -> None:
-    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    audio_dir, marker, sibling_marker, legit = cover_escape_layout(
+        tmp_path, Path(COVER_DIRNAME) / "alice-album",
+    )
     nested = audio_dir / "other"
     nested.mkdir()
     (nested / "file.txt").write_text("keep")
     remove_album_cover_files(audio_dir, "..")
-    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
     assert (nested / "file.txt").read_text() == "keep"
 
 
@@ -479,13 +462,15 @@ def test_remove_album_cover_files_does_not_rmtree_audio_dir(tmp_path: Path) -> N
 def test_resolve_cover_file_rejects_unsafe_album_ids(
     tmp_path: Path, album_id: str,
 ) -> None:
-    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
-    album_id = _unsafe_id(album_id, sibling_marker)
+    audio_dir, marker, sibling_marker, legit = cover_escape_layout(
+        tmp_path, Path(COVER_DIRNAME) / "alice-album",
+    )
+    album_id = unsafe_cover_id(album_id, sibling_marker)
     with pytest.raises(FileNotFoundError):
         resolve_cover_file(
             audio_dir, album_id, "deadbeef.png", COVER_VARIANT_ORIGINAL,
         )
-    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
 def test_write_album_cover_restores_live_dir_if_publish_rename_fails(
