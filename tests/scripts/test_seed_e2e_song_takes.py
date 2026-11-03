@@ -11,7 +11,7 @@ import pytest
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, User
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import seed_e2e_job_states  # noqa: E402
 import seed_e2e_song_takes  # noqa: E402

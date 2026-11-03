@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import create_engine, event, insert, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from support.repository_root import REPOSITORY_ROOT
 from support.web_app import make_authenticated_user, seed_user
 
 import songmaker_cli.db.queries.jobs as job_queries
@@ -717,8 +718,7 @@ def test_alembic_migrations_on_postgresql() -> None:
         conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
         conn.commit()
     engine.dispose()
-
-    cfg = Config("alembic.ini")
+    cfg = Config(str(REPOSITORY_ROOT / "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", TEST_PG_URL)
     command.upgrade(cfg, "202b0514cdde")
 

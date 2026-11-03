@@ -8,7 +8,7 @@ from typing import Final
 # package spawns (the ACE-Step HTTP subprocess, in subprocess_runner.py).
 # Kept identical in content and name to the application package's secret-key constant.
 # The packages cannot share an import, so
-# tests/test_secret_scrub_parity.py pins the two as equal sets.
+# tests/songmaker_cli/test_constants_secret_scrub_parity.py pins the two as equal sets.
 #
 # HF_TOKEN: the ACE-Step subprocess *does* call Hugging Face itself — see
 # vendor/acestep/acestep/api/model_download.py:download_from_huggingface,
