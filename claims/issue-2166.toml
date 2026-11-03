@@ -1,8 +1,0 @@
-claim_id = "27942c4c7ea84df8aac26055c97436c3"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "a6fc7341e51df4b0bd6afd121f85d51ee0764eef"
-branch = "claude/issue-2166-reference-remnant-reconciliation"
-scope = [".github/workflows/ci.yml", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/auth.py", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/reference_audio.py", "tests/songmaker_cli/test_admin_api.py", "tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_reference_audio_reconciliation.py", "tests/songmaker_cli/test_reference_audio_reconciliation_postgres.py"]
-opened_commit = "37fa43cbbd80c6140023091f8998a7b7e57a3068"
-whole_reason = "One daily job: the reconciliation, its schedule and the hour constant's honest name cannot land apart."
