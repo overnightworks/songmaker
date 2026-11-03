@@ -80,12 +80,9 @@ def main():
         **duplicate_modules("backend", (root / "tests").rglob("*.py"), backend_names),
         **duplicate_modules("frontend", (root / "frontend/src").rglob("*.test.ts"), frontend_names),
     }
-    if baseline.exists():
-        stored = read_baseline(baseline)
-    elif update:
-        stored = current
-    else:
-        raise SystemExit(f"Missing baseline {baseline}; initialize with --update")
+    if not baseline.exists():
+        raise SystemExit(f"Missing baseline {baseline}")
+    stored = read_baseline(baseline)
     grown = sorted(entry for entry, count in current.items() if count > stored.get(entry, 0))
     stale = sorted(entry for entry, count in stored.items() if current.get(entry, 0) < count)
     for entry in grown:
@@ -96,7 +93,7 @@ def main():
         raise SystemExit("Duplicate test helpers increased; consolidate before updating the baseline.")
     if stale and not update:
         raise SystemExit("Duplicate test helpers fell; run scripts/test_helper_ratchet.sh --update.")
-    if update and (stale or not baseline.exists()):
+    if update and stale:
         baseline.write_text("".join(f"{tree} {name} {count}\n" for (tree, name), count in sorted(current.items())))
         print("Updated test helper baseline.")
     print(f"{len(current)} duplicated helper names")

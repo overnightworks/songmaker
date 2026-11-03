@@ -57,10 +57,13 @@ def test_counts_each_helper_name_once_across_files(
     for name in ("first", "second", "third"):
         (ratchet_tree / directory / f"{name}{suffix}").write_text(definition)
 
-    result = run_ratchet(ratchet_tree, "--update")
+    baseline = ratchet_tree / "scripts/test_helper_ratchet.txt"
+    baseline.write_text(expected)
+
+    result = run_ratchet(ratchet_tree)
 
     assert result.returncode == 0, result.stderr
-    assert (ratchet_tree / "scripts/test_helper_ratchet.txt").read_text() == expected
+    assert "stale" not in result.stdout
 
 
 def test_calls_and_duplicates_in_one_file_do_not_count(ratchet_tree: Path) -> None:
@@ -78,10 +81,12 @@ def test_calls_and_duplicates_in_one_file_do_not_count(ratchet_tree: Path) -> No
         "const helper = makeHelper({});\n",
     )
 
-    result = run_ratchet(ratchet_tree, "--update")
+    (ratchet_tree / "scripts/test_helper_ratchet.txt").write_text("")
+
+    result = run_ratchet(ratchet_tree)
 
     assert result.returncode == 0, result.stderr
-    assert (ratchet_tree / "scripts/test_helper_ratchet.txt").read_text() == ""
+    assert "0 duplicated helper names" in result.stdout
 
 
 @pytest.mark.parametrize("arguments", [(), ("--update",)])
@@ -190,3 +195,14 @@ def test_invalid_baseline_fails_loudly(ratchet_tree: Path, stored: str) -> None:
 
     assert run_ratchet(ratchet_tree, "--update").returncode != 0
     assert baseline.read_text() == stored
+
+
+@pytest.mark.parametrize("arguments", [(), ("--update",)])
+def test_missing_baseline_fails_and_is_not_created(
+    ratchet_tree: Path, arguments: tuple[str, ...],
+) -> None:
+    result = run_ratchet(ratchet_tree, *arguments)
+
+    assert result.returncode != 0
+    assert "Missing baseline" in result.stderr
+    assert not (ratchet_tree / "scripts/test_helper_ratchet.txt").exists()

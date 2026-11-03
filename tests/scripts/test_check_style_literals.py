@@ -223,13 +223,6 @@ def test_update_never_raises_or_adds_an_entry(gate, files, limit):
     assert baseline == limit
 
 
-def test_update_initializes_a_missing_baseline_with_today_s_entries(gate):
-    files = {"a.css": "color: #abc;", "b.css": "color: #abc;", "c.css": ""}
-    status, _, baseline = gate(files, limit=None, update=True)
-    assert status == 0
-    assert baseline == "a.css 1\nb.css 1\n"
-
-
 @pytest.mark.parametrize("limit", [None, "invalid", "a.css -1", "a.css x", "a.css 0", "a.css 1 2"])
 def test_missing_or_invalid_baseline_fails_loudly(gate, limit):
     status, output, baseline = gate({"card.css": ""}, limit=limit)
@@ -240,6 +233,13 @@ def test_missing_or_invalid_baseline_fails_loudly(gate, limit):
 
 def test_invalid_baseline_cannot_be_overwritten_with_update(gate):
     assert gate({"card.css": ""}, limit="invalid", update=True)[0] == 1
+
+
+def test_missing_baseline_fails_under_update_without_being_created(gate):
+    status, output, baseline = gate({"a.css": "color: #abc;"}, limit=None, update=True)
+    assert status == 1
+    assert "Missing baseline" in output
+    assert baseline is None
 
 
 def test_empty_source_tree_fails_loudly(gate):

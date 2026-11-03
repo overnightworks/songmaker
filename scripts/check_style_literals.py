@@ -86,9 +86,9 @@ def style_sources(source: Path) -> list[Path]:
     return paths
 
 
-def read_baseline(baseline: Path) -> dict[str, int] | None:
+def read_baseline(baseline: Path) -> dict[str, int]:
     if not baseline.exists():
-        return None
+        raise ValueError(f"Missing baseline {baseline}")
     entries: dict[str, int] = {}
     for line in baseline.read_text().splitlines():
         fields = line.split()
@@ -114,23 +114,17 @@ def print_locations(sites: Sites, paths: set[str]) -> None:
                 print(f"{path}:{entry.line}: {entry.kind}: {entry.literal}")
 
 
-def print_drift(stored: dict[str, int], current: dict[str, int]) -> tuple[set[str], set[str]]:
+def drift(stored: dict[str, int], current: dict[str, int]) -> tuple[set[str], set[str]]:
     grown = {path for path, count in current.items() if count > stored.get(path, 0)}
     stale = {path for path, count in stored.items() if current.get(path, 0) < count}
+    return grown, stale
+
+
+def print_drift(stored: dict[str, int], current: dict[str, int], grown: set[str], stale: set[str]) -> None:
     for path in sorted(grown):
         print(f"{path}: stored {stored.get(path, 0)}, current {current[path]}")
     for path in sorted(stale):
         print(f"{path}: stored {stored[path]}, current {current.get(path, 0)} (stale)")
-    return grown, stale
-
-
-def initial_baseline(baseline: Path, current: dict[str, int], *, update: bool) -> dict[str, int]:
-    stored = read_baseline(baseline)
-    if stored is not None:
-        return stored
-    if not update:
-        raise ValueError(f"Missing baseline {baseline}; initialize with --update")
-    return current
 
 
 def check(source: Path, baseline: Path, *, update: bool) -> int:
@@ -139,8 +133,9 @@ def check(source: Path, baseline: Path, *, update: bool) -> int:
     counts = Counter(finding.kind for _, entries in sites for finding in entries)
     current = {str(path): len(entries) for path, entries in sites if entries}
     print_summary(sites, counts)
-    stored = initial_baseline(baseline, current, update=update)
-    grown, stale = print_drift(stored, current)
+    stored = read_baseline(baseline)
+    grown, stale = drift(stored, current)
+    print_drift(stored, current, grown, stale)
     if grown:
         print("Style literals increased; replace them with tokens. Locations in those files:")
         print_locations(sites, grown)
@@ -148,7 +143,7 @@ def check(source: Path, baseline: Path, *, update: bool) -> int:
     if stale and not update:
         print("Style literals fell; run scripts/check_style_literals.py --update.")
         return 1
-    if update and (stale or not baseline.exists()):
+    if update and stale:
         baseline.write_text("".join(f"{path} {count}\n" for path, count in sorted(current.items())))
         print("Updated style literal baseline.")
     return 0
