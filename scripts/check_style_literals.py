@@ -1,4 +1,4 @@
-"""Cap style literals outside app.css; only --update may lower the baseline."""
+"""Hold style literals outside app.css per file; only --update may lower an entry."""
 
 import argparse
 import re
@@ -86,49 +86,70 @@ def style_sources(source: Path) -> list[Path]:
     return paths
 
 
-def read_baseline(baseline: Path) -> str | None:
+def read_baseline(baseline: Path) -> dict[str, int] | None:
     if not baseline.exists():
         return None
-    return baseline.read_text().strip()
+    entries: dict[str, int] = {}
+    for line in baseline.read_text().splitlines():
+        fields = line.split()
+        valid = len(fields) == 2 and fields[1].isdecimal() and int(fields[1]) > 0
+        if not valid or fields[0] in entries:
+            raise ValueError(f"Expected one 'path count' line per file in {baseline}: {line!r}")
+        entries[fields[0]] = int(fields[1])
+    return entries
 
 
-def baseline_limit(previous: str | None, baseline: Path, total: int, *, update: bool) -> int:
-    if previous is None and update:
-        return total
-    if previous is None or not previous.isdecimal():
-        raise ValueError(f"Expected one nonnegative count in {baseline}; initialize with --update")
-    return int(previous)
-
-
-def print_summary(sites: Sites, counts: Counter[str], limit: int) -> None:
+def print_summary(sites: Sites, counts: Counter[str]) -> None:
     for path, entries in sites:
         if entries:
             print(f"{path}: {len(entries)} style literals")
-    print(f"Style literals: {counts.total()} (limit {limit}); "
+    print(f"Style literals: {counts.total()}; "
           + ", ".join(f"{kind}={count}" for kind, count in sorted(counts.items())))
 
 
-def print_locations(sites: Sites) -> None:
-    print("Style literals increased; replace literals with tokens before updating baseline.")
-    print("Current locations (the count-only baseline does not identify which are new):")
+def print_locations(sites: Sites, paths: set[str]) -> None:
     for path, entries in sites:
         for entry in entries:
-            print(f"{path}:{entry.line}: {entry.kind}: {entry.literal}")
+            if str(path) in paths:
+                print(f"{path}:{entry.line}: {entry.kind}: {entry.literal}")
+
+
+def print_drift(stored: dict[str, int], current: dict[str, int]) -> tuple[set[str], set[str]]:
+    grown = {path for path, count in current.items() if count > stored.get(path, 0)}
+    stale = {path for path, count in stored.items() if current.get(path, 0) < count}
+    for path in sorted(grown):
+        print(f"{path}: stored {stored.get(path, 0)}, current {current[path]}")
+    for path in sorted(stale):
+        print(f"{path}: stored {stored[path]}, current {current.get(path, 0)} (stale)")
+    return grown, stale
+
+
+def initial_baseline(baseline: Path, current: dict[str, int], *, update: bool) -> dict[str, int]:
+    stored = read_baseline(baseline)
+    if stored is not None:
+        return stored
+    if not update:
+        raise ValueError(f"Missing baseline {baseline}; initialize with --update")
+    return current
 
 
 def check(source: Path, baseline: Path, *, update: bool) -> int:
     sites = [(path.relative_to(source), findings(path.read_text(), path.suffix))
              for path in style_sources(source)]
     counts = Counter(finding.kind for _, entries in sites for finding in entries)
-    total = counts.total()
-    previous = read_baseline(baseline)
-    limit = baseline_limit(previous, baseline, total, update=update)
-    print_summary(sites, counts, limit)
-    if total > limit:
-        print_locations(sites)
+    current = {str(path): len(entries) for path, entries in sites if entries}
+    print_summary(sites, counts)
+    stored = initial_baseline(baseline, current, update=update)
+    grown, stale = print_drift(stored, current)
+    if grown:
+        print("Style literals increased; replace them with tokens. Locations in those files:")
+        print_locations(sites, grown)
         return 1
-    if update and (previous is None or total < limit):
-        baseline.write_text(f"{total}\n")
+    if stale and not update:
+        print("Style literals fell; run scripts/check_style_literals.py --update.")
+        return 1
+    if update and (stale or not baseline.exists()):
+        baseline.write_text("".join(f"{path} {count}\n" for path, count in sorted(current.items())))
         print("Updated style literal baseline.")
     return 0
 

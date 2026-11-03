@@ -16,7 +16,7 @@ def gate(tmp_path, capsys):
     source.mkdir(parents=True)
     baseline = tmp_path / "style-literals.txt"
 
-    def run(files, *, limit="0\n", update=False):
+    def run(files, *, limit="", update=False):
         for relative, content in files.items():
             path = source / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -54,8 +54,8 @@ def test_each_literal_kind_fails_with_its_location(gate, literal, kind, filename
     status, output, baseline = gate({filename: f"\n{literal}"})
     assert status == 1
     assert f"{filename}:2: {kind}:" in output
-    assert "Style literals: 1 (limit 0)" in output
-    assert baseline == "0\n"
+    assert "Style literals: 1;" in output
+    assert baseline == ""
 
 
 @pytest.mark.parametrize("pixels", [22, 15, 13, 12, 11, 10])
@@ -131,9 +131,9 @@ def test_issue_references_in_test_files_are_not_style_literals(gate, suffix):
     status, output, _ = gate({
         f"nested/card.{suffix}.ts": "describe('card (#973)', () => {});",
         "card.ts": "const color = '#abc';",
-    }, limit="1\n")
+    }, limit="card.ts 1\n")
     assert status == 0
-    assert "Style literals: 1 (limit 1); hex=1" in output
+    assert "Style literals: 1; hex=1" in output
     assert f"card.{suffix}.ts" not in output
 
 
@@ -154,54 +154,87 @@ def test_issue_references_in_test_files_are_not_style_literals(gate, suffix):
 def test_comments_are_ignored_without_losing_line_numbers_or_urls(gate, filename, text, line):
     status, output, _ = gate({filename: text})
     assert status == 1
-    assert "Style literals: 1 (limit 0)" in output
+    assert "Style literals: 1;" in output
     assert f"{filename}:{line}: hex: #def" in output
 
 
 def test_color_inside_a_shadow_counts_both_literal_kinds(gate):
     status, output, _ = gate({"card.css": "box-shadow: 0 0 4px #abc;"})
     assert status == 1
-    assert "Style literals: 2 (limit 0); box-shadow=1, hex=1" in output
+    assert "Style literals: 2; box-shadow=1, hex=1" in output
 
 
-def test_baseline_caps_the_combined_file_count(gate):
-    status, output, baseline = gate({"a.css": "color: #abc;", "b.ts": "'#def'"}, limit="1\n")
+def test_a_literal_added_in_a_second_file_fails_even_when_another_file_shrank(gate):
+    status, output, baseline = gate(
+        {"a.css": "", "b.ts": "'#def'"}, limit="a.css 1\n",
+    )
     assert status == 1
-    assert "Style literals: 2 (limit 1)" in output
-    assert "a.css:1: hex: #abc" in output
+    assert "b.ts: stored 0, current 1" in output
     assert "b.ts:1: hex: #def" in output
-    assert baseline == "1\n"
+    assert "a.css: stored 1, current 0 (stale)" in output
+    assert baseline == "a.css 1\n"
 
 
-@pytest.mark.parametrize("limit", ["1\n", "2\n"])
-def test_normal_check_accepts_equal_or_lower_count_without_rewriting(gate, limit):
-    status, output, baseline = gate({"card.css": "color: #abc;"}, limit=limit)
-    assert status == 0
-    assert baseline == limit
-    assert "card.css: 1 style literals" in output
-
-
-@pytest.mark.parametrize("update", [False, True])
-def test_growth_fails_even_with_update_and_keeps_baseline(gate, update):
-    status, output, baseline = gate({"card.css": "color: #abc;"}, update=update)
+def test_growth_in_a_listed_file_names_the_file_with_both_counts(gate):
+    status, output, _ = gate({"a.css": "color: #abc; color: #def;"}, limit="a.css 1\n")
     assert status == 1
-    assert "Style literals increased" in output
-    assert "card.css:1: hex: #abc" in output
-    assert baseline == "0\n"
+    assert "a.css: stored 1, current 2" in output
+    assert "a.css:1: hex: #def" in output
 
 
-@pytest.mark.parametrize("limit", [None, "1\n", "2\n"])
-def test_update_initializes_or_lowers_baseline(gate, limit):
-    status, _, baseline = gate({"card.css": "color: #abc;"}, limit=limit, update=True)
+def test_unchanged_tree_passes_without_rewriting(gate):
+    status, output, baseline = gate({"card.css": "color: #abc;"}, limit="card.css 1\n")
     assert status == 0
-    assert baseline == "1\n"
+    assert baseline == "card.css 1\n"
+    assert "Style literals: 1;" in output
 
 
-@pytest.mark.parametrize("limit", [None, "", "-1", "1 2", "invalid"])
+@pytest.mark.parametrize(
+    "files, limit, expected",
+    [
+        ({"a.css": "color: #abc;"}, "a.css 2\n", "a.css 1\n"),
+        ({"a.css": ""}, "a.css 1\n", ""),
+        ({"b.css": "color: #abc;"}, "a.css 1\nb.css 1\n", "b.css 1\n"),
+    ],
+    ids=["fallen", "none left", "vanished"],
+)
+def test_stale_entry_fails_until_update_writes_the_smaller_baseline(gate, files, limit, expected):
+    status, output, baseline = gate(files, limit=limit)
+    assert status == 1
+    assert "stale" in output
+    assert baseline == limit
+    status, _, baseline = gate({}, limit=None, update=True)
+    assert status == 0
+    assert baseline == expected
+
+
+@pytest.mark.parametrize(
+    "files, limit",
+    [
+        ({"a.css": "color: #abc; color: #def;"}, "a.css 1\n"),
+        ({"a.css": "color: #abc;", "b.css": "color: #abc;"}, "a.css 1\n"),
+        ({"a.css": "color: #abc;", "b.css": ""}, "b.css 1\n"),
+    ],
+    ids=["raise", "add", "add while another fell"],
+)
+def test_update_never_raises_or_adds_an_entry(gate, files, limit):
+    status, _, baseline = gate(files, limit=limit, update=True)
+    assert status == 1
+    assert baseline == limit
+
+
+def test_update_initializes_a_missing_baseline_with_today_s_entries(gate):
+    files = {"a.css": "color: #abc;", "b.css": "color: #abc;", "c.css": ""}
+    status, _, baseline = gate(files, limit=None, update=True)
+    assert status == 0
+    assert baseline == "a.css 1\nb.css 1\n"
+
+
+@pytest.mark.parametrize("limit", [None, "invalid", "a.css -1", "a.css x", "a.css 0", "a.css 1 2"])
 def test_missing_or_invalid_baseline_fails_loudly(gate, limit):
     status, output, baseline = gate({"card.css": ""}, limit=limit)
     assert status == 1
-    assert "Expected one nonnegative count" in output
+    assert "Expected" in output or "Missing baseline" in output
     assert baseline == limit
 
 
