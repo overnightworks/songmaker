@@ -454,7 +454,7 @@ async def download_model_endpoint(
 def _retention_report_response(
     report, *, dry_run: bool,
 ) -> GenerationRetentionReportResponse:
-    from songmaker_cli.cleanup import GENERATION_RETENTION_HOUR_UTC
+    from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 
     settings = get_settings()
     return GenerationRetentionReportResponse(
@@ -464,7 +464,7 @@ def _retention_report_response(
         deleted_count=report.deleted_count,
         retention_days=settings.generation_retention_days,
         hard_delete_days=settings.final_deletion_days,
-        scheduled_hour_utc=GENERATION_RETENTION_HOUR_UTC,
+        scheduled_hour_utc=DAILY_CLEANUP_HOUR_UTC,
         dry_run=dry_run,
     )
 

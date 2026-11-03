@@ -53,6 +53,14 @@ def get_owned_reference_recording(
     return session.execute(query).scalar_one_or_none()
 
 
+def owned_reference_storage_paths(session: Session, user_id: str) -> set[str]:
+    return set(
+        session.execute(
+            select(ReferenceRecording.storage_path).where(ReferenceRecording.user_id == user_id),
+        ).scalars(),
+    )
+
+
 def list_owned_reference_recordings(session: Session, user_id: str) -> list[ReferenceRecording]:
     """The owner's own rows, newest first; the id orders rows sharing an instant."""
     return list(
