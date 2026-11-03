@@ -83,9 +83,4 @@ services:
 
 # No runner and no local e2e stack has edge's network.
 networks:
-  hal_mcp_songmaker: !reset null
   hal_agent_songmaker: !reset null
-
-secrets:
-  agent_service_signing_public_key:
-    file: tests/fixtures/agent_service_capability_public_key.pem

@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 import json
-import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from agent_runtime_client.backend.fake_gateway import completion, tool_call, tool_round
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
-from support.fake_agent_service import (
+from support.cowriter_gateway import (
     CowriterStack,
-    answers,
-    attach_cowriter_service,
-    fails_to_connect,
+    attach_cowriter_gateway,
     held_until,
+    raises,
     signed_in_request,
-    streams,
 )
 from support.web_app import (
     make_authenticated_user,
@@ -28,7 +26,6 @@ from support.web_app import (
 )
 
 from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE
-from songmaker_cli.cowriter import service_runs
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -93,10 +90,10 @@ def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
 
 
 @pytest.fixture
-def service(client, monkeypatch) -> CowriterStack:
-    """The agent service and the realm behind the signed-in musician's turns."""
+def service(client, tmp_path: Path) -> CowriterStack:
+    """The gateway and the realm behind the signed-in musician's turns."""
     c, factory = client
-    return attach_cowriter_service(c, factory, monkeypatch, "u-test")
+    return attach_cowriter_gateway(c, factory, tmp_path, "u-test")
 
 
 def _stream_events(response) -> list[dict]:
@@ -261,7 +258,7 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
 
 def test_chat_turn_streams_sse_and_stores_messages(client, service):
     c, factory = client
-    service.agent.reply_with(answers("ok"))
+    service.replies(completion("ok"))
 
     resp = c.post("/api/chat/turn", json={"message": "hey"})
 
@@ -302,7 +299,7 @@ def _while_a_turn_runs(client, service, look):
 
     async def _exercise():
         reply_released = asyncio.Event()
-        service.agent.reply_with(held_until(reply_released, "done"))
+        service.behaves(held_until(reply_released, "done"))
         request = signed_in_request(c)
         with factory() as session:
             response = await api_chat_turn(
@@ -364,7 +361,7 @@ def test_a_turn_sent_while_another_runs_is_refused_and_the_message_answered_once
         [("user", "Ja bitte"), ("assistant", "done")],
         False,
     )
-    assert len(service.agent.runs) == 1
+    assert len(service.turns) == 1
     with factory() as session:
         assert [job.status for job in session.query(Job).filter_by(type="chat")] == ["completed"]
 
@@ -429,7 +426,7 @@ def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
 
 def test_chat_turn_completes_when_its_heartbeat_task_fails(client, service):
     c, factory = client
-    service.agent.reply_with(answers("ok"))
+    service.replies(completion("ok"))
 
     async def _failed_heartbeat(*_args, **_kwargs) -> None:
         raise RuntimeError("database unavailable")
@@ -447,7 +444,7 @@ def test_chat_turn_completes_when_its_heartbeat_task_fails(client, service):
 def test_a_turn_that_cannot_open_its_stream_no_longer_counts_as_running(client, service):
     """A turn failing before its first event still ends its job, so no panel waits on it forever."""
     c, factory = client
-    service.agent.reply_with(fails_to_connect(RuntimeError("the client could not be built")))
+    service.behaves(raises(RuntimeError("the client could not be built")))
 
     c.post("/api/chat/turn", json={"message": "hey"})
 
@@ -509,11 +506,10 @@ def test_a_turn_whose_client_leaves_runs_to_completion_and_keeps_its_reply(
     from songmaker_cli.conversation_api import api_chat_turn
 
     c, factory = client
-    run_id = str(uuid.uuid4())
 
     async def _exercise() -> None:
         reply_released = asyncio.Event()
-        service.agent.reply_with(held_until(reply_released, "Erledigt.", run_id=run_id))
+        service.behaves(held_until(reply_released, "Erledigt."))
         user = make_authenticated_user("u-test", username="u-u-test")
         with factory() as session:
             response = await api_chat_turn(
@@ -527,7 +523,6 @@ def test_a_turn_whose_client_leaves_runs_to_completion_and_keeps_its_reply(
 
     asyncio.run(_exercise())
 
-    assert service_runs.holder(run_id) is None
     with factory() as session:
         job = session.query(Job).filter_by(type="chat").one()
         assert job.status == "completed"
@@ -545,7 +540,7 @@ def test_chat_turn_closing_after_completion_keeps_job_completed(client, service)
     from songmaker_cli.conversation_api import api_chat_turn
 
     c, factory = client
-    service.agent.reply_with(answers("ok"))
+    service.replies(completion("ok"))
 
     async def _exercise() -> None:
         user = make_authenticated_user("u-test", username="u-u-test")
@@ -569,7 +564,7 @@ def test_chat_turn_closing_after_completion_keeps_job_completed(client, service)
 
 def test_chat_turn_reuses_active_conversation_across_turns(client, service):
     c, factory = client
-    service.agent.reply_with(answers("ok"))
+    service.replies(completion("ok"))
 
     r1 = c.post("/api/chat/turn", json={"message": "one"})
     r2 = c.post("/api/chat/turn", json={"message": "two"})
@@ -607,15 +602,15 @@ def test_chat_turn_carries_history_memory_mentions_and_take_into_the_next_turn(c
         "mentioned_version_ids": ["v1"],
         "current_generation_id": "gen1",
     }
-    service.agent.reply_with(answers("first answer"))
+    service.replies(completion("first answer"))
     first = c.post("/api/chat/turn", json=first_request)
     first_final = _final_event(_stream_events(first))
-    service.agent.reply_with(answers("second answer"))
+    service.replies(completion("second answer"))
     second = c.post("/api/chat/turn", json={**first_request, "message": "continue the verse"})
 
     second_final = _final_event(_stream_events(second))
     assert second_final["conversation_id"] == first_final["conversation_id"]
-    second_messages = service.agent.last_run.messages
+    second_messages = service.last_turn.messages
     second_context = "\n".join(m["text"] for m in second_messages if m["role"] == "user")
     assert "prefers vivid imagery" in second_context
     assert "chorus is locked" in second_context
@@ -647,7 +642,7 @@ def test_chat_turn_injects_current_song_block(client, service):
     )
 
     assert resp.status_code == 200
-    last_user = service.agent.last_run.messages[-1]["text"]
+    last_user = service.last_turn.messages[-1]["text"]
     assert f"{CURRENT_SONG_FRESHNESS_NOTE}\n<current_song>" in last_user
     assert "title: Thunder" in last_user
     assert "lyrics:\nverse" in last_user
@@ -655,15 +650,9 @@ def test_chat_turn_injects_current_song_block(client, service):
 
 def test_chat_turn_forwards_tool_call_events(client, service):
     c, _ = client
-
-    async def _frames(_run, script):
-        yield script.started()
-        yield script.tool_call("tu-1", "get_song", {"song_id": "s1"})
-        yield script.tool_result("tu-1", "song")
-        yield script.text("here")
-        yield script.succeeded("here")
-
-    service.agent.reply_with(streams(_frames))
+    service.replies(
+        tool_round(tool_call("tu-1", "get_song", {"song_id": "s1"})), completion("here"),
+    )
 
     resp = c.post("/api/chat/turn", json={"message": "call a tool"})
 
@@ -676,9 +665,9 @@ def test_chat_turn_forwards_tool_call_events(client, service):
     assert tool_result["tool_use_id"] == "tu-1"
 
 
-def test_chat_turn_rejects_other_users_song(stranger_client, monkeypatch):
+def test_chat_turn_rejects_other_users_song(stranger_client, tmp_path):
     c, factory = stranger_client
-    stack = attach_cowriter_service(c, factory, monkeypatch, "u-spy")
+    stack = attach_cowriter_gateway(c, factory, tmp_path, "u-spy")
 
     resp = c.post(
         "/api/chat/turn",
@@ -686,12 +675,12 @@ def test_chat_turn_rejects_other_users_song(stranger_client, monkeypatch):
     )
 
     assert resp.status_code == 404
-    assert stack.agent.runs == []
+    assert stack.turns == []
 
 
 def test_chat_turn_unexpected_error_emits_error_frame_and_marks_job_failed(client, service):
     c, factory = client
-    service.agent.reply_with(fails_to_connect(RuntimeError("kaboom")))
+    service.behaves(raises(RuntimeError("kaboom")))
 
     resp = c.post("/api/chat/turn", json={"message": "oops"})
 
@@ -722,9 +711,9 @@ def test_a_turn_after_an_unanswered_one_keeps_the_message_it_left(
     client, service, next_message, expected_history,
 ):
     c, factory = client
-    service.agent.reply_with(fails_to_connect(RuntimeError("kaboom")))
+    service.behaves(raises(RuntimeError("kaboom")))
     c.post("/api/chat/turn", json={"message": "oops"})
-    service.agent.reply_with(answers("ok"))
+    service.replies(completion("ok"))
 
     final = _final_event(_stream_events(
         c.post("/api/chat/turn", json={"message": next_message}),
@@ -768,7 +757,7 @@ def test_list_conversations_includes_counts(client, service):
 
 def test_get_conversation_returns_messages(client, service):
     c, _ = client
-    service.agent.reply_with(answers("reply!"))
+    service.replies(completion("reply!"))
     turn = c.post("/api/chat/turn", json={"message": "question?"})
     conv_id = _final_event(_stream_events(turn))["conversation_id"]
 

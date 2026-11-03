@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from support.fake_agent_service import CowriterStack, attach_cowriter_service
+from support.cowriter_gateway import CowriterStack, attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.api_models import ChatTurnV2Request
@@ -62,7 +62,7 @@ def _seed(session, user_id: str) -> None:
 
 @dataclass
 class Musician:
-    """A signed-in musician whose turns reach the fake agent service."""
+    """A signed-in musician whose turns reach the fake gateway."""
 
     client: TestClient
     stack: CowriterStack
@@ -72,15 +72,15 @@ class Musician:
 
     @property
     def run_started(self) -> bool:
-        return bool(self.stack.agent.runs)
+        return bool(self.stack.turns)
 
     @property
     def content(self) -> str:
-        return self.stack.agent.last_run.messages[-1]["text"]
+        return self.stack.last_turn.messages[-1]["text"]
 
 
 @pytest.fixture
-def client(tmp_path: Path, monkeypatch) -> Musician:
+def client(tmp_path: Path) -> Musician:
     factory = init_db(tmp_path / "mentions.db")
     with factory() as session:
         _seed(session, "u-test")
@@ -89,11 +89,11 @@ def client(tmp_path: Path, monkeypatch) -> Musician:
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
     web = web_client(app)
-    return Musician(web, attach_cowriter_service(web, factory, monkeypatch, "u-test"))
+    return Musician(web, attach_cowriter_gateway(web, factory, tmp_path, "u-test"))
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path, monkeypatch) -> Musician:
+def stranger_client(tmp_path: Path) -> Musician:
     factory = init_db(tmp_path / "mentions_spy.db")
     with factory() as session:
         _seed(session, "u-owner")
@@ -104,7 +104,7 @@ def stranger_client(tmp_path: Path, monkeypatch) -> Musician:
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
     web = web_client(app)
-    return Musician(web, attach_cowriter_service(web, factory, monkeypatch, "u-spy"))
+    return Musician(web, attach_cowriter_gateway(web, factory, tmp_path, "u-spy"))
 
 
 def test_mentioned_song_snapshot_is_server_loaded(client):

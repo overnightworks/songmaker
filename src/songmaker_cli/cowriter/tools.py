@@ -1,7 +1,7 @@
 """Canonical songmaker tool catalog for the co-writer.
 
-The agent service reaches these functions through ``/mcp``. Query logic and
-ownership checks stay in ``mcp_server.tools``.
+The gateway backend reaches these functions through the hand tools of ``agent.tools``. Query
+logic and ownership checks stay in ``mcp_server.tools``.
 
 ``execute_cowriter_tool``'s ``arguments: dict[str, Any]`` is exempt from
 ``scripts/check_no_silent_fallbacks.py``'s dict-any-in-signature rule:

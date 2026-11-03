@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Final, Literal
 from urllib.parse import urlsplit
 
+from agent_runtime_client.config import AgentConfig
 from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -55,9 +56,6 @@ _RELEASE_FIELD_DEFAULTS: Final = {
     "songmaker_release": UNRELEASED_TAG,
     "songmaker_commit": UNKNOWN_COMMIT,
 }
-
-# RFC 6749 section 3.3 scope-token: printable ASCII without space, double quote and backslash.
-_SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5b\x5d-\x7e]+")
 
 _PUBLIC_BASE_URL_SCHEMES: Final = frozenset({"http", "https"})
 # urlsplit hands back a nonsense netloc verbatim ("http://https://host" splits
@@ -150,6 +148,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="forbid",
         case_sensitive=False,
+        env_nested_delimiter="__",
     )
 
     # ── Required (no defaults — startup fails if missing) ─────────────
@@ -172,14 +171,6 @@ class Settings(BaseSettings):
         """An empty list admits no client; an empty entry in a non-empty list is a typo."""
         if value and "" in _split_token_clients(value):
             raise ValueError("TOKEN_CLIENTS has an empty entry")
-        return value
-
-    @field_validator("agent_service_audience_scope")
-    @classmethod
-    def agent_service_audience_scope_is_one_scope_token(cls, value: str | None) -> str | None:
-        """A scope is one RFC 6749 scope-token; a space would request two services."""
-        if value is not None and _SCOPE_TOKEN.fullmatch(value) is None:
-            raise ValueError("AGENT_SERVICE_AUDIENCE_SCOPE is not one RFC 6749 scope-token")
         return value
 
     @field_validator("public_base_url")
@@ -299,20 +290,10 @@ class Settings(BaseSettings):
     oidc_issuer: str | None = None
     oidc_client_id: str | None = None
     oidc_client_secret_file: Path | None = None
-    # The co-writer's MCP endpoint for the agent service: the origin the service
-    # names in each capability and the file holding the service's public signing
-    # key. Both are checked where the endpoint is composed, so workers and the
-    # migrate step start without them, and a missing one leaves only /mcp
-    # unavailable.
-    agent_service_mcp_origin: str | None = None
-    agent_service_capability_key_file: Path | None = None
-    # Where the co-writer turn starts its runs; checked where the turn runs, so workers and the
-    # migrate step start without it.
-    agent_service_url: str | None = None
-    # The OAuth scope of the agent service's audience; the workload grant and the person sign-in
-    # request it, and the token is limited to that audience once the realm makes the scope
-    # optional. Checked where the turn runs.
-    agent_service_audience_scope: str | None = None
+    # The co-writer's gateway, read as AGENT__BACKEND, AGENT__GATEWAY__ORIGIN,
+    # AGENT__GATEWAY__KEY_FILE, AGENT__GATEWAY__CA_FILE and AGENT__API_GROUP. Unset leaves the
+    # co-writer unavailable; a partly set value stops startup. The client owns the fields.
+    agent: AgentConfig | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 30

@@ -440,11 +440,10 @@ def run_server(
             d.mkdir(parents=True)
 
     app = create_app(audio_dir, data_dir, project_root)
-    # Imported here: create_app and the CI jobs without the agent-service extra import nothing new.
-    from songmaker_cli.cowriter.mcp_endpoint import AVAILABILITY_ATTRIBUTE, compose_mcp_endpoint
+    # Imported here: create_app and the CI jobs without the agent extra import nothing new.
+    from songmaker_cli.agent.backend import compose_agent_backend
 
-    served_app, availability = compose_mcp_endpoint(app, settings)
-    setattr(app.state, AVAILABILITY_ATTRIBUTE, availability)
+    compose_agent_backend(app, settings)
     log.info("Songmaker server: http://localhost:%d", port)
     log.info("Auth enabled (session-based)")
 
@@ -459,7 +458,7 @@ def run_server(
     # TRUSTED_PROXIES. TrustedProxies is the single owner of that decision (see
     # auth.resolve_client_ip), so uvicorn must hand over the connection as it is.
     uvicorn.run(
-        served_app,
+        app,
         host=settings.host,
         port=port,
         log_level="info",

@@ -253,7 +253,7 @@ def test_t13_the_co_writer_turn_refuses_a_token_before_writing_any_chat_state(
 # -- T14, T26: what the gate leaves alone ---------------------------------------------
 
 
-@pytest.mark.parametrize("path", ["/mcp", "/shared/nobody", "/login/oidc", "/auth/callback"])
+@pytest.mark.parametrize("path", ["/shared/nobody", "/login/oidc", "/auth/callback"])
 def test_t14_a_path_outside_the_person_paths_answers_as_without_a_bearer(
     token_world: TokenWorld, path: str,
 ) -> None:
