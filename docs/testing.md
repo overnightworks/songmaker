@@ -352,29 +352,34 @@ the tool-surface health it republishes on `/health` — through `test_conversati
 
 ## Testing Patterns
 
-The frontend CI job runs `python3 scripts/check_style_literals.py` (from the
-repository root) against `.svelte`, `.ts`, and `.css` files in `frontend/src`,
+The frontend CI job runs `python3 ../scripts/check_style_literals.py` (from
+`frontend/`) against `.svelte`, `.ts`, and `.css` files in `frontend/src`,
 excluding `app.css` and comments. Test files (`*.test.ts` and `*.spec.ts`) are
 excluded so issue references in test names are not counted as hex colors.
 It counts hex and rgb/hsl colors, pixel `border-radius` declarations (including
 longhands), `font-size` literals outside the
 22/15/13/12/11/10 px scale (including equivalent rem values at a 16 px root),
 and literal `box-shadow` declarations. A shadow containing a color counts in
-both categories. The total cannot exceed `scripts/style-literals.txt`, even
-with `--update`; use that flag after replacing literals with tokens to lower
-the baseline. Ordinary checks never rewrite it. Output includes per-file counts;
-growth prints all current locations because a count-only baseline cannot
-distinguish new locations from existing ones. The file fixtures in
+both categories. `scripts/style-literals.txt` lists one `path count` line per
+file (relative to `frontend/src`, sorted) with its current count. A file whose
+count grows, or a new file with literals, fails and prints the stored and
+current count with that file's literal locations. A file whose count fell, or
+that is gone or has none, fails as stale until `--update` writes the smaller
+baseline. `--update` never raises or adds an entry; ordinary checks never
+rewrite the file. The file fixtures in
 `tests/scripts/test_check_style_literals.py` prove detection and ratchet behavior.
 
-`scripts/test_helper_ratchet.sh` checks how many helper names are defined in more
-than one test module: module-level private Python functions in `tests/`, and
+`scripts/test_helper_ratchet.sh` holds each helper name defined in more than one
+test module: module-level private Python functions in `tests/`, and
 top-level named functions, `const` function expressions, or `const` object literals in
 `frontend/src/**/*.test.ts`.
-Calls and repeated definitions within one file do not increase the count.
-The backend CI job compares both counts with `scripts/test_helper_ratchet.txt`;
-a growth fails, including with `--update`. After consolidation, run
-`scripts/test_helper_ratchet.sh --update` to commit the smaller baseline; normal
+Calls and repeated definitions within one file do not count.
+`scripts/test_helper_ratchet.txt` lists one `tree name modules` line per
+duplicated name (`backend` or `frontend`, sorted) with the number of test modules
+that define it. A new duplicated name or a name in more modules fails, and one in
+fewer modules or no longer duplicated fails as stale, each naming the stored and
+current count. After consolidation, run `scripts/test_helper_ratchet.sh --update`
+to commit the smaller baseline; it never raises or adds an entry, and normal
 checks never rewrite it. Router-only API tests use `make_router_ctx` from
 `tests/support/web_app.py` to prepare a context with an optional database and seed callback,
 then `make_router_app(ctx, user=...)` to mount the router. `make_authenticated_user` (`tests/support/web_app.py`)
