@@ -14,9 +14,9 @@
 #   starlette.
 # application-layers: songmaker_cli modules import only downward (entry points,
 #   workers, routes, runners, the gateway turn, co-writer and MCP, services,
-#   HTTP contract, persistence, settings, constants), and the routes never
-#   import each other.
-#   A route that is not listed in the routes row is unconstrained.
+#   HTTP contract, scoring and health types, persistence, below persistence,
+#   settings, constants, leaves), and the routes never import each other.
+#   exhaustive: a module without a row breaks the contract.
 # scoring-is-self-contained: the scorers reach neither persistence nor the HTTP
 #   framework.
 [importlinter]
@@ -59,8 +59,9 @@ name = The application's layers point downward and routes stay apart
 type = layers
 containers =
     songmaker_cli
+exhaustive = true
 layers =
-    main
+    main | (arq_worker)
     server | music_worker | scoring_worker
     api | worker_base
     (admin_api) | (album_api) | (auth_api) | (conversation_api) | (generation_api) | (health_api) | (internal_api) | (jobs_api) | (library_api) | (lora_api) | (playlist_api) | (reference_api) | (reimport_api) | (resource_event_api) | (settings_api) | (sharing_api) | (song_api)
@@ -68,13 +69,17 @@ layers =
     (cover_runner)
     jobs
     agent
+    (agent_runtime)
     cowriter
     mcp_server
-    (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (queue_streams) : (reference_audio) : (reimport) : (scheduler)
+    (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (queue_streams) : (reference_audio) : (reimport) : (scheduler) : (app_context) : (arq_pool) : (covers) : (generate) : (logging_config) : (middleware) : (redis_client) : (request_policies) : (library_cursor)
     api_models
+    (health_types) | (scoring)
     db
+    (parser) | (worker_liveness)
     settings
     constants
+    (acestep_capabilities) | (acestep_state) | (arq_codec) | (audio_files) | (audio_paths) | (cover_job_errors) | (env_override) | (errors) | (generation_params) | (provider_status) | (theme_types) | (timestamps) | (whisper_cues)
 
 [importlinter:contract:scoring-is-self-contained]
 name = Scorers reach neither persistence nor HTTP

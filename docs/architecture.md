@@ -1332,23 +1332,26 @@ The in-tree packages beside the application — `acestep_engine`, `acestep_worke
 
 Persistence sits beneath the HTTP contract: `db/` never imports `api_models/`, directly or through another in-tree module. The value objects both use — generation knobs (`generation_params.py`) and Whisper time marks (`whisper_cues.py`) — live beside them in `songmaker_cli/`; `api_models` re-exports them because `scripts/generate_types.py` reads its `__all__`. `.importlinter` enforces the direction (#925 G1).
 
-Inside `songmaker_cli` the `application-layers` contract holds one direction for every module it lists: a layer imports only layers below it, and the routes never import each other. Leaf modules the contract does not list (for example `parser`, `timestamps`, `covers`, `scoring`, `health_types`) are free of it. `scoring/` stays free of persistence and the HTTP framework (`scoring-is-self-contained`). Which role each layer plays, from the importing side down:
+Inside `songmaker_cli` the `application-layers` contract lists every module (`exhaustive = true`): a layer imports only layers below it, and the routes never import each other. `scoring/` stays free of persistence and the HTTP framework (`scoring-is-self-contained`). Which role each layer plays, from the importing side down:
 
 ```mermaid
 flowchart TB
-    entry["Entry: main"]
+    entry["Entry: main, arq_worker"]
     workers["Workers and server: server, music_worker, scoring_worker"]
     routes["Routes: the *_api modules, api, worker_base"]
     runtime["Runners, lifecycle, jobs"]
-    ai["Co-writer and MCP server"]
+    ai["Gateway turn, co-writer and MCP server"]
     services["Services: auth, config, cleanup, scheduler, queue_streams, ..."]
     contract["HTTP contract: api_models"]
+    typed["Scoring and health types: scoring, health_types"]
     persistence["Persistence: db"]
+    below["Below persistence: parser, worker_liveness"]
     base["Settings and constants"]
-    entry --> workers --> routes --> runtime --> ai --> services --> contract --> persistence --> base
+    leaves["Leaves: import nothing in-tree"]
+    entry --> workers --> routes --> runtime --> ai --> services --> contract --> typed --> persistence --> below --> base --> leaves
 ```
 
-The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list, and the docs do not repeat it. Known gap: a new or renamed route is unconstrained until it is listed there. The exits are a `songmaker_cli.routes` package, or `exhaustive = true` once quality ships quality#148 C8.
+The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list. A new module breaks the contract until it takes a row.
 
 ## Data Model
 

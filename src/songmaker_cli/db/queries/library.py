@@ -17,13 +17,35 @@ from songmaker_cli.constants import (
     LIKE_ESCAPE_CHAR,
 )
 from songmaker_cli.db.models import Album, Song, aware_timestamp
-from songmaker_cli.library_cursor import LibraryCursor
 
 _SONG_LIST_OPTIONS = (
     joinedload(Song.versions),
     joinedload(Song.generations),
     joinedload(Song.album),
 )
+
+
+@dataclass(frozen=True)
+class LibraryCursor:
+    q: str
+    sort: str
+    item_type: str
+    sort_value: str
+    id: str
+
+
+def cursor_from_hit(hit: Album | Song, *, q: str, sort: str) -> LibraryCursor:
+    if sort == LIBRARY_SORT_TITLE:
+        sort_value = hit.title.lower()
+    else:
+        sort_value = aware_timestamp(hit.created_at).isoformat()
+    return LibraryCursor(
+        q=q,
+        sort=sort,
+        item_type=_hit_type(hit),
+        sort_value=sort_value,
+        id=hit.id,
+    )
 
 
 @dataclass(frozen=True)

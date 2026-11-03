@@ -37,11 +37,10 @@ from songmaker_cli.db.queries.albums import (
     count_picked_songs_by_album,
     count_songs_by_album,
 )
-from songmaker_cli.db.queries.library import search_library
+from songmaker_cli.db.queries.library import cursor_from_hit, search_library
 from songmaker_cli.library_cursor import (
     LibraryCursorInvalidError,
     LibraryCursorMismatchError,
-    cursor_from_hit,
     decode_library_cursor,
     encode_library_cursor,
 )
