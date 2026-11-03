@@ -1,0 +1,8 @@
+claim_id = "311b35f8ac3e4c7b828d72cb0eace775"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "c6164bc7738bc08bc9d55b9ee331e42b2d1816ca"
+branch = "claude/issue-2197-reference-delete-route"
+scope = [".github/workflows/ci.yml", "docs/architecture.md", "docs/security.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/components/editor/RecipeTabs.test.ts", "frontend/src/lib/test-utils/references.ts", "src/songmaker_cli/api_models/references.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/reference_api.py", "src/songmaker_cli/reference_audio.py", "tests/songmaker_cli/db/queries/test_reference_recordings_attach_lock_postgres.py", "tests/songmaker_cli/test_reference_api.py", "tests/songmaker_cli/test_reference_audio.py", "tests/songmaker_cli/test_reference_delete_postgres.py"]
+opened_commit = "b15dbfb1c6331c003468dcc8d1784ca3ffb1cbb4"
+whole_reason = "The delete route stands on the one path owner, the serving guard and the list's in_use; the route without the guard would let a delete leak a path while serving, and the in_use field changes the same response model the upload answers with."
