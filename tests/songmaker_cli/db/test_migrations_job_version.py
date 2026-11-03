@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 
+import sqlalchemy as sa
 from alembic import command
 from sqlalchemy import inspect, text
 from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
@@ -12,6 +13,7 @@ from support.reference_link_migration import execute, seed_users
 MIGRATION_MODULE = "songmaker_cli.db.migrations.versions.e3a91c5d7f20_jobs_remember_their_version"
 PREVIOUS_REVISION = "c4d7e1a9b3f6"
 COLUMN = "version_id"
+JOBS_VERSION = sa.table("jobs", sa.column(COLUMN))
 MIGRATION = importlib.import_module(MIGRATION_MODULE)
 
 
@@ -37,19 +39,27 @@ def _seed_job_at_the_previous_revision(engine) -> None:
     # only the columns both have plus the timestamps where they exist.
     present = column_names(engine, "jobs")
     timestamps = [name for name in ("heartbeat_at", "started_at") if name in present]
-    execute(
-        engine,
-        "INSERT INTO jobs (id, type, status, progress"
-        + "".join(f", {name}" for name in timestamps)
-        + ") VALUES ('job', 'generate', 'queued', 0.0"
-        + ", CURRENT_TIMESTAMP" * len(timestamps)
-        + ")",
+    names = ("id", "type", "status", "progress", *timestamps)
+    jobs = sa.table("jobs", *(sa.column(name) for name in names))
+    insert_job = sa.insert(jobs).values(
+        id="job",
+        type="generate",
+        status="queued",
+        progress=0.0,
+        **{name: sa.func.current_timestamp() for name in timestamps},
     )
+    with engine.begin() as connection:
+        connection.execute(insert_job)
 
 
 def _job_count(engine) -> int:
     with engine.connect() as connection:
         return connection.execute(text("SELECT count(*) FROM jobs")).scalar_one()
+
+
+def _job_versions(engine) -> list[str | None]:
+    with engine.connect() as connection:
+        return list(connection.execute(sa.select(JOBS_VERSION.c[COLUMN])).scalars())
 
 
 def _upgraded_with_a_job(database):
@@ -80,16 +90,15 @@ def test_upgrade_adds_an_indexed_nullable_key_that_the_database_sets_null(
 
 def test_upgrade_keeps_an_existing_job_without_a_version(reference_link_database):
     engine = _upgraded_with_a_job(reference_link_database)
-    with engine.connect() as connection:
-        assert connection.execute(text(f"SELECT {COLUMN} FROM jobs")).scalars().all() == [None]
+    assert _job_versions(engine) == [None]
 
 
 def test_deleting_a_version_sets_its_jobs_key_to_null(reference_link_database):
     engine = _upgraded_with_a_job(reference_link_database)
-    execute(engine, f"UPDATE jobs SET {COLUMN} = 'version'")
+    with engine.begin() as connection:
+        connection.execute(sa.update(JOBS_VERSION).values({COLUMN: "version"}))
     execute(engine, "DELETE FROM versions")
-    with engine.connect() as connection:
-        assert connection.execute(text(f"SELECT {COLUMN} FROM jobs")).scalars().all() == [None]
+    assert _job_versions(engine) == [None]
 
 
 def test_downgrade_drops_the_key_and_keeps_the_job(reference_link_database):

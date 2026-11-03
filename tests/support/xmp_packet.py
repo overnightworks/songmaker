@@ -15,6 +15,6 @@ def read_digital_source_type(image_path: Path) -> str:
     """The IPTC digital source type of a PNG or JPEG's XMP packet, parsed as XML."""
     with Image.open(image_path) as image:
         packet = image.info.get("xmp") or image.info.get("XML:com.adobe.xmp")
-    description = ElementTree.fromstring(packet).find(f".//{{{RDF_NAMESPACE}}}Description")
+    description = ElementTree.fromstring(packet).find(f".//{{{RDF_NAMESPACE}}}Description")  # noqa: S314 - packet is trusted output of the test's own writer
     assert description is not None, image_path.name
     return description.attrib[f"{{{IPTC_EXTENSION_NAMESPACE}}}DigitalSourceType"]

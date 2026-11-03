@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 
 import pytest
+import sqlalchemy as sa
 from alembic import command
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -14,12 +15,18 @@ from support.reference_link_migration import execute, seed_users
 MIGRATION_MODULE = "songmaker_cli.db.migrations.versions.d8b4f2a6c1e9_users_choose_their_theme"
 PREVIOUS_REVISION = "e3a91c5d7f20"
 COLUMN = "theme"
+USERS = sa.table("users", sa.column("id"), sa.column(COLUMN))
 MIGRATION = importlib.import_module(MIGRATION_MODULE)
 
 
 def _themes(engine) -> list[str]:
     with engine.connect() as connection:
-        return connection.execute(text(f"SELECT {COLUMN} FROM users ORDER BY id")).scalars().all()
+        return list(connection.execute(sa.select(USERS.c[COLUMN]).order_by(USERS.c.id)).scalars())
+
+
+def _set_theme_of_u1(engine, theme: str | None) -> None:
+    with engine.begin() as connection:
+        connection.execute(sa.update(USERS).where(USERS.c.id == "u1").values({COLUMN: theme}))
 
 
 def _upgraded_with_two_people(database):
@@ -49,13 +56,13 @@ def test_a_person_added_afterwards_without_a_theme_gets_the_device_choice(refere
 def test_the_database_refuses_a_value_outside_the_three_ways(reference_link_database):
     engine = _upgraded_with_two_people(reference_link_database)
     with pytest.raises(IntegrityError):
-        execute(engine, f"UPDATE users SET {COLUMN} = 'auto' WHERE id = 'u1'")
+        _set_theme_of_u1(engine, "auto")
 
 
 def test_the_database_refuses_no_theme(reference_link_database):
     engine = _upgraded_with_two_people(reference_link_database)
     with pytest.raises(IntegrityError):
-        execute(engine, f"UPDATE users SET {COLUMN} = NULL WHERE id = 'u1'")
+        _set_theme_of_u1(engine, None)
 
 
 def test_downgrade_drops_the_column_and_its_check_and_keeps_the_people(reference_link_database):

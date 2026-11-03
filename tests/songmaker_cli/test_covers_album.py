@@ -50,7 +50,7 @@ from songmaker_cli.settings import get_settings
 
 ALICE_PASSWORD = "alicepass1"
 
-UNSAFE_COVER_ALBUM_IDS = ("", ".", "..", "/tmp", "a/b")
+UNSAFE_COVER_ALBUM_IDS = ("", ".", "..", "/srv", "a/b")
 
 
 def _cover_escape_layout(tmp_path: Path) -> tuple[Path, Path, Path, Path]:

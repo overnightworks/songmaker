@@ -22,7 +22,7 @@ from acestep_worker.registry_client import RegistryClient, WorkerRegistration
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import WorkerDeps, build_state_payload, create_app
 
-DEFAULT_BIND_HOST = "0.0.0.0"
+DEFAULT_BIND_HOST = "0.0.0.0"  # noqa: S104 - the fake runs in its own container and the web container must reach it
 DEFAULT_CONTROL_PLANE_URL = "http://songmaker-web:8080"
 DEFAULT_PORT = 8001
 DEFAULT_PROGRESS_PAUSE_SECONDS = 1.0

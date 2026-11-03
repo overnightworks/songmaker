@@ -158,7 +158,7 @@ for _compose_merge_tag in ("!reset", "!override"):
 
 
 def _compose_file(path: Path) -> dict[str, object]:
-    compose = yaml.load(path.read_text(), Loader=_ComposeLoader)
+    compose = yaml.load(path.read_text(), Loader=_ComposeLoader)  # noqa: S506 - _ComposeLoader extends SafeLoader and safe_load cannot take the merge tags
     assert isinstance(compose, dict)
     return compose
 

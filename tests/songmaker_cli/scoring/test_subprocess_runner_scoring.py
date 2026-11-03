@@ -81,20 +81,20 @@ class _FakeProcess:
 # ── Message pickling ─────────────────────────────────────────────
 
 
-def test_score_request_pickles() -> None:
+def test_score_request_pickles(tmp_path: Path) -> None:
     import pickle
 
     from songmaker_cli.parser import SongMeta
     from songmaker_cli.scoring.pipeline import PipelineConfig
 
     req = ScoreRequest(
-        mp3_path=Path("/tmp/test.mp3"),
+        mp3_path=tmp_path / "test.mp3",
         meta=SongMeta(title="Test"),
         scorers=["silence"],
         config=PipelineConfig(device="cpu"),
         job_id="j1",
     )
-    restored = pickle.loads(pickle.dumps(req))
+    restored = pickle.loads(pickle.dumps(req))  # noqa: S301 - the test proves the subprocess hand-off's own pickle round trip and pickle is the contract under test
     assert restored.mp3_path == req.mp3_path
     assert restored.job_id == "j1"
 
@@ -103,7 +103,7 @@ def test_score_response_pickles() -> None:
     import pickle
 
     resp = ScoreResponse(scores=SongScores(), error=None)
-    restored = pickle.loads(pickle.dumps(resp))
+    restored = pickle.loads(pickle.dumps(resp))  # noqa: S301 - the test proves the subprocess hand-off's own pickle round trip and pickle is the contract under test
     assert restored.scores is not None
     assert restored.error is None
 
@@ -112,7 +112,7 @@ def test_error_response_pickles() -> None:
     import pickle
 
     resp = ScoreResponse(scores=None, error="boom")
-    restored = pickle.loads(pickle.dumps(resp))
+    restored = pickle.loads(pickle.dumps(resp))  # noqa: S301 - the test proves the subprocess hand-off's own pickle round trip and pickle is the contract under test
     assert restored.error == "boom"
 
 

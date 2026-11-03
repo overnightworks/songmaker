@@ -29,13 +29,13 @@ def _db(tmp_path: Path):
     return init_db(tmp_path / "test.db")
 
 
-def _build_auth_app(_db, redis=None):
+def _build_auth_app(_db, tmp_path: Path, redis=None):
     from songmaker_cli.app_context import AppContext, get_db_session
 
     if redis is None:
         redis = make_fake_redis()
     ctx = AppContext(
-        db=_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
+        db=_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
         signing_key=_TEST_SECRET, redis=redis,
     )
     app = FastAPI()
@@ -64,9 +64,9 @@ def _build_auth_app(_db, redis=None):
 
 
 @pytest.fixture
-def auth_app(_db) -> TestClient:
+def auth_app(_db, tmp_path: Path) -> TestClient:
     """Minimal FastAPI app with auth dependency — no middleware stack."""
-    app = _build_auth_app(_db)
+    app = _build_auth_app(_db, tmp_path)
     return web_client(app, cookies={})
 
 
@@ -182,7 +182,7 @@ def test_require_admin_allows_admin(auth_app: TestClient, create_session_id) -> 
 
 @pytest.mark.parametrize("commit_fails", [False, True])
 def test_auth_transaction_commits_the_renewal(
-    _db, commit_fails, session_commit_failure,
+    _db, tmp_path, commit_fails, session_commit_failure,
 ) -> None:
     """defect:#1590: an auth commit failure leaves no renewal."""
     from starlette.requests import Request
@@ -196,7 +196,7 @@ def test_auth_transaction_commits_the_renewal(
         record.expires_at = old_expiry
         db.commit()
 
-    app = _build_auth_app(_db)
+    app = _build_auth_app(_db, tmp_path)
     cookie = f"{DEFAULT_SESSION_COOKIE_NAME}={sign_session_id(sid, _TEST_SECRET)}"
     request = Request({
         "type": "http", "app": app, "method": "GET", "path": "/protected",
@@ -225,7 +225,9 @@ def test_auth_transaction_commits_the_renewal(
 
 
 @pytest.mark.parametrize("endpoint_write", ["none", "uncommitted", "failed"])
-def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_write) -> None:
+def test_authentication_persists_independently_of_endpoint_writes(
+    _db, tmp_path, endpoint_write,
+) -> None:
     """defect:#1590: the renewal commits; endpoint work never piggybacks."""
     from songmaker_cli.app_context import get_db_session
     from songmaker_cli.db.queries.auth import get_session_with_user, get_user
@@ -239,7 +241,7 @@ def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_
         original_name = record.user.username
         db.commit()
 
-    app = _build_auth_app(_db)
+    app = _build_auth_app(_db, tmp_path)
 
     @app.get("/no-commit")
     def no_commit(
@@ -264,7 +266,7 @@ def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_
         assert get_user(db, user_id).username == original_name
 
 
-def test_failed_session_renewal_refuses_authentication(_db) -> None:
+def test_failed_session_renewal_refuses_authentication(_db, tmp_path) -> None:
     """defect:#1590: a vanished row makes touch return False and auth return 401."""
     from sqlalchemy import event
     from starlette.requests import Request
@@ -272,7 +274,7 @@ def test_failed_session_renewal_refuses_authentication(_db) -> None:
     from songmaker_cli.db.models import UserSession
 
     sid = _make_user_and_session(_db)
-    app = _build_auth_app(_db)
+    app = _build_auth_app(_db, tmp_path)
     cookie = f"{DEFAULT_SESSION_COOKIE_NAME}={sign_session_id(sid, _TEST_SECRET)}"
     request = Request({
         "type": "http", "app": app, "method": "GET", "path": "/protected",
