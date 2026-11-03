@@ -666,10 +666,16 @@ def test_evict_model_worker_returns_4xx(client: TestClient) -> None:
     assert resp.status_code == 502
 
 
-# ── pin_model_on_worker_endpoint ────────────────────────────────────
+# ── pin_model and unpin_model endpoints ─────────────────────────────
 
 
-def test_pin_model_on_worker_success(client: TestClient, internal_token: str) -> None:
+_PIN_ACTIONS = pytest.mark.parametrize("action", ["pin_model", "unpin_model"])
+
+
+@_PIN_ACTIONS
+def test_pin_model_on_worker_success(
+    client: TestClient, internal_token: str, action: str,
+) -> None:
     """1301-F10-FIXTURE: forward the configured internal token."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -684,40 +690,58 @@ def test_pin_model_on_worker_success(client: TestClient, internal_token: str) ->
 
     with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
         resp = client.post(
-            "/api/admin/workers/w1/pin_model", json={"mode": "sft"},
+            f"/api/admin/workers/w1/{action}", json={"mode": "sft"},
         )
     assert resp.status_code == 200
     args, kwargs = fake_client.post.call_args
-    assert args[0].endswith("/pin_model")
+    assert args[0].endswith(f"/{action}")
     assert kwargs["json"] == {"mode": "sft"}
     assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == internal_token
 
 
-def test_pin_model_unknown_worker(client: TestClient) -> None:
+@_PIN_ACTIONS
+def test_pin_model_unknown_worker(client: TestClient, action: str) -> None:
     _login_as_admin(client)
     resp = client.post(
-        "/api/admin/workers/missing/pin_model", json={"mode": "sft"},
+        f"/api/admin/workers/missing/{action}", json={"mode": "sft"},
     )
     assert resp.status_code == 404
 
 
-def test_pin_model_unknown_mode(client: TestClient) -> None:
+@_PIN_ACTIONS
+def test_pin_model_unknown_mode(client: TestClient, action: str) -> None:
     _login_as_admin(client)
     _seed_worker(client, "w1")
     resp = client.post(
-        "/api/admin/workers/w1/pin_model", json={"mode": "bogus"},
+        f"/api/admin/workers/w1/{action}", json={"mode": "bogus"},
     )
     assert resp.status_code == 400
 
 
-def test_pin_model_worker_409_passes_through(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, MagicMock, patch
+@pytest.mark.parametrize(
+    ("status_code", "content", "expected_status", "expected_detail"),
+    [
+        (409, b'{"detail": "Cannot pin sft: not loaded"}', 409, "Cannot pin sft: not loaded"),
+        (400, b"plain text refusal", 400, "plain text refusal"),
+        (500, b"", 502, "Worker returned 500 with no detail"),
+    ],
+    ids=["json-detail", "non-json-body", "empty-body"],
+)
+def test_pin_model_worker_error_detail_reaches_the_admin(
+    client: TestClient,
+    status_code: int,
+    content: bytes,
+    expected_status: int,
+    expected_detail: str,
+) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    import httpx
 
     _login_as_admin(client)
     _seed_worker(client, "w1")
 
-    fake_response = MagicMock(status_code=409)
-    fake_response.json = MagicMock(return_value={"detail": "Cannot pin sft: not loaded"})
+    fake_response = httpx.Response(status_code, content=content)
     fake_client = AsyncMock()
     fake_client.post = AsyncMock(return_value=fake_response)
     fake_client.__aenter__ = AsyncMock(return_value=fake_client)
@@ -727,8 +751,8 @@ def test_pin_model_worker_409_passes_through(client: TestClient) -> None:
         resp = client.post(
             "/api/admin/workers/w1/pin_model", json={"mode": "sft"},
         )
-    assert resp.status_code == 409
-    assert "not loaded" in resp.json()["detail"]
+    assert resp.status_code == expected_status
+    assert resp.json()["detail"] == expected_detail
 
 
 def test_pin_model_worker_unreachable(client: TestClient) -> None:
@@ -754,49 +778,6 @@ def test_pin_model_worker_unreachable(client: TestClient) -> None:
 def test_pin_model_requires_admin(client: TestClient) -> None:
     resp = client.post("/api/admin/workers/w1/pin_model", json={"mode": "sft"})
     assert resp.status_code in (401, 403)
-
-
-# ── unpin_model_on_worker_endpoint ──────────────────────────────────
-
-
-def test_unpin_model_on_worker_success(client: TestClient, internal_token: str) -> None:
-    """1301-F10-FIXTURE: forward the configured internal token."""
-    from unittest.mock import AsyncMock, MagicMock, patch
-
-    _login_as_admin(client)
-    _seed_worker(client, "w1")
-
-    fake_response = MagicMock(status_code=200)
-    fake_client = AsyncMock()
-    fake_client.post = AsyncMock(return_value=fake_response)
-    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
-    fake_client.__aexit__ = AsyncMock(return_value=False)
-
-    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
-        resp = client.post(
-            "/api/admin/workers/w1/unpin_model", json={"mode": "sft"},
-        )
-    assert resp.status_code == 200
-    args, kwargs = fake_client.post.call_args
-    assert args[0].endswith("/unpin_model")
-    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == internal_token
-
-
-def test_unpin_model_unknown_worker(client: TestClient) -> None:
-    _login_as_admin(client)
-    resp = client.post(
-        "/api/admin/workers/missing/unpin_model", json={"mode": "sft"},
-    )
-    assert resp.status_code == 404
-
-
-def test_unpin_model_unknown_mode(client: TestClient) -> None:
-    _login_as_admin(client)
-    _seed_worker(client, "w1")
-    resp = client.post(
-        "/api/admin/workers/w1/unpin_model", json={"mode": "bogus"},
-    )
-    assert resp.status_code == 400
 
 
 # ── restart_worker_endpoint ─────────────────────────────────────────
