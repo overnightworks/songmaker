@@ -62,6 +62,27 @@ def _install_fake_pynvml(monkeypatch: pytest.MonkeyPatch, *, fails: bool) -> Mag
     return fake
 
 
+def test_check_gpu_health_when_nvml_init_fails_is_broken(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _install_fake_pynvml(monkeypatch, fails=False)
+    fake.nvmlInit = MagicMock(side_effect=_FakeNVMLError("NVML Shared Library Not Found"))
+    health = check_gpu_health()
+    assert health.status is GpuHealthStatus.UNAVAILABLE
+    assert "NVML Shared Library Not Found" in health.detail
+
+
+def test_read_gpu_vram_stats_survives_a_failing_nvml_shutdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _install_fake_pynvml(monkeypatch, fails=False)
+    fake.nvmlShutdown = MagicMock(side_effect=_FakeNVMLError("shutdown failed"))
+    stats = read_gpu_vram_stats()
+    assert stats is not None
+    assert stats.total_gb == 24.0
+    assert check_gpu_health().status is GpuHealthStatus.OK
+
+
 def test_check_gpu_health_when_nvml_call_fails_is_broken(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

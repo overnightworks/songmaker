@@ -8,6 +8,8 @@ import shutil
 import uuid
 from pathlib import Path
 
+from mutagen import MutagenError
+from mutagen.id3 import ID3
 from sqlalchemy.orm import Session
 
 from songmaker_cli.config import audio_file_path
@@ -33,14 +35,13 @@ def cleanup_reimported_files(
 
 def _extract_seed(mp3_path: Path) -> int | None:
     try:
-        from mutagen.id3 import ID3
         tags = ID3(str(mp3_path))
         for frame in tags.getall("COMM"):
             match = _SEED_PATTERN.search(str(frame))
             if match:
                 return int(match.group(1))
-    except Exception:
-        pass
+    except (MutagenError, ValueError) as exc:
+        log.debug("No seed read from %s: %s", mp3_path.name, exc)
     return None
 
 

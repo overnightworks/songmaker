@@ -175,6 +175,21 @@ def test_extract_seed_no_tags(tmp_path: Path) -> None:
     assert _extract_seed(mp3) is None
 
 
+def test_extract_seed_longer_than_the_integer_digit_limit_is_none(tmp_path: Path) -> None:
+    import sys
+
+    from mutagen.id3 import COMM, ID3
+
+    mp3 = tmp_path / "crafted.mp3"
+    mp3.write_bytes(b"\xff\xfb\x90\x00" + b"\x00" * 1024)
+    tags = ID3()
+    digits = "9" * (sys.get_int_max_str_digits() + 1)
+    tags.add(COMM(encoding=3, lang="eng", desc="", text=[f"seed={digits}"]))
+    tags.save(str(mp3))
+
+    assert _extract_seed(mp3) is None
+
+
 def test_extract_seed_with_mutagen(tmp_path: Path) -> None:
     from mutagen.id3 import COMM, ID3
 
