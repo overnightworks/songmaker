@@ -154,6 +154,21 @@ def test_remove_reference_file_reports_an_absent_file_as_already_gone(
     assert outcome is RemovalOutcome.ALREADY_GONE
 
 
+@pytest.mark.parametrize("owner_directory", ["user-b", ".."])
+def test_remove_reference_file_fails_for_a_path_of_another_owner(
+    tmp_path: Path, owner_directory: str,
+) -> None:
+    audio_dir = tmp_path / "audio"
+    own = _write_ref(audio_dir, "user-a", "x.wav")
+
+    outcome = remove_reference_file(
+        audio_dir, "user-a", f"{owner_directory}/{REFERENCE_AUDIO_DIR}/x.wav",
+    )
+
+    assert outcome is RemovalOutcome.FAILED
+    assert own.exists()
+
+
 def test_remove_reference_file_fails_through_a_symlinked_ancestor(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     foreign = _write_ref(audio_dir, "user-b", "clip.wav")

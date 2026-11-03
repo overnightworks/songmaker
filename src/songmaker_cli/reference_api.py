@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
+from starlette.types import Receive, Scope, Send
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_models import (
@@ -72,7 +73,7 @@ class OpenedFileResponse(FileResponse):
     ) -> None:
         super().__init__(path, stat_result=stat_result, media_type=media_type)
 
-    async def __call__(self, scope, receive, send) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         try:
             await super().__call__(scope, receive, send)
         except OSError as exc:

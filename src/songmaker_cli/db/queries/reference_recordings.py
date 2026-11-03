@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from dataclasses import dataclass
+from typing import Final
 
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import Generation, ReferenceRecording, Version
+
+REFERENCE_LINK_COLUMNS: Final = (
+    Version.reference_recording_id,
+    Generation.reference_recording_id,
+)
 
 
 @dataclass(frozen=True)
@@ -76,10 +82,10 @@ def reference_ids_in_use(session: Session, reference_ids: Collection[str]) -> se
         session.execute(
             select(ReferenceRecording.id).where(
                 ReferenceRecording.id.in_(reference_ids),
-                or_(
-                    exists().where(Version.reference_recording_id == ReferenceRecording.id),
-                    exists().where(Generation.reference_recording_id == ReferenceRecording.id),
-                ),
+                or_(*(
+                    exists().where(link == ReferenceRecording.id)
+                    for link in REFERENCE_LINK_COLUMNS
+                )),
             ),
         ).scalars(),
     )

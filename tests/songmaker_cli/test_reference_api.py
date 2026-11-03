@@ -39,9 +39,13 @@ from songmaker_cli.constants import (
     REFERENCE_AUDIO_EXTENSIONS,
 )
 from songmaker_cli.db.models import (
+    Base,
     ReferenceRecording,
 )
-from songmaker_cli.db.queries.reference_recordings import create_reference_recording
+from songmaker_cli.db.queries.reference_recordings import (
+    REFERENCE_LINK_COLUMNS,
+    create_reference_recording,
+)
 from songmaker_cli.settings import get_settings
 
 signed_in = reference_api_world.signed_in
@@ -92,11 +96,17 @@ def test_m1_an_upload_answers_the_stored_record(
     assert (signed_in.app.state.ctx.audio_dir / row.storage_path).read_bytes() == payload
 
 
-def test_m2_a_directory_part_in_the_client_name_is_dropped(signed_in: TestClient) -> None:
-    response = post_reference(signed_in, name="../../etc/dir/song.wav")
+@pytest.mark.parametrize(
+    ("sent", "stored"),
+    [("../../etc/dir/song.wav", "song.wav"), ("Würde é.wav", "Würde é.wav")],
+)
+def test_m2_a_directory_part_in_the_client_name_is_dropped_and_a_non_ascii_name_kept(
+    signed_in: TestClient, sent: str, stored: str,
+) -> None:
+    response = post_reference(signed_in, name=sent)
 
     assert response.status_code == 200
-    assert response.json()["filename"] == "song.wav"
+    assert response.json()["filename"] == stored
 
 
 @pytest.mark.parametrize(
@@ -540,6 +550,22 @@ def test_l8_the_list_marks_a_linked_reference_as_in_use(
     assert {item["filename"]: item["in_use"] for item in listed} == {
         "linked.wav": True, "free.wav": False,
     }
+
+
+def test_l8_the_in_use_query_checks_every_foreign_key_that_points_at_a_reference() -> None:
+    referencing = {
+        (foreign_key.parent.table.name, foreign_key.parent.name)
+        for table in Base.metadata.tables.values()
+        for foreign_key in table.foreign_keys
+        if foreign_key.column.table.name == ReferenceRecording.__tablename__
+    }
+
+    checked = {
+        (link.class_.__tablename__, link.property.columns[0].name)
+        for link in REFERENCE_LINK_COLUMNS
+    }
+
+    assert checked == referencing
 
 
 @pytest.mark.parametrize("control", ["\x00", "\x01", "\x09", "\x1b", "\x1f"])
