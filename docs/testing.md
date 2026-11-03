@@ -340,7 +340,7 @@ The auth library's own tests are not in this repository. They moved with
 `webauth` to [overnightworks/webauth](https://github.com/overnightworks/webauth)
 in #879 and run in that repository's CI; songmaker installs its pinned release wheel
 and proves the auth surface it builds on it through `test_oidc_sign_in.py`,
-`test_auth_api.py`, `test_middleware.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
+`test_auth_api.py`, `test_auth_dependencies.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
 
 The provider library's own tests likewise left with it. They moved with
 `agent_providers` to

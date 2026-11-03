@@ -182,7 +182,7 @@ For a cookie no token is involved: the session cookie is `SameSite=Strict` and t
 
 - The per-IP middleware starts fresh budgets once at deployment because its Redis keys change to the class-qualified names documented below. Session keys, stored data and rights are unchanged.
 - The fetch-metadata check above hardens mutating `/api/` requests. Songmaker's frontend is same-origin; CLI and workers omit `Sec-Fetch-Site` and keep their existing behavior. A cross-site browser client cannot make these mutations, even when its Origin is configured.
-- Logout clears both cookies with `SameSite=Strict`, previously Starlette's `lax`. The header text changes; deletion still matches the same cookie name, domain and path. The logout behavior remains covered by [auth API tests](../tests/test_auth_api.py); no test pins this deletion attribute.
+- Logout clears both cookies with `SameSite=Strict`, previously Starlette's `lax`. The header text changes; deletion still matches the same cookie name, domain and path. The logout behavior remains covered by [auth API tests](../tests/songmaker_cli/test_auth_api.py); no test pins this deletion attribute.
 
 ### History: deliberate changes with webauth v0.11.0 (#1320)
 
