@@ -1,0 +1,8 @@
+claim_id = "c7a7ed83be8e4e21919504260a939013"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3faa23783bfa8856824b2b12b7aa388023d1c416"
+branch = "claude/issue-2157-ratchets-per-entry"
+scope = ["docs/testing.md", "quality/baseline.toml", "scripts/check_style_literals.py", "scripts/style-literals.txt", "scripts/test_helper_ratchet.sh", "scripts/test_helper_ratchet.txt", "tests/scripts/test_check_style_literals.py", "tests/scripts/test_test_helper_ratchet.py"]
+opened_commit = "bc1ff043cc95ca52e2d0da1c11257a3cca006ec1"
+whole_reason = "One rule, two ratchets: both count scripts move to the same per-entry baseline form, and the docs paragraph describing them is one."
