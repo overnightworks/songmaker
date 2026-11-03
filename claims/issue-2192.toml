@@ -1,0 +1,8 @@
+claim_id = "1e9fea376b024f5b8f7c787734d1936f"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "34da0831824cc5cbfb9a4ca4e1c420d3eb3b423a"
+branch = "claude/issue-2192-explicit-raises"
+scope = ["src/songmaker_cli/api_helpers.py", "src/songmaker_cli/auth_stores.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/mcp_server/tools.py", "src/songmaker_cli/scoring/models.py", "src/songmaker_cli/scoring/subprocess_runner.py", "tests/songmaker_cli/test_auth_stores.py"]
+opened_commit = "d5814379c5e0005f1e17ae6d2d6c6ccf7711703b"
+whole_reason = "One rule across seven modules, with one shared guard and one hygiene proof; per module it would be seven reviews of the same judgement."
