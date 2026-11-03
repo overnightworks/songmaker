@@ -137,7 +137,7 @@
 
 	let providerStatuses = $state<ProviderStatus[]>([]);
 
-	// The co-writer runs through the agent service; its row offers no choice until the Models row replaces it.
+	// The co-writer runs through the gateway; its row offers no choice until the Models row replaces it.
 	let cowriterSettings = $state<CowriterSettings | null>(null);
 	let cowriterBudget = $state(0);
 	let cowriterBudgetSaved = $state(false);

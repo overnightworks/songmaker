@@ -16,7 +16,7 @@
 // stack's own honest state rather than an arranged one: greyed route pills with
 // their reason, "No models", a gray "Claude CLI not logged in", and a co-writer turn
 // that ends with a named problem instead of silently switching provider. The co-writer row
-// is read-only: it runs through the agent service, which songmaker does not configure.
+// is read-only: the agent file names its model and the gateway runs it.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
@@ -33,7 +33,9 @@ import {
 	MODELS_COLUMN_TASK_LABEL,
 	MODELS_HISTORY_TAIL_LABEL,
 	MODELS_NO_MODELS_LABEL,
+	MODELS_ROUTE_GATEWAY_LABEL,
 	MODELS_SAVED_LABEL,
+	MODELS_SET_BY_AGENT_FILE_LABEL,
 	MODELS_TASK_COVER_LABEL,
 	MODELS_TASK_COWRITER_LABEL,
 	PROVIDER_ROUTE_API_LABEL,
@@ -63,16 +65,16 @@ const DESKTOP_WIDTHS = [1920, 1440, 1280, 1024] as const;
 const PHONE_VIEWPORT = { width: 375, height: 844 };
 const DESKTOP_HEIGHT = 900;
 
-// The named problems a co-writer turn ends with when the agent service did not run it. This
-// stack has no agent service, and its seeded session holds no refresh token, so the turn ends
-// before any request: "sign in again". That it is a named problem, and never a silent switch
-// to a local provider, is the ruled behaviour (#820, line 8; #1476).
+// The named problems a co-writer turn ends with when the agent did not run it. This stack
+// configures no gateway, so the turn ends before any request with "unavailable". That it is a
+// named problem, and never a silent switch to a local provider, is the ruled behaviour
+// (#820, line 8; #1476).
 const NAMED_TURN_FAILURES =
 	/The co-writer is unavailable|The co-writer is busy|The co-writer is not enabled for your account|Log in again to use the co-writer/;
 
 // The co-writer row of the Agents table: words, no control, no model and no status (#1949):
-// the agent service decides the model, so the row says so.
-const COWRITER_ROW_WORDS = ['Set by the agent service', 'Agent service'];
+// the agent file names the model, so the row says so.
+const COWRITER_ROW_WORDS = [MODELS_SET_BY_AGENT_FILE_LABEL, MODELS_ROUTE_GATEWAY_LABEL];
 const SELECTABLE_TASKS = [MODELS_TASK_COVER_LABEL];
 
 async function openAgentsTab(page: Page): Promise<void> {
@@ -223,7 +225,7 @@ test(
 		await openAgentsTab(page);
 
 		// One row per task, and nothing else; the co-writer's row only reads, because
-		// the agent service chooses (#1476, lines 1 and 2).
+		// the agent file names the model (#1476, lines 1 and 2).
 		await expectCowriterRowReadOnly(page);
 		await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toBeVisible();
 		await expect(page.locator('.tt-row')).toHaveCount(2);

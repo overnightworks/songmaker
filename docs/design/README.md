@@ -107,7 +107,7 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   to use the co-writer" mit Sign-in-Link, und der Rest von songmaker arbeitet
   weiter (Q5 b, die ganze App meldet ab, ist verworfen); Q13 gilt mit ihrem
   Default a. Besitzer: `admin-models.html` (Abschnitt „Neu · #1895",
-  Zustände w bis y′: fünf Spalten, Co-Writer-Zeile „Set by the agent service"
+  Zustände w bis y′: fünf Spalten, Co-Writer-Zeile „Set by the agent file"
   ohne Status, Cover und Scoring „not available yet"), `song-page.html` (D5b, D7a–d) und
   `song-page-phone.html` (7c–7e; die Gesprächszeile in Frame 7 ist ersetzt),
   `album-cover.html` („Suggest closed", Punkt 8; `album-browsing.html` zeigt

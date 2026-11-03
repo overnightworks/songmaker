@@ -272,9 +272,9 @@ class ChatTurnProblem(StrEnum):
 
 
 class ChatTurnProblemFrame(BaseModel):
-    """The frame a turn ends with when the agent service did not run it.
+    """The frame a turn ends with when the agent did not run it.
 
-    ``retry_after_seconds`` is set only for ``busy``: the wait the service named.
+    ``retry_after_seconds`` is set only for ``busy``: the wait the gateway named.
     """
 
     type: Literal["error"] = "error"
