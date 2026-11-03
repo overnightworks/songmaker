@@ -6,7 +6,7 @@ import asyncio
 
 import httpx
 import pytest
-from worker_http_peer import WorkerScenario
+from support.worker_http_peer import WorkerScenario
 
 from acestep_worker.model_cache import LoadedModel
 
