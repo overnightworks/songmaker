@@ -45,7 +45,7 @@ def rewrite(source: str) -> str:
 
 def tracked_frontend_sources() -> list[Path]:
     listing = subprocess.run(
-        ["git", "ls-files", "-z", "--", "frontend"],
+        ["git", "ls-files", "-z", "--", "frontend"],  # noqa: S607 - git is the operator tool found through PATH on purpose
         cwd=REPOSITORY_ROOT,
         check=True,
         capture_output=True,
@@ -59,7 +59,7 @@ def format_with_prettier(paths: list[Path]) -> None:
     """A changed specifier changes line widths, so prettier decides the final layout."""
     if paths:
         command = ["pnpm", "exec", "prettier", "--write", "--log-level", "warn", *map(str, paths)]
-        subprocess.run(command, cwd=REPOSITORY_ROOT / "frontend", check=True)
+        subprocess.run(command, cwd=REPOSITORY_ROOT / "frontend", check=True)  # noqa: S603 - list argv without a shell and the paths are absolute so none reads as an option
 
 
 def main() -> int:

@@ -42,7 +42,7 @@ from pathlib import Path
 from dotenv_file import Assignment, DotenvError, effective_assignment
 from main_checkout import CheckoutError, main_checkout_elsewhere
 
-PASSWORD_KEY = "GRAFANA_PASSWORD"
+PASSWORD_KEY = "GRAFANA_PASSWORD"  # noqa: S105 - the name of an environment key and no secret
 USER_KEY = "GRAFANA_USER"
 DEFAULT_ADMIN_USER = "admin"
 PUBLICLY_KNOWN_PASSWORDS = frozenset({"", "admin"})
@@ -246,7 +246,7 @@ def _run_docker(
 ) -> subprocess.CompletedProcess[str] | None:
     """Run a docker command in the checkout, its output kept for checks and never shown."""
     try:
-        return subprocess.run(
+        return subprocess.run(  # noqa: S603 - fixed docker argv without a shell from module constants
             command, input=stdin, capture_output=True, encoding="utf-8", errors="replace",
             cwd=repo_root, check=False,
         )

@@ -551,7 +551,7 @@ def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
         str(output_path),
     ]
     try:
-        subprocess.run(
+        subprocess.run(  # noqa: S603 - ffmpeg argv without a shell and both paths lie under the server stream directory
             cmd,
             check=True,
             capture_output=True,
