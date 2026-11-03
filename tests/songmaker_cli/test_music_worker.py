@@ -385,6 +385,42 @@ def test_music_worker_settings_has_cron() -> None:
     names = {job.name for job in MusicWorkerSettings.cron_jobs}
     assert "cron:MusicWorker.cleanup_files_cron" in names
     assert "cron:MusicWorker.generation_retention_cron" in names
+    assert "cron:MusicWorker.reference_remnant_cron" in names
+
+
+def test_the_daily_jobs_run_at_the_daily_cleanup_hour() -> None:
+    from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
+    from songmaker_cli.music_worker import MusicWorkerSettings
+
+    daily = {
+        job.name: job.hour for job in MusicWorkerSettings.cron_jobs
+        if job.name != "cron:MusicWorker.cleanup_files_cron"
+    }
+    assert daily == {
+        "cron:MusicWorker.generation_retention_cron": {DAILY_CLEANUP_HOUR_UTC},
+        "cron:MusicWorker.reference_remnant_cron": {DAILY_CLEANUP_HOUR_UTC},
+    }
+
+
+def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_count(tmp_path) -> None:
+    factory = init_test_db(tmp_path / "songmaker.db")
+    audio_dir = tmp_path / "audio"
+    refs = audio_dir / "u1" / "refs"
+    refs.mkdir(parents=True)
+    (refs / "one.wav").write_bytes(b"x")
+    (refs / "two.wav").write_bytes(b"x")
+    with factory() as session:
+        session.add(User(id="u1", username="u1"))
+        session.commit()
+    settings = _settings(CoverExecutor.WEB).model_copy(update={"audio_dir": str(audio_dir)})
+    worker = MusicWorker(settings)
+    # init_db would run the PostgreSQL migrations, which needs a live database.
+    worker.get_db_factory = MagicMock(return_value=factory)
+
+    removed = _run(worker.reference_remnant_cron(_mock_ctx()))
+
+    assert removed == 2
+    assert list(refs.iterdir()) == []
 
 
 def test_music_worker_settings_functions() -> None:

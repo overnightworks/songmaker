@@ -1703,7 +1703,9 @@ SIGKILLed and even the values the run did produce would be lost.
   `train_lora` tasks
 - `max_jobs=2` (concurrent SSE consumers; the actual generation runs on the
   acestep-worker)
-- Cron: audits orphaned audio files and applies file-expiry cleanup. The
+- Cron: audits orphaned audio files and applies file-expiry cleanup; once a day
+  (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
+  reference-audio files that no row names. The
   `generate` and `lora_training` job types are recovered on MusicWorker
   startup and shutdown.
 - Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
