@@ -625,6 +625,7 @@ def test_the_refresh_token_is_stored_with_the_session_and_reaches_no_log_or_resp
         with world.client:
             responses.append(world.client.get("/health/details", headers=monitoring_headers))
 
+    assert responses[-1].status_code == 200
     assert refresh_token not in caplog.text
     for response in responses:
         assert refresh_token not in response.text
@@ -681,6 +682,7 @@ def test_health_carries_neither_the_secret_nor_the_path_it_is_read_from(
     with world.client:
         response = world.client.get("/health/details", headers=monitoring_headers)
 
+    assert response.status_code == 200
     assert TEST_CLIENT_SECRET not in response.text
     assert os.environ["OIDC_CLIENT_SECRET_FILE"] not in response.text
 

@@ -49,7 +49,7 @@ from songmaker_cli.constants import (
 # The web server's port: the CLI and server default, and the port of the back-channel Host.
 DEFAULT_SERVER_PORT: Final = 8080
 
-# What `/health` reports for an image built without the release build arguments.
+# What `/health/details` reports for an image built without the release build arguments.
 UNRELEASED_TAG: Final[str] = "unreleased"
 UNKNOWN_COMMIT: Final[str] = "unknown"
 _RELEASE_FIELD_DEFAULTS: Final = {

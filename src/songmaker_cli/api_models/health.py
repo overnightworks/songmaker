@@ -17,6 +17,8 @@ from songmaker_cli.health_types import (
 )
 
 ClaudeCliToolSurface = Literal["ok", "drift", "unverified"]
+HealthVerdict = Literal["ok", "degraded"]
+AceStepState = Literal["healthy", "unknown", "unhealthy"]
 
 
 @dataclass(frozen=True)
@@ -38,7 +40,7 @@ class HealthSignals:
     release: ReleaseInfo
 
     @property
-    def acestep(self) -> Literal["healthy", "unknown", "unhealthy"]:
+    def acestep(self) -> AceStepState:
         if self.workers_online > 0:
             return "healthy"
         if self.workers_total == 0:
@@ -46,7 +48,7 @@ class HealthSignals:
         return "unhealthy"
 
     @property
-    def status(self) -> Literal["ok", "degraded"]:
+    def status(self) -> HealthVerdict:
         degraded = (
             not self.db_ok
             or (not self.music_running and not self.scoring_running)
@@ -59,7 +61,7 @@ class HealthSignals:
 class HealthStatusResponse(BaseModel):
     """The readiness answer anyone may read; the details need the monitoring token."""
 
-    status: Literal["ok", "degraded"]
+    status: HealthVerdict
 
     @classmethod
     def from_signals(cls, signals: HealthSignals) -> HealthStatusResponse:
@@ -81,14 +83,14 @@ class BackgroundLoopResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    status: Literal["ok", "degraded"]
+    status: HealthVerdict
     music_worker: Literal["running", "stopped"]
     scoring_worker: Literal["running", "stopped"]
     music_queue_depth: int
     scoring_queue_depth: int
     db: Literal["ok", "error"]
     redis: Literal["ok", "error"]
-    acestep: Literal["healthy", "unknown", "unhealthy"]
+    acestep: AceStepState
     acestep_reason: Literal["lm_init_failed"] | None = Field(description=(
         "lm_init_failed while a registered worker's language model cannot start, "
         "otherwise null; it can accompany a healthy aggregate when other workers are "

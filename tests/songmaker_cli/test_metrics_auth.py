@@ -97,11 +97,17 @@ def workers_running(request):
     indirect=["workers_running"],
 )
 def test_health_answers_its_status_and_nothing_else_to_everyone(
-    metrics_client, monkeypatch, fresh_settings, monitoring_headers, workers_running, status,
+    metrics_client, monkeypatch, fresh_settings, workers_running, status,
 ) -> None:
     monkeypatch.setenv("SONGMAKER_MONITORING_TOKEN", CONFIGURED_MONITORING_TOKEN)
+    metrics_client.cookies.set("songmaker_session", "any-session-value")
 
-    for headers in ({}, monitoring_headers):
+    for headers in (
+        {},
+        _bearer(CONFIGURED_MONITORING_TOKEN),
+        _bearer("wrong-token"),
+        _bearer(CONFIGURED_MONITORING_TOKEN, "Basic"),
+    ):
         resp = metrics_client.get("/health", headers=headers)
 
         assert resp.status_code == 200
