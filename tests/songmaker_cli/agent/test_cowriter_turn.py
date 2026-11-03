@@ -308,7 +308,7 @@ def test_an_event_the_turn_does_not_know_fails_the_turn_and_stores_no_answer(wor
         events = world.turn()
 
     assert _types(events)[-1] == "error"
-    assert "Co-writer chat failed (AssertionError)" in caplog.text
+    assert _frame(events, "error")["status"] == 500
     assert world.stored_roles() == ["user"]
 
 
