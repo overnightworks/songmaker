@@ -13,8 +13,8 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from fake_oidc_issuer import Person
 from httpx import Response
+from support.fake_oidc_issuer import Person
 from support.oidc_client import TEST_CLIENT_SECRET
 from support.oidc_world import World
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session, web_client

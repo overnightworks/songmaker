@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pytest
-from fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
+from support.fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
 from support.web_app import make_test_app, seed_user
 
 from songmaker_cli.db.models import User, UserSession

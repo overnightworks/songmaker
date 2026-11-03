@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from fake_oidc_issuer import Person, a_fake_issuer
 from httpx import Response
 from psycopg2.errors import LockNotAvailable
 from sqlalchemy import event, text
 from sqlalchemy.exc import OperationalError
+from support.fake_oidc_issuer import Person, a_fake_issuer
 from support.oidc_world import World
 from support.postgres_lock_harness import (
     WAIT_SECONDS,

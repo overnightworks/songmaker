@@ -23,7 +23,7 @@ from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, comple
 from agent_runtime_client.backend.gateway import GatewayBackend
 from agent_runtime_client.config import AgentConfig, BackendKind, ChatGateway
 from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
-from fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
+from support.fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
 from support.web_app import issued_cookies
 
 from songmaker_cli.agent.tools import cowriter_hand_tools
