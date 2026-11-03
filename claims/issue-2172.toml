@@ -1,8 +1,0 @@
-claim_id = "f9d32fae583b44a4a797cf66eb203a7c"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "0224005642d6f9170b2956f27dd553e4b0fdd381"
-branch = "claude/issue-2172-test-layout-3h8-oidc-tail"
-scope = ["docs/testing.md", "quality/baseline.toml", "tests/fake_oidc_issuer.py", "tests/songmaker_cli/test_auth_api_backchannel_logout.py", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_auth_stores_write_lock_postgres.py", "tests/songmaker_cli/test_oidc_client_person_token_paths.py", "tests/songmaker_cli/test_oidc_client_person_token_paths_postgres.py", "tests/support/cowriter_gateway.py", "tests/support/fake_oidc_issuer.py", "tests/support/oidc_world.py", "tests/support/token_world.py", "tests/test_oidc_sign_in.py", "tests/test_person_token_paths.py"]
-opened_commit = "7e2316143997b3206a472e68aa0c46eada3bfa10"
-whole_reason = "One helper move must change every importer in one change; otherwise the suite fails to import."
