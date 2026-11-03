@@ -68,6 +68,11 @@ from songmaker_cli.api_models.queue_streams import (
     QueueStreamSkipResponse,
     QueueStreamTrackResponse,
 )
+from songmaker_cli.api_models.references import (
+    ReferenceListResponse,
+    ReferenceRecordingResponse,
+    ReferenceUsageResponse,
+)
 from songmaker_cli.api_models.resource_events import (
     GenerationCreatedResourceEvent,
     ResourceHelloEvent,
@@ -118,9 +123,6 @@ from songmaker_cli.api_models.songs import (
     GenerationParams,
     GenerationResponse,
     RateRequest,
-    ReferenceListResponse,
-    ReferenceRecordingResponse,
-    ReferenceUsageResponse,
     RepaintRequest,
     ScoreRequest,
     ScorerSchemaItem,
