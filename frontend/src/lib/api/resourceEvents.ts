@@ -3,6 +3,20 @@ import type {
 	ResourceHelloEvent,
 	ResourceResyncEvent
 } from './types';
+import { RESOURCE_EVENT_STREAM_PATH } from '#lib/constants.ts';
+
+// The browser only sends `Last-Event-ID` on its own native retry; the owner
+// reopens a dropped stream itself, so it hands the server that cursor as a
+// query parameter instead (#1020).
+const RESOURCE_EVENT_RESUME_QUERY = 'last_event_id';
+
+export function openResourceEventStream(resumeId: string | null): EventSource {
+	const url =
+		resumeId === null
+			? RESOURCE_EVENT_STREAM_PATH
+			: `${RESOURCE_EVENT_STREAM_PATH}?${new URLSearchParams({ [RESOURCE_EVENT_RESUME_QUERY]: resumeId })}`;
+	return new EventSource(url, { withCredentials: true });
+}
 
 const DECIMAL_ID = /^(0|[1-9]\d*)$/;
 

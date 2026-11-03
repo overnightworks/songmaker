@@ -42,7 +42,7 @@ import {
 } from './resourceSync';
 
 type ResourceSyncDeps = ConstructorParameters<typeof ResourceSyncController>[0];
-type ResourceEventSource = ReturnType<ResourceSyncDeps['createEventSource']>;
+type ResourceEventSource = ReturnType<ResourceSyncDeps['openEventStream']>;
 type ResourceAuthProbe = Awaited<ReturnType<ResourceSyncDeps['probeAuth']>>;
 type ResourceSyncState = ResourceSyncController['state'];
 
@@ -65,6 +65,7 @@ const EVENT_SOURCE_CONNECTING = 0;
 class MockEventSource implements ResourceEventSource {
 	static instances: MockEventSource[] = [];
 	url: string;
+	resumeId: string | null = null;
 	withCredentials: boolean;
 	closed = false;
 	readyState = EVENT_SOURCE_CONNECTING;
@@ -175,8 +176,8 @@ function setup(options?: {
 			}));
 	const controller = new ResourceSyncController(
 		{
-			createEventSource: (url) => {
-				const source = new MockEventSource(url);
+			openEventStream: (resumeId) => {
+				const source = Object.assign(new MockEventSource(RESOURCE_EVENT_STREAM_PATH), { resumeId });
 				sources.push(source);
 				return source;
 			},
@@ -1113,8 +1114,7 @@ describe('resource sync owner', () => {
 	it('opens a native EventSource with credentials and cleans it up', async () => {
 		const { controller, sources, store } = setup();
 		controller.start();
-		expect(sources).toHaveLength(1);
-		expect(sources[0].url).toBe(RESOURCE_EVENT_STREAM_PATH);
+		expect(sources.map((source) => source.resumeId)).toEqual([null]);
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
 		await controller.waitForReady();
@@ -1685,7 +1685,7 @@ describe('resource sync owner', () => {
 		window.dispatchEvent(new Event('online'));
 
 		expect(sources).toHaveLength(2);
-		expect(latestSource(sources).url).toBe(`${RESOURCE_EVENT_STREAM_PATH}?last_event_id=4`);
+		expect(latestSource(sources).resumeId).toBe('4');
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		expect(sources).toHaveLength(2);
 	});
@@ -1717,7 +1717,7 @@ describe('resource sync owner', () => {
 		serverTakes.push('g6');
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 
-		expect(latestSource(sources).url).toBe(`${RESOURCE_EVENT_STREAM_PATH}?last_event_id=5`);
+		expect(latestSource(sources).resumeId).toBe('5');
 		latestSource(sources).emit('hello', { high_water_mark: '6' }, '5');
 		latestSource(sources).emit('generation.created', created('6', 'g6'), '6');
 		await flush();
@@ -1734,7 +1734,7 @@ describe('resource sync owner', () => {
 		controller.stop();
 		controller.start();
 
-		expect(latestSource(sources).url).toBe(RESOURCE_EVENT_STREAM_PATH);
+		expect(latestSource(sources).resumeId).toBeNull();
 	});
 
 	it('grows the backoff delay on successive live drops and resets after a hello', async () => {

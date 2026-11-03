@@ -6,6 +6,7 @@ import {
 	type JobStatus
 } from '#lib/api/client.ts';
 import { ApiError, isNotFound } from '#lib/api/fetch.ts';
+import { openJobEventStream } from '#lib/api/jobs.ts';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
@@ -369,7 +370,7 @@ function streamJob(
 	let current = retry;
 	let spoke = false;
 
-	const source = new EventSource(`/api/jobs/${jobId}/stream`, { withCredentials: true });
+	const source = openJobEventStream(jobId);
 	eventSources.set(jobId, source);
 
 	source.onopen = () => {

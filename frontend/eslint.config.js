@@ -67,8 +67,9 @@ const WIRE_SHAPE_SYNTAX = ['TSInterfaceDeclaration', 'TSTypeLiteral'].map((selec
 	message: NO_HAND_WRITTEN_WIRE_SHAPE
 }));
 
-// #925 G3. Only the transport calls fetch; the named media owners and service worker
-// retain their direct reads. Tests stub the boundary.
+// #925 G3. Only the transport calls fetch and sends an XMLHttpRequest; the named media owners and service worker
+// retain their direct reads. Only lib/api opens a server stream (EventSource) or
+// sends a beacon. Tests stub the boundary.
 // checkGlobalObject also refuses window.fetch, globalThis.fetch and self.fetch.
 // #1006 H6d. Only lib/history/historyController.ts writes or traverses history; tests
 // drive and fake the browser's history. checkGlobalObject also refuses window.history.
@@ -83,6 +84,20 @@ const RAW_HISTORY_MESSAGE =
 	'call a controller function, or add one there.';
 const RAW_FETCH = { name: 'fetch', message: RAW_FETCH_MESSAGE };
 const RAW_HISTORY = { name: 'history', message: RAW_HISTORY_MESSAGE };
+const RAW_EVENT_SOURCE = {
+	name: 'EventSource',
+	message:
+		'Only lib/api opens a server stream: call openJobEventStream or openResourceEventStream, or add an opener there.'
+};
+const RAW_XHR = {
+	name: 'XMLHttpRequest',
+	message:
+		'Only lib/api/fetch.ts sends an XMLHttpRequest (#925 G3): call apiUpload or another lib/api function.'
+};
+const RAW_BEACON = {
+	property: 'sendBeacon',
+	message: 'Only lib/api reaches the server: call a lib/api function, or add one there.'
+};
 const refusedGlobals = (...globals) => ['error', { globals, checkGlobalObject: true }];
 
 export default ts.config(
@@ -170,28 +185,41 @@ export default ts.config(
 	{
 		files: ['src/**'],
 		ignores: [
-			'src/lib/api/fetch.ts',
+			'src/lib/api/**',
 			'src/lib/services/audioPlayer.svelte.ts',
 			'src/service-worker.ts',
 			'src/lib/history/historyController.ts',
 			'src/**/*.test.ts',
 			'src/lib/test-utils/**'
 		],
-		rules: { 'no-restricted-globals': refusedGlobals(RAW_FETCH, RAW_HISTORY) }
+		rules: {
+			'no-restricted-globals': refusedGlobals(RAW_FETCH, RAW_HISTORY, RAW_EVENT_SOURCE, RAW_XHR)
+		}
 	},
 	{
-		files: [
-			'src/lib/api/fetch.ts',
-			'src/lib/services/audioPlayer.svelte.ts',
-			'src/service-worker.ts'
-		],
+		files: ['src/lib/api/**'],
+		ignores: ['src/lib/api/fetch.ts', 'src/lib/api/**/*.test.ts'],
+		rules: { 'no-restricted-globals': refusedGlobals(RAW_FETCH, RAW_HISTORY, RAW_XHR) }
+	},
+	{
+		files: ['src/lib/api/fetch.ts'],
 		ignores: ['src/**/*.test.ts'],
 		rules: { 'no-restricted-globals': refusedGlobals(RAW_HISTORY) }
 	},
 	{
+		files: ['src/lib/services/audioPlayer.svelte.ts', 'src/service-worker.ts'],
+		ignores: ['src/**/*.test.ts'],
+		rules: { 'no-restricted-globals': refusedGlobals(RAW_HISTORY, RAW_EVENT_SOURCE, RAW_XHR) }
+	},
+	{
 		files: ['src/lib/history/historyController.ts', 'src/lib/test-utils/**'],
 		ignores: ['src/**/*.test.ts'],
-		rules: { 'no-restricted-globals': refusedGlobals(RAW_FETCH) }
+		rules: { 'no-restricted-globals': refusedGlobals(RAW_FETCH, RAW_EVENT_SOURCE, RAW_XHR) }
+	},
+	{
+		files: ['src/**'],
+		ignores: ['src/lib/api/**', 'src/**/*.test.ts', 'src/lib/test-utils/**'],
+		rules: { 'no-restricted-properties': ['error', RAW_BEACON] }
 	},
 	{
 		ignores: [
