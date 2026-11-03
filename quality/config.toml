@@ -185,38 +185,3 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1146 -> 11
 item = "#2152"
 date = 2026-11-03
 reason = "the reference list answers its storage usage: the generated API types gain the ReferenceListResponse and ReferenceUsageResponse interfaces; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[layout.allow]]
-path = "frontend/src/lib/components/detail-back.test.ts"
-rule = "test-layout"
-reason = "it proves that the detail views own no content back and the song editor survives list revalidation, across several components, so it has no single subject file"
-
-[[layout.allow]]
-path = "frontend/src/lib/components/frequent-hitbox.test.ts"
-rule = "test-layout"
-reason = "it measures the hitboxes of the frequent actions across several components, so it has no single subject file"
-
-[[layout.allow]]
-path = "frontend/src/lib/components/share/share-import-boundary.test.ts"
-rule = "test-layout"
-reason = "a grep gate over the whole share surface: nothing it mounts may runtime-import app-only state, so it has no single subject file"
-
-[[layout.allow]]
-path = "tests/test_compose_release_args.py"
-rule = "test-layout"
-reason = "it renders docker-compose.yml through the real docker compose, so it has no single subject module"
-
-[[layout.allow]]
-path = "tests/test_compose_required_env.py"
-rule = "test-layout"
-reason = "it proves docker-compose.yml fails closed without its required settings, so it has no single subject module"
-
-[[layout.allow]]
-path = "tests/test_packaging_boundary.py"
-rule = "test-layout"
-reason = "it checks that the container extras own every optional import reachable from the entrypoints, across packages and images"
-
-[[layout.allow]]
-path = "tests/test_import_boundaries.py"
-rule = "test-layout"
-reason = "the planted-breach proof that the import boundaries hold and CI catches a breach, across all packages (#2064 finding 19)"
