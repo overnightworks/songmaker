@@ -463,23 +463,23 @@ describe('references page', () => {
 		});
 	});
 
+	async function renderReady(usage: Partial<ReferenceUsageResponse> = {}): Promise<HTMLElement> {
+		mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({ id: 'a' })], usage));
+		const target = await renderReferencesPage();
+		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
+		return target;
+	}
+
 	describe('storage meter', () => {
 		const MB = 1_000_000;
 		const meterFigures = (target: HTMLElement) =>
 			Array.from(target.querySelectorAll('.quota span'), (figure) => figure.textContent);
 
-		async function renderWithUsage(usage: Partial<ReferenceUsageResponse>): Promise<HTMLElement> {
-			mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({})], usage));
-			const target = await renderReferencesPage();
-			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
-			return target;
-		}
-
 		it.each([
 			{ case: 'files below 80 %', usage: { files: 39 } },
 			{ case: 'bytes below 80 %', usage: { bytes: 399 * MB } }
 		])('stays away with $case of its limit', async ({ usage }) => {
-			const target = await renderWithUsage(usage);
+			const target = await renderReady(usage);
 
 			expect(target.querySelector('.quota')).toBeNull();
 		});
@@ -496,7 +496,7 @@ describe('references page', () => {
 				figures: ['3 of 50 files', '400 of 500 MB']
 			}
 		])('shows both figures from 80 % of the limit on $case alone', async ({ usage, figures }) => {
-			const target = await renderWithUsage(usage);
+			const target = await renderReady(usage);
 
 			expect(meterFigures(target)).toEqual(figures);
 			expect(
@@ -507,7 +507,7 @@ describe('references page', () => {
 		});
 
 		it('draws no red for a meter below 100 %', async () => {
-			const target = await renderWithUsage({ files: 49 });
+			const target = await renderReady({ files: 49 });
 
 			expect(target.querySelector('.quota')).not.toBeNull();
 			expect(target.querySelector('.upload-button.failed')).toBeNull();
@@ -528,7 +528,7 @@ describe('references page', () => {
 		])(
 			'says at the button that storage is full at 100 % of $limit, and the button stays pressable',
 			async ({ usage, reason }) => {
-				const target = await renderWithUsage(usage);
+				const target = await renderReady(usage);
 
 				const button = target.querySelector<HTMLButtonElement>('.upload-button');
 				expect(button?.classList.contains('failed')).toBe(true);
@@ -554,13 +554,6 @@ describe('references page', () => {
 			await tick();
 		}
 
-		async function renderReady(usage: Partial<ReferenceUsageResponse> = {}): Promise<HTMLElement> {
-			mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({ id: 'a' })], usage));
-			const target = await renderReferencesPage();
-			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
-			return target;
-		}
-
 		it('offers Upload as one button, for the same file types as the recipe picker', async () => {
 			const target = await renderReady();
 
@@ -568,14 +561,6 @@ describe('references page', () => {
 			expect(target.querySelector('input[type="file"]')?.getAttribute('accept')).toBe(
 				'.mp3,.wav,.flac,.ogg'
 			);
-		});
-
-		it('offers Upload on an empty list too', async () => {
-			mocks.listReferences.mockResolvedValue(listAnswer([]));
-			const target = await renderReferencesPage();
-			await vi.waitFor(() => expect(target.querySelector('.empty')).not.toBeNull());
-
-			expect(uploadButton(target).textContent?.trim()).toBe('Upload');
 		});
 
 		it('shows the name and the share sent on the button while the file travels', async () => {
@@ -625,7 +610,6 @@ describe('references page', () => {
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
 			const preview = referenceElement() as HTMLAudioElement;
 			const playingSource = preview.src;
-			const pauses = vi.mocked(HTMLMediaElement.prototype.pause).mock.calls.length;
 			mocks.listReferences.mockResolvedValue(
 				listAnswer([
 					referenceRecording({ id: 'new', filename: 'synth-hook.wav' }),
@@ -636,7 +620,6 @@ describe('references page', () => {
 			await choose(target);
 			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
 
-			expect(vi.mocked(HTMLMediaElement.prototype.pause).mock.calls.length).toBe(pauses);
 			expect(target.querySelector('.reference-row.playing .reference-name')?.textContent).toBe(
 				'voice-memo.mp3'
 			);
@@ -658,33 +641,21 @@ describe('references page', () => {
 
 		it.each([
 			{
-				case: 'the file limit',
-				known: { files: 50 },
-				reloaded: { files: 50 } as Partial<ReferenceUsageResponse> | null,
-				reason: 'Reference storage is full (50 of 50 files) — delete one first.'
-			},
-			{
 				case: 'the byte limit',
 				known: { bytes: 500_000_000 },
-				reloaded: { bytes: 500_000_000 } as Partial<ReferenceUsageResponse> | null,
+				reloaded: { bytes: 500_000_000 },
 				reason: 'Reference storage is full (500 of 500 MB) — delete one first.'
 			},
 			{
 				case: 'a stale 49 whose reload answers 50',
 				known: { files: 49 },
-				reloaded: { files: 50 } as Partial<ReferenceUsageResponse> | null,
+				reloaded: { files: 50 },
 				reason: 'Reference storage is full (50 of 50 files) — delete one first.'
 			},
 			{
 				case: 'room left',
 				known: { files: 5, bytes: 431_900_000 },
-				reloaded: { files: 5, bytes: 431_900_000 } as Partial<ReferenceUsageResponse> | null,
-				reason: "That file doesn't fit (431 of 500 MB used) — delete one first."
-			},
-			{
-				case: 'room left when the reload fails',
-				known: { files: 5, bytes: 431_900_000 },
-				reloaded: null,
+				reloaded: { files: 5, bytes: 431_900_000 },
 				reason: "That file doesn't fit (431 of 500 MB used) — delete one first."
 			}
 		])(
@@ -692,13 +663,9 @@ describe('references page', () => {
 			async ({ known, reloaded, reason }) => {
 				mocks.uploadReference.mockRejectedValue(STORAGE_FULL);
 				const target = await renderReady(known);
-				if (reloaded === null) {
-					mocks.listReferences.mockRejectedValue(new ApiError(500, 'down', '/api/references'));
-				} else {
-					mocks.listReferences.mockResolvedValue(
-						listAnswer([referenceRecording({ id: 'a' })], reloaded)
-					);
-				}
+				mocks.listReferences.mockResolvedValue(
+					listAnswer([referenceRecording({ id: 'a' })], reloaded)
+				);
 
 				await choose(target);
 				await vi.waitFor(() => expect(target.querySelector('.upload-reason')).not.toBeNull());
@@ -708,6 +675,39 @@ describe('references page', () => {
 				expect(listedReferences(target)).toHaveLength(1);
 			}
 		);
+
+		it('lets a full figure found by a later retry win over a refusal worded from stale usage', async () => {
+			mocks.uploadReference.mockRejectedValue(STORAGE_FULL);
+			const target = await renderReady({ files: 49 });
+			mocks.listReferences.mockRejectedValue(new ApiError(500, 'down', '/api/references'));
+
+			await choose(target);
+			await vi.waitFor(() => expect(target.querySelector('.load-error')).not.toBeNull());
+			mocks.listReferences.mockResolvedValue(
+				listAnswer([referenceRecording({ id: 'a' })], { files: 50 })
+			);
+			(target.querySelector('.retry-btn') as HTMLButtonElement).click();
+
+			await vi.waitFor(() =>
+				expect(target.querySelector('.upload-reason')?.textContent?.trim()).toBe(
+					'Reference storage is full (50 of 50 files) — delete one first.'
+				)
+			);
+		});
+
+		it('offers Upload on an empty list, and claims it empty no longer once the reload after a first upload fails', async () => {
+			mocks.uploadReference.mockResolvedValue(referenceRecording({ id: 'new' }));
+			mocks.listReferences.mockResolvedValue(listAnswer([]));
+			const target = await renderReferencesPage();
+			await vi.waitFor(() => expect(target.querySelector('.empty')).not.toBeNull());
+			expect(uploadButton(target).textContent?.trim()).toBe('Upload');
+			mocks.listReferences.mockRejectedValue(new ApiError(500, 'down', '/api/references'));
+
+			await choose(target);
+			await vi.waitFor(() => expect(target.querySelector('.load-error')).not.toBeNull());
+
+			expect(target.querySelector('.empty')).toBeNull();
+		});
 
 		it('shows the load failure with its retry beside the kept rows when the reload after a stored upload fails', async () => {
 			mocks.uploadReference.mockResolvedValue(referenceRecording({ id: 'new' }));

@@ -61,32 +61,35 @@
 		usage ? Math.max(usage.files / usage.file_limit, usage.bytes / usage.byte_limit) : 0
 	);
 	const meterShown = $derived(storageShare >= METER_FROM_SHARE);
-	const fullFigure = $derived.by(() => {
-		if (!usage) return null;
-		if (usage.files >= usage.file_limit) return filesFigure(usage);
-		if (usage.bytes >= usage.byte_limit) return sizeFigure(usage);
+
+	function fullFigure(used: ReferenceUsageResponse): string | null {
+		if (used.files >= used.file_limit) return filesFigure(used);
+		if (used.bytes >= used.byte_limit) return sizeFigure(used);
 		return null;
-	});
+	}
+
+	// A refusal holds no words: they come from the usage current when read.
+	type UploadFailure = { kind: 'refused' } | { kind: 'failed'; words: string };
 
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let uploading = $state<{ name: string; percent: number } | null>(null);
-	let uploadFailure = $state<string | null>(null);
-	const uploadReason = $derived(
-		uploadFailure ??
-			(fullFigure === null ? null : `Reference storage is full (${fullFigure}) — delete one first.`)
-	);
+	let uploadFailure = $state<UploadFailure | null>(null);
 
-	// A conflict is worded from the usage the list now reports; a full storage
-	// leaves the words to `uploadReason`.
-	async function failureWording(error: unknown): Promise<string | null> {
-		if (!(error instanceof ApiError) || error.status !== STORAGE_CONFLICT_STATUS) {
-			return describeFailure(error, UPLOAD_FAILED);
+	function uploadReason(used: ReferenceUsageResponse): string | null {
+		const full = fullFigure(used);
+		if (full !== null) return `Reference storage is full (${full}) — delete one first.`;
+		if (uploadFailure === null) return null;
+		return uploadFailure.kind === 'refused'
+			? `That file doesn't fit (${sizeFigure(used)} used) — delete one first.`
+			: uploadFailure.words;
+	}
+
+	async function failureOf(error: unknown): Promise<UploadFailure> {
+		if (error instanceof ApiError && error.status === STORAGE_CONFLICT_STATUS) {
+			await load();
+			return { kind: 'refused' };
 		}
-		await load();
-		if (fullFigure !== null) return null;
-		return usage
-			? `That file doesn't fit (${sizeFigure(usage)} used) — delete one first.`
-			: describeFailure(error, UPLOAD_FAILED);
+		return { kind: 'failed', words: describeFailure(error, UPLOAD_FAILED) };
 	}
 
 	async function upload(file: File) {
@@ -97,7 +100,7 @@
 				uploading = { name: file.name, percent: Math.round(fraction * 100) };
 			});
 		} catch (error) {
-			uploadFailure = await failureWording(error);
+			uploadFailure = await failureOf(error);
 			return;
 		} finally {
 			uploading = null;
@@ -187,12 +190,13 @@
 	</header>
 
 	{#if usage}
+		{@const reason = uploadReason(usage)}
 		<div class="upload-area">
 			<button
 				type="button"
 				class="upload-button"
 				class:busy={uploading !== null}
-				class:failed={uploading === null && uploadReason !== null}
+				class:failed={uploading === null && reason !== null}
 				style:--progress={uploading ? `${uploading.percent}%` : undefined}
 				disabled={uploading !== null}
 				onclick={() => fileInput?.click()}
@@ -202,10 +206,7 @@
 						>{PROGRESS_SEPARATOR}{uploading.percent}%</span
 					>
 				{:else}
-					<Icon
-						name={uploadReason !== null ? 'triangle-alert' : 'arrow-up'}
-						size={16}
-					/>{UPLOAD_LABEL}
+					<Icon name={reason !== null ? 'triangle-alert' : 'arrow-up'} size={16} />{UPLOAD_LABEL}
 				{/if}
 			</button>
 			<input
@@ -215,8 +216,8 @@
 				hidden
 				onchange={fileChosen}
 			/>
-			{#if uploading === null && uploadReason !== null}
-				<p class="upload-reason" role="alert">{uploadReason}</p>
+			{#if uploading === null && reason !== null}
+				<p class="upload-reason" role="alert">{reason}</p>
 			{/if}
 		</div>
 	{/if}
@@ -266,10 +267,12 @@
 			</div>
 		{/if}
 	{:else if references.length === 0}
-		<div class="empty">
-			<Icon name="audio-lines" size={40} />
-			<p>No references yet — upload a recording to guide a song's sound.</p>
-		</div>
+		{#if !$loadFailure}
+			<div class="empty">
+				<Icon name="audio-lines" size={40} />
+				<p>No references yet — upload a recording to guide a song's sound.</p>
+			</div>
+		{/if}
 	{:else}
 		{@const now = new Date()}
 		<ul class="reference-list">
@@ -406,11 +409,11 @@
 		padding: 10px 12px;
 		border: 1px solid color-mix(in srgb, var(--score-ok) 50%, transparent);
 		border-radius: var(--card-radius);
-		background: color-mix(in srgb, var(--score-ok) 15%, transparent);
-		color: var(--score-ok);
+		background: var(--score-ok-bg);
 	}
 
 	.quota-figures {
+		color: color-mix(in srgb, var(--score-ok) 80%, var(--text));
 		display: flex;
 		justify-content: space-between;
 		gap: 10px;
@@ -447,6 +450,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 9px;
+		margin-bottom: 12px;
 		padding: 12px;
 		background: var(--surface);
 		border: 1px solid var(--score-bad);
@@ -636,21 +640,21 @@
 
 	@media (max-width: 640px) {
 		.page {
-			/* The settings layout's padding around this page, cancelled for the bar. */
-			--layout-padding: 2rem;
 			display: flex;
 			flex-direction: column;
+			align-items: stretch;
 			min-height: 100%;
 		}
 
 		.page > .upload-area {
 			order: 1;
 			position: sticky;
-			bottom: calc(-1 * var(--layout-padding));
+			bottom: calc(-1 * var(--settings-content-padding));
 			z-index: 1;
 			align-items: stretch;
 			max-width: none;
-			margin: auto calc(-1 * var(--layout-padding)) calc(-1 * var(--layout-padding));
+			margin: auto calc(-1 * var(--settings-content-padding))
+				calc(-1 * var(--settings-content-padding));
 			padding: 8px 12px;
 			background: var(--header-bg);
 			border-top: 1px solid var(--border);
