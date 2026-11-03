@@ -8,16 +8,14 @@ import dataclasses
 import hashlib
 import json
 import logging
-import os
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 from support.web_app import (
     TEST_SECRET,
     make_fake_redis,
@@ -663,8 +661,6 @@ def test_run_server_leaves_forwarded_headers_to_the_application() -> None:
 
 
 def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path) -> None:
-    from unittest.mock import AsyncMock
-
     from songmaker_cli.redis_client import release_lease_in_background
     from songmaker_cli.server import _lifespan
 
@@ -730,8 +726,6 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
     running server, not just exist as a function -- generate/score get their
     equivalent from the arq-worker cron unconditionally; the web-process side
     only takes effect if _lifespan starts it like the other three loops."""
-    from unittest.mock import AsyncMock
-
     from songmaker_cli.server import _lifespan
 
     factory = init_db(tmp_path / "test.db")
@@ -783,8 +777,6 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
 
 
 def test_lifespan_fails_on_redis_unavailable(tmp_path: Path) -> None:
-    from unittest.mock import AsyncMock
-
     from songmaker_cli.server import _lifespan
 
     factory = init_db(tmp_path / "test.db")
@@ -1189,11 +1181,7 @@ class TestConfigureLogging:
 # ── health endpoint ──────────────────────────────────────────────
 
 
-def test_health_details_report_an_idle_service(
-    tmp_path: Path, mock_arq_pool, monitoring_headers,
-) -> None:
-    from unittest.mock import AsyncMock
-
+def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1239,8 +1227,6 @@ def test_health_details_report_an_idle_service(
 
 
 def test_health_with_worker_running(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
-    from unittest.mock import AsyncMock
-
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1282,11 +1268,7 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool, monitoring_he
     assert data["acestep_workers_total"] == 0
 
 
-def test_health_degraded_when_worker_stopped(
-    tmp_path: Path, mock_arq_pool, monitoring_headers,
-) -> None:
-    from unittest.mock import AsyncMock
-
+def test_health_degraded_no_worker(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1322,8 +1304,6 @@ def test_health_degraded_when_worker_stopped(
 
 
 def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
-    from unittest.mock import AsyncMock
-
     from songmaker_cli.db.models import Job
 
     audio_dir = tmp_path / "audio"
@@ -1361,7 +1341,9 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool, monitorin
     ):
         mock_settings.return_value.configure_mock(
             max_queue_depth=2, songmaker_release=UNRELEASED_TAG, songmaker_commit=UNKNOWN_COMMIT,
-            songmaker_monitoring_token=SecretStr(os.environ["SONGMAKER_MONITORING_TOKEN"]),
+            songmaker_monitoring_token=MagicMock(
+                get_secret_value=lambda: monitoring_headers["Authorization"].split()[1],
+            ),
         )
         resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
@@ -1414,8 +1396,8 @@ def test_metrics_serves_prometheus_text(tmp_path: Path, mock_arq_pool, monitorin
 def test_metrics_reflects_http_traffic(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     client = _make_metrics_client(tmp_path)
     with client:
-        client.get("/health/details", headers=monitoring_headers)
-        client.get("/health/details", headers=monitoring_headers)
+        client.get("/health")
+        client.get("/health")
         resp = client.get("/metrics", headers=monitoring_headers)
     body = resp.text
     assert 'songmaker_http_requests_total{method="GET",status="200"}' in body
