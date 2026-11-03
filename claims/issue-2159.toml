@@ -1,8 +1,0 @@
-claim_id = "a26eb76cf48a4eaa9095473cf5c38733"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3faa23783bfa8856824b2b12b7aa388023d1c416"
-branch = "claude/issue-2159-test-layout-3h2-3h3"
-scope = ["docs/security.md", "docs/testing.md", "tests/songmaker_cli/db/queries/test_versions_in_use.py", "tests/songmaker_cli/jobs/test_generation_reference_recording.py", "tests/songmaker_cli/test_archived_take_refusal.py", "tests/songmaker_cli/test_auth_api.py", "tests/songmaker_cli/test_auth_api_backchannel_logout.py", "tests/songmaker_cli/test_auth_dependencies.py", "tests/songmaker_cli/test_auth_stores.py", "tests/songmaker_cli/test_generation_api_archived_take_refusal.py", "tests/songmaker_cli/test_generation_params.py", "tests/songmaker_cli/test_reference_audio.py", "tests/songmaker_cli/test_reference_audio_recordings.py", "tests/songmaker_cli/test_release_api.py", "tests/songmaker_cli/test_settings_api_reference_refusal.py", "tests/songmaker_cli/test_settings_api_release.py", "tests/test_auth_api.py", "tests/test_auth_stores.py", "tests/test_backchannel_logout.py", "tests/test_generation_params.py", "tests/test_generation_reference_recording.py", "tests/test_middleware.py", "tests/test_reference_audio.py", "tests/test_reference_recordings.py", "tests/test_settings_reference_refusal.py", "tests/test_version_in_use.py"]
-opened_commit = "aa25cc7bec7368d0db49592e7c58ff4f3ff703b5"
-whole_reason = "One rename set of twelve files with two doc pins; a split pays a second lane's overhead for renames."
