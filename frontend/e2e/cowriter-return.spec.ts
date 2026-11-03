@@ -9,7 +9,7 @@
 // CI's e2e stack configures no co-writer provider, so a real turn ends at
 // once with its route failure and cannot be left while it runs. The turn and
 // the conversation it writes are therefore answered by `page.route`, playing
-// the backend contract tests/test_conversation_api.py pins: the user message
+// the backend contract tests/songmaker_cli/test_conversation_api.py pins: the user message
 // is in the conversation from the moment the turn starts, the conversation
 // reports the turn running until it ends, and the reply joins it then.
 //

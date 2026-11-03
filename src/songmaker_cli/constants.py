@@ -791,7 +791,7 @@ class LimiterFailurePolicy(StrEnum):
 # acestep_worker package keeps an identical tuple of the same name in
 # acestep_worker/constants.py — it cannot import this module (see
 # AGENTS.md "Engine packages are independent") — and
-# tests/test_secret_scrub_parity.py pins the two as equal sets.
+# tests/songmaker_cli/test_constants_secret_scrub_parity.py pins the two as equal sets.
 #
 # A login is scrubbed as a pair. The name half is no secret on its own, but
 # handing a child process one half of a credential is pointless generosity —
