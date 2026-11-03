@@ -3,5 +3,5 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "3faa23783bfa8856824b2b12b7aa388023d1c416"
 branch = "claude/issue-2154-empty-cowriter-message"
-scope = ["src/songmaker_cli/api_models/settings.py", "tests/songmaker_cli/test_conversation_api.py"]
+scope = ["src/songmaker_cli/api_models/settings.py", "tests/songmaker_cli/test_conversation_api.py", "tests/songmaker_cli/test_conversation_api_blank_message.py"]
 opened_commit = "4bcd4a85ce591a818b18c42bd3ab33bfe829e3b8"
