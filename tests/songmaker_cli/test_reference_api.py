@@ -552,7 +552,7 @@ def test_l8_the_list_marks_a_linked_reference_as_in_use(
     }
 
 
-def test_l8_the_in_use_query_checks_every_foreign_key_that_points_at_a_reference() -> None:
+def test_l9_the_in_use_query_checks_every_foreign_key_that_points_at_a_reference() -> None:
     referencing = {
         (foreign_key.parent.table.name, foreign_key.parent.name)
         for table in Base.metadata.tables.values()
