@@ -1577,7 +1577,7 @@ close the stream.
 | POST/DELETE | `/api/songs/{id}/share` | user | Enable/revoke song sharing. An archived Pick is not kept by it. |
 | POST/DELETE | `/api/generations/{id}/share` | user | Enable/revoke generation sharing. POST answers 409 "Restore this take first." on an archived take. |
 | POST/DELETE | `/api/playlists/{id}/share` | user | Enable/revoke playlist sharing |
-| GET | `/api/references` | user | The caller's own reference recordings (a bare list; an admin gets only their own), newest first with the id ordering rows of one instant; Settings › References shows them. `duration_sec` is `null` when unmeasured. |
+| GET | `/api/references` | user | `{references, usage}`: the caller's own reference recordings (an admin gets only their own), newest first with the id ordering rows of one instant, and `usage` with `files` and `bytes` as admission counts them (`owner_reference_usage`) beside `file_limit` and `byte_limit` from the settings; Settings › References shows both, with its Upload button and the meter from 80 % of either limit. `duration_sec` is `null` when unmeasured. |
 | GET | `/api/references/{id}/audio` | user | The caller's own reference recording as audio, with Range (206, 416). Only the owner reads it: a foreign or unknown id, a missing file and a rejected path all answer the global 404, and an admin has no bypass. Media rate class. |
 | GET | `/shared/{slug}` | public | Read-only album JSON (no auth, rate-limited). `cover` is present only while shared and the file exists. |
 | GET | `/shared/song/{slug}` | public | Read-only song JSON (no auth, rate-limited). `cover` is present only while shared and the song file exists; `album_cover` is the parent album art, gated by this song share. |

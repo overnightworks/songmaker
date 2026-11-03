@@ -301,7 +301,7 @@ def test_l1_a_person_lists_only_their_own_references(
     response = _signed_in_as(signed_in, username).get(REFERENCES_PATH)
 
     assert response.status_code == 200
-    assert [item["filename"] for item in response.json()] == expected
+    assert [item["filename"] for item in response.json()["references"]] == expected
 
 
 def test_l2_references_come_newest_first_and_one_instant_keeps_one_order(
@@ -315,7 +315,7 @@ def test_l2_references_come_newest_first_and_one_instant_keeps_one_order(
     _seed_reference(signed_in, "owner-id", "tie-a.wav", created_at=now - timedelta(days=1),
                     reference_id="aaaa")
 
-    listed = signed_in.get(REFERENCES_PATH).json()
+    listed = signed_in.get(REFERENCES_PATH).json()["references"]
 
     assert [item["filename"] for item in listed] == [
         "new.wav", "tie-a.wav", "tie-b.wav", "old.wav",
@@ -326,15 +326,55 @@ def test_l3_no_references_answers_an_empty_list(signed_in: TestClient) -> None:
     response = signed_in.get(REFERENCES_PATH)
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json()["references"] == []
 
 
 def test_l4_a_reference_without_a_length_answers_null(signed_in: TestClient) -> None:
     _seed_reference(signed_in, "owner-id", "unmeasured.wav", duration_sec=None)
 
-    [item] = signed_in.get(REFERENCES_PATH).json()
+    [item] = signed_in.get(REFERENCES_PATH).json()["references"]
 
     assert item["duration_sec"] is None
+
+
+def _seed_sized_reference(client: TestClient, user_id: str, size_bytes: int, index: int) -> None:
+    with client.app.state.ctx.db() as session:
+        create_reference_recording(
+            session, user_id=user_id, storage_path=f"{user_id}/refs/sized-{index}.wav",
+            original_filename=f"sized-{index}.wav", size_bytes=size_bytes, duration_sec=None,
+        )
+        session.commit()
+
+
+@pytest.mark.parametrize(
+    ("owned_sizes", "foreign_sizes", "expected_files", "expected_bytes"),
+    [([], [], 0, 0), ([30, 12], [], 2, 42), ([30, 12], [999], 2, 42), ([], [999], 0, 0)],
+    ids=["no-rows", "some-rows", "foreign-rows-uncounted", "only-foreign-rows"],
+)
+def test_l6_usage_counts_what_admission_counts_for_the_caller_only(
+    signed_in: TestClient, owned_sizes: list[int], foreign_sizes: list[int],
+    expected_files: int, expected_bytes: int,
+) -> None:
+    for index, size in enumerate(owned_sizes):
+        _seed_sized_reference(signed_in, "owner-id", size, index)
+    for index, size in enumerate(foreign_sizes):
+        _seed_sized_reference(signed_in, "other-id", size, index)
+
+    usage = signed_in.get(REFERENCES_PATH).json()["usage"]
+
+    assert (usage["files"], usage["bytes"]) == (expected_files, expected_bytes)
+
+
+def test_l7_usage_answers_the_limits_the_settings_name(
+    signed_in: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REFERENCE_AUDIO_QUOTA_FILES", "7")
+    monkeypatch.setenv("REFERENCE_AUDIO_QUOTA_BYTES", "123456")
+    get_settings.cache_clear()
+
+    usage = signed_in.get(REFERENCES_PATH).json()["usage"]
+
+    assert (usage["file_limit"], usage["byte_limit"]) == (7, 123456)
 
 
 def test_l5_listing_without_a_session_is_unauthenticated(signed_in: TestClient) -> None:

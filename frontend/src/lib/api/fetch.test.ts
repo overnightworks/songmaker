@@ -9,6 +9,7 @@ vi.mock('$app/navigation', async () =>
 
 import {
 	apiFetch,
+	apiUpload,
 	fetchMediaBytes,
 	sseFetch,
 	ApiError,
@@ -19,7 +20,12 @@ import {
 	signInAddress
 } from './fetch';
 import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants.ts';
-import { hangsUntilAborted } from '#lib/test-utils/network.ts';
+import { hangsUntilAborted, sentUpload, uploadAnswers } from '#lib/test-utils/network.ts';
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.stubGlobal('fetch', mockFetch);
+});
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -270,9 +276,15 @@ describe('apiFetch 429 classification', () => {
 describe('refusal reactions', () => {
 	const throughApiFetch = (path: string) => apiFetch(path);
 	const throughSseFetch = (path: string) => sseFetch(path, { method: 'POST' }).next();
+	const throughApiUpload = async (path: string) => {
+		const settled = apiUpload(path, new FormData(), () => undefined);
+		sentUpload().onload?.();
+		return settled;
+	};
 	const clients = [
 		{ client: 'apiFetch', request: throughApiFetch },
-		{ client: 'sseFetch', request: throughSseFetch }
+		{ client: 'sseFetch', request: throughSseFetch },
+		{ client: 'apiUpload', request: throughApiUpload }
 	];
 
 	const NOTHING_HAPPENS = {
@@ -281,6 +293,7 @@ describe('refusal reactions', () => {
 	};
 
 	function serverRefusesWith(status: number) {
+		uploadAnswers({ status, body: '{"detail":"refused"}' });
 		mockFetch.mockImplementation(async () => ({
 			ok: false,
 			status,

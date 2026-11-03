@@ -1,17 +1,22 @@
-import type { ReferenceRecordingResponse } from './types';
-import { apiFetch } from './fetch';
+import type { ReferenceListResponse, ReferenceRecordingResponse } from './types';
+import { apiFetch, apiUpload } from './fetch';
 
-export async function uploadReference(file: File): Promise<ReferenceRecordingResponse> {
+export async function uploadReference(
+	file: File,
+	onProgress?: (fractionSent: number) => void
+): Promise<ReferenceRecordingResponse> {
 	const formData = new FormData();
 	formData.append('file', file);
+	if (onProgress)
+		return apiUpload<ReferenceRecordingResponse>('/api/references', formData, onProgress);
 	return apiFetch<ReferenceRecordingResponse>('/api/references', {
 		method: 'POST',
 		body: formData
 	});
 }
 
-export async function listReferences(): Promise<ReferenceRecordingResponse[]> {
-	return apiFetch<ReferenceRecordingResponse[]>('/api/references');
+export async function listReferences(): Promise<ReferenceListResponse> {
+	return apiFetch<ReferenceListResponse>('/api/references');
 }
 
 export function referenceAudioUrl(referenceId: string): string {

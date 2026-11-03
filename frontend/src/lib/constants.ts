@@ -52,6 +52,7 @@ export const ADMIN_VOICES_OWNER_LABEL = 'Owner';
 export const ADMIN_VOICES_STATUS_LABEL = 'Status';
 
 export const LORA_AUDIO_EXTENSIONS = ['.wav', '.mp3', '.flac'] as const;
+export const REFERENCE_AUDIO_ACCEPT = '.mp3,.wav,.flac,.ogg';
 
 export const LORA_OWN_TAKES_LABEL = 'Your takes';
 export const LORA_OWN_TAKES_LOADING = 'Loading your takes...';

@@ -21,7 +21,8 @@
 		overflow-y: auto;
 		min-width: 0;
 		max-width: var(--settings-content-max-width);
-		padding: 2rem;
+		--settings-content-padding: 2rem;
+		padding: var(--settings-content-padding);
 		box-sizing: border-box;
 	}
 
