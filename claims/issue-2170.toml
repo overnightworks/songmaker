@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "6876f72673edca841a4d6d0144c5e4a7632ffec7"
 branch = "claude/issue-2170-cowriter-models-row-agent-file"
-scope = ["docs/architecture.md", "docs/design/README.md", "docs/design/admin-models.html", "frontend/e2e/admin-models.spec.ts", "frontend/src/lib/components/ModelsCowriterRow.svelte", "frontend/src/lib/components/ModelsCowriterRow.test.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/settings/users/+page.svelte", "src/songmaker_cli/api_models/settings.py"]
+scope = ["docs/architecture.md", "docs/design/README.md", "docs/design/admin-models.html", "frontend/e2e/admin-models.spec.ts", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/src/lib/components/ModelsCowriterRow.svelte", "frontend/src/lib/components/ModelsCowriterRow.test.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts", "src/songmaker_cli/api_models/settings.py"]
 opened_commit = "7f96638c5971abd64da68e06a067e18c839c1117"
 whole_reason = "One row's words with their constant, docstring, E2E, docs and frozen mockup; split, the docs or the mockup would say what the page no longer shows."
