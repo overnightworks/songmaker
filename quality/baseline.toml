@@ -60,7 +60,7 @@
 "frontend/src/routes/layout.test.ts" = 1414
 "frontend/src/routes/settings/users/+page.svelte" = 1123
 "frontend/src/routes/settings/users/page.test.ts" = 861
-"src/acestep_worker/wrapper.py" = 1086
+"src/acestep_worker/wrapper.py" = 1088
 "src/songmaker_cli/constants.py" = 814
 "src/songmaker_cli/conversation_api.py" = 972
 "src/songmaker_cli/jobs/generation.py" = 1151

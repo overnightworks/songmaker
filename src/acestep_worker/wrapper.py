@@ -721,11 +721,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        if deps.registration_task is not None and not deps.registration_task.done():
-            deps.registration_task.cancel()
-            await asyncio.wait([deps.registration_task])
-        await deps.heartbeat.shutdown()
-        await deps.cache.evict_all()
+        try:
+            if deps.registration_task is not None and not deps.registration_task.done():
+                deps.registration_task.cancel()
+                await asyncio.wait([deps.registration_task])
+        finally:
+            await deps.heartbeat.shutdown()
+            await deps.cache.evict_all()
 
 
 def create_app(deps: WorkerDeps) -> FastAPI:
