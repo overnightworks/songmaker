@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import Annotated
 
 from agent_providers.claude import provider
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
 
 from songmaker_cli import acestep_state, arq_pool, redis_client, settings
@@ -241,7 +244,28 @@ def _format_prometheus(metrics: _PrometheusMetrics) -> str:
     return "\n".join(lines)
 
 
-@router.get("/metrics")
+_bearer_credentials = HTTPBearer(auto_error=False)
+
+
+def require_monitoring_token(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer_credentials),
+    ],
+) -> None:
+    """Admit only Prometheus's own token; one uniform 401 tells a prober nothing."""
+    configured = settings.get_settings().songmaker_monitoring_token
+    # Prometheus trims its credentials file, so the configured value is trimmed alike.
+    expected = configured.get_secret_value().strip() if configured else ""
+    if not expected:
+        raise HTTPException(503, "Monitoring not configured")
+    presented = credentials.credentials if credentials else ""
+    if not hmac.compare_digest(presented.encode(), expected.encode()):
+        raise HTTPException(
+            401, "Not authenticated", headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@router.get("/metrics", dependencies=[Depends(require_monitoring_token)])
 async def metrics_endpoint(request: Request) -> PlainTextResponse:
     http_metrics = request.app.state.http_metrics
 

@@ -16,5 +16,8 @@ alerting:
 scrape_configs:
   - job_name: songmaker
     metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/monitoring_token
     static_configs:
       - targets: ["songmaker-web:8080"]

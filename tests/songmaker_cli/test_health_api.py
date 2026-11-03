@@ -227,7 +227,9 @@ def test_health_defaults_codex_image_sandbox_runtime_to_unverified_before_a_boot
     assert resp.json()["codex_image_sandbox_runtime"] == "unverified"
 
 
-def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_arq_pool) -> None:
+def test_health_and_metrics_report_background_loop_health(
+    tmp_path: Path, mock_arq_pool, monitoring_headers,
+) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     client, _ = make_test_app(tmp_path)
     with client:
@@ -237,7 +239,7 @@ def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_a
         registry.mark_dead(BackgroundLoopName.SESSION_CLEANUP, None)
 
         health = client.get("/health")
-        metrics = client.get("/metrics")
+        metrics = client.get("/metrics", headers=monitoring_headers)
 
     assert health.status_code == 200
     assert health.json()["background_loops"] == {
@@ -570,7 +572,9 @@ def test_reason_follows_the_key_when_the_worker_recovers(health_client) -> None:
     assert body["status"] == "ok"
 
 
-def test_metrics_excludes_broken_gpu_worker_from_online_count(health_client) -> None:
+def test_metrics_excludes_broken_gpu_worker_from_online_count(
+    health_client, monitoring_headers,
+) -> None:
     """The #333 alert (`songmaker_acestep_workers_total{status="online"} == 0`)
     reads this exact metric — a GPU-broken worker still counted as "online"
     here is the original incident in new clothes."""
@@ -581,7 +585,7 @@ def test_metrics_excludes_broken_gpu_worker_from_online_count(health_client) -> 
     )
     arq_mod._pool.zcard = AsyncMock(return_value=0)
 
-    resp = health_client.get("/metrics")
+    resp = health_client.get("/metrics", headers=monitoring_headers)
     assert resp.status_code == 200
     body = resp.text
     assert 'songmaker_acestep_workers_total{status="online"} 0' in body

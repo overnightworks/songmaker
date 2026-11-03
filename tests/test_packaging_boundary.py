@@ -624,6 +624,18 @@ def test_only_the_web_service_holds_the_keycloak_client_secret(
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_only_prometheus_holds_the_monitoring_token(
+    compose_files: tuple[str, ...],
+) -> None:
+    holders = {
+        service_name
+        for service_name, service in _rendered_test_stack_services(compose_files).items()
+        if "monitoring_token" in {s["source"] for s in service.get("secrets", [])}
+    }
+    assert holders == {"prometheus"}
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
 @pytest.mark.parametrize("operator_hosts", [None, "songmaker.hallucinai.de"])
 def test_the_web_host_check_admits_the_names_the_stack_calls_it_by(
     compose_files: tuple[str, ...], operator_hosts: str | None,
