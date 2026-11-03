@@ -26,6 +26,7 @@ This connects to the database only -- it never runs schema migrations, even
 implicitly, matching every other one-off script here (see ``connect_db()``
 in ``db/engine.py``).
 """
+# ruff: noqa: T201 - this seed helper reports the albums it created
 
 from __future__ import annotations
 

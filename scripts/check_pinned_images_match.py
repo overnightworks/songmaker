@@ -8,6 +8,7 @@ Run from the project root:
 
     python scripts/check_pinned_images_match.py
 """
+# ruff: noqa: T201 - this check reports a pin mismatch on stderr
 
 from __future__ import annotations
 

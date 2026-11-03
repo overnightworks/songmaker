@@ -10,6 +10,7 @@ Every reported row needs an operator decision. Reimport a take when its source
 is known, or archive it until its file identity can be established. A blind
 normalization could attach an existing generation to a different recording.
 """
+# ruff: noqa: T201 - this audit reports the generation paths it finds
 
 from __future__ import annotations
 

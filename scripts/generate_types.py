@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Generate TypeScript API types from the FastAPI route contract."""
+# ruff: noqa: T201 - this generator reports whether types.ts is in sync
 
 from __future__ import annotations
 

@@ -22,6 +22,7 @@ The value travels only through this process's memory, the ``.env`` file and
 the stdin of ``docker compose exec``. Nothing Grafana prints is ever replayed:
 a failure names the step and whether ``.env`` changed, nothing more.
 """
+# ruff: noqa: T201 - this command reports whether the Grafana password was set
 
 from __future__ import annotations
 

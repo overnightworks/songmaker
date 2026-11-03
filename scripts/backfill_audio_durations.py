@@ -41,6 +41,7 @@ container's ``PATH`` is the package-less system interpreter, not the app's:
 
 Run the dry-run first and read the counts before passing ``--apply``.
 """
+# ruff: noqa: T201 - this backfill reports what it filled and skipped
 
 from __future__ import annotations
 

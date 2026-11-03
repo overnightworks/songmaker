@@ -7,6 +7,7 @@ Usage: arq_healthcheck.py <queue-name>
 
 Exit codes: 0 = healthy, 1 = unhealthy.
 """
+# ruff: noqa: T201 - this health check reports why a worker is unhealthy on stderr
 
 import os
 import sys

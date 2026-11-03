@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Prove the AppArmor-enabled Bubblewrap boundary in the running web service."""
+# ruff: noqa: T201 - this proof reports its result on stdout and failures on stderr
 
 from __future__ import annotations
 

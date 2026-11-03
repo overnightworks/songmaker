@@ -254,7 +254,6 @@ def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory
             for statement, parameters in statements
         ]
 
-    print(f"Home list statements on PostgreSQL, execution ms: {timings}")
     assert len(listens) == 40
     assert [worked.song.id for worked in worked_songs] == ["m0-a19-s9", "m0-a19-s8", "m0-a19-s7"]
     assert len(timings) == 4

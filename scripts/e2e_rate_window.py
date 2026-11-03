@@ -13,6 +13,7 @@ The access log is written inside the rate limiter, so a request the limiter
 refused with 429 never reaches it: on a run that hit the limit, the reported
 peak is a lower bound of what was attempted.
 """
+# ruff: noqa: T201 - this report prints the busiest rate-limit window
 
 from __future__ import annotations
 

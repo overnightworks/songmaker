@@ -8,6 +8,7 @@ Same-file uses count only as AST name/attribute references, never strings/docstr
 An import is not a use: a re-export such as `from .auth import name as name` keeps
 nothing alive unless the importing file itself uses the bound name.
 """
+# ruff: noqa: T201 - this check reports unreferenced symbols on stdout
 
 from __future__ import annotations
 

@@ -40,6 +40,7 @@ The rules encode the lessons of the no-silent-fallbacks-v2 cleanup:
   No default, a named constant, or ``None`` is honest. Calls such as
   ``set()`` and ``frozenset()`` are intentionally not literals.
 """
+# ruff: noqa: T201 - this check reports its violations on stdout
 
 from __future__ import annotations
 

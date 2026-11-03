@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Advisory Python-function similarity audit with cached local embeddings."""
+# ruff: noqa: T201 - this audit prints its similarity report on stdout
 
 from __future__ import annotations
 

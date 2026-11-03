@@ -31,6 +31,7 @@ Prints the created song's id on stdout. Connects to the database only —
 never runs schema migrations, even implicitly, matching every other one-off
 script here (see ``connect_db()`` in ``db/engine.py``).
 """
+# ruff: noqa: T201 - this seed helper prints the song id its caller reads
 
 from __future__ import annotations
 

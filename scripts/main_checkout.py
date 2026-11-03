@@ -16,6 +16,7 @@ command by the shell ones:
 prints the main checkout when PROJECT_ROOT is a linked worktree of it, and
 nothing when PROJECT_ROOT is the main checkout itself.
 """
+# ruff: noqa: T201 - this command prints the main checkout path for its callers
 
 from __future__ import annotations
 

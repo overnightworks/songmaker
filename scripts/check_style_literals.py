@@ -1,4 +1,5 @@
 """Hold style literals outside app.css per file; only --update may lower an entry."""
+# ruff: noqa: T201 - this check reports style literal counts and locations
 
 import argparse
 import re
