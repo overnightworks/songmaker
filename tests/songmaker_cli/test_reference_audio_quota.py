@@ -460,7 +460,7 @@ else:
         env={
             **os.environ,
             "PYTHONPATH": os.pathsep.join(
-                [str(Path(__file__).resolve().parents[1] / "src"), os.environ.get("PYTHONPATH", "")]
+                [str(Path(__file__).resolve().parents[2] / "src"), os.environ.get("PYTHONPATH", "")]
             ),
             "REFERENCE_TEST_DB": factory.kw["bind"].url.render_as_string(hide_password=False),
         },
