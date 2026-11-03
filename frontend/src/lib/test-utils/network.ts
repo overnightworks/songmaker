@@ -77,4 +77,8 @@ export function uploadAnswers(answer: UploadAnswer) {
 	);
 }
 
-export const sentUpload = () => sentUploads[sentUploads.length - 1];
+export function sentUpload(): FakeUploadRequest {
+	const latest = sentUploads.at(-1);
+	if (!latest) throw new Error('no upload was sent');
+	return latest;
+}
