@@ -1,0 +1,8 @@
+claim_id = "d5042ff99fac46a3b896a46e510e13d1"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "ab628f156923e2fdc6790a472c22ccbb35b9cbf8"
+branch = "claude/issue-2182-python-print-owners"
+scope = ["frontend/e2e/support/seed_sessions.py", "scripts/archive_e2e_albums.py", "scripts/arq_healthcheck.py", "scripts/audit_generation_audio_paths.py", "scripts/backfill_audio_durations.py", "scripts/check_dead_symbols.py", "scripts/check_no_silent_fallbacks.py", "scripts/check_pinned_images_match.py", "scripts/check_style_literals.py", "scripts/e2e_rate_window.py", "scripts/generate_types.py", "scripts/grafana_password.py", "scripts/main_checkout.py", "scripts/migrate_generation_params.py", "scripts/mirror_agent_cli_credentials.py", "scripts/prove_codex_image_sandbox.py", "scripts/seed_e2e_filler_albums.py", "scripts/seed_e2e_job_states.py", "scripts/seed_e2e_song_takes.py", "scripts/similar_functions.py", "tests/songmaker_cli/test_db_postgresql.py"]
+opened_commit = "ce741bec7c5c67b5f4ccd56b269f61c21f104756"
+whole_reason = "Each file needs one declaration line or one removed print, all judged by one rule and proven by one hygiene diff; split per file it would be twenty-one identical lanes."
