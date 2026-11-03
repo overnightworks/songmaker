@@ -63,7 +63,7 @@
 "src/acestep_worker/wrapper.py" = 1088
 "src/songmaker_cli/constants.py" = 814
 "src/songmaker_cli/conversation_api.py" = 972
-"src/songmaker_cli/jobs/generation.py" = 1151
+"src/songmaker_cli/jobs/generation.py" = 1149
 "src/songmaker_cli/jobs/lora_training.py" = 1552
 "src/songmaker_cli/queue_streams.py" = 963
 "src/songmaker_cli/sharing_api.py" = 861
@@ -98,7 +98,7 @@
 "_register_protected_routes" = 76
 
 [function_lines."src/songmaker_cli/api_helpers.py"]
-"create_job_with_rate_limit" = 48
+"create_job_with_rate_limit" = 45
 
 [function_lines."src/songmaker_cli/config.py"]
 "build_ace_config" = 65

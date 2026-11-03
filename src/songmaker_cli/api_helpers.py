@@ -60,6 +60,7 @@ from songmaker_cli.db.queries.songs import get_song
 from songmaker_cli.db.queries.versions import lock_song_and_find_version
 from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
+from songmaker_cli.invariants import expect_present
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness, read_worker_liveness
 
@@ -114,15 +115,21 @@ def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> No
         session.execute(text("SELECT pg_advisory_xact_lock(:id)").bindparams(id=lock_id))
 
 
+def require_no_uncommitted_mutations(session: Session, caller: str) -> None:
+    """Refuse a commit that would persist application mutations the caller did not mean to save."""
+    if session.new or session.dirty or session.deleted:
+        raise RuntimeError(
+            f"{caller}: session has uncommitted mutations — "
+            "the commit() below would persist them unconditionally"
+        )
+
+
 def commit_auth_state_before_lock(session: Session, caller: str) -> None:
     """Commit the auth dependency's renewal and audit writes so a lock can follow.
 
     Callers must have made no application mutation: the commit persists whatever is pending.
     """
-    assert not session.new and not session.dirty and not session.deleted, (
-        f"{caller}: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
-    )
+    require_no_uncommitted_mutations(session, caller)
     session.commit()
 
 
@@ -217,10 +224,7 @@ def create_job_with_rate_limit(
     injection and this function; such mutations would be committed
     unconditionally by the commit() here.
     """
-    assert not session.new and not session.dirty and not session.deleted, (
-        "create_job_with_rate_limit: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
-    )
+    require_no_uncommitted_mutations(session, "create_job_with_rate_limit")
     worker_ids = [worker.id for worker in list_worker_identities(session)]
     worker_liveness = read_worker_liveness(redis, worker_ids)
     session.commit()
@@ -231,7 +235,7 @@ def create_job_with_rate_limit(
         # Inside the exclusive section and before the insert: a lock taken earlier is
         # released by the commit above, and one taken after the insert lets a delete that
         # won the song row fail the insert's version key with a 500 instead of a 404.
-        assert song_id is not None
+        song_id = expect_present(song_id, "create_job_with_rate_limit: version_id requires song_id")
         if lock_song_and_find_version(session, song_id, version_id) is None:
             session.rollback()
             raise HTTPException(404, "Version not found")
