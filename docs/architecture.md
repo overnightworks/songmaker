@@ -1347,7 +1347,7 @@ flowchart TB
     persistence["Persistence: db"]
     below["Below persistence: parser, worker_liveness"]
     base["Settings and constants"]
-    leaves["Leaves: import nothing in-tree"]
+    leaves["Leaves: import no songmaker_cli module"]
     entry --> workers --> routes --> runtime --> ai --> services --> contract --> typed --> persistence --> below --> base --> leaves
 ```
 
