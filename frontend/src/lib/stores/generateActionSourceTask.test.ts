@@ -1,10 +1,6 @@
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-	makeGeneration,
-	makeSong,
-	makeVersion
-} from '#lib/test-utils/factories.ts';
+import { makeGeneration, makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import type { JobItem } from '#lib/api/types.ts';
 import { ApiError } from '#lib/api/fetch.ts';
 

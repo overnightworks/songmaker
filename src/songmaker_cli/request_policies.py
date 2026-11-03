@@ -99,8 +99,7 @@ BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 #
 # `/health` is deliberately NOT here: it is the most expensive anonymous
 # endpoint (a DB query plus ~6 Redis round trips for worker/queue state),
-# the browser only polls it every 15s (~4/min, see health.ts), and nothing
-# in the deploy hits it as a healthcheck (docker-compose.yml has none) --
+# the container healthcheck (every 30s) and the CI smoke are its callers --
 # exempting it would let an anonymous caller hammer the priciest endpoint
 # for free. It stays in the API class.
 RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
