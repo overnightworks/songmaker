@@ -65,6 +65,7 @@ convention. ``set-phase``, ``set-failed`` and ``set-completed`` print nothing.
 Connects to the database only -- never runs schema migrations, even
 implicitly, matching every other one-off script here (see ``connect_db()`` in ``db/engine.py``).
 """
+# ruff: noqa: T201 - this seed helper prints the ids its caller reads
 
 from __future__ import annotations
 

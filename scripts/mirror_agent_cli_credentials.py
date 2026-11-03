@@ -40,6 +40,7 @@ source that exists but does not parse, or that fails a safety check, is an
 error — it is left un-mirrored, the previous good copy stays in place, and
 this script exits non-zero so systemd records the failure.
 """
+# ruff: noqa: T201 - this command reports what it mirrored and the mirror directory
 
 from __future__ import annotations
 

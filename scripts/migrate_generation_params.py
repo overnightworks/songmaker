@@ -24,6 +24,7 @@ the package-less system interpreter, not the app's:
     docker compose exec songmaker-web /app/.venv/bin/python \
         scripts/migrate_generation_params.py --fix
 """
+# ruff: noqa: T201 - this migration reports the rows it validated and fixed
 
 from __future__ import annotations
 

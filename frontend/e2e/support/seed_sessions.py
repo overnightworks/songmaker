@@ -15,6 +15,7 @@ Keycloak login; the row holds an ID token. The stack has no admin bootstrap,
 so this is the only place an e2e admin account comes into being. The helper
 never ships: it lives outside ``scripts/``, which the image copies.
 """
+# ruff: noqa: T201 - this seed helper prints the signed-in sessions as JSON for its caller
 
 from __future__ import annotations
 

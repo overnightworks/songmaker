@@ -15,6 +15,7 @@ Run inside the web container, where ``DATABASE_URL`` is mounted:
 Only live albums owned by the named test user and carrying the explicit test
 prefix are archived. Their songs, takes, covers, and share links remain intact.
 """
+# ruff: noqa: T201 - this script reports the albums it archived
 
 from __future__ import annotations
 
