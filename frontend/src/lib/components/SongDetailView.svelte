@@ -17,7 +17,6 @@
 	import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 	import { offline, whenBackOnline } from '#lib/stores/connectivity.ts';
 	import { fetchAlbum } from '#lib/api/albums.ts';
-	import { startHealthPolling, stopHealthPolling } from '#lib/stores/health.ts';
 	import {
 		albumList,
 		songList,
@@ -300,11 +299,6 @@
 			}
 		}
 		return { count, minDays: count > 0 ? Math.max(0, minDays) : 0 };
-	});
-
-	$effect(() => {
-		startHealthPolling();
-		return () => stopHealthPolling();
 	});
 
 	$effect(() => {

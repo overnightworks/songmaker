@@ -1,4 +1,3 @@
-import { makeHealthResponse } from '#lib/test-utils/factories.ts';
 import { describe, expect, it, onTestFinished, vi, beforeEach } from 'vitest';
 
 const mockFetch = vi.fn();
@@ -26,7 +25,6 @@ import {
 	generateSong,
 	scoreGeneration,
 	fetchJob,
-	fetchHealth,
 	pickGeneration,
 	unpickGeneration,
 	fetchCapabilities,
@@ -164,18 +162,6 @@ describe('API client', () => {
 		mockOk({ id: 'j1', status: 'completed' });
 		const result = await fetchJob('j1');
 		expect(result.status).toBe('completed');
-	});
-
-	it('fetchHealth returns the complete health response', async () => {
-		const response = makeHealthResponse({
-			queue_depth_cap_reached: true,
-			music_queue_depth: 3,
-			scoring_queue_depth: 2
-		});
-		mockOk(response);
-		const result = await fetchHealth();
-		expect(mockFetch.mock.calls[0][0]).toBe('/health');
-		expect(result).toEqual(response);
 	});
 
 	it('pickGeneration sends POST', async () => {

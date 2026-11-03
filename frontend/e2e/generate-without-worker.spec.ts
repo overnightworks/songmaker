@@ -66,7 +66,7 @@ async function openUserSong(page: Page): Promise<OpenedSong> {
 	}
 }
 
-// CI's stack runs no ACE-Step worker and `/health` is not stubbed: the press
+// CI's stack runs no ACE-Step worker and nothing is stubbed: the press
 // reaches the real server, which refuses it and stores the failed job.
 for (const width of WIDTHS) {
 	for (const role of ['user', 'admin'] as const) {

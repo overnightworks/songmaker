@@ -38,7 +38,6 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 	return {
 		...actual,
 		fetchVersions: vi.fn().mockResolvedValue([]),
-		fetchHealth: vi.fn().mockResolvedValue(null),
 		fetchSong: vi.fn(),
 		fetchSongs: vi.fn(),
 		sharePlaylist: vi.fn(),

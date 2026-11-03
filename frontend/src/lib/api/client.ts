@@ -58,7 +58,6 @@ export {
 } from './generations';
 export { uploadReference } from './references';
 export { fetchJob, cancelJob } from './jobs';
-export { fetchHealth } from './health';
 export {
 	fetchPlaylists,
 	createPlaylist,
