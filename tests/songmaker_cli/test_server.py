@@ -1389,9 +1389,7 @@ def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
     return web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
 
-def test_metrics_serve_prometheus_text_to_the_monitoring_token(
-    tmp_path: Path, mock_arq_pool, monitoring_headers,
-) -> None:
+def test_metrics_serves_prometheus_text(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     from songmaker_cli.constants import PROM_CONTENT_TYPE
     client = _make_metrics_client(tmp_path)
     with client:
