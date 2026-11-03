@@ -17,7 +17,7 @@ from acestep_worker.heartbeat import worker_state_key
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
 
-_FIXTURE_PATH = Path(__file__).with_name("e2e_fixtures") / "fake_training_worker.py"
+_FIXTURE_PATH = Path(__file__).parents[1] / "support" / "fake_training_worker.py"
 _fixture_spec = importlib.util.spec_from_file_location("fake_training_worker", _FIXTURE_PATH)
 if _fixture_spec is None or _fixture_spec.loader is None:
     raise RuntimeError(f"Could not load test fixture: {_FIXTURE_PATH}")

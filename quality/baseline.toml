@@ -73,7 +73,7 @@
 "tests/songmaker_cli/test_admin_api.py" = 1055
 "tests/songmaker_cli/test_api.py" = 4751
 "tests/test_auto_deploy_alerting.py" = 1384
-"tests/songmaker_cli/test_conversation_api.py" = 853
+"tests/songmaker_cli/test_conversation_api.py" = 842
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
 "tests/songmaker_cli/test_db.py" = 3623
 "tests/songmaker_cli/test_jobs.py" = 3215
@@ -396,9 +396,6 @@ stranger_client = [["tests/songmaker_cli/test_conversation_api_memory.py", "stra
 
 [clones."tests/songmaker_cli/test_cover_runner.py"]
 _png_bytes = [["tests/songmaker_cli/test_playlist_api.py", "_png_bytes"]]
-
-[clones."tests/songmaker_cli/cowriter/test_mcp_endpoint.py"]
-mcp_environment = [["tests/songmaker_cli/cowriter/test_service_turn.py", "mcp_key"]]
 
 [clones."tests/songmaker_cli/test_settings_api_providers.py"]
 _stream_events = [["tests/songmaker_cli/test_conversation_api_memory.py", "_stream_events"], ["tests/songmaker_cli/test_conversation_api_mentions.py", "_stream_events"], ["tests/songmaker_cli/test_conversation_api_takes.py", "_stream_events"]]

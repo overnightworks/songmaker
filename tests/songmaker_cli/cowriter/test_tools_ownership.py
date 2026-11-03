@@ -5,10 +5,13 @@ import asyncio
 import json
 
 import pytest
+from agent_runtime_client.backend.fake_gateway import completion, tool_call, tool_round
+from agent_runtime_client.tools import Principal
 from mcp.server.mcpserver.exceptions import ToolError
-from support.fake_agent_service import attach_cowriter_service, streams
+from support.cowriter_gateway import attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
+from songmaker_cli.agent.tools import cowriter_hand_tools
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db
@@ -86,6 +89,11 @@ def _dispatch_ownership_tool(factory, monkeypatch, route, name, arguments):
         if isinstance(payload, dict) and set(payload) == {"result"}:
             payload = payload["result"]
         return False, payload
+    if route == "hand-tool":
+        hand_tool = next(t for t in cowriter_hand_tools(factory) if t.declaration.name == name)
+        principal = Principal(iss="issuer.test", sub="actor")
+        result = asyncio.run(hand_tool.handler(principal, arguments))
+        return result.is_error, result.content if result.is_error else json.loads(result.content)
     with factory() as session:
         result = execute_cowriter_tool(
             session, auth.load_user(session, "actor"), name, arguments,
@@ -105,7 +113,7 @@ def test_ownership_matrix_covers_every_registered_tool(ownership_factory):
 @pytest.mark.parametrize("name", sorted(MCP_TOOL_NAMES))
 @pytest.mark.parametrize("role", ["user", "admin"])
 @pytest.mark.parametrize("identity", ["actor", "foreign"])
-@pytest.mark.parametrize("route", ["mcp", "in-process"])
+@pytest.mark.parametrize("route", ["mcp", "in-process", "hand-tool"])
 def test_tools_only_reach_owned_resources(
     ownership_factory, monkeypatch, name, role, identity, route,
 ):
@@ -165,7 +173,7 @@ def test_tools_only_reach_owned_resources(
 
 
 @pytest.mark.parametrize("role", ["user", "admin"])
-@pytest.mark.parametrize("route", ["mcp", "in-process"])
+@pytest.mark.parametrize("route", ["mcp", "in-process", "hand-tool"])
 def test_unfiltered_song_listing_still_filters_by_owner(
     ownership_factory, monkeypatch, role, route,
 ):
@@ -180,9 +188,7 @@ def test_unfiltered_song_listing_still_filters_by_owner(
     assert [song["id"] for song in payload] == ["song-actor"]
 
 
-def test_admin_foreign_context_loads_but_tool_access_is_denied(
-    ownership_factory, tmp_path, monkeypatch,
-):
+def test_admin_foreign_context_loads_but_tool_access_is_denied(ownership_factory, tmp_path):
     """1301-F2-BOUNDARY: user-selected foreign context retains HTTP admin access."""
     with ownership_factory() as session:
         session.get(User, "actor").role = "admin"
@@ -190,42 +196,44 @@ def test_admin_foreign_context_loads_but_tool_access_is_denied(
     user = make_authenticated_user("actor", role="admin")
     app = make_router_app(make_router_ctx(tmp_path, db=ownership_factory), user=user)
     client = web_client(app)
-    service = attach_cowriter_service(client, ownership_factory, monkeypatch, "actor")
-    observed = {}
+    stack = attach_cowriter_gateway(client, ownership_factory, tmp_path, "actor")
+    stack.replies(
+        tool_round(tool_call("call-1", "get_song", {"song_id": "song-foreign"})),
+        completion("Cannot edit this song"),
+    )
 
-    async def run_the_tool(_run, script):
-        yield script.started()
-        with ownership_factory() as session:
-            observed["tool"] = execute_cowriter_tool(
-                session, user, "get_song", {"song_id": "song-foreign"},
-            )
-        yield script.succeeded("Cannot edit this song")
-
-    service.agent.reply_with(streams(run_the_tool))
     response = client.post(
         "/api/chat/turn",
         json={"message": "edit this", "current_song_id": "song-foreign"},
     )
+
     assert response.status_code == 200
-    context = service.agent.last_run.messages[-1]["text"]
+    context = stack.last_turn.messages[-1]["text"]
     assert "<current_song>" in context
     assert "Track foreign" in context
     assert "original" in context
-    assert observed["tool"].is_error is True
-    assert observed["tool"].content == "Song not found"
+    frames = [
+        json.loads(line[len("data: "):])
+        for line in response.iter_lines()
+        if line.startswith("data: ")
+    ]
+    result = next(frame for frame in frames if frame["type"] == "tool_result")
+    assert result["is_error"] is True
+    assert result["content"] == "Song not found"
 
 
 @pytest.mark.parametrize("role", ["user", "admin"])
 @pytest.mark.parametrize("identity", ["actor", "foreign"])
+@pytest.mark.parametrize("route", ["in-process", "hand-tool"])
 def test_the_coherence_verdict_is_stored_only_on_the_actors_own_take(
-    ownership_factory, monkeypatch, role, identity,
+    ownership_factory, monkeypatch, role, identity, route,
 ):
     """REQ-COWRITER-34: the verdict reaches the owner's take and nothing else."""
     with ownership_factory() as session:
         session.get(User, "actor").role = role
         session.commit()
     is_error, payload = _dispatch_ownership_tool(
-        ownership_factory, monkeypatch, "in-process", VERDICT_TOOL,
+        ownership_factory, monkeypatch, route, VERDICT_TOOL,
         _ownership_arguments(identity)[VERDICT_TOOL],
     )
 

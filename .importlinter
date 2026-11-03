@@ -13,8 +13,9 @@
 # persistence-below-http-framework: songmaker_cli.db never imports fastapi or
 #   starlette.
 # application-layers: songmaker_cli modules import only downward (entry points,
-#   workers, routes, runners, co-writer and MCP, services, HTTP contract,
-#   persistence, settings, constants), and the routes never import each other.
+#   workers, routes, runners, the gateway turn, co-writer and MCP, services,
+#   HTTP contract, persistence, settings, constants), and the routes never
+#   import each other.
 #   A route that is not listed in the routes row is unconstrained.
 # scoring-is-self-contained: the scorers reach neither persistence nor the HTTP
 #   framework.
@@ -66,6 +67,7 @@ layers =
     lifecycle
     (cover_runner)
     jobs
+    agent
     cowriter
     mcp_server
     (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (queue_streams) : (reference_audio) : (reimport) : (scheduler)

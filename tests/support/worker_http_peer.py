@@ -16,12 +16,12 @@ import fakeredis.aioredis
 import httpx
 import pytest
 import uvicorn
-from e2e_fixtures.fake_training_worker import (
+from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
+from support.fake_training_worker import (
     FakeTrainingWorkerSettings,
     build_fake_worker_deps,
 )
-from starlette.responses import Response
-from starlette.types import ASGIApp, Receive, Scope, Send
 
 from acestep_worker.model_cache import LoadedModel, ModelCache
 from acestep_worker.wrapper import create_app

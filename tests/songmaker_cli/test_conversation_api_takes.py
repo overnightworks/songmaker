@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from support.fake_agent_service import CowriterStack, attach_cowriter_service
+from support.cowriter_gateway import CowriterStack, attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import JobType
@@ -97,7 +97,7 @@ def client(tmp_path: Path):
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path, monkeypatch):
+def stranger_client(tmp_path: Path):
     factory = init_db(tmp_path / "takes_spy.db")
     with factory() as session:
         _seed(session, "u-owner")
@@ -108,13 +108,13 @@ def stranger_client(tmp_path: Path, monkeypatch):
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
     web = web_client(app)
-    return web, attach_cowriter_service(web, factory, monkeypatch, "u-spy")
+    return web, attach_cowriter_gateway(web, factory, tmp_path, "u-spy")
 
 
 @pytest.fixture
-def service(client, monkeypatch) -> CowriterStack:
+def service(client, tmp_path: Path) -> CowriterStack:
     c, factory = client
-    return attach_cowriter_service(c, factory, monkeypatch, "u-test")
+    return attach_cowriter_gateway(c, factory, tmp_path, "u-test")
 
 
 def _turn(client, payload: dict):
@@ -122,7 +122,7 @@ def _turn(client, payload: dict):
 
 
 def _content(service: CowriterStack) -> str:
-    return service.agent.last_run.messages[-1]["text"]
+    return service.last_turn.messages[-1]["text"]
 
 
 def test_playing_take_wins_over_pick(client, service):
@@ -204,7 +204,7 @@ def test_explicit_unknown_or_foreign_generation_is_404(client, service, stranger
         "current_generation_id": "missing",
     })
     assert resp.status_code == 404
-    assert service.agent.runs == []
+    assert service.turns == []
 
     resp = _turn(stranger, {
         "message": "x",
@@ -212,7 +212,7 @@ def test_explicit_unknown_or_foreign_generation_is_404(client, service, stranger
         "current_generation_id": "gA",
     })
     assert resp.status_code == 404
-    assert stranger_service.agent.runs == []
+    assert stranger_service.turns == []
 
 
 def test_wrong_song_or_unplayable_is_422(client, service):
@@ -223,7 +223,7 @@ def test_wrong_song_or_unplayable_is_422(client, service):
         "current_generation_id": "g2",
     })
     assert resp.status_code == 422
-    assert service.agent.runs == []
+    assert service.turns == []
 
     resp = _turn(c, {
         "message": "x",
@@ -231,7 +231,7 @@ def test_wrong_song_or_unplayable_is_422(client, service):
         "current_generation_id": "gArch",
     })
     assert resp.status_code == 422
-    assert service.agent.runs == []
+    assert service.turns == []
 
 
 def test_chat_turn_does_not_enqueue_scoring(client, service):
