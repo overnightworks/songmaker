@@ -198,7 +198,9 @@ def test_unchanged_tree_passes_without_rewriting(gate):
     ],
     ids=["fallen", "none left", "vanished"],
 )
-def test_stale_entry_fails_until_update_writes_the_smaller_baseline(gate, files, baseline, expected):
+def test_stale_entry_fails_until_update_writes_the_smaller_baseline(
+    gate, files, baseline, expected,
+):
     status, output, written = gate(files, baseline=baseline)
     assert status == 1
     assert "stale" in output
@@ -223,7 +225,9 @@ def test_update_never_raises_or_adds_an_entry(gate, files, baseline):
     assert written == baseline
 
 
-@pytest.mark.parametrize("baseline", [None, "invalid", "a.css -1", "a.css x", "a.css 0", "a.css 1 2"])
+@pytest.mark.parametrize(
+    "baseline", [None, "invalid", "a.css -1", "a.css x", "a.css 0", "a.css 1 2"],
+)
 def test_missing_or_invalid_baseline_fails_loudly(gate, baseline):
     status, output, written = gate({"card.css": ""}, baseline=baseline)
     assert status == 1
