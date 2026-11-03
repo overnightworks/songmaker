@@ -142,7 +142,7 @@ def test_management_lock_rejects_pending_business_changes(accounts, session) -> 
     account.role = "admin"
     lock = DatabaseWriteLock(session)
 
-    with pytest.raises(AssertionError, match="uncommitted mutations"), lock.hold():
+    with pytest.raises(RuntimeError, match="uncommitted mutations"), lock.hold():
         pass
     session.rollback()
     assert accounts.get(_SUBJECT).role == "user"
