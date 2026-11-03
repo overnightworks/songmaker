@@ -76,12 +76,12 @@
 	let uploadFailure = $state<UploadFailure | null>(null);
 
 	function uploadReason(used: ReferenceUsageResponse): string | null {
+		if (uploadFailure?.kind === 'failed') return uploadFailure.words;
 		const full = fullFigure(used);
 		if (full !== null) return `Reference storage is full (${full}) — delete one first.`;
-		if (uploadFailure === null) return null;
-		return uploadFailure.kind === 'refused'
-			? `That file doesn't fit (${sizeFigure(used)} used) — delete one first.`
-			: uploadFailure.words;
+		return uploadFailure === null
+			? null
+			: `That file doesn't fit (${sizeFigure(used)} used) — delete one first.`;
 	}
 
 	async function failureOf(error: unknown): Promise<UploadFailure> {

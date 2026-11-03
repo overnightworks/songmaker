@@ -1,0 +1,55 @@
+import { mount, tick, unmount } from 'svelte';
+import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
+import ReferencesPage from '../../routes/settings/references/+page.svelte';
+
+export function referenceRecording(
+	overrides: Partial<ReferenceRecordingResponse>
+): ReferenceRecordingResponse {
+	return {
+		id: 'reference-1',
+		filename: 'voice-memo.mp3',
+		size_bytes: 1000,
+		duration_sec: 31.4,
+		created_at: '2026-10-27T10:00:00Z',
+		...overrides
+	};
+}
+
+export function listAnswer(
+	references: ReferenceRecordingResponse[],
+	usage: Partial<ReferenceUsageResponse> = {}
+) {
+	return {
+		references,
+		usage: { files: references.length, bytes: 0, file_limit: 50, byte_limit: 500_000_000, ...usage }
+	};
+}
+
+let mountedPage: ReturnType<typeof mount> | undefined;
+
+export async function renderReferencesPage(): Promise<HTMLElement> {
+	const target = document.createElement('div');
+	document.body.append(target);
+	mountedPage = mount(ReferencesPage, { target });
+	await tick();
+	return target;
+}
+
+export async function unmountReferencesPage(): Promise<void> {
+	if (mountedPage) await unmount(mountedPage);
+	mountedPage = undefined;
+}
+
+export function listedReferences(target: HTMLElement): { name: string; meta: string }[] {
+	return Array.from(target.querySelectorAll('.reference-row')).map((row) => ({
+		name: row.querySelector('.reference-name')?.textContent ?? '',
+		meta: row.querySelector('.reference-meta')?.textContent ?? ''
+	}));
+}
+
+export async function chooseFile(target: HTMLElement, file: File): Promise<void> {
+	const input = target.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
+	Object.defineProperty(input, 'files', { value: [file], configurable: true });
+	input.dispatchEvent(new Event('change', { bubbles: true }));
+	await tick();
+}
