@@ -4,7 +4,13 @@
 // so the list starts empty and holds only what the flow uploads.
 
 import { readFileSync } from 'node:fs';
-import { expect, test, type APIRequestContext, type BrowserContext } from '@playwright/test';
+import {
+	expect,
+	test,
+	type APIRequestContext,
+	type BrowserContext,
+	type Page
+} from '@playwright/test';
 
 import { FlowGuard, LIBRARY_PATH, openSettingsSection, shellOf, workspace } from './helpers';
 import {
@@ -30,6 +36,28 @@ async function postReferenceAudio(api: APIRequestContext, filename: string): Pro
 		}
 	});
 	expect(response.ok(), `Reference upload failed: ${await response.text()}`).toBeTruthy();
+}
+
+async function trackCreatedAudio(page: Page): Promise<void> {
+	await page.addInitScript(() => {
+		const Original = window.Audio;
+		window.Audio = function (...args: ConstructorParameters<typeof Audio>) {
+			const element = new Original(...args);
+			(window as unknown as { createdAudio: HTMLAudioElement[] }).createdAudio = [
+				...((window as unknown as { createdAudio?: HTMLAudioElement[] }).createdAudio ?? []),
+				element
+			];
+			return element;
+		} as unknown as typeof Audio;
+	});
+}
+
+async function previewIsAdvancing(page: Page): Promise<boolean> {
+	return page.evaluate(() => {
+		const previews = (window as unknown as { createdAudio: HTMLAudioElement[] }).createdAudio;
+		const preview = previews[previews.length - 1];
+		return preview.currentTime > 0 && (!preview.paused || preview.ended) && !preview.error;
+	});
 }
 
 async function signInFreshAccount(
@@ -123,17 +151,7 @@ test('Settings › References plays a recording again after its first audio answ
 	const account = await signInFreshAccount(context, 'references-retry', testInfo.project.name);
 	const api = await signedInApi(account);
 	const audioRoute = /\/api\/references\/[^/]+\/audio$/;
-	await page.addInitScript(() => {
-		const Original = window.Audio;
-		window.Audio = function (...args: ConstructorParameters<typeof Audio>) {
-			const element = new Original(...args);
-			(window as unknown as { createdAudio: HTMLAudioElement[] }).createdAudio = [
-				...((window as unknown as { createdAudio?: HTMLAudioElement[] }).createdAudio ?? []),
-				element
-			];
-			return element;
-		} as unknown as typeof Audio;
-	});
+	await trackCreatedAudio(page);
 	try {
 		await postReferenceAudio(api, 'storytime-drums.mp3');
 		await page.goto('/settings/references');
@@ -152,15 +170,50 @@ test('Settings › References plays a recording again after its first audio answ
 		await served;
 		await expect(row.getByRole('button', { name: 'Pause storytime-drums.mp3' })).toBeVisible();
 		await expect(row.getByRole('alert')).toHaveCount(0);
-		await expect
-			.poll(() =>
-				page.evaluate(() => {
-					const previews = (window as unknown as { createdAudio: HTMLAudioElement[] }).createdAudio;
-					const preview = previews[previews.length - 1];
-					return preview.currentTime > 0 && (!preview.paused || preview.ended) && !preview.error;
-				})
-			)
-			.toBe(true);
+		await expect.poll(() => previewIsAdvancing(page)).toBe(true);
+		guard.assertClean();
+	} finally {
+		await api.dispose();
+	}
+});
+
+test('Settings › References uploads a recording through the file chooser, lists it first and plays it', async ({
+	context,
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const account = await signInFreshAccount(context, 'references-upload', testInfo.project.name);
+	const api = await signedInApi(account);
+	await trackCreatedAudio(page);
+	try {
+		await postReferenceAudio(api, 'storytime-drums.mp3');
+		await page.goto('/settings/references');
+		await expect(workspace(page).getByRole('listitem')).toHaveCount(1);
+
+		const chooser = page.waitForEvent('filechooser');
+		await workspace(page).getByRole('button', { name: 'Upload' }).click();
+		await (
+			await chooser
+		).setFiles({
+			name: 'synth-hook.mp3',
+			mimeType: 'audio/mpeg',
+			buffer: readFileSync(TAKE_FIXTURE)
+		});
+
+		const row = workspace(page).getByRole('listitem').filter({ hasText: 'synth-hook.mp3' });
+		await expect(row).toBeVisible();
+		await expect(workspace(page).getByRole('listitem').first()).toContainText('synth-hook.mp3');
+		await expect(row.locator('.reference-meta')).toHaveText(LENGTH_AND_DAY);
+		await expect(workspace(page).getByRole('button', { name: 'Upload' })).toBeEnabled();
+		const served = page.waitForResponse(
+			(response) => /\/api\/references\/[^/]+\/audio$/.test(response.url()) && response.ok()
+		);
+
+		await row.getByRole('button', { name: 'Play synth-hook.mp3' }).click();
+
+		await served;
+		await expect(row).toHaveClass(/playing/);
+		await expect.poll(() => previewIsAdvancing(page)).toBe(true);
 		guard.assertClean();
 	} finally {
 		await api.dispose();

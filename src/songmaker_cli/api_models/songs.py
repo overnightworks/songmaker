@@ -765,22 +765,3 @@ class BulkDeleteRequest(BaseModel):
 
 class BulkDeleteResponse(BaseModel):
     deleted: int
-
-
-class ReferenceRecordingResponse(BaseModel):
-    id: str
-    filename: str
-    size_bytes: int
-    duration_sec: float | None
-    created_at: str
-
-    @classmethod
-    def from_orm(cls, recording: ReferenceRecording) -> ReferenceRecordingResponse:
-        link = ReferenceResponse.from_orm(recording)
-        return cls(
-            id=link.id,
-            filename=link.filename,
-            size_bytes=recording.size_bytes,
-            duration_sec=recording.duration_sec,
-            created_at=recording.created_at.isoformat(),
-        )
