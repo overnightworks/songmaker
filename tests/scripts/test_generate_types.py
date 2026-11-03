@@ -291,3 +291,12 @@ def test_routed_model_outside_api_models_fails_without_writing_types(
 )
 def test_model_homes_are_api_models_or_a_named_exemption(model: type[BaseModel]) -> None:
     assert generate_types.models_outside_api_models((model,)) == ()
+
+
+def test_the_real_health_router_generates_no_health_model() -> None:
+    from songmaker_cli.api_models.release import ReleaseInfo
+    from songmaker_cli.health_api import router as health_router
+
+    result = generate_types.generate((health_router,))
+
+    assert {model.__name__ for model in result.models} <= {ReleaseInfo.__name__}

@@ -77,6 +77,7 @@ def _use_real_gate_with_fake_cli(monkeypatch, binary_path: Path, *lines: bytes) 
 
 def test_health_reports_claude_cli_tool_surface_ok_after_a_real_clean_probe(
     tmp_path: Path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     binary = tmp_path / "claude"
     binary.write_bytes(b"cli-build")
@@ -86,7 +87,7 @@ def test_health_reports_claude_cli_tool_surface_ok_after_a_real_clean_probe(
 
     client, _ = make_test_app(tmp_path)
     with client:
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
 
     assert resp.status_code == 200
     assert resp.json()["claude_cli_tool_surface"] == "ok"
@@ -94,6 +95,7 @@ def test_health_reports_claude_cli_tool_surface_ok_after_a_real_clean_probe(
 
 def test_health_reports_drift_without_failing_the_server(
     tmp_path: Path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     """#351 round 6, Finding 1 / the operator's ruling: a drifted Claude
     CLI must not stop the server from starting or serving albums and
@@ -106,7 +108,7 @@ def test_health_reports_drift_without_failing_the_server(
 
     client, _ = make_test_app(tmp_path)
     with client:
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
 
     assert resp.status_code == 200
     assert resp.json()["claude_cli_tool_surface"] == "drift"
@@ -114,6 +116,7 @@ def test_health_reports_drift_without_failing_the_server(
 
 def test_health_reports_unverified_when_the_probe_itself_could_not_check(
     tmp_path: Path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     """#351 round 6 follow-up: "could not check" (no CLI mounted, a
     timeout, a zombie, MCP never connecting — anything UnavailableError
@@ -126,7 +129,7 @@ def test_health_reports_unverified_when_the_probe_itself_could_not_check(
 
     client, _ = make_test_app(tmp_path)
     with client:
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
 
     assert resp.status_code == 200
     assert resp.json()["claude_cli_tool_surface"] == "unverified"
@@ -134,6 +137,7 @@ def test_health_reports_unverified_when_the_probe_itself_could_not_check(
 
 def test_health_defaults_to_unverified_not_ok_when_nothing_has_verified_yet(
     tmp_path: Path, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     """The live state defaults to "unverified" (never a silent "ok")
     until something actually calls verify_cli_tool_surface() and records
@@ -145,7 +149,7 @@ def test_health_defaults_to_unverified_not_ok_when_nothing_has_verified_yet(
     the silent default check_no_silent_fallbacks.py exists to catch."""
     client, _ = make_test_app(tmp_path)
     with client:
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
 
     assert resp.status_code == 200
     assert resp.json()["claude_cli_tool_surface"] == "unverified"
@@ -166,6 +170,7 @@ def _reset_codex_image_sandbox_runtime_health():
 
 def test_health_reports_codex_image_sandbox_runtime_ready_after_a_real_clean_probe(
     tmp_path: Path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     """Undoes conftest's blanket stub (_no_codex_cover_sandbox_runtime_probe)
     for this one test, so the *real* boot report — including the /health
@@ -183,7 +188,7 @@ def test_health_reports_codex_image_sandbox_runtime_ready_after_a_real_clean_pro
 
     client, _ = make_test_app(tmp_path)
     with client:
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
 
     assert resp.status_code == 200
     assert resp.json()["codex_image_sandbox_runtime"] == "ready"
@@ -191,6 +196,7 @@ def test_health_reports_codex_image_sandbox_runtime_ready_after_a_real_clean_pro
 
 def test_health_reports_codex_image_sandbox_runtime_not_set_up_without_failing_the_server(
     tmp_path: Path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     from songmaker_cli import lifecycle, server
 
@@ -202,7 +208,7 @@ def test_health_reports_codex_image_sandbox_runtime_not_set_up_without_failing_t
 
     client, _ = make_test_app(tmp_path)
     with client:
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
 
     assert resp.status_code == 200
     assert resp.json()["codex_image_sandbox_runtime"] == "not_set_up"
@@ -210,6 +216,7 @@ def test_health_reports_codex_image_sandbox_runtime_not_set_up_without_failing_t
 
 def test_health_defaults_codex_image_sandbox_runtime_to_unverified_before_a_boot_report(
     tmp_path: Path, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     """The live state defaults to "unverified" (never a silent "ready")
     until the boot report actually records a real answer. This test never
@@ -221,7 +228,7 @@ def test_health_defaults_codex_image_sandbox_runtime_to_unverified_before_a_boot
     check_no_silent_fallbacks.py exists to catch."""
     client, _ = make_test_app(tmp_path)
     with client:
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
 
     assert resp.status_code == 200
     assert resp.json()["codex_image_sandbox_runtime"] == "unverified"
@@ -238,7 +245,7 @@ def test_health_and_metrics_report_background_loop_health(
             registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("no pool"))
         registry.mark_dead(BackgroundLoopName.SESSION_CLEANUP, None)
 
-        health = client.get("/health")
+        health = client.get("/health/details", headers=monitoring_headers)
         metrics = client.get("/metrics", headers=monitoring_headers)
 
     assert health.status_code == 200
@@ -270,6 +277,7 @@ def test_health_and_metrics_report_background_loop_health(
 
 def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
     tmp_path: Path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     """#351 round 7, Finding 4: /health must follow the tool-surface
     gate's live state, not a value captured once at boot — a later
@@ -281,7 +289,9 @@ def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
     import asyncio
 
     with client:
-        before = client.get("/health").json()["claude_cli_tool_surface"]
+        before = client.get(
+            "/health/details", headers=monitoring_headers,
+        ).json()["claude_cli_tool_surface"]
         assert before == "unverified"
 
         clean_binary = tmp_path / "claude-clean"
@@ -290,7 +300,9 @@ def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
             monkeypatch, clean_binary, _init_line(_ALL_SONGMAKER_TOOLS),
         )
         asyncio.run(_real_verify_cli_tool_surface())
-        after_clean = client.get("/health").json()["claude_cli_tool_surface"]
+        after_clean = client.get(
+            "/health/details", headers=monitoring_headers,
+        ).json()["claude_cli_tool_surface"]
 
         drifted_binary = tmp_path / "claude-drifted"
         drifted_binary.write_bytes(b"cli-build-2")
@@ -299,7 +311,9 @@ def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
         verification = _real_verify_cli_tool_surface()
         with pytest.raises(provider.CliToolSurfaceError):
             asyncio.run(verification)
-        after_drift = client.get("/health").json()["claude_cli_tool_surface"]
+        after_drift = client.get(
+            "/health/details", headers=monitoring_headers,
+        ).json()["claude_cli_tool_surface"]
 
     assert after_clean == "ok"
     assert after_drift == "drift"
@@ -307,6 +321,7 @@ def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
 
 def test_health_drift_does_not_by_itself_mark_the_server_degraded(
     tmp_path: Path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     """A drifted co-writer is not the same outage as a down database or
     Redis — /health's overall status is unaffected; only the dedicated
@@ -318,7 +333,9 @@ def test_health_drift_does_not_by_itself_mark_the_server_degraded(
         monkeypatch, clean_binary, _init_line(_ALL_SONGMAKER_TOOLS),
     )
     with clean_client:
-        clean_status = clean_client.get("/health").json()["status"]
+        clean_status = clean_client.get(
+            "/health/details", headers=monitoring_headers,
+        ).json()["status"]
 
     provider.clear_cli_tool_surface_cache()
 
@@ -327,7 +344,7 @@ def test_health_drift_does_not_by_itself_mark_the_server_degraded(
     drifted_client, _ = make_test_app(tmp_path)
     _use_real_gate_with_fake_cli(monkeypatch, drifted_binary, _init_line(["Bash"]))
     with drifted_client:
-        drifted_body = drifted_client.get("/health").json()
+        drifted_body = drifted_client.get("/health/details", headers=monitoring_headers).json()
 
     assert drifted_body["claude_cli_tool_surface"] == "drift"
     assert drifted_body["status"] == clean_status
@@ -352,6 +369,7 @@ async def _async_iter(items):
 
 def _get_health(
     client,
+    monitoring_headers: dict[str, str],
     *,
     gpu_healthy: bool | None = None,
     heartbeat: Mapping[str, object] | None = _EMPTY_HEARTBEAT,
@@ -393,7 +411,7 @@ def _get_health(
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
     ):
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
     return resp.json()
 
@@ -435,6 +453,7 @@ def expected_health_json() -> bytes:
 def test_health_preserves_response_bytes(
     health_client, expected_health_json, monkeypatch, fresh_settings,
     tool_surface, worker_online, overall_status, acestep_status,
+    monitoring_headers,
 ) -> None:
     # defect:#1590 — health exposes only current service signals.
     import songmaker_cli.arq_pool as arq_mod
@@ -463,7 +482,7 @@ def test_health_preserves_response_bytes(
         patch.object(arq_mod, "get_scoring_queue_depth", AsyncMock(return_value=2)),
     ):
         clock.now.return_value = now
-        response = health_client.get("/health")
+        response = health_client.get("/health/details", headers=monitoring_headers)
 
     expected = (
         expected_health_json
@@ -486,7 +505,7 @@ def test_health_preserves_response_bytes(
     ids=["release-build", "commit-without-tag", "tag-without-commit"],
 )
 def test_health_reports_the_release_the_image_was_built_for(
-    health_client, monkeypatch, fresh_settings, release, commit, expected,
+    health_client, monitoring_headers, monkeypatch, fresh_settings, release, commit, expected,
 ) -> None:
     for name, value in (("SONGMAKER_RELEASE", release), ("SONGMAKER_COMMIT", commit)):
         if value is None:
@@ -495,54 +514,63 @@ def test_health_reports_the_release_the_image_was_built_for(
             monkeypatch.setenv(name, value)
     get_settings.cache_clear()
 
-    assert _get_health(health_client)["release"] == expected
+    assert _get_health(health_client, monitoring_headers)["release"] == expected
 
 
-def test_worker_with_broken_gpu_is_not_counted_online(health_client) -> None:
-    body = _get_health(health_client, gpu_healthy=False)
+def test_worker_with_broken_gpu_is_not_counted_online(health_client, monitoring_headers) -> None:
+    body = _get_health(health_client, monitoring_headers, gpu_healthy=False)
     assert body["acestep_workers_total"] == 1
     assert body["acestep_workers_online"] == 0
     assert body["acestep"] == "unhealthy"
 
 
 def test_acestep_unhealthy_marks_overall_status_degraded_but_keeps_200(
-    health_client,
+    health_client, monitoring_headers,
 ) -> None:
-    body = _get_health(health_client, gpu_healthy=False)
+    body = _get_health(health_client, monitoring_headers, gpu_healthy=False)
     assert body["status"] == "degraded"
 
 
-def test_worker_with_healthy_gpu_is_counted_online(health_client) -> None:
-    body = _get_health(health_client, gpu_healthy=True)
+def test_worker_with_healthy_gpu_is_counted_online(health_client, monitoring_headers) -> None:
+    body = _get_health(health_client, monitoring_headers, gpu_healthy=True)
     assert body["acestep_workers_online"] == 1
     assert body["acestep"] == "healthy"
     assert body["status"] == "ok"
 
 
-def test_worker_without_gpu_healthy_field_is_treated_as_not_online(health_client) -> None:
+def test_worker_without_gpu_healthy_field_is_treated_as_not_online(
+    health_client, monitoring_headers,
+) -> None:
     """Fail-closed: a heartbeat with no ``gpu_healthy`` key at all (an old
     or broken worker build that never learned to publish it) must never
     count as online on a silent "assume fine forever" default."""
-    body = _get_health(health_client, gpu_healthy=None)
+    body = _get_health(health_client, monitoring_headers, gpu_healthy=None)
     assert body["acestep_workers_online"] == 0
     assert body["acestep"] == "unhealthy"
 
 
-def test_registered_worker_with_lm_failure_key_names_the_reason(health_client) -> None:
-    body = _get_health(health_client, heartbeat=None, lm_failure_values=_LM_FAILED)
+def test_registered_worker_with_lm_failure_key_names_the_reason(
+    health_client, monitoring_headers,
+) -> None:
+    body = _get_health(
+        health_client, monitoring_headers, heartbeat=None, lm_failure_values=_LM_FAILED,
+    )
     assert body["status"] == "degraded"
     assert body["acestep"] == "unhealthy"
     assert body["acestep_reason"] == "lm_init_failed"
 
 
-def test_worker_without_lm_failure_key_has_no_reason(health_client) -> None:
-    body = _get_health(health_client, gpu_healthy=False)
+def test_worker_without_lm_failure_key_has_no_reason(health_client, monitoring_headers) -> None:
+    body = _get_health(health_client, monitoring_headers, gpu_healthy=False)
     assert body["acestep_reason"] is None
 
 
-def test_lm_failure_key_of_an_unregistered_worker_is_ignored(health_client) -> None:
+def test_lm_failure_key_of_an_unregistered_worker_is_ignored(
+    health_client, monitoring_headers,
+) -> None:
     body = _get_health(
-        health_client, gpu_healthy=True, lm_failure_values={"ghost-worker": b"sft"},
+        health_client, monitoring_headers,
+        gpu_healthy=True, lm_failure_values={"ghost-worker": b"sft"},
     )
     assert body["acestep_reason"] is None
     assert body["acestep"] == "healthy"
@@ -551,10 +579,12 @@ def test_lm_failure_key_of_an_unregistered_worker_is_ignored(health_client) -> N
     assert "sft" not in serialized
 
 
-def test_reason_carries_neither_worker_id_nor_key_value(health_client) -> None:
+def test_reason_carries_neither_worker_id_nor_key_value(health_client, monitoring_headers) -> None:
     import songmaker_cli.arq_pool as arq_mod
 
-    body = _get_health(health_client, heartbeat=None, lm_failure_values=_LM_FAILED)
+    body = _get_health(
+        health_client, monitoring_headers, heartbeat=None, lm_failure_values=_LM_FAILED,
+    )
     arq_mod._pool.exists.assert_awaited()
     assert body["acestep_reason"] == "lm_init_failed"
     serialized = json.dumps(body)
@@ -562,11 +592,13 @@ def test_reason_carries_neither_worker_id_nor_key_value(health_client) -> None:
     assert "sft" not in serialized
 
 
-def test_reason_follows_the_key_when_the_worker_recovers(health_client) -> None:
-    failed = _get_health(health_client, heartbeat=None, lm_failure_values=_LM_FAILED)
+def test_reason_follows_the_key_when_the_worker_recovers(health_client, monitoring_headers) -> None:
+    failed = _get_health(
+        health_client, monitoring_headers, heartbeat=None, lm_failure_values=_LM_FAILED,
+    )
     assert failed["acestep_reason"] == "lm_init_failed"
 
-    body = _get_health(health_client, gpu_healthy=True)
+    body = _get_health(health_client, monitoring_headers, gpu_healthy=True)
     assert body["acestep_reason"] is None
     assert body["acestep"] == "healthy"
     assert body["status"] == "ok"

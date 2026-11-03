@@ -347,7 +347,7 @@ The provider library's own tests likewise left with it. They moved with
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
 in #886 and run in that repository's CI; songmaker installs the released wheel
 (tag `v0.1.3`) and proves the surface it builds on it — the co-writer and
-the tool-surface health it republishes on `/health` — through `test_conversation_api.py`,
+the tool-surface health it republishes on `/health/details` — through `test_conversation_api.py`,
 `test_lifecycle_claude_tool_surface.py`, and `test_health_api.py`.
 
 ## Testing Patterns

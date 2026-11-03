@@ -102,7 +102,7 @@ def _codex_image_sandbox_runtime_error() -> str | None:
     return None
 
 
-# The boot report's most recent verdict, for /health's
+# The boot report's most recent verdict, for /health/details's
 # codex_image_sandbox_runtime field -- mirrors claude.provider's
 # _tool_surface_health_state: a live value every call to
 # report_codex_image_sandbox_runtime() updates, not a value frozen at
@@ -114,7 +114,7 @@ _codex_image_sandbox_runtime_health: CodexImageSandboxRuntimeHealth = "unverifie
 
 
 def codex_image_sandbox_runtime_health() -> CodexImageSandboxRuntimeHealth:
-    """The sandbox boot report's most recent verdict -- what /health's
+    """The sandbox boot report's most recent verdict -- what /health/details's
     codex_image_sandbox_runtime field reports."""
     with _codex_image_sandbox_runtime_health_lock:
         return _codex_image_sandbox_runtime_health
@@ -129,9 +129,9 @@ def record_codex_image_sandbox_runtime_health(state: CodexImageSandboxRuntimeHea
 def report_codex_image_sandbox_runtime() -> Literal["ready", "not_set_up"]:
     """Report whether the future web cover route can enter its user namespace.
 
-    Also records the outcome as the live /health state (see
+    Also records the outcome as the live /health/details state (see
     codex_image_sandbox_runtime_health above) on every call, so a later
-    boot report always overrides an earlier one instead of /health being
+    boot report always overrides an earlier one instead of /health/details being
     stuck at whatever the process saw first.
     """
     error = _codex_image_sandbox_runtime_error()
@@ -502,7 +502,7 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
 
 async def report_claude_cli_tool_surface() -> Literal["ok", "drift", "unverified"]:
     """Verify the mounted Claude CLI's tool surface at boot; say so in the
-    log, and return the state for ``/health``'s ``claude_cli_tool_surface``
+    log, and return the state for ``/health/details``'s ``claude_cli_tool_surface``
     field (operator ruling, #351 round 6).
 
     #351 originally asked for an unexpected tool to fail the server

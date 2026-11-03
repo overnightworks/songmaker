@@ -198,7 +198,7 @@ explicitly rather than assumed: a `FlowGuard` only counts `/api/*` requests
 the page itself made, so it misses HTML document navigations (the rate-limit
 policy puts every unrecognized path, including a plain page load, in the same
 API class — fail closed, not fail open), the CI
-workflow's own `/health` smoke test before Playwright even starts,
+workflow's own `/health` and `/health/details` smoke test before Playwright even starts,
 anything seeded through Playwright's `request` API context (global setup's
 library, each attempt's playlist), and a retry re-running a whole flow inside
 the same window. What the rate limiter actually counts is measured from

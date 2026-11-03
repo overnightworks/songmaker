@@ -127,6 +127,7 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
 
 def test_finished_lifecycle_loop_is_dead_outside_shutdown(
     tmp_path, monkeypatch, mock_arq_pool, caplog,
+    monitoring_headers,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     async def stopped_loop(_app) -> None:
@@ -135,7 +136,7 @@ def test_finished_lifecycle_loop_is_dead_outside_shutdown(
     monkeypatch.setattr(server, "session_cleanup_loop", stopped_loop)
     client, _ = make_test_app(tmp_path)
     with client:
-        response = client.get("/health")
+        response = client.get("/health/details", headers=monitoring_headers)
 
     health = response.json()["background_loops"][BackgroundLoopName.SESSION_CLEANUP]
     assert health["state"] == BackgroundLoopStatus.DEAD
@@ -145,6 +146,7 @@ def test_finished_lifecycle_loop_is_dead_outside_shutdown(
 
 def test_failed_lifecycle_loop_logs_its_exception(
     tmp_path, monkeypatch, mock_arq_pool, caplog,
+    monitoring_headers,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     async def failed_loop(_app) -> None:
@@ -153,7 +155,7 @@ def test_failed_lifecycle_loop_logs_its_exception(
     monkeypatch.setattr(server, "session_cleanup_loop", failed_loop)
     client, _ = make_test_app(tmp_path)
     with client:
-        response = client.get("/health")
+        response = client.get("/health/details", headers=monitoring_headers)
 
     assert response.status_code == 200
     matching_records = [
@@ -166,6 +168,7 @@ def test_failed_lifecycle_loop_logs_its_exception(
 
 def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
     tmp_path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     import songmaker_cli.arq_pool as arq_pool
@@ -175,7 +178,7 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
     monkeypatch.setattr(arq_pool, "is_scoring_worker_healthy", AsyncMock(return_value=True))
     client, _ = make_test_app(tmp_path)
     with client:
-        before_cancellation = client.get("/health")
+        before_cancellation = client.get("/health/details", headers=monitoring_headers)
         assert before_cancellation.status_code == 200
         assert before_cancellation.json()["status"] == "ok"
 
@@ -188,7 +191,7 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
                 await task
 
         client.portal.call(cancel_and_wait_for_loop)
-        after_cancellation = client.get("/health")
+        after_cancellation = client.get("/health/details", headers=monitoring_headers)
 
     assert after_cancellation.status_code == 200
     assert after_cancellation.json()["status"] == "ok"
@@ -234,6 +237,7 @@ def test_music_cover_executor_does_not_start_a_web_cover_runner(
 
 def test_web_cover_runner_is_visible_in_lifecycle_health(
     tmp_path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     started = threading.Event()
     recovered = []
@@ -250,13 +254,16 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
 
     with client:
         assert started.wait(timeout=1)
-        health = client.get("/health").json()["background_loops"]
+        health = client.get(
+            "/health/details", headers=monitoring_headers,
+        ).json()["background_loops"]
         assert health[BackgroundLoopName.COVER_RUNNER]["state"] == BackgroundLoopStatus.OK
     assert recovered == [True]
 
 
 def test_provider_status_loop_fills_snapshots_and_is_healthy(
     tmp_path, monkeypatch, mock_arq_pool,
+    monitoring_headers,
 ) -> None:
     from agent_providers.catalog import ProviderRoute
     from agent_providers.constants import COWRITER_PROVIDERS
@@ -302,7 +309,9 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
 
     with client:
         assert client.portal.call(asyncio.to_thread, refreshed.wait, 1)
-        health = client.get("/health").json()["background_loops"]
+        health = client.get(
+            "/health/details", headers=monitoring_headers,
+        ).json()["background_loops"]
 
     assert all(provider in provider_snapshots() for provider in COWRITER_PROVIDERS)
     assert refreshed_routes == expected_routes

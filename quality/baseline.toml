@@ -27,7 +27,7 @@
 "frontend/e2e/seed.ts" = 1180
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
-"frontend/src/lib/api/types.ts" = 1158
+"frontend/src/lib/api/types.ts" = 1132
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 975
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -84,7 +84,7 @@
 "tests/songmaker_cli/test_queue_streams.py" = 2417
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1285
-"tests/songmaker_cli/test_server.py" = 1955
+"tests/songmaker_cli/test_server.py" = 1944
 "tests/songmaker_cli/test_sharing_api.py" = 2499
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
@@ -242,7 +242,7 @@
 "test_postgresql_reference_admission_is_atomic" = 66
 
 [function_lines."tests/songmaker_cli/test_server.py"]
-"test_lifespan_shutdown_order_drains_pending_lease_releases" = 60
+"test_lifespan_shutdown_order_drains_pending_lease_releases" = 58
 "test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker" = 75
 "test_real_access_record_is_readable_by_rate_window_parser" = 66
 
