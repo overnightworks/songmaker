@@ -187,7 +187,7 @@ date = 2026-11-03
 reason = "the reference list answers its storage usage: the generated API types gain the ReferenceListResponse and ReferenceUsageResponse interfaces; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
 
 [[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1158 -> 1159"
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1132 -> 1133"
 item = "#2197"
 date = 2026-11-03
 reason = "the reference list gains the generated in_use field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"

@@ -128,7 +128,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
-    # Both log their result at boot; /health reads the live state each
+    # Both log their result at boot; /health/details reads the live state each
     # call records (provider.claude_cli_tool_surface_health() and
     # lifecycle.codex_image_sandbox_runtime_health()) instead of these
     # calls' return values, since a later call can change either.

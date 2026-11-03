@@ -74,10 +74,17 @@ jobs:
           set -euo pipefail
           base="http://localhost:${WEB_PORT}"
 
-          # /health always returns 200 regardless of body, so assert the body:
+          # Anonymous /health answers its status and nothing else.
+          anonymous="$(curl -fsS --retry 10 --retry-delay 2 --retry-connrefused "$base/health")"
+          [ "$(jq -c 'keys' <<<"$anonymous")" = '["status"]' ] || {
+            echo "expected anonymous /health to carry only status, got $anonymous" >&2
+            exit 1
+          }
+
+          # The details always answer 200 regardless of body, so assert the body:
           # no music/scoring worker runs in this stack, so "degraded" is
           # expected, but db and redis must both be reachable.
-          health="$(curl -fsS --retry 10 --retry-delay 2 --retry-connrefused "$base/health")"
+          health="$(curl -fsS -H "Authorization: Bearer $SONGMAKER_MONITORING_TOKEN" "$base/health/details")"
           db_ok="$(jq -r '.db' <<<"$health")"
           redis_ok="$(jq -r '.redis' <<<"$health")"
           [ "$db_ok" = "ok" ] && [ "$redis_ok" = "ok" ] || {

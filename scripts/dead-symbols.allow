@@ -61,6 +61,7 @@ songmaker_cli/generation_api.py:api_unkeep_generation # HTTP dispatcher: router.
 songmaker_cli/generation_api.py:api_unpick_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unpick', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/generation_api.py:api_unshare_generation # HTTP dispatcher: router.delete('/generations/{gen_id}/share', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/health_api.py:health_check # HTTP dispatcher: router.get('/health')
+songmaker_cli/health_api.py:health_details # HTTP dispatcher: router.get('/health/details')
 songmaker_cli/health_api.py:metrics_endpoint # HTTP dispatcher: router.get('/metrics')
 songmaker_cli/internal_api.py:register_worker_endpoint # HTTP dispatcher: router.post('/workers/register')
 songmaker_cli/jobs_api.py:api_cancel_job # HTTP dispatcher: router.post('/jobs/{job_id}/cancel', responses={404: {'description': 'Job does not exist'}, 409: {'description': 'Job is not queued or running'}})

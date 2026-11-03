@@ -122,6 +122,13 @@ TYPE_ALIASES: dict[str, str] = {
 STRING_OUTPUT_KEYS = frozenset({"detected_language"})
 
 
+HEALTH_ROUTE_PREFIX = "/health"
+HEALTH_EXEMPTION_REASON = (
+    "health and monitoring are read by the container healthcheck, the CI smoke and "
+    "operators, not by the browser"
+)
+
+
 @dataclass(frozen=True)
 class RouteExemption:
     prefix: str
@@ -136,6 +143,7 @@ EXEMPT_ROUTE_ROLES = (
         prefix=INTERNAL_ROUTE_PREFIX,
         reason="worker registration is a backend-to-backend protocol, not a browser API",
     ),
+    RouteExemption(prefix=HEALTH_ROUTE_PREFIX, reason=HEALTH_EXEMPTION_REASON),
 )
 
 
@@ -152,6 +160,10 @@ EXEMPT_MODEL_ROLES = (
     ModelExemption(
         names=frozenset({"WorkerRegisterRequest", "WorkerRegisterResponse"}),
         reason="worker registration is a backend-to-backend protocol, not a browser API",
+    ),
+    ModelExemption(
+        names=frozenset({"HealthResponse", "HealthStatusResponse"}),
+        reason=HEALTH_EXEMPTION_REASON,
     ),
 )
 

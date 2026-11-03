@@ -1,4 +1,4 @@
-"""Public health response built from the current service signals."""
+"""Health responses built from the current service signals: the public status and the details."""
 
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ from songmaker_cli.health_types import (
 )
 
 ClaudeCliToolSurface = Literal["ok", "drift", "unverified"]
+HealthVerdict = Literal["ok", "degraded"]
+AceStepState = Literal["healthy", "unknown", "unhealthy"]
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,34 @@ class HealthSignals:
     background_loops: Mapping[BackgroundLoopName, BackgroundLoopHealth]
     release: ReleaseInfo
 
+    @property
+    def acestep(self) -> AceStepState:
+        if self.workers_online > 0:
+            return "healthy"
+        if self.workers_total == 0:
+            return "unknown"
+        return "unhealthy"
+
+    @property
+    def status(self) -> HealthVerdict:
+        degraded = (
+            not self.db_ok
+            or (not self.music_running and not self.scoring_running)
+            or not self.redis_ok
+            or self.acestep == "unhealthy"
+        )
+        return "degraded" if degraded else "ok"
+
+
+class HealthStatusResponse(BaseModel):
+    """The readiness answer anyone may read; the details need the monitoring token."""
+
+    status: HealthVerdict
+
+    @classmethod
+    def from_signals(cls, signals: HealthSignals) -> HealthStatusResponse:
+        return cls(status=signals.status)
+
 
 class BackgroundLoopResponse(BaseModel):
     state: BackgroundLoopStatus
@@ -53,14 +83,14 @@ class BackgroundLoopResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    status: Literal["ok", "degraded"]
+    status: HealthVerdict
     music_worker: Literal["running", "stopped"]
     scoring_worker: Literal["running", "stopped"]
     music_queue_depth: int
     scoring_queue_depth: int
     db: Literal["ok", "error"]
     redis: Literal["ok", "error"]
-    acestep: Literal["healthy", "unknown", "unhealthy"]
+    acestep: AceStepState
     acestep_reason: Literal["lm_init_failed"] | None = Field(description=(
         "lm_init_failed while a registered worker's language model cannot start, "
         "otherwise null; it can accompany a healthy aggregate when other workers are "
@@ -94,28 +124,15 @@ class HealthResponse(BaseModel):
 
     @classmethod
     def from_signals(cls, signals: HealthSignals) -> HealthResponse:
-        acestep: Literal["healthy", "unknown", "unhealthy"]
-        if signals.workers_online > 0:
-            acestep = "healthy"
-        elif signals.workers_total == 0:
-            acestep = "unknown"
-        else:
-            acestep = "unhealthy"
-        degraded = (
-            not signals.db_ok
-            or (not signals.music_running and not signals.scoring_running)
-            or not signals.redis_ok
-            or acestep == "unhealthy"
-        )
         return cls(
-            status="degraded" if degraded else "ok",
+            status=signals.status,
             music_worker="running" if signals.music_running else "stopped",
             scoring_worker="running" if signals.scoring_running else "stopped",
             music_queue_depth=signals.music_queue_depth,
             scoring_queue_depth=signals.scoring_queue_depth,
             db="ok" if signals.db_ok else "error",
             redis="ok" if signals.redis_ok else "error",
-            acestep=acestep,
+            acestep=signals.acestep,
             acestep_reason="lm_init_failed" if signals.workers_lm_failed else None,
             acestep_workers_total=signals.workers_total,
             acestep_workers_online=signals.workers_online,
