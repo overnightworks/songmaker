@@ -63,7 +63,7 @@ def find_uv() -> list[str] | None:
     ]
     for candidate in candidates:
         try:
-            subprocess.run([candidate, "--version"], capture_output=True, timeout=5, check=False)
+            subprocess.run([candidate, "--version"], capture_output=True, timeout=5, check=False)  # noqa: S603 - fixed uv argv without a shell
         except (FileNotFoundError, subprocess.TimeoutExpired):
             result = None
         else:
@@ -112,7 +112,7 @@ def build_env(
 def is_acestep_healthy(port: int, timeout: float = 5.0) -> bool:
     try:
         req = Request(f"http://127.0.0.1:{port}/health", method="GET")
-        with urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        with urlopen(req, timeout=timeout) as resp:  # noqa: S310 - literal http loopback URL
             return resp.status == 200
     except OSError:
         return False
@@ -122,7 +122,7 @@ def _read_llm_initialized(port: int, timeout: float = 5.0) -> bool | None:
     """The child's own report of its LM; None when the body gives no verdict."""
     try:
         req = Request(f"http://127.0.0.1:{port}/health", method="GET")
-        with urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        with urlopen(req, timeout=timeout) as resp:  # noqa: S310 - literal http loopback URL
             body = json.loads(resp.read())
         flag = body["data"]["llm_initialized"]
     except (OSError, ValueError, KeyError, TypeError):
@@ -241,7 +241,7 @@ def start_acestep_subprocess(
     env = build_env(mode, port, vram_budget_gb, gpu_id)
     stderr_path, stderr_file = _open_log_file(log_dir, mode)
     cmd = [*uv, "run", "acestep-api", "--port", str(port)]
-    process = subprocess.Popen(  # noqa: S603
+    process = subprocess.Popen(  # noqa: S603 - uv argv with an integer port and no shell
         cmd,
         env=env,
         cwd=checkpoint_dir,

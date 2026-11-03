@@ -25,7 +25,7 @@ def _config(lora_path: str = "") -> AceStepConfig:
 
 
 def _make_client() -> AceStepClient:
-    return AceStepClient(host="http://localhost", port=8001)
+    return AceStepClient(host="localhost", port=8001)
 
 
 def test_generate_skips_lora_when_path_empty(tmp_path: Path) -> None:
@@ -181,7 +181,7 @@ def test_unload_lora_sends_post() -> None:
 
 
 def test_training_model_initialization_uses_canonical_mode_payload() -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     captured: dict = {}
 
     def capture(req, timeout):
@@ -197,7 +197,7 @@ def test_training_model_initialization_uses_canonical_mode_payload() -> None:
 
 
 def test_training_model_initialization_rejects_wrapped_fork_error() -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
 
     with patch(
         "acestep_engine.training_client.urlopen",
@@ -208,7 +208,7 @@ def test_training_model_initialization_rejects_wrapped_fork_error() -> None:
 
 
 def test_training_client_preserves_fork_safe_path_rejection() -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
 
     with patch(
         "acestep_engine.training_client.urlopen",

@@ -16,9 +16,10 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from http.client import HTTPResponse
 from pathlib import Path
 from typing import Final
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
@@ -34,7 +35,6 @@ from acestep_engine.errors import (
 from acestep_engine.models import (
     AceStepConfig,
     AceStepResult,
-    ServerInfo,
     TaskQueryEntry,
     TaskQueryResponse,
     TaskSubmitResponse,
@@ -138,24 +138,16 @@ def _shorten_cause(detail: str) -> str:
     return last_line[: _MAX_CAUSE_CHARS - 1] + "\u2026"
 
 
-def _default_host() -> str:
-    return get_engine_settings().acestep_host
-
-
-def _default_port() -> int:
-    return get_engine_settings().acestep_port
-
-
-def is_acestep_available(host: str | None = None, port: int | None = None) -> bool:
-    """Check if the ACE-Step server is running and healthy."""
-    host = host or _default_host()
-    port = port or _default_port()
-    try:
-        req = Request(f"{host}:{port}/health", method="GET")
-        with urlopen(req, timeout=5) as resp:
-            return resp.status == 200
-    except OSError:
-        return False
+def _open(
+    url: str,
+    *,
+    timeout: float,
+    data: bytes | None = None,
+    content_type: str | None = None,
+    method: str = "GET",
+) -> HTTPResponse:
+    headers = {"Content-Type": content_type} if content_type else {}
+    return urlopen(Request(url, data=data, headers=headers, method=method), timeout=timeout)  # noqa: S310 - every URL starts with this module's literal http scheme
 
 
 ALLOWED_AUDIO_PATH_RE = re.compile(
@@ -315,7 +307,7 @@ class AceStepClient:
     the result as stereo audio at the server's native sample rate.
 
     Usage:
-        client = AceStepClient()
+        client = AceStepClient(host="localhost", port=8001)
         result = client.generate(AceStepConfig(
             prompt="female vocal, piano ballad",
             lyrics="[verse]\\nHello world",
@@ -324,34 +316,8 @@ class AceStepClient:
         ))
     """
 
-    def __init__(
-        self,
-        host: str | None = None,
-        port: int | None = None,
-    ) -> None:
-        self.base_url = f"{host or _default_host()}:{port or _default_port()}"
-
-    @property
-    def is_available(self) -> bool:
-        """Whether the ACE-Step server is reachable."""
-        parsed = urlparse(self.base_url)
-        host = f"{parsed.scheme}://{parsed.hostname}"
-        port = parsed.port or _default_port()
-        return is_acestep_available(host=host, port=port)
-
-    def server_info(self) -> ServerInfo | None:
-        """Fetch model and version info from the /health endpoint."""
-        try:
-            req = Request(f"{self.base_url}/health", method="GET")
-            with urlopen(req, timeout=5) as resp:
-                data = json.loads(resp.read()).get("data", {})
-            return ServerInfo(
-                model=data.get("loaded_model", ""),
-                lm_model=data.get("loaded_lm_model", ""),
-                version=data.get("version", ""),
-            )
-        except (OSError, json.JSONDecodeError):
-            return None
+    def __init__(self, host: str, port: int) -> None:
+        self.base_url = f"http://{host}:{port}"
 
     def generate(
         self, config: AceStepConfig,
@@ -405,13 +371,13 @@ class AceStepClient:
             payload = json.dumps(
                 {"lora_path": lora_path, "adapter_name": adapter_name},
             ).encode()
-            req = Request(
+            with _open(
                 f"{self.base_url}/v1/lora/load",
                 data=payload,
-                headers={"Content-Type": _JSON_CONTENT_TYPE},
+                content_type=_JSON_CONTENT_TYPE,
                 method="POST",
-            )
-            with urlopen(req, timeout=30) as resp:
+                timeout=30,
+            ) as resp:
                 resp.read()
             log.info("LoRA loaded: path=%s adapter=%s", lora_path, adapter_name)
             return True
@@ -421,13 +387,13 @@ class AceStepClient:
 
     def _unload_lora_best_effort(self) -> None:
         try:
-            req = Request(
+            with _open(
                 f"{self.base_url}/v1/lora/unload",
                 data=b"",
-                headers={"Content-Type": _JSON_CONTENT_TYPE},
+                content_type=_JSON_CONTENT_TYPE,
                 method="POST",
-            )
-            with urlopen(req, timeout=30) as resp:
+                timeout=30,
+            ) as resp:
                 resp.read()
             log.info("LoRA unloaded")
         except OSError as exc:
@@ -479,13 +445,13 @@ class AceStepClient:
             content_type = _JSON_CONTENT_TYPE
         else:
             data, content_type = multipart
-        req = Request(
+        with _open(
             f"{self.base_url}/release_task",
             data=data,
-            headers={"Content-Type": content_type},
+            content_type=content_type,
             method="POST",
-        )
-        with urlopen(req, timeout=30) as resp:
+            timeout=30,
+        ) as resp:
             raw = json.loads(resp.read())
 
         response = TaskSubmitResponse.model_validate(raw)
@@ -555,13 +521,13 @@ class AceStepClient:
         return None
 
     def _query_task_result(self, payload: bytes) -> TaskQueryResponse:
-        req = Request(
+        with _open(
             f"{self.base_url}/query_result",
             data=payload,
-            headers={"Content-Type": _JSON_CONTENT_TYPE},
+            content_type=_JSON_CONTENT_TYPE,
             method="POST",
-        )
-        with urlopen(req, timeout=10) as resp:
+            timeout=10,
+        ) as resp:
             raw = json.loads(resp.read())
         return TaskQueryResponse.model_validate(raw)
 
@@ -579,8 +545,7 @@ class AceStepClient:
                 url = f"{self.base_url}{audio_path}"
             else:
                 url = f"{self.base_url}/v1/audio?path={quote(audio_path)}"
-            req = Request(url, method="GET")
-            with urlopen(req, timeout=60) as resp:
+            with _open(url, timeout=60) as resp:
                 start = time.monotonic()
                 chunks: list[bytes] = []
                 while True:
