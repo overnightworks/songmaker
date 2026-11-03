@@ -227,19 +227,23 @@ def make_executable(path: Path, body: str) -> None:
 
 
 def linked_worktree_of(checkout: Path, tmp_path: Path) -> Path:
-    identity = {
+    isolated_git_environment = {
         **os.environ,
         "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
         "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e",
+        "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
     }
-    subprocess.run(["git", "add", "-A"], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "add", "-A"],
+        cwd=checkout, check=True, env=isolated_git_environment,
+    )
     subprocess.run(
         ["git", "commit", "-q", "-m", "base"],
-        cwd=checkout, check=True, env=identity,
+        cwd=checkout, check=True, env=isolated_git_environment,
     )
     linked = tmp_path / "linked"
     subprocess.run(
         ["git", "worktree", "add", "-q", "--detach", str(linked)],
-        cwd=checkout, check=True,
+        cwd=checkout, check=True, env=isolated_git_environment,
     )
     return linked
