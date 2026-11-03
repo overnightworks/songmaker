@@ -1,0 +1,7 @@
+claim_id = "ed47024226044663a5ea24d17340e724"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "ab628f156923e2fdc6790a472c22ccbb35b9cbf8"
+branch = "claude/issue-2184-hermetic-linked-worktree"
+scope = ["tests/support/install_script_fakes.py"]
+opened_commit = "3a8505946fb171cafe856e1359d9c1cc699c4595"
