@@ -21,7 +21,7 @@ def run_async(coro):
 
 def make_generation_dto(
     seed: int = 42,
-    audio_path: str = "/tmp/fake.wav",
+    audio_path: str = "/worker-output/fake.wav",
     delivered_batch_size: int | None = None,
 ) -> GenerationTaskResultDTO:
     return GenerationTaskResultDTO(

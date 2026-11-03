@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -26,7 +28,7 @@ def _make_client() -> AceStepClient:
     return AceStepClient(host="http://localhost", port=8001)
 
 
-def test_generate_skips_lora_when_path_empty() -> None:
+def test_generate_skips_lora_when_path_empty(tmp_path: Path) -> None:
     client = _make_client()
     config = _config(lora_path="")
 
@@ -47,7 +49,7 @@ def test_generate_skips_lora_when_path_empty() -> None:
         ),
         patch.object(
             AceStepClient, "_poll_result",
-            return_value=_fake_poll_result(),
+            return_value=_fake_poll_result(tmp_path),
         ),
         patch.object(
             AceStepClient, "_download_audio",
@@ -59,9 +61,9 @@ def test_generate_skips_lora_when_path_empty() -> None:
     assert calls == []
 
 
-def test_generate_loads_and_unloads_when_lora_set() -> None:
+def test_generate_loads_and_unloads_when_lora_set(tmp_path: Path) -> None:
     client = _make_client()
-    config = _config(lora_path="/tmp/my-lora")
+    config = _config(lora_path=str(tmp_path / "my-lora"))
 
     calls: list[str] = []
 
@@ -78,7 +80,7 @@ def test_generate_loads_and_unloads_when_lora_set() -> None:
         patch.object(AceStepClient, "_submit_task", return_value="task-1"),
         patch.object(
             AceStepClient, "_poll_result",
-            return_value=_fake_poll_result(),
+            return_value=_fake_poll_result(tmp_path),
         ),
         patch.object(
             AceStepClient, "_download_audio",
@@ -87,12 +89,12 @@ def test_generate_loads_and_unloads_when_lora_set() -> None:
     ):
         client.generate(config)
 
-    assert calls == ["load:/tmp/my-lora", "unload"]
+    assert calls == [f"load:{config.lora_path}", "unload"]
 
 
-def test_generate_ends_before_submission_if_lora_load_failed() -> None:
+def test_generate_ends_before_submission_if_lora_load_failed(tmp_path: Path) -> None:
     client = _make_client()
-    config = _config(lora_path="/tmp/bad")
+    config = _config(lora_path=str(tmp_path / "bad"))
 
     calls: list[str] = []
 
@@ -108,7 +110,7 @@ def test_generate_ends_before_submission_if_lora_load_failed() -> None:
         patch.object(AceStepClient, "_unload_lora_best_effort", fake_unload),
         patch.object(AceStepClient, "_submit_task") as submit_task,
         patch.object(
-            AceStepClient, "_poll_result", return_value=_fake_poll_result(),
+            AceStepClient, "_poll_result", return_value=_fake_poll_result(tmp_path),
         ),
         patch.object(
             AceStepClient, "_download_audio",
@@ -117,7 +119,7 @@ def test_generate_ends_before_submission_if_lora_load_failed() -> None:
     ):
         with pytest.raises(
             TaskSubmissionError,
-            match="Failed to load configured LoRA adapter: /tmp/bad",
+            match=f"Failed to load configured LoRA adapter: {re.escape(config.lora_path)}",
         ):
             client.generate(config)
 
@@ -125,11 +127,11 @@ def test_generate_ends_before_submission_if_lora_load_failed() -> None:
     submit_task.assert_not_called()
 
 
-def test_ensure_lora_loaded_idempotent_uses_sha_adapter_name() -> None:
+def test_ensure_lora_loaded_idempotent_uses_sha_adapter_name(tmp_path: Path) -> None:
     import hashlib
 
     client = _make_client()
-    lora_path = "/tmp/my-lora"
+    lora_path = str(tmp_path / "my-lora")
     expected_name = hashlib.sha256(lora_path.encode()).hexdigest()[:16]
     captured: dict = {}
 
@@ -147,12 +149,12 @@ def test_ensure_lora_loaded_idempotent_uses_sha_adapter_name() -> None:
     assert captured["body"]["adapter_name"] == expected_name
 
 
-def test_ensure_lora_loaded_returns_false_on_network_error() -> None:
+def test_ensure_lora_loaded_returns_false_on_network_error(tmp_path: Path) -> None:
     from urllib.error import URLError
 
     client = _make_client()
     with patch("acestep_engine.client.urlopen", side_effect=URLError("boom")):
-        assert client._ensure_lora_loaded("/tmp/x") is False
+        assert client._ensure_lora_loaded(str(tmp_path / "x")) is False
 
 
 def test_unload_lora_best_effort_swallows_errors() -> None:
@@ -218,17 +220,17 @@ def test_training_client_preserves_fork_safe_path_rejection() -> None:
             client.scan_dataset("/outside-the-safe-root")
 
 
-def _fake_poll_result():
+def _fake_poll_result(tmp_path: Path):
     from acestep_engine.client import _PollResult
 
-    return _PollResult(audio_path="/tmp/x.wav", seed=42)
+    return _PollResult(audio_path=str(tmp_path / "x.wav"), seed=42)
 
 
 @pytest.mark.parametrize(
     "lora_a,lora_b,expect_same",
     [
-        ("/tmp/a", "/tmp/a", True),
-        ("/tmp/a", "/tmp/b", False),
+        ("/worker-loras/a", "/worker-loras/a", True),
+        ("/worker-loras/a", "/worker-loras/b", False),
     ],
 )
 def test_adapter_name_varies_with_path(lora_a, lora_b, expect_same) -> None:

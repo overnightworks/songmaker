@@ -118,15 +118,15 @@ def _final_event(events: list[dict]) -> dict:
 # ── provider: _build_mcp_cli_cmd ──────────────────────────────────────
 
 
-def test_mcp_cli_cmd_includes_required_flags():
+def test_mcp_cli_cmd_includes_required_flags(tmp_path: Path):
     from agent_providers.claude.provider import _build_mcp_cli_cmd
     from agent_providers.config import current_config
 
     cmd = _build_mcp_cli_cmd(
-        "claude", "claude-opus-4-6", "/tmp/mcp.json", current_config().mcp_server,
+        "claude", "claude-opus-4-6", str(tmp_path / "mcp.json"), current_config().mcp_server,
     )
     assert "--mcp-config" in cmd
-    assert cmd[cmd.index("--mcp-config") + 1] == "/tmp/mcp.json"
+    assert cmd[cmd.index("--mcp-config") + 1] == str(tmp_path / "mcp.json")
     assert "--strict-mcp-config" in cmd
     assert "--allowedTools" in cmd
     assert "mcp__songmaker__*" in cmd

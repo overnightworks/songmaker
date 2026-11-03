@@ -154,17 +154,17 @@ def test_master_audio_returns_arrays() -> None:
     assert len(right) == len(signal)
 
 
-def test_encode_mp3_no_ffmpeg() -> None:
+def test_encode_mp3_no_ffmpeg(tmp_path: Path) -> None:
     from unittest.mock import patch
 
     signal = np.zeros(100, dtype=np.float64)
     other_signal = signal.copy()
     with patch("audio_engine.audio_io.shutil.which", return_value=None):
         with pytest.raises(MasteringError, match="ffmpeg not found"):
-            encode_mp3(signal, other_signal, "/tmp/test.mp3")
+            encode_mp3(signal, other_signal, str(tmp_path / "test.mp3"))
 
 
-def test_encode_mp3_ffmpeg_failure() -> None:
+def test_encode_mp3_ffmpeg_failure(tmp_path: Path) -> None:
     from unittest.mock import patch
 
     signal = np.zeros(100, dtype=np.float64)
@@ -178,16 +178,16 @@ def test_encode_mp3_ffmpeg_failure() -> None:
     ):
         other_signal = signal.copy()
         with pytest.raises(MasteringError, match="MP3 encoding failed"):
-            encode_mp3(signal, other_signal, "/tmp/test.mp3")
+            encode_mp3(signal, other_signal, str(tmp_path / "test.mp3"))
 
 
-def test_master_to_mp3_empty_audio() -> None:
+def test_master_to_mp3_empty_audio(tmp_path: Path) -> None:
     empty = np.array([], dtype=np.float64)
     with pytest.raises(MasteringError, match="empty"):
-        master_to_mp3(empty, empty, "/tmp/test.mp3")
+        master_to_mp3(empty, empty, str(tmp_path / "test.mp3"))
 
 
-def test_master_to_mp3_ffmpeg_failure() -> None:
+def test_master_to_mp3_ffmpeg_failure(tmp_path: Path) -> None:
     from unittest.mock import patch
 
     signal = np.sin(np.linspace(0, 100, 44100 * 3)).astype(np.float64) * 0.5
@@ -201,7 +201,7 @@ def test_master_to_mp3_ffmpeg_failure() -> None:
     ):
         other_signal = signal.copy()
         with pytest.raises(MasteringError, match="MP3 encoding failed"):
-            master_to_mp3(signal, other_signal, "/tmp/test.mp3")
+            master_to_mp3(signal, other_signal, str(tmp_path / "test.mp3"))
 
 
 def test_build_ffmpeg_cmd_pipe_input() -> None:

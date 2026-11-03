@@ -1222,7 +1222,7 @@ def test_renewal_failure_cancels_materialization_and_releases_the_hold(seeded, d
         assert get_job(session, "job-1").status == JobStatus.FAILED
 
 
-def test_lora_renews_repeatedly_while_model_load_outlasts_the_hold_ttl() -> None:
+def test_lora_renews_repeatedly_while_model_load_outlasts_the_hold_ttl(tmp_path: Path) -> None:
     from songmaker_cli.jobs.lora_training import (
         _pick_and_call_worker,
         _renew_lora_hold,
@@ -1254,7 +1254,7 @@ def test_lora_renews_repeatedly_while_model_load_outlasts_the_hold_ttl() -> None
         client.post = AsyncMock(side_effect=post)
 
         async def events(*args, **kwargs):
-            yield ("done", {"result": {"mode": "sft", "adapter_dir": "/tmp/adapter"}})
+            yield ("done", {"result": {"mode": "sft", "adapter_dir": str(tmp_path / "adapter")}})
 
         async def immediate_sleep(*args, **kwargs) -> None:
             await real_sleep(0)
@@ -1639,7 +1639,7 @@ def test_cancel_after_worker_handover_propagates_to_the_lora_job() -> None:
     release.assert_not_awaited()
 
 
-def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -> None:
+def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory, tmp_path) -> None:
     import fakeredis.aioredis
     import httpx
 
@@ -1676,7 +1676,7 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -
 
         release = AsyncMock(side_effect=release_hold)
         async def events(*_args, **_kwargs):
-            yield ("done", {"result": {"mode": "sft", "adapter_dir": "/tmp/adapter"}})
+            yield ("done", {"result": {"mode": "sft", "adapter_dir": str(tmp_path / "adapter")}})
 
         with (
             patch("httpx.AsyncClient", return_value=client),
@@ -1692,7 +1692,7 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -
                 on_progress=lambda _fraction, _current_epoch, _train_epochs, _started_at: None,
                 on_heartbeat=lambda: None,
             )
-        assert result.adapter_dir == "/tmp/adapter"
+        assert result.adapter_dir == str(tmp_path / "adapter")
         assert not await admit_generation(redis, "w0")
         return release
 

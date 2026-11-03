@@ -22,8 +22,8 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def test_model_dir_unknown() -> None:
-    assert model_dir(Path("/tmp"), "ghost") is None
+def test_model_dir_unknown(tmp_path: Path) -> None:
+    assert model_dir(tmp_path, "ghost") is None
 
 
 def test_model_dir_known(tmp_path: Path) -> None:
