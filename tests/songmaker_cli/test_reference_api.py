@@ -11,11 +11,25 @@ from pathlib import Path
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event, func, select
-from sqlalchemy.exc import OperationalError
+from support import reference_api_world
+from support.reference_api_world import (
+    AUDIO_BYTES,
+    LINKS,
+    NOT_FOUND,
+    REFERENCES_PATH,
+    SECRET_FILENAME,
+    WAV_BYTES,
+    link_reference,
+    post_reference,
+    reference_files,
+    reference_rows,
+    seed_playable,
+    seed_reference,
+    signed_in_as,
+)
 from support.token_world import TokenWorld, make_token_world
 from support.wav_files import write_wav
-from support.web_app import TEST_ORIGIN, make_test_app, seed_session, web_client
+from support.web_app import TEST_ORIGIN, web_client
 
 from songmaker_cli import reference_api
 from songmaker_cli.constants import (
@@ -25,35 +39,15 @@ from songmaker_cli.constants import (
     REFERENCE_AUDIO_EXTENSIONS,
 )
 from songmaker_cli.db.models import (
-    Album,
-    AuditLog,
-    Generation,
     ReferenceRecording,
-    Song,
-    User,
-    Version,
 )
 from songmaker_cli.db.queries.reference_recordings import create_reference_recording
 from songmaker_cli.settings import get_settings
 
-REFERENCES_PATH = "/api/references"
-WAV_BYTES = b"RIFF" + b"\x00" * 200
+signed_in = reference_api_world.signed_in
+
 MPEG_FRAME_BYTES = 417  # MPEG-1 layer III, 128 kbit/s, 44.1 kHz
 MPEG_FRAME_COUNT = 40
-
-
-def _seed_owner_other_and_admin_accounts(session) -> None:
-    session.add_all([
-        User(id=f"{name}-id", username=name, role=role)
-        for name, role in (("owner", "user"), ("other", "user"), ("boss", "admin"))
-    ])
-
-
-@pytest.fixture
-def signed_in(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_owner_other_and_admin_accounts)
-    seed_session(client, "owner")
-    return client
 
 
 def _one_second_wav_bytes(tmp_path: Path) -> bytes:
@@ -66,20 +60,6 @@ def _repeated_mpeg_frames() -> bytes:
     frame = b"\xff\xfb\x90\x00".ljust(MPEG_FRAME_BYTES, b"\x00")
     return frame * MPEG_FRAME_COUNT
 
-
-def _reference_rows(client: TestClient) -> list[ReferenceRecording]:
-    with client.app.state.ctx.db() as session:
-        return session.query(ReferenceRecording).all()
-
-
-def _reference_files(client: TestClient) -> list[Path]:
-    return [path for path in client.app.state.ctx.audio_dir.rglob("*") if path.is_file()]
-
-
-def _post_reference(
-    client: TestClient, payload: bytes = WAV_BYTES, name: str = "ref.wav", **kwargs,
-):
-    return client.post(REFERENCES_PATH, files={"file": (name, payload, "audio/wav")}, **kwargs)
 
 
 def _without_fetch_metadata(signed_in: TestClient) -> TestClient:
@@ -96,10 +76,10 @@ def test_m1_an_upload_answers_the_stored_record(
 ) -> None:
     payload = _one_second_wav_bytes(tmp_path) if kind == "wav" else _repeated_mpeg_frames()
 
-    response = _post_reference(signed_in, payload, f"ref.{kind}")
+    response = post_reference(signed_in, payload, f"ref.{kind}")
 
     assert response.status_code == 200, response.text
-    [row] = _reference_rows(signed_in)
+    [row] = reference_rows(signed_in)
     body = response.json()
     assert set(body) == {"id", "filename", "size_bytes", "duration_sec", "created_at", "in_use"}
     assert body["in_use"] is False
@@ -113,7 +93,7 @@ def test_m1_an_upload_answers_the_stored_record(
 
 
 def test_m2_a_directory_part_in_the_client_name_is_dropped(signed_in: TestClient) -> None:
-    response = _post_reference(signed_in, name="../../etc/dir/song.wav")
+    response = post_reference(signed_in, name="../../etc/dir/song.wav")
 
     assert response.status_code == 200
     assert response.json()["filename"] == "song.wav"
@@ -130,11 +110,11 @@ def test_m2_a_directory_part_in_the_client_name_is_dropped(signed_in: TestClient
 def test_m3_an_invalid_upload_is_refused_and_stores_nothing(
     signed_in: TestClient, payload: bytes, name: str,
 ) -> None:
-    response = _post_reference(signed_in, payload, name)
+    response = post_reference(signed_in, payload, name)
 
     assert response.status_code == 400
-    assert _reference_rows(signed_in) == []
-    assert _reference_files(signed_in) == []
+    assert reference_rows(signed_in) == []
+    assert reference_files(signed_in) == []
 
 
 def test_m3_an_upload_without_a_filename_is_refused(signed_in: TestClient) -> None:
@@ -152,14 +132,14 @@ def test_m3_an_upload_without_a_filename_is_refused(signed_in: TestClient) -> No
 
     assert response.status_code == 400
     assert "filename" in response.json()["detail"].lower()
-    assert _reference_rows(signed_in) == []
-    assert _reference_files(signed_in) == []
+    assert reference_rows(signed_in) == []
+    assert reference_files(signed_in) == []
 
 
 def test_m4a_a_file_of_the_size_limit_inside_the_envelope_is_accepted(
     signed_in: TestClient,
 ) -> None:
-    response = _post_reference(signed_in, b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 4))
+    response = post_reference(signed_in, b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 4))
 
     assert response.status_code == 200, response.text
 
@@ -167,12 +147,12 @@ def test_m4a_a_file_of_the_size_limit_inside_the_envelope_is_accepted(
 def test_m4b_a_file_just_over_the_size_limit_is_refused_and_stores_nothing(
     signed_in: TestClient,
 ) -> None:
-    response = _post_reference(signed_in, b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 3))
+    response = post_reference(signed_in, b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 3))
 
     assert response.status_code == 400
     assert "too large" in response.json()["detail"].lower()
-    assert _reference_rows(signed_in) == []
-    assert _reference_files(signed_in) == []
+    assert reference_rows(signed_in) == []
+    assert reference_files(signed_in) == []
 
 
 @pytest.mark.parametrize("with_session", [True, False])
@@ -189,8 +169,8 @@ def test_m4c_a_body_over_the_allowance_is_refused_before_authentication(
     )
 
     assert response.status_code == 413
-    assert _reference_rows(signed_in) == []
-    assert _reference_files(signed_in) == []
+    assert reference_rows(signed_in) == []
+    assert reference_files(signed_in) == []
 
 
 @pytest.mark.parametrize("fullness", ["files", "bytes"])
@@ -208,11 +188,11 @@ def test_m5_a_full_quota_refuses_with_409_and_stores_nothing(
             )
         session.commit()
 
-    response = _post_reference(signed_in)
+    response = post_reference(signed_in)
 
     assert response.status_code == 409
-    assert len(_reference_rows(signed_in)) == count
-    assert _reference_files(signed_in) == []
+    assert len(reference_rows(signed_in)) == count
+    assert reference_files(signed_in) == []
 
 
 def test_m6_the_former_upload_path_is_gone(signed_in: TestClient) -> None:
@@ -221,17 +201,17 @@ def test_m6_the_former_upload_path_is_gone(signed_in: TestClient) -> None:
     )
 
     assert response.status_code == 404
-    assert _reference_rows(signed_in) == []
-    assert _reference_files(signed_in) == []
+    assert reference_rows(signed_in) == []
+    assert reference_files(signed_in) == []
 
 
 def test_m7a_a_same_origin_cookie_upload_belongs_to_the_signed_in_person(
     signed_in: TestClient,
 ) -> None:
-    response = _post_reference(signed_in)
+    response = post_reference(signed_in)
 
     assert response.status_code == 200
-    [row] = _reference_rows(signed_in)
+    [row] = reference_rows(signed_in)
     assert row.user_id == "owner-id"
 
 
@@ -245,22 +225,22 @@ def test_m7a_a_same_origin_cookie_upload_belongs_to_the_signed_in_person(
 def test_m7b_a_cookie_upload_without_origin_proof_is_refused(
     signed_in: TestClient, headers: dict[str, str],
 ) -> None:
-    response = _post_reference(_without_fetch_metadata(signed_in), headers=headers)
+    response = post_reference(_without_fetch_metadata(signed_in), headers=headers)
 
     assert response.status_code == 403
-    assert _reference_rows(signed_in) == []
-    assert _reference_files(signed_in) == []
+    assert reference_rows(signed_in) == []
+    assert reference_files(signed_in) == []
 
 
 def test_m7c_no_session_with_origin_proof_is_unauthenticated(signed_in: TestClient) -> None:
     anonymous = TestClient(
         signed_in.app, base_url=TEST_ORIGIN, raise_server_exceptions=False,
     )
-    response = _post_reference(anonymous, headers={"Sec-Fetch-Site": "same-origin"})
+    response = post_reference(anonymous, headers={"Sec-Fetch-Site": "same-origin"})
 
     assert response.status_code == 401
-    assert _reference_rows(signed_in) == []
-    assert _reference_files(signed_in) == []
+    assert reference_rows(signed_in) == []
+    assert reference_files(signed_in) == []
 
 
 def test_m7d_a_persons_token_without_origin_uploads_as_that_person(
@@ -269,33 +249,11 @@ def test_m7d_a_persons_token_without_origin_uploads_as_that_person(
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
     world = make_token_world(tmp_path)
 
-    response = _post_reference(world.client, headers=world.bearer(TokenWorld.ALICE))
+    response = post_reference(world.client, headers=world.bearer(TokenWorld.ALICE))
 
     assert response.status_code == 200, response.text
     assert world.rows(ReferenceRecording, "user_id") == [(TokenWorld.ALICE,)]
 
-
-def _seed_reference(
-    client: TestClient, user_id: str, name: str, *, created_at: datetime | None = None,
-    reference_id: str | None = None, duration_sec: float | None = 12.5,
-) -> str:
-    with client.app.state.ctx.db() as session:
-        row = create_reference_recording(
-            session, user_id=user_id, storage_path=f"{user_id}/refs/{name}",
-            original_filename=name, size_bytes=1, duration_sec=duration_sec,
-        )
-        if created_at is not None:
-            row.created_at = created_at
-        if reference_id is not None:
-            row.id = reference_id
-        session.commit()
-        return row.id
-
-
-def _signed_in_as(signed_in: TestClient, username: str) -> TestClient:
-    client = web_client(signed_in.app, raise_server_exceptions=False)
-    seed_session(client, username)
-    return client
 
 
 @pytest.mark.parametrize(
@@ -305,11 +263,11 @@ def _signed_in_as(signed_in: TestClient, username: str) -> TestClient:
 def test_l1_a_person_lists_only_their_own_references(
     signed_in: TestClient, username: str, expected: list[str],
 ) -> None:
-    _seed_reference(signed_in, "owner-id", "mine.wav")
-    _seed_reference(signed_in, "other-id", "theirs.wav")
-    _seed_reference(signed_in, "boss-id", "boss.wav")
+    seed_reference(signed_in, "owner-id", "mine.wav")
+    seed_reference(signed_in, "other-id", "theirs.wav")
+    seed_reference(signed_in, "boss-id", "boss.wav")
 
-    response = _signed_in_as(signed_in, username).get(REFERENCES_PATH)
+    response = signed_in_as(signed_in, username).get(REFERENCES_PATH)
 
     assert response.status_code == 200
     assert [item["filename"] for item in response.json()["references"]] == expected
@@ -319,11 +277,11 @@ def test_l2_references_come_newest_first_and_one_instant_keeps_one_order(
     signed_in: TestClient,
 ) -> None:
     now = datetime(2026, 10, 27, 12, 0, tzinfo=timezone.utc)
-    _seed_reference(signed_in, "owner-id", "old.wav", created_at=now - timedelta(days=9))
-    _seed_reference(signed_in, "owner-id", "new.wav", created_at=now)
-    _seed_reference(signed_in, "owner-id", "tie-b.wav", created_at=now - timedelta(days=1),
+    seed_reference(signed_in, "owner-id", "old.wav", created_at=now - timedelta(days=9))
+    seed_reference(signed_in, "owner-id", "new.wav", created_at=now)
+    seed_reference(signed_in, "owner-id", "tie-b.wav", created_at=now - timedelta(days=1),
                     reference_id="bbbb")
-    _seed_reference(signed_in, "owner-id", "tie-a.wav", created_at=now - timedelta(days=1),
+    seed_reference(signed_in, "owner-id", "tie-a.wav", created_at=now - timedelta(days=1),
                     reference_id="aaaa")
 
     listed = signed_in.get(REFERENCES_PATH).json()["references"]
@@ -341,7 +299,7 @@ def test_l3_no_references_answers_an_empty_list(signed_in: TestClient) -> None:
 
 
 def test_l4_a_reference_without_a_length_answers_null(signed_in: TestClient) -> None:
-    _seed_reference(signed_in, "owner-id", "unmeasured.wav", duration_sec=None)
+    seed_reference(signed_in, "owner-id", "unmeasured.wav", duration_sec=None)
 
     [item] = signed_in.get(REFERENCES_PATH).json()["references"]
 
@@ -396,20 +354,6 @@ def test_l5_listing_without_a_session_is_unauthenticated(signed_in: TestClient) 
     assert response.status_code == 401
 
 
-AUDIO_BYTES = bytes(range(256)) * 4
-SECRET_FILENAME = "private-take-name.wav"
-NOT_FOUND = {"detail": "Not Found"}
-
-
-def _seed_playable(
-    client: TestClient, user_id: str = "owner-id", name: str = SECRET_FILENAME,
-) -> str:
-    reference_id = _seed_reference(client, user_id, name)
-    refs = client.app.state.ctx.audio_dir / user_id / "refs"
-    refs.mkdir(parents=True, exist_ok=True)
-    (refs / name).write_bytes(AUDIO_BYTES)
-    return reference_id
-
 
 def _audio_path(reference_id: str) -> str:
     return f"{REFERENCES_PATH}/{reference_id}/audio"
@@ -417,7 +361,7 @@ def _audio_path(reference_id: str) -> str:
 
 @pytest.mark.parametrize("extension", sorted(REFERENCE_AUDIO_EXTENSIONS))
 def test_p1_the_owner_plays_the_whole_file(signed_in: TestClient, extension: str) -> None:
-    reference_id = _seed_playable(signed_in, name=f"take{extension}")
+    reference_id = seed_playable(signed_in, name=f"take{extension}")
 
     response = signed_in.get(_audio_path(reference_id))
 
@@ -439,14 +383,14 @@ def test_p1b_the_database_connection_is_returned_before_the_file_is_sent(
 
     monkeypatch.setattr(reference_api, "OpenedFileResponse", RecordingFileResponse)
 
-    signed_in.get(_audio_path(_seed_playable(signed_in)))
+    signed_in.get(_audio_path(seed_playable(signed_in)))
 
     assert checked_out_when_sending == [0]
 
 
 def test_p2_a_range_request_answers_a_partial_response(signed_in: TestClient) -> None:
     response = signed_in.get(
-        _audio_path(_seed_playable(signed_in)), headers={"Range": "bytes=0-99"},
+        _audio_path(seed_playable(signed_in)), headers={"Range": "bytes=0-99"},
     )
 
     assert response.status_code == 206
@@ -466,7 +410,7 @@ def test_p3_open_suffix_and_unsatisfiable_ranges(
     signed_in: TestClient, range_header: str, status: int, expected: bytes | None,
 ) -> None:
     response = signed_in.get(
-        _audio_path(_seed_playable(signed_in)), headers={"Range": range_header},
+        _audio_path(seed_playable(signed_in)), headers={"Range": range_header},
     )
 
     assert response.status_code == status
@@ -475,17 +419,17 @@ def test_p3_open_suffix_and_unsatisfiable_ranges(
 
 
 def test_p4_another_person_gets_the_same_404_as_an_unknown_id(signed_in: TestClient) -> None:
-    reference_id = _seed_playable(signed_in)
+    reference_id = seed_playable(signed_in)
 
-    foreign = _signed_in_as(signed_in, "other").get(_audio_path(reference_id))
-    unknown = _signed_in_as(signed_in, "other").get(_audio_path("no-such-id"))
+    foreign = signed_in_as(signed_in, "other").get(_audio_path(reference_id))
+    unknown = signed_in_as(signed_in, "other").get(_audio_path("no-such-id"))
 
     assert foreign.status_code == unknown.status_code == 404
     assert foreign.json() == unknown.json() == NOT_FOUND
 
 
 def test_p5_an_admin_cannot_play_another_persons_reference(signed_in: TestClient) -> None:
-    response = _signed_in_as(signed_in, "boss").get(_audio_path(_seed_playable(signed_in)))
+    response = signed_in_as(signed_in, "boss").get(_audio_path(seed_playable(signed_in)))
 
     assert response.status_code == 404
     assert response.json() == NOT_FOUND
@@ -501,8 +445,8 @@ def test_p6_an_unknown_id_is_not_found(signed_in: TestClient) -> None:
 def test_p7_a_row_whose_file_is_gone_is_not_found_and_logs_no_name_or_path(
     signed_in: TestClient, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    reference_id = _seed_playable(signed_in)
-    for path in _reference_files(signed_in):
+    reference_id = seed_playable(signed_in)
+    for path in reference_files(signed_in):
         path.unlink()
     audio_dir = str(signed_in.app.state.ctx.audio_dir)
 
@@ -526,8 +470,8 @@ def test_p7_a_row_whose_file_is_gone_is_not_found_and_logs_no_name_or_path(
 def test_p7b_a_file_that_cannot_be_opened_is_not_found_and_logs_no_name_or_path(
     signed_in: TestClient, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    reference_id = _seed_playable(signed_in)
-    (unreadable,) = _reference_files(signed_in)
+    reference_id = seed_playable(signed_in)
+    (unreadable,) = reference_files(signed_in)
     unreadable.chmod(0)
     audio_dir = str(signed_in.app.state.ctx.audio_dir)
 
@@ -547,7 +491,7 @@ def test_p7b_a_file_that_cannot_be_opened_is_not_found_and_logs_no_name_or_path(
 def test_p8_a_symlink_leaf_out_of_the_root_is_not_found(
     signed_in: TestClient, tmp_path: Path,
 ) -> None:
-    reference_id = _seed_playable(signed_in)
+    reference_id = seed_playable(signed_in)
     leaf = signed_in.app.state.ctx.audio_dir / "owner-id" / "refs" / SECRET_FILENAME
     outside = tmp_path / "outside.wav"
     outside.write_bytes(AUDIO_BYTES)
@@ -561,7 +505,7 @@ def test_p8_a_symlink_leaf_out_of_the_root_is_not_found(
 
 
 def test_p9a_without_a_session_the_audio_is_unauthenticated(signed_in: TestClient) -> None:
-    reference_id = _seed_playable(signed_in)
+    reference_id = seed_playable(signed_in)
     anonymous = TestClient(signed_in.app, base_url=TEST_ORIGIN, raise_server_exceptions=False)
 
     assert anonymous.get(_audio_path(reference_id)).status_code == 401
@@ -572,7 +516,7 @@ def test_p9b_a_persons_token_plays_that_persons_reference(
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
     world = make_token_world(tmp_path)
-    uploaded = _post_reference(
+    uploaded = post_reference(
         world.client, AUDIO_BYTES, "mine.wav", headers=world.bearer(TokenWorld.ALICE),
     )
     reference_id = uploaded.json()["id"]
@@ -583,55 +527,13 @@ def test_p9b_a_persons_token_plays_that_persons_reference(
     assert response.content == AUDIO_BYTES
 
 
-def _link_reference(
-    client: TestClient, reference_id: str, *, via: str, archived: bool = False,
-    song_trashed: bool = False, album_trashed: bool = False,
-) -> None:
-    """Link the reference from a saved version (``via="version"``) or from a take."""
-    trashed_at = datetime(2026, 10, 1, tzinfo=timezone.utc)
-    with client.app.state.ctx.db() as session:
-        album = Album(
-            id="album-link", title="A", artist="A", created_by="owner-id",
-            deleted_at=trashed_at if album_trashed else None,
-        )
-        song = Song(
-            id="song-link", title="S", album_id="album-link", track_number=1,
-            deleted_at=trashed_at if song_trashed else None,
-        )
-        version = Version(
-            id="version-link", song_id="song-link", version_number=1, lyrics="la", prompt="p",
-            reference_recording_id=reference_id if via == "version" else None,
-        )
-        session.add(album)
-        session.flush()
-        session.add_all([song, version])
-        session.flush()
-        if via == "take":
-            session.add(Generation(
-                song_id="song-link", version_id="version-link", mp3_path="owner-id/take.mp3",
-                is_archived=archived, reference_recording_id=reference_id,
-            ))
-        session.commit()
-
-
-LINKS = [
-    pytest.param({"via": "version"}, id="saved-version"),
-    pytest.param({"via": "take"}, id="take"),
-    pytest.param({"via": "take", "archived": True}, id="archived-take"),
-    pytest.param({"via": "version", "song_trashed": True}, id="version-of-trashed-song"),
-    pytest.param({"via": "take", "song_trashed": True}, id="take-of-trashed-song"),
-    pytest.param({"via": "version", "album_trashed": True}, id="version-of-trashed-album"),
-    pytest.param({"via": "take", "album_trashed": True}, id="take-of-trashed-album"),
-]
-
-
 @pytest.mark.parametrize("link", LINKS)
 def test_l8_the_list_marks_a_linked_reference_as_in_use(
     signed_in: TestClient, link: dict,
 ) -> None:
-    linked = _seed_reference(signed_in, "owner-id", "linked.wav")
-    _seed_reference(signed_in, "owner-id", "free.wav")
-    _link_reference(signed_in, linked, **link)
+    linked = seed_reference(signed_in, "owner-id", "linked.wav")
+    seed_reference(signed_in, "owner-id", "free.wav")
+    link_reference(signed_in, linked, **link)
 
     listed = signed_in.get(REFERENCES_PATH).json()["references"]
 
@@ -658,183 +560,8 @@ def test_f1_a_filename_with_a_control_character_is_refused_and_stores_nothing(
 
     assert response.status_code == 400
     assert response.json() == {"detail": "Invalid filename."}
-    assert _reference_rows(signed_in) == []
-    assert _reference_files(signed_in) == []
-
-
-def _delete(client: TestClient, reference_id: str):
-    return client.delete(f"{REFERENCES_PATH}/{reference_id}")
-
-
-def _audit_records(client: TestClient) -> list[AuditLog]:
-    with client.app.state.ctx.db() as session:
-        return session.query(AuditLog).filter_by(action="delete", resource_type="reference").all()
-
-
-def test_d1_the_owner_deletes_an_unused_reference_row_and_file(signed_in: TestClient) -> None:
-    reference_id = _seed_playable(signed_in)
-    other_id = _seed_playable(signed_in, name="stays.wav")
-
-    response = _delete(signed_in, reference_id)
-
-    assert response.status_code == 204
-    assert response.content == b""
-    assert [row.id for row in _reference_rows(signed_in)] == [other_id]
-    assert [path.name for path in _reference_files(signed_in)] == ["stays.wav"]
-
-
-def test_d2_a_delete_writes_one_audit_record_without_a_filename(signed_in: TestClient) -> None:
-    reference_id = _seed_playable(signed_in)
-
-    _delete(signed_in, reference_id)
-
-    [record] = _audit_records(signed_in)
-    assert record.user_id == "owner-id"
-    assert record.resource_id == reference_id
-    assert SECRET_FILENAME not in f"{record.detail}{record.resource_id}"
-
-
-@pytest.mark.parametrize("who", ["other", "boss", "nobody"])
-def test_d3_a_foreign_or_missing_reference_answers_the_global_404_and_stays(
-    signed_in: TestClient, who: str,
-) -> None:
-    reference_id = _seed_playable(signed_in)
-    target = "no-such-id" if who == "nobody" else reference_id
-    caller = signed_in if who == "nobody" else _signed_in_as(signed_in, who)
-
-    response = _delete(caller, target)
-
-    assert response.status_code == 404
-    assert response.json() == NOT_FOUND
-    assert len(_reference_rows(signed_in)) == 1
-    assert len(_reference_files(signed_in)) == 1
-    assert _audit_records(signed_in) == []
-
-
-def test_d4_a_repeated_delete_answers_404_and_unlinks_nothing(signed_in: TestClient) -> None:
-    reference_id = _seed_playable(signed_in)
-    _delete(signed_in, reference_id)
-    replacement = signed_in.app.state.ctx.audio_dir / "owner-id" / "refs" / SECRET_FILENAME
-    replacement.write_bytes(AUDIO_BYTES)
-
-    response = _delete(signed_in, reference_id)
-
-    assert response.status_code == 404
-    assert replacement.exists()
-
-
-@pytest.mark.parametrize("link", LINKS)
-def test_d5_a_linked_reference_answers_409_and_stays(signed_in: TestClient, link: dict) -> None:
-    reference_id = _seed_playable(signed_in)
-    _link_reference(signed_in, reference_id, **link)
-
-    response = _delete(signed_in, reference_id)
-
-    assert response.status_code == 409
-    assert response.json() == {"detail": "Reference audio is in use."}
-    assert [row.id for row in _reference_rows(signed_in)] == [reference_id]
-    assert len(_reference_files(signed_in)) == 1
-    assert _audit_records(signed_in) == []
-
-
-def test_d6_a_failed_unlink_answers_204_leaves_the_file_and_logs_no_path(
-    signed_in: TestClient, tmp_path: Path, caplog: pytest.LogCaptureFixture,
-) -> None:
-    reference_id = _seed_playable(signed_in)
-    audio_dir = signed_in.app.state.ctx.audio_dir
-    refs = audio_dir / "owner-id" / "refs"
-    moved = tmp_path / "elsewhere"
-    refs.rename(moved)
-    refs.symlink_to(moved)
-
-    with caplog.at_level(logging.INFO):
-        response = _delete(signed_in, reference_id)
-
-    assert response.status_code == 204
-    assert _reference_rows(signed_in) == []
-    assert (moved / SECRET_FILENAME).exists()
-    logged = caplog.text
-    assert SECRET_FILENAME not in logged
-    assert str(tmp_path) not in logged
-    assert reference_id in logged
-    assert "owner-id" in logged
-
-
-def test_d7_a_failed_commit_unlinks_nothing(signed_in: TestClient) -> None:
-    reference_id = _seed_playable(signed_in)
-    factory = signed_in.app.state.ctx.db
-
-    def refuse_commit_with_the_audit_record(session) -> None:
-        if session.execute(select(func.count(AuditLog.id))).scalar_one():
-            raise OperationalError("COMMIT", {}, Exception("commit refused"))
-
-    event.listen(factory, "before_commit", refuse_commit_with_the_audit_record)
-    try:
-        client = web_client(
-            signed_in.app, cookies=signed_in.cookies, raise_server_exceptions=False,
-        )
-        response = _delete(client, reference_id)
-    finally:
-        event.remove(factory, "before_commit", refuse_commit_with_the_audit_record)
-
-    assert response.status_code == 500
-    assert len(_reference_files(signed_in)) == 1
-    assert [row.id for row in _reference_rows(signed_in)] == [reference_id]
-
-
-@pytest.mark.parametrize(
-    "stored_path",
-    ["owner-id/refs/sub/nested.wav", "other-id/refs/theirs.wav", "owner-id/refs/../escape.wav"],
-)
-def test_d8_a_row_with_a_corrupt_path_answers_500_and_keeps_the_row_and_the_file(
-    signed_in: TestClient, caplog: pytest.LogCaptureFixture, stored_path: str,
-) -> None:
-    audio_dir = signed_in.app.state.ctx.audio_dir
-    target = audio_dir / stored_path
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(AUDIO_BYTES)
-    with signed_in.app.state.ctx.db() as session:
-        row = create_reference_recording(
-            session, user_id="owner-id", storage_path=stored_path,
-            original_filename="x.wav", size_bytes=4, duration_sec=None,
-        )
-        session.commit()
-        reference_id = row.id
-
-    with caplog.at_level(logging.INFO):
-        response = _delete(signed_in, reference_id)
-
-    assert response.status_code == 500
-    assert response.json() == {"detail": "Reference audio storage could not be checked."}
-    assert [row.id for row in _reference_rows(signed_in)] == [reference_id]
-    assert target.exists()
-    assert stored_path not in caplog.text
-    assert _audit_records(signed_in) == []
-
-
-def test_d9_a_persons_token_deletes_that_persons_reference(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = make_token_world(tmp_path)
-    uploaded = _post_reference(
-        world.client, AUDIO_BYTES, "mine.wav", headers=world.bearer(TokenWorld.ALICE),
-    )
-
-    response = world.client.delete(
-        f"{REFERENCES_PATH}/{uploaded.json()['id']}", headers=world.bearer(TokenWorld.ALICE),
-    )
-
-    assert response.status_code == 204
-    assert world.rows(ReferenceRecording, "user_id") == []
-
-
-def test_d10_without_a_session_the_delete_is_unauthenticated(signed_in: TestClient) -> None:
-    reference_id = _seed_playable(signed_in)
-    anonymous = web_client(signed_in.app, raise_server_exceptions=False)
-
-    assert _delete(anonymous, reference_id).status_code == 401
-    assert len(_reference_rows(signed_in)) == 1
+    assert reference_rows(signed_in) == []
+    assert reference_files(signed_in) == []
 
 
 def _vanish_after_the_route_checked_the_file(
@@ -855,8 +582,8 @@ def _vanish_after_the_route_checked_the_file(
 def test_s1_a_file_vanishing_after_the_check_logs_the_kind_and_no_path(
     signed_in: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    reference_id = _seed_playable(signed_in)
-    (target,) = _reference_files(signed_in)
+    reference_id = seed_playable(signed_in)
+    (target,) = reference_files(signed_in)
     audio_dir = str(signed_in.app.state.ctx.audio_dir)
     _vanish_after_the_route_checked_the_file(monkeypatch, target)
     client = web_client(signed_in.app, cookies=signed_in.cookies, raise_server_exceptions=False)
@@ -899,8 +626,8 @@ def test_s1b_a_file_vanishing_after_the_headers_ends_the_body_without_an_escape(
 
 
 def test_s2_a_file_gone_before_the_check_is_not_found(signed_in: TestClient) -> None:
-    reference_id = _seed_playable(signed_in)
-    (target,) = _reference_files(signed_in)
+    reference_id = seed_playable(signed_in)
+    (target,) = reference_files(signed_in)
     target.unlink()
 
     response = signed_in.get(_audio_path(reference_id))
