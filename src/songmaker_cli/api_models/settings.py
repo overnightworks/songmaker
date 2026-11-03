@@ -225,6 +225,14 @@ class ChatTurnV2Request(BaseModel):
     mentioned_album_id: str | None = Field(default=None, max_length=36)
     current_generation_id: str | None = Field(default=None, max_length=36)
 
+    @field_validator("message")
+    @classmethod
+    def _message_has_text(cls, v: str) -> str:
+        if not v.strip():
+            msg = "message must not be blank"
+            raise ValueError(msg)
+        return v
+
 
 class AssistantTextEvent(BaseModel):
     type: Literal["assistant_text"] = "assistant_text"
