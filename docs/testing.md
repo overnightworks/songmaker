@@ -352,8 +352,8 @@ the tool-surface health it republishes on `/health` — through `test_conversati
 
 ## Testing Patterns
 
-The frontend CI job runs `python3 scripts/check_style_literals.py` (from the
-repository root) against `.svelte`, `.ts`, and `.css` files in `frontend/src`,
+The frontend CI job runs `python3 ../scripts/check_style_literals.py` (from
+`frontend/`) against `.svelte`, `.ts`, and `.css` files in `frontend/src`,
 excluding `app.css` and comments. Test files (`*.test.ts` and `*.spec.ts`) are
 excluded so issue references in test names are not counted as hex colors.
 It counts hex and rgb/hsl colors, pixel `border-radius` declarations (including
@@ -369,8 +369,8 @@ baseline. `--update` never raises or adds an entry; ordinary checks never
 rewrite the file. The file fixtures in
 `tests/scripts/test_check_style_literals.py` prove detection and ratchet behavior.
 
-`scripts/test_helper_ratchet.sh` checks how many helper names are defined in more
-than one test module: module-level private Python functions in `tests/`, and
+`scripts/test_helper_ratchet.sh` holds each helper name defined in more than one
+test module: module-level private Python functions in `tests/`, and
 top-level named functions, `const` function expressions, or `const` object literals in
 `frontend/src/**/*.test.ts`.
 Calls and repeated definitions within one file do not count.

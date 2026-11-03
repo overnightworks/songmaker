@@ -171,11 +171,11 @@ def test_fallen_entry_fails_as_stale_and_passes_after_update(
     assert baseline.read_text() == expected
 
 
-@pytest.mark.parametrize("stored", ["", "backend _helper 1\n"], ids=["add", "raise"])
+@pytest.mark.parametrize("stored", ["", "backend _helper 2\n"], ids=["add", "raise"])
 def test_update_never_raises_or_adds_an_entry(ratchet_tree: Path, stored: str) -> None:
     baseline = ratchet_tree / "scripts/test_helper_ratchet.txt"
     baseline.write_text(stored)
-    for module in ("first", "second"):
+    for module in ("first", "second", "third"):
         define_helper(ratchet_tree, "backend", module)
 
     assert run_ratchet(ratchet_tree, "--update").returncode != 0
