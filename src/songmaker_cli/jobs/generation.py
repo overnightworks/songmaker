@@ -631,8 +631,9 @@ def _finalize_generation_job(
         return
     if completed == count:
         _update_job(db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
+    elif failure is None:
+        raise RuntimeError(f"Job {job_id}: {completed}/{count} generations done, no failure")
     elif completed > 0:
-        assert failure is not None
         _update_job(
             db_factory,
             job_id,
@@ -642,7 +643,6 @@ def _finalize_generation_job(
             error_type=failure.error_type,
         )
     else:
-        assert failure is not None
         _update_job(
             db_factory,
             job_id,

@@ -14,7 +14,11 @@ from typing import TYPE_CHECKING
 
 from webauth.ports import AccountEventKind, SignInStores
 
-from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
+from songmaker_cli.api_helpers import (
+    _USER_MANAGEMENT_LOCK_ID,
+    _begin_exclusive,
+    commit_auth_state_before_lock,
+)
 from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH
 from songmaker_cli.db.queries.auth import (
@@ -82,11 +86,7 @@ class DatabaseWriteLock:
         return current is not None and current is self._locked_transaction
 
     def _lock_new_transaction(self) -> None:
-        assert not self.session.new and not self.session.dirty and not self.session.deleted, (
-            "DatabaseWriteLock: session has uncommitted mutations — "
-            "the commit() below would persist them unconditionally"
-        )
-        self.session.commit()
+        commit_auth_state_before_lock(self.session, "DatabaseWriteLock")
         _begin_exclusive(self.session, _USER_MANAGEMENT_LOCK_ID)
         self._locked_transaction = self.session.get_transaction()
 

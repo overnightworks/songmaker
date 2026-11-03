@@ -240,9 +240,8 @@ _TO_DICT_ORDER: tuple[str, ...] = (
     "spectral_quality",
 )
 
-assert frozenset(_TO_DICT_ORDER) == frozenset(SCORERS.keys()), (
-    "_TO_DICT_ORDER must contain exactly the scorer names from SCORERS"
-)
+if frozenset(_TO_DICT_ORDER) != frozenset(SCORERS.keys()):
+    raise RuntimeError("_TO_DICT_ORDER must contain exactly the scorer names from SCORERS")
 
 SCORE_TYPES: dict[str, type] = {
     "text_accuracy": TextAccuracyScore,
@@ -255,6 +254,7 @@ SCORE_TYPES: dict[str, type] = {
 
 _SCORE_FIELD_NAMES = frozenset(f.name for f in fields(SongScores)) - {"runs"}
 
-assert frozenset(SCORE_TYPES) == _SCORE_FIELD_NAMES == frozenset(SCORERS.keys()), (
-    "SCORE_TYPES, the SongScores score fields, and SCORERS must name the same scorers"
-)
+if not frozenset(SCORE_TYPES) == _SCORE_FIELD_NAMES == frozenset(SCORERS.keys()):
+    raise RuntimeError(
+        "SCORE_TYPES, the SongScores score fields, and SCORERS must name the same scorers"
+    )

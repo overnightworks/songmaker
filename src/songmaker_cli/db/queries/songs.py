@@ -223,7 +223,8 @@ def lock_song_row(session: Session, song_id: str) -> Song:
     if session.query(Song).filter_by(id=song_id).with_for_update().first() is None:
         raise ValueError(f"Song not found: {song_id}")
     song = get_song(session, song_id, populate_existing=True)
-    assert song is not None
+    if song is None:
+        raise ValueError(f"Song not found: {song_id}")
     return song
 
 

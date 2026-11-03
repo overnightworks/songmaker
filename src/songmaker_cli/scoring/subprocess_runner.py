@@ -79,7 +79,7 @@ def _cleanup_gpu_and_exit(_signum: int, _frame: object) -> None:
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    except Exception:
+    except Exception:  # noqa: S110 - signal handler frees the GPU cache best effort and the process exits next
         pass
     raise SystemExit(0)
 
@@ -252,7 +252,8 @@ class ScorerProcess:
             if isinstance(msg, ScoreResponse):
                 if msg.error:
                     raise RuntimeError(msg.error)
-                assert msg.scores is not None
+                if msg.scores is None:
+                    raise RuntimeError("Score worker answered without scores or an error")
                 return msg.scores
             if isinstance(msg, ScoreProgressUpdate) and on_progress:
                 on_progress(msg.completed, msg.total, msg.scorer_name)

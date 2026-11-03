@@ -329,5 +329,6 @@ def tool_suggest_album_cover(
 def _reload_song(session: Session, song_id: str) -> Song:
     session.flush()
     song = db_get_song(session, song_id)
-    assert song is not None
+    if song is None:
+        raise RuntimeError(f"Song {song_id} vanished during its own transaction")
     return song
