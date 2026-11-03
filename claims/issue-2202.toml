@@ -1,0 +1,8 @@
+claim_id = "ea96492ff7014dbfb3a564be9698d83d"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "1ac1f9a041710cbc5c00e14234cf192bdd828bc7"
+branch = "claude/issue-2202-health-minimal-details-behind-token"
+scope = [".github/workflows/e2e.yml", "AGENTS.md", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "docs/testing.md", "frontend/e2e/README.md", "frontend/src/lib/api/types.ts", "quality/baseline.toml", "scripts/dead-symbols.allow", "scripts/generate_types.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/health.py", "src/songmaker_cli/health_api.py", "src/songmaker_cli/request_policies.py", "tests/scripts/test_generate_types.py", "tests/songmaker_cli/test_admin_api.py", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_health_api.py", "tests/songmaker_cli/test_lifecycle_background_loop_health.py", "tests/songmaker_cli/test_metrics_auth.py", "tests/songmaker_cli/test_oidc_client_person_token_paths.py", "tests/songmaker_cli/test_redis_client_metrics.py", "tests/songmaker_cli/test_server.py"]
+opened_commit = "7f88866887ea43d8cb5d83663700f263f3126904"
+whole_reason = "One contract change: the minimal anonymous answer, the token-gated details, their one owner of signals, their one CI reader, the generated-type exemption and the text describing them land together, or the smoke breaks or the docs and types lie."
