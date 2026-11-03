@@ -18,6 +18,7 @@ import {
 	ADMIN_VOICES_EMPTY,
 	COMPACT_LAYOUT_MEDIA,
 	MODELS_SAVE_FAILED_FALLBACK,
+	MODELS_SET_BY_AGENT_FILE_LABEL,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '#lib/constants.ts';
 import {
@@ -553,12 +554,11 @@ describe('admin agents tab', () => {
 		expect(statusText(rowNamed(target, 'Cover'))).toBe('○Checking…');
 	});
 
-	it('C16 shows the co-writer row as set by the agent service, without a choice', async () => {
+	it('C16 shows the co-writer row as set by the agent file, without a choice', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'agents');
-
 		const row = rowNamed(target, 'Co-Writer');
-		expect(row.textContent).toContain('Set by the agent service');
+		expect(row.textContent).toContain(MODELS_SET_BY_AGENT_FILE_LABEL);
 		expect(row.querySelector('select, [role="group"]')).toBeNull();
 	});
 
