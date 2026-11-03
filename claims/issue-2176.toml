@@ -1,8 +1,0 @@
-claim_id = "8c95e1bcbfb64e62a0bb8caac137363c"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5a78a174b8d1ebba2fe746e634761a4f122b9209"
-branch = "claude/issue-2176-application-layers-exhaustive"
-scope = [".importlinter", "docs/architecture.md", "src/songmaker_cli/db/queries/library.py", "src/songmaker_cli/library_api.py", "src/songmaker_cli/library_cursor.py", "tests/songmaker_cli/test_library_cursor.py"]
-opened_commit = "edf7f20ce303f19e3fc0d5feecc4f673c8321a72"
-whole_reason = "The listing cannot be complete while library_cursor and db import each other, so the cycle's break and the listing land together."
