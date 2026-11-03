@@ -378,14 +378,23 @@ describe('references page uploads', () => {
 			}
 		);
 
-		it('clears an earlier failure when the next upload starts', async () => {
+		it('clears an earlier failure once the next upload is stored', async () => {
 			mocks.uploadReference.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/references'));
 			const target = await renderReady();
 			await choose(target);
 			await vi.waitFor(() => expect(target.querySelector('.upload-reason')).not.toBeNull());
 
-			mocks.uploadReference.mockReturnValue(new Promise(() => {}));
+			mocks.uploadReference.mockResolvedValue(
+				referenceRecording({ id: 'new', filename: 'synth-hook.wav' })
+			);
+			mocks.listReferences.mockResolvedValue(
+				listAnswer([
+					referenceRecording({ id: 'new', filename: 'synth-hook.wav' }),
+					referenceRecording({ id: 'a' })
+				])
+			);
 			await choose(target);
+			await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
 
 			expect(target.querySelector('.upload-reason')).toBeNull();
 			expect(uploadButton(target).classList.contains('failed')).toBe(false);
