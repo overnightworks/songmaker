@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Fails when the backend or frontend tests define more duplicate helper names than the baseline allows.
+# Fails when a duplicated test helper name is new, defined in more modules, or fell below the baseline.
 set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 exec python3 - "$script_dir/.." "$@" <<'PY'
-"""Cap helper names defined in more than one test module, separately per tree."""
+"""Hold each helper name defined in more than one test module, per tree, to its baseline."""
 
 import ast
 import re
@@ -39,12 +39,34 @@ def frontend_names(path):
     }
 
 
-def duplicate_count(paths, read_names):
+def duplicate_modules(tree, paths, read_names):
     definitions = defaultdict(set)
     for path in paths:
         for name in read_names(path):
             definitions[name].add(path)
-    return sum(len(files) > 1 for files in definitions.values())
+    return {
+        (tree, name): len(files) for name, files in definitions.items() if len(files) > 1
+    }
+
+
+def read_baseline(baseline):
+    entries = {}
+    for line in baseline.read_text().splitlines():
+        fields = line.split()
+        if (
+            len(fields) != 3
+            or fields[0] not in ("backend", "frontend")
+            or not fields[2].isdecimal()
+            or int(fields[2]) < 2
+            or tuple(fields[:2]) in entries
+        ):
+            raise SystemExit(f"Expected 'tree name modules' lines (modules >= 2) in {baseline}: {line!r}")
+        entries[tuple(fields[:2])] = int(fields[2])
+    return entries
+
+
+def describe(entry, stored, current):
+    return f"{entry[0]} {entry[1]}: stored {stored}, current {current}"
 
 
 def main():
@@ -52,25 +74,29 @@ def main():
     arguments = sys.argv[2:]
     if arguments not in ([], ["--update"]):
         raise SystemExit("Usage: test_helper_ratchet.sh [--update]")
+    update = arguments == ["--update"]
     baseline = root / "scripts/test_helper_ratchet.txt"
-    counts = (
-        duplicate_count((root / "tests").rglob("*.py"), backend_names),
-        duplicate_count((root / "frontend/src").rglob("*.test.ts"), frontend_names),
-    )
-    if not baseline.exists() and arguments == ["--update"]:
-        limits = counts
-    else:
-        values = baseline.read_text().split()
-        if len(values) != 2 or any(not value.isdecimal() for value in values):
-            raise SystemExit(f"Expected two nonnegative counts in {baseline}")
-        limits = tuple(map(int, values))
-    for name, count, limit in zip(("backend", "frontend"), counts, limits):
-        print(f"{name}: {count} duplicate helper names (limit {limit})")
-    if any(count > limit for count, limit in zip(counts, limits)):
+    current = {
+        **duplicate_modules("backend", (root / "tests").rglob("*.py"), backend_names),
+        **duplicate_modules("frontend", (root / "frontend/src").rglob("*.test.ts"), frontend_names),
+    }
+    if not baseline.exists():
+        raise SystemExit(f"Missing baseline {baseline}")
+    stored = read_baseline(baseline)
+    grown = sorted(entry for entry, count in current.items() if count > stored.get(entry, 0))
+    stale = sorted(entry for entry, count in stored.items() if current.get(entry, 0) < count)
+    for entry in grown:
+        print(describe(entry, stored.get(entry, 0), current[entry]))
+    for entry in stale:
+        print(describe(entry, stored[entry], current.get(entry, 0)) + " (stale)")
+    if grown:
         raise SystemExit("Duplicate test helpers increased; consolidate before updating the baseline.")
-    if arguments == ["--update"] and (not baseline.exists() or counts != limits):
-        baseline.write_text(f"{counts[0]} {counts[1]}\n")
+    if stale and not update:
+        raise SystemExit("Duplicate test helpers fell; run scripts/test_helper_ratchet.sh --update.")
+    if update and stale:
+        baseline.write_text("".join(f"{tree} {name} {count}\n" for (tree, name), count in sorted(current.items())))
         print("Updated test helper baseline.")
+    print(f"{len(current)} duplicated helper names")
 
 
 main()

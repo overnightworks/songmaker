@@ -195,7 +195,7 @@ def get_song(
     # above -- not an identity-map lookup, so it's unaffected by parent
     # lifetime either way. Nothing on this path reads the Generation.song
     # back-populate, which is the direction #340's pitfall actually depends
-    # on (see tests/test_song_api.py for the query-count proof).
+    # on (see tests/songmaker_cli/test_song_api.py for the query-count proof).
     query = session.query(Song).options(
         selectinload(Song.versions),
         selectinload(Song.generations).selectinload(Generation.scores),

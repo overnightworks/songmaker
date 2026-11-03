@@ -462,7 +462,7 @@ def test_id_token_migration_adds_and_removes_nullable_column_keeping_sessions(
         "songmaker_cli.db.migrations.versions.a1d7c5e93b60_session_row_keeps_the_id_token",
     )
     db_path = tmp_path / "id-token.db"
-    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config = Config(str(Path(__file__).parents[2] / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
     def session_state() -> tuple[dict, list]:
