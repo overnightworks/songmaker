@@ -7,6 +7,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from songmaker_cli.invariants import expect
 from songmaker_cli.scoring.registry import SCORERS
 from songmaker_cli.whisper_cues import WhisperCue
 
@@ -240,8 +241,10 @@ _TO_DICT_ORDER: tuple[str, ...] = (
     "spectral_quality",
 )
 
-if frozenset(_TO_DICT_ORDER) != frozenset(SCORERS.keys()):
-    raise RuntimeError("_TO_DICT_ORDER must contain exactly the scorer names from SCORERS")
+expect(
+    frozenset(_TO_DICT_ORDER) == frozenset(SCORERS.keys()),
+    "_TO_DICT_ORDER must contain exactly the scorer names from SCORERS",
+)
 
 SCORE_TYPES: dict[str, type] = {
     "text_accuracy": TextAccuracyScore,
@@ -254,7 +257,7 @@ SCORE_TYPES: dict[str, type] = {
 
 _SCORE_FIELD_NAMES = frozenset(f.name for f in fields(SongScores)) - {"runs"}
 
-if not frozenset(SCORE_TYPES) == _SCORE_FIELD_NAMES == frozenset(SCORERS.keys()):
-    raise RuntimeError(
-        "SCORE_TYPES, the SongScores score fields, and SCORERS must name the same scorers"
-    )
+expect(
+    frozenset(SCORE_TYPES) == _SCORE_FIELD_NAMES == frozenset(SCORERS.keys()),
+    "SCORE_TYPES, the SongScores score fields, and SCORERS must name the same scorers",
+)

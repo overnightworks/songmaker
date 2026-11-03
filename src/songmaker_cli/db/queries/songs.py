@@ -29,6 +29,7 @@ from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 from songmaker_cli.db.soft_delete import include_deleted
+from songmaker_cli.invariants import expect_present
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -222,10 +223,10 @@ def lock_song_row(session: Session, song_id: str) -> Song:
     """
     if session.query(Song).filter_by(id=song_id).with_for_update().first() is None:
         raise ValueError(f"Song not found: {song_id}")
-    song = get_song(session, song_id, populate_existing=True)
-    if song is None:
-        raise ValueError(f"Song not found: {song_id}")
-    return song
+    return expect_present(
+        get_song(session, song_id, populate_existing=True),
+        f"Song {song_id} vanished while its row was locked",
+    )
 
 
 def set_song_cover_key(session: Session, song_id: str, cover_key: str | None) -> Song:

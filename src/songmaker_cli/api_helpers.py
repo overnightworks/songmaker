@@ -60,6 +60,7 @@ from songmaker_cli.db.queries.songs import get_song
 from songmaker_cli.db.queries.versions import lock_song_and_find_version
 from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
+from songmaker_cli.invariants import expect_present
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness, read_worker_liveness
 
@@ -234,8 +235,7 @@ def create_job_with_rate_limit(
         # Inside the exclusive section and before the insert: a lock taken earlier is
         # released by the commit above, and one taken after the insert lets a delete that
         # won the song row fail the insert's version key with a 500 instead of a 404.
-        if song_id is None:
-            raise RuntimeError("create_job_with_rate_limit: version_id requires song_id")
+        song_id = expect_present(song_id, "create_job_with_rate_limit: version_id requires song_id")
         if lock_song_and_find_version(session, song_id, version_id) is None:
             session.rollback()
             raise HTTPException(404, "Version not found")

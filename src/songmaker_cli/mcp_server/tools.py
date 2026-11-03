@@ -52,6 +52,7 @@ from songmaker_cli.db.queries.songs import (
     update_song as db_update_song,
 )
 from songmaker_cli.db.queries.versions import get_version
+from songmaker_cli.invariants import expect_present
 from songmaker_cli.mcp_server.schemas import (
     AlbumSummary,
     CoverSuggestionRequestResult,
@@ -328,7 +329,6 @@ def tool_suggest_album_cover(
 
 def _reload_song(session: Session, song_id: str) -> Song:
     session.flush()
-    song = db_get_song(session, song_id)
-    if song is None:
-        raise RuntimeError(f"Song {song_id} vanished during its own transaction")
-    return song
+    return expect_present(
+        db_get_song(session, song_id), f"Song {song_id} vanished during its own transaction"
+    )

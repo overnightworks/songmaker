@@ -63,6 +63,7 @@ from songmaker_cli.generate import (
     _write_output,
 )
 from songmaker_cli.generation_params import BaseGenerationParams, stored_config_options
+from songmaker_cli.invariants import expect_present
 from songmaker_cli.parser import AlbumMeta, SongMeta
 from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_linked_reference_audio
 from songmaker_cli.scheduler import (
@@ -631,9 +632,9 @@ def _finalize_generation_job(
         return
     if completed == count:
         _update_job(db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
-    elif failure is None:
-        raise RuntimeError(f"Job {job_id}: {completed}/{count} generations done, no failure")
-    elif completed > 0:
+        return
+    failure = expect_present(failure, f"Job {job_id}: {completed}/{count} done, no failure")
+    if completed > 0:
         _update_job(
             db_factory,
             job_id,
@@ -644,11 +645,8 @@ def _finalize_generation_job(
         )
     else:
         _update_job(
-            db_factory,
-            job_id,
-            JobStatus.FAILED,
-            error=failure.message,
-            error_type=failure.error_type,
+            db_factory, job_id, JobStatus.FAILED,
+            error=failure.message, error_type=failure.error_type,
         )
 
 

@@ -19,6 +19,7 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 
 from songmaker_cli.constants import SECRET_ENV_KEYS
+from songmaker_cli.invariants import expect_present
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig
@@ -252,9 +253,9 @@ class ScorerProcess:
             if isinstance(msg, ScoreResponse):
                 if msg.error:
                     raise RuntimeError(msg.error)
-                if msg.scores is None:
-                    raise RuntimeError("Score worker answered without scores or an error")
-                return msg.scores
+                return expect_present(
+                    msg.scores, "Score worker answered without scores or an error"
+                )
             if isinstance(msg, ScoreProgressUpdate) and on_progress:
                 on_progress(msg.completed, msg.total, msg.scorer_name)
 
