@@ -24,9 +24,9 @@ from songmaker_cli.app_context import AppContext, get_app_context, get_db_sessio
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
-    AuditAction,
     REFERENCE_AUDIO_EXTENSIONS,
     REFERENCE_AUDIO_MAX_BYTES,
+    AuditAction,
     ResourceType,
 )
 from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH

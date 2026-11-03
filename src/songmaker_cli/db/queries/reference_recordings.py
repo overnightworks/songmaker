@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from collections.abc import Collection
+from dataclasses import dataclass
 
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session

@@ -1,14 +1,14 @@
-"""Deleting a reference through the route against a take being saved, and against a second delete."""
+"""Deleting a reference through the route against a take being saved and a second delete."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-from acestep_engine.models import AceStepConfig
 from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.web_app import make_test_app, seed_session
 
+from acestep_engine.models import AceStepConfig
 from songmaker_cli import reference_api
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Generation, Job, ReferenceRecording, Song, User, Version
@@ -28,7 +28,7 @@ IN_USE = {"detail": "Reference audio is in use."}
 NOT_FOUND = {"detail": "Not Found"}
 
 
-def _seed(session) -> None:
+def _seed_take_and_reference(session) -> None:
     session.add(User(id=OWNER, username="owner"))
     session.flush()
     session.add(Album(id="album-a", title="A", artist="A", created_by=OWNER))
@@ -51,7 +51,9 @@ class _World:
 
     def __init__(self, pg_factory, tmp_path: Path) -> None:
         self.pg_factory = pg_factory
-        self.client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed)
+        self.client, _ = make_test_app(
+            tmp_path, factory=pg_factory, seed_db=_seed_take_and_reference,
+        )
         seed_session(self.client, "owner")
         self.audio_dir = self.client.app.state.ctx.audio_dir
         self.stored_file = self.audio_dir / OWNER / REFERENCE_AUDIO_DIR / STORED_NAME
