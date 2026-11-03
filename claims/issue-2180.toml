@@ -1,0 +1,7 @@
+claim_id = "11625ac46e5f475698def429e39304d0"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "8c887508f68b6cbb2efe50fff727ec607b45ceb3"
+branch = "claude/issue-2180-minimatch-advisory"
+scope = ["frontend/pnpm-lock.yaml", "frontend/pnpm-workspace.yaml"]
+opened_commit = "0ee1c6b657ead9a33d0dd9c67c20b664fe58a2e5"
