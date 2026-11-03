@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from http.client import HTTPResponse
 from typing import Final
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
@@ -28,7 +29,6 @@ from pydantic import ValidationError as PydanticValidationError
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_engine.errors import AceStepError
 from acestep_engine.models import LoraTrainingConfig
-from acestep_engine.settings import get_engine_settings
 
 log = logging.getLogger(__name__)
 
@@ -150,6 +150,12 @@ def _unwrap_data(raw: dict) -> dict:
     return raw
 
 
+def _open(
+    url: str, *, body: bytes | None, headers: dict[str, str], method: str, timeout: float,
+) -> HTTPResponse:
+    return urlopen(Request(url, data=body, headers=headers, method=method), timeout=timeout)  # noqa: S310 - every URL starts with this module's literal http scheme
+
+
 class AceStepTrainingClient:
     """Training HTTP client. All methods raise :class:`TrainingRequestError`
     on retriable transport errors and :class:`TrainingResponseError` on
@@ -157,15 +163,11 @@ class AceStepTrainingClient:
 
     def __init__(
         self,
-        host: str | None = None,
-        port: int | None = None,
+        host: str,
+        port: int,
         timeout_seconds: float = TRAINING_DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
-        if host is None or port is None:
-            settings = get_engine_settings()
-            host = host or settings.acestep_host
-            port = port or settings.acestep_port
-        self.base_url = f"{host}:{port}"
+        self.base_url = f"http://{host}:{port}"  # NOSONAR(S5332) Loopback child without TLS.
         self.timeout = timeout_seconds
 
     def _url(self, path: str) -> str:
@@ -183,8 +185,10 @@ class AceStepTrainingClient:
         last_exc: Exception | None = None
         for attempt in range(retries):
             try:
-                req = Request(url, data=body, headers=headers, method=method)
-                with urlopen(req, timeout=timeout or self.timeout) as resp:
+                with _open(
+                    url, body=body, headers=headers, method=method,
+                    timeout=timeout or self.timeout,
+                ) as resp:
                     raw = json.loads(resp.read())
                 return _unwrap_data(raw)
             except OSError as exc:

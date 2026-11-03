@@ -19,8 +19,6 @@ class EngineSettings(BaseSettings):
         case_sensitive=False,
     )
 
-    acestep_host: str = "http://localhost"
-    acestep_port: int = 8001
     acestep_poll_timeout: float = 600.0
 
 
