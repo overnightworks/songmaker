@@ -15,7 +15,7 @@ from agent_providers.errors import (
 )
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from support.admin_client import build_admin_client
-from support.fake_agent_service import attach_cowriter_service
+from support.cowriter_gateway import attach_cowriter_gateway
 from support.provider_runtime import override_provider_runtime, refresh_provider_snapshots
 from support.web_app import TEST_SECRET, make_authenticated_user, make_test_app, seed_user
 
@@ -206,11 +206,11 @@ def test_cowriter_put_requires_an_admin(admin_client):
     assert response.status_code == 403
 
 
-def test_chat_turns_beyond_the_chat_rate_limit_are_refused(admin_client, monkeypatch):
+def test_chat_turns_beyond_the_chat_rate_limit_are_refused(admin_client, monkeypatch, tmp_path):
     client, factory = admin_client
     monkeypatch.setenv("CHAT_RATE_LIMIT_USER", "2")
     get_settings.cache_clear()
-    attach_cowriter_service(client, factory, monkeypatch, "u-test")
+    attach_cowriter_gateway(client, factory, tmp_path, "u-test")
 
     statuses = [
         client.post("/api/chat/turn", json={"message": "hi"}).status_code for _ in range(3)

@@ -2,7 +2,7 @@
 
 This module owns the Phase 3 conversation-scoped chat API:
 
-- ``POST /chat/turn`` — one turn in the user's active conversation, run by the agent service.
+- ``POST /chat/turn`` — one turn in the user's active conversation, run through the gateway backend.
 - ``GET /conversations`` — list all the user's conversations.
 - ``GET /conversations/{id}`` — full message history of one.
 - ``POST /conversations/new`` — archive the active one and start fresh.
@@ -20,7 +20,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime_client.wire import TurnMessage
+from agent_runtime_client.turn import TurnMessage
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -29,6 +29,12 @@ from webauth.config import installed_web_auth_config
 from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.backend import (
+    TurnAnswer,
+    TurnCaller,
+    TurnProblem,
+    run_cowriter_turn,
+)
 from songmaker_cli.api_helpers import (
     check_album_access,
     check_generation_access,
@@ -73,12 +79,6 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
-from songmaker_cli.cowriter.service_turn import (
-    TurnAnswer,
-    TurnCaller,
-    TurnProblem,
-    run_cowriter_turn,
-)
 from songmaker_cli.db.models import ChatMessage, Conversation, Generation, Song
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.conversations import (

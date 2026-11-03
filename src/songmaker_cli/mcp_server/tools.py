@@ -9,8 +9,8 @@ new version.
 
 The ``server.py`` layer wires these into FastMCP tools — opening
 sessions, loading the user, committing writes; ``save_coherence_verdict`` is
-the exception, served only through ``/mcp`` and the in-process dispatcher. Keeping the logic in
-pure functions makes everything directly unit-testable without
+the exception, served only through the hand tools of ``agent.tools`` and the in-process dispatcher.
+Keeping the logic in pure functions makes everything directly unit-testable without
 speaking the MCP protocol.
 """
 from __future__ import annotations

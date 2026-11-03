@@ -6,7 +6,7 @@ Co-Writer is a multi-turn studio partner on one active conversation per
 musician, not one conversation per song. Durable user and song memory,
 musician-confirmed mentions, the open song's current lyrics and style prompt,
 and the relevant take's sung transcription travel with each turn. The turn runs
-through the agent service with the same song read and write capabilities for
+through the LiteLLM gateway with the same song read and write capabilities for
 every model and no local fallback. The model may persist owned-song lyric, prompt, title, BPM,
 key, and duration writes and may create songs; memory changes persist only after
 Accept; Co-Writer does not generate audio or choose the Pick or Keep. When
@@ -39,10 +39,10 @@ Quelle: OPERATOR — Issue #26, “Verhalten”.
 ### REQ-COWRITER-08: When a Co-Writer turn uses a rolling summary, that summary preserves at least the album concept, locked versus open lyric decisions, names and characters, and open questions.
 Quelle: OPERATOR — Issue #26, “Locked-in”.
 
-### REQ-COWRITER-09: A Co-Writer turn runs through the agent service, and the service configuration alone chooses its model; Songmaker's run request names none.
-Quelle: OPERATOR — agent-runtime#494, Urteil vom 27.10.2026; ersetzt die Modellwahl des Operators vom 23.10.2026.
+### REQ-COWRITER-09: A Co-Writer turn runs through the LiteLLM gateway, and the agent file alone names its model.
+Quelle: OPERATOR — Issue #1476 und #2155, Urteil vom 02.11.2026 (jede App wechselt zum Gateway) und Modellwahl vom 03.11.2026; ersetzt das Urteil agent-runtime#494 vom 27.10.2026.
 
-### REQ-COWRITER-11: When the agent service refuses or fails the run, the turn ends with a named error; Songmaker never answers through a local provider or another model.
+### REQ-COWRITER-11: When the gateway refuses or fails the turn, it ends with a named error; Songmaker never answers through a local provider or another model.
 Quelle: HEAD — Issue #1476, Vorschlag; hält Q1 und das Urteil zur Modellwahl des Operators vom 23.10.2026 fest.
 
 ### REQ-COWRITER-12: Every model the Co-Writer runs on gets the same tools under the same ownership and persistence rules.
@@ -128,7 +128,7 @@ Quelle: OPERATOR — chat, 28.10.2026 (the Co-Writer rates a take's coherence as
 - Sharing/Administration, including which role may change the Co-Writer's model
   or tail budget.
 - Exact tail-budget numbers, token-count algorithm, SSE event types, and the
-  agent-service and `/mcp` transport.
+  gateway transport.
 - Scoring: a scoring run has no provider and no model; the Co-Writer judges a
   take only when asked (REQ-COWRITER-34).
 - Legacy per-song chat endpoints and user-applied songmaker blocks.

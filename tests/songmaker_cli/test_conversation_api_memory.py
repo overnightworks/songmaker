@@ -6,9 +6,10 @@ import json
 from pathlib import Path
 
 import pytest
+from agent_runtime_client.backend.fake_gateway import completion
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
-from support.fake_agent_service import CowriterStack, attach_cowriter_service, streams
+from support.cowriter_gateway import CowriterStack, attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import (
@@ -93,9 +94,9 @@ def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
 
 
 @pytest.fixture
-def service(client, monkeypatch) -> CowriterStack:
+def service(client, tmp_path: Path) -> CowriterStack:
     c, factory = client
-    return attach_cowriter_service(c, factory, monkeypatch, "u-test")
+    return attach_cowriter_gateway(c, factory, tmp_path, "u-test")
 
 
 def test_compose_turn_context_keeps_named_scopes_once():
@@ -170,7 +171,7 @@ def test_new_conversation_keeps_memory(client, service):
     )
     assert resp.status_code == 200
     _stream_events(resp)
-    content = service.agent.last_run.messages[-1]["text"]
+    content = service.last_turn.messages[-1]["text"]
     assert "<user_memory>\nstanding rule\n</user_memory>" in content
     assert "<song_memory>\nopen bridge\n</song_memory>" in content
 
@@ -185,7 +186,7 @@ def test_song_switch_swaps_song_memory_keeps_user_memory(client, service):
         json={"message": "work on rain", "current_song_id": "s2"},
     )
     _stream_events(resp)
-    content = service.agent.last_run.messages[-1]["text"]
+    content = service.last_turn.messages[-1]["text"]
     assert "<user_memory>\ntaste\n</user_memory>" in content
     assert "<song_memory>\nmemory B\n</song_memory>" in content
     assert "memory A" not in content
@@ -202,12 +203,7 @@ def test_proposal_in_assistant_text_does_not_write_memory(client, service):
         "</memory_proposal>"
     )
 
-    async def _with_proposal(_run, script):
-        yield script.started()
-        yield script.text(proposal)
-        yield script.succeeded(proposal)
-
-    service.agent.reply_with(streams(_with_proposal))
+    service.replies(completion(proposal))
     resp = c.post("/api/chat/turn", json={"message": "remember this"})
     assert resp.status_code == 200
     _stream_events(resp)

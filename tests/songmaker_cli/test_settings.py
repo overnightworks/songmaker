@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -275,17 +276,75 @@ def test_a_malformed_public_base_url_fails_loud_and_names_the_value(malformed: s
     assert malformed in str(refused.value)
 
 
-@pytest.mark.parametrize("malformed", ["two scopes", " padded", "tab\tseparated", '"quoted"', ""])
-def test_an_agent_service_audience_scope_that_is_not_one_scope_token_fails_loud(
-    malformed: str,
+_AGENT_ENVIRONMENT = {
+    "AGENT__BACKEND": "litellm",
+    "AGENT__GATEWAY__ORIGIN": "http://gateway.test:4000",
+    "AGENT__GATEWAY__KEY_FILE": "/run/secrets/gateway_key",
+    "AGENT__API_GROUP": "/apps/songmaker/api",
+}
+
+
+def _with_environment(monkeypatch: pytest.MonkeyPatch, environment: dict[str, str]) -> None:
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+
+
+def test_an_unset_agent_reads_as_none() -> None:
+    assert Settings(**_required_settings()).agent is None
+
+
+def test_a_fully_set_agent_is_read_from_the_nested_environment(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _with_environment(monkeypatch, _AGENT_ENVIRONMENT)
+
+    agent = Settings(**_required_settings()).agent
+
+    assert agent is not None
+    assert (agent.gateway.origin, str(agent.gateway.key_file), agent.api_group) == (
+        _AGENT_ENVIRONMENT["AGENT__GATEWAY__ORIGIN"],
+        _AGENT_ENVIRONMENT["AGENT__GATEWAY__KEY_FILE"],
+        _AGENT_ENVIRONMENT["AGENT__API_GROUP"],
+    )
+
+
+@pytest.mark.parametrize(
+    "environment",
+    [
+        {"AGENT__BACKEND": "litellm"},
+        {**_AGENT_ENVIRONMENT, "AGENT__GATEWAY__COLOUR": "blue"},
+        {name: "" for name in _AGENT_ENVIRONMENT},
+        {**_AGENT_ENVIRONMENT, "AGENT__GATEWAY__CA_FILE": ""},
+        {**_AGENT_ENVIRONMENT, "AGENT__GATEWAY__CA_FILE": "/run/secrets/ca.pem"},
+    ],
+    ids=["partly-set", "unknown-key", "all-empty", "empty-ca-file", "ca-file-for-http"],
+)
+def test_a_malformed_agent_value_stops_startup(
+    monkeypatch: pytest.MonkeyPatch, environment: dict[str, str],
+) -> None:
+    _with_environment(monkeypatch, environment)
     required = _required_settings()
 
-    with pytest.raises(ValidationError, match="AGENT_SERVICE_AUDIENCE_SCOPE"):
-        Settings(**required, agent_service_audience_scope=malformed)
+    with pytest.raises(ValidationError, match="agent"):
+        Settings(**required)
 
 
-def test_an_agent_service_audience_scope_of_one_scope_token_is_kept() -> None:
-    settings = Settings(**_required_settings(), agent_service_audience_scope="audience:agent")
+def test_a_wrongly_delimited_agent_name_is_ignored_and_reads_as_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AGENT_GATEWAY__ORIGIN", "http://gateway.test:4000")
 
-    assert settings.agent_service_audience_scope == "audience:agent"
+    assert Settings(**_required_settings()).agent is None
+
+
+def test_a_dotenv_key_starting_with_agent_passes_and_another_unknown_one_is_refused(
+    tmp_path: Path,
+) -> None:
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("AGENT_SERVICE_URL=http://old.test\n")
+    assert Settings(**_required_settings(), _env_file=dotenv).agent is None
+
+    dotenv.write_text("UNKNOWN_SETTING=1\n")
+    required = _required_settings()
+    with pytest.raises(ValidationError, match="unknown_setting"):
+        Settings(**required, _env_file=dotenv)

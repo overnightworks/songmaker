@@ -17,8 +17,8 @@
                     └──┬─────────┬──────────┬─────────────┘
                        │         │          │
                        ▼         ▼          ▼
-                 PostgreSQL    Redis    Agent service / cover provider
-                 (all data)   (queues,  (co-writer turns; cover image)
+                 PostgreSQL    Redis    Cover provider
+                 (all data)   (queues,  (cover image)
                               sessions,
                               rate limits)
 ```
@@ -127,7 +127,7 @@ User clicks "Generate"                    User clicks "Score"
   POST /api/chat/turn
   (multi-turn: loads history from DB,
    compacts it to a rolling summary plus a token-bounded tail,
-   runs one run of agents/cowriter.md at the agent service,
+   runs agents/cowriter.md through the LiteLLM gateway,
    relays its events as SSE frames,
    stores user + assistant messages)
 ```
@@ -991,9 +991,9 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
-| Co-writer | The turn as a run at the agent service: its agent file, its tokens and run binding, the tools it calls back at `/mcp`; the cover selection's route is resolved by `cowriter/routing.py` | `agents/cowriter.md`, `cowriter/service_turn.py`, `cowriter/service_runs.py`, `cowriter/mcp_endpoint.py`, `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
+| Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`); the cover selection's route is resolved by `cowriter/routing.py` | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py`, `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
-| MCP | Claude's stdio tool server, the `/mcp` endpoint for the agent service, and the shared tool declarations and execution | `mcp_server/`, `cowriter/mcp_endpoint.py`, `cowriter/tools.py` |
+| MCP | Claude's stdio tool server, and the shared tool declarations and execution | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
 
 ### The co-writer turn
@@ -1001,37 +1001,38 @@ starts with the creator's account id: a stream track carries `seed: null` and
 `POST /api/chat/turn` (`conversation_api.py`) prepares the turn as before: the
 context envelope, the memory, the rolling summary plus a token-bounded tail, the
 chat job and the stored user message. The turn then runs as a task of its own
-through `cowriter/service_turn.py`:
+through `agent/backend.py`:
 
-1. It reads the `/mcp` verdict `run_server` published on
-   `app.state.cowriter_mcp_availability`; an unavailable endpoint ends the turn
-   before any token is fetched.
-2. It turns the session's refresh token into a fresh user access token
-   (`fresh_access_token` through `DatabaseSessionTransaction` in
-   `auth_stores.py`) and takes songmaker's workload token from the same
-   relying party, asking only for the agent service's audience scope
-   (`AGENT_SERVICE_AUDIENCE_SCOPE`).
-3. It posts the `RunRequest` of `agents/cowriter.md` (the thirteen tools of
+1. It takes the `GatewayBackend` that `run_server` composed from `Settings.agent` and
+   holds on `app.state.agent_backend`; an unset `agent` ends the turn
+   unavailable before any request leaves, and so does an agent file the client
+   refuses.
+2. It builds the turn's person: the principal is the normalised issuer and the
+   user's id, the role is the account's role, and the groups come from a fresh
+   refresh grant (`current_groups` through `DatabaseSessionTransaction`). The
+   client checks the role against the agent file's `appRoles` and the groups
+   against `AGENT__API_GROUP` before it reads the key file.
+3. It runs `agents/cowriter.md` (the thirteen tools of
    `cowriter_tool_declarations()`, the agent file's body as the system prompt,
-   everything else in the messages; no model) to `AGENT_SERVICE_URL`.
-4. It reads the event stream through agent-runtime-client's decoder and
-   registers the run id from `run_started` in `service_runs` for the person;
-   `/mcp` accepts a tool call only for a registered run. The run is released
-   when the stream ends, whatever ends it.
+   its `model`, `maxDurationSeconds` and `maxToolCalls`) through
+   `GatewayBackend.run`. The gateway's request names the person only by the
+   client's fingerprint of issuer and id.
+4. Each tool call reaches a hand tool of `agent/tools.py`, which takes the user
+   only from the turn's principal and runs `execute_cowriter_tool` in a thread.
 5. It yields `assistant_text`, `tool_call` and `tool_result` frames in
-   songmaker's own models (heartbeats are not relayed), the answer of
-   `succeeded` that `_complete_chat_turn` stores, or one typed problem that ends
-   the turn with an error frame: `unavailable`, `busy`, `not_enabled` or
-   `sign_in_again`. The run client never falls back to a local provider.
+   songmaker's own models, the answer of the final event that
+   `_complete_chat_turn` stores, or one typed problem that ends the turn with an
+   error frame: `unavailable`, `busy`, `not_enabled` or `sign_in_again`. A
+   finished turn without words ends unavailable, and the turn never falls back
+   to a local provider.
 
-Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the-agent-service).
+Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the-gateway).
 
 ### Agent routes
 
 `db/queries/settings.py` owns the Cover selection. Cover captures its provider,
 model, and explicit `cli` or `api` route before work begins.
-The Co-Writer has no selection here: the agent service's configuration chooses the turn's model
-(the agent file names none), and the rows once saved for it stay in the table unread. The rows
+The Co-Writer has no selection here: the agent file `agents/cowriter.md` names the turn's model, and the rows once saved for it stay in the table unread. The rows
 once saved for the removed judge stay in the table unread as well.
 `agent_providers/dispatch.py`
 owns the resulting adapter decision for the Cover (the Co-Writer
@@ -1053,12 +1054,12 @@ the row already carries, or none while that catalogue lists nothing — never of
 reachability: whether the choice runs is what the row's status says, and an
 unusable one stays saved until its next turn or job fails with the named reason.
 
-The Cover is what asks that one dispatch; the Co-Writer runs at
-the agent service. Settings › Admin › **Agents** shows the Co-Writer and Cover: one table, one
+The Cover is what asks that one dispatch; the Co-Writer runs through
+the gateway. Settings › Admin › **Agents** shows the Co-Writer and Cover: one table, one
 row per task, with Task, Provider, Route, Model and Status. The Co-Writer row is
 read-only (`ModelsCowriterRow.svelte`): "Set by the agent service" in the Provider
 and Model cells, Agent service as the route, no status, and the history tail under
-Advanced; the app reads no service setting and names no model the service decides.
+Advanced; the model is the agent file's, never a setting the app reads.
 The Cover row offers every provider, the list its own settings response carries, because what a provider
 cannot do, or has not been set up for, is a reason next to the choice and never
 a missing control: an unusable route stays visible and greyed with its reason
@@ -1078,8 +1079,8 @@ by the header row and both row components. Below 768px each row becomes
 one card per task with the same labelled lines;
 `frontend/e2e/admin-models.spec.ts` drives the surface at both widths.
 
-The co-writer turn does not use these routes: it runs at the agent service
-(see "The co-writer turn" below). The routes above keep serving the cover
+The co-writer turn does not use these routes: it runs through the gateway
+(see "The co-writer turn" above). The routes above keep serving the cover
 until its own move.
 
 ### Engine packages (`src/`)
@@ -1226,7 +1227,7 @@ declares its own in `songmaker_cli/cowriter/mcp_spec.py` — deliberately outsid
 does not install. `None` is a valid value: a deployment without an MCP server
 runs its co-writer turns on the tool-free command line and gate.
 
-The stdio server's twelve tools plus `save_coherence_verdict` are also served over HTTP at `/mcp` for the agent service: `compose_mcp_endpoint` (`cowriter/mcp_endpoint.py`) puts agent-runtime-client's `McpServer` in front of the application in `run_server`, one tool per `COWRITER_TOOLS` entry, and accepts a call only for a run in `cowriter/service_runs.py` registered for that person's running turn. Trust, bypassed middleware and the named gaps: [Co-writer MCP endpoint](security.md#co-writer-mcp-endpoint).
+The stdio server's twelve tools plus `save_coherence_verdict` are also served to the gateway turn as hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
 #### Provider constants: Go and Stay
 
