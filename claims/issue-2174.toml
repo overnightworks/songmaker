@@ -1,8 +1,0 @@
-claim_id = "740f5c72dbdc4113bc38714334a488ea"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "941c378488d1e08bcc1f9e060c33e62103fd15ea"
-branch = "claude/issue-2174-test-layout-3h10-declarations"
-scope = ["frontend/src/routes/settings/references/pageUpload.test.ts", "frontend/src/routes/settings/references/upload.test.ts", "quality/baseline.toml", "tests/songmaker_cli/agent/test_backend_cowriter_agent.py", "tests/songmaker_cli/agent/test_cowriter_agent.py", "tests/songmaker_cli/agent/test_cowriter_turn.py", "tests/songmaker_cli/test_conversation_api_gateway_turn.py"]
-opened_commit = "6e2a7d7e82b488acbec934418abe8c4b66384015"
-whole_reason = "The last test-layout findings outside 3h9 and slice 5 close in one change: seven declarations in one config file and three renames, each proven by the same hygiene diff."
