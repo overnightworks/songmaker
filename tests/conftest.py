@@ -14,6 +14,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("SESSION_SECRET", "x" * 64)
 os.environ.setdefault("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
+os.environ.setdefault("SONGMAKER_MONITORING_TOKEN", "test-monitoring-token")
 os.environ.setdefault("WORKER_ID", "test-worker")
 os.environ.setdefault("PUBLIC_BASE_URL", "https://songmaker.test")
 os.environ.setdefault(
@@ -272,6 +273,12 @@ def mock_arq_pool():
     ):
         yield
     arq_mod._pool = saved
+
+
+@pytest.fixture
+def monitoring_headers() -> dict[str, str]:
+    """The request header Prometheus sends to ``/metrics``."""
+    return {"Authorization": f"Bearer {os.environ['SONGMAKER_MONITORING_TOKEN']}"}
 
 
 @pytest.fixture

@@ -24,6 +24,7 @@ export WEB_PORT="$PROBE_PORT"
 export POSTGRES_PASSWORD=e2e-ci-postgres-password
 export SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else
 export SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token
+export SONGMAKER_MONITORING_TOKEN=e2e-ci-monitoring-token
 export E2E_ADMIN_USERNAME=e2e-ci-admin
 export OIDC_ISSUER=https://keycloak.invalid/realms/e2e
 export KEYCLOAK_CLIENT_SECRET_FILE="$secret_file"

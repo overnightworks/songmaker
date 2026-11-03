@@ -268,6 +268,16 @@ def test_t14_a_path_outside_the_person_paths_answers_as_without_a_bearer(
     assert token_world.users() == []
 
 
+def test_t14_metrics_refuses_a_persons_token_and_makes_no_account_of_it(
+    token_world: TokenWorld,
+) -> None:
+    response = token_world.client.get("/metrics", headers=token_world.bearer())
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
+    assert token_world.users() == []
+
+
 @pytest.mark.parametrize(
     ("requested_header", "status"),
     [("content-type", 200), ("authorization", 400)],
@@ -295,6 +305,7 @@ def test_t15_compose_hands_token_clients_to_the_web_service_only(tmp_path: Path)
     env_file = tmp_path / "scratch.env"
     env_file.write_text(
         "GRAFANA_PASSWORD=scratch-grafana-password-not-a-secret\n"
+        "SONGMAKER_MONITORING_TOKEN=scratch-monitoring-token-not-a-secret\n"
         "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
         f"TOKEN_CLIENTS={TokenWorld.HAL}\n",
     )

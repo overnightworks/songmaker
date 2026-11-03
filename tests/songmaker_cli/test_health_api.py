@@ -227,7 +227,7 @@ def test_health_defaults_codex_image_sandbox_runtime_to_unverified_before_a_boot
     assert resp.json()["codex_image_sandbox_runtime"] == "unverified"
 
 
-def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_arq_pool) -> None:
+def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     client, _ = make_test_app(tmp_path)
     with client:
@@ -237,7 +237,7 @@ def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_a
         registry.mark_dead(BackgroundLoopName.SESSION_CLEANUP, None)
 
         health = client.get("/health")
-        metrics = client.get("/metrics")
+        metrics = client.get("/metrics", headers=monitoring_headers)
 
     assert health.status_code == 200
     assert health.json()["background_loops"] == {
@@ -570,7 +570,7 @@ def test_reason_follows_the_key_when_the_worker_recovers(health_client) -> None:
     assert body["status"] == "ok"
 
 
-def test_metrics_excludes_broken_gpu_worker_from_online_count(health_client) -> None:
+def test_metrics_excludes_broken_gpu_worker_from_online_count(health_client, monitoring_headers) -> None:
     """The #333 alert (`songmaker_acestep_workers_total{status="online"} == 0`)
     reads this exact metric — a GPU-broken worker still counted as "online"
     here is the original incident in new clothes."""
@@ -581,11 +581,100 @@ def test_metrics_excludes_broken_gpu_worker_from_online_count(health_client) -> 
     )
     arq_mod._pool.zcard = AsyncMock(return_value=0)
 
-    resp = health_client.get("/metrics")
+    resp = health_client.get("/metrics", headers=monitoring_headers)
     assert resp.status_code == 200
     body = resp.text
     assert 'songmaker_acestep_workers_total{status="online"} 0' in body
     assert 'songmaker_acestep_workers_total{status="offline"} 1' in body
+
+
+CONFIGURED_MONITORING_TOKEN = "scratch-monitoring-token"
+UNAUTHENTICATED = {"detail": "Not authenticated"}
+
+
+@pytest.fixture
+def configured_monitoring_token(monkeypatch, fresh_settings) -> None:
+    monkeypatch.setenv("SONGMAKER_MONITORING_TOKEN", CONFIGURED_MONITORING_TOKEN)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        pytest.param({}, id="no-header"),
+        pytest.param({"Authorization": f"Basic {CONFIGURED_MONITORING_TOKEN}"}, id="basic-scheme"),
+        pytest.param({"Authorization": "Bearer"}, id="bearer-without-credential"),
+        pytest.param({"Authorization": "Bearer wrong-token"}, id="wrong-token"),
+        pytest.param({"Authorization": f"Bearer {CONFIGURED_MONITORING_TOKEN}x"}, id="longer"),
+    ],
+)
+def test_metrics_refuses_a_request_without_the_monitoring_token(
+    health_client, configured_monitoring_token, headers,
+) -> None:
+    resp = health_client.get("/metrics", headers=headers)
+
+    assert resp.status_code == 401
+    assert resp.json() == UNAUTHENTICATED
+    assert resp.headers["www-authenticate"] == "Bearer"
+    assert "songmaker_" not in resp.text
+
+
+@pytest.mark.parametrize("configured", ["", "   "], ids=["empty", "whitespace-only"])
+def test_metrics_is_unavailable_when_no_monitoring_token_is_configured(
+    health_client, monkeypatch, fresh_settings, configured,
+) -> None:
+    monkeypatch.setenv("SONGMAKER_MONITORING_TOKEN", configured)
+
+    resp = health_client.get(
+        "/metrics", headers={"Authorization": f"Bearer {configured}"},
+    )
+
+    assert resp.status_code == 503
+    assert resp.json() == {"detail": "Monitoring not configured"}
+
+
+def test_metrics_is_unavailable_when_the_monitoring_token_is_unset(
+    health_client, monkeypatch, fresh_settings,
+) -> None:
+    monkeypatch.delenv("SONGMAKER_MONITORING_TOKEN")
+
+    resp = health_client.get("/metrics")
+
+    assert resp.status_code == 503
+
+
+@pytest.mark.parametrize("scheme", ["Bearer", "bearer"])
+def test_metrics_serves_the_monitoring_token_in_any_scheme_case(
+    health_client, configured_monitoring_token, scheme,
+) -> None:
+    from songmaker_cli.constants import PROM_CONTENT_TYPE
+
+    resp = health_client.get(
+        "/metrics", headers={"Authorization": f"{scheme} {CONFIGURED_MONITORING_TOKEN}"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == PROM_CONTENT_TYPE
+    assert "songmaker_acestep_workers_total" in resp.text
+
+
+def test_metrics_matches_the_token_prometheus_trims_from_its_file(
+    health_client, monkeypatch, fresh_settings,
+) -> None:
+    monkeypatch.setenv("SONGMAKER_MONITORING_TOKEN", f"  {CONFIGURED_MONITORING_TOKEN}\n")
+
+    resp = health_client.get(
+        "/metrics", headers={"Authorization": f"Bearer {CONFIGURED_MONITORING_TOKEN}"},
+    )
+
+    assert resp.status_code == 200
+
+
+def test_health_answers_without_a_monitoring_token_configured(
+    health_client, monkeypatch, fresh_settings,
+) -> None:
+    monkeypatch.delenv("SONGMAKER_MONITORING_TOKEN")
+
+    assert health_client.get("/health").status_code == 200
 
 
 @pytest.fixture

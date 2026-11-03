@@ -1571,7 +1571,7 @@ close the stream.
 | GET | `/auth/callback` | public | Finish the sign-in: 303 to `next` or `/`, to `/no-access` for a non-member, else 403 with the SPA shell |
 | POST | `/auth/logout` | public | End the session and answer the page that ends the Keycloak session |
 | GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths, running release and commit |
-| GET | `/metrics` | public | Job stats, HTTP counters, VRAM usage (Prometheus) |
+| GET | `/metrics` | monitoring token | Job stats, HTTP counters, VRAM usage (Prometheus) |
 | POST/DELETE | `/api/albums/{id}/share` | user | Enable/revoke album sharing |
 | POST/DELETE | `/api/songs/{id}/share` | user | Enable/revoke song sharing. An archived Pick is not kept by it. |
 | POST/DELETE | `/api/generations/{id}/share` | user | Enable/revoke generation sharing. POST answers 409 "Restore this take first." on an archived take. |
@@ -1939,7 +1939,7 @@ its current usage via heartbeat. The music-worker has no GPU access at all.
 
 ## Monitoring
 
-Prometheus + Grafana stack in `docker-compose.yml`. Prometheus scrapes `/metrics` every 15s. Grafana on port 3000 with a pre-provisioned dashboard.
+Prometheus + Grafana stack in `docker-compose.yml`. Prometheus scrapes `/metrics` every 15s with the monitoring token as its bearer credential. Grafana on port 3000 with a pre-provisioned dashboard.
 
 Exported metrics: `songmaker_http_requests_total`, `songmaker_http_request_duration_milliseconds_total`, `songmaker_active_sessions`, `songmaker_jobs_total`, `songmaker_job_duration_seconds`, `songmaker_last_job_failure_timestamp_seconds` (0 while nothing has ever failed), `songmaker_queue_depth{queue="music"|"scoring"}`, `songmaker_acestep_workers_total{status=...}`, `songmaker_acestep_worker_loaded_models`, `songmaker_acestep_worker_queue_depth`, `songmaker_acestep_worker_vram_used_gigabytes`, `songmaker_acestep_worker_vram_total_gigabytes` (the last two come from each acestep-worker's own heartbeat — `songmaker-web` itself has no GPU access and cannot produce a VRAM number of its own), `songmaker_background_loop_consecutive_failures{loop=...}`, and `songmaker_background_loop_alive{loop=...}`.
 

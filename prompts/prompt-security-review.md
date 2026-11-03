@@ -92,7 +92,7 @@ These have been reviewed and accepted. Skip them unless the implementation has r
 - **No `X-XSS-Protection` header**: Modern browsers use CSP instead. The buggy XSS auditor is deprecated.
 - **ACE-Step reinitialize has no cooldown**: Admin-only endpoint. Compromised admin has full access anyway.
 - **AccessLogMiddleware logs URL paths**: `request.url.path` does not include query strings, so no sensitive data is logged.
-- **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics without auth. Protected at the infrastructure layer (Cloudflare Tunnel / reverse proxy blocks public access). Documented in `docs/security.md`.
+- **`/metrics` requires the monitoring token**: `require_monitoring_token` admits only Prometheus's bearer token and answers 503 while it is unset. Documented in `docs/security.md`.
 
 ---
 

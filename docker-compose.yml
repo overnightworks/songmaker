@@ -103,6 +103,7 @@ services:
       XAI_API_KEY: ${XAI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
+      SONGMAKER_MONITORING_TOKEN: "${SONGMAKER_MONITORING_TOKEN:?SONGMAKER_MONITORING_TOKEN must be set in .env (see docker/.env.docker.example)}"
       COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       LOG_FORMAT: json
@@ -353,6 +354,10 @@ services:
       - "--storage.tsdb.path=/prometheus"
     ports:
       - "127.0.0.1:9090:9090"
+    # Prometheus sends it as the bearer token of the songmaker job
+    # (monitoring/prometheus.yml); no other service mounts it.
+    secrets:
+      - monitoring_token
     volumes:
       - ./monitoring:/etc/prometheus:ro
       - promdata:/prometheus
@@ -459,6 +464,8 @@ secrets:
   # a text substitution on its way into the config (issue #333).
   smtp_password:
     environment: SMTP_PASSWORD
+  monitoring_token:
+    environment: SONGMAKER_MONITORING_TOKEN
 
 # Created by the edge stack (one network per app); the deploy follows its apply.
 networks:

@@ -20,7 +20,12 @@ SCRATCH_PROJECT_COMPOSE_ARGS = (
 )
 SCRATCH_PASSWORD = "scratch-grafana-password-not-a-secret"
 SCRATCH_ISSUER = "https://keycloak.invalid/realms/scratch"
-EVERYTHING_REQUIRED = {"GRAFANA_PASSWORD": SCRATCH_PASSWORD, "OIDC_ISSUER": SCRATCH_ISSUER}
+SCRATCH_MONITORING_TOKEN = "scratch-monitoring-token-not-a-secret"
+EVERYTHING_REQUIRED = {
+    "GRAFANA_PASSWORD": SCRATCH_PASSWORD,
+    "OIDC_ISSUER": SCRATCH_ISSUER,
+    "SONGMAKER_MONITORING_TOKEN": SCRATCH_MONITORING_TOKEN,
+}
 
 
 def _env_file(**settings: str) -> str:
