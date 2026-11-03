@@ -179,7 +179,7 @@ def test_submit_task_matches_fork_multipart_audio_contract(tmp_path) -> None:
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
-        assert AceStepClient()._submit_task(config) == "multipart-1"
+        assert AceStepClient(host="localhost", port=8001)._submit_task(config) == "multipart-1"
 
     request = mock_urlopen.call_args.args[0]
     multipart_parts = _multipart_form_parts(

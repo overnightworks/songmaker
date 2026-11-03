@@ -28,7 +28,7 @@ def _resp(payload: dict) -> MagicMock:
 
 
 def test_scan_dataset_happy_path(tmp_path: Path) -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     envelope = {
         "data": {
             "num_samples": 5,
@@ -44,7 +44,7 @@ def test_scan_dataset_happy_path(tmp_path: Path) -> None:
 
 
 def test_start_preprocess_returns_handle(tmp_path: Path) -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     envelope = {"data": {"task_id": "abc-123", "total": 4}}
     with patch("acestep_engine.training_client.urlopen", return_value=_resp(envelope)):
         handle = client.start_preprocess(str(tmp_path / "tensors"))
@@ -54,7 +54,7 @@ def test_start_preprocess_returns_handle(tmp_path: Path) -> None:
 
 
 def test_start_preprocess_missing_task_id_raises(tmp_path: Path) -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     with patch(
         "acestep_engine.training_client.urlopen",
         return_value=_resp({"data": {"message": "oops"}}),
@@ -64,7 +64,7 @@ def test_start_preprocess_missing_task_id_raises(tmp_path: Path) -> None:
 
 
 def test_poll_preprocess_completed_has_num_tensors() -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     envelope = {
         "data": {
             "task_id": "abc",
@@ -83,7 +83,7 @@ def test_poll_preprocess_completed_has_num_tensors() -> None:
 
 
 def test_poll_preprocess_failed_has_error() -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     envelope = {
         "data": {
             "task_id": "abc", "status": "failed", "progress": "Failed: OOM",
@@ -97,7 +97,7 @@ def test_poll_preprocess_failed_has_error() -> None:
 
 
 def test_start_lokr_dumps_config(tmp_path: Path) -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     envelope = {
         "data": {
             "tensor_dir": str(tmp_path / "t"),
@@ -124,7 +124,7 @@ def test_start_lokr_dumps_config(tmp_path: Path) -> None:
 
 
 def test_poll_training_is_training_true() -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     envelope = {
         "data": {
             "is_training": True, "current_epoch": 5, "current_step": 100,
@@ -141,7 +141,7 @@ def test_poll_training_is_training_true() -> None:
 
 
 def test_stop_training_posts() -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     with patch(
         "acestep_engine.training_client.urlopen",
         return_value=_resp({"data": {"message": "Stopping..."}}),
@@ -151,7 +151,7 @@ def test_stop_training_posts() -> None:
 
 
 def test_export_training_returns_result(tmp_path: Path) -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     envelope = {
         "data": {
             "export_path": str(tmp_path / "out/final"),
@@ -166,7 +166,7 @@ def test_export_training_returns_result(tmp_path: Path) -> None:
 
 
 def test_bad_json_response_raises(tmp_path: Path) -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     resp = MagicMock()
     resp.read = MagicMock(return_value=b"not json")
     resp.__enter__ = MagicMock(return_value=resp)
@@ -179,7 +179,7 @@ def test_bad_json_response_raises(tmp_path: Path) -> None:
 def test_network_error_retries_then_raises(tmp_path: Path) -> None:
     from urllib.error import URLError
 
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     with (
         patch("acestep_engine.training_client.urlopen", side_effect=URLError("boom")),
         patch("acestep_engine.training_client.time.sleep", return_value=None),
@@ -189,7 +189,7 @@ def test_network_error_retries_then_raises(tmp_path: Path) -> None:
 
 
 def test_unwrap_envelope_without_data_key(tmp_path: Path) -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     envelope = {"num_samples": 3}
     with patch("acestep_engine.training_client.urlopen", return_value=_resp(envelope)):
         result = client.scan_dataset(str(tmp_path / "x"))
@@ -197,7 +197,7 @@ def test_unwrap_envelope_without_data_key(tmp_path: Path) -> None:
 
 
 def test_non_dict_response_raises(tmp_path: Path) -> None:
-    client = AceStepTrainingClient(host="http://localhost", port=8001)
+    client = AceStepTrainingClient(host="localhost", port=8001)
     resp = mock_http_response(b"[]")
     with patch("acestep_engine.training_client.urlopen", return_value=resp):
         with pytest.raises(TrainingResponseError):

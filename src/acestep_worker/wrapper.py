@@ -74,7 +74,7 @@ from acestep_worker.settings import (
     DEFAULT_SHARED_AUDIO_ROOT,
     DEFAULT_TRAINING_WORKSPACE_DIRNAME,
 )
-from acestep_worker.subprocess_runner import SubprocessStartError
+from acestep_worker.subprocess_runner import SUBPROCESS_BIND_HOST, SubprocessStartError
 from acestep_worker.task_store import TaskStore
 
 log = logging.getLogger(__name__)
@@ -786,7 +786,7 @@ async def default_train_lora_runner(
     from acestep_engine.training_client import AceStepTrainingClient
 
     await task_store.mark_running(task_id)
-    client = AceStepTrainingClient(host="http://127.0.0.1", port=port)
+    client = AceStepTrainingClient(host=SUBPROCESS_BIND_HOST, port=port)
     paths = _lora_training_paths(
         checkpoint_dir,
         training_workspace_dirname,
@@ -1054,7 +1054,7 @@ async def default_generate_runner(
 
     await task_store.mark_running(task_id)
     try:
-        client = AceStepClient(host="http://127.0.0.1", port=port)
+        client = AceStepClient(host=SUBPROCESS_BIND_HOST, port=port)
         loop = asyncio.get_running_loop()
         scheduled_updates: list[Future[None]] = []
         def _on_progress(progress: AceStepProgress) -> None:
