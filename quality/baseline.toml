@@ -56,7 +56,7 @@
 "frontend/src/lib/stores/player.test.ts" = 5286
 "frontend/src/lib/stores/player.ts" = 2242
 "frontend/src/lib/stores/resourceSync.test.ts" = 2039
-"frontend/src/lib/stores/resourceSync.ts" = 1073
+"frontend/src/lib/stores/resourceSync.ts" = 1063
 "frontend/src/routes/layout.test.ts" = 1414
 "frontend/src/routes/settings/users/+page.svelte" = 1123
 "frontend/src/routes/settings/users/page.test.ts" = 861
