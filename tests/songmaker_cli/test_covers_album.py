@@ -50,7 +50,12 @@ from songmaker_cli.settings import get_settings
 
 ALICE_PASSWORD = "alicepass1"
 
-UNSAFE_COVER_ALBUM_IDS = ("", ".", "..", "/srv", "a/b")
+SIBLING_DIRECTORY = "<absolute path of the directory beside audio_dir>"
+UNSAFE_COVER_ALBUM_IDS = ("", ".", "..", SIBLING_DIRECTORY, "a/b")
+
+
+def _unsafe_id(raw_id: str, sibling_marker: Path) -> str:
+    return str(sibling_marker.parent) if raw_id == SIBLING_DIRECTORY else raw_id
 
 
 def _cover_escape_layout(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
@@ -443,6 +448,7 @@ def test_write_album_cover_rejects_unsafe_album_ids(
     tmp_path: Path, album_id: str,
 ) -> None:
     audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    album_id = _unsafe_id(album_id, sibling_marker)
     image = _png_bytes()
     with pytest.raises(CoverRejectedError, match=COVER_INVALID_ALBUM_ID):
         write_album_cover(audio_dir, album_id, image)
@@ -454,6 +460,7 @@ def test_remove_album_cover_files_rejects_unsafe_album_ids(
     tmp_path: Path, album_id: str,
 ) -> None:
     audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    album_id = _unsafe_id(album_id, sibling_marker)
     remove_album_cover_files(audio_dir, album_id)
     _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
@@ -473,6 +480,7 @@ def test_resolve_cover_file_rejects_unsafe_album_ids(
     tmp_path: Path, album_id: str,
 ) -> None:
     audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    album_id = _unsafe_id(album_id, sibling_marker)
     with pytest.raises(FileNotFoundError):
         resolve_cover_file(
             audio_dir, album_id, "deadbeef.png", COVER_VARIANT_ORIGINAL,
