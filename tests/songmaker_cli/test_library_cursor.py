@@ -12,8 +12,8 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_NEWEST,
     LIBRARY_SORT_TITLE,
 )
+from songmaker_cli.db.queries.library import LibraryCursor
 from songmaker_cli.library_cursor import (
-    LibraryCursor,
     LibraryCursorInvalidError,
     LibraryCursorMismatchError,
     decode_library_cursor,

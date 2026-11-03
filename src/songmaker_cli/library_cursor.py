@@ -5,10 +5,8 @@ from __future__ import annotations
 import base64
 import hmac
 import json
-from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
-from typing import Any
 
 from songmaker_cli.constants import (
     LIBRARY_CURSOR_INVALID,
@@ -24,11 +22,9 @@ from songmaker_cli.constants import (
     LIBRARY_ITEM_SONG,
     LIBRARY_SORT_NEWEST,
     LIBRARY_SORT_OLDEST,
-    LIBRARY_SORT_TITLE,
     LIBRARY_SORTS,
 )
-from songmaker_cli.db.models import Album
-from songmaker_cli.timestamps import aware_timestamp
+from songmaker_cli.db.queries.library import LibraryCursor
 
 _CURSOR_KEYS = frozenset({
     LIBRARY_CURSOR_KEY_VERSION,
@@ -48,15 +44,6 @@ class LibraryCursorInvalidError(ValueError):
 
 class LibraryCursorMismatchError(ValueError):
     """Cursor was issued for a different query or sort."""
-
-
-@dataclass(frozen=True)
-class LibraryCursor:
-    q: str
-    sort: str
-    item_type: str
-    sort_value: str
-    id: str
 
 
 def encode_library_cursor(cursor: LibraryCursor, secret: bytes) -> str:
@@ -81,22 +68,6 @@ def decode_library_cursor(
     if parsed.q != q or parsed.sort != sort:
         raise LibraryCursorMismatchError(LIBRARY_CURSOR_MISMATCH)
     return parsed
-
-
-def cursor_from_hit(hit: Any, *, q: str, sort: str) -> LibraryCursor:
-    item_type = LIBRARY_ITEM_ALBUM if isinstance(hit, Album) else LIBRARY_ITEM_SONG
-    if sort == LIBRARY_SORT_TITLE:
-        sort_value = hit.title.lower()
-    else:
-        created = aware_timestamp(hit.created_at)
-        sort_value = created.isoformat()
-    return LibraryCursor(
-        q=q,
-        sort=sort,
-        item_type=item_type,
-        sort_value=sort_value,
-        id=hit.id,
-    )
 
 
 def _parse_signed_cursor(cursor: str, secret: bytes) -> LibraryCursor:
