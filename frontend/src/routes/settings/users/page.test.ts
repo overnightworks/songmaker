@@ -557,7 +557,6 @@ describe('admin agents tab', () => {
 	it('C16 shows the co-writer row as set by the agent file, without a choice', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'agents');
-
 		const row = rowNamed(target, 'Co-Writer');
 		expect(row.textContent).toContain(MODELS_SET_BY_AGENT_FILE_LABEL);
 		expect(row.querySelector('select, [role="group"]')).toBeNull();
