@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+import sqlalchemy as sa
 from alembic import command
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -86,6 +87,13 @@ def _seed_take_with_params(engine, params, *, owner="u1", **recording) -> None:
     _insert_take(engine, "take1", params, owner)
 
 
+def _update_statement(table: str, values: dict[str, object]) -> str:
+    """An UPDATE setting each named column to a parameter named after it."""
+    return str(sa.update(sa.table(table, *(sa.column(name) for name in values))).values(values))
+
+
+VERSIONS_LINK = {RECORDING_COLUMN: "recording"}
+TAKES_LINK = {RECORDING_COLUMN: "recording", "is_archived": True}
 VERSIONS = LinkCase(
     table="versions",
     migration_module=(
@@ -94,8 +102,8 @@ VERSIONS = LinkCase(
     previous_revision="5b2e9d4a7c31",
     failing_id="version",
     seed=_seed_version_with_params,
-    link_statement=f"UPDATE versions SET {RECORDING_COLUMN} = 'recording'",
-    link_values={},
+    link_statement=_update_statement("versions", VERSIONS_LINK),
+    link_values=VERSIONS_LINK,
 )
 TAKES = LinkCase(
     table="generations",
@@ -105,10 +113,8 @@ TAKES = LinkCase(
     previous_revision="ea28bf0de7cc",
     failing_id="take1",
     seed=_seed_take_with_params,
-    link_statement=(
-        f"UPDATE generations SET {RECORDING_COLUMN} = 'recording', is_archived = :archived"
-    ),
-    link_values={"archived": True},
+    link_statement=_update_statement("generations", TAKES_LINK),
+    link_values=TAKES_LINK,
 )
 link_cases = pytest.mark.parametrize("case", [VERSIONS, TAKES], ids=lambda case: case.table)
 
@@ -117,10 +123,15 @@ def _decoded_json(value):
     return json.loads(value) if isinstance(value, str) else value
 
 
+def _case_table(case: LinkCase) -> sa.TableClause:
+    return sa.table(case.table, sa.column(RECORDING_COLUMN), sa.column("generation_params"))
+
+
 def _linked_row(engine, case: LinkCase) -> tuple[str | None, dict | None]:
+    table = _case_table(case)
     with engine.connect() as connection:
         key, params = connection.execute(
-            text(f"SELECT {RECORDING_COLUMN}, generation_params FROM {case.table} LIMIT 1")
+            sa.select(table.c[RECORDING_COLUMN], table.c.generation_params).limit(1)
         ).one()
     return key, _decoded_json(params)
 
@@ -236,7 +247,7 @@ def test_downgrade_writes_the_path_back_and_drops_the_column(reference_link_data
     )
     command.downgrade(config, case.previous_revision)
     with engine.connect() as connection:
-        params = connection.execute(text(f"SELECT generation_params FROM {case.table}")).scalar()
+        params = connection.execute(sa.select(_case_table(case).c.generation_params)).scalar()
     assert RECORDING_COLUMN not in column_names(engine, case.table)
     assert _decoded_json(params) == {"reference_audio_path": RECORDING_PATH, "shift": 3.0}
     command.upgrade(config, case.migration.revision)

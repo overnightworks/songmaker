@@ -62,6 +62,9 @@ def _query_nvml(device_index: int) -> _NvmlQuery:
 
     try:
         pynvml.nvmlInit()
+    except pynvml.NVMLError as exc:
+        return _unavailable_query(exc)
+    try:
         handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
         info = pynvml.nvmlDeviceGetMemoryInfo(handle)
         stats = VramStats(
@@ -70,16 +73,20 @@ def _query_nvml(device_index: int) -> _NvmlQuery:
         )
         return _NvmlQuery(health=GpuHealth(GpuHealthStatus.OK), stats=stats)
     except pynvml.NVMLError as exc:
-        log.warning("NVML query failed: %s", exc)
-        return _NvmlQuery(
-            health=GpuHealth(GpuHealthStatus.UNAVAILABLE, detail=str(exc)),
-            stats=None,
-        )
+        return _unavailable_query(exc)
     finally:
         try:
             pynvml.nvmlShutdown()
-        except Exception:
-            pass
+        except pynvml.NVMLError as exc:
+            log.warning("NVML shutdown failed: %s", exc)
+
+
+def _unavailable_query(exc: Exception) -> _NvmlQuery:
+    log.warning("NVML query failed: %s", exc)
+    return _NvmlQuery(
+        health=GpuHealth(GpuHealthStatus.UNAVAILABLE, detail=str(exc)),
+        stats=None,
+    )
 
 
 def read_gpu_vram_stats(device_index: int = 0) -> VramStats | None:

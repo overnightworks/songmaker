@@ -2192,13 +2192,13 @@ def test_scoring_job_uses_configured_per_scorer_budgets(
     assert config.pipeline_timeout > 600
 
 
-def test_scoring_job_generation_not_found(seeded_db) -> None:
+def test_scoring_job_generation_not_found(seeded_db, tmp_path: Path) -> None:
     run_scoring_job(
         "j2",
         "nonexistent",
         None,
         db_factory=seeded_db,
-        audio_dir=Path("/tmp/audio"),
+        audio_dir=tmp_path / "audio",
     )
 
     with seeded_db() as session:

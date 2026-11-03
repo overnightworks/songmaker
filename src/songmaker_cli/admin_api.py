@@ -54,6 +54,7 @@ from songmaker_cli.db.queries.auth import (
 )
 from songmaker_cli.db.queries.loras import list_user_loras_for_admin
 from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
+from songmaker_cli.scheduler import worker_response_cause
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -310,14 +311,9 @@ async def pin_model_on_worker_endpoint(
     except httpx.HTTPError as exc:
         raise HTTPException(502, f"Worker unreachable: {exc}")
     if response.status_code >= 400:
-        detail = ""
-        try:
-            detail = response.json().get("detail", "")
-        except Exception:
-            pass
         raise HTTPException(
             response.status_code if response.status_code in (400, 409) else 502,
-            detail or f"Worker returned {response.status_code}",
+            worker_response_cause(response),
         )
     return StatusResponse(status="ok")
 

@@ -39,7 +39,7 @@ def clear_cache() -> None:
                 try:
                     _predictor.model.cpu()
                 except Exception:
-                    pass
+                    log.warning("Moving AudioBox model to CPU failed", exc_info=True)
         _predictor = None
         _predictor_device = None
     gc.collect()

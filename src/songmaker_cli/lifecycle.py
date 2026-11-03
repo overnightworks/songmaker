@@ -87,7 +87,7 @@ def _codex_image_sandbox_runtime_error() -> str | None:
             (bubblewrap, *_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS),
             (bubblewrap, *_CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS),
         ):
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 - bwrap argv from module constants without a shell
                 command,
                 check=False,
                 stdin=subprocess.DEVNULL,

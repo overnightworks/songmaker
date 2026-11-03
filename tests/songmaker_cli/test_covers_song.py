@@ -11,6 +11,12 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy.orm import Session
+from support.cover_escape import (
+    SIBLING_DIRECTORY,
+    assert_escape_markers_survive,
+    cover_escape_layout,
+    unsafe_cover_id,
+)
 from support.web_app import make_test_app, seed_session, seed_user, web_client
 
 from songmaker_cli.cleanup import run_cleanup_expired
@@ -51,22 +57,7 @@ from songmaker_cli.settings import get_settings
 ALICE_PASSWORD = "alicepass1"
 BOB_PASSWORD = "bobpass12"
 
-UNSAFE_COVER_SONG_IDS = ("", ".", "..", "/tmp", "a/b")
-
-
-def _cover_escape_layout(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    marker = audio_dir / "marker.txt"
-    marker.write_text("keep")
-    sibling = tmp_path / "sibling"
-    sibling.mkdir()
-    sibling_marker = sibling / "marker.txt"
-    sibling_marker.write_text("keep")
-    legit = audio_dir / SONG_COVER_DIRNAME / "alice-song"
-    legit.mkdir(parents=True)
-    (legit / "keep.txt").write_text("keep")
-    return audio_dir, marker, sibling_marker, legit
+UNSAFE_COVER_SONG_IDS = ("", ".", "..", SIBLING_DIRECTORY, "a/b")
 
 
 def _jpeg_bytes(
@@ -509,54 +500,55 @@ def test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit(
     assert live_song_dir.is_dir()
 
 
-def _assert_escape_markers_survive(
-    audio_dir: Path, marker: Path, sibling_marker: Path, legit: Path,
-) -> None:
-    assert marker.read_text() == "keep"
-    assert sibling_marker.read_text() == "keep"
-    assert (legit / "keep.txt").read_text() == "keep"
-    assert audio_dir.is_dir()
-
-
 @pytest.mark.parametrize("song_id", UNSAFE_COVER_SONG_IDS)
 def test_write_song_cover_rejects_unsafe_song_ids(tmp_path: Path, song_id: str) -> None:
-    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    audio_dir, marker, sibling_marker, legit = cover_escape_layout(
+        tmp_path, Path(SONG_COVER_DIRNAME) / "alice-song",
+    )
+    song_id = unsafe_cover_id(song_id, sibling_marker)
     image = _png_bytes()
     with pytest.raises(CoverRejectedError, match=COVER_INVALID_SONG_ID):
         write_song_cover(audio_dir, song_id, image)
-    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
 @pytest.mark.parametrize("song_id", UNSAFE_COVER_SONG_IDS)
 def test_remove_song_cover_files_rejects_unsafe_song_ids(
     tmp_path: Path, song_id: str,
 ) -> None:
-    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    audio_dir, marker, sibling_marker, legit = cover_escape_layout(
+        tmp_path, Path(SONG_COVER_DIRNAME) / "alice-song",
+    )
+    song_id = unsafe_cover_id(song_id, sibling_marker)
     remove_song_cover_files(audio_dir, song_id)
-    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
 def test_remove_song_cover_files_logs_its_category_without_the_rejected_id(
     tmp_path: Path, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    audio_dir, marker, sibling_marker, legit = cover_escape_layout(
+        tmp_path, Path(SONG_COVER_DIRNAME) / "alice-song",
+    )
     rejected_id = "private-user-content/song"
 
     with caplog.at_level("WARNING", logger="songmaker_cli.covers"):
         remove_song_cover_files(audio_dir, rejected_id)
 
-    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
     assert rejected_id not in caplog.text
     assert "category: song-covers" in caplog.text
 
 
 def test_remove_song_cover_files_does_not_rmtree_audio_dir(tmp_path: Path) -> None:
-    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    audio_dir, marker, sibling_marker, legit = cover_escape_layout(
+        tmp_path, Path(SONG_COVER_DIRNAME) / "alice-song",
+    )
     nested = audio_dir / "other"
     nested.mkdir()
     (nested / "file.txt").write_text("keep")
     remove_song_cover_files(audio_dir, "..")
-    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
     assert (nested / "file.txt").read_text() == "keep"
 
 
@@ -564,12 +556,15 @@ def test_remove_song_cover_files_does_not_rmtree_audio_dir(tmp_path: Path) -> No
 def test_resolve_song_cover_file_rejects_unsafe_song_ids(
     tmp_path: Path, song_id: str,
 ) -> None:
-    audio_dir, marker, sibling_marker, legit = _cover_escape_layout(tmp_path)
+    audio_dir, marker, sibling_marker, legit = cover_escape_layout(
+        tmp_path, Path(SONG_COVER_DIRNAME) / "alice-song",
+    )
+    song_id = unsafe_cover_id(song_id, sibling_marker)
     with pytest.raises(FileNotFoundError):
         resolve_song_cover_file(
             audio_dir, song_id, "deadbeef.png", COVER_VARIANT_ORIGINAL,
         )
-    _assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
+    assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
 def test_write_song_cover_restores_live_dir_if_publish_rename_fails(

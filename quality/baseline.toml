@@ -60,7 +60,7 @@
 "frontend/src/routes/layout.test.ts" = 1414
 "frontend/src/routes/settings/users/+page.svelte" = 1123
 "frontend/src/routes/settings/users/page.test.ts" = 861
-"src/acestep_worker/wrapper.py" = 1089
+"src/acestep_worker/wrapper.py" = 1088
 "src/songmaker_cli/constants.py" = 814
 "src/songmaker_cli/conversation_api.py" = 972
 "src/songmaker_cli/jobs/generation.py" = 1151
@@ -70,7 +70,7 @@
 "tests/acestep_engine/test_client.py" = 870
 "tests/acestep_worker/test_wrapper.py" = 1631
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
-"tests/songmaker_cli/test_admin_api.py" = 1055
+"tests/songmaker_cli/test_admin_api.py" = 1036
 "tests/songmaker_cli/test_api.py" = 4751
 "tests/test_auto_deploy_alerting.py" = 1384
 "tests/songmaker_cli/test_conversation_api.py" = 842
@@ -355,9 +355,7 @@ test_list_albums_picked_count_zero_when_no_picks = [["tests/songmaker_cli/test_s
 "test_update_album_metadata_other_user_blocked._seed" = [["tests/songmaker_cli/test_request_policies_upload_limits.py", "_seed_owner"]]
 
 [clones."tests/songmaker_cli/test_covers_album.py"]
-_assert_escape_markers_survive = [["tests/songmaker_cli/test_covers_song.py", "_assert_escape_markers_survive"]]
 _authed_app = [["tests/songmaker_cli/test_covers_song.py", "_authed_app"]]
-_cover_escape_layout = [["tests/songmaker_cli/test_covers_song.py", "_cover_escape_layout"]]
 _jpeg_bytes = [["tests/songmaker_cli/test_covers_song.py", "_jpeg_bytes"]]
 _png_bytes = [["tests/songmaker_cli/test_covers_song.py", "_png_bytes"]]
 "_png_header.chunk" = [["tests/songmaker_cli/test_covers_song.py", "_png_header.chunk"]]

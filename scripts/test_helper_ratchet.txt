@@ -1,10 +1,8 @@
 backend _add_job 2
 backend _alembic_config 3
-backend _assert_escape_markers_survive 2
 backend _authed_app 3
 backend _codex_cover_dispatch 2
 backend _count_queries 4
-backend _cover_escape_layout 2
 backend _files 2
 backend _jpeg_bytes 2
 backend _later 2

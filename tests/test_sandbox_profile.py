@@ -65,7 +65,7 @@ def test_web_seccomp_profile_only_adds_the_bubblewrap_setup_extension() -> None:
 
 
 _CODEX_HOME_MOUNT = re.compile(
-    r"/tmp/(\{[^}]+\}|[A-Za-z0-9][A-Za-z0-9.*-]*)/" + re.escape(CODEX_HOME_DIRECTORY_NAME)
+    r"/tmp/(\{[^}]+\}|[A-Za-z0-9][A-Za-z0-9.*-]*)/" + re.escape(CODEX_HOME_DIRECTORY_NAME)  # noqa: S108 - pattern matches the AppArmor profile's /tmp mount rules and opens no file
 )
 
 

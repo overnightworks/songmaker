@@ -99,7 +99,7 @@ def _base_config(**overrides) -> AceStepConfig:
         (
             "repaint",
             {
-                "src_audio_path": "/tmp/src.wav",
+                "src_audio_path": "/worker-input/src.wav",
                 "repainting_start": 10.0,
                 "repainting_end": 20.0,
                 "repaint_mode": "balanced",
@@ -109,7 +109,7 @@ def _base_config(**overrides) -> AceStepConfig:
         (
             "cover",
             {
-                "src_audio_path": "/tmp/src.wav",
+                "src_audio_path": "/worker-input/src.wav",
                 "audio_cover_strength": 0.8,
                 "cover_noise_strength": 0.1,
             },

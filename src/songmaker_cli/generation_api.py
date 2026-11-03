@@ -145,7 +145,7 @@ def _resolve_source_wav(audio_dir: Path, gen: Generation, session: Session) -> P
         if ffmpeg is None:
             raise HTTPException(503, "ffmpeg is not available")
         try:
-            subprocess.run(
+            subprocess.run(  # noqa: S603 - ffmpeg argv without a shell and both paths lie under audio_dir so none starts with a dash
                 [ffmpeg, "-y", "-i", str(mp3), str(wav)],
                 check=True, capture_output=True,
             )

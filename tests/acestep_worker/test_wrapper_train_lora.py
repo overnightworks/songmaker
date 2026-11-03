@@ -885,7 +885,7 @@ def test_train_lora_pins_mode_from_eviction(tmp_path: Path) -> None:
             task_id,
             TrainLoraTaskResult(
                 mode=request.mode,
-                adapter_dir="/tmp/x",
+                adapter_dir=str(tmp_path / "x"),
                 num_samples=0,
             ),
         )
