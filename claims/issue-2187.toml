@@ -1,0 +1,8 @@
+claim_id = "795021017a114cd7b79b785a4deb6e2c"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "34da0831824cc5cbfb9a4ca4e1c420d3eb3b423a"
+branch = "claude/issue-2187-prod-security-markers"
+scope = ["scripts/grafana_password.py", "scripts/main_checkout.py", "scripts/prove_codex_image_sandbox.py", "scripts/rewrite_lib_imports.py", "scripts/similar_functions.py", "src/acestep_worker/settings.py", "src/audio_engine/audio_io.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/queue_streams.py"]
+opened_commit = "31bfaa77a5b7dfa401e669321ffde298cef96552"
+whole_reason = "One line each in twelve files, judged by one rule and proven by one hygiene diff."
