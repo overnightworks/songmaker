@@ -1,53 +1,30 @@
-import { mount, tick, unmount } from 'svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import type { ReferenceRecordingResponse } from '#lib/api/types.ts';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 
-const mocks = vi.hoisted(() => ({ listReferences: vi.fn() }));
+const mocks = vi.hoisted(() => ({ listReferences: vi.fn(), uploadReference: vi.fn() }));
 
 vi.mock('#lib/api/references.ts', async (importActual) => ({
 	...(await importActual<typeof import('#lib/api/references.ts')>()),
-	listReferences: (...args: unknown[]) => mocks.listReferences(...args)
+	listReferences: (...args: unknown[]) => mocks.listReferences(...args),
+	uploadReference: (...args: unknown[]) => mocks.uploadReference(...args)
 }));
 
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { makeGeneration } from '#lib/test-utils/factories.ts';
-import ReferencesPage from './+page.svelte';
-
-let mounted: ReturnType<typeof mount> | undefined;
-
-function referenceRecording(
-	overrides: Partial<ReferenceRecordingResponse>
-): ReferenceRecordingResponse {
-	return {
-		id: 'reference-1',
-		filename: 'voice-memo.mp3',
-		size_bytes: 1000,
-		duration_sec: 31.4,
-		created_at: '2026-10-27T10:00:00Z',
-		...overrides
-	};
-}
-
-async function renderReferencesPage(): Promise<HTMLElement> {
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted = mount(ReferencesPage, { target });
-	await tick();
-	return target;
-}
-
-function listedReferences(target: HTMLElement): { name: string; meta: string }[] {
-	return Array.from(target.querySelectorAll('.reference-row')).map((row) => ({
-		name: row.querySelector('.reference-name')?.textContent ?? '',
-		meta: row.querySelector('.reference-meta')?.textContent ?? ''
-	}));
-}
+import {
+	chooseFile,
+	listAnswer,
+	listedReferences,
+	renderReferencesPage,
+	referenceRecording,
+	unmountReferencesPage
+} from '#lib/test-utils/references.ts';
 
 let playSpy: MockInstance<HTMLMediaElement['play']>;
 let playOutcome: Promise<void>;
@@ -72,10 +49,12 @@ function referenceButtonLabels(target: HTMLElement): string[] {
 }
 
 async function renderTwoReferences(): Promise<HTMLElement> {
-	mocks.listReferences.mockResolvedValue([
-		referenceRecording({ id: 'a', filename: 'voice-memo.mp3' }),
-		referenceRecording({ id: 'b', filename: 'storytime-drums.wav' })
-	]);
+	mocks.listReferences.mockResolvedValue(
+		listAnswer([
+			referenceRecording({ id: 'a', filename: 'voice-memo.mp3' }),
+			referenceRecording({ id: 'b', filename: 'storytime-drums.wav' })
+		])
+	);
 	const target = await renderReferencesPage();
 	await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
 	return target;
@@ -99,13 +78,13 @@ beforeEach(() => {
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(new Date('2026-11-02T09:00:00Z'));
 	mocks.listReferences.mockReset();
+	mocks.uploadReference.mockReset();
 });
 
 afterEach(async () => {
 	vi.restoreAllMocks();
 	audioPlayer.destroy();
-	if (mounted) await unmount(mounted);
-	mounted = undefined;
+	await unmountReferencesPage();
 	document.body.replaceChildren();
 	resetConnectivityForTests();
 	vi.useRealTimers();
@@ -114,15 +93,17 @@ afterEach(async () => {
 
 describe('references page', () => {
 	it('lists each reference with its filename, length and upload day, in the order served', async () => {
-		mocks.listReferences.mockResolvedValue([
-			referenceRecording({ id: 'a', filename: 'voice-memo.mp3', duration_sec: 31.4 }),
-			referenceRecording({
-				id: 'b',
-				filename: 'storytime-drums.wav',
-				duration_sec: 62,
-				created_at: '2026-10-14T08:00:00Z'
-			})
-		]);
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([
+				referenceRecording({ id: 'a', filename: 'voice-memo.mp3', duration_sec: 31.4 }),
+				referenceRecording({
+					id: 'b',
+					filename: 'storytime-drums.wav',
+					duration_sec: 62,
+					created_at: '2026-10-14T08:00:00Z'
+				})
+			])
+		);
 		const target = await renderReferencesPage();
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
 
@@ -140,7 +121,9 @@ describe('references page', () => {
 	});
 
 	it('shows a dash for a reference whose length is unknown', async () => {
-		mocks.listReferences.mockResolvedValue([referenceRecording({ duration_sec: null })]);
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([referenceRecording({ duration_sec: null })])
+		);
 		const target = await renderReferencesPage();
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
 
@@ -158,7 +141,7 @@ describe('references page', () => {
 	});
 
 	it('says what references are for once the read answered with none', async () => {
-		mocks.listReferences.mockResolvedValue([]);
+		mocks.listReferences.mockResolvedValue(listAnswer([]));
 		const target = await renderReferencesPage();
 
 		await vi.waitFor(() =>
@@ -203,7 +186,7 @@ describe('references page', () => {
 		refuseRetry(new ApiError(500, 'boom', '/api/references'));
 		await vi.waitFor(() => expect(retry()).not.toBeNull());
 
-		mocks.listReferences.mockResolvedValue([referenceRecording({})]);
+		mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({})]));
 		clickRetry();
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
 
@@ -223,7 +206,7 @@ describe('references page', () => {
 		);
 		expect(target.querySelector('.empty')).toBeNull();
 
-		mocks.listReferences.mockResolvedValue([referenceRecording({})]);
+		mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({})]));
 		reportResourceStreamReachable(false);
 		reportResourceStreamReachable(true);
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
@@ -395,8 +378,7 @@ describe('references page', () => {
 			const stopped = vi.fn();
 			element.addEventListener('pause', stopped);
 
-			await unmount(mounted as ReturnType<typeof mount>);
-			mounted = undefined;
+			await unmountReferencesPage();
 
 			expect(stopped).toHaveBeenCalled();
 			expect(element.getAttribute('src')).toBeNull();
@@ -443,5 +425,36 @@ describe('references page', () => {
 			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
 			expect(target.querySelector('.reference-row.playing')).toBeNull();
 		});
+	});
+
+	it('keeps a playing preview and its source through the reload that follows an upload', async () => {
+		mocks.uploadReference.mockResolvedValue(referenceRecording({ id: 'new' }));
+		mocks.listReferences.mockResolvedValue(listAnswer([referenceRecording({ id: 'a' })]));
+		const target = await renderReferencesPage();
+		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
+		await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+		const preview = referenceElement() as HTMLAudioElement;
+		const playingSource = preview.src;
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([
+				referenceRecording({ id: 'new', filename: 'synth-hook.wav' }),
+				referenceRecording({ id: 'a' })
+			])
+		);
+
+		await chooseFile(target, new File(['x'], 'synth-hook.wav', { type: 'audio/wav' }));
+		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
+
+		expect(target.querySelector('.reference-row.playing .reference-name')?.textContent).toBe(
+			'voice-memo.mp3'
+		);
+		expect(preview.src).toBe(playingSource);
+
+		await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+		await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+		expect(preview.src).toBe(playingSource);
+
+		await pressReferenceControl(referencePlayButton(target, 'synth-hook.wav'));
+		expect(preview.src).toMatch(/\/api\/references\/new\/audio$/);
 	});
 });

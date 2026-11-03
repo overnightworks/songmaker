@@ -53,6 +53,7 @@
 		pin: '<line x1="12" x2="12" y1="17" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>',
 		x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
 		plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+		'arrow-up': '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
 		album:
 			'<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
 		playlist:
