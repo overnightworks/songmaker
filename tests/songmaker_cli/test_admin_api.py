@@ -298,7 +298,7 @@ def test_last_error_worker_list_requires_admin(client: TestClient, role: str) ->
 
 
 def test_last_error_stays_out_of_public_and_musician_paths(
-    client: TestClient, mock_arq_pool,
+    client: TestClient, mock_arq_pool, monitoring_headers,
 ) -> None:
     """S15-06: Last error stays out of public and musician paths."""
     import asyncio
@@ -335,7 +335,7 @@ def test_last_error_stays_out_of_public_and_musician_paths(
     client.app.state.background_loop_registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     _seed_worker(client, "w1")
     for path in ("/health", "/metrics"):
-        response = client.get(path)
+        response = client.get(path, headers=monitoring_headers)
         assert response.status_code == 200
         assert sentinel not in response.text
     _login_as_user(client)

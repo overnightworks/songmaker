@@ -156,6 +156,8 @@ class Settings(BaseSettings):
     redis_url: str
     session_secret: SecretStr
     songmaker_internal_token: SecretStr
+    # Optional so direct runs and tests start; /metrics answers 503 while unset.
+    songmaker_monitoring_token: SecretStr | None = None
 
     @field_validator("songmaker_release", "songmaker_commit", mode="before")
     @classmethod

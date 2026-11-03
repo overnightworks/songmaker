@@ -1389,11 +1389,11 @@ def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
     return web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
 
-def test_metrics_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
+def test_metrics_serves_prometheus_text(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     from songmaker_cli.constants import PROM_CONTENT_TYPE
     client = _make_metrics_client(tmp_path)
     with client:
-        resp = client.get("/metrics")
+        resp = client.get("/metrics", headers=monitoring_headers)
     assert resp.status_code == 200
     assert resp.headers["content-type"] == PROM_CONTENT_TYPE
     body = resp.text
@@ -1404,17 +1404,17 @@ def test_metrics_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
     assert "songmaker_queue_depth" in body
 
 
-def test_metrics_reflects_http_traffic(tmp_path: Path, mock_arq_pool) -> None:
+def test_metrics_reflects_http_traffic(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     client = _make_metrics_client(tmp_path)
     with client:
         client.get("/health")
         client.get("/health")
-        resp = client.get("/metrics")
+        resp = client.get("/metrics", headers=monitoring_headers)
     body = resp.text
     assert 'songmaker_http_requests_total{method="GET",status="200"}' in body
 
 
-def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
+def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     from songmaker_cli.db.models import Job
 
     audio_dir = tmp_path / "audio"
@@ -1445,14 +1445,14 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
     client = web_client(app)
 
     with client:
-        resp = client.get("/metrics")
+        resp = client.get("/metrics", headers=monitoring_headers)
     body = resp.text
     assert 'songmaker_jobs_total{type="generate",status="completed"} 1' in body
     assert "songmaker_job_duration_seconds" in body
 
 
 def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
-    tmp_path: Path, mock_arq_pool,
+    tmp_path: Path, mock_arq_pool, monitoring_headers,
 ) -> None:
     """S9-F: The failure sample excludes newer timestamped PARTIAL jobs.
 
@@ -1478,18 +1478,18 @@ def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
         session.commit()
 
     with client:
-        body = client.get("/metrics").text
+        body = client.get("/metrics", headers=monitoring_headers).text
 
     assert f"songmaker_last_job_failure_timestamp_seconds {newest.timestamp()}" in body
 
 
 def test_metrics_last_job_failure_timestamp_is_epoch_when_nothing_ever_failed(
-    tmp_path: Path, mock_arq_pool,
+    tmp_path: Path, mock_arq_pool, monitoring_headers,
 ) -> None:
     client = _make_metrics_client(tmp_path)
 
     with client:
-        body = client.get("/metrics").text
+        body = client.get("/metrics", headers=monitoring_headers).text
 
     assert "songmaker_last_job_failure_timestamp_seconds 0.0" in body
 
@@ -1678,7 +1678,7 @@ def _restore_arq_pool(saved) -> None:
 
 
 def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
-    tmp_path: Path, mock_arq_pool,
+    tmp_path: Path, mock_arq_pool, monitoring_headers,
 ) -> None:
     import json
 
@@ -1739,7 +1739,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
     with client:
         saved = _override_arq_pool(async_pool)
         try:
-            resp = client.get("/metrics")
+            resp = client.get("/metrics", headers=monitoring_headers)
         finally:
             _restore_arq_pool(saved)
 
@@ -1755,7 +1755,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
 
 
 def test_metrics_endpoint_offline_worker(
-    tmp_path: Path, mock_arq_pool,
+    tmp_path: Path, mock_arq_pool, monitoring_headers,
 ) -> None:
     import fakeredis.aioredis
 
@@ -1794,7 +1794,7 @@ def test_metrics_endpoint_offline_worker(
     with client:
         saved = _override_arq_pool(async_pool)
         try:
-            resp = client.get("/metrics")
+            resp = client.get("/metrics", headers=monitoring_headers)
         finally:
             _restore_arq_pool(saved)
 

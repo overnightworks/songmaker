@@ -158,12 +158,12 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool) -> None:
     assert resp.headers["Retry-After"] == "5"
 
 
-def test_metrics_with_redis(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
+def test_metrics_with_redis(tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with web_client(app) as client:
         client.get("/health")
-        resp = client.get("/metrics")
+        resp = client.get("/metrics", headers=monitoring_headers)
     body = resp.text
     assert "songmaker_http_requests_total" in body
     assert "songmaker_http_request_duration_milliseconds_total" in body

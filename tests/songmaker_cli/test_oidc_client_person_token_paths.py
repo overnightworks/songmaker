@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import event
 from sqlalchemy.orm import Session
@@ -268,6 +269,26 @@ def test_t14_a_path_outside_the_person_paths_answers_as_without_a_bearer(
     assert token_world.users() == []
 
 
+def test_t14_metrics_refuses_a_persons_token_and_makes_no_account_of_it(
+    token_world: TokenWorld,
+) -> None:
+    response = token_world.client.get("/metrics", headers=token_world.bearer())
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
+    assert token_world.users() == []
+
+
+def test_t14_metrics_serves_the_monitoring_token_beside_the_person_gate(
+    token_world: TokenWorld, mock_arq_pool, monitoring_headers: dict[str, str],
+) -> None:
+    with TestClient(token_world.client.app, base_url=TEST_ORIGIN, cookies={}) as running:
+        response = running.get("/metrics", headers=monitoring_headers)
+
+    assert response.status_code == 200
+    assert token_world.users() == []
+
+
 @pytest.mark.parametrize(
     ("requested_header", "status"),
     [("content-type", 200), ("authorization", 400)],
@@ -295,6 +316,7 @@ def test_t15_compose_hands_token_clients_to_the_web_service_only(tmp_path: Path)
     env_file = tmp_path / "scratch.env"
     env_file.write_text(
         "GRAFANA_PASSWORD=scratch-grafana-password-not-a-secret\n"
+        "SONGMAKER_MONITORING_TOKEN=scratch-monitoring-token-not-a-secret\n"
         "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
         f"TOKEN_CLIENTS={TokenWorld.HAL}\n",
     )

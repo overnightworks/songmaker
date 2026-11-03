@@ -23,6 +23,7 @@ env:
   POSTGRES_PASSWORD: e2e-ci-postgres-password
   SESSION_SECRET: e2e-ci-session-secret-do-not-reuse-anywhere-else
   SONGMAKER_INTERNAL_TOKEN: e2e-ci-internal-token
+  SONGMAKER_MONITORING_TOKEN: e2e-ci-monitoring-token
   # The admin account the seeding helper creates (frontend/e2e/support/seed_sessions.py).
   E2E_ADMIN_USERNAME: e2e-ci-admin
   # No identity provider runs in this stack: web boots without reaching the
