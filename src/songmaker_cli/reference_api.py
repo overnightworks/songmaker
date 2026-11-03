@@ -60,6 +60,12 @@ INVALID_FILENAME_DETAIL: Final = "Invalid filename."
 _CONTROL_CHARACTER: Final = re.compile(r"[\x00-\x1f]")
 
 
+def _log_send_ended(exc: OSError) -> None:
+    log.error(  # NOSONAR(S8572) A traceback would carry the path, which this log never holds.
+        "Reference audio ended while it was sent: %s", type(exc).__name__,
+    )
+
+
 class OpenedFileResponse(FileResponse):
     """A file response whose ``stat_result`` the caller took from the open file.
 
@@ -77,7 +83,7 @@ class OpenedFileResponse(FileResponse):
         try:
             await super().__call__(scope, receive, send)
         except OSError as exc:
-            log.error("Reference audio ended while it was sent: %s", type(exc).__name__)
+            _log_send_ended(exc)
 
 
 @router.get("/references")
@@ -150,21 +156,22 @@ def api_delete_reference(
     recording = get_owned_reference_recording(session, user.id, reference_id, lock=True)
     if recording is None:
         raise HTTPException(404)
+    recording_id = recording.id
     if not is_owner_storage_path(user.id, recording.storage_path):
-        log.error("Reference %s of user %s kept: corrupt_path", reference_id, user.id)
+        log.error("Reference %s of user %s kept: corrupt_path", recording_id, user.id)
         raise HTTPException(500, REFERENCE_AUDIO_STORAGE_DETAIL)
     try:
         storage_path = delete_reference_recording(session, recording)
     except IntegrityError:
         session.rollback()
-        log.info("Reference %s of user %s kept: in_use", reference_id, user.id)
+        log.info("Reference %s of user %s kept: in_use", recording_id, user.id)
         raise HTTPException(409, REFERENCE_IN_USE_DETAIL) from None
-    record_audit(session, user.id, AuditAction.DELETE, ResourceType.REFERENCE, reference_id)
+    record_audit(session, user.id, AuditAction.DELETE, ResourceType.REFERENCE, recording_id)
     session.commit()
     outcome = remove_reference_file(ctx.audio_dir, user.id, storage_path)
     log.log(
         logging.WARNING if outcome is RemovalOutcome.FAILED else logging.INFO,
-        "Reference %s of user %s deleted: file %s", reference_id, user.id, outcome.value,
+        "Reference %s of user %s deleted: file %s", recording_id, user.id, outcome.value,
     )
     return Response(status_code=204)
 
