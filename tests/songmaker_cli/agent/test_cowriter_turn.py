@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import socket
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,6 +23,7 @@ from support.cowriter_gateway import (
     CowriterStack,
     agent_config,
     attach_cowriter_gateway,
+    closed_port_origin,
     stops,
 )
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
@@ -152,12 +152,6 @@ def test_a_handler_that_raises_gives_the_model_a_fixed_sentence_and_logs_the_cla
     assert _frame(events, "final")["assistant_message"]["content"] == "That failed."
 
 
-def _closed_port_origin() -> str:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return f"http://127.0.0.1:{probe.getsockname()[1]}"
-
-
 def _backend_without_key(world: World) -> GatewayBackend:
     config = AgentConfig(
         backend=world.stack.config.backend,
@@ -181,7 +175,7 @@ def _arrange_reply(world: World, arrangement: str) -> None:
                 completion("   "),
             )
         case "refused-connection":
-            config = agent_config(world.tmp_path, origin=_closed_port_origin())
+            config = agent_config(world.tmp_path, origin=closed_port_origin())
             world.stack.app.state.agent_backend = GatewayBackend(
                 config, tools=cowriter_hand_tools(world.factory),
             )
@@ -302,6 +296,20 @@ def test_a_refused_agent_file_ends_the_turn_unavailable_and_is_logged(world, mon
     assert (problem["status"], problem["problem"]) == (503, "unavailable")
     assert "agent file" in caplog.text
     assert world.stack.gateway_requests == []
+
+
+def test_an_event_the_turn_does_not_know_fails_the_turn_and_stores_no_answer(world, caplog):
+    async def foreign_event(_request, _person):
+        yield object()
+
+    world.stack.behaves(foreign_event)
+
+    with caplog.at_level(logging.ERROR):
+        events = world.turn()
+
+    assert _types(events)[-1] == "error"
+    assert "Co-writer chat failed (AssertionError)" in caplog.text
+    assert world.stored_roles() == ["user"]
 
 
 _FINGERPRINT = re.compile(r"fp-[0-9a-f]{64}")

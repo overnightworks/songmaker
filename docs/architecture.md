@@ -17,8 +17,8 @@
                     └──┬─────────┬──────────┬─────────────┘
                        │         │          │
                        ▼         ▼          ▼
-                 PostgreSQL    Redis    Agent service / cover provider
-                 (all data)   (queues,  (co-writer turns; cover image)
+                 PostgreSQL    Redis    Cover provider
+                 (all data)   (queues,  (cover image)
                               sessions,
                               rate limits)
 ```
@@ -1032,7 +1032,7 @@ Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the
 
 `db/queries/settings.py` owns the Cover selection. Cover captures its provider,
 model, and explicit `cli` or `api` route before work begins.
-The Co-Writer has no selection here: the agent file names the turn's model (`model: text/haiku`), and the rows once saved for it stay in the table unread. The rows
+The Co-Writer has no selection here: the agent file `agents/cowriter.md` names the turn's model, and the rows once saved for it stay in the table unread. The rows
 once saved for the removed judge stay in the table unread as well.
 `agent_providers/dispatch.py`
 owns the resulting adapter decision for the Cover (the Co-Writer
@@ -1059,7 +1059,7 @@ the gateway. Settings › Admin › **Agents** shows the Co-Writer and Cover: on
 row per task, with Task, Provider, Route, Model and Status. The Co-Writer row is
 read-only (`ModelsCowriterRow.svelte`): "Set by the agent service" in the Provider
 and Model cells, Agent service as the route, no status, and the history tail under
-Advanced; the app reads no service setting and names no model the service decides.
+Advanced; the model is the agent file's, never a setting the app reads.
 The Cover row offers every provider, the list its own settings response carries, because what a provider
 cannot do, or has not been set up for, is a reason next to the choice and never
 a missing control: an unusable route stays visible and greyed with its reason

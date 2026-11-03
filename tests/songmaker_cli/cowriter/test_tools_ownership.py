@@ -224,15 +224,16 @@ def test_admin_foreign_context_loads_but_tool_access_is_denied(ownership_factory
 
 @pytest.mark.parametrize("role", ["user", "admin"])
 @pytest.mark.parametrize("identity", ["actor", "foreign"])
+@pytest.mark.parametrize("route", ["in-process", "hand-tool"])
 def test_the_coherence_verdict_is_stored_only_on_the_actors_own_take(
-    ownership_factory, monkeypatch, role, identity,
+    ownership_factory, monkeypatch, role, identity, route,
 ):
     """REQ-COWRITER-34: the verdict reaches the owner's take and nothing else."""
     with ownership_factory() as session:
         session.get(User, "actor").role = role
         session.commit()
     is_error, payload = _dispatch_ownership_tool(
-        ownership_factory, monkeypatch, "in-process", VERDICT_TOOL,
+        ownership_factory, monkeypatch, route, VERDICT_TOOL,
         _ownership_arguments(identity)[VERDICT_TOOL],
     )
 

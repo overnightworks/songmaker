@@ -323,9 +323,10 @@ def test_a_malformed_agent_value_stops_startup(
     monkeypatch: pytest.MonkeyPatch, environment: dict[str, str],
 ) -> None:
     _with_environment(monkeypatch, environment)
+    required = _required_settings()
 
     with pytest.raises(ValidationError, match="agent"):
-        Settings(**_required_settings())
+        Settings(**required)
 
 
 def test_a_wrongly_delimited_agent_name_is_ignored_and_reads_as_unset(
@@ -344,5 +345,6 @@ def test_a_dotenv_key_starting_with_agent_passes_and_another_unknown_one_is_refu
     assert Settings(**_required_settings(), _env_file=dotenv).agent is None
 
     dotenv.write_text("UNKNOWN_SETTING=1\n")
+    required = _required_settings()
     with pytest.raises(ValidationError, match="unknown_setting"):
-        Settings(**_required_settings(), _env_file=dotenv)
+        Settings(**required, _env_file=dotenv)

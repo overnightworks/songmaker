@@ -440,7 +440,6 @@ def run_server(
             d.mkdir(parents=True)
 
     app = create_app(audio_dir, data_dir, project_root)
-    # Imported here: create_app and the CI jobs without the agent extra import nothing new.
     from songmaker_cli.agent.backend import compose_agent_backend
 
     compose_agent_backend(app, settings)

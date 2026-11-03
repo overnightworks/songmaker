@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 from dataclasses import dataclass
 from importlib.resources import files
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, assert_never
 
 from agent_runtime_client import turn_events
 from agent_runtime_client.agents import AgentDefinition, AgentFileError, TurnRequest, load_agent
@@ -82,7 +82,7 @@ class TurnCaller:
     user: AuthenticatedUser
 
 
-class _GroupsRefused(Exception):  # noqa: N818 - carries the realm's refusal, not an error to name
+class _GroupsRefusedError(Exception):
     def __init__(self, refusal: AccessTokenRefusal) -> None:
         super().__init__(refusal.reason.value)
         self.refusal = refusal
@@ -138,7 +138,7 @@ async def _run(
                 yield _outcome_of(event)
         except TurnStopped as stopped:
             yield _problem_of_stop(stopped)
-        except _GroupsRefused as refused:
+        except _GroupsRefusedError as refused:
             yield _problem_of_refusal(refused.refusal)
 
 
@@ -159,7 +159,7 @@ def _groups_of(caller: TurnCaller) -> GroupSource:
             config=installed_web_auth_config(app),
         )
         if isinstance(found, AccessTokenRefusal):
-            raise _GroupsRefused(found)
+            raise _GroupsRefusedError(found)
         return frozenset(found)
 
     return groups
@@ -174,7 +174,9 @@ def _outcome_of(event: TurnEvent) -> TurnOutcome:
         return ToolResultEvent(
             tool_use_id=event.tool_use_id, content=event.content, is_error=event.is_error,
         )
-    return TurnAnswer(event.text)
+    if isinstance(event, turn_events.FinalEvent):
+        return TurnAnswer(event.text)
+    assert_never(event)
 
 
 def _problem_of_stop(stopped: TurnStopped) -> TurnProblem:

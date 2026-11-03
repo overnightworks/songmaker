@@ -9,6 +9,7 @@ cannot script: one held open, one that raises, one that stops short.
 
 from __future__ import annotations
 
+import socket
 from collections.abc import AsyncGenerator, Callable
 from contextlib import aclosing
 from dataclasses import dataclass, field
@@ -49,6 +50,13 @@ def agent_config(directory: Path, *, origin: str = GATEWAY_ORIGIN) -> AgentConfi
         gateway=ChatGateway(origin=origin, key_file=key_file),
         api_group=API_GROUP,
     )
+
+
+def closed_port_origin() -> str:
+    """An origin on this machine where nothing listens, so a connection to it is refused."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return f"http://127.0.0.1:{probe.getsockname()[1]}"
 
 
 class ScriptedBackend:
@@ -94,10 +102,6 @@ class RecordedTurn:
             {"role": message.role.value, "text": message.text}
             for message in self.request.turn.messages
         ]
-
-    @property
-    def system(self) -> str:
-        return self.request.turn.system
 
 
 class _RecordingBackend:
