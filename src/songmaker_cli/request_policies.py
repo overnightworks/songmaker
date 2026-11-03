@@ -98,8 +98,9 @@ BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 # `build_rate_limit_policy` from `SIGN_IN_PATHS`.
 #
 # `/health` is deliberately NOT here: it is the most expensive anonymous
-# endpoint (a DB query plus ~6 Redis round trips for worker/queue state),
-# the container healthcheck (every 30s) and the CI smoke are its callers --
+# endpoint (a DB check and two DB queries, plus Redis reads that grow with
+# the registered workers), the container healthcheck (every 30s), the CI smoke
+# and CI's E2E are its callers --
 # exempting it would let an anonymous caller hammer the priciest endpoint
 # for free. It stays in the API class.
 RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({

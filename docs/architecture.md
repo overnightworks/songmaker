@@ -1402,7 +1402,7 @@ the event loop closes.
 
 | Loop | Cadence | Owner and result |
 | --- | --- | --- |
-| `provider_status_refresh` | 30 seconds | The co-writer catalog refreshes each provider's reachability and model snapshot. One provider failure is logged without stopping the sweep; `/health` reports the loop through the shared registry. |
+| `provider_status_refresh` | 30 seconds | The co-writer catalog refreshes each provider's reachability and model snapshot. One provider failure is logged without stopping the sweep; `/health/details` reports the loop through the shared registry. |
 
 The first provider refresh is the loop's first tick after lifespan startup, not a
 synchronous boot probe. Settings requests read the last snapshot only; an empty
@@ -1564,13 +1564,14 @@ close the stream.
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
 | PUT | `/api/memory/albums/{id}` | user | Replace album-scope co-writer notes |
 | GET | `/api/capabilities` | user | Feature flags |
-| GET | `/api/release` | user | The release tag and commit the running image was built for, the `release` object `/health` also reports; Settings › About shows it |
+| GET | `/api/release` | user | The release tag and commit the running image was built for, the `release` object `/health/details` also reports; Settings › About shows it |
 | * | `/api/admin/*` | admin | ACE-Step control |
 | GET | `/api/auth/me` | user | The signed-in account |
 | GET | `/login/oidc` | public | Start the Keycloak sign-in (303); `next` is a path of this app |
 | GET | `/auth/callback` | public | Finish the sign-in: 303 to `next` or `/`, to `/no-access` for a non-member, else 403 with the SPA shell |
 | POST | `/auth/logout` | public | End the session and answer the page that ends the Keycloak session |
-| GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths, running release and commit |
+| GET | `/health` | public | The readiness status, `ok` or `degraded`, and nothing else |
+| GET | `/health/details` | monitoring token | Per-worker status, DB, Redis, ACE-Step, queue depths, background loops, running release and commit |
 | GET | `/metrics` | monitoring token | Job stats, HTTP counters, VRAM usage (Prometheus) |
 | POST/DELETE | `/api/albums/{id}/share` | user | Enable/revoke album sharing |
 | POST/DELETE | `/api/songs/{id}/share` | user | Enable/revoke song sharing. An archived Pick is not kept by it. |
@@ -1741,7 +1742,7 @@ unknown. Running jobs still use `heartbeat_at`. Worker
 startup/shutdown recovery is separate: it records that a worker process
 restarted, rather than deciding whether a still-running job is stale. An
 active job type without a policy-table row is a loop failure and is exposed by
-`/health`; it is never silently skipped.
+`/health/details`; it is never silently skipped.
 The request path supplies the same Redis-derived liveness map before it
 reclaims a submitting user's stale jobs, so admission and lifecycle recovery
 apply the same queued-job rule.
@@ -1945,12 +1946,12 @@ Exported metrics: `songmaker_http_requests_total`, `songmaker_http_request_durat
 
 Access logs and HTTP duration metrics are recorded when the full exchange ends, including the lifetime of an SSE stream; an error or cancellation before response start is logged and counted as 500.
 
-Health endpoint at `/health` reports:
+`GET /health` answers only `status` (below) to anyone. `GET /health/details`, behind the monitoring token (the one that guards `/metrics`), reports:
 - `music_worker`: running/stopped
 - `scoring_worker`: running/stopped
 - `music_queue_depth`, `scoring_queue_depth`: jobs waiting per queue
 - `background_loops`: each registered loop's `ok`, `failing`, or `dead` state, consecutive-failure count, and latest error
-- `db`, `redis`, `acestep`: component health. An ACE-Step worker only counts as online (`songmaker_cli.acestep_state.worker_is_online`, the one function every caller — `/health`, `/metrics`, the scheduler's worker picker, the generate/repaint/cover preflight, the admin worker pool and model registry — goes through) if its heartbeat both exists in Redis *and* reports `gpu_healthy: true` — a worker whose GPU has gone away (NVML present but unreachable: a driver/GPU mismatch, a vanished device) keeps heartbeating just fine, so heartbeat presence alone is not enough (issue #367). A heartbeat missing the `gpu_healthy` key entirely counts as **not** online — fail-closed, since this is a single-host deployment where every container is rebuilt in one `docker compose up --build`; a lenient default would only ever hide an old or broken worker build forever. That deploy has no ordering guarantee between `songmaker-web` and the acestep-worker — they share no `depends_on`, so which finishes building and starts first is not assured — and `docker compose up -d --wait` can run for up to `COMPOSE_UP_WAIT_TIMEOUT_SECONDS` (20 minutes) on a cold cache. The worker publishes its first heartbeat immediately on start, so the mixed-version window is normally seconds; the worst case is however long the new worker container takes to start, not a fixed bound. For the deployment this project runs — a single host, one operator watching the deploy — that worst case is acceptable to simply wait out: every caller above honestly reports "no worker online" for as long as the window lasts, rather than guessing. A staged or ordered rollout that shortens the window is a separate concern, not one this single-machine deployment needs solved here.
+- `db`, `redis`, `acestep`: component health. An ACE-Step worker only counts as online (`songmaker_cli.acestep_state.worker_is_online`, the one function every caller — `/health/details`, `/metrics`, the scheduler's worker picker, the generate/repaint/cover preflight, the admin worker pool and model registry — goes through) if its heartbeat both exists in Redis *and* reports `gpu_healthy: true` — a worker whose GPU has gone away (NVML present but unreachable: a driver/GPU mismatch, a vanished device) keeps heartbeating just fine, so heartbeat presence alone is not enough (issue #367). A heartbeat missing the `gpu_healthy` key entirely counts as **not** online — fail-closed, since this is a single-host deployment where every container is rebuilt in one `docker compose up --build`; a lenient default would only ever hide an old or broken worker build forever. That deploy has no ordering guarantee between `songmaker-web` and the acestep-worker — they share no `depends_on`, so which finishes building and starts first is not assured — and `docker compose up -d --wait` can run for up to `COMPOSE_UP_WAIT_TIMEOUT_SECONDS` (20 minutes) on a cold cache. The worker publishes its first heartbeat immediately on start, so the mixed-version window is normally seconds; the worst case is however long the new worker container takes to start, not a fixed bound. For the deployment this project runs — a single host, one operator watching the deploy — that worst case is acceptable to simply wait out: every caller above honestly reports "no worker online" for as long as the window lasts, rather than guessing. A staged or ordered rollout that shortens the window is a separate concern, not one this single-machine deployment needs solved here.
 - `acestep_reason`: `lm_init_failed` while a registered worker carries the `songmaker:acestep:lm-failure:{id}` key (its language model cannot start and its restart is retrying the load), otherwise `null`. A fixed code read from the key's existence only; the worker id, the mode and the vendor's error text never appear in the body.
 - `release`: `{tag, commit}` of the running image, the full 40-character commit. The root `Dockerfile` takes the build arguments `SONGMAKER_RELEASE` and `SONGMAKER_COMMIT` in its backend stage and writes them into the image as `ENV`; `Settings` is their only reader and `ReleaseInfo` (`api_models/release.py`) their one shape. Compose passes both to `migrate` and `songmaker-web`, the auto-deploy tick exports them, and the CI e2e stack passes the commit. A value that is unset or blank resolves to the named constants `UNRELEASED_TAG` and `UNKNOWN_COMMIT` (`settings.py`); the build is never refused and no tag is invented.
 - `status`: "ok" or "degraded" (degraded if both workers down, DB down, Redis down, or `acestep` is unhealthy). The HTTP status code stays 200 even when degraded or a background loop is dead: a 503 here would fail `songmaker-web`'s own Docker healthcheck over a *different* container's GPU going away, and auto-deploy's `--wait` would then refuse every deploy for the exact duration of the outage a fix is meant to end. `songmaker_acestep_workers_total{status="online"} == 0` and `songmaker_background_loop_alive == 0 or songmaker_background_loop_consecutive_failures >= 3` (issue #333) carry alerts instead — the Docker healthcheck answers "is this container alive", not "is the fleet healthy".

@@ -113,12 +113,6 @@ export interface AvailableModel {
 	capabilities?: ModelCapabilities | null;
 }
 
-export interface BackgroundLoopResponse {
-	state: 'ok' | 'failing' | 'dead';
-	consecutive_failures: number;
-	last_error: string | null;
-}
-
 export interface BulkDeleteRequest {
 	generation_ids: string[];
 }
@@ -379,26 +373,6 @@ export interface GenerationUnavailableResponse {
 	detail: string;
 	error_type: string;
 	job_id: string;
-}
-
-export interface HealthResponse {
-	status: 'ok' | 'degraded';
-	music_worker: 'running' | 'stopped';
-	scoring_worker: 'running' | 'stopped';
-	music_queue_depth: number;
-	scoring_queue_depth: number;
-	db: 'ok' | 'error';
-	redis: 'ok' | 'error';
-	acestep: 'healthy' | 'unknown' | 'unhealthy';
-	acestep_reason: 'lm_init_failed' | null;
-	acestep_workers_total: number;
-	acestep_workers_online: number;
-	queue_depth_cap_reached: boolean;
-	uptime_seconds: number;
-	claude_cli_tool_surface: 'ok' | 'drift' | 'unverified';
-	codex_image_sandbox_runtime: 'ready' | 'not_set_up' | 'unverified';
-	background_loops: Record<'cover_runner' | 'session_cleanup' | 'resource_event_cleanup' | 'score_backfill' | 'stale_job_reaper' | 'provider_status_refresh', BackgroundLoopResponse>;
-	release: ReleaseInfo;
 }
 
 export interface JobItem {

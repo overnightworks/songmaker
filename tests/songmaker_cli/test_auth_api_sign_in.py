@@ -611,6 +611,7 @@ def test_the_secret_is_in_no_log_and_no_response_of_the_sign_in(world: World, ca
 
 def test_the_refresh_token_is_stored_with_the_session_and_reaches_no_log_or_response(
     world: World, caplog,
+    monitoring_headers,
 ) -> None:
     refresh_token = "rt-0123456789-never-shown"
     person = Person(SUBJECT, "felix", (MEMBER,), refresh_token)
@@ -622,7 +623,7 @@ def test_the_refresh_token_is_stored_with_the_session_and_reaches_no_log_or_resp
             world.client.post("/auth/logout", headers=_same_origin()),
         ]
         with world.client:
-            responses.append(world.client.get("/health"))
+            responses.append(world.client.get("/health/details", headers=monitoring_headers))
 
     assert refresh_token not in caplog.text
     for response in responses:
@@ -674,9 +675,11 @@ def test_the_id_token_is_in_no_log_and_no_url_of_the_sign_in_and_the_sign_out(
     assert token in signed_out.text
 
 
-def test_health_carries_neither_the_secret_nor_the_path_it_is_read_from(world: World) -> None:
+def test_health_carries_neither_the_secret_nor_the_path_it_is_read_from(
+    world: World, monitoring_headers,
+) -> None:
     with world.client:
-        response = world.client.get("/health")
+        response = world.client.get("/health/details", headers=monitoring_headers)
 
     assert TEST_CLIENT_SECRET not in response.text
     assert os.environ["OIDC_CLIENT_SECRET_FILE"] not in response.text

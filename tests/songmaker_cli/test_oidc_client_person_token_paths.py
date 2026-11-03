@@ -269,21 +269,23 @@ def test_t14_a_path_outside_the_person_paths_answers_as_without_a_bearer(
     assert token_world.users() == []
 
 
-def test_t14_metrics_refuses_a_persons_token_and_makes_no_account_of_it(
-    token_world: TokenWorld,
+@pytest.mark.parametrize("path", ["/metrics", "/health/details"])
+def test_t14_monitoring_refuses_a_persons_token_and_makes_no_account_of_it(
+    token_world: TokenWorld, path: str,
 ) -> None:
-    response = token_world.client.get("/metrics", headers=token_world.bearer())
+    response = token_world.client.get(path, headers=token_world.bearer())
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Not authenticated"}
     assert token_world.users() == []
 
 
-def test_t14_metrics_serves_the_monitoring_token_beside_the_person_gate(
-    token_world: TokenWorld, mock_arq_pool, monitoring_headers: dict[str, str],
+@pytest.mark.parametrize("path", ["/metrics", "/health/details"])
+def test_t14_monitoring_serves_the_monitoring_token_beside_the_person_gate(
+    token_world: TokenWorld, mock_arq_pool, monitoring_headers: dict[str, str], path: str,
 ) -> None:
     with TestClient(token_world.client.app, base_url=TEST_ORIGIN, cookies={}) as running:
-        response = running.get("/metrics", headers=monitoring_headers)
+        response = running.get(path, headers=monitoring_headers)
 
     assert response.status_code == 200
     assert token_world.users() == []

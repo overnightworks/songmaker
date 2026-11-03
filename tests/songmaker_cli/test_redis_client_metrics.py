@@ -95,7 +95,9 @@ def _make_redis_ctx(tmp_path: Path, fake_redis) -> tuple[AppContext, Path, Path,
     return ctx, audio_dir, data_dir, project_root
 
 
-def test_health_reports_redis_ok(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
+def test_health_reports_redis_ok(
+    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers,
+) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with (
@@ -105,17 +107,19 @@ def test_health_reports_redis_ok(tmp_path: Path, fake_redis, mock_arq_pool) -> N
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", return_value=0),
         web_client(app) as client,
     ):
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
     data = resp.json()
     assert data["redis"] == "ok"
 
 
-def test_health_reports_redis_error(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
+def test_health_reports_redis_error(
+    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers,
+) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with web_client(app) as client:
         with patch("songmaker_cli.redis_client.redis_health", return_value=False):
-            resp = client.get("/health")
+            resp = client.get("/health/details", headers=monitoring_headers)
     data = resp.json()
     assert data["redis"] == "error"
     assert data["status"] == "degraded"
@@ -162,7 +166,7 @@ def test_metrics_with_redis(tmp_path: Path, fake_redis, mock_arq_pool, monitorin
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with web_client(app) as client:
-        client.get("/health")
+        client.get("/health/details", headers=monitoring_headers)
         resp = client.get("/metrics", headers=monitoring_headers)
     body = resp.text
     assert "songmaker_http_requests_total" in body

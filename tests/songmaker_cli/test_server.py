@@ -8,6 +8,7 @@ import dataclasses
 import hashlib
 import json
 import logging
+import os
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -16,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from support.web_app import (
     TEST_SECRET,
     make_fake_redis,
@@ -1187,7 +1189,9 @@ class TestConfigureLogging:
 # ── health endpoint ──────────────────────────────────────────────
 
 
-def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
+def test_health_details_report_an_idle_service(
+    tmp_path: Path, mock_arq_pool, monitoring_headers,
+) -> None:
     from unittest.mock import AsyncMock
 
     audio_dir = tmp_path / "audio"
@@ -1219,7 +1223,7 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
     ):
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["db"] == "ok"
@@ -1234,7 +1238,7 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
     assert isinstance(data["uptime_seconds"], int)
 
 
-def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
+def test_health_with_worker_running(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     from unittest.mock import AsyncMock
 
     audio_dir = tmp_path / "audio"
@@ -1266,7 +1270,7 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=2)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=1)),
     ):
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
@@ -1278,7 +1282,9 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
     assert data["acestep_workers_total"] == 0
 
 
-def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> None:
+def test_health_degraded_when_worker_stopped(
+    tmp_path: Path, mock_arq_pool, monitoring_headers,
+) -> None:
     from unittest.mock import AsyncMock
 
     audio_dir = tmp_path / "audio"
@@ -1310,12 +1316,12 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> N
         patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
     ):
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
     assert resp.json()["status"] == "degraded"
 
 
-def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
+def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     from unittest.mock import AsyncMock
 
     from songmaker_cli.db.models import Job
@@ -1355,8 +1361,9 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
     ):
         mock_settings.return_value.configure_mock(
             max_queue_depth=2, songmaker_release=UNRELEASED_TAG, songmaker_commit=UNKNOWN_COMMIT,
+            songmaker_monitoring_token=SecretStr(os.environ["SONGMAKER_MONITORING_TOKEN"]),
         )
-        resp = client.get("/health")
+        resp = client.get("/health/details", headers=monitoring_headers)
     assert resp.status_code == 200
     assert resp.json()["queue_depth_cap_reached"] is True
 
@@ -1407,8 +1414,8 @@ def test_metrics_serves_prometheus_text(tmp_path: Path, mock_arq_pool, monitorin
 def test_metrics_reflects_http_traffic(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
     client = _make_metrics_client(tmp_path)
     with client:
-        client.get("/health")
-        client.get("/health")
+        client.get("/health/details", headers=monitoring_headers)
+        client.get("/health/details", headers=monitoring_headers)
         resp = client.get("/metrics", headers=monitoring_headers)
     body = resp.text
     assert 'songmaker_http_requests_total{method="GET",status="200"}' in body

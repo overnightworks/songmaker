@@ -19,7 +19,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
 
 from songmaker_cli import acestep_state, arq_pool, redis_client, settings
-from songmaker_cli.api_models.health import HealthResponse, HealthSignals
+from songmaker_cli.api_models.health import HealthResponse, HealthSignals, HealthStatusResponse
 from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -338,8 +338,7 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
 
 
-@router.get("/health")
-async def health_check(request: Request) -> HealthResponse:
+async def _read_health_signals(request: Request) -> HealthSignals:
     ctx: AppContext = request.app.state.ctx
     startup_time: datetime = getattr(
         request.app.state, "startup_time", datetime.now(timezone.utc),
@@ -369,7 +368,7 @@ async def health_check(request: Request) -> HealthResponse:
         workers_lm_failed |= await acestep_state.worker_lm_failed(pool, w.id)
 
     redis_ok = redis_client.redis_health(ctx.redis)
-    return HealthResponse.from_signals(HealthSignals(
+    return HealthSignals(
         db_ok=db_ok,
         redis_ok=redis_ok,
         music_running=music_running,
@@ -385,4 +384,14 @@ async def health_check(request: Request) -> HealthResponse:
         codex_image_sandbox_runtime=codex_image_sandbox_runtime_health(),
         background_loops=request.app.state.background_loop_registry.loop_health(),
         release=ReleaseInfo.from_settings(config),
-    ))
+    )
+
+
+@router.get("/health")
+async def health_check(request: Request) -> HealthStatusResponse:
+    return HealthStatusResponse.from_signals(await _read_health_signals(request))
+
+
+@router.get("/health/details", dependencies=[Depends(require_monitoring_token)])
+async def health_details(request: Request) -> HealthResponse:
+    return HealthResponse.from_signals(await _read_health_signals(request))

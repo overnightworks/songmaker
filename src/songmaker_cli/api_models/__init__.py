@@ -17,7 +17,7 @@ from songmaker_cli.api_models.cover_suggestions import (
     CoverSuggestionSelectionRequest,
     CoverSuggestionsResponse,
 )
-from songmaker_cli.api_models.health import HealthResponse
+from songmaker_cli.api_models.health import HealthResponse, HealthStatusResponse
 from songmaker_cli.api_models.jobs import GenerationUnavailableResponse, JobResponse
 from songmaker_cli.api_models.library import (
     LIBRARY_SORT_VALUES,
@@ -264,6 +264,7 @@ __all__ = [
     "GenerationResponse",
     "GenerationRetentionReportResponse",
     "HealthResponse",
+    "HealthStatusResponse",
     "JobResponse",
     "LoraCapacityErrorResponse",
     "GenerationUnavailableResponse",

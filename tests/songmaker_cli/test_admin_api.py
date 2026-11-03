@@ -334,7 +334,7 @@ def test_last_error_stays_out_of_public_and_musician_paths(
     asyncio.run(prepare_pool())
     client.app.state.background_loop_registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     _seed_worker(client, "w1")
-    for path in ("/health", "/metrics"):
+    for path in ("/health/details", "/metrics"):
         response = client.get(path, headers=monitoring_headers)
         assert response.status_code == 200
         assert sentinel not in response.text
