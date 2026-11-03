@@ -1,0 +1,8 @@
+claim_id = "06fca59e26c141839e96067da7474a18"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "34da0831824cc5cbfb9a4ca4e1c420d3eb3b423a"
+branch = "claude/issue-2193-visible-swallows"
+scope = ["src/acestep_worker/gpu_util.py", "src/acestep_worker/wrapper.py", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/reimport.py", "src/songmaker_cli/scoring/audiobox_aesthetics.py", "tests/acestep_worker/test_gpu_util.py", "tests/songmaker_cli/test_admin_api.py", "tests/songmaker_cli/test_reimport.py"]
+opened_commit = "49ce63b7b5fe14d48d6c93b6d3691de5c53d2089"
+whole_reason = "One rule judged per swallow across five modules with one hygiene proof."
