@@ -1,8 +1,0 @@
-claim_id = "5f977a5f33824e9f9840d019e86caf69"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5a78a174b8d1ebba2fe746e634761a4f122b9209"
-branch = "claude/issue-2177-streams-open-through-lib-api"
-scope = ["docs/architecture.md", "frontend/eslint.config.js", "frontend/src/lib/api/jobs.ts", "frontend/src/lib/api/resourceEvents.test.ts", "frontend/src/lib/api/resourceEvents.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "quality/baseline.toml"]
-opened_commit = "551239fa8f0f44afa5f9e65152ac777a405e5555"
-whole_reason = "The two stream openers, the rule that keeps them the only ones, the doc that names them and the two tests that follow the moved seam change one boundary together."
