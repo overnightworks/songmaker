@@ -1,8 +1,0 @@
-claim_id = "ce250714975b48d594c1d4e11cb1f459"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "7f0448fae5053bf7fe61bdb8d344502c645446ff"
-branch = "claude/issue-2186-test-python-security"
-scope = ["quality/baseline.toml", "scripts/test_helper_ratchet.txt", "tests/acestep_engine/test_client_contract.py", "tests/acestep_engine/test_client_lora.py", "tests/acestep_engine/test_training_client.py", "tests/acestep_worker/test_downloads.py", "tests/acestep_worker/test_wrapper_train_lora.py", "tests/audio_engine/test_audio_io.py", "tests/songmaker_cli/db/test_migrations_job_version.py", "tests/songmaker_cli/db/test_migrations_reference_link.py", "tests/songmaker_cli/db/test_migrations_user_theme.py", "tests/songmaker_cli/jobs/test_lora_training.py", "tests/songmaker_cli/scoring/test_subprocess_runner_scoring.py", "tests/songmaker_cli/test_auth_dependencies.py", "tests/songmaker_cli/test_conversation_api.py", "tests/songmaker_cli/test_covers_album.py", "tests/songmaker_cli/test_covers_song.py", "tests/songmaker_cli/test_jobs.py", "tests/support/cover_escape.py", "tests/support/fake_training_worker.py", "tests/support/generation_job_world.py", "tests/support/xmp_packet.py", "tests/test_packaging_boundary.py", "tests/test_sandbox_profile.py"]
-opened_commit = "b5bf02776239cdd90d4c45f3ff1a12e947937850"
-whole_reason = "One rule judged per finding across the test tree, proven by one hygiene diff; split per file it would be twenty-one lanes with the same proof."
