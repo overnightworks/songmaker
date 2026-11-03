@@ -1,4 +1,4 @@
-"""``/metrics`` answers only Prometheus's own token (#2198); ``/health`` stays open."""
+"""``/metrics`` answers only Prometheus's own token; ``/health`` stays open."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def test_metrics_refuses_a_request_without_the_monitoring_token(
 def test_metrics_is_unavailable_and_health_answers_without_a_monitoring_token(
     metrics_client, monkeypatch, fresh_settings, configured,
 ) -> None:
-    monkeypatch.delenv("SONGMAKER_MONITORING_TOKEN")
+    monkeypatch.delenv("SONGMAKER_MONITORING_TOKEN", raising=False)
     if configured is not None:
         monkeypatch.setenv("SONGMAKER_MONITORING_TOKEN", configured)
 

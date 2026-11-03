@@ -33,6 +33,9 @@ def _set_required_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("SESSION_SECRET", "x" * 64)
+    for key in SECRET_ENV_KEYS:
+        if key in os.environ:
+            monkeypatch.setenv(key, os.environ[key])
     monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
 
 
