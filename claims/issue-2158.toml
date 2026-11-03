@@ -1,0 +1,8 @@
+claim_id = "073374a4daa74f8aad2a5e7c4e4c2a53"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3faa23783bfa8856824b2b12b7aa388023d1c416"
+branch = "claude/issue-2158-test-layout-3h1-3h4"
+scope = [".github/workflows/ci.yml", "docs/acestep.md", "docs/security.md", "quality/baseline.toml", "tests/songmaker_cli/db/queries/test_reference_recordings_attach_lock_postgres.py", "tests/songmaker_cli/db/queries/test_songs_version_lock_postgres.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_api_router_app.py", "tests/songmaker_cli/test_auth_stores_write_lock_postgres.py", "tests/songmaker_cli/test_cleanup_generation_retention_lock_postgres.py", "tests/songmaker_cli/test_jobs.py", "tests/songmaker_cli/test_oidc_client_person_token_paths_postgres.py", "tests/songmaker_cli/test_reference_audio_quota.py", "tests/test_api.py", "tests/test_auth_write_lock_postgres.py", "tests/test_generation_retention_lock_postgres.py", "tests/test_jobs.py", "tests/test_person_token_paths_postgres.py", "tests/test_reference_attach_lock_postgres.py", "tests/test_reference_quota.py", "tests/test_router_app.py", "tests/test_song_version_lock_postgres.py"]
+opened_commit = "64fc10aa43441140851c4a1033853899dee88315"
+whole_reason = "One rename set: the six PostgreSQL modules share one ci.yml block and the two big suites share its baseline keys; splitting them only adds a lane of overhead for renames."
