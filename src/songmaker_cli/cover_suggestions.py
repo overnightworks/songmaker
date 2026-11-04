@@ -89,7 +89,7 @@ def request_cover_suggestions(
         raise CoverSuggestionDailyLimitReachedError()
 
     if session_id is not None and not lock_session_row(session, session_id):
-        raise CoverSuggestionSessionEndedError() from None
+        raise CoverSuggestionSessionEndedError()
 
     return create_job(
         session, JobType.COVER, user_id=actor.id, album_id=album.id, session_id=session_id,

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from support.cover_album_world import album_owner, seed_cover_albums
 from support.web_app import (
     make_authenticated_user,
     make_router_app,
@@ -19,7 +20,6 @@ from support.web_app import (
     web_client,
 )
 from support.xmp_packet import read_digital_source_type
-from webauth.ports import AuthenticatedUser
 
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.cleanup import run_cleanup_expired
@@ -40,7 +40,7 @@ from songmaker_cli.cover_suggestions import (
     request_cover_suggestions,
 )
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, UserSession
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, UserSession
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since
 from songmaker_cli.settings import get_settings
@@ -52,25 +52,6 @@ def _png_bytes() -> bytes:
     payload = BytesIO()
     Image.new("RGB", (32, 32), (40, 80, 200)).save(payload, format="PNG")
     return payload.getvalue()
-
-
-def _seed_albums(session) -> None:
-    alice = User(username="alice", role="user")
-    bob = User(username="bob", role="user")
-    admin = User(username="admin", role="admin")
-    session.add_all([alice, bob, admin])
-    session.flush()
-    session.add_all([
-        Album(id="alice-album", title="Alice", artist="Alice", created_by=alice.id),
-        Album(id="bob-album", title="Bob", artist="Bob", created_by=bob.id),
-    ])
-
-
-@pytest.fixture
-def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
-    seed_session(client, "alice")
-    return client, factory
 
 
 def _add_cover_job(
@@ -127,13 +108,8 @@ def _add_suggestion(
     return suggestion_id
 
 
-def _album_owner(session, album_id: str = "alice-album") -> AuthenticatedUser:
-    album = session.query(Album).filter_by(id=album_id).one()
-    return make_authenticated_user(album.created_by or "")
-
-
 def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(tmp_path: Path) -> None:
-    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
 
     with factory() as session:
         alice = make_authenticated_user("alice")
@@ -157,12 +133,12 @@ def _suggestion_file(audio_dir: Path, suggestion_id: str) -> Path:
 def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_suggestions(
     tmp_path: Path,
 ) -> None:
-    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     pending_ids = _add_two_pending_suggestions(factory, tmp_path / "audio")
 
     with factory() as session:
         job = request_cover_suggestions(
-            session, "alice-album", _album_owner(session), session_id=None,
+            session, "alice-album", album_owner(session), session_id=None,
         )
 
         assert job.type == JobType.COVER
@@ -177,11 +153,11 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """1301-F3-C1-COUNT: active work blocks; completed work consumes the limit."""
-    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     _add_cover_job(factory)
 
     with factory() as session:
-        owner = _album_owner(session)
+        owner = album_owner(session)
         with pytest.raises(CoverSuggestionAlreadyRunningError):
             request_cover_suggestions(session, "alice-album", owner, session_id=None)
         session.rollback()
@@ -194,7 +170,7 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
     get_settings.cache_clear()
     with factory() as session:
-        owner = _album_owner(session)
+        owner = album_owner(session)
         with pytest.raises(CoverSuggestionDailyLimitReachedError):
             request_cover_suggestions(session, "alice-album", owner, session_id=None)
 
@@ -202,13 +178,13 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
 @pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
 def test_unsuccessful_cover_attempts_allow_another_request(tmp_path, monkeypatch, status):
     """1301-F3-C1-COUNT: failed and cancelled attempts leave the allowance free."""
-    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     _add_cover_job(factory, status=status)
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
     get_settings.cache_clear()
     with factory() as session:
         job = request_cover_suggestions(
-            session, "alice-album", _album_owner(session), session_id=None,
+            session, "alice-album", album_owner(session), session_id=None,
         )
         assert job.status == JobStatus.QUEUED
         assert job.album_id == "alice-album"
@@ -506,7 +482,7 @@ def test_foreign_cover_suggestion_routes_are_not_found(
     path: str,
     kwargs: dict,
 ) -> None:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     _add_suggestion(factory, tmp_path / "audio")
     seed_session(client, "bob")
 
@@ -588,9 +564,9 @@ def test_a_suggestion_resolving_outside_the_audio_root_answers_like_a_missing_su
     # The router app keeps the endpoint's own detail; create_app rewrites every API 404.
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
-        _seed_albums(session)
+        seed_cover_albums(session)
         session.commit()
-        owner = _album_owner(session)
+        owner = album_owner(session)
     audio_dir = tmp_path / "audio"
     _add_suggestion(factory, audio_dir)
     album_dir = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
@@ -627,7 +603,7 @@ def test_discarding_suggestions_with_a_path_outside_the_audio_root_leaves_that_f
 
 
 def test_admin_can_list_and_read_another_users_suggestion(tmp_path: Path) -> None:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
     seed_session(client, "admin")
 
@@ -665,7 +641,7 @@ def test_only_completed_cover_jobs_on_this_utc_day_count(
     factory = init_test_db(tmp_path / "accounting.db")
     midnight = datetime(2026, 9, 4, tzinfo=timezone.utc)
     with factory() as session:
-        _seed_albums(session)
+        seed_cover_albums(session)
         session.commit()
     _add_cover_job(factory, status=status, started_at=midnight + timedelta(microseconds=offset))
     with factory() as session:

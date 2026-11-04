@@ -7,10 +7,11 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 from sqlalchemy.exc import OperationalError
 from support.web_app import make_authenticated_user
 
+from songmaker_cli import cover_suggestions
 from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.cover_suggestions import (
     CoverSuggestionSessionEndedError,
@@ -18,6 +19,7 @@ from songmaker_cli.cover_suggestions import (
 )
 from songmaker_cli.db.models import Album, Job, User, UserSession
 from songmaker_cli.db.queries import jobs as job_queries
+from songmaker_cli.db.queries.auth import renew_session
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     create_job,
@@ -74,6 +76,7 @@ def test_an_ended_session_is_refused_on_postgresql_without_a_job_or_log_trace(
     ended_session_id = "e" * 43
     with pg_factory() as session:
         session.add(User(id="asker", username="asker"))
+        session.flush()
         session.add(Album(id="pg-album", title="T", artist="A", created_by="asker"))
         session.commit()
     caplog.set_level(logging.DEBUG)
@@ -92,33 +95,61 @@ def test_an_ended_session_is_refused_on_postgresql_without_a_job_or_log_trace(
     assert ended_session_id not in caplog.text
 
 
-def test_a_live_session_row_cannot_be_deleted_until_the_job_that_references_it_commits(
-    pg_factory,
-) -> None:
-    from sqlalchemy import text
-
+def _seed_asker_with_a_live_session(pg_factory) -> str:
     with pg_factory() as session:
         session.add(User(id="asker", username="asker"))
+        session.flush()
         session.add(Album(id="pg-album", title="T", artist="A", created_by="asker"))
         asking = UserSession(
             user_id="asker", expires_at=datetime.now(timezone.utc) + timedelta(days=1),
         )
         session.add(asking)
         session.commit()
-        asking_id = asking.id
+        return asking.id
+
+
+def test_a_logout_cannot_delete_the_session_before_the_job_that_references_it_is_written(
+    pg_factory, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asking_id = _seed_asker_with_a_live_session(pg_factory)
+    real_create_job = cover_suggestions.create_job
+
+    def create_job_after_a_logout_attempt(*args, **kwargs):
+        with pg_factory() as logout:
+            logout.execute(text("SET LOCAL lock_timeout = '300ms'"))
+            with pytest.raises(OperationalError):
+                logout.execute(delete(UserSession).where(UserSession.id == asking_id))
+        return real_create_job(*args, **kwargs)
+
+    monkeypatch.setattr(cover_suggestions, "create_job", create_job_after_a_logout_attempt)
 
     with pg_factory() as admitting:
         job = request_cover_suggestions(
             admitting, "pg-album", make_authenticated_user("asker"), session_id=asking_id,
         )
-        with pg_factory() as logout:
-            logout.execute(text("SET LOCAL lock_timeout = '300ms'"))
-            with pytest.raises(OperationalError):
-                logout.execute(delete(UserSession).where(UserSession.id == asking_id))
         admitting.commit()
         job_id = job.id
 
     with pg_factory() as session:
+        assert session.get(Job, job_id).session_id == asking_id
         session.execute(delete(UserSession).where(UserSession.id == asking_id))
         session.commit()
         assert session.get(Job, job_id).session_id is None
+
+
+def test_a_session_renews_while_a_cover_admission_is_still_uncommitted(pg_factory) -> None:
+    asking_id = _seed_asker_with_a_live_session(pg_factory)
+    renewed_until = datetime.now(timezone.utc) + timedelta(days=30)
+
+    with pg_factory() as admitting:
+        request_cover_suggestions(
+            admitting, "pg-album", make_authenticated_user("asker"), session_id=asking_id,
+        )
+        with pg_factory() as renewing:
+            renewing.execute(text("SET LOCAL lock_timeout = '300ms'"))
+            assert renew_session(renewing, asking_id, expires_at=renewed_until) is True
+            renewing.commit()
+        admitting.rollback()
+
+    with pg_factory() as session:
+        assert session.get(UserSession, asking_id).expires_at == renewed_until

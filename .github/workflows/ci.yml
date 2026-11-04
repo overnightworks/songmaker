@@ -159,6 +159,7 @@ jobs:
       POSTGRESQL_CONTRACT_MODULES: >-
         tests/songmaker_cli/test_db_postgresql.py
         tests/songmaker_cli/test_cover_runner_accounting.py
+        tests/songmaker_cli/test_db_postgresql_job_session.py
         tests/songmaker_cli/test_reference_audio_quota.py
         tests/songmaker_cli/test_reference_audio_reconciliation_postgres.py
         tests/songmaker_cli/test_auth_stores_write_lock_postgres.py
