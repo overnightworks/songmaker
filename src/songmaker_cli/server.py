@@ -103,7 +103,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.redis_client import drain_lease_releases
 
     ctx: AppContext = app.state.ctx
-    settings = get_settings()
     registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     app.state.background_loop_registry = registry
     app.state.cover_job_cancellation_registry = CoverJobCancellationRegistry()
@@ -114,7 +113,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             log.info("Startup: cleaned up %d expired sessions", deleted)
         session.commit()
 
-    await asyncio.to_thread(recover_web_cover_jobs, ctx.db, ctx.audio_dir, settings)
+    await asyncio.to_thread(recover_web_cover_jobs, ctx.db, ctx.audio_dir)
     fail_chat_turns_ended_by_restart(ctx.db)
     reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)

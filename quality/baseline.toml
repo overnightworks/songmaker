@@ -103,7 +103,7 @@
 "build_ace_config" = 65
 
 [function_lines."src/songmaker_cli/cover_runner.py"]
-"run_claimed_cover_suggestion_job" = 83
+"run_claimed_cover_suggestion_job" = 71
 
 [function_lines."src/songmaker_cli/cowriter/history.py"]
 "compact_conversation" = 60
@@ -165,7 +165,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 72
+"_lifespan" = 71
 "create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]

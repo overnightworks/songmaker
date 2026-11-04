@@ -514,9 +514,7 @@ being in place.
 
 `songmaker-web` mounts the Claude, Grok, and Codex binaries and redacted
 credential mirrors read-only. Cover jobs run only in the web process; the music
-worker mounts no agent CLI. The scoring worker
-mounts only Claude's binary and credential mirror; it does
-not mount Grok or Codex (`docker-compose.yml:246-259`).
+worker mounts no agent CLI. The scoring worker mounts no agent CLI.
 
 `scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
 login into `~/.songmaker/agent-cli-credentials/`, kept current by

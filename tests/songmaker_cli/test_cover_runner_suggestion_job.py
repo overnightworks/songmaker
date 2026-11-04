@@ -41,16 +41,14 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cover_runner import (
     COVER_IMAGE_POLICY,
+    CoverJobCancellationRegistry,
     build_cover_prompt,
-    run_claimed_cover_suggestion_job,
     run_next_cover_job,
 )
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version
-from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 from songmaker_cli.db.queries.settings import set_cover_settings
-from songmaker_cli.settings import get_settings
 
 _REDACTED_CODEX_LOGIN = {
     "auth_mode": "chatgpt",
@@ -666,7 +664,7 @@ def test_cancelled_cover_job_removes_its_staging_group(
         *,
         policy: ImagePolicy,
         deadline: float,
-        abort_signal: threading.Event | None,
+        abort_signal: threading.Event,
         model: str,
     ) -> bytes:
         started.set()
@@ -683,12 +681,11 @@ def test_cancelled_cover_job_removes_its_staging_group(
     )
 
     async def cancel_job() -> None:
-        with factory() as session:
-            assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.RUNNING))
-            session.commit()
         task = asyncio.create_task(
-            run_claimed_cover_suggestion_job(
-                job_id, db_factory=factory, audio_dir=audio_dir, settings=get_settings(),
+            run_next_cover_job(
+                db_factory=factory,
+                audio_dir=audio_dir,
+                cancellation_registry=CoverJobCancellationRegistry(),
             ),
         )
         await asyncio.to_thread(started.wait)
@@ -704,6 +701,6 @@ def test_cancelled_cover_job_removes_its_staging_group(
 
     with factory() as session:
         job = session.get(Job, job_id)
-        assert job.status == JobStatus.FAILED
+        assert job.status == JobStatus.RUNNING
         assert not job.album.cover_suggestions
     assert not list((audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).glob(".*.staging"))
