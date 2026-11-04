@@ -21,6 +21,10 @@ from pathlib import Path
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+import secret_files  # noqa: E402 - needs SCRIPTS on sys.path first
+
 COMMAND_FILES = ("secret_files.py", "dotenv_file.py")
 
 DIRECTORY_MODE = 0o700
@@ -33,13 +37,7 @@ VALUES = {
     "SONGMAKER_MONITORING_TOKEN": "fake-monitoring-value-g7h8",
     "HF_TOKEN": "fake-hf-value-i9j0",
 }
-FILE_OF_KEY = {
-    "SESSION_SECRET": "session-secret",
-    "POSTGRES_PASSWORD": "postgres-password",
-    "SONGMAKER_INTERNAL_TOKEN": "internal-token",
-    "SONGMAKER_MONITORING_TOKEN": "monitoring-token",
-    "HF_TOKEN": "hf-token",
-}
+FILE_OF_KEY = {entry.key: entry.name for entry in secret_files.TABLE}
 OTHER_VALUE = "fake-other-value-z9y8"
 EVERY_VALUE = (*VALUES.values(), CONFIG_LEAK_VALUE, OTHER_VALUE)
 
@@ -52,7 +50,7 @@ class Project:
 
     @property
     def default_directory(self) -> Path:
-        return self.home / ".secrets" / "songmaker"
+        return self.home / secret_files.DEFAULT_DIRECTORY
 
     def write_env(self, assignments: dict[str, str]) -> None:
         (self.root / ".env").write_text(
@@ -408,18 +406,121 @@ def test_an_unparsable_config_is_refused(project: Project) -> None:
     result = project.run("--verify")
 
     assert result.returncode != 0
+    assert "no readable secrets block" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
-def test_the_command_is_inert_without_docker_for_copy_and_refuses_verify(project: Project) -> None:
+def test_verify_refuses_naming_docker_when_docker_cannot_be_run(project: Project) -> None:
     project.write_env(VALUES)
-    (project.bin / "docker").unlink()
-    environment = {"PATH": "/nonexistent"}
 
-    result = subprocess.run(
-        [sys.executable, str(project.root / "scripts" / "secret_files.py"), "--verify"],
-        cwd=project.root, env={"HOME": str(project.home), **environment},
-        capture_output=True, text=True, check=False,
-    )
+    result = project.run("--verify", environment={"PATH": "/nonexistent"})
 
     assert result.returncode != 0
     assert "docker" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_copy_needs_no_docker(project: Project) -> None:
+    project.write_env(VALUES)
+
+    result = project.run(environment={"PATH": "/nonexistent"})
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("mode", ["copy", "verify"])
+def test_a_non_utf8_env_is_refused_without_a_traceback_or_a_byte(
+    project: Project, mode: str,
+) -> None:
+    (project.root / ".env").write_bytes(b"SESSION_SECRET=\xffsecret-tail\n")
+    project.declare_table_files()
+
+    result = project.run(*(["--verify"] if mode == "verify" else []))
+
+    assert result.returncode != 0
+    assert "Traceback" not in result.stderr
+    assert "\\xff" not in result.stderr
+    assert "secret-tail" not in result.stderr
+    assert "cannot read" in result.stderr
+
+
+def test_copy_refuses_a_value_with_surrounding_whitespace_naming_the_key(
+    project: Project,
+) -> None:
+    project.write_env({**VALUES, "SESSION_SECRET": f"\" {VALUES['SESSION_SECRET']}\""})
+
+    result = project.run()
+
+    assert result.returncode != 0
+    assert "SESSION_SECRET" in result.stderr
+    assert not project.default_directory.exists()
+
+
+def test_copy_refuses_a_symlinked_table_file_and_verify_does_too(project: Project) -> None:
+    project.write_env(VALUES)
+    outside = project.put_file(
+        "session-secret", VALUES["SESSION_SECRET"], directory=project.root / "outside",
+    )
+    directory = project.default_directory
+    directory.mkdir(parents=True, mode=DIRECTORY_MODE)
+    (directory / "session-secret").symlink_to(outside)
+    project.declare({"session-secret": directory / "session-secret"})
+
+    copied = project.run()
+    verified = project.run("--verify")
+
+    for result in (copied, verified):
+        assert result.returncode != 0
+        assert "session-secret" in result.stderr
+        assert "symbolic link" in result.stderr
+
+
+@pytest.mark.parametrize("mode", ["copy", "verify"])
+def test_a_symlinked_secrets_directory_is_refused(project: Project, mode: str) -> None:
+    project.write_env(VALUES)
+    real = project.root / "real"
+    real.mkdir(mode=DIRECTORY_MODE)
+    (real / "session-secret").write_text(VALUES["SESSION_SECRET"])
+    project.default_directory.parent.mkdir(parents=True)
+    project.default_directory.symlink_to(real)
+    project.declare({"session-secret": project.default_directory / "session-secret"})
+
+    result = project.run(*(["--verify"] if mode == "verify" else []))
+
+    assert result.returncode != 0
+    assert "symbolic link" in result.stderr or "must be a directory" in result.stderr
+
+
+def test_copy_refuses_when_the_directory_cannot_be_created(project: Project) -> None:
+    project.write_env(VALUES)
+    project.default_directory.parent.write_text("a file where the parent should be")
+
+    result = project.run()
+
+    assert result.returncode != 0
+    assert "Traceback" not in result.stderr
+    assert "cannot" in result.stderr
+
+
+def test_publishing_never_replaces_a_file_that_appeared_meanwhile(tmp_path: Path) -> None:
+    """Unit test of the publish function; a subprocess run has no seam between check and write."""
+    target = tmp_path / "session-secret"
+    target.write_text("other-value-from-the-race")
+
+    with pytest.raises(secret_files.Refusal):
+        secret_files._publish(target, "wanted-value")
+
+    assert target.read_text() == "other-value-from-the-race"
+    assert [path.name for path in tmp_path.iterdir()] == ["session-secret"]
+
+
+def test_publishing_beside_an_equal_file_that_appeared_meanwhile_is_a_no_op(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "session-secret"
+    target.write_text("wanted-value\n")
+
+    secret_files._publish(target, "wanted-value")
+
+    assert target.read_text() == "wanted-value\n"
+    assert [path.name for path in tmp_path.iterdir()] == ["session-secret"]

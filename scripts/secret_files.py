@@ -82,7 +82,7 @@ def _read_env_text(env_file: Path, *, required: bool) -> str:
         if required:
             raise Refusal(f"no .env at {env_file}") from exc
         return ""
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise Refusal(f"cannot read {env_file}") from exc
 
 
@@ -118,6 +118,8 @@ def _resolve_directory(text: str, env_file: Path, home: Path) -> Path:
 
 
 def _read_file(path: Path) -> str | None:
+    if path.is_symlink() or path.parent.is_symlink():
+        raise Refusal(f"{path} or its directory is a symbolic link; a secret file must be real")
     try:
         return path.read_text()
     except FileNotFoundError:
@@ -139,6 +141,8 @@ def copy(project_root: Path, home: Path) -> None:
             continue
         if not value and not entry.optional:
             raise Refusal(f"{entry.key} is empty in {env_file}; {entry.name} would be empty")
+        if value != value.strip():
+            raise Refusal(f"{entry.key} in {env_file} has surrounding whitespace; fix it there")
         existing = _read_file(directory / entry.name)
         if existing is None:
             pending.append((entry, value))
@@ -150,12 +154,17 @@ def copy(project_root: Path, home: Path) -> None:
                 f"{env_file}; not overwriting it",
             )
     if pending and not directory.exists():
-        directory.parent.mkdir(parents=True, exist_ok=True)
-        directory.mkdir(mode=DIRECTORY_MODE)
-        directory.chmod(DIRECTORY_MODE)
+        try:
+            directory.parent.mkdir(parents=True, exist_ok=True)
+            directory.mkdir(mode=DIRECTORY_MODE)
+            directory.chmod(DIRECTORY_MODE)
+        except OSError as exc:
+            raise Refusal(f"cannot create {directory}") from exc
     for entry, value in pending:
-        _write_atomically(directory / entry.name, value)
-        print(f"copied {entry.key} to {directory / entry.name}")
+        if _publish(directory / entry.name, value):
+            print(f"copied {entry.key} to {directory / entry.name}")
+        else:
+            print(f"already copied {entry.name}")
 
 
 def _require_private_directory(directory: Path) -> None:
@@ -163,6 +172,8 @@ def _require_private_directory(directory: Path) -> None:
         status = directory.lstat()
     except FileNotFoundError:
         return
+    except OSError as exc:
+        raise Refusal(f"cannot inspect {directory}") from exc
     if (
         not stat.S_ISDIR(status.st_mode)
         or status.st_uid != os.getuid()
@@ -173,18 +184,33 @@ def _require_private_directory(directory: Path) -> None:
         )
 
 
-def _write_atomically(path: Path, value: str) -> None:
-    descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+def _publish(path: Path, value: str) -> bool:
+    """Link a finished temporary file to ``path``; never replaces a file that appeared meanwhile.
+
+    Returns whether it wrote; a file that is already there is judged like any
+    existing one (equal after stripping is a no-op, another value is refused).
+    """
+    try:
+        descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    except OSError as exc:
+        raise Refusal(f"cannot write {path}") from exc
     try:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(value.encode())
             handle.flush()
-            os.fchmod(handle.fileno(), FILE_MODE)
+            os.fchmod(handle.fileno(), FILE_MODE)  # noqa: E501  # NOSONAR(S2612) 0644 inside the 0700 secrets directory: postgres (uid 70) and prometheus (65534) read these files, as hal's own secrets do.
             os.fsync(handle.fileno())
-        Path(temporary).replace(path)
-    except BaseException:
+        os.link(temporary, path)
+    except FileExistsError as exc:
+        existing = _read_file(path)
+        if existing is not None and existing.strip() == value:
+            return False
+        raise Refusal(f"{path} holds another value; not overwriting it") from exc
+    except OSError as exc:
+        raise Refusal(f"cannot write {path}") from exc
+    finally:
         Path(temporary).unlink(missing_ok=True)
-        raise
+    return True
 
 
 def verify(project_root: Path, home: Path) -> None:
@@ -206,7 +232,7 @@ def verify(project_root: Path, home: Path) -> None:
 
 
 def _judge(entry: SecretFile, declared: Path, env_value: str | None) -> None:
-    content = _read_file(declared)
+    content = _read_file(declared)  # refuses a linked file or directory
     if content is None:
         raise Refusal(f"{declared} is declared but missing; copy it from {entry.key}")
     value = content.strip()

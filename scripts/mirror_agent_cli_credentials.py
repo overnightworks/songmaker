@@ -269,10 +269,12 @@ def resolve_mirror_directory(project_root: Path, home: Path) -> Path:
 
 def _configured_mirror_directory(env_file: Path) -> str | None:
     """The key as compose resolves it (exported, then ``.env``), or refused."""
-    try:
-        text = env_file.read_text()
-    except OSError:
-        text = ""
+    text = ""
+    if MIRROR_DIR_KEY not in os.environ:
+        try:
+            text = env_file.read_text()
+        except OSError:
+            pass
     try:
         return compose_value(os.environ, text, MIRROR_DIR_KEY, env_file)
     except DotenvError as exc:

@@ -15,7 +15,8 @@ def test_a_release_declaring_a_missing_secret_file_is_refused_before_build_and_r
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     deployed_before = checkout.deployed_sha_file.read_text()
-    checkout.set_compose_secret_files({"session-secret": tmp_path / "absent" / "session-secret"})
+    declared = tmp_path / ".secrets" / "songmaker" / "session-secret"
+    checkout.set_compose_secret_files({"session-secret": declared})
     checkout.move_main_forward()
 
     exit_codes = [checkout.tick().returncode for _ in range(FAILURE_ALERT_THRESHOLD)]
@@ -23,6 +24,6 @@ def test_a_release_declaring_a_missing_secret_file_is_refused_before_build_and_r
     assert exit_codes == [0, 0, 1]
     assert len(checkout.alert_lines()) == 1
     assert "reason: declared secret files refused" in checkout.journal
-    assert "session-secret" in checkout.journal
+    assert "session-secret is declared but missing" in checkout.journal
     assert checkout.build_and_recreate_calls == []
     assert checkout.deployed_sha_file.read_text() == deployed_before
