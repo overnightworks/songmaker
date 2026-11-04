@@ -66,7 +66,7 @@ const PHONE_VIEWPORT = { width: 375, height: 844 };
 const DESKTOP_HEIGHT = 900;
 
 // The named problems a co-writer turn ends with when the agent did not run it. This stack
-// configures no gateway, so the turn ends before any request with "unavailable". That it is a
+// sets a gateway it cannot reach, so a real turn ends with a named problem. That it is a
 // named problem, and never a silent switch to a local provider, is the ruled behaviour
 // (#820, line 8; #1476).
 const NAMED_TURN_FAILURES =

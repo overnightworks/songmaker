@@ -22,6 +22,8 @@ import yaml
 from support.compose_config import run_compose_config
 from support.repository_root import REPOSITORY_ROOT
 
+from songmaker_cli.settings import Settings
+
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
 DOCKER_ROOT = REPOSITORY_ROOT / "docker"
 UV_INSTALLED_ENVIRONMENT_FLAGS = frozenset({"--no-sync", "--frozen", "--no-build"})
@@ -611,16 +613,43 @@ def test_no_test_stack_service_comes_back_after_a_reboot(
     assert restart_policies == dict.fromkeys(restart_policies, "no")
 
 
+@pytest.mark.parametrize("secret_name", ["keycloak_client_secret", "gateway_key"])
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
-def test_only_the_web_service_holds_the_keycloak_client_secret(
-    compose_files: tuple[str, ...],
+def test_only_the_web_service_holds_the_secret_the_edge_and_hal_own(
+    compose_files: tuple[str, ...], secret_name: str,
 ) -> None:
     holders = {
         service_name
         for service_name, service in _rendered_test_stack_services(compose_files).items()
-        if "keycloak_client_secret" in {s["source"] for s in service.get("secrets", [])}
+        if secret_name in {s["source"] for s in service.get("secrets", [])}
     }
     assert holders == {"songmaker-web"}
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_the_web_gateway_key_file_is_where_compose_mounts_the_gateway_key(
+    compose_files: tuple[str, ...],
+) -> None:
+    web = _rendered_test_stack_services(compose_files)["songmaker-web"]
+    mount_targets = {secret["source"]: secret["target"] for secret in web["secrets"]}
+    assert web["environment"]["AGENT__GATEWAY__KEY_FILE"] == mount_targets["gateway_key"]
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_settings_accept_the_agent_the_web_service_is_rendered_with(
+    compose_files: tuple[str, ...], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    web_environment = _rendered_test_stack_services(compose_files)["songmaker-web"]["environment"]
+    for name, value in web_environment.items():
+        if name.startswith("AGENT__"):
+            monkeypatch.setenv(name, value)
+
+    settings = Settings(
+        _env_file=None, database_url="postgresql://x", redis_url="redis://x",
+        session_secret="s", songmaker_internal_token="t",
+    )
+
+    assert settings.agent is not None
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
