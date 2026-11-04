@@ -30,7 +30,7 @@ def album_owner(session, album_id: str = "alice-album") -> AuthenticatedUser:
 
 
 @pytest.fixture
-def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
+def cover_album_app(tmp_path: Path) -> tuple[TestClient, object]:
     client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     seed_session(client, "alice")
     return client, factory

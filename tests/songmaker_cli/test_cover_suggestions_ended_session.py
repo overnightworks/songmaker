@@ -41,10 +41,10 @@ def test_cover_suggestion_request_owner_refuses_an_ended_session_without_job_or_
 
 
 def test_suggest_answers_401_when_the_session_ends_during_the_request(
-    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+    cover_album_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
     caplog.set_level(logging.DEBUG)
     with factory() as session:
         [live_session_id] = [row.id for row in session.query(UserSession)]
