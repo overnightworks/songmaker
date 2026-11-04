@@ -7,7 +7,7 @@ vi.mock('$app/navigation', async () =>
 );
 
 import { ApiError } from './fetch';
-import { listReferences, referenceAudioUrl, uploadReference } from './references';
+import { deleteReference, listReferences, referenceAudioUrl, uploadReference } from './references';
 
 describe('reference API', () => {
 	beforeEach(() => mockFetch.mockReset());
@@ -51,6 +51,34 @@ describe('reference API', () => {
 
 		expect(mockFetch.mock.calls[0][0]).toBe('/api/references');
 		expect(result).toEqual(answer);
+	});
+
+	it('deletes a reference by id and accepts the empty answer', async () => {
+		mockFetch.mockResolvedValue({
+			ok: true,
+			status: 204,
+			json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input'))
+		});
+
+		await expect(deleteReference('reference 1')).resolves.toBeUndefined();
+
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/references/reference%201');
+		expect(init.method).toBe('DELETE');
+	});
+
+	it('rejects with the refusal when the reference is in use', async () => {
+		mockFetch.mockResolvedValue({
+			ok: false,
+			status: 409,
+			headers: new Headers(),
+			json: () => Promise.resolve({ detail: 'Reference audio is in use.' })
+		});
+
+		await expect(deleteReference('reference-1')).rejects.toMatchObject({
+			status: 409,
+			message: 'Reference audio is in use.'
+		});
 	});
 
 	describe('with a progress callback', () => {
