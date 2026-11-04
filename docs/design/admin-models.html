@@ -1270,6 +1270,57 @@
 	.ags .menu-item .saved-mark { color: var(--violet); font-weight: 600; margin-left: .3rem; }
 	.ags .phone .tcard .later { margin-top: .35rem; }
 	.ags .phone .menu { max-width: 100%; }
+
+	/* ── #2142 · ein Modell je Agent (noch nicht gesegnet) ──────
+	   Drei Spalten: Agent, Model, Status. Gestrichelt umrandet = neu mit #2142. */
+	.am .tt-head, .am .tt-row { grid-template-columns: 9rem minmax(0, 16rem) minmax(0, 1fr); }
+	.am .tt-sub { padding-left: 10.7rem; }
+	.am .tt-note { display: flex; padding: .45rem .85rem; border-top: 1px solid var(--rule); border-left: 3px solid var(--rule-strong); background: var(--panel-sunk); }
+	.am .tt-note .st { padding-top: 0; }
+	.am .sel .name { flex: 1 1 auto; min-width: 0; }
+	.am .pill {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .08em;
+		font-size: .64rem;
+		font-weight: 600;
+		padding: .05rem .4rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--violet) 12%, transparent);
+		color: var(--violet);
+		white-space: nowrap;
+	}
+	.am .pill.gone { background: var(--bad-bg); color: var(--bad-ink); }
+	.am .sel.gone { border-color: var(--bad-ink); }
+	.am .sel.gone .name { text-decoration: line-through; color: var(--bad-ink); }
+	.am .ro { display: flex; align-items: center; gap: .4rem; }
+	.am .info {
+		display: inline-grid;
+		place-items: center;
+		width: .95rem;
+		height: .95rem;
+		margin-left: .35rem;
+		border: 1px solid currentColor;
+		border-radius: 50%;
+		font: 600 .6rem/1 "IBM Plex Sans", system-ui, sans-serif;
+		text-transform: none;
+		letter-spacing: 0;
+		vertical-align: .05rem;
+	}
+	.am .act-row { display: flex; align-items: flex-start; gap: .3rem .6rem; flex-wrap: wrap; }
+	.am .act-row .st { flex: 0 1 auto; }
+	.am .use-default { border-color: var(--violet); color: var(--violet); }
+	.am .tcard.bad { border-left-color: var(--bad-ink); background: color-mix(in srgb, var(--bad-bg) 60%, transparent); }
+	.am .tcard .act-row { padding-top: .2rem; }
+	.am .menus { display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: flex-start; }
+	.am .menu-item.picked .state { color: var(--violet); }
+	.am .moment { display: flex; flex-direction: column; gap: .35rem; }
+	.am .decision ul + p { margin-top: .6rem; }
+	@media (max-width: 760px) {
+		.am .tt-head { display: none; }
+		.am .tt-row { grid-template-columns: minmax(0, 1fr); gap: .35rem; }
+		.am .tt-sub { padding-left: .85rem; }
+	}
 	code, code.loc { max-width: 100%; overflow-wrap: anywhere; }
 </style>
 </head>
@@ -1299,6 +1350,11 @@
 	<a href="#agent-service">„Neu · #1895 — der Agent-Service übernimmt"</a> zeichnet die Agents-Tabelle für
 	#1476 (Punkte 1–6 von „The pictures must show") in jedem Zwischenstand der Landung, am Desktop und bei
 	390&nbsp;px. Er überschreibt die Co-Writer- und Cover-Zeilen von Fassung 2.
+</p>
+<p class="freeze-note">
+	<strong>Noch nicht gesegnet, #2142:</strong> Der Abschnitt
+	<a href="#models-per-agent">„Neu · #2142 — ein Modell je Agent"</a> zeichnet die Zeile, die SM-AM baut (Plan r8, D-11), am
+	Desktop und bei 375&nbsp;px. Gesegnet überschreibt er die Co-Writer- und Cover-Zeilen von #1895.
 </p>
 <div class="wrap">
 	<header>
@@ -2441,6 +2497,7 @@
 		<h2>Neu · #1895 — der Agent-Service übernimmt<span class="proposed-tag">Blessed 26.10.2026 · #1895</span></h2>
 		<div class="decision">
 			<h3>Warum — #1476, „mit prio umbauen, dass der dienst genutzt wird" (26.10.2026)</h3>
+			<p><em>Überholt, sobald <a href="#models-per-agent">„Neu · #2142 — ein Modell je Agent"</a> gesegnet ist; bis dahin gilt dieser Abschnitt.</em></p>
 			<p>
 				Songmaker ruft keinen Anbieter mehr selbst auf. Der Co-Writer läuft über das LiteLLM-Gateway, und die
 				Agent-Datei nennt sein Modell (#2155, #2170); Cover kann der Dienst noch nicht und
@@ -2573,6 +2630,308 @@
 							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
 							<div class="line"><span class="k">Model</span><span class="ro none">—</span></div>
 							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Not available yet: waits for image runs through the agent service</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+		</div>
+	</section>
+
+	<hr class="rule">
+	<section class="decisions ags am" id="models-per-agent">
+		<h2>Neu · #2142 — ein Modell je Agent<span class="proposed-tag">Noch nicht gesegnet · #2142</span></h2>
+		<div class="decision">
+			<h3>Warum — der Operator, 02.11.2026 (hal#299, Plan r8 Abschnitt 2)</h3>
+			<p class="quote">
+				„je agent =&gt; das model? und die liste von litellm bekommen? … also dass ich das model "auswählen kann"? …
+				für bilder etc? … also so dass unserer admin seite bei songmaker sinn macht? und auhc andere apps“
+			</p>
+			<p>
+				Plan r8, D-11: ein Modell je Agent, der Default aus der Agent-Datei oder die Wahl eines Admins, für alle
+				gespeichert; eine Person wählt nie. Die Liste kommt vom LiteLLM-Gateway, jeder Name trägt seine Art
+				(<code>text/…</code>, <code>image/…</code>), und jede Zeile bietet nur Namen ihrer Art an. Heute sind das
+				<code>text/haiku</code> (Default des Co-Writers), <code>text/opus</code>, <code>text/sonnet</code> und
+				<code>image/flare</code> (Default des Covers). SM-AM baut diese Zeile.
+			</p>
+			<ul>
+				<li><strong>Drei Spalten statt fünf.</strong> Provider und Route gehen: der Name nennt keinen Anbieter, und
+					der Weg ist für jede Zeile derselbe. Eine Spalte, die immer dasselbe sagt, beantwortet keine Frage.</li>
+				<li><strong>Der Default steht in der Liste.</strong> Er trägt „default"; ihn wählen löscht die gespeicherte
+					Wahl. Steht eine andere Wahl, nennt die Zeile darunter den Default.</li>
+				<li><strong>Gespeichert wird pro Zeile wie in Fassung 2:</strong> „✓ Saved.", ein Fehlschlag rot in der Zeile
+					mit Retry. Abgewiesen wird ein Name, den die Liste nicht hält, und jedes Speichern, solange die Liste fehlt;
+					gespeichert wird dann nichts.</li>
+				<li><strong>Zurückgezogen ist rot.</strong> Hält die Liste einen gespeicherten Namen nicht mehr, endet jeder
+					Lauf dieses Agenten „unavailable", ohne Rückfall auf den Default, und nur ein Admin beendet das. Die Zeile
+					streicht den Namen durch und bietet „Use default" an.</li>
+				<li><strong>Fehlt die Liste, liest die Zeile nur.</strong> Sie zeigt den wirksamen Namen ohne Select, und die
+					Tabelle sagt es einmal mit dem leeren Ring, weil hier niemand etwas beheben kann. Beim Laden steht dort
+					„Loading models…".</li>
+				<li><strong>Kein Licht, wo niemand prüft.</strong> Im Normalfall bleibt die Statusspalte leer; die Seite prüft
+					keinen Agenten vorab (Operator, 27.10.2026, agent-runtime#494).</li>
+			</ul>
+			<p>
+				Bis SM-AM landet, liest die Cover-Zeile wie die Co-Writer-Zeile in (w): C1 nimmt ihr die Bedienelemente
+				(#2055). Gesegnet überschreibt dieser Abschnitt die Co-Writer- und Cover-Zeilen von (w) bis (y′).
+			</p>
+		</div>
+
+		<div class="states">
+			<article class="state wide">
+				<div class="state-head"><h3>(M1) Default aus der Agent-Datei · die Liste offen</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">
+					Der Normalfall: jede Zeile steht auf dem Default ihrer Agent-Datei, die Statusspalte ist leer. Offen
+					gezeichnet sind beide Listen, wie das Gateway sie für diese App führt: drei Textmodelle für den Co-Writer,
+					ein Bildmodell für das Cover.
+				</p>
+				<div class="screen">
+					<div class="screen-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
+					<div class="screen-body">
+						<h4 class="screen-title">Agents</h4>
+						<div class="tt">
+							<div class="tt-head"><span>Agent</span><span>Model<span class="info" title="One model per agent: its file's default, or the one chosen here for everyone">i</span></span><span>Status</span></div>
+							<div class="tt-row">
+								<span class="cell-task">Co-Writer</span>
+								<span><span class="sel is-new"><span class="name">text/haiku</span><span class="pill">default</span><span class="caret">⌄</span></span></span>
+								<span></span>
+							</div>
+							<div class="tt-sub"><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></div>
+							<div class="tt-row">
+								<span class="cell-task">Cover</span>
+								<span><span class="sel is-new"><span class="name">image/flare</span><span class="pill">default</span><span class="caret">⌄</span></span></span>
+								<span></span>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="menus">
+					<div class="menu-demo">
+						<span class="field-label">Co-Writer · text models</span>
+						<div class="menu is-new">
+							<div class="menu-item picked"><span>text/haiku</span><span class="state">✓ default</span></div>
+							<div class="menu-item"><span>text/opus</span></div>
+							<div class="menu-item"><span>text/sonnet</span></div>
+						</div>
+					</div>
+					<div class="menu-demo">
+						<span class="field-label">Cover · image models</span>
+						<div class="menu is-new">
+							<div class="menu-item picked"><span>image/flare</span><span class="state">✓ default</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(M2) Eine Wahl, gespeichert in der Zeile</h3><span class="tag tag-state">Saved</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">
+					Der Admin hat für den Co-Writer <code>text/opus</code> gewählt; die Zeile speichert sofort und sagt es. Unter
+					dem Select steht der Default, zu dem ein Klick zurückführt.
+				</p>
+				<div class="tt">
+					<div class="tt-head"><span>Agent</span><span>Model</span><span>Status</span></div>
+					<div class="tt-row">
+						<span class="cell-task">Co-Writer</span>
+						<span><span class="sel"><span class="name">text/opus</span><span class="caret">⌄</span></span><small class="why is-new">Default · text/haiku</small></span>
+						<span><span class="saved">✓ Saved.</span></span>
+					</div>
+					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span><span class="sel"><span class="name">image/flare</span><span class="pill">default</span><span class="caret">⌄</span></span></span>
+						<span></span>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(M3) Nicht gespeichert</h3><span class="tag tag-state">Failed</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">
+					Der Admin wollte auf <code>text/sonnet</code> wechseln, aber die Liste war beim Speichern nicht zu haben.
+					Gespeichert ist nichts: das Select steht wieder auf der gespeicherten Wahl, der Grund rot in der Zeile, Retry
+					daneben. Ein Name, den die Liste nicht hält, wird ebenso abgewiesen.
+				</p>
+				<div class="tt">
+					<div class="tt-head"><span>Agent</span><span>Model</span><span>Status</span></div>
+					<div class="tt-row bad">
+						<span class="cell-task">Co-Writer</span>
+						<span><span class="sel"><span class="name">text/opus</span><span class="caret">⌄</span></span><small class="why">Default · text/haiku</small></span>
+						<span class="act-row is-new"><span class="st bad"><span class="mark">✕</span>Not saved · model list unavailable</span><button class="retry">Retry</button></span>
+					</div>
+					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span><span class="sel"><span class="name">image/flare</span><span class="pill">default</span><span class="caret">⌄</span></span></span>
+						<span></span>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(M4) Zurückgezogen · der Default wird angeboten</h3><span class="tag tag-state">Withdrawn</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">
+					Gespeichert ist <code>text/sonnet</code>, aber die Liste führt es nicht mehr. Der Co-Writer antwortet allen
+					„The co-writer is unavailable", bis ein Admin wählt; ein Klick auf Use default stellt den Default der
+					Agent-Datei wieder her, das Select bietet die übrigen Namen. Beim Cover sähe die Person
+					<a href="album-cover.html#suggest-open">(m) Unavailable</a>.
+				</p>
+				<div class="tt">
+					<div class="tt-head"><span>Agent</span><span>Model</span><span>Status</span></div>
+					<div class="tt-row bad">
+						<span class="cell-task">Co-Writer</span>
+						<span><span class="sel gone is-new"><span class="name">text/sonnet</span><span class="pill gone">withdrawn</span><span class="caret">⌄</span></span><small class="why">Default · text/haiku</small></span>
+						<span class="act-row is-new"><span class="st bad"><span class="mark">!</span>Withdrawn · co-writer unavailable</span><button class="retry use-default">Use default</button></span>
+					</div>
+					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span><span class="sel"><span class="name">image/flare</span><span class="pill">default</span><span class="caret">⌄</span></span></span>
+						<span></span>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(M5) Die Liste lädt · die Liste fehlt</h3><span class="tag tag-state">Read only</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">
+					Ohne Liste gibt es nichts zu wählen: jede Zeile zeigt ihren wirksamen Namen ohne Select, die gespeicherte
+					Wahl oder den Default. Die Tabelle sagt einmal, warum, grau mit dem leeren Ring. Die Läufe der Agenten
+					hängen nicht an dieser Liste.
+				</p>
+				<div class="moment">
+					<span class="field-label">Loading</span>
+					<div class="tt">
+						<div class="tt-head"><span>Agent</span><span>Model</span><span>Status</span></div>
+						<div class="tt-note is-new"><span class="st off"><span class="mark">○</span>Loading models…</span></div>
+						<div class="tt-row">
+							<span class="cell-task">Co-Writer</span>
+							<span><span class="ro">text/opus</span><small class="why">Default · text/haiku</small></span>
+							<span></span>
+						</div>
+						<div class="tt-row">
+							<span class="cell-task">Cover</span>
+							<span class="ro">image/flare<span class="pill">default</span></span>
+							<span></span>
+						</div>
+					</div>
+				</div>
+				<div class="moment">
+					<span class="field-label">Unavailable</span>
+					<div class="tt">
+						<div class="tt-head"><span>Agent</span><span>Model</span><span>Status</span></div>
+						<div class="tt-note is-new"><span class="st off"><span class="mark">○</span>Model list unavailable</span></div>
+						<div class="tt-row">
+							<span class="cell-task">Co-Writer</span>
+							<span><span class="ro is-new">text/opus</span><small class="why">Default · text/haiku</small></span>
+							<span></span>
+						</div>
+						<div class="tt-row">
+							<span class="cell-task">Cover</span>
+							<span class="ro is-new">image/flare<span class="pill">default</span></span>
+							<span></span>
+						</div>
+					</div>
+				</div>
+			</article>
+		</div>
+
+		<div class="states">
+			<article class="state">
+				<div class="state-head"><h3>(M1′) Default · gestapelt</h3><span class="tag tag-state">375 px</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">Eine Karte je Agent, eine Zeile Model. Die Liste öffnet unter dem Select; Advanced bleibt in der Co-Writer-Karte.</p>
+				<div class="phone">
+					<div class="ph-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Model</span><span><span class="sel is-new"><span class="name">text/haiku</span><span class="pill">default</span><span class="caret">⌄</span></span>
+								<div class="menu is-new">
+									<div class="menu-item picked"><span>text/haiku</span><span class="state">✓ default</span></div>
+									<div class="menu-item"><span>text/opus</span></div>
+									<div class="menu-item"><span>text/sonnet</span></div>
+								</div>
+							</span></div>
+							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
+						</div>
+						<div class="tcard">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Model</span><span><span class="sel is-new"><span class="name">image/flare</span><span class="pill">default</span><span class="caret">⌄</span></span></span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(M2′) Gespeichert · gestapelt</h3><span class="tag tag-state">375 px</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">Wie (M2): die Wahl, der Default darunter, „✓ Saved." in der Karte.</p>
+				<div class="phone">
+					<div class="ph-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Model</span><span><span class="sel"><span class="name">text/opus</span><span class="caret">⌄</span></span><small class="why is-new">Default · text/haiku</small><span class="saved">✓ Saved.</span></span></div>
+							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
+						</div>
+						<div class="tcard">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Model</span><span><span class="sel"><span class="name">image/flare</span><span class="pill">default</span><span class="caret">⌄</span></span></span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(M3′) Nicht gespeichert · gestapelt</h3><span class="tag tag-state">375 px</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">Wie (M3): rot in der Karte, der Grund vollständig, Retry darunter.</p>
+				<div class="phone">
+					<div class="ph-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard bad">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Model</span><span><span class="sel"><span class="name">text/opus</span><span class="caret">⌄</span></span><small class="why">Default · text/haiku</small></span></div>
+							<div class="line"><span class="k">Status</span><span class="act-row is-new"><span class="st bad"><span class="mark">✕</span>Not saved · model list unavailable</span><button class="retry">Retry</button></span></div>
+							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
+						</div>
+						<div class="tcard">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Model</span><span><span class="sel"><span class="name">image/flare</span><span class="pill">default</span><span class="caret">⌄</span></span></span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(M4′) Zurückgezogen · gestapelt</h3><span class="tag tag-state">375 px</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">Wie (M4): der durchgestrichene Name, der Grund und Use default in der roten Karte.</p>
+				<div class="phone">
+					<div class="ph-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard bad">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Model</span><span><span class="sel gone is-new"><span class="name">text/sonnet</span><span class="pill gone">withdrawn</span><span class="caret">⌄</span></span><small class="why">Default · text/haiku</small></span></div>
+							<div class="line"><span class="k">Status</span><span class="act-row is-new"><span class="st bad"><span class="mark">!</span>Withdrawn · co-writer unavailable</span><button class="retry use-default">Use default</button></span></div>
+							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
+						</div>
+						<div class="tcard">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Model</span><span><span class="sel"><span class="name">image/flare</span><span class="pill">default</span><span class="caret">⌄</span></span></span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(M5′) Die Liste fehlt · gestapelt</h3><span class="tag tag-state">375 px</span><span class="proposed-tag flush">New · #2142</span></div>
+				<p class="state-note">Wie (M5): die Zeile über den Karten sagt es einmal, die Karten lesen nur. Beim Laden steht dort „Loading models…".</p>
+				<div class="phone">
+					<div class="ph-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<span class="st off is-new"><span class="mark">○</span>Model list unavailable</span>
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Model</span><span><span class="ro">text/opus</span><small class="why">Default · text/haiku</small></span></div>
+							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
+						</div>
+						<div class="tcard">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Model</span><span class="ro">image/flare<span class="pill">default</span></span></div>
 						</div>
 					</div>
 				</div>
