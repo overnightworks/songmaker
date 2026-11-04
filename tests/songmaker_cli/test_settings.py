@@ -93,9 +93,10 @@ def test_settings_build_with_none_of_the_removed_cover_keys(
 def test_a_dotenv_with_a_removed_cover_key_raises(tmp_path: Path, key: str) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(f"{key}=1\n")
+    required = _required_settings()
 
     with pytest.raises(ValidationError):
-        Settings(_env_file=env_file, **_required_settings())
+        Settings(_env_file=env_file, **required)
 
 
 def test_rejects_a_cover_cap_above_the_codex_process_cap() -> None:
