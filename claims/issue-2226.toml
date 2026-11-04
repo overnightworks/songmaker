@@ -1,0 +1,8 @@
+claim_id = "cc572f5b29a44e3d81fe8185f0e99c1a"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "d66c72a6f55fc871b0c9a8167967919798d2758a"
+branch = "claude/issue-2226-reference-uses-read"
+scope = ["docs/architecture.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/components/editor/RecipeTabs.test.ts", "frontend/src/lib/test-utils/references.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/references.py", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/reference_api.py", "tests"]
+opened_commit = "54d1625f698e3ab563795a3878825eac36ae4d8a"
+whole_reason = "The counts, the uses route and its models are one contract: counts without the route leave Show takes nothing to list, and the route without the counts shows a number the list cannot give."
