@@ -1,8 +1,0 @@
-claim_id = "9d85989a425b4acd9e5cfd27a2252ffe"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "7648bdec8f2d0da24ae884c3d2dfb3f7a9799c8d"
-branch = "claude/issue-2220-the-co-writer-reaches-the-litellm-gatewa"
-scope = [".github/workflows/e2e.yml", "docker-compose.yml", "docs/security.md", "docs/testing.md", "frontend/e2e/README.md", "frontend/e2e/admin-models.spec.ts", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/phone-typing.spec.ts", "scripts/voices_e2e_probe.sh", "tests/test_packaging_boundary.py"]
-opened_commit = "2466d3d6cec4d23fe29f71c08b255e8e0132d84c"
-whole_reason = "The secret, the setting and every throwaway stack's fixture change together: a compose secret without each stack's fixture breaks CI and the probes, and the setting without the secret stops startup."
