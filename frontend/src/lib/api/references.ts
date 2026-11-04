@@ -1,5 +1,5 @@
 import type { ReferenceListResponse, ReferenceRecordingResponse } from './types';
-import { apiFetch, apiUpload } from './fetch';
+import { apiFetch, apiSend, apiUpload } from './fetch';
 
 export async function uploadReference(
 	file: File,
@@ -21,4 +21,10 @@ export async function listReferences(): Promise<ReferenceListResponse> {
 
 export function referenceAudioUrl(referenceId: string): string {
 	return `/api/references/${encodeURIComponent(referenceId)}/audio`;
+}
+
+export async function deleteReference(referenceId: string): Promise<void> {
+	await apiSend(`/api/references/${encodeURIComponent(referenceId)}`, {
+		method: 'DELETE'
+	});
 }
