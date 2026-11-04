@@ -82,6 +82,43 @@ describe('route error page', () => {
 		expect(target.textContent).not.toContain('Internal Error');
 	});
 
+	it('shows the plain status once a retry fails while the browser is online', async () => {
+		browserReportsOnline(false);
+		failNavigationWith(500, 'Internal Error');
+		const target = await mountErrorPage();
+		let failRetry: () => void = () => {};
+		goto.mockReturnValue(new Promise<void>((resolve) => (failRetry = resolve)));
+
+		browserReportsOnline(true);
+		await tick();
+		failRetry();
+		await vi.waitFor(() => expect(target.textContent).toContain('500'));
+
+		expect(target.textContent).not.toContain(OFFLINE_SENTENCE);
+	});
+
+	it('keeps the offline state while only an earlier, superseded retry has finished', async () => {
+		browserReportsOnline(false);
+		failNavigationWith(500, 'Internal Error');
+		const target = await mountErrorPage();
+		const finishers: Array<() => void> = [];
+		goto.mockImplementation(() => new Promise<void>((resolve) => finishers.push(resolve)));
+
+		browserReportsOnline(true);
+		await tick();
+		browserReportsOnline(false);
+		await tick();
+		browserReportsOnline(true);
+		await tick();
+		finishers[0]();
+		await new Promise((resolve) => setTimeout(resolve));
+		await tick();
+
+		expect(goto).toHaveBeenCalledTimes(2);
+		expect(target.textContent).toContain(OFFLINE_SENTENCE);
+		expect(target.textContent).not.toContain('500');
+	});
+
 	it('shows the status and message of a failure while online', async () => {
 		failNavigationWith(500, 'Internal Error');
 

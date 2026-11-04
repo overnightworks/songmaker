@@ -639,7 +639,7 @@ export const SESSION_REFUSAL_STATUSES: readonly number[] = [401, 403, 429];
 export interface FlowGuardOptions {
 	refusalsExpectedOn?: readonly ExpectedRefusal[];
 	// A flow that calls `loseNetwork` drives that loss on purpose, so neither the failed request
-	// nor the console lines for it (Chromium's, the router's lost route stylesheet) fail it.
+	// nor its console lines (Chromium's, the router's lost route stylesheet) fail it, and they do elsewhere.
 	losesNetworkOnPurpose?: boolean;
 }
 

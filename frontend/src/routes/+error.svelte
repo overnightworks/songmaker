@@ -12,14 +12,17 @@
 
 	// The router keeps the failed status until the retry's chunk has loaded.
 	let retrying = $state(false);
+	let retryAttempts = 0;
 
 	$effect(() => {
 		if (!waitsForNetwork) return;
 		return whenBackOnline(() => {
+			const thisAttempt = ++retryAttempts;
 			retrying = true;
 			// eslint-disable-next-line svelte/no-navigation-without-resolve -- re-runs the failed navigation to the address kit already resolved
 			void goto(page.url.href, { replace: true, refreshAll: true }).finally(() => {
-				retrying = false;
+				// A newer retry supersedes this one: kit resolves the superseded goto early.
+				if (thisAttempt === retryAttempts) retrying = false;
 			});
 		});
 	});
