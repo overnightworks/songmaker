@@ -1,7 +1,0 @@
-claim_id = "20a659d772d04df99c09f453597817be"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3070926f8c6552fc557040e92de98a619b0ee42e"
-branch = "claude/issue-2221-songmaker-s-own-privacy-text-and-terms-c"
-scope = ["legal/datenschutz.html", "legal/nutzungsbedingungen.html"]
-opened_commit = "bbf6b50f5ba4067843cfefc4de048aef2163aa79"
