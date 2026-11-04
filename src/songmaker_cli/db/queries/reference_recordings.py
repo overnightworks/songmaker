@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
+from typing import Final
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.models import ReferenceRecording
+from songmaker_cli.db.models import Generation, ReferenceRecording, Version
+
+REFERENCE_LINK_COLUMNS: Final = (
+    Version.reference_recording_id,
+    Generation.reference_recording_id,
+)
 
 
 @dataclass(frozen=True)
@@ -51,6 +58,37 @@ def get_owned_reference_recording(
     if lock:
         query = query.with_for_update()
     return session.execute(query).scalar_one_or_none()
+
+
+def delete_reference_recording(session: Session, recording: ReferenceRecording) -> str:
+    """Delete the row and flush; returns its storage path.
+
+    A version or take that still links the row refuses the flush with ``IntegrityError``.
+    """
+    storage_path = recording.storage_path
+    session.delete(recording)
+    session.flush()
+    return storage_path
+
+
+def reference_ids_in_use(session: Session, reference_ids: Collection[str]) -> set[str]:
+    """The ids a version or a take links, trashed songs' and albums' links included.
+
+    The query names neither Song nor Album, so the soft-delete filter cannot hide a link.
+    """
+    if not reference_ids:
+        return set()
+    return set(
+        session.execute(
+            select(ReferenceRecording.id).where(
+                ReferenceRecording.id.in_(reference_ids),
+                or_(*(
+                    exists().where(link == ReferenceRecording.id)
+                    for link in REFERENCE_LINK_COLUMNS
+                )),
+            ),
+        ).scalars(),
+    )
 
 
 def owned_reference_storage_paths(session: Session, user_id: str) -> set[str]:

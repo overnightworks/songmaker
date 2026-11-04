@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from httpx import Response
-from sqlalchemy.exc import IntegrityError
-from support.postgres_lock_harness import CommitPause, race
+from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
@@ -18,7 +16,7 @@ from songmaker_cli.db.queries.songs import create_song
 OWNER = "u1"
 REFERENCE_ID = "reference-1"
 NOT_FOUND = {"detail": "Not Found"}
-DELETE_REFUSED = "refused by the foreign key"
+IN_USE = {"detail": "Reference audio is in use."}
 
 
 def _seed(session) -> None:
@@ -52,21 +50,8 @@ class _World:
             f"/api/songs/{self.song_id}", json={"reference_recording_id": REFERENCE_ID},
         )
 
-    def delete_row(self, pause: CommitPause | None = None) -> Callable[[], str]:
-        """A delete of the reference row; with a ``pause`` it holds the delete before its commit."""
-        def run() -> str:
-            with self.pg_factory() as session:
-                try:
-                    session.query(ReferenceRecording).filter_by(id=REFERENCE_ID).delete()
-                    if pause is not None:
-                        pause.hold(session)
-                    session.commit()
-                except IntegrityError:
-                    session.rollback()
-                    return DELETE_REFUSED
-                return "deleted"
-
-        return run
+    def delete_reference(self) -> Response:
+        return self.client.delete(f"/api/references/{REFERENCE_ID}")
 
     def linked_keys(self) -> list[str | None]:
         with self.pg_factory() as session:
@@ -82,13 +67,14 @@ class _World:
 
 
 @pytest.mark.parametrize("route", ["create", "update"])
-def test_a_delete_waits_for_a_save_that_links_the_row_and_then_fails_on_the_foreign_key(
+def test_a_delete_waits_for_a_save_that_links_the_row_and_then_answers_in_use(
     pg_factory, tmp_path, route,
 ) -> None:
     world = _World(pg_factory, tmp_path)
-    answers = race(pg_factory, lambda: world.attach(route), world.delete_row())
+    answers = race(pg_factory, lambda: world.attach(route), world.delete_reference)
     assert answers["first"].status_code == 200
-    assert answers["second"] == DELETE_REFUSED
+    assert answers["second"].status_code == 409
+    assert answers["second"].json() == IN_USE
     assert world.reference_rows() == 1
     assert REFERENCE_ID in world.linked_keys()
 
@@ -98,11 +84,11 @@ def test_a_save_waits_for_a_delete_of_the_row_and_then_answers_not_found(
     pg_factory, tmp_path, route,
 ) -> None:
     world = _World(pg_factory, tmp_path)
-    delete_pause = CommitPause(lambda _session: False)
+    delete_pause = CommitPause(lambda session: wrote_to_tables(session, "reference_recordings"))
     answers = race(
-        pg_factory, world.delete_row(delete_pause), lambda: world.attach(route), delete_pause,
+        pg_factory, world.delete_reference, lambda: world.attach(route), delete_pause,
     )
-    assert answers["first"] == "deleted"
+    assert answers["first"].status_code == 204
     assert answers["second"].status_code == 404
     assert answers["second"].json() == NOT_FOUND
     assert world.reference_rows() == 0

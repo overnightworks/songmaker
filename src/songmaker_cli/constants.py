@@ -210,7 +210,6 @@ HALLUCINATION_MIN_LINES = 5
 HALLUCINATION_MAX_UNIQUE = 2
 HALLUCINATION_PHRASE_RATIO = 0.5
 
-# Sharing
 SHARING_RATE_LIMIT = 60
 SHARING_RATE_WINDOW_SECONDS = 60
 SHARING_STREAM_RATE_LIMIT = 6
@@ -722,6 +721,7 @@ class ResourceType(StrEnum):
     JOB = "job"
     SESSION = "session"
     LORA = "lora"
+    REFERENCE = "reference"
 
 
 class ResourceEventKind(StrEnum):

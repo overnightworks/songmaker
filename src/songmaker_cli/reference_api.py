@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Final
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
+from starlette.types import Receive, Scope, Send
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_models import (
@@ -23,17 +27,26 @@ from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
     REFERENCE_AUDIO_EXTENSIONS,
     REFERENCE_AUDIO_MAX_BYTES,
+    AuditAction,
+    ResourceType,
 )
 from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH
+from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.reference_recordings import (
+    delete_reference_recording,
     get_owned_reference_recording,
     list_owned_reference_recordings,
     owner_reference_usage,
+    reference_ids_in_use,
 )
 from songmaker_cli.reference_audio import (
+    REFERENCE_AUDIO_STORAGE_DETAIL,
     ReferenceAudioQuotaExceeded,
     ReferenceAudioRejected,
     ReferenceAudioStorageError,
+    RemovalOutcome,
+    is_owner_storage_path,
+    remove_reference_file,
     resolve_owned_reference_audio,
     store_reference_audio,
 )
@@ -42,16 +55,44 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 router = APIRouter()
 
+REFERENCE_IN_USE_DETAIL: Final = "Reference audio is in use."
+INVALID_FILENAME_DETAIL: Final = "Invalid filename."
+_CONTROL_CHARACTER: Final = re.compile(r"[\x00-\x1f]")
+
+
+class OpenedFileResponse(FileResponse):
+    """A file response whose ``stat_result`` the caller took from the open file.
+
+    Starlette then never names the path in an error. A file that vanishes or becomes
+    unreadable after the headers went out ends the body here, logging the kind only. This
+    holds while uvicorn offers no ``pathsend``; an upgrade that adds it needs a re-check.
+    """
+
+    def __init__(
+        self, path: Path, *, stat_result: os.stat_result, media_type: str | None,
+    ) -> None:
+        super().__init__(path, stat_result=stat_result, media_type=media_type)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        except OSError as exc:
+            log.error(  # NOSONAR(S8572) A traceback would name the path.
+                "Reference audio ended while it was sent: %s", type(exc).__name__,
+            )
+
 
 @router.get("/references")
 def api_list_references(
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_db_session)],
 ) -> ReferenceListResponse:
+    recordings = list_owned_reference_recordings(session, user.id)
+    in_use = reference_ids_in_use(session, [recording.id for recording in recordings])
     return ReferenceListResponse(
         references=[
-            ReferenceRecordingResponse.from_orm(recording)
-            for recording in list_owned_reference_recordings(session, user.id)
+            ReferenceRecordingResponse.from_orm(recording, in_use=recording.id in in_use)
+            for recording in recordings
         ],
         usage=ReferenceUsageResponse.from_orm(
             owner_reference_usage(session, user.id), get_settings()
@@ -81,13 +122,54 @@ def api_reference_audio(
         # FileResponse opens after it sent headers, so an unreadable file is refused here.
         with audio_path.open("rb") as audio:
             audio.read(1)
+            stat_result = os.fstat(audio.fileno())
     except (ReferenceAudioRejected, OSError) as exc:
         log.error(  # NOSONAR(S8572) A traceback would carry the path, which this log never holds.
             "Reference audio unusable for user %s, reference %s: %s",
             user.id, recording_id, type(exc).__name__,
         )
         raise HTTPException(404) from None
-    return FileResponse(audio_path, media_type=AUDIO_MEDIA_TYPES.get(audio_path.suffix))
+    return OpenedFileResponse(
+        audio_path, stat_result=stat_result, media_type=AUDIO_MEDIA_TYPES.get(audio_path.suffix),
+    )
+
+
+@router.delete(
+    "/references/{reference_id}",
+    status_code=204,
+    responses={
+        404: {"description": "Reference audio not found"},
+        409: {"description": "Reference audio is in use"},
+        500: {"description": "Reference audio storage could not be checked"},
+    },
+)
+def api_delete_reference(
+    reference_id: str,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_db_session)],
+    ctx: Annotated[AppContext, Depends(get_app_context)],
+) -> Response:
+    recording = get_owned_reference_recording(session, user.id, reference_id, lock=True)
+    if recording is None:
+        raise HTTPException(404)
+    recording_id = recording.id
+    if not is_owner_storage_path(user.id, recording.storage_path):
+        log.error("Reference %s of user %s kept: corrupt_path", recording_id, user.id)
+        raise HTTPException(500, REFERENCE_AUDIO_STORAGE_DETAIL)
+    try:
+        storage_path = delete_reference_recording(session, recording)
+    except IntegrityError:
+        session.rollback()
+        log.info("Reference %s of user %s kept: in_use", recording_id, user.id)
+        raise HTTPException(409, REFERENCE_IN_USE_DETAIL) from None
+    record_audit(session, user.id, AuditAction.DELETE, ResourceType.REFERENCE, recording_id)
+    session.commit()
+    outcome = remove_reference_file(ctx.audio_dir, user.id, storage_path)
+    log.log(
+        logging.WARNING if outcome is RemovalOutcome.FAILED else logging.INFO,
+        "Reference %s of user %s deleted: file %s", recording_id, user.id, outcome.value,
+    )
+    return Response(status_code=204)
 
 
 @router.post(
@@ -107,6 +189,8 @@ async def api_upload_reference(
         raise HTTPException(400, "No filename provided")
 
     original_filename = Path(file.filename).name
+    if _CONTROL_CHARACTER.search(original_filename):
+        raise HTTPException(400, INVALID_FILENAME_DETAIL)
     if len(original_filename) > REFERENCE_FILENAME_MAX_LENGTH:
         raise HTTPException(
             400, f"Filename too long (max {REFERENCE_FILENAME_MAX_LENGTH} characters)",
@@ -147,4 +231,4 @@ def _stored_reference_response(
 ) -> ReferenceRecordingResponse:
     with ctx.db() as session:
         recording = get_owned_reference_recording(session, user_id, recording_id)
-        return ReferenceRecordingResponse.from_orm(recording)
+        return ReferenceRecordingResponse.from_orm(recording, in_use=False)

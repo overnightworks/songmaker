@@ -12,6 +12,8 @@ from songmaker_cli.db.models import Album, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import create_reference_recording
 from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,
+    RemovalOutcome,
+    remove_reference_file,
     resolve_owned_reference_audio,
 )
 
@@ -113,6 +115,70 @@ def test_rejects_missing_or_unsupported_owned_reference_audio(tmp_path: Path, na
 
     with pytest.raises(ReferenceAudioRejected, match="reference audio path is not owned"):
         resolve_owned_reference_audio(audio_dir, "user-a", f"user-a/{REFERENCE_AUDIO_DIR}/{name}")
+
+
+def test_a_nested_path_is_refused_although_its_file_exists(tmp_path: Path) -> None:
+    audio_dir = tmp_path / "audio"
+    nested = audio_dir / "user-a" / REFERENCE_AUDIO_DIR / "sub" / "x.wav"
+    nested.parent.mkdir(parents=True)
+    nested.write_bytes(b"RIFF")
+
+    with pytest.raises(ReferenceAudioRejected):
+        resolve_owned_reference_audio(
+            audio_dir, "user-a", f"user-a/{REFERENCE_AUDIO_DIR}/sub/x.wav",
+        )
+
+
+def test_remove_reference_file_removes_the_owners_file(tmp_path: Path) -> None:
+    audio_dir = tmp_path / "audio"
+    kept = _write_ref(audio_dir, "user-a", "other.wav")
+    gone = _write_ref(audio_dir, "user-a", "clip.wav")
+
+    outcome = remove_reference_file(audio_dir, "user-a", f"user-a/{REFERENCE_AUDIO_DIR}/clip.wav")
+
+    assert outcome is RemovalOutcome.REMOVED
+    assert not gone.exists()
+    assert kept.exists()
+
+
+@pytest.mark.parametrize("directory_exists", [True, False])
+def test_remove_reference_file_reports_an_absent_file_as_already_gone(
+    tmp_path: Path, directory_exists: bool,
+) -> None:
+    audio_dir = tmp_path / "audio"
+    if directory_exists:
+        _write_ref(audio_dir, "user-a", "other.wav")
+
+    outcome = remove_reference_file(audio_dir, "user-a", f"user-a/{REFERENCE_AUDIO_DIR}/clip.wav")
+
+    assert outcome is RemovalOutcome.ALREADY_GONE
+
+
+@pytest.mark.parametrize("owner_directory", ["user-b", ".."])
+def test_remove_reference_file_fails_for_a_path_of_another_owner(
+    tmp_path: Path, owner_directory: str,
+) -> None:
+    audio_dir = tmp_path / "audio"
+    own = _write_ref(audio_dir, "user-a", "x.wav")
+
+    outcome = remove_reference_file(
+        audio_dir, "user-a", f"{owner_directory}/{REFERENCE_AUDIO_DIR}/x.wav",
+    )
+
+    assert outcome is RemovalOutcome.FAILED
+    assert own.exists()
+
+
+def test_remove_reference_file_fails_through_a_symlinked_ancestor(tmp_path: Path) -> None:
+    audio_dir = tmp_path / "audio"
+    foreign = _write_ref(audio_dir, "user-b", "clip.wav")
+    (audio_dir / "user-a").mkdir(parents=True)
+    (audio_dir / "user-a" / REFERENCE_AUDIO_DIR).symlink_to(foreign.parent)
+
+    outcome = remove_reference_file(audio_dir, "user-a", f"user-a/{REFERENCE_AUDIO_DIR}/clip.wav")
+
+    assert outcome is RemovalOutcome.FAILED
+    assert foreign.exists()
 
 
 def _seed_users(session) -> None:
