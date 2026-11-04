@@ -311,6 +311,7 @@ def test_create_song_dedupes_slug_against_sibling_in_same_album(db_session: Sess
     owner_id, _, album_id, _, _ = _seed(db_session)
     owner = _owner(db_session, owner_id)
     tools.tool_create_song(db_session, owner, album_id=album_id, title="Twin")
+    db_session.commit()
     result = tools.tool_create_song(db_session, owner, album_id=album_id, title="Twin")
     stored = db_session.query(Song).filter_by(id=result.song_id).one()
     assert stored.slug == "twin-2"
@@ -412,6 +413,7 @@ def test_rename_song_dedupes_slug_against_sibling_in_same_album(db_session: Sess
     owner_id, _, album_id, song_id, _ = _seed(db_session)
     owner = _owner(db_session, owner_id)
     tools.tool_create_song(db_session, owner, album_id=album_id, title="Rival")
+    db_session.commit()
     result = tools.tool_rename_song(db_session, owner, song_id=song_id, title="Rival")
     stored = db_session.query(Song).filter_by(id=result.song_id).one()
     assert stored.slug == "rival-2"

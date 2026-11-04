@@ -162,6 +162,7 @@ jobs:
         tests/songmaker_cli/test_reference_audio_quota.py
         tests/songmaker_cli/test_reference_audio_reconciliation_postgres.py
         tests/songmaker_cli/test_auth_stores_write_lock_postgres.py
+        tests/songmaker_cli/test_lock_guard_postgres.py
         tests/songmaker_cli/test_oidc_client_person_token_paths_postgres.py
         tests/songmaker_cli/db/queries/test_reference_recordings_attach_lock_postgres.py
         tests/songmaker_cli/test_reference_delete_postgres.py

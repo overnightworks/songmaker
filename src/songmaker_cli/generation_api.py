@@ -129,11 +129,15 @@ async def _has_online_acestep_worker(session: Session) -> bool:
     return False
 
 
-def _resolve_source_wav(audio_dir: Path, gen: Generation, session: Session) -> Path:
+def _resolve_source_wav(audio_dir: Path, gen: Generation) -> tuple[Path, str]:
+    """The take's wav and its name under ``audio_dir``, converting the mp3 once.
+
+    It writes nothing to the database: the caller records the name after its lock.
+    """
     if gen.wav_path:
         wav = audio_dir / gen.wav_path
         if wav.exists():
-            return wav
+            return wav, gen.wav_path
 
     mp3 = audio_dir / gen.mp3_path
     if not mp3.exists():
@@ -154,11 +158,7 @@ def _resolve_source_wav(audio_dir: Path, gen: Generation, session: Session) -> P
         except subprocess.CalledProcessError as exc:
             raise HTTPException(500, "Failed to convert MP3 to WAV") from exc
 
-    wav_rel = str(wav.relative_to(audio_dir))
-    gen.wav_path = wav_rel
-    session.flush()
-
-    return wav
+    return wav, str(wav.relative_to(audio_dir))
 
 
 def _generation_version_or_error(gen: Generation, version_id: str | None) -> Version:
@@ -354,7 +354,6 @@ async def api_repaint_generation(
 ) -> JobResponse | JSONResponse:
     gen = check_generation_access(session, gen_id, user)
     song = gen.song
-
     version = _generation_version_or_error(gen, req.version_id)
 
     if req.repainting_start >= req.repainting_end:
@@ -363,7 +362,7 @@ async def api_repaint_generation(
     _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
 
-    wav_path = _resolve_source_wav(ctx.audio_dir, gen, session)
+    wav_path, wav_name = _resolve_source_wav(ctx.audio_dir, gen)
 
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
@@ -371,6 +370,7 @@ async def api_repaint_generation(
     job = create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song.id, version_id=version.id, redis=ctx.redis,
     )
+    gen.wav_path = wav_name
     record_audit(
         session, user.id, AuditAction.REPAINT, ResourceType.GENERATION, gen_id,
         f"range={req.repainting_start:.2f}-{req.repainting_end:.2f}",
@@ -432,7 +432,7 @@ async def api_cover_generation(
     _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
 
-    wav_path = _resolve_source_wav(ctx.audio_dir, gen, session)
+    wav_path, wav_name = _resolve_source_wav(ctx.audio_dir, gen)
 
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
@@ -440,6 +440,7 @@ async def api_cover_generation(
     job = create_job_with_rate_limit(
         session, user, JobType.GENERATE, song_id=song.id, version_id=version.id, redis=ctx.redis,
     )
+    gen.wav_path = wav_name
     record_audit(
         session, user.id, AuditAction.COVER, ResourceType.GENERATION, gen_id,
         f"strength={req.audio_cover_strength:.2f}",
