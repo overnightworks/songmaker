@@ -1,0 +1,7 @@
+claim_id = "254abf1c88274febb611327d8365cdfd"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3070926f8c6552fc557040e92de98a619b0ee42e"
+branch = "claude/issue-2142-the-cover-s-suggest-states-and-the-per-a"
+scope = ["docs/design/README.md", "docs/design/admin-models.html", "docs/design/album-cover.html"]
+opened_commit = "7bf69344927edd97638886f74fc3d835e6e17e17"
