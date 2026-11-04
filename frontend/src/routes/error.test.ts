@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
-import { stateProxy } from '../tests/reactive-fixtures.svelte';
 
 const { goto, page } = vi.hoisted(() => ({
 	goto: vi.fn(),
@@ -22,7 +21,7 @@ const ADDRESS = 'http://localhost/settings/references';
 let mounted: ReturnType<typeof mount> | undefined;
 
 function failNavigationWith(status: number, message: string): void {
-	Object.assign(page, stateProxy({ status, error: { message }, url: new URL(ADDRESS) }));
+	Object.assign(page, { status, error: { message }, url: new URL(ADDRESS) });
 }
 
 async function mountErrorPage(): Promise<HTMLElement> {
@@ -67,7 +66,20 @@ describe('route error page', () => {
 		await tick();
 
 		expect(goto).toHaveBeenCalledTimes(1);
-		expect(goto).toHaveBeenCalledWith(ADDRESS, { replaceState: true, invalidateAll: true });
+		expect(goto).toHaveBeenCalledWith(ADDRESS, { replace: true, refreshAll: true });
+	});
+
+	it('keeps the offline state, not the status, while the retry is still loading', async () => {
+		browserReportsOnline(false);
+		failNavigationWith(500, 'Internal Error');
+		const target = await mountErrorPage();
+		goto.mockReturnValue(new Promise(() => {}));
+
+		browserReportsOnline(true);
+		await tick();
+
+		expect(target.textContent).not.toContain('500');
+		expect(target.textContent).not.toContain('Internal Error');
 	});
 
 	it('shows the status and message of a failure while online', async () => {

@@ -1,5 +1,4 @@
 <script lang="ts">
-	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import Icon from '#lib/components/Icon.svelte';
@@ -11,16 +10,23 @@
 	// A page chunk that fails to load is a 500 to the router; offline it is the lost network.
 	const waitsForNetwork = $derived(page.status === LOAD_FAILED_STATUS && $offline);
 
+	// The router keeps the failed status until the retry's chunk has loaded.
+	let retrying = $state(false);
+
 	$effect(() => {
 		if (!waitsForNetwork) return;
 		return whenBackOnline(() => {
-			void goto(page.url.href, { replaceState: true, invalidateAll: true });
+			retrying = true;
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- re-runs the failed navigation to the address kit already resolved
+			void goto(page.url.href, { replace: true, refreshAll: true }).finally(() => {
+				retrying = false;
+			});
 		});
 	});
 </script>
 
 <section class="route-error" role="alert">
-	{#if waitsForNetwork}
+	{#if waitsForNetwork || retrying}
 		<Icon name="cloud-off" size={32} class="route-error-glyph" />
 		<p class="route-error-words">{OFFLINE_WORDS}</p>
 	{:else}
