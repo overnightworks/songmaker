@@ -408,7 +408,6 @@ JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 120
 JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
 COVER_CLI_DEADLINE_SECONDS: Final[int] = 88
-COVER_JOB_BUDGET_SECONDS: Final[int] = 300
 COVER_MAX_CONCURRENT_RUNS: Final[int] = 1
 CODEX_CLI_MAX_CONCURRENT_PROCESSES: Final[int] = 8
 COVER_PROMPT_SONG_FIELD_MAX_CHARS: Final[int] = 500
@@ -584,23 +583,11 @@ class WorkerLivenessSignal(StrEnum):
 
 
 class JobFunction(StrEnum):
-    COVER = "cover"
     GENERATE = "generate"
     SCORE = "score"
     LOAD_MODEL_ON_WORKER = "load_model_on_worker"
     DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
     LORA_TRAINING = "lora_training"
-
-
-class CoverExecutor(StrEnum):
-    """The one process class allowed to take queued cover jobs."""
-
-    MUSIC = "music"
-    WEB = "web"
-
-
-DEFAULT_COVER_EXECUTOR: Final[CoverExecutor] = CoverExecutor.WEB
-"""Production owner for cover jobs; ``music`` remains a temporary rollback switch."""
 
 
 @dataclass(frozen=True)
@@ -630,11 +617,11 @@ class JobStaleThresholds:
 # slowest measured or provisioned progress signal for that type; see #331 F20.
 STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
     JobType.COVER: JobStaleThresholds(
-        queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
+        queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-        liveness_signal=WorkerLivenessSignal.MUSIC,
-        restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
-    ),
+        liveness_signal=None,
+        restart_grace_seconds=None,
+    ),  # runs in the web process, which has no worker liveness signal
     JobType.CHAT: JobStaleThresholds(
         queued_seconds=QUEUED_JOB_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
@@ -672,25 +659,6 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
         restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
     ),  # worker polls download progress every 2 s; 180 s tolerates 90 misses
 }
-
-
-COVER_WEB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = QUEUED_JOB_STALE_THRESHOLD_SECONDS
-"""Web covers share the web process' queue-age guard, not ARQ's worker guard."""
-
-
-def stale_job_thresholds(cover_executor: CoverExecutor) -> dict[JobType, JobStaleThresholds]:
-    """Return the reaper policy for the configured cover execution owner."""
-    if cover_executor is CoverExecutor.MUSIC:
-        return STALE_JOB_THRESHOLDS
-    return {
-        **STALE_JOB_THRESHOLDS,
-        JobType.COVER: JobStaleThresholds(
-            queued_seconds=COVER_WEB_QUEUED_STALE_THRESHOLD_SECONDS,
-            heartbeat_seconds=COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-            liveness_signal=None,
-            restart_grace_seconds=None,
-        ),
-    }
 
 
 def worker_restart_grace_seconds(signal: WorkerLivenessSignal) -> int:

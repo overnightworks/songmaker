@@ -1,4 +1,4 @@
-"""The dark web executor and shared execution owner for cover jobs."""
+"""The web executor for cover jobs: claim, generate, publish and recover."""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ from PIL import Image
 
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
+    COVER_CLI_DEADLINE_SECONDS,
     COVER_GENERATED_EDGE_PIXELS,
     COVER_GENERATED_IMAGE_FORMAT,
     COVER_MAX_BYTES,
@@ -33,7 +34,6 @@ from songmaker_cli.constants import (
     COVER_PNG_MAGIC,
     COVER_PROMPT_MAX_CHARS,
     COVER_PROMPT_SONG_FIELD_MAX_CHARS,
-    JOB_ERROR_COVER_IMAGE_FAILED,
     JOB_HEARTBEAT_INTERVAL_SECONDS,
     JobStatus,
     JobType,
@@ -55,7 +55,6 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.jobs._runtime import _sanitize_error, _touch_heartbeat, _update_job
-from songmaker_cli.settings import CoverExecutor, Settings, get_settings
 
 log = logging.getLogger(__name__)
 
@@ -115,15 +114,11 @@ def abort_web_cover_job(app, job_id: str) -> bool:
 def recover_web_cover_jobs(
     db_factory,
     audio_dir: Path,
-    settings: Settings | None = None,
 ) -> int:
     """Fail interrupted web covers, then remove only their own suggestion.
 
     Suggestions of earlier jobs stay pending; a restart must not discard them.
     """
-    settings = settings or get_settings()
-    if settings.cover_executor is not CoverExecutor.WEB:
-        return 0
     with db_factory() as session:
         interrupted_jobs = session.query(Job.id, Job.album_id).filter(
             Job.type == JobType.COVER,
@@ -154,13 +149,9 @@ async def run_next_cover_job(
     *,
     db_factory,
     audio_dir: Path,
-    settings: Settings | None = None,
     cancellation_registry: CoverJobCancellationRegistry | None = None,
 ) -> bool:
-    """Claim and run one cover job when this process is the configured owner."""
-    settings = settings or get_settings()
-    if settings.cover_executor is not CoverExecutor.WEB:
-        return False
+    """Claim and run one queued cover job."""
     job_id = await asyncio.to_thread(_claim_next_cover_job, db_factory)
     if job_id is None:
         return False
@@ -174,7 +165,6 @@ async def run_next_cover_job(
             job_id,
             db_factory=db_factory,
             audio_dir=audio_dir,
-            settings=settings,
             abort_signal=abort_signal,
         )
     finally:
@@ -184,10 +174,7 @@ async def run_next_cover_job(
 
 
 async def cover_runner_loop(app, registry: BackgroundLoopRegistry) -> None:
-    """Poll the dark web cover queue and publish one completed suggestion per tick."""
-    settings = get_settings()
-    if settings.cover_executor is not CoverExecutor.WEB:
-        return
+    """Poll the cover queue and publish one completed suggestion per tick."""
     ctx = app.state.ctx
     cancellation_registry = cover_job_cancellation_registry(app)
     while True:
@@ -195,7 +182,6 @@ async def cover_runner_loop(app, registry: BackgroundLoopRegistry) -> None:
             await run_next_cover_job(
                 db_factory=ctx.db,
                 audio_dir=ctx.audio_dir,
-                settings=settings,
                 cancellation_registry=cancellation_registry,
             )
         except Exception as exc:
@@ -206,41 +192,19 @@ async def cover_runner_loop(app, registry: BackgroundLoopRegistry) -> None:
         await asyncio.sleep(COVER_RUNNER_POLL_INTERVAL_SECONDS)
 
 
-async def run_cover_suggestion_job(
-    job_id: str,
-    *,
-    db_factory,
-    audio_dir: Path,
-    settings: Settings | None = None,
-) -> None:
-    """Claim the arq-delivered job, then use the shared cover execution path."""
-    settings = settings or get_settings()
-    started = await asyncio.to_thread(_update_job, db_factory, job_id, JobStatus.RUNNING)
-    if not started:
-        return
-    await run_claimed_cover_suggestion_job(
-        job_id,
-        db_factory=db_factory,
-        audio_dir=audio_dir,
-        settings=settings,
-    )
-
-
 async def run_claimed_cover_suggestion_job(
     job_id: str,
     *,
     db_factory,
     audio_dir: Path,
-    settings: Settings | None = None,
-    abort_signal: Event | None = None,
+    abort_signal: Event,
 ) -> None:
     """Produce and publish the one suggestion of an already-running cover job.
 
-    This is deliberately shared by the arq worker and the web runner.  The
-    caller alone owns claiming the queued job; this owner owns all subsequent
-    heartbeats, the image, atomic publish, cleanup, and terminal status.
+    The caller alone owns claiming the queued job; this owner owns all
+    subsequent heartbeats, the image, atomic publish, cleanup, and terminal
+    status.
     """
-    settings = settings or get_settings()
     await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
     heartbeat_task = asyncio.create_task(_keep_heartbeats(db_factory, job_id))
     staging_dir: Path | None = None
@@ -258,7 +222,7 @@ async def run_claimed_cover_suggestion_job(
         staging_dir = await asyncio.to_thread(_staging_directory, audio_dir, album_id, job_id)
         payload = await _generate_cover_image(
             prompt,
-            deadline=time.monotonic() + settings.cover_cli_deadline_seconds,
+            deadline=time.monotonic() + COVER_CLI_DEADLINE_SECONDS,
             abort_signal=abort_signal,
             model=dispatch.model,
         )
@@ -284,18 +248,8 @@ async def run_claimed_cover_suggestion_job(
         await asyncio.to_thread(shutil.rmtree, staging_dir)
         staging_dir = None
     except asyncio.CancelledError:
-        if abort_signal is not None:
-            abort_signal.set()
+        abort_signal.set()
         await asyncio.to_thread(_remove_staging_directory, staging_dir)
-        if abort_signal is None:
-            await asyncio.to_thread(
-                _update_job,
-                db_factory,
-                job_id,
-                JobStatus.FAILED,
-                error=JOB_ERROR_COVER_IMAGE_FAILED,
-                error_type="timeout",
-            )
         raise
     except Exception as exc:
         await asyncio.to_thread(_remove_staging_directory, staging_dir)
@@ -441,7 +395,7 @@ async def _generate_cover_image(
     prompt: str,
     *,
     deadline: float,
-    abort_signal: Event | None,
+    abort_signal: Event,
     model: str,
 ) -> bytes:
     """Await one image generation and reap its CLI before task cancellation escapes."""
@@ -453,8 +407,6 @@ async def _generate_cover_image(
         abort_signal=abort_signal,
         model=model,
     )
-    if abort_signal is None:
-        return await image_generation
     generation = asyncio.create_task(image_generation)
     try:
         return await asyncio.shield(generation)

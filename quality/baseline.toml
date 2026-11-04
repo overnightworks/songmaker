@@ -60,7 +60,7 @@
 "frontend/src/routes/settings/users/+page.svelte" = 1123
 "frontend/src/routes/settings/users/page.test.ts" = 861
 "src/acestep_worker/wrapper.py" = 1088
-"src/songmaker_cli/constants.py" = 814
+"src/songmaker_cli/constants.py" = 782
 "src/songmaker_cli/conversation_api.py" = 972
 "src/songmaker_cli/jobs/generation.py" = 1149
 "src/songmaker_cli/jobs/lora_training.py" = 1552
@@ -74,7 +74,7 @@
 "tests/test_auto_deploy_alerting.py" = 1384
 "tests/songmaker_cli/test_conversation_api.py" = 842
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
-"tests/songmaker_cli/test_db.py" = 3623
+"tests/songmaker_cli/test_db.py" = 3585
 "tests/songmaker_cli/test_jobs.py" = 3215
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_library_api.py" = 1627
@@ -103,7 +103,7 @@
 "build_ace_config" = 65
 
 [function_lines."src/songmaker_cli/cover_runner.py"]
-"run_claimed_cover_suggestion_job" = 83
+"run_claimed_cover_suggestion_job" = 71
 
 [function_lines."src/songmaker_cli/cowriter/history.py"]
 "compact_conversation" = 60
@@ -165,7 +165,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 84
+"_lifespan" = 71
 "create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
