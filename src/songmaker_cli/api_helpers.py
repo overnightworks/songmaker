@@ -140,11 +140,10 @@ def require_no_uncommitted_mutations(session: Session, caller: str) -> None:
         )
 
 
-def commit_auth_state_before_lock(session: Session, caller: str) -> None:
+def end_read_transaction_before_lock(session: Session, caller: str) -> None:
     """End the open transaction so a lock can follow.
 
-    The session holds no write here: ``get_current_user`` authenticates in its own
-    session. The check refuses a session that wrote, and the commit ends what is read.
+    The check refuses a session that wrote; the commit then only ends the reads.
     """
     require_no_uncommitted_mutations(session, caller)
     session.commit()
@@ -158,7 +157,7 @@ def lock_lora_capacity(session: Session) -> None:
     ``create_job_with_rate_limit``, end the open transaction before taking
     the lock; callers must not have written yet.
     """
-    commit_auth_state_before_lock(session, "lock_lora_capacity")
+    end_read_transaction_before_lock(session, "lock_lora_capacity")
     _begin_exclusive(session, _LORA_CAPACITY_LOCK_ID)
 
 
@@ -230,8 +229,8 @@ def create_job_with_rate_limit(
 
     Liveness is observed before the initial commit and exclusive write lock so
     Redis round trips do not extend the serialized section. The initial commit
-    closes the implicit transaction opened by the auth
-    dependency's reads so that BEGIN IMMEDIATE can acquire an exclusive write lock.
+    closes the implicit transaction the endpoint's
+    reads opened so that BEGIN IMMEDIATE can acquire an exclusive write lock.
 
     Callers must not write between dependency injection and this function;
     the guard refuses a session that did, because the commit() here would
@@ -298,7 +297,7 @@ def _acquire_unique_slug(
     transaction, which the guard refuses, because the commit() below would
     persist it unconditionally.
     """
-    commit_auth_state_before_lock(session, caller)
+    end_read_transaction_before_lock(session, caller)
     _begin_exclusive(session, lock_id)
     return _first_free_slug(base_slug, is_taken)
 

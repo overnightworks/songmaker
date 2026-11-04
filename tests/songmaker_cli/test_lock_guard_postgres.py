@@ -5,10 +5,11 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from test_lock_guard import (
+from support.lock_owners import (
     EARLY_WRITES,
     LOCK_OWNERS,
     OWNER_ID,
+    read_the_seeded_owner,
     refused_and_left_nothing,
     seed_committed_owner,
 )
@@ -43,4 +44,6 @@ def test_a_lock_is_refused_after_a_write_in_the_open_transaction(
 
 @pytest.mark.parametrize("take_lock", LOCK_OWNERS.values(), ids=LOCK_OWNERS.keys())
 def test_a_clean_session_takes_the_lock(session, take_lock) -> None:
+    read_the_seeded_owner(session)
+
     take_lock(session)
