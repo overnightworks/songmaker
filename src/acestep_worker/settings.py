@@ -18,7 +18,7 @@ DEFAULT_AUDIO_OUTPUT_DIR = "/app/data/worker_output"
 DEFAULT_SHARED_AUDIO_ROOT = "/app/data/audio"
 DEFAULT_TRAINING_WORKSPACE_DIRNAME = "training"
 # The worker accepts control-plane traffic over the container network.
-DEFAULT_CONTAINER_BIND_HOST = "0.0.0.0"  # nosec B104  # noqa: S104 - default of the worker_bind_host setting for the container network
+DEFAULT_CONTAINER_BIND_HOST = "0.0.0.0"  # noqa: S104 - default of the worker_bind_host setting for the container network
 
 
 class WorkerSettings(BaseSettings):

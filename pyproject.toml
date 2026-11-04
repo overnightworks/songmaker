@@ -136,16 +136,6 @@ select = ["E", "F", "W", "I"]
 "tests/songmaker_cli/test_scoring_scorers.py" = ["E402", "I001"]
 "tests/songmaker_cli/test_scoring_scorers_extended.py" = ["E402", "I001"]
 
-[tool.bandit]
-exclude_dirs = ["tests", ".venv"]
-skips = [
-    "B101",  # assert in tests
-    "B310",  # urlopen — URLs are from config, not user input
-    "B404",  # subprocess import — required for ffmpeg and ACE-Step
-    "B603",  # subprocess without shell — intentional, uses list args
-    "B110",  # try/except/pass — used in cleanup paths (GPU, subprocess, model unload)
-]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

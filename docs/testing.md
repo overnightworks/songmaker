@@ -71,8 +71,8 @@ A test that takes `pg_factory` and `fresh_settings` lists `pg_factory` first, be
 - **Resource-event transport**: `tests/songmaker_cli/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 - **Not measured**: Playwright E2E, because `e2e.yml` drives a plain, uninstrumented build of the CI stack and collects no coverage, so the browser flows add nothing to the Sonar reports; and `scripts/`, because the backend `--cov` flags name only `songmaker_cli`, `audio_engine`, `acestep_engine` and `acestep_worker`, so `scripts/` stays outside the coverage reports (Sonar scopes it but excludes it from coverage).
 
-GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml`, and `security.yml`) run on push/PR to `main`.
-Security verification also runs weekly. The live checks are:
+GitHub workflows (`.github/workflows/ci.yml`, and `e2e.yml`) run on push/PR to `main`.
+Code scanning (`code-scanning.yml`) also runs weekly. The live checks are:
 
 | Job | What |
 |---|---|
@@ -81,7 +81,7 @@ Security verification also runs weekly. The live checks are:
 | Quality | `quality / verdict`: hygiene, Sonar findings, mandatory jobs and both coverage reports |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | E2E | Boots the CI stack (`docker/docker-compose.ci.yml`: Postgres, Redis, web and the music worker; web migrates at start, and the boot is two `up --wait` steps, the stores first, so a worker image that cannot start fails the boot), curl-smokes it, then drives the library flows in Chromium against it, one job per Playwright project (`desktop`, `mobile`), each with its own runner and stack |
-| Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · Python lockfiles are covered by quality's advisory rule (the frontend has only devDependencies, so no production audit applies, and its `pnpm-lock.yaml` is not audited until quality's advisory rule reads it) |
+| Security | quality's `python-security` rule (ruff's `S` rules; known false positives carry a `# noqa: S…` with its reason) · Python lockfiles are covered by quality's advisory rule (the frontend has only devDependencies, so no production audit applies, and its `pnpm-lock.yaml` is not audited until quality's advisory rule reads it) |
 
 ### No-silent-fallbacks check
 
