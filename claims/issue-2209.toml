@@ -1,0 +1,8 @@
+claim_id = "c913f14b18294031bce6680069e5dc5c"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3822cb965bfb657a15f3cab7a7229cae93027a32"
+branch = "claude/issue-2209-bandit-goes"
+scope = [".github/workflows/security.yml", "docs/security.md", "docs/testing.md", "pyproject.toml", "src/acestep_worker/settings.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py"]
+opened_commit = "c0fcce4267ac27b57ff32f3502165a4621d30c78"
+whole_reason = "One scanner's removal: its job, its config and its markers go together, or a marker names a scanner that no longer runs."
