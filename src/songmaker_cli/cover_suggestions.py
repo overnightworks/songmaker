@@ -16,6 +16,7 @@ from songmaker_cli.audio_paths import AudioPathRejectedError, canonical_audio_pa
 from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, JobType
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.auth import lock_session_row
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since, create_job, has_active_cover_job
 from songmaker_cli.settings import get_settings
 
@@ -24,6 +25,7 @@ log = logging.getLogger(__name__)
 ALBUM_NOT_FOUND: Final = "Album not found"
 COVER_SUGGESTIONS_ALREADY_RUNNING: Final = "Cover suggestions are already being generated"
 DAILY_COVER_SUGGESTION_LIMIT_REACHED: Final = "Daily cover suggestion limit reached"
+SESSION_ENDED: Final = "Log in again to suggest covers."
 _COVER_SUGGESTIONS_LOCK_ID: Final = 7
 
 
@@ -54,6 +56,13 @@ class CoverSuggestionDailyLimitReachedError(CoverSuggestionRequestError):
         super().__init__(DAILY_COVER_SUGGESTION_LIMIT_REACHED)
 
 
+class CoverSuggestionSessionEndedError(CoverSuggestionRequestError):
+    status_code = 401
+
+    def __init__(self) -> None:
+        super().__init__(SESSION_ENDED)
+
+
 def request_cover_suggestions(
     session: Session, album_id: str, actor: Actor,
     *, session_id: str | None, require_owner: bool = False,
@@ -78,6 +87,9 @@ def request_cover_suggestions(
     used_today = count_cover_jobs_since(session, album.id, utc_day_start())
     if used_today >= settings.cover_suggestions_daily_limit:
         raise CoverSuggestionDailyLimitReachedError()
+
+    if session_id is not None and not lock_session_row(session, session_id):
+        raise CoverSuggestionSessionEndedError() from None
 
     return create_job(
         session, JobType.COVER, user_id=actor.id, album_id=album.id, session_id=session_id,

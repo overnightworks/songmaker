@@ -416,6 +416,7 @@ async def api_upload_album_cover(
 @router.post(
     "/albums/{album_id}/cover-suggestions",
     responses={
+        401: {"description": "The asking session has ended"},
         404: {"description": "Album not found"},
         409: {"description": "Cover suggestions are already running"},
         429: {"description": "Daily suggestion limit reached"},

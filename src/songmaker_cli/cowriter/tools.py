@@ -247,7 +247,8 @@ def execute_cowriter_tool(
     user: AuthenticatedUser,
     name: str,
     arguments: dict[str, Any],
-    session_id: str | None = None,
+    *,
+    session_id: str | None,
 ) -> ToolOutcome:
     """Run one tool; ``session_id`` is the asking session, handed only to a tool that needs it."""
     tool = _TOOLS_BY_NAME.get(name)

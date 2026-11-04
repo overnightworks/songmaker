@@ -92,5 +92,7 @@ def _execute(
             user = load_user(session, user_id)
         except MCPAuthError:
             return _REFUSED
-        outcome = execute_cowriter_tool(session, user, name, arguments, session_id)
+        outcome = execute_cowriter_tool(
+            session, user, name, arguments, session_id=session_id,
+        )
     return ToolOutcome(outcome.content, outcome.is_error)

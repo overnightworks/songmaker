@@ -384,19 +384,19 @@ _ASK_FOR_A_COVER = tool_round(
 _TURN_PERSON = make_authenticated_user(USER_ID)
 
 
-class _HoldsTheFirstReply(FakeGateway):
-    """Takes its first request's reply at once and delivers it only when ``release`` is set."""
+class _HoldsReplies(FakeGateway):
+    """Takes each request's reply at once; the nth one is delivered when ``holds[n]`` is set."""
 
-    def __init__(self, release, *replies) -> None:
+    def __init__(self, holds, *replies) -> None:
         super().__init__(*replies)
-        self.release = release
-        self._first = True
+        self.holds = holds
+        self._arrivals = 0
 
     async def handle_async_request(self, request):
-        first, self._first = self._first, False
+        arrival, self._arrivals = self._arrivals, self._arrivals + 1
         response = await super().handle_async_request(request)
-        if first:
-            await self.release.wait()
+        if arrival in self.holds:
+            await self.holds[arrival].wait()
         return response
 
 
@@ -450,7 +450,7 @@ def test_a_turns_cover_keeps_its_session_when_another_session_of_the_person_ends
 
 
 def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
-    """Turn A (S1) is held and cancelled, turn B (S2) runs, then A's reply arrives."""
+    """Turn A (S1) is held and cancelled; A's reply arrives while turn B (S2) is still running."""
     import asyncio
 
     from songmaker_cli.api_models import ChatTurnV2Request
@@ -462,9 +462,11 @@ def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
     second_session = open_session(app, world.factory, USER_ID)
 
     async def _exercise() -> None:
-        release = asyncio.Event()
+        release_a, release_b = asyncio.Event(), asyncio.Event()
         gateway = world.stack.uses(
-            _HoldsTheFirstReply(release, _ASK_FOR_A_COVER, completion("ok")),
+            _HoldsReplies(
+                {0: release_a, 1: release_b}, _ASK_FOR_A_COVER, completion("ok"), completion("ok"),
+            ),
         )
         with world.factory() as turn_a, world.factory() as turn_b, world.factory() as canceller:
             first = await api_chat_turn(
@@ -481,11 +483,18 @@ def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
                 ChatTurnV2Request(message="b"),
                 request_in_session(app, second_session), _TURN_PERSON, turn_b,
             )
-            async for _frame in second.body_iterator:
-                pass
-            release.set()
-            async for _frame in first.body_iterator:
-                pass
+
+            async def drain(response) -> None:
+                async for _frame in response.body_iterator:
+                    pass
+
+            second_turn = asyncio.create_task(drain(second))
+            while len(gateway.requests) < 2:
+                await asyncio.sleep(0)
+            release_a.set()
+            await drain(first)
+            release_b.set()
+            await second_turn
 
     asyncio.run(_exercise())
 

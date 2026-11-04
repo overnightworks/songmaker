@@ -237,6 +237,7 @@ def test_cowriter_get_generation_keeps_integer_score_in_json(db_session: Session
     owner = _seed_take(db_session, _batch_scores())
     outcome = execute_cowriter_tool(
         db_session, owner, "get_generation", {"generation_id": "gen1"},
+        session_id=None,
     )
     assert not outcome.is_error
     shown = json.loads(outcome.content)["scores"]["lyrical_coherence"]

@@ -15,6 +15,7 @@ from support.web_app import (
     make_router_ctx,
     make_test_app,
     seed_session,
+    seed_user,
     web_client,
 )
 from support.xmp_packet import read_digital_source_type
@@ -257,21 +258,24 @@ def test_a_suggestion_from_a_browser_session_records_that_session_and_never_show
 
 
 def test_a_suggestion_admitted_by_bearer_records_no_session(
-    alice_app: tuple[TestClient, object],
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from support.cowriter_gateway import signed_in_request
+    from support.token_world import TokenWorld, make_token_world
 
-    from songmaker_cli.album_api import api_create_cover_suggestions
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
+    world = make_token_world(tmp_path)
+    with world.factory() as session:
+        seed_user(session, "alice", user_id=TokenWorld.ALICE)
+        session.add(Album(id="bearer-album", title="B", artist="A", created_by=TokenWorld.ALICE))
+        session.commit()
 
-    client, factory = alice_app
-    client.cookies.clear()
-    with factory() as session:
-        alice = session.query(User).filter_by(username="alice").one()
-        user = make_authenticated_user(alice.id, username="alice")
-        job = api_create_cover_suggestions(
-            "alice-album", signed_in_request(client), user, session,
-        )
-        assert session.get(Job, job.id).session_id is None
+    response = world.client.post(
+        "/api/albums/bearer-album/cover-suggestions", headers=world.bearer(TokenWorld.ALICE),
+    )
+
+    assert response.status_code == 200
+    with world.factory() as session:
+        assert session.get(Job, response.json()["id"]).session_id is None
 
 
 def test_create_cover_suggestions_keeps_the_pending_suggestions_and_their_files(
