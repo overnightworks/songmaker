@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -37,3 +38,20 @@ def seeded_then_upgraded(
 
 def column_names(engine: Engine, table: str) -> set[str]:
     return {column["name"] for column in inspect(engine).get_columns(table)}
+
+
+def insert_bare_job(engine: Engine, *, job_type: str = "generate") -> None:
+    """Insert the job ``job`` with only the columns every revision's ``jobs`` table has.
+
+    The SQLite chain builds a narrower table than PostgreSQL's, so the timestamps join only
+    where they exist.
+    """
+    present = column_names(engine, "jobs")
+    timestamps = [name for name in ("heartbeat_at", "started_at") if name in present]
+    names = ("id", "type", "status", "progress", *timestamps)
+    jobs = sa.table("jobs", *(sa.column(name) for name in names))
+    with engine.begin() as connection:
+        connection.execute(sa.insert(jobs).values(
+            id="job", type=job_type, status="queued", progress=0.0,
+            **{name: sa.func.current_timestamp() for name in timestamps},
+        ))

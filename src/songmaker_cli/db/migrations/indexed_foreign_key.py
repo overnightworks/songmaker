@@ -15,10 +15,12 @@ def _names(table: str, column: str, referent_table: str) -> tuple[str, str]:
     return f"ix_{table}_{column}", f"fk_{table}_{column}_{referent_table}"
 
 
-def add_indexed_foreign_key(table: str, column: str, referent_table: str) -> None:
+def add_indexed_foreign_key(
+    table: str, column: str, referent_table: str, *, length: int = ID_LENGTH,
+) -> None:
     index, foreign_key = _names(table, column, referent_table)
     with op.batch_alter_table(table) as batch:
-        batch.add_column(sa.Column(column, sa.String(length=ID_LENGTH), nullable=True))
+        batch.add_column(sa.Column(column, sa.String(length=length), nullable=True))
         batch.create_index(index, [column])
         batch.create_foreign_key(foreign_key, referent_table, [column], ["id"], ondelete="SET NULL")
 

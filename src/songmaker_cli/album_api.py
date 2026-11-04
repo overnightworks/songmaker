@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from webauth.config import installed_web_auth_config
+from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
@@ -421,12 +423,16 @@ async def api_upload_album_cover(
 )
 def api_create_cover_suggestions(
     album_id: str,
+    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
     session.commit()
     try:
-        job = request_cover_suggestions(session, album_id, user)
+        job = request_cover_suggestions(
+            session, album_id, user,
+            session_id=session_id_from_request(request, installed_web_auth_config(request.app)),
+        )
         session.commit()
     except CoverSuggestionRequestError as exc:
         session.rollback()

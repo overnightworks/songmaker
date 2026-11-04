@@ -13,7 +13,13 @@ from pathlib import Path
 
 import pytest
 from agent_runtime_client.backend import TurnStopKind, TurnStopped
-from agent_runtime_client.backend.fake_gateway import Reply, completion, tool_call, tool_round
+from agent_runtime_client.backend.fake_gateway import (
+    FakeGateway,
+    Reply,
+    completion,
+    tool_call,
+    tool_round,
+)
 from agent_runtime_client.backend.gateway import GatewayBackend
 from agent_runtime_client.config import AgentConfig, ChatGateway
 from agent_runtime_client.turn import FailureCode, RejectionCode
@@ -24,13 +30,16 @@ from support.cowriter_gateway import (
     agent_config,
     attach_cowriter_gateway,
     closed_port_origin,
+    held_until,
+    open_session,
+    request_in_session,
     stops,
 )
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.agent.tools import cowriter_hand_tools
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, ChatMessage, Job, Song, User, Version
+from songmaker_cli.db.models import Album, ChatMessage, Job, Song, User, UserSession, Version
 
 USER_ID = "u-test"
 OTHER_SONG = "s-other"
@@ -365,3 +374,157 @@ def test_a_turn_read_to_its_end_holds_exactly_one_terminal_outcome_last(world, a
     terminal = TurnAnswer if answers else TurnProblem
     assert [isinstance(outcome, terminal) for outcome in outcomes].count(True) == 1
     assert isinstance(outcomes[-1], terminal)
+
+
+# ── the cover job's reference to the turn's session ───────────────────
+
+_ASK_FOR_A_COVER = tool_round(
+    tool_call("call-1", "suggest_album_cover", {"album_id": f"alb-{USER_ID}"}),
+)
+_TURN_PERSON = make_authenticated_user(USER_ID)
+
+
+class _HoldsTheFirstReply(FakeGateway):
+    """Takes its first request's reply at once and delivers it only when ``release`` is set."""
+
+    def __init__(self, release, *replies) -> None:
+        super().__init__(*replies)
+        self.release = release
+        self._first = True
+
+    async def handle_async_request(self, request):
+        first, self._first = self._first, False
+        response = await super().handle_async_request(request)
+        if first:
+            await self.release.wait()
+        return response
+
+
+def _cover_jobs(world: World) -> list[Job]:
+    with world.factory() as session:
+        return session.query(Job).filter_by(type="cover").all()
+
+
+def _drive_a_turn_in(world: World, session_id: str) -> None:
+    import asyncio
+
+    from songmaker_cli.api_models import ChatTurnV2Request
+    from songmaker_cli.conversation_api import api_chat_turn
+
+    async def _exercise() -> None:
+        with world.factory() as session:
+            response = await api_chat_turn(
+                ChatTurnV2Request(message="cover please"),
+                request_in_session(world.client.app, session_id), _TURN_PERSON, session,
+            )
+            async for _frame in response.body_iterator:
+                pass
+
+    asyncio.run(_exercise())
+
+
+def test_the_cover_a_turn_asks_for_belongs_to_the_session_of_that_turn(world):
+    world.stack.replies(_ASK_FOR_A_COVER, completion("queued"))
+
+    _drive_a_turn_in(world, world.stack.session_id)
+
+    [job] = _cover_jobs(world)
+    assert job.session_id == world.stack.session_id
+
+
+def test_a_turns_cover_keeps_its_session_when_another_session_of_the_person_ends(world):
+    other_session = open_session(world.client.app, world.factory, USER_ID)
+    world.stack.replies(_ASK_FOR_A_COVER, completion("queued"))
+
+    _drive_a_turn_in(world, world.stack.session_id)
+
+    def delete(session_id: str) -> None:
+        with world.factory() as session:
+            session.query(UserSession).filter_by(id=session_id).delete()
+            session.commit()
+
+    delete(other_session)
+    assert _cover_jobs(world)[0].session_id == world.stack.session_id
+    delete(world.stack.session_id)
+    assert _cover_jobs(world)[0].session_id is None
+
+
+def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
+    """Turn A (S1) is held and cancelled, turn B (S2) runs, then A's reply arrives."""
+    import asyncio
+
+    from songmaker_cli.api_models import ChatTurnV2Request
+    from songmaker_cli.conversation_api import api_chat_turn
+    from songmaker_cli.jobs_api import api_cancel_job
+
+    app = world.client.app
+    first_session = world.stack.session_id
+    second_session = open_session(app, world.factory, USER_ID)
+
+    async def _exercise() -> None:
+        release = asyncio.Event()
+        gateway = world.stack.uses(
+            _HoldsTheFirstReply(release, _ASK_FOR_A_COVER, completion("ok")),
+        )
+        with world.factory() as turn_a, world.factory() as turn_b, world.factory() as canceller:
+            first = await api_chat_turn(
+                ChatTurnV2Request(message="a"),
+                request_in_session(app, first_session), _TURN_PERSON, turn_a,
+            )
+            while not gateway.requests:
+                await asyncio.sleep(0)
+            chat_job = canceller.query(Job).filter_by(type="chat").one()
+            api_cancel_job(
+                chat_job.id, request_in_session(app, first_session), _TURN_PERSON, canceller,
+            )
+            second = await api_chat_turn(
+                ChatTurnV2Request(message="b"),
+                request_in_session(app, second_session), _TURN_PERSON, turn_b,
+            )
+            async for _frame in second.body_iterator:
+                pass
+            release.set()
+            async for _frame in first.body_iterator:
+                pass
+
+    asyncio.run(_exercise())
+
+    [job] = _cover_jobs(world)
+    assert job.session_id == first_session
+
+
+def test_the_stdio_server_records_no_session_while_a_web_turn_runs(world, monkeypatch):
+    import asyncio
+
+    from songmaker_cli.api_models import ChatTurnV2Request
+    from songmaker_cli.conversation_api import api_chat_turn
+    from songmaker_cli.mcp_server import auth, server
+    from songmaker_cli.settings import get_settings
+
+    monkeypatch.setenv(auth.USER_ID_ENV, USER_ID)
+    get_settings.cache_clear()
+
+    async def _exercise() -> None:
+        release = asyncio.Event()
+        world.stack.behaves(held_until(release, "done"))
+        with world.factory() as session:
+            response = await api_chat_turn(
+                ChatTurnV2Request(message="hold"),
+                request_in_session(world.client.app, world.stack.session_id),
+                _TURN_PERSON, session,
+            )
+            stream = response.body_iterator
+            await anext(stream)
+            stdio = server.build_server(session_factory=world.factory)
+            await stdio.call_tool("suggest_album_cover", {"album_id": f"alb-{USER_ID}"})
+            release.set()
+            async for _frame in stream:
+                pass
+
+    try:
+        asyncio.run(_exercise())
+    finally:
+        get_settings.cache_clear()
+
+    [job] = _cover_jobs(world)
+    assert job.session_id is None

@@ -313,11 +313,16 @@ def tool_rename_song(
 
 
 def tool_suggest_album_cover(
-    session: Session, user: AuthenticatedUser, album_id: str,
+    session: Session, user: AuthenticatedUser, album_id: str, *, session_id: str | None,
 ) -> CoverSuggestionRequestResult:
-    """Queue one more cover suggestion through the album admission owner."""
+    """Queue one more cover suggestion through the album admission owner.
+
+    ``session_id`` is the session that asked; a caller with none (stdio) passes ``None``.
+    """
     try:
-        job = request_cover_suggestions(session, album_id, user, require_owner=True)
+        job = request_cover_suggestions(
+            session, album_id, user, session_id=session_id, require_owner=True,
+        )
     except CoverSuggestionRequestError as exc:
         raise MCPToolError(str(exc)) from exc
     return CoverSuggestionRequestResult(

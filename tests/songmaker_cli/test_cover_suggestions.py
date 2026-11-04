@@ -39,7 +39,7 @@ from songmaker_cli.cover_suggestions import (
     request_cover_suggestions,
 )
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, UserSession
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since
 from songmaker_cli.settings import get_settings
@@ -137,9 +137,9 @@ def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(tmp_p
     with factory() as session:
         alice = make_authenticated_user("alice")
         with pytest.raises(CoverSuggestionAlbumNotFoundError):
-            request_cover_suggestions(session, "missing", alice)
+            request_cover_suggestions(session, "missing", alice, session_id=None)
         with pytest.raises(CoverSuggestionAlbumNotFoundError):
-            request_cover_suggestions(session, "bob-album", alice)
+            request_cover_suggestions(session, "bob-album", alice, session_id=None)
 
 
 def _add_two_pending_suggestions(factory, audio_dir: Path) -> list[str]:
@@ -160,7 +160,9 @@ def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_sugges
     pending_ids = _add_two_pending_suggestions(factory, tmp_path / "audio")
 
     with factory() as session:
-        job = request_cover_suggestions(session, "alice-album", _album_owner(session))
+        job = request_cover_suggestions(
+            session, "alice-album", _album_owner(session), session_id=None,
+        )
 
         assert job.type == JobType.COVER
         assert job.album_id == "alice-album"
@@ -180,7 +182,7 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
     with factory() as session:
         owner = _album_owner(session)
         with pytest.raises(CoverSuggestionAlreadyRunningError):
-            request_cover_suggestions(session, "alice-album", owner)
+            request_cover_suggestions(session, "alice-album", owner, session_id=None)
         session.rollback()
 
     with factory() as session:
@@ -193,7 +195,7 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
     with factory() as session:
         owner = _album_owner(session)
         with pytest.raises(CoverSuggestionDailyLimitReachedError):
-            request_cover_suggestions(session, "alice-album", owner)
+            request_cover_suggestions(session, "alice-album", owner, session_id=None)
 
 
 @pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
@@ -204,7 +206,9 @@ def test_unsuccessful_cover_attempts_allow_another_request(tmp_path, monkeypatch
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
     get_settings.cache_clear()
     with factory() as session:
-        job = request_cover_suggestions(session, "alice-album", _album_owner(session))
+        job = request_cover_suggestions(
+            session, "alice-album", _album_owner(session), session_id=None,
+        )
         assert job.status == JobStatus.QUEUED
         assert job.album_id == "alice-album"
 
@@ -235,6 +239,39 @@ def test_create_cover_suggestions_leaves_the_job_for_the_web_runner(
         job = session.get(Job, response.json()["id"])
         assert job is not None
         assert job.status == JobStatus.QUEUED
+
+
+def test_a_suggestion_from_a_browser_session_records_that_session_and_never_shows_it(
+    alice_app: tuple[TestClient, object],
+) -> None:
+    client, factory = alice_app
+    with factory() as session:
+        [seeded_session_id] = [row.id for row in session.query(UserSession)]
+
+    response = client.post("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 200
+    assert seeded_session_id not in response.text
+    with factory() as session:
+        assert session.get(Job, response.json()["id"]).session_id == seeded_session_id
+
+
+def test_a_suggestion_admitted_by_bearer_records_no_session(
+    alice_app: tuple[TestClient, object],
+) -> None:
+    from support.cowriter_gateway import signed_in_request
+
+    from songmaker_cli.album_api import api_create_cover_suggestions
+
+    client, factory = alice_app
+    client.cookies.clear()
+    with factory() as session:
+        alice = session.query(User).filter_by(username="alice").one()
+        user = make_authenticated_user(alice.id, username="alice")
+        job = api_create_cover_suggestions(
+            "alice-album", signed_in_request(client), user, session,
+        )
+        assert session.get(Job, job.id).session_id is None
 
 
 def test_create_cover_suggestions_keeps_the_pending_suggestions_and_their_files(

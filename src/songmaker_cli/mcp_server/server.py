@@ -217,7 +217,7 @@ def build_server(
     def suggest_album_cover(album_id: str) -> CoverSuggestionRequestResult:
         with session_scope(write=True) as session:
             user = resolved_user(session)
-            return tools.tool_suggest_album_cover(session, user, album_id=album_id)
+            return tools.tool_suggest_album_cover(session, user, album_id=album_id, session_id=None)
 
     return mcp
 

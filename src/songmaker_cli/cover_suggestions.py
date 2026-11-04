@@ -56,7 +56,7 @@ class CoverSuggestionDailyLimitReachedError(CoverSuggestionRequestError):
 
 def request_cover_suggestions(
     session: Session, album_id: str, actor: Actor,
-    *, require_owner: bool = False,
+    *, session_id: str | None, require_owner: bool = False,
 ) -> Job:
     """Prepare one single-image cover job after enforcing the album's request contract.
 
@@ -79,7 +79,9 @@ def request_cover_suggestions(
     if used_today >= settings.cover_suggestions_daily_limit:
         raise CoverSuggestionDailyLimitReachedError()
 
-    return create_job(session, JobType.COVER, user_id=actor.id, album_id=album.id)
+    return create_job(
+        session, JobType.COVER, user_id=actor.id, album_id=album.id, session_id=session_id,
+    )
 
 
 def utc_day_start() -> datetime:
