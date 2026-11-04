@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "4cd2a131c31cd2c8f1e8db62e754412954466c5e"
 branch = "claude/issue-2229-cover-job-session"
-scope = ["docs/architecture.md", "quality/baseline.toml", "src/songmaker_cli/agent/tools.py", "src/songmaker_cli/album_api.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/cowriter/tools.py", "src/songmaker_cli/db/migrations/indexed_foreign_key.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/mcp_server/server.py", "src/songmaker_cli/mcp_server/tools.py", "tests"]
+scope = ["docs/architecture.md", "quality/baseline.toml", "src/songmaker_cli/agent/tools.py", "src/songmaker_cli/album_api.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/cowriter/tools.py", "src/songmaker_cli/db/migrations/indexed_foreign_key.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/auth.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/mcp_server/server.py", "src/songmaker_cli/mcp_server/tools.py", "tests"]
 opened_commit = "989c77542c1a5ce3f58810dc437ecf5ff0db6dc1"
 whole_reason = "One thread from the calling turn and the Suggest request to the job row, with its migration and terminal clear; a column without its writers proves nothing."
