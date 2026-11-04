@@ -47,12 +47,16 @@ from songmaker_cli.db.queries.auth import get_user_by_username
 def seed_filler_albums(
     session: Session, *, count: int, title_prefix: str, owner_id: str,
 ) -> int:
-    """Create ``count`` songless albums titled ``{title_prefix}-{index}``."""
+    """Create ``count`` songless albums titled ``{title_prefix}-{index}``.
+
+    Each album commits before the next ``unique_album_id``, which takes a lock
+    and refuses a session holding an uncommitted write.
+    """
     for index in range(count):
         title = f"{title_prefix}-{index}"
         album_id = unique_album_id(session, title)
         create_album(session, album_id, title, created_by=owner_id)
-    session.commit()
+        session.commit()
     return count
 
 
