@@ -560,3 +560,36 @@ def test_an_unexpected_error_prints_one_fixed_line_naming_only_its_type(
     assert captured.err.count("\n") == 1
     assert "ValueError" in captured.err
     assert "secret-message" not in captured.err + captured.out
+
+
+@pytest.mark.parametrize("appears_as", ["loose directory", "symlink"])
+def test_a_directory_appearing_after_the_prechecks_is_validated_before_any_publish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, appears_as: str,
+) -> None:
+    """Unit test of copy: a subprocess run has no seam between the prechecks and the publish."""
+    for key in (*FILE_OF_KEY, secret_files.DIRECTORY_KEY):
+        monkeypatch.delenv(key, raising=False)
+    (tmp_path / ".env").write_text(f"SESSION_SECRET={VALUES['SESSION_SECRET']}\n")
+    home = tmp_path / "home"
+    directory = home / secret_files.DEFAULT_DIRECTORY
+    original = secret_files._require_private_directory
+
+    def check_then_let_the_directory_appear(checked: Path) -> None:
+        original(checked)
+        if appears_as == "symlink":
+            (tmp_path / "elsewhere").mkdir(mode=DIRECTORY_MODE)
+            checked.parent.mkdir(parents=True, exist_ok=True)
+            checked.symlink_to(tmp_path / "elsewhere")
+        else:
+            checked.mkdir(parents=True, mode=0o777)
+            checked.chmod(0o777)
+
+    monkeypatch.setattr(
+        secret_files, "_require_private_directory", check_then_let_the_directory_appear,
+    )
+
+    with pytest.raises(secret_files.Refusal) as refusal:
+        secret_files.copy(tmp_path, home)
+
+    assert str(directory) in str(refusal.value)
+    assert list(directory.iterdir()) == []

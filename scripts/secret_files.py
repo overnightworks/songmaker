@@ -163,6 +163,8 @@ def copy(project_root: Path, home: Path) -> None:
             directory.chmod(DIRECTORY_MODE)
         except OSError as exc:
             raise Refusal(f"cannot create {directory}") from exc
+    if pending:
+        _require_private_directory(directory)
     for entry, value in pending:
         if _publish(directory / entry.name, value):
             print(f"copied {entry.key} to {directory / entry.name}")
