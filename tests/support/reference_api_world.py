@@ -90,21 +90,28 @@ def seed_playable(
 
 def link_reference(
     client: TestClient, reference_id: str, *, via: str, archived: bool = False,
-    song_trashed: bool = False, album_trashed: bool = False,
+    song_trashed: bool = False, album_trashed: bool = False, key: str = "link",
+    title: str = "S", slug: str = "", version_number: int = 1, generation_number: int = 1,
+    duration_sec: float | None = None, created_at: datetime | None = None,
 ) -> None:
-    """Link the reference from a saved version (``via="version"``) or from a take."""
+    """Link the reference from a saved version (``via="version"``) or from a take.
+
+    Each ``key`` seeds its own album, song and version, so one reference can be linked many times.
+    """
     trashed_at = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    stamp = {} if created_at is None else {"created_at": created_at}
     with client.app.state.ctx.db() as session:
         album = Album(
-            id="album-link", title="A", artist="A", created_by="owner-id",
+            id=f"album-{key}", title="A", artist="A", created_by="owner-id",
             deleted_at=trashed_at if album_trashed else None,
         )
         song = Song(
-            id="song-link", title="S", album_id="album-link", track_number=1,
+            id=f"song-{key}", title=title, slug=slug, album_id=album.id, track_number=1,
             deleted_at=trashed_at if song_trashed else None,
         )
         version = Version(
-            id="version-link", song_id="song-link", version_number=1, lyrics="la", prompt="p",
+            id=f"version-{key}", song_id=song.id, version_number=version_number,
+            lyrics="la", prompt="p", **(stamp if via == "version" else {}),
             reference_recording_id=reference_id if via == "version" else None,
         )
         session.add(album)
@@ -113,8 +120,9 @@ def link_reference(
         session.flush()
         if via == "take":
             session.add(Generation(
-                song_id="song-link", version_id="version-link", mp3_path="owner-id/take.mp3",
+                song_id=song.id, version_id=version.id, mp3_path=f"owner-id/{key}.mp3",
                 is_archived=archived, reference_recording_id=reference_id,
+                generation_number=generation_number, audio_duration_sec=duration_sec, **stamp,
             ))
         session.commit()
 

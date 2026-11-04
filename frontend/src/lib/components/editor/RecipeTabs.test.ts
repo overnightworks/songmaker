@@ -338,7 +338,9 @@ describe('RecipeTabs', () => {
 			size_bytes: 1,
 			duration_sec: null,
 			created_at: '2026-11-02T10:00:00+00:00',
-			in_use: false
+			in_use: false,
+			used_by_versions: 0,
+			used_by_takes: 0
 		});
 		await vi.waitFor(() =>
 			expect(props.values.reference).toEqual({ id: 'reference-1', filename: 'ref.wav' })

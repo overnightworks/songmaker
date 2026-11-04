@@ -71,7 +71,10 @@ from songmaker_cli.api_models.queue_streams import (
 from songmaker_cli.api_models.references import (
     ReferenceListResponse,
     ReferenceRecordingResponse,
+    ReferenceTakeUseResponse,
     ReferenceUsageResponse,
+    ReferenceUsesResponse,
+    ReferenceVersionUseResponse,
 )
 from songmaker_cli.api_models.resource_events import (
     GenerationCreatedResourceEvent,
@@ -225,7 +228,10 @@ __all__ = [
     "BulkDeleteResponse",
     "ReferenceListResponse",
     "ReferenceRecordingResponse",
+    "ReferenceTakeUseResponse",
     "ReferenceUsageResponse",
+    "ReferenceUsesResponse",
+    "ReferenceVersionUseResponse",
     "AuthMeResponse",
     "CapabilitiesResponse",
     "ChatMessageResponse",
