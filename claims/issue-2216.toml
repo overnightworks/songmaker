@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "bd51f8bebdd1c6acf7e92b0738cdd241a5aeadab"
 branch = "claude/issue-2216-secret-files-copy-and-deploy-verify"
-scope = ["docs/security.md", "scripts/auto-deploy.sh", "scripts/dotenv_file.py", "scripts/mirror_agent_cli_credentials.py", "scripts/secret_files.py", "tests/auto_deploy_harness.py", "tests/auto_deploy_support.py", "tests/scripts/test_secret_files.py", "tests/test_auto_deploy_secret_files.py"]
+scope = ["docs/architecture.md", "docs/security.md", "scripts/auto-deploy.sh", "scripts/dotenv_file.py", "scripts/mirror_agent_cli_credentials.py", "scripts/secret_files.py", "tests/auto_deploy_harness.py", "tests/auto_deploy_support.py", "tests/scripts/test_secret_files.py", "tests/test_auto_deploy_secret_files.py"]
 opened_commit = "80d1179c5d5eeb53b8ff9f5631c1aa6d119980f5"
 whole_reason = "The copy command, its verify mode and the deploy call share one table and one directory rule; the call without the command, or the command without the call, would leave B2's deploy unguarded."
