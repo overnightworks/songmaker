@@ -18,24 +18,6 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  bandit:
-    name: Bandit (Python security)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
-        with:
-          python-version-file: .python-version
-
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-
-      - name: Run bandit
-        run: uvx --isolated --from 'bandit[toml]>=1.8,<2' bandit -r src/ -c pyproject.toml # why: Bandit runs in its own tool environment so its resolution cannot change worker-image dependencies.
-
   pip-audit:
     name: pip-audit (Python dependencies)
     runs-on: ubuntu-latest

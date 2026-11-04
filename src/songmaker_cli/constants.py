@@ -11,7 +11,7 @@ from acestep_engine.settings import get_engine_settings
 
 APP_NAME = "Hallucinai"
 
-INTERNAL_TOKEN_HEADER = "X-Internal-Token"  # nosec B105  # noqa: S105 - the name of an HTTP header and no secret
+INTERNAL_TOKEN_HEADER = "X-Internal-Token"  # noqa: S105 - the name of an HTTP header and no secret
 
 JOB_ERROR_AUDIO_DOWNLOAD_FAILED: Final[str] = "Failed to download generated audio"
 JOB_ERROR_SERVER_UNREACHABLE: Final[str] = "ACE-Step server not reachable"
@@ -149,7 +149,7 @@ WHISPER_BEAM_SIZE = 5
 WHISPER_TEMPERATURE = 0.0
 
 SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
-SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105  # noqa: S105 - a setting key for an LLM token budget and no secret
+SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # noqa: S105 - a setting key for an LLM token budget and no secret
 SETTING_COVER_PROVIDER = "cover_provider"
 SETTING_COVER_ROUTE = "cover_route"
 SETTING_COVER_MODEL = "cover_model"
