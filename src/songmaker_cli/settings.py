@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Final, Literal
+from typing import Annotated, Final, Literal
 from urllib.parse import urlsplit
 
 from agent_runtime_client.config import AgentConfig
@@ -110,6 +110,12 @@ class LoraTrainingJobConfig:
         }
 
 
+# Where the container runtime mounts secret files. acestep_worker/constants.py
+# keeps its own copy: the engine packages never import songmaker_cli.
+SECRETS_DIRECTORY: Final[Path] = Path("/run/secrets")
+DATABASE_PASSWORD_SECRET_FILE: Final[str] = "postgres_password"
+
+
 def _find_env_file() -> Path | None:
     """Walk up from CWD to find .env at the project root.
 
@@ -149,13 +155,16 @@ class Settings(BaseSettings):
         extra="forbid",
         case_sensitive=False,
         env_nested_delimiter="__",
+        # Precedence stays: constructor, environment, .env, then files. A
+        # missing directory would make pydantic-settings warn.
+        secrets_dir=SECRETS_DIRECTORY if SECRETS_DIRECTORY.is_dir() else None,
     )
 
     # ── Required (no defaults — startup fails if missing) ─────────────
     database_url: str
     redis_url: str
-    session_secret: SecretStr
-    songmaker_internal_token: SecretStr
+    session_secret: Annotated[SecretStr, Field(min_length=1)]
+    songmaker_internal_token: Annotated[SecretStr, Field(min_length=1)]
     # Optional so direct runs and tests start; /metrics answers 503 while unset.
     songmaker_monitoring_token: SecretStr | None = None
 
@@ -464,11 +473,12 @@ class Settings(BaseSettings):
     # These live in .env so docker-compose can substitute them into
     # container environment blocks (POSTGRES_USER → the postgres
     # container, HF_TOKEN → scripts/download_models.sh, etc.). The app
-    # code does not read them. Declared here so extra="forbid" still
+    # code does not read them, except postgres_password, which `db/database_url.py`
+    # joins to `database_url`. Declared here so extra="forbid" still
     # recognizes them and a typo on a real app field still raises
     # ValidationError.
     postgres_user: str | None = None
-    postgres_password: SecretStr | None = None
+    postgres_password: Annotated[SecretStr, Field(min_length=1)] | None = None
     postgres_db: str | None = None
     grafana_user: str | None = None
     grafana_password: SecretStr | None = None
