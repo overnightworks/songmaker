@@ -81,11 +81,11 @@ def test_an_ended_session_is_refused_on_postgresql_without_a_job_or_log_trace(
         session.commit()
     caplog.set_level(logging.DEBUG)
 
+    asker = make_authenticated_user("asker")
     with pg_factory() as session:
         with pytest.raises(CoverSuggestionSessionEndedError) as refusal:
             request_cover_suggestions(
-                session, "pg-album", make_authenticated_user("asker"),
-                session_id=ended_session_id,
+                session, "pg-album", asker, session_id=ended_session_id,
             )
         session.rollback()
 
@@ -113,12 +113,13 @@ def test_a_logout_cannot_delete_the_session_before_the_job_that_references_it_is
 ) -> None:
     asking_id = _seed_asker_with_a_live_session(pg_factory)
     real_create_job = cover_suggestions.create_job
+    delete_the_asking_session = delete(UserSession).where(UserSession.id == asking_id)
 
     def create_job_after_a_logout_attempt(*args, **kwargs):
         with pg_factory() as logout:
             logout.execute(text("SET LOCAL lock_timeout = '300ms'"))
             with pytest.raises(OperationalError):
-                logout.execute(delete(UserSession).where(UserSession.id == asking_id))
+                logout.execute(delete_the_asking_session)
         return real_create_job(*args, **kwargs)
 
     monkeypatch.setattr(cover_suggestions, "create_job", create_job_after_a_logout_attempt)

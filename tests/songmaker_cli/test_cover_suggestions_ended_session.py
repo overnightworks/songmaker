@@ -26,15 +26,17 @@ def test_cover_suggestion_request_owner_refuses_an_ended_session_without_job_or_
     caplog.set_level(logging.DEBUG)
 
     with factory() as session:
+        owner = album_owner(session)
         with pytest.raises(CoverSuggestionSessionEndedError) as refusal:
             request_cover_suggestions(
-                session, "alice-album", album_owner(session), session_id=_ENDED_SESSION_ID,
+                session, "alice-album", owner, session_id=_ENDED_SESSION_ID,
             )
         session.rollback()
 
     assert refusal.value.status_code == 401
     assert str(refusal.value) == "Log in again to suggest covers."
-    assert refusal.value.__cause__ is None and refusal.value.__context__ is None
+    assert refusal.value.__cause__ is None
+    assert refusal.value.__context__ is None
     with factory() as session:
         assert session.query(Job).count() == 0
     assert _ENDED_SESSION_ID not in caplog.text
