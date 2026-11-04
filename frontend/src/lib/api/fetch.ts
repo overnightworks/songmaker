@@ -270,7 +270,7 @@ async function requestChecked<T>(
 	path: string,
 	init: RequestInit | undefined,
 	timeoutMs: number | undefined,
-	readSuccess: (response: Response, timeoutSignal: AbortSignal) => Promise<T>
+	readSuccess: (response: Response, timeoutSignal: AbortSignal) => T | Promise<T>
 ): Promise<T> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
@@ -296,7 +296,7 @@ export function apiFetch<T>(path: string, init?: RequestInit, timeoutMs?: number
 
 /** A request whose success carries no body to read (a 204). Failures reject as `apiFetch`'s do. */
 export async function apiSend(path: string, init?: RequestInit, timeoutMs?: number): Promise<void> {
-	await requestChecked(path, init, timeoutMs, async () => undefined);
+	await requestChecked(path, init, timeoutMs, () => undefined);
 }
 
 /**

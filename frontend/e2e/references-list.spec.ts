@@ -29,6 +29,21 @@ const LENGTH_AND_DAY = /^\d+:\d{2} · \d{1,2} [A-Z][a-z]{2}( \d{4})?$/;
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
+/** Archives the test's album and always disposes `api`; an archive failure surfaces only when the test itself passed, so it never masks the test's own error. */
+async function cleanUp(
+	api: APIRequestContext,
+	albumId: string | undefined,
+	testPassed: boolean
+): Promise<void> {
+	try {
+		if (albumId) await archiveOwnedAlbum(api, albumId);
+	} catch (archiveError) {
+		if (testPassed) throw archiveError;
+	} finally {
+		await api.dispose();
+	}
+}
+
 async function postReferenceAudio(api: APIRequestContext, filename: string): Promise<string> {
 	const response = await api.post(REFERENCES_PATH, {
 		headers: { origin: BASE_URL },
@@ -278,6 +293,7 @@ test('Settings › References greys Delete for a recording a song uses', async (
 	const account = await signInFreshAccount(context, 'references-in-use', testInfo.project.name);
 	const api = await signedInApi(account);
 	let albumId: string | undefined;
+	let testPassed = false;
 	try {
 		albumId = await linkReferenceToSong(api, await postReferenceAudio(api, 'storytime-drums.mp3'));
 		await page.goto('/settings/references');
@@ -290,9 +306,9 @@ test('Settings › References greys Delete for a recording a song uses', async (
 		});
 		await expect(choice).toBeDisabled();
 		guard.assertClean();
+		testPassed = true;
 	} finally {
-		if (albumId) await archiveOwnedAlbum(api, albumId);
-		await api.dispose();
+		await cleanUp(api, albumId, testPassed);
 	}
 });
 
@@ -306,6 +322,7 @@ test('Settings › References shows the in-use notice on the row when a song too
 	const account = await signInFreshAccount(context, 'references-conflict', testInfo.project.name);
 	const api = await signedInApi(account);
 	let albumId: string | undefined;
+	let testPassed = false;
 	try {
 		const referenceId = await postReferenceAudio(api, 'storytime-drums.mp3');
 		await page.goto('/settings/references');
@@ -329,8 +346,8 @@ test('Settings › References shows the in-use notice on the row when a song too
 			page.getByRole('dialog', { name: 'Reference menu' }).getByRole('button', { name: /Delete/ })
 		).toBeDisabled();
 		guard.assertClean();
+		testPassed = true;
 	} finally {
-		if (albumId) await archiveOwnedAlbum(api, albumId);
-		await api.dispose();
+		await cleanUp(api, albumId, testPassed);
 	}
 });
