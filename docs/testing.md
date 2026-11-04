@@ -232,8 +232,8 @@ request budget per shell.
   failed pages, and logout. The identity provider is a stub
   (`stubIdentityProvider`), and a real login is proven live, not in CI. The
   stack's `OIDC_ISSUER` names an issuer that never answers and its client secret
-  is a throwaway file (`KEYCLOAK_CLIENT_SECRET_FILE`); web boots without
-  reaching the issuer. The spec's numbers live in `frontend/e2e/README.md`.
+  is a throwaway file (`KEYCLOAK_CLIENT_SECRET_FILE`), as is the gateway key
+  (`GATEWAY_KEY_FILE`); web boots without reaching the issuer. The spec's numbers live in `frontend/e2e/README.md`.
 - **Sign-in routes run against a fake issuer.** `tests/songmaker_cli/test_auth_api_sign_in.py`
   drives `/login/oidc`, `/auth/callback` and `/auth/logout` (webauth's routes) through the real
   relying party; only the token request and the key set come from
