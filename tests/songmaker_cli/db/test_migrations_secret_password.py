@@ -13,8 +13,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 
 from songmaker_cli import settings as settings_module
+from songmaker_cli.db import database_url as database_url_module
 from songmaker_cli.db import engine as engine_module
-from songmaker_cli.db.database_url import database_url_with_password
+from songmaker_cli.db.database_url import database_url_with_password, password_from_secret_file
 
 ENV_SCRIPT = Path(engine_module.MIGRATIONS_DIR) / "env.py"
 PASSWORD_WITH_SPECIALS = "p%a@s/s:w ord"
@@ -56,11 +57,19 @@ def _url_alembic_configures(monkeypatch: pytest.MonkeyPatch) -> str:
     return configured["url"]
 
 
+def _mount_secrets_at(monkeypatch: pytest.MonkeyPatch, directory: Path) -> None:
+    monkeypatch.setattr(
+        database_url_module,
+        "password_from_secret_file",
+        lambda: password_from_secret_file(directory),
+    )
+
+
 def test_env_py_joins_the_environment_url_and_the_password_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (tmp_path / settings_module.DATABASE_PASSWORD_SECRET_FILE).write_text(PASSWORD_WITH_SPECIALS)
-    monkeypatch.setattr(settings_module, "SECRETS_DIRECTORY", tmp_path)
+    _mount_secrets_at(monkeypatch, tmp_path)
     monkeypatch.setenv("DATABASE_URL", "postgresql://app@db/songs")
 
     url = make_url(_url_alembic_configures(monkeypatch))
@@ -71,7 +80,7 @@ def test_env_py_joins_the_environment_url_and_the_password_file(
 def test_env_py_uses_the_environment_url_alone_without_a_password_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings_module, "SECRETS_DIRECTORY", tmp_path / "absent")
+    _mount_secrets_at(monkeypatch, tmp_path / "absent")
     monkeypatch.setenv("DATABASE_URL", "postgresql://app:today@db/songs")
 
     assert _url_alembic_configures(monkeypatch) == "postgresql://app:today@db/songs"

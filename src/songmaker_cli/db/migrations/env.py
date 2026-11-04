@@ -14,8 +14,7 @@ import os
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
-from songmaker_cli import settings as settings_module
-from songmaker_cli.db.database_url import database_url_with_password
+from songmaker_cli.db.database_url import database_url_from_environment
 from songmaker_cli.db.migration_logging import configure_migration_logging
 from songmaker_cli.db.models import Base
 
@@ -37,19 +36,7 @@ def _resolve_db_url() -> str:
             "DATABASE_URL is required for alembic migrations — "
             "set it in the environment before running `alembic upgrade`.",
         )
-    return database_url_with_password(env_url, _password_from_secret_file()).render_as_string(
-        hide_password=False,
-    )
-
-
-def _password_from_secret_file() -> str | None:
-    path = settings_module.SECRETS_DIRECTORY / settings_module.DATABASE_PASSWORD_SECRET_FILE
-    if not path.is_file():
-        return None
-    password = path.read_text().strip()
-    if not password:
-        raise RuntimeError(f"{path} is empty")
-    return password
+    return database_url_from_environment(env_url).render_as_string(hide_password=False)
 
 
 def run_migrations_offline() -> None:
