@@ -14,6 +14,7 @@ import {
 
 import { FlowGuard, LIBRARY_PATH, openSettingsSection, shellOf, workspace } from './helpers';
 import {
+	archiveOwnedAlbum,
 	BASE_URL,
 	runMarker,
 	seedAccount,
@@ -45,7 +46,7 @@ async function postJson<T>(api: APIRequestContext, path: string, data: object): 
 	return (await response.json()) as T;
 }
 
-async function linkReferenceToSong(api: APIRequestContext, referenceId: string): Promise<void> {
+async function linkReferenceToSong(api: APIRequestContext, referenceId: string): Promise<string> {
 	const album = await postJson<{ id: string }>(api, '/api/albums', {
 		title: `E2E reference album ${runMarker()}`,
 		artist: 'E2E'
@@ -55,6 +56,7 @@ async function linkReferenceToSong(api: APIRequestContext, referenceId: string):
 		album_id: album.id,
 		reference_recording_id: referenceId
 	});
+	return album.id;
 }
 
 async function trackCreatedAudio(page: Page): Promise<void> {
@@ -275,8 +277,9 @@ test('Settings › References greys Delete for a recording a song uses', async (
 	const guard = new FlowGuard(page);
 	const account = await signInFreshAccount(context, 'references-in-use', testInfo.project.name);
 	const api = await signedInApi(account);
+	let albumId: string | undefined;
 	try {
-		await linkReferenceToSong(api, await postReferenceAudio(api, 'storytime-drums.mp3'));
+		albumId = await linkReferenceToSong(api, await postReferenceAudio(api, 'storytime-drums.mp3'));
 		await page.goto('/settings/references');
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
 
@@ -288,6 +291,7 @@ test('Settings › References greys Delete for a recording a song uses', async (
 		await expect(choice).toBeDisabled();
 		guard.assertClean();
 	} finally {
+		if (albumId) await archiveOwnedAlbum(api, albumId);
 		await api.dispose();
 	}
 });
@@ -301,12 +305,13 @@ test('Settings › References shows the in-use notice on the row when a song too
 	});
 	const account = await signInFreshAccount(context, 'references-conflict', testInfo.project.name);
 	const api = await signedInApi(account);
+	let albumId: string | undefined;
 	try {
 		const referenceId = await postReferenceAudio(api, 'storytime-drums.mp3');
 		await page.goto('/settings/references');
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
 		await expect(row).toBeVisible();
-		await linkReferenceToSong(api, referenceId);
+		albumId = await linkReferenceToSong(api, referenceId);
 
 		await row.getByRole('button', { name: 'Reference menu' }).click();
 		await page
@@ -325,6 +330,7 @@ test('Settings › References shows the in-use notice on the row when a song too
 		).toBeDisabled();
 		guard.assertClean();
 	} finally {
+		if (albumId) await archiveOwnedAlbum(api, albumId);
 		await api.dispose();
 	}
 });

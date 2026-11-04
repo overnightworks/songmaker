@@ -497,9 +497,12 @@ describe('deleting a reference', () => {
 		await pressReferenceControl(buttonNamed(menuPanel(), 'Delete'));
 	}
 
+	function confirmDialog(): HTMLElement {
+		return document.body.querySelector('[role="dialog"][aria-labelledby]') as HTMLElement;
+	}
+
 	async function confirmDelete(): Promise<void> {
-		const dialog = document.body.querySelector('[role="dialog"][aria-labelledby]') as HTMLElement;
-		await pressReferenceControl(buttonNamed(dialog, 'Delete'));
+		await pressReferenceControl(buttonNamed(confirmDialog(), 'Delete'));
 	}
 
 	function faultOf(row: HTMLElement): string | undefined {
@@ -511,10 +514,9 @@ describe('deleting a reference', () => {
 
 		await chooseDelete(target, 'voice-memo.mp3');
 
-		const text = document.body.textContent ?? '';
+		const text = confirmDialog().textContent ?? '';
 		expect(text).toContain('Delete reference?');
-		expect(text).toContain('voice-memo.mp3');
-		expect(text).toContain('its audio file');
+		expect(text).toContain('voice-memo.mp3 — its audio file');
 		expect(text).toContain('This cannot be undone.');
 		expect(mocks.deleteReference).not.toHaveBeenCalled();
 	});
@@ -535,7 +537,7 @@ describe('deleting a reference', () => {
 		await vi.waitFor(() =>
 			expect(listedReferences(target).map((row) => row.name)).toEqual(['storytime-drums.wav'])
 		);
-		expect(mocks.listReferences).toHaveBeenCalledTimes(2);
+		expect(target.textContent).toContain('49 of 50 files');
 	});
 
 	it('shows the in-use notice on the row and greys Delete when the server refuses with 409', async () => {
@@ -570,13 +572,28 @@ describe('deleting a reference', () => {
 		expect(listedReferences(target)).toHaveLength(2);
 	});
 
-	it('leaves the Upload button in its normal state through a refused delete', async () => {
+	it.each([
+		['a refused delete (409)', new ApiError(409, 'in use', '/api/references/a')],
+		['a failed delete (500)', new ApiError(500, 'broken', '/api/references/a')],
+		['a successful delete', undefined]
+	])('leaves the Upload button in its normal state through %s', async (_outcome, failure) => {
 		const target = await renderTwoReferences();
-		mocks.deleteReference.mockRejectedValue(new ApiError(409, 'in use', '/api/references/a'));
+		if (failure) {
+			mocks.deleteReference.mockRejectedValue(failure);
+		} else {
+			mocks.deleteReference.mockResolvedValue(undefined);
+			mocks.listReferences.mockResolvedValue(
+				listAnswer([referenceRecording({ id: 'b', filename: 'storytime-drums.wav' })])
+			);
+		}
 
 		await chooseDelete(target, 'voice-memo.mp3');
 		await confirmDelete();
-		await vi.waitFor(() => expect(faultOf(rowOf(target, 'voice-memo.mp3'))).toBeDefined());
+		await vi.waitFor(() =>
+			failure
+				? expect(faultOf(rowOf(target, 'voice-memo.mp3'))).toBeDefined()
+				: expect(listedReferences(target)).toHaveLength(1)
+		);
 
 		expect(target.querySelector('.upload-button.failed')).toBeNull();
 		expect(target.querySelector('.upload-reason')).toBeNull();

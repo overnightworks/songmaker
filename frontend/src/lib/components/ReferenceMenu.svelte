@@ -80,11 +80,11 @@
 	}
 
 	.menu-item:disabled {
-		opacity: 0.5;
+		color: var(--text-disabled);
 		cursor: default;
 	}
 
-	.menu-item.destructive {
+	.menu-item.destructive:not(:disabled) {
 		color: var(--score-bad);
 	}
 </style>

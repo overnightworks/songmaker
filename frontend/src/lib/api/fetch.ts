@@ -266,12 +266,11 @@ async function orNetworkError<T>(
 	}
 }
 
-const NO_CONTENT_STATUS = 204;
-
-export async function apiFetch<T>(
+async function requestChecked<T>(
 	path: string,
-	init?: RequestInit,
-	timeoutMs?: number
+	init: RequestInit | undefined,
+	timeoutMs: number | undefined,
+	readSuccess: (response: Response, timeoutSignal: AbortSignal) => Promise<T>
 ): Promise<T> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
@@ -283,11 +282,21 @@ export async function apiFetch<T>(
 	try {
 		const resp = await orNetworkError(path, controller.signal, fetch(path, opts));
 		await throwForFailedResponse(resp, path);
-		if (resp.status === NO_CONTENT_STATUS) return undefined as T;
-		return await orNetworkError(path, controller.signal, resp.json() as Promise<T>);
+		return await readSuccess(resp, controller.signal);
 	} finally {
 		clearTimeout(timeout);
 	}
+}
+
+export function apiFetch<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
+	return requestChecked(path, init, timeoutMs, (resp, timeoutSignal) =>
+		orNetworkError(path, timeoutSignal, resp.json() as Promise<T>)
+	);
+}
+
+/** A request whose success carries no body to read (a 204). Failures reject as `apiFetch`'s do. */
+export async function apiSend(path: string, init?: RequestInit, timeoutMs?: number): Promise<void> {
+	await requestChecked(path, init, timeoutMs, async () => undefined);
 }
 
 /**

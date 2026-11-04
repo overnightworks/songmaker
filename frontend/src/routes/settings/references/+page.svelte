@@ -35,7 +35,7 @@
 	const PROGRESS_SEPARATOR = ' · ';
 	const UPLOAD_FAILED = "Couldn't upload this file";
 	const METER_FROM_SHARE = 0.8;
-	const STORAGE_CONFLICT_STATUS = 409;
+	const CONFLICT_STATUS = 409;
 	const BYTES_PER_MB = 1_000_000;
 
 	let references = $state<ReferenceRecordingResponse[] | null>(null);
@@ -96,7 +96,7 @@
 	}
 
 	async function failureOf(error: unknown): Promise<UploadFailure> {
-		if (error instanceof ApiError && error.status === STORAGE_CONFLICT_STATUS) {
+		if (error instanceof ApiError && error.status === CONFLICT_STATUS) {
 			await load();
 			return { kind: 'refused' };
 		}
@@ -188,7 +188,7 @@
 		try {
 			await deleteReference(reference.id);
 		} catch (error) {
-			if (error instanceof ApiError && error.status === STORAGE_CONFLICT_STATUS) {
+			if (error instanceof ApiError && error.status === CONFLICT_STATUS) {
 				markInUse(reference.id);
 				rowFault = { id: reference.id, words: IN_USE_FAULT };
 			} else {
