@@ -167,17 +167,17 @@ const NETWORK_LOST_ERROR = 'net::ERR_INTERNET_DISCONNECTED';
 const ISSUER_UNRESOLVED_ERROR = 'net::ERR_NAME_NOT_RESOLVED';
 // How it reports a load `loseNetwork` found still in flight and ended.
 const LOAD_STOPPED_ERROR = 'net::ERR_ABORTED';
+const ROUTE_CSS_LOST_CONSOLE_MESSAGE = /^Error: Unable to preload CSS/;
 const pagesWithoutNetwork = new WeakSet<Page>();
 const JOB_STREAM_PATH = /^\/api\/jobs\/[^/]+\/stream$/;
 
-// Streams the client closes on purpose: leaving the library route (Settings,
-// sign-out) stops the live resource-event stream
-// (`ResourceSyncController.stop()`), a co-writer turn's reader stops on the
-// last event it needs, including a named failure, and a job's stream closes
-// on the job's terminal status (`completeTrackedJob` in `stores/jobs.ts`) —
-// racing the server's own end-of-stream right behind it, which a loaded
-// machine loses often enough to fail a flow (#1020). Matched on the path
-// alone: a resumed resource stream carries a `last_event_id` query.
+// Streams the client closes on purpose: leaving the library route stops the
+// live resource-event stream (`ResourceSyncController.stop()`), a co-writer
+// turn's reader stops on the last event it needs, including a named failure,
+// and a job's stream closes on the job's terminal status
+// (`completeTrackedJob` in `stores/jobs.ts`), racing the server's own end-of-stream
+// behind it, which a loaded machine loses often enough to fail a flow (#1020).
+// Matched on the path alone: a resumed resource stream carries a `last_event_id` query.
 function isClosedOnPurpose(url: string): boolean {
 	const path = new URL(url).pathname;
 	return (
@@ -274,12 +274,16 @@ export async function regainNetwork(page: Page, context: BrowserContext): Promis
 	pagesWithoutNetwork.delete(page);
 }
 
-// Whether a load in flight when the network went, or started while it is
-// away, failed only because `loseNetwork` took it: which loads are still in
-// flight at that moment is a race the flow does not choose.
+// Whether a load in flight when the network went, or started while it is away, failed only
+// because `loseNetwork` took it: which loads are still in flight then is a race.
 function failedWithTheNetwork(page: Page, errorText: string): boolean {
 	if (errorText === NETWORK_LOST_ERROR) return true;
 	return errorText === LOAD_STOPPED_ERROR && pagesWithoutNetwork.has(page);
+}
+
+function consoleLostWithTheNetwork(page: Page, text: string): boolean {
+	if (text.includes(NETWORK_LOST_ERROR)) return true;
+	return pagesWithoutNetwork.has(page) && ROUTE_CSS_LOST_CONSOLE_MESSAGE.test(text);
 }
 
 /** Which shell a test drives: the mobile project is the emulated phone. */
@@ -634,9 +638,8 @@ export const SESSION_REFUSAL_STATUSES: readonly number[] = [401, 403, 429];
 
 export interface FlowGuardOptions {
 	refusalsExpectedOn?: readonly ExpectedRefusal[];
-	// A flow that calls `loseNetwork` drives that loss on purpose, so neither
-	// the failed request nor the console line Chromium adds for it is a guard
-	// failure there — and stays one in every other flow.
+	// A flow that calls `loseNetwork` drives that loss on purpose, so neither the failed request
+	// nor its console lines (Chromium's, the router's lost route stylesheet) fail it, and they do elsewhere.
 	losesNetworkOnPurpose?: boolean;
 }
 
@@ -703,12 +706,9 @@ export class FlowGuard {
 		});
 		page.on('requestfailed', (request) => {
 			const errorText = request.failure()?.errorText ?? 'unknown';
-			// Chromium reports a stream the client cancelled in flight and a take the running step
-			// abandons as a failed request with exactly this error,
-			// indistinguishable from any other intentional client-side abort. Every other reason still fails
-			// the flow, including a 429 or 5xx on the same path (handled below).
-			// A request the page leaves behind after the server's expected refusal
-			// of it is reported the same way, though its answer had arrived.
+			// Chromium reports a stream the client cancelled, a take the running step abandons and a
+			// request left behind after an expected refusal as this error, like any intentional
+			// client-side abort. Every other reason still fails the flow, a 429 or 5xx included.
 			const cutOffOnPurpose =
 				isClosedOnPurpose(request.url()) ||
 				this.forgivesAbandonedTake(request.url()) ||
@@ -747,7 +747,7 @@ export class FlowGuard {
 		});
 		page.on('console', (message) => {
 			if (message.type() !== 'error') return;
-			if (losesNetworkOnPurpose && message.text().includes(NETWORK_LOST_ERROR)) return;
+			if (losesNetworkOnPurpose && consoleLostWithTheNetwork(page, message.text())) return;
 			const refusedStatus = REFUSED_RESOURCE_CONSOLE_MESSAGE.exec(message.text())?.[1];
 			const reportsAnExpectedRefusal =
 				refusedStatus !== undefined &&
