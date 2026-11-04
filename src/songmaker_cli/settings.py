@@ -141,7 +141,7 @@ def _split_token_clients(value: str) -> list[str]:
 
 
 class Settings(BaseSettings):
-    """Validated application settings, loaded from env + .env.
+    """Validated application settings, loaded from env, .env and the secret files.
 
     All env reads in ``src/songmaker_cli`` and ``src/acestep_worker`` go
     through this class. Required fields raise at startup if missing.

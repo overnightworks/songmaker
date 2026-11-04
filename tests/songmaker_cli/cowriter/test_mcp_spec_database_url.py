@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from sqlalchemy.engine import make_url
+from agent_providers.config import ProviderRuntimeConfig
 
-from songmaker_cli.cowriter.mcp_spec import songmaker_mcp_server
+from songmaker_cli import agent_runtime
 from songmaker_cli.db.engine import resolve_database_url
 from songmaker_cli.settings import get_settings
 
@@ -31,13 +31,19 @@ def password_file_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.usefixtures("password_file_settings")
-def test_the_child_resolves_the_full_url_while_the_spec_holds_no_password() -> None:
-    settings = get_settings()
+def test_the_child_resolves_the_full_url_while_the_spec_holds_no_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured: list[ProviderRuntimeConfig] = []
+    monkeypatch.setattr(agent_runtime, "configure", configured.append)
 
+    agent_runtime.configure_agent_providers(get_settings())
+
+    (config,) = configured
     resolved = resolve_database_url()
-    spec = songmaker_mcp_server(settings.database_url)
-
-    assert make_url(resolved).password == PASSWORD
-    carried = {key: value.get_secret_value() for key, value in spec.environment.items()}
+    assert resolved.password == PASSWORD
+    carried = {
+        key: value.get_secret_value() for key, value in config.mcp_server.environment.items()
+    }
     assert carried["DATABASE_URL"] == BASE_URL
     assert PASSWORD not in "".join(carried.values())

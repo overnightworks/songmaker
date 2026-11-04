@@ -9,7 +9,7 @@ from songmaker_cli.db.database_url import database_url_with_password
 PASSWORD_WITH_SPECIALS = "p%a@s/s:w ord"
 
 
-def test_a_base_without_a_password_part_comes_back_unchanged_when_no_password_is_given() -> None:
+def test_a_base_with_its_own_password_comes_back_unchanged_when_no_password_file_is_given() -> None:
     url = database_url_with_password("postgresql://app:today@db:5432/songs", None)
 
     assert url.render_as_string(hide_password=False) == "postgresql://app:today@db:5432/songs"

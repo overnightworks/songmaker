@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import runpy
-import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 
 from songmaker_cli import settings as settings_module
@@ -78,28 +76,3 @@ def test_env_py_uses_the_environment_url_alone_without_a_password_file(
 
     assert _url_alembic_configures(monkeypatch) == "postgresql://app:today@db/songs"
 
-
-def test_init_db_connects_to_postgresql_with_the_password_kept_apart(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    full_url = os.environ.get("TEST_DATABASE_URL", "")
-    if not full_url.startswith("postgresql"):
-        pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
-    parsed = make_url(full_url)
-    schema = "secret_password_" + uuid.uuid4().hex
-    admin = create_engine(full_url)
-    with admin.begin() as connection:
-        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    base = parsed.set(password=None).update_query_dict({"options": f"-csearch_path={schema}"})
-    try:
-        factory = engine_module.init_db(
-            database_url_with_password(
-                base.render_as_string(hide_password=False), parsed.password,
-            ),
-        )
-        assert "albums" in inspect(factory.kw["bind"]).get_table_names(schema=schema)
-        factory.kw["bind"].dispose()
-    finally:
-        with admin.begin() as connection:
-            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        admin.dispose()

@@ -23,9 +23,12 @@ MIGRATIONS_DIR = str(Path(__file__).parent / "migrations")
 _DEFAULT_SQLITE_TIMEOUT = 30
 
 
-def resolve_database_url() -> str:
-    """Return the full connection URL from Settings (base plus password file), rendered."""
-    return connection_url_from_settings(get_settings()).render_as_string(hide_password=False)
+def resolve_database_url() -> URL:
+    """Return the full connection URL from Settings (base plus password file).
+
+    A ``URL`` object, so the password never travels as plain text.
+    """
+    return connection_url_from_settings(get_settings())
 
 
 def _run_migrations(url: URL | str) -> None:
