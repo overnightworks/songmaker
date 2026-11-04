@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "fb76d27f659451483072e003d250ae331676aca6"
 branch = "claude/issue-2199-reference-delete-menu"
-scope = ["frontend/e2e/references-list.spec.ts", "frontend/src/lib/api/references.test.ts", "frontend/src/lib/api/references.ts", "frontend/src/lib/components/ReferenceMenu.svelte", "frontend/src/lib/components/ReferenceMenu.test.ts", "frontend/src/routes/settings/references/+page.svelte", "frontend/src/routes/settings/references/page.test.ts", "scripts/style-literals.txt"]
+scope = ["frontend/e2e/references-list.spec.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/api/references.test.ts", "frontend/src/lib/api/references.ts", "frontend/src/lib/components/ReferenceMenu.svelte", "frontend/src/lib/components/ReferenceMenu.test.ts", "frontend/src/routes/settings/references/+page.svelte", "frontend/src/routes/settings/references/page.test.ts", "scripts/style-literals.txt"]
 opened_commit = "b02ae47afeb0b923178449787014990a81936d00"
 whole_reason = "The menu, the page-level confirm and the row fault are one interaction on one page; the menu without the confirm or the notice would delete without the ruled confirmation or hide a refusal."
