@@ -3,5 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "8ed767ede4d170d0fe9146256ddaa34c260c3227"
 branch = "claude/issue-2139-offline-section-opens-after-reconnect"
-scope = ["frontend/e2e/offline-route-load.spec.ts", "frontend/src/routes/+error.svelte", "frontend/src/routes/error.test.ts"]
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/offline-route-load.spec.ts", "frontend/src/routes/+error.svelte", "frontend/src/routes/error.test.ts"]
 opened_commit = "c041460433403d726c55d718dd5d83ad920bd91d"
+whole_reason = "The error page, its two proofs and FlowGuard's one allowance for the failed chunk land together, or the Playwright proof would need a second console decider."
