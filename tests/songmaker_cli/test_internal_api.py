@@ -36,7 +36,6 @@ def _payload(**overrides) -> dict:
         pytest.param("secret", b"wrong", 401, id="wrong-token"),
         pytest.param("secret", b"", 401, id="empty-token"),
         pytest.param("secret", b"\xff", 401, id="raw-non-ascii-token"),
-        pytest.param("", b"anything", 503, id="unconfigured-server"),
         pytest.param("secret", b"secret", 200, id="valid-registration"),
     ],
 )

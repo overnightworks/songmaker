@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.api_models.songs import generation_expiry
 from songmaker_cli.constants import DEFAULT_COVER_EXECUTOR
+from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.settings import (
     UNKNOWN_COMMIT,
     UNRELEASED_TAG,
@@ -348,3 +350,133 @@ def test_a_dotenv_key_starting_with_agent_passes_and_another_unknown_one_is_refu
     required = _required_settings()
     with pytest.raises(ValidationError, match="unknown_setting"):
         Settings(**required, _env_file=dotenv)
+
+
+@pytest.fixture
+def secrets_only_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Leave the secret fields to the secrets directory under test."""
+    for name in ("SESSION_SECRET", "SONGMAKER_INTERNAL_TOKEN", "POSTGRES_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://app@db:5432/songs")
+
+
+def _write_secret_files(directory: Path, **contents: str) -> None:
+    for name, content in contents.items():
+        (directory / name).write_text(content)
+
+
+@pytest.mark.usefixtures("secrets_only_environment")
+def test_secret_files_set_the_secret_fields(tmp_path: Path) -> None:
+    _write_secret_files(
+        tmp_path,
+        session_secret="session-from-file\n",
+        songmaker_internal_token="token-from-file",
+        postgres_password="password-from-file",
+    )
+
+    settings = Settings(_secrets_dir=tmp_path)
+
+    assert settings.session_secret.get_secret_value() == "session-from-file"
+    assert settings.songmaker_internal_token.get_secret_value() == "token-from-file"
+    assert settings.postgres_password.get_secret_value() == "password-from-file"
+
+
+@pytest.mark.usefixtures("secrets_only_environment")
+def test_files_in_the_secrets_directory_that_settings_do_not_declare_are_ignored(
+    tmp_path: Path,
+) -> None:
+    _write_secret_files(
+        tmp_path,
+        session_secret="s",
+        songmaker_internal_token="t",
+        keycloak_client_secret="mounted-for-the-web-service",
+    )
+
+    assert Settings(_secrets_dir=tmp_path).session_secret.get_secret_value() == "s"
+
+
+@pytest.mark.usefixtures("secrets_only_environment")
+def test_the_environment_wins_over_a_secret_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_secret_files(tmp_path, session_secret="from-file", songmaker_internal_token="t")
+    monkeypatch.setenv("SESSION_SECRET", "from-environment")
+
+    assert Settings(_secrets_dir=tmp_path).session_secret.get_secret_value() == "from-environment"
+
+
+@pytest.mark.usefixtures("secrets_only_environment")
+@pytest.mark.parametrize(
+    "field", ["session_secret", "songmaker_internal_token", "postgres_password"],
+)
+def test_an_empty_secret_file_is_refused_naming_the_field(tmp_path: Path, field: str) -> None:
+    files = {"session_secret": "s", "songmaker_internal_token": "t", field: ""}
+    _write_secret_files(tmp_path, **files)
+
+    with pytest.raises(ValidationError, match=field):
+        Settings(_secrets_dir=tmp_path)
+
+
+def test_a_missing_required_setting_names_the_field_without_showing_a_loaded_secret(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A short input dict is shown whole; a longer one is cut in the middle.
+    for name in list(os.environ):
+        monkeypatch.delenv(name)
+    _write_secret_files(tmp_path, postgres_password="hunter2")
+
+    with pytest.raises(ValidationError, match="database_url") as refusal:
+        Settings(_secrets_dir=tmp_path, _env_file=None)
+
+    assert "hunter2" not in str(refusal.value)
+
+
+@pytest.mark.usefixtures("secrets_only_environment")
+def test_the_connection_url_joins_the_base_and_the_password_file(tmp_path: Path) -> None:
+    _write_secret_files(
+        tmp_path,
+        session_secret="s",
+        songmaker_internal_token="t",
+        postgres_password="p@ss:w/rd %",
+    )
+
+    url = connection_url_from_settings(Settings(_secrets_dir=tmp_path))
+
+    assert (url.username, url.password, url.host, url.database) == (
+        "app", "p@ss:w/rd %", "db", "songs",
+    )
+
+
+@pytest.mark.usefixtures("secrets_only_environment")
+def test_a_password_in_the_database_url_and_in_a_file_is_refused_without_showing_either(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://app:inline-secret@db/songs")
+    _write_secret_files(
+        tmp_path,
+        session_secret="s",
+        songmaker_internal_token="t",
+        postgres_password="file-secret",
+    )
+    settings = Settings(_secrets_dir=tmp_path)
+
+    with pytest.raises(ValueError, match="DATABASE_URL") as refusal:
+        connection_url_from_settings(settings)
+
+    assert "inline-secret" not in str(refusal.value)
+    assert "file-secret" not in str(refusal.value)
+
+
+def test_without_a_secrets_directory_the_database_url_keeps_its_own_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("POSTGRES_PASSWORD", raising=False)
+
+    settings = Settings(
+        **{**_required_settings(), "database_url": "postgresql://app:today@db:5432/songs"},
+        _secrets_dir=None,
+    )
+
+    assert connection_url_from_settings(settings).render_as_string(hide_password=False) == (
+        "postgresql://app:today@db:5432/songs"
+    )

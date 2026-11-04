@@ -11,6 +11,8 @@ from functools import lru_cache
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from acestep_worker.constants import SECRETS_DIRECTORY
+
 DEFAULT_SHARED_AUDIO_ROOT = "/app/data/audio"
 DEFAULT_TRAINING_WORKSPACE_DIRNAME = "training"
 # The worker accepts control-plane traffic over the container network.
@@ -23,6 +25,10 @@ class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(
         extra="forbid",
         case_sensitive=False,
+        # A missing directory would make pydantic-settings warn.
+        secrets_dir=SECRETS_DIRECTORY if SECRETS_DIRECTORY.is_dir() else None,
+        # The input dict of a failed validation would show a loaded secret.
+        hide_input_in_errors=True,
     )
 
     worker_id: str

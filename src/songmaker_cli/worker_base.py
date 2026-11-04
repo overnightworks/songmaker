@@ -21,6 +21,7 @@ from songmaker_cli.constants import (
     RECOVERY_LOCK_TTL_SECONDS,
     JobStatus,
 )
+from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.settings import Settings, get_settings
@@ -77,7 +78,7 @@ class WorkerBase:
     def get_db_factory(self):
         with self._db_lock:
             if self._db_factory is None:
-                self._db_factory = init_db(self._settings.database_url)
+                self._db_factory = init_db(connection_url_from_settings(self._settings))
                 self._db_engine = self._db_factory.kw["bind"]
         return self._db_factory
 

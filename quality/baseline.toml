@@ -228,7 +228,7 @@
 "test_startup_recovers_music_job_types_and_reconciles_lora_once" = 70
 
 [function_lines."tests/songmaker_cli/test_db_postgresql.py"]
-"test_alembic_migrations_on_postgresql" = 148
+"test_alembic_migrations_on_postgresql" = 119
 "test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql" = 65
 "test_concurrent_lora_reconciliation_claims_one_locked_row" = 83
 

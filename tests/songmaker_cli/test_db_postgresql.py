@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 import threading
+import uuid
 from datetime import datetime, timedelta, timezone
 from functools import partial
 
 import pytest
-from sqlalchemy import create_engine, event, insert, text
+from sqlalchemy import create_engine, event, insert, inspect, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from support.repository_root import REPOSITORY_ROOT
@@ -19,9 +21,8 @@ from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
-from songmaker_cli.db.engine import (
-    resolve_database_url,
-)
+from songmaker_cli.db.database_url import database_url_with_password
+from songmaker_cli.db.engine import init_db, resolve_database_url
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
@@ -76,7 +77,35 @@ SKIP_NO_PG = pytest.mark.skipif(
 def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@host/db")
     url = resolve_database_url()
-    assert url == "postgresql://user:pass@host/db"
+    assert url.render_as_string(hide_password=False) == "postgresql://user:pass@host/db"
+
+
+@SKIP_NO_PG
+def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart() -> None:
+    name = f"secret_password_{uuid.uuid4().hex[:12]}"
+    password = "p%a@s/s:w ord"
+    admin = create_engine(TEST_PG_URL)
+    with admin.begin() as connection:
+        role = text("SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :name, :password)")
+        statement = connection.execute(role, {"name": name, "password": password}).scalar_one()
+        # text() reads ":" as a bind marker, so the password's colon is escaped.
+        connection.execute(text(statement.replace(":", r"\:")))
+        connection.execute(text(f'CREATE SCHEMA "{name}" AUTHORIZATION "{name}"'))
+        connection.execute(text(f'ALTER ROLE "{name}" SET search_path = "{name}"'))
+    base = make_url(TEST_PG_URL)._replace(username=name, password=None)
+    factory = None
+    try:
+        factory = init_db(database_url_with_password(base, password))
+        tables = inspect(factory.kw["bind"]).get_table_names(schema=name)
+        assert "albums" in tables
+    finally:
+        if factory is not None:
+            factory.kw["bind"].dispose()
+        with admin.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA IF EXISTS "{name}" CASCADE'))
+            connection.execute(text(f'DROP OWNED BY "{name}"'))
+            connection.execute(text(f'DROP ROLE "{name}"'))
+        admin.dispose()
 
 
 @SKIP_NO_PG
@@ -732,21 +761,14 @@ def test_alembic_migrations_on_postgresql() -> None:
             ),
             [
                 {
-                    "id": "migration-user",
-                    "username": "migration",
+                    "id": f"migration-user{suffix}",
+                    "username": f"migration{suffix}",
                     "password_hash": "x",
                     "role": "user",
                     "is_active": True,
                     "now": now,
-                },
-                {
-                    "id": "migration-user-without-events",
-                    "username": "migration-without-events",
-                    "password_hash": "x",
-                    "role": "user",
-                    "is_active": True,
-                    "now": now,
-                },
+                }
+                for suffix in ("", "-without-events")
             ],
         )
     engine.dispose()
@@ -772,19 +794,13 @@ def test_alembic_migrations_on_postgresql() -> None:
             ),
             [
                 {
-                    "id": "legacy-event-1",
-                    "sequence": 1,
-                    "song_id": "legacy-song-1",
-                    "generation_id": "legacy-generation-1",
+                    "id": f"legacy-event-{number}",
+                    "sequence": number,
+                    "song_id": f"legacy-song-{number}",
+                    "generation_id": f"legacy-generation-{number}",
                     "now": now,
-                },
-                {
-                    "id": "legacy-event-2",
-                    "sequence": 2,
-                    "song_id": "legacy-song-2",
-                    "generation_id": "legacy-generation-2",
-                    "now": now,
-                },
+                }
+                for number in (1, 2)
             ],
         )
     engine.dispose()
@@ -792,8 +808,6 @@ def test_alembic_migrations_on_postgresql() -> None:
     command.upgrade(cfg, "head")
 
     engine = create_engine(TEST_PG_URL)
-    from sqlalchemy import inspect
-
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     engine.dispose()
@@ -838,20 +852,6 @@ def test_alembic_migrations_on_postgresql() -> None:
         ("migration-user-without-events", 0),
     ]
     assert events == [
-        (
-            "legacy-event-1",
-            1,
-            "generation.created",
-            "song",
-            "legacy-song-1",
-            "legacy-generation-1",
-        ),
-        (
-            "legacy-event-2",
-            2,
-            "generation.created",
-            "song",
-            "legacy-song-2",
-            "legacy-generation-2",
-        ),
+        ("legacy-event-1", 1, "generation.created", "song", "legacy-song-1", "legacy-generation-1"),
+        ("legacy-event-2", 2, "generation.created", "song", "legacy-song-2", "legacy-generation-2"),
     ]

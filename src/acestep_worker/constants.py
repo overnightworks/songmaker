@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Final
+
+# Copy of songmaker_cli/settings.py: this package never imports songmaker_cli.
+SECRETS_DIRECTORY: Final[Path] = Path("/run/secrets")
 
 # Env var names stripped from the environment of every child process this
 # package spawns (the ACE-Step HTTP subprocess, in subprocess_runner.py).

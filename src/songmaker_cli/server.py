@@ -375,6 +375,7 @@ def create_app(
 
 def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
     from songmaker_cli.constants import REDIS_STARTUP_ERROR
+    from songmaker_cli.db.database_url import connection_url_from_settings
     from songmaker_cli.db.engine import init_db
     from songmaker_cli.redis_client import create_redis, redis_health
 
@@ -385,7 +386,7 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
         raise RuntimeError(REDIS_STARTUP_ERROR.format(url=settings.redis_url.split("@")[-1]))
     log.info("Redis connected: %s", settings.redis_url.split("@")[-1])
     return AppContext(
-        db=init_db(settings.database_url),
+        db=init_db(connection_url_from_settings(settings)),
         audio_dir=audio_dir,
         data_dir=data_dir,
         signing_key=settings.session_secret.get_secret_value().encode(),
