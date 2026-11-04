@@ -27,6 +27,8 @@ class WorkerSettings(BaseSettings):
         case_sensitive=False,
         # A missing directory would make pydantic-settings warn.
         secrets_dir=SECRETS_DIRECTORY if SECRETS_DIRECTORY.is_dir() else None,
+        # The input dict of a failed validation would show a loaded secret.
+        hide_input_in_errors=True,
     )
 
     worker_id: str

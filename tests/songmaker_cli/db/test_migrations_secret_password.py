@@ -75,4 +75,3 @@ def test_env_py_uses_the_environment_url_alone_without_a_password_file(
     monkeypatch.setenv("DATABASE_URL", "postgresql://app:today@db/songs")
 
     assert _url_alembic_configures(monkeypatch) == "postgresql://app:today@db/songs"
-

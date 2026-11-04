@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from acestep_worker.settings import WorkerSettings
 
@@ -40,3 +41,17 @@ def test_an_empty_token_file_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="songmaker_internal_token"):
         WorkerSettings(_secrets_dir=tmp_path)
+
+
+def test_a_missing_required_setting_names_the_field_without_showing_the_token_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A short input dict is shown whole; a longer one is cut in the middle.
+    monkeypatch.delenv("WORKER_ID")
+    monkeypatch.delenv("REDIS_URL")
+    (tmp_path / "songmaker_internal_token").write_text("hunter2")
+
+    with pytest.raises(ValidationError, match="worker_id") as refusal:
+        WorkerSettings(_secrets_dir=tmp_path)
+
+    assert "hunter2" not in str(refusal.value)

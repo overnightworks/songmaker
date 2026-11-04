@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -414,6 +415,20 @@ def test_an_empty_secret_file_is_refused_naming_the_field(tmp_path: Path, field:
 
     with pytest.raises(ValidationError, match=field):
         Settings(_secrets_dir=tmp_path)
+
+
+def test_a_missing_required_setting_names_the_field_without_showing_a_loaded_secret(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A short input dict is shown whole; a longer one is cut in the middle.
+    for name in list(os.environ):
+        monkeypatch.delenv(name)
+    _write_secret_files(tmp_path, postgres_password="hunter2")
+
+    with pytest.raises(ValidationError, match="database_url") as refusal:
+        Settings(_secrets_dir=tmp_path, _env_file=None)
+
+    assert "hunter2" not in str(refusal.value)
 
 
 @pytest.mark.usefixtures("secrets_only_environment")
