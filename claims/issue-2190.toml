@@ -1,0 +1,8 @@
+claim_id = "29c7cc2dc008454d951de7bc571950de"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3822cb965bfb657a15f3cab7a7229cae93027a32"
+branch = "claude/issue-2190-lock-guard-sees-written-transaction"
+scope = ["src/songmaker_cli/api_helpers.py", "src/songmaker_cli/auth_stores.py", "src/songmaker_cli/generation_api.py", "tests/songmaker_cli/db/queries/test_versions_in_use.py", "tests/songmaker_cli/test_generation_api_source_wav.py", "tests/songmaker_cli/test_lock_guard.py", "tests/songmaker_cli/test_lock_guard_postgres.py", "tests/songmaker_cli/test_mcp_server.py"]
+opened_commit = "d5e5aad3bf8b03639ab6f3715b630a5b1254f63b"
+whole_reason = "The guard and the one caller it would otherwise refuse land together, or repaint and cover fail on the first mp3-only take."
