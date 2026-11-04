@@ -24,11 +24,9 @@ from songmaker_cli.api_models import (
 from songmaker_cli.constants import (
     GENERATION_ETA_MIN_PROGRESS,
     STALE_JOB_THRESHOLDS,
-    CoverExecutor,
     GenerationPhase,
     JobStatus,
     JobType,
-    stale_job_thresholds,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -2027,33 +2025,15 @@ def test_reaper_uses_the_supplied_resolved_queue_depth_for_an_alive_worker(
     assert get_job(db_session, job.id).error_type == "queued_full_queue_bound"
 
 
-@pytest.mark.parametrize(
-    ("job_type", "cover_executor"),
-    [
-        (job_type, executor)
-        for job_type in stale_job_thresholds(CoverExecutor.MUSIC)
-        for executor in (
-            (None, CoverExecutor.MUSIC) if job_type is JobType.COVER else (None,)
-        )
-    ],
-    ids=lambda value: "default" if value is None else value.value,
-)
+@pytest.mark.parametrize("job_type", STALE_JOB_THRESHOLDS)
 def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     db_session: Session,
     job_type: JobType,
-    cover_executor: CoverExecutor | None,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from datetime import datetime, timedelta, timezone
 
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    if cover_executor is None:
-        monkeypatch.delenv("COVER_EXECUTOR", raising=False)
-    else:
-        monkeypatch.setenv("COVER_EXECUTOR", cover_executor)
-    thresholds = stale_job_thresholds(
-        CoverExecutor.WEB if cover_executor is None else cover_executor,
-    )[job_type]
+    thresholds = STALE_JOB_THRESHOLDS[job_type]
     queued = create_job(db_session, job_type)
     running = create_job(db_session, job_type)
     healthy = create_job(db_session, job_type)
@@ -2072,32 +2052,14 @@ def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     assert get_job(db_session, healthy.id).status == JobStatus.RUNNING
 
 
-@pytest.mark.parametrize(
-    ("job_type", "cover_executor"),
-    [
-        (job_type, executor)
-        for job_type in stale_job_thresholds(CoverExecutor.MUSIC)
-        for executor in (
-            (None, CoverExecutor.MUSIC) if job_type is JobType.COVER else (None,)
-        )
-    ],
-    ids=lambda value: "default" if value is None else value.value,
-)
+@pytest.mark.parametrize("job_type", STALE_JOB_THRESHOLDS)
 def test_reaper_keeps_jobs_at_each_strict_threshold_cutoff(
     db_session: Session,
     job_type: JobType,
-    cover_executor: CoverExecutor | None,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The reaper uses strict `<`: equality with either cutoff stays active."""
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    if cover_executor is None:
-        monkeypatch.delenv("COVER_EXECUTOR", raising=False)
-    else:
-        monkeypatch.setenv("COVER_EXECUTOR", cover_executor)
-    thresholds = stale_job_thresholds(
-        CoverExecutor.WEB if cover_executor is None else cover_executor,
-    )[job_type]
+    thresholds = STALE_JOB_THRESHOLDS[job_type]
     queued = create_job(db_session, job_type)
     running = create_job(db_session, job_type)
     update_job_status(db_session, running.id, JobStatusUpdate(JobStatus.RUNNING))

@@ -513,9 +513,8 @@ being in place.
 ## Agent-CLI Mounts
 
 `songmaker-web` mounts the Claude, Grok, and Codex binaries and redacted
-credential mirrors read-only. The music worker does not register, recover, or
-execute cover jobs: `COVER_EXECUTOR=web` makes the web runner the sole owner.
-Its obsolete Codex mounts remain only until W5 removes them. The scoring worker
+credential mirrors read-only. Cover jobs run only in the web process; the music
+worker mounts no agent CLI. The scoring worker
 mounts only Claude's binary and credential mirror; it does
 not mount Grok or Codex (`docker-compose.yml:246-259`).
 
@@ -872,9 +871,7 @@ in `.env`: the preflight reads its values from the exported environment and
 does not load `.env`. For systemd boot and auto-deploy, these non-secret paths
 therefore belong in the persistent service environment. Compose currently
 mounts `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and
-`SONGMAKER_CODEX_CLI` into `songmaker-web`. The music worker's remaining
-read-only Codex binary and `codex.json` mirror have no execution path after the
-cutover and are removed by W5.
+`SONGMAKER_CODEX_CLI` into `songmaker-web`.
 
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
@@ -959,8 +956,6 @@ These host files are received read-only:
 | `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/grok.json` | `/home/songmaker/.grok/auth.json` |
 | `songmaker-web` | `$SONGMAKER_CODEX_CLI` (default native Codex binary) | `/usr/local/bin/codex` |
 | `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/codex.json` | `/home/songmaker/.codex/auth.json` |
-| `songmaker-music-worker` | `$SONGMAKER_CODEX_CLI` (default native Codex binary) | `/usr/local/bin/codex` |
-| `songmaker-music-worker` | `$SONGMAKER_CLI_CREDENTIALS_DIR/codex.json` | `/home/songmaker/.codex/auth.json` |
 
 `songmaker-scoring-worker` mounts no agent CLI and no login mirror: a scoring
 run calls no provider.
@@ -970,9 +965,7 @@ run with a private `0700` working directory and their own session tree, both
 removed after success or abort; prompts and tool results reach the CLI only
 through a private prompt file. The text tool protocol does not grant Grok CLI
 tools: every start and resume keeps `--deny '*'`, and native tool-call events
-abort the turn. The music worker's temporary Codex mounts have no execution
-path after the cover cutover; W5 removes them. The scoring worker does not
-mount Codex.
+abort the turn. The scoring worker does not mount Codex.
 
 The cover-image route starts Codex with the fixed read-only image
 argv (`--sandbox read-only`, no MCP servers, and `web_search="disabled"`),

@@ -109,7 +109,6 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       SONGMAKER_MONITORING_TOKEN: "${SONGMAKER_MONITORING_TOKEN:?SONGMAKER_MONITORING_TOKEN must be set in .env (see docker/.env.docker.example)}"
-      COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       LOG_FORMAT: json
       HOST: "0.0.0.0"
@@ -243,24 +242,9 @@ services:
       LORA_TRAINING_SAVE_EVERY_N_EPOCHS: "${LORA_TRAINING_SAVE_EVERY_N_EPOCHS:-5}"
       LORA_TRAINING_POLL_INTERVAL_SECONDS: "${LORA_TRAINING_POLL_INTERVAL_SECONDS:-5}"
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
-      COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"
       LOG_FORMAT: json
     volumes:
       - audiofiles:/app/data/audio
-      # Cover suggestions run here. Keep the worker's writable profile private
-      # and provide only the CLI binary plus the redacted login mirror.
-      - type: bind
-        source: ${SONGMAKER_CODEX_CLI:-~/.local/node/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex}
-        target: /usr/local/bin/codex
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/codex.json
-        target: /home/songmaker/.codex/auth.json
-        read_only: true
-        bind:
-          create_host_path: false
 
   songmaker-acestep-worker-0:
     build:

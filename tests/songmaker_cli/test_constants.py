@@ -7,7 +7,6 @@ import json
 from songmaker_cli.constants import (
     ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
     ACESTEP_SSE_READ_TIMEOUT_SECONDS,
-    COVER_WEB_QUEUED_STALE_THRESHOLD_SECONDS,
     GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS,
     GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
@@ -19,16 +18,15 @@ from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_AVAILABLE_MODES,
     MODEL_DEFAULT_MODE,
+    QUEUED_JOB_STALE_THRESHOLD_SECONDS,
     STALE_JOB_THRESHOLDS,
     WORKER_RESTART_GRACE_SECONDS,
     AuditAction,
-    CoverExecutor,
     JobFunction,
     JobStatus,
     JobType,
     ResourceType,
     WorkerLivenessSignal,
-    stale_job_thresholds,
     worker_restart_grace_seconds,
 )
 from songmaker_cli.settings import Settings
@@ -108,7 +106,7 @@ def test_stale_job_policy_covers_every_type_create_job_can_receive() -> None:
 
 def test_stale_job_policy_keeps_liveness_signal_and_grace_together() -> None:
     expected_signals = {
-        JobType.COVER: WorkerLivenessSignal.MUSIC,
+        JobType.COVER: None,
         JobType.CHAT: None,
         JobType.GENERATE: WorkerLivenessSignal.MODEL_EXECUTION,
         JobType.LOAD_MODEL_ON_WORKER: WorkerLivenessSignal.MODEL_EXECUTION,
@@ -135,7 +133,6 @@ def test_stale_job_policy_keeps_liveness_signal_and_grace_together() -> None:
         for job_type, policy in STALE_JOB_THRESHOLDS.items()
         if policy.liveness_signal is not None
     } == {
-        JobType.COVER: 12_000,
         JobType.GENERATE: 76_000,
         JobType.LOAD_MODEL_ON_WORKER: 130_000,
         JobType.DOWNLOAD_MODEL_ON_WORKER: 18_000,
@@ -147,16 +144,12 @@ def test_stale_job_policy_keeps_liveness_signal_and_grace_together() -> None:
     } == {WORKER_RESTART_GRACE_SECONDS}
 
 
-def test_web_cover_policy_uses_the_web_queue_without_a_worker_signal() -> None:
-    policy = stale_job_thresholds(CoverExecutor.WEB)[JobType.COVER]
+def test_cover_policy_uses_the_web_queue_without_a_worker_signal() -> None:
+    policy = STALE_JOB_THRESHOLDS[JobType.COVER]
 
-    assert policy.queued_seconds == COVER_WEB_QUEUED_STALE_THRESHOLD_SECONDS
+    assert policy.queued_seconds == QUEUED_JOB_STALE_THRESHOLD_SECONDS
     assert policy.liveness_signal is None
     assert policy.restart_grace_seconds is None
-    assert (
-        stale_job_thresholds(CoverExecutor.MUSIC)[JobType.COVER]
-        is STALE_JOB_THRESHOLDS[JobType.COVER]
-    )
 
 
 def test_generate_timeout_windows_are_covered_before_arq_timeout() -> None:

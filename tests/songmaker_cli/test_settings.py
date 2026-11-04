@@ -12,15 +12,15 @@ from pydantic import ValidationError
 from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.api_models.songs import generation_expiry
-from songmaker_cli.constants import DEFAULT_COVER_EXECUTOR
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.settings import (
     UNKNOWN_COMMIT,
     UNRELEASED_TAG,
-    CoverExecutor,
     Settings,
     get_settings,
 )
+
+_REMOVED_COVER_KEYS = ("COVER_EXECUTOR", "COVER_JOB_BUDGET_SECONDS", "COVER_CLI_DEADLINE_SECONDS")
 
 
 def _required_settings() -> dict[str, str]:
@@ -80,24 +80,22 @@ def test_codex_process_caps_default_to_the_single_pool_contract() -> None:
     assert settings.cover_max_concurrent_runs == 1
 
 
-def test_cover_executor_defaults_to_web_and_rejects_unknown_values() -> None:
-    assert DEFAULT_COVER_EXECUTOR is CoverExecutor.WEB
-    settings = Settings(**_required_settings())
-    assert settings.cover_executor is CoverExecutor.WEB
-
-    required = _required_settings()
-    with pytest.raises(ValidationError):
-        Settings(**required, cover_executor="unknown")
-
-
-def test_cover_executor_rejects_an_unknown_environment_value(
+def test_settings_build_with_none_of_the_removed_cover_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("COVER_EXECUTOR", "unknown")
-    required = _required_settings()
+    for key in _REMOVED_COVER_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+    Settings(**_required_settings())
+
+
+@pytest.mark.parametrize("key", _REMOVED_COVER_KEYS)
+def test_a_dotenv_with_a_removed_cover_key_raises(tmp_path: Path, key: str) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"{key}=1\n")
 
     with pytest.raises(ValidationError):
-        Settings(**required)
+        Settings(_env_file=env_file, **_required_settings())
 
 
 def test_rejects_a_cover_cap_above_the_codex_process_cap() -> None:

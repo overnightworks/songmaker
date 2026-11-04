@@ -31,18 +31,17 @@ from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
-from songmaker_cli.settings import CoverExecutor, Settings
+from songmaker_cli.settings import Settings
 
 HANG_GUARD_SECONDS: Final = 30
 
 
-def _settings(executor: CoverExecutor) -> Settings:
+def _settings() -> Settings:
     return Settings(
         database_url="postgresql://example",
         redis_url="redis://example",
         session_secret="session-secret",
         songmaker_internal_token="internal-token",
-        cover_executor=executor,
     )
 
 
@@ -74,18 +73,6 @@ def _cover_job(tmp_path: Path):
     return factory, audio_dir, "job"
 
 
-def test_music_executor_neither_starts_a_cover_run_nor_claims_a_job(tmp_path: Path) -> None:
-    factory, audio_dir, job_id = _cover_job(tmp_path)
-
-    claimed = asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.MUSIC),
-    ))
-
-    with factory() as session:
-        assert session.get(Job, job_id).status == JobStatus.QUEUED
-    assert claimed is False
-
-
 def test_cancelled_queued_web_cover_job_is_never_claimed(tmp_path: Path, monkeypatch) -> None:
     factory, audio_dir, job_id = _cover_job(tmp_path)
     with factory() as session:
@@ -98,7 +85,7 @@ def test_cancelled_queued_web_cover_job_is_never_claimed(tmp_path: Path, monkeyp
     monkeypatch.setattr(cover_runner, "generate_codex_cover_image", should_not_run)
 
     assert not asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+        db_factory=factory, audio_dir=audio_dir, settings=_settings(),
     ))
 
     with factory() as session:
@@ -160,11 +147,11 @@ def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_on
 
     async def run_race() -> tuple[bool, bool]:
         winner = asyncio.create_task(cover_runner.run_next_cover_job(
-            db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+            db_factory=factory, audio_dir=audio_dir, settings=_settings(),
         ))
         assert await asyncio.to_thread(image_started.wait, HANG_GUARD_SECONDS)
         loser = await cover_runner.run_next_cover_job(
-            db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+            db_factory=factory, audio_dir=audio_dir, settings=_settings(),
         )
         allow_image_return.set()
         return await winner, loser
@@ -213,7 +200,7 @@ def test_web_recovery_fails_interrupted_work_cleans_only_its_suggestion_and_leav
         session.commit()
 
     assert cover_runner.recover_web_cover_jobs(
-        factory, audio_dir, _settings(CoverExecutor.WEB),
+        factory, audio_dir, _settings(),
     ) == 1
 
     with factory() as session:
@@ -232,23 +219,10 @@ def test_web_recovery_fails_interrupted_work_cleans_only_its_suggestion_and_leav
         cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
     )
     assert asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+        db_factory=factory, audio_dir=audio_dir, settings=_settings(),
     ))
     with factory() as session:
         assert session.get(Job, "queued").status == JobStatus.COMPLETED
-
-
-def test_music_executor_does_not_recover_web_cover_jobs(tmp_path: Path) -> None:
-    factory, audio_dir, job_id = _cover_job(tmp_path)
-    with factory() as session:
-        assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.RUNNING))
-        session.commit()
-
-    assert cover_runner.recover_web_cover_jobs(
-        factory, audio_dir, _settings(CoverExecutor.MUSIC),
-    ) == 0
-    with factory() as session:
-        assert session.get(Job, job_id).status == JobStatus.RUNNING
 
 
 @pytest.mark.parametrize("aborted", (False, True), ids=("no-abort-signal", "abort-requested"))
@@ -286,7 +260,7 @@ def test_cover_job_passes_image_policy_and_reports_generator_abort(
         job_id,
         db_factory=factory,
         audio_dir=audio_dir,
-        settings=_settings(CoverExecutor.WEB),
+        settings=_settings(),
         abort_signal=abort_signal,
     ))
 
@@ -356,7 +330,7 @@ def test_web_runner_names_the_cause_in_the_job_error(
     monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fail_image_generator)
 
     assert asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+        db_factory=factory, audio_dir=audio_dir, settings=_settings(),
     ))
 
     with factory() as session:
@@ -410,7 +384,7 @@ def test_web_runner_reports_the_real_codex_usage_limit_transcript_end_to_end(
     caplog.set_level("ERROR", logger="songmaker_cli.jobs._runtime")
 
     assert asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+        db_factory=factory, audio_dir=audio_dir, settings=_settings(),
     ))
 
     with factory() as session:
@@ -486,7 +460,7 @@ def test_web_cancel_reaps_the_codex_process_and_keeps_the_job_cancelled(
         task = asyncio.create_task(cover_runner.run_next_cover_job(
             db_factory=factory,
             audio_dir=audio_dir,
-            settings=_settings(CoverExecutor.WEB),
+            settings=_settings(),
             cancellation_registry=registry,
         ))
         assert await asyncio.to_thread(spawned.wait, HANG_GUARD_SECONDS)
@@ -523,7 +497,7 @@ def test_web_runner_task_cancellation_reaps_the_codex_process(tmp_path: Path, mo
 
     async def cancel_runner_task() -> None:
         task = asyncio.create_task(cover_runner.run_next_cover_job(
-            db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+            db_factory=factory, audio_dir=audio_dir, settings=_settings(),
         ))
         assert await asyncio.to_thread(spawned.wait, HANG_GUARD_SECONDS)
         task.cancel()
@@ -554,7 +528,7 @@ def test_published_cover_suggestion_carries_the_ai_mark_in_its_xmp(
     )
 
     assert asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+        db_factory=factory, audio_dir=audio_dir, settings=_settings(),
     ))
 
     with factory() as session:

@@ -1298,12 +1298,11 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `CODEX_CLI_MAX_CONCURRENT_PROCESSES` | Stay | Default of the `codex_cli_max_concurrent_processes` setting; the live cap arrives through the configuration. |
 | `CODEX_CODE_MODE_HOST_BINARY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
 | `CODEX_RESOURCES_DIRECTORY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
-| `COVER_CLI_DEADLINE_SECONDS` | Stay | Budget of a songmaker cover job, not of a provider call. |
+| `COVER_CLI_DEADLINE_SECONDS` | Stay | Constant, until the picture agent file owns the deadline. |
 | `COVER_DEFAULT_MODEL` | Stay | Cover art is songmaker's own task, with its own model choice. |
 | `COVER_DEFAULT_PROVIDER` | Stay | Cover art is songmaker's own task, with its own provider choice. |
 | `COVER_DEFAULT_ROUTE` | Stay | Cover art is songmaker's own task, with its own route choice. |
 | `COVER_IMAGE_TOOL_UNAVAILABLE_ERROR` | Stay | A text a musician reads. |
-| `COVER_JOB_BUDGET_SECONDS` | Stay | Budget of a songmaker cover job, not of a provider call. |
 | `COVER_MAX_CONCURRENT_RUNS` | Stay | Default of the `cover_max_concurrent_runs` setting; the live cap arrives through the configuration. |
 | `COVER_PROMPT_MAX_CHARS` | Stay | How long songmaker's cover prompt may grow. |
 | `COVER_PROMPT_SONG_FIELD_MAX_CHARS` | Stay | How much of a song a cover prompt may quote. |

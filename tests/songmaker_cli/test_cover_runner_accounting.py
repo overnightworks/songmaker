@@ -26,7 +26,7 @@ from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Base, Job, User, aware_timestamp
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
-from songmaker_cli.settings import CoverExecutor, Settings
+from songmaker_cli.settings import Settings
 
 STARTED = datetime(2026, 10, 18, tzinfo=timezone.utc)
 GENERATED_PIXEL = (20, 80, 160)
@@ -91,7 +91,6 @@ def running_cover(accounting_factory, tmp_path, monkeypatch):
         "settings": Settings(
             database_url="postgresql://example", redis_url="redis://example",
             session_secret="session-secret", songmaker_internal_token="internal-token",
-            cover_executor=CoverExecutor.WEB,
         ),
     }
 
