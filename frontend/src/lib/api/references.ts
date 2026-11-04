@@ -22,3 +22,9 @@ export async function listReferences(): Promise<ReferenceListResponse> {
 export function referenceAudioUrl(referenceId: string): string {
 	return `/api/references/${encodeURIComponent(referenceId)}/audio`;
 }
+
+export async function deleteReference(referenceId: string): Promise<void> {
+	await apiFetch<undefined>(`/api/references/${encodeURIComponent(referenceId)}`, {
+		method: 'DELETE'
+	});
+}

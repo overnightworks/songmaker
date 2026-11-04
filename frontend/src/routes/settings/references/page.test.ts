@@ -7,12 +7,17 @@ import {
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 
-const mocks = vi.hoisted(() => ({ listReferences: vi.fn(), uploadReference: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+	listReferences: vi.fn(),
+	uploadReference: vi.fn(),
+	deleteReference: vi.fn()
+}));
 
 vi.mock('#lib/api/references.ts', async (importActual) => ({
 	...(await importActual<typeof import('#lib/api/references.ts')>()),
 	listReferences: (...args: unknown[]) => mocks.listReferences(...args),
-	uploadReference: (...args: unknown[]) => mocks.uploadReference(...args)
+	uploadReference: (...args: unknown[]) => mocks.uploadReference(...args),
+	deleteReference: (...args: unknown[]) => mocks.deleteReference(...args)
 }));
 
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
@@ -43,7 +48,7 @@ function referencePlayButton(target: HTMLElement, filename: string): HTMLButtonE
 }
 
 function referenceButtonLabels(target: HTMLElement): string[] {
-	return Array.from(target.querySelectorAll('.reference-row button')).map(
+	return Array.from(target.querySelectorAll('.reference-row .reference-play')).map(
 		(button) => button.getAttribute('aria-label') ?? ''
 	);
 }
@@ -79,6 +84,7 @@ beforeEach(() => {
 	vi.setSystemTime(new Date('2026-11-02T09:00:00Z'));
 	mocks.listReferences.mockReset();
 	mocks.uploadReference.mockReset();
+	mocks.deleteReference.mockReset();
 });
 
 afterEach(async () => {
@@ -262,12 +268,12 @@ describe('references page', () => {
 			expect(playSpy).toHaveBeenCalledTimes(2);
 		});
 
-		it('gives the row no focus stop of its own beside the play button', async () => {
+		it('gives the row no focus stop of its own beside the play button and the menu', async () => {
 			const target = await renderTwoReferences();
 
 			for (const row of target.querySelectorAll('.reference-row')) {
 				expect(row.hasAttribute('tabindex')).toBe(false);
-				expect(row.querySelectorAll('button')).toHaveLength(1);
+				expect(row.querySelectorAll('button')).toHaveLength(2);
 			}
 		});
 
@@ -456,5 +462,158 @@ describe('references page', () => {
 
 		await pressReferenceControl(referencePlayButton(target, 'synth-hook.wav'));
 		expect(preview.src).toMatch(/\/api\/references\/new\/audio$/);
+	});
+});
+
+describe('deleting a reference', () => {
+	function rowOf(target: HTMLElement, filename: string): HTMLElement {
+		return Array.from(target.querySelectorAll<HTMLElement>('.reference-row')).find((row) =>
+			row.textContent?.includes(filename)
+		) as HTMLElement;
+	}
+
+	function buttonNamed(root: ParentNode, text: string): HTMLButtonElement {
+		return Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+			button.textContent?.includes(text)
+		) as HTMLButtonElement;
+	}
+
+	function menuPanel(): HTMLElement {
+		return document.body.querySelector('.menu-panel') as HTMLElement;
+	}
+
+	function menuBackdrop(): HTMLElement {
+		return document.body.querySelector('.menu-backdrop') as HTMLElement;
+	}
+
+	async function openMenuOf(target: HTMLElement, filename: string): Promise<void> {
+		await pressReferenceControl(
+			rowOf(target, filename).querySelector('[aria-haspopup="dialog"]') as HTMLElement
+		);
+	}
+
+	async function chooseDelete(target: HTMLElement, filename: string): Promise<void> {
+		await openMenuOf(target, filename);
+		await pressReferenceControl(buttonNamed(menuPanel(), 'Delete'));
+	}
+
+	async function confirmDelete(): Promise<void> {
+		const dialog = document.body.querySelector('[role="dialog"][aria-labelledby]') as HTMLElement;
+		await pressReferenceControl(buttonNamed(dialog, 'Delete'));
+	}
+
+	function faultOf(row: HTMLElement): string | undefined {
+		return row.querySelector('.reference-fault')?.textContent?.trim();
+	}
+
+	it('asks first, naming the reference and its audio file', async () => {
+		const target = await renderTwoReferences();
+
+		await chooseDelete(target, 'voice-memo.mp3');
+
+		const text = document.body.textContent ?? '';
+		expect(text).toContain('Delete reference?');
+		expect(text).toContain('voice-memo.mp3');
+		expect(text).toContain('its audio file');
+		expect(text).toContain('This cannot be undone.');
+		expect(mocks.deleteReference).not.toHaveBeenCalled();
+	});
+
+	it('removes the row and refreshes the usage once the delete is confirmed', async () => {
+		const target = await renderTwoReferences();
+		mocks.deleteReference.mockResolvedValue(undefined);
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([referenceRecording({ id: 'b', filename: 'storytime-drums.wav' })], {
+				files: 49
+			})
+		);
+
+		await chooseDelete(target, 'voice-memo.mp3');
+		await confirmDelete();
+
+		expect(mocks.deleteReference).toHaveBeenCalledWith('a');
+		await vi.waitFor(() =>
+			expect(listedReferences(target).map((row) => row.name)).toEqual(['storytime-drums.wav'])
+		);
+		expect(mocks.listReferences).toHaveBeenCalledTimes(2);
+	});
+
+	it('shows the in-use notice on the row and greys Delete when the server refuses with 409', async () => {
+		const target = await renderTwoReferences();
+		mocks.deleteReference.mockRejectedValue(
+			new ApiError(409, 'Reference audio is in use.', '/api/references/a')
+		);
+
+		await chooseDelete(target, 'voice-memo.mp3');
+		await confirmDelete();
+
+		await vi.waitFor(() =>
+			expect(faultOf(rowOf(target, 'voice-memo.mp3'))).toBe('In use — not deleted.')
+		);
+		expect(faultOf(rowOf(target, 'storytime-drums.wav'))).toBeUndefined();
+		await openMenuOf(target, 'voice-memo.mp3');
+		expect(buttonNamed(menuPanel(), 'Delete').disabled).toBe(true);
+	});
+
+	it('shows another failure in the same row slot and keeps the row', async () => {
+		const target = await renderTwoReferences();
+		mocks.deleteReference.mockRejectedValue(
+			new ApiError(500, 'Reference audio storage could not be checked.', '/api/references/a')
+		);
+
+		await chooseDelete(target, 'voice-memo.mp3');
+		await confirmDelete();
+
+		await vi.waitFor(() =>
+			expect(faultOf(rowOf(target, 'voice-memo.mp3'))).toContain('could not be checked')
+		);
+		expect(listedReferences(target)).toHaveLength(2);
+	});
+
+	it('leaves the Upload button in its normal state through a refused delete', async () => {
+		const target = await renderTwoReferences();
+		mocks.deleteReference.mockRejectedValue(new ApiError(409, 'in use', '/api/references/a'));
+
+		await chooseDelete(target, 'voice-memo.mp3');
+		await confirmDelete();
+		await vi.waitFor(() => expect(faultOf(rowOf(target, 'voice-memo.mp3'))).toBeDefined());
+
+		expect(target.querySelector('.upload-button.failed')).toBeNull();
+		expect(target.querySelector('.upload-reason')).toBeNull();
+	});
+
+	it('does not start or stop the preview when the menu opens, closes or Delete is chosen', async () => {
+		const target = await renderTwoReferences();
+		await openMenuOf(target, 'voice-memo.mp3');
+		await pressReferenceControl(menuBackdrop());
+		await chooseDelete(target, 'voice-memo.mp3');
+
+		expect(referenceElement()).toBeUndefined();
+
+		await pressReferenceControl(referencePlayButton(target, 'storytime-drums.wav'));
+		await openMenuOf(target, 'storytime-drums.wav');
+		await pressReferenceControl(menuBackdrop());
+
+		expect(target.querySelector('.reference-row.playing .reference-name')?.textContent).toBe(
+			'storytime-drums.wav'
+		);
+	});
+
+	it('stops the preview of a reference that is deleted while playing', async () => {
+		const target = await renderTwoReferences();
+		mocks.deleteReference.mockResolvedValue(undefined);
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([referenceRecording({ id: 'b', filename: 'storytime-drums.wav' })])
+		);
+		await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
+		const preview = referenceElement() as HTMLAudioElement;
+		expect(target.querySelector('.reference-row.playing')).not.toBeNull();
+
+		await chooseDelete(target, 'voice-memo.mp3');
+		await confirmDelete();
+
+		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
+		expect(target.querySelector('.reference-row.playing')).toBeNull();
+		expect(preview.getAttribute('src')).toBeNull();
 	});
 });

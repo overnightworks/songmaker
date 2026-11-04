@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
-	import { listReferences, referenceAudioUrl, uploadReference } from '#lib/api/references.ts';
+	import {
+		deleteReference,
+		listReferences,
+		referenceAudioUrl,
+		uploadReference
+	} from '#lib/api/references.ts';
 	import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
+	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import ReferenceMenu from '#lib/components/ReferenceMenu.svelte';
 	import {
 		APP_NAME,
 		REFERENCE_AUDIO_ACCEPT,
@@ -20,6 +27,10 @@
 	const SKELETON_ROWS = 3;
 	const NO_LENGTH = '—';
 	const PLAY_FAULT = "Can't play this recording";
+	const IN_USE_FAULT = 'In use — not deleted.';
+	const DELETE_FAILED = "Couldn't delete this recording";
+	const DELETE_TITLE = 'Delete reference?';
+	const DELETE_CONSEQUENCE = 'its audio file';
 	const UPLOAD_LABEL = 'Upload';
 	const PROGRESS_SEPARATOR = ' · ';
 	const UPLOAD_FAILED = "Couldn't upload this file";
@@ -116,7 +127,8 @@
 	}
 
 	let activeId = $state<string | null>(null);
-	let faultId = $state<string | null>(null);
+	let rowFault = $state<{ id: string; words: string } | null>(null);
+	let pendingDelete = $state<ReferenceRecordingResponse | null>(null);
 	let preview: HTMLAudioElement | null = null;
 	let previewId: string | null = null;
 
@@ -133,7 +145,7 @@
 		if (previewId === referenceId) previewId = null;
 		if (referenceId !== activeId) return;
 		activeId = null;
-		faultId = referenceId;
+		rowFault = { id: referenceId, words: PLAY_FAULT };
 	}
 
 	function stop() {
@@ -158,9 +170,35 @@
 			element.src = referenceAudioUrl(referenceId);
 			previewId = referenceId;
 		}
-		faultId = null;
+		rowFault = null;
 		activeId = referenceId;
 		element.play().catch(() => fail(referenceId));
+	}
+
+	function markInUse(referenceId: string) {
+		references =
+			references?.map((reference) =>
+				reference.id === referenceId ? { ...reference, in_use: true } : reference
+			) ?? null;
+	}
+
+	async function confirmDelete(reference: ReferenceRecordingResponse) {
+		pendingDelete = null;
+		rowFault = null;
+		try {
+			await deleteReference(reference.id);
+		} catch (error) {
+			if (error instanceof ApiError && error.status === STORAGE_CONFLICT_STATUS) {
+				markInUse(reference.id);
+				rowFault = { id: reference.id, words: IN_USE_FAULT };
+			} else {
+				rowFault = { id: reference.id, words: describeFailure(error, DELETE_FAILED) };
+			}
+			return;
+		}
+		if (previewId === reference.id) release();
+		references = references?.filter((candidate) => candidate.id !== reference.id) ?? null;
+		await load();
 	}
 
 	// The global player starting ends a preview; the reverse is `toggle`.
@@ -295,15 +333,34 @@
 					<span class="reference-text">
 						<span class="reference-name" title={reference.filename}>{reference.filename}</span>
 						<span class="reference-meta">{metaLabel(reference, now)}</span>
-						{#if faultId === reference.id}
-							<span class="reference-meta reference-fault" role="alert">{PLAY_FAULT}</span>
+						{#if rowFault?.id === reference.id}
+							<span class="reference-meta reference-fault" role="alert">{rowFault.words}</span>
 						{/if}
+					</span>
+					<!-- The menu's clicks are the menu's own, never the row's preview toggle. -->
+					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+					<span class="reference-menu" onclick={(event) => event.stopPropagation()}>
+						<ReferenceMenu
+							filename={reference.filename}
+							inUse={reference.in_use}
+							ondelete={() => (pendingDelete = reference)}
+						/>
 					</span>
 				</li>
 			{/each}
 		</ul>
 	{/if}
 </div>
+
+{#if pendingDelete}
+	{@const doomed = pendingDelete}
+	<ConfirmDeleteDialog
+		title={DELETE_TITLE}
+		items={[`${doomed.filename} — ${DELETE_CONSEQUENCE}`]}
+		onconfirm={() => void confirmDelete(doomed)}
+		oncancel={() => (pendingDelete = null)}
+	/>
+{/if}
 
 <style>
 	.page {
@@ -353,7 +410,7 @@
 		background: var(--accent);
 		color: var(--on-accent);
 		font-family: var(--font-display);
-		font-size: 0.95rem;
+		font-size: 15px;
 		letter-spacing: var(--btn-letter-spacing);
 		text-transform: uppercase;
 		white-space: nowrap;
@@ -370,7 +427,7 @@
 			var(--accent);
 		gap: 0;
 		font-family: var(--font-body);
-		font-size: 0.9rem;
+		font-size: 15px;
 		letter-spacing: 0;
 		text-transform: none;
 		cursor: progress;
@@ -396,7 +453,7 @@
 		display: flex;
 		gap: 6px;
 		margin: 0;
-		font-size: 0.84rem;
+		font-size: 13px;
 		line-height: 1.35;
 		color: var(--score-bad);
 	}
@@ -417,20 +474,20 @@
 		display: flex;
 		justify-content: space-between;
 		gap: 10px;
-		font-size: 0.84rem;
+		font-size: 13px;
 		font-variant-numeric: tabular-nums;
 	}
 
 	.quota-bar {
 		height: 4px;
-		border-radius: 2px;
+		border-radius: var(--btn-radius-sm);
 		background: color-mix(in srgb, var(--score-ok) 22%, transparent);
 	}
 
 	.quota-bar i {
 		display: block;
 		height: 100%;
-		border-radius: 2px;
+		border-radius: var(--btn-radius-sm);
 		background: var(--score-ok);
 	}
 
@@ -614,6 +671,11 @@
 		gap: 2px;
 		flex: 1;
 		min-width: 0;
+	}
+
+	.reference-menu {
+		display: flex;
+		flex: none;
 	}
 
 	.reference-row + .reference-row {

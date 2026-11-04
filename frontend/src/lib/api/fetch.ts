@@ -266,6 +266,8 @@ async function orNetworkError<T>(
 	}
 }
 
+const NO_CONTENT_STATUS = 204;
+
 export async function apiFetch<T>(
 	path: string,
 	init?: RequestInit,
@@ -281,6 +283,7 @@ export async function apiFetch<T>(
 	try {
 		const resp = await orNetworkError(path, controller.signal, fetch(path, opts));
 		await throwForFailedResponse(resp, path);
+		if (resp.status === NO_CONTENT_STATUS) return undefined as T;
 		return await orNetworkError(path, controller.signal, resp.json() as Promise<T>);
 	} finally {
 		clearTimeout(timeout);
