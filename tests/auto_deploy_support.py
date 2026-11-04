@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import stat
 import subprocess
 import time
@@ -92,6 +93,33 @@ class ComposeConfigRefusal:
 
     stderr: str
     when_compose_file_contains: str | None = None
+
+
+def compose_config_quiet_stub(refusal: ComposeConfigRefusal | None) -> str:
+    """Compose's own validation; the wrapper runs it inside the checkout."""
+    refusal_branch = ""
+    if refusal is not None:
+        condition = (
+            "true"
+            if refusal.when_compose_file_contains is None
+            else f"grep -qsF -- {shlex.quote(refusal.when_compose_file_contains)} "
+            "docker-compose.yml"
+        )
+        refusal_branch = (
+            f"    if {condition}; then\n"
+            f"        printf '%s\\n' {shlex.quote(refusal.stderr)} >&2\n"
+            "        exit 1\n"
+            "    fi\n"
+        )
+    return (
+        'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--quiet" ]]; then\n'
+        '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
+        '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
+        "    fi\n"
+        + refusal_branch
+        + "    exit 0\n"
+        "fi\n"
+    )
 
 
 def check_runs_response(*runs: tuple[str, ...]) -> str:
