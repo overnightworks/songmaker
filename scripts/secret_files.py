@@ -136,6 +136,19 @@ def copy(project_root: Path, home: Path) -> None:
     text = _read_env_text(env_file, required=True)
     directory = _resolve_directory(text, env_file, home)
     _require_private_directory(directory)
+    pending = _plan_copies(text, env_file, directory)
+    if not pending:
+        return
+    _ensure_private_directory(directory)
+    for entry, value in pending:
+        if _publish(directory / entry.name, value):
+            print(f"copied {entry.key} to {directory / entry.name}")
+        else:
+            print(f"already copied {entry.name}")
+
+
+def _plan_copies(text: str, env_file: Path, directory: Path) -> list[tuple[SecretFile, str]]:
+    """The entries still to write; every refusal comes before any write."""
     pending: list[tuple[SecretFile, str]] = []
     for entry in TABLE:
         value = _env_value(text, entry, env_file)
@@ -156,20 +169,19 @@ def copy(project_root: Path, home: Path) -> None:
                 f"{directory / entry.name} holds another value than {entry.key} in "
                 f"{env_file}; not overwriting it",
             )
-    if pending and not directory.exists():
+    return pending
+
+
+def _ensure_private_directory(directory: Path) -> None:
+    """Create the directory when absent, then validate it whoever created it."""
+    if not directory.exists():
         try:
             directory.parent.mkdir(parents=True, exist_ok=True)
             directory.mkdir(mode=DIRECTORY_MODE)
             directory.chmod(DIRECTORY_MODE)
         except OSError as exc:
             raise Refusal(f"cannot create {directory}") from exc
-    if pending:
-        _require_private_directory(directory)
-    for entry, value in pending:
-        if _publish(directory / entry.name, value):
-            print(f"copied {entry.key} to {directory / entry.name}")
-        else:
-            print(f"already copied {entry.name}")
+    _require_private_directory(directory)
 
 
 def _require_private_directory(directory: Path) -> None:
