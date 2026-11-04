@@ -72,6 +72,9 @@ def main(argv: list[str]) -> int:
     except Refusal as refusal:
         print(f"secret_files.py: {refusal}", file=sys.stderr)
         return 1
+    except Exception as error:  # noqa: BLE001 - nothing but the type may reach the output
+        print(f"secret_files.py: unexpected {type(error).__name__}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -209,8 +212,15 @@ def _publish(path: Path, value: str) -> bool:
     except OSError as exc:
         raise Refusal(f"cannot write {path}") from exc
     finally:
-        Path(temporary).unlink(missing_ok=True)
+        _discard(temporary)
     return True
+
+
+def _discard(temporary: str) -> None:
+    try:
+        Path(temporary).unlink(missing_ok=True)
+    except OSError:
+        raise Refusal(f"cannot remove the temporary file {temporary}") from None
 
 
 def verify(project_root: Path, home: Path) -> None:

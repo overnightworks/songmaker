@@ -524,3 +524,39 @@ def test_publishing_beside_an_equal_file_that_appeared_meanwhile_is_a_no_op(
 
     assert target.read_text() == "wanted-value\n"
     assert [path.name for path in tmp_path.iterdir()] == ["session-secret"]
+
+
+def test_a_failing_cleanup_of_the_temporary_file_is_a_refusal_naming_no_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "session-secret"
+    target.write_bytes(b"\xffcontent-byte")
+
+    def failing_unlink(self: Path, missing_ok: bool = False) -> None:
+        raise PermissionError("content-byte")
+
+    monkeypatch.setattr(Path, "unlink", failing_unlink)
+
+    with pytest.raises(secret_files.Refusal) as refusal:
+        secret_files._publish(target, "wanted-value")
+
+    assert "content-byte" not in str(refusal.value)
+    assert refusal.value.__suppress_context__
+    assert refusal.value.__cause__ is None
+
+
+def test_an_unexpected_error_prints_one_fixed_line_naming_only_its_type(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    def explode(*_arguments: object) -> None:
+        raise ValueError("embedded null byte secret-message")
+
+    monkeypatch.setattr(secret_files, "copy", explode)
+
+    exit_code = secret_files.main([])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.err.count("\n") == 1
+    assert "ValueError" in captured.err
+    assert "secret-message" not in captured.err + captured.out
