@@ -643,7 +643,6 @@ def test_settings_accept_the_agent_the_web_service_is_rendered_with(
     for name, value in web_environment.items():
         if name.startswith("AGENT__"):
             monkeypatch.setenv(name, value)
-    monkeypatch.setenv("SONGMAKER_SKIP_ENV_FILE", "1")
 
     settings = Settings(
         _env_file=None, database_url="postgresql://x", redis_url="redis://x",

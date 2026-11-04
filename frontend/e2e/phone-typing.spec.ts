@@ -328,7 +328,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 
 	// Before #1063 the tap's own focus change brought the mini-player back and
 	// moved Send up before the tap landed, so only Enter sent. CI's stack
-	// configures no co-writer provider: the turn is answered here, and a
+	// sets a gateway it cannot reach: the turn is mocked here, and a
 	// refusal keeps the chat from reading a conversation the server never
 	// stored. The musician starts without a conversation: the one earlier
 	// specs leave behind would otherwise be read in while the message is

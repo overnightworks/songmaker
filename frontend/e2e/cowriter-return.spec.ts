@@ -6,8 +6,8 @@
 // page's middle tab (#1016), and switching to Edit and Takes and back is the
 // return this pins.
 //
-// CI's e2e stack configures no co-writer provider, so a real turn ends at
-// once with its route failure and cannot be left while it runs. The turn and
+// CI's e2e stack sets a gateway it cannot reach, so a real turn ends at
+// once with a named problem and cannot be left while it runs. The turn and
 // the conversation it writes are therefore answered by `page.route`, playing
 // the backend contract tests/songmaker_cli/test_conversation_api.py pins: the user message
 // is in the conversation from the moment the turn starts, the conversation
