@@ -1,0 +1,8 @@
+claim_id = "344f870d8abf4d3b9cecca7c40b7b4c9"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "af382930d5bee90992e4c44740d3dc131eb8b26b"
+branch = "claude/issue-2225-cover-web-only"
+scope = ["docker-compose.yml", "docker/.env.docker.example", "docs/architecture.md", "docs/security.md", "scripts/dead-symbols.allow", "src/songmaker_cli/album_api.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "src/songmaker_cli/worker_liveness.py", "tests"]
+opened_commit = "0536a153423df19f227579df9f6dbe823fda2a56"
+whole_reason = "One removal of the second cover executor across its settings, worker, checks, compose binds and tests; any part left behind is a switch that can no longer work."
