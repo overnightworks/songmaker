@@ -64,7 +64,7 @@ class DatabaseSubjectUserStore:
 
 @dataclass
 class DatabaseWriteLock:
-    """Commit preceding auth work, then keep the lock until the transaction ends.
+    """End the open transaction, which must hold no write, then keep the lock until it ends.
 
     The lock is tracked per transaction: a further hold in the same transaction,
     nested or sequential, neither commits nor takes the lock again, so a combined

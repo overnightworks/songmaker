@@ -382,6 +382,7 @@ def test_c1_a_co_writer_write_during_a_render_makes_a_version_and_spares_the_ren
     job_id = _add_job(client, "v2")
     with _database(client) as session:
         tool_update_song_lyrics(session, OWNER, "song", "co-written")
+        session.commit()
         tool_rename_song(session, OWNER, "song", "Renamed")
         session.commit()
 

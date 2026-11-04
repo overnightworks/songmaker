@@ -115,19 +115,36 @@ def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> No
         session.execute(text("SELECT pg_advisory_xact_lock(:id)").bindparams(id=lock_id))
 
 
+def _transaction_has_written(session: Session) -> bool:
+    """Ask the database whether the open transaction already wrote.
+
+    This sees flushed rows, ``update()`` statements and raw DML alike. On
+    PostgreSQL a ``SELECT ... FOR UPDATE`` assigns a transaction id too.
+    """
+    if not session.in_transaction():
+        return False
+    if session.bind.dialect.name == "sqlite":
+        return session.connection().connection.dbapi_connection.in_transaction
+    return session.execute(text("SELECT pg_current_xact_id_if_assigned() IS NOT NULL")).scalar_one()
+
+
 def require_no_uncommitted_mutations(session: Session, caller: str) -> None:
-    """Refuse a commit that would persist application mutations the caller did not mean to save."""
-    if session.new or session.dirty or session.deleted:
+    """Refuse a commit that would persist writes the caller did not mean to save.
+
+    Refused: pending ORM changes and a transaction that already wrote.
+    """
+    if session.new or session.dirty or session.deleted or _transaction_has_written(session):
         raise RuntimeError(
-            f"{caller}: session has uncommitted mutations — "
+            f"{caller}: session has uncommitted mutations or a written transaction — "
             "the commit() below would persist them unconditionally"
         )
 
 
 def commit_auth_state_before_lock(session: Session, caller: str) -> None:
-    """Commit the auth dependency's renewal and audit writes so a lock can follow.
+    """End the open transaction so a lock can follow.
 
-    Callers must have made no application mutation: the commit persists whatever is pending.
+    The session holds no write here: ``get_current_user`` authenticates in its own
+    session. The check refuses a session that wrote, and the commit ends what is read.
     """
     require_no_uncommitted_mutations(session, caller)
     session.commit()
@@ -138,9 +155,8 @@ def lock_lora_capacity(session: Session) -> None:
 
     Both capacity checks share one transaction-scoped advisory lock on
     PostgreSQL (and SQLite's test-only ``BEGIN IMMEDIATE`` fallback).  Like
-    ``create_job_with_rate_limit``, commit the auth dependency's possible
-    renewal/audit mutations before taking the lock; callers must not have
-    made application mutations yet.
+    ``create_job_with_rate_limit``, end the open transaction before taking
+    the lock; callers must not have written yet.
     """
     commit_auth_state_before_lock(session, "lock_lora_capacity")
     _begin_exclusive(session, _LORA_CAPACITY_LOCK_ID)
@@ -215,14 +231,11 @@ def create_job_with_rate_limit(
     Liveness is observed before the initial commit and exclusive write lock so
     Redis round trips do not extend the serialized section. The initial commit
     closes the implicit transaction opened by the auth
-    dependency (session renewal, IP/UA audit records) so that BEGIN IMMEDIATE
-    can acquire an exclusive write lock.  This means auth-layer mutations are
-    committed even when the rate limit rejects the request — that is correct
-    because session renewal and audit logging must persist regardless.
+    dependency's reads so that BEGIN IMMEDIATE can acquire an exclusive write lock.
 
-    Callers must not perform any additional mutations between dependency
-    injection and this function; such mutations would be committed
-    unconditionally by the commit() here.
+    Callers must not write between dependency injection and this function;
+    the guard refuses a session that did, because the commit() here would
+    persist it unconditionally.
     """
     require_no_uncommitted_mutations(session, "create_job_with_rate_limit")
     worker_ids = [worker.id for worker in list_worker_identities(session)]
@@ -281,9 +294,9 @@ def _acquire_unique_slug(
 
     Commits the current transaction before acquiring an exclusive lock, so
     the check-then-act sequence cannot interleave with a competing request.
-    Same caveats as create_job_with_rate_limit — no prior uncommitted
-    mutations besides auth-layer session renewal, because the commit() below
-    would persist them unconditionally.
+    Same caveat as create_job_with_rate_limit — no prior write in the
+    transaction, which the guard refuses, because the commit() below would
+    persist it unconditionally.
     """
     commit_auth_state_before_lock(session, caller)
     _begin_exclusive(session, lock_id)
