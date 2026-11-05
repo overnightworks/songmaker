@@ -268,7 +268,7 @@ def test_cli_warm_cache_report_and_ratchet_need_no_ports(tmp_path, monkeypatch, 
         FakeEmbedder(),
         None,
         cache,
-        audit.DEFAULT_MODEL,
+        audit.embedding_identity(audit.DEFAULT_MODEL),
         audit.DEFAULT_CLAUDE_MODEL,
     )
     report = tmp_path / "report.md"
@@ -500,12 +500,14 @@ def test_pairs_skip_only_enclosing_functions_in_same_file(functions, name, path,
 
 @pytest.mark.parametrize("model", [audit.DEFAULT_MODEL, "other-model"])
 def test_embedding_loader_pins_default_weights_and_runs_no_remote_code(monkeypatch, model):
+    dtype = object()
+    monkeypatch.setattr(audit, "EMBEDDING_DTYPE", "configured_dtype")
     def load(name, **kwargs):
         assert name == model
         is_default = model == audit.DEFAULT_MODEL
         assert not kwargs.get("trust_remote_code")
         assert kwargs["revision"] == (audit.DEFAULT_MODEL_REVISION if is_default else None)
-        assert kwargs["model_kwargs"] == {"dtype": "float32"}
+        assert kwargs["model_kwargs"] == {"dtype": dtype}
         return SimpleNamespace(
             encode=lambda *args, **kwargs: SimpleNamespace(tolist=lambda: [[1, 0]])
         )
@@ -513,12 +515,17 @@ def test_embedding_loader_pins_default_weights_and_runs_no_remote_code(monkeypat
     monkeypatch.setitem(
         sys.modules,
         "torch",
-        SimpleNamespace(set_num_threads=lambda count: None, float32="float32"),
+        SimpleNamespace(set_num_threads=lambda count: None, configured_dtype=dtype),
     )
     monkeypatch.setitem(
         sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=load)
     )
     assert audit.LocalEmbedder(model).embed(["code"]) == [[1, 0]]
+
+
+def test_configured_embedding_dtype_is_full_precision():
+    torch = pytest.importorskip("torch")
+    assert torch.finfo(getattr(torch, audit.EMBEDDING_DTYPE)).bits >= 32
 
 
 def test_cli_applies_summary_limit_before_calling_ports(tmp_path, capsys):

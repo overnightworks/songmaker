@@ -38,7 +38,7 @@ a reported pair exceeds N; without this flag, the audit is not a gate.
 `--model` selects the local model (default `Alibaba-NLP/gte-modernbert-base`).
 The default model is pinned to the commit revision in `DEFAULT_MODEL_REVISION`
 in [the script](../scripts/similar_functions.py), so cold runs cannot load
-moving Hub weights; the model runs in float32 on the CPU, and the vector cache is keyed by model, revision and dtype. The script runs no remote model code
+moving Hub weights; the model runs in float32 on the CPU, and the vector cache is keyed by model, the default model's pinned revision and dtype. The script runs no remote model code
 (`trust_remote_code` is never set); the model's architecture must be one the
 locked `transformers` implements. The first run downloads weights and computes embeddings on
 CPU. Each distinct uncached function content requires one Claude call.

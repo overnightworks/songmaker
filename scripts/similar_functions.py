@@ -304,7 +304,7 @@ def collect_signals(
 
 
 def embedding_identity(model: str) -> str:
-    """Everything that changes vectors; the vector cache namespace is built from it."""
+    """The model, the default model's pinned revision and the dtype; the vector cache namespace is built from it."""
     revision = DEFAULT_MODEL_REVISION if model == DEFAULT_MODEL else "unpinned"
     return f"{model}@{revision}:{EMBEDDING_DTYPE}"
 
