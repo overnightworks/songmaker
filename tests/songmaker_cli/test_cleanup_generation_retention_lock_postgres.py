@@ -96,6 +96,9 @@ class _World:
             "/api/generations/bulk-delete", json={"generation_ids": list(takes)},
         )
 
+    def delete_version(self) -> Callable[[], Response]:
+        return lambda: self.client.delete("/api/versions/version-1?delete_generations=true")
+
     def state(self, take: str) -> dict[str, Any] | None:
         with self.pg_factory() as session:
             gen = session.get(Generation, take)
@@ -305,8 +308,9 @@ def test_a_pick_of_a_sibling_and_a_cleanup_both_finish_whichever_runs_first(
     assert world.state("z") is None
 
 
-def test_a_bulk_delete_of_a_scored_take_that_a_cleanup_has_locked_waits_and_both_finish(
-    pg_factory, tmp_path,
+@pytest.mark.parametrize("delete_name", ["bulk_delete", "delete_version"])
+def test_a_scored_take_delete_that_a_cleanup_has_locked_waits_and_both_finish(
+    pg_factory, tmp_path, delete_name,
 ) -> None:
     world = _World(pg_factory, tmp_path, {
         "x": {"archived": False, "old": False}, "y": {"archived": False, "old": False},
@@ -323,7 +327,8 @@ def test_a_bulk_delete_of_a_scored_take_that_a_cleanup_has_locked_waits_and_both
     event.listen(pg_factory, "before_flush", pause_before_the_deletes)
     try:
         answers = race(
-            pg_factory, world.cleanup("songs/song-1"), world.bulk_delete("x"),
+            pg_factory, world.cleanup("songs/song-1"),
+            world.bulk_delete("x") if delete_name == "bulk_delete" else world.delete_version(),
             holding_after_the_locks,
         )
     finally:

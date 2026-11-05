@@ -296,12 +296,10 @@ def delete_album(session: Session, album_id: str) -> list[str]:
         if not album:
             raise ValueError(f"Album not found: {album_id}")
 
-        gens = (
-            session.query(Generation)
-            .join(Song)
-            .options(joinedload(Generation.scores), joinedload(Generation.rating))
-            .filter(Song.album_id == album_id)
-            .all()
+        gens = lock_takes(
+            session,
+            Generation.song_id.in_(select(Song.id).where(Song.album_id == album_id)),
+            options=DELETION_LOADING,
         )
         paths: list[str] = []
         for gen in gens:
