@@ -78,9 +78,11 @@ def test_suggest_album_cover_surfaces_the_admission_owner_errors(
 
 def test_suggest_album_cover_refuses_a_caller_without_a_browser_session(db_session):
     """A tool call outside a bound web turn fails closed: a tool error and no job."""
+    owner = album_owner(db_session)
+
     with pytest.raises(tools.MCPToolError, match="need a browser login"):
         tools.tool_suggest_album_cover(
-            db_session, album_owner(db_session), album_id="alice-album", session_id=None,
+            db_session, owner, album_id="alice-album", session_id=None,
         )
 
     assert db_session.query(Job).count() == 0

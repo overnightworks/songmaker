@@ -54,6 +54,7 @@ log = logging.getLogger(__name__)
 _AGENT_FILE: Final = "cowriter.md"
 _COVER_AGENT_FILE: Final = "cover.md"
 _NOT_ENABLED_CODES: Final = frozenset({RejectionCode.NOT_ENABLED, RejectionCode.FORBIDDEN})
+_NO_AGENT_CONFIGURED: Final = "no agent configured"
 
 
 @dataclass(frozen=True)
@@ -120,7 +121,7 @@ def cover_admission(caller: TurnCaller) -> TurnProblem | None:
     """
     api_group = getattr(caller.app.state, "agent_api_group", None)
     if getattr(caller.app.state, "agent_backend", None) is None or api_group is None:
-        return TurnProblem(AgentProblem.UNAVAILABLE, "no agent configured")
+        return TurnProblem(AgentProblem.UNAVAILABLE, _NO_AGENT_CONFIGURED)
     try:
         groups = _read_groups(caller)
     except _GroupsRefusedError as refused:
@@ -134,7 +135,7 @@ async def run_cover_picture(caller: TurnCaller, album_data: str) -> bytes | Turn
     """Draw one cover from ``album_data`` for ``caller``: its bytes, or why there are none."""
     backend = getattr(caller.app.state, "agent_backend", None)
     if backend is None:
-        return TurnProblem(AgentProblem.UNAVAILABLE, "no agent configured")
+        return TurnProblem(AgentProblem.UNAVAILABLE, _NO_AGENT_CONFIGURED)
     try:
         request = _cover_agent().request([TurnMessage(role=TurnRole.USER, text=album_data)])
     except AgentFileError:
@@ -170,7 +171,7 @@ def _prepared_turn(
 ) -> tuple[GatewayBackend, TurnRequest] | TurnProblem:
     backend = getattr(app.state, "agent_backend", None)
     if backend is None:
-        return TurnProblem(AgentProblem.UNAVAILABLE, "no agent configured")
+        return TurnProblem(AgentProblem.UNAVAILABLE, _NO_AGENT_CONFIGURED)
     try:
         return backend, _cowriter_agent().request(messages)
     except AgentFileError:
