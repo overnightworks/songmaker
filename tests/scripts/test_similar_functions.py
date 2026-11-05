@@ -154,6 +154,24 @@ def test_enabling_summaries_or_changing_summary_model_reuses_code(tmp_path, func
         assert len(summarizer.texts) == 1
 
 
+@pytest.mark.parametrize(
+    ("setting", "value"),
+    [("DEFAULT_MODEL_REVISION", "other-revision"), ("EMBEDDING_DTYPE", "float16")],
+)
+def test_changing_embedding_configuration_recomputes_stale_vectors(
+    tmp_path, functions, monkeypatch, setting, value
+):
+    cache = audit.Cache(tmp_path)
+    identity = audit.embedding_identity(audit.DEFAULT_MODEL)
+    audit.collect_signals(functions, FakeEmbedder(), None, cache, identity, "claude")
+    monkeypatch.setattr(audit, setting, value)
+    embedder = FakeEmbedder()
+    audit.collect_signals(
+        functions, embedder, None, cache, audit.embedding_identity(audit.DEFAULT_MODEL), "claude"
+    )
+    assert len(embedder.texts) == 1
+
+
 @pytest.mark.parametrize("vector", [[], [0, 0], [float("nan")], [float("inf")], ["x"]])
 def test_rejects_invalid_model_vectors(vector):
     with pytest.raises(audit.AuditError, match="Embedding"):
@@ -162,7 +180,7 @@ def test_rejects_invalid_model_vectors(vector):
 
 def test_corrupt_cache_fails_loudly(tmp_path, functions):
     cache = audit.Cache(tmp_path)
-    path = cache.path("code-v1:code", functions[0].key)
+    path = cache.path("code-v2:code", functions[0].key)
     path.parent.mkdir()
     path.write_text("{broken")
     embedder = UnavailablePort()
@@ -487,11 +505,16 @@ def test_embedding_loader_pins_default_weights_and_runs_no_remote_code(monkeypat
         is_default = model == audit.DEFAULT_MODEL
         assert not kwargs.get("trust_remote_code")
         assert kwargs["revision"] == (audit.DEFAULT_MODEL_REVISION if is_default else None)
+        assert kwargs["model_kwargs"] == {"dtype": "float32"}
         return SimpleNamespace(
             encode=lambda *args, **kwargs: SimpleNamespace(tolist=lambda: [[1, 0]])
         )
 
-    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(set_num_threads=lambda count: None))
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        SimpleNamespace(set_num_threads=lambda count: None, float32="float32"),
+    )
     monkeypatch.setitem(
         sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=load)
     )

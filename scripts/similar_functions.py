@@ -33,7 +33,7 @@ DEFAULT_CACHE = Path(".cache/similar_functions")
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_SUMMARY_WORKERS = 4
 CPU_THREADS = 4
-MAX_SEQUENCE_TOKENS = 512
+EMBEDDING_DTYPE = "float32"
 MIN_BODY_LINES = 3
 CLAUDE_TIMEOUT_SECONDS = 120
 SUMMARY_MAX_TOKENS = 256
@@ -280,7 +280,7 @@ def collect_signals(
                 f"{len(missing)} missing summaries exceed --max-summaries {max_summaries}; "
                 "rerun with a higher --max-summaries N or --no-summaries"
             )
-    code = cached_vectors(texts, embedder, cache, f"code-v1:{model}")
+    code = cached_vectors(texts, embedder, cache, f"code-v2:{model}")
     if summarizer is None:
         return [FunctionSignals(function, code[function.key]) for function in functions]
 
@@ -301,6 +301,12 @@ def collect_signals(
         )
         for function in functions
     ]
+
+
+def embedding_identity(model: str) -> str:
+    """Everything that changes vectors; the vector cache namespace is built from it."""
+    revision = DEFAULT_MODEL_REVISION if model == DEFAULT_MODEL else "unpinned"
+    return f"{model}@{revision}:{EMBEDDING_DTYPE}"
 
 
 def cosine(left: Vector, right: Vector) -> float:
@@ -416,8 +422,8 @@ class LocalEmbedder:
                     self.model_name,
                     device="cpu",
                     revision=DEFAULT_MODEL_REVISION if self.model_name == DEFAULT_MODEL else None,
+                    model_kwargs={"dtype": getattr(torch, EMBEDDING_DTYPE)},
                 )
-                self.model.max_seq_length = MAX_SEQUENCE_TOKENS
             except (ImportError, OSError, ValueError) as error:
                 raise AuditError(
                     f"Cannot load embedding model {self.model_name}; install the similarity extra "
@@ -555,7 +561,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             LocalEmbedder(args.model),
             None if args.no_summaries else ClaudeSummarizer(args.claude_model),
             Cache(args.cache_dir),
-            args.model,
+            embedding_identity(args.model),
             args.claude_model,
             args.summary_workers,
             args.max_summaries,
