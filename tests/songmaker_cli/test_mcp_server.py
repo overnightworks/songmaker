@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 from songmaker_cli.constants import (
     GET_SONG_ONLY_FOR_OTHER_SONGS,
     AuditAction,
@@ -456,11 +458,23 @@ def test_co_writer_refuses_unstorable_title_before_any_write(db_session, tool_na
     assert db_session.query(AuditLog).count() == 0
 
 
+def _signed_in(db_session: Session, user_id: str) -> str:
+    """A browser session of ``user_id``: the cover tool runs only as one."""
+    now = datetime.now(timezone.utc)
+    record = DatabaseSessionRecordStore(db_session).create(
+        user_id, now=now, expires_at=now + timedelta(hours=1), refresh_token=None, id_token=None,
+    )
+    db_session.commit()
+    return record.id
+
+
 def test_suggest_album_cover_queues_a_cover_job(db_session: Session):
     owner_id, _, album_id, _, _ = _seed(db_session)
     owner = _owner(db_session, owner_id)
 
-    result = tools.tool_suggest_album_cover(db_session, owner, album_id=album_id, session_id=None)
+    result = tools.tool_suggest_album_cover(
+        db_session, owner, album_id=album_id, session_id=_signed_in(db_session, owner_id),
+    )
 
     assert result.status == JobStatus.QUEUED
     assert result.message == "Cover suggestion queued."
@@ -499,9 +513,12 @@ def test_suggest_album_cover_surfaces_the_admission_owner_errors(
         from songmaker_cli.settings import get_settings
         get_settings.cache_clear()
 
+    session_id = _signed_in(db_session, owner_id)
     try:
         with pytest.raises(tools.MCPToolError, match=message):
-            tools.tool_suggest_album_cover(db_session, owner, album_id=album_id, session_id=None)
+            tools.tool_suggest_album_cover(
+                db_session, owner, album_id=album_id, session_id=session_id,
+            )
     finally:
         if daily_limit is not None:
             get_settings.cache_clear()
@@ -606,7 +623,9 @@ def test_co_writer_writes_leave_their_audit_row(
     db_session.get(Generation, "gen1").whisper_text = "sung words"
     db_session.commit()
 
-    outcome = execute_cowriter_tool(db_session, owner, tool_name, arguments, session_id=None)
+    outcome = execute_cowriter_tool(
+        db_session, owner, tool_name, arguments, session_id=_signed_in(db_session, owner.id),
+    )
 
     assert not outcome.is_error
     db_session.expire_all()
@@ -691,12 +710,14 @@ def test_e2e_every_tool_wrapper(e2e_setup, db_factory):
         "update_song_style": {"song_id": song_id, "bpm": 99},
         "rename_song": {"song_id": song_id, "title": "E2E Renamed"},
         "create_song": {"album_id": album_id, "title": "E2E New"},
-        "suggest_album_cover": {"album_id": album_id},
     }
     for name, args in calls.items():
         result = asyncio.run(srv.call_tool(name, args))
         payload = _extract_payload(result)
         assert payload is not None, f"{name} returned nothing"
+    # stdio has no browser session, so the cover tool refuses there.
+    with pytest.raises(ToolError, match="need a browser login"):
+        asyncio.run(srv.call_tool("suggest_album_cover", {"album_id": album_id}))
 
 
 def test_every_co_writer_route_reads_the_same_get_song_rule(db_factory):
