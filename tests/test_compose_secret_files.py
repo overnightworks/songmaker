@@ -29,7 +29,7 @@ SECRET_ENVIRONMENT_KEYS = (
 SCRATCH_VALUE = "scratch-value-not-a-secret"
 
 
-def _render(tmp_path: Path, environment: dict[str, str]) -> dict:
+def _rendered_compose(tmp_path: Path, environment: dict[str, str]) -> dict:
     scratch_env_file = tmp_path / "scratch.env"
     scratch_env_file.write_text(SCRATCH_REQUIRED)
     result = run_compose_config(
@@ -52,13 +52,13 @@ def _songmaker_secret_directories(rendered: dict) -> set[Path]:
 
 
 def test_the_secret_files_default_to_the_home_secrets_directory(tmp_path: Path) -> None:
-    rendered = _render(tmp_path, {})
+    rendered = _rendered_compose(tmp_path, {})
 
     assert _songmaker_secret_directories(rendered) == {Path.home() / ".secrets" / "songmaker"}
 
 
 def test_the_secret_files_follow_the_configured_secrets_directory(tmp_path: Path) -> None:
-    rendered = _render(tmp_path, {"SONGMAKER_SECRETS_DIR": str(tmp_path / "elsewhere")})
+    rendered = _rendered_compose(tmp_path, {"SONGMAKER_SECRETS_DIR": str(tmp_path / "elsewhere")})
 
     assert _songmaker_secret_directories(rendered) == {tmp_path / "elsewhere"}
 
@@ -67,7 +67,7 @@ def test_the_secret_files_follow_the_configured_secrets_directory(tmp_path: Path
 def test_no_service_receives_a_secret_as_an_environment_variable(
     tmp_path: Path, key: str,
 ) -> None:
-    rendered = _render(tmp_path, {key: SCRATCH_VALUE})
+    rendered = _rendered_compose(tmp_path, {key: SCRATCH_VALUE})
 
     assert SCRATCH_VALUE not in json.dumps(rendered)
     for name, service in rendered["services"].items():
