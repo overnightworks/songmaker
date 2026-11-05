@@ -485,7 +485,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 def postgresql_url(request: pytest.FixtureRequest) -> str:
     """The PostgreSQL URL of this run; the one place a PostgreSQL test skips without it."""
     if request.node.get_closest_marker("postgresql") is None:
-        pytest.fail("Test reaches PostgreSQL without the postgresql marker (pytest_collection_modifyitems)")
+        pytest.fail("Test reaches PostgreSQL unmarked; see pytest_collection_modifyitems")
     url = os.environ.get("TEST_DATABASE_URL", "")
     if not url.startswith("postgresql"):
         pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
