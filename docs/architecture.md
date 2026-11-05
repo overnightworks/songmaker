@@ -1188,7 +1188,7 @@ yields, `config.py` owns the `ProviderRuntimeConfig` the host installs,
 the Claude CLI and API backends with their tool-surface gate, `tools.py` owns
 the `ToolCatalog` port the host lends it, `tool_loop.py` owns the
 transport-independent tool loop and `text_tool_protocol.py` the text wire format
-both subscription CLIs speak, `errors.py` owns the named route failures every
+both agent CLIs speak, `errors.py` owns the named route failures every
 transport raises, `catalog.py` owns the per-route model listing and the
 four-case provider setup answer, `dispatch.py` owns running one named route with
 the host's catalog and executor, `claude/adapter.py` and `openai_adapter.py`

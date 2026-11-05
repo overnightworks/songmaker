@@ -15,14 +15,18 @@ export default defineConfig({
 		setupFiles: ['src/tests/setup.ts'],
 		coverage: {
 			provider: 'v8',
-			include: ['src/lib/**/*.ts'],
-			exclude: ['src/lib/index.ts', 'src/lib/api/types.ts'],
+			include: ['src/**/*.{ts,svelte}'],
+			exclude: ['src/lib/index.ts', 'src/lib/api/types.ts', 'src/service-worker.ts'],
 			reporter: ['text', 'text-summary', 'lcov'],
 			reportsDirectory: '../reports/frontend-coverage',
-			all: false,
 			thresholds: {
-				statements: 90,
-				lines: 93
+				statements: 94,
+				lines: 95,
+				branches: 87,
+				'src/lib/**/*.ts': {
+					statements: 90,
+					lines: 93
+				}
 			}
 		}
 	}
