@@ -42,7 +42,7 @@ def _count_queries(engine, *substrings: str) -> tuple[list[str], Callable]:
 
 def _add_song_with_generations(
     session, *, song_id: str, album_id: str, track_number: int, generation_count: int,
-    is_archived: bool = False,
+    is_archived: bool = False, picked_take: bool = False,
 ) -> None:
     session.add(Song(
         id=song_id, title=song_id, album_id=album_id,
@@ -53,7 +53,7 @@ def _add_song_with_generations(
         session.add(Generation(
             id=f"g-{song_id}-{i}", song_id=song_id, version_id=f"v-{song_id}",
             generation_number=i + 1, mp3_path=f"{_ADMIN_USER}/{song_id}-{i}.mp3", seed=1,
-            is_archived=is_archived,
+            is_archived=is_archived, is_picked=picked_take and i == 0,
         ))
 
 
@@ -74,6 +74,14 @@ def _seed_generation_count_scenarios(session) -> None:
     _add_song_with_generations(
         session, song_id="archived-take", album_id="alb", track_number=4,
         generation_count=1, is_archived=True,
+    )
+    _add_song_with_generations(
+        session, song_id="picked-take", album_id="alb", track_number=5,
+        generation_count=2, picked_take=True,
+    )
+    _add_song_with_generations(
+        session, song_id="archived-pick", album_id="alb", track_number=6,
+        generation_count=1, is_archived=True, picked_take=True,
     )
 
 
@@ -106,6 +114,27 @@ def test_list_songs_generation_count_counts_n_takes(generation_count_client) -> 
     assert by_id["many-takes"]["generation_count"] == 5
 
 
+@pytest.mark.parametrize(("song_id", "expected"), [
+    ("picked-take", True),
+    ("many-takes", False),
+    ("no-takes", False),
+    ("archived-pick", False),
+])
+def test_list_songs_reports_whether_the_song_has_a_pick(
+    generation_count_client, song_id: str, expected: bool,
+) -> None:
+    client, _ = generation_count_client
+    resp = client.get("/api/songs")
+    by_id = {s["id"]: s for s in resp.json()["items"]}
+    assert by_id[song_id]["has_pick"] is expected
+
+
+def test_song_detail_reports_the_same_pick_as_the_list(generation_count_client) -> None:
+    client, _ = generation_count_client
+    assert client.get("/api/songs/picked-take").json()["has_pick"] is True
+    assert client.get("/api/songs/many-takes").json()["has_pick"] is False
+
+
 def test_list_songs_generation_count_counts_archived_take(generation_count_client) -> None:
     """#340 F1: an archived generation must still count, matching the old
     len(song.generations) behaviour -- count_generations_by_song() carries
@@ -134,21 +163,21 @@ def test_list_songs_computes_generation_count_in_one_aggregate_query(
 
     all_queries = queries_without_session_auth(all_queries)
     assert resp.status_code == 200
-    assert len(resp.json()["items"]) == 4
+    assert len(resp.json()["items"]) == 6
     assert len(aggregate_queries) == 1, (
         f"expected one aggregate generation-count query for all songs, "
         f"got {len(aggregate_queries)}: {aggregate_queries}"
     )
     # Fixed budget for GET /api/songs against this fixture: one count(*) for
     # the page total, one SELECT for the page of songs (+versions +album via
-    # joinedload, no extra round trip), one aggregate generations count --
-    # never a query per song. A regression on an unrelated relationship
+    # joinedload, no extra round trip), one aggregate generations count, one batched
+    # pick lookup -- never a query per song. A regression on an unrelated relationship
     # (e.g. an N+1 reintroduced on Song.versions) changes this number
     # without changing the aggregate-query assertion above, which is why
     # both are pinned.
-    assert len(all_queries) == 3, (
-        f"expected exactly 3 queries for GET /api/songs against this fixture "
-        f"(count + page + aggregate generation-count), got {len(all_queries)}: {all_queries}"
+    assert len(all_queries) == 4, (
+        f"expected exactly 4 queries for GET /api/songs against this fixture "
+        f"(count + page + generation-count + pick), got {len(all_queries)}: {all_queries}"
     )
 
 

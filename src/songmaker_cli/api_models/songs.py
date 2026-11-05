@@ -18,6 +18,7 @@ from songmaker_cli.constants import (
     COVER_VERSION_QUERY,
     MODEL_AVAILABLE_MODES,
 )
+from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
 )
@@ -500,6 +501,7 @@ class SongSummaryResponse(BaseModel):
     reference: ReferenceResponse | None = None
     version_count: int = 0
     generation_count: int = 0
+    has_pick: bool = False
     is_shared: bool = False
     share_slug: str | None = None
     share_url: str | None = None
@@ -509,7 +511,9 @@ class SongSummaryResponse(BaseModel):
     created_at: str
 
     @classmethod
-    def from_orm(cls, song: Song, *, generation_count: int) -> SongSummaryResponse:
+    def from_orm(
+        cls, song: Song, *, generation_count: int, has_pick: bool,
+    ) -> SongSummaryResponse:
         ver = song.latest_version
         generation_params = (
             _safe_json_dict(ver.generation_params, "version", ver.id)
@@ -534,6 +538,7 @@ class SongSummaryResponse(BaseModel):
             reference=_reference_of(ver),
             version_count=len(song.versions),
             generation_count=generation_count,
+            has_pick=has_pick,
             is_shared=song.is_shared,
             share_slug=song.share_slug,
             share_url=(
@@ -554,7 +559,11 @@ class SongResponse(SongSummaryResponse):
         # song.generations is always eager-loaded on this path (get_song(),
         # list_songs(light=False)), unlike the light SongSummaryResponse
         # list path — so counting it here costs no extra query.
-        base = SongSummaryResponse.from_orm(song, generation_count=len(song.generations))
+        base = SongSummaryResponse.from_orm(
+            song,
+            generation_count=len(song.generations),
+            has_pick=has_playable_pick(song.generations),
+        )
 
         best_gen = _best_generation(song.generations)
         best_scores: dict[str, object] | None = None
@@ -578,6 +587,11 @@ def _audiobox_quality(generation: Generation) -> float | None:
         if isinstance(score.value, dict) and "audiobox_quality" in score.value:
             return score.value["audiobox_quality"]
     return None
+
+
+def has_playable_pick(generations: list[Generation]) -> bool:
+    """Pick of already-loaded takes; the list path asks song_ids_with_pick()."""
+    return any(gen.is_picked and is_playable_take(gen) for gen in generations)
 
 
 def _best_generation(generations: list[Generation]) -> Generation | None:

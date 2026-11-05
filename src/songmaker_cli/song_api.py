@@ -76,6 +76,7 @@ from songmaker_cli.db.queries.songs import (
     restore_song,
     set_song_cover_key,
     soft_delete_song,
+    song_ids_with_pick,
     stored_song_title,
     update_song,
 )
@@ -126,8 +127,13 @@ def api_list_songs(
         exclude_archived_albums=exclude_archived_albums,
     )
     generation_counts = count_generations_by_song(session, [s.id for s in songs])
+    picked_song_ids = song_ids_with_pick(session, [s.id for s in songs])
     items = [
-        SongSummaryResponse.from_orm(s, generation_count=generation_counts.get(s.id, 0))
+        SongSummaryResponse.from_orm(
+            s,
+            generation_count=generation_counts.get(s.id, 0),
+            has_pick=s.id in picked_song_ids,
+        )
         for s in songs
     ]
     return PaginatedResponse(

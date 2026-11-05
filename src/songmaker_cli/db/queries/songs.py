@@ -155,6 +155,28 @@ def count_generations_by_song(
     return dict(rows)
 
 
+def song_ids_with_pick(session: Session, song_ids: Sequence[str]) -> set[str]:
+    """Ids among ``song_ids`` that have a picked, playable take.
+
+    One query for the whole page, like count_generations_by_song(). The
+    filter is is_playable_take() (sharing.py) written as SQL.
+    """
+    if not song_ids:
+        return set()
+    rows = (
+        session.query(Generation.song_id)
+        .filter(
+            Generation.song_id.in_(song_ids),
+            Generation.is_picked.is_(True),
+            Generation.is_archived.is_(False),
+            Generation.mp3_path != "",
+        )
+        .distinct()
+        .all()
+    )
+    return {song_id for (song_id,) in rows}
+
+
 def _apply_song_filters(
     query,
     *,

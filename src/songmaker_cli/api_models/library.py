@@ -12,6 +12,7 @@ from songmaker_cli.api_models.songs import (
     AlbumResponse,
     SongSummaryResponse,
     album_cover_urls,
+    has_playable_pick,
     song_cover_urls,
 )
 from songmaker_cli.constants import (
@@ -78,7 +79,11 @@ class LibrarySongHit(BaseModel):
         # (_SONG_LIST_OPTIONS), so this costs no extra query.
         return cls(
             type=LIBRARY_ITEM_SONG,
-            song=SongSummaryResponse.from_orm(song, generation_count=len(song.generations)),
+            song=SongSummaryResponse.from_orm(
+                song,
+                generation_count=len(song.generations),
+                has_pick=has_playable_pick(song.generations),
+            ),
             album_id=song.album_id,
             album_title=song.album.title,
         )
