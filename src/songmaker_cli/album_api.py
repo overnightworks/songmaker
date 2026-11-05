@@ -434,6 +434,7 @@ def api_create_cover_suggestions(
             session, album_id, user,
             session_id=session_id_from_request(request, installed_web_auth_config(request.app)),
         )
+        record_audit(session, user.id, AuditAction.GENERATE, ResourceType.ALBUM, job.album_id)
         session.commit()
     except CoverSuggestionRequestError as exc:
         session.rollback()

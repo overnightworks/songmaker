@@ -28,8 +28,10 @@ from songmaker_cli.constants import (
     COVER_DIRNAME,
     COVER_SUGGESTION_NOT_FOUND,
     JSON_REQUEST_BODY_MAX_BYTES,
+    AuditAction,
     JobStatus,
     JobType,
+    ResourceType,
 )
 from songmaker_cli.cover_suggestions import (
     CoverSuggestionAlbumNotFoundError,
@@ -40,7 +42,7 @@ from songmaker_cli.cover_suggestions import (
     request_cover_suggestions,
 )
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, UserSession
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, AuditLog, Job, UserSession
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since
 from songmaker_cli.settings import get_settings
@@ -216,6 +218,23 @@ def test_create_cover_suggestions_leaves_the_job_for_the_web_runner(
         job = session.get(Job, response.json()["id"])
         assert job is not None
         assert job.status == JobStatus.QUEUED
+
+
+def test_create_cover_suggestions_audits_the_request_and_a_refusal_leaves_no_row(
+    cover_album_app: tuple[TestClient, object],
+) -> None:
+    client, factory = cover_album_app
+
+    assert client.post("/api/albums/alice-album/cover-suggestions").status_code == 200
+
+    with factory() as session:
+        entry = session.query(AuditLog).one()
+        assert (entry.action, entry.resource_type, entry.resource_id) == (
+            AuditAction.GENERATE, ResourceType.ALBUM, "alice-album",
+        )
+    assert client.post("/api/albums/alice-album/cover-suggestions").status_code == 409
+    with factory() as session:
+        assert session.query(AuditLog).count() == 1
 
 
 def test_a_suggestion_from_a_browser_session_records_that_session_and_never_shows_it(
