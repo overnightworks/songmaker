@@ -123,7 +123,7 @@ file's job:
   timestamp field still fails, because that is how a NOT NULL column gets
   misdescribed.
 - **`cowriter/tools.py`** is exempt from the `dict[str, Any]`-in-signature
-  rule: `execute_cowriter_tool` dispatches raw MCP tool-call JSON across the
+  rule: `execute_cowriter_tool` dispatches raw tool-call JSON across the
   heterogeneous handlers whose only shared shape is each tool's own JSON
   Schema (`CowriterTool.parameters`). Collapsing that into named per-tool
   argument models is a multi-file rework, tracked as a follow-up (#332,
@@ -348,9 +348,8 @@ The provider library's own tests likewise left with it. They moved with
 `agent_providers` to
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
 in #886 and run in that repository's CI; songmaker installs the released wheel
-(tag `v0.1.3`) and proves the surface it builds on it — the co-writer and
-the tool-surface health it republishes on `/health/details` — through `test_conversation_api.py`,
-`test_lifecycle_claude_tool_surface.py`, and `test_health_api.py`.
+(tag `v0.1.3`) and proves the surface it builds on it — the co-writer — through
+`test_conversation_api.py`.
 
 ## Testing Patterns
 

@@ -103,8 +103,7 @@ def _codex_image_sandbox_runtime_error() -> str | None:
 
 
 # The boot report's most recent verdict, for /health/details's
-# codex_image_sandbox_runtime field -- mirrors claude.provider's
-# _tool_surface_health_state: a live value every call to
+# codex_image_sandbox_runtime field: a live value every call to
 # report_codex_image_sandbox_runtime() updates, not a value frozen at
 # whatever the process happened to see at startup. Defaults to
 # "unverified" (never a silent "ready") for the window before the boot
@@ -498,51 +497,6 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
             log.exception("Stale job reaper tick failed")
         else:
             registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
-
-
-async def report_claude_cli_tool_surface() -> Literal["ok", "drift", "unverified"]:
-    """Verify the mounted Claude CLI's tool surface at boot; say so in the
-    log, and return the state for ``/health/details``'s ``claude_cli_tool_surface``
-    field (operator ruling, #351 round 6).
-
-    #351 originally asked for an unexpected tool to fail the server
-    start outright; the operator overruled that once the allowlist gate
-    itself was confirmed to cover every call path — a server that refuses
-    to serve albums and playback over a co-writer problem is a worse
-    outage than the co-writer being unavailable. So this never aborts
-    startup. The co-writer's own CLI transport verifies this again itself
-    and refuses a drifted binary regardless of what this function
-    returns; this only makes that state visible to the operator and to
-    monitoring, not just to whichever musician opens a chat first and
-    finds it broken.
-
-    Three states, not two — "could not check" is its own message to the
-    operator, not silently folded into either verified state:
-
-    - ``"ok"``: verified, and the surface matches the allowlist.
-    - ``"drift"``: verified, and it does not (``CliToolSurfaceError``) — a
-      real security finding.
-    - ``"unverified"``: the probe itself failed to reach a verdict at all
-      (no CLI mounted, a timeout, a zombie process, the MCP connection
-      never coming up) — a different kind of unavailability, not evidence
-      of drift, but also not the same claim as "checked and clean".
-    """
-    from agent_providers.claude.provider import (
-        CliToolSurfaceError,
-        UnavailableError,
-        verify_cli_tool_surface,
-    )
-
-    try:
-        await verify_cli_tool_surface()
-    except CliToolSurfaceError as exc:
-        log.exception("Claude CLI co-writer disabled: %s", exc)
-        return "drift"
-    except UnavailableError as exc:
-        log.info("Claude CLI tool surface not verified: %s", exc)
-        return "unverified"
-    log.info("Claude CLI tool surface verified: songmaker MCP tools only")
-    return "ok"
 
 
 def _cleanup_sessions(ctx: AppContext) -> int:

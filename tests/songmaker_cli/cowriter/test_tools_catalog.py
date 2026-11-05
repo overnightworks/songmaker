@@ -4,16 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.cowriter.tools import (
-    COWRITER_TOOLS,
     CowriterTool,
     execute_cowriter_tool,
 )
-
-
-def test_the_co_writer_tools_are_the_mcp_server_tools_plus_the_coherence_verdict():
-    assert {tool.name for tool in COWRITER_TOOLS} == MCP_TOOL_NAMES | {"save_coherence_verdict"}
 
 
 def test_executing_an_unknown_tool_is_a_refused_outcome_not_a_crash():

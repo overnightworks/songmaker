@@ -24,7 +24,7 @@ from agent_runtime_client.tools import (
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
-from songmaker_cli.mcp_server.auth import MCPAuthError, load_user
+from songmaker_cli.mcp_server.auth import ToolUserNotFoundError, load_user
 
 _REFUSED: Final = ToolOutcome("The tool call was refused.", is_error=True)
 
@@ -90,7 +90,7 @@ def _execute(
     with session_factory() as session:
         try:
             user = load_user(session, user_id)
-        except MCPAuthError:
+        except ToolUserNotFoundError:
             return _REFUSED
         outcome = execute_cowriter_tool(
             session, user, name, arguments, session_id=session_id,

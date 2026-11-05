@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -22,27 +20,6 @@ from songmaker_cli.scoring.models import (
     TextAccuracyScore,
 )
 from songmaker_cli.whisper_cues import WhisperCue
-
-# ── import boundary ─────────────────────────────────────────────────
-
-
-def test_scoring_job_is_importable_without_the_mcp_package() -> None:
-    """The scoring worker container never installs the ``mcp`` extra (it
-    ships only ``server``, ``scoring``, ``whisper``). A fresh interpreter
-    with ``mcp`` poisoned in ``sys.modules`` proves the whole chain that
-    ``songmaker_cli.jobs.scoring`` pulls in stays importable without it.
-    """
-    script = (
-        "import sys\n"
-        "sys.modules['mcp'] = None\n"
-        "import songmaker_cli.jobs.scoring\n"
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True, text=True, timeout=30,
-    )
-    assert result.returncode == 0, result.stderr
-
 
 # ── run_scoring_job wiring ───────────────────────────────────────────
 

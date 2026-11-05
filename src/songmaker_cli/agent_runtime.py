@@ -30,7 +30,6 @@ from songmaker_cli.constants import (
     GROK_CLI_PROMPT_FILE_PLACEHOLDER,
     SECRET_ENV_KEYS,
 )
-from songmaker_cli.cowriter.mcp_spec import songmaker_mcp_server
 from songmaker_cli.settings import Settings
 
 GROK_CLI_SESSION_ROOT: Final = Path.home() / ".grok" / "sessions"
@@ -72,6 +71,6 @@ def configure_agent_providers(settings: Settings) -> None:
             cli_prompt_file_prefix=CLI_PROMPT_FILE_PREFIX,
             cli_prompt_file_placeholder=GROK_CLI_PROMPT_FILE_PLACEHOLDER,
             secret_env_keys=SECRET_ENV_KEYS,
-            mcp_server=songmaker_mcp_server(settings.database_url),
+            mcp_server=None,
         ),
     )
