@@ -1,8 +1,8 @@
 x-service-logging: &service-logging
-  driver: json-file
+  driver: journald
   options:
-    max-size: "10m"
-    max-file: "5"
+    tag: "{{.Name}}"
+    labels: "com.docker.compose.service"
 
 # Test-only override for the Voices browser flow.  It deliberately adds the
 # fake worker here instead of changing docker-compose.ci.yml, so library E2E

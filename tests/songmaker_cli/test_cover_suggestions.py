@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-from support.cover_album_world import album_owner, seed_cover_albums
+from support.cover_album_world import album_owner, declared_suggest_refusal, seed_cover_albums
+from support.cowriter_gateway import attach_cowriter_gateway
 from support.web_app import (
     make_authenticated_user,
     make_router_app,
@@ -42,7 +43,7 @@ from songmaker_cli.cover_suggestions import (
     request_cover_suggestions,
 )
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, AlbumCoverSuggestion, AuditLog, Job, UserSession
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, AuditLog, Job, User, UserSession
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since
 from songmaker_cli.settings import get_settings
@@ -252,7 +253,7 @@ def test_a_suggestion_from_a_browser_session_records_that_session_and_never_show
         assert session.get(Job, response.json()["id"]).session_id == seeded_session_id
 
 
-def test_a_suggestion_admitted_by_bearer_records_no_session(
+def test_suggest_with_a_hal_token_is_refused_and_creates_no_job(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from support.token_world import TokenWorld, make_token_world
@@ -263,14 +264,17 @@ def test_a_suggestion_admitted_by_bearer_records_no_session(
         seed_user(session, "alice", user_id=TokenWorld.ALICE)
         session.add(Album(id="bearer-album", title="B", artist="A", created_by=TokenWorld.ALICE))
         session.commit()
+    suggestions = "/api/albums/bearer-album/cover-suggestions"
+    bearer = world.bearer(TokenWorld.ALICE)
 
-    response = world.client.post(
-        "/api/albums/bearer-album/cover-suggestions", headers=world.bearer(TokenWorld.ALICE),
-    )
+    response = world.client.post(suggestions, headers=bearer)
 
-    assert response.status_code == 200
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Cover suggestions need a browser login."}
+    declared_suggest_refusal(403).model_validate(response.json())
     with world.factory() as session:
-        assert session.get(Job, response.json()["id"]).session_id is None
+        assert session.query(Job).count() == 0
+    assert world.client.get(suggestions, headers=bearer).json()["used_today"] == 0
 
 
 def test_create_cover_suggestions_keeps_the_pending_suggestions_and_their_files(
@@ -503,7 +507,9 @@ def test_foreign_cover_suggestion_routes_are_not_found(
 ) -> None:
     client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     _add_suggestion(factory, tmp_path / "audio")
-    seed_session(client, "bob")
+    with factory() as session:
+        bob_id = session.query(User).filter_by(username="bob").one().id
+    attach_cowriter_gateway(client, factory, tmp_path, bob_id)
 
     foreign = getattr(client, method)(path, **kwargs)
 

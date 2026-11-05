@@ -67,7 +67,7 @@
 		type CowriterTurnError
 	} from '#lib/utils/cowriter-ui.ts';
 	import ChatInput from './ChatInput.svelte';
-	import CoWriterTurnError from './CoWriterTurnError.svelte';
+	import AgentProblemLine from './AgentProblemLine.svelte';
 	import AiNotice from './AiNotice.svelte';
 	import Icon from './Icon.svelte';
 	import MemoryEditor from './MemoryEditor.svelte';
@@ -1075,7 +1075,7 @@
 					{/if}
 				</div>
 				{#if msg.error && i === retryableMessageIndex}
-					<CoWriterTurnError
+					<AgentProblemLine
 						text={msg.error}
 						problem={msg.problem ?? null}
 						waitSeconds={msg.waitSeconds ?? 0}

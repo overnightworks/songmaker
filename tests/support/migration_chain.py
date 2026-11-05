@@ -40,6 +40,11 @@ def column_names(engine: Engine, table: str) -> set[str]:
     return {column["name"] for column in inspect(engine).get_columns(table)}
 
 
+def job_count(engine: Engine) -> int:
+    with engine.connect() as connection:
+        return connection.execute(sa.text("SELECT count(*) FROM jobs")).scalar_one()
+
+
 def insert_bare_job(engine: Engine, *, job_type: str = "generate") -> None:
     """Insert the job ``job`` with only the columns every revision's ``jobs`` table has.
 

@@ -16,7 +16,6 @@ import {
 	cowriterThinkingLabel,
 	cowriterToolCallTarget,
 	cowriterTurnError,
-	providerDisplayName,
 	type CowriterTurnError
 } from './cowriter-ui';
 
@@ -78,14 +77,6 @@ describe('co-writer copy', () => {
 
 	it('defect:#1856: names no failure for a frame that carries an empty message', () => {
 		expect(cowriterTurnError({ type: 'error', status: 500, message: '' })).toBeNull();
-	});
-
-	it.each([
-		['claude', 'Claude'],
-		['codex', 'Codex'],
-		['openai', 'Openai']
-	])('shows the provider id %s as %s, the one spelling every surface uses', (id, name) => {
-		expect(providerDisplayName(id)).toBe(name);
 	});
 });
 

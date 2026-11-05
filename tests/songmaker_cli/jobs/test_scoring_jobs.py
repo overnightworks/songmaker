@@ -7,10 +7,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from support.provider_runtime import override_provider_runtime
+from support.setting_rows import store_setting_row
 
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Job, Song, User, Version
-from songmaker_cli.db.queries.settings import set_claude_model
 from songmaker_cli.jobs.scoring import run_scoring_job
 from songmaker_cli.scoring.models import (
     EmotionalDynamicsScore,
@@ -82,7 +82,7 @@ def test_scoring_run_calls_no_provider_and_writes_no_verdict_key(tmp_path: Path)
         for key, value in (
             ("judge_provider", "grok"), ("judge_route", "api"), ("judge_model", "grok-4.6"),
         ):
-            set_claude_model(session, key, value)
+            store_setting_row(session, key, value)
         session.add(Score(generation_id="g1", scorer="batch", value=dict(stored_pair)))
         session.commit()
     override_provider_runtime(anthropic_api_key=None, xai_api_key=None)

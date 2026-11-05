@@ -428,9 +428,9 @@ A version names its reference by `reference_recording_id` only. `reference_audio
 
 `POST /api/albums/{album_id}/cover`, `POST /api/songs/{song_id}/cover`, and `POST /api/playlists/{playlist_id}/cover` accept JPEG and PNG only (SVG and WebP are rejected). The server checks magic bytes, decodes with Pillow, applies EXIF orientation, and strips metadata before writing. Named pixel and byte ceilings reject decompression bombs. Card and detail derivatives are written at upload time; GET never resizes. Album files live at `{audio_dir}/covers/{album_id}/`; song files live at `{audio_dir}/song-covers/{song_id}/`; playlist files live at `{audio_dir}/playlist-covers/{playlist_id}/`. Authenticated GET/POST/DELETE use `check_album_access`, `check_song_access`, or the matching playlist ownership check (foreign resources 404). Authenticated and public song cover endpoints stream only that song's files — 404 when the song has no own cover, even if the parent album has one. Public bytes use the matching share slug. The song- and playlist-cover body budgets are the cover ceiling; neither is the `/api/songs/{id}/reimport` ceiling.
 
-Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The web container is the sole production cover executor: its runner claims queued jobs, owns recovery, and resolves the admin-selected cover provider, route, and model only through the co-writer dispatch owner; a selection without an image tool ends the job named, and no path falls back to an HTTP image API. Each image call receives a new private `CODEX_HOME` containing only a copied login mirror; the bounded runner gets that path through its child-only environment, reaps the CLI, then accepts exactly one PNG found beneath that private tree. The image command uses the fixed read-only image argv with Code Mode host enabled only for that run, no MCP servers, and web search disabled. Its streamed-event gate permits `image_gen` and exactly one measured `command_execution` start/completion pair that reads the bundled image skill; any other command or tool event fails the job with the fixed image-tool message. Pillow rewrites its exactly one accepted PNG as a metadata-free 1024×1024 RGB PNG. The stdin-only prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
+Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The web container is the sole cover executor: its runner claims queued jobs, owns recovery, and draws each picture through the gateway (see "Cover picture through the gateway"); no path falls back to a CLI or another image API. `covers.decode_cover_image` accepts one PNG or JPEG within `COVER_MAX_BYTES` and `COVER_MAX_PIXELS` and rewrites it as a metadata-free PNG. The prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
 
-All Codex text and cover CLI calls use one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps cover processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. The Co-Writer uses the server-owned text tool protocol, never Codex CLI tool permissions: every start and resume gets the read-only sandbox, `approval_policy="never"`, no shell tool, no web search, and no MCP servers. Its event gate aborts on every file, command, MCP, or web-search event before the process is reaped. Saturated Co-Writer calls return the named busy route error, and saturated cover jobs retain the musician-facing “Codex is busy. Try generating the cover again shortly.” error.
+In `agent_providers`, every Codex text and image CLI call uses one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps the wheel's image processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. The Co-Writer uses the server-owned text tool protocol, never Codex CLI tool permissions: every start and resume gets the read-only sandbox, `approval_policy="never"`, no shell tool, no web search, and no MCP servers. Its event gate aborts on every file, command, MCP, or web-search event before the process is reaped. Saturated Co-Writer calls return the named busy route error. No songmaker job starts a Codex process any more; the caps stay configured while the Codex mounts remain.
 
 **Deployment boundary**: This repository ships no reverse-proxy service or configuration (nginx, Caddy, Traefik, and tunnel configuration are absent). An operator who puts a proxy in front of Songmaker may add equivalent path-specific limits to reject oversized requests at the edge; those limits are defense in depth, not the application's only body limit. A blanket 1 MiB upstream limit would block the documented audio-upload and cover routes. The missing in-repository edge configuration is recorded in #327.
 
@@ -500,6 +500,18 @@ being in place.
 **Named gap: the forwarded address.** With `TRUSTED_PROXIES` at `172.16.0.0/12`, a direct peer can send `X-Forwarded-For` and the per-IP budgets and the access log use the forged address. Sessions, the origin check and the internal token do not depend on the address. Narrowing the range needs the default network's subnet pinned, which recreates the live network. Trigger: a new peer on `hal_agent_songmaker` or an observed budget evasion.
 
 **Retention outside songmaker.** The gateway receives the turn's system prompt, messages, tool calls and results and forwards them to the model provider over the provider's API. Songmaker keeps the conversation in `chat_messages` only.
+
+## Cover picture through the gateway
+
+A cover suggestion runs `agents/cover.md` through the same `GatewayBackend` and key as the co-writer turn; `agent/backend.py` owns the call (`run_cover_picture`) and the click's check (`cover_admission`), and `cover_runner.py` the job.
+
+**Who may ask, twice.** Suggest needs a browser session: a hal token (bearer) gets 403 "Cover suggestions need a browser login." and no job. The click then reads the person's groups through a fresh refresh grant, as a turn does: no `agent` or an issuer that is down answers 503, outside the API group or a refused grant answers 403, each with `{"detail": {"problem": …}}` and no job. A refused group or grant never answers 401, because the frontend reads it as a logout; only a session that ends during the request still answers 401. The job references the session that asked (`jobs.session_id`, `ON DELETE SET NULL`, cleared when the job ends, never in a response, frame or log); the co-writer's cover tool binds the calling turn's session, and a tool call outside a bound turn refuses. The job checks again at its start through that session: a person who left the group meanwhile ends `not_enabled`, an ended session or a job with no reference `sign_in_again`, and a user who is gone `not_enabled`, each before any request.
+
+**What leaves.** Album title, artist name and quoted excerpts of style prompts and lyrics, with the account's fingerprint as `user`, the same fingerprint the turn sends. No request carries the account id, the session id or the issuer.
+
+**Outcomes.** A picture is checked by `covers.decode_cover_image`; WebP and anything else that is not a bounded PNG or JPEG ends `unavailable`, logged only as a closed detail. The job ends in one of the turn's four problems: `busy` (a 429; its `Retry-After`, capped by the client, is kept as `jobs.retry_after_seconds`), `not_enabled`, `sign_in_again` or `unavailable` (everything else, a budget or moderation refusal and the 88 s limit of the agent file included). The job's `error` holds one closed sentence per problem, never the gateway's words, a key, a token or the session id. Only a completed run spends the daily count. An explicit Cancel closes the picture's request; an answer the gateway already billed stays billed.
+
+**Retention outside songmaker.** The gateway receives what leaves and forwards it to the image provider over the provider's API; what is stored and deleted there is the agent service's, named in the privacy text's Agent-Dienst section. Songmaker keeps only the stored suggestion.
 
 ## Agent-CLI Mounts
 
@@ -776,7 +788,7 @@ not a sandbox failure. Both the installer and the proof take the profile name
 as an optional first argument; a stack proven under another profile passes it
 to both.
 
-Codex has a resumable Co-Writer tool loop and a fixed cover-image command. The
+In `agent_providers`, Codex has a resumable Co-Writer tool loop and a fixed image command. The
 Co-Writer begins with `codex exec --json --sandbox read-only`; later rounds use
 `codex exec resume`. Both command shapes apply `--skip-git-repo-check`,
 `--ignore-user-config`, `--ignore-rules`, `approval_policy="never"`,
@@ -956,11 +968,12 @@ through a private prompt file. The text tool protocol does not grant Grok CLI
 tools: every start and resume keeps `--deny '*'`, and native tool-call events
 abort the turn. The scoring worker does not mount Codex.
 
-The cover-image route starts Codex with the fixed read-only image
+The wheel's image route, which no songmaker cover calls (the cover draws
+through the gateway), starts Codex with the fixed read-only image
 argv (`--sandbox read-only`, no MCP servers, and `web_search="disabled"`),
 with Code Mode enabled only for this image run. Its one variable part is the
-admin-stored cover model, appended as `--model <slug>` when that setting is
-not empty. Each run creates a private
+model its caller names, appended as `--model <slug>` when one is named.
+Each run creates a private
 `0700` root whose `codex-home/` and `work/` directories are separate `0700`
 siblings; the home contains only the redacted `auth.json` mirror (`0600`) and
 the process cwd is the resolved `work/` path. The streamed event gate admits a
@@ -974,7 +987,7 @@ as `ImageToolBlockedError`; the process is reaped before the route returns.
 The gate sees only what the CLI reports. This measurement does not establish
 whether other tools using the invisible path would be reported. The PNG is
 associated with the turn through its private `CODEX_HOME` location and
-normalization under the host `ImagePolicy`. The gate is defense in depth;
+normalization under the embedding host's `ImagePolicy`. The gate is defense in depth;
 containment rests on the Codex read-only sandbox and songmaker's AppArmor and
 seccomp profiles. Fixture replay proves event handling, not live containment.
 Every Co-Writer tool-loop round keeps Code Mode disabled.
@@ -995,8 +1008,9 @@ container's Claude CLI mirror. The API and DOM expose only safe readiness
 metadata (`set`/`not set` through route state), never a key value, raw
 provider body, command output, or a secret-derived value. The co-writer has no
 route to select: it runs through the gateway (see "Co-writer turn through the
-gateway"). The [Agent routes contract](architecture.md#agent-routes)
-describes the Cover selection.
+gateway"), and neither has the cover (see "Cover picture through the
+gateway"); [the Models page](architecture.md#the-models-page) shows both rows
+read-only.
 
 **#327 F5:** Settings reads and validation never start an agent CLI or catalog
 request. `provider_status_refresh` owns those probes; an empty snapshot is reported

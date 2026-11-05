@@ -54,7 +54,8 @@ mounted. Use the venv's Python directly:
 would be working on (CI's e2e stack mounts no image route, so no real run ever
 leaves the failed state), ``--started-offset`` moves its start into the past,
 and ``set-cover-completed`` publishes the finished run's suggestion the way
-``cover_runner.py`` does. A cover run is failed with ``set-failed``.
+``cover_runner.py`` does. A cover run is failed with ``set-failed``, whose
+``--error-type`` names the agent problem and ``--retry-after-seconds`` a busy wait.
 
 The ``set-failed`` example stores raw worker detail to verify that musician
 reads show "Generating failed — try again." instead (L6/L11).
@@ -278,13 +279,20 @@ def cmd_set_failed(session: Session, args: argparse.Namespace) -> None:
     one) is deliberate: ``/api/jobs/{id}/stream`` polls the row and pushes the
     change to any client still watching it, the same way a real worker crash
     would report it. ``error_type`` matches ``generation.py``'s own failure
-    path (``"generation_error"``). The raw worker sentence stays stored;
-    musician reads project it to "Generating failed — try again." (L6/L11).
+    path (``"generation_error"``) unless ``--error-type`` names another, as a
+    cover run's agent problem does, with the wait a busy one was given. The
+    raw worker sentence stays stored; musician reads project it to
+    "Generating failed — try again." (L6/L11).
     """
     updated = update_job_status(
         session,
         args.job_id,
-        JobStatusUpdate(JobStatus.FAILED, error=args.error, error_type="generation_error"),
+        JobStatusUpdate(
+            JobStatus.FAILED,
+            error=args.error,
+            error_type=args.error_type,
+            retry_after_seconds=args.retry_after_seconds,
+        ),
     )
     if not updated:
         raise SystemExit(f"Job {args.job_id} was already terminal or does not exist")
@@ -450,6 +458,8 @@ def _add_transition_parsers(sub) -> None:
     )
     p_failed.add_argument("--job-id", required=True)
     p_failed.add_argument("--error", required=True)
+    p_failed.add_argument("--error-type", default="generation_error")
+    p_failed.add_argument("--retry-after-seconds", type=int)
     p_failed.set_defaults(func=cmd_set_failed)
 
     p_completed = sub.add_parser(

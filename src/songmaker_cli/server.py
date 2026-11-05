@@ -41,7 +41,6 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.conversation_api import fail_chat_turns_ended_by_restart
 from songmaker_cli.cover_runner import (
-    CoverJobCancellationRegistry,
     cover_runner_loop,
     recover_web_cover_jobs,
 )
@@ -102,7 +101,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     ctx: AppContext = app.state.ctx
     registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
     app.state.background_loop_registry = registry
-    app.state.cover_job_cancellation_registry = CoverJobCancellationRegistry()
     cleanup_expired_queue_streams(ctx)
     with ctx.db() as session:
         deleted = delete_expired_sessions(session)

@@ -1,8 +1,8 @@
 x-logging: &service-logging
-  driver: json-file
+  driver: journald
   options:
-    max-size: "10m"
-    max-file: "5"
+    tag: "{{.Name}}"
+    labels: "com.docker.compose.service"
 
 # Bare args take the value from compose's environment and are omitted when unset.
 x-web-image-build: &web-image-build

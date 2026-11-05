@@ -51,15 +51,12 @@ def test_suggest_answers_401_when_the_session_ends_during_the_request(
     with factory() as session:
         [live_session_id] = [row.id for row in session.query(UserSession)]
 
-    def logout_before_the_job_is_written(*_args, **_kwargs) -> str:
+    def logout_after_the_click_check(*_args, **_kwargs) -> None:
         with factory() as other:
             other.query(UserSession).filter_by(id=live_session_id).delete()
             other.commit()
-        return live_session_id
 
-    monkeypatch.setattr(
-        "songmaker_cli.album_api.session_id_from_request", logout_before_the_job_is_written,
-    )
+    monkeypatch.setattr("songmaker_cli.album_api.cover_admission", logout_after_the_click_check)
 
     response = client.post("/api/albums/alice-album/cover-suggestions")
 
