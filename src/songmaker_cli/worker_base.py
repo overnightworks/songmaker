@@ -12,8 +12,6 @@ import threading
 from pathlib import Path
 from typing import ClassVar
 
-from arq.connections import RedisSettings
-
 from songmaker_cli.agent_runtime import configure_agent_providers
 from songmaker_cli.constants import (
     ARQ_HEALTH_CHECK_INTERVAL_SECONDS,
@@ -27,11 +25,6 @@ from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
-
-
-def build_redis_settings(settings: Settings | None = None) -> RedisSettings:
-    """Build arq RedisSettings from validated Settings."""
-    return RedisSettings.from_dsn((settings or get_settings()).redis_url)
 
 
 class WorkerBase:

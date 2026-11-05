@@ -196,14 +196,6 @@ def test_recover_on_startup_releases_lock_on_error() -> None:
     ctx["redis"].delete.assert_called_once_with("test:lock:dummy")
 
 
-# ── module-level helpers ──────────────────────────────────────────
-
-
-def test_build_redis_settings() -> None:
-    settings = wb_mod.build_redis_settings()
-    assert settings is not None
-
-
 # ── audit_orphaned_files ──────────────────────────────────────────
 
 

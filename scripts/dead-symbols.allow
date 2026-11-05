@@ -98,6 +98,7 @@ songmaker_cli/playlist_api.py:api_share_playlist # HTTP dispatcher: router.post(
 songmaker_cli/playlist_api.py:api_unshare_playlist # HTTP dispatcher: router.delete('/playlists/{playlist_id}/share', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_update_playlist # HTTP dispatcher: router.put('/playlists/{playlist_id}', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_upload_playlist_cover # HTTP dispatcher: router.put('/playlists/{playlist_id}/cover', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/redis_client.py:RedisConnectionSettings # Operational caller scripts/arq_healthcheck.py outside src
 songmaker_cli/reference_api.py:api_delete_reference # HTTP dispatcher: router.delete('/references/{reference_id}', status_code=204, responses={404: {'description': 'Reference audio not found'}, 409: {'description': 'Reference audio is in use'}, 500: {'description': 'Reference audio storage could not be checked'}})
 songmaker_cli/reference_api.py:api_reference_audio # HTTP dispatcher: router.get('/references/{reference_id}/audio', response_class=FileResponse)
 songmaker_cli/reference_api.py:api_list_references # HTTP dispatcher: router.get('/references')
