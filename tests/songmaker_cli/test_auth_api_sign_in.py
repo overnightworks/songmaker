@@ -581,9 +581,9 @@ def test_the_music_and_scoring_workers_start_without_any_realm_variable_or_secre
         monkeypatch.delenv(variable)
     # Both entry modules read the settings when they are first imported.
     from songmaker_cli.music_worker import MusicWorker, _music_worker_functions
+    from songmaker_cli.redis_client import build_arq_redis_settings
     from songmaker_cli.scoring_worker import ScoringWorker
     from songmaker_cli.settings import get_settings
-    from songmaker_cli.worker_base import build_redis_settings
 
     get_settings.cache_clear()
     settings = get_settings()
@@ -591,7 +591,7 @@ def test_the_music_and_scoring_workers_start_without_any_realm_variable_or_secre
     assert (
         settings.oidc_issuer, settings.oidc_client_id, settings.oidc_client_secret_file,
     ) == (None, None, None)
-    assert build_redis_settings(settings) is not None
+    assert build_arq_redis_settings(settings.redis_url) is not None
     assert _music_worker_functions(MusicWorker(settings), settings)
     assert ScoringWorker(settings).queue_name
 
