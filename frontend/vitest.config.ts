@@ -26,9 +26,9 @@ export default defineConfig({
 			reporter: ['text', 'text-summary', 'lcov'],
 			reportsDirectory: '../reports/frontend-coverage',
 			thresholds: {
-				statements: 93,
-				lines: 94,
-				branches: 86,
+				statements: 94,
+				lines: 95,
+				branches: 87,
 				'src/lib/**/*.ts': {
 					statements: 90,
 					lines: 93
