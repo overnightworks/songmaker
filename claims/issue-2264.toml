@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "573fe20a09784fbd2cbeb3e2db152c8b681bfcae"
 branch = "claude/issue-2264-rail-pick"
-scope = ["frontend/e2e/rail-pick.spec.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/rail-test-fixtures.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/test-utils/factories.ts", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/test_song_api.py"]
+scope = ["frontend/e2e/rail-pick.spec.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/rail-test-fixtures.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/test-utils/factories.ts", "src/songmaker_cli/api_models/library.py", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/test_song_api.py"]
 opened_commit = "53f9ad5240f0fe533312fbc4f45f68e294aaa777"
 whole_reason = "One fact crosses its layers: the query that counts it, the response that carries it, the generated type, the rail that shows it, and their tests."
