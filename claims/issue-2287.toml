@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "b348643802ae325633f482624b63043305eccf1d"
 branch = "claude/issue-2287-cover-through-gateway"
-scope = ["AGENTS.md", "docs/architecture.md", "docs/design/album-browsing.html", "docs/design/now-playing.html", "docs/design/song-page-phone.html", "docs/design/song-page.html", "docs/security.md", "frontend/e2e", "frontend/src", "legal/datenschutz.html", "quality/baseline.toml", "scripts/dead-symbols.allow", "scripts/seed_e2e_job_states.py", "src/songmaker_cli", "tests"]
+scope = ["AGENTS.md", "docs/architecture.md", "docs/design/album-browsing.html", "docs/design/now-playing.html", "docs/design/song-page-phone.html", "docs/design/song-page.html", "docs/security.md", "frontend/e2e", "frontend/src", "legal/datenschutz.html", "quality/baseline.toml", "scripts/dead-symbols.allow", "scripts/seed_e2e_job_states.py", "scripts/style-literals.txt", "src/songmaker_cli", "tests"]
 opened_commit = "8441ce8680d364b6891970a41821800b65ed28a2"
 whole_reason = "The switch makes every cover setting, its API, its controls and the editor's Codex-era wording false at once, so each leaves in the same landing (plan r3 section 4); C1a, C3 and C1b are already cut apart."
