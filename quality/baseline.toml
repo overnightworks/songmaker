@@ -74,7 +74,7 @@
 "tests/test_auto_deploy_alerting.py" = 1384
 "tests/songmaker_cli/test_conversation_api.py" = 842
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
-"tests/songmaker_cli/test_db.py" = 3585
+"tests/songmaker_cli/test_db.py" = 3575
 "tests/songmaker_cli/test_jobs.py" = 3215
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_library_api.py" = 1627
@@ -301,7 +301,6 @@ upgrade = [["src/songmaker_cli/db/migrations/versions/e5a9c3d7b2f1_add_generatio
 _assert_no_empty_slugs_remain = [["src/songmaker_cli/db/migrations/versions/d5f8a3b21c46_add_slug_to_playlists.py", "_assert_no_empty_slugs_remain"]]
 
 [clones."src/songmaker_cli/db/queries/albums.py"]
-cleanup_album = [["src/songmaker_cli/db/queries/songs.py", "cleanup_song"]]
 count_songs_by_album = [["src/songmaker_cli/db/queries/songs.py", "count_generations_by_song"]]
 get_album_by_slug = [["src/songmaker_cli/db/queries/generations.py", "get_generation_by_slug"], ["src/songmaker_cli/db/queries/playlists.py", "get_playlist_by_slug"], ["src/songmaker_cli/db/queries/songs.py", "get_song_by_slug"]]
 set_album_cover_key = [["src/songmaker_cli/db/queries/playlists.py", "set_playlist_cover_key"], ["src/songmaker_cli/db/queries/songs.py", "set_song_cover_key"]]

@@ -483,16 +483,6 @@ def test_unpick_generation(seeded_session: Session) -> None:
     assert get_generation(seeded_session, "g1").is_picked is False
 
 
-def test_cleanup_album_deletes_unpicked(seeded_session: Session) -> None:
-    pick_generation(seeded_session, "g1")
-    seeded_session.commit()
-    count, paths = cleanup_album(seeded_session, "test")
-    seeded_session.commit()
-    assert count == 1
-    assert get_generation(seeded_session, "g1") is not None
-    assert get_generation(seeded_session, "g2") is None
-
-
 def test_cleanup_album_no_picks_deletes_all(seeded_session: Session) -> None:
     count, _paths = cleanup_album(seeded_session, "test")
     seeded_session.commit()
@@ -526,16 +516,6 @@ def test_unkeep_generation_not_found(seeded_session: Session) -> None:
         unkeep_generation(seeded_session, "nonexistent")
 
 
-def test_cleanup_album_skips_kept(seeded_session: Session) -> None:
-    keep_generation(seeded_session, "g2")
-    seeded_session.commit()
-    count, paths = cleanup_album(seeded_session, "test")
-    seeded_session.commit()
-    assert count == 1
-    assert get_generation(seeded_session, "g1") is None
-    assert get_generation(seeded_session, "g2") is not None
-
-
 def test_cleanup_album_skips_picked_and_kept(seeded_session: Session) -> None:
     pick_generation(seeded_session, "g1")
     keep_generation(seeded_session, "g2")
@@ -547,24 +527,34 @@ def test_cleanup_album_skips_picked_and_kept(seeded_session: Session) -> None:
     assert get_generation(seeded_session, "g2") is not None
 
 
-def test_cleanup_song_deletes_unpicked(seeded_session: Session) -> None:
+@pytest.mark.parametrize(
+    "cleanup", [lambda s: cleanup_song(s, "s1"), lambda s: cleanup_album(s, "test")],
+)
+def test_cleanup_deletes_exactly_the_unpicked_unkept_takes_and_returns_their_files(
+    seeded_session: Session, cleanup,
+) -> None:
+    seeded_session.add_all([
+        Generation(id="g3", song_id="s1", version_id="v1", generation_number=3,
+                   mp3_path="test/v3.mp3", wav_path="test/v3.wav"),
+        Generation(id="g4", song_id="s1", version_id="v1", generation_number=4,
+                   mp3_path="test/v4.mp3"),
+        Score(id="sc3", generation_id="g3", scorer="batch", value={"dynamics": 1.0}),
+        Rating(id="r3", generation_id="g3", rating=50.0),
+    ])
     pick_generation(seeded_session, "g1")
-    seeded_session.commit()
-    count, paths = cleanup_song(seeded_session, "s1")
-    seeded_session.commit()
-    assert count == 1
-    assert get_generation(seeded_session, "g1") is not None
-    assert get_generation(seeded_session, "g2") is None
-
-
-def test_cleanup_song_skips_kept(seeded_session: Session) -> None:
     keep_generation(seeded_session, "g2")
     seeded_session.commit()
-    count, paths = cleanup_song(seeded_session, "s1")
+
+    count, paths = cleanup(seeded_session)
     seeded_session.commit()
-    assert count == 1
-    assert get_generation(seeded_session, "g1") is None
-    assert get_generation(seeded_session, "g2") is not None
+
+    assert count == 2
+    assert sorted(paths) == ["test/v3.mp3", "test/v3.wav", "test/v4.mp3"]
+    assert [gen.id for gen in seeded_session.query(Generation).order_by(Generation.id)] == [
+        "g1", "g2",
+    ]
+    assert seeded_session.query(Score).filter_by(generation_id="g3").count() == 0
+    assert seeded_session.query(Rating).filter_by(generation_id="g3").count() == 0
 
 
 def test_sharing_generation_auto_sets_kept(seeded_session: Session) -> None:
