@@ -19,7 +19,7 @@ def _announce(pg_factory) -> None:
 
 
 def test_probe_needs_no_database():
-    assert True
+    """Passes without a server, as every test that needs no database must."""
 
 
 def test_probe_needs_a_database(pg_factory):

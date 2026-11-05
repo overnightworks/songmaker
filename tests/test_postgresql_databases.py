@@ -13,14 +13,17 @@ import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 from support import postgresql as owner_module
+from support.postgres_lock_harness import WAIT_SECONDS, in_thread, wait_until_blocked_behind
 from support.postgresql import (
     ALEMBIC_VERSION_TABLE,
     DatabaseDriftError,
     LeakedConnectionError,
     PostgresqlTestDatabases,
     WorkerDatabaseUnusableError,
+    database_name,
     migration_head,
 )
 from support.postgresql_probe import DATABASE_LINE
@@ -83,19 +86,6 @@ def _child_environment() -> dict[str, str]:
     return {key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")}
 
 
-def _without_the_server(
-    environment: dict[str, str], administration_url: URL, replacement: str | None,
-) -> dict[str, str]:
-    """The environment with the variable that carries the server's URL replaced or removed."""
-    configured = administration_url.render_as_string(hide_password=False)
-    carriers = [key for key, value in environment.items() if value == configured]
-    assert len(carriers) == 1, "exactly one variable carries the server's URL"
-    environment = {key: value for key, value in environment.items() if key not in carriers}
-    if replacement is not None:
-        environment[carriers[0]] = replacement
-    return environment
-
-
 def _child_pytest(*selection: str) -> list[str]:
     return [
         sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:warnings",
@@ -140,6 +130,34 @@ def test_runs_and_workers_get_separate_databases_locks_and_cleanup(another_run):
     assert _database_exists(first.administration_url, urls[1].database)
 
 
+@pytest.mark.parametrize("option", ["dbname", "database"])
+def test_a_url_option_that_selects_a_database_is_refused_before_anything_is_created(
+    postgresql_databases, option,
+):
+    """Cell 1: the administration URL cannot redirect the owner's databases elsewhere."""
+    administration_url = postgresql_databases.administration_url
+    redirecting = administration_url.update_query_dict({option: administration_url.database})
+    run_id = uuid.uuid4().hex
+
+    with pytest.raises(ValueError, match=option):
+        PostgresqlTestDatabases(redirecting, run_id=run_id, worker_id="gw0")
+
+    assert not _database_exists(administration_url, database_name(run_id, "gw0"))
+
+
+def test_every_owned_connection_reaches_the_owned_database(another_run):
+    """Cell 1: migrations, resets and tests connect to the database the owner named."""
+    owner = another_run()
+    for url in (owner.worker_url, owner.create_empty_database()):
+        engine = create_engine(url, poolclass=NullPool)
+        try:
+            with engine.connect() as connection:
+                reached = connection.execute(text("SELECT current_database()")).scalar_one()
+        finally:
+            engine.dispose()
+        assert reached == url.database
+
+
 def test_a_commit_is_visible_to_a_second_connection_and_a_rollback_is_not(pg_factory):
     """Cell 2: commit visibility."""
     observer = create_engine(pg_factory.kw["bind"].url, poolclass=NullPool)
@@ -173,30 +191,58 @@ def test_the_reset_removes_writes_and_restores_every_baseline_row(
         session.execute(text(f"TRUNCATE {', '.join(f'"{table}"' for table in seeded)} CASCADE"))
         session.commit()
     assert _contents(url) != baseline
+    pg_factory.kw["bind"].dispose()
 
     postgresql_databases.reset()
 
     assert _contents(url) == baseline
 
 
-def test_a_session_left_open_fails_the_reset_and_is_terminated(
-    postgresql_databases, pg_factory,
+@pytest.mark.parametrize(
+    ("isolation_level", "leaked_statement"),
+    [
+        pytest.param(None, "SELECT count(*) AS leaked_marker FROM users", id="table-lock"),
+        pytest.param(None, "SELECT 1 AS leaked_marker", id="open-transaction"),
+        pytest.param(
+            "AUTOCOMMIT", "SELECT pg_advisory_lock(2300) AS leaked_marker", id="advisory-lock",
+        ),
+    ],
+)
+def test_a_connection_left_open_fails_the_reset_and_only_it_is_terminated(
+    postgresql_databases, pg_factory, another_run, isolation_level, leaked_statement,
 ):
-    """Cell 4: a leaking session, here on the worker's own database."""
-    leaked = pg_factory()
-    statement = "SELECT count(*) AS leaked_marker FROM users"
-    leaked.execute(text(statement))
+    """Cell 4: a leaking connection on the worker's own database; others stay untouched."""
+    bystanders = [
+        create_engine(url, poolclass=NullPool)
+        for url in (another_run().worker_url, postgresql_databases.administration_url)
+    ]
+    held = [engine.connect() for engine in bystanders]
+    leaking = pg_factory.kw["bind"]
+    if isolation_level is not None:
+        leaking = leaking.execution_options(isolation_level=isolation_level)
+    leaked = leaking.connect()
+    leaked.execute(text(leaked_statement))
     leaked_pid = leaked.execute(text("SELECT pg_backend_pid()")).scalar_one()
+    alive = text("SELECT 1")
+    try:
+        for bystander in held:
+            bystander.execute(alive)
 
-    with pytest.raises(LeakedConnectionError) as refusal:
-        postgresql_databases.reset()
+        with pytest.raises(LeakedConnectionError) as refusal:
+            postgresql_databases.reset()
 
-    report = str(refusal.value)
-    assert f"({leaked_pid}, " in report
-    assert "leaked_marker" not in report
-    with pytest.raises(OperationalError):
-        leaked.execute(text("SELECT 1"))
-    leaked.close()
+        report = str(refusal.value)
+        assert f"({leaked_pid}, " in report
+        assert "leaked_marker" not in report
+        with pytest.raises(OperationalError):
+            leaked.execute(alive)
+        assert [bystander.execute(alive).scalar_one() for bystander in held] == [1, 1]
+    finally:
+        leaked.invalidate()
+        for bystander in held:
+            bystander.close()
+        for engine in bystanders:
+            engine.dispose()
     postgresql_databases.reset()
 
 
@@ -206,6 +252,10 @@ def test_a_session_left_open_fails_the_reset_and_is_terminated(
         pytest.param("CREATE TABLE stray (id integer)", id="table"),
         pytest.param("ALTER TABLE users ADD COLUMN stray integer", id="column"),
         pytest.param("UPDATE alembic_version SET version_num = 'elsewhere'", id="revision"),
+        pytest.param(
+            "ALTER TABLE alembic_version RENAME COLUMN version_num TO renamed",
+            id="revision-column",
+        ),
     ],
 )
 def test_drift_fails_the_reset_and_the_database_is_recreated(another_run, drift):
@@ -228,34 +278,101 @@ def test_drift_fails_the_reset_and_the_database_is_recreated(another_run, drift)
             schema = inspect(connection)
             assert "stray" not in schema.get_table_names()
             assert "stray" not in {column["name"] for column in schema.get_columns("users")}
-            revision = connection.execute(text("SELECT version_num FROM alembic_version"))
+            revision = connection.execute(text(f"SELECT version_num FROM {ALEMBIC_VERSION_TABLE}"))
             assert revision.scalar_one() == migration_head()
     finally:
         engine.dispose()
     owner.reset()
 
 
-def test_a_failed_recreation_makes_every_later_use_fail_with_the_drift(
-    another_run, monkeypatch,
-):
-    """Cell 5: when recreation fails, the worker's later database fixtures error."""
+def test_drift_is_found_before_any_row_is_removed(another_run, monkeypatch):
+    """Cell 5: the reset checks for drift before it deletes anything."""
+    owner = another_run()
+    url = owner.worker_url
+    engine = create_engine(url, poolclass=NullPool)
+    try:
+        with sessionmaker(bind=engine).begin() as session:
+            session.add(User(id="kept", username="kept"))
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN stray integer"))
+
+        def refuse(_url):
+            raise RuntimeError("drop refused")
+
+        monkeypatch.setattr(owner, "drop_database", refuse)
+        with pytest.raises(DatabaseDriftError):
+            owner.reset()
+
+        with engine.connect() as connection:
+            kept = connection.execute(text("SELECT id FROM users WHERE id = 'kept'"))
+            assert kept.scalars().all() == ["kept"]
+    finally:
+        engine.dispose()
+
+
+def test_drift_committed_while_the_reset_waits_for_its_locks_fails_the_reset(another_run):
+    """Cell 5: the drift check runs under the reset's locks, so a late change is still seen."""
     owner = another_run()
     engine = create_engine(owner.worker_url, poolclass=NullPool)
-    with engine.begin() as connection:
-        connection.execute(text("CREATE TABLE stray (id integer)"))
-    engine.dispose()
+    answers: dict[str, object] = {}
+    reset = in_thread(answers, "reset", owner.reset)
+    try:
+        with engine.connect() as drifting:
+            drifting.execute(text("ALTER TABLE users ADD COLUMN stray integer"))
+            holder = drifting.execute(text("SELECT pg_backend_pid()")).scalar_one()
+            reset.start()
+            wait_until_blocked_behind(sessionmaker(bind=engine), holder)
+            drifting.commit()
+        reset.join(WAIT_SECONDS)
+    finally:
+        engine.dispose()
+    assert isinstance(answers.get("reset"), DatabaseDriftError), answers
 
+
+def _refuse_migrations(monkeypatch) -> None:
     def refuse(_url):
         raise RuntimeError("migration refused")
 
     monkeypatch.setattr(owner_module, "init_db", refuse)
+
+
+def _drift_then_fail_the_recreation(owner, monkeypatch) -> BaseException:
+    engine = create_engine(owner.worker_url, poolclass=NullPool)
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE stray (id integer)"))
+    engine.dispose()
+    _refuse_migrations(monkeypatch)
     with pytest.raises(DatabaseDriftError) as drift:
         owner.reset()
+    return drift.value
 
-    for later_use in (lambda: owner.worker_url, owner.reset):
+
+def _fail_the_first_migration(owner, monkeypatch) -> BaseException:
+    _refuse_migrations(monkeypatch)
+    with pytest.raises(WorkerDatabaseUnusableError, match="migration refused") as unusable:
+        _ = owner.worker_url
+    return unusable.value.__cause__
+
+
+@pytest.mark.parametrize(
+    "make_unusable",
+    [
+        pytest.param(_drift_then_fail_the_recreation, id="failed-recreation"),
+        pytest.param(_fail_the_first_migration, id="failed-first-migration"),
+    ],
+)
+def test_an_unusable_worker_database_fails_every_later_database_fixture(
+    another_run, monkeypatch, make_unusable,
+):
+    """Cell 5: once the worker database cannot be built, every later allocation errors."""
+    owner = another_run()
+    cause = make_unusable(owner, monkeypatch)
+    assert cause is not None
+
+    for later_use in (lambda: owner.worker_url, owner.reset, owner.create_empty_database):
         with pytest.raises(WorkerDatabaseUnusableError, match="migration refused") as unusable:
             later_use()
-        assert unusable.value.__cause__ is drift.value
+        assert unusable.value.__cause__ is cause
 
 
 def test_an_empty_database_migrates_apart_from_the_worker_database(
@@ -281,7 +398,7 @@ def test_an_empty_database_migrates_apart_from_the_worker_database(
     ("replacement", "refusal"),
     [
         pytest.param(None, "is not set", id="missing"),
-        pytest.param("not a database url", "is not a database URL", id="malformed"),
+        pytest.param("not a database url", "ArgumentError", id="malformed"),
         pytest.param("sqlite:///probe.db", "must name a PostgreSQL server", id="not-postgresql"),
         pytest.param(
             "postgresql://probe:probe@127.0.0.1:9/probe", "OperationalError", id="unreachable",
@@ -289,15 +406,13 @@ def test_an_empty_database_migrates_apart_from_the_worker_database(
     ],
 )
 def test_without_a_usable_server_database_tests_fail_and_pure_tests_run(
-    postgresql_databases, replacement, refusal,
+    environment_with_database_server, replacement, refusal,
 ):
     """Cell 7: missing configuration fails database tests; none skips."""
     child = subprocess.run(
         _child_pytest("needs_no_database", "needs_a_database"),
         cwd=REPOSITORY_ROOT,
-        env=_without_the_server(
-            _child_environment(), postgresql_databases.administration_url, replacement,
-        ),
+        env=environment_with_database_server(_child_environment(), replacement),
         capture_output=True, text=True, timeout=CHILD_TIMEOUT_SECONDS, check=False,
     )
     assert child.returncode == 1, child.stdout

@@ -470,6 +470,24 @@ def _require_postgresql_mark(node: pytest.Item) -> None:
         )
 
 
+_DATABASE_SERVER_VARIABLE = "TEST_DATABASE_URL"
+
+
+@pytest.fixture
+def environment_with_database_server():
+    """Builds a child process's environment with the database server setting replaced, or
+    removed when given None, so a test can start a run without a usable server."""
+
+    def with_server(environment: dict[str, str], server_url: str | None) -> dict[str, str]:
+        child = dict(environment)
+        child.pop(_DATABASE_SERVER_VARIABLE, None)
+        if server_url is not None:
+            child[_DATABASE_SERVER_VARIABLE] = server_url
+        return child
+
+    return with_server
+
+
 @pytest.fixture(scope="session")
 def postgresql_databases(testrun_uid: str, worker_id: str):
     """The owner of this run's and worker's databases; the only reader of `TEST_DATABASE_URL`.
@@ -477,19 +495,15 @@ def postgresql_databases(testrun_uid: str, worker_id: str):
     A missing, malformed or unreachable server fails every database test; none skips.
     """
     from sqlalchemy.engine import make_url
-    from sqlalchemy.exc import ArgumentError
     from support.postgresql import PostgresqlTestDatabases
 
-    configured = os.environ.get("TEST_DATABASE_URL", "")
+    configured = os.environ.get(_DATABASE_SERVER_VARIABLE, "")
     if not configured:
         pytest.fail(
             "TEST_DATABASE_URL is not set: run database tests through "
             "scripts/test_postgresql.sh, which starts a disposable PostgreSQL."
         )
-    try:
-        administration_url = make_url(configured)
-    except ArgumentError as malformed:
-        pytest.fail(f"TEST_DATABASE_URL is not a database URL: {malformed}")
+    administration_url = make_url(configured)
     if administration_url.get_backend_name() != "postgresql":
         pytest.fail("TEST_DATABASE_URL must name a PostgreSQL server")
     databases = PostgresqlTestDatabases(

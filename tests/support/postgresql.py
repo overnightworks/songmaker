@@ -9,6 +9,7 @@ is only connected to: it is never migrated, truncated or dropped.
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import cache
@@ -21,7 +22,7 @@ from alembic.script import ScriptDirectory
 from psycopg2 import errors as postgresql_errors
 from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.engine import URL
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.pool import NullPool
 
 from songmaker_cli.db.engine import MIGRATIONS_DIR, init_db
@@ -34,6 +35,10 @@ STATEMENT_TIMEOUT_MILLISECONDS = 4 * LOCK_TIMEOUT_MILLISECONDS
 DROP_TIMEOUT_MILLISECONDS = 30000
 TERMINATION_WAIT_MILLISECONDS = 5000
 DIAGNOSTIC_BACKEND_LIMIT = 20
+# A client that closed its connection may still be listed while its backend exits.
+CLOSING_BACKEND_POLL_SECONDS = 0.02
+# psycopg2 and libpq take these URL query options over the database named in the path.
+DATABASE_SELECTING_OPTIONS = frozenset({"dbname", "database"})
 # Alembic's own bookkeeping table; the reset keeps it, since it names the revision.
 ALEMBIC_VERSION_TABLE = "alembic_version"
 RUN_ID_LENGTH = 12
@@ -70,6 +75,10 @@ _BACKENDS = text(
     "date_trunc('second', now() - xact_start)::text AS transaction_age "
     "FROM pg_stat_activity WHERE datname = :database ORDER BY pid LIMIT :limit"
 )
+_OTHER_CLIENTS = text(
+    "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() "
+    "AND backend_type = 'client backend' AND pid <> pg_backend_pid()"
+)
 _TERMINATE = text(
     "SELECT pg_terminate_backend(pid, :wait) FROM pg_stat_activity "
     "WHERE datname = :database AND pid <> pg_backend_pid()"
@@ -81,7 +90,7 @@ class DatabaseDriftError(AssertionError):
 
 
 class LeakedConnectionError(AssertionError):
-    """A connection the test left open blocked the reset; it was terminated."""
+    """A connection the test left open outlived it; it was terminated."""
 
 
 class WorkerDatabaseUnusableError(RuntimeError):
@@ -115,7 +124,7 @@ def _quote(engine: Engine, name: str) -> str:
     return engine.dialect.identifier_preparer.quote_identifier(name)
 
 
-def _is_blocked(error: OperationalError) -> bool:
+def _is_blocked(error: DBAPIError) -> bool:
     blocking = postgresql_errors.LockNotAvailable | postgresql_errors.QueryCanceled
     return isinstance(error.orig, blocking)
 
@@ -139,6 +148,12 @@ class PostgresqlTestDatabases:
         run_id: str,
         worker_id: str,
     ) -> None:
+        selecting = sorted(DATABASE_SELECTING_OPTIONS & set(administration_url.query))
+        if selecting:
+            raise ValueError(
+                f"the administration URL selects its database through the option(s) "
+                f"{selecting}; name it in the URL's path only"
+            )
         self._administration_url = administration_url
         self._run_id = run_id
         self._worker_id = worker_id
@@ -159,15 +174,20 @@ class PostgresqlTestDatabases:
 
     @property
     def worker_url(self) -> URL:
-        """The migrated worker database; raises once it could not be recreated."""
-        if self._unusable is not None:
-            raise self._unusable
+        """The migrated worker database; raises once it could not be created or recreated."""
+        self._raise_if_unusable()
         if self._baseline is None:
-            self._create_migrated_worker_database()
+            try:
+                self._create_migrated_worker_database()
+            except Exception as failure:  # noqa: BLE001 - any failure makes the database unusable
+                raise self._become_unusable(
+                    f"{self._worker_name} could not be created and migrated: {failure!r}", failure,
+                ) from failure
         return self._database_url(self._worker_name)
 
     def create_empty_database(self) -> URL:
         """An additional database with nothing in it, for a test that migrates on its own."""
+        self._raise_if_unusable()
         self._empty_count += 1
         name = database_name(self._run_id, self._worker_id, f"e{self._empty_count}")
         self._create_database(name)
@@ -196,10 +216,10 @@ class PostgresqlTestDatabases:
         """Return the worker database to its migrated baseline.
 
         Drift fails before anything is destroyed, and the database is recreated for the
-        next test. A connection left open is reported, terminated and the reset retried.
+        next test. A connection left open, in a transaction or not, is reported and
+        terminated, and the test fails.
         """
-        if self._unusable is not None:
-            raise self._unusable
+        self._raise_if_unusable()
         try:
             self._reset_once()
         except DatabaseDriftError as drift:
@@ -208,22 +228,40 @@ class PostgresqlTestDatabases:
         except OperationalError as blocked:
             if not _is_blocked(blocked):
                 raise
-            self._report_and_terminate_leaks(blocked)
+            leak = self._report_and_terminate_leaks(
+                f"waited past its {LOCK_TIMEOUT_MILLISECONDS} ms lock timeout on a "
+                "transaction the test left open"
+            )
+            try:
+                self._reset_once()
+            except (OperationalError, DatabaseDriftError) as still_failing:
+                self._recreate_after(still_failing)
+            raise leak from blocked
+        self._raise_on_lingering_connections()
 
-    def _report_and_terminate_leaks(self, blocked: OperationalError) -> None:
+    def _raise_on_lingering_connections(self) -> None:
+        deadline = time.monotonic() + LOCK_TIMEOUT_MILLISECONDS / 1000
+        while self._other_clients():
+            if time.monotonic() >= deadline:
+                raise self._report_and_terminate_leaks(
+                    f"found a connection the test left open {LOCK_TIMEOUT_MILLISECONDS} ms "
+                    "after it ended"
+                )
+            time.sleep(CLOSING_BACKEND_POLL_SECONDS)
+
+    def _other_clients(self) -> int:
+        with self._maintenance_engine().connect() as connection:
+            return connection.execute(_OTHER_CLIENTS).scalar_one()
+
+    def _report_and_terminate_leaks(self, finding: str) -> LeakedConnectionError:
         self._dispose_maintenance()
         backends = self._backends()
         self._terminate_backends()
-        try:
-            self._reset_once()
-        except (OperationalError, DatabaseDriftError) as still_failing:
-            self._recreate_after(still_failing)
-        raise LeakedConnectionError(
-            f"The reset of {self._worker_name} waited past its {LOCK_TIMEOUT_MILLISECONDS} ms "
-            f"lock timeout on a connection the test left open; it was terminated.\n"
+        return LeakedConnectionError(
+            f"The reset of {self._worker_name} {finding}; it was terminated.\n"
             f"Open backends (pid, state, wait type, wait event, backend, transaction age):\n"
             + "\n".join(str(backend) for backend in backends)
-        ) from blocked
+        )
 
     def _reset_once(self) -> None:
         baseline = self._baseline
@@ -234,12 +272,7 @@ class PostgresqlTestDatabases:
             connection.execute(
                 text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MILLISECONDS}")
             )
-            self._raise_on_drift(connection, baseline)
-            # The exclusive lock makes a transaction the test left open block the reset,
-            # as TRUNCATE would; on 29 small tables a DELETE per table measured faster
-            # than one TRUNCATE, which replaces every table's files.
-            tables = ", ".join(baseline.tables_referenced_first)
-            connection.execute(text(f"LOCK TABLE {tables} IN ACCESS EXCLUSIVE MODE"))
+            self._lock_and_raise_on_drift(connection, baseline)
             for table in reversed(baseline.tables_referenced_first):
                 connection.execute(text(f"DELETE FROM {table}"))
             cursor = connection.connection.driver_connection.cursor()
@@ -251,13 +284,27 @@ class PostgresqlTestDatabases:
                     {"sequence": sequence, "value": value, "is_called": is_called},
                 )
 
-    def _raise_on_drift(self, connection: Connection, baseline: Baseline) -> None:
-        revisions = set(MigrationContext.configure(connection).get_current_heads())
-        head = migration_head()
-        if revisions != {head}:
+    def _lock_and_raise_on_drift(self, connection: Connection, baseline: Baseline) -> None:
+        """Lock every table, then compare; a change committed while the lock waited is seen.
+
+        The exclusive lock also makes a transaction the test left open block the reset, as
+        TRUNCATE would; on 29 small tables a DELETE per table measured faster than one
+        TRUNCATE, which replaces every table's files. A table or column the check cannot
+        read is drift too.
+        """
+        tables = ", ".join((*baseline.tables_referenced_first, ALEMBIC_VERSION_TABLE))
+        try:
+            connection.execute(text(f"LOCK TABLE {tables} IN ACCESS EXCLUSIVE MODE"))
+            self._raise_on_drift(connection, baseline)
+        except DBAPIError as unreadable:
+            if _is_blocked(unreadable):
+                raise
             raise DatabaseDriftError(
-                f"{self._worker_name} is at revision {sorted(revisions)}, not at head {head}"
-            )
+                f"{self._worker_name} could not be checked against its migrated schema: "
+                f"{unreadable.orig!r}"
+            ) from unreadable
+
+    def _raise_on_drift(self, connection: Connection, baseline: Baseline) -> None:
         structure = _structure(connection)
         if structure != baseline.structure:
             added = sorted(structure - baseline.structure)[:10]
@@ -265,6 +312,12 @@ class PostgresqlTestDatabases:
             raise DatabaseDriftError(
                 f"{self._worker_name} no longer matches its migrated schema; "
                 f"added: {added}, missing: {missing}"
+            )
+        revisions = set(MigrationContext.configure(connection).get_current_heads())
+        head = migration_head()
+        if revisions != {head}:
+            raise DatabaseDriftError(
+                f"{self._worker_name} is at revision {sorted(revisions)}, not at head {head}"
             )
 
     def _recreate_after(self, cause: BaseException) -> None:
@@ -274,11 +327,21 @@ class PostgresqlTestDatabases:
             self.drop_database(self._database_url(self._worker_name))
             self._create_migrated_worker_database()
         except Exception as failure:  # noqa: BLE001 - any failure makes the database unusable
-            unusable = WorkerDatabaseUnusableError(
-                f"{self._worker_name} could not be recreated after {cause!r}: {failure!r}"
+            self._become_unusable(
+                f"{self._worker_name} could not be recreated after {cause!r}: {failure!r}", cause,
             )
-            unusable.__cause__ = cause
-            self._unusable = unusable
+
+    def _become_unusable(
+        self, problem: str, cause: BaseException,
+    ) -> WorkerDatabaseUnusableError:
+        unusable = WorkerDatabaseUnusableError(problem)
+        unusable.__cause__ = cause
+        self._unusable = unusable
+        return unusable
+
+    def _raise_if_unusable(self) -> None:
+        if self._unusable is not None:
+            raise self._unusable
 
     def _create_migrated_worker_database(self) -> None:
         self._create_database(self._worker_name)
