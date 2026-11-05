@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -26,11 +25,6 @@ from songmaker_cli.db.queries.jobs import (
     recover_stale_jobs_by_age_and_type,
     update_job_heartbeat,
     update_job_status,
-)
-
-pytestmark = pytest.mark.skipif(
-    not os.environ.get("TEST_DATABASE_URL", "").startswith("postgresql"),
-    reason="No PostgreSQL URL",
 )
 
 

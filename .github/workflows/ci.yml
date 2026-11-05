@@ -156,26 +156,6 @@ jobs:
           --health-retries 5
     env:
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
-      POSTGRESQL_CONTRACT_MODULES: >-
-        tests/songmaker_cli/test_db_postgresql.py
-        tests/songmaker_cli/test_cover_runner_accounting.py
-        tests/songmaker_cli/test_db_postgresql_job_session.py
-        tests/songmaker_cli/test_reference_audio_quota.py
-        tests/songmaker_cli/test_reference_audio_reconciliation_postgres.py
-        tests/songmaker_cli/test_auth_stores_write_lock_postgres.py
-        tests/songmaker_cli/test_lock_guard_postgres.py
-        tests/songmaker_cli/test_oidc_client_person_token_paths_postgres.py
-        tests/songmaker_cli/db/queries/test_reference_recordings_attach_lock_postgres.py
-        tests/songmaker_cli/test_reference_delete_postgres.py
-        tests/songmaker_cli/test_cleanup_generation_retention_lock_postgres.py
-        tests/songmaker_cli/db/queries/test_songs_version_lock_postgres.py
-        tests/songmaker_cli/mcp_server/test_tools_coherence_verdict_lock_postgres.py
-        tests/songmaker_cli/db/test_migrations_coherence_verdict.py
-        tests/songmaker_cli/db/test_migrations_reference_recordings.py
-        tests/songmaker_cli/db/test_migrations_reference_link.py
-        tests/songmaker_cli/db/test_migrations_job_version.py
-        tests/songmaker_cli/db/test_migrations_job_session.py
-        tests/songmaker_cli/db/test_migrations_user_theme.py
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -189,35 +169,30 @@ jobs:
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run --no-sync --frozen --no-build pytest $POSTGRESQL_CONTRACT_MODULES -n 0 -v --tb=short --junitxml=postgresql-contract.xml
-      - name: Require executed PostgreSQL reference quota and write lock proofs
+        run: uv run --no-sync --frozen --no-build pytest -m postgresql tests/ -n 0 -v --tb=short --junitxml=postgresql-contract.xml
+      - name: Require every selected PostgreSQL proof to execute
         run: |
           python - <<'PYTHON'
-          import os
-          import pathlib
+          import collections
           import xml.etree.ElementTree as ET
 
-          cases = [
-              case for case in ET.parse("postgresql-contract.xml").iter("testcase")
-              if case.attrib["classname"].endswith("test_reference_audio_quota")
-              and (
-                  "postgresql" in case.attrib["name"].partition("[")[2]
-                  or (
-                      "[" not in case.attrib["name"]
-                      and case.attrib["name"].startswith("test_postgresql_")
-                  )
-              )
-          ]
-          assert cases, "No PostgreSQL reference quota proofs executed"
-          assert not any(case.find("skipped") is not None for case in cases), "Quota proof skipped"
-          print(f"PostgreSQL reference quota proofs: {len(cases)} passed, 0 skipped")
-          cases = list(ET.parse("postgresql-contract.xml").iter("testcase"))
-          for path in os.environ["POSTGRESQL_CONTRACT_MODULES"].split():
-              module = pathlib.PurePath(path).stem
-              module_cases = [case for case in cases if module in case.attrib["classname"].split(".")]
-              assert module_cases, f"{module} executed no case"
-              assert not any(case.find("skipped") is not None for case in module_cases), f"{module} proof skipped"
-              print(f"{module}: {len(module_cases)} passed, 0 skipped")
+          testcases = list(ET.parse("postgresql-contract.xml").iter("testcase"))
+          collection_skips = [case for case in testcases if not case.attrib["classname"]]
+          for case in collection_skips:
+              print(f"Skipped at collection, not a selected proof: {case.attrib['name']!r}")
+          cases = [case for case in testcases if case.attrib["classname"]]
+          assert cases, "No PostgreSQL proof selected"
+          skipped = [case for case in cases if case.find("skipped") is not None]
+          assert not skipped, (
+              "PostgreSQL proofs skipped: "
+              f"{[(case.attrib['classname'], case.attrib['name']) for case in skipped]}"
+          )
+          counts = collections.Counter(case.attrib["classname"] for case in cases)
+          assert any(name.endswith("test_reference_audio_quota") for name in counts), (
+              "No PostgreSQL reference quota proofs executed"
+          )
+          for name, count in sorted(counts.items()):
+              print(f"{name}: {count} passed, 0 skipped")
           PYTHON
 
   frontend:
