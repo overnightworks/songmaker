@@ -67,19 +67,25 @@ stop_pytest() {
     fi
 }
 
-# `docker rm -f` succeeds for a container that is already gone, as after its own --rm;
-# a container that still exists after a failed removal fails the run.
+# `docker rm -f` succeeds for a container that is already gone, as after its own --rm.
+# After a failed removal only a listing that succeeds and names nothing counts as gone:
+# `inspect` fails alike for a missing container and an unreachable daemon.
+remove_container() {
+    local removal listing
+    removal=$(capped_docker "$DOCKER_CALL_SECONDS" rm -f "$container" 2>&1) && return 0
+    if listing=$(capped_docker "$DOCKER_CALL_SECONDS" ps -a --quiet --filter "name=^${container}\$" 2>&1) \
+        && [[ -z $listing ]]; then
+        return 0
+    fi
+    echo "test_postgresql: could not remove container $container: $removal; listing: $listing" >&2
+    return 1
+}
 teardown() {
     local status=$?
     trap - EXIT
     trap '' INT TERM HUP
     stop_pytest
-    local removal
-    if ! removal=$(capped_docker "$DOCKER_CALL_SECONDS" rm -f "$container" 2>&1) \
-        && capped_docker "$DOCKER_CALL_SECONDS" container inspect "$container" > /dev/null 2>&1; then
-        echo "test_postgresql: could not remove container $container: $removal" >&2
-        exit 1
-    fi
+    remove_container || exit 1
     exit "$status"
 }
 interrupted() {
