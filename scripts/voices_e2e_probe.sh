@@ -6,7 +6,7 @@
 # Run it only under the probe lock, as one capped command:
 #   flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 120 1700 scripts/voices_e2e_probe.sh
 # CAP 1700 + K 120 = 1820, within the lock contract's 1830. K covers the
-# teardown (`down -v --remove-orphans`), measured at about 2 s, with room for a slower disk.
+# teardown (`--profile gpu down -v --remove-orphans`), measured at about 2 s, with room for a slower disk.
 #
 # The exit code is the proof's own; a failed build or start exits non-zero too.
 
@@ -16,6 +16,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 PROBE_PORT=18080
 
+secrets_dir="$(mktemp -d)"
+echo e2e-ci-postgres-password > "$secrets_dir/postgres-password"
+echo e2e-ci-session-secret-do-not-reuse-anywhere-else > "$secrets_dir/session-secret"
+echo e2e-ci-internal-token > "$secrets_dir/internal-token"
+echo e2e-ci-monitoring-token > "$secrets_dir/monitoring-token"
 secret_file="$(mktemp)"
 echo e2e-ci-client-secret > "$secret_file"
 gateway_key_file="$(mktemp)"
@@ -23,10 +28,7 @@ echo e2e-ci-gateway-key > "$gateway_key_file"
 
 export COMPOSE_PROJECT_NAME=songmaker-i689-probe
 export WEB_PORT="$PROBE_PORT"
-export POSTGRES_PASSWORD=e2e-ci-postgres-password
-export SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else
-export SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token
-export SONGMAKER_MONITORING_TOKEN=e2e-ci-monitoring-token
+export SONGMAKER_SECRETS_DIR="$secrets_dir"
 export E2E_ADMIN_USERNAME=e2e-ci-admin
 export OIDC_ISSUER=https://keycloak.invalid/realms/e2e
 export KEYCLOAK_CLIENT_SECRET_FILE="$secret_file"
@@ -42,7 +44,10 @@ compose=(docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml
 
 teardown() {
     trap - EXIT TERM
-    "${compose[@]}" down -v --remove-orphans
+    # The CI override puts the music worker in the gpu profile; without the
+    # profile, down leaves it running.
+    "${compose[@]}" --profile gpu down -v --remove-orphans
+    rm -rf "$secrets_dir"
     rm -f "$secret_file" "$gateway_key_file"
 }
 trap teardown EXIT

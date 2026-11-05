@@ -244,7 +244,7 @@ If a worker is stuck in step 3:
 
 - Check container logs for the per-attempt warning lines (`"Registration attempt N failed: ..."`)
 - Verify the control plane URL is reachable from inside the worker container: `docker compose exec acestep-worker-0 curl -v http://songmaker-web:8080/health`
-- Verify `SONGMAKER_INTERNAL_TOKEN` matches between the worker and the web container env
+- Verify the worker and the web container mount the same `internal-token` file content (both read it from `/run/secrets/songmaker_internal_token`; a rotated file reaches them only after a recreate)
 
 The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container stop) while still in the registration loop, the lifespan finally block cancels the registration task and awaits its cleanup before exiting. No orphaned tasks survive shutdown.
 
@@ -456,7 +456,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `WORKER_PORT` | 8001 | Port the worker's FastAPI app listens on |
 | `REDIS_URL` | (required) | Redis URL for heartbeat publishing |
 | `CONTROL_PLANE_URL` | None | Songmaker web URL for worker registration. If unset, registration is skipped. |
-| `SONGMAKER_INTERNAL_TOKEN` | (required, non-empty) | Shared secret for control-plane auth. The worker refuses to start without it, and every route except `/health` checks it in the `X-Internal-Token` header (see "How Songmaker Uses ACE-Step"). |
+| `songmaker_internal_token` (file `/run/secrets/songmaker_internal_token`) | (required, non-empty) | Shared secret for control-plane auth. The worker refuses to start without it, and every route except `/health` checks it in the `X-Internal-Token` header (see "How Songmaker Uses ACE-Step"). |
 | `VRAM_BUDGET_GB` | 24.0 | VRAM budget in GB. Passed to the ACE-Step subprocess as `MAX_CUDA_VRAM`. Lower values (e.g. 22 on a 24 GB card) cause ACE-Step to auto-fall-back to CPU VAE decode during xl-turbo generation, which is ~100x slower than GPU — raise the budget if the admin panel shows very slow xl-turbo generations at ~0% GPU util. |
 | `GPU_ID` | None | CUDA device index passed deterministically to the inner process as `CUDA_VISIBLE_DEVICES` |
 | `NVIDIA_VISIBLE_DEVICES` | Compose: `0` | Host GPU exposed to the worker by the explicit NVIDIA container runtime |

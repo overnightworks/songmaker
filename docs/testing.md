@@ -395,7 +395,7 @@ middleware and lifecycle tests continue to use `make_test_app`.
 - **Mock external services**: scheduler dispatch, Whisper model, Claude API, ffmpeg
 - **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.dispatch_generation_on_worker")`
 - **Factory fixtures** in conftest.py for WAV bytes and stereo audio
-- **`Settings` constructed with explicit kwargs** in tests; no monkeypatching of `os.environ` for the fields. Use `monkeypatch.setenv` only for the import-time env vars set in `conftest.py` (`DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `WORKER_ID`, `PUBLIC_BASE_URL`)
+- **`Settings` constructed with explicit kwargs** in tests; no monkeypatching of `os.environ` for the fields. Use `monkeypatch.setenv` only for the import-time env vars set in `conftest.py` (`DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `WORKER_ID`, `PUBLIC_BASE_URL`). A compose stack gets the four songmaker secrets as files: the CI e2e workflow and `scripts/voices_e2e_probe.sh` write throwaway ones into a temporary directory and set `SONGMAKER_SECRETS_DIR`, and `tests/test_compose_secret_files.py` renders the real compose to prove no service receives one as an environment variable
 
 ### Frontend
 

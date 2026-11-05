@@ -14,7 +14,7 @@ Install and first start, in the deploy checkout `~/srv/songmaker` (a clone at a 
 
 ```bash
 sudo ./scripts/apparmor/install_profile.sh        # songmaker-web does not start without its AppArmor profile
-cp docker/.env.docker.example .env                # fill in the required secrets
+cp docker/.env.docker.example .env                # fill in the required settings; the secrets are files, see docs/security.md ("Secrets")
 docker compose up -d --build --wait               # never wrap in `timeout`
 sudo ./scripts/install-cli-credentials-mirror.sh  # agent-CLI login mirror
 sudo ./scripts/install-autostart.sh               # start the stack after every boot
