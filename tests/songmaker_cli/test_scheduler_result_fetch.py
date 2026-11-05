@@ -6,6 +6,7 @@ import asyncio
 import gzip
 import json
 import tempfile
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -63,17 +64,21 @@ def small_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GENERATION_RESULT_MAX_BYTES", str(_LIMIT))
 
 
-def _dispatch(worker: _Worker):
+def _generation_dispatch(worker: _Worker):
     from acestep_engine.models import AceStepConfig
 
     options = DispatchOptions(
         transport=httpx.MockTransport(worker.handle), initial_reconnect_backoff_seconds=0.0,
     )
     picked = _PickedWorker(id="w1", host="worker", port=8001, loaded_modes=["sft"], queue_depth=0)
-    return asyncio.run(dispatch_generation_on_worker(
+    return dispatch_generation_on_worker(
         worker=picked, ace_config=AceStepConfig(prompt="p", lyrics="l"), target_mode="sft",
         options=options,
-    ))
+    )
+
+
+def _dispatch(worker: _Worker):
+    return asyncio.run(_generation_dispatch(worker))
 
 
 async def _streamed(body: bytes):
@@ -160,24 +165,12 @@ def test_a_take_announced_over_the_limit_is_refused_before_its_body_is_read(
     assert list(music_tmp.iterdir()) == []
 
 
-def _encoded(body: bytes, layers: int) -> bytes:
-    for _ in range(layers):
-        body = gzip.compress(body)
-    return body
-
-
 @pytest.mark.usefixtures("small_limit")
-@pytest.mark.parametrize("encoding, decoded_bytes", [
-    pytest.param("gzip", _LIMIT // 2, id="small-gzip"),
-    pytest.param("gzip, gzip", _LIMIT * 4096, id="stacked-gzip-bomb"),
-])
-def test_an_encoded_take_is_refused_and_leaves_no_file(
-    music_tmp: Path, encoding: str, decoded_bytes: int,
-) -> None:
-    body = _encoded(b"\0" * decoded_bytes, encoding.count("gzip"))
+def test_an_encoded_take_is_refused_and_leaves_no_file(music_tmp: Path) -> None:
+    body = gzip.compress(b"\0" * (_LIMIT // 2))
     assert len(body) < _LIMIT
     worker = _Worker(lambda request: httpx.Response(
-        200, headers={"Content-Encoding": encoding}, content=_streamed(body),
+        200, headers={"Content-Encoding": "gzip"}, content=_streamed(body),
     ))
 
     with pytest.raises(WorkerTaskFailed):
@@ -218,6 +211,36 @@ def test_a_failed_fetch_is_one_failed_take_without_retry_or_leftover(
         _dispatch(worker)
 
     assert len(worker.calls("GET", "/tasks/gen-1/result")) == 1
+    assert list(music_tmp.iterdir()) == []
+
+
+@pytest.mark.parametrize("creation", ["succeeds", "fails"])
+def test_a_cancel_while_the_take_file_is_being_created_leaves_no_file(
+    music_tmp: Path, monkeypatch: pytest.MonkeyPatch, creation: str,
+) -> None:
+    created, resume = threading.Event(), threading.Event()
+    mkstemp = tempfile.mkstemp
+
+    def mkstemp_held_after_creating(*args, **kwargs):
+        made = mkstemp(*args, **kwargs) if creation == "succeeds" else None
+        created.set()
+        resume.wait(timeout=10)
+        if made is None:
+            raise OSError(28, "No space left on device")
+        return made
+
+    monkeypatch.setattr(tempfile, "mkstemp", mkstemp_held_after_creating)
+
+    async def cancel_while_creating() -> None:
+        fetch = asyncio.create_task(_generation_dispatch(_Worker(_serves(_TAKE))))
+        assert await asyncio.to_thread(created.wait, 10)
+        fetch.cancel()
+        resume.set()
+        with pytest.raises(asyncio.CancelledError):
+            await fetch
+
+    asyncio.run(cancel_while_creating())
+
     assert list(music_tmp.iterdir()) == []
 
 

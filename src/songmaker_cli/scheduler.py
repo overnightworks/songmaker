@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase
+from acestep_engine.thread_handoff import acquire_in_thread
 from songmaker_cli.acestep_state import (
     admit_generation as admit_generation_occupancy,
 )
@@ -485,6 +486,12 @@ def _open_take_file() -> tuple[Path, BinaryIO]:
     return Path(name), os.fdopen(fd, "wb")
 
 
+def _discard_take_file(opened: tuple[Path, BinaryIO]) -> None:
+    path, take = opened
+    take.close()
+    path.unlink(missing_ok=True)
+
+
 async def _fetch_generation_result(
     worker: _PickedWorker, task_id: str, options: DispatchOptions,
 ) -> Path:
@@ -493,7 +500,7 @@ async def _fetch_generation_result(
     One attempt: any failure leaves no file behind and surfaces as ``WorkerTaskFailed``.
     The file work runs in a thread so a large take never blocks the event loop.
     """
-    path, take = await asyncio.to_thread(_open_take_file)
+    path, take = await acquire_in_thread(_open_take_file, _discard_take_file)
     try:
         try:
             await _stream_generation_result(worker, task_id, take, options)
