@@ -279,13 +279,6 @@ def test_create_song_requires_access(db_session: Session):
         )
 
 
-def test_create_song_rejects_empty_title(db_session: Session):
-    owner_id, _, album_id, _, _ = _seed(db_session)
-    owner = _owner(db_session, owner_id)
-    with pytest.raises(tools.MCPToolError):
-        tools.tool_create_song(db_session, owner, album_id=album_id, title="  ")
-
-
 def test_create_song_persists_and_returns_state(db_session: Session):
     owner_id, _, album_id, _, _ = _seed(db_session)
     owner = _owner(db_session, owner_id)
@@ -423,24 +416,44 @@ def test_rename_song_dedupes_slug_against_sibling_in_same_album(db_session: Sess
     assert stored.slug == "rival-2"
 
 
-def test_co_writer_rename_stores_the_stripped_title(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+TITLE_WRITES = pytest.mark.parametrize(
+    ("tool_name", "target"), [("create_song", "album_id"), ("rename_song", "song_id")])
 
-    outcome = execute_cowriter_tool(
-        db_session, _owner(db_session, owner_id), "rename_song",
-        {"song_id": song_id, "title": "  Night Drive "}, session_id=None,
+
+def _co_writer_title_write(db_session: Session, tool_name: str, target: str, title: str):
+    owner_id, _, album_id, song_id, _ = _seed(db_session)
+    arguments = {target: {"album_id": album_id, "song_id": song_id}[target], "title": title}
+    return execute_cowriter_tool(
+        db_session, _owner(db_session, owner_id), tool_name, arguments, session_id=None,
     )
 
+
+@TITLE_WRITES
+def test_co_writer_stores_the_stripped_title(db_session: Session, tool_name, target):
+    outcome = _co_writer_title_write(db_session, tool_name, target, "  Night Drive ")
+
     assert not outcome.is_error
-    stored = db_session.query(Song).filter_by(id=song_id).one()
-    assert (stored.title, stored.slug) == ("Night Drive", "night-drive")
+    assert db_session.query(Song).filter_by(title="Night Drive").one().slug == "night-drive"
 
 
-def test_rename_song_rejects_empty(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+@TITLE_WRITES
+@pytest.mark.parametrize(
+    "title", ["   ", "x" * (Song.__table__.c.title.type.length + 1)], ids=["blank", "overlong"],
+)
+def test_co_writer_refuses_unstorable_title_before_any_write(db_session, tool_name, target, title):
+    owner_id, _, album_id, song_id, _ = _seed(db_session)
+    target_id = {"album_id": album_id, "song_id": song_id}[target]
+    before = db_session.query(Song.id, Song.title, Song.slug).all()
+    tool = getattr(tools, f"tool_{tool_name}")
     owner = _owner(db_session, owner_id)
+    # The tool body runs outside the executor, whose rollback would hide an earlier write.
     with pytest.raises(tools.MCPToolError):
-        tools.tool_rename_song(db_session, owner, song_id=song_id, title="  ")
+        tool(db_session, owner, **{target: target_id}, title=title)
+
+    assert not db_session.new
+    assert not db_session.dirty
+    assert db_session.query(Song.id, Song.title, Song.slug).all() == before
+    assert db_session.query(AuditLog).count() == 0
 
 
 def test_suggest_album_cover_queues_a_cover_job(db_session: Session):

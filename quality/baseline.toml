@@ -70,7 +70,7 @@
 "tests/acestep_worker/test_wrapper.py" = 1631
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
 "tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4751
+"tests/songmaker_cli/test_api.py" = 4715
 "tests/test_auto_deploy_alerting.py" = 1384
 "tests/songmaker_cli/test_conversation_api.py" = 842
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
@@ -382,7 +382,6 @@ test_list_songs_offset_beyond_total = [["tests/songmaker_cli/test_server.py", "t
 test_list_songs_pagination_offset_limit = [["tests/songmaker_cli/test_server.py", "test_api_songs"]]
 test_rename_album = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_rename_album_strips_whitespace = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
-test_rename_song_strips_whitespace = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_song_detail_response_uncompressed_without_client_support = [["tests/songmaker_cli/test_server_middleware.py", "test_tiny_json_response_is_not_gzip_compressed"]]
 
 [clones."tests/songmaker_cli/test_conversation_api.py"]

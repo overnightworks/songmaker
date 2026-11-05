@@ -62,6 +62,7 @@ from songmaker_cli.db.queries.playlists import best_playable_generation, playlis
 from songmaker_cli.db.queries.reference_recordings import get_owned_reference_recording
 from songmaker_cli.db.queries.songs import (
     EmptySongTitleError,
+    UnstorableSongTitleError,
     cleanup_song,
     count_generations_by_song,
     count_songs,
@@ -146,9 +147,16 @@ def api_get_song(
     return SongResponse.from_orm(song)
 
 
+def _title_refusal_detail(error: UnstorableSongTitleError) -> str:
+    return "Title is required" if isinstance(error, EmptySongTitleError) else "Title is too long"
+
+
 @router.post(
     "/songs",
-    responses={404: {"description": "Album or reference audio not found"}},
+    responses={
+        404: {"description": "Album or reference audio not found"},
+        422: {"description": "Song title is required or too long"},
+    },
 )
 def api_create_song(
     req: SongCreateRequest,
@@ -157,10 +165,14 @@ def api_create_song(
 ) -> SongResponse:
     album = get_album(session, req.album_id)
     check_album_access(album, user)
-    slug = unique_song_slug(session, req.album_id, req.title)
+    try:
+        title = stored_song_title(req.title)
+    except UnstorableSongTitleError as exc:
+        raise HTTPException(422, _title_refusal_detail(exc)) from exc
+    slug = unique_song_slug(session, req.album_id, title)
     _attach_reference(session, user.id, req.reference_recording_id)
     song = create_song(
-        session, title=req.title, album_id=req.album_id,
+        session, title=title, album_id=req.album_id,
         lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
         audio_duration=req.audio_duration, key_scale=req.key_scale,
         vocal_language=req.vocal_language,
@@ -211,7 +223,7 @@ def api_update_song(
     "/songs/{song_id}/title",
     responses={
         404: {"description": SONG_NOT_FOUND_DETAIL},
-        422: {"description": "Song title is required"},
+        422: {"description": "Song title is required or too long"},
     },
 )
 def api_rename_song(
@@ -222,8 +234,8 @@ def api_rename_song(
     song = check_song_access(session, song_id, user)
     try:
         title = stored_song_title(req.title)
-    except EmptySongTitleError:
-        raise HTTPException(422, "Title is required")
+    except UnstorableSongTitleError as exc:
+        raise HTTPException(422, _title_refusal_detail(exc)) from exc
     slug = unique_song_slug(
         session, song.album_id, title, exclude_song_id=song_id,
     )

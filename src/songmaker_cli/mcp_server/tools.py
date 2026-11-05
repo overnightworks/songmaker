@@ -39,6 +39,7 @@ from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.generations import save_coherence_verdict
 from songmaker_cli.db.queries.songs import (
     EmptySongTitleError,
+    OverlongSongTitleError,
     count_songs,
     list_songs,
     stored_song_title,
@@ -194,6 +195,15 @@ def tool_save_coherence_verdict(
     return GenerationDetail.from_orm(gen)
 
 
+def _stored_title_or_tool_error(title: str) -> str:
+    try:
+        return stored_song_title(title)
+    except EmptySongTitleError as exc:
+        raise MCPToolError("title cannot be empty") from exc
+    except OverlongSongTitleError as exc:
+        raise MCPToolError("title is longer than a song title can be") from exc
+
+
 def tool_create_song(
     session: Session,
     user: AuthenticatedUser,
@@ -202,8 +212,7 @@ def tool_create_song(
     lyrics: str = "",
     prompt: str = "",
 ) -> WriteResult:
-    if not title.strip():
-        raise MCPToolError("title cannot be empty")
+    title = _stored_title_or_tool_error(title)
     album = get_album(session, album_id)
     try:
         check_album_access(album, user, require_owner=True)
@@ -300,10 +309,7 @@ def tool_update_song_style(
 def tool_rename_song(
     session: Session, user: AuthenticatedUser, song_id: str, title: str,
 ) -> WriteResult:
-    try:
-        title = stored_song_title(title)
-    except EmptySongTitleError as exc:
-        raise MCPToolError("title cannot be empty") from exc
+    title = _stored_title_or_tool_error(title)
     try:
         song = check_song_access(session, song_id, user, require_owner=True)
     except HTTPException as exc:

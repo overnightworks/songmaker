@@ -526,14 +526,24 @@ def restore_song(session: Session, song_id: str) -> Song:
     return song
 
 
-class EmptySongTitleError(ValueError):
+class UnstorableSongTitleError(ValueError):
+    """A song title the title column cannot hold."""
+
+
+class EmptySongTitleError(UnstorableSongTitleError):
     """A song title that is empty once stripped."""
+
+
+class OverlongSongTitleError(UnstorableSongTitleError):
+    """A song title longer than the title column holds."""
 
 
 def stored_song_title(title: str) -> str:
     stripped = title.strip()
     if not stripped:
         raise EmptySongTitleError
+    if len(stripped) > Song.__table__.c.title.type.length:
+        raise OverlongSongTitleError
     return stripped
 
 

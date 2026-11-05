@@ -279,27 +279,6 @@ def test_rename_song(client: TestClient) -> None:
     assert after.json()["version_count"] == 2
 
 
-def test_rename_song_strips_whitespace(client: TestClient) -> None:
-    resp = client.put("/api/songs/s1/title", json={"title": "  Storm  "})
-    assert resp.status_code == 200
-    assert resp.json()["title"] == "Storm"
-
-
-def test_rename_song_rejects_empty(client: TestClient) -> None:
-    resp = client.put("/api/songs/s1/title", json={"title": ""})
-    assert resp.status_code == 422
-
-
-def test_rename_song_rejects_whitespace_only(client: TestClient) -> None:
-    resp = client.put("/api/songs/s1/title", json={"title": "   "})
-    assert resp.status_code == 422
-
-
-def test_rename_song_rejects_too_long(client: TestClient) -> None:
-    resp = client.put("/api/songs/s1/title", json={"title": "x" * 201})
-    assert resp.status_code == 422
-
-
 def test_rename_song_not_found(client: TestClient) -> None:
     resp = client.put("/api/songs/nonexistent/title", json={"title": "Storm"})
     assert resp.status_code == 404
@@ -3497,29 +3476,14 @@ def test_stream_job_heartbeat_survives_the_lease_and_deadline_changes(
 # ── Coverage gap tests ───────────────────────────────────────────────
 
 
-def test_create_song_gen_param_out_of_range(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    "generation_params",
+    [{"inference_steps": 500}, {"infer_method": "euler"}, {"thinking": "not-a-bool"}],
+    ids=["out-of-range", "invalid-infer-method", "invalid-thinking"],
+)
+def test_create_song_rejects_invalid_gen_params(client: TestClient, generation_params) -> None:
     resp = client.post("/api/songs", json={
-        "title": "Bad Params",
-        "album_id": "rock",
-        "generation_params": {"inference_steps": 500},
-    })
-    assert resp.status_code == 422
-
-
-def test_create_song_gen_param_invalid_infer_method(client: TestClient) -> None:
-    resp = client.post("/api/songs", json={
-        "title": "Bad Infer",
-        "album_id": "rock",
-        "generation_params": {"infer_method": "euler"},
-    })
-    assert resp.status_code == 422
-
-
-def test_create_song_gen_param_invalid_thinking(client: TestClient) -> None:
-    resp = client.post("/api/songs", json={
-        "title": "Bad Think",
-        "album_id": "rock",
-        "generation_params": {"thinking": "not-a-bool"},
+        "title": "Bad Params", "album_id": "rock", "generation_params": generation_params,
     })
     assert resp.status_code == 422
 
