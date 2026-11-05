@@ -4,20 +4,24 @@
 # project (one acestep worker on the GPU, the web process, the music worker,
 # Postgres and Redis), drives each kind through the API as a throwaway admin,
 # and judges each by its outcome: a completed job, a take row whose mp3 and
-# wav are served, a LoRA adapter adopted (status ready with a tensor path).
+# wav are served with its raw.wav beside them, a LoRA adapter adopted (status
+# ready, its storage path holding the adapter's files), and nothing left in the
+# worker's local output root.
 #
 # Usage, only as one capped command under the probe lock:
 #   flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 120 1700 \
 #       scripts/gpu_job_kinds_probe.sh <deploy checkout>/vendor/acestep/checkpoints
 # CAP 1700 + K 120 = 1820, within the lock contract's 1830. K covers the
-# teardown (`--profile gpu down -v --remove-orphans`), measured at about 2 s on
-# the voices stack; 120 s leaves room for a worker that still holds the GPU.
+# teardown (`--profile gpu down -v --remove-orphans --rmi local`), measured at
+# about 2 s on the voices stack without the image removal; 120 s leaves room
+# for a worker that still holds the GPU and for removing the probe's images.
 #
 # The operator stops the live `acestep-worker-0` first and restarts it after;
 # the script refuses to start while one runs (one GPU, one worker name).
 # The checkpoint directory is mounted read-only, so the probe cannot change the
 # deploy's models. The script never touches the live project, port 8080 or an
-# `.env`: every secret below is a throwaway.
+# `.env`: every compose call reads an empty environment file instead of the
+# checkout's `.env`, and every secret below is a throwaway.
 #
 # The exit code is the proof's: 0 only when all five kinds held and the
 # teardown left nothing behind.
@@ -68,6 +72,9 @@ echo gpu-probe-internal-token > "$secrets_dir/internal-token"
 echo gpu-probe-monitoring-token > "$secrets_dir/monitoring-token"
 echo gpu-probe-client-secret > "$work_dir/client-secret"
 echo gpu-probe-gateway-key > "$work_dir/gateway-key"
+# Compose reads the checkout's `.env` unless it is handed another file.
+: > "$work_dir/empty.env"
+unset COMPOSE_ENV_FILES
 
 # Compose merges a volume by its container path: only the checkpoints entry changes.
 cat > "$work_dir/checkpoints-readonly.yml" <<'EOF'
@@ -90,7 +97,8 @@ export LORA_TRAINING_EPOCHS="$LORA_EPOCHS"
 export LORA_TRAINING_SAVE_EVERY_N_EPOCHS="$LORA_EPOCHS"
 
 cd "$PROJECT_ROOT"
-compose=(docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml
+compose=(docker compose --env-file "$work_dir/empty.env"
+    -f docker-compose.yml -f docker/docker-compose.ci.yml
     -f "$work_dir/checkpoints-readonly.yml")
 base="http://127.0.0.1:$PROBE_PORT"
 cookie=""
@@ -99,8 +107,9 @@ teardown() {
     local status=$?
     trap - EXIT TERM
     # The CI override puts the GPU and music services in the gpu profile; without
-    # the profile, down leaves them running.
-    "${compose[@]}" --profile gpu down -v --remove-orphans || status=1
+    # the profile, down leaves them running. The images it built go too: the
+    # worker's alone is about 9 GB.
+    "${compose[@]}" --profile gpu down -v --remove-orphans --rmi local || status=1
     rm -rf "$work_dir"
     local left
     left="$(docker ps -a -q --filter "label=com.docker.compose.project=$PROJECT")$(
@@ -116,10 +125,10 @@ teardown() {
 trap teardown EXIT
 trap 'exit 143' TERM
 
-api() { # api METHOD PATH [curl args...]
+api() { # api METHOD PATH [curl args...]; the Origin passes the app's same-origin CSRF check
     local method="$1" path="$2"
     shift 2
-    curl -fsS -X "$method" -b "$cookie" "$base$path" "$@"
+    curl -fsS -X "$method" -b "$cookie" -H "Origin: $base" "$base$path" "$@"
 }
 
 api_json() { # api_json METHOD PATH JSON
@@ -148,15 +157,21 @@ newest_take() { # newest_take SONG_ID -> JSON of the song's newest generation
     api GET "/api/songs/$1" | jq -c '.generations | sort_by(.created_at) | last'
 }
 
-prove_take() { # prove_take LABEL TAKE_JSON: the row names an mp3 and a wav the server serves
-    local label="$1" take="$2" kind path size
+audio_file_exists() { # audio_file_exists RELATIVE_PATH: a non-empty file in the audio tree
+    "${compose[@]}" exec -T songmaker-web sh -c 'test -s "$1"' _ "/app/data/audio/$1"
+}
+
+prove_take() { # prove_take LABEL TAKE_JSON: an mp3 and a wav served, the raw.wav beside them
+    local label="$1" take="$2" kind path size wav
     for kind in mp3_path wav_path; do
         path="$(jq -r ".$kind // empty" <<<"$take")"
         [[ -n "$path" ]] || fail "$label: take has no $kind"
         size="$(api GET "/audio/$path" | wc -c)"
         ((size > 1000)) || fail "$label: /audio/$path served only $size bytes"
     done
-    echo "PROOF $label: take $(jq -r .id <<<"$take") with its mp3 and wav served"
+    wav="$(jq -r .wav_path <<<"$take")"
+    audio_file_exists "${wav%.wav}.raw.wav" || fail "$label: no raw.wav beside $wav"
+    echo "PROOF $label: take $(jq -r .id <<<"$take") with its mp3 and wav served and its raw.wav kept"
 }
 
 generate_kind() { # generate_kind LABEL PATH JSON SONG_ID
@@ -229,12 +244,19 @@ while ((SECONDS < lora_deadline)); do
     sleep 10
 done
 [[ "$(jq -r .status <<<"$lora")" == ready ]] || fail "lora: still $status after ${LORA_TIMEOUT_SECONDS}s"
-[[ -n "$(jq -r '.tensor_path // empty' <<<"$lora")" ]] || fail "lora: ready without an adapter tensor"
-echo "PROOF lora: voice $voice ready with its adapter adopted ($(jq -r .tensor_path <<<"$lora"))"
+# A trained adapter is adopted as its storage path (jobs/lora_training.py, _mark_lora_training_complete).
+storage="$(jq -r '.storage_path // empty' <<<"$lora")"
+[[ -n "$storage" ]] || fail "lora: ready without a storage path"
+"${compose[@]}" exec -T songmaker-web sh -c 'test -n "$(ls -A "$1")"' _ "/app/data/audio/$storage" \
+    || fail "lora: no adapter files under $storage"
+echo "PROOF lora: voice $voice ready with its adapter adopted ($storage)"
 
 echo "--- nothing on the shared volume from the worker ---"
 if "${compose[@]}" exec -T songmaker-web sh -c 'ls /app/data/audio/worker_output/*.wav' > /dev/null 2>&1; then
     fail "generation: the worker left a take on the shared audio volume"
 fi
 echo "PROOF output: no take under the shared audio volume's worker_output"
+"${compose[@]}" exec -T "$WORKER_SERVICE" sh -c 'test -z "$(ls -A "$AUDIO_OUTPUT_DIR")"' \
+    || fail "generation: the worker's local output root still holds a take"
+echo "PROOF output: the worker's local output root is empty"
 echo "PROOF all five job kinds held"
