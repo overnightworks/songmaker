@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import { MODELS_LOAD_ERROR } from '#lib/constants.ts';
+import { MODELS_LOAD_ERROR } from '#lib/constants/models.ts';
 import type { PresetItem, VersionGenerationParams } from '#lib/api/types.ts';
 import type { AvailableModel } from '#lib/api/client.ts';
 import {

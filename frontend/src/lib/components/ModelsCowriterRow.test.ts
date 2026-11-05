@@ -1,7 +1,10 @@
 import { createRawSnippet, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { MODELS_ROUTE_GATEWAY_LABEL, MODELS_SET_BY_AGENT_FILE_LABEL } from '#lib/constants.ts';
+import {
+	MODELS_ROUTE_GATEWAY_LABEL,
+	MODELS_SET_BY_AGENT_FILE_LABEL
+} from '#lib/constants/models.ts';
 import ModelsCowriterRow from './ModelsCowriterRow.svelte';
 
 const mounted: ReturnType<typeof mount>[] = [];

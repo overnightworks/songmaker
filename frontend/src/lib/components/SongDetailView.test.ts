@@ -40,12 +40,6 @@ import {
 	TAKES_RETRY_LABEL,
 	DIALOG_CANCEL_LABEL,
 	TOAST_UNDO_LABEL,
-	VERSION_DELETE_CONFIRM_LABEL,
-	VERSION_DELETE_DRAFT_GOES,
-	VERSION_DELETE_EMPTIES_EDITOR,
-	VERSION_DELETE_LOAD_UNDO_GOES,
-	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
-	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_LABEL,
 	versionDeleteLabel,
 	versionDeleteTitle,
@@ -53,6 +47,14 @@ import {
 	versionLoadedToastLabel,
 	versionReplaceDraftMessage
 } from '#lib/constants.ts';
+import {
+	VERSION_DELETE_CONFIRM_LABEL,
+	VERSION_DELETE_DRAFT_GOES,
+	VERSION_DELETE_EMPTIES_EDITOR,
+	VERSION_DELETE_LOAD_UNDO_GOES,
+	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
+	VERSION_REPLACE_DRAFT_TITLE
+} from '#lib/constants/versions.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '#lib/test-utils/hitbox.ts';
@@ -243,6 +245,12 @@ class MockEventSource {
 	}
 }
 
+async function settleRender(): Promise<void> {
+	await tick();
+	await Promise.resolve();
+	await tick();
+}
+
 async function renderView(options: { widthPx?: number } = {}): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	if (options.widthPx !== undefined) {
@@ -251,9 +259,7 @@ async function renderView(options: { widthPx?: number } = {}): Promise<HTMLEleme
 	}
 	document.body.append(target);
 	mounted.push(mount(SongDetailView, { target }));
-	await tick();
-	await Promise.resolve();
-	await tick();
+	await settleRender();
 	return target;
 }
 
@@ -627,12 +633,6 @@ describe('SongDetailView failure wording', () => {
 });
 
 describe('SongDetailView recipe and takes', () => {
-	async function settleTakesLoad(): Promise<void> {
-		await tick();
-		await Promise.resolve();
-		await tick();
-	}
-
 	function takesWithNoNetworkAnswer(): void {
 		vi.mocked(fetchSong).mockRejectedValueOnce(
 			new NetworkError('/api/songs/s1', new TypeError('Failed to fetch'))
@@ -644,7 +644,7 @@ describe('SongDetailView recipe and takes', () => {
 		takesWithNoNetworkAnswer();
 		songList.set([song({ ...editableSongDefaults(), generation_count: 2 })]);
 		const target = await renderView();
-		await settleTakesLoad();
+		await settleRender();
 		expect(target.querySelectorAll('.take-row')).toHaveLength(1);
 		expect(target.textContent).not.toContain(TAKES_ERROR);
 		expect(target.textContent).not.toContain('Failed to fetch');
@@ -655,7 +655,7 @@ describe('SongDetailView recipe and takes', () => {
 		takesWithNoNetworkAnswer();
 		songList.set([song({ ...editableSongDefaults(), generation_count: 2 })]);
 		const target = await renderView();
-		await settleTakesLoad();
+		await settleRender();
 		const alert = target.querySelector('.takes-list [role="alert"]') as HTMLElement;
 		expect(alert.textContent).toContain(TAKES_ERROR);
 		expect(getByRoleButton(alert, TAKES_RETRY_LABEL)).toBeTruthy();
@@ -666,7 +666,7 @@ describe('SongDetailView recipe and takes', () => {
 		takesWithNoNetworkAnswer();
 		songList.set([song({ ...editableSongDefaults(), generation_count: 2, generations: [] })]);
 		const target = await renderView();
-		await settleTakesLoad();
+		await settleRender();
 		expect(target.textContent).toContain(TAKES_LOADING);
 		expect(target.textContent).not.toContain(TAKES_ERROR);
 
@@ -700,7 +700,7 @@ describe('SongDetailView recipe and takes', () => {
 			vi.mocked(fetchSong).mockRejectedValueOnce(error);
 			songList.set([song({ ...editableSongDefaults(), generation_count: 2, generations: [] })]);
 			const target = await renderView();
-			await settleTakesLoad();
+			await settleRender();
 			expect(target.textContent).toContain(shown);
 			expect(target.textContent).not.toContain(hidden);
 		}
@@ -979,9 +979,7 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 		expect(generateSong).toHaveBeenCalledTimes(1);
 
 		resolveGenerate(jobStatus({ status: 'completed' }));
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 	});
 
 	it('locks the button while the request is in flight, before any job exists', async () => {
@@ -1004,9 +1002,7 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 		);
 
 		resolveGenerate(jobStatus({ status: 'completed' }));
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 
 		expect(generateBtn(target).disabled).toBe(false);
 	});
@@ -1168,9 +1164,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		} else {
 			writeSaveButton(target).click();
 		}
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 
 		expect(updateSong).toHaveBeenCalled();
 		expect(generateSong).not.toHaveBeenCalled();
@@ -1198,9 +1192,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 			})
 		]);
 		writeSaveButton(target).click();
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 
 		expect(addToast).toHaveBeenCalledWith('Saved version 5', 'success');
 	});
@@ -1743,9 +1735,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		);
 		if (!row) throw new Error(`Expected the v${versionNumber} row`);
 		row.click();
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 	}
 
 	function undoLastLoad(): void {
@@ -1814,9 +1804,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		named('button[aria-expanded="false"]', `v${n} ·`)?.click();
 		flushSync();
 		named('.version-link', openVersionLabel(n))?.click();
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 	}
 
 	it('Open v1 on a take group loads v1 as the draft and shows it on Edit', async () => {
@@ -1890,9 +1878,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		if (!dialog) throw new Error('Expected the replace-draft confirm');
 		expect(dialog.textContent).toContain(versionReplaceDraftMessage(1));
 		clickNamed(dialog, DIALOG_CANCEL_LABEL);
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 
 		expect(replaceDialog()).toBeNull();
 		expect(versionsSheet()).not.toBeNull();
@@ -1909,9 +1895,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		const dialog = replaceDialog();
 		if (!dialog) throw new Error('Expected the replace-draft confirm');
 		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 	}
 
 	it('Replace loads the version, and Undo brings the replaced edit back', async () => {
@@ -2013,9 +1997,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		vi.advanceTimersByTime(4 * BRIEF_UNDO_TOAST_MS);
 
 		versionRowButton(1).click();
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 
 		const { toasts } = await shownToasts();
 		expect(get(toasts).map((toast) => toast.message)).toEqual([versionLoadedToastLabel(1)]);
@@ -2244,9 +2226,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		const dialog = replaceDialog();
 		if (!dialog) throw new Error('Expected the replace-draft confirm');
 		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await settleRender();
 		const { toasts } = await shownToasts();
 		expect(get(toasts).map((t) => t.message)).toEqual([versionLoadedToastLabel(2)]);
 
