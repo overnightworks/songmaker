@@ -76,12 +76,6 @@ GENERATION_WAITING_FOR_LORA_QUEUE_REASON: Final[str] = "Waiting for LoRA trainin
 GENERATION_ETA_MIN_PROGRESS: Final[float] = 0.05
 # 0 asks ACE-Step to choose the song length.
 AUTO_LENGTH_SECONDS: Final[int] = 0
-# The most a worker may hand music for one take. ACE-Step writes 32-bit float stereo WAV at
-# 48 kHz (`subtype="FLOAT"` in vendor/acestep acestep/audio_utils.py), and a song request asks
-# for at most 600 seconds (`audio_duration`, le=600 in api_models/songs.py). The product,
-# 600 s * 48000 Hz * 2 channels * 4 bytes = 230,400,000 bytes, plus a header allowance, is
-# rounded up to a whole 256 MiB; a longer file is not a take songmaker can have asked for.
-GENERATION_RESULT_MAX_BYTES: Final[int] = 256 * 1024 * 1024
 LORA_WAITING_FOR_GENERATION_QUEUE_REASON: Final[str] = "Waiting for queued generations on this GPU."
 
 DEFAULT_ARTIST = "Flex0r"

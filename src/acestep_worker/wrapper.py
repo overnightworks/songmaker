@@ -14,7 +14,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
@@ -75,6 +75,7 @@ from acestep_worker.settings import (
     DEFAULT_TRAINING_WORKSPACE_DIRNAME,
 )
 from acestep_worker.subprocess_runner import SUBPROCESS_BIND_HOST, SubprocessStartError
+from acestep_worker.task_results import register_result_routes, write_result_file
 from acestep_worker.task_store import TaskStore
 
 log = logging.getLogger(__name__)
@@ -375,16 +376,6 @@ class _WorkerRoutes:
             raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
         return snapshot
 
-    async def get_task_result(self, task_id: str) -> FileResponse:
-        result_file = await self._deps.task_store.result_file(task_id)
-        if result_file is None or not result_file.is_file():
-            raise HTTPException(status_code=404, detail=f"No result for task: {task_id}")
-        return FileResponse(result_file, media_type="audio/wav")
-
-    async def discard_task_result(self, task_id: str) -> None:
-        if not await self._deps.task_store.discard_result(task_id):
-            raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
-
     async def stream_task(self, task_id: str) -> StreamingResponse:
         snapshot = await self._deps.task_store.get(task_id)
         if snapshot is None:
@@ -626,6 +617,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
     routes = _WorkerRoutes(deps)
     router = APIRouter(dependencies=[Depends(routes.verify_internal_token)])
     _register_protected_routes(router, routes)
+    register_result_routes(router, deps.task_store)
     return router
 
 
@@ -697,19 +689,6 @@ def _register_protected_routes(router: APIRouter, routes: _WorkerRoutes) -> None
         "/tasks/{task_id}",
         routes.get_task,
         methods=["GET"],
-        responses={404: {"description": "Task does not exist"}},
-    )
-    router.add_api_route(
-        "/tasks/{task_id}/result",
-        routes.get_task_result,
-        methods=["GET"],
-        responses={404: {"description": "Task has no result file"}},
-    )
-    router.add_api_route(
-        "/tasks/{task_id}/result",
-        routes.discard_task_result,
-        methods=["DELETE"],
-        status_code=204,
         responses={404: {"description": "Task does not exist"}},
     )
     router.add_api_route(
@@ -1091,9 +1070,7 @@ async def default_generate_runner(
                 *map(asyncio.wrap_future, scheduled_updates), return_exceptions=True,
             )):
                 log.warning("Progress write failed for task %s: %r", task_id, failure)
-        audio_output_dir.mkdir(parents=True, exist_ok=True)
-        out_path = audio_output_dir / f"{task_id}-{uuid4().hex[:8]}.wav"
-        out_path.write_bytes(result.wav_bytes)
+        out_path = write_result_file(audio_output_dir, task_id, result.wav_bytes)
         await task_store.complete(task_id, GenerationTaskResult(
             mode=mode,
             seed=result.seed,

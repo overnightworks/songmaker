@@ -11,14 +11,13 @@ from pathlib import Path
 import httpx
 import pytest
 
-from songmaker_cli.constants import GENERATION_RESULT_MAX_BYTES
 from songmaker_cli.scheduler import (
     DispatchOptions,
     WorkerTaskFailed,
     _PickedWorker,
     dispatch_generation_on_worker,
 )
-from songmaker_cli.settings import get_settings
+from songmaker_cli.settings import GENERATION_RESULT_MAX_BYTES, get_settings
 
 _TAKE = b"RIFF" + b"\x01" * 600
 _LIMIT = 256

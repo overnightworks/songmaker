@@ -84,8 +84,8 @@ def configure_logging(log_level: str) -> None:
     root.setLevel(log_level)
 
 
-def prepare_output_root(output_root: Path, shared_audio_root: Path) -> None:
-    """Start with an empty output root; refuse one that overlaps the shared audio tree."""
+def prepare_output_root(output_root: Path, shared_audio_root: Path) -> Path:
+    """Return an emptied output root; refuse one that overlaps the shared audio tree."""
     output, shared = output_root.resolve(), shared_audio_root.resolve()
     if output.is_relative_to(shared) or shared.is_relative_to(output):
         raise ValueError(
@@ -98,6 +98,7 @@ def prepare_output_root(output_root: Path, shared_audio_root: Path) -> None:
             shutil.rmtree(entry)
         else:
             entry.unlink()
+    return output_root
 
 
 def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
@@ -105,9 +106,8 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     worker_id = settings.worker_id
     worker_host = settings.worker_host or worker_id
     checkpoint_dir = Path(settings.acestep_checkpoint_dir)
-    audio_dir = Path(settings.audio_output_dir)
     shared_audio_root = Path(settings.shared_audio_root)
-    prepare_output_root(audio_dir, shared_audio_root)
+    audio_dir = prepare_output_root(Path(settings.audio_output_dir), shared_audio_root)
     log_dir = Path(settings.acestep_log_dir)
 
     redis_client: Redis = Redis.from_url(settings.redis_url, decode_responses=False)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncIterator
 from datetime import timedelta
@@ -11,7 +10,12 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from test_wrapper import _INTERNAL_HEADERS, _make_deps
+from test_wrapper import (
+    _INTERNAL_HEADERS,
+    _make_deps,
+    _run,
+    real_generate_worker,  # noqa: F401 - the pytest fixture, used by name
+)
 
 from acestep_worker.__main__ import build_deps
 from acestep_worker.clock import utcnow
@@ -21,10 +25,6 @@ from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import WorkerDeps, create_app
 
 _TAKE_BYTES = b"RIFF-the-take"
-
-
-def _run(coro):
-    return asyncio.run(coro)
 
 
 async def _finished_take(deps: WorkerDeps, root: Path) -> tuple[str, Path]:
@@ -153,6 +153,22 @@ def test_delete_does_not_disturb_a_stream_that_already_opened_the_take(tmp_path:
     _run(go())
 
 
+def test_the_real_runner_writes_only_its_local_root_and_names_no_path(
+    real_generate_worker,  # noqa: F811 - the fixture imported above
+) -> None:
+    async def go():
+        async with real_generate_worker() as (client, deps, boundary, generate):
+            boundary.succeed()
+            snapshot = await generate(client)
+            written = [take.read_bytes() for take in deps.audio_output_dir.iterdir()]
+            assert written == [boundary.wav_bytes]
+            wire = json.dumps(snapshot)
+            assert "audio_path" not in wire
+            assert str(deps.audio_output_dir) not in wire
+
+    _run(go())
+
+
 def test_a_done_snapshot_names_no_worker_path(tmp_path: Path) -> None:
     async def go():
         deps, _ = _make_deps(tmp_path)
@@ -166,7 +182,7 @@ def test_a_done_snapshot_names_no_worker_path(tmp_path: Path) -> None:
     _run(go())
 
 
-def _settings(output_dir: Path, shared_root: Path) -> WorkerSettings:
+def _settings_with_roots(output_dir: Path, shared_root: Path) -> WorkerSettings:
     return WorkerSettings(
         worker_id="acestep-worker-0", redis_url="redis://fake", songmaker_internal_token="secret",
         audio_output_dir=str(output_dir), shared_audio_root=str(shared_root),
@@ -192,7 +208,7 @@ def test_a_worker_start_empties_its_output_root_and_touches_nothing_shared(tmp_p
     shared.mkdir()
     (shared / "kept.mp3").write_bytes(b"kept")
 
-    _build(_settings(root, shared))
+    _build(_settings_with_roots(root, shared))
 
     assert root.is_dir()
     assert list(root.iterdir()) == []
@@ -209,6 +225,6 @@ def test_a_worker_start_refuses_an_output_root_on_the_shared_volume(
     (shared / "kept.mp3").write_bytes(b"kept")
 
     with pytest.raises(ValueError, match="shared"):
-        _build(_settings(root, shared))
+        _build(_settings_with_roots(root, shared))
 
     assert (shared / "kept.mp3").read_bytes() == b"kept"

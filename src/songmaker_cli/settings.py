@@ -30,7 +30,6 @@ from songmaker_cli.constants import (
     CODEX_CLI_MAX_CONCURRENT_PROCESSES,
     COVER_MAX_CONCURRENT_RUNS,
     COVER_UPLOAD_BODY_MAX_BYTES,
-    GENERATION_RESULT_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     REIMPORT_BODY_MAX_BYTES,
@@ -41,6 +40,13 @@ from songmaker_cli.constants import (
     acestep_sse_read_timeout_seconds,
     generate_job_heartbeat_stale_threshold_seconds,
 )
+
+# The most a worker may hand music for one take. ACE-Step writes 32-bit float stereo WAV at
+# 48 kHz (`subtype="FLOAT"` in vendor/acestep acestep/audio_utils.py), and a song request asks
+# for at most 600 seconds (`audio_duration`, le=600 in api_models/songs.py). The product,
+# 600 s * 48000 Hz * 2 channels * 4 bytes = 230,400,000 bytes, plus a header allowance, is
+# rounded up to a whole 256 MiB; a longer file is not a take songmaker can have asked for.
+GENERATION_RESULT_MAX_BYTES: Final[int] = 256 * 1024 * 1024
 
 # The web server's port: the CLI and server default, and the port of the back-channel Host.
 DEFAULT_SERVER_PORT: Final = 8080

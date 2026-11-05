@@ -104,13 +104,7 @@ def _make_deps(
         audio_output_dir: Path,
     ) -> None:
         await store.mark_running(task_id)
-        await store.complete(
-            task_id,
-            GenerationTaskResult(
-                mode=mode,
-                seed=42,
-            ),
-        )
+        await store.complete(task_id, GenerationTaskResult(mode=mode, seed=42))
 
     deps = WorkerDeps(
         worker_id="acestep-worker-0",
@@ -1011,12 +1005,8 @@ def test_default_generate_runner_error_kind_over_get_and_stream(
             assert snapshot["error_kind"] == expected_kind
             if diagnostic is None:
                 assert snapshot["error"] is None
-                assert "audio_path" not in snapshot["result"]
-                taken = await client.get(f"/tasks/{snapshot['task_id']}/result")
-                assert (taken.status_code, taken.content) == (200, boundary.wav_bytes)
-                assert deps.audio_output_dir.is_dir()
-                written = [path.read_bytes() for path in deps.audio_output_dir.iterdir()]
-                assert written == [boundary.wav_bytes]
+                result = await client.get(f"/tasks/{snapshot['task_id']}/result")
+                assert result.content == boundary.wav_bytes
             else:
                 assert diagnostic in snapshot["error"]
                 if scenario in {"gpu", "generic"}:

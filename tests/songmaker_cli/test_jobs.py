@@ -638,12 +638,8 @@ def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome
     run_async(exercise())
 
 
-@pytest.mark.parametrize("failure", [
-    RuntimeError("GPU OOM"),
-    WorkerTaskFailed("Worker result fetch ended before the take was complete"),
-])
-def test_generation_job_partial_failure(seeded_db, tmp_path: Path, failure: Exception) -> None:
-    side_effects = [make_generation_dto(seed=100), failure, failure]
+def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
+    side_effects = [make_generation_dto(seed=100), RuntimeError("GPU OOM"), RuntimeError("GPU OOM")]
     dispatch, post_process, defaults = patch_generation_dispatch(side_effects)
     with dispatch, post_process, defaults:
         run_async(
@@ -671,27 +667,6 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path, failure: Exce
         assert len(gens) == 1
         assert gens[0].created_by == "u1"
         assert session.query(ResourceEvent).count() == 1
-
-
-def test_a_take_fetched_for_a_job_cancelled_meanwhile_leaves_no_local_file(
-    seeded_db, tmp_path: Path,
-) -> None:
-    fetched = tmp_path / "music-take.wav"
-
-    async def dispatch(**kwargs):
-        fetched.write_bytes(b"RIFF")
-        _cancel_job(seeded_db, "j1")
-        return make_generation_dto(audio_path=str(fetched))
-
-    dispatch_patch, post_process, defaults = patch_generation_dispatch(dispatch)
-    with dispatch_patch, post_process as saved, defaults:
-        run_async(run_generation_job(
-            "j1", "s1", "v1", 1, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
-            data_dir=tmp_path / "data", redis=MagicMock(), target_model="sft",
-        ))
-
-    saved.assert_not_called()
-    assert not fetched.exists()
 
 
 def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:

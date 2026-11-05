@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
+import tempfile
 from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -363,6 +364,10 @@ async def open_generation_worker_peer(
 
 
 @pytest.fixture
-def generation_worker_peer(tmp_path: Path):
-    """S5-A/B/D, L3/L6/L9/L10: Own every resource of a shared worker scenario."""
+def generation_worker_peer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """S5-A/B/D, L3/L6/L9/L10: Own every resource of a shared worker scenario.
+
+    Takes music fetches from the peer land in its temp dir, which stays inside the test's folder.
+    """
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     return partial(open_generation_worker_peer, tmp_path)

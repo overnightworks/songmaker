@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
-import tempfile
 from dataclasses import asdict, replace
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -65,12 +64,6 @@ _PEER_DISPATCH_OPTIONS = DispatchOptions(
     initial_reconnect_backoff_seconds=0.0,
     max_reconnect_backoff_seconds=0.0,
 )
-
-
-@pytest.fixture(autouse=True)
-def _music_temp_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Fetched takes land in music's temp dir; keep them inside the test's own folder."""
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
 
 
 def _run(coro):
