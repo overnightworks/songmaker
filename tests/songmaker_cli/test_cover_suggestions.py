@@ -9,16 +9,17 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from support.cover_album_world import album_owner, seed_cover_albums
 from support.web_app import (
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
     make_test_app,
     seed_session,
+    seed_user,
     web_client,
 )
 from support.xmp_packet import read_digital_source_type
-from webauth.ports import AuthenticatedUser
 
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.cleanup import run_cleanup_expired
@@ -39,7 +40,7 @@ from songmaker_cli.cover_suggestions import (
     request_cover_suggestions,
 )
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, UserSession
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since
 from songmaker_cli.settings import get_settings
@@ -51,25 +52,6 @@ def _png_bytes() -> bytes:
     payload = BytesIO()
     Image.new("RGB", (32, 32), (40, 80, 200)).save(payload, format="PNG")
     return payload.getvalue()
-
-
-def _seed_albums(session) -> None:
-    alice = User(username="alice", role="user")
-    bob = User(username="bob", role="user")
-    admin = User(username="admin", role="admin")
-    session.add_all([alice, bob, admin])
-    session.flush()
-    session.add_all([
-        Album(id="alice-album", title="Alice", artist="Alice", created_by=alice.id),
-        Album(id="bob-album", title="Bob", artist="Bob", created_by=bob.id),
-    ])
-
-
-@pytest.fixture
-def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
-    seed_session(client, "alice")
-    return client, factory
 
 
 def _add_cover_job(
@@ -126,20 +108,15 @@ def _add_suggestion(
     return suggestion_id
 
 
-def _album_owner(session, album_id: str = "alice-album") -> AuthenticatedUser:
-    album = session.query(Album).filter_by(id=album_id).one()
-    return make_authenticated_user(album.created_by or "")
-
-
 def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(tmp_path: Path) -> None:
-    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
 
     with factory() as session:
         alice = make_authenticated_user("alice")
         with pytest.raises(CoverSuggestionAlbumNotFoundError):
-            request_cover_suggestions(session, "missing", alice)
+            request_cover_suggestions(session, "missing", alice, session_id=None)
         with pytest.raises(CoverSuggestionAlbumNotFoundError):
-            request_cover_suggestions(session, "bob-album", alice)
+            request_cover_suggestions(session, "bob-album", alice, session_id=None)
 
 
 def _add_two_pending_suggestions(factory, audio_dir: Path) -> list[str]:
@@ -156,11 +133,13 @@ def _suggestion_file(audio_dir: Path, suggestion_id: str) -> Path:
 def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_suggestions(
     tmp_path: Path,
 ) -> None:
-    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     pending_ids = _add_two_pending_suggestions(factory, tmp_path / "audio")
 
     with factory() as session:
-        job = request_cover_suggestions(session, "alice-album", _album_owner(session))
+        job = request_cover_suggestions(
+            session, "alice-album", album_owner(session), session_id=None,
+        )
 
         assert job.type == JobType.COVER
         assert job.album_id == "alice-album"
@@ -174,13 +153,13 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """1301-F3-C1-COUNT: active work blocks; completed work consumes the limit."""
-    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     _add_cover_job(factory)
 
     with factory() as session:
-        owner = _album_owner(session)
+        owner = album_owner(session)
         with pytest.raises(CoverSuggestionAlreadyRunningError):
-            request_cover_suggestions(session, "alice-album", owner)
+            request_cover_suggestions(session, "alice-album", owner, session_id=None)
         session.rollback()
 
     with factory() as session:
@@ -191,27 +170,29 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
     get_settings.cache_clear()
     with factory() as session:
-        owner = _album_owner(session)
+        owner = album_owner(session)
         with pytest.raises(CoverSuggestionDailyLimitReachedError):
-            request_cover_suggestions(session, "alice-album", owner)
+            request_cover_suggestions(session, "alice-album", owner, session_id=None)
 
 
 @pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
 def test_unsuccessful_cover_attempts_allow_another_request(tmp_path, monkeypatch, status):
     """1301-F3-C1-COUNT: failed and cancelled attempts leave the allowance free."""
-    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     _add_cover_job(factory, status=status)
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
     get_settings.cache_clear()
     with factory() as session:
-        job = request_cover_suggestions(session, "alice-album", _album_owner(session))
+        job = request_cover_suggestions(
+            session, "alice-album", album_owner(session), session_id=None,
+        )
         assert job.status == JobStatus.QUEUED
         assert job.album_id == "alice-album"
 
 
-def test_completed_cover_at_daily_limit_returns_http_429(alice_app, monkeypatch):
+def test_completed_cover_at_daily_limit_returns_http_429(cover_album_app, monkeypatch):
     """1301-F3-C1-COUNT: HTTP retains the daily-limit refusal contract."""
-    client, factory = alice_app
+    client, factory = cover_album_app
     _add_cover_job(factory, status=JobStatus.COMPLETED)
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
     get_settings.cache_clear()
@@ -223,9 +204,9 @@ def test_completed_cover_at_daily_limit_returns_http_429(alice_app, monkeypatch)
 
 
 def test_create_cover_suggestions_leaves_the_job_for_the_web_runner(
-    alice_app: tuple[TestClient, object],
+    cover_album_app: tuple[TestClient, object],
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
 
     response = client.post("/api/albums/alice-album/cover-suggestions")
 
@@ -237,11 +218,47 @@ def test_create_cover_suggestions_leaves_the_job_for_the_web_runner(
         assert job.status == JobStatus.QUEUED
 
 
+def test_a_suggestion_from_a_browser_session_records_that_session_and_never_shows_it(
+    cover_album_app: tuple[TestClient, object],
+) -> None:
+    client, factory = cover_album_app
+    with factory() as session:
+        [seeded_session_id] = [row.id for row in session.query(UserSession)]
+
+    response = client.post("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 200
+    assert seeded_session_id not in response.text
+    with factory() as session:
+        assert session.get(Job, response.json()["id"]).session_id == seeded_session_id
+
+
+def test_a_suggestion_admitted_by_bearer_records_no_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from support.token_world import TokenWorld, make_token_world
+
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
+    world = make_token_world(tmp_path)
+    with world.factory() as session:
+        seed_user(session, "alice", user_id=TokenWorld.ALICE)
+        session.add(Album(id="bearer-album", title="B", artist="A", created_by=TokenWorld.ALICE))
+        session.commit()
+
+    response = world.client.post(
+        "/api/albums/bearer-album/cover-suggestions", headers=world.bearer(TokenWorld.ALICE),
+    )
+
+    assert response.status_code == 200
+    with world.factory() as session:
+        assert session.get(Job, response.json()["id"]).session_id is None
+
+
 def test_create_cover_suggestions_keeps_the_pending_suggestions_and_their_files(
-    alice_app: tuple[TestClient, object],
+    cover_album_app: tuple[TestClient, object],
     tmp_path: Path,
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
     audio_dir = tmp_path / "audio"
     pending_ids = _add_two_pending_suggestions(factory, audio_dir)
 
@@ -254,10 +271,10 @@ def test_create_cover_suggestions_keeps_the_pending_suggestions_and_their_files(
 
 
 def test_cover_suggestion_list_and_selection_use_the_existing_cover_writer(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
     """1301-F3-C1-DURABLE: removing images does not remove usage."""
-    client, factory = alice_app
+    client, factory = cover_album_app
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
     latest_job_id = _add_cover_job(
         factory,
@@ -290,9 +307,9 @@ def test_cover_suggestion_list_and_selection_use_the_existing_cover_writer(
 
 
 def test_selected_cover_suggestion_carries_the_ai_mark_in_every_published_file(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
 
     selected = client.put("/api/albums/alice-album/cover", json={"suggestion_id": suggestion_id})
@@ -305,10 +322,10 @@ def test_selected_cover_suggestion_carries_the_ai_mark_in_every_published_file(
 
 
 def test_discard_suggestions_keeps_the_selected_cover(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
     """1301-F3-C1-DURABLE: removing images does not remove usage."""
-    client, factory = alice_app
+    client, factory = cover_album_app
     audio_dir = tmp_path / "audio"
     suggestion_id, other_id = _add_two_pending_suggestions(factory, audio_dir)
     assert client.put(
@@ -343,10 +360,10 @@ def _job_of(factory, suggestion_id: str) -> str:
 
 @pytest.mark.parametrize("named_by", ["suggestion_id", "job_id"])
 def test_discard_deletes_only_what_it_names(
-    alice_app: tuple[TestClient, object], tmp_path: Path, named_by: str,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path, named_by: str,
 ) -> None:
     """A suggestion asked for after the discard, here or in another tab, survives it."""
-    client, factory = alice_app
+    client, factory = cover_album_app
     audio_dir = tmp_path / "audio"
     discarded_id = _add_suggestion(factory, audio_dir, suggestion_id="a" * 36)
     later_id = _add_suggestion(factory, audio_dir, suggestion_id="b" * 36)
@@ -364,9 +381,9 @@ def test_discard_deletes_only_what_it_names(
 
 @pytest.mark.parametrize("named_by", ["suggestion_id", "job_id"])
 def test_discard_never_deletes_another_albums_suggestion(
-    alice_app: tuple[TestClient, object], tmp_path: Path, named_by: str,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path, named_by: str,
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
     foreign_id = _add_suggestion(factory, tmp_path / "audio", album_id="bob-album")
     named = foreign_id if named_by == "suggestion_id" else _job_of(factory, foreign_id)
 
@@ -379,9 +396,9 @@ def test_discard_never_deletes_another_albums_suggestion(
 
 
 def test_discard_naming_nothing_is_refused(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
 
     response = client.delete("/api/albums/alice-album/cover-suggestions")
@@ -391,9 +408,9 @@ def test_discard_naming_nothing_is_refused(
 
 
 def test_delete_selected_cover_keeps_suggestions(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
     assert client.put(
         "/api/albums/alice-album/cover", json={"suggestion_id": suggestion_id},
@@ -409,9 +426,9 @@ def test_delete_selected_cover_keeps_suggestions(
 
 
 def test_put_cover_rejects_an_upload_without_changing_the_cover(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
 
     response = client.put(
         "/api/albums/alice-album/cover",
@@ -427,9 +444,9 @@ def test_put_cover_rejects_an_upload_without_changing_the_cover(
 
 
 def test_put_cover_keeps_json_requests_within_the_standard_body_budget(
-    alice_app: tuple[TestClient, object],
+    cover_album_app: tuple[TestClient, object],
 ) -> None:
-    client, _ = alice_app
+    client, _ = cover_album_app
     payload = json.dumps({
         "suggestion_id": "a" * 36,
         "padding": "x" * JSON_REQUEST_BODY_MAX_BYTES,
@@ -465,7 +482,7 @@ def test_foreign_cover_suggestion_routes_are_not_found(
     path: str,
     kwargs: dict,
 ) -> None:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     _add_suggestion(factory, tmp_path / "audio")
     seed_session(client, "bob")
 
@@ -476,9 +493,9 @@ def test_foreign_cover_suggestion_routes_are_not_found(
 
 
 def test_cover_suggestions_have_no_public_share_route(
-    alice_app: tuple[TestClient, object],
+    cover_album_app: tuple[TestClient, object],
 ) -> None:
-    client, _ = alice_app
+    client, _ = cover_album_app
 
     response = client.get("/shared/album-slug/cover-suggestions")
 
@@ -498,9 +515,9 @@ def test_cover_suggestions_have_no_public_share_route(
     ],
 )
 def test_full_app_answers_a_suggestion_outside_the_audio_root_like_a_missing_one(
-    alice_app: tuple[TestClient, object], tmp_path: Path, method: str, path_for, kwargs_for,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path, method: str, path_for, kwargs_for,
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
     audio_dir = tmp_path / "audio"
     suggestion_id = _add_suggestion(factory, audio_dir)
     album_dir = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
@@ -516,9 +533,9 @@ def test_full_app_answers_a_suggestion_outside_the_audio_root_like_a_missing_one
 
 
 def test_owner_cannot_distinguish_missing_and_traversal_suggestions(
-    alice_app: tuple[TestClient, object],
+    cover_album_app: tuple[TestClient, object],
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
 
     missing = client.get("/api/albums/alice-album/cover-suggestions/missing")
     traversal = client.get(
@@ -547,9 +564,9 @@ def test_a_suggestion_resolving_outside_the_audio_root_answers_like_a_missing_su
     # The router app keeps the endpoint's own detail; create_app rewrites every API 404.
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
-        _seed_albums(session)
+        seed_cover_albums(session)
         session.commit()
-        owner = _album_owner(session)
+        owner = album_owner(session)
     audio_dir = tmp_path / "audio"
     _add_suggestion(factory, audio_dir)
     album_dir = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
@@ -564,9 +581,9 @@ def test_a_suggestion_resolving_outside_the_audio_root_answers_like_a_missing_su
 
 
 def test_discarding_suggestions_with_a_path_outside_the_audio_root_leaves_that_file(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
     audio_dir = tmp_path / "audio"
     kept_id = _add_suggestion(factory, audio_dir, suggestion_id="b" * 36)
     escaping_id = _add_suggestion(factory, audio_dir, stored_path=ESCAPING_STORED_PATH)
@@ -586,7 +603,7 @@ def test_discarding_suggestions_with_a_path_outside_the_audio_root_leaves_that_f
 
 
 def test_admin_can_list_and_read_another_users_suggestion(tmp_path: Path) -> None:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
     seed_session(client, "admin")
 
@@ -602,9 +619,9 @@ def test_admin_can_list_and_read_another_users_suggestion(tmp_path: Path) -> Non
 
 
 def test_active_cover_job_blocks_a_new_request_before_unavailable_response(
-    alice_app: tuple[TestClient, object],
+    cover_album_app: tuple[TestClient, object],
 ) -> None:
-    client, factory = alice_app
+    client, factory = cover_album_app
     _add_cover_job(factory)
 
     response = client.post("/api/albums/alice-album/cover-suggestions")
@@ -624,7 +641,7 @@ def test_only_completed_cover_jobs_on_this_utc_day_count(
     factory = init_test_db(tmp_path / "accounting.db")
     midnight = datetime(2026, 9, 4, tzinfo=timezone.utc)
     with factory() as session:
-        _seed_albums(session)
+        seed_cover_albums(session)
         session.commit()
     _add_cover_job(factory, status=status, started_at=midnight + timedelta(microseconds=offset))
     with factory() as session:
@@ -634,10 +651,10 @@ def test_only_completed_cover_jobs_on_this_utc_day_count(
 
 
 def test_hard_delete_cleanup_removes_suggestions_from_expired_albums(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
     """1301-F3-C1-DURABLE: removing images does not remove usage."""
-    client, factory = alice_app
+    client, factory = cover_album_app
     _add_suggestion(factory, tmp_path / "audio")
     suggestion_dir = tmp_path / "audio" / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
 

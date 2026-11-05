@@ -159,6 +159,7 @@ jobs:
       POSTGRESQL_CONTRACT_MODULES: >-
         tests/songmaker_cli/test_db_postgresql.py
         tests/songmaker_cli/test_cover_runner_accounting.py
+        tests/songmaker_cli/test_db_postgresql_job_session.py
         tests/songmaker_cli/test_reference_audio_quota.py
         tests/songmaker_cli/test_reference_audio_reconciliation_postgres.py
         tests/songmaker_cli/test_auth_stores_write_lock_postgres.py
@@ -173,6 +174,7 @@ jobs:
         tests/songmaker_cli/db/test_migrations_reference_recordings.py
         tests/songmaker_cli/db/test_migrations_reference_link.py
         tests/songmaker_cli/db/test_migrations_job_version.py
+        tests/songmaker_cli/db/test_migrations_job_session.py
         tests/songmaker_cli/db/test_migrations_user_theme.py
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x

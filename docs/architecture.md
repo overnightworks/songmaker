@@ -1364,7 +1364,7 @@ User (id = Keycloak subject, username, role: admin|user)
   ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
-  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`)
+  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start)
   └── AuditLog (action, resource_type, resource_id, detail)
 
 Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,

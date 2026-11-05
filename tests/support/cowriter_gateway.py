@@ -137,7 +137,10 @@ class CowriterStack:
 
     def replies(self, *replies: Reply) -> FakeGateway:
         """Answer the following gateway requests with ``replies`` (the last one repeats)."""
-        gateway = FakeGateway(*replies)
+        return self.uses(FakeGateway(*replies))
+
+    def uses(self, gateway: FakeGateway) -> FakeGateway:
+        """Run the following turns through ``gateway``, a ``FakeGateway`` or a subclass of it."""
         self.gateways.append(gateway)
         backend = GatewayBackend(
             self.config,
@@ -166,15 +169,28 @@ def attach_cowriter_gateway(
     The client leaves signed in as ``user_id`` with a session that holds ``refresh_token``, and
     the realm names ``groups`` for that person at every renewal.
     """
-    from pydantic import SecretStr
     from webauth.config import installed_web_auth_config
-
-    from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 
     app = client.app
     issuer = a_fake_issuer()
     issuer.person = Person(subject=user_id, groups=groups)
     app.state.oidc_sign_in = issuer.relying_party_for_app()
+
+    config = installed_web_auth_config(app)
+    session_id = open_session(app, factory, user_id, refresh_token)
+    for name, value in issued_cookies(session_id, config).items():
+        client.cookies.set(name, value)
+    stack = CowriterStack(app, issuer, session_id, agent_config(directory))
+    stack.replies(completion("ok"))
+    return stack
+
+
+def open_session(app, factory, user_id: str, refresh_token: str | None = A_REFRESH_TOKEN) -> str:
+    """Write one more signed-in session row for ``user_id`` and return its id."""
+    from pydantic import SecretStr
+    from webauth.config import installed_web_auth_config
+
+    from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 
     config = installed_web_auth_config(app)
     now = datetime.now(timezone.utc)
@@ -187,21 +203,27 @@ def attach_cowriter_gateway(
             id_token=None,
         )
         session.commit()
-        session_id = record.id
-    for name, value in issued_cookies(session_id, config).items():
-        client.cookies.set(name, value)
-    stack = CowriterStack(app, issuer, session_id, agent_config(directory))
-    stack.replies(completion("ok"))
-    return stack
+        return record.id
+
+
+def request_in_session(app, session_id: str):
+    """A request that carries the cookies of ``session_id``, for calling an endpoint directly."""
+    from webauth.config import installed_web_auth_config
+
+    return _request_with_cookies(app, issued_cookies(session_id, installed_web_auth_config(app)))
 
 
 def signed_in_request(client: TestClient):
     """A request that carries the client's cookies, for tests that call an endpoint directly."""
+    return _request_with_cookies(client.app, dict(client.cookies.items()))
+
+
+def _request_with_cookies(app, cookies: dict[str, str]):
     from starlette.requests import Request
 
-    cookie_header = "; ".join(f"{name}={value}" for name, value in client.cookies.items())
+    cookie_header = "; ".join(f"{name}={value}" for name, value in cookies.items())
     return Request({
         "type": "http",
-        "app": client.app,
+        "app": app,
         "headers": [(b"cookie", cookie_header.encode())],
     })

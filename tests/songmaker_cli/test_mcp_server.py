@@ -237,6 +237,7 @@ def test_cowriter_get_generation_keeps_integer_score_in_json(db_session: Session
     owner = _seed_take(db_session, _batch_scores())
     outcome = execute_cowriter_tool(
         db_session, owner, "get_generation", {"generation_id": "gen1"},
+        session_id=None,
     )
     assert not outcome.is_error
     shown = json.loads(outcome.content)["scores"]["lyrical_coherence"]
@@ -430,7 +431,7 @@ def test_suggest_album_cover_queues_a_cover_job(db_session: Session):
     owner_id, _, album_id, _, _ = _seed(db_session)
     owner = _owner(db_session, owner_id)
 
-    result = tools.tool_suggest_album_cover(db_session, owner, album_id=album_id)
+    result = tools.tool_suggest_album_cover(db_session, owner, album_id=album_id, session_id=None)
 
     assert result.status == JobStatus.QUEUED
     assert result.message == "Cover suggestion queued."
@@ -471,7 +472,7 @@ def test_suggest_album_cover_surfaces_the_admission_owner_errors(
 
     try:
         with pytest.raises(tools.MCPToolError, match=message):
-            tools.tool_suggest_album_cover(db_session, owner, album_id=album_id)
+            tools.tool_suggest_album_cover(db_session, owner, album_id=album_id, session_id=None)
     finally:
         if daily_limit is not None:
             get_settings.cache_clear()

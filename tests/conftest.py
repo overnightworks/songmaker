@@ -54,6 +54,7 @@ pytest_plugins = [
     "support.oidc_world",
     "support.fake_acestep_child",
     "support.admin_client_fixture",
+    "support.cover_album_world",
     "support.generation_job_world",
     "support.reference_link_migration",
 ]

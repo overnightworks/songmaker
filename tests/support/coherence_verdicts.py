@@ -47,4 +47,5 @@ def save_verdict(factory, generation_id, score, summary, user="anna"):
         return execute_cowriter_tool(
             session, auth.load_user(session, user), "save_coherence_verdict",
             {"generation_id": generation_id, "score": score, "summary": summary},
+            session_id=None,
         )

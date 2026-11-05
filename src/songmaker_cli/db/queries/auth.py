@@ -97,6 +97,21 @@ def get_session_with_user(session: Session, session_id: str) -> UserSession | No
     )
 
 
+def lock_session_row(session: Session, session_id: str) -> bool:
+    """Hold an existing session row until the transaction ends, so a reference to it cannot dangle.
+
+    ``FOR KEY SHARE`` blocks a concurrent delete but not the ``expires_at``
+    renewal, which a stronger lock would hold behind the whole cover admission.
+    SQLite's single-writer transaction already serializes the delete.
+    """
+    return (
+        session.query(UserSession.id)
+        .filter_by(id=session_id)
+        .with_for_update(key_share=True, read=True)
+        .first()
+    ) is not None
+
+
 def renew_session(
     session: Session,
     session_id: str,

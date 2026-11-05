@@ -225,7 +225,7 @@ def test_create_song_tool_hits_canonical_function(admin_client):
     with factory() as session:
         outcome = execute_cowriter_tool(
             session, user, "create_song",
-            {"album_id": "alb1", "title": "FromCatalog", "lyrics": "a"},
+            {"album_id": "alb1", "title": "FromCatalog", "lyrics": "a"}, session_id=None,
         )
         via_catalog = outcome.content
         assert outcome.is_error is False
@@ -251,7 +251,7 @@ def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
     with factory() as session:
         outcome = execute_cowriter_tool(
             session, user, "rename_song",
-            {"song_id": "s1", "title": "Renamed Track"},
+            {"song_id": "s1", "title": "Renamed Track"}, session_id=None,
         )
         assert outcome.is_error is False
     with factory() as session:
@@ -279,7 +279,7 @@ def test_shared_cowriter_tool_executor_creates_an_immutable_song_version(admin_c
     with factory() as session:
         outcome = execute_cowriter_tool(
             session, user, "update_song_lyrics",
-            {"song_id": "s1", "lyrics": "new lyrics"},
+            {"song_id": "s1", "lyrics": "new lyrics"}, session_id=None,
         )
 
     assert outcome.is_error is False
@@ -298,7 +298,7 @@ def test_suggest_album_cover_tool_hits_the_canonical_admission_owner(admin_clien
     user = make_authenticated_user("u-test", role="admin", username="u-u-test")
     with factory() as session:
         outcome = execute_cowriter_tool(
-            session, user, "suggest_album_cover", {"album_id": "alb1"},
+            session, user, "suggest_album_cover", {"album_id": "alb1"}, session_id=None,
         )
         assert outcome.is_error is False
         assert '"status": "queued"' in outcome.content

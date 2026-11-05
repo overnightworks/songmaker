@@ -39,10 +39,11 @@ def create_job(
     song_id: str | None = None,
     album_id: str | None = None,
     version_id: str | None = None,
+    session_id: str | None = None,
 ) -> Job:
     job = Job(
         type=job_type, user_id=user_id, song_id=song_id, album_id=album_id,
-        version_id=version_id,
+        version_id=version_id, session_id=session_id,
     )
     session.add(job)
     session.flush()
@@ -223,6 +224,7 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
         job.heartbeat_at = now
     if status in JOB_TERMINAL_STATUSES:
         job.completed_at = now
+        job.session_id = None
     session.flush()
     return True
 
@@ -418,6 +420,7 @@ def _recover_stale_job_if_unchanged(
             completed_at=completed_at,
             queue_reason=None,
             generation_started_at=None,
+            session_id=None,
         )
         .execution_options(synchronize_session=False),
     )
@@ -453,6 +456,7 @@ def recover_stale_jobs_by_type(
             job.completed_at = now
             job.queue_reason = None
             job.generation_started_at = None
+            job.session_id = None
         if stale:
             recovered[job_type] = len(stale)
     session.flush()

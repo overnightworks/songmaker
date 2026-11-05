@@ -57,6 +57,7 @@ class CowriterTool:
     parameters: dict[str, Any]
     write: bool
     handler: Callable[..., Any]
+    needs_asking_session: bool = False
 
     def __post_init__(self) -> None:
         require_supported_declaration(self.parameters)
@@ -192,6 +193,7 @@ COWRITER_TOOLS: tuple[CowriterTool, ...] = (
         _object({"album_id": _STRING}, ["album_id"]),
         True,
         tool_suggest_album_cover,
+        needs_asking_session=True,
     ),
     CowriterTool(
         "save_coherence_verdict",
@@ -245,7 +247,10 @@ def execute_cowriter_tool(
     user: AuthenticatedUser,
     name: str,
     arguments: dict[str, Any],
+    *,
+    session_id: str | None,
 ) -> ToolOutcome:
+    """Run one tool; ``session_id`` is the asking session, handed only to a tool that needs it."""
     tool = _TOOLS_BY_NAME.get(name)
     if tool is None:
         return ToolOutcome(f"Unknown tool: {name}", True)
@@ -253,7 +258,10 @@ def execute_cowriter_tool(
     if refusal is not None:
         return ToolOutcome(refusal, True)
     try:
-        result = tool.handler(session, user, **arguments)
+        if tool.needs_asking_session:
+            result = tool.handler(session, user, **arguments, session_id=session_id)
+        else:
+            result = tool.handler(session, user, **arguments)
         if tool.write:
             session.commit()
         return ToolOutcome(_serialize(result), False)

@@ -276,6 +276,7 @@ def test_a_verdict_saved_over_a_stale_take_keeps_the_scoring_runs_new_keys(score
         outcome = execute_cowriter_tool(
             stale, auth.load_user(stale, "u1"), "save_coherence_verdict",
             {"generation_id": GENERATION_ID, "score": 4, "summary": "garbled"},
+            session_id=None,
         )
 
     assert outcome.is_error is False
@@ -297,6 +298,7 @@ def test_a_refreshed_scoring_run_over_a_stale_take_keeps_the_committed_verdict(
         execute_cowriter_tool(
             verdict, auth.load_user(verdict, "u1"), "save_coherence_verdict",
             {"generation_id": GENERATION_ID, "score": 2, "summary": "stuck loop"},
+            session_id=None,
         )
         save_scores(stale, GENERATION_ID, {"silence_gaps": 5}, {"silence_gaps"})
         stale.commit()
