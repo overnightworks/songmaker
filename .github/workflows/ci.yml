@@ -88,7 +88,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p reports
-          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-config=.github/workflows/coveragerc-ci.ini | tee pytest-output.txt
+          uv run --no-sync --frozen --no-build pytest tests/ -m "not postgresql" -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-config=.github/workflows/coveragerc-ci.ini | tee pytest-output.txt
 
       - name: Backend test summary
         if: always()
@@ -169,12 +169,29 @@ jobs:
         run: uv sync --frozen --extra server --extra dev --extra agent --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
-      - name: Run PostgreSQL contracts serially
+      - name: Turn off the disposable service's durability
+        # why: the service is thrown away with the job, so it needs no crash safety; tests/support/postgresql.py never changes server settings.
+        env:
+          SERVICE: ${{ job.services.postgres.id }}
+        run: |
+          psql() { docker exec "$SERVICE" psql --username songmaker --dbname songmaker_test --no-psqlrc --tuples-only --no-align "$@"; }
+          for setting in fsync synchronous_commit full_page_writes; do
+            psql --command "ALTER SYSTEM SET $setting = off"
+          done
+          psql --command "SELECT pg_reload_conf()"
+          for _ in $(seq 10); do
+            effective=$(psql --command "SELECT string_agg(setting, ',' ORDER BY name) FROM pg_settings WHERE name IN ('fsync', 'synchronous_commit', 'full_page_writes')")
+            [ "$effective" = "off,off,off" ] && exit 0
+            sleep 1
+          done
+          echo "Durability settings are still $effective after reload" >&2
+          exit 1
+      - name: Run PostgreSQL contracts on one database per worker
         env:
           COVERAGE_FILE: reports/coverage-data-postgresql
         run: |
           mkdir -p reports
-          uv run --no-sync --frozen --no-build pytest -m postgresql tests/ -n 0 -v --tb=short --junitxml=postgresql-contract.xml --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report= --cov-config=.github/workflows/coveragerc-ci.ini
+          uv run --no-sync --frozen --no-build pytest -m postgresql tests/ -n auto -v --tb=short --junitxml=postgresql-contract.xml --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report= --cov-config=.github/workflows/coveragerc-ci.ini
       - name: Require every selected PostgreSQL proof to execute
         run: |
           python - <<'PYTHON'

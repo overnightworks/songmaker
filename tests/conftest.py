@@ -10,7 +10,9 @@ import os
 # environment win — these are only safe defaults so importing songmaker_cli.music_worker
 # (which constructs Settings at class-definition time) does not fail in unit tests.
 os.environ["SONGMAKER_SKIP_ENV_FILE"] = "1"
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+# No dialect has this name, so an engine built from settings fails at once instead of
+# reaching SQLite or whatever database the shell names; database tests get an owned URL.
+os.environ["DATABASE_URL"] = "unconfigured+no_database_in_tests://"
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("SESSION_SECRET", "x" * 64)
 os.environ.setdefault("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
@@ -33,7 +35,7 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import structlog  # noqa: E402
 from sqlalchemy import event  # noqa: E402
-from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
 from support.fake_cli_process import close_fake_cli_processes  # noqa: E402
 from support.generation_failures import SONGMAKER_FAILURE_CASES  # noqa: E402
 from support.oidc_client import write_test_client_secret  # noqa: E402
@@ -433,24 +435,6 @@ def session_commit_failure():
     return fail_commit
 
 
-def _pg_session_factory(url: str) -> sessionmaker[Session]:
-    from sqlalchemy import create_engine
-
-    from songmaker_cli.db.models import Base
-    from songmaker_cli.settings import get_settings
-
-    settings = get_settings()
-    engine = create_engine(
-        url,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_pre_ping=True,
-    )
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)
-
-
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers",
@@ -461,54 +445,107 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Mark every test that collection can see needs PostgreSQL, so `-m postgresql` selects it.
 
-    Two things make a test visible: `postgresql_url` in its fixture closure, and the value
-    `postgresql` of the one backend fixture (`database_backend`), which an indirect
+    Two things make a test visible: `postgresql_databases` in its fixture closure, and the
+    value `postgresql` of the one backend fixture (`database_backend`), which an indirect
     parametrization cannot hide. A path collection cannot see (a dynamic `getfixturevalue`)
-    ends in `_postgresql_url`, which fails the unmarked test.
+    ends in `_require_postgresql_mark`, which fails the unmarked test.
     """
     for item in items:
         callspec = getattr(item, "callspec", None)
         backend = callspec.params.get("database_backend") if callspec else None
-        if "postgresql_url" in item.fixturenames or backend == "postgresql":
+        if "postgresql_databases" in item.fixturenames or backend == "postgresql":
             item.add_marker(pytest.mark.postgresql)
 
 
-def _postgresql_url(node: pytest.Item) -> str:
-    """The only reader of `TEST_DATABASE_URL`; every PostgreSQL fixture takes its URL here.
+def _require_postgresql_mark(node: pytest.Item) -> None:
+    """Fail a test that reaches PostgreSQL but is not selected by `-m postgresql`.
 
-    An unmarked test would be skipped by the Backend job and never run by the contract job,
-    so it fails before it may skip.
+    An unmarked test would never run in the contract job and fail in the Backend job.
     """
     if node.get_closest_marker("postgresql") is None:
         pytest.fail(
             "This test reaches PostgreSQL but is not selected by `-m postgresql`: request "
-            "`postgresql_url` or `pg_factory`, or parametrize `database_backend` with 'postgresql'."
+            "`pg_factory`, `postgresql_url` or `empty_postgresql_url`, or parametrize "
+            "`database_backend` with 'postgresql'."
         )
-    url = os.environ.get("TEST_DATABASE_URL", "")
-    if not url.startswith("postgresql"):
-        pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
-    return url
+
+
+_DATABASE_SERVER_VARIABLE = "TEST_DATABASE_URL"
 
 
 @pytest.fixture
-def postgresql_url(request) -> str:
-    """The PostgreSQL URL of this run; the PostgreSQL tests skip without it."""
-    return _postgresql_url(request.node)
+def environment_with_database_server():
+    """Builds a child process's environment with the database server setting replaced, or
+    removed when given None, so a test can start a run without a usable server."""
+
+    def with_server(environment: dict[str, str], server_url: str | None) -> dict[str, str]:
+        child = dict(environment)
+        child.pop(_DATABASE_SERVER_VARIABLE, None)
+        if server_url is not None:
+            child[_DATABASE_SERVER_VARIABLE] = server_url
+        return child
+
+    return with_server
 
 
-def _pg_factory_until_teardown(url: str):
-    from songmaker_cli.db.models import Base
+@pytest.fixture(scope="session")
+def postgresql_databases(testrun_uid: str, worker_id: str):
+    """The owner of this run's and worker's databases; the only reader of `TEST_DATABASE_URL`.
 
-    factory = _pg_session_factory(url)
-    yield factory
-    engine = factory.kw["bind"]
-    Base.metadata.drop_all(engine)
-    engine.dispose()
+    A missing, malformed or unreachable server fails every database test; none skips.
+    """
+    from sqlalchemy.engine import make_url
+    from support.postgresql import PostgresqlTestDatabases
+
+    configured = os.environ.get(_DATABASE_SERVER_VARIABLE, "")
+    if not configured:
+        pytest.fail(
+            "TEST_DATABASE_URL is not set: run database tests through "
+            "scripts/test_postgresql.sh, which starts a disposable PostgreSQL."
+        )
+    administration_url = make_url(configured)
+    if administration_url.get_backend_name() != "postgresql":
+        pytest.fail("TEST_DATABASE_URL must name a PostgreSQL server")
+    databases = PostgresqlTestDatabases(
+        administration_url, run_id=testrun_uid, worker_id=worker_id,
+    )
+    yield databases
+    databases.close()
+
+
+@pytest.fixture
+def postgresql_url(request, postgresql_databases):
+    """This worker's migrated database; it is reset to its migrated baseline after the test."""
+    _require_postgresql_mark(request.node)
+    yield postgresql_databases.worker_url
+    postgresql_databases.reset()
+
+
+@pytest.fixture
+def empty_postgresql_url(request, postgresql_databases):
+    """An additional empty database for a test that migrates it itself; dropped afterwards."""
+    _require_postgresql_mark(request.node)
+    url = postgresql_databases.create_empty_database()
+    yield url
+    postgresql_databases.drop_database(url)
 
 
 @pytest.fixture
 def pg_factory(postgresql_url):
-    yield from _pg_factory_until_teardown(postgresql_url)
+    """A session factory on this worker's migrated database, closed before its reset."""
+    from sqlalchemy import create_engine
+
+    from songmaker_cli.settings import get_settings
+
+    settings = get_settings()
+    engine = create_engine(
+        postgresql_url,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_pre_ping=True,
+    )
+    yield sessionmaker(bind=engine)
+    engine.dispose()
 
 
 @pytest.fixture(params=["sqlite", "postgresql"])
@@ -518,15 +555,16 @@ def database_backend(request) -> str:
 
 
 @pytest.fixture
-def database_postgresql_url(request, database_backend) -> str | None:
-    """The PostgreSQL URL on the PostgreSQL leg of `database_backend`, None on the SQLite leg."""
-    return _postgresql_url(request.node) if database_backend == "postgresql" else None
+def database_empty_postgresql_url(request, database_backend):
+    """An empty PostgreSQL database on the PostgreSQL leg of `database_backend`, else None."""
+    if database_backend == "postgresql":
+        return request.getfixturevalue("empty_postgresql_url")
+    return None
 
 
 @pytest.fixture
-def database_pg_factory(database_postgresql_url):
+def database_pg_factory(request, database_backend):
     """The PostgreSQL session factory on the PostgreSQL leg of `database_backend`, else None."""
-    if database_postgresql_url is None:
-        yield None
-    else:
-        yield from _pg_factory_until_teardown(database_postgresql_url)
+    if database_backend == "postgresql":
+        return request.getfixturevalue("pg_factory")
+    return None

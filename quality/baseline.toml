@@ -63,7 +63,7 @@
 "tests/songmaker_cli/test_api.py" = 4694
 "tests/songmaker_cli/test_conversation_api.py" = 704
 "tests/songmaker_cli/test_db.py" = 3573
-"tests/songmaker_cli/test_db_postgresql.py" = 838
+"tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_jobs.py" = 3215
 "tests/songmaker_cli/test_library_api.py" = 1627
 "tests/songmaker_cli/test_lora_api.py" = 1297
@@ -193,7 +193,7 @@
 "test_user_lora_model_mode_migration_backfills_constrains_and_removes" = 79
 
 [function_lines."tests/songmaker_cli/test_db_postgresql.py"]
-"test_alembic_migrations_on_postgresql" = 119
+"test_alembic_migrations_on_postgresql" = 114
 "test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql" = 65
 "test_concurrent_lora_reconciliation_claims_one_locked_row" = 83
 
