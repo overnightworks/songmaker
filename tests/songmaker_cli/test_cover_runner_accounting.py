@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import shutil
 import threading
 import uuid
@@ -40,10 +39,8 @@ def _png_bytes() -> bytes:
 
 
 @pytest.fixture
-def accounting_pg_url():
-    url = os.environ.get("TEST_DATABASE_URL", "")
-    if not url.startswith("postgresql"):
-        pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
+def accounting_pg_url(postgresql_url):
+    url = postgresql_url
     engine = create_engine(url)
     schema = "cover_accounting_" + uuid.uuid4().hex
     with engine.begin() as connection:

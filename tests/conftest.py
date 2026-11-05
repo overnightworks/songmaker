@@ -456,12 +456,46 @@ def _pg_session_factory() -> sessionmaker[Session]:
     return sessionmaker(bind=engine)
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "postgresql: needs PostgreSQL; the CI postgresql-contract job runs exactly these tests",
+    )
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Mark every test that reaches PostgreSQL, so the contract job selects it with `-m postgresql`.
+
+    A test reaches PostgreSQL through the `postgresql_url` fixture (directly, or via `pg_factory`),
+    through a parameter value naming `postgresql`, or by a `test_postgresql_` name when it asks for
+    the fixture at run time. `postgresql_url` fails a test the rule missed.
+    """
+    for item in items:
+        callspec = getattr(item, "callspec", None)
+        parameters = callspec.params.values() if callspec else ()
+        if (
+            "postgresql_url" in item.fixturenames
+            or item.name.startswith("test_postgresql_")
+            or any(isinstance(value, str) and "postgresql" in value for value in parameters)
+        ):
+            item.add_marker(pytest.mark.postgresql)
+
+
 @pytest.fixture
-def pg_factory():
+def postgresql_url(request: pytest.FixtureRequest) -> str:
+    """The PostgreSQL URL of this run; the one place a PostgreSQL test skips without it."""
+    if request.node.get_closest_marker("postgresql") is None:
+        pytest.fail("Test reaches PostgreSQL without the postgresql marker (pytest_collection_modifyitems)")
+    url = os.environ.get("TEST_DATABASE_URL", "")
+    if not url.startswith("postgresql"):
+        pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
+    return url
+
+
+@pytest.fixture
+def pg_factory(postgresql_url):
     from songmaker_cli.db.models import Base
 
-    if not os.environ.get("TEST_DATABASE_URL", "").startswith("postgresql"):
-        pytest.skip("No PostgreSQL URL")
     factory = _pg_session_factory()
     yield factory
     engine = factory.kw["bind"]

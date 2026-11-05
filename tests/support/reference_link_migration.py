@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import os
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -61,10 +60,8 @@ def reference_link_sqlite(tmp_path: Path):
 
 
 @pytest.fixture
-def reference_link_postgresql():
-    base_url = os.environ.get("TEST_DATABASE_URL", "")
-    if not base_url.startswith("postgresql"):
-        pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
+def reference_link_postgresql(postgresql_url):
+    base_url = postgresql_url
     schema = "reference_link_" + uuid.uuid4().hex
     admin = create_engine(base_url)
     with admin.begin() as connection:

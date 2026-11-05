@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import json
 import logging
-import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,9 +39,7 @@ def database(request, tmp_path, isolated_logging):
         url = make_url(f"sqlite:///{tmp_path / 'coherence.db'}")
         schema = None
     else:
-        base_url = os.environ.get("TEST_DATABASE_URL", "")
-        if not base_url.startswith("postgresql"):
-            pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
+        base_url = request.getfixturevalue("postgresql_url")
         schema = "coherence_verdicts_" + uuid.uuid4().hex
         admin = create_engine(base_url)
         with admin.begin() as connection:
