@@ -56,7 +56,7 @@ def _songmaker_secret_directories(rendered: dict) -> set[Path]:
     }
 
 
-def test_the_secret_files_default_to_the_directory_the_verify_check_compares(tmp_path: Path) -> None:
+def test_the_secret_files_default_to_the_directory_verify_compares(tmp_path: Path) -> None:
     rendered = _rendered_compose(tmp_path, {})
 
     assert _songmaker_secret_directories(rendered) == {Path.home() / secret_files.DEFAULT_DIRECTORY}
