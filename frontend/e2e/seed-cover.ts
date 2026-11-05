@@ -42,3 +42,27 @@ export async function seedRunningCoverJob(
 export async function completeCoverJob(jobId: string): Promise<void> {
 	await seedJobState('set-cover-completed', ['--job-id', jobId], readFileSync(COVER_FIXTURE));
 }
+
+/**
+ * Ends a running cover job in place with one of the agent's problems, the way
+ * the web cover runner stores it: `error` is what the job's row holds, which
+ * no page may show, and `retryAfterSeconds` the wait a busy gateway named.
+ */
+export async function failCoverJob(
+	jobId: string,
+	problem: string,
+	error: string,
+	retryAfterSeconds?: number
+): Promise<void> {
+	const waitArgs =
+		retryAfterSeconds === undefined ? [] : ['--retry-after-seconds', String(retryAfterSeconds)];
+	await seedJobState('set-failed', [
+		'--job-id',
+		jobId,
+		'--error',
+		error,
+		'--error-type',
+		problem,
+		...waitArgs
+	]);
+}

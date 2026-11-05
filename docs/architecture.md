@@ -17,9 +17,9 @@
                     └──┬─────────┬──────────┬─────────────┘
                        │         │          │
                        ▼         ▼          ▼
-                 PostgreSQL    Redis    Cover provider
-                 (all data)   (queues,  (cover image)
-                              sessions,
+                 PostgreSQL    Redis    Agent gateway
+                 (all data)   (queues,  (co-writer turn,
+                              sessions,  cover picture)
                               rate limits)
 ```
 
@@ -1023,60 +1023,47 @@ through `agent/backend.py`:
 
 Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the-gateway).
 
-### Agent routes
+### The Models page
 
-`db/queries/settings.py` owns the Cover selection. Cover captures its provider,
-model, and explicit `cli` or `api` route before work begins.
-The Co-Writer has no selection here: the agent file `agents/cowriter.md` names the turn's model, and the rows once saved for it stay in the table unread. The rows
-once saved for the removed judge stay in the table unread as well.
-`agent_providers/dispatch.py`
-owns the resulting adapter decision for the Cover (the Co-Writer
-turn no longer executes a route; a scoring run calls no provider): Cover asks `cover_image_capability(provider, route)`,
-the one answer to whether a route carries an image tool and what blocks it
-today. Nothing else answers that: the cover job resolves its saved row through
-it, `/api/settings/providers` projects it per route as `cover_routes`, and no
-endpoint preflights the mounted CLI on its own. A selected route never falls
-back to its sibling, so a Cover selection without an image tool ends its job
-named (`<Provider> · no image tool`) instead of quietly running Codex.
-`agent_providers/catalog.py` probes both routes per provider independently and
-`provider_status.py` refreshes and caches one snapshot per provider; the
-Codex CLI route reads its model catalogue from the mounted CLI's
-`codex debug models` JSON output. The settings responses project the selected
-route for legacy callers while also returning route-keyed readiness and
-catalogue snapshots. The Agents page has no Scoring control. Saving an Agents row is a question of
-form — a known provider, a known route, and a model the provider lists, the one
-the row already carries, or none while that catalogue lists nothing — never of
-reachability: whether the choice runs is what the row's status says, and an
-unusable one stays saved until its next turn or job fails with the named reason.
+No agent has a route to choose any more: each agent file names its model
+(`agents/cowriter.md` for the turn, `agents/cover.md` for the cover picture),
+and both run through the gateway. Settings › Admin › **Models** shows the
+Co-Writer and the Cover: one table, one row per task, with Task, Provider,
+Route, Model and Status. Both rows are read-only `ModelsServiceRow`s: "Set by
+the agent file" in the Provider and Model cells, Gateway as the route, and no
+status, because the page checks no agent ahead of its run; the Co-Writer row
+keeps the history tail under Advanced. The page reads no provider status. The
+rows once saved for the Cover's provider, route and model, for the Co-Writer
+and for the removed judge stay in the table unread. `GET /api/settings/providers`
+still reports `cover_routes` (`agent_providers/dispatch.py`'s
+`cover_image_capability`), which no page reads.
 
-The Cover is what asks that one dispatch; the Co-Writer runs through
-the gateway. Settings › Admin › **Agents** shows the Co-Writer and Cover: one table, one
-row per task, with Task, Provider, Route, Model and Status. The Co-Writer row is
-read-only (`ModelsCowriterRow.svelte`): "Set by the agent file" in the Provider
-and Model cells, Gateway as the route, no status, and the history tail under
-Advanced; the model is the agent file's, never a setting the app reads.
-The Cover row offers every provider, the list its own settings response carries, because what a provider
-cannot do, or has not been set up for, is a reason next to the choice and never
-a missing control: an unusable route stays visible and greyed with its reason
-(`API · key not set`, `CLI · not logged in`, `API · no image tool`), a provider
-option carries its own state, and a model list that could not be fetched says
-`No models` rather than inventing a value. A row saves on change and confirms
-with `Saved.`; a rejected save is a red sub-row with the reason and a retry.
-Because the dispatch never falls back to a sibling route, a saved but unusable
-combination is kept, and it is the next turn or job that ends with the named
-error — the table shows that state, it does not prevent it. Keys and logins
-appear as state only, never as values. How much room the five columns have is
-answered by the card the table sits in rather than by the viewport — the same
-reasoning as the editor's own container query (#185), since the rail and a
-docked panel take hundreds of pixels the viewport still counts — so the column
-geometry is published once as tokens on that card (`--models-columns`) and read
-by the header row and both row components. Below 768px each row becomes
-one card per task with the same labelled lines;
+How much room the five columns have is answered by the card the table sits in
+rather than by the viewport — the same reasoning as the editor's own container
+query (#185), since the rail and a docked panel take hundreds of pixels the
+viewport still counts — so the column geometry is published once as tokens on
+that card (`--models-columns`) and read by the header row and the rows. Below
+768px each row becomes one card per task with the same labelled lines;
 `frontend/e2e/admin-models.spec.ts` drives the surface at both widths.
 
-The co-writer turn does not use these routes: it runs through the gateway
-(see "The co-writer turn" above). The routes above keep serving the cover
-until its own move.
+### The cover picture
+
+A Suggest click asks `agent/backend.py::cover_admission` before it makes a job:
+no gateway configured or an unreachable issuer answers 503, outside the API group or a session whose
+grant is refused answers 403, each with `{"detail": {"problem": …}}`, one of
+the turn's four problems (`AgentProblem`). The web process's one-at-a-time
+runner (`cover_runner.py`) then loads the asking user and the session the job
+references, and `run_cover_picture` draws one picture through the picture
+agent file on the same `GatewayBackend` the turn uses, checking the group again
+at its start. The picture runs in its own task, so an explicit Cancel closes
+its request without stopping the runner. `covers.decode_cover_image` checks the
+bytes and stores them as PNG. A run that cannot draw ends FAILED with the
+problem as `error_type`, a closed sentence as `error`, and, when busy, the wait
+the gateway named as `retry_after_seconds`; the editor words the problem
+itself and counts a busy wait down from the job's end. Only a completed run
+spends the daily count.
+
+Trust, tokens and the network: [Security](security.md#cover-picture-through-the-gateway).
 
 ### Engine packages (`src/`)
 
@@ -1291,11 +1278,6 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `CODEX_CLI_MAX_CONCURRENT_PROCESSES` | Stay | Default of the `codex_cli_max_concurrent_processes` setting; the live cap arrives through the configuration. |
 | `CODEX_CODE_MODE_HOST_BINARY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
 | `CODEX_RESOURCES_DIRECTORY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
-| `COVER_CLI_DEADLINE_SECONDS` | Stay | Constant, until the picture agent file owns the deadline. |
-| `COVER_DEFAULT_MODEL` | Stay | Cover art is songmaker's own task, with its own model choice. |
-| `COVER_DEFAULT_PROVIDER` | Stay | Cover art is songmaker's own task, with its own provider choice. |
-| `COVER_DEFAULT_ROUTE` | Stay | Cover art is songmaker's own task, with its own route choice. |
-| `COVER_IMAGE_TOOL_UNAVAILABLE_ERROR` | Stay | A text a musician reads. |
 | `COVER_MAX_CONCURRENT_RUNS` | Stay | Default of the `cover_max_concurrent_runs` setting; the live cap arrives through the configuration. |
 | `COVER_PROMPT_MAX_CHARS` | Stay | How long songmaker's cover prompt may grow. |
 | `COVER_PROMPT_SONG_FIELD_MAX_CHARS` | Stay | How much of a song a cover prompt may quote. |
@@ -1307,11 +1289,9 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `GROK_CLI_AUTH_FILE` | Stay | A container path; deployment fact, arrives through the runtime configuration. |
 | `GROK_CLI_BINARY` | Stay | Songmaker's default binary name; arrives as `ProviderRuntimeConfig.grok_cli_binary`. |
 | `CLI_PROMPT_FILE_PREFIX` | Stay | The temporary prompt file carries songmaker's name; injected as `ProviderRuntimeConfig.cli_prompt_file_prefix`. |
-| `COVER_GENERATED_EDGE_PIXELS` | Stay | How large a generated cover is — a product choice, injected as `ImagePolicy.output_edge_pixels`. |
-| `COVER_GENERATED_IMAGE_FORMAT` | Stay | Which format a generated cover is written in; injected as `ImagePolicy.output_format`. |
-| `COVER_MAX_BYTES` | Stay | The byte ceiling for any cover songmaker accepts; injected as `ImagePolicy.maximum_source_bytes`. |
-| `COVER_MAX_PIXELS` | Stay | The pixel ceiling for any cover songmaker accepts; injected as `ImagePolicy.maximum_pixels`. |
-| `COVER_PNG_MAGIC` | Stay | The signature a generated cover must carry; injected as `ImagePolicy.output_signature`. |
+| `COVER_MAX_BYTES` | Stay | The byte ceiling for any cover songmaker accepts, uploaded or drawn by the gateway. |
+| `COVER_MAX_PIXELS` | Stay | The pixel ceiling for any cover songmaker accepts, uploaded or drawn by the gateway. |
+| `COVER_PNG_MAGIC` | Stay | The signature a stored cover suggestion carries; `covers.decode_cover_image` writes every drawn picture as PNG. |
 | `GROK_CLI_PROMPT_FILE_PLACEHOLDER` | Stay | Mechanics, but its value carries songmaker's name; injected as `ProviderRuntimeConfig.cli_prompt_file_placeholder`. |
 | `SECRET_ENV_KEYS` | Stay | Songmaker's own secret names; injected as `ProviderRuntimeConfig.secret_env_keys`. |
 
@@ -1528,7 +1508,7 @@ close the stream.
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay after a `Last-Event-ID` header or `last_event_id` query cursor (the header wins when both are sent), gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
 | GET/POST/PUT/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, select a private suggestion, or remove the album cover (JPEG/PNG; ownership 404) |
-| POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | POST creates one `cover` job after the active-job and per-album UTC-day checks; only completed jobs that produced an image count, on the UTC day of their start. Publication and completion commit together; suggestion deletion keeps the charge, and album deletion retains the job with a null album reference. Each job makes one image and adds it to the album's pending suggestions, which stay until DELETE (the UI discards after ×, USE or Upload) or album deletion. The web container's one-at-a-time runner claims queued cover jobs; it owns startup recovery, reports interrupted running jobs as `server_restart`, and removes only their own suggestion. The music worker neither registers nor recovers covers. GET inspects the latest job state and private suggestions; DELETE deletes only the album's suggestions it names by `suggestion_id` or by the run that made them (`job_id`), refuses naming nothing with 422, and removes their files after the database commit. |
+| POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | POST needs a browser session (a bearer gets 403) and asks the gateway's API group first: 503 `{"detail": {"problem": "unavailable"}}` without a gateway or with the issuer down, 403 with `not_enabled` or `sign_in_again`, and no job; it then creates one `cover` job after the active-job and per-album UTC-day checks; only completed jobs that produced an image count, on the UTC day of their start. Publication and completion commit together; suggestion deletion keeps the charge, and album deletion retains the job with a null album reference. Each job makes one image and adds it to the album's pending suggestions, which stay until DELETE (the UI discards after ×, USE or Upload) or album deletion. The web container's one-at-a-time runner claims queued cover jobs; it owns startup recovery, reports interrupted running jobs as `server_restart`, and removes only their own suggestion. The music worker neither registers nor recovers covers. GET inspects the latest job state and private suggestions; DELETE deletes only the album's suggestions it names by `suggestion_id` or by the run that made them (`job_id`), refuses naming nothing with 422, and removes their files after the database commit. |
 | GET | `/api/albums/{id}/cover-suggestions/{suggestion_id}` | user | Stream one private suggestion after the same album ownership check; no share route exists. |
 | GET/POST/DELETE | `/api/songs/{id}/cover` | user | Read, upload/replace, or remove the song's own cover (JPEG/PNG; ownership 404). JSON `cover` is the song file or null — never the parent album's URLs. |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
@@ -1549,8 +1529,7 @@ close the stream.
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
 | GET/PUT | `/api/settings/theme` | user | The person's `light`, `dark` or `system` (follow the device) choice, new people start at `system`; any other value is rejected with 422. |
-| GET/PUT | `/api/settings/cover` | admin | Read or persist Cover's independent provider, route, and model; both answers carry `allowed_providers`, the sorted providers a save accepts. The selection is retained even when its route cannot make images; the next Cover job reports the named fixed failure and never falls back. |
-| GET | `/api/settings/providers` | admin | `cowriter_routes` carries shared provider readiness and catalogs for both routes, and `cover_routes` carries image capability; neither reads a saved route. Cover's route reason comes from the shared image-capability dispatch owner. |
+| GET | `/api/settings/providers` | admin | `cowriter_routes` carries shared provider readiness and catalogs for both routes, and `cover_routes` carries image capability; neither reads a saved route, and no page reads either. |
 | GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
 | PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
