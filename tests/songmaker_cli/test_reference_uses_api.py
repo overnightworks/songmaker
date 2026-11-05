@@ -84,6 +84,16 @@ def test_an_archived_take_is_marked_archived(signed_in: TestClient) -> None:
     assert take["is_trashed"] is False
 
 
+def test_a_take_without_a_version_is_listed_and_counted(signed_in: TestClient) -> None:
+    reference_id = seed_reference(signed_in, "owner-id", "ref.wav")
+    link_reference(signed_in, reference_id, via="take", versionless=True)
+
+    takes = signed_in.get(_uses_path(reference_id)).json()["takes"]
+
+    assert [take["version_number"] for take in takes] == [None]
+    assert _listed_counts(signed_in, reference_id) == (0, len(takes))
+
+
 def test_links_are_listed_newest_first(signed_in: TestClient) -> None:
     reference_id = seed_reference(signed_in, "owner-id", "ref.wav")
     for key, day in (("old", 1), ("new", 3), ("mid", 2)):

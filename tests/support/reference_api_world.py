@@ -93,10 +93,12 @@ def link_reference(
     song_trashed: bool = False, album_trashed: bool = False, key: str = "link",
     title: str = "S", slug: str = "", version_number: int = 1, generation_number: int = 1,
     duration_sec: float | None = None, created_at: datetime | None = None,
+    versionless: bool = False,
 ) -> None:
     """Link the reference from a saved version (``via="version"``) or from a take.
 
     Each ``key`` seeds its own album, song and version, so one reference can be linked many times.
+    ``versionless`` leaves a take without a version.
     """
     trashed_at = datetime(2026, 10, 1, tzinfo=timezone.utc)
     stamp = {} if created_at is None else {"created_at": created_at}
@@ -120,7 +122,8 @@ def link_reference(
         session.flush()
         if via == "take":
             session.add(Generation(
-                song_id=song.id, version_id=version.id, mp3_path=f"owner-id/{key}.mp3",
+                song_id=song.id, version_id=None if versionless else version.id,
+                mp3_path=f"owner-id/{key}.mp3",
                 is_archived=archived, reference_recording_id=reference_id,
                 generation_number=generation_number, audio_duration_sec=duration_sec, **stamp,
             ))
