@@ -13,7 +13,7 @@ from functools import partial
 def _release_acquired[ResourceT](
     acquisition: asyncio.Future[ResourceT], release: Callable[[ResourceT], None],
 ) -> None:
-    if acquisition.exception() is None:
+    if not acquisition.cancelled() and acquisition.exception() is None:
         release(acquisition.result())
 
 

@@ -231,7 +231,14 @@ def test_a_cancel_while_the_take_file_is_being_created_leaves_no_file(
 
     monkeypatch.setattr(tempfile, "mkstemp", mkstemp_held_after_creating)
 
+    callback_failures: list[dict] = []
+
+    def record_callback_failure(_loop: asyncio.AbstractEventLoop, context: dict) -> None:
+        if "handle" in context:
+            callback_failures.append(context)
+
     async def cancel_while_creating() -> None:
+        asyncio.get_running_loop().set_exception_handler(record_callback_failure)
         fetch = asyncio.create_task(_generation_dispatch(_Worker(_serves(_TAKE))))
         assert await asyncio.to_thread(created.wait, 10)
         fetch.cancel()
@@ -242,6 +249,7 @@ def test_a_cancel_while_the_take_file_is_being_created_leaves_no_file(
     asyncio.run(cancel_while_creating())
 
     assert list(music_tmp.iterdir()) == []
+    assert callback_failures == []
 
 
 def test_a_delete_the_worker_refuses_does_not_fail_the_fetched_take(music_tmp: Path) -> None:
