@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -43,16 +42,22 @@ class _TakeResponse(StreamingResponse):
 
     def __init__(self, take: BinaryIO) -> None:
         self._take = take
+        try:
+            size = os.fstat(take.fileno()).st_size
+        except OSError:
+            take.close()
+            raise
         super().__init__(
-            _chunks(take), media_type="audio/wav",
-            headers={"Content-Length": str(os.fstat(take.fileno()).st_size)},
+            _chunks(take), media_type="audio/wav", headers={"Content-Length": str(size)},
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         try:
             await super().__call__(scope, receive, send)
         finally:
-            await asyncio.to_thread(self._take.close)
+            # Closing a read-only descriptor flushes nothing and does not block; an awaited
+            # close is a cancellation point, and a cancel there would leave the handle open.
+            self._take.close()
 
 
 def register_result_routes(router: APIRouter, task_store: TaskStore) -> None:

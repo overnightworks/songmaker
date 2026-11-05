@@ -6,6 +6,7 @@ import asyncio
 import json
 import threading
 from collections.abc import AsyncIterator, Awaitable, Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 from typing import BinaryIO
@@ -284,6 +285,88 @@ def test_a_result_response_closes_its_take_however_delivery_ends(
     _run(go())
 
 
+def test_a_result_whose_size_cannot_be_read_answers_an_error_and_closes_its_take(
+    tmp_path: Path, opened_takes: list[BinaryIO], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def failing_fstat(_descriptor: int):
+        raise OSError(5, "Input/output error")
+
+    async def go():
+        deps, _ = _make_deps(tmp_path)
+        task_id, _ = await _finished_take(deps, tmp_path / "out")
+        monkeypatch.setattr("acestep_worker.task_results.os.fstat", failing_fstat)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app(deps), raise_app_exceptions=False),
+            base_url="http://worker",
+        ) as http:
+            response = await http.get(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
+        assert response.status_code == 500
+        assert opened_takes
+        assert all(handle.closed for handle in opened_takes)
+
+    _run(go())
+
+
+class _HoldableExecutor(ThreadPoolExecutor):
+    """One worker thread; once held, every later job waits in its queue until release."""
+
+    def __init__(self) -> None:
+        super().__init__(max_workers=1)
+        self._released = threading.Event()
+        self._holding = False
+        self.queued = asyncio.Event()
+
+    def hold(self) -> None:
+        super().submit(self._released.wait, 10)
+        self._holding = True
+
+    def submit(self, fn, /, *args, **kwargs):
+        if self._holding:
+            self.queued.set()
+        return super().submit(fn, *args, **kwargs)
+
+    def release_and_drain(self) -> None:
+        self._released.set()
+        self.shutdown(wait=True)
+
+
+def test_a_result_response_cancelled_during_its_cleanup_still_closes_its_take(
+    tmp_path: Path, opened_takes: list[BinaryIO],
+) -> None:
+    async def go():
+        deps, _ = _make_deps(tmp_path)
+        task_id, _ = await _finished_take(deps, tmp_path / "out")
+        executor = _HoldableExecutor()
+        asyncio.get_running_loop().set_default_executor(executor)
+        requested = False
+
+        async def receive() -> dict:
+            nonlocal requested
+            if not requested:
+                requested = True
+                return {"type": "http.request", "body": b"", "more_body": False}
+            await asyncio.Event().wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                executor.hold()
+
+        delivery = asyncio.create_task(create_app(deps)(
+            _get_scope(f"/tasks/{task_id}/result", "2.4"), receive, send,
+        ))
+        queued = asyncio.create_task(executor.queued.wait())
+        await asyncio.wait([delivery, queued], return_when=asyncio.FIRST_COMPLETED)
+        delivery.cancel()
+        queued.cancel()
+        await asyncio.wait([delivery])
+        executor.release_and_drain()
+        assert opened_takes
+        assert all(handle.closed for handle in opened_takes)
+
+    _run(go())
+
+
 def test_a_result_open_cancelled_in_its_thread_closes_the_take(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -459,7 +542,9 @@ def test_a_worker_start_refuses_an_output_root_on_the_shared_volume(
     root.mkdir(parents=True)
     (shared / "kept.mp3").write_bytes(b"kept")
 
+    settings = _settings_with_roots(root, shared)
+
     with pytest.raises(ValueError, match="shared"):
-        _build(_settings_with_roots(root, shared))
+        _build(settings)
 
     assert (shared / "kept.mp3").read_bytes() == b"kept"
