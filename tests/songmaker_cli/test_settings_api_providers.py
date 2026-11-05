@@ -682,11 +682,11 @@ def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
     assert calls == 0
 
 
-# ── Provider-status response pin (A9, #873) ─────────────────────────
+# ── Provider-status response pin ───────────────────────────────────
 #
-# ``GET /api/settings/providers`` feeds the admin "Agents" table.  The pin
-# drives it from one fixed snapshot set so the whole response body — not a
-# field the assertion happens to name — is compared byte for byte.
+# The pin drives ``GET /api/settings/providers`` from one fixed snapshot set
+# so the whole response body — not a field the assertion happens to name —
+# is compared byte for byte.
 
 _PINNED_PROBED_AT = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc)
 
