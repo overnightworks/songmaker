@@ -70,7 +70,7 @@
 "tests/acestep_worker/test_wrapper.py" = 1631
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
 "tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4734
+"tests/songmaker_cli/test_api.py" = 4715
 "tests/test_auto_deploy_alerting.py" = 1384
 "tests/songmaker_cli/test_conversation_api.py" = 842
 "tests/songmaker_cli/test_settings_api_providers.py" = 972

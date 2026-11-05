@@ -420,10 +420,8 @@ TITLE_WRITES = pytest.mark.parametrize(
     ("tool_name", "target"), [("create_song", "album_id"), ("rename_song", "song_id")])
 
 
-def _co_writer_title_write(
-    db_session: Session, seeded: tuple, tool_name: str, target: str, title: str,
-):
-    owner_id, _, album_id, song_id, _ = seeded
+def _co_writer_title_write(db_session: Session, tool_name: str, target: str, title: str):
+    owner_id, _, album_id, song_id, _ = _seed(db_session)
     arguments = {target: {"album_id": album_id, "song_id": song_id}[target], "title": title}
     return execute_cowriter_tool(
         db_session, _owner(db_session, owner_id), tool_name, arguments, session_id=None,
@@ -432,8 +430,7 @@ def _co_writer_title_write(
 
 @TITLE_WRITES
 def test_co_writer_stores_the_stripped_title(db_session: Session, tool_name, target):
-    seeded = _seed(db_session)
-    outcome = _co_writer_title_write(db_session, seeded, tool_name, target, "  Night Drive ")
+    outcome = _co_writer_title_write(db_session, tool_name, target, "  Night Drive ")
 
     assert not outcome.is_error
     assert db_session.query(Song).filter_by(title="Night Drive").one().slug == "night-drive"
@@ -443,16 +440,19 @@ def test_co_writer_stores_the_stripped_title(db_session: Session, tool_name, tar
 @pytest.mark.parametrize(
     "title", ["   ", "x" * (Song.__table__.c.title.type.length + 1)], ids=["blank", "overlong"],
 )
-def test_co_writer_refuses_an_unstorable_title_and_writes_nothing(
-    db_session: Session, tool_name, target, title,
+def test_co_writer_refuses_an_unstorable_title_before_any_write(
+    db_session, tool_name, target, title,
 ):
-    seeded = _seed(db_session)
-    before = db_session.query(Song.title).order_by(Song.id).all()
-    outcome = _co_writer_title_write(db_session, seeded, tool_name, target, title)
+    owner_id, _, album_id, song_id, _ = _seed(db_session)
+    target_id = {"album_id": album_id, "song_id": song_id}[target]
+    # The tool body runs outside the executor, whose rollback would hide an earlier write.
+    with pytest.raises(tools.MCPToolError):
+        getattr(tools, f"tool_{tool_name}")(
+            db_session, _owner(db_session, owner_id), **{target: target_id}, title=title,
+        )
 
-    assert outcome.is_error
-    db_session.expire_all()
-    assert db_session.query(Song.title).order_by(Song.id).all() == before
+    assert not db_session.new and not db_session.dirty
+    assert db_session.query(Song).filter(Song.title == title.strip()).count() == 0
     assert db_session.query(AuditLog).count() == 0
 
 

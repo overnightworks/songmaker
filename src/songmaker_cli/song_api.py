@@ -62,6 +62,7 @@ from songmaker_cli.db.queries.playlists import best_playable_generation, playlis
 from songmaker_cli.db.queries.reference_recordings import get_owned_reference_recording
 from songmaker_cli.db.queries.songs import (
     EmptySongTitleError,
+    UnstorableSongTitleError,
     cleanup_song,
     count_generations_by_song,
     count_songs,
@@ -146,6 +147,15 @@ def api_get_song(
     return SongResponse.from_orm(song)
 
 
+def _stored_title_or_422(title: str) -> str:
+    try:
+        return stored_song_title(title)
+    except UnstorableSongTitleError as exc:
+        empty = isinstance(exc, EmptySongTitleError)
+        detail = "Title is required" if empty else "Title is too long"
+        raise HTTPException(422, detail) from exc
+
+
 @router.post(
     "/songs",
     responses={404: {"description": "Album or reference audio not found"}},
@@ -157,10 +167,7 @@ def api_create_song(
 ) -> SongResponse:
     album = get_album(session, req.album_id)
     check_album_access(album, user)
-    try:
-        title = stored_song_title(req.title)
-    except EmptySongTitleError:
-        raise HTTPException(422, "Title is required")
+    title = _stored_title_or_422(req.title)
     slug = unique_song_slug(session, req.album_id, title)
     _attach_reference(session, user.id, req.reference_recording_id)
     song = create_song(
@@ -224,10 +231,7 @@ def api_rename_song(
     session: Session = Depends(get_db_session),
 ) -> SongResponse:
     song = check_song_access(session, song_id, user)
-    try:
-        title = stored_song_title(req.title)
-    except EmptySongTitleError:
-        raise HTTPException(422, "Title is required")
+    title = _stored_title_or_422(req.title)
     slug = unique_song_slug(
         session, song.album_id, title, exclude_song_id=song_id,
     )
