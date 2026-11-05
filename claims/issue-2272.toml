@@ -1,0 +1,8 @@
+claim_id = "22ec993612ec41cd89bb9185ca55f3df"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "4bba8298057269182f03ac73b758a4158701aaeb"
+branch = "claude/issue-2272-webauth-0-30"
+scope = ["pyproject.toml", "src/songmaker_cli/auth_api.py", "tests/songmaker_cli/test_auth_api_sign_in.py", "uv.lock"]
+opened_commit = "2bd70690fd06f906ced559c5a18b2b387524bd7e"
+whole_reason = "The pin, its lock, the one breaking call site and its test move together, or the build breaks."
