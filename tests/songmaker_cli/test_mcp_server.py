@@ -579,7 +579,7 @@ def test_co_writer_writes_that_change_nothing_record_no_work(
         ("rename_song", {"song_id": "song1", "title": "New Title"},
          AuditAction.UPDATE, ResourceType.SONG, "song1"),
         ("suggest_album_cover", {"album_id": "album1"},
-         AuditAction.COVER, ResourceType.ALBUM, "album1"),
+         AuditAction.GENERATE, ResourceType.ALBUM, "album1"),
         ("save_coherence_verdict",
          {"generation_id": "gen1", "score": 7, "summary": "Holds together."},
          AuditAction.SCORE, ResourceType.GENERATION, "gen1"),
