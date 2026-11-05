@@ -1,0 +1,7 @@
+claim_id = "87f7c69a63e440ceae436aefb8405cab"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "46d997f526e56f160595086cab28e5d3f2170eda"
+branch = "claude/issue-2259-home-write-settle"
+scope = ["frontend/e2e/home-write.spec.ts"]
+opened_commit = "aa467132a8e510209004ac9e24616cca7852b98b"
