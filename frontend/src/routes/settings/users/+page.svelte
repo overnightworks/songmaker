@@ -57,8 +57,7 @@
 		ADMIN_VOICES_NAME_LABEL,
 		ADMIN_VOICES_OWNER_LABEL,
 		ADMIN_VOICES_STATUS_LABEL,
-		AGENTS_HEADING,
-		modelsRowStatus
+		AGENTS_HEADING
 	} from '#lib/constants.ts';
 	import {
 		MODELS_COLUMN_MODEL_LABEL,
@@ -72,7 +71,8 @@
 		MODELS_SAVE_FAILED_FALLBACK,
 		MODELS_TASK_COVER_LABEL,
 		MODELS_TASK_COWRITER_LABEL,
-		PROVIDER_STATUS_UNAVAILABLE_DETAIL
+		PROVIDER_STATUS_UNAVAILABLE_DETAIL,
+		modelsRowStatus
 	} from '#lib/constants/models.ts';
 	import {
 		COMPACT_SELECT_CLASS,
@@ -155,8 +155,6 @@
 	let genEditDefaults = $state<VersionGenerationParams>({});
 	let genSaving = $state(false);
 	const genModelModes = $derived(Object.keys($builtinDefaults));
-
-	const admin = $derived($isAdmin);
 
 	// Each read the page makes (#1107): a lost network shows no words of its
 	// own while the offline strip says it or a reload is coming, and the read
@@ -438,11 +436,7 @@
 
 	async function loadGenDefaults() {
 		await loadBuiltins();
-		try {
-			allModels = await fetchAllModels();
-		} catch {
-			allModels = [];
-		}
+		allModels = await fetchAllModels().catch(() => []);
 		const wasLoaded = genDefaultsLoaded;
 		try {
 			genDefaults = await fetchGenerationDefaults();
@@ -481,8 +475,10 @@
 		genSaving = true;
 		reportError('');
 		try {
-			const cleaned = Object.keys(genEditDefaults).length > 0 ? genEditDefaults : {};
-			genDefaults = await updateGenerationDefaults({ ...genDefaults, [genEditModel]: cleaned });
+			genDefaults = await updateGenerationDefaults({
+				...genDefaults,
+				[genEditModel]: genEditDefaults
+			});
 			genDefaultsLoaded = true;
 			settleLoad('genDefaults');
 			genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
@@ -498,7 +494,7 @@
 	}
 </script>
 
-{#if !admin}
+{#if !$isAdmin}
 	<div class="denied">Admin access required.</div>
 {:else}
 	<div class="settings-page">

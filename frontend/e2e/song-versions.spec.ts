@@ -238,6 +238,12 @@ function replaceDraftDialog(page: Page): Locator {
 	return page.getByRole('dialog', { name: VERSION_REPLACE_DRAFT_TITLE });
 }
 
+async function confirmReplace(page: Page): Promise<void> {
+	await replaceDraftDialog(page)
+		.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
+		.click();
+}
+
 type Box = { x: number; y: number; width: number; height: number };
 
 function boxesOverlap(a: Box | null, b: Box | null): boolean {
@@ -427,9 +433,7 @@ test.describe('the versions of a song', () => {
 		await expect(lyricsField(page)).toHaveValue(editedLyrics);
 
 		await versionRow(page, 1).click();
-		await replaceDraftDialog(page)
-			.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
-			.click();
+		await confirmReplace(page);
 		await expect(versionsSheet(page)).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 
@@ -458,9 +462,7 @@ test.describe('the versions of a song', () => {
 		await expect(loadedToast(page)).toBeHidden();
 
 		await tapVersion(page, 2);
-		await replaceDraftDialog(page)
-			.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
-			.click();
+		await confirmReplace(page);
 		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
 		await expect(loadedToast(page, 2)).toBeVisible();
 
@@ -480,9 +482,7 @@ test.describe('the versions of a song', () => {
 		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
 		await lyricsField(page).fill(editedLyrics);
 		await tapVersion(page, 1);
-		await replaceDraftDialog(page)
-			.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
-			.click();
+		await confirmReplace(page);
 		await expect(loadedToast(page)).toBeVisible();
 
 		await tapVersion(page, 1);
@@ -572,9 +572,7 @@ test.describe('the versions of a song', () => {
 		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
 		await lyricsField(page).fill(editedLyrics);
 		await tapVersion(page, 1);
-		await replaceDraftDialog(page)
-			.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
-			.click();
+		await confirmReplace(page);
 		await expect(loadedToast(page)).toBeVisible();
 		await versionChip(page).click();
 		await expect(versionsSheet(page)).toBeVisible();

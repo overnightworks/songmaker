@@ -618,15 +618,7 @@ describe('admin agents tab', () => {
 	});
 
 	it('offers no defaults editor and sends nothing while the generation defaults failed to load', async () => {
-		api.fetchGenerationDefaults.mockRejectedValue(
-			new ApiError(
-				500,
-				'Defaults unavailable',
-				'/api/settings/generation-defaults',
-				null,
-				'Defaults unavailable'
-			)
-		);
+		api.fetchGenerationDefaults.mockRejectedValue(serverRefusal('Defaults unavailable'));
 		const target = await renderPage(true);
 		await selectTab(target, 'generation');
 
@@ -641,9 +633,7 @@ describe('admin agents tab', () => {
 		const stored = { turbo: { inference_steps: 20, guidance_scale: 5 } };
 		api.fetchBuiltinDefaults.mockResolvedValue({ turbo: { inference_steps: 8 } });
 		api.fetchGenerationDefaults
-			.mockRejectedValueOnce(
-				new ApiError(500, 'Defaults unavailable', '/api/settings/generation-defaults', null, null)
-			)
+			.mockRejectedValueOnce(serverRefusal('Defaults unavailable'))
 			.mockResolvedValue(stored);
 		api.updateGenerationDefaults.mockImplementation(async (body: unknown) => body);
 		const target = await renderPage(true);
@@ -679,9 +669,7 @@ describe('admin agents tab', () => {
 			base: { inference_steps: 8 }
 		});
 		api.fetchGenerationDefaults
-			.mockRejectedValueOnce(
-				new ApiError(500, 'Defaults unavailable', '/api/settings/generation-defaults', null, null)
-			)
+			.mockRejectedValueOnce(serverRefusal('Defaults unavailable'))
 			.mockResolvedValue(stored);
 		api.updateGenerationDefaults.mockImplementation(async (body: unknown) => body);
 		const target = await renderPage(true);

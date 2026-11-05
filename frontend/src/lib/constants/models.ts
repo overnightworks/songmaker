@@ -31,3 +31,15 @@ export const MODELS_ROUTE_NOT_LOGGED_IN_PHRASE = 'not logged in';
 export const MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE = 'no image tool';
 export const MODELS_SAVE_FAILED_FALLBACK = 'The server rejected the change.';
 export const MODELS_LOAD_ERROR = 'Failed to load models';
+
+const MODELS_LOADING_LABEL = 'Loading…';
+const MODELS_UNAVAILABLE_LABEL = 'Unavailable';
+export const modelsRowStatus = (loadFailure: string | null): string =>
+	loadFailure ? MODELS_UNAVAILABLE_LABEL : MODELS_LOADING_LABEL;
+export function modelsRouteNotAvailablePhrase(task: string): string {
+	return `not available for ${task.toLowerCase()}`;
+}
+
+export function modelsCannotDrawHint(provider: string): string {
+	return `${provider} cannot draw`;
+}
