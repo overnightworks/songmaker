@@ -134,6 +134,27 @@ def test_ownership_matrix_covers_every_registered_tool(ownership_factory):
     assert {tool.name for tool in registered} == MCP_TOOL_NAMES
 
 
+def _assert_owned_answer(name, identity, payload):
+    if name == "list_albums":
+        assert [album["id"] for album in payload] == ["album-actor"]
+    elif name in {"list_songs", "search_songs"}:
+        assert [song["id"] for song in payload] == (
+            [] if identity == "foreign" else ["song-actor"]
+        )
+    elif name in {"get_song", "get_version", "get_generation"}:
+        expected_id = _ownership_arguments(identity)[name][
+            {
+                "get_song": "song_id", "get_version": "version_id",
+                "get_generation": "generation_id",
+            }[name]
+        ]
+        assert payload["id"] == expected_id
+    elif name == "suggest_album_cover":
+        assert payload["status"] == "queued"
+    else:
+        assert payload["ok"] is True
+
+
 @pytest.mark.parametrize("name", sorted(MCP_TOOL_NAMES))
 @pytest.mark.parametrize("role", ["user", "admin"])
 @pytest.mark.parametrize("identity", ["actor", "foreign"])
@@ -155,24 +176,8 @@ def test_tools_only_reach_owned_resources(
         assert "need a browser login" in payload
     elif denied:
         assert "not found" in payload
-    elif name == "list_albums":
-        assert [album["id"] for album in payload] == ["album-actor"]
-    elif name in {"list_songs", "search_songs"}:
-        assert [song["id"] for song in payload] == (
-            [] if identity == "foreign" else ["song-actor"]
-        )
-    elif name in {"get_song", "get_version", "get_generation"}:
-        expected_id = _ownership_arguments(identity)[name][
-            {
-                "get_song": "song_id", "get_version": "version_id",
-                "get_generation": "generation_id",
-            }[name]
-        ]
-        assert payload["id"] == expected_id
-    elif name == "suggest_album_cover":
-        assert payload["status"] == "queued"
     else:
-        assert payload["ok"] is True
+        _assert_owned_answer(name, identity, payload)
 
     with ownership_factory() as session:
         foreign = session.get(Song, "song-foreign")

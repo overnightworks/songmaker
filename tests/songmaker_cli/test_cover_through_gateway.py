@@ -70,7 +70,7 @@ def _image_bytes(image_format: str, size: tuple[int, int] = (16, 16)) -> bytes:
     return output.getvalue()
 
 
-def _seed(session) -> None:
+def _seed_open_windows_album(session) -> None:
     session.add(User(id=USER_ID, username="owner", role="user"))
     session.flush()
     session.add(Album(id=ALBUM_ID, title="Open Windows", artist="Felix", created_by=USER_ID))
@@ -133,7 +133,7 @@ class CoverWorld:
 def build_world(tmp_path: Path, **attach) -> CoverWorld:
     factory = init_test_db(tmp_path / "cover.db")
     with factory() as session:
-        _seed(session)
+        _seed_open_windows_album(session)
     ctx = make_router_ctx(tmp_path, db=factory)
     app = make_router_app(ctx, user=make_authenticated_user(USER_ID))
     client = web_client(app)

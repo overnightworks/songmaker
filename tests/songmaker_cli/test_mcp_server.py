@@ -17,12 +17,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 from songmaker_cli.constants import (
     GET_SONG_ONLY_FOR_OTHER_SONGS,
     AuditAction,
-    JobStatus,
-    JobType,
     ResourceType,
     SongWorkKind,
 )
@@ -32,13 +29,13 @@ from songmaker_cli.db.models import (
     Album,
     AuditLog,
     Generation,
-    Job,
     Score,
     Song,
     User,
     UserSongWork,
     Version,
 )
+from songmaker_cli.db.queries.auth import create_session
 from songmaker_cli.mcp_server import auth, server, tools
 
 
@@ -458,72 +455,6 @@ def test_co_writer_refuses_unstorable_title_before_any_write(db_session, tool_na
     assert db_session.query(AuditLog).count() == 0
 
 
-def _signed_in(db_session: Session, user_id: str) -> str:
-    """A browser session of ``user_id``: the cover tool runs only as one."""
-    now = datetime.now(timezone.utc)
-    record = DatabaseSessionRecordStore(db_session).create(
-        user_id, now=now, expires_at=now + timedelta(hours=1), refresh_token=None, id_token=None,
-    )
-    db_session.commit()
-    return record.id
-
-
-def test_suggest_album_cover_queues_a_cover_job(db_session: Session):
-    owner_id, _, album_id, _, _ = _seed(db_session)
-    owner = _owner(db_session, owner_id)
-
-    result = tools.tool_suggest_album_cover(
-        db_session, owner, album_id=album_id, session_id=_signed_in(db_session, owner_id),
-    )
-
-    assert result.status == JobStatus.QUEUED
-    assert result.message == "Cover suggestion queued."
-    job = db_session.query(Job).filter_by(id=result.job_id).one()
-    assert job.type == JobType.COVER
-    assert job.album_id == album_id
-
-
-@pytest.mark.parametrize(
-    ("album_id", "existing_status", "daily_limit", "message"),
-    [
-        ("missing", None, None, "Album not found"),
-        ("album1", JobStatus.QUEUED, None, "Cover suggestions are already being generated"),
-        ("album1", JobStatus.COMPLETED, "1", "Daily cover suggestion limit reached"),
-    ],
-)
-def test_suggest_album_cover_surfaces_the_admission_owner_errors(
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-    album_id: str,
-    existing_status: JobStatus | None,
-    daily_limit: str | None,
-    message: str,
-):
-    """1301-F3-C1-COUNT: only produced suggestions exhaust admission."""
-    owner_id, _, _, _, _ = _seed(db_session)
-    owner = _owner(db_session, owner_id)
-    if existing_status is not None:
-        db_session.add(Job(
-            id="cover-job", type=JobType.COVER, status=existing_status,
-            album_id="album1", user_id=owner_id,
-        ))
-        db_session.commit()
-    if daily_limit is not None:
-        monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", daily_limit)
-        from songmaker_cli.settings import get_settings
-        get_settings.cache_clear()
-
-    session_id = _signed_in(db_session, owner_id)
-    try:
-        with pytest.raises(tools.MCPToolError, match=message):
-            tools.tool_suggest_album_cover(
-                db_session, owner, album_id=album_id, session_id=session_id,
-            )
-    finally:
-        if daily_limit is not None:
-            get_settings.cache_clear()
-
-
 def test_write_tools_block_other_users(db_session: Session):
     _, stranger_id, _, song_id, _ = _seed(db_session)
     stranger = _owner(db_session, stranger_id)
@@ -623,9 +554,10 @@ def test_co_writer_writes_leave_their_audit_row(
     db_session.get(Generation, "gen1").whisper_text = "sung words"
     db_session.commit()
 
-    outcome = execute_cowriter_tool(
-        db_session, owner, tool_name, arguments, session_id=_signed_in(db_session, owner.id),
-    )
+    asking = create_session(db_session, owner.id, datetime.now(timezone.utc) + timedelta(hours=1))
+    db_session.commit()
+
+    outcome = execute_cowriter_tool(db_session, owner, tool_name, arguments, session_id=asking.id)
 
     assert not outcome.is_error
     db_session.expire_all()
