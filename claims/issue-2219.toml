@@ -1,0 +1,8 @@
+claim_id = "fa454bb1815e4eb4bf346192dd19c228"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "8a395ad4e757c9b97b20da27330f2ff606c417ec"
+branch = "claude/issue-2219-e2e-matrix"
+scope = [".github/workflows/e2e.yml", "docker/docker-compose.ci.yml", "docs/testing.md", "frontend/e2e/README.md"]
+opened_commit = "4b8a09efe92c0ed120f3ee9bf8059dbdf6eb2e3c"
+whole_reason = "One CI change: the matrix split makes the one-stack sentences in the compose comments and both docs false at once, so they change together."
