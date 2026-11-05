@@ -8,7 +8,7 @@
 		WORKER_POOL_KEEP_LOADED_LABEL,
 		WORKER_POOL_KEEP_LOADED_HINT,
 		WORKER_POOL_UNLOAD_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/worker.ts';
 
 	interface Props {
 		loaded: LoadedModelDetailItem[];
