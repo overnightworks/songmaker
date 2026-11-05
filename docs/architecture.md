@@ -986,7 +986,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
-| Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`); the cover selection's route is resolved by `cowriter/routing.py` | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py`, `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
+| Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | Tool bodies | The co-writer's tool declarations and their execution, which the hand tools call | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
@@ -1057,9 +1057,9 @@ references, and `run_cover_picture` draws one picture through the picture
 agent file on the same `GatewayBackend` the turn uses, checking the group again
 at its start. The picture runs in its own task, so an explicit Cancel closes
 its request without stopping the runner. `covers.decode_cover_image` checks the
-bytes and stores them as PNG. A run that cannot draw ends FAILED with the
-problem as `error_type`, a closed sentence as `error`, and, when busy, the wait
-the gateway named as `retry_after_seconds`; the editor words the problem
+bytes, and the runner writes the decoded picture as PNG. A run that cannot draw
+ends FAILED with the problem as `error_type`, a closed sentence as `error`, and,
+when busy, the wait the gateway named as `retry_after_seconds`; the editor words the problem
 itself and counts a busy wait down from the job's end. Only a completed run
 spends the daily count.
 
@@ -1291,7 +1291,7 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `CLI_PROMPT_FILE_PREFIX` | Stay | The temporary prompt file carries songmaker's name; injected as `ProviderRuntimeConfig.cli_prompt_file_prefix`. |
 | `COVER_MAX_BYTES` | Stay | The byte ceiling for any cover songmaker accepts, uploaded or drawn by the gateway. |
 | `COVER_MAX_PIXELS` | Stay | The pixel ceiling for any cover songmaker accepts, uploaded or drawn by the gateway. |
-| `COVER_PNG_MAGIC` | Stay | The signature a stored cover suggestion carries; `covers.decode_cover_image` writes every drawn picture as PNG. |
+| `COVER_PNG_MAGIC` | Stay | The signature a stored cover suggestion carries; `cover_runner.py` writes every drawn picture as PNG after `covers.decode_cover_image` checks it. |
 | `GROK_CLI_PROMPT_FILE_PLACEHOLDER` | Stay | Mechanics, but its value carries songmaker's name; injected as `ProviderRuntimeConfig.cli_prompt_file_placeholder`. |
 | `SECRET_ENV_KEYS` | Stay | Songmaker's own secret names; injected as `ProviderRuntimeConfig.secret_env_keys`. |
 
