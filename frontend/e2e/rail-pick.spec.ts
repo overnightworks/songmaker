@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from '@playwright/test';
 import { EDITOR_LYRICS_LABEL, RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
+import { NOW_PLAYING_UNPICK_LABEL } from '../src/lib/constants/now-playing';
 import { archiveOwnedAlbum } from './seed';
 import { ONLY_IN_SHELL, sameOriginHeaders } from './helpers';
 
@@ -80,7 +81,12 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 				response.status() === 200
 		);
 		await pickedRow.click();
-		await detailLoaded;
+		await (await detailLoaded).finished();
+		// Album list items carry no takes, so a take row exists only once the detail response is
+		// merged into the song list, in the same update as its has_pick.
+		await expect(
+			page.getByRole('button', { name: new RegExp(`^${NOW_PLAYING_UNPICK_LABEL} take`) })
+		).toBeVisible();
 		await expect(
 			page.getByRole('textbox', { name: new RegExp(`^${EDITOR_LYRICS_LABEL}`) })
 		).toBeVisible();
