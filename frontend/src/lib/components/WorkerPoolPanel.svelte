@@ -14,8 +14,8 @@
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 	import type { WorkerPoolResponse, WorkerInfoItem } from '#lib/api/types.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
+	import { DIALOG_CANCEL_LABEL } from '#lib/constants.ts';
 	import {
-		DIALOG_CANCEL_LABEL,
 		WORKER_POOL_RESTART_LABEL,
 		WORKER_POOL_RESTART_CONFIRM,
 		WORKER_POOL_RESTART_TITLE,
@@ -26,7 +26,7 @@
 		WORKER_POOL_NO_MODEL_LABEL,
 		WORKER_POOL_REFRESH_FAILED,
 		WORKER_TRAINING_REMAINING_TEMPLATE
-	} from '#lib/constants.ts';
+	} from '#lib/constants/worker.ts';
 
 	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
 	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '#lib/utils/focus-trap.ts';
