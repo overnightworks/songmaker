@@ -1,0 +1,8 @@
+claim_id = "3eeb8135245e49d9babf5b52bb59ef6f"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "7535d6d813ddcc2225a95a00d575a0a526381c8f"
+branch = "claude/issue-2278-one-off-audio-scripts-leave"
+scope = ["docs/architecture.md", "quality/baseline.toml", "scripts/audit_generation_audio_paths.py", "scripts/backfill_audio_durations.py", "tests/scripts/test_audit_generation_audio_paths.py", "tests/scripts/test_backfill_audio_durations.py"]
+opened_commit = "4e4b3843b40cc6a23fbefbe0d0887d5e93aa579c"
+whole_reason = "Two dead one-off scripts leave with their tests, their baseline entry and their doc mention, or a check names a missing file."
