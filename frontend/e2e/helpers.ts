@@ -81,8 +81,9 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
  * run against `library.spec.ts`'s own first test: 41 requests on desktop and
  * 37 on mobile, budgeted at 45 and 40 respectively. The flow's round trip to
  * Settings stops the live stream, so the snapshot on the return follows a gap
- * and reads every album again: one request per 50 albums. Both projects
- * share one IP rate-limit window, so a flow that suddenly needs more round
+ * and reads every album again: one request per 50 albums. Locally both
+ * projects share one IP rate-limit window (CI runs each project in its own
+ * job with its own window), so a flow that suddenly needs more round
  * trips is a regression — find the extra requests instead of raising this
  * number. Every other mention of this budget (the `e2e/README.md` table,
  * `docs/testing.md`) points back here rather than restating it, which is
