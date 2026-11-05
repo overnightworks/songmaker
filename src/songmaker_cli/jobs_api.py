@@ -253,7 +253,6 @@ async def _leased_job_event_generator(
 )
 def api_cancel_job(
     job_id: str,
-    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
@@ -266,7 +265,7 @@ def api_cancel_job(
     session.commit()
     from songmaker_cli.cover_runner import abort_web_cover_job
 
-    abort_web_cover_job(request.app, job_id)
+    abort_web_cover_job(job_id)
     job = get_job(session, job_id)
     return musician_job_response(job)
 

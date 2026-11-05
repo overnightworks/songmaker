@@ -39,10 +39,10 @@ from songmaker_cli.api_helpers import (
     owner_filter,
 )
 from songmaker_cli.api_models import (
+    AgentProblem,
     ChatMessageResponse,
     ChatTurnFailureFrame,
     ChatTurnFinalFrame,
-    ChatTurnProblem,
     ChatTurnProblemFrame,
     ChatTurnV2Request,
     ConversationListResponse,
@@ -503,10 +503,10 @@ async def _run_chat_turn(
 
 
 _PROBLEM_STATUS: Final = {
-    ChatTurnProblem.UNAVAILABLE: 503,
-    ChatTurnProblem.BUSY: 429,
-    ChatTurnProblem.NOT_ENABLED: 403,
-    ChatTurnProblem.SIGN_IN_AGAIN: 401,
+    AgentProblem.UNAVAILABLE: 503,
+    AgentProblem.BUSY: 429,
+    AgentProblem.NOT_ENABLED: 403,
+    AgentProblem.SIGN_IN_AGAIN: 401,
 }
 _TURN_FAILED_STATUS: Final = 500
 _TURN_ALREADY_RUNNING_STATUS: Final = 409

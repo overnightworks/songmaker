@@ -8,11 +8,12 @@
 	interface Props {
 		text: string;
 		problem: CowriterProblem | null;
-		waitSeconds: number;
-		onretry: () => void;
+		waitSeconds?: number;
+		/** Try again beside the line; without it, the surface's own action is how to ask again. */
+		onretry?: () => void;
 	}
 
-	let { text, problem, waitSeconds, onretry }: Props = $props();
+	let { text, problem, waitSeconds = 0, onretry }: Props = $props();
 
 	const signInHref = $derived(signInAddress(location.pathname + location.search));
 	const look = $derived(problem ? COWRITER_PROBLEM_LOOKS[problem] : null);
@@ -34,7 +35,7 @@
 	<span class="text">{text}</span>
 	{#if problem === 'sign_in_again'}
 		<a class="signin" href={signInHref} data-sveltekit-reload>Log in</a>
-	{:else if problem !== 'not_enabled'}
+	{:else if onretry && problem !== 'not_enabled'}
 		<button type="button" class="retry-turn" disabled={remaining > 0} onclick={onretry}>
 			Try again{#if remaining > 0}
 				<span class="wait-time">&nbsp;{formatTime(remaining)}</span>{/if}

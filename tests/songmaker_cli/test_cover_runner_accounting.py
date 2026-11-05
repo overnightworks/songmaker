@@ -5,21 +5,23 @@ from __future__ import annotations
 import asyncio
 import shutil
 import threading
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
 import pytest
-from agent_providers.catalog import ProviderRoute
+from agent_runtime_client.backend.fake_gateway import picture
 from alembic import command
 from alembic.config import Config
 from PIL import Image
 from sqlalchemy import create_engine, delete, event, inspect, text
 from sqlalchemy.orm import sessionmaker
+from support.cowriter_gateway import HeldGateway, attach_cowriter_gateway
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli import cover_runner
 from songmaker_cli.constants import JobStatus, JobType
-from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, aware_timestamp
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
@@ -46,27 +48,38 @@ def accounting_factory(database_pg_factory, tmp_path):
     factory.kw["bind"].dispose()
 
 
+@dataclass
+class RunningCover:
+    """One RUNNING cover job of ``owner`` on an app whose gateway draws ``gateway``'s picture."""
+
+    app: object
+    audio_dir: Path
+    gateway: HeldGateway
+
+    def run(self):
+        return cover_runner.run_claimed_cover_suggestion_job(self.app, "cover")
+
+
 @pytest.fixture
-def running_cover(accounting_factory, tmp_path, monkeypatch):
+def running_cover(accounting_factory, tmp_path):
     with accounting_factory() as session:
         session.add(User(id="owner", username="owner"))
         session.flush()
         session.add(Album(id="album", title="Album", artist="Artist", created_by="owner"))
-        session.flush()
+        session.commit()
+    ctx = make_router_ctx(tmp_path, db=accounting_factory)
+    client = web_client(make_router_app(ctx, user=make_authenticated_user("owner")))
+    stack = attach_cowriter_gateway(client, accounting_factory, tmp_path, "owner")
+    gateway = HeldGateway(picture(_png_bytes()))
+    gateway.released.set()
+    stack.uses(gateway)
+    with accounting_factory() as session:
         session.add(Job(
             id="cover", type=JobType.COVER, status=JobStatus.RUNNING,
-            album_id="album", user_id="owner", started_at=STARTED,
+            album_id="album", user_id="owner", session_id=stack.session_id, started_at=STARTED,
         ))
         session.commit()
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method",
-        lambda session: CoverImageDispatch(provider="codex", route=ProviderRoute.CLI, model=""),
-    )
-    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", lambda *a, **kw: _png_bytes())
-    return {
-        "job_id": "cover", "db_factory": accounting_factory, "audio_dir": tmp_path / "audio",
-        "abort_signal": threading.Event(),
-    }
+    return RunningCover(client.app, ctx.audio_dir, gateway)
 
 
 def _assert_cover_accounting(factory, audio_dir, status):
@@ -120,7 +133,7 @@ def test_publication_cleanup_preserves_only_committed_images(
     monkeypatch.setattr(shutil, "rmtree", remove_staging)
 
     async def exercise():
-        task = asyncio.create_task(cover_runner.run_claimed_cover_suggestion_job(**running_cover))
+        task = asyncio.create_task(running_cover.run())
         try:
             assert await asyncio.to_thread(publication_ready.wait, 10)
             if cancel_task:
@@ -143,7 +156,7 @@ def test_publication_cleanup_preserves_only_committed_images(
         else JobStatus.FAILED if failure == "rollback"
         else JobStatus.COMPLETED
     )
-    _assert_cover_accounting(accounting_factory, running_cover["audio_dir"], expected_status)
+    _assert_cover_accounting(accounting_factory, running_cover.audio_dir, expected_status)
 
 
 def test_late_cancellation_preserves_publication_with_a_preloaded_job(
@@ -175,7 +188,7 @@ def test_late_cancellation_preserves_publication_with_a_preloaded_job(
 )
 @pytest.mark.parametrize("winner", ["publication", "cancellation"])
 def test_postgresql_serializes_publication_and_cancellation(
-    accounting_factory, running_cover, monkeypatch, winner,
+    accounting_factory, running_cover, winner,
 ):
     """1301-F3-C1-ATOMIC: the first terminal transition owns image and charge."""
     engine = accounting_factory.kw["bind"]
@@ -208,26 +221,17 @@ def test_postgresql_serializes_publication_and_cancellation(
             session.commit()
             return accepted
 
-    image_started = threading.Event()
-    allow_image = threading.Event()
-    image_returned = threading.Event()
-
-    def generate_after_cancellation(*args, **kwargs):
-        image_started.set()
-        assert allow_image.wait(10)
-        image_returned.set()
-        return _png_bytes()
-
+    held = running_cover.gateway
     if winner == "cancellation":
-        monkeypatch.setattr(cover_runner, "generate_codex_cover_image", generate_after_cancellation)
+        held.released.clear()
 
     async def exercise():
         if winner == "cancellation":
             task = asyncio.create_task(
-                cover_runner.run_claimed_cover_suggestion_job(**running_cover),
+                running_cover.run(),
             )
             try:
-                assert await asyncio.to_thread(image_started.wait, 10)
+                assert await asyncio.to_thread(held.received.wait, 10)
                 with accounting_factory() as cancellation:
                     cached_job = cancellation.get(Job, "cover")
                     assert cached_job.status == JobStatus.RUNNING
@@ -236,15 +240,15 @@ def test_postgresql_serializes_publication_and_cancellation(
                     )
                     cancellation.commit()
             finally:
-                allow_image.set()
+                held.released.set()
             await task
-            assert image_returned.is_set()
+            assert len(held.requests) == 1
         else:
             contender = asyncio.create_task(asyncio.to_thread(cancel_cover))
             try:
                 assert await asyncio.to_thread(cancellation_loaded.wait, 10)
                 task = asyncio.create_task(
-                    cover_runner.run_claimed_cover_suggestion_job(**running_cover),
+                    running_cover.run(),
                 )
                 assert await asyncio.to_thread(publication_locked.wait, 10)
                 assert await asyncio.to_thread(contender_started.wait, 10)
@@ -263,7 +267,7 @@ def test_postgresql_serializes_publication_and_cancellation(
             event.remove(engine, "before_cursor_execute", observe_lock_request)
             event.remove(accounting_factory, "after_flush", hold_completed_transition)
     _assert_cover_accounting(
-        accounting_factory, running_cover["audio_dir"],
+        accounting_factory, running_cover.audio_dir,
         JobStatus.COMPLETED if winner == "publication" else JobStatus.CANCELLED,
     )
 

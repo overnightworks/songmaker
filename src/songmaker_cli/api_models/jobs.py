@@ -78,6 +78,7 @@ class JobResponse(BaseModel):
     remaining_time_estimate: RemainingTimeEstimate | None = None
     error: str | None = None
     error_type: str | None = None
+    retry_after_seconds: int | None = None
     queue_reason: str | None = None
     queue_position: int | None = None
     started_at: str | None = None
@@ -106,6 +107,7 @@ class JobResponse(BaseModel):
             remaining_time_estimate=_remaining_time_estimate(job, now=now),
             error=job.error,
             error_type=job.error_type,
+            retry_after_seconds=job.retry_after_seconds,
             queue_reason=job.queue_reason,
             queue_position=queue_position,
             started_at=job.started_at.isoformat() if job.started_at else None,

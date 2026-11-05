@@ -9,7 +9,9 @@ cannot script: one held open, one that raises, one that stops short.
 
 from __future__ import annotations
 
+import asyncio
 import socket
+import threading
 from collections.abc import AsyncGenerator, Callable
 from contextlib import aclosing
 from dataclasses import dataclass, field
@@ -17,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import httpx2
 from agent_runtime_client.agents import TurnRequest
 from agent_runtime_client.backend import AgentBackend, TurnEvent, TurnPerson, TurnStopped
 from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, completion
@@ -50,6 +53,60 @@ def agent_config(directory: Path, *, origin: str = GATEWAY_ORIGIN) -> AgentConfi
         gateway=ChatGateway(origin=origin, key_file=key_file),
         api_group=API_GROUP,
     )
+
+
+class Release:
+    """A flag any thread sets, which wakes the requests held on their own event loops."""
+
+    def __init__(self) -> None:
+        self._flag = threading.Event()
+        self._lock = threading.Lock()
+        self._waiters: list[tuple[asyncio.AbstractEventLoop, asyncio.Event]] = []
+
+    def set(self) -> None:
+        with self._lock:
+            self._flag.set()
+            waiters, self._waiters = self._waiters, []
+        for loop, woken in waiters:
+            loop.call_soon_threadsafe(woken.set)
+
+    def clear(self) -> None:
+        self._flag.clear()
+
+    async def wait(self) -> None:
+        waiter = (asyncio.get_running_loop(), asyncio.Event())
+        with self._lock:
+            if self._flag.is_set():
+                return
+            self._waiters.append(waiter)
+        try:
+            await waiter[1].wait()
+        finally:
+            with self._lock:
+                if waiter in self._waiters:
+                    self._waiters.remove(waiter)
+
+
+class HeldGateway(FakeGateway):
+    """A gateway that holds each request until ``released`` is set, then answers ``reply``.
+
+    ``received`` is set when a request arrives, ``closed`` when a held request is cancelled.
+    """
+
+    def __init__(self, reply: Reply | None = None) -> None:
+        super().__init__(reply or Reply(status=500))
+        self.received = threading.Event()
+        self.released = Release()
+        self.closed = threading.Event()
+
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
+        self.received.set()
+        try:
+            await self.released.wait()
+        except asyncio.CancelledError:
+            self.closed.set()
+            raise
+        return await super().handle_async_request(request)
 
 
 def closed_port_origin() -> str:
@@ -147,12 +204,21 @@ class CowriterStack:
             tools=cowriter_hand_tools(self.app.state.ctx.db),
             transport=gateway,
         )
-        self.app.state.agent_backend = _RecordingBackend(backend, self.turns)
+        self._compose(_RecordingBackend(backend, self.turns))
         return gateway
 
     def behaves(self, behavior: Behavior) -> None:
         """Run the following turns as ``behavior`` instead of through a gateway."""
-        self.app.state.agent_backend = _RecordingBackend(ScriptedBackend(behavior), self.turns)
+        self._compose(_RecordingBackend(ScriptedBackend(behavior), self.turns))
+
+    def unset(self) -> None:
+        """Leave the app as a deployment without ``agent`` composes it."""
+        self.app.state.agent_backend = None
+        self.app.state.agent_api_group = None
+
+    def _compose(self, backend: AgentBackend) -> None:
+        self.app.state.agent_backend = backend
+        self.app.state.agent_api_group = self.config.api_group
 
 
 def attach_cowriter_gateway(
