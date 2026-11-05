@@ -70,9 +70,6 @@ api = [
 image = [
     "pillow>=13,<14",
 ]
-mcp = [
-    "mcp>=2.2,<3",
-]
 # The co-writer's gateway backend (GatewayBackend): the web image installs it.
 # The release wheel of an immutable tag, like the other release wheels.
 agent = [

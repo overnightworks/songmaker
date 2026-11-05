@@ -438,11 +438,6 @@ class Settings(BaseSettings):
     xai_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
 
-    # ── MCP server (songmaker tools exposed over stdio) ───────────────
-    # Set only in the stdio MCP server's own process. Identifies the acting
-    # user so tool calls can run the same ownership checks as HTTP.
-    songmaker_mcp_user_id: str | None = None
-
     # ── Release (written into the image by the build arguments) ───────
     songmaker_release: str = UNRELEASED_TAG
     songmaker_commit: str = UNKNOWN_COMMIT

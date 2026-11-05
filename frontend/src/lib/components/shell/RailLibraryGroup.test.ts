@@ -380,7 +380,7 @@ describe('RailLibraryGroup', () => {
 		expect(active?.textContent).toBe('Ebb');
 	});
 
-	it('shows a take/pick summary per track', async () => {
+	it('shows a take/pick summary per track, the pick read from the list item without its takes', async () => {
 		showAlbumDetail('a1');
 		songList.set([
 			song({ id: 's1', title: 'Tide', track_number: 1, generation_count: 0, generations: [] }),
@@ -389,7 +389,7 @@ describe('RailLibraryGroup', () => {
 				title: 'Ebb',
 				track_number: 2,
 				generation_count: 3,
-				generations: [generation({ id: 'g1', is_picked: true })]
+				has_pick: true
 			})
 		]);
 		const target = await render();

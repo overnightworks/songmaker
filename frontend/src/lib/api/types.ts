@@ -892,6 +892,7 @@ export interface SongItem {
 	reference?: ReferenceResponse | null;
 	version_count: number;
 	generation_count: number;
+	has_pick: boolean;
 	is_shared: boolean;
 	share_slug?: string | null;
 	share_url?: string | null;
@@ -928,6 +929,7 @@ export interface SongSummaryResponse {
 	reference?: ReferenceResponse | null;
 	version_count: number;
 	generation_count: number;
+	has_pick: boolean;
 	is_shared: boolean;
 	share_slug?: string | null;
 	share_url?: string | null;

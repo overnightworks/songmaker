@@ -18,7 +18,7 @@
 "frontend/e2e/seed.ts" = 1180
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
-"frontend/src/lib/api/types.ts" = 1125
+"frontend/src/lib/api/types.ts" = 1127
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -61,7 +61,7 @@
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_admin_api.py" = 1036
 "tests/songmaker_cli/test_api.py" = 4694
-"tests/songmaker_cli/test_conversation_api.py" = 842
+"tests/songmaker_cli/test_conversation_api.py" = 704
 "tests/songmaker_cli/test_db.py" = 3573
 "tests/songmaker_cli/test_db_postgresql.py" = 838
 "tests/songmaker_cli/test_jobs.py" = 3215
@@ -137,9 +137,6 @@
 "api_add_sample" = 65
 "api_train_lora" = 61
 
-[function_lines."src/songmaker_cli/mcp_server/server.py"]
-"build_server" = 173
-
 [function_lines."src/songmaker_cli/queue_streams.py"]
 "_build_queue_stream_snapshot" = 63
 "resolve_library_pool_membership" = 60
@@ -148,7 +145,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 70
+"_lifespan" = 65
 "create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
@@ -247,6 +244,7 @@ main = [["scripts/seed_e2e_filler_albums.py", "main"]]
 
 [clones."src/songmaker_cli/album_api.py"]
 api_cleanup_album = [["src/songmaker_cli/song_api.py", "api_cleanup_song"]]
+api_delete_album_cover = [["src/songmaker_cli/song_api.py", "api_delete_song_cover"]]
 api_get_album = [["src/songmaker_cli/sharing_api.py", "get_shared_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_playlist_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_queue_stream_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_song_audio"]]
 api_get_album_cover = [["src/songmaker_cli/playlist_api.py", "api_get_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
 api_upload_album_cover = [["src/songmaker_cli/playlist_api.py", "api_upload_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_upload_song_cover"]]
@@ -310,8 +308,6 @@ api_unshare_generation = [["src/songmaker_cli/playlist_api.py", "api_delete_play
 
 [clones."src/songmaker_cli/playlist_api.py"]
 api_delete_playlist = [["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]
-api_delete_playlist_cover = [["src/songmaker_cli/song_api.py", "api_delete_song_cover"]]
-api_get_playlist = [["src/songmaker_cli/song_api.py", "api_get_song"]]
 api_get_playlist_cover = [["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
 api_share_playlist = [["src/songmaker_cli/song_api.py", "api_share_song"]]
 api_unshare_playlist = [["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]

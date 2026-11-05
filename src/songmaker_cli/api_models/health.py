@@ -16,7 +16,6 @@ from songmaker_cli.health_types import (
     CodexImageSandboxRuntimeHealth,
 )
 
-ClaudeCliToolSurface = Literal["ok", "drift", "unverified"]
 HealthVerdict = Literal["ok", "degraded"]
 AceStepState = Literal["healthy", "unknown", "unhealthy"]
 
@@ -34,7 +33,6 @@ class HealthSignals:
     workers_lm_failed: bool
     queue_depth_cap_reached: bool
     uptime_seconds: int
-    claude_cli_tool_surface: ClaudeCliToolSurface
     codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth
     background_loops: Mapping[BackgroundLoopName, BackgroundLoopHealth]
     release: ReleaseInfo
@@ -101,17 +99,6 @@ class HealthResponse(BaseModel):
     acestep_workers_online: int
     queue_depth_cap_reached: bool
     uptime_seconds: int
-    claude_cli_tool_surface: ClaudeCliToolSurface = Field(description=(
-        "Whether the mounted Claude CLI tool surface matches the co-writer allowlist: "
-        "ok, drift, or unverified. A drifted binary never takes the whole server down; "
-        "the co-writer refuses it on its own, while monitoring can see this state "
-        "without reading the boot log. This is the gate's live answer from "
-        "provider.claude_cli_tool_surface_health(), updated by every "
-        "verify_cli_tool_surface() call, cache hit or fresh probe alike. A later "
-        "successful co-writer turn clears an earlier unverified state, and a later "
-        "drifted build replaces an earlier ok. Before the boot check runs, the gate "
-        "reports unverified, never a silent ok."
-    ))
     codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth = Field(description=(
         "Whether the Codex cover-image sandbox user-namespace boot check last "
         "succeeded: ready, not_set_up, or unverified. This live value comes from "
@@ -138,7 +125,6 @@ class HealthResponse(BaseModel):
             acestep_workers_online=signals.workers_online,
             queue_depth_cap_reached=signals.queue_depth_cap_reached,
             uptime_seconds=signals.uptime_seconds,
-            claude_cli_tool_surface=signals.claude_cli_tool_surface,
             codex_image_sandbox_runtime=signals.codex_image_sandbox_runtime,
             background_loops={
                 name: BackgroundLoopResponse.from_health(health)

@@ -177,21 +177,16 @@ def _isolate_codex_process_pool():
 
 
 @pytest.fixture(autouse=True)
-def _no_claude_cli_tool_surface_probe():
-    """Never let a test spawn the real Claude CLI to read its tool surface.
+def _no_claude_cli_builtin_tools_probe():
+    """Never let a test spawn the real Claude CLI to list its built-in tools.
 
-    Server startup and every co-writer turn each ask the mounted binary which
-    tools it offers before running it (#351); on a developer machine that
-    binary exists, so without this a lifespan or co-writer test would start a
-    real CLI session. Each probe's own behaviour is pinned in
-    ``test_claude_provider.py``.
+    The catalog's login and ``/model`` checks ask the mounted binary; on a
+    developer machine that binary exists, so without this a catalog test would
+    start a real CLI session.
     """
     from unittest.mock import AsyncMock
 
     with (
-        patch(
-            "agent_providers.claude.provider.verify_cli_tool_surface", AsyncMock(),
-        ),
         patch(
             "agent_providers.claude.provider.averify_no_builtin_cli_tools", AsyncMock(),
         ),

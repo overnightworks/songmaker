@@ -341,11 +341,15 @@ export function updateGenerationInList(
 }
 
 export function removeGenerationFromSong(songId: string, genId: string): void {
-	updateSongInList(songId, (s) => ({
-		...s,
-		generations: s.generations.filter((g) => g.id !== genId),
-		generation_count: s.generation_count - 1
-	}));
+	updateSongInList(songId, (s) => {
+		const removedWasPicked = s.generations.some((g) => g.id === genId && g.is_picked);
+		return {
+			...s,
+			generations: s.generations.filter((g) => g.id !== genId),
+			generation_count: s.generation_count - 1,
+			has_pick: s.has_pick && !removedWasPicked
+		};
+	});
 }
 
 export function resetLibraryDataForTests(): void {

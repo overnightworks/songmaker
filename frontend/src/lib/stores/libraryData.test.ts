@@ -42,6 +42,7 @@ import {
 	overlaySongList,
 	replaceSongInList,
 	rereadAllAlbums,
+	removeGenerationFromSong,
 	resetLibraryDataForTests,
 	songList,
 	upsertSongInList
@@ -397,6 +398,25 @@ describe('song list mutations', () => {
 		upsertSongInList(makeSong({ ...loadedSongDefaults(), id: 'a', title: 'A2' }));
 		const byId = new Map(get(songList).map((s) => [s.id, s.title]));
 		expect([byId.get('a'), byId.get('b')]).toEqual(['A2', 'B']);
+	});
+
+	it.each([
+		{ removed: 'picked', hasPickAfter: false },
+		{ removed: 'other', hasPickAfter: true }
+	])('removing the $removed take leaves has_pick $hasPickAfter', ({ removed, hasPickAfter }) => {
+		songList.set([
+			makeSong({
+				id: 's',
+				has_pick: true,
+				generation_count: 2,
+				generations: [
+					makeGen({ id: 'picked', is_picked: true }),
+					makeGen({ id: 'other', is_picked: false })
+				]
+			})
+		]);
+		removeGenerationFromSong('s', removed);
+		expect(get(songList)[0].has_pick).toBe(hasPickAfter);
 	});
 });
 

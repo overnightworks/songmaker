@@ -12,7 +12,6 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Annotated
 
-from agent_providers.claude import provider
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -380,7 +379,6 @@ async def _read_health_signals(request: Request) -> HealthSignals:
         workers_lm_failed=workers_lm_failed,
         queue_depth_cap_reached=queue_depth_cap_reached,
         uptime_seconds=uptime,
-        claude_cli_tool_surface=provider.claude_cli_tool_surface_health(),
         codex_image_sandbox_runtime=codex_image_sandbox_runtime_health(),
         background_loops=request.app.state.background_loop_registry.loop_health(),
         release=ReleaseInfo.from_settings(config),

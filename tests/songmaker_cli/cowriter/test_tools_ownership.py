@@ -8,13 +8,11 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from agent_runtime_client.backend.fake_gateway import completion, tool_call, tool_round
 from agent_runtime_client.tools import Principal
-from mcp.server.mcpserver.exceptions import ToolError
 from support.cowriter_gateway import attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.agent.tools import CallingTurn, bound_to_turn, cowriter_hand_tools
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore
-from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
@@ -28,7 +26,7 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
-from songmaker_cli.mcp_server import auth, server
+from songmaker_cli.mcp_server import auth
 
 
 @pytest.fixture
@@ -73,6 +71,7 @@ def _actor_session_id(factory) -> str:
 
 
 VERDICT_TOOL = "save_coherence_verdict"
+USER_TOOL_NAMES = sorted(tool.name for tool in COWRITER_TOOLS if tool.name != VERDICT_TOOL)
 
 
 def _ownership_arguments(identity):
@@ -98,19 +97,6 @@ def _ownership_arguments(identity):
 
 
 def _dispatch_ownership_tool(factory, monkeypatch, route, name, arguments):
-    if route == "mcp":
-        monkeypatch.setenv(auth.USER_ID_ENV, "actor")
-        srv = server.build_server(session_factory=factory)
-        try:
-            result = asyncio.run(srv.call_tool(name, arguments))
-        except ToolError as exc:
-            return True, str(exc)
-        payload = result.structured_content
-        if payload is None:
-            payload = json.loads(result.content[0].text)
-        if isinstance(payload, dict) and set(payload) == {"result"}:
-            payload = payload["result"]
-        return False, payload
     if route == "hand-tool":
         hand_tool = next(t for t in cowriter_hand_tools(factory) if t.declaration.name == name)
         principal = Principal(iss="issuer.test", sub="actor")
@@ -125,13 +111,9 @@ def _dispatch_ownership_tool(factory, monkeypatch, route, name, arguments):
     return result.is_error, result.content if result.is_error else json.loads(result.content)
 
 
-def test_ownership_matrix_covers_every_registered_tool(ownership_factory):
+def test_ownership_matrix_covers_every_registered_tool():
     """1301-F2-TOOLS, 1301-F2-ENTRY: adding a tool requires an ownership row."""
-    registered = asyncio.run(server.build_server(session_factory=ownership_factory).list_tools())
-    catalog = {tool.name for tool in COWRITER_TOOLS}
-    assert catalog == MCP_TOOL_NAMES | {VERDICT_TOOL}
-    assert set(_ownership_arguments("actor")) == catalog
-    assert {tool.name for tool in registered} == MCP_TOOL_NAMES
+    assert set(_ownership_arguments("actor")) == {tool.name for tool in COWRITER_TOOLS}
 
 
 def _assert_owned_answer(name, identity, payload):
@@ -155,10 +137,10 @@ def _assert_owned_answer(name, identity, payload):
         assert payload["ok"] is True
 
 
-@pytest.mark.parametrize("name", sorted(MCP_TOOL_NAMES))
+@pytest.mark.parametrize("name", USER_TOOL_NAMES)
 @pytest.mark.parametrize("role", ["user", "admin"])
 @pytest.mark.parametrize("identity", ["actor", "foreign"])
-@pytest.mark.parametrize("route", ["mcp", "in-process", "hand-tool"])
+@pytest.mark.parametrize("route", ["in-process", "hand-tool"])
 def test_tools_only_reach_owned_resources(
     ownership_factory, monkeypatch, name, role, identity, route,
 ):
@@ -169,12 +151,9 @@ def test_tools_only_reach_owned_resources(
     is_error, payload = _dispatch_ownership_tool(
         ownership_factory, monkeypatch, route, name, _ownership_arguments(identity)[name],
     )
-    browser_only = route == "mcp" and name == "suggest_album_cover"
     denied = identity == "foreign" and name not in {"list_albums", "search_songs"}
-    assert is_error is (denied or browser_only)
-    if browser_only:
-        assert "need a browser login" in payload
-    elif denied:
+    assert is_error is denied
+    if denied:
         assert "not found" in payload
     else:
         _assert_owned_answer(name, identity, payload)
@@ -188,9 +167,9 @@ def test_tools_only_reach_owned_resources(
         own_write = identity == "actor" and name in {
             tool.name for tool in COWRITER_TOOLS if tool.write
         }
-        cover = own_write and name == "suggest_album_cover" and not browser_only
+        cover = own_write and name == "suggest_album_cover"
         created = own_write and name == "create_song"
-        edited = own_write and name != "suggest_album_cover"
+        edited = own_write and not cover
         assert session.query(Song).count() == 2 + created
         assert session.query(Version).count() == 2 + edited
         assert session.query(UserSongWork).count() == int(edited)
@@ -205,7 +184,7 @@ def test_tools_only_reach_owned_resources(
 
 
 @pytest.mark.parametrize("role", ["user", "admin"])
-@pytest.mark.parametrize("route", ["mcp", "in-process", "hand-tool"])
+@pytest.mark.parametrize("route", ["in-process", "hand-tool"])
 def test_unfiltered_song_listing_still_filters_by_owner(
     ownership_factory, monkeypatch, role, route,
 ):
