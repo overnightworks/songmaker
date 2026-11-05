@@ -1,0 +1,8 @@
+claim_id = "f14f7df6f5aa4c26b39b015dbe1bed58"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "d17e437127dbad2eed775601a99adbe2d24cafbc"
+branch = "claude/issue-2234-clone-check"
+scope = ["pyproject.toml", "scripts/similar_functions.py", "tests/scripts/test_similar_functions.py", "uv.lock"]
+opened_commit = "8095547b14d2f3097cbe64b3f5f916d3540d94c0"
+whole_reason = "The extra's bound, the lock and the script's pinned revisions must agree in one landing."
