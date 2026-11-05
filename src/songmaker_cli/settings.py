@@ -47,7 +47,10 @@ from songmaker_cli.constants import (
 # most 4 bytes per sample (a float tensor saves as 32-bit FLOAT). A song request asks
 # for at most 600 seconds (`audio_duration`, le=600 in api_models/songs.py). The product,
 # 600 s * 48000 Hz * 2 channels * 4 bytes = 230,400,000 bytes, plus a header allowance, is
-# rounded up to a whole 256 MiB; a longer file is not a take songmaker can have asked for.
+# rounded up to a whole 256 MiB. The bound covers every generated take. A repaint or cover
+# follows its source's length, so one of a longer reimported source can exceed it and then
+# fails as a refused take; raising the setting
+# `generation_result_max_bytes` (environment GENERATION_RESULT_MAX_BYTES) admits it.
 GENERATION_RESULT_MAX_BYTES: Final[int] = 256 * 1024 * 1024
 
 # The web server's port: the CLI and server default, and the port of the back-channel Host.
