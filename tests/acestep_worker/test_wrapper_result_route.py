@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import timedelta
 from pathlib import Path
+from typing import BinaryIO
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -143,18 +145,23 @@ def test_the_expiry_sweep_removes_the_take_with_its_record(
     _run(go())
 
 
-async def _get_releasing_after_the_start(
-    app, path: str, release: Callable[[], Awaitable[None]],
-) -> tuple[int, bytes]:
-    """GET over raw ASGI: ``release`` runs once the headers left, before any body byte."""
-    scope = {
-        "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "GET",
+def _get_scope(path: str, spec_version: str = "2.0") -> dict:
+    return {
+        "type": "http", "asgi": {"version": "3.0", "spec_version": spec_version},
+        "http_version": "1.1", "method": "GET",
         "scheme": "http", "path": path, "raw_path": path.encode(), "query_string": b"",
         "root_path": "", "server": ("worker", 80), "client": ("music", 1),
         "headers": [(b"host", b"worker"), *(
             (name.lower().encode(), value.encode()) for name, value in _INTERNAL_HEADERS.items()
         )],
     }
+
+
+async def _get_releasing_after_the_start(
+    app, path: str, release: Callable[[], Awaitable[None]],
+) -> tuple[int, bytes]:
+    """GET over raw ASGI: ``release`` runs once the headers left, before any body byte."""
+    scope = _get_scope(path)
     requested = False
     status, body = 0, bytearray()
 
@@ -208,6 +215,103 @@ def test_a_result_stream_survives_a_delete_or_sweep_after_it_opened(
             app, f"/tasks/{task_id}/result", release_the_take,
         )
         assert (status, body) == (200, _TAKE_BYTES)
+
+    _run(go())
+
+
+@pytest.fixture
+def opened_takes(monkeypatch: pytest.MonkeyPatch) -> list[BinaryIO]:
+    """Every file a test opens for reading, kept referenced so no finalizer can close it."""
+    handles: list[BinaryIO] = []
+    open_ = Path.open
+
+    def recording_open(path: Path, *args, **kwargs):
+        handle = open_(path, *args, **kwargs)
+        if handle.mode == "rb":
+            handles.append(handle)
+        return handle
+
+    monkeypatch.setattr(Path, "open", recording_open)
+    return handles
+
+
+async def _get_interrupted(app, path: str, interruption: str) -> None:
+    """GET over raw ASGI whose delivery ends as ``interruption`` names."""
+    disconnected = asyncio.Event()
+    requested = False
+
+    async def receive() -> dict:
+        nonlocal requested
+        if not requested:
+            requested = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+        await disconnected.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict) -> None:
+        at_start = message["type"] == "http.response.start"
+        if interruption == "send-error-mid-stream" and not at_start:
+            raise OSError("connection reset by music")
+        if (interruption, at_start) in {
+            ("disconnect-before-first-chunk", True), ("disconnect-mid-stream", False),
+        }:
+            disconnected.set()
+            await asyncio.Event().wait()
+
+    spec_version = "2.4" if interruption == "send-error-mid-stream" else "2.0"
+    try:
+        await app(_get_scope(path, spec_version), receive, send)
+    except Exception:
+        if interruption != "send-error-mid-stream":
+            raise
+
+
+@pytest.mark.parametrize("interruption", [
+    "completed", "disconnect-before-first-chunk", "disconnect-mid-stream",
+    "send-error-mid-stream",
+])
+def test_a_result_response_closes_its_take_however_delivery_ends(
+    tmp_path: Path, opened_takes: list[BinaryIO], interruption: str,
+) -> None:
+    async def go():
+        deps, _ = _make_deps(tmp_path)
+        task_id, take = await _finished_take(deps, tmp_path / "out")
+        take.write_bytes(b"x" * (3 * 64 * 1024))
+        await _get_interrupted(create_app(deps), f"/tasks/{task_id}/result", interruption)
+        assert opened_takes
+        assert all(handle.closed for handle in opened_takes)
+
+    _run(go())
+
+
+def test_a_result_open_cancelled_in_its_thread_closes_the_take(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened, resume = threading.Event(), threading.Event()
+    handles: list[BinaryIO] = []
+    open_ = Path.open
+
+    def open_held_after_opening(path: Path, *args, **kwargs):
+        handle = open_(path, *args, **kwargs)
+        if handle.mode == "rb":
+            handles.append(handle)
+            opened.set()
+            resume.wait(timeout=10)
+        return handle
+
+    monkeypatch.setattr(Path, "open", open_held_after_opening)
+
+    async def go():
+        deps, _ = _make_deps(tmp_path)
+        task_id, _ = await _finished_take(deps, tmp_path / "out")
+        opening = asyncio.create_task(deps.task_store.open_result(task_id))
+        assert await asyncio.to_thread(opened.wait, 10)
+        opening.cancel()
+        resume.set()
+        with pytest.raises(asyncio.CancelledError):
+            await opening
+        assert handles
+        assert all(handle.closed for handle in handles)
 
     _run(go())
 

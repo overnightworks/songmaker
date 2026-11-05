@@ -6,11 +6,13 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from functools import partial
 from pathlib import Path
 from typing import BinaryIO
 from uuid import uuid4
 
 from acestep_engine.progress import AceStepPhase
+from acestep_engine.thread_handoff import acquire_in_thread
 from acestep_worker.clock import utcnow
 from acestep_worker.models import (
     TaskErrorKind,
@@ -89,6 +91,10 @@ def _removed(path: Path | None) -> bool:
         log.warning("Failed to remove task result %s", path.name, exc_info=True)
         return False
     return True
+
+
+def _close(handle: BinaryIO) -> None:
+    handle.close()
 
 
 class TaskStore:
@@ -215,7 +221,7 @@ class TaskStore:
             if task is None or task.result_file is None:
                 return None
             try:
-                return await asyncio.to_thread(task.result_file.open, "rb")
+                return await acquire_in_thread(partial(task.result_file.open, "rb"), _close)
             except FileNotFoundError:
                 return None
 
