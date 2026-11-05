@@ -39,8 +39,8 @@ test skipping itself by shell (`docs/testing.md`, the two projects).
 
 `album-address.spec.ts` and `playlist-address.spec.ts` run on **desktop
 only**: what they pin is the router's behaviour across an address that
-changes the route, which is the same code on both shells, and both projects
-share one rate-limit window. They are here rather than in the unit suite
+changes the route, which is the same code on both shells, and a local run
+shares one rate-limit window between both projects. They are here rather than in the unit suite
 because jsdom has no router — only a real browser shows whether moving
 between `/`, `/album/<slug>`, `/album/<slug>/<song-slug>`,
 `/album/<slug>/<song-slug>/take/<n>` and `/playlist/<slug>` keeps the
@@ -73,8 +73,10 @@ compact shell differs:
 | Transport     | One 64px row, with a play control at least the frequent-hitbox size                                                                                              |
 | Album header  | Still a readable title over its song count when the shell narrows to 320                                                                                         |
 
-`fullyParallel: false` with one worker: both shells hit one stack behind one IP
-rate-limit window, so their cost stays additive instead of a burst.
+`fullyParallel: false` with one worker: in CI each project has its own job,
+stack and IP rate-limit window; a local run drives both shells one after the
+other in one stack behind one window, so their cost stays additive instead of a
+burst.
 
 ## How a run is set up
 
@@ -205,8 +207,8 @@ the same window. What the rate limiter actually counts is measured from
 `docker compose logs songmaker-web`'s access log, filtered to the runner's
 one IP and to the API class by the same rate-limit policy the server uses
 (`scripts/e2e_rate_window.py`). The E2E workflow's "Busiest API rate-limit
-window" step prints that busiest 60-second window after every Playwright run,
-counting setup, cleanup, retries and browser traffic, so the figure cannot go
+window" step prints that busiest 60-second window after every Playwright run
+(in CI once per project job, locally once for both), counting setup, cleanup, retries and browser traffic, so the figure cannot go
 stale. The CI stack's `IP_RATE_LIMIT: "8000"` override
 (`docker/docker-compose.ci.yml`) is kept at least three times above that
 peak, with room for one CI retry landing inside the same window (#1555). A
