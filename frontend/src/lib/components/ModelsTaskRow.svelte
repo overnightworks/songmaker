@@ -1,13 +1,13 @@
 <script module lang="ts">
 	import type { SafeRouteReason } from '#lib/api/types.ts';
+	import { modelsRouteNotAvailablePhrase } from '#lib/constants.ts';
 	import {
 		MODELS_ROUTE_KEY_NOT_SET_PHRASE,
 		MODELS_ROUTE_NOT_LOGGED_IN_PHRASE,
 		MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE,
 		PROVIDER_ROUTE_API_LABEL,
-		PROVIDER_ROUTE_CLI_LABEL,
-		modelsRouteNotAvailablePhrase
-	} from '#lib/constants.ts';
+		PROVIDER_ROUTE_CLI_LABEL
+	} from '#lib/constants/models.ts';
 
 	export type ModelsRouteKey = 'cli' | 'api';
 
@@ -96,9 +96,9 @@
 		MODELS_STATUS_NEEDS_API_KEY_LABEL,
 		MODELS_STATUS_NOT_SAVED_LABEL,
 		MODELS_STATUS_READY_CLI_LABEL,
-		MODELS_STATUS_READY_KEY_LABEL,
-		modelsCannotDrawHint
-	} from '#lib/constants.ts';
+		MODELS_STATUS_READY_KEY_LABEL
+	} from '#lib/constants/models.ts';
+	import { modelsCannotDrawHint } from '#lib/constants.ts';
 
 	interface Props {
 		task: string;

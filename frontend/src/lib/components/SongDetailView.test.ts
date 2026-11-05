@@ -40,12 +40,6 @@ import {
 	TAKES_RETRY_LABEL,
 	DIALOG_CANCEL_LABEL,
 	TOAST_UNDO_LABEL,
-	VERSION_DELETE_CONFIRM_LABEL,
-	VERSION_DELETE_DRAFT_GOES,
-	VERSION_DELETE_EMPTIES_EDITOR,
-	VERSION_DELETE_LOAD_UNDO_GOES,
-	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
-	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_LABEL,
 	versionDeleteLabel,
 	versionDeleteTitle,
@@ -53,6 +47,14 @@ import {
 	versionLoadedToastLabel,
 	versionReplaceDraftMessage
 } from '#lib/constants.ts';
+import {
+	VERSION_DELETE_CONFIRM_LABEL,
+	VERSION_DELETE_DRAFT_GOES,
+	VERSION_DELETE_EMPTIES_EDITOR,
+	VERSION_DELETE_LOAD_UNDO_GOES,
+	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
+	VERSION_REPLACE_DRAFT_TITLE
+} from '#lib/constants/versions.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '#lib/test-utils/hitbox.ts';

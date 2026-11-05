@@ -14,9 +14,6 @@
 	import { isSungLine } from '#lib/utils/lyrics-align.ts';
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 	import {
-		VERSION_CURRENT_TAG,
-		VERSION_NO_LYRICS,
-		VERSION_PICKED_LABEL,
 		VERSIONS_SHEET_CLOSE_LABEL,
 		VERSIONS_SHEET_LABEL,
 		versionChipLabel,
@@ -25,6 +22,11 @@
 		versionTakesLabel,
 		versionsChipAccessibleLabel
 	} from '#lib/constants.ts';
+	import {
+		VERSION_CURRENT_TAG,
+		VERSION_NO_LYRICS,
+		VERSION_PICKED_LABEL
+	} from '#lib/constants/versions.ts';
 	import { takeVersion } from '#lib/constants/now-playing.ts';
 	import Icon from '../Icon.svelte';
 

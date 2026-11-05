@@ -17,10 +17,12 @@ import {
 	ADMIN_TABS_LABEL,
 	ADMIN_VOICES_EMPTY,
 	COMPACT_LAYOUT_MEDIA,
-	MODELS_SAVE_FAILED_FALLBACK,
-	MODELS_SET_BY_AGENT_FILE_LABEL,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '#lib/constants.ts';
+import {
+	MODELS_SAVE_FAILED_FALLBACK,
+	MODELS_SET_BY_AGENT_FILE_LABEL
+} from '#lib/constants/models.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
