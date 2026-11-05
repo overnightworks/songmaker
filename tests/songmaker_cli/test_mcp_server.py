@@ -569,7 +569,7 @@ def test_co_writer_writes_that_change_nothing_record_no_work(
     ("tool_name", "arguments", "action", "resource_type", "resource"),
     [
         ("create_song", {"album_id": "album1", "title": "Fresh"},
-         AuditAction.CREATE, ResourceType.SONG, None),
+         AuditAction.CREATE, ResourceType.SONG, "created"),
         ("update_song_lyrics", {"song_id": "song1", "lyrics": "new words"},
          AuditAction.UPDATE, ResourceType.SONG, "song1"),
         ("update_song_prompt", {"song_id": "song1", "prompt": "jazz"},
@@ -601,8 +601,9 @@ def test_co_writer_writes_leave_their_audit_row(
     assert (entry.user_id, entry.action, entry.resource_type) == (
         owner.id, action, resource_type,
     )
-    if resource is not None:
-        assert entry.resource_id == resource
+    if resource == "created":
+        resource = db_session.query(Song).filter_by(title="Fresh").one().id
+    assert entry.resource_id == resource
 
 
 @pytest.mark.parametrize("role", ["admin", "user"])

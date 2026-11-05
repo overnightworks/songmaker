@@ -531,7 +531,6 @@ class EmptySongTitleError(ValueError):
 
 
 def stored_song_title(title: str) -> str:
-    """The title a song is stored under: what the editor and the co-writer both write."""
     stripped = title.strip()
     if not stripped:
         raise EmptySongTitleError
