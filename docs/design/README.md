@@ -159,3 +159,10 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   Recipes (#1988). Freigegeben am 29.10.2026 (Operator: „passt für mich! alles
   wie empfohlen!“); die neun offenen Entscheidungen sind wie empfohlen gerult
   und auf #1988 festgehalten.
+- `move-song.html` — ein Song in ein anderes Album verschieben (#2281): die
+  Zeile „Move ›“ im Songmenü ⋯, der Album-Picker im selben Popover und seine
+  Zustände (laden, Liste fehlt, kein anderes Album, beschäftigt, nicht
+  verschoben) am Desktop 1440 und bei 375 px. Gesegnet am 05.11.2026
+  (Operator: „ja sieht gut aus!“, alle Empfehlungen F1 bis F7), noch nicht
+  gebaut. `song-page.html` und `song-page-phone.html` besitzen weiter den Rest
+  der Songseite.
