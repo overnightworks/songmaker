@@ -8,6 +8,12 @@ mandatory_jobs = [
 ]
 
 [[gate.loosened]]
+what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 1135 -> 1163'
+item = "#2226"
+date = 2026-11-05
+reason = "the operator allowed it on the card on #2226 line 1 (ruling A, 05.11.2026) for the generated types a reference's uses add; it lands through his emergency-merge"
+
+[[gate.loosened]]
 what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 1133 -> 1135'
 item = "#2264"
 date = 2026-11-05
@@ -204,9 +210,3 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1132 -> 11
 item = "#2197"
 date = 2026-11-03
 reason = "the reference list gains the generated in_use field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = 'size baseline of frontend/src/lib/api/types.ts raised from 1133 to 1161'
-item = "#2226"
-date = 2026-11-05
-reason = "the operator allowed the generated types file to grow once for the reference uses read (card on #2226, 05.11.2026); it lands through his emergency-merge"
