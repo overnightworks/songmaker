@@ -475,9 +475,7 @@ def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
             while not gateway.requests:
                 await asyncio.sleep(0)
             chat_job = canceller.query(Job).filter_by(type="chat").one()
-            api_cancel_job(
-                chat_job.id, request_in_session(app, first_session), _TURN_PERSON, canceller,
-            )
+            api_cancel_job(chat_job.id, _TURN_PERSON, canceller)
             second = await api_chat_turn(
                 ChatTurnV2Request(message="b"),
                 request_in_session(app, second_session), _TURN_PERSON, turn_b,

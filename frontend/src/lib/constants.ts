@@ -177,7 +177,7 @@ export const COWRITER_SINGLE_MESSAGE_COUNT = '1 msg';
 export const COWRITER_CONVERSATION_CONFIRM_TEMPLATE = '{name} · {count}';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-writer';
 
-export const AGENTS_HEADING = 'Agents';
+export const MODELS_HEADING = 'Models';
 
 // The co-writer is one global conversation (REQ-COWRITER-01): a proposal
 // streamed while song X is open can target song Y. Every tool-call badge

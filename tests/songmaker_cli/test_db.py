@@ -3121,24 +3121,22 @@ def test_get_claude_chat_model_fallback(db_session: Session) -> None:
     assert get_claude_chat_model(db_session) == "claude-opus-4-6"
 
 
-def test_set_and_get_claude_chat_model(db_session: Session) -> None:
-    from songmaker_cli.db.queries.settings import (
-        get_claude_chat_model,
-        set_claude_model,
-    )
+def test_a_stored_claude_chat_model_overrides_the_default(db_session: Session) -> None:
+    from support.setting_rows import store_setting_row
 
-    set_claude_model(db_session, "claude_chat_model", "claude-sonnet-4-6")
+    from songmaker_cli.db.queries.settings import get_claude_chat_model
+
+    store_setting_row(db_session, "claude_chat_model", "claude-sonnet-4-6")
     assert get_claude_chat_model(db_session) == "claude-sonnet-4-6"
 
 
-def test_set_claude_chat_model_updates_existing(db_session: Session) -> None:
-    from songmaker_cli.db.queries.settings import (
-        get_claude_chat_model,
-        set_claude_model,
-    )
+def test_the_last_stored_claude_chat_model_wins(db_session: Session) -> None:
+    from support.setting_rows import store_setting_row
 
-    set_claude_model(db_session, "claude_chat_model", "claude-sonnet-4-6")
-    set_claude_model(db_session, "claude_chat_model", "claude-haiku-4-5-20251001")
+    from songmaker_cli.db.queries.settings import get_claude_chat_model
+
+    store_setting_row(db_session, "claude_chat_model", "claude-sonnet-4-6")
+    store_setting_row(db_session, "claude_chat_model", "claude-haiku-4-5-20251001")
     assert get_claude_chat_model(db_session) == "claude-haiku-4-5-20251001"
 
 

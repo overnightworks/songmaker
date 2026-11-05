@@ -107,10 +107,6 @@ export const COWRITER_PROBLEM_LOOKS: Record<CowriterProblem, { tone: string; ico
 	unavailable: { tone: 'wait', icon: 'circle-alert' }
 };
 
-export function providerDisplayName(provider: string): string {
-	return provider.charAt(0).toUpperCase() + provider.slice(1);
-}
-
 /** The one English day form every conversation label uses: "today", "Tue", "Sep 12", "Sep 12, 2025". */
 function conversationDayLabel(createdAt: string, now: Date): string {
 	const started = new Date(createdAt);

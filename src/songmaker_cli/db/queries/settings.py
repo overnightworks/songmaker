@@ -2,36 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import (
-    COVER_DEFAULT_MODEL,
-    COVER_DEFAULT_PROVIDER,
-    COVER_DEFAULT_ROUTE,
     COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
     COWRITER_MAX_TAIL_TOKEN_BUDGET,
     COWRITER_MIN_TAIL_TOKEN_BUDGET,
     PRESET_GLOBAL_DEFAULTS_NAME,
     SETTING_CLAUDE_CHAT_MODEL,
-    SETTING_COVER_MODEL,
-    SETTING_COVER_PROVIDER,
-    SETTING_COVER_ROUTE,
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
 from songmaker_cli.settings import get_settings
-
-
-@dataclass(frozen=True)
-class CoverSettings:
-    """The saved cover provider selection, with defaults when unset."""
-
-    provider: str
-    route: str
-    model: str
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
@@ -229,22 +213,6 @@ def get_claude_chat_model(session: Session) -> str:
     )
 
 
-def get_cover_settings(session: Session) -> CoverSettings:
-    """Return the saved cover selection, or the named defaults where unset."""
-    return CoverSettings(
-        provider=_get_claude_model_row(session, SETTING_COVER_PROVIDER) or COVER_DEFAULT_PROVIDER,
-        route=_get_claude_model_row(session, SETTING_COVER_ROUTE) or COVER_DEFAULT_ROUTE,
-        model=_get_claude_model_row(session, SETTING_COVER_MODEL) or COVER_DEFAULT_MODEL,
-    )
-
-
-def set_cover_settings(session: Session, provider: str, route: str, model: str) -> None:
-    """Persist the cover selection, including one no route can currently run."""
-    set_claude_model(session, SETTING_COVER_PROVIDER, provider)
-    set_claude_model(session, SETTING_COVER_ROUTE, route)
-    set_claude_model(session, SETTING_COVER_MODEL, model)
-
-
 def get_cowriter_tail_token_budget(session: Session) -> int:
     row = (
         session.query(RateLimitSetting)
@@ -280,23 +248,6 @@ def set_cowriter_tail_token_budget(session: Session, budget: int) -> None:
         row = RateLimitSetting(
             setting_key=SETTING_COWRITER_TAIL_TOKEN_BUDGET, value=budget,
         )
-        session.add(row)
-    session.flush()
-
-
-def set_claude_model(session: Session, setting_key: str, value: str) -> None:
-    row = (
-        session.query(RateLimitSetting)
-        .filter(
-            RateLimitSetting.setting_key == setting_key,
-            RateLimitSetting.user_id.is_(None),
-        )
-        .first()
-    )
-    if row:
-        row.value_text = value
-    else:
-        row = RateLimitSetting(setting_key=setting_key, value=0, value_text=value)
         session.add(row)
     session.flush()
 

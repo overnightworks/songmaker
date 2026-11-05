@@ -6,11 +6,12 @@ import importlib
 
 import sqlalchemy as sa
 from alembic import command
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
 from support.migration_chain import (
     column_names,
     insert_bare_job,
     is_on_the_single_chain,
+    job_count,
     seeded_then_upgraded,
 )
 from support.reference_link_migration import execute, seed_users
@@ -41,11 +42,6 @@ def _seed_job_at_the_previous_revision(engine) -> None:
         "key_scale, created_at) VALUES ('version', 'song', 1, '', '', 0, 0, '', CURRENT_TIMESTAMP)",
     )
     insert_bare_job(engine)
-
-
-def _job_count(engine) -> int:
-    with engine.connect() as connection:
-        return connection.execute(text("SELECT count(*) FROM jobs")).scalar_one()
 
 
 def _job_versions(engine) -> list[str | None]:
@@ -100,6 +96,6 @@ def test_downgrade_drops_the_key_and_keeps_the_job(reference_link_database):
     assert not any(
         index["column_names"] == [COLUMN] for index in inspect(engine).get_indexes("jobs")
     )
-    assert _job_count(engine) == 1
+    assert job_count(engine) == 1
     command.upgrade(config, MIGRATION.revision)
     assert COLUMN in column_names(engine, "jobs")
