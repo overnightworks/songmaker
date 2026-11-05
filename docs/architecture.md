@@ -1966,7 +1966,7 @@ Dashboard: `songmaker_acestep_workers_total{status="online"}` has its own stat p
 
 ## Operational Scripts
 
-One-off data scripts (`scripts/backfill_audio_durations.py`, `scripts/migrate_generation_params.py`, and future ones) live in `scripts/`, which the web image copies whole (`Dockerfile`). They run inside the `songmaker-web` container, where `DATABASE_URL` and the audio volume are mounted:
+One-off data scripts (`scripts/migrate_generation_params.py`, and future ones) live in `scripts/`, which the web image copies whole (`Dockerfile`). They run inside the `songmaker-web` container, where `DATABASE_URL` and the audio volume are mounted:
 
 ```
 docker compose exec songmaker-web /app/.venv/bin/python scripts/<name>.py --help

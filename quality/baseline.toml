@@ -176,9 +176,6 @@
 "test_train_lora_releases_handover_claim_after_setup_failure" = 62
 "test_worker_renewal_failure_releases_hold_and_cache_before_background_error" = 62
 
-[function_lines."tests/scripts/test_backfill_audio_durations.py"]
-"test_apply_survives_an_interruption_after_the_first_commit_batch" = 71
-
 [function_lines."tests/songmaker_cli/test_acestep_state.py"]
 "test_heartbeat_payload_keys_match_admin_reader" = 66
 
