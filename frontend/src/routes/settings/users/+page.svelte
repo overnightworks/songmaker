@@ -2,11 +2,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { derived } from 'svelte/store';
-	import {
-		fetchAdminVoices,
-		fetchRateLimits,
-		updateRateLimits
-	} from '#lib/api/client.ts';
+	import { fetchAdminVoices, fetchRateLimits, updateRateLimits } from '#lib/api/client.ts';
 	import { describeFailure } from '#lib/api/fetch.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import type { RateLimitItem, AdminUserLoraItem } from '#lib/api/types.ts';
@@ -39,7 +35,7 @@
 		ADMIN_VOICES_NAME_LABEL,
 		ADMIN_VOICES_OWNER_LABEL,
 		ADMIN_VOICES_STATUS_LABEL,
-		AGENTS_HEADING
+		MODELS_HEADING
 	} from '#lib/constants.ts';
 	import {
 		MODELS_COLUMN_MODEL_LABEL,
@@ -95,8 +91,8 @@
 			void loadVoices();
 		} else if (next === 'generation' || next === 'acestep') {
 			void loadGenDefaults();
-		} else if (next === 'agents') {
-			void loadAgentsTab();
+		} else if (next === 'models') {
+			void loadModelsTab();
 		}
 	}
 
@@ -137,12 +133,7 @@
 	// Each read the page makes (#1107): a lost network shows no words of its
 	// own while the offline strip says it or a reload is coming, and the read
 	// runs again by itself; any other failure shows the server's reason.
-	const ADMIN_LOADS = [
-		'voices',
-		'rateLimits',
-		'cowriter',
-		'genDefaults'
-	] as const;
+	const ADMIN_LOADS = ['voices', 'rateLimits', 'cowriter', 'genDefaults'] as const;
 	type AdminLoad = (typeof ADMIN_LOADS)[number];
 
 	const LOAD_FAILURE_FALLBACKS: Record<AdminLoad, string> = {
@@ -153,7 +144,7 @@
 	};
 	const PAGE_WIDE_LOADS = {
 		rateLimits: ['ratelimits'],
-		cowriter: ['agents']
+		cowriter: ['models']
 	} satisfies Partial<Record<AdminLoad, AdminTab[]>>;
 
 	const loadReloads: Record<AdminLoad, ReturnType<typeof reloadWhileUnreachable>> = {
@@ -245,7 +236,7 @@
 		}
 	}
 
-	function loadAgentsTab(): void {
+	function loadModelsTab(): void {
 		void loadCowriterSettings();
 	}
 
@@ -485,9 +476,9 @@
 			</section>
 		{/if}
 
-		{#if tab === 'agents'}
+		{#if tab === 'models'}
 			<section class="models-table-frame">
-				<h2>{AGENTS_HEADING}</h2>
+				<h2>{MODELS_HEADING}</h2>
 				<div class="tt">
 					<div class="tt-head">
 						<span>{MODELS_COLUMN_TASK_LABEL}</span>

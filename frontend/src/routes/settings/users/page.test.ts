@@ -58,7 +58,7 @@ function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSe
 	};
 }
 
-const TAB_LABELS = ['Voices', 'Rate Limits', 'Generation', 'Agents', 'ACE-Step', 'Cleanup'];
+const TAB_LABELS = ['Voices', 'Rate Limits', 'Generation', 'Models', 'ACE-Step', 'Cleanup'];
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -190,7 +190,7 @@ afterEach(async () => {
 describe('C2: requested admin tab', () => {
 	it.each([
 		['?tab=acestep', 'acestep'],
-		['?tab=agents', 'agents'],
+		['?tab=models', 'models'],
 		['', 'voices'],
 		['?tab=unknown', 'voices']
 	] as const)('C2: selects %s on arrival and later navigation', async (query, expected) => {
@@ -319,7 +319,7 @@ describe('admin error ownership (#1447)', () => {
 
 	it.each([
 		{ load: 'rateLimits', request: 'fetchRateLimits', start: 'ratelimits', tabs: ['ratelimits'] },
-		{ load: 'cowriter', request: 'fetchCowriterSettings', start: 'agents', tabs: ['agents'] }
+		{ load: 'cowriter', request: 'fetchCowriterSettings', start: 'models', tabs: ['models'] }
 	] as const)(
 		'defect:#920-12 shows $load failures only on their data tabs',
 		async ({ load, request, start, tabs }) => {
@@ -328,7 +328,7 @@ describe('admin error ownership (#1447)', () => {
 			const target = await renderPage(true);
 			await selectTab(target, start);
 			expect(target.textContent).toContain(message);
-			for (const destination of ['ratelimits', 'agents', 'voices', 'generation', 'acestep']) {
+			for (const destination of ['ratelimits', 'models', 'voices', 'generation', 'acestep']) {
 				await selectTab(target, destination);
 				expect(target.textContent?.includes(message), destination).toBe(
 					(tabs as readonly string[]).includes(destination)
@@ -356,7 +356,7 @@ describe('admin reads and actions that fail', () => {
 	it('names a save the network swallowed without browser text', async () => {
 		api.updateCowriterSettings.mockRejectedValue(lostNetwork());
 		const target = await renderPage(true);
-		await selectTab(target, 'agents');
+		await selectTab(target, 'models');
 		const budget = requireElement<HTMLInputElement>(target, '#cowriter-budget');
 		budget.value = '32000';
 		budget.dispatchEvent(new Event('change', { bubbles: true }));
@@ -367,24 +367,24 @@ describe('admin reads and actions that fail', () => {
 	});
 });
 
-describe('admin agents tab', () => {
+describe('admin models tab', () => {
 	it('answers who does what in one row per task', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'agents');
+		await selectTab(target, 'models');
 
-		const agents = sectionByHeading(target, 'Agents');
-		expect(taskNames(agents)).toEqual(['Co-Writer', 'Cover']);
-		expect(columnNames(agents)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
+		const models = sectionByHeading(target, 'Models');
+		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover']);
+		expect(columnNames(models)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
 		expect(headings(target)).not.toContain('Providers');
-		expect(agents.querySelector('.route-card')).toBeNull();
-		expect(saveButtons(agents)).toEqual([]);
+		expect(models.querySelector('.route-card')).toBeNull();
+		expect(saveButtons(models)).toEqual([]);
 	});
 
 	it.each(['Co-Writer', 'Cover'])(
 		'C16 shows the %s row as set by the agent file through the gateway, without a choice',
 		async (task) => {
 			const target = await renderPage(true);
-			await selectTab(target, 'agents');
+			await selectTab(target, 'models');
 			const row = rowNamed(target, task);
 			expect(row.textContent).toContain(MODELS_SET_BY_AGENT_FILE_LABEL);
 			expect(row.textContent).toContain(MODELS_ROUTE_GATEWAY_LABEL);
@@ -396,7 +396,7 @@ describe('admin agents tab', () => {
 		const requests = vi.fn(() => new Promise<Response>(() => {}));
 		vi.stubGlobal('fetch', requests);
 		const target = await renderPage(true);
-		await selectTab(target, 'agents');
+		await selectTab(target, 'models');
 
 		const urls = requests.mock.calls.map((call) => String((call as unknown[])[0]));
 		expect(urls.filter((url) => /settings\/(providers|cover)/.test(url))).toEqual([]);
@@ -555,10 +555,10 @@ describe('admin agents tab', () => {
 	it('names a rejected history-tail save next to the field with a retry', async () => {
 		api.updateCowriterSettings.mockRejectedValue(serverRefusal('Tail budget out of range'));
 		const target = await renderPage(true);
-		await selectTab(target, 'agents');
+		await selectTab(target, 'models');
 
 		const disclosure = requireElement<HTMLDetailsElement>(
-			sectionByHeading(target, 'Agents'),
+			sectionByHeading(target, 'Models'),
 			'details'
 		);
 		const budget = requireElement<HTMLInputElement>(disclosure, '#cowriter-budget');
@@ -579,10 +579,10 @@ describe('admin agents tab', () => {
 
 	it('keeps the history tail under a collapsed Advanced disclosure and saves it there', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'agents');
+		await selectTab(target, 'models');
 
 		const disclosure = requireElement<HTMLDetailsElement>(
-			sectionByHeading(target, 'Agents'),
+			sectionByHeading(target, 'Models'),
 			'details'
 		);
 		expect(disclosure.open).toBe(false);
