@@ -8,7 +8,7 @@ from __future__ import annotations
 import threading
 
 from arq import create_pool
-from arq.connections import ArqRedis, RedisSettings
+from arq.connections import ArqRedis
 
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.constants import (
@@ -17,6 +17,7 @@ from songmaker_cli.constants import (
     ARQ_SCORING_HEALTH_KEY,
     ARQ_SCORING_QUEUE_NAME,
 )
+from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import get_settings
 
 _pool: ArqRedis | None = None
@@ -26,7 +27,7 @@ _pool_lock = threading.Lock()
 async def init_arq_pool() -> ArqRedis:
     global _pool
     pool = await create_pool(
-        RedisSettings.from_dsn(get_settings().redis_url),
+        build_arq_redis_settings(get_settings().redis_url),
         job_serializer=serialize_arq,
         job_deserializer=deserialize_arq,
     )

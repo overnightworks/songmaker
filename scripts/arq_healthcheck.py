@@ -9,10 +9,11 @@ Exit codes: 0 = healthy, 1 = unhealthy.
 """
 # ruff: noqa: T201 - this health check reports why a worker is unhealthy on stderr
 
-import os
 import sys
 
-from redis import Redis
+from pydantic import ValidationError
+
+from songmaker_cli.redis_client import RedisConnectionSettings, create_redis
 
 HEALTH_KEY_TEMPLATE = "arq:queue:{queue}:health-check"
 VALID_QUEUES = ("music", "scoring")
@@ -24,11 +25,15 @@ def main() -> int:
         return 1
 
     queue = sys.argv[1]
-    redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+    try:
+        redis_url = RedisConnectionSettings().redis_url
+    except ValidationError:
+        print("REDIS_URL is not set", file=sys.stderr)
+        return 1
     key = HEALTH_KEY_TEMPLATE.format(queue=queue)
 
     try:
-        r = Redis.from_url(redis_url)
+        r = create_redis(redis_url)
         exists = r.exists(key) > 0
         r.close()
     except Exception as exc:

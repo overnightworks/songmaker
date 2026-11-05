@@ -7,6 +7,9 @@ import logging
 import uuid
 from typing import TYPE_CHECKING
 
+from arq.connections import RedisSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from songmaker_cli.constants import (
     REDIS_METRICS_DURATION_KEY,
     REDIS_METRICS_HTTP_KEY,
@@ -22,6 +25,19 @@ log = logging.getLogger(__name__)
 _LEASE_RELEASE_TASKS: set[asyncio.Task[None]] = set()
 
 
+class RedisConnectionSettings(BaseSettings):
+    """The one setting every Redis connection needs.
+
+    Processes that must not require the app's other settings or secrets (the
+    worker healthcheck) read the URL through this type; ``REDIS_URL`` has no
+    default.
+    """
+
+    model_config = SettingsConfigDict(extra="ignore", case_sensitive=False)
+
+    redis_url: str
+
+
 def create_redis(url: str) -> Redis:
     from redis import Redis as RedisClient
 
@@ -31,6 +47,10 @@ def create_redis(url: str) -> Redis:
         socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
         socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
     )
+
+
+def build_arq_redis_settings(url: str) -> RedisSettings:
+    return RedisSettings.from_dsn(url)
 
 
 def redis_health(r: Redis) -> bool:
