@@ -36,7 +36,6 @@ WORKER_SERVICE=songmaker-acestep-worker-0
 # Takes of 8 s and a LoRA of 5 epochs keep the whole proof well inside the cap.
 TAKE_SECONDS=8
 LORA_EPOCHS=5
-MODEL=turbo
 JOB_TIMEOUT_SECONDS=420
 LORA_TIMEOUT_SECONDS=900
 
@@ -196,13 +195,16 @@ seeded="$("${compose[@]}" exec -T \
     -e 'SEED_SESSIONS_REQUEST={"seed":[{"username":"gpu-probe-admin","role":"admin"}]}' \
     songmaker-web /app/.venv/bin/python - < frontend/e2e/support/seed_sessions.py | tail -n 1)"
 cookie="$(jq -r '.[0] | "\(.session_cookie_name)=\(.session_cookie_value)"' <<<"$seeded")"
+# A fresh stack activates only songmaker's default model; the probe takes what it offers.
+model="$(api GET /api/settings/models | jq -r 'first.id // empty')"
+[[ -n "$model" ]] || fail "the stack offers no active model"
 
 album="$(api_json POST /api/albums '{"title":"gpu-probe album","artist":"gpu-probe"}' | jq -r .id)"
 song_body="$(jq -nc --arg album "$album" --argjson seconds "$TAKE_SECONDS" '{
     title: "gpu-probe song", album_id: $album, audio_duration: $seconds,
     lyrics: "[verse]\nla la la la\nla la la la", prompt: "calm piano, slow"}')"
 song="$(api_json POST /api/songs "$song_body" | jq -r .id)"
-generate_body="$(jq -nc --arg model "$MODEL" '{count: 1, model: $model}')"
+generate_body="$(jq -nc --arg model "$model" '{count: 1, model: $model}')"
 
 # 1. Generation
 generate_kind generation "/api/songs/$song/generate" "$generate_body" "$song"
@@ -219,12 +221,12 @@ generate_kind reference "/api/songs/$song/generate" "$generate_body" "$song"
 echo "PROOF reference: the new take links reference $reference"
 
 # 3. Repaint the middle of the first take
-repaint_body="$(jq -nc --arg src "$source_id" --arg model "$MODEL" '{
+repaint_body="$(jq -nc --arg src "$source_id" --arg model "$model" '{
     src_generation_id: $src, repainting_start: 0.3, repainting_end: 0.6, count: 1, model: $model}')"
 generate_kind repaint "/api/generations/$source_id/repaint" "$repaint_body" "$song"
 
 # 4. Cover of the first take
-cover_body="$(jq -nc --arg src "$source_id" --arg model "$MODEL" '{
+cover_body="$(jq -nc --arg src "$source_id" --arg model "$model" '{
     src_generation_id: $src, count: 1, model: $model}')"
 generate_kind cover "/api/generations/$source_id/cover" "$cover_body" "$song"
 
