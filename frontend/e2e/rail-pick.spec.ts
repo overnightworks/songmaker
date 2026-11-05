@@ -7,7 +7,11 @@ import { RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
 import { archiveOwnedAlbum } from './seed';
 import { ONLY_IN_SHELL, sameOriginHeaders } from './helpers';
 
-const TAKE_FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'take.mp3');
+const TAKE_FIXTURE = path.join(
+	path.dirname(fileURLToPath(import.meta.url)),
+	'fixtures',
+	'take.mp3'
+);
 
 interface CreatedResource {
 	id: string;
