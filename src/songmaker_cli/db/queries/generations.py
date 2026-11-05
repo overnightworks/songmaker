@@ -291,10 +291,33 @@ def lock_unarchived_generation(session: Session, generation_id: str) -> Generati
 
 def pick_generation(session: Session, generation_id: str) -> None:
     gen = _require_generation(session, generation_id)
+    lock_cleanup_candidates(session, Generation.song_id == gen.song_id, only_unmarked=False)
     session.query(Generation).filter_by(song_id=gen.song_id).update({"is_picked": False})
     gen = lock_unarchived_generation(session, generation_id)
     gen.is_picked = True
     session.flush()
+
+
+def lock_cleanup_candidates(
+    session: Session, *scope: ColumnElement[bool], only_unmarked: bool = True,
+) -> list[Generation]:
+    """Lock the scope's takes in id order and reload them, so a Keep, Pick or share
+    that commits first is seen; with ``only_unmarked`` only takes that are neither
+    picked nor kept remain, which are the ones manual cleanup may delete.
+
+    Every writer of several takes of one song takes the rows in this order, so none
+    of them deadlocks. The lock is limited to the take (`of=Generation`) because the
+    eager joins to its reference recording and scores are outer joins.
+    """
+    query = session.query(Generation).filter(*scope)
+    if only_unmarked:
+        query = query.filter(Generation.is_picked.is_(False), Generation.is_kept.is_(False))
+    return (
+        query.order_by(Generation.id)
+        .with_for_update(of=Generation)
+        .populate_existing()
+        .all()
+    )
 
 
 def unpick_generation(session: Session, generation_id: str) -> None:

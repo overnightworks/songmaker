@@ -1,4 +1,4 @@
-"""Automatic retention, a keep, a pick and the manual delete order themselves on the take's row."""
+"""Automatic retention, manual cleanup, keep, pick and delete order themselves on the take row."""
 
 from __future__ import annotations
 
@@ -79,6 +79,9 @@ class _World:
     def entry_count(self) -> int:
         with self.pg_factory() as session:
             return session.query(PlaylistEntry).count()
+
+    def cleanup(self, scope: str) -> Callable[[], Response]:
+        return lambda: self.client.post(f"/api/{scope}/cleanup")
 
     def delete(self, take: str) -> Callable[[], Response]:
         return lambda: self.client.delete(f"/api/generations/{take}")
@@ -243,3 +246,49 @@ def test_stage_one_waits_for_a_manual_delete_of_the_take_and_leaves_it_out_of_it
     assert answers["second"].status_code == 200
     assert answers["second"].json()["archived_ids"] == []
     assert world.state("x") is None
+
+
+CLEANUP_SCOPES = {"song": "songs/song-1", "album": "albums/album-1"}
+CANDIDATE_AND_OTHER = {
+    "x": {"archived": False, "old": False}, "other": {"archived": False, "old": False},
+}
+
+
+@pytest.mark.parametrize("scope", CLEANUP_SCOPES)
+@pytest.mark.parametrize("route", ["keep", "pick", "share"])
+def test_cleanup_leaves_a_take_that_a_keep_pick_or_share_commits_first(
+    pg_factory, tmp_path, scope, route,
+) -> None:
+    world = _World(pg_factory, tmp_path, CANDIDATE_AND_OTHER)
+    mark = world.share("x") if route == "share" else world.mark(route, "x")
+    answers = race(
+        pg_factory, mark, world.cleanup(CLEANUP_SCOPES[scope]), _holding_a_generation_write(),
+    )
+    assert answers["first"].status_code == 200
+    assert answers["second"].json()["deleted"] == 1
+    assert world.state("x") == {
+        "archived": False, "kept": route in ("keep", "share"), "picked": route == "pick",
+    }
+    assert world.files["x"].exists()
+    assert world.state("other") is None
+    assert not world.files["other"].exists()
+
+
+@pytest.mark.parametrize("scope", CLEANUP_SCOPES)
+@pytest.mark.parametrize("cleanup_first", [True, False])
+def test_a_pick_of_a_sibling_and_a_cleanup_both_finish_whichever_runs_first(
+    pg_factory, tmp_path, scope, cleanup_first,
+) -> None:
+    world = _World(pg_factory, tmp_path, {
+        "a": {"archived": False, "old": False},
+        "y": {"archived": False, "old": False},
+        "z": {"archived": False, "old": False},
+    })
+    world.mark("keep", "y")()
+    cleanup, pick = world.cleanup(CLEANUP_SCOPES[scope]), world.mark("pick", "y")
+    first, second = (cleanup, pick) if cleanup_first else (pick, cleanup)
+    answers = race(pg_factory, first, second, _holding_a_generation_write())
+    assert answers["first"].status_code == answers["second"].status_code == 200
+    assert world.state("y") == {"archived": False, "kept": True, "picked": True}
+    assert world.state("a") is None
+    assert world.state("z") is None

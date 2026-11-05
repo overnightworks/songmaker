@@ -5,10 +5,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Album, Generation, Song, aware_timestamp
+from songmaker_cli.db.queries.generations import lock_cleanup_candidates
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import (
@@ -213,16 +214,8 @@ def disable_album_sharing(session: Session, album_id: str) -> Album:
 
 def cleanup_album(session: Session, album_id: str) -> tuple[int, list[str]]:
     """Remove unpicked generations. Returns (count, paths) for post-commit cleanup."""
-    gens = (
-        session.query(Generation)
-        .join(Song)
-        .options(joinedload(Generation.scores), joinedload(Generation.rating))
-        .filter(
-            Song.album_id == album_id,
-            Generation.is_picked == False,  # noqa: E712
-            Generation.is_kept == False,  # noqa: E712
-        )
-        .all()
+    gens = lock_cleanup_candidates(
+        session, Generation.song_id.in_(select(Song.id).where(Song.album_id == album_id)),
     )
     count = len(gens)
     paths: list[str] = []

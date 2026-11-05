@@ -301,7 +301,6 @@ upgrade = [["src/songmaker_cli/db/migrations/versions/e5a9c3d7b2f1_add_generatio
 _assert_no_empty_slugs_remain = [["src/songmaker_cli/db/migrations/versions/d5f8a3b21c46_add_slug_to_playlists.py", "_assert_no_empty_slugs_remain"]]
 
 [clones."src/songmaker_cli/db/queries/albums.py"]
-cleanup_album = [["src/songmaker_cli/db/queries/songs.py", "cleanup_song"]]
 count_songs_by_album = [["src/songmaker_cli/db/queries/songs.py", "count_generations_by_song"]]
 get_album_by_slug = [["src/songmaker_cli/db/queries/generations.py", "get_generation_by_slug"], ["src/songmaker_cli/db/queries/playlists.py", "get_playlist_by_slug"], ["src/songmaker_cli/db/queries/songs.py", "get_song_by_slug"]]
 set_album_cover_key = [["src/songmaker_cli/db/queries/playlists.py", "set_playlist_cover_key"], ["src/songmaker_cli/db/queries/songs.py", "set_song_cover_key"]]
