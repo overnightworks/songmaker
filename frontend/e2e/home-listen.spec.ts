@@ -128,6 +128,9 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 			.getByRole('button', { name: `${COLLECTION_MENU_DELETE_LABEL} playlist`, exact: true })
 			.click();
 		await page.getByRole('button', { name: 'Delete Playlist', exact: true }).click();
+		await expect(
+			page.getByRole('alert').getByText('Playlist deleted', { exact: true })
+		).toBeVisible();
 		await openHome(page, shellOf(testInfo));
 		await expect(
 			listenRegion(page).getByRole('button', { name: titles[0], exact: true })
