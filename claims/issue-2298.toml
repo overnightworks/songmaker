@@ -1,7 +1,0 @@
-claim_id = "e683f82cb2ab46c0a84ef26a13c99d85"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "908c829cbd12b127fcaf3f46321c523f87e95032"
-branch = "claude/issue-2298-move-song-picture-frozen"
-scope = ["docs/design/README.md", "docs/design/move-song.html"]
-opened_commit = "177558bd0af25752e7057bd1f23bc3ba0f0ee3ed"
