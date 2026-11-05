@@ -131,7 +131,8 @@ api() { # api METHOD PATH [curl args...]; the Origin passes the app's same-origi
 }
 
 api_json() { # api_json METHOD PATH JSON
-    api "$1" "$2" -H 'Content-Type: application/json' -d "$3"
+    local method="$1" path="$2" json="$3"
+    api "$method" "$path" -H 'Content-Type: application/json' -d "$json"
 }
 
 fail() {
@@ -140,24 +141,27 @@ fail() {
 }
 
 wait_for_job() { # wait_for_job JOB_ID LABEL
-    local deadline=$((SECONDS + JOB_TIMEOUT_SECONDS)) status
+    local job="$1" label="$2" deadline=$((SECONDS + JOB_TIMEOUT_SECONDS)) status
     while ((SECONDS < deadline)); do
-        status="$(api GET "/api/jobs/$1" | jq -r .status)"
+        status="$(api GET "/api/jobs/$job" | jq -r .status)"
         case "$status" in
             completed) return 0 ;;
-            failed | partial | cancelled) fail "$2: job $1 ended $status: $(api GET "/api/jobs/$1" | jq -c '{error,error_type}')" ;;
+            failed | partial | cancelled) fail "$label: job $job ended $status: $(api GET "/api/jobs/$job" | jq -c '{error,error_type}')" ;;
+            *) ;; # queued or running: poll again
         esac
         sleep 5
     done
-    fail "$2: job $1 still $status after ${JOB_TIMEOUT_SECONDS}s"
+    fail "$label: job $job still $status after ${JOB_TIMEOUT_SECONDS}s"
 }
 
 newest_take() { # newest_take SONG_ID -> JSON of the song's newest generation
-    api GET "/api/songs/$1" | jq -c '.generations | sort_by(.created_at) | last'
+    local song="$1"
+    api GET "/api/songs/$song" | jq -c '.generations | sort_by(.created_at) | last'
 }
 
 audio_file_exists() { # audio_file_exists RELATIVE_PATH: a non-empty file in the audio tree
-    "${compose[@]}" exec -T songmaker-web sh -c 'test -s "$1"' _ "/app/data/audio/$1"
+    local relative="$1"
+    "${compose[@]}" exec -T songmaker-web sh -c 'test -s "$1"' _ "/app/data/audio/$relative"
 }
 
 prove_take() { # prove_take LABEL TAKE_JSON: an mp3 and a wav served, the raw.wav beside them
@@ -174,10 +178,10 @@ prove_take() { # prove_take LABEL TAKE_JSON: an mp3 and a wav served, the raw.wa
 }
 
 generate_kind() { # generate_kind LABEL PATH JSON SONG_ID
-    local job
-    job="$(api_json POST "$2" "$3" | jq -r .id)"
-    wait_for_job "$job" "$1"
-    prove_take "$1" "$(newest_take "$4")"
+    local label="$1" path="$2" json="$3" song="$4" job
+    job="$(api_json POST "$path" "$json" | jq -r .id)"
+    wait_for_job "$job" "$label"
+    prove_take "$label" "$(newest_take "$song")"
 }
 
 "${compose[@]}" --profile gpu up -d --build --wait \
@@ -254,9 +258,11 @@ storage="$(jq -r '.storage_path // empty' <<<"$lora")"
 echo "PROOF lora: voice $voice ready with its adapter adopted ($storage)"
 
 echo "--- nothing on the shared volume from the worker ---"
-if "${compose[@]}" exec -T songmaker-web sh -c 'ls /app/data/audio/worker_output/*.wav' > /dev/null 2>&1; then
-    fail "generation: the worker left a take on the shared audio volume"
-fi
+# A missing audio volume or a failed listing fails here instead of reading as no take.
+"${compose[@]}" exec -T songmaker-web sh -c \
+    'set -eu; test -d /app/data/audio; test -d "$1" || exit 0; listing=$(ls -A "$1"); case "$listing" in *.wav*) exit 1 ;; *) ;; esac' \
+    _ /app/data/audio/worker_output \
+    || fail "generation: the shared audio volume's worker_output holds a take or cannot be read"
 echo "PROOF output: no take under the shared audio volume's worker_output"
 # An unset root, a missing one or a failed listing fails here instead of reading as empty.
 "${compose[@]}" exec -T "$WORKER_SERVICE" sh -c \
