@@ -1,0 +1,8 @@
+claim_id = "4d157da6b479485688ab8f795a1ba15b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "f73c2076695f866ae1eed1e77103f0f052fe40d4"
+branch = "claude/issue-2250-lora-constants"
+scope = ["frontend/src/lib/components/LoraDetail.svelte", "frontend/src/lib/constants.ts", "frontend/src/lib/constants/lora.ts", "frontend/src/routes/settings/voices/+page.svelte"]
+opened_commit = "a9ce96935796b0e10d74d813457821f58a5a8cbf"
+whole_reason = "One move: the owner file, the new domain module and its two callers change together or the build breaks."
