@@ -389,40 +389,9 @@ def api_get_provider_status(
         ProviderStatusResponse(
             provider=name,
             cowriter_routes=_route_statuses(snapshots.get(name)),
-            cover_routes=_cover_route_readiness(name),
         )
         for name in sorted(COWRITER_PROVIDERS)
     ]
-
-
-def _cover_route_readiness(provider: str) -> dict[str, ProviderRouteReadiness]:
-    """Project the one image-capability answer for every route of one provider."""
-    from agent_providers.catalog import (
-        ProviderRoute,
-        ProviderRouteCapability,
-        ProviderRouteReadinessState,
-        route_setup_label,
-    )
-    from agent_providers.dispatch import cover_image_capability
-
-    readiness: dict[str, ProviderRouteReadiness] = {}
-    for route in ProviderRoute:
-        capability = cover_image_capability(provider, route)
-        readiness[route.value] = ProviderRouteReadiness(
-            state=(
-                ProviderRouteReadinessState.READY
-                if capability.failure is None
-                else ProviderRouteReadinessState.NOT_CONFIGURED
-            ).value,
-            capability=(
-                ProviderRouteCapability.TOOLS_AVAILABLE
-                if capability.carries_image_tool
-                else ProviderRouteCapability.TEXT_ONLY
-            ).value,
-            reason=capability.failure,
-            setup_label=route_setup_label(route),
-        )
-    return readiness
 
 
 def _cowriter_response(session: Session) -> CowriterSettingsResponse:

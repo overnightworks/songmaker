@@ -1034,9 +1034,7 @@ the agent file" in the Provider and Model cells, Gateway as the route, and no
 status, because the page checks no agent ahead of its run; the Co-Writer row
 keeps the history tail under Advanced. The page reads no provider status. The
 rows once saved for the Cover's provider, route and model, for the Co-Writer
-and for the removed judge stay in the table unread. `GET /api/settings/providers`
-still reports `cover_routes` (`agent_providers/dispatch.py`'s
-`cover_image_capability`), which no page reads.
+and for the removed judge stay in the table unread.
 
 How much room the five columns have is answered by the card the table sits in
 rather than by the viewport — the same reasoning as the editor's own container
@@ -1529,7 +1527,7 @@ close the stream.
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
 | GET/PUT | `/api/settings/theme` | user | The person's `light`, `dark` or `system` (follow the device) choice, new people start at `system`; any other value is rejected with 422. |
-| GET | `/api/settings/providers` | admin | `cowriter_routes` carries shared provider readiness and catalogs for both routes, and `cover_routes` carries image capability; neither reads a saved route, and no page reads either. |
+| GET | `/api/settings/providers` | admin | `cowriter_routes` carries shared provider readiness and catalogs for both routes; it reads no saved route, and no page reads it. |
 | GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
 | PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
