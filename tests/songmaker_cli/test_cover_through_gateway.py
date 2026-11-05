@@ -28,10 +28,12 @@ from agent_runtime_client.backend.fake_gateway import (
     tool_round,
 )
 from agent_runtime_client.backend.gateway import GatewayBackend
-from agent_runtime_client.turn import FailureCode, RejectionCode
+from agent_runtime_client.turn import FailureCode, Principal, RejectionCode, person_fingerprint
 from fastapi.testclient import TestClient
 from PIL import Image
+from support.cover_album_world import declared_suggest_refusal
 from support.cowriter_gateway import (
+    A_REFRESH_TOKEN,
     CowriterStack,
     HeldGateway,
     agent_config,
@@ -39,7 +41,7 @@ from support.cowriter_gateway import (
     closed_port_origin,
     stops,
 )
-from support.fake_oidc_issuer import Person
+from support.fake_oidc_issuer import USER_ACCESS_TOKEN, Person
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from support.xmp_packet import read_digital_source_type
 
@@ -57,6 +59,7 @@ from songmaker_cli.db.models import (
     UserSession,
     Version,
 )
+from songmaker_cli.oidc_client import normalised_oidc_issuer
 
 USER_ID = "u-cover"
 ALBUM_ID = "alb-cover"
@@ -173,8 +176,8 @@ def test_a_member_gets_one_suggestion_drawn_by_the_picture_agent(world):
     assert body["prompt"].startswith(agent.prompt)
     assert '"title":"Open Windows"' in body["prompt"]
     assert "the window opens" in body["prompt"]
-    assert body["user"].startswith("fp-")
-    assert USER_ID not in body["user"]
+    asker = Principal(iss=normalised_oidc_issuer(world.stack.issuer.issuer), sub=USER_ID)
+    assert body["user"] == person_fingerprint(asker)
     assert world.used_today() == 1
 
 
@@ -221,6 +224,7 @@ def test_the_click_refuses_before_any_job_and_any_request(
 
     assert response.status_code == status
     assert _problem_of(response) == problem
+    declared_suggest_refusal(status).model_validate(response.json())
     assert world.jobs() == 0
     assert world.stack.gateway_requests == []
     assert world.used_today() == 0
@@ -389,32 +393,47 @@ def test_a_missing_key_file_ends_unavailable_without_a_request(world):
 
 
 # 16 and the one classifier: every stop the client defines maps to one of the four problems.
-_EVERY_STOP = [
-    *(TurnStopped(TurnStopKind.REFUSED, code) for code in RejectionCode),
-    *(TurnStopped(TurnStopKind.FAILED, code) for code in FailureCode),
-    TurnStopped(TurnStopKind.CANCELLED),
+_REFUSED, _FAILED = TurnStopKind.REFUSED, TurnStopKind.FAILED
+_PROBLEM_OF_EVERY_STOP = [
+    (TurnStopped(_REFUSED, RejectionCode.NOT_ENABLED), AgentProblem.NOT_ENABLED),
+    (TurnStopped(_REFUSED, RejectionCode.FORBIDDEN), AgentProblem.NOT_ENABLED),
+    (TurnStopped(_REFUSED, RejectionCode.BUSY), AgentProblem.BUSY),
+    (TurnStopped(_REFUSED, RejectionCode.UNSUPPORTED_VERSION), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_REFUSED, RejectionCode.UNAUTHORIZED), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_REFUSED, RejectionCode.INVALID_REQUEST), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_REFUSED, RejectionCode.TOO_LARGE), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_REFUSED, RejectionCode.UNAVAILABLE), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_REFUSED, RejectionCode.NOT_FOUND), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_REFUSED, RejectionCode.CAPABILITY_TOO_LARGE), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_REFUSED, RejectionCode.MODEL_NOT_OFFERED), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_FAILED, FailureCode.INTERRUPTED), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_FAILED, FailureCode.PROVIDER_UNAVAILABLE), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_FAILED, FailureCode.PROVIDER_ERROR), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_FAILED, FailureCode.LIMIT_EXCEEDED), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_FAILED, FailureCode.IDLE_TIMEOUT), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_FAILED, FailureCode.INTERNAL_ERROR), AgentProblem.UNAVAILABLE),
+    (TurnStopped(TurnStopKind.CANCELLED), AgentProblem.UNAVAILABLE),
 ]
 
 
-def _expected_problem(stopped: TurnStopped) -> AgentProblem:
-    if stopped.kind is TurnStopKind.REFUSED and stopped.code in {
-        RejectionCode.NOT_ENABLED, RejectionCode.FORBIDDEN,
-    }:
-        return AgentProblem.NOT_ENABLED
-    if stopped.kind is TurnStopKind.REFUSED and stopped.code is RejectionCode.BUSY:
-        return AgentProblem.BUSY
-    return AgentProblem.UNAVAILABLE
+def test_the_stop_table_names_every_stop_the_client_defines():
+    named = {(stopped.kind, stopped.code) for stopped, _problem in _PROBLEM_OF_EVERY_STOP}
+    assert named == {
+        *((_REFUSED, code) for code in RejectionCode),
+        *((_FAILED, code) for code in FailureCode),
+        (TurnStopKind.CANCELLED, None),
+    }
 
 
-@pytest.mark.parametrize("stopped", _EVERY_STOP, ids=str)
-def test_every_stop_of_a_picture_run_is_one_of_the_four_problems(world, stopped):
+@pytest.mark.parametrize(("stopped", "problem"), _PROBLEM_OF_EVERY_STOP, ids=str)
+def test_every_stop_of_a_picture_run_is_one_of_the_four_problems(world, stopped, problem):
     world.stack.behaves(stops(stopped))
     job_id = world.queue()
 
     world.run_next()
 
     job = world.job(job_id)
-    assert (job.status, job.error_type) == (JobStatus.FAILED, _expected_problem(stopped).value)
+    assert (job.status, job.error_type) == (JobStatus.FAILED, problem.value)
 
 
 def test_the_picture_deadline_reads_unavailable(world):
@@ -455,6 +474,26 @@ def test_cancel_during_the_picture_closes_the_request_and_the_next_job_runs(worl
     assert world.job(second).status == JobStatus.COMPLETED
 
 
+def test_a_cancel_between_the_start_and_the_picture_sends_no_request(world, monkeypatch):
+    job_id = world.queue()
+    load_cover_start = cover_runner._load_cover_start
+
+    def cancel_once_the_start_is_read(db_factory, loaded_job_id):
+        start = load_cover_start(db_factory, loaded_job_id)
+        cancelled = world.client.post(f"/api/jobs/{loaded_job_id}/cancel")
+        assert cancelled.status_code == 200
+        return start
+
+    monkeypatch.setattr(cover_runner, "_load_cover_start", cancel_once_the_start_is_read)
+
+    assert world.run_next() is True
+
+    assert world.picture_requests() == []
+    assert world.job(job_id).status == JobStatus.CANCELLED
+    assert world.suggestions() == []
+    assert not list(world.audio_dir.rglob(".*.staging"))
+
+
 def test_a_runner_that_stops_cancels_its_picture(world):
     held = HeldGateway()
     world.stack.uses(held)
@@ -477,12 +516,20 @@ def test_a_runner_that_stops_cancels_its_picture(world):
 def test_the_runner_loop_survives_a_cancelled_picture(world):
     from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 
+    class TickSignallingRegistry(BackgroundLoopRegistry):
+        ticked: asyncio.Event
+
+        def record_success(self, name: BackgroundLoopName) -> None:
+            super().record_success(name)
+            self.ticked.set()
+
     held = HeldGateway()
     world.stack.uses(held)
     job_id = world.queue()
-    registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
+    registry = TickSignallingRegistry(tuple(BackgroundLoopName))
 
     async def scenario() -> None:
+        registry.ticked = asyncio.Event()
         loop = asyncio.create_task(cover_runner.cover_runner_loop(world.app, registry))
         assert await asyncio.to_thread(held.received.wait, 10)
         await asyncio.to_thread(world.client.post, f"/api/jobs/{job_id}/cancel")
@@ -491,7 +538,8 @@ def test_the_runner_loop_survives_a_cancelled_picture(world):
         second = await asyncio.to_thread(world.queue)
         async with asyncio.timeout(10):
             while world.job(second).status != JobStatus.COMPLETED:
-                await asyncio.sleep(0.05)
+                registry.ticked.clear()
+                await registry.ticked.wait()
         assert not loop.done()
         health = registry.loop_health()[BackgroundLoopName.COVER_RUNNER]
         assert (health.consecutive_failures, health.last_error) == (0, None)
@@ -525,9 +573,14 @@ def test_no_key_session_or_fingerprint_reaches_any_surface(tmp_path, caplog):
         outcomes.append((key, world.stack.session_id, fingerprint, seen))
     refused = build_world(tmp_path / "refused", groups=NOT_A_MEMBER)
     refusal = refused.suggest().text
+    refused_key = refused.stack.config.gateway.key_file.read_text().strip()
+    outcomes.append((refused_key, refused.stack.session_id, None, [refusal]))
 
     for key, session_id, fingerprint, seen in outcomes:
-        for canary in (key, session_id, fingerprint):
+        canaries = [key, session_id, A_REFRESH_TOKEN, USER_ACCESS_TOKEN]
+        if fingerprint is not None:
+            canaries.append(fingerprint)
+        for canary in canaries:
             assert canary not in caplog.text
             assert canary not in refusal
             for surface in seen:

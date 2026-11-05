@@ -20,6 +20,18 @@ class CoverSuggestionRefusal(BaseModel):
     problem: AgentProblem
 
 
+class CoverSuggestionUnavailableBody(BaseModel):
+    """The 503 body of a Suggest the gateway or the realm cannot serve now."""
+
+    detail: CoverSuggestionRefusal
+
+
+class CoverSuggestionForbiddenBody(BaseModel):
+    """The 403 body: why the person may not suggest, or a sentence for a caller without a login."""
+
+    detail: CoverSuggestionRefusal | str
+
+
 class CoverSuggestionResponse(BaseModel):
     id: str
     url: str

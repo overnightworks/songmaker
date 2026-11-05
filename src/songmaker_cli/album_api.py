@@ -37,6 +37,10 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
+from songmaker_cli.api_models.cover_suggestions import (
+    CoverSuggestionForbiddenBody,
+    CoverSuggestionUnavailableBody,
+)
 from songmaker_cli.api_models.songs import ShareKind, UnplayableSongSummary, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import AudioPathRejectedError
@@ -420,11 +424,17 @@ async def api_upload_album_cover(
     "/albums/{album_id}/cover-suggestions",
     responses={
         401: {"description": "The asking session has ended"},
-        403: {"description": "A browser login is needed, or the account may not suggest covers"},
+        403: {
+            "description": "A browser login is needed, or the account may not suggest covers",
+            "model": CoverSuggestionForbiddenBody,
+        },
         404: {"description": "Album not found"},
         409: {"description": "Cover suggestions are already running"},
         429: {"description": "Daily suggestion limit reached"},
-        503: {"description": "Cover suggestions are unavailable"},
+        503: {
+            "description": "Cover suggestions are unavailable",
+            "model": CoverSuggestionUnavailableBody,
+        },
     },
 )
 def api_create_cover_suggestions(

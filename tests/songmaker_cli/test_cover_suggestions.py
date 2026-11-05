@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-from support.cover_album_world import album_owner, seed_cover_albums
+from support.cover_album_world import album_owner, declared_suggest_refusal, seed_cover_albums
 from support.cowriter_gateway import attach_cowriter_gateway
 from support.web_app import (
     make_authenticated_user,
@@ -271,6 +271,7 @@ def test_suggest_with_a_hal_token_is_refused_and_creates_no_job(
 
     assert response.status_code == 403
     assert response.json() == {"detail": "Cover suggestions need a browser login."}
+    declared_suggest_refusal(403).model_validate(response.json())
     with world.factory() as session:
         assert session.query(Job).count() == 0
     assert world.client.get(suggestions, headers=bearer).json()["used_today"] == 0

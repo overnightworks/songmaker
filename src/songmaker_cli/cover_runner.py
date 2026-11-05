@@ -160,7 +160,7 @@ async def run_claimed_cover_suggestion_job(app, job_id: str) -> None:
         drawn = await _draw(app, job_id, start)
         if drawn is None:
             return
-        image = _checked_picture(drawn)
+        image = await asyncio.to_thread(_checked_picture, drawn)
         if isinstance(image, TurnProblem):
             await asyncio.to_thread(_end_with_problem, db_factory, job_id, image)
             return
@@ -210,7 +210,9 @@ async def _draw(app, job_id: str, start: _CoverStart) -> bytes | TurnProblem | N
     if start.session_id is None:
         return TurnProblem(AgentProblem.SIGN_IN_AGAIN, "no asking session")
     caller = TurnCaller(app, start.session_id, start.user)
-    picture = asyncio.create_task(run_cover_picture(caller, start.album_data))
+    picture = asyncio.create_task(
+        _picture_while_running(app.state.ctx.db, job_id, caller, start.album_data),
+    )
     with _running_pictures_lock:
         _running_pictures[job_id] = (asyncio.get_running_loop(), picture)
     try:
@@ -229,6 +231,17 @@ async def _draw(app, job_id: str, start: _CoverStart) -> bytes | TurnProblem | N
         log.error("Cover job %s: the picture run raised %s", job_id, type(error).__qualname__)
         return _RUN_FAILED
     return picture.result()
+
+
+async def _picture_while_running(
+    db_factory, job_id: str, caller: TurnCaller, album_data: str,
+) -> bytes | TurnProblem | None:
+    # This task is registered before it runs: a cancel committed after the read below reaches
+    # it through ``abort_web_cover_job``, and one committed before it leaves no request to send.
+    if not await asyncio.to_thread(_is_still_running, db_factory, job_id):
+        log.info("Cover job %s was cancelled before its picture", job_id)
+        return None
+    return await run_cover_picture(caller, album_data)
 
 
 def _checked_picture(drawn: bytes | TurnProblem) -> Image.Image | TurnProblem:
@@ -305,6 +318,12 @@ def _load_cover_start(db_factory, job_id: str) -> _CoverStart:
             user=_user_or_none(session, job.user_id),
             session_id=job.session_id,
         )
+
+
+def _is_still_running(db_factory, job_id: str) -> bool:
+    with db_factory() as session:
+        job = get_job(session, job_id)
+        return job is not None and job.status == JobStatus.RUNNING
 
 
 def _user_or_none(session, user_id: str | None) -> AuthenticatedUser | None:

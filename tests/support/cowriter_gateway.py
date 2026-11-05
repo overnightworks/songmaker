@@ -55,6 +55,41 @@ def agent_config(directory: Path, *, origin: str = GATEWAY_ORIGIN) -> AgentConfi
     )
 
 
+class Release:
+    """A flag any thread sets, which wakes the requests held on their own event loops."""
+
+    def __init__(self) -> None:
+        self._flag = threading.Event()
+        self._lock = threading.Lock()
+        self._waiters: list[tuple[asyncio.AbstractEventLoop, asyncio.Event]] = []
+
+    def set(self) -> None:
+        with self._lock:
+            self._flag.set()
+            waiters, self._waiters = self._waiters, []
+        for loop, woken in waiters:
+            loop.call_soon_threadsafe(woken.set)
+
+    def clear(self) -> None:
+        self._flag.clear()
+
+    def is_set(self) -> bool:
+        return self._flag.is_set()
+
+    async def wait(self) -> None:
+        waiter = (asyncio.get_running_loop(), asyncio.Event())
+        with self._lock:
+            if self._flag.is_set():
+                return
+            self._waiters.append(waiter)
+        try:
+            await waiter[1].wait()
+        finally:
+            with self._lock:
+                if waiter in self._waiters:
+                    self._waiters.remove(waiter)
+
+
 class HeldGateway(FakeGateway):
     """A gateway that holds each request until ``released`` is set, then answers ``reply``.
 
@@ -64,14 +99,13 @@ class HeldGateway(FakeGateway):
     def __init__(self, reply: Reply | None = None) -> None:
         super().__init__(reply or Reply(status=500))
         self.received = threading.Event()
-        self.released = threading.Event()
+        self.released = Release()
         self.closed = threading.Event()
 
     async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         self.received.set()
         try:
-            while not self.released.is_set():
-                await asyncio.sleep(0.01)
+            await self.released.wait()
         except asyncio.CancelledError:
             self.closed.set()
             raise

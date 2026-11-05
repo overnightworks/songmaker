@@ -9,7 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
 from support.cowriter_gateway import attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_test_app
 from webauth.ports import AuthenticatedUser
@@ -41,3 +43,16 @@ def cover_album_app(tmp_path: Path) -> tuple[TestClient, object]:
         alice_id = session.query(User).filter_by(username="alice").one().id
     attach_cowriter_gateway(client, factory, tmp_path, alice_id)
     return client, factory
+
+
+def declared_suggest_refusal(status: int) -> type[BaseModel]:
+    """The error body the Suggest route declares for ``status`` in its API contract."""
+    from songmaker_cli.album_api import router
+
+    [suggest] = [
+        route for route in router.routes
+        if isinstance(route, APIRoute)
+        and route.path == "/albums/{album_id}/cover-suggestions"
+        and "POST" in route.methods
+    ]
+    return suggest.responses[status]["model"]
