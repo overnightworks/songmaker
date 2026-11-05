@@ -154,6 +154,24 @@ def test_enabling_summaries_or_changing_summary_model_reuses_code(tmp_path, func
         assert len(summarizer.texts) == 1
 
 
+@pytest.mark.parametrize(
+    ("setting", "value"),
+    [("DEFAULT_MODEL_REVISION", "other-revision"), ("EMBEDDING_DTYPE", "float16")],
+)
+def test_changing_embedding_configuration_recomputes_stale_vectors(
+    tmp_path, functions, monkeypatch, setting, value
+):
+    cache = audit.Cache(tmp_path)
+    identity = audit.embedding_identity(audit.DEFAULT_MODEL)
+    audit.collect_signals(functions, FakeEmbedder(), None, cache, identity, "claude")
+    monkeypatch.setattr(audit, setting, value)
+    embedder = FakeEmbedder()
+    audit.collect_signals(
+        functions, embedder, None, cache, audit.embedding_identity(audit.DEFAULT_MODEL), "claude"
+    )
+    assert len(embedder.texts) == 1
+
+
 @pytest.mark.parametrize("vector", [[], [0, 0], [float("nan")], [float("inf")], ["x"]])
 def test_rejects_invalid_model_vectors(vector):
     with pytest.raises(audit.AuditError, match="Embedding"):
@@ -162,7 +180,7 @@ def test_rejects_invalid_model_vectors(vector):
 
 def test_corrupt_cache_fails_loudly(tmp_path, functions):
     cache = audit.Cache(tmp_path)
-    path = cache.path("code-v1:code", functions[0].key)
+    path = cache.path("code-v2:code", functions[0].key)
     path.parent.mkdir()
     path.write_text("{broken")
     embedder = UnavailablePort()
@@ -250,7 +268,7 @@ def test_cli_warm_cache_report_and_ratchet_need_no_ports(tmp_path, monkeypatch, 
         FakeEmbedder(),
         None,
         cache,
-        audit.DEFAULT_MODEL,
+        audit.embedding_identity(audit.DEFAULT_MODEL),
         audit.DEFAULT_CLAUDE_MODEL,
     )
     report = tmp_path / "report.md"
@@ -481,25 +499,34 @@ def test_pairs_skip_only_enclosing_functions_in_same_file(functions, name, path,
 
 
 @pytest.mark.parametrize("model", [audit.DEFAULT_MODEL, "other-model"])
-def test_embedding_loader_pins_default_weights_and_external_code(monkeypatch, model):
+def test_embedding_loader_pins_default_weights_and_runs_no_remote_code(monkeypatch, model):
+    dtype = object()
+    monkeypatch.setattr(audit, "EMBEDDING_DTYPE", "configured_dtype")
+
     def load(name, **kwargs):
         assert name == model
         is_default = model == audit.DEFAULT_MODEL
-        assert kwargs["trust_remote_code"] is is_default
+        assert not kwargs.get("trust_remote_code")
         assert kwargs["revision"] == (audit.DEFAULT_MODEL_REVISION if is_default else None)
-        for key in ("model_kwargs", "config_kwargs"):
-            assert kwargs[key] == (
-                {"code_revision": audit.DEFAULT_MODEL_CODE_REVISION} if is_default else {}
-            )
+        assert kwargs["model_kwargs"] == {"dtype": dtype}
         return SimpleNamespace(
             encode=lambda *args, **kwargs: SimpleNamespace(tolist=lambda: [[1, 0]])
         )
 
-    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(set_num_threads=lambda count: None))
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        SimpleNamespace(set_num_threads=lambda count: None, configured_dtype=dtype),
+    )
     monkeypatch.setitem(
         sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=load)
     )
     assert audit.LocalEmbedder(model).embed(["code"]) == [[1, 0]]
+
+
+def test_configured_embedding_dtype_is_full_precision():
+    torch = pytest.importorskip("torch")
+    assert torch.finfo(getattr(torch, audit.EMBEDDING_DTYPE)).bits >= 32
 
 
 def test_cli_applies_summary_limit_before_calling_ports(tmp_path, capsys):

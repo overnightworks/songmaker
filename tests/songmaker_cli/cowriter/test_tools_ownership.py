@@ -97,6 +97,7 @@ def _dispatch_ownership_tool(factory, monkeypatch, route, name, arguments):
     with factory() as session:
         result = execute_cowriter_tool(
             session, auth.load_user(session, "actor"), name, arguments,
+            session_id=None,
         )
     return result.is_error, result.content if result.is_error else json.loads(result.content)
 

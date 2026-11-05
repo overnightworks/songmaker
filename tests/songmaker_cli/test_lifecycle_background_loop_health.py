@@ -173,7 +173,6 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     import songmaker_cli.arq_pool as arq_pool
 
-    monkeypatch.setenv("COVER_EXECUTOR", "music")
     monkeypatch.setattr(arq_pool, "is_music_worker_healthy", AsyncMock(return_value=True))
     monkeypatch.setattr(arq_pool, "is_scoring_worker_healthy", AsyncMock(return_value=True))
     client, _ = make_test_app(tmp_path)
@@ -206,6 +205,7 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
         BackgroundLoopName.SCORE_BACKFILL: BackgroundLoopStatus.OK,
         BackgroundLoopName.STALE_JOB_REAPER: BackgroundLoopStatus.OK,
         BackgroundLoopName.PROVIDER_STATUS_REFRESH: BackgroundLoopStatus.OK,
+        BackgroundLoopName.COVER_RUNNER: BackgroundLoopStatus.OK,
     }
 
 
@@ -222,19 +222,6 @@ def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
     )
 
 
-def test_music_cover_executor_does_not_start_a_web_cover_runner(
-    tmp_path, monkeypatch, mock_arq_pool,
-) -> None:
-    recovered = []
-    monkeypatch.setenv("COVER_EXECUTOR", "music")
-    monkeypatch.setattr(server, "recover_web_cover_jobs", lambda *_args: recovered.append(True))
-    client, _ = make_test_app(tmp_path)
-
-    with client:
-        assert BackgroundLoopName.COVER_RUNNER not in client.app.state.background_loop_tasks
-    assert recovered == []
-
-
 def test_web_cover_runner_is_visible_in_lifecycle_health(
     tmp_path, monkeypatch, mock_arq_pool,
     monitoring_headers,
@@ -247,7 +234,6 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
         started.set()
         await asyncio.Future()
 
-    monkeypatch.setenv("COVER_EXECUTOR", "web")
     monkeypatch.setattr(server, "recover_web_cover_jobs", lambda *_args: recovered.append(True))
     monkeypatch.setattr(server, "cover_runner_loop", idle_cover_runner)
     client, _ = make_test_app(tmp_path)

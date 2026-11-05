@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import os
 import uuid
 from pathlib import Path
 
@@ -24,27 +23,26 @@ def _alembic_config() -> Config:
     return Config(str(Path(__file__).resolve().parents[3] / "alembic.ini"))
 
 
-@pytest.fixture(params=["sqlite", "postgresql"])
-def database(request, tmp_path, isolated_logging):
+@pytest.fixture
+def database(database_postgresql_url, tmp_path, isolated_logging):
     """Yield (config, engine) of an empty database; PostgreSQL gets its own schema."""
-    if request.param == "sqlite":
+    if database_postgresql_url is None:
         url = make_url(f"sqlite:///{tmp_path / 'reference.db'}")
         schema = None
     else:
-        base_url = os.environ.get("TEST_DATABASE_URL", "")
-        if not base_url.startswith("postgresql"):
-            pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
         schema = "reference_recordings_" + uuid.uuid4().hex
-        admin = create_engine(base_url)
+        admin = create_engine(database_postgresql_url)
         with admin.begin() as connection:
             connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-        url = make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
+        url = make_url(database_postgresql_url).update_query_dict(
+            {"options": f"-csearch_path={schema}"}
+        )
     config = _alembic_config()
     config.set_main_option(
         "sqlalchemy.url", url.render_as_string(hide_password=False).replace("%", "%%"),
     )
     engine = create_engine(url)
-    if request.param == "sqlite":
+    if database_postgresql_url is None:
         # Alembic's engine does not enable foreign keys; this connection does, as init_test_db does.
         event.listen(
             engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"),

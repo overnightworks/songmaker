@@ -1,4 +1,5 @@
-import { HOME_PAGE_LABEL, LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL } from '#lib/constants.ts';
+import { LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL } from '#lib/constants.ts';
+import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 import type { Place } from '#lib/stores/libraryContext.ts';
 
 export const PHONE_TABS = [

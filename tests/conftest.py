@@ -54,6 +54,7 @@ pytest_plugins = [
     "support.oidc_world",
     "support.fake_acestep_child",
     "support.admin_client_fixture",
+    "support.cover_album_world",
     "support.generation_job_world",
     "support.reference_link_migration",
 ]
@@ -437,7 +438,7 @@ def session_commit_failure():
     return fail_commit
 
 
-def _pg_session_factory() -> sessionmaker[Session]:
+def _pg_session_factory(url: str) -> sessionmaker[Session]:
     from sqlalchemy import create_engine
 
     from songmaker_cli.db.models import Base
@@ -445,7 +446,7 @@ def _pg_session_factory() -> sessionmaker[Session]:
 
     settings = get_settings()
     engine = create_engine(
-        os.environ["TEST_DATABASE_URL"],
+        url,
         pool_size=settings.database_pool_size,
         max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,
@@ -455,14 +456,82 @@ def _pg_session_factory() -> sessionmaker[Session]:
     return sessionmaker(bind=engine)
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "postgresql: needs PostgreSQL; the CI postgresql-contract job runs exactly these tests",
+    )
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Mark every test that collection can see needs PostgreSQL, so `-m postgresql` selects it.
+
+    Two things make a test visible: `postgresql_url` in its fixture closure, and the value
+    `postgresql` of the one backend fixture (`database_backend`), which an indirect
+    parametrization cannot hide. A path collection cannot see (a dynamic `getfixturevalue`)
+    ends in `_postgresql_url`, which fails the unmarked test.
+    """
+    for item in items:
+        callspec = getattr(item, "callspec", None)
+        backend = callspec.params.get("database_backend") if callspec else None
+        if "postgresql_url" in item.fixturenames or backend == "postgresql":
+            item.add_marker(pytest.mark.postgresql)
+
+
+def _postgresql_url(node: pytest.Item) -> str:
+    """The only reader of `TEST_DATABASE_URL`; every PostgreSQL fixture takes its URL here.
+
+    An unmarked test would be skipped by the Backend job and never run by the contract job,
+    so it fails before it may skip.
+    """
+    if node.get_closest_marker("postgresql") is None:
+        pytest.fail(
+            "This test reaches PostgreSQL but is not selected by `-m postgresql`: request "
+            "`postgresql_url` or `pg_factory`, or parametrize `database_backend` with 'postgresql'."
+        )
+    url = os.environ.get("TEST_DATABASE_URL", "")
+    if not url.startswith("postgresql"):
+        pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
+    return url
+
+
 @pytest.fixture
-def pg_factory():
+def postgresql_url(request) -> str:
+    """The PostgreSQL URL of this run; the PostgreSQL tests skip without it."""
+    return _postgresql_url(request.node)
+
+
+def _pg_factory_until_teardown(url: str):
     from songmaker_cli.db.models import Base
 
-    if not os.environ.get("TEST_DATABASE_URL", "").startswith("postgresql"):
-        pytest.skip("No PostgreSQL URL")
-    factory = _pg_session_factory()
+    factory = _pg_session_factory(url)
     yield factory
     engine = factory.kw["bind"]
     Base.metadata.drop_all(engine)
     engine.dispose()
+
+
+@pytest.fixture
+def pg_factory(postgresql_url):
+    yield from _pg_factory_until_teardown(postgresql_url)
+
+
+@pytest.fixture(params=["sqlite", "postgresql"])
+def database_backend(request) -> str:
+    """The backend of a test that runs on SQLite and on PostgreSQL; collection marks the second."""
+    return request.param
+
+
+@pytest.fixture
+def database_postgresql_url(request, database_backend) -> str | None:
+    """The PostgreSQL URL on the PostgreSQL leg of `database_backend`, None on the SQLite leg."""
+    return _postgresql_url(request.node) if database_backend == "postgresql" else None
+
+
+@pytest.fixture
+def database_pg_factory(database_postgresql_url):
+    """The PostgreSQL session factory on the PostgreSQL leg of `database_backend`, else None."""
+    if database_postgresql_url is None:
+        yield None
+    else:
+        yield from _pg_factory_until_teardown(database_postgresql_url)

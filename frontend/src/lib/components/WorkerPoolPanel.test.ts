@@ -6,7 +6,7 @@ import { localClockTime } from '#lib/utils/format.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkerPoolResponse } from '#lib/api/types.ts';
-import { WORKER_POOL_LOAD_FAILED, WORKER_POOL_REFRESH_FAILED } from '#lib/constants.ts';
+import { WORKER_POOL_LOAD_FAILED, WORKER_POOL_REFRESH_FAILED } from '#lib/constants/worker.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests

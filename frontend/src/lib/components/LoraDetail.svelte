@@ -43,7 +43,7 @@
 		loraTrainingEpochLabel,
 		loraTrainingQueuePositionLabel,
 		loraTrainingRemainingLabel
-	} from '#lib/constants.ts';
+	} from '#lib/constants/lora.ts';
 
 	interface Props {
 		lora: UserLoraItem;

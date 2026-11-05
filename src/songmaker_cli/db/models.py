@@ -52,6 +52,7 @@ ALBUMS_ID: Final = "albums.id"
 SONGS_ID: Final = "songs.id"
 GENERATIONS_ID: Final = "generations.id"
 SET_NULL: Final = "SET NULL"
+SESSION_ID_LENGTH: Final = 43
 RESTRICT: Final = "RESTRICT"
 REFERENCE_RECORDINGS_ID: Final = "reference_recordings.id"
 DELETE_ORPHANS: Final = "all, delete-orphan"
@@ -404,6 +405,10 @@ class Job(Base):
     version_id: Mapped[str | None] = mapped_column(
         ForeignKey("versions.id", ondelete=SET_NULL), nullable=True, index=True,
     )
+    session_id: Mapped[str | None] = mapped_column(
+        String(SESSION_ID_LENGTH), ForeignKey("user_sessions.id", ondelete=SET_NULL),
+        nullable=True, index=True,
+    )
     worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     heartbeat_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     started_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
@@ -519,7 +524,9 @@ class ResourceEvent(Base):
 class UserSession(Base):
     __tablename__ = "user_sessions"
 
-    id: Mapped[str] = mapped_column(String(43), primary_key=True, default=_session_token)
+    id: Mapped[str] = mapped_column(
+        String(SESSION_ID_LENGTH), primary_key=True, default=_session_token,
+    )
     user_id: Mapped[str] = mapped_column(ForeignKey(USERS_ID), index=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(TZDateTime)

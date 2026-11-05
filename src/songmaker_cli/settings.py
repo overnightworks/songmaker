@@ -28,12 +28,8 @@ from acestep_engine.settings import EngineSettings
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     CODEX_CLI_MAX_CONCURRENT_PROCESSES,
-    COVER_CLI_DEADLINE_SECONDS,
-    COVER_JOB_BUDGET_SECONDS,
-    COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     COVER_MAX_CONCURRENT_RUNS,
     COVER_UPLOAD_BODY_MAX_BYTES,
-    DEFAULT_COVER_EXECUTOR,
     JSON_REQUEST_BODY_MAX_BYTES,
     LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     REIMPORT_BODY_MAX_BYTES,
@@ -41,7 +37,6 @@ from songmaker_cli.constants import (
     SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT,
     SESSION_IDLE_SECONDS_DEFAULT,
     TEXT_ACCURACY_TIMEOUT_SECONDS,
-    CoverExecutor,
     acestep_sse_read_timeout_seconds,
     generate_job_heartbeat_stale_threshold_seconds,
 )
@@ -241,17 +236,6 @@ class Settings(BaseSettings):
                 f"{LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS} < "
                 f"{self.lora_training_job_timeout})",
             )
-        if not (
-            self.cover_cli_deadline_seconds
-            < COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS
-            < self.cover_job_budget_seconds
-        ):
-            raise ValueError(
-                "Cover timeout order must be CLI deadline < reaper < job budget "
-                f"({self.cover_cli_deadline_seconds} < "
-                f"{COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS} < "
-                f"{self.cover_job_budget_seconds})",
-            )
         if self.cover_max_concurrent_runs > self.codex_cli_max_concurrent_processes:
             raise ValueError("Cover process cap cannot exceed the Codex process cap")
         return self
@@ -313,13 +297,10 @@ class Settings(BaseSettings):
     scoring_rate_limit_user: int = 100
     chat_rate_limit_user: int = 300
     cover_suggestions_daily_limit: int = Field(default=10, ge=1)
-    cover_cli_deadline_seconds: int = Field(default=COVER_CLI_DEADLINE_SECONDS, ge=1)
-    cover_job_budget_seconds: int = Field(default=COVER_JOB_BUDGET_SECONDS, ge=1)
     codex_cli_max_concurrent_processes: int = Field(
         default=CODEX_CLI_MAX_CONCURRENT_PROCESSES, ge=1,
     )
     cover_max_concurrent_runs: int = Field(default=COVER_MAX_CONCURRENT_RUNS, ge=1)
-    cover_executor: CoverExecutor = DEFAULT_COVER_EXECUTOR
     max_queue_depth: int = 100
     max_user_active_jobs: int = 10
     ip_rate_limit: int = 120
@@ -457,9 +438,8 @@ class Settings(BaseSettings):
     xai_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
 
-    # ── MCP server (songmaker tools exposed to Claude) ────────────────
-    # Only set in the subprocess spawned for a co-writer turn when the CLI
-    # launches the MCP server via --mcp-config. Identifies the acting
+    # ── MCP server (songmaker tools exposed over stdio) ───────────────
+    # Set only in the stdio MCP server's own process. Identifies the acting
     # user so tool calls can run the same ownership checks as HTTP.
     songmaker_mcp_user_id: str | None = None
 

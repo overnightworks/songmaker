@@ -5,7 +5,7 @@ import {
 	SHARE_BUTTON_COPY_FAILED_TOAST,
 	SHARE_BUTTON_FAILED_TOAST,
 	SHARE_BUTTON_UNSHARED_TOAST
-} from '#lib/constants.ts';
+} from '#lib/constants/share.ts';
 import { sharePagePath, type ShareKind } from '#lib/routes/addresses.ts';
 import { addToast } from './toast';
 

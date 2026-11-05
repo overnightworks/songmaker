@@ -7,7 +7,12 @@ import importlib
 import sqlalchemy as sa
 from alembic import command
 from sqlalchemy import inspect, text
-from support.migration_chain import column_names, is_on_the_single_chain, seeded_then_upgraded
+from support.migration_chain import (
+    column_names,
+    insert_bare_job,
+    is_on_the_single_chain,
+    seeded_then_upgraded,
+)
 from support.reference_link_migration import execute, seed_users
 
 MIGRATION_MODULE = "songmaker_cli.db.migrations.versions.e3a91c5d7f20_jobs_remember_their_version"
@@ -35,21 +40,7 @@ def _seed_job_at_the_previous_revision(engine) -> None:
         "INSERT INTO versions (id, song_id, version_number, lyrics, prompt, bpm, audio_duration, "
         "key_scale, created_at) VALUES ('version', 'song', 1, '', '', 0, 0, '', CURRENT_TIMESTAMP)",
     )
-    # The SQLite chain builds a narrower jobs table than PostgreSQL's, so the row names
-    # only the columns both have plus the timestamps where they exist.
-    present = column_names(engine, "jobs")
-    timestamps = [name for name in ("heartbeat_at", "started_at") if name in present]
-    names = ("id", "type", "status", "progress", *timestamps)
-    jobs = sa.table("jobs", *(sa.column(name) for name in names))
-    insert_job = sa.insert(jobs).values(
-        id="job",
-        type="generate",
-        status="queued",
-        progress=0.0,
-        **{name: sa.func.current_timestamp() for name in timestamps},
-    )
-    with engine.begin() as connection:
-        connection.execute(insert_job)
+    insert_bare_job(engine)
 
 
 def _job_count(engine) -> int:

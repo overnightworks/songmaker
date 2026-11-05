@@ -23,17 +23,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-DEFAULT_MODEL = "jinaai/jina-embeddings-v2-base-code"
-DEFAULT_MODEL_REVISION = "516f4baf13dec4ddddda8631e019b5737c8bc250"
-DEFAULT_MODEL_CODE_REVISION = "3baf9e3ac750e76e8edd3019170176884695fb94"
+DEFAULT_MODEL = "Alibaba-NLP/gte-modernbert-base"
+DEFAULT_MODEL_REVISION = "e7f32e3c00f91d699e8c43b53106206bcc72bb22"
 DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_MAX_SUMMARIES = 400
-DEFAULT_CODE_THRESHOLD = 0.90
+DEFAULT_CODE_THRESHOLD = 0.92
 DEFAULT_SUMMARY_THRESHOLD = 0.90
 DEFAULT_CACHE = Path(".cache/similar_functions")
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_SUMMARY_WORKERS = 4
 CPU_THREADS = 4
+EMBEDDING_DTYPE = "float32"
 MIN_BODY_LINES = 3
 CLAUDE_TIMEOUT_SECONDS = 120
 SUMMARY_MAX_TOKENS = 256
@@ -280,7 +280,7 @@ def collect_signals(
                 f"{len(missing)} missing summaries exceed --max-summaries {max_summaries}; "
                 "rerun with a higher --max-summaries N or --no-summaries"
             )
-    code = cached_vectors(texts, embedder, cache, f"code-v1:{model}")
+    code = cached_vectors(texts, embedder, cache, f"code-v2:{model}")
     if summarizer is None:
         return [FunctionSignals(function, code[function.key]) for function in functions]
 
@@ -301,6 +301,15 @@ def collect_signals(
         )
         for function in functions
     ]
+
+
+def embedding_identity(model: str) -> str:
+    """The model, the default model's pinned revision and the dtype.
+
+    The vector cache namespace is built from it.
+    """
+    revision = DEFAULT_MODEL_REVISION if model == DEFAULT_MODEL else "unpinned"
+    return f"{model}@{revision}:{EMBEDDING_DTYPE}"
 
 
 def cosine(left: Vector, right: Vector) -> float:
@@ -415,18 +424,8 @@ class LocalEmbedder:
                 self.model = SentenceTransformer(
                     self.model_name,
                     device="cpu",
-                    trust_remote_code=self.model_name == DEFAULT_MODEL,
                     revision=DEFAULT_MODEL_REVISION if self.model_name == DEFAULT_MODEL else None,
-                    model_kwargs=(
-                        {"code_revision": DEFAULT_MODEL_CODE_REVISION}
-                        if self.model_name == DEFAULT_MODEL
-                        else {}
-                    ),
-                    config_kwargs=(
-                        {"code_revision": DEFAULT_MODEL_CODE_REVISION}
-                        if self.model_name == DEFAULT_MODEL
-                        else {}
-                    ),
+                    model_kwargs={"dtype": getattr(torch, EMBEDDING_DTYPE)},
                 )
             except (ImportError, OSError, ValueError) as error:
                 raise AuditError(
@@ -565,7 +564,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             LocalEmbedder(args.model),
             None if args.no_summaries else ClaudeSummarizer(args.claude_model),
             Cache(args.cache_dir),
-            args.model,
+            embedding_identity(args.model),
             args.claude_model,
             args.summary_workers,
             args.max_summaries,

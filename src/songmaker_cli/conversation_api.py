@@ -29,12 +29,8 @@ from webauth.config import installed_web_auth_config
 from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.backend import (
-    TurnAnswer,
-    TurnCaller,
-    TurnProblem,
-    run_cowriter_turn,
-)
+from songmaker_cli.agent.backend import TurnAnswer, TurnCaller, TurnProblem, run_cowriter_turn
+from songmaker_cli.agent.tools import CallingTurn, bound_to_turn
 from songmaker_cli.api_helpers import (
     check_album_access,
     check_generation_access,
@@ -494,7 +490,7 @@ async def _run_chat_turn(
 
     db_factory: sessionmaker[Session] = caller.app.state.ctx.db
     try:
-        with db_factory() as session:
+        with bound_to_turn(CallingTurn(caller.session_id)), db_factory() as session:
             lifecycle = ChatTurnLifecycle(
                 session,
                 prepared.job_id,

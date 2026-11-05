@@ -19,11 +19,9 @@ from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     MODEL_DEFAULT_MODE,
     RECOVERY_LOCK_MUSIC_KEY,
-    CoverExecutor,
     JobFunction,
     JobType,
 )
-from songmaker_cli.cover_runner import run_cover_suggestion_job
 from songmaker_cli.jobs import (
     download_model_on_worker as _download_model_on_worker_impl,
 )
@@ -50,11 +48,6 @@ class MusicWorker(WorkerBase):
     )
     recovery_lock_key = RECOVERY_LOCK_MUSIC_KEY
     queue_name = ARQ_MUSIC_QUEUE_NAME
-
-    def __init__(self, settings: Settings | None = None) -> None:
-        super().__init__(settings)
-        if self._settings.cover_executor is CoverExecutor.MUSIC:
-            self.job_types = (JobType.COVER, *self.job_types)
 
     async def _reconcile_recovered_jobs(self, recovered: dict[str, int]) -> None:
         if not recovered.get(JobType.LORA_TRAINING):
@@ -93,20 +86,6 @@ class MusicWorker(WorkerBase):
             cover_params=typed_cover,
             target_model=requested_model,
             redis=ctx["redis"],
-        )
-
-    async def generate_cover_suggestions(self, _ctx, job_id: str) -> None:
-        if not self.check_job_still_valid(job_id):
-            return
-
-        import structlog
-        structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.COVER)
-
-        await run_cover_suggestion_job(
-            job_id,
-            db_factory=self.get_db_factory(),
-            audio_dir=self.audio_dir(),
-            settings=self._settings,
         )
 
     async def train_lora(
@@ -186,15 +165,6 @@ def _music_worker_functions(worker: MusicWorker, settings: Settings):
             timeout=settings.lora_training_job_timeout,
         ),
     ]
-    if settings.cover_executor is CoverExecutor.MUSIC:
-        functions.insert(
-            0,
-            func(
-                worker.generate_cover_suggestions,
-                name=JobFunction.COVER,
-                timeout=settings.cover_job_budget_seconds,
-            ),
-        )
     return functions
 
 

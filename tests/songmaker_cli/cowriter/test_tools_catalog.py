@@ -17,7 +17,7 @@ def test_the_co_writer_tools_are_the_mcp_server_tools_plus_the_coherence_verdict
 
 
 def test_executing_an_unknown_tool_is_a_refused_outcome_not_a_crash():
-    outcome = execute_cowriter_tool(None, None, "delete_everything", {})
+    outcome = execute_cowriter_tool(None, None, "delete_everything", {}, session_id=None)
 
     assert outcome.is_error is True
     assert outcome.content == "Unknown tool: delete_everything"
@@ -50,7 +50,7 @@ def test_arguments_that_break_the_declaration_are_refused_naming_the_field_befor
     tool_name, arguments, named_field,
 ):
     # No session: a handler that ran would crash, and a commit would too.
-    outcome = execute_cowriter_tool(None, None, tool_name, arguments)
+    outcome = execute_cowriter_tool(None, None, tool_name, arguments, session_id=None)
 
     assert outcome.is_error is True
     assert named_field in outcome.content

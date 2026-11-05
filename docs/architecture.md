@@ -1203,7 +1203,7 @@ project derives its profile from the library instead of guessing it.
 
 The provider layer never reads songmaker's settings. Its binaries, credential
 mirrors, mounted Codex resources, chat model, API keys, process caps, the
-secret-scrub list, and the MCP server a co-writer turn attaches all arrive as
+secret-scrub list and the stdio MCP server declaration all arrive as
 one frozen `ProviderRuntimeConfig`, installed by
 `songmaker_cli/agent_runtime.py::configure_agent_providers(settings)`. Exactly
 two places call it: `server.create_app` for the web container, and
@@ -1215,14 +1215,7 @@ quietly win. A process that never configures gets a loud
 `ProviderRuntimeNotConfiguredError` at its first provider call, never a guessed
 path.
 
-The MCP server a co-writer turn attaches is part of that configuration:
-`ProviderRuntimeConfig.mcp_server` carries an `McpServerSpec`, and songmaker
-declares its own in `songmaker_cli/cowriter/mcp_spec.py` — deliberately outside
-`mcp_server/`, whose package import pulls in the `mcp` extra the scoring worker
-does not install. `None` is a valid value: a deployment without an MCP server
-runs its co-writer turns on the tool-free command line and gate.
-
-The stdio server's twelve tools plus `save_coherence_verdict` are also served to the gateway turn as hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
+The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one; the web process still runs the mounted CLI for the boot tool-surface probe and for the catalog's login and `/model` checks, and `GET /health/details` shows the probe's result. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
 #### Provider constants: Go and Stay
 
@@ -1298,12 +1291,11 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `CODEX_CLI_MAX_CONCURRENT_PROCESSES` | Stay | Default of the `codex_cli_max_concurrent_processes` setting; the live cap arrives through the configuration. |
 | `CODEX_CODE_MODE_HOST_BINARY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
 | `CODEX_RESOURCES_DIRECTORY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
-| `COVER_CLI_DEADLINE_SECONDS` | Stay | Budget of a songmaker cover job, not of a provider call. |
+| `COVER_CLI_DEADLINE_SECONDS` | Stay | Constant, until the picture agent file owns the deadline. |
 | `COVER_DEFAULT_MODEL` | Stay | Cover art is songmaker's own task, with its own model choice. |
 | `COVER_DEFAULT_PROVIDER` | Stay | Cover art is songmaker's own task, with its own provider choice. |
 | `COVER_DEFAULT_ROUTE` | Stay | Cover art is songmaker's own task, with its own route choice. |
 | `COVER_IMAGE_TOOL_UNAVAILABLE_ERROR` | Stay | A text a musician reads. |
-| `COVER_JOB_BUDGET_SECONDS` | Stay | Budget of a songmaker cover job, not of a provider call. |
 | `COVER_MAX_CONCURRENT_RUNS` | Stay | Default of the `cover_max_concurrent_runs` setting; the live cap arrives through the configuration. |
 | `COVER_PROMPT_MAX_CHARS` | Stay | How long songmaker's cover prompt may grow. |
 | `COVER_PROMPT_SONG_FIELD_MAX_CHARS` | Stay | How much of a song a cover prompt may quote. |
@@ -1365,7 +1357,7 @@ User (id = Keycloak subject, username, role: admin|user)
   ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
-  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`)
+  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start)
   └── AuditLog (action, resource_type, resource_id, detail)
 
 Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,

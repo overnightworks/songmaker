@@ -25,6 +25,9 @@ import {
 	COWRITER_COMPOSER_PLACEHOLDER,
 	COWRITER_SEND_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
+	songEditorOpenLabel
+} from '../src/lib/constants';
+import {
 	MODELS_ADVANCED_LABEL,
 	MODELS_COLUMN_MODEL_LABEL,
 	MODELS_COLUMN_PROVIDER_LABEL,
@@ -39,9 +42,8 @@ import {
 	MODELS_TASK_COVER_LABEL,
 	MODELS_TASK_COWRITER_LABEL,
 	PROVIDER_ROUTE_API_LABEL,
-	PROVIDER_ROUTE_CLI_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants';
+	PROVIDER_ROUTE_CLI_LABEL
+} from '../src/lib/constants/models';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
@@ -66,7 +68,7 @@ const PHONE_VIEWPORT = { width: 375, height: 844 };
 const DESKTOP_HEIGHT = 900;
 
 // The named problems a co-writer turn ends with when the agent did not run it. This stack
-// configures no gateway, so the turn ends before any request with "unavailable". That it is a
+// sets a gateway it cannot reach, so a real turn ends with a named problem. That it is a
 // named problem, and never a silent switch to a local provider, is the ruled behaviour
 // (#820, line 8; #1476).
 const NAMED_TURN_FAILURES =

@@ -4,10 +4,10 @@
 		MODELS_ROUTE_KEY_NOT_SET_PHRASE,
 		MODELS_ROUTE_NOT_LOGGED_IN_PHRASE,
 		MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE,
+		modelsRouteNotAvailablePhrase,
 		PROVIDER_ROUTE_API_LABEL,
-		PROVIDER_ROUTE_CLI_LABEL,
-		modelsRouteNotAvailablePhrase
-	} from '#lib/constants.ts';
+		PROVIDER_ROUTE_CLI_LABEL
+	} from '#lib/constants/models.ts';
 
 	export type ModelsRouteKey = 'cli' | 'api';
 
@@ -98,7 +98,7 @@
 		MODELS_STATUS_READY_CLI_LABEL,
 		MODELS_STATUS_READY_KEY_LABEL,
 		modelsCannotDrawHint
-	} from '#lib/constants.ts';
+	} from '#lib/constants/models.ts';
 
 	interface Props {
 		task: string;
