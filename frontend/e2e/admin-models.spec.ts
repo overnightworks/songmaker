@@ -25,6 +25,9 @@ import {
 	COWRITER_COMPOSER_PLACEHOLDER,
 	COWRITER_SEND_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
+	songEditorOpenLabel
+} from '../src/lib/constants';
+import {
 	MODELS_ADVANCED_LABEL,
 	MODELS_COLUMN_MODEL_LABEL,
 	MODELS_COLUMN_PROVIDER_LABEL,
@@ -39,9 +42,8 @@ import {
 	MODELS_TASK_COVER_LABEL,
 	MODELS_TASK_COWRITER_LABEL,
 	PROVIDER_ROUTE_API_LABEL,
-	PROVIDER_ROUTE_CLI_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants';
+	PROVIDER_ROUTE_CLI_LABEL
+} from '../src/lib/constants/models';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 

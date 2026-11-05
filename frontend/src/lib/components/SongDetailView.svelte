@@ -94,12 +94,6 @@
 		EDITOR_UNSAVED_DISCARD_LABEL,
 		TAKES_ERROR,
 		TOAST_UNDO_LABEL,
-		VERSION_DELETE_CONFIRM_LABEL,
-		VERSION_DELETE_DRAFT_GOES,
-		VERSION_DELETE_LOAD_UNDO_GOES,
-		VERSION_DELETE_EMPTIES_EDITOR,
-		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
-		VERSION_REPLACE_DRAFT_TITLE,
 		versionDeleteTitle,
 		versionDeleteReplacedBy,
 		versionDeleteLoadedDraftGoes,
@@ -110,6 +104,14 @@
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
 	} from '#lib/constants.ts';
+	import {
+		VERSION_DELETE_CONFIRM_LABEL,
+		VERSION_DELETE_DRAFT_GOES,
+		VERSION_DELETE_LOAD_UNDO_GOES,
+		VERSION_DELETE_EMPTIES_EDITOR,
+		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
+		VERSION_REPLACE_DRAFT_TITLE
+	} from '#lib/constants/versions.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
@@ -147,8 +149,7 @@
 		song ? (albums.find((album) => album.id === song.album_id) ?? null) : null
 	);
 	const ownCoverUrl = $derived(song?.cover?.detail ?? null);
-	const inheritedCoverUrl = $derived(ownCoverUrl ? null : (parentAlbum?.cover?.detail ?? null));
-	const coverUrl = $derived(ownCoverUrl ?? inheritedCoverUrl);
+	const coverUrl = $derived(ownCoverUrl ?? parentAlbum?.cover?.detail ?? null);
 	const hasOwnCover = $derived(Boolean(song?.cover));
 	const coverAlt = $derived(
 		ownCoverUrl && song
@@ -174,7 +175,6 @@
 	const trackTotal = $derived(albumTracks.length);
 	const albumSongCount = $derived(parentAlbum?.song_count ?? trackTotal);
 	const albumCoverUrl = $derived(parentAlbum?.cover?.card ?? null);
-	const albumArtFill = $derived(parentAlbum ? usableAlbumPrimary(parentAlbum.colors) : null);
 	const albumInitials = $derived(titleInitials(parentAlbum?.title ?? song?.album_title ?? ''));
 	const collection = $derived($openCollection);
 	const breadcrumbItems = $derived(
@@ -708,7 +708,7 @@
 			albumTitle={song.album_title}
 			{albumSongCount}
 			{albumCoverUrl}
-			{albumArtFill}
+			albumArtFill={artFill}
 			{albumInitials}
 			previousDisabled={!neighbors.previous}
 			nextDisabled={!neighbors.next}
