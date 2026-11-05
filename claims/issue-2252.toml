@@ -1,7 +1,0 @@
-claim_id = "5cf8349c6d674bdbb256eaf01579caf8"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "f73c2076695f866ae1eed1e77103f0f052fe40d4"
-branch = "claude/issue-2252-backend-branch-coverage"
-scope = [".github/workflows/ci.yml", ".github/workflows/coveragerc-ci.ini", "docs/testing.md"]
-opened_commit = "cd5d35f2ae4240e9bed7c283cc7ccff0b6cca8af"
