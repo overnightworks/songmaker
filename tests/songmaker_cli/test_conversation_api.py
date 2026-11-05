@@ -1,4 +1,4 @@
-"""Tests for the Phase 3 co-writer endpoints + the MCP-enabled Claude call."""
+"""Tests for the Phase 3 co-writer endpoints."""
 
 from __future__ import annotations
 

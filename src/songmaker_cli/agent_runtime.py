@@ -3,9 +3,8 @@
 ``agent_providers`` refuses to run until a host installs its deployment facts
 (see ``agent_providers.config``). This module is where songmaker states them:
 the container's credential mirrors and mounted Codex resources, the Claude
-chat model, the API keys, the Codex process caps, and the MCP server a
-co-writer turn attaches. Every process that can reach a provider calls
-:func:`configure_agent_providers` at startup — the web application in
+chat model, the API keys, and the Codex process caps. Every process that can
+reach a provider calls :func:`configure_agent_providers` at startup — the web application in
 ``server.create_app`` and both arq workers in
 ``worker_base.WorkerBase.on_startup``, since neither worker runs a lifespan.
 """
