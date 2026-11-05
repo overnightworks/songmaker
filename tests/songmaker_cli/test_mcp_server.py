@@ -440,19 +440,18 @@ def test_co_writer_stores_the_stripped_title(db_session: Session, tool_name, tar
 @pytest.mark.parametrize(
     "title", ["   ", "x" * (Song.__table__.c.title.type.length + 1)], ids=["blank", "overlong"],
 )
-def test_co_writer_refuses_an_unstorable_title_before_any_write(
-    db_session, tool_name, target, title,
-):
+def test_co_writer_refuses_unstorable_title_before_any_write(db_session, tool_name, target, title):
     owner_id, _, album_id, song_id, _ = _seed(db_session)
     target_id = {"album_id": album_id, "song_id": song_id}[target]
     before = db_session.query(Song.id, Song.title, Song.slug).all()
+    tool = getattr(tools, f"tool_{tool_name}")
+    owner = _owner(db_session, owner_id)
     # The tool body runs outside the executor, whose rollback would hide an earlier write.
     with pytest.raises(tools.MCPToolError):
-        getattr(tools, f"tool_{tool_name}")(
-            db_session, _owner(db_session, owner_id), **{target: target_id}, title=title,
-        )
+        tool(db_session, owner, **{target: target_id}, title=title)
 
-    assert not db_session.new and not db_session.dirty
+    assert not db_session.new
+    assert not db_session.dirty
     assert db_session.query(Song.id, Song.title, Song.slug).all() == before
     assert db_session.query(AuditLog).count() == 0
 

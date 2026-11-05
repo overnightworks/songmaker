@@ -147,18 +147,16 @@ def api_get_song(
     return SongResponse.from_orm(song)
 
 
-def _stored_title_or_422(title: str) -> str:
-    try:
-        return stored_song_title(title)
-    except UnstorableSongTitleError as exc:
-        empty = isinstance(exc, EmptySongTitleError)
-        detail = "Title is required" if empty else "Title is too long"
-        raise HTTPException(422, detail) from exc
+def _title_refusal_detail(error: UnstorableSongTitleError) -> str:
+    return "Title is required" if isinstance(error, EmptySongTitleError) else "Title is too long"
 
 
 @router.post(
     "/songs",
-    responses={404: {"description": "Album or reference audio not found"}},
+    responses={
+        404: {"description": "Album or reference audio not found"},
+        422: {"description": "Song title is required or too long"},
+    },
 )
 def api_create_song(
     req: SongCreateRequest,
@@ -167,7 +165,10 @@ def api_create_song(
 ) -> SongResponse:
     album = get_album(session, req.album_id)
     check_album_access(album, user)
-    title = _stored_title_or_422(req.title)
+    try:
+        title = stored_song_title(req.title)
+    except UnstorableSongTitleError as exc:
+        raise HTTPException(422, _title_refusal_detail(exc)) from exc
     slug = unique_song_slug(session, req.album_id, title)
     _attach_reference(session, user.id, req.reference_recording_id)
     song = create_song(
@@ -222,7 +223,7 @@ def api_update_song(
     "/songs/{song_id}/title",
     responses={
         404: {"description": SONG_NOT_FOUND_DETAIL},
-        422: {"description": "Song title is required"},
+        422: {"description": "Song title is required or too long"},
     },
 )
 def api_rename_song(
@@ -231,7 +232,10 @@ def api_rename_song(
     session: Session = Depends(get_db_session),
 ) -> SongResponse:
     song = check_song_access(session, song_id, user)
-    title = _stored_title_or_422(req.title)
+    try:
+        title = stored_song_title(req.title)
+    except UnstorableSongTitleError as exc:
+        raise HTTPException(422, _title_refusal_detail(exc)) from exc
     slug = unique_song_slug(
         session, song.album_id, title, exclude_song_id=song_id,
     )
