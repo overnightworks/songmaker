@@ -27,7 +27,7 @@
 "frontend/e2e/seed.ts" = 1180
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
-"frontend/src/lib/api/types.ts" = 1133
+"frontend/src/lib/api/types.ts" = 1135
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 975
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -265,6 +265,7 @@ main = [["scripts/seed_e2e_filler_albums.py", "main"]]
 
 [clones."src/songmaker_cli/album_api.py"]
 api_cleanup_album = [["src/songmaker_cli/song_api.py", "api_cleanup_song"]]
+api_delete_album_cover = [["src/songmaker_cli/song_api.py", "api_delete_song_cover"]]
 api_get_album = [["src/songmaker_cli/sharing_api.py", "get_shared_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_playlist_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_queue_stream_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_song_audio"]]
 api_get_album_cover = [["src/songmaker_cli/playlist_api.py", "api_get_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
 api_upload_album_cover = [["src/songmaker_cli/playlist_api.py", "api_upload_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_upload_song_cover"]]
@@ -328,8 +329,6 @@ api_unshare_generation = [["src/songmaker_cli/playlist_api.py", "api_delete_play
 
 [clones."src/songmaker_cli/playlist_api.py"]
 api_delete_playlist = [["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]
-api_delete_playlist_cover = [["src/songmaker_cli/song_api.py", "api_delete_song_cover"]]
-api_get_playlist = [["src/songmaker_cli/song_api.py", "api_get_song"]]
 api_get_playlist_cover = [["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
 api_share_playlist = [["src/songmaker_cli/song_api.py", "api_share_song"]]
 api_unshare_playlist = [["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]

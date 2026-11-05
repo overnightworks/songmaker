@@ -30,7 +30,7 @@ from songmaker_cli.constants import (
     PAGE_DEFAULT_LIMIT,
     PAGE_MAX_LIMIT,
 )
-from songmaker_cli.db.models import Album
+from songmaker_cli.db.models import Album, Song
 from songmaker_cli.db.queries.activity import list_place_listens, list_worked_songs
 from songmaker_cli.db.queries.albums import (
     album_ids_with_playable_take,
@@ -38,6 +38,7 @@ from songmaker_cli.db.queries.albums import (
     count_songs_by_album,
 )
 from songmaker_cli.db.queries.library import cursor_from_hit, search_library
+from songmaker_cli.db.queries.songs import song_ids_with_pick
 from songmaker_cli.library_cursor import (
     LibraryCursorInvalidError,
     LibraryCursorMismatchError,
@@ -131,6 +132,9 @@ def api_library_search(
         next_cursor=next_cursor,
         picked_counts=picked_counts,
         playable_album_ids=album_ids_with_playable_take(session, album_ids),
+        picked_song_ids=song_ids_with_pick(
+            session, [item.id for item in page.items if isinstance(item, Song)],
+        ),
         song_counts=song_counts,
     )
 

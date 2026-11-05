@@ -34,6 +34,7 @@ export function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		prompt: '',
 		version_count: 1,
 		generation_count: 1,
+		has_pick: false,
 		is_shared: false,
 		created_at: '2026-01-01T00:00:00+00:00',
 		generations: [],
@@ -155,6 +156,7 @@ export function makeSongSummary(overrides: Partial<SongSummaryResponse> = {}): S
 		prompt: '',
 		version_count: 1,
 		generation_count: 1,
+		has_pick: false,
 		is_shared: false,
 		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides

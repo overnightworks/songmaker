@@ -358,7 +358,7 @@ def test_generation_version_lyrics_stay_on_the_producing_version(
     gen = get_generation(seeded_session, "g1")
     song = get_song(seeded_session, "s1")
     assert GenerationResponse.from_orm(gen).version_lyrics == "verse one"
-    assert SongResponse.from_orm(song).lyrics == "latest draft"
+    assert SongResponse.from_orm(song, has_pick=False).lyrics == "latest draft"
 
 
 def test_generation_missing_version_lyrics_is_null(
@@ -406,7 +406,7 @@ def test_generation_empty_version_lyrics_is_null(
 
 def test_song_to_dict(seeded_session: Session) -> None:
     song = get_song(seeded_session, "s1")
-    d = SongResponse.from_orm(song).model_dump()
+    d = SongResponse.from_orm(song, has_pick=False).model_dump()
     assert d["title"] == "Song One"
     assert d["generation_count"] == 2
     assert d["best_rating"] == 82.5
@@ -1568,7 +1568,7 @@ def test_song_to_dict_includes_generation_params(seeded_session: Session) -> Non
     update_song(seeded_session, "s1", generation_params=params)
     seeded_session.commit()
     song = get_song(seeded_session, "s1")
-    d = SongResponse.from_orm(song).model_dump()
+    d = SongResponse.from_orm(song, has_pick=False).model_dump()
     assert d["generation_params"] == params
 
 
