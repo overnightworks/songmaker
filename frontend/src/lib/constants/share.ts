@@ -21,3 +21,15 @@ export function shareNowPlayingLine(songTitle: string, position: number, total: 
 export function sharePlaylistSubtitle(count: number): string {
 	return `Playlist${SHARE_SEPARATOR}${count} song${count === 1 ? '' : 's'}`;
 }
+
+// The share succeeded server-side even when the follow-up clipboard write
+// throws (no permission, no focus, etc.) — that toast must never read as a
+// share failure, since the link exists and only the copy step didn't.
+export const SHARE_BUTTON_COPY_FAILED_TOAST =
+	'Shared — copy the link manually, clipboard write failed';
+export const SHARE_BUTTON_COPIED_TOAST = 'Link copied to clipboard';
+export const SHARE_BUTTON_UNSHARED_TOAST = 'Sharing disabled';
+export const SHARE_BUTTON_FAILED_TOAST = 'Share failed';
+
+export const SHARE_LINK_COPIED_TOAST = 'Link copied';
+export const SHARE_LINK_COPY_FAILED_TOAST = 'Copy failed';

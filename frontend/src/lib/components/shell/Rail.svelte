@@ -7,7 +7,8 @@
 	import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
 	import { standingPathname } from '#lib/routes/standingAddress.ts';
 	import { followPlainClick, openHome } from '#lib/stores/navigation.ts';
-	import { APP_NAME, HOME_PAGE_LABEL, RAIL_NAV_LABEL } from '#lib/constants.ts';
+	import { APP_NAME, RAIL_NAV_LABEL } from '#lib/constants.ts';
+	import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 	import { kineticScroll } from '#lib/actions/kineticScroll.ts';
 	import Icon from '../Icon.svelte';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';

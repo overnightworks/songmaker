@@ -21,7 +21,8 @@
 // (resolveLegacySongQueryAddress in stores/libraryContext.test.ts).
 
 import { expect, test, type Page } from '@playwright/test';
-import { HOME_PAGE_LABEL, RESOURCE_SYNC_ERROR, songEditorOpenLabel } from '../src/lib/constants';
+import { RESOURCE_SYNC_ERROR, songEditorOpenLabel } from '../src/lib/constants';
+import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
 import { FlowGuard, ONLY_IN_SHELL, workspace, HOME_PATH } from './helpers';
 import { readSeededLibrary } from './seed';
 

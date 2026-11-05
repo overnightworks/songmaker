@@ -1,7 +1,10 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShareResult } from '#lib/api/types.ts';
-import { SHARE_BUTTON_COPY_FAILED_TOAST, SHARE_BUTTON_UNSHARED_TOAST } from '#lib/constants.ts';
+import {
+	SHARE_BUTTON_COPY_FAILED_TOAST,
+	SHARE_BUTTON_UNSHARED_TOAST
+} from '#lib/constants/share.ts';
 
 const addToast = vi.hoisted(() => vi.fn());
 vi.mock('#lib/stores/toast.ts', () => ({ addToast }));
