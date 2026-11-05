@@ -33,7 +33,11 @@ from songmaker_cli.db.queries.generations import (
 from songmaker_cli.db.queries.jobs import has_active_job_for_version
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
-from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
+from songmaker_cli.db.queries.sharing import (
+    disable_sharing,
+    enable_sharing,
+    playable_take_filter,
+)
 from songmaker_cli.db.soft_delete import include_deleted
 from songmaker_cli.invariants import expect_present
 from songmaker_cli.settings import get_settings
@@ -159,7 +163,7 @@ def song_ids_with_pick(session: Session, song_ids: Sequence[str]) -> set[str]:
     """Ids among ``song_ids`` that have a picked, playable take.
 
     One query for the whole page, like count_generations_by_song(). The
-    filter is is_playable_take() (sharing.py) written as SQL.
+    playable part is sharing.playable_take_filter().
     """
     if not song_ids:
         return set()
@@ -168,8 +172,7 @@ def song_ids_with_pick(session: Session, song_ids: Sequence[str]) -> set[str]:
         .filter(
             Generation.song_id.in_(song_ids),
             Generation.is_picked.is_(True),
-            Generation.is_archived.is_(False),
-            Generation.mp3_path != "",
+            playable_take_filter(),
         )
         .distinct()
         .all()

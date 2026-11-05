@@ -114,12 +114,15 @@ def test_list_songs_generation_count_counts_n_takes(generation_count_client) -> 
     assert by_id["many-takes"]["generation_count"] == 5
 
 
-@pytest.mark.parametrize(("song_id", "expected"), [
+PICK_BY_SONG = pytest.mark.parametrize(("song_id", "expected"), [
     ("picked-take", True),
     ("many-takes", False),
     ("no-takes", False),
     ("archived-pick", False),
 ])
+
+
+@PICK_BY_SONG
 def test_list_songs_reports_whether_the_song_has_a_pick(
     generation_count_client, song_id: str, expected: bool,
 ) -> None:
@@ -129,10 +132,12 @@ def test_list_songs_reports_whether_the_song_has_a_pick(
     assert by_id[song_id]["has_pick"] is expected
 
 
-def test_song_detail_reports_the_same_pick_as_the_list(generation_count_client) -> None:
+@PICK_BY_SONG
+def test_song_detail_reports_the_same_pick_as_the_list(
+    generation_count_client, song_id: str, expected: bool,
+) -> None:
     client, _ = generation_count_client
-    assert client.get("/api/songs/picked-take").json()["has_pick"] is True
-    assert client.get("/api/songs/many-takes").json()["has_pick"] is False
+    assert client.get(f"/api/songs/{song_id}").json()["has_pick"] is expected
 
 
 def test_list_songs_generation_count_counts_archived_take(generation_count_client) -> None:

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from '@playwright/test';
-import { RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
+import { EDITOR_LYRICS_LABEL, RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
 import { archiveOwnedAlbum } from './seed';
 import { ONLY_IN_SHELL, sameOriginHeaders } from './helpers';
 
@@ -28,7 +28,7 @@ async function createSongWithTake(
 	albumId: string,
 	title: string,
 	options: { picked: boolean }
-): Promise<void> {
+): Promise<string> {
 	const song = await postJson<CreatedResource>(page, '/api/songs', {
 		title,
 		lyrics: 'A pick the rail must show.',
@@ -42,9 +42,10 @@ async function createSongWithTake(
 		}
 	});
 	expect(imported.ok(), `Take import failed: ${await imported.text()}`).toBeTruthy();
-	if (!options.picked) return;
+	if (!options.picked) return song.id;
 	const take = (await imported.json()) as CreatedResource;
 	await postJson(page, `/api/generations/${take.id}/pick`, {});
+	return song.id;
 }
 
 test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album is open, and after the song opens`, async ({
@@ -58,7 +59,7 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 	const pickedTitle = `Picked ${marker}`;
 	const unpickedTitle = `Unpicked ${marker}`;
 	try {
-		await createSongWithTake(page, album.id, pickedTitle, { picked: true });
+		const pickedId = await createSongWithTake(page, album.id, pickedTitle, { picked: true });
 		await createSongWithTake(page, album.id, unpickedTitle, { picked: false });
 
 		await page.goto(`/album/${album.id}`);
@@ -72,7 +73,17 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 		await expect(unpickedRow).toContainText('1 take');
 		await expect(unpickedRow).not.toContainText('· pick');
 
+		const detailLoaded = page.waitForResponse(
+			(response) =>
+				response.request().method() === 'GET' &&
+				new URL(response.url()).pathname === `/api/songs/${pickedId}` &&
+				response.status() === 200
+		);
 		await pickedRow.click();
+		await detailLoaded;
+		await expect(
+			page.getByRole('textbox', { name: new RegExp(`^${EDITOR_LYRICS_LABEL}`) })
+		).toBeVisible();
 		await expect(page).toHaveURL(/\/album\/[^/]+\/[^/]+/);
 		await expect(pickedRow).toContainText('1 take · pick');
 		await expect(unpickedRow).not.toContainText('· pick');
