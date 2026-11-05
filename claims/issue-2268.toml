@@ -1,0 +1,8 @@
+claim_id = "45c4d5f5c25e4550a88e52e9cf02e367"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "4bba8298057269182f03ac73b758a4158701aaeb"
+branch = "claude/issue-2268-home-share-voice-constants"
+scope = ["frontend/e2e", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/routes/pageBack.ts", "frontend/src/lib/stores/shareToggle.svelte.ts"]
+opened_commit = "55949201f31969fb7ebffdf8d6f09348205b228e"
+whole_reason = "One pure move: the three families leave the catch-all together, and every caller re-points in the same change, or the build breaks."
