@@ -700,9 +700,8 @@ def _register_protected_routes(router: APIRouter, routes: _WorkerRoutes) -> None
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     deps: WorkerDeps = app.state.deps
-    control_plane = (
-        deps.registry_client.control_plane_url if deps.registry_client is not None else "(disabled)"
-    )
+    registry = deps.registry_client
+    control_plane = registry.control_plane_url if registry is not None else "(disabled)"
     log.info(
         "acestep-worker %s starting; awaiting control plane at %s",
         deps.worker_id,
@@ -715,16 +714,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await deps.registry_client.register(deps.registration)
         deps.registered = True
 
-    deps.registration_task = asyncio.create_task(_register_and_flag())
+    deps.registration_task = registration_task = asyncio.create_task(_register_and_flag())
     await deps.heartbeat.clear_orphaned_queue()
     deps.heartbeat.start()
+    sweep_task = asyncio.create_task(deps.task_store.sweep_terminal_tasks())
     try:
         yield
     finally:
         try:
-            if deps.registration_task is not None and not deps.registration_task.done():
-                deps.registration_task.cancel()
-                await asyncio.wait([deps.registration_task])
+            sweep_task.cancel()
+            registration_task.cancel()
+            await asyncio.wait([sweep_task, registration_task])
         finally:
             await deps.heartbeat.shutdown()
             await deps.cache.evict_all()
