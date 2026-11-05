@@ -33,7 +33,7 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   mit Menü samt Rechtliches-Zeile; (j) überschreibt dort die Settings-Zeilen
   von (e) und (h), das Konto-Menü von (h) und (i) und die Konto-Zeile der
   Desktop-Leiste.
-- `admin-models.html` — der Admin-Tab „Agents" (#317). Fassung 1 wurde am
+- `admin-models.html` — der Admin-Tab „Models" (#317). Fassung 1 wurde am
   01.09.2026 freigegeben; Fassung 2 wurde am 06.09.2026 freigegeben: eine
   Aufgaben-Tabelle für Co-Writer, Cover und Scoring, mit Gründen direkt an
   Auswahl und Status. Die Scoring-CLI/API-Zeile (10.09.2026, #844) ist am
@@ -113,6 +113,19 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   `album-cover.html` („Suggest closed", Punkt 8; `album-browsing.html` zeigt
   C2–C9 als den Zustand, der mit Bildläufen zurückkommt, und I1 liest
   „upload") und `now-playing.html` („Coherence not available").
+- Cover und Modelle über LiteLLM (#2142, Bilder für C1 in #2055 und SM-AM in
+  #1476), noch nicht gesegnet. Besitzer: `album-cover.html` (Abschnitt
+  „Suggest open", Zustände j bis n am Desktop und bei 375 px: offen, busy,
+  not enabled, unavailable, log in again, in den Formen und Farben der vier
+  Probleme des Co-Writers; Album-Zugriff, Tageslimit und Laufen bleiben wie
+  heute) und `admin-models.html` (Abschnitt „Neu · #2142 — ein Modell je
+  Agent", Zustände M1 bis M5 und M1′ bis M5′: eine Zeile je Agent mit dem
+  wirksamen Modell und der Liste des Gateways, Speichern in der Zeile, eine
+  zurückgezogene Wahl rot mit angebotenem Default, nur lesend, solange die
+  Liste lädt oder fehlt). Mit der Segnung überholt: „Suggest closed" in
+  `album-cover.html`, die Hinweise „Returns with image runs" an C2–C9 in
+  `album-browsing.html` (C2–C9 gelten wieder) und die Co-Writer- und
+  Cover-Zeilen von (w) bis (y′) in `admin-models.html`.
 - KI-Kennzeichnung nach Art. 50 der KI-Verordnung (#1906), gesegnet vom
   Operator am 27.10.2026 (P1 bis P5). Wortlaut gerult (E3, Operator 19.10.2026):
   „KI-generiert“ am Song oder Album und „Du schreibst mit einer KI“ im
