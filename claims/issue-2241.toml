@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "5ca4e7c97262f13006f0ce287148396e1e372060"
 branch = "claude/issue-2241-cowriter-writes-audit"
-scope = ["src/songmaker_cli/album_api.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/mcp_server/tools.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/test_mcp_server.py"]
+scope = ["src/songmaker_cli/album_api.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/mcp_server/tools.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/test_cover_suggestions.py", "tests/songmaker_cli/test_mcp_server.py"]
 opened_commit = "5f3e3dd97279a0c5a593045df6360b46bf95f030"
 whole_reason = "One write rule (title and audit) spans the tool bodies, the shared query owner, the web route that loses its copy, and their one test module."
