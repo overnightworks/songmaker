@@ -1215,7 +1215,7 @@ quietly win. A process that never configures gets a loud
 `ProviderRuntimeNotConfiguredError` at its first provider call, never a guessed
 path.
 
-The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No songmaker path calls a Claude CLI; the web process still probes the mounted binary's tool surface at start and `GET /health/details` shows the result. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
+The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one; the web process still runs the mounted CLI for the boot tool-surface probe and for the catalog's login and `/model` checks, and `GET /health/details` shows the probe's result. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
 #### Provider constants: Go and Stay
 
