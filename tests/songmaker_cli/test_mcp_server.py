@@ -18,14 +18,17 @@ from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.constants import (
     GET_SONG_ONLY_FOR_OTHER_SONGS,
+    AuditAction,
     JobStatus,
     JobType,
+    ResourceType,
     SongWorkKind,
 )
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
+    AuditLog,
     Generation,
     Job,
     Score,
@@ -420,6 +423,19 @@ def test_rename_song_dedupes_slug_against_sibling_in_same_album(db_session: Sess
     assert stored.slug == "rival-2"
 
 
+def test_co_writer_rename_stores_the_stripped_title(db_session: Session):
+    owner_id, _, _, song_id, _ = _seed(db_session)
+
+    outcome = execute_cowriter_tool(
+        db_session, _owner(db_session, owner_id), "rename_song",
+        {"song_id": song_id, "title": "  Night Drive "}, session_id=None,
+    )
+
+    assert not outcome.is_error
+    stored = db_session.query(Song).filter_by(id=song_id).one()
+    assert (stored.title, stored.slug) == ("Night Drive", "night-drive")
+
+
 def test_rename_song_rejects_empty(db_session: Session):
     owner_id, _, _, song_id, _ = _seed(db_session)
     owner = _owner(db_session, owner_id)
@@ -547,6 +563,46 @@ def test_co_writer_writes_that_change_nothing_record_no_work(
     tool(db_session, _owner(db_session, owner_id), song_id=song_id, **arguments)
 
     assert db_session.query(UserSongWork).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "action", "resource_type", "resource"),
+    [
+        ("create_song", {"album_id": "album1", "title": "Fresh"},
+         AuditAction.CREATE, ResourceType.SONG, None),
+        ("update_song_lyrics", {"song_id": "song1", "lyrics": "new words"},
+         AuditAction.UPDATE, ResourceType.SONG, "song1"),
+        ("update_song_prompt", {"song_id": "song1", "prompt": "jazz"},
+         AuditAction.UPDATE, ResourceType.SONG, "song1"),
+        ("update_song_style", {"song_id": "song1", "bpm": 90},
+         AuditAction.UPDATE, ResourceType.SONG, "song1"),
+        ("rename_song", {"song_id": "song1", "title": "New Title"},
+         AuditAction.UPDATE, ResourceType.SONG, "song1"),
+        ("suggest_album_cover", {"album_id": "album1"},
+         AuditAction.COVER, ResourceType.ALBUM, "album1"),
+        ("save_coherence_verdict",
+         {"generation_id": "gen1", "score": 7, "summary": "Holds together."},
+         AuditAction.SCORE, ResourceType.GENERATION, "gen1"),
+    ],
+    ids=["create", "lyrics", "prompt", "style", "rename", "cover", "verdict"],
+)
+def test_co_writer_writes_leave_their_audit_row(
+    db_session: Session, tool_name, arguments, action, resource_type, resource,
+):
+    owner = _seed_take(db_session, None)
+    db_session.get(Generation, "gen1").whisper_text = "sung words"
+    db_session.commit()
+
+    outcome = execute_cowriter_tool(db_session, owner, tool_name, arguments, session_id=None)
+
+    assert not outcome.is_error
+    db_session.expire_all()
+    entry = db_session.query(AuditLog).one()
+    assert (entry.user_id, entry.action, entry.resource_type) == (
+        owner.id, action, resource_type,
+    )
+    if resource is not None:
+        assert entry.resource_id == resource
 
 
 @pytest.mark.parametrize("role", ["admin", "user"])

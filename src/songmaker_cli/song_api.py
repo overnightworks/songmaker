@@ -61,6 +61,7 @@ from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.playlists import best_playable_generation, playlist_holds_song
 from songmaker_cli.db.queries.reference_recordings import get_owned_reference_recording
 from songmaker_cli.db.queries.songs import (
+    EmptySongTitleError,
     cleanup_song,
     count_generations_by_song,
     count_songs,
@@ -74,6 +75,7 @@ from songmaker_cli.db.queries.songs import (
     restore_song,
     set_song_cover_key,
     soft_delete_song,
+    stored_song_title,
     update_song,
 )
 from songmaker_cli.db.queries.versions import VersionInUseError, delete_version
@@ -218,8 +220,9 @@ def api_rename_song(
     session: Session = Depends(get_db_session),
 ) -> SongResponse:
     song = check_song_access(session, song_id, user)
-    title = req.title.strip()
-    if not title:
+    try:
+        title = stored_song_title(req.title)
+    except EmptySongTitleError:
         raise HTTPException(422, "Title is required")
     slug = unique_song_slug(
         session, song.album_id, title, exclude_song_id=song_id,

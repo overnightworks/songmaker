@@ -28,16 +28,20 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     unique_song_slug,
 )
+from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.cover_suggestions import (
     CoverSuggestionRequestError,
     request_cover_suggestions,
 )
 from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.albums import get_album, list_albums
+from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.generations import save_coherence_verdict
 from songmaker_cli.db.queries.songs import (
+    EmptySongTitleError,
     count_songs,
     list_songs,
+    stored_song_title,
 )
 from songmaker_cli.db.queries.songs import (
     create_song as db_create_song,
@@ -185,6 +189,7 @@ def tool_save_coherence_verdict(
     if gen.whisper_text == "":
         raise MCPToolError("this take has no sung words to judge")
     save_coherence_verdict(session, gen.id, score, summary)
+    _audit(session, user, AuditAction.SCORE, ResourceType.GENERATION, gen.id)
     session.expire(gen, ["scores"])
     return GenerationDetail.from_orm(gen)
 
@@ -209,6 +214,7 @@ def tool_create_song(
         session, title=title, album_id=album_id, lyrics=lyrics, prompt=prompt,
         slug=slug, created_by=user.id,
     )
+    _audit(session, user, AuditAction.CREATE, ResourceType.SONG, song.id)
     refreshed = _reload_song(session, song.id)
     return WriteResult(
         song_id=song.id,
@@ -227,6 +233,7 @@ def tool_update_song_lyrics(
     version = db_update_song(
         session, song_id=song_id, lyrics=lyrics, force_new_version=True, edited_by=user.id,
     )
+    _audit(session, user, AuditAction.UPDATE, ResourceType.SONG, song_id)
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
@@ -245,6 +252,7 @@ def tool_update_song_prompt(
     version = db_update_song(
         session, song_id=song_id, prompt=prompt, force_new_version=True, edited_by=user.id,
     )
+    _audit(session, user, AuditAction.UPDATE, ResourceType.SONG, song_id)
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
@@ -273,6 +281,7 @@ def tool_update_song_style(
         session, song_id=song_id, bpm=bpm, key_scale=key_scale,
         audio_duration=audio_duration, force_new_version=True, edited_by=user.id,
     )
+    _audit(session, user, AuditAction.UPDATE, ResourceType.SONG, song_id)
     refreshed = _reload_song(session, song_id)
     parts = []
     if bpm is not None:
@@ -291,8 +300,10 @@ def tool_update_song_style(
 def tool_rename_song(
     session: Session, user: AuthenticatedUser, song_id: str, title: str,
 ) -> WriteResult:
-    if not title.strip():
-        raise MCPToolError("title cannot be empty")
+    try:
+        title = stored_song_title(title)
+    except EmptySongTitleError as exc:
+        raise MCPToolError("title cannot be empty") from exc
     try:
         song = check_song_access(session, song_id, user, require_owner=True)
     except HTTPException as exc:
@@ -302,6 +313,7 @@ def tool_rename_song(
         session, song_id=song_id, title=title, slug=slug, force_new_version=True,
         edited_by=user.id,
     )
+    _audit(session, user, AuditAction.UPDATE, ResourceType.SONG, song_id)
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
@@ -325,11 +337,20 @@ def tool_suggest_album_cover(
         )
     except CoverSuggestionRequestError as exc:
         raise MCPToolError(str(exc)) from exc
+    _audit(session, user, AuditAction.COVER, ResourceType.ALBUM, album_id)
     return CoverSuggestionRequestResult(
         job_id=job.id,
         status=job.status,
         message="Cover suggestion queued.",
     )
+
+
+def _audit(
+    session: Session, user: AuthenticatedUser, action: AuditAction,
+    resource_type: ResourceType, resource_id: str,
+) -> None:
+    """Record the audit row of a write tool in the tool's own transaction."""
+    record_audit(session, user.id, action, resource_type, resource_id)
 
 
 def _reload_song(session: Session, song_id: str) -> Song:

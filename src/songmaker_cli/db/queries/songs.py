@@ -526,6 +526,18 @@ def restore_song(session: Session, song_id: str) -> Song:
     return song
 
 
+class EmptySongTitleError(ValueError):
+    """A song title that is empty once stripped."""
+
+
+def stored_song_title(title: str) -> str:
+    """The title a song is stored under: what the editor and the co-writer both write."""
+    stripped = title.strip()
+    if not stripped:
+        raise EmptySongTitleError
+    return stripped
+
+
 def rename_song(
     session: Session,
     song_id: str,
