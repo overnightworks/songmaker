@@ -1,7 +1,0 @@
-claim_id = "f85dc8bbb3d8497cab911ac55c5a4386"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "908c829cbd12b127fcaf3f46321c523f87e95032"
-branch = "claude/issue-2297-lib-import-codemod-leaves"
-scope = ["scripts/rewrite_lib_imports.py"]
-opened_commit = "2d2836ccdf119e4a7c26621372b7e1b980163aee"
