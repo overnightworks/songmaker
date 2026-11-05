@@ -502,6 +502,7 @@ def test_pairs_skip_only_enclosing_functions_in_same_file(functions, name, path,
 def test_embedding_loader_pins_default_weights_and_runs_no_remote_code(monkeypatch, model):
     dtype = object()
     monkeypatch.setattr(audit, "EMBEDDING_DTYPE", "configured_dtype")
+
     def load(name, **kwargs):
         assert name == model
         is_default = model == audit.DEFAULT_MODEL
