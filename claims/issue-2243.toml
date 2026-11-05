@@ -1,8 +1,0 @@
-claim_id = "1d866efdfebb44959a3b5ac32ffe7ff1"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "94327d8c808ff2d59831eb24d7c29fdfa735523f"
-branch = "claude/issue-2243-song-create-title-rule"
-scope = ["quality/baseline.toml", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/mcp_server/tools.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_mcp_server.py", "tests/songmaker_cli/test_song_title_api.py"]
-opened_commit = "b8c63d735d6dc1a2dd7481f33abe7918ca978bcd"
-whole_reason = "One title rule spans its decider, both create surfaces and their two test modules."
