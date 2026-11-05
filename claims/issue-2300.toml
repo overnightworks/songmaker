@@ -1,0 +1,8 @@
+claim_id = "9db0aa7538734e1383463c12c91de839"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "60958f42dbf3b4dd13932a6dbba9ee9771dd394f"
+branch = "claude/issue-2300-test-database-owner"
+scope = [".github/workflows/ci.yml", "AGENTS.md", "docs/testing.md", "quality/baseline.toml", "scripts/test_helper_ratchet.txt", "scripts/test_postgresql.sh", "tests"]
+opened_commit = "9c396c6f8ba53594b8798ad1932bef9e505bd72d"
+whole_reason = "The owner, its runner, the consumers it replaces and the CI job that runs them are one resource contract; a half leaves tests on a database nobody owns."
