@@ -81,12 +81,16 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 				response.status() === 200
 		);
 		await pickedRow.click();
-		await (await detailLoaded).finished();
+		const detail = await detailLoaded;
+		await detail.finished();
 		// Album list items carry no takes, so a take row exists only once the detail response is
 		// merged into the song list, in the same update as its has_pick.
 		await expect(
 			page.getByRole('button', { name: new RegExp(`^${NOW_PLAYING_UNPICK_LABEL} take`) })
 		).toBeVisible();
+		// A later album-list refresh keeps the merged takes but takes has_pick from its summary, so the
+		// detail response itself must carry the pick for the rail check below to prove it.
+		expect(((await detail.json()) as { has_pick: boolean }).has_pick).toBe(true);
 		await expect(
 			page.getByRole('textbox', { name: new RegExp(`^${EDITOR_LYRICS_LABEL}`) })
 		).toBeVisible();
