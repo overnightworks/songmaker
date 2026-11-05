@@ -3,5 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "4c652811dfd121ff9c52f16aff1dfc939a73d268"
 branch = "claude/issue-2274-public-no-subscription"
-scope = ["docker/.env.docker.example", "docs/architecture.md", "docs/design/album-cover.html"]
+scope = ["docker/.env.docker.example", "docs/architecture.md", "docs/design/album-cover.html", "tests/scripts/test_mirror_agent_cli_credentials.py"]
 opened_commit = "c01e6c35dcb215b601602c823ea0742f0bbd1270"
+whole_reason = "Every public line naming an agent subscription goes in one pass, so the tree is clean at one landing."
