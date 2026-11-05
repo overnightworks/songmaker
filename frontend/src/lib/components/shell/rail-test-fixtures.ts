@@ -138,6 +138,7 @@ export function buildSong(overrides: Partial<SongItem> = {}): SongItem {
 		generation_params: null,
 		version_count: 1,
 		generation_count: 1,
+		has_pick: false,
 		best_scores: null,
 		best_rating: null,
 		generations: [],

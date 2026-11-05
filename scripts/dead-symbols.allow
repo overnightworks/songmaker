@@ -41,6 +41,7 @@ songmaker_cli/conversation_api.py:api_new_conversation # HTTP dispatcher: router
 songmaker_cli/conversation_api.py:api_put_album_memory # HTTP dispatcher: router.put('/memory/albums/{album_id}')
 songmaker_cli/conversation_api.py:api_put_song_memory # HTTP dispatcher: router.put('/memory/songs/{song_id}')
 songmaker_cli/conversation_api.py:api_put_user_memory # HTTP dispatcher: router.put('/memory/user')
+songmaker_cli/db/engine.py:resolve_database_url # Operational callers scripts/seed_e2e_*.py, scripts/archive_e2e_albums.py and the other scripts outside src
 songmaker_cli/db/engine.py:init_test_db # Explicit test database constructor; used by tests/support/web_app.py and database tests
 songmaker_cli/db/queries/auth.py:get_user_by_username # Operational callers scripts/seed_e2e_*.py and scripts/archive_e2e_albums.py outside src
 songmaker_cli/generation_api.py:api_active_generation # HTTP dispatcher: router.get('/songs/{song_id}/active-generation')
@@ -98,6 +99,7 @@ songmaker_cli/playlist_api.py:api_share_playlist # HTTP dispatcher: router.post(
 songmaker_cli/playlist_api.py:api_unshare_playlist # HTTP dispatcher: router.delete('/playlists/{playlist_id}/share', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_update_playlist # HTTP dispatcher: router.put('/playlists/{playlist_id}', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_upload_playlist_cover # HTTP dispatcher: router.put('/playlists/{playlist_id}/cover', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/redis_client.py:RedisConnectionSettings # Operational caller scripts/arq_healthcheck.py outside src
 songmaker_cli/reference_api.py:api_delete_reference # HTTP dispatcher: router.delete('/references/{reference_id}', status_code=204, responses={404: {'description': 'Reference audio not found'}, 409: {'description': 'Reference audio is in use'}, 500: {'description': 'Reference audio storage could not be checked'}})
 songmaker_cli/reference_api.py:api_reference_audio # HTTP dispatcher: router.get('/references/{reference_id}/audio', response_class=FileResponse)
 songmaker_cli/reference_api.py:api_list_references # HTTP dispatcher: router.get('/references')

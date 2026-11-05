@@ -1,8 +1,8 @@
 x-service-logging: &service-logging
-  driver: json-file
+  driver: journald
   options:
-    max-size: "10m"
-    max-file: "5"
+    tag: "{{.Name}}"
+    labels: "com.docker.compose.service"
 
 # Test-only override for the Voices browser flow.  It deliberately adds the
 # fake worker here instead of changing docker-compose.ci.yml, so library E2E
@@ -44,9 +44,11 @@ services:
         condition: service_healthy
       songmaker-web:
         condition: service_healthy
+    secrets:
+      - songmaker_internal_token
     environment:
       REDIS_URL: redis://redis:6379/0
-      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:?set SONGMAKER_INTERNAL_TOKEN}"
+      SONGMAKER_INTERNAL_TOKEN_FILE: /run/secrets/songmaker_internal_token
       CONTROL_PLANE_URL: http://songmaker-web:8080
       AUDIO_DIR: /app/data/audio
       WORKER_ID: voices-e2e-training-worker

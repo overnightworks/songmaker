@@ -18,7 +18,6 @@ SCRATCH_PROJECT_COMPOSE_ARGS = (
 )
 SCRATCH_REQUIRED = (
     "GRAFANA_PASSWORD=scratch-grafana-password-not-a-secret\n"
-    "SONGMAKER_MONITORING_TOKEN=scratch-monitoring-token-not-a-secret\n"
     "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
 )
 WEB_IMAGE_SERVICES = ("migrate", "songmaker-web")

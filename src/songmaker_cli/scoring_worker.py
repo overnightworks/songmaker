@@ -19,8 +19,9 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.jobs import run_scoring_job
+from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import get_settings
-from songmaker_cli.worker_base import WorkerBase, build_redis_settings
+from songmaker_cli.worker_base import WorkerBase
 
 log = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ class ScoringWorkerSettings:
     on_shutdown = _scoring_worker.on_shutdown
     job_serializer = staticmethod(serialize_arq)
     job_deserializer = staticmethod(deserialize_arq)
-    redis_settings = build_redis_settings(_settings)
+    redis_settings = build_arq_redis_settings(_settings.redis_url)
     queue_name = ScoringWorker.queue_name
     max_jobs = _settings.scoring_max_jobs
     job_timeout = _settings.arq_job_timeout

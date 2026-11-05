@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from webauth.oidc import OidcRefusal
 from webauth.ports import AuthenticatedUser
 from webauth.sign_in_routes import (
+    LogoutPageText,
     RefusalPage,
     SignInRefusal,
     install_sign_in_routes,
@@ -84,7 +85,9 @@ def install_sign_in(app: FastAPI) -> None:
         refused=_refuse_sign_in,
         keeps_id_token=True,
         max_sessions=settings.max_concurrent_sessions_per_user,
-        logout_button_label=lambda _request: LOGOUT_BUTTON_LABEL,
+        logout_page_text=lambda _request: LogoutPageText(
+            language="en", button_label=LOGOUT_BUTTON_LABEL
+        ),
         backchannel_dependencies=[Depends(_require_backchannel_host)],
     )
 

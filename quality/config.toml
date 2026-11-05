@@ -8,6 +8,18 @@ mandatory_jobs = [
 ]
 
 [[gate.loosened]]
+what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 1133 -> 1135'
+item = "#2264"
+date = 2026-11-05
+reason = "the operator allowed the generated types file to grow once for the rail's pick field (card on #2264, 05.11.2026); it lands through his emergency-merge"
+
+[[gate.loosened]]
+what = 'clone baseline adds src/songmaker_cli/album_api.py api_delete_album_cover <-> src/songmaker_cli/song_api.py api_delete_song_cover'
+item = "#2264"
+date = 2026-11-05
+reason = "the operator allowed it in chat on 05.11.2026 („A“), because the album, song and playlist cover-delete endpoints were already a baselined clone family and the pick change only re-paired song's delete from playlist's to album's, while two stale pairs leave"
+
+[[gate.loosened]]
 what = 'mandatory job "Frontend (Node 22)" removed'
 item = "#2120"
 date = 2026-11-02
