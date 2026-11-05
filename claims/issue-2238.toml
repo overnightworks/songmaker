@@ -1,8 +1,0 @@
-claim_id = "6b0ff0f1b60d4087a027ae9afb55ebdc"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "407527cd8f214a5c39f9881f6488b8b662061638"
-branch = "claude/issue-2238-pg-contract-marker"
-scope = [".github/workflows/ci.yml", "docs/testing.md", "quality/baseline.toml", "tests/conftest.py", "tests/songmaker_cli/db/test_migrations_coherence_verdict.py", "tests/songmaker_cli/db/test_migrations_reference_recordings.py", "tests/songmaker_cli/test_cover_runner_accounting.py", "tests/songmaker_cli/test_db_postgresql.py", "tests/songmaker_cli/test_db_postgresql_job_session.py", "tests/songmaker_cli/test_reference_audio_quota.py", "tests/support/reference_link_migration.py", "tests/test_postgresql_selection.py"]
-opened_commit = "be13821e48bde6d7030dc5481e6ae0641825efe5"
-whole_reason = "The marker, the skip helper and the job's selection are one contract; landing one without the others leaves the hand list or a second selector."
