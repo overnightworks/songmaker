@@ -1,12 +1,10 @@
 import type {
 	AvailableModel,
 	Capabilities,
-	CoverSettingsResponse,
 	CowriterSettings,
 	DefaultConfigResponse,
 	PresetItem,
 	PresetUpdateRequest,
-	ProviderStatus,
 	RateLimitsResponse,
 	ReleaseInfo,
 	ThemeSettings,
@@ -72,26 +70,6 @@ export async function updateCowriterSettings(tailTokenBudget: number): Promise<C
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ tail_token_budget: tailTokenBudget })
 	});
-}
-
-export async function fetchCoverSettings(): Promise<CoverSettingsResponse> {
-	return apiFetch<CoverSettingsResponse>('/api/settings/cover');
-}
-
-export async function updateCoverSettings(
-	provider: string,
-	route: 'cli' | 'api',
-	model: string
-): Promise<CoverSettingsResponse> {
-	return apiFetch<CoverSettingsResponse>('/api/settings/cover', {
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ provider, route, model })
-	});
-}
-
-export async function fetchProviderStatus(): Promise<ProviderStatus[]> {
-	return apiFetch<ProviderStatus[]>('/api/settings/providers');
 }
 
 export async function fetchBuiltinDefaults(): Promise<Record<string, VersionGenerationParams>> {

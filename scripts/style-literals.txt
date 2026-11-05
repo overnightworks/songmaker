@@ -21,7 +21,6 @@ lib/components/MemoryEditor.svelte 9
 lib/components/MentionDropdown.svelte 3
 lib/components/ModelRegistryPanel.svelte 12
 lib/components/ModelsServiceRow.svelte 6
-lib/components/ModelsTaskRow.svelte 18
 lib/components/NewPlaceCard.svelte 3
 lib/components/NewPlaceMenu.svelte 2
 lib/components/NowPlayingCuration.svelte 2

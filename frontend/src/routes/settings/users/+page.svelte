@@ -4,7 +4,6 @@
 	import { derived } from 'svelte/store';
 	import {
 		fetchAdminVoices,
-		ApiError,
 		fetchRateLimits,
 		updateRateLimits
 	} from '#lib/api/client.ts';
@@ -19,35 +18,18 @@
 		fetchAllModels,
 		toggleModel as toggleModelApi,
 		fetchCowriterSettings,
-		updateCowriterSettings,
-		fetchCoverSettings,
-		updateCoverSettings,
-		fetchProviderStatus
+		updateCowriterSettings
 	} from '#lib/api/client.ts';
 	import type { AvailableModel } from '#lib/api/client.ts';
-	import type {
-		CoverSettingsResponse,
-		CowriterSettings,
-		ProviderRouteStatusResponse,
-		ProviderStatus,
-		SafeRouteReason
-	} from '#lib/api/types.ts';
+	import type { CowriterSettings } from '#lib/api/types.ts';
 	import type { VersionGenerationParams } from '#lib/api/types.ts';
 	import ParamControls from '#lib/components/ParamControls.svelte';
 	import { ADMIN_TABS, parseAdminTab, type AdminTab } from '#lib/adminTabs.ts';
 	import WorkerPoolPanel from '#lib/components/WorkerPoolPanel.svelte';
 	import ModelRegistryPanel from '#lib/components/ModelRegistryPanel.svelte';
 	import TakeRetentionPanel from '#lib/components/TakeRetentionPanel.svelte';
-	import ModelsTaskRow, { routeReasonSentence } from '#lib/components/ModelsTaskRow.svelte';
 	import ModelsCowriterRow from '#lib/components/ModelsCowriterRow.svelte';
-	import type {
-		ModelsRouteKey,
-		ModelsRouteReason,
-		ModelsSaveOutcome,
-		ModelsTaskProvider,
-		ModelsTaskRoute,
-		ModelsTaskSelection
-	} from '#lib/components/ModelsTaskRow.svelte';
+	import ModelsServiceRow from '#lib/components/ModelsServiceRow.svelte';
 	import {
 		ADMIN_TABS_LABEL,
 		ADMIN_VOICES_EMPTY,
@@ -69,9 +51,9 @@
 		MODELS_RETRY_LABEL,
 		MODELS_SAVED_LABEL,
 		MODELS_SAVE_FAILED_FALLBACK,
+		MODELS_ROUTE_GATEWAY_LABEL,
+		MODELS_SET_BY_AGENT_FILE_LABEL,
 		MODELS_TASK_COVER_LABEL,
-		MODELS_TASK_COWRITER_LABEL,
-		PROVIDER_STATUS_UNAVAILABLE_DETAIL,
 		modelsRowStatus
 	} from '#lib/constants/models.ts';
 	import {
@@ -80,7 +62,6 @@
 		ensureCompactUiStyles
 	} from '#lib/styles/compact-ui.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
-	import { providerDisplayName } from '#lib/utils/cowriter-ui.ts';
 
 	let voices = $state<AdminUserLoraItem[]>([]);
 	let loadingVoices = $state(false);
@@ -137,14 +118,11 @@
 		max_user_active_jobs: 'Max active jobs'
 	};
 
-	let providerStatuses = $state<ProviderStatus[]>([]);
-
 	// The co-writer runs through the gateway; its row offers no choice until the Models row replaces it.
 	let cowriterSettings = $state<CowriterSettings | null>(null);
 	let cowriterBudget = $state(0);
 	let cowriterBudgetSaved = $state(false);
 	let cowriterBudgetFailure = $state<string | null>(null);
-	let coverSettings = $state<CoverSettingsResponse | null>(null);
 
 	let registryModes = $state<string[]>([]);
 
@@ -162,9 +140,7 @@
 	const ADMIN_LOADS = [
 		'voices',
 		'rateLimits',
-		'providerStatus',
 		'cowriter',
-		'cover',
 		'genDefaults'
 	] as const;
 	type AdminLoad = (typeof ADMIN_LOADS)[number];
@@ -172,23 +148,18 @@
 	const LOAD_FAILURE_FALLBACKS: Record<AdminLoad, string> = {
 		voices: VOICES_LOAD_FAILED,
 		rateLimits: 'Failed to load rate limits',
-		providerStatus: PROVIDER_STATUS_UNAVAILABLE_DETAIL,
 		cowriter: 'Failed to load co-writer settings',
-		cover: 'Failed to load cover settings',
 		genDefaults: 'Failed to load generation defaults'
 	};
 	const PAGE_WIDE_LOADS = {
 		rateLimits: ['ratelimits'],
-		cowriter: ['agents'],
-		cover: ['agents']
+		cowriter: ['agents']
 	} satisfies Partial<Record<AdminLoad, AdminTab[]>>;
 
 	const loadReloads: Record<AdminLoad, ReturnType<typeof reloadWhileUnreachable>> = {
 		voices: reloadWhileUnreachable(() => void loadVoices()),
 		rateLimits: reloadWhileUnreachable(() => void loadGlobalLimits()),
-		providerStatus: reloadWhileUnreachable(() => void loadProviderStatuses()),
 		cowriter: reloadWhileUnreachable(() => void loadCowriterSettings()),
-		cover: reloadWhileUnreachable(() => void loadCoverSettings()),
 		genDefaults: reloadWhileUnreachable(() => void loadGenDefaults())
 	};
 	const loadFailures = derived(
@@ -274,30 +245,8 @@
 		}
 	}
 
-	function providerStatusFor(provider: string): ProviderStatus | undefined {
-		return providerStatuses.find((status) => status.provider === provider);
-	}
-
-	function isNonEmptyString(value: unknown): value is string {
-		return typeof value === 'string' && value.length > 0;
-	}
-
-	const FALLBACK_ROUTE: ModelsRouteKey = 'cli';
-
 	function loadAgentsTab(): void {
-		void loadProviderStatuses();
 		void loadCowriterSettings();
-		void loadCoverSettings();
-	}
-
-	async function loadProviderStatuses(): Promise<void> {
-		try {
-			providerStatuses = await fetchProviderStatus();
-			settleLoad('providerStatus');
-		} catch (e) {
-			providerStatuses = [];
-			failLoad('providerStatus', e);
-		}
 	}
 
 	async function loadCowriterSettings(): Promise<void> {
@@ -310,117 +259,6 @@
 		}
 	}
 
-	async function loadCoverSettings(): Promise<void> {
-		try {
-			coverSettings = await fetchCoverSettings();
-			settleLoad('cover');
-		} catch (e) {
-			failLoad('cover', e);
-		}
-	}
-
-	const providerStatusError = $derived($loadFailures.providerStatus ?? '');
-	const providerStatusFailure = $derived<SafeRouteReason | null>(
-		providerStatusError === '' ? null : { code: 'route_failed', message: providerStatusError }
-	);
-
-	function catalogueOf(
-		provider: string,
-		route: ModelsRouteKey
-	): ProviderRouteStatusResponse | undefined {
-		return providerStatusFor(provider)?.cowriter_routes?.[route];
-	}
-
-	function taskRoute(
-		provider: string,
-		route: ModelsRouteKey,
-		ready: boolean,
-		reason: SafeRouteReason | null,
-		models?: string[]
-	): ModelsTaskRoute {
-		if (providerStatusFailure) {
-			return {
-				ready: false,
-				reason: providerStatusFailure,
-				models: [],
-				modelsReason: providerStatusError
-			};
-		}
-		const catalogue = catalogueOf(provider, route);
-		return {
-			ready,
-			reason,
-			models: models ?? catalogue?.models ?? [],
-			modelsReason: catalogue?.catalogue_failure?.message ?? null
-		};
-	}
-
-	function coverRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
-		const readiness = providerStatusFor(provider)?.cover_routes?.[route];
-		const canDraw = readiness?.state === 'ready';
-		return taskRoute(
-			provider,
-			route,
-			canDraw,
-			readiness && readiness.state !== 'unverified' ? (readiness.reason ?? null) : null,
-			canDraw ? undefined : []
-		);
-	}
-
-	function taskProviders(
-		routeOf: (provider: string, route: ModelsRouteKey) => ModelsTaskRoute,
-		names: string[]
-	): ModelsTaskProvider[] {
-		return names.map((provider) => ({
-			provider,
-			label: providerDisplayName(provider),
-			routes: { cli: routeOf(provider, 'cli'), api: routeOf(provider, 'api') }
-		}));
-	}
-
-	const coverProviders = $derived(
-		taskProviders(coverRoute, coverSettings?.allowed_providers ?? [])
-	);
-	const coverSelection = $derived<ModelsTaskSelection>({
-		provider: coverSettings?.provider ?? '',
-		route: coverSettings?.route ?? FALLBACK_ROUTE,
-		model: coverSettings?.model ?? ''
-	});
-
-	function isRouteReason(detail: unknown): detail is ModelsRouteReason {
-		if (typeof detail !== 'object' || detail === null) return false;
-		const candidate = detail as Partial<ModelsRouteReason>;
-		return isNonEmptyString(candidate.code) && isNonEmptyString(candidate.message);
-	}
-
-	/**
-	 * Every rejected save reaches the row as a sentence: a route reason through
-	 * the row's own phrasing, a plain string verbatim. The generic API message
-	 * never stands in for a reason.
-	 */
-	function saveFailureReason(e: unknown, task: string, route: ModelsRouteKey): string {
-		if (e instanceof ApiError) {
-			if (isRouteReason(e.responseDetail)) {
-				return routeReasonSentence(e.responseDetail, route, task);
-			}
-			return isNonEmptyString(e.responseDetail) ? e.responseDetail : MODELS_SAVE_FAILED_FALLBACK;
-		}
-		return describeFailure(e, MODELS_SAVE_FAILED_FALLBACK);
-	}
-
-	async function saveCover(selection: ModelsTaskSelection): Promise<ModelsSaveOutcome> {
-		try {
-			coverSettings = await updateCoverSettings(
-				selection.provider,
-				selection.route,
-				selection.model
-			);
-			return { ok: true };
-		} catch (e) {
-			return { ok: false, reason: saveFailureReason(e, MODELS_TASK_COVER_LABEL, selection.route) };
-		}
-	}
-
 	async function saveCowriterBudget(budget: number): Promise<void> {
 		cowriterBudgetSaved = false;
 		cowriterBudgetFailure = null;
@@ -430,7 +268,7 @@
 			cowriterBudget = cowriterSettings.tail_token_budget;
 			cowriterBudgetSaved = true;
 		} catch (e) {
-			cowriterBudgetFailure = saveFailureReason(e, MODELS_TASK_COWRITER_LABEL, FALLBACK_ROUTE);
+			cowriterBudgetFailure = describeFailure(e, MODELS_SAVE_FAILED_FALLBACK);
 		}
 	}
 
@@ -663,16 +501,12 @@
 					{:else}
 						<p class="hint">{modelsRowStatus($loadFailures.cowriter)}</p>
 					{/if}
-					{#if coverSettings}
-						<ModelsTaskRow
-							task={MODELS_TASK_COVER_LABEL}
-							providers={coverProviders}
-							selection={coverSelection}
-							save={saveCover}
-						/>
-					{:else}
-						<p class="hint">{modelsRowStatus($loadFailures.cover)}</p>
-					{/if}
+					<ModelsServiceRow
+						task={MODELS_TASK_COVER_LABEL}
+						provider={MODELS_SET_BY_AGENT_FILE_LABEL}
+						route={MODELS_ROUTE_GATEWAY_LABEL}
+						model={MODELS_SET_BY_AGENT_FILE_LABEL}
+					/>
 				</div>
 			</section>
 		{/if}
@@ -727,7 +561,7 @@
 {/snippet}
 
 <style>
-	/* The head lives here and the rows live in ModelsTaskRow, so the column
+	/* The head lives here and the rows live in ModelsServiceRow, so the column
 	   geometry is published once as tokens rather than kept in step by hand.
 	   Every track may shrink below its width: how much room the table has is
 	   decided by the card it sits in, not by the viewport — a docked panel or

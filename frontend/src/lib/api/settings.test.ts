@@ -10,7 +10,6 @@ import {
 	fetchDefaultConfig,
 	fetchTheme,
 	toggleModel,
-	updateCoverSettings,
 	updateCowriterSettings,
 	updateDefaultConfig,
 	updateGenerationDefaults,
@@ -39,13 +38,6 @@ describe('settings API contract', () => {
 			'/api/settings/generation-defaults',
 			'PUT',
 			{ acestep: { inference_steps: 7 } }
-		],
-		[
-			'cover settings',
-			() => updateCoverSettings('codex', 'cli', 'gpt-5-codex'),
-			'/api/settings/cover',
-			'PUT',
-			{ provider: 'codex', route: 'cli', model: 'gpt-5-codex' }
 		],
 		[
 			'rate limits',
