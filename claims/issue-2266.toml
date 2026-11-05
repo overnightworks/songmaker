@@ -1,0 +1,7 @@
+claim_id = "8bfbf9466f7b45cfb3927a98fdaeb3c7"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "179feaa1ad060d70f083855ee4a14e1d4f1d1b2f"
+branch = "claude/issue-2266-vitest-branches"
+scope = ["docs/testing.md", "frontend/vitest.config.ts"]
+opened_commit = "4a6106cf800590840f15f112a14f288eca1c44cb"
