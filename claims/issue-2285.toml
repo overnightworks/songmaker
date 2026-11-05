@@ -1,8 +1,0 @@
-claim_id = "3e97b9a15f1b458f9f744fe8d4e4bef0"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "ad9acddeb45662143ecca4bda9382a1e7bb8c48d"
-branch = "claude/issue-2285-compose-secret-files"
-scope = [".github/workflows/ci.yml", ".github/workflows/e2e.yml", "AGENTS.md", "docker-compose.yml", "docker/.env.docker.example", "docker/docker-compose.e2e-voices.yml", "docs", "frontend/e2e/README.md", "scripts/voices_e2e_probe.sh", "tests"]
-opened_commit = "ab920bc10e7f6eee69ff05f07b44d9c6505e9444"
-whole_reason = "Compose, every runner that starts the stack, the tests that pin compose's secret variables and the docs that describe them switch together, or a stack starts without its secrets."
