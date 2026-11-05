@@ -1203,7 +1203,7 @@ project derives its profile from the library instead of guessing it.
 
 The provider layer never reads songmaker's settings. Its binaries, credential
 mirrors, mounted Codex resources, chat model, API keys, process caps, the
-secret-scrub list, and the MCP server a co-writer turn attaches all arrive as
+secret-scrub list and the stdio MCP server declaration all arrive as
 one frozen `ProviderRuntimeConfig`, installed by
 `songmaker_cli/agent_runtime.py::configure_agent_providers(settings)`. Exactly
 two places call it: `server.create_app` for the web container, and
@@ -1215,14 +1215,7 @@ quietly win. A process that never configures gets a loud
 `ProviderRuntimeNotConfiguredError` at its first provider call, never a guessed
 path.
 
-The MCP server a co-writer turn attaches is part of that configuration:
-`ProviderRuntimeConfig.mcp_server` carries an `McpServerSpec`, and songmaker
-declares its own in `songmaker_cli/cowriter/mcp_spec.py` — deliberately outside
-`mcp_server/`, whose package import pulls in the `mcp` extra the scoring worker
-does not install. `None` is a valid value: a deployment without an MCP server
-runs its co-writer turns on the tool-free command line and gate.
-
-The stdio server's twelve tools plus `save_coherence_verdict` are also served to the gateway turn as hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
+The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one; the web process still runs the mounted CLI for the boot tool-surface probe and for the catalog's login and `/model` checks, and `GET /health/details` shows the probe's result. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
 #### Provider constants: Go and Stay
 

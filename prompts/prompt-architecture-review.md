@@ -88,7 +88,7 @@ Read the entire codebase. Then tear it apart across these dimensions:
 
 ### 11. Trust Boundaries
 - **ACE-Step subprocess**: Runs model inference code as the same OS user. If model weights or ACE-Step code are compromised, what's the blast radius? Does the subprocess inherit more privileges than it needs?
-- **Claude CLI**: Runs as the server's OS user. The session offers only our MCP tools and is verified against the mounted binary before each turn — what could a future Claude Code version still do?
+- **Claude CLI boot probe**: No co-writer turn runs on a CLI; only the boot probe at web start explicitly attaches songmaker's MCP tools (the catalog's `/model` check runs with the CLI's defaults and sends no song content), and the CLI runs as the server's OS user. It is built with `--tools ""`, `--setting-sources ""`, `--strict-mcp-config`, `--disable-slash-commands` and only `mcp__songmaker__*` allowed, and `verify_cli_tool_surface()` reports any other announced surface as drift. The parser ignores fields beyond tools, slash commands and MCP status, and the probe can cost API usage — what could a future Claude Code version still do?
 - **Frontend build artifacts**: Are the SvelteKit build outputs served directly? Could a compromised build inject scripts?
 
 ## Output Format
