@@ -1,8 +1,7 @@
-"""Pydantic models for MCP tool inputs and outputs.
+"""Structured results of the co-writer's hand tools.
 
-Returning structured Pydantic models (rather than free-form dicts) means
-the FastMCP layer auto-derives a JSON schema for each tool's output,
-which the Claude client uses to interpret tool results.
+Each tool in ``tools.py`` returns one of these models, so the co-writer
+receives typed, serialisable data instead of free-form dicts.
 """
 from __future__ import annotations
 
