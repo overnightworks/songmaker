@@ -530,10 +530,16 @@ class EmptySongTitleError(ValueError):
     """A song title that is empty once stripped."""
 
 
+class OverlongSongTitleError(ValueError):
+    """A song title longer than the title column holds."""
+
+
 def stored_song_title(title: str) -> str:
     stripped = title.strip()
     if not stripped:
         raise EmptySongTitleError
+    if len(stripped) > Song.__table__.c.title.type.length:
+        raise OverlongSongTitleError
     return stripped
 
 

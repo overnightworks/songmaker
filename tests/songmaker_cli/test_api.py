@@ -244,6 +244,25 @@ def test_create_song(client: TestClient) -> None:
     assert (resp.status_code, body["title"], body["audio_duration"]) == (200, "Lightning", 0)
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [("POST", "/api/songs", {"album_id": "rock"}), ("PUT", "/api/songs/s1/title", {})],
+    ids=["create", "rename"],
+)
+@pytest.mark.parametrize(
+    ("title", "status"),
+    [("  Night Drive ", 200), ("", 422), ("   ", 422), ("x" * 201, 422)],
+    ids=["padded", "empty", "blank", "too-long"],
+)
+def test_song_write_stores_the_stripped_title_or_refuses(
+    client: TestClient, method, path, body, title, status,
+) -> None:
+    resp = client.request(method, path, json={**body, "title": title})
+
+    stored = [song["title"] for song in client.get("/api/songs").json()["items"]]
+    assert (resp.status_code, title.strip() in stored) == (status, status == 200)
+
+
 def test_update_song(client: TestClient) -> None:
     resp = client.put("/api/songs/s1", json={"lyrics": "kaboom"})
     assert resp.status_code == 200
@@ -277,27 +296,6 @@ def test_rename_song(client: TestClient) -> None:
     after = client.get("/api/songs/s1")
     assert after.json()["title"] == "Storm"
     assert after.json()["version_count"] == 2
-
-
-def test_rename_song_strips_whitespace(client: TestClient) -> None:
-    resp = client.put("/api/songs/s1/title", json={"title": "  Storm  "})
-    assert resp.status_code == 200
-    assert resp.json()["title"] == "Storm"
-
-
-def test_rename_song_rejects_empty(client: TestClient) -> None:
-    resp = client.put("/api/songs/s1/title", json={"title": ""})
-    assert resp.status_code == 422
-
-
-def test_rename_song_rejects_whitespace_only(client: TestClient) -> None:
-    resp = client.put("/api/songs/s1/title", json={"title": "   "})
-    assert resp.status_code == 422
-
-
-def test_rename_song_rejects_too_long(client: TestClient) -> None:
-    resp = client.put("/api/songs/s1/title", json={"title": "x" * 201})
-    assert resp.status_code == 422
 
 
 def test_rename_song_not_found(client: TestClient) -> None:
@@ -3497,29 +3495,14 @@ def test_stream_job_heartbeat_survives_the_lease_and_deadline_changes(
 # ── Coverage gap tests ───────────────────────────────────────────────
 
 
-def test_create_song_gen_param_out_of_range(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    "generation_params",
+    [{"inference_steps": 500}, {"infer_method": "euler"}, {"thinking": "not-a-bool"}],
+    ids=["out-of-range", "invalid-infer-method", "invalid-thinking"],
+)
+def test_create_song_rejects_invalid_gen_params(client: TestClient, generation_params) -> None:
     resp = client.post("/api/songs", json={
-        "title": "Bad Params",
-        "album_id": "rock",
-        "generation_params": {"inference_steps": 500},
-    })
-    assert resp.status_code == 422
-
-
-def test_create_song_gen_param_invalid_infer_method(client: TestClient) -> None:
-    resp = client.post("/api/songs", json={
-        "title": "Bad Infer",
-        "album_id": "rock",
-        "generation_params": {"infer_method": "euler"},
-    })
-    assert resp.status_code == 422
-
-
-def test_create_song_gen_param_invalid_thinking(client: TestClient) -> None:
-    resp = client.post("/api/songs", json={
-        "title": "Bad Think",
-        "album_id": "rock",
-        "generation_params": {"thinking": "not-a-bool"},
+        "title": "Bad Params", "album_id": "rock", "generation_params": generation_params,
     })
     assert resp.status_code == 422
 

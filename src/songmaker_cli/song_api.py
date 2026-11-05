@@ -157,10 +157,14 @@ def api_create_song(
 ) -> SongResponse:
     album = get_album(session, req.album_id)
     check_album_access(album, user)
-    slug = unique_song_slug(session, req.album_id, req.title)
+    try:
+        title = stored_song_title(req.title)
+    except EmptySongTitleError:
+        raise HTTPException(422, "Title is required")
+    slug = unique_song_slug(session, req.album_id, title)
     _attach_reference(session, user.id, req.reference_recording_id)
     song = create_song(
-        session, title=req.title, album_id=req.album_id,
+        session, title=title, album_id=req.album_id,
         lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
         audio_duration=req.audio_duration, key_scale=req.key_scale,
         vocal_language=req.vocal_language,
