@@ -480,18 +480,25 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 
 
+def _open_take_file() -> tuple[Path, BinaryIO]:
+    fd, name = tempfile.mkstemp(prefix="songmaker_take_", suffix=".wav")
+    return Path(name), os.fdopen(fd, "wb")
+
+
 async def _fetch_generation_result(
     worker: _PickedWorker, task_id: str, options: DispatchOptions,
 ) -> Path:
     """Copy the worker's take into a file of music's own, then free it on the worker.
 
     One attempt: any failure leaves no file behind and surfaces as ``WorkerTaskFailed``.
+    The file work runs in a thread so a large take never blocks the event loop.
     """
-    fd, name = tempfile.mkstemp(prefix="songmaker_take_", suffix=".wav")
-    path = Path(name)
+    path, take = await asyncio.to_thread(_open_take_file)
     try:
-        with os.fdopen(fd, "wb") as take:
+        try:
             await _stream_generation_result(worker, task_id, take, options)
+        finally:
+            await asyncio.to_thread(take.close)
         await _release_generation_result(worker, task_id, options)
     except BaseException:
         path.unlink(missing_ok=True)
@@ -502,6 +509,8 @@ async def _fetch_generation_result(
 async def _stream_generation_result(
     worker: _PickedWorker, task_id: str, take: BinaryIO, options: DispatchOptions,
 ) -> None:
+    # A content-encoded body could expand past the limit inside the decoder, before any
+    # byte is counted: music asks for identity, refuses anything else and counts raw bytes.
     limit = get_settings().generation_result_max_bytes
     timeout = httpx.Timeout(
         options.result_fetch_timeout_seconds, connect=options.sse_connect_timeout_seconds,
@@ -510,18 +519,21 @@ async def _stream_generation_result(
         async with (
             httpx.AsyncClient(timeout=timeout, transport=options.transport) as client,
             client.stream(
-                "GET", f"{worker.base_url}/tasks/{task_id}/result", headers=_internal_headers(),
+                "GET", f"{worker.base_url}/tasks/{task_id}/result",
+                headers={**_internal_headers(), "Accept-Encoding": "identity"},
             ) as response,
         ):
             response.raise_for_status()
+            if response.headers.get("content-encoding", "identity").strip().lower() != "identity":
+                raise WorkerTaskFailed("Worker result arrived content-encoded")
             if int(response.headers.get("content-length", 0)) > limit:
                 raise WorkerTaskFailed(WORKER_RESULT_TOO_LARGE)
             received = 0
-            async for chunk in response.aiter_bytes():
+            async for chunk in response.aiter_raw():
                 received += len(chunk)
                 if received > limit:
                     raise WorkerTaskFailed(WORKER_RESULT_TOO_LARGE)
-                take.write(chunk)
+                await asyncio.to_thread(take.write, chunk)
     except httpx.HTTPError as exc:
         raise WorkerTaskFailed(f"Worker result fetch failed: {exc}") from exc
 
@@ -529,14 +541,20 @@ async def _stream_generation_result(
 async def _release_generation_result(
     worker: _PickedWorker, task_id: str, options: DispatchOptions,
 ) -> None:
-    """Free the worker's copy; a failure only delays the worker's own expiry sweep."""
+    """Free the worker's copy; a failure only delays the worker's own expiry sweep.
+
+    Only the status counts: the answer's body is never read, so its size cannot matter.
+    """
     try:
-        async with httpx.AsyncClient(
-            timeout=options.result_fetch_timeout_seconds, transport=options.transport,
-        ) as client:
-            response = await client.delete(
-                f"{worker.base_url}/tasks/{task_id}/result", headers=_internal_headers(),
-            )
+        async with (
+            httpx.AsyncClient(
+                timeout=options.result_fetch_timeout_seconds, transport=options.transport,
+            ) as client,
+            client.stream(
+                "DELETE", f"{worker.base_url}/tasks/{task_id}/result",
+                headers=_internal_headers(),
+            ) as response,
+        ):
             response.raise_for_status()
     except httpx.HTTPError as exc:
         log.warning("Worker %s kept the result of task %s: %s", worker.id, task_id, exc)

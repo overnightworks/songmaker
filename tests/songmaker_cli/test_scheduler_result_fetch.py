@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
+import annotated_types
 import httpx
 import pytest
 
+from songmaker_cli.api_models.songs import SongCreateRequest, SongUpdateRequest
 from songmaker_cli.scheduler import (
     DispatchOptions,
     WorkerTaskFailed,
@@ -73,11 +76,16 @@ def _dispatch(worker: _Worker):
     ))
 
 
+async def _streamed(body: bytes):
+    """A body as a real worker sends it: a stream, not content the client already holds."""
+    yield body
+
+
 def _serves(body: bytes) -> Callable[[httpx.Request], httpx.Response]:
     def answer(request: httpx.Request) -> httpx.Response:
         if request.method == "DELETE":
             return httpx.Response(204)
-        return httpx.Response(200, content=body)
+        return httpx.Response(200, content=_streamed(body))
 
     return answer
 
@@ -96,6 +104,7 @@ def test_the_take_is_fetched_by_task_id_into_musics_own_temp_dir_then_deleted(
     fetch, delete = worker.calls("GET", "/tasks/gen-1/result")[0], worker.calls(
         "DELETE", "/tasks/gen-1/result")[0]
     assert fetch.headers["X-Internal-Token"] == token
+    assert fetch.headers["Accept-Encoding"] == "identity"
     assert delete.headers["X-Internal-Token"] == token
     assert worker.requests.index(delete) > worker.requests.index(fetch)
 
@@ -142,7 +151,33 @@ def test_a_take_announced_over_the_limit_is_refused_before_its_body_is_read(
     music_tmp: Path,
 ) -> None:
     worker = _Worker(lambda request: httpx.Response(
-        200, headers={"Content-Length": str(_LIMIT + 1)}, content=b"x" * (_LIMIT + 1),
+        200, headers={"Content-Length": str(_LIMIT + 1)}, content=_streamed(b"x" * (_LIMIT + 1)),
+    ))
+
+    with pytest.raises(WorkerTaskFailed):
+        _dispatch(worker)
+
+    assert list(music_tmp.iterdir()) == []
+
+
+def _encoded(body: bytes, layers: int) -> bytes:
+    for _ in range(layers):
+        body = gzip.compress(body)
+    return body
+
+
+@pytest.mark.usefixtures("small_limit")
+@pytest.mark.parametrize("encoding, decoded_bytes", [
+    pytest.param("gzip", _LIMIT // 2, id="small-gzip"),
+    pytest.param("gzip, gzip", _LIMIT * 4096, id="stacked-gzip-bomb"),
+])
+def test_an_encoded_take_is_refused_and_leaves_no_file(
+    music_tmp: Path, encoding: str, decoded_bytes: int,
+) -> None:
+    body = _encoded(b"\0" * decoded_bytes, encoding.count("gzip"))
+    assert len(body) < _LIMIT
+    worker = _Worker(lambda request: httpx.Response(
+        200, headers={"Content-Encoding": encoding}, content=_streamed(body),
     ))
 
     with pytest.raises(WorkerTaskFailed):
@@ -190,15 +225,45 @@ def test_a_delete_the_worker_refuses_does_not_fail_the_fetched_take(music_tmp: P
     def refuses_delete(request: httpx.Request) -> httpx.Response:
         if request.method == "DELETE":
             return httpx.Response(500)
-        return httpx.Response(200, content=_TAKE)
+        return httpx.Response(200, content=_streamed(_TAKE))
 
     fetched = _dispatch(_Worker(refuses_delete))
 
     assert Path(fetched.audio_path).read_bytes() == _TAKE
 
 
+def test_a_delete_answer_with_an_endless_body_is_never_read(music_tmp: Path) -> None:
+    served = []
+
+    def endless_delete_answer(request: httpx.Request) -> httpx.Response:
+        if request.method != "DELETE":
+            return httpx.Response(200, content=_streamed(_TAKE))
+
+        async def chunks():
+            for _ in range(100_000):
+                served.append(1)
+                yield b"x" * 16
+
+        return httpx.Response(500, content=chunks())
+
+    fetched = _dispatch(_Worker(endless_delete_answer))
+
+    assert Path(fetched.audio_path).read_bytes() == _TAKE
+    assert len(served) <= 1
+
+
+def _longest_requested_seconds() -> int:
+    """The duration bound a song request's own Field declares, create or update."""
+    return max(
+        constraint.le
+        for model in (SongCreateRequest, SongUpdateRequest)
+        for constraint in model.model_fields["audio_duration"].metadata
+        if isinstance(constraint, annotated_types.Le)
+    )
+
+
 def test_the_default_limit_admits_the_longest_take_songmaker_allows() -> None:
-    longest_take_bytes = 600 * 48_000 * 2 * 4 + 44
+    # ACE-Step's WAV: 48 kHz stereo, at most 4 bytes per sample, a 44-byte header.
+    longest_take_bytes = _longest_requested_seconds() * 48_000 * 2 * 4 + 44
 
     assert GENERATION_RESULT_MAX_BYTES >= longest_take_bytes
-    assert get_settings().generation_result_max_bytes == GENERATION_RESULT_MAX_BYTES

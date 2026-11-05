@@ -41,8 +41,10 @@ from songmaker_cli.constants import (
     generate_job_heartbeat_stale_threshold_seconds,
 )
 
-# The most a worker may hand music for one take. ACE-Step writes 32-bit float stereo WAV at
-# 48 kHz (`subtype="FLOAT"` in vendor/acestep acestep/audio_utils.py), and a song request asks
+# The most a worker may hand music for one take. Songmaker asks ACE-Step for `audio_format:
+# "wav"` (acestep_engine/client.py); the pinned vendor/acestep saves that with
+# `torchaudio.save(..., backend="soundfile")` in acestep/audio_utils.py: stereo at 48 kHz, at
+# most 4 bytes per sample (a float tensor saves as 32-bit FLOAT). A song request asks
 # for at most 600 seconds (`audio_duration`, le=600 in api_models/songs.py). The product,
 # 600 s * 48000 Hz * 2 channels * 4 bytes = 230,400,000 bytes, plus a header allowance, is
 # rounded up to a whole 256 MiB; a longer file is not a take songmaker can have asked for.

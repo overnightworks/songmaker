@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -142,13 +143,128 @@ def test_the_expiry_sweep_removes_the_take_with_its_record(
     _run(go())
 
 
-def test_delete_does_not_disturb_a_stream_that_already_opened_the_take(tmp_path: Path) -> None:
+async def _get_releasing_after_the_start(
+    app, path: str, release: Callable[[], Awaitable[None]],
+) -> tuple[int, bytes]:
+    """GET over raw ASGI: ``release`` runs once the headers left, before any body byte."""
+    scope = {
+        "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "GET",
+        "scheme": "http", "path": path, "raw_path": path.encode(), "query_string": b"",
+        "root_path": "", "server": ("worker", 80), "client": ("music", 1),
+        "headers": [(b"host", b"worker"), *(
+            (name.lower().encode(), value.encode()) for name, value in _INTERNAL_HEADERS.items()
+        )],
+    }
+    requested = False
+    status, body = 0, bytearray()
+
+    async def receive() -> dict:
+        nonlocal requested
+        if not requested:
+            requested = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+        await asyncio.Event().wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict) -> None:
+        nonlocal status
+        if message["type"] == "http.response.start":
+            status = message["status"]
+            await release()
+        elif message["type"] == "http.response.body":
+            body.extend(message.get("body", b""))
+
+    await app(scope, receive, send)
+    return status, bytes(body)
+
+
+@pytest.mark.parametrize("release", ["delete", "sweep"])
+def test_a_result_stream_survives_a_delete_or_sweep_after_it_opened(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, release: str,
+) -> None:
     async def go():
         deps, _ = _make_deps(tmp_path)
+        deps.task_store = TaskStore(retention_seconds=0.0)
         task_id, take = await _finished_take(deps, tmp_path / "out")
-        with take.open("rb") as open_stream:
-            await deps.task_store.discard_result(task_id)
-            assert open_stream.read() == _TAKE_BYTES
+        app = create_app(deps)
+
+        async def release_the_take() -> None:
+            if release == "delete":
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=app), base_url="http://worker",
+                ) as http:
+                    deleted = await http.delete(
+                        f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS,
+                    )
+                assert deleted.status_code == 204
+            else:
+                monkeypatch.setattr(
+                    "acestep_worker.task_store.utcnow", lambda: utcnow() + timedelta(seconds=1),
+                )
+                assert await deps.task_store.cleanup_terminal() == 1
+            assert not take.exists()
+
+        status, body = await _get_releasing_after_the_start(
+            app, f"/tasks/{task_id}/result", release_the_take,
+        )
+        assert (status, body) == (200, _TAKE_BYTES)
+
+    _run(go())
+
+
+@pytest.fixture
+def removal_fails_once(monkeypatch: pytest.MonkeyPatch) -> Callable[[Path], None]:
+    """The next removal of the named file raises; later ones remove it."""
+    unlink = Path.unlink
+    failing: set[Path] = set()
+
+    def flaky_unlink(path: Path, missing_ok: bool = False) -> None:
+        if path in failing:
+            failing.discard(path)
+            raise PermissionError(13, "Permission denied", str(path))
+        unlink(path, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", flaky_unlink)
+    return failing.add
+
+
+def test_a_delete_whose_removal_fails_answers_an_error_and_a_retry_removes_the_take(
+    world, removal_fails_once: Callable[[Path], None],
+) -> None:
+    deps, root, client = world
+
+    async def go():
+        task_id, take = await _finished_take(deps, root)
+        removal_fails_once(take)
+        async for http in client():
+            failed = await http.delete(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
+            assert failed.status_code >= 500
+            assert str(root) not in failed.text
+            assert take.exists()
+            retried = await http.delete(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
+        assert retried.status_code == 204
+        assert not take.exists()
+
+    _run(go())
+
+
+def test_a_sweep_whose_removal_fails_keeps_the_take_for_the_next_sweep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, removal_fails_once: Callable[[Path], None],
+) -> None:
+    async def go():
+        deps, _ = _make_deps(tmp_path)
+        store = TaskStore(retention_seconds=0.0)
+        deps.task_store = store
+        task_id, take = await _finished_take(deps, tmp_path / "out")
+        removal_fails_once(take)
+        monkeypatch.setattr(
+            "acestep_worker.task_store.utcnow", lambda: utcnow() + timedelta(seconds=1),
+        )
+        assert await store.cleanup_terminal() == 0
+        assert take.exists()
+        assert await store.get(task_id) is not None
+        assert await store.cleanup_terminal() == 1
+        assert not take.exists()
 
     _run(go())
 
@@ -165,6 +281,21 @@ def test_the_real_runner_writes_only_its_local_root_and_names_no_path(
             wire = json.dumps(snapshot)
             assert "audio_path" not in wire
             assert str(deps.audio_output_dir) not in wire
+
+    _run(go())
+
+
+def test_a_failed_result_write_names_no_worker_path(
+    real_generate_worker,  # noqa: F811 - the fixture imported above
+) -> None:
+    async def go():
+        async with real_generate_worker() as (client, deps, boundary, generate):
+            boundary.succeed()
+            deps.audio_output_dir.write_text("occupied")
+            snapshot = await generate(client)
+            assert snapshot["state"] == "error"
+            assert snapshot["error"].startswith("FileExistsError:")
+            assert str(deps.audio_output_dir) not in snapshot["error"]
 
     _run(go())
 
