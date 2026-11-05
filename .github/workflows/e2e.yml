@@ -29,10 +29,14 @@ env:
 
 jobs:
   smoke:
-    name: Boot stack + library flows
+    name: Boot stack + library flows (${{ matrix.project }})
     runs-on: ubuntu-latest
-    # The suite runs 19-25 min (measured 17.10.2026); this ceiling guards against a hang, not a slow suite.
+    # Each project runs 15-22 min on its own runner; this ceiling guards against a hang, not a slow suite.
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [desktop, mobile]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -121,15 +125,36 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright Chromium
+      - name: Download Playwright Chromium
         working-directory: frontend
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
 
-      - name: Library flows (desktop and mobile)
+      # why: the apt mirror sometimes serves at a few dozen kB/s, and an install
+      # that stalls there would otherwise eat the whole job's ceiling. timeout
+      # runs as root above the whole apt tree, so apt-get and dpkg get the
+      # signal; dpkg is repaired between tries in case the kill hit its phase.
+      - name: Install Playwright system dependencies
+        working-directory: frontend
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            status=0
+            sudo env "PATH=$PATH" timeout --kill-after=15 150 pnpm exec playwright install-deps chromium || status=$?
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+            echo "install-deps try $attempt failed with exit code $status"
+            sudo dpkg --configure -a
+          done
+          echo "install-deps failed after 3 tries" >&2
+          exit 1
+
+      - name: Library flows (${{ matrix.project }})
         working-directory: frontend
         env:
           E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}
-        run: pnpm test:e2e
+        run: pnpm test:e2e --project=${{ matrix.project }}
 
       # The E2E-only IP_RATE_LIMIT in docker/docker-compose.ci.yml is sized
       # from this peak (#1555), so every run prints it rather than leaving a
@@ -150,7 +175,7 @@ jobs:
         if: failure() || hashFiles('frontend/test-results/**/trace.zip') != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
-          name: e2e-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}
+          name: e2e-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.project }}
           path: |
             frontend/playwright-report
             frontend/test-results
@@ -164,7 +189,7 @@ jobs:
         if: failure() || hashFiles('frontend/test-results/**/trace.zip') != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
-          name: e2e-compose-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          name: e2e-compose-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.project }}
           path: compose-logs.txt
           retention-days: 14
 
