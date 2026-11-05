@@ -1,8 +1,0 @@
-claim_id = "6e617eac1e41462fa70028a94b23bf4b"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "92969e1b1717e95c6a5370653cd3573c2c6bd6c0"
-branch = "claude/issue-2304-providers-without-cover-routes"
-scope = ["docs/architecture.md", "frontend/src/lib/api/types.ts", "quality/baseline.toml", "src/songmaker_cli/api_models/settings.py", "src/songmaker_cli/settings_api.py", "tests/fixtures/provider_status_capability_missing.json", "tests/fixtures/provider_status_ready.json", "tests/songmaker_cli/test_settings_api_providers.py"]
-opened_commit = "540015598ec68fafc905230a36cca595ecdf833c"
-whole_reason = "The field, its model, its generated type, its fixtures and its tests describe one response; removing a part leaves the contract and its proof disagreeing."
