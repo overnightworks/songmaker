@@ -3,5 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "db1f0e87e45c1179c42a3ff908b38b9fd495954b"
 branch = "claude/issue-2247-worker-task-sweep"
-scope = ["src/acestep_worker/task_store.py", "src/acestep_worker/wrapper.py", "tests/acestep_worker/test_task_store.py"]
+scope = ["src/acestep_worker/task_store.py", "src/acestep_worker/wrapper.py", "tests/acestep_worker/test_task_store.py", "tests/acestep_worker/test_wrapper_task_sweep.py"]
 opened_commit = "4adbd3991b5a07f8df91cd983f3d01803a3e5cea"
+whole_reason = "One sweep loop spans its owner, the lifespan that starts it, its loop tests and one lifespan wiring test kept apart from the size-capped wrapper tests."
