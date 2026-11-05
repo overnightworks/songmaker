@@ -125,30 +125,12 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
-      - name: Download Playwright Chromium
+      # why: the apt mirror once served at a few dozen kB/s and the install took
+      # 12.4 min; past 15 min the step is a hang, and it must not eat the job's ceiling.
+      - name: Install Playwright Chromium
         working-directory: frontend
-        run: pnpm exec playwright install chromium
-
-      # why: the apt mirror sometimes serves at a few dozen kB/s, and an install
-      # that stalls there would otherwise eat the whole job's ceiling. timeout
-      # runs as root above the whole apt tree, so apt-get and dpkg get the
-      # signal; dpkg is repaired between tries in case the kill hit its phase.
-      - name: Install Playwright system dependencies
-        working-directory: frontend
-        timeout-minutes: 10
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            status=0
-            sudo env "PATH=$PATH" timeout --kill-after=15 5 pnpm exec playwright install-deps chromium || status=$?
-            if [ "$status" -eq 0 ]; then
-              exit 0
-            fi
-            echo "install-deps try $attempt failed with exit code $status"
-            sudo dpkg --configure -a
-          done
-          echo "install-deps failed after 3 tries" >&2
-          exit 1
+        timeout-minutes: 15
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Library flows (${{ matrix.project }})
         working-directory: frontend
