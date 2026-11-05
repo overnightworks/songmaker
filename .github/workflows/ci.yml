@@ -92,7 +92,7 @@ jobs:
         if: always()
         env:
           LINE_FLOOR: "93"
-          BRANCH_FLOOR: "0"
+          BRANCH_FLOOR: "87"
         run: |
           passed=$(grep -oP '^\d+ passed' pytest-output.txt | awk '{print $1}')
           skipped=$(grep -oP '\d+ skipped' pytest-output.txt | awk '{print $1}')
