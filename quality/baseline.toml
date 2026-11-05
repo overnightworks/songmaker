@@ -80,7 +80,7 @@
 "tests/songmaker_cli/test_library_api.py" = 1627
 "tests/songmaker_cli/test_lora_api.py" = 1297
 "tests/songmaker_cli/test_playlist_api.py" = 1105
-"tests/songmaker_cli/test_db_postgresql.py" = 857
+"tests/songmaker_cli/test_db_postgresql.py" = 854
 "tests/songmaker_cli/test_queue_streams.py" = 2417
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1285
