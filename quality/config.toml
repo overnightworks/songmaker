@@ -3,6 +3,7 @@ mandatory_jobs = [
     "Backend (Python 3.14)",
     "Alert rules (promtool)",
     "PostgreSQL contract (serial)",
+    "Combine backend coverage",
     "Frontend",
 ]
 

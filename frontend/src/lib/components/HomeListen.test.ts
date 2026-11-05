@@ -5,10 +5,9 @@ import { get } from 'svelte/store';
 import {
 	COLLECTION_MENU_ARCHIVE_LABEL,
 	COLLECTION_MENU_DELETE_LABEL,
-	HOME_LISTEN_EMPTY,
-	HOME_LISTEN_ERROR,
 	PLAYING_MARK_LABEL
 } from '#lib/constants.ts';
+import { HOME_LISTEN_EMPTY, HOME_LISTEN_ERROR } from '#lib/constants/home.ts';
 import { albumList, allAlbumsLoad, songList } from '#lib/stores/libraryData.ts';
 import { deletePlaylist, playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import {

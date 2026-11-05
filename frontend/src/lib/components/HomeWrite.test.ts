@@ -2,13 +2,13 @@ import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { LibraryWriteItem } from '#lib/api/types.ts';
+import { songEditorOpenLabel } from '#lib/constants.ts';
 import {
 	HOME_WRITE_EMPTY,
 	HOME_WRITE_ERROR,
 	HOME_WRITE_LOADING,
-	homeWriteOpenLabel,
-	songEditorOpenLabel
-} from '#lib/constants.ts';
+	homeWriteOpenLabel
+} from '#lib/constants/home.ts';
 import {
 	ensureLibraryWriteRead,
 	outdateLibraryWrite,

@@ -18,13 +18,13 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type Page } from '@playwright/test';
 import {
-	HOME_PAGE_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
 	PLAYLISTS_PAGE_LABEL,
 	LIBRARY_PAGE_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SIGN_IN_NEXT_PARAM
 } from '../src/lib/constants';
+import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
 	routerHistoryEntry,

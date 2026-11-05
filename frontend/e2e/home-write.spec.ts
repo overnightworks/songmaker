@@ -4,15 +4,17 @@ import {
 	ACCOUNT_MENU_LABEL,
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_ARCHIVE_LABEL,
-	HOME_LISTEN_EMPTY,
 	LIBRARY_NEW_MENU_LABEL,
-	HOME_WRITE_EMPTY,
-	HOME_WRITE_ERROR,
 	SONG_MENU_LABEL,
 	SONG_MENU_DELETE_LABEL,
-	homeWriteOpenLabel,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import {
+	HOME_LISTEN_EMPTY,
+	HOME_WRITE_EMPTY,
+	HOME_WRITE_ERROR,
+	homeWriteOpenLabel
+} from '../src/lib/constants/home';
 import { songRoutePath } from '../src/lib/routes/addresses';
 import {
 	appBar,
