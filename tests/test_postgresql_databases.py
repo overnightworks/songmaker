@@ -7,6 +7,8 @@ import re
 import signal
 import subprocess
 import sys
+import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -20,6 +22,8 @@ from support import postgresql as owner_module
 from support.postgres_lock_harness import WAIT_SECONDS, in_thread, wait_until_blocked_behind
 from support.postgresql import (
     ALEMBIC_VERSION_TABLE,
+    CONNECT_TIMEOUT_SECONDS,
+    DROP_TIMEOUT_MILLISECONDS,
     DatabaseDriftError,
     LeakedConnectionError,
     PostgresqlTestDatabases,
@@ -34,6 +38,11 @@ from songmaker_cli.db.models import User
 
 PROBE = Path(__file__).resolve().parent / "support" / "postgresql_probe.py"
 CHILD_TIMEOUT_SECONDS = 120
+THREAD_POLL_SECONDS = 0.02
+_END_BACKENDS_OF = text(
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :database"
+)
+_WAITS_ON_A_LOCK = text("SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = :pid")
 
 
 @pytest.fixture
@@ -78,6 +87,47 @@ def _contents(url: URL) -> dict[str, list[str]]:
                 )
                 for table in inspect(connection).get_table_names()
             }
+    finally:
+        engine.dispose()
+
+
+def _stop_thread_working_in(
+    thread: threading.Thread, administration_url: URL, database: str,
+) -> bool:
+    """Join the thread; while it lives, end every backend of the database and join again.
+
+    Ending those backends ends every statement the owner runs in that database. The longest
+    it runs elsewhere is the drop of a database it recreates, so the wait covers that drop.
+    """
+    if thread.ident is None:
+        return True
+    thread.join(WAIT_SECONDS)
+    deadline = time.monotonic() + DROP_TIMEOUT_MILLISECONDS / 1000 + CONNECT_TIMEOUT_SECONDS
+    engine = create_engine(administration_url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+    try:
+        while thread.is_alive() and time.monotonic() < deadline:
+            with engine.connect() as administration:
+                administration.execute(_END_BACKENDS_OF, {"database": database})
+            thread.join(THREAD_POLL_SECONDS)
+    finally:
+        engine.dispose()
+    return not thread.is_alive()
+
+
+def _wait_until_waiting_on_a_lock_or_done(
+    administration_url: URL, pid: int, thread: threading.Thread,
+) -> None:
+    """Return once the backend waits on a lock or the thread driving it has ended."""
+    deadline = time.monotonic() + WAIT_SECONDS
+    engine = create_engine(administration_url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+    try:
+        with engine.connect() as observer:
+            while thread.is_alive():
+                if observer.execute(_WAITS_ON_A_LOCK, {"pid": pid}).scalar():
+                    return
+                if time.monotonic() >= deadline:
+                    pytest.fail(f"{thread.name} neither waited on a lock nor ended")
+                time.sleep(THREAD_POLL_SECONDS)
     finally:
         engine.dispose()
 
@@ -248,34 +298,64 @@ def test_a_connection_left_open_fails_the_reset_and_only_it_is_terminated(
 
 
 def test_a_write_from_a_connection_left_open_never_outlives_the_reset(
-    postgresql_databases, pg_factory,
+    postgresql_databases, pg_factory, monkeypatch,
 ):
-    """Cell 4: a leaked connection holding no lock writes while the reset runs.
-
-    The write starts half a second in, after a reset that checks too late has committed;
-    the outcome asserted does not depend on when it lands.
-    """
+    """Cell 4: a leaked connection holding no lock writes once the reset looks for clients."""
     url = postgresql_databases.worker_url
     baseline = _contents(url)
     leaked = pg_factory.kw["bind"].execution_options(isolation_level="AUTOCOMMIT").connect()
     leaked_pid = leaked.execute(text("SELECT pg_backend_pid()")).scalar_one()
     answers: dict[str, object] = {}
     late_write = in_thread(answers, "late write", lambda: leaked.execute(text(
-        "DO $$ BEGIN PERFORM pg_sleep(0.5); "
         "INSERT INTO users (id, username, role, created_at, updated_at) "
-        "VALUES ('late', 'late', 'user', now(), now()); END $$"
+        "VALUES ('late', 'late', 'user', now(), now())"
     )))
-    late_write.start()
+    count_clients = owner_module._other_clients
+
+    def write_once_the_reset_counts_clients(connection):
+        if late_write.ident is None:
+            late_write.start()
+            _wait_until_waiting_on_a_lock_or_done(
+                postgresql_databases.administration_url, leaked_pid, late_write,
+            )
+        return count_clients(connection)
+
+    monkeypatch.setattr(owner_module, "_other_clients", write_once_the_reset_counts_clients)
     try:
         with pytest.raises(LeakedConnectionError) as refusal:
             postgresql_databases.reset()
     finally:
-        late_write.join(WAIT_SECONDS)
+        stopped = _stop_thread_working_in(
+            late_write, postgresql_databases.administration_url, url.database,
+        )
         leaked.invalidate()
-    assert not late_write.is_alive(), "the leaked writer outlived its termination"
+    assert stopped, "the leaked writer outlived the termination of its database's backends"
 
     assert re.search(rf"\b{leaked_pid}\b", str(refusal.value))
     assert _contents(url) == baseline
+
+
+def test_a_connection_closed_while_the_reset_counts_clients_is_no_leak(
+    postgresql_databases, postgresql_url, monkeypatch,
+):
+    """Cell 4: a client the reset counted open, then closed, is seen gone; nothing leaked."""
+    engine = create_engine(postgresql_url, poolclass=NullPool)
+    closing = engine.connect()
+    counts: list[int] = []
+    count_clients = owner_module._other_clients
+
+    def close_after_the_first_count(connection):
+        counts.append(count_clients(connection))
+        closing.close()
+        return counts[-1]
+
+    monkeypatch.setattr(owner_module, "_other_clients", close_after_the_first_count)
+    try:
+        postgresql_databases.reset()
+    finally:
+        closing.close()
+        engine.dispose()
+    assert counts[0] == 1
 
 
 @pytest.mark.parametrize(
@@ -346,6 +426,7 @@ def test_drift_committed_while_the_reset_waits_for_its_locks_fails_the_reset(ano
     """Cell 5: the drift check runs under the reset's locks, so a late change is still seen."""
     owner = another_run()
     engine = create_engine(owner.worker_url, poolclass=NullPool)
+    worker = engine.url.database
     answers: dict[str, object] = {}
     reset = in_thread(answers, "reset", owner.reset)
     try:
@@ -358,9 +439,8 @@ def test_drift_committed_while_the_reset_waits_for_its_locks_fails_the_reset(ano
                 drifting.commit()
             finally:
                 drifting.close()
-                reset.join(WAIT_SECONDS)
-                if reset.is_alive():
-                    pytest.fail(f"the reset still runs {WAIT_SECONDS} s after its blocker ended")
+                if not _stop_thread_working_in(reset, owner.administration_url, worker):
+                    pytest.fail("the reset outlived the termination of its database's backends")
     finally:
         engine.dispose()
     assert isinstance(answers.get("reset"), DatabaseDriftError), answers
