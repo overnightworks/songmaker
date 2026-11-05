@@ -87,6 +87,8 @@
 	let followedRunId = $state<string | null>(null);
 	// A refusal at the click is this view's alone: the next load, sign-in or click asks again.
 	let clickProblem = $state<CoverProblem | null>(null);
+	// The request throttle's words, in the daily limit's place and tone, until the next ask.
+	let throttleNote = $state<string | null>(null);
 	let now = $state(Date.now());
 	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
 
@@ -107,6 +109,7 @@
 	const dailyLimitNote = $derived(
 		dailySuggestionsSpent ? (activity?.limitNote ?? ALBUM_COVER_DAILY_LIMIT_REACHED) : null
 	);
+	const limitNote = $derived(dailyLimitNote ?? throttleNote);
 	const busyWaitSeconds = $derived(coverBusyWaitSeconds(latestCoverJob, now));
 	const coverProblem = $derived(
 		clickProblem ??
@@ -158,6 +161,7 @@
 		const albumId = currentAlbumId;
 		followedRunId = null;
 		clickProblem = null;
+		throttleNote = null;
 		void readCoverActivity(albumId);
 		return () => void readCoverActivity(albumId);
 	});
@@ -178,6 +182,7 @@
 		const albumId = currentAlbumId;
 		chosenSlot = null;
 		clickProblem = null;
+		throttleNote = null;
 		const ask = beginCoverSuggestion(albumId);
 		try {
 			const job = await createAlbumCoverSuggestions(albumId);
@@ -232,8 +237,8 @@
 	// limit, with the server's words beside it. A 409 needs no word of its own:
 	// the reread either follows the run that still goes or shows how it ended,
 	// so that run counts as followed even when it already ended.
-	// Any other 429 (the request throttle) is an ordinary failure that the next
-	// Suggest may retry.
+	// Any other 429 (the request throttle) reads like the limit in the server's
+	// words, and the next Suggest may retry.
 	async function rereadAfterRefusal(albumId: string, refusal: ApiError): Promise<void> {
 		await readCoverActivity(albumId);
 		if (albumId !== currentAlbumId || coverSuggestions === null) return;
@@ -241,12 +246,12 @@
 			followedRunId = latestCoverJob?.id ?? null;
 			return;
 		}
-		if (refusal.status === RATE_LIMITED_STATUS && dailySuggestionsSpent) {
-			const limitNote = describeFailure(refusal, ALBUM_COVER_DAILY_LIMIT_REACHED);
-			updateCoverActivity(albumId, (state) => ({ ...state, limitNote }));
+		const note = describeFailure(refusal, ALBUM_COVER_DAILY_LIMIT_REACHED);
+		if (dailySuggestionsSpent) {
+			updateCoverActivity(albumId, (state) => ({ ...state, limitNote: note }));
 			return;
 		}
-		showCoverActivityFailure(albumId, refusal, { keepData: true });
+		throttleNote = note;
 	}
 
 	// The server deletes the rows and commits before it removes the files, so
@@ -395,8 +400,8 @@
 		{:else if coverSuggestionsLoading}
 			<span role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</span>
 		{/if}
-		{#if dailyLimitNote}
-			<span class="cover-limit">{dailyLimitNote}</span>
+		{#if limitNote}
+			<span class="cover-limit">{limitNote}</span>
 		{/if}
 		{#if coverSuggestionsFailure}
 			<span class="cover-failure" role="alert">
@@ -600,6 +605,7 @@
 
 	.cover-limit {
 		flex-basis: 100%;
+		color: var(--score-ok);
 		text-align: center;
 	}
 

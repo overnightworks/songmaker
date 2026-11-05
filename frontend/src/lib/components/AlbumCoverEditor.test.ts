@@ -269,7 +269,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
-	it('names a throttled ask as an ordinary failure, rereads the count and keeps Suggest open', async () => {
+	it('a throttled ask reads like the daily limit in the server words, never red, and keeps Suggest open', async () => {
 		createAlbumCoverSuggestions.mockRejectedValue(
 			new ApiError(429, 'Too many requests, slow down', '/api/albums/a-local')
 		);
@@ -279,11 +279,11 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		await pressSuggestOnceLoaded(target);
 		await vi.waitFor(() =>
-			expect(failureAlert(target)?.textContent).toContain('Too many requests, slow down')
+			expect(countLine(target)).toBe('7 of 10 left today Too many requests, slow down')
 		);
 
 		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
-		expect(countLine(target)).toContain('7 of 10 left today');
+		expect(failureAlert(target)).toBeNull();
 		expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest').disabled).toBe(false);
 	});
 
