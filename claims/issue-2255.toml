@@ -1,0 +1,8 @@
+claim_id = "a2f999d6053444bba67beba5ce678d26"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "b02f9d539af1b26aec0b55dabcaa53c5dbcf5e4e"
+branch = "claude/issue-2255-worker-constants"
+scope = ["frontend/src/lib/components/WorkerModelsList.svelte", "frontend/src/lib/components/WorkerPoolPanel.svelte", "frontend/src/lib/components/WorkerPoolPanel.test.ts", "frontend/src/lib/components/WorkerVramLine.svelte", "frontend/src/lib/constants.ts", "frontend/src/lib/constants/worker.ts"]
+opened_commit = "a6f307900a55cce038a560d13eaee03b82205611"
+whole_reason = "One move: the owner file, the new domain module and its users change together or the build breaks."
