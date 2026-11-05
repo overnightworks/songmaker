@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "7535d6d813ddcc2225a95a00d575a0a526381c8f"
 branch = "claude/issue-2292-gpu-result-over-http"
-scope = ["docker-compose.yml", "docker/acestep-worker.Dockerfile", "docker/docker-compose.e2e-voices.yml", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "quality/baseline.toml", "scripts/gpu_job_kinds_probe.sh", "scripts/test_helper_ratchet.txt", "src/acestep_worker/__main__.py", "src/acestep_worker/models.py", "src/acestep_worker/settings.py", "src/acestep_worker/wrapper.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/scheduler.py", "src/songmaker_cli/settings.py", "tests"]
+scope = ["docker-compose.yml", "docker/acestep-worker.Dockerfile", "docker/docker-compose.e2e-voices.yml", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "quality/baseline.toml", "scripts/gpu_job_kinds_probe.sh", "scripts/test_helper_ratchet.txt", "src/acestep_worker/__main__.py", "src/acestep_worker/models.py", "src/acestep_worker/settings.py", "src/acestep_worker/task_results.py", "src/acestep_worker/task_store.py", "src/acestep_worker/wrapper.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/scheduler.py", "src/songmaker_cli/settings.py", "tests"]
 opened_commit = "0d0d3d77457dd708cedd607f9f845bc354410e68"
 whole_reason = "The result's wire contract changes on worker and music at once; no intermediate tree releases."
