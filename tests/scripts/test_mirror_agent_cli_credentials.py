@@ -23,7 +23,7 @@ CLAUDE = {
         "expiresAt": 1,
         "refreshTokenExpiresAt": 2,
         "scopes": ["user:inference"],
-        "subscriptionType": "max",
+        "subscriptionType": "example",
         "rateLimitTier": "default",
     },
 }
