@@ -7,7 +7,7 @@ import pytest
 
 from acestep_engine.progress import AceStepPhase
 from acestep_worker.clock import utcnow
-from acestep_worker.models import GenerationTaskResult, TaskErrorKind, TaskKind
+from acestep_worker.models import GenerationTaskResult, TaskErrorKind, TaskKind, TaskSnapshot
 from acestep_worker.task_store import TaskStore
 
 
@@ -177,6 +177,7 @@ def test_done_event_carries_the_result_as_json() -> None:
 @pytest.mark.parametrize("kind", ["generate", "download", "train_lora"])
 def test_fail_terminal(kind: TaskKind) -> None:
     """S7-07: Two-argument failure remains compatible for every task kind."""
+
     async def go():
         store = TaskStore()
         task_id = await store.create(kind)
@@ -253,6 +254,7 @@ def test_subscribe_already_terminal_yields_only_initial() -> None:
 @pytest.mark.parametrize("error_kind", [None, "gpu_out_of_memory"])
 def test_subscribe_already_failed_yields_only_initial(error_kind: TaskErrorKind | None) -> None:
     """S7-05/S7-06: Live and late subscribers receive the identical failure snapshot."""
+
     async def go():
         store = TaskStore()
         task_id = await store.create("generate")
@@ -276,6 +278,7 @@ def test_subscribe_already_failed_yields_only_initial(error_kind: TaskErrorKind 
 @pytest.mark.parametrize("state", ["pending", "running", "done"])
 def test_error_kind_is_null_without_failure(state: str) -> None:
     """S7-06: Non-failure snapshots and events explicitly serialize null."""
+
     async def go():
         store = TaskStore()
         task_id = await store.create("generate")
@@ -397,7 +400,7 @@ async def _finish(store: TaskStore) -> str:
 def test_sweep_loop_drops_expired_terminal_tasks_and_keeps_the_rest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def go() -> tuple[int, set[str], set[str]]:
+    async def go() -> tuple[TaskSnapshot | None, TaskSnapshot | None, TaskSnapshot | None]:
         clock = _SweepClock(monkeypatch)
         store = TaskStore()
         old_done = await _finish(store)
@@ -408,14 +411,19 @@ def test_sweep_loop_drops_expired_terminal_tasks_and_keeps_the_rest(
         await clock.next_tick()
         fresh_done = await _finish(store)
         await clock.next_tick()
-        remaining = set(store._tasks)
+        survivors = (
+            await store.get(old_done),
+            await store.get(running),
+            await store.get(fresh_done),
+        )
         sweep.cancel()
         await asyncio.wait([sweep])
-        return len(remaining), remaining, {old_done, running, fresh_done}
+        return survivors
 
-    count, remaining, ids = _run(go())
-    assert count == 2
-    assert len(ids - remaining) == 1
+    old_done, running, fresh_done = _run(go())
+    assert old_done is None
+    assert running is not None
+    assert fresh_done is not None
 
 
 def test_sweep_loop_continues_after_a_failed_sweep(
