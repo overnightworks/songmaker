@@ -445,6 +445,7 @@ def test_co_writer_refuses_an_unstorable_title_before_any_write(
 ):
     owner_id, _, album_id, song_id, _ = _seed(db_session)
     target_id = {"album_id": album_id, "song_id": song_id}[target]
+    before = db_session.query(Song.id, Song.title, Song.slug).all()
     # The tool body runs outside the executor, whose rollback would hide an earlier write.
     with pytest.raises(tools.MCPToolError):
         getattr(tools, f"tool_{tool_name}")(
@@ -452,7 +453,7 @@ def test_co_writer_refuses_an_unstorable_title_before_any_write(
         )
 
     assert not db_session.new and not db_session.dirty
-    assert db_session.query(Song).filter(Song.title == title.strip()).count() == 0
+    assert db_session.query(Song.id, Song.title, Song.slug).all() == before
     assert db_session.query(AuditLog).count() == 0
 
 

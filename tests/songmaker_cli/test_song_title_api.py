@@ -12,6 +12,7 @@ from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AuditLog, Song, User, Version
 
 _OWNER_ID = "owner"
+_TITLE_LENGTH = Song.__table__.c.title.type.length
 
 WRITES = pytest.mark.parametrize(
     ("method", "path", "body"),
@@ -46,7 +47,7 @@ def _stored_rows(client: TestClient) -> tuple[list, list]:
 @WRITES
 @pytest.mark.parametrize(
     ("title", "stored"),
-    [("  Night Drive ", "Night Drive"), ("x" * 200, "x" * 200)],
+    [("  Night Drive ", "Night Drive"), ("x" * _TITLE_LENGTH, "x" * _TITLE_LENGTH)],
     ids=["padded", "longest"],
 )
 def test_song_write_stores_the_stripped_title(client, method, path, body, title, stored) -> None:
@@ -58,7 +59,9 @@ def test_song_write_stores_the_stripped_title(client, method, path, body, title,
 
 
 @WRITES
-@pytest.mark.parametrize("title", ["", "   ", "x" * 201], ids=["empty", "blank", "too-long"])
+@pytest.mark.parametrize(
+    "title", ["", "   ", "x" * (_TITLE_LENGTH + 1)], ids=["empty", "blank", "too-long"],
+)
 def test_song_write_refuses_an_unstorable_title_before_any_write(
     client, method, path, body, title,
 ) -> None:
