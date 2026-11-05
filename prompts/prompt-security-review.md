@@ -35,7 +35,7 @@ This is a critical attack surface unique to LLM-integrated applications. Do NOT 
 - **User content in prompts**: Trace every path where user-controlled text (lyrics, song context, chat messages, song titles) reaches a Claude API call or CLI invocation. Can a user craft input that overrides or escapes the system prompt?
 - **Data exfiltration via prompt**: Could a malicious prompt trick Claude into revealing the system prompt, API key (from environment), or server-side context in its response?
 - **Indirect prompt injection**: If Claude's response is ever parsed or applied to data (e.g., the `songmaker` JSON block is parsed and applied to song fields), can a crafted response cause unintended mutations?
-- **CLI boot probe**: The only Claude CLI session songmaker starts (at web start) is built with an empty built-in tool set and only `mcp__songmaker__*` allowed. Could it reach anything else — a skill, a slash command, an MCP server from somewhere other than our own config?
+- **CLI boot probe**: The only Claude CLI session that carries tools (the probe at web start) is built with an empty built-in tool set and only `mcp__songmaker__*` allowed. Could it reach anything else — a skill, a slash command, an MCP server from somewhere other than our own config?
 - **Token/cost abuse**: Can a user craft prompts that maximize token consumption? Is `max_tokens` enforced on all backends (API and CLI)?
 
 ## 5. Resource Exhaustion (DoS)
