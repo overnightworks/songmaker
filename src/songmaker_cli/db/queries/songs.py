@@ -473,8 +473,10 @@ def delete_song(session: Session, song_id: str) -> list[str]:
         if not song:
             raise ValueError(f"Song not found: {song_id}")
 
-        takes = lock_takes(session, Generation.song_id == song_id, options=DELETION_LOADING)
-        paths = [p for g in takes for p in [g.mp3_path, g.wav_path] if p]
+        paths = [
+            p for g in song.generations
+            for p in [g.mp3_path, g.wav_path] if p
+        ]
         session.delete(song)
         session.flush()
     return paths
