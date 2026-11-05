@@ -12,7 +12,12 @@ from support.web_app import TEST_SECRET, web_client
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import User
-from songmaker_cli.redis_client import RedisHttpMetrics, create_redis, redis_health
+from songmaker_cli.redis_client import (
+    RedisHttpMetrics,
+    build_arq_redis_settings,
+    create_redis,
+    redis_health,
+)
 from songmaker_cli.server import create_app
 
 
@@ -22,6 +27,19 @@ def fake_redis():
 
 
 # ── create_redis / redis_health ─────────────────────────────────
+
+
+def test_the_sync_client_and_arq_settings_connect_to_the_same_url() -> None:
+    url = "redis://cache.internal:6391/4"
+
+    client_kwargs = create_redis(url).connection_pool.connection_kwargs
+    arq_settings = build_arq_redis_settings(url)
+
+    assert (client_kwargs["host"], client_kwargs["port"], client_kwargs["db"]) == (
+        arq_settings.host,
+        arq_settings.port,
+        arq_settings.database,
+    )
 
 
 def test_redis_health_returns_true(fake_redis) -> None:

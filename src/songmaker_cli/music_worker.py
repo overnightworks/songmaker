@@ -33,8 +33,9 @@ from songmaker_cli.jobs import (
     run_lora_training_job,
 )
 from songmaker_cli.jobs.lora_training import reconcile_crashed_loras
+from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import Settings, get_settings
-from songmaker_cli.worker_base import WorkerBase, build_redis_settings
+from songmaker_cli.worker_base import WorkerBase
 
 log = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ class MusicWorkerSettings:
     on_shutdown = _music_worker.on_shutdown
     job_serializer = staticmethod(serialize_arq)
     job_deserializer = staticmethod(deserialize_arq)
-    redis_settings = build_redis_settings(_settings)
+    redis_settings = build_arq_redis_settings(_settings.redis_url)
     queue_name = MusicWorker.queue_name
     max_jobs = _settings.music_max_jobs
     job_timeout = _settings.arq_job_timeout
