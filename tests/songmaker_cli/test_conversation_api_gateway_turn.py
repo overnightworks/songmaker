@@ -30,7 +30,6 @@ from support.cowriter_gateway import (
     agent_config,
     attach_cowriter_gateway,
     closed_port_origin,
-    held_until,
     open_session,
     request_in_session,
     stops,
@@ -500,40 +499,3 @@ def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
 
     [job] = _cover_jobs(world)
     assert job.session_id == first_session
-
-
-def test_the_stdio_server_records_no_session_while_a_web_turn_runs(world, monkeypatch):
-    import asyncio
-
-    from songmaker_cli.api_models import ChatTurnV2Request
-    from songmaker_cli.conversation_api import api_chat_turn
-    from songmaker_cli.mcp_server import auth, server
-    from songmaker_cli.settings import get_settings
-
-    monkeypatch.setenv(auth.USER_ID_ENV, USER_ID)
-    get_settings.cache_clear()
-
-    async def _exercise() -> None:
-        release = asyncio.Event()
-        world.stack.behaves(held_until(release, "done"))
-        with world.factory() as session:
-            response = await api_chat_turn(
-                ChatTurnV2Request(message="hold"),
-                request_in_session(world.client.app, world.stack.session_id),
-                _TURN_PERSON, session,
-            )
-            stream = response.body_iterator
-            await anext(stream)
-            stdio = server.build_server(session_factory=world.factory)
-            await stdio.call_tool("suggest_album_cover", {"album_id": f"alb-{USER_ID}"})
-            release.set()
-            async for _frame in stream:
-                pass
-
-    try:
-        asyncio.run(_exercise())
-    finally:
-        get_settings.cache_clear()
-
-    [job] = _cover_jobs(world)
-    assert job.session_id is None

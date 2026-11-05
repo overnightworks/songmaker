@@ -52,7 +52,6 @@ from songmaker_cli.lifecycle import (
     provider_status_refresh_loop,
     reap_stale_jobs,
     reconcile_crashed_loras,
-    report_claude_cli_tool_surface,
     report_codex_image_sandbox_runtime,
     resource_event_cleanup_loop,
     score_backfill_loop,
@@ -95,8 +94,6 @@ def _record_background_loop_completion(
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    from agent_providers.claude.provider import shutdown_tool_surface_background_tasks
-
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
     from songmaker_cli.db.queries.auth import delete_expired_sessions
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
@@ -118,11 +115,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
-    # Both log their result at boot; /health/details reads the live state each
-    # call records (provider.claude_cli_tool_surface_health() and
-    # lifecycle.codex_image_sandbox_runtime_health()) instead of these
-    # calls' return values, since a later call can change either.
-    await report_claude_cli_tool_surface()
+    # It logs its result at boot; /health/details reads the live state each call
+    # records (lifecycle.codex_image_sandbox_runtime_health()) instead of the
+    # return value, since a later call can change it.
     report_codex_image_sandbox_runtime()
 
     await init_arq_pool()
@@ -164,7 +159,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
         await drain_lease_releases()
         await close_arq_pool()
-        await shutdown_tool_surface_background_tasks()
 
 
 def audio_path_rejected_handler(

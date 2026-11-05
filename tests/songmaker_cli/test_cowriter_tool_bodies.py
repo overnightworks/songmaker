@@ -1,21 +1,18 @@
-"""Tests for the songmaker MCP server.
+"""Co-writer tool bodies and dispatch, called without any transport.
 
-Most coverage comes from calling the pure ``tool_*`` functions
-directly with a DB session + ``AuthenticatedUser``. A small end-to-end
-suite drives the MCPServer via ``call_tool()`` to exercise the
-session/auth plumbing in ``server.py``.
+The ``tools.tool_*`` functions are driven directly with a DB session and an
+``AuthenticatedUser``; ``execute_cowriter_tool`` is the shared entry point.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 
 import pytest
-from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.tools import cowriter_hand_tools
 from songmaker_cli.constants import (
     GET_SONG_ONLY_FOR_OTHER_SONGS,
     AuditAction,
@@ -37,23 +34,18 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
-from songmaker_cli.mcp_server import auth, server, tools
+from songmaker_cli.mcp_server import auth, tools
 
 
 @pytest.fixture
 def db_session(tmp_path: Path) -> Session:
-    factory = init_test_db(tmp_path / "mcp.db")
+    factory = init_test_db(tmp_path / "tool_bodies.db")
     session = factory()
     yield session
     session.close()
 
 
-@pytest.fixture
-def db_factory(tmp_path: Path):
-    return init_test_db(tmp_path / "mcp_e2e.db")
-
-
-def _seed(session: Session) -> tuple[str, str, str, str, str]:
+def _seed_owned_song(session: Session) -> tuple[str, str, str, str, str]:
     """Create owner + non-owner + album + song. Returns ids."""
     owner = User(id="u1", username="alice", role="user")
     stranger = User(id="u2", username="bob", role="user")
@@ -82,20 +74,8 @@ def _owner(session: Session, user_id: str) -> AuthenticatedUser:
 
 # ── auth.py ───────────────────────────────────────────────────────────
 
-
-def test_require_user_id_raises_when_missing(monkeypatch):
-    monkeypatch.delenv(auth.USER_ID_ENV, raising=False)
-    with pytest.raises(auth.MCPAuthError):
-        auth.require_user_id()
-
-
-def test_require_user_id_returns_value(monkeypatch):
-    monkeypatch.setenv(auth.USER_ID_ENV, "u1")
-    assert auth.require_user_id() == "u1"
-
-
 def test_load_user_not_found(db_session: Session):
-    with pytest.raises(auth.MCPAuthError):
+    with pytest.raises(auth.ToolUserNotFoundError):
         auth.load_user(db_session, "nope")
 
 
@@ -103,7 +83,7 @@ def test_load_user_not_found(db_session: Session):
 
 
 def test_list_albums_scoped_to_owner(db_session: Session):
-    owner_id, stranger_id, _, _, _ = _seed(db_session)
+    owner_id, stranger_id, _, _, _ = _seed_owned_song(db_session)
     db_session.add(Album(id="other", title="Other", artist="Bob", created_by=stranger_id))
     db_session.commit()
 
@@ -119,7 +99,7 @@ def test_list_albums_scoped_to_owner(db_session: Session):
 
 
 def test_list_songs_without_album(db_session: Session):
-    owner_id, _, _, _, _ = _seed(db_session)
+    owner_id, _, _, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     songs = tools.tool_list_songs(db_session, owner)
     assert [s.id for s in songs] == ["song1"]
@@ -128,21 +108,21 @@ def test_list_songs_without_album(db_session: Session):
 
 
 def test_list_songs_filtered_by_album(db_session: Session):
-    owner_id, _, album_id, _, _ = _seed(db_session)
+    owner_id, _, album_id, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     songs = tools.tool_list_songs(db_session, owner, album_id=album_id)
     assert [s.id for s in songs] == ["song1"]
 
 
 def test_list_songs_rejects_other_users_album(db_session: Session):
-    owner_id, stranger_id, album_id, _, _ = _seed(db_session)
+    owner_id, stranger_id, album_id, _, _ = _seed_owned_song(db_session)
     stranger = _owner(db_session, stranger_id)
     with pytest.raises(tools.MCPToolError):
         tools.tool_list_songs(db_session, stranger, album_id=album_id)
 
 
 def test_search_songs_matches_title(db_session: Session):
-    owner_id, _, _, _, _ = _seed(db_session)
+    owner_id, _, _, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     hit = tools.tool_search_songs(db_session, owner, query="FIRST")
     miss = tools.tool_search_songs(db_session, owner, query="nope")
@@ -151,14 +131,14 @@ def test_search_songs_matches_title(db_session: Session):
 
 
 def test_search_songs_rejects_empty(db_session: Session):
-    owner_id, _, _, _, _ = _seed(db_session)
+    owner_id, _, _, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     with pytest.raises(tools.MCPToolError):
         tools.tool_search_songs(db_session, owner, query="   ")
 
 
 def test_search_songs_limit_validated(db_session: Session):
-    owner_id, _, _, _, _ = _seed(db_session)
+    owner_id, _, _, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     with pytest.raises(tools.MCPToolError):
         tools.tool_search_songs(db_session, owner, query="a", limit=0)
@@ -169,7 +149,7 @@ def test_search_songs_limit_validated(db_session: Session):
 
 
 def test_get_song_returns_current_draft(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+    owner_id, _, _, song_id, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     detail = tools.tool_get_song(db_session, owner, song_id=song_id)
     assert detail.id == "song1"
@@ -181,14 +161,14 @@ def test_get_song_returns_current_draft(db_session: Session):
 
 
 def test_get_song_blocks_other_user(db_session: Session):
-    _, stranger_id, _, song_id, _ = _seed(db_session)
+    _, stranger_id, _, song_id, _ = _seed_owned_song(db_session)
     stranger = _owner(db_session, stranger_id)
     with pytest.raises(tools.MCPToolError):
         tools.tool_get_song(db_session, stranger, song_id=song_id)
 
 
 def test_get_version_and_not_found(db_session: Session):
-    owner_id, _, _, song_id, version_id = _seed(db_session)
+    owner_id, _, _, song_id, version_id = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     v = tools.tool_get_version(db_session, owner, song_id=song_id, version_id=version_id)
     assert v.lyrics == "verse one"
@@ -197,7 +177,7 @@ def test_get_version_and_not_found(db_session: Session):
 
 
 def test_get_version_blocks_other_user(db_session: Session):
-    _, stranger_id, _, song_id, version_id = _seed(db_session)
+    _, stranger_id, _, song_id, version_id = _seed_owned_song(db_session)
     stranger = _owner(db_session, stranger_id)
     with pytest.raises(tools.MCPToolError):
         tools.tool_get_version(
@@ -215,7 +195,7 @@ def _batch_scores() -> dict:
 
 
 def _seed_take(db_session: Session, batch_value: dict | None):
-    owner_id, _, _, song_id, version_id = _seed(db_session)
+    owner_id, _, _, song_id, version_id = _seed_owned_song(db_session)
     db_session.add(Generation(
         id="gen1", song_id=song_id, version_id=version_id, generation_number=1,
         mp3_path="p/g1.mp3", seed=42, is_picked=True, is_kept=True,
@@ -255,7 +235,7 @@ def test_get_generation_without_score_row_has_no_scores(db_session: Session):
 
 
 def test_get_generation_blocks_other_user(db_session: Session):
-    owner_id, stranger_id, _, song_id, version_id = _seed(db_session)
+    owner_id, stranger_id, _, song_id, version_id = _seed_owned_song(db_session)
     db_session.add(Generation(
         id="gen1", song_id=song_id, version_id=version_id, generation_number=1,
         mp3_path="p/g1.mp3",
@@ -271,7 +251,7 @@ def test_get_generation_blocks_other_user(db_session: Session):
 
 
 def test_create_song_requires_access(db_session: Session):
-    _, stranger_id, album_id, _, _ = _seed(db_session)
+    _, stranger_id, album_id, _, _ = _seed_owned_song(db_session)
     stranger = _owner(db_session, stranger_id)
     with pytest.raises(tools.MCPToolError):
         tools.tool_create_song(
@@ -280,7 +260,7 @@ def test_create_song_requires_access(db_session: Session):
 
 
 def test_create_song_persists_and_returns_state(db_session: Session):
-    owner_id, _, album_id, _, _ = _seed(db_session)
+    owner_id, _, album_id, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     result = tools.tool_create_song(
         db_session, owner, album_id=album_id, title="Second Song",
@@ -296,7 +276,7 @@ def test_create_song_persists_and_returns_state(db_session: Session):
 
 
 def test_cowriter_created_song_stays_on_auto_after_a_lyrics_edit(db_session: Session):
-    owner_id, _, album_id, _, _ = _seed(db_session)
+    owner_id, _, album_id, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     created = tools.tool_create_song(db_session, owner, album_id=album_id, title="Auto")
     assert created.song.current_audio_duration == 0
@@ -305,7 +285,7 @@ def test_cowriter_created_song_stays_on_auto_after_a_lyrics_edit(db_session: Ses
 
 
 def test_create_song_dedupes_slug_against_sibling_in_same_album(db_session: Session):
-    owner_id, _, album_id, _, _ = _seed(db_session)
+    owner_id, _, album_id, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     tools.tool_create_song(db_session, owner, album_id=album_id, title="Twin")
     db_session.commit()
@@ -317,7 +297,7 @@ def test_create_song_dedupes_slug_against_sibling_in_same_album(db_session: Sess
 def test_update_lyrics_always_creates_a_new_version_and_preserves_existing_take(
     db_session: Session,
 ):
-    owner_id, _, _, song_id, version_id = _seed(db_session)
+    owner_id, _, _, song_id, version_id = _seed_owned_song(db_session)
     db_session.add(Generation(
         id="gen1", song_id=song_id, version_id=version_id, generation_number=1,
         mp3_path="p/g1.mp3",
@@ -338,7 +318,7 @@ def test_update_lyrics_always_creates_a_new_version_and_preserves_existing_take(
 
 
 def test_update_lyrics_creates_new_version_when_generated(db_session: Session):
-    owner_id, _, _, song_id, version_id = _seed(db_session)
+    owner_id, _, _, song_id, version_id = _seed_owned_song(db_session)
     db_session.add(Generation(
         id="gen1", song_id=song_id, version_id=version_id, generation_number=1,
         mp3_path="p/g1.mp3",
@@ -355,7 +335,7 @@ def test_update_lyrics_creates_new_version_when_generated(db_session: Session):
 
 
 def test_update_prompt(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+    owner_id, _, _, song_id, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     result = tools.tool_update_song_prompt(
         db_session, owner, song_id=song_id, prompt="jazzy bossa",
@@ -365,14 +345,14 @@ def test_update_prompt(db_session: Session):
 
 
 def test_update_style_requires_at_least_one_param(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+    owner_id, _, _, song_id, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     with pytest.raises(tools.MCPToolError):
         tools.tool_update_song_style(db_session, owner, song_id=song_id)
 
 
 def test_update_style_applies_partial(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+    owner_id, _, _, song_id, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     result = tools.tool_update_song_style(
         db_session, owner, song_id=song_id, bpm=88, key_scale="F#m",
@@ -383,7 +363,7 @@ def test_update_style_applies_partial(db_session: Session):
 
 
 def test_update_style_with_duration(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+    owner_id, _, _, song_id, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     result = tools.tool_update_song_style(
         db_session, owner, song_id=song_id, audio_duration=240,
@@ -393,7 +373,7 @@ def test_update_style_with_duration(db_session: Session):
 
 
 def test_rename_song(db_session: Session):
-    owner_id, _, _, song_id, version_id = _seed(db_session)
+    owner_id, _, _, song_id, version_id = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     result = tools.tool_rename_song(
         db_session, owner, song_id=song_id, title="Renamed Track",
@@ -407,7 +387,7 @@ def test_rename_song(db_session: Session):
 
 
 def test_rename_song_dedupes_slug_against_sibling_in_same_album(db_session: Session):
-    owner_id, _, album_id, song_id, _ = _seed(db_session)
+    owner_id, _, album_id, song_id, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     tools.tool_create_song(db_session, owner, album_id=album_id, title="Rival")
     db_session.commit()
@@ -421,7 +401,7 @@ TITLE_WRITES = pytest.mark.parametrize(
 
 
 def _co_writer_title_write(db_session: Session, tool_name: str, target: str, title: str):
-    owner_id, _, album_id, song_id, _ = _seed(db_session)
+    owner_id, _, album_id, song_id, _ = _seed_owned_song(db_session)
     arguments = {target: {"album_id": album_id, "song_id": song_id}[target], "title": title}
     return execute_cowriter_tool(
         db_session, _owner(db_session, owner_id), tool_name, arguments, session_id=None,
@@ -441,7 +421,7 @@ def test_co_writer_stores_the_stripped_title(db_session: Session, tool_name, tar
     "title", ["   ", "x" * (Song.__table__.c.title.type.length + 1)], ids=["blank", "overlong"],
 )
 def test_co_writer_refuses_unstorable_title_before_any_write(db_session, tool_name, target, title):
-    owner_id, _, album_id, song_id, _ = _seed(db_session)
+    owner_id, _, album_id, song_id, _ = _seed_owned_song(db_session)
     target_id = {"album_id": album_id, "song_id": song_id}[target]
     before = db_session.query(Song.id, Song.title, Song.slug).all()
     tool = getattr(tools, f"tool_{tool_name}")
@@ -457,7 +437,7 @@ def test_co_writer_refuses_unstorable_title_before_any_write(db_session, tool_na
 
 
 def test_suggest_album_cover_queues_a_cover_job(db_session: Session):
-    owner_id, _, album_id, _, _ = _seed(db_session)
+    owner_id, _, album_id, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
 
     result = tools.tool_suggest_album_cover(db_session, owner, album_id=album_id, session_id=None)
@@ -486,7 +466,7 @@ def test_suggest_album_cover_surfaces_the_admission_owner_errors(
     message: str,
 ):
     """1301-F3-C1-COUNT: only produced suggestions exhaust admission."""
-    owner_id, _, _, _, _ = _seed(db_session)
+    owner_id, _, _, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)
     if existing_status is not None:
         db_session.add(Job(
@@ -508,7 +488,7 @@ def test_suggest_album_cover_surfaces_the_admission_owner_errors(
 
 
 def test_write_tools_block_other_users(db_session: Session):
-    _, stranger_id, _, song_id, _ = _seed(db_session)
+    _, stranger_id, _, song_id, _ = _seed_owned_song(db_session)
     stranger = _owner(db_session, stranger_id)
     with pytest.raises(tools.MCPToolError):
         tools.tool_update_song_lyrics(
@@ -544,7 +524,7 @@ def test_co_writer_edits_record_the_editors_own_work_and_its_kind(
     db_session: Session, tool, arguments, kind, role,
 ):
     """1301-F2-WORK: owned edits retain the acting musician and work kind."""
-    editor_id, _, _, song_id, _ = _seed(db_session)
+    editor_id, _, _, song_id, _ = _seed_owned_song(db_session)
     db_session.get(User, editor_id).role = role
     db_session.commit()
     editor = _owner(db_session, editor_id)
@@ -571,7 +551,7 @@ def test_co_writer_edits_record_the_editors_own_work_and_its_kind(
 def test_co_writer_writes_that_change_nothing_record_no_work(
     db_session: Session, tool, arguments,
 ):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+    owner_id, _, _, song_id, _ = _seed_owned_song(db_session)
 
     tool(db_session, _owner(db_session, owner_id), song_id=song_id, **arguments)
 
@@ -624,7 +604,7 @@ def test_co_writer_song_creation_records_the_creators_own_work(
     db_session: Session, role,
 ):
     """1301-F2-WORK: owned creation records the acting musician."""
-    creator_id, _, album_id, _, _ = _seed(db_session)
+    creator_id, _, album_id, _, _ = _seed_owned_song(db_session)
     db_session.get(User, creator_id).role = role
     db_session.commit()
 
@@ -641,158 +621,12 @@ def test_co_writer_song_creation_records_the_creators_own_work(
 # ── End-to-end via MCPServer.call_tool ──────────────────────────────────
 
 
-@pytest.fixture
-def e2e_setup(db_factory, monkeypatch):
-    with db_factory() as session:
-        owner_id, stranger_id, album_id, song_id, _ = _seed(session)
-    monkeypatch.setenv(auth.USER_ID_ENV, owner_id)
-    srv = server.build_server(session_factory=db_factory)
-    return srv, owner_id, stranger_id, album_id, song_id
-
-
-def test_e2e_read_and_write(e2e_setup, db_factory):
-    srv, _, _, album_id, song_id = e2e_setup
-    listed = asyncio.run(srv.call_tool("list_songs", {}))
-    payload = _extract_payload(listed)
-    assert any(s["id"] == song_id for s in payload)
-
-    updated = asyncio.run(srv.call_tool(
-        "update_song_lyrics",
-        {"song_id": song_id, "lyrics": "new verse"},
-    ))
-    payload = _extract_payload(updated)
-    assert payload["ok"] is True
-    assert payload["song"]["current_lyrics"] == "new verse"
-
-
-def test_e2e_every_tool_wrapper(e2e_setup, db_factory):
-    """Exercise every MCPServer tool wrapper once so server.py is covered."""
-    srv, _, _, album_id, song_id = e2e_setup
-
-    # Seed a generation for get_generation
-    with db_factory() as session:
-        from songmaker_cli.db.models import Generation
-        version_id = session.query(Song).filter_by(id=song_id).one().latest_version.id
-        session.add(Generation(
-            id="gen-e2e", song_id=song_id, version_id=version_id,
-            generation_number=1, mp3_path="p/e2e.mp3",
-        ))
-        session.commit()
-
-    calls: dict[str, dict] = {
-        "list_albums": {},
-        "list_songs": {"album_id": album_id},
-        "search_songs": {"query": "first", "limit": 10},
-        "get_song": {"song_id": song_id},
-        "get_version": {"song_id": song_id, "version_id": version_id},
-        "get_generation": {"generation_id": "gen-e2e"},
-        "update_song_lyrics": {"song_id": song_id, "lyrics": "E2E lyrics"},
-        "update_song_prompt": {"song_id": song_id, "prompt": "bossa"},
-        "update_song_style": {"song_id": song_id, "bpm": 99},
-        "rename_song": {"song_id": song_id, "title": "E2E Renamed"},
-        "create_song": {"album_id": album_id, "title": "E2E New"},
-        "suggest_album_cover": {"album_id": album_id},
-    }
-    for name, args in calls.items():
-        result = asyncio.run(srv.call_tool(name, args))
-        payload = _extract_payload(result)
-        assert payload is not None, f"{name} returned nothing"
-
-
-def test_every_co_writer_route_reads_the_same_get_song_rule(db_factory):
-    registered = asyncio.run(server.build_server(session_factory=db_factory).list_tools())
-    mcp_descriptions = {tool.name: tool.description for tool in registered}
+def test_every_co_writer_route_reads_the_same_get_song_rule(tmp_path: Path):
+    factory = init_test_db(tmp_path / "routes.db")
     catalog_descriptions = {tool.name: tool.description for tool in COWRITER_TOOLS}
-    assert GET_SONG_ONLY_FOR_OTHER_SONGS in mcp_descriptions["get_song"]
-    assert catalog_descriptions["get_song"] == mcp_descriptions["get_song"]
-
-
-def test_e2e_write_rolled_back_on_access_denied(e2e_setup, db_factory, monkeypatch):
-    srv, _, stranger_id, _, song_id = e2e_setup
-    monkeypatch.setenv(auth.USER_ID_ENV, stranger_id)
-    call_tool = srv.call_tool(
-        "update_song_lyrics",
-        {"song_id": song_id, "lyrics": "hijack"},
-    )
-    with pytest.raises(ToolError, match="not found"):
-        asyncio.run(call_tool)
-    # Ensure no change landed.
-    with db_factory() as session:
-        song = session.query(Song).filter_by(id=song_id).one()
-        assert song.latest_version.lyrics == "verse one"
-
-
-def test_e2e_missing_env_var_fails(db_factory, monkeypatch):
-    monkeypatch.delenv(auth.USER_ID_ENV, raising=False)
-    srv = server.build_server(session_factory=db_factory)
-    call_tool = srv.call_tool("list_albums", {})
-    with pytest.raises(ToolError, match="not set"):
-        asyncio.run(call_tool)
-
-
-def test_e2e_list_albums_returns_structured(e2e_setup):
-    srv, _, _, album_id, _ = e2e_setup
-    result = asyncio.run(srv.call_tool("list_albums", {}))
-    payload = _extract_payload(result)
-    assert any(a["id"] == album_id for a in payload)
-
-
-def test_default_factory_used_when_none_provided(db_factory, monkeypatch):
-    """build_server() without explicit factory lazily calls init_db via settings."""
-    monkeypatch.setattr(
-        "songmaker_cli.mcp_server.server._default_factory",
-        lambda: db_factory,
-    )
-    with db_factory() as session:
-        owner_id, _, _, _, _ = _seed(session)
-    monkeypatch.setenv(auth.USER_ID_ENV, owner_id)
-    srv = server.build_server(session_factory=None)
-    result = asyncio.run(srv.call_tool("list_albums", {}))
-    payload = _extract_payload(result)
-    assert isinstance(payload, list)
-
-
-def test_default_factory_resolves_via_settings(db_factory, monkeypatch):
-    """_default_factory() itself calls init_db(resolve_database_url())."""
-    monkeypatch.setattr(
-        "songmaker_cli.db.engine.resolve_database_url",
-        lambda: "sqlite:///:memory:",
-    )
-    monkeypatch.setattr(
-        "songmaker_cli.db.engine.init_db", lambda _url: db_factory,
-    )
-    assert server._default_factory() is db_factory
-
-
-def test_main_runs_server(monkeypatch):
-    """main() wires stdio transport — mock MCPServer.run so it doesn't block."""
-    called = {}
-
-    def _fake_run(self, transport="stdio", **kwargs):
-        called["transport"] = transport
-
-    monkeypatch.setattr(
-        "mcp.server.mcpserver.MCPServer.run", _fake_run,
-    )
-    monkeypatch.setattr(
-        "songmaker_cli.mcp_server.server._default_factory",
-        lambda: object(),
-    )
-    server.main()
-    assert called["transport"] == "stdio"
-
-
-def _extract_payload(call_result):
-    # MCPServer.call_tool returns a CallToolResult with structured_content
-    # set from the tool's Pydantic return value, falling back to the text
-    # content block for tools with no structured output schema.
-    if call_result.structured_content is not None:
-        return _unwrap_structured(call_result.structured_content)
-    return json.loads(call_result.content[0].text)
-
-
-def _unwrap_structured(payload):
-    # MCPServer wraps list outputs in {"result": [...]} for JSON-RPC; peel it off.
-    if isinstance(payload, dict) and set(payload.keys()) == {"result"}:
-        return payload["result"]
-    return payload
+    hand_descriptions = {
+        hand_tool.declaration.name: hand_tool.declaration.description
+        for hand_tool in cowriter_hand_tools(factory)
+    }
+    assert GET_SONG_ONLY_FOR_OTHER_SONGS in catalog_descriptions["get_song"]
+    assert hand_descriptions["get_song"] == catalog_descriptions["get_song"]

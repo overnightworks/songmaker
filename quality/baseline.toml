@@ -72,7 +72,7 @@
 "tests/songmaker_cli/test_admin_api.py" = 1036
 "tests/songmaker_cli/test_api.py" = 4715
 "tests/test_auto_deploy_alerting.py" = 1384
-"tests/songmaker_cli/test_conversation_api.py" = 842
+"tests/songmaker_cli/test_conversation_api.py" = 704
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
 "tests/songmaker_cli/test_db.py" = 3575
 "tests/songmaker_cli/test_jobs.py" = 3215
@@ -154,9 +154,6 @@
 "api_add_sample" = 65
 "api_train_lora" = 61
 
-[function_lines."src/songmaker_cli/mcp_server/server.py"]
-"build_server" = 173
-
 [function_lines."src/songmaker_cli/queue_streams.py"]
 "_build_queue_stream_snapshot" = 63
 "resolve_library_pool_membership" = 60
@@ -165,7 +162,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 71
+"_lifespan" = 66
 "create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]

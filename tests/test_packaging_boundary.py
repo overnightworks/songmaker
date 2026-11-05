@@ -434,29 +434,6 @@ def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> 
         )
 
 
-def test_the_mcp_server_spec_imports_without_the_mcp_extra() -> None:
-    """The scoring-worker container installs no ``mcp`` extra, so songmaker's
-    MCP declaration must stay outside ``mcp_server/`` — whose ``__init__``
-    imports that extra eagerly (ruling ac on #825)."""
-    spec = CONTAINERS[SCORING_WORKER_SERVICE]
-    blocked_roots = frozenset(
-        root for root, owners in _root_owning_extras().items()
-        if not owners & spec.extras
-    )
-    assert "mcp" in blocked_roots
-
-    completed = _run_with_blocked_optional_imports(
-        spec,
-        blocked_roots,
-        "importlib.import_module('songmaker_cli.cowriter.mcp_spec')",
-    )
-
-    assert completed.returncode == 0, (
-        f"songmaker_cli.cowriter.mcp_spec reached an omitted optional "
-        f"dependency.\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
-    )
-
-
 def test_the_scoring_worker_imports_the_image_route_without_pillow() -> None:
     """The scoring worker reaches the cover job's error names through
     ``jobs/_runtime.py`` but never produces an image, so it installs no
