@@ -23,17 +23,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-DEFAULT_MODEL = "jinaai/jina-embeddings-v2-base-code"
-DEFAULT_MODEL_REVISION = "516f4baf13dec4ddddda8631e019b5737c8bc250"
-DEFAULT_MODEL_CODE_REVISION = "3baf9e3ac750e76e8edd3019170176884695fb94"
+DEFAULT_MODEL = "Alibaba-NLP/gte-modernbert-base"
+DEFAULT_MODEL_REVISION = "e7f32e3c00f91d699e8c43b53106206bcc72bb22"
 DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_MAX_SUMMARIES = 400
-DEFAULT_CODE_THRESHOLD = 0.90
+DEFAULT_CODE_THRESHOLD = 0.92
 DEFAULT_SUMMARY_THRESHOLD = 0.90
 DEFAULT_CACHE = Path(".cache/similar_functions")
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_SUMMARY_WORKERS = 4
 CPU_THREADS = 4
+MAX_SEQUENCE_TOKENS = 512
 MIN_BODY_LINES = 3
 CLAUDE_TIMEOUT_SECONDS = 120
 SUMMARY_MAX_TOKENS = 256
@@ -415,19 +415,9 @@ class LocalEmbedder:
                 self.model = SentenceTransformer(
                     self.model_name,
                     device="cpu",
-                    trust_remote_code=self.model_name == DEFAULT_MODEL,
                     revision=DEFAULT_MODEL_REVISION if self.model_name == DEFAULT_MODEL else None,
-                    model_kwargs=(
-                        {"code_revision": DEFAULT_MODEL_CODE_REVISION}
-                        if self.model_name == DEFAULT_MODEL
-                        else {}
-                    ),
-                    config_kwargs=(
-                        {"code_revision": DEFAULT_MODEL_CODE_REVISION}
-                        if self.model_name == DEFAULT_MODEL
-                        else {}
-                    ),
                 )
+                self.model.max_seq_length = MAX_SEQUENCE_TOKENS
             except (ImportError, OSError, ValueError) as error:
                 raise AuditError(
                     f"Cannot load embedding model {self.model_name}; install the similarity extra "

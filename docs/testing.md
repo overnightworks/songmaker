@@ -31,15 +31,16 @@ Methods are included; initializers, pure delegation, and bodies shorter than
 three normalized lines are excluded. Nested functions are not paired with their
 enclosing functions. `--include-tests` also scans `tests/`.
 `--code-threshold` and `--summary-threshold` select pairs by cosine similarity
-(both default to 0.90); either signal qualifies unless `--require-both` is set.
+(defaults 0.92 and 0.90); either signal qualifies unless `--require-both` is set.
 Pairs are sorted by their mean score. `--fail-above N` exits with status 1 when
 a reported pair exceeds N; without this flag, the audit is not a gate.
 
-`--model` selects the local model (default `jinaai/jina-embeddings-v2-base-code`).
-The default model and its external Python implementation are pinned to commit
-revisions recorded in `DEFAULT_MODEL_REVISION` and `DEFAULT_MODEL_CODE_REVISION`
-in [the script](../scripts/similar_functions.py), so cold runs cannot execute a
-moving Hub revision. The first run downloads weights and computes embeddings on
+`--model` selects the local model (default `Alibaba-NLP/gte-modernbert-base`).
+The default model is pinned to the commit revision in `DEFAULT_MODEL_REVISION`
+in [the script](../scripts/similar_functions.py), so cold runs cannot load
+moving Hub weights; inputs are truncated to 512 tokens to keep CPU runs bounded. The script runs no remote model code
+(`trust_remote_code` is never set); the model's architecture must be one the
+locked `transformers` implements. The first run downloads weights and computes embeddings on
 CPU. Each distinct uncached function content requires one Claude call.
 Before any model or Claude call, the audit prints the summary cache-miss count
 and aborts if it exceeds `--max-summaries N` (default 400); rerun with a higher

@@ -481,16 +481,12 @@ def test_pairs_skip_only_enclosing_functions_in_same_file(functions, name, path,
 
 
 @pytest.mark.parametrize("model", [audit.DEFAULT_MODEL, "other-model"])
-def test_embedding_loader_pins_default_weights_and_external_code(monkeypatch, model):
+def test_embedding_loader_pins_default_weights_and_runs_no_remote_code(monkeypatch, model):
     def load(name, **kwargs):
         assert name == model
         is_default = model == audit.DEFAULT_MODEL
-        assert kwargs["trust_remote_code"] is is_default
+        assert not kwargs.get("trust_remote_code")
         assert kwargs["revision"] == (audit.DEFAULT_MODEL_REVISION if is_default else None)
-        for key in ("model_kwargs", "config_kwargs"):
-            assert kwargs[key] == (
-                {"code_revision": audit.DEFAULT_MODEL_CODE_REVISION} if is_default else {}
-            )
         return SimpleNamespace(
             encode=lambda *args, **kwargs: SimpleNamespace(tolist=lambda: [[1, 0]])
         )
