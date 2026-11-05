@@ -31,6 +31,7 @@ from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, sugge
 from songmaker_cli.covers import CoverRejectedError, ai_mark_png_info, decode_cover_image
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.auth import get_user
 from songmaker_cli.db.queries.cover_suggestions import delete_job_cover_suggestions
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
@@ -42,7 +43,6 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.jobs._runtime import _touch_heartbeat, _update_job
-from songmaker_cli.mcp_server.auth import MCPAuthError, load_user
 
 log = logging.getLogger(__name__)
 
@@ -308,12 +308,10 @@ def _load_cover_start(db_factory, job_id: str) -> _CoverStart:
 
 
 def _user_or_none(session, user_id: str | None) -> AuthenticatedUser | None:
-    if user_id is None:
+    user = None if user_id is None else get_user(session, user_id)
+    if user is None:
         return None
-    try:
-        return load_user(session, user_id)
-    except MCPAuthError:
-        return None
+    return AuthenticatedUser(id=user.id, username=user.username, role=user.role)
 
 
 def _staging_directory(audio_dir: Path, album_id: str, job_id: str) -> Path:
