@@ -282,16 +282,17 @@ the CI stack on its own port and project, run, then throw it away:
 ```bash
 cd <repo root>
 export COMPOSE_PROJECT_NAME=songmaker-e2e-local WEB_PORT=18080
-export POSTGRES_PASSWORD=e2e-ci-postgres-password
-export SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else
-export SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token
+export SONGMAKER_SECRETS_DIR="$(mktemp -d)"   # throwaway files; the default is ~/.secrets/songmaker, the live stack's
+echo e2e-ci-postgres-password > "$SONGMAKER_SECRETS_DIR/postgres-password"
+echo e2e-ci-session-secret-do-not-reuse-anywhere-else > "$SONGMAKER_SECRETS_DIR/session-secret"
+echo e2e-ci-internal-token > "$SONGMAKER_SECRETS_DIR/internal-token"
+echo e2e-ci-monitoring-token > "$SONGMAKER_SECRETS_DIR/monitoring-token"
 export E2E_ADMIN_USERNAME=e2e-ci-admin
 # The web app boots without reaching Keycloak; these name an issuer that never answers.
 export OIDC_ISSUER=https://keycloak.invalid/realms/e2e
 export KEYCLOAK_CLIENT_SECRET_FILE="$(mktemp)" && echo e2e-ci-client-secret > "$KEYCLOAK_CLIENT_SECRET_FILE"
 export GATEWAY_KEY_FILE="$(mktemp)" && echo e2e-ci-gateway-key > "$GATEWAY_KEY_FILE"
 export GRAFANA_PASSWORD=e2e-ci-grafana-password    # compose refuses up/down without it
-export SONGMAKER_MONITORING_TOKEN=e2e-ci-monitoring-token
 export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or the web app refuses to start
 docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
   up -d --build --wait postgres redis migrate songmaker-web

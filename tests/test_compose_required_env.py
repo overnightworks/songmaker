@@ -1,6 +1,7 @@
 """Compose fails closed without its required settings, against the real compose.
 
 Grafana needs its password (#1357) and the web app needs its Keycloak issuer.
+The secret files are judged by the deploy preflight, not here.
 Each case runs the repository's docker-compose.yml through the real
 ``docker compose config --quiet`` — the same command the auto-deploy guard
 runs — with a scratch ``--env-file`` and a scratch project name, so the
@@ -20,11 +21,9 @@ SCRATCH_PROJECT_COMPOSE_ARGS = (
 )
 SCRATCH_PASSWORD = "scratch-grafana-password-not-a-secret"
 SCRATCH_ISSUER = "https://keycloak.invalid/realms/scratch"
-SCRATCH_MONITORING_TOKEN = "scratch-monitoring-token-not-a-secret"
 EVERYTHING_REQUIRED = {
     "GRAFANA_PASSWORD": SCRATCH_PASSWORD,
     "OIDC_ISSUER": SCRATCH_ISSUER,
-    "SONGMAKER_MONITORING_TOKEN": SCRATCH_MONITORING_TOKEN,
 }
 
 

@@ -244,7 +244,7 @@ If a worker is stuck in step 3:
 
 - Check container logs for the per-attempt warning lines (`"Registration attempt N failed: ..."`)
 - Verify the control plane URL is reachable from inside the worker container: `docker compose exec acestep-worker-0 curl -v http://songmaker-web:8080/health`
-- Verify `SONGMAKER_INTERNAL_TOKEN` matches between the worker and the web container env
+- Verify the worker and the web container mount the same `internal-token` file content (both read it from `/run/secrets/songmaker_internal_token`; a rotated file reaches them only after a recreate)
 
 The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container stop) while still in the registration loop, the lifespan finally block cancels the registration task and awaits its cleanup before exiting. No orphaned tasks survive shutdown.
 
@@ -353,7 +353,7 @@ docker run --rm --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all \
 
 On this Docker 29 host, the legacy `--gpus all` / Compose `deploy.resources.reservations.devices` path fails even though the explicit NVIDIA runtime and CDI both work. The worker therefore uses `runtime: nvidia` plus `NVIDIA_VISIBLE_DEVICES`, and does not declare the failing deploy reservation. If the explicit-runtime test fails, stop: fix the NVIDIA Container Toolkit/daemon configuration before retrying Compose. If it succeeds, start exactly one worker and wait for registration before attempting generation.
 
-**"Worker won't register"** — `/health` returns 503. Check container logs for `"Registration attempt N failed: ..."`. Verify the control plane URL is reachable from inside the worker container with `docker compose exec songmaker-acestep-worker-0 curl -v http://songmaker-web:8080/health`. Verify `SONGMAKER_INTERNAL_TOKEN` matches between worker and web. The retry loop never gives up — fix the root cause and the next backoff tick will succeed.
+**"Worker won't register"** — `/health` returns 503. Check container logs for `"Registration attempt N failed: ..."`. Verify the control plane URL is reachable from inside the worker container with `docker compose exec songmaker-acestep-worker-0 curl -v http://songmaker-web:8080/health`. Verify the worker and the web container mount the same `internal-token` file content (a rotated file reaches them only after a recreate). The retry loop never gives up — fix the root cause and the next backoff tick will succeed.
 
 **"Jobs fail with an init error"** — a child without its LM no longer stays up serving that error: the worker exits with code 75 and retries the failed load when Docker restarts it (see [Restart procedure](#restart-procedure)). If takes keep failing, the LM cannot initialise (VRAM held by another process, a missing LM checkpoint): read `acestep_reason` in `GET /health/details` first (`lm_init_failed` means this loop), then check the key with `redis-cli GET 'songmaker:acestep:lm-failure:{worker_id}'`, the restart count above and the container log's last lines, fix the cause, and the next restart comes online by itself.
 
@@ -456,7 +456,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `WORKER_PORT` | 8001 | Port the worker's FastAPI app listens on |
 | `REDIS_URL` | (required) | Redis URL for heartbeat publishing |
 | `CONTROL_PLANE_URL` | None | Songmaker web URL for worker registration. If unset, registration is skipped. |
-| `SONGMAKER_INTERNAL_TOKEN` | (required, non-empty) | Shared secret for control-plane auth. The worker refuses to start without it, and every route except `/health` checks it in the `X-Internal-Token` header (see "How Songmaker Uses ACE-Step"). |
+| `songmaker_internal_token` (file `/run/secrets/songmaker_internal_token`) | (required, non-empty) | Shared secret for control-plane auth. The worker refuses to start without it, and every route except `/health` checks it in the `X-Internal-Token` header (see "How Songmaker Uses ACE-Step"). |
 | `VRAM_BUDGET_GB` | 24.0 | VRAM budget in GB. Passed to the ACE-Step subprocess as `MAX_CUDA_VRAM`. Lower values (e.g. 22 on a 24 GB card) cause ACE-Step to auto-fall-back to CPU VAE decode during xl-turbo generation, which is ~100x slower than GPU — raise the budget if the admin panel shows very slow xl-turbo generations at ~0% GPU util. |
 | `GPU_ID` | None | CUDA device index passed deterministically to the inner process as `CUDA_VISIBLE_DEVICES` |
 | `NVIDIA_VISIBLE_DEVICES` | Compose: `0` | Host GPU exposed to the worker by the explicit NVIDIA container runtime |

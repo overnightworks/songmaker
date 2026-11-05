@@ -19,8 +19,10 @@ services:
     logging: *service-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-songmaker}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: ${POSTGRES_DB:-songmaker}
+    secrets:
+      - postgres_password
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -60,7 +62,9 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
+    secrets:
+      - postgres_password
     entrypoint: ["uv", "run", "--no-sync", "--frozen", "--no-build", "alembic", "upgrade", "head"]
     restart: "no"
     logging: *service-logging
@@ -81,9 +85,8 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
-      SESSION_SECRET: ${SESSION_SECRET}
       FINAL_DELETION_DAYS:
       # The container's own healthcheck calls localhost and the ACE-Step control
       # plane and Prometheus call songmaker-web, so the Host check admits these
@@ -107,15 +110,18 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       XAI_API_KEY: ${XAI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
-      SONGMAKER_MONITORING_TOKEN: "${SONGMAKER_MONITORING_TOKEN:?SONGMAKER_MONITORING_TOKEN must be set in .env (see docker/.env.docker.example)}"
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       LOG_FORMAT: json
       HOST: "0.0.0.0"
-    # Only the web service reads the Keycloak client secret and the gateway key.
+    # Each file is mounted only into the services that read it; the settings
+    # read /run/secrets/<name> by their field names.
     secrets:
       - keycloak_client_secret
       - gateway_key
+      - session_secret
+      - postgres_password
+      - songmaker_internal_token
+      - songmaker_monitoring_token
     # backchannel: the private network on which the realm posts its back-channel
     # logout to <public host>:8080; nothing else joins it.
     # hal_agent_songmaker: edge's per-app network on which songmaker-web reaches
@@ -229,9 +235,8 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
-      SESSION_SECRET: ${SESSION_SECRET}
       FINAL_DELETION_DAYS:
       MUSIC_MAX_JOBS: "${MUSIC_MAX_JOBS:-2}"
       ARQ_JOB_TIMEOUT: "${ARQ_JOB_TIMEOUT:-1000}"
@@ -241,8 +246,11 @@ services:
       LORA_TRAINING_GRADIENT_ACCUMULATION: "${LORA_TRAINING_GRADIENT_ACCUMULATION:-4}"
       LORA_TRAINING_SAVE_EVERY_N_EPOCHS: "${LORA_TRAINING_SAVE_EVERY_N_EPOCHS:-5}"
       LORA_TRAINING_POLL_INTERVAL_SECONDS: "${LORA_TRAINING_POLL_INTERVAL_SECONDS:-5}"
-      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       LOG_FORMAT: json
+    secrets:
+      - session_secret
+      - postgres_password
+      - songmaker_internal_token
     volumes:
       - audiofiles:/app/data/audio
 
@@ -283,9 +291,10 @@ services:
       ACESTEP_LOG_DIR: "/opt/acestep/logs"
       REDIS_URL: redis://redis:6379/0
       CONTROL_PLANE_URL: "${ACESTEP_WORKER_CONTROL_PLANE_URL:-http://songmaker-web:8080}"
-      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       HF_TOKEN: "${HF_TOKEN:-}"
       HF_HUB_DISABLE_XET: "1"
+    secrets:
+      - songmaker_internal_token
     volumes:
       - ./vendor/acestep/checkpoints:/opt/acestep/checkpoints
       - audiofiles:/app/data/audio
@@ -322,15 +331,17 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
-      SESSION_SECRET: ${SESSION_SECRET}
-      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       SCORING_DEVICE: "${SCORING_DEVICE:-cpu}"
       SCORING_MAX_JOBS: "${SCORING_MAX_JOBS:-1}"
       SCORER_TIMEOUT_SECONDS: "${SCORER_TIMEOUT_SECONDS:-120}"
       TEXT_ACCURACY_TIMEOUT_SECONDS: "${TEXT_ACCURACY_TIMEOUT_SECONDS:-300}"
       LOG_FORMAT: json
+    secrets:
+      - session_secret
+      - postgres_password
+      - songmaker_internal_token
     volumes:
       - audiofiles:/app/data/audio
       - hfcache:/app/.cache/huggingface/hub
@@ -345,9 +356,10 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     # Prometheus sends it as the bearer token of the songmaker job
-    # (monitoring/prometheus.yml); no other service mounts it.
+    # (monitoring/prometheus.yml); web mounts the same source to check it.
     secrets:
-      - monitoring_token
+      - source: songmaker_monitoring_token
+        target: monitoring_token
     volumes:
       - ./monitoring:/etc/prometheus:ro
       - promdata:/prometheus
@@ -458,8 +470,18 @@ secrets:
   # a text substitution on its way into the config (issue #333).
   smtp_password:
     environment: SMTP_PASSWORD
-  monitoring_token:
-    environment: SONGMAKER_MONITORING_TOKEN
+  # The songmaker secrets, one file each (made by hal setup;
+  # scripts/secret_files.py copies an existing .env once).
+  # Rotating one is a file write plus a recreate of its readers. A throwaway
+  # stack (CI, local e2e) points SONGMAKER_SECRETS_DIR at a directory of its own.
+  session_secret:
+    file: ${SONGMAKER_SECRETS_DIR:-${HOME}/.secrets/songmaker}/session-secret
+  postgres_password:
+    file: ${SONGMAKER_SECRETS_DIR:-${HOME}/.secrets/songmaker}/postgres-password
+  songmaker_internal_token:
+    file: ${SONGMAKER_SECRETS_DIR:-${HOME}/.secrets/songmaker}/internal-token
+  songmaker_monitoring_token:
+    file: ${SONGMAKER_SECRETS_DIR:-${HOME}/.secrets/songmaker}/monitoring-token
 
 # Created by the edge stack (one network per app); the deploy follows its apply.
 networks:
