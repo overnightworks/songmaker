@@ -30,7 +30,7 @@ The live app is Docker-only; there is no local server path. `.venv` is for tests
 
 CI runs the pinned reusable quality gate (`quality / verdict`, mandatory jobs in `quality/config.toml`); coverage floors, Sonar and transport are in [testing](docs/testing.md#static-analysis-sonarcloud).
 
-Local runs are targeted: `pytest -q` on the named files, `pnpm exec vitest run` on the named frontend file.
+Local runs are targeted: `pytest -q` on the named files, `scripts/test_postgresql.sh <files>` for database tests (a disposable PostgreSQL, no lock), `pnpm exec vitest run` on the named frontend file.
 
 Before reporting a tip, run `bash scripts/static_checks.sh`: it runs CI's static gates (ruff, import contracts, the repository scripts, svelte-check, eslint, prettier, quality hygiene at CI's pin) and stops at the first red one, naming it. It needs `.venv` and `frontend/node_modules`; the script lists the gates.
 

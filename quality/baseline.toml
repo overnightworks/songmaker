@@ -80,7 +80,7 @@
 "tests/songmaker_cli/test_library_api.py" = 1627
 "tests/songmaker_cli/test_lora_api.py" = 1297
 "tests/songmaker_cli/test_playlist_api.py" = 1105
-"tests/songmaker_cli/test_db_postgresql.py" = 838
+"tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_queue_streams.py" = 2417
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1285
@@ -222,7 +222,7 @@
 "test_startup_recovers_music_job_types_and_reconciles_lora_once" = 70
 
 [function_lines."tests/songmaker_cli/test_db_postgresql.py"]
-"test_alembic_migrations_on_postgresql" = 119
+"test_alembic_migrations_on_postgresql" = 114
 "test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql" = 65
 "test_concurrent_lora_reconciliation_claims_one_locked_row" = 83
 

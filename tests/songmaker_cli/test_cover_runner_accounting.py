@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import shutil
 import threading
-import uuid
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -17,14 +15,13 @@ from alembic import command
 from alembic.config import Config
 from PIL import Image
 from sqlalchemy import create_engine, delete, event, inspect, text
-from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 from songmaker_cli import cover_runner
 from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Base, Job, User, aware_timestamp
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, aware_timestamp
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
 
 STARTED = datetime(2026, 10, 18, tzinfo=timezone.utc)
@@ -39,39 +36,14 @@ def _png_bytes() -> bytes:
     return output.getvalue()
 
 
-@contextmanager
-def _accounting_schema(base_url):
-    engine = create_engine(base_url)
-    schema = "cover_accounting_" + uuid.uuid4().hex
-    with engine.begin() as connection:
-        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    try:
-        yield make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
-    finally:
-        with engine.begin() as connection:
-            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        engine.dispose()
-
-
 @pytest.fixture
-def accounting_pg_url(postgresql_url):
-    with _accounting_schema(postgresql_url) as url:
-        yield url
-
-
-@pytest.fixture
-def accounting_factory(database_postgresql_url, tmp_path):
-    if database_postgresql_url is None:
-        factory = init_test_db(tmp_path / "accounting.db")
-        yield factory
-        factory.kw["bind"].dispose()
+def accounting_factory(database_pg_factory, tmp_path):
+    if database_pg_factory is not None:
+        yield database_pg_factory
         return
-    with _accounting_schema(database_postgresql_url) as url:
-        engine = create_engine(url)
-        Base.metadata.create_all(engine)
-        factory = sessionmaker(bind=engine)
-        yield factory
-        engine.dispose()
+    factory = init_test_db(tmp_path / "accounting.db")
+    yield factory
+    factory.kw["bind"].dispose()
 
 
 @pytest.fixture
@@ -346,15 +318,17 @@ def _seed_owner_with_jobs_on_two_albums(factory) -> None:
         session.commit()
 
 
-def test_migration_preserves_usage_across_upgrade_album_deletion_and_downgrade(accounting_pg_url):
+def test_migration_preserves_usage_across_upgrade_album_deletion_and_downgrade(
+    empty_postgresql_url,
+):
     """1301-F3-C1-DURABLE: change the FK without erasing existing or orphaned jobs."""
     config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
     config.set_main_option(
         "sqlalchemy.url",
-        accounting_pg_url.render_as_string(hide_password=False).replace("%", "%%"),
+        empty_postgresql_url.render_as_string(hide_password=False).replace("%", "%%"),
     )
     command.upgrade(config, PREVIOUS_REVISION)
-    engine = create_engine(accounting_pg_url)
+    engine = create_engine(empty_postgresql_url)
     factory = sessionmaker(bind=engine)
     try:
         _seed_owner_with_jobs_on_two_albums(factory)
