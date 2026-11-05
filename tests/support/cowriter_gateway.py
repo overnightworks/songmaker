@@ -73,9 +73,6 @@ class Release:
     def clear(self) -> None:
         self._flag.clear()
 
-    def is_set(self) -> bool:
-        return self._flag.is_set()
-
     async def wait(self) -> None:
         waiter = (asyncio.get_running_loop(), asyncio.Event())
         with self._lock:
