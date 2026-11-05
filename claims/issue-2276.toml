@@ -1,0 +1,7 @@
+claim_id = "c8835e9b5ef74d5db4a61801a84015ad"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "4c652811dfd121ff9c52f16aff1dfc939a73d268"
+branch = "claude/issue-2276-terms-sign-in-details"
+scope = ["legal/nutzungsbedingungen.html"]
+opened_commit = "fac3b4af08a9b83ec6572d3afcd0f90846af0b37"
