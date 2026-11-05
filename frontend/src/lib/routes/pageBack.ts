@@ -1,5 +1,6 @@
 import type { AlbumItem, PlaylistItem, SongItem } from '#lib/api/types.ts';
-import { HOME_PAGE_LABEL, RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
+import { RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
+import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 import {
 	albumRoutePath,
 	HOME_ROUTE_PATH,

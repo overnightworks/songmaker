@@ -9,32 +9,10 @@ export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 // return to from this param.
 export const SIGN_IN_NEXT_PARAM = 'next';
 
-// The share succeeded server-side even when the follow-up clipboard write
-// throws (no permission, no focus, etc.) — that toast must never read as a
-// share failure, since the link exists and only the copy step didn't.
-export const SHARE_BUTTON_COPY_FAILED_TOAST =
-	'Shared — copy the link manually, clipboard write failed';
-export const SHARE_BUTTON_COPIED_TOAST = 'Link copied to clipboard';
-export const SHARE_BUTTON_UNSHARED_TOAST = 'Sharing disabled';
-export const SHARE_BUTTON_FAILED_TOAST = 'Share failed';
-
-export const SHARE_LINK_COPIED_TOAST = 'Link copied';
-export const SHARE_LINK_COPY_FAILED_TOAST = 'Copy failed';
-
 export const DIALOG_CANCEL_LABEL = 'Cancel';
 export const DIALOG_CONFIRM_LABEL = 'Confirm';
 
 export const EXPIRY_WARN_DAYS = 3;
-
-export const VOICE_PICKER_LABEL = 'Your Voice';
-export const VOICE_PICKER_NONE_LABEL = 'None';
-export const VOICE_PICKER_CREATE_LABEL = 'Create a voice';
-export const VOICE_PICKER_NOT_AVAILABLE_FOR_MODEL = 'not available for this model';
-export const VOICE_PICKER_DELETED_LABEL = 'voice deleted';
-
-export function voicePickerMobileLabel(modelMode: string): string {
-	return `${VOICE_PICKER_LABEL} · ${modelMode} model`;
-}
 
 export const ADMIN_VOICES_TAB_LABEL = 'Voices';
 export const ADMIN_VOICES_HEADING = 'Voice operations';
@@ -349,8 +327,6 @@ export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
 	title: 'A–Z',
 	played: 'Last played'
 };
-// Home's head, and what a page's ‹ calls it (#1354 rules 25 and 31).
-export const HOME_PAGE_LABEL = 'Home';
 export const LIBRARY_PAGE_LABEL = 'Library';
 export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums';
 // Each page's head reads its name and count as one heading ('Library · 12').
@@ -631,26 +607,3 @@ export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
 // long enough for the page to resync, short enough that a refresh that never
 // runs does not leave a card behind.
 export const GENERATE_TAKE_ARRIVAL_WAIT_MS = 30_000;
-
-export const HOME_WRITE_LABEL = 'Write';
-export const HOME_WRITE_EMPTY = 'Songs you work on will appear here.';
-export const HOME_WRITE_LOADING = 'Loading Write…';
-export const HOME_WRITE_ERROR = 'Could not load Write.';
-// The row body and its pencil both open the editor; distinct names keep them apart for a screen reader.
-export function homeWriteOpenLabel(songTitle: string): string {
-	return `Open song ${songTitle}`;
-}
-export const HOME_WRITE_WORK_LABELS = {
-	created: 'new song',
-	lyrics: 'lyrics edited',
-	style: 'style edited',
-	renamed: 'renamed',
-	take: 'new take',
-	cowriter: 'co-writer',
-	edited: 'edited'
-} as const;
-export const HOME_LISTEN_LABEL = 'Listen';
-export const HOME_LISTEN_LIMIT = 3;
-export const HOME_LISTEN_EMPTY = 'Albums and playlists you play will appear here.';
-export const HOME_LISTEN_LOADING = 'Loading Listen…';
-export const HOME_LISTEN_ERROR = 'Could not load Listen.';

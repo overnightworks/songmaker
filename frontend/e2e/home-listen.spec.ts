@@ -3,10 +3,9 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_DELETE_LABEL,
-	COLLECTION_MENU_ARCHIVE_LABEL,
-	HOME_LISTEN_EMPTY,
-	HOME_LISTEN_ERROR
+	COLLECTION_MENU_ARCHIVE_LABEL
 } from '../src/lib/constants';
+import { HOME_LISTEN_EMPTY, HOME_LISTEN_ERROR } from '../src/lib/constants/home';
 import {
 	sameOriginHeaders,
 	FlowGuard,

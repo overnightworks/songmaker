@@ -14,7 +14,7 @@
 		VOICE_PICKER_NONE_LABEL,
 		VOICE_PICKER_NOT_AVAILABLE_FOR_MODEL,
 		voicePickerMobileLabel
-	} from '#lib/constants.ts';
+	} from '#lib/constants/voice.ts';
 	import type { UserLoraItem, VersionGenerationParams } from '#lib/api/types.ts';
 
 	const NONE_VALUE = '__none__';
