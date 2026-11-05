@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "b348643802ae325633f482624b63043305eccf1d"
 branch = "claude/issue-2283-one-redis-owner"
-scope = ["scripts/arq_healthcheck.py", "src/songmaker_cli/arq_pool.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/scoring_worker.py", "src/songmaker_cli/worker_base.py", "tests/scripts", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_redis_client_metrics.py", "tests/songmaker_cli/test_worker_base.py"]
+scope = ["scripts/arq_healthcheck.py", "scripts/dead-symbols.allow", "src/songmaker_cli/arq_pool.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/scoring_worker.py", "src/songmaker_cli/worker_base.py", "tests/scripts", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_redis_client_metrics.py", "tests/songmaker_cli/test_worker_base.py"]
 opened_commit = "2321185c6605e2c1bae5d83156980a533f3fb9e7"
 whole_reason = "One owner replaces four constructors; its callers move with it or the import breaks."
