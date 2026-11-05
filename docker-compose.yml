@@ -356,7 +356,7 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
     # Prometheus sends it as the bearer token of the songmaker job
-    # (monitoring/prometheus.yml); no other service mounts it.
+    # (monitoring/prometheus.yml); web mounts the same source to check it.
     secrets:
       - source: songmaker_monitoring_token
         target: monitoring_token
@@ -470,7 +470,8 @@ secrets:
   # a text substitution on its way into the config (issue #333).
   smtp_password:
     environment: SMTP_PASSWORD
-  # The songmaker secrets, one file each (made by scripts/secret_files.py).
+  # The songmaker secrets, one file each (made by hal setup;
+  # scripts/secret_files.py copies an existing .env once).
   # Rotating one is a file write plus a recreate of its readers. A throwaway
   # stack (CI, local e2e) points SONGMAKER_SECRETS_DIR at a directory of its own.
   session_secret:

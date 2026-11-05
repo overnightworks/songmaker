@@ -8,10 +8,15 @@ scratch project name, so the operator's ``.env`` and live project are never read
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
 from support.compose_config import run_compose_config
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+import secret_files  # noqa: E402 - needs scripts on sys.path first
 
 SCRATCH_PROJECT_COMPOSE_ARGS = (
     "-f", "docker-compose.yml", "-p", "songmaker-compose-secret-files-test",
@@ -51,10 +56,10 @@ def _songmaker_secret_directories(rendered: dict) -> set[Path]:
     }
 
 
-def test_the_secret_files_default_to_the_home_secrets_directory(tmp_path: Path) -> None:
+def test_the_secret_files_default_to_the_directory_the_verify_check_compares(tmp_path: Path) -> None:
     rendered = _rendered_compose(tmp_path, {})
 
-    assert _songmaker_secret_directories(rendered) == {Path.home() / ".secrets" / "songmaker"}
+    assert _songmaker_secret_directories(rendered) == {Path.home() / secret_files.DEFAULT_DIRECTORY}
 
 
 def test_the_secret_files_follow_the_configured_secrets_directory(tmp_path: Path) -> None:
