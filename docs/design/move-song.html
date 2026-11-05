@@ -205,7 +205,7 @@ figcaption.tag.new{color:var(--violet)}
 .desk .toast{right:16px;bottom:76px;max-width:400px}
 .ph .toast{left:16px;right:16px;bottom:136px}
 
-/* the album page's song boxes (SongRow.svelte), for the order question */
+/* the album page's song boxes (SongRow.svelte), for D3 */
 .alist{width:340px;display:flex;flex-direction:column;gap:6px;padding:12px;background:var(--bg)}
 .srow{display:flex;align-items:center;gap:8px;min-height:46px;padding:0 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:.92rem}
 .srow .t{flex:1;min-width:0}
@@ -621,10 +621,10 @@ beim Warten.</div></div>
 <section class="part"><h2>Decisions <small>blessed 05.11.2026</small></h2>
 
 <div class="q"><h3>F1 · Where the control sits</h3>
-<p><b>Only in the song menu (D1, P1).</b> Every affordance exists once; the song menu already exists at both widths.</p></div>
+<p><b>Only in the song menu, as one row Move › between Add to playlist and Delete song (D1, P1).</b> Every affordance exists once; the song menu already exists at both widths.</p></div>
 
 <div class="q"><h3>F2 · What the picker lists</h3>
-<p><b>Your albums as the Library lists them, not archived, sorted the same way; the current album pinned on top with ✓ and not tappable (D2).</b> Seeing where the song is now answers half the question, and an archived album would hide the moved song from the Library.</p></div>
+<p><b>Your albums as the Library lists them, not archived, sorted the same way; the current album pinned on top with ✓ and not tappable, a filter, and rows that look like rail rows: cover or initials, title, take count, share mark (D2).</b> Seeing where the song is now answers half the question, and an archived album would hide the moved song from the Library.</p></div>
 
 <div class="q"><h3>F3 · Moving into a shared album publishes the song</h3>
 <div class="frames">
@@ -642,7 +642,7 @@ beim Warten.</div></div>
 <p><b>At the end, as the last track, the way a new song does (D3).</b> Keeping the old number would tie with another track in an order nobody chose, and the app has no reordering to fix it.</p></div>
 
 <div class="q"><h3>F5 · Where you are after the move</h3>
-<p><b>Stay on the song, with no Undo (D3, P3).</b> The person was working on the song; moving back is the same menu with two taps, so Undo would be a second way to do one thing.</p></div>
+<p><b>Stay on the song, with no Undo (D3, P3): same tab, same draft, same playing take; the crumb (desktop) or a toast (phone) names the new album, and the new address replaces the old one in the history.</b> The person was working on the song; moving back is the same menu with two taps, so Undo would be a second way to do one thing.</p></div>
 
 <div class="q"><h3>F6 · You have only one album</h3>
 <p><b>The picker says “No other album” (S3).</b> Albums are made in one place, Library › + NEW; a second album-making surface would bring its own failure states.</p></div>
