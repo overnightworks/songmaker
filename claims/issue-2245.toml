@@ -1,7 +1,0 @@
-claim_id = "7f8b4964edf4421798ffcc03637d09e7"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d07533d38758d308748ff1c67c931d9e73bde791"
-branch = "claude/issue-2245-home-listen-settle"
-scope = ["frontend/e2e/home-listen.spec.ts"]
-opened_commit = "1db4f2b4df03d83e645d52e6fdfbd3189ef8a21f"
