@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 
 from sqlalchemy import ColumnElement, and_, func, or_
 from sqlalchemy.orm import Session, aliased
@@ -46,6 +47,11 @@ def is_playable_take(gen: Generation) -> bool:
     `songs_without_playable_take` below must agree with this, or a song can
     silently vanish from /shared/{slug} without the owner being warned."""
     return bool(gen.mp3_path) and not gen.is_archived
+
+
+def has_playable_pick(generations: Iterable[Generation]) -> bool:
+    """Pick of already-loaded takes; the list path asks song_ids_with_pick()."""
+    return any(gen.is_picked and is_playable_take(gen) for gen in generations)
 
 
 def playable_take_filter(

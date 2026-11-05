@@ -18,7 +18,6 @@ from songmaker_cli.constants import (
     COVER_VERSION_QUERY,
     MODEL_AVAILABLE_MODES,
 )
-from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
 )
@@ -555,14 +554,14 @@ class SongResponse(SongSummaryResponse):
     generations: list[GenerationResponse] = Field(default_factory=list)
 
     @classmethod
-    def from_orm(cls, song: Song) -> SongResponse:
+    def from_orm(cls, song: Song, *, has_pick: bool) -> SongResponse:
         # song.generations is always eager-loaded on this path (get_song(),
         # list_songs(light=False)), unlike the light SongSummaryResponse
         # list path — so counting it here costs no extra query.
         base = SongSummaryResponse.from_orm(
             song,
             generation_count=len(song.generations),
-            has_pick=has_playable_pick(song.generations),
+            has_pick=has_pick,
         )
 
         best_gen = _best_generation(song.generations)
@@ -587,11 +586,6 @@ def _audiobox_quality(generation: Generation) -> float | None:
         if isinstance(score.value, dict) and "audiobox_quality" in score.value:
             return score.value["audiobox_quality"]
     return None
-
-
-def has_playable_pick(generations: list[Generation]) -> bool:
-    """Pick of already-loaded takes; the list path asks song_ids_with_pick()."""
-    return any(gen.is_picked and is_playable_take(gen) for gen in generations)
 
 
 def _best_generation(generations: list[Generation]) -> Generation | None:

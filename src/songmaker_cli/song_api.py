@@ -55,11 +55,13 @@ from songmaker_cli.covers import (
     resolve_song_cover_file,
     write_song_cover,
 )
+from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.activity import record_song_played
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError, get_album
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.playlists import best_playable_generation, playlist_holds_song
 from songmaker_cli.db.queries.reference_recordings import get_owned_reference_recording
+from songmaker_cli.db.queries.sharing import has_playable_pick
 from songmaker_cli.db.queries.songs import (
     EmptySongTitleError,
     UnstorableSongTitleError,
@@ -95,6 +97,11 @@ def _attach_reference(session: Session, user_id: str, reference_id: str | None) 
 
 
 router = APIRouter()
+
+
+def _song_response(song: Song) -> SongResponse:
+    # Every detail path loads song.generations, so the pick needs no query.
+    return SongResponse.from_orm(song, has_pick=has_playable_pick(song.generations))
 
 SONG_NOT_FOUND_DETAIL: Final = "Song not found"
 VERSION_IN_USE_DETAIL: Final = (
@@ -150,7 +157,7 @@ def api_get_song(
     session: Session = Depends(get_db_session),
 ) -> SongResponse:
     song = check_song_access(session, song_id, user)
-    return SongResponse.from_orm(song)
+    return _song_response(song)
 
 
 def _title_refusal_detail(error: UnstorableSongTitleError) -> str:
@@ -188,7 +195,7 @@ def api_create_song(
     )
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.SONG, song.id)
     session.commit()
-    return SongResponse.from_orm(song)
+    return _song_response(song)
 
 
 @router.put(
@@ -222,7 +229,7 @@ def api_update_song(
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
-    return SongResponse.from_orm(version.song)
+    return _song_response(version.song)
 
 
 @router.put(
@@ -253,7 +260,7 @@ def api_rename_song(
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
-    return SongResponse.from_orm(song)
+    return _song_response(song)
 
 
 @router.put(
@@ -280,7 +287,7 @@ def api_move_song(
         song_id, f"album={req.album_id}",
     )
     session.commit()
-    return SongResponse.from_orm(song)
+    return _song_response(song)
 
 
 @router.delete(
@@ -323,7 +330,7 @@ def api_restore_song(
         raise HTTPException(404, str(e))
     record_audit(session, user.id, AuditAction.RESTORE, ResourceType.SONG, song_id)
     session.commit()
-    return SongResponse.from_orm(restored)
+    return _song_response(restored)
 
 
 @router.post(
@@ -442,7 +449,7 @@ async def api_upload_song_cover(
     song = set_song_cover_key(session, song.id, cover_key)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song.id)
     session.commit()
-    return SongResponse.from_orm(song)
+    return _song_response(song)
 
 
 @router.delete("/songs/{song_id}/cover")
@@ -457,7 +464,7 @@ def api_delete_song_cover(
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song.id)
     session.commit()
     remove_song_cover_files(ctx.audio_dir, song.id)
-    return SongResponse.from_orm(song)
+    return _song_response(song)
 
 
 @router.delete(

@@ -12,7 +12,6 @@ from songmaker_cli.api_models.songs import (
     AlbumResponse,
     SongSummaryResponse,
     album_cover_urls,
-    has_playable_pick,
     song_cover_urls,
 )
 from songmaker_cli.constants import (
@@ -72,7 +71,7 @@ class LibrarySongHit(BaseModel):
     album_title: str
 
     @classmethod
-    def from_orm(cls, song: Song) -> LibrarySongHit:
+    def from_orm(cls, song: Song, *, has_pick: bool) -> LibrarySongHit:
         if song.album is None:
             raise ValueError(f"Song {song.id} has no album")
         # search_library() eager-loads Song.generations for every hit
@@ -82,7 +81,7 @@ class LibrarySongHit(BaseModel):
             song=SongSummaryResponse.from_orm(
                 song,
                 generation_count=len(song.generations),
-                has_pick=has_playable_pick(song.generations),
+                has_pick=has_pick,
             ),
             album_id=song.album_id,
             album_title=song.album.title,
@@ -110,11 +109,13 @@ class LibrarySearchResponse(BaseModel):
         song_counts: dict[str, int],
         picked_counts: dict[str, int] | None = None,
         playable_album_ids: set[str] | None = None,
+        picked_song_ids: set[str] | None = None,
     ) -> LibrarySearchResponse:
         from songmaker_cli.db.models import Album as AlbumModel
 
         picked = picked_counts or {}
         playable = playable_album_ids or set()
+        picked_songs = picked_song_ids or set()
         songs = song_counts
         items: list[LibraryAlbumHit | LibrarySongHit] = []
         for hit in hits:
@@ -128,7 +129,7 @@ class LibrarySearchResponse(BaseModel):
                     ),
                 )
             else:
-                items.append(LibrarySongHit.from_orm(hit))
+                items.append(LibrarySongHit.from_orm(hit, has_pick=hit.id in picked_songs))
         return cls(items=items, next_cursor=next_cursor, has_more=has_more)
 
 
