@@ -59,7 +59,7 @@ The [logic tests](../tests/scripts/test_similar_functions.py) use fakes and load
 
 ## Static analysis (SonarCloud)
 
-GitHub CI calls the SHA-pinned `overnightworks/quality` v0.5.0 reusable gate from `.github/workflows/ci.yml`. Its `quality / verdict` check combines hygiene, Sonar findings and the five mandatory job names in [`quality/config.toml`](../quality/config.toml). Failed or skipped dependencies still reach the verdict; cancelled runs do not start the caller. There are no actor or fork exclusions: missing `SONAR_TOKEN` fails closed, including tokenless forks. Dependabot needs the separately configured Dependabot secret.
+GitHub CI calls the SHA-pinned `overnightworks/quality` v0.5.0 reusable gate from `.github/workflows/ci.yml`. Its `quality / verdict` check combines hygiene, Sonar findings and the mandatory job names in [`quality/config.toml`](../quality/config.toml). Failed or skipped dependencies still reach the verdict; cancelled runs do not start the caller. There are no actor or fork exclusions: missing `SONAR_TOKEN` fails closed, including tokenless forks. Dependabot needs the separately configured Dependabot secret.
 
 The backend and frontend producers retain their separate coverage artifacts. The `coverage` assembly job downloads both, requires nonempty XML and LCOV reports, and uploads exactly those files as `coverage`, replacing the artifact on reruns. The gate restores it into the checkout; [`sonar-project.properties`](../sonar-project.properties) therefore names `coverage.xml` and `frontend-coverage/lcov.info`. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=overnightworks_songmaker) shows the resulting analysis and coverage.
 
@@ -92,8 +92,9 @@ Security verification also runs weekly. The live checks are:
 
 | Job | What |
 |---|---|
-| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_root_layout.py` · `scripts/generate_types.py --check` · pytest with line and branch coverage floors (see Coverage Targets) |
-| PostgreSQL contract | Serial PostgreSQL 16 tests for dialect-specific migrations, concurrency, rollback, and event retention gaps |
+| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_root_layout.py` · `scripts/generate_types.py --check` · pytest collecting coverage data, judged in Combine backend coverage |
+| PostgreSQL contract | Serial PostgreSQL 16 tests with coverage for dialect-specific migrations, concurrency, rollback, and event retention gaps |
+| Combine backend coverage | Combines the Backend and PostgreSQL coverage data and judges the line and branch floors (see Coverage Targets) |
 | Quality | `quality / verdict`: hygiene, Sonar findings, mandatory jobs and both coverage reports |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | E2E | Boots the CI stack (`docker/docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |

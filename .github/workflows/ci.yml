@@ -302,7 +302,9 @@ jobs:
 
       - name: Combine backend coverage
         run: |
-          uv run --no-sync coverage combine --rcfile=.github/workflows/coveragerc-ci.ini --data-file=reports/coverage-data reports/coverage-data-backend reports/coverage-data-postgresql
+          # coverage combine exits 0 when an input is unreadable, so a dropped share must fail here.
+          uv run --no-sync coverage combine --rcfile=.github/workflows/coveragerc-ci.ini --data-file=reports/coverage-data reports/coverage-data-backend reports/coverage-data-postgresql 2>&1 | tee reports/combine.log
+          ! grep -q "Couldn't combine" reports/combine.log
           uv run --no-sync coverage xml --rcfile=.github/workflows/coveragerc-ci.ini --data-file=reports/coverage-data -o reports/coverage.xml
 
       - name: Coverage summary and floors
