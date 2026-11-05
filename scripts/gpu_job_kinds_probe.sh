@@ -258,7 +258,9 @@ if "${compose[@]}" exec -T songmaker-web sh -c 'ls /app/data/audio/worker_output
     fail "generation: the worker left a take on the shared audio volume"
 fi
 echo "PROOF output: no take under the shared audio volume's worker_output"
-"${compose[@]}" exec -T "$WORKER_SERVICE" sh -c 'test -z "$(ls -A "$AUDIO_OUTPUT_DIR")"' \
-    || fail "generation: the worker's local output root still holds a take"
+# An unset root, a missing one or a failed listing fails here instead of reading as empty.
+"${compose[@]}" exec -T "$WORKER_SERVICE" sh -c \
+    'set -eu; test -d "$AUDIO_OUTPUT_DIR"; listing=$(ls -A "$AUDIO_OUTPUT_DIR"); test -z "$listing"' \
+    || fail "generation: the worker's local output root is not readable as empty"
 echo "PROOF output: the worker's local output root is empty"
 echo "PROOF all five job kinds held"
