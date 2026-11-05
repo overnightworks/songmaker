@@ -89,9 +89,10 @@ teardown() {
     exit "$status"
 }
 interrupted() {
+    local signal_status=$1
     trap '' INT TERM HUP
     stop_pytest
-    exit "$1"
+    exit "$signal_status"
 }
 trap teardown EXIT
 trap 'interrupted 129' HUP
