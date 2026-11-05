@@ -649,60 +649,14 @@ def test_the_cover_settings_are_gone_and_their_stored_rows_stay_unread(admin_cli
     assert stored == _STORED_COVER_ROWS
 
 
-def _cover_routes(client) -> dict[str, dict]:
-    return {
-        item["provider"]: item["cover_routes"]
-        for item in client.get("/api/settings/providers").json()
-    }
-
-
-def test_provider_status_grants_the_image_tool_only_to_a_ready_codex_cli(
-    admin_client, monkeypatch,
-):
+def test_provider_status_reports_no_cover_routes(admin_client):
     client, _ = admin_client
-    monkeypatch.setattr(
-        "agent_providers.dispatch.codex_cover_image_capability_is_available", lambda: True,
-    )
-    monkeypatch.setattr(
-        "agent_providers.dispatch.codex_cli_access_token_is_present", lambda: True,
-    )
 
-    cover_routes = _cover_routes(client)
+    items = client.get("/api/settings/providers").json()
 
-    assert cover_routes["codex"]["cli"] == {
-        "state": "ready",
-        "capability": "tools_available",
-        "reason": None,
-        "probed_at": None,
-        "setup_label": "CLI login",
-    }
-    for provider, routes in cover_routes.items():
-        for route, readiness in routes.items():
-            if (provider, route) == ("codex", "cli"):
-                continue
-            assert readiness["state"] == "not_configured"
-            assert readiness["capability"] == "text_only"
-            assert readiness["reason"] == {
-                "code": "no_image_tool", "message": "no image tool",
-            }
-
-
-def test_provider_status_names_a_codex_cover_route_that_is_not_signed_in(
-    admin_client, monkeypatch,
-):
-    client, _ = admin_client
-    monkeypatch.setattr(
-        "agent_providers.dispatch.codex_cover_image_capability_is_available", lambda: True,
-    )
-    monkeypatch.setattr(
-        "agent_providers.dispatch.codex_cli_access_token_is_present", lambda: False,
-    )
-
-    codex_cli = _cover_routes(client)["codex"]["cli"]
-
-    assert codex_cli["state"] == "not_configured"
-    assert codex_cli["capability"] == "tools_available"
-    assert codex_cli["reason"]["code"] == "cli_login_not_configured"
+    assert items
+    for item in items:
+        assert set(item) == {"provider", "cowriter_routes"}
 
 
 def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
@@ -813,18 +767,6 @@ def _pinned_snapshots(case: str):
     }
 
 
-def _pinned_cover_capability(provider: str, route):
-    from agent_providers.catalog import ProviderRoute
-    from agent_providers.dispatch import CoverImageCapability
-
-    if provider == "codex" and route is ProviderRoute.CLI:
-        return CoverImageCapability(carries_image_tool=True, failure=None)
-    return CoverImageCapability(
-        carries_image_tool=False,
-        failure=normalize_route_failure(SafeRouteReasonCode.NO_IMAGE_TOOL),
-    )
-
-
 def _pinned_response_body(case: str) -> bytes:
     return (
         Path(__file__).parents[1] / "fixtures" / f"provider_status_{case}.json"
@@ -839,9 +781,6 @@ def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
     snapshots = _pinned_snapshots(case)
     monkeypatch.setattr(
         "songmaker_cli.provider_status.provider_snapshots", lambda: snapshots,
-    )
-    monkeypatch.setattr(
-        "agent_providers.dispatch.cover_image_capability", _pinned_cover_capability,
     )
 
     response = client.get("/api/settings/providers")

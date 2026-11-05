@@ -129,7 +129,6 @@ class CowriterSettingsResponse(BaseModel):
 class ProviderStatusResponse(BaseModel):
     provider: str
     cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse]
-    cover_routes: dict[Literal["cli", "api"], ProviderRouteReadiness]
 
 
 class ChatMessageResponse(BaseModel):

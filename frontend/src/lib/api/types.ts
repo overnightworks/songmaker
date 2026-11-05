@@ -618,7 +618,6 @@ export interface ProviderRouteStatusResponse {
 export interface ProviderStatus {
 	provider: string;
 	cowriter_routes: Record<'cli' | 'api', ProviderRouteStatusResponse>;
-	cover_routes: Record<'cli' | 'api', ProviderRouteReadiness>;
 }
 
 export interface QueueStreamManifest {
