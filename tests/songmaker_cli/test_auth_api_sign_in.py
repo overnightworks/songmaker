@@ -341,6 +341,7 @@ def test_logging_out_ends_the_session_and_answers_the_page_that_posts_the_stored
         "post_logout_redirect_uri": "https://songmaker.test/login",
         "id_token_hint": stored_token,
     }
+    assert '<html lang="en"' in response.text
     assert f">{LOGOUT_BUTTON_LABEL}</button>" in response.text
     assert _cleared(response, SESSION_COOKIE)
     assert world.session_count() == 0
