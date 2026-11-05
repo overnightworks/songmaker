@@ -21,7 +21,6 @@ import {
 	type Route
 } from '@playwright/test';
 import {
-	HOME_PAGE_LABEL,
 	LIBRARY_NEW_ALBUM_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
 	LIBRARY_NEW_PLAYLIST_LABEL,
@@ -46,6 +45,7 @@ import {
 	PLAYLISTS_PAGE_LABEL,
 	RATE_LIMITED_TOAST_MESSAGE
 } from '../src/lib/constants';
+import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
 import {
 	boundingBoxes,
 	sameOriginHeaders,

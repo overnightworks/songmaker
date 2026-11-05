@@ -39,7 +39,7 @@
 "frontend/src/lib/components/PlayerBar.test.ts" = 1645
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
 "frontend/src/lib/components/SongDetailView.svelte" = 1021
-"frontend/src/lib/components/SongDetailView.test.ts" = 2290
+"frontend/src/lib/components/SongDetailView.test.ts" = 2270
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
 "frontend/src/lib/history/historyController.test.ts" = 906
@@ -57,11 +57,11 @@
 "frontend/src/lib/stores/resourceSync.test.ts" = 2039
 "frontend/src/lib/stores/resourceSync.ts" = 1063
 "frontend/src/routes/layout.test.ts" = 1414
-"frontend/src/routes/settings/users/+page.svelte" = 1123
-"frontend/src/routes/settings/users/page.test.ts" = 861
+"frontend/src/routes/settings/users/+page.svelte" = 1121
+"frontend/src/routes/settings/users/page.test.ts" = 851
 "src/acestep_worker/wrapper.py" = 1088
-"src/songmaker_cli/constants.py" = 814
-"src/songmaker_cli/conversation_api.py" = 972
+"src/songmaker_cli/constants.py" = 782
+"src/songmaker_cli/conversation_api.py" = 968
 "src/songmaker_cli/jobs/generation.py" = 1149
 "src/songmaker_cli/jobs/lora_training.py" = 1552
 "src/songmaker_cli/queue_streams.py" = 963
@@ -70,17 +70,17 @@
 "tests/acestep_worker/test_wrapper.py" = 1631
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
 "tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4751
+"tests/songmaker_cli/test_api.py" = 4715
 "tests/test_auto_deploy_alerting.py" = 1384
 "tests/songmaker_cli/test_conversation_api.py" = 842
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
-"tests/songmaker_cli/test_db.py" = 3623
+"tests/songmaker_cli/test_db.py" = 3575
 "tests/songmaker_cli/test_jobs.py" = 3215
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_library_api.py" = 1627
 "tests/songmaker_cli/test_lora_api.py" = 1297
 "tests/songmaker_cli/test_playlist_api.py" = 1105
-"tests/songmaker_cli/test_db_postgresql.py" = 857
+"tests/songmaker_cli/test_db_postgresql.py" = 838
 "tests/songmaker_cli/test_queue_streams.py" = 2417
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1285
@@ -103,7 +103,7 @@
 "build_ace_config" = 65
 
 [function_lines."src/songmaker_cli/cover_runner.py"]
-"run_claimed_cover_suggestion_job" = 83
+"run_claimed_cover_suggestion_job" = 71
 
 [function_lines."src/songmaker_cli/cowriter/history.py"]
 "compact_conversation" = 60
@@ -165,7 +165,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 84
+"_lifespan" = 71
 "create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
@@ -301,7 +301,6 @@ upgrade = [["src/songmaker_cli/db/migrations/versions/e5a9c3d7b2f1_add_generatio
 _assert_no_empty_slugs_remain = [["src/songmaker_cli/db/migrations/versions/d5f8a3b21c46_add_slug_to_playlists.py", "_assert_no_empty_slugs_remain"]]
 
 [clones."src/songmaker_cli/db/queries/albums.py"]
-cleanup_album = [["src/songmaker_cli/db/queries/songs.py", "cleanup_song"]]
 count_songs_by_album = [["src/songmaker_cli/db/queries/songs.py", "count_generations_by_song"]]
 get_album_by_slug = [["src/songmaker_cli/db/queries/generations.py", "get_generation_by_slug"], ["src/songmaker_cli/db/queries/playlists.py", "get_playlist_by_slug"], ["src/songmaker_cli/db/queries/songs.py", "get_song_by_slug"]]
 set_album_cover_key = [["src/songmaker_cli/db/queries/playlists.py", "set_playlist_cover_key"], ["src/songmaker_cli/db/queries/songs.py", "set_song_cover_key"]]
@@ -383,7 +382,6 @@ test_list_songs_offset_beyond_total = [["tests/songmaker_cli/test_server.py", "t
 test_list_songs_pagination_offset_limit = [["tests/songmaker_cli/test_server.py", "test_api_songs"]]
 test_rename_album = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_rename_album_strips_whitespace = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
-test_rename_song_strips_whitespace = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_song_detail_response_uncompressed_without_client_support = [["tests/songmaker_cli/test_server_middleware.py", "test_tiny_json_response_is_not_gzip_compressed"]]
 
 [clones."tests/songmaker_cli/test_conversation_api.py"]

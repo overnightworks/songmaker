@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { songEditorOpenLabel } from '#lib/constants.ts';
 	import {
 		HOME_WRITE_LABEL,
 		HOME_WRITE_EMPTY,
 		HOME_WRITE_LOADING,
 		HOME_WRITE_ERROR,
 		HOME_WRITE_WORK_LABELS,
-		homeWriteOpenLabel,
-		songEditorOpenLabel
-	} from '#lib/constants.ts';
+		homeWriteOpenLabel
+	} from '#lib/constants/home.ts';
 	import {
 		libraryWriteItems,
 		libraryWriteState,

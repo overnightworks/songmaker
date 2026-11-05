@@ -19,6 +19,7 @@ Stdlib only, imported as a sibling module by the scripts beside it.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +57,19 @@ def effective_assignment(text: str, key: str, source: Path) -> Assignment | None
         return None
     index, raw = last
     return Assignment(index, _dotenv_value(raw, key, source))
+
+
+def compose_value(environment: Mapping[str, str], text: str, key: str, source: Path) -> str | None:
+    """The value Compose interpolates for ``key``, or ``None`` when nothing sets it.
+
+    An exported value wins, even an empty one; otherwise ``.env``'s last
+    assignment; otherwise nothing. Defaults (``${KEY:-default}``) stay with the
+    caller, because only it knows them.
+    """
+    if key in environment:
+        return environment[key]
+    assignment = effective_assignment(text, key, source)
+    return assignment.value if assignment else None
 
 
 def _split_assignment(line: str) -> tuple[str, str, str]:

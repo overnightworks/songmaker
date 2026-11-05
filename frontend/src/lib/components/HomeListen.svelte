@@ -8,7 +8,7 @@
 		HOME_LISTEN_EMPTY,
 		HOME_LISTEN_LOADING,
 		HOME_LISTEN_ERROR
-	} from '#lib/constants.ts';
+	} from '#lib/constants/home.ts';
 	import {
 		ensureLastPlayedRead,
 		readLastPlayed,

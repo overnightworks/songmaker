@@ -10,7 +10,7 @@
 		WORKER_POOL_VRAM_NO_HEARTBEAT,
 		WORKER_POOL_VRAM_NO_FIELDS,
 		WORKER_POOL_VRAM_NO_TOTAL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/worker.ts';
 
 	let { state, offline }: { state: WorkerInfoItem['state']; offline: boolean } = $props();
 	const used = $derived(state?.vram_used_gb);

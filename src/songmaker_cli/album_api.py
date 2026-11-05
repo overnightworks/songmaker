@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from webauth.config import installed_web_auth_config
+from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
@@ -34,20 +36,15 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.songs import ShareKind, UnplayableSongSummary, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.arq_pool import get_arq_pool, is_music_worker_healthy
 from songmaker_cli.audio_paths import AudioPathRejectedError
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
-    ARQ_MUSIC_QUEUE_NAME,
     COVER_MAX_BYTES,
     COVER_NOT_FOUND,
     COVER_SUGGESTION_NOT_FOUND,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
     AuditAction,
-    CoverExecutor,
-    JobFunction,
-    JobStatus,
     ResourceType,
 )
 from songmaker_cli.cover_suggestions import (
@@ -92,10 +89,8 @@ from songmaker_cli.db.queries.cover_suggestions import (
     list_album_cover_suggestions,
 )
 from songmaker_cli.db.queries.jobs import (
-    JobStatusUpdate,
     count_cover_jobs_since,
     get_last_cover_job_for_album,
-    update_job_status,
 )
 from songmaker_cli.db.queries.sentinels import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
@@ -421,53 +416,29 @@ async def api_upload_album_cover(
 @router.post(
     "/albums/{album_id}/cover-suggestions",
     responses={
+        401: {"description": "The asking session has ended"},
         404: {"description": "Album not found"},
         409: {"description": "Cover suggestions are already running"},
         429: {"description": "Daily suggestion limit reached"},
-        503: {"description": "Cover suggestions are unavailable"},
     },
 )
-async def api_create_cover_suggestions(
+def api_create_cover_suggestions(
     album_id: str,
+    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
     session.commit()
-    settings = get_settings()
     try:
-        job = request_cover_suggestions(session, album_id, user)
-        if (
-            settings.cover_executor is CoverExecutor.MUSIC
-            and not await is_music_worker_healthy()
-        ):
-            raise HTTPException(503, "Worker not running")
+        job = request_cover_suggestions(
+            session, album_id, user,
+            session_id=session_id_from_request(request, installed_web_auth_config(request.app)),
+        )
+        record_audit(session, user.id, AuditAction.GENERATE, ResourceType.ALBUM, job.album_id)
         session.commit()
     except CoverSuggestionRequestError as exc:
         session.rollback()
         raise HTTPException(exc.status_code, str(exc)) from exc
-    except HTTPException:
-        session.rollback()
-        raise
-    if settings.cover_executor is CoverExecutor.WEB:
-        return JobResponse.from_orm(job)
-    try:
-        await get_arq_pool().enqueue_job(
-            JobFunction.COVER,
-            job.id,
-            _queue_name=ARQ_MUSIC_QUEUE_NAME,
-        )
-    except (ConnectionError, RuntimeError):
-        update_job_status(
-            session,
-            job.id,
-            JobStatusUpdate(
-                JobStatus.FAILED,
-                error="Job queue unavailable",
-                error_type="queue_unavailable",
-            ),
-        )
-        session.commit()
-        raise HTTPException(503, "Job queue unavailable")
     return JobResponse.from_orm(job)
 
 

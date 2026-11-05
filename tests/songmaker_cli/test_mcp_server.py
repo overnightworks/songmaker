@@ -18,14 +18,17 @@ from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.constants import (
     GET_SONG_ONLY_FOR_OTHER_SONGS,
+    AuditAction,
     JobStatus,
     JobType,
+    ResourceType,
     SongWorkKind,
 )
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
+    AuditLog,
     Generation,
     Job,
     Score,
@@ -237,6 +240,7 @@ def test_cowriter_get_generation_keeps_integer_score_in_json(db_session: Session
     owner = _seed_take(db_session, _batch_scores())
     outcome = execute_cowriter_tool(
         db_session, owner, "get_generation", {"generation_id": "gen1"},
+        session_id=None,
     )
     assert not outcome.is_error
     shown = json.loads(outcome.content)["scores"]["lyrical_coherence"]
@@ -273,13 +277,6 @@ def test_create_song_requires_access(db_session: Session):
         tools.tool_create_song(
             db_session, stranger, album_id=album_id, title="Sneak",
         )
-
-
-def test_create_song_rejects_empty_title(db_session: Session):
-    owner_id, _, album_id, _, _ = _seed(db_session)
-    owner = _owner(db_session, owner_id)
-    with pytest.raises(tools.MCPToolError):
-        tools.tool_create_song(db_session, owner, album_id=album_id, title="  ")
 
 
 def test_create_song_persists_and_returns_state(db_session: Session):
@@ -419,18 +416,51 @@ def test_rename_song_dedupes_slug_against_sibling_in_same_album(db_session: Sess
     assert stored.slug == "rival-2"
 
 
-def test_rename_song_rejects_empty(db_session: Session):
-    owner_id, _, _, song_id, _ = _seed(db_session)
+TITLE_WRITES = pytest.mark.parametrize(
+    ("tool_name", "target"), [("create_song", "album_id"), ("rename_song", "song_id")])
+
+
+def _co_writer_title_write(db_session: Session, tool_name: str, target: str, title: str):
+    owner_id, _, album_id, song_id, _ = _seed(db_session)
+    arguments = {target: {"album_id": album_id, "song_id": song_id}[target], "title": title}
+    return execute_cowriter_tool(
+        db_session, _owner(db_session, owner_id), tool_name, arguments, session_id=None,
+    )
+
+
+@TITLE_WRITES
+def test_co_writer_stores_the_stripped_title(db_session: Session, tool_name, target):
+    outcome = _co_writer_title_write(db_session, tool_name, target, "  Night Drive ")
+
+    assert not outcome.is_error
+    assert db_session.query(Song).filter_by(title="Night Drive").one().slug == "night-drive"
+
+
+@TITLE_WRITES
+@pytest.mark.parametrize(
+    "title", ["   ", "x" * (Song.__table__.c.title.type.length + 1)], ids=["blank", "overlong"],
+)
+def test_co_writer_refuses_unstorable_title_before_any_write(db_session, tool_name, target, title):
+    owner_id, _, album_id, song_id, _ = _seed(db_session)
+    target_id = {"album_id": album_id, "song_id": song_id}[target]
+    before = db_session.query(Song.id, Song.title, Song.slug).all()
+    tool = getattr(tools, f"tool_{tool_name}")
     owner = _owner(db_session, owner_id)
+    # The tool body runs outside the executor, whose rollback would hide an earlier write.
     with pytest.raises(tools.MCPToolError):
-        tools.tool_rename_song(db_session, owner, song_id=song_id, title="  ")
+        tool(db_session, owner, **{target: target_id}, title=title)
+
+    assert not db_session.new
+    assert not db_session.dirty
+    assert db_session.query(Song.id, Song.title, Song.slug).all() == before
+    assert db_session.query(AuditLog).count() == 0
 
 
 def test_suggest_album_cover_queues_a_cover_job(db_session: Session):
     owner_id, _, album_id, _, _ = _seed(db_session)
     owner = _owner(db_session, owner_id)
 
-    result = tools.tool_suggest_album_cover(db_session, owner, album_id=album_id)
+    result = tools.tool_suggest_album_cover(db_session, owner, album_id=album_id, session_id=None)
 
     assert result.status == JobStatus.QUEUED
     assert result.message == "Cover suggestion queued."
@@ -471,7 +501,7 @@ def test_suggest_album_cover_surfaces_the_admission_owner_errors(
 
     try:
         with pytest.raises(tools.MCPToolError, match=message):
-            tools.tool_suggest_album_cover(db_session, owner, album_id=album_id)
+            tools.tool_suggest_album_cover(db_session, owner, album_id=album_id, session_id=None)
     finally:
         if daily_limit is not None:
             get_settings.cache_clear()
@@ -546,6 +576,47 @@ def test_co_writer_writes_that_change_nothing_record_no_work(
     tool(db_session, _owner(db_session, owner_id), song_id=song_id, **arguments)
 
     assert db_session.query(UserSongWork).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "action", "resource_type", "resource"),
+    [
+        ("create_song", {"album_id": "album1", "title": "Fresh"},
+         AuditAction.CREATE, ResourceType.SONG, "created"),
+        ("update_song_lyrics", {"song_id": "song1", "lyrics": "new words"},
+         AuditAction.UPDATE, ResourceType.SONG, "song1"),
+        ("update_song_prompt", {"song_id": "song1", "prompt": "jazz"},
+         AuditAction.UPDATE, ResourceType.SONG, "song1"),
+        ("update_song_style", {"song_id": "song1", "bpm": 90},
+         AuditAction.UPDATE, ResourceType.SONG, "song1"),
+        ("rename_song", {"song_id": "song1", "title": "New Title"},
+         AuditAction.UPDATE, ResourceType.SONG, "song1"),
+        ("suggest_album_cover", {"album_id": "album1"},
+         AuditAction.GENERATE, ResourceType.ALBUM, "album1"),
+        ("save_coherence_verdict",
+         {"generation_id": "gen1", "score": 7, "summary": "Holds together."},
+         AuditAction.SCORE, ResourceType.GENERATION, "gen1"),
+    ],
+    ids=["create", "lyrics", "prompt", "style", "rename", "cover", "verdict"],
+)
+def test_co_writer_writes_leave_their_audit_row(
+    db_session: Session, tool_name, arguments, action, resource_type, resource,
+):
+    owner = _seed_take(db_session, None)
+    db_session.get(Generation, "gen1").whisper_text = "sung words"
+    db_session.commit()
+
+    outcome = execute_cowriter_tool(db_session, owner, tool_name, arguments, session_id=None)
+
+    assert not outcome.is_error
+    db_session.expire_all()
+    entry = db_session.query(AuditLog).one()
+    assert (entry.user_id, entry.action, entry.resource_type) == (
+        owner.id, action, resource_type,
+    )
+    if resource == "created":
+        resource = db_session.query(Song).filter_by(title="Fresh").one().id
+    assert entry.resource_id == resource
 
 
 @pytest.mark.parametrize("role", ["admin", "user"])

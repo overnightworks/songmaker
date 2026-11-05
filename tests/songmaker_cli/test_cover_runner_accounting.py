@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import shutil
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -26,7 +26,6 @@ from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Base, Job, User, aware_timestamp
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
-from songmaker_cli.settings import CoverExecutor, Settings
 
 STARTED = datetime(2026, 10, 18, tzinfo=timezone.utc)
 GENERATED_PIXEL = (20, 80, 160)
@@ -40,33 +39,39 @@ def _png_bytes() -> bytes:
     return output.getvalue()
 
 
-@pytest.fixture
-def accounting_pg_url():
-    url = os.environ.get("TEST_DATABASE_URL", "")
-    if not url.startswith("postgresql"):
-        pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
-    engine = create_engine(url)
+@contextmanager
+def _accounting_schema(base_url):
+    engine = create_engine(base_url)
     schema = "cover_accounting_" + uuid.uuid4().hex
     with engine.begin() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     try:
-        yield make_url(url).update_query_dict({"options": f"-csearch_path={schema}"})
+        yield make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
     finally:
         with engine.begin() as connection:
             connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         engine.dispose()
 
 
-@pytest.fixture(params=["sqlite", "postgresql"])
-def accounting_factory(request, tmp_path):
-    if request.param == "sqlite":
+@pytest.fixture
+def accounting_pg_url(postgresql_url):
+    with _accounting_schema(postgresql_url) as url:
+        yield url
+
+
+@pytest.fixture
+def accounting_factory(database_postgresql_url, tmp_path):
+    if database_postgresql_url is None:
         factory = init_test_db(tmp_path / "accounting.db")
-    else:
-        engine = create_engine(request.getfixturevalue("accounting_pg_url"))
+        yield factory
+        factory.kw["bind"].dispose()
+        return
+    with _accounting_schema(database_postgresql_url) as url:
+        engine = create_engine(url)
         Base.metadata.create_all(engine)
         factory = sessionmaker(bind=engine)
-    yield factory
-    factory.kw["bind"].dispose()
+        yield factory
+        engine.dispose()
 
 
 @pytest.fixture
@@ -88,11 +93,7 @@ def running_cover(accounting_factory, tmp_path, monkeypatch):
     monkeypatch.setattr(cover_runner, "generate_codex_cover_image", lambda *a, **kw: _png_bytes())
     return {
         "job_id": "cover", "db_factory": accounting_factory, "audio_dir": tmp_path / "audio",
-        "settings": Settings(
-            database_url="postgresql://example", redis_url="redis://example",
-            session_secret="session-secret", songmaker_internal_token="internal-token",
-            cover_executor=CoverExecutor.WEB,
-        ),
+        "abort_signal": threading.Event(),
     }
 
 
@@ -164,10 +165,13 @@ def test_publication_cleanup_preserves_only_committed_images(
         asyncio.run(exercise())
     finally:
         event.remove(accounting_factory, "before_commit", hold_publication)
-    _assert_cover_accounting(
-        accounting_factory, running_cover["audio_dir"],
-        JobStatus.FAILED if failure == "rollback" else JobStatus.COMPLETED,
+    # A cancelled web task leaves its job RUNNING for startup recovery to fail.
+    expected_status = (
+        JobStatus.RUNNING if cancel_task and failure == "rollback"
+        else JobStatus.FAILED if failure == "rollback"
+        else JobStatus.COMPLETED
     )
+    _assert_cover_accounting(accounting_factory, running_cover["audio_dir"], expected_status)
 
 
 def test_late_cancellation_preserves_publication_with_a_preloaded_job(
@@ -194,7 +198,9 @@ def test_late_cancellation_preserves_publication_with_a_preloaded_job(
         assert count_cover_jobs_since(verification, "album", STARTED) == 1
 
 
-@pytest.mark.parametrize("accounting_factory", ["postgresql"], indirect=True)
+@pytest.mark.parametrize(
+    "database_backend", ["postgresql"], indirect=True,
+)
 @pytest.mark.parametrize("winner", ["publication", "cancellation"])
 def test_postgresql_serializes_publication_and_cancellation(
     accounting_factory, running_cover, monkeypatch, winner,

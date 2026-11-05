@@ -1678,6 +1678,16 @@ export SONGMAKER_RELEASE="${RELEASE_TAG_OF[$DEPLOY_COMMIT]}" SONGMAKER_COMMIT="$
 # it before the base-image and compose builds rather than after them.
 compose_config_refusal "after checking out $DEPLOY_COMMIT"
 
+# The selected release's compose may declare secret files; refuse one whose
+# file is missing, empty or different before anything is built or recreated.
+# The command reads compose's interpolated configuration in memory only and
+# prints no value, so its stderr is safe for the journal. -B keeps the import of
+# dotenv_file from leaving a __pycache__ that would dirty the checkout.
+if ! SECRET_FILES_ERROR="$(python3 -B "$SCRIPT_DIR/secret_files.py" --verify 2>&1 >/dev/null)"; then
+    log_err "declared secret files refused after checking out $DEPLOY_COMMIT — refusing to deploy, the running stack is untouched: $SECRET_FILES_ERROR"
+    fail_tick "declared secret files refused"
+fi
+
 backup_before_schema_change "$DEPLOY_COMMIT" "${RELEASE_TAG_OF[$DEPLOY_COMMIT]}"
 
 # Base images are local-only. Check the selected release against the revision

@@ -24,11 +24,9 @@ from songmaker_cli.api_models import (
 from songmaker_cli.constants import (
     GENERATION_ETA_MIN_PROGRESS,
     STALE_JOB_THRESHOLDS,
-    CoverExecutor,
     GenerationPhase,
     JobStatus,
     JobType,
-    stale_job_thresholds,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -485,16 +483,6 @@ def test_unpick_generation(seeded_session: Session) -> None:
     assert get_generation(seeded_session, "g1").is_picked is False
 
 
-def test_cleanup_album_deletes_unpicked(seeded_session: Session) -> None:
-    pick_generation(seeded_session, "g1")
-    seeded_session.commit()
-    count, paths = cleanup_album(seeded_session, "test")
-    seeded_session.commit()
-    assert count == 1
-    assert get_generation(seeded_session, "g1") is not None
-    assert get_generation(seeded_session, "g2") is None
-
-
 def test_cleanup_album_no_picks_deletes_all(seeded_session: Session) -> None:
     count, _paths = cleanup_album(seeded_session, "test")
     seeded_session.commit()
@@ -528,16 +516,6 @@ def test_unkeep_generation_not_found(seeded_session: Session) -> None:
         unkeep_generation(seeded_session, "nonexistent")
 
 
-def test_cleanup_album_skips_kept(seeded_session: Session) -> None:
-    keep_generation(seeded_session, "g2")
-    seeded_session.commit()
-    count, paths = cleanup_album(seeded_session, "test")
-    seeded_session.commit()
-    assert count == 1
-    assert get_generation(seeded_session, "g1") is None
-    assert get_generation(seeded_session, "g2") is not None
-
-
 def test_cleanup_album_skips_picked_and_kept(seeded_session: Session) -> None:
     pick_generation(seeded_session, "g1")
     keep_generation(seeded_session, "g2")
@@ -549,24 +527,34 @@ def test_cleanup_album_skips_picked_and_kept(seeded_session: Session) -> None:
     assert get_generation(seeded_session, "g2") is not None
 
 
-def test_cleanup_song_deletes_unpicked(seeded_session: Session) -> None:
+@pytest.mark.parametrize(
+    "cleanup", [lambda s: cleanup_song(s, "s1"), lambda s: cleanup_album(s, "test")],
+)
+def test_cleanup_deletes_exactly_the_unpicked_unkept_takes_and_returns_their_files(
+    seeded_session: Session, cleanup,
+) -> None:
+    seeded_session.add_all([
+        Generation(id="g3", song_id="s1", version_id="v1", generation_number=3,
+                   mp3_path="test/v3.mp3", wav_path="test/v3.wav"),
+        Generation(id="g4", song_id="s1", version_id="v1", generation_number=4,
+                   mp3_path="test/v4.mp3"),
+        Score(id="sc3", generation_id="g3", scorer="batch", value={"dynamics": 1.0}),
+        Rating(id="r3", generation_id="g3", rating=50.0),
+    ])
     pick_generation(seeded_session, "g1")
-    seeded_session.commit()
-    count, paths = cleanup_song(seeded_session, "s1")
-    seeded_session.commit()
-    assert count == 1
-    assert get_generation(seeded_session, "g1") is not None
-    assert get_generation(seeded_session, "g2") is None
-
-
-def test_cleanup_song_skips_kept(seeded_session: Session) -> None:
     keep_generation(seeded_session, "g2")
     seeded_session.commit()
-    count, paths = cleanup_song(seeded_session, "s1")
+
+    count, paths = cleanup(seeded_session)
     seeded_session.commit()
-    assert count == 1
-    assert get_generation(seeded_session, "g1") is None
-    assert get_generation(seeded_session, "g2") is not None
+
+    assert count == 2
+    assert sorted(paths) == ["test/v3.mp3", "test/v3.wav", "test/v4.mp3"]
+    assert [gen.id for gen in seeded_session.query(Generation).order_by(Generation.id)] == [
+        "g1", "g2",
+    ]
+    assert seeded_session.query(Score).filter_by(generation_id="g3").count() == 0
+    assert seeded_session.query(Rating).filter_by(generation_id="g3").count() == 0
 
 
 def test_sharing_generation_auto_sets_kept(seeded_session: Session) -> None:
@@ -2027,33 +2015,15 @@ def test_reaper_uses_the_supplied_resolved_queue_depth_for_an_alive_worker(
     assert get_job(db_session, job.id).error_type == "queued_full_queue_bound"
 
 
-@pytest.mark.parametrize(
-    ("job_type", "cover_executor"),
-    [
-        (job_type, executor)
-        for job_type in stale_job_thresholds(CoverExecutor.MUSIC)
-        for executor in (
-            (None, CoverExecutor.MUSIC) if job_type is JobType.COVER else (None,)
-        )
-    ],
-    ids=lambda value: "default" if value is None else value.value,
-)
+@pytest.mark.parametrize("job_type", STALE_JOB_THRESHOLDS)
 def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     db_session: Session,
     job_type: JobType,
-    cover_executor: CoverExecutor | None,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from datetime import datetime, timedelta, timezone
 
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    if cover_executor is None:
-        monkeypatch.delenv("COVER_EXECUTOR", raising=False)
-    else:
-        monkeypatch.setenv("COVER_EXECUTOR", cover_executor)
-    thresholds = stale_job_thresholds(
-        CoverExecutor.WEB if cover_executor is None else cover_executor,
-    )[job_type]
+    thresholds = STALE_JOB_THRESHOLDS[job_type]
     queued = create_job(db_session, job_type)
     running = create_job(db_session, job_type)
     healthy = create_job(db_session, job_type)
@@ -2072,32 +2042,14 @@ def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     assert get_job(db_session, healthy.id).status == JobStatus.RUNNING
 
 
-@pytest.mark.parametrize(
-    ("job_type", "cover_executor"),
-    [
-        (job_type, executor)
-        for job_type in stale_job_thresholds(CoverExecutor.MUSIC)
-        for executor in (
-            (None, CoverExecutor.MUSIC) if job_type is JobType.COVER else (None,)
-        )
-    ],
-    ids=lambda value: "default" if value is None else value.value,
-)
+@pytest.mark.parametrize("job_type", STALE_JOB_THRESHOLDS)
 def test_reaper_keeps_jobs_at_each_strict_threshold_cutoff(
     db_session: Session,
     job_type: JobType,
-    cover_executor: CoverExecutor | None,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The reaper uses strict `<`: equality with either cutoff stays active."""
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    if cover_executor is None:
-        monkeypatch.delenv("COVER_EXECUTOR", raising=False)
-    else:
-        monkeypatch.setenv("COVER_EXECUTOR", cover_executor)
-    thresholds = stale_job_thresholds(
-        CoverExecutor.WEB if cover_executor is None else cover_executor,
-    )[job_type]
+    thresholds = STALE_JOB_THRESHOLDS[job_type]
     queued = create_job(db_session, job_type)
     running = create_job(db_session, job_type)
     update_job_status(db_session, running.id, JobStatusUpdate(JobStatus.RUNNING))

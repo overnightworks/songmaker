@@ -1,0 +1,9 @@
+export const VERSION_CURRENT_TAG = 'current';
+export const VERSION_PICKED_LABEL = 'picked';
+export const VERSION_REPLACE_DRAFT_TITLE = 'Replace your unsaved draft?';
+export const VERSION_REPLACE_DRAFT_CONFIRM_LABEL = 'Replace';
+export const VERSION_DELETE_CONFIRM_LABEL = 'Delete version';
+export const VERSION_DELETE_DRAFT_GOES = 'Your unsaved draft goes too.';
+export const VERSION_DELETE_EMPTIES_EDITOR = 'Its lyrics leave the editor, which will be empty.';
+export const VERSION_DELETE_LOAD_UNDO_GOES = 'Undo for your earlier draft goes too.';
+export const VERSION_NO_LYRICS = 'No lyrics';

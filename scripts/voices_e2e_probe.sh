@@ -18,6 +18,8 @@ PROBE_PORT=18080
 
 secret_file="$(mktemp)"
 echo e2e-ci-client-secret > "$secret_file"
+gateway_key_file="$(mktemp)"
+echo e2e-ci-gateway-key > "$gateway_key_file"
 
 export COMPOSE_PROJECT_NAME=songmaker-i689-probe
 export WEB_PORT="$PROBE_PORT"
@@ -28,6 +30,7 @@ export SONGMAKER_MONITORING_TOKEN=e2e-ci-monitoring-token
 export E2E_ADMIN_USERNAME=e2e-ci-admin
 export OIDC_ISSUER=https://keycloak.invalid/realms/e2e
 export KEYCLOAK_CLIENT_SECRET_FILE="$secret_file"
+export GATEWAY_KEY_FILE="$gateway_key_file"
 export GRAFANA_PASSWORD=e2e-ci-grafana-password
 export PUBLIC_BASE_URL="http://localhost:$PROBE_PORT"
 export E2E_BASE_URL="http://localhost:$PROBE_PORT"
@@ -40,7 +43,7 @@ compose=(docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml
 teardown() {
     trap - EXIT TERM
     "${compose[@]}" down -v --remove-orphans
-    rm -f "$secret_file"
+    rm -f "$secret_file" "$gateway_key_file"
 }
 trap teardown EXIT
 trap 'teardown; exit 143' TERM

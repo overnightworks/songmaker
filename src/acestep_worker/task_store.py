@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+import logging
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import uuid4
@@ -16,6 +17,8 @@ from acestep_worker.models import (
     TaskState,
     WorkerTaskEvent,
 )
+
+log = logging.getLogger(__name__)
 
 TERMINAL_RETENTION_SECONDS = 60.0
 _TERMINAL_STATES: frozenset[TaskState] = frozenset({"done", "error"})
@@ -209,6 +212,16 @@ class TaskStore:
             for tid in to_drop:
                 del self._tasks[tid]
         return len(to_drop)
+
+    async def sweep_terminal_tasks(
+        self, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
+    ) -> None:
+        while True:
+            await sleep(self._retention)
+            try:
+                await self.cleanup_terminal()
+            except Exception:
+                log.exception("Terminal task sweep failed")
 
     async def size(self) -> int:
         async with self._lock:

@@ -12,7 +12,6 @@ from agent_providers.config import reset_config
 import songmaker_cli.music_worker as mw_mod
 from songmaker_cli.constants import (
     AuditAction,
-    CoverExecutor,
     JobFunction,
     JobStatus,
     JobType,
@@ -42,13 +41,12 @@ def _make_worker() -> MusicWorker:
     return worker
 
 
-def _settings(cover_executor: CoverExecutor) -> Settings:
+def _settings() -> Settings:
     return Settings(
         database_url="postgresql://example",
         redis_url="redis://example",
         session_secret="session-secret",
         songmaker_internal_token="internal-token",
-        cover_executor=cover_executor,
     )
 
 
@@ -75,36 +73,6 @@ def test_generate_runs_queued_job() -> None:
     mock_run.assert_awaited_once()
     kwargs = mock_run.await_args.kwargs
     assert kwargs["redis"] is ctx["redis"]
-
-
-def test_cover_suggestion_job_runs_on_the_music_worker() -> None:
-    worker = _make_worker()
-
-    with patch(
-        "songmaker_cli.music_worker.run_cover_suggestion_job", new_callable=AsyncMock,
-    ) as mock_run:
-        _run(worker.generate_cover_suggestions(_mock_ctx(), "cover-job"))
-
-    mock_run.assert_awaited_once()
-    assert mock_run.await_args.args == ("cover-job",)
-    assert mock_run.await_args.kwargs["audio_dir"] == "audio"
-    assert mock_run.await_args.kwargs["settings"] is worker._settings
-
-
-def test_web_executor_leaves_cover_registration_and_recovery_to_the_web_runner() -> None:
-    worker = MusicWorker(_settings(CoverExecutor.WEB))
-    functions = mw_mod._music_worker_functions(worker, worker._settings)
-
-    assert JobType.COVER not in worker.job_types
-    assert JobFunction.COVER not in {function.name for function in functions}
-
-
-def test_music_executor_keeps_cover_registration_and_recovery_on_the_music_worker() -> None:
-    worker = MusicWorker(_settings(CoverExecutor.MUSIC))
-    functions = mw_mod._music_worker_functions(worker, worker._settings)
-
-    assert worker.recovery_statuses_by_type()[JobType.COVER] == frozenset({JobStatus.RUNNING})
-    assert JobFunction.COVER in {function.name for function in functions}
 
 
 def test_generate_passes_seed_and_target_model() -> None:
@@ -265,7 +233,7 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
         ])
         session.commit()
 
-    worker = MusicWorker(_settings(CoverExecutor.MUSIC))
+    worker = MusicWorker(_settings())
     worker.get_db_factory = MagicMock(return_value=factory)
     worker.audio_dir = MagicMock(return_value=audio_dir)
     redis = AsyncMock()
@@ -290,13 +258,13 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
         ).all()
 
     assert worker.job_types == (
-        JobType.COVER,
         JobType.GENERATE,
         JobType.LORA_TRAINING,
         JobType.LOAD_MODEL_ON_WORKER,
         JobType.DOWNLOAD_MODEL_ON_WORKER,
     )
-    for job in (cover, generate, lora_job, load_model, download_model):
+    assert cover.status == JobStatus.RUNNING
+    for job in (generate, lora_job, load_model, download_model):
         assert job.status == JobStatus.FAILED
         assert job.error_type == "server_restart"
     assert lora.status == LoraStatus.FAILED
@@ -412,7 +380,7 @@ def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_coun
     with factory() as session:
         session.add(User(id="u1", username="u1"))
         session.commit()
-    settings = _settings(CoverExecutor.WEB).model_copy(update={"audio_dir": str(audio_dir)})
+    settings = _settings().model_copy(update={"audio_dir": str(audio_dir)})
     worker = MusicWorker(settings)
     # init_db would run the PostgreSQL migrations, which needs a live database.
     worker.get_db_factory = MagicMock(return_value=factory)
@@ -424,11 +392,9 @@ def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_coun
 
 
 def test_music_worker_settings_functions() -> None:
-    from songmaker_cli.constants import JobFunction
     from songmaker_cli.music_worker import MusicWorkerSettings
     func_names = {f.name for f in MusicWorkerSettings.functions}
     assert JobFunction.GENERATE in func_names
-    assert JobFunction.COVER not in func_names
     assert JobFunction.LOAD_MODEL_ON_WORKER in func_names
     assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in func_names
     assert JobFunction.LORA_TRAINING in func_names
@@ -449,7 +415,6 @@ def test_music_worker_functions_registered_under_job_function_names() -> None:
     """
     from arq.worker import Worker
 
-    from songmaker_cli.constants import JobFunction
     from songmaker_cli.music_worker import MusicWorkerSettings
 
     async def _build_and_inspect() -> set[str]:
@@ -462,7 +427,6 @@ def test_music_worker_functions_registered_under_job_function_names() -> None:
         return set(worker.functions.keys())
 
     registered = asyncio.run(_build_and_inspect())
-    assert JobFunction.COVER not in registered
     assert JobFunction.GENERATE in registered
     assert JobFunction.LOAD_MODEL_ON_WORKER in registered
     assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in registered

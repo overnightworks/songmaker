@@ -4,15 +4,17 @@ import {
 	ACCOUNT_MENU_LABEL,
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_ARCHIVE_LABEL,
-	HOME_LISTEN_EMPTY,
 	LIBRARY_NEW_MENU_LABEL,
-	HOME_WRITE_EMPTY,
-	HOME_WRITE_ERROR,
 	SONG_MENU_LABEL,
 	SONG_MENU_DELETE_LABEL,
-	homeWriteOpenLabel,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import {
+	HOME_LISTEN_EMPTY,
+	HOME_WRITE_EMPTY,
+	HOME_WRITE_ERROR,
+	homeWriteOpenLabel
+} from '../src/lib/constants/home';
 import { songRoutePath } from '../src/lib/routes/addresses';
 import {
 	appBar,
@@ -245,6 +247,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await songMenuOf(page, shellOf(testInfo)).click();
 		await page.getByRole('button', { name: SONG_MENU_DELETE_LABEL, exact: true }).click();
 		await page.getByRole('button', { name: 'Delete Song', exact: true }).click();
+		await expect(page.getByRole('alert').getByText('Song deleted', { exact: true })).toBeVisible();
 		await openHome(page, shellOf(testInfo));
 		await expect(writeBodies(page).filter({ hasText: answer.items[0].song_title })).toHaveCount(0);
 		releaseRemoval?.();

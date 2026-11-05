@@ -23,7 +23,13 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.activity import record_song_edit
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
-from songmaker_cli.db.queries.generations import ArchivedTakeError, lock_unarchived_generation
+from songmaker_cli.db.queries.generations import (
+    DELETION_LOADING,
+    UNPICKED_AND_UNKEPT,
+    ArchivedTakeError,
+    lock_takes,
+    lock_unarchived_generation,
+)
 from songmaker_cli.db.queries.jobs import has_active_job_for_version
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
@@ -520,6 +526,27 @@ def restore_song(session: Session, song_id: str) -> Song:
     return song
 
 
+class UnstorableSongTitleError(ValueError):
+    """A song title the title column cannot hold."""
+
+
+class EmptySongTitleError(UnstorableSongTitleError):
+    """A song title that is empty once stripped."""
+
+
+class OverlongSongTitleError(UnstorableSongTitleError):
+    """A song title longer than the title column holds."""
+
+
+def stored_song_title(title: str) -> str:
+    stripped = title.strip()
+    if not stripped:
+        raise EmptySongTitleError
+    if len(stripped) > Song.__table__.c.title.type.length:
+        raise OverlongSongTitleError
+    return stripped
+
+
 def rename_song(
     session: Session,
     song_id: str,
@@ -620,15 +647,8 @@ def disable_song_sharing(session: Session, song_id: str) -> Song:
 
 def cleanup_song(session: Session, song_id: str) -> tuple[int, list[str]]:
     """Remove unpicked+unkept generations from a song. Returns (count, paths)."""
-    gens = (
-        session.query(Generation)
-        .options(joinedload(Generation.scores), joinedload(Generation.rating))
-        .filter(
-            Generation.song_id == song_id,
-            Generation.is_picked == False,  # noqa: E712
-            Generation.is_kept == False,  # noqa: E712
-        )
-        .all()
+    gens = lock_takes(
+        session, Generation.song_id == song_id, *UNPICKED_AND_UNKEPT, options=DELETION_LOADING,
     )
     count = len(gens)
     paths: list[str] = []

@@ -57,7 +57,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from dotenv_file import DotenvError, effective_assignment
+from dotenv_file import DotenvError, compose_value
 
 MIRROR_DIR_MODE = 0o700
 MIRROR_FILE_MODE = 0o600
@@ -260,28 +260,25 @@ def resolve_mirror_directory(project_root: Path, home: Path) -> Path:
     A value we cannot honour exactly is refused loudly instead of being
     silently mangled.
     """
-    if MIRROR_DIR_KEY in os.environ:
-        # Exported, even empty, wins — and compose's `${VAR:-default}` treats
-        # an empty value as "take the default", so this does too.
-        configured = os.environ[MIRROR_DIR_KEY]
-    else:
-        configured = _mirror_dir_from_env_file(project_root / ".env")
+    configured = _configured_mirror_directory(project_root / ".env")
     if not configured:
+        # Compose's `${VAR:-default}` treats an empty value as "take the default".
         return home / ".songmaker/agent-cli-credentials"
     return _validated_mirror_directory(configured, home)
 
 
-def _mirror_dir_from_env_file(env_file: Path) -> str:
-    """The key's value from ``.env``, read as Compose reads it — or refused."""
+def _configured_mirror_directory(env_file: Path) -> str | None:
+    """The key as compose resolves it (exported, then ``.env``), or refused."""
+    text = ""
+    if MIRROR_DIR_KEY not in os.environ:
+        try:
+            text = env_file.read_text()
+        except OSError:
+            pass
     try:
-        text = env_file.read_text()
-    except OSError:
-        return ""
-    try:
-        assignment = effective_assignment(text, MIRROR_DIR_KEY, env_file)
+        return compose_value(os.environ, text, MIRROR_DIR_KEY, env_file)
     except DotenvError as exc:
         raise MirrorError(str(exc)) from exc
-    return assignment.value if assignment else ""
 
 
 def _validated_mirror_directory(configured: str, home: Path) -> Path:

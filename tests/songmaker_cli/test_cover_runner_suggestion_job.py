@@ -41,8 +41,9 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cover_runner import (
     COVER_IMAGE_POLICY,
+    CoverJobCancellationRegistry,
     build_cover_prompt,
-    run_cover_suggestion_job,
+    run_next_cover_job,
 )
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
@@ -193,7 +194,7 @@ def test_cover_job_generates_one_normalized_png_through_isolated_fake_cli(
     factory, audio_dir, job_id = cover_job
     calls = _install_fake_codex_cli(monkeypatch, tmp_path)
 
-    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+    asyncio.run(run_next_cover_job(db_factory=factory, audio_dir=audio_dir))
 
     with factory() as session:
         job = session.get(Job, job_id)
@@ -251,7 +252,7 @@ def test_a_saved_codex_model_reaches_the_image_cli_as_its_model_flag(
         set_cover_settings(session, "codex", "cli", "gpt-5.4")
         session.commit()
     calls = _install_fake_codex_cli(monkeypatch, tmp_path)
-    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+    asyncio.run(run_next_cover_job(db_factory=factory, audio_dir=audio_dir))
 
     with factory() as session:
         assert session.get(Job, job_id).status == JobStatus.COMPLETED
@@ -273,7 +274,7 @@ def test_cover_job_names_a_saved_claude_selection_without_calling_codex(
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("Codex must not run")),
     )
 
-    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+    asyncio.run(run_next_cover_job(db_factory=factory, audio_dir=audio_dir))
 
     with factory() as session:
         job = session.get(Job, job_id)
@@ -296,7 +297,7 @@ def test_cover_job_asks_the_selected_codex_route_to_sign_in(
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("Codex must not run")),
     )
 
-    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+    asyncio.run(run_next_cover_job(db_factory=factory, audio_dir=audio_dir))
 
     with factory() as session:
         job = session.get(Job, job_id)
@@ -450,7 +451,7 @@ def test_cover_job_leaves_no_group_for_named_image_failures(
     factory, audio_dir, job_id = cover_job
     _install_fake_codex_cli(monkeypatch, tmp_path, outcome=outcome)
 
-    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+    asyncio.run(run_next_cover_job(db_factory=factory, audio_dir=audio_dir))
 
     with factory() as session:
         job = session.get(Job, job_id)
@@ -473,7 +474,7 @@ def test_cover_job_reports_an_unavailable_cli_probe_as_an_image_failure(
         )),
     )
 
-    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+    asyncio.run(run_next_cover_job(db_factory=factory, audio_dir=audio_dir))
 
     with factory() as session:
         job = session.get(Job, job_id)
@@ -491,7 +492,7 @@ def test_cover_job_names_a_busy_codex_process_pool(
     _install_fake_codex_cli(monkeypatch, tmp_path)
     use_codex_process_pool(monkeypatch, process_pool)
 
-    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+    asyncio.run(run_next_cover_job(db_factory=factory, audio_dir=audio_dir))
 
     with factory() as session:
         job = session.get(Job, job_id)
@@ -510,7 +511,7 @@ def test_cover_job_names_a_completed_turn_that_creates_no_image(
         creates_artifact=False,
     )
 
-    asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
+    asyncio.run(run_next_cover_job(db_factory=factory, audio_dir=audio_dir))
 
     with factory() as session:
         job = session.get(Job, job_id)
@@ -663,7 +664,7 @@ def test_cancelled_cover_job_removes_its_staging_group(
         *,
         policy: ImagePolicy,
         deadline: float,
-        abort_signal: threading.Event | None,
+        abort_signal: threading.Event,
         model: str,
     ) -> bytes:
         started.set()
@@ -681,7 +682,11 @@ def test_cancelled_cover_job_removes_its_staging_group(
 
     async def cancel_job() -> None:
         task = asyncio.create_task(
-            run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir),
+            run_next_cover_job(
+                db_factory=factory,
+                audio_dir=audio_dir,
+                cancellation_registry=CoverJobCancellationRegistry(),
+            ),
         )
         await asyncio.to_thread(started.wait)
         task.cancel()
@@ -696,6 +701,6 @@ def test_cancelled_cover_job_removes_its_staging_group(
 
     with factory() as session:
         job = session.get(Job, job_id)
-        assert job.status == JobStatus.FAILED
+        assert job.status == JobStatus.RUNNING
         assert not job.album.cover_suggestions
     assert not list((audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).glob(".*.staging"))

@@ -4,7 +4,7 @@
 		MODELS_ROUTE_GATEWAY_LABEL,
 		MODELS_SET_BY_AGENT_FILE_LABEL,
 		MODELS_TASK_COWRITER_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/models.ts';
 	import ModelsServiceRow from './ModelsServiceRow.svelte';
 
 	interface Props {

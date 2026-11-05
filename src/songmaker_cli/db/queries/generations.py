@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Final
 
 from sqlalchemy import ColumnElement, exists
-from sqlalchemy.orm import Session, aliased, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload, selectinload
+from sqlalchemy.orm.interfaces import ExecutableOption
 
 from songmaker_cli import audio_files
 from songmaker_cli.audio_paths import canonical_audio_filename
@@ -291,10 +292,40 @@ def lock_unarchived_generation(session: Session, generation_id: str) -> Generati
 
 def pick_generation(session: Session, generation_id: str) -> None:
     gen = _require_generation(session, generation_id)
-    session.query(Generation).filter_by(song_id=gen.song_id).update({"is_picked": False})
+    for sibling in lock_takes(session, Generation.song_id == gen.song_id):
+        sibling.is_picked = False
     gen = lock_unarchived_generation(session, generation_id)
     gen.is_picked = True
     session.flush()
+
+
+UNPICKED_AND_UNKEPT: Final = (Generation.is_picked.is_(False), Generation.is_kept.is_(False))
+DELETION_LOADING: Final = (selectinload(Generation.scores), selectinload(Generation.rating))
+
+
+def lock_takes(
+    session: Session,
+    *criteria: ColumnElement[bool],
+    options: Sequence[ExecutableOption] = (),
+) -> list[Generation]:
+    """Lock the takes that match the criteria in id order and reload them, so a Keep,
+    Pick or share that commits first is seen and the criteria are checked again after
+    the wait.
+
+    Cleanup, pick and bulk delete take their rows in this order, so none of them
+    waits on another in a cycle. The lock is limited to the take (`of=Generation`)
+    because the eager join to its reference recording is an outer join, which
+    PostgreSQL cannot lock.
+    """
+    return (
+        session.query(Generation)
+        .filter(*criteria)
+        .options(*options)
+        .order_by(Generation.id)
+        .with_for_update(of=Generation)
+        .populate_existing()
+        .all()
+    )
 
 
 def unpick_generation(session: Session, generation_id: str) -> None:
@@ -423,13 +454,16 @@ def get_generations(session: Session, generation_ids: list[str]) -> list[Generat
 
 def bulk_delete_generations(session: Session, generations: list[Generation]) -> list[str]:
     """Delete the generations and return relative file paths for post-commit cleanup."""
+    locked = lock_takes(
+        session, Generation.id.in_([gen.id for gen in generations]), options=DELETION_LOADING,
+    )
     paths: list[str] = []
-    for gen in generations:
+    for gen in locked:
         paths.extend(p for p in [gen.mp3_path, gen.wav_path] if p)
         session.delete(gen)
 
     session.flush()
-    log.info("Bulk deleted %d generations", len(generations))
+    log.info("Bulk deleted %d generations", len(locked))
     return paths
 
 

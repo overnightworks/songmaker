@@ -34,6 +34,7 @@ from auto_deploy_support import (
     ComposeConfigRefusal,
     FailingTransport,
     check_runs_response,
+    compose_config_quiet_stub,
     count_alerting_rules,
     git,
     git_output,
@@ -79,6 +80,7 @@ class Checkout:
         self._compose_up_exit_code = 0
         self._compose_project_name = "songmaker"
         self._compose_config_refusal: ComposeConfigRefusal | None = None
+        self._compose_secrets_json = "{}"
         self._prometheus_ready_exit_code = 0
         self._prometheus_reload_exit_code = 0
         self._prometheus_rules_exit_code = 0
@@ -107,7 +109,13 @@ class Checkout:
         git(self.root, "config", "user.name", "Test")
 
         (self.root / "scripts").mkdir()
-        for source in (DEPLOY_SCRIPT, ALERT_CONFIG_LIB, REPO_ROOT / "scripts" / "build_images.sh"):
+        for source in (
+            DEPLOY_SCRIPT,
+            ALERT_CONFIG_LIB,
+            REPO_ROOT / "scripts" / "build_images.sh",
+            REPO_ROOT / "scripts" / "secret_files.py",
+            REPO_ROOT / "scripts" / "dotenv_file.py",
+        ):
             copy = self.root / "scripts" / source.name
             copy.write_text(source.read_text())
             copy.chmod(source.stat().st_mode)
@@ -177,6 +185,13 @@ class Checkout:
         self._compose_config_refusal = refusal
         self._write_docker_stub()
 
+    def set_compose_secret_files(self, files: dict[str, Path]) -> None:
+        """Make `docker compose config --format json` declare these top-level secret files."""
+        self._compose_secrets_json = json.dumps(
+            {name: {"file": str(path)} for name, path in files.items()},
+        )
+        self._write_docker_stub()
+
     def satisfy_compose_config(self) -> None:
         """Stand in for the operator adding the missing variable to .env."""
         self._compose_config_refusal = None
@@ -243,33 +258,6 @@ class Checkout:
             "exit 2\n",
         )
 
-    def _compose_config_quiet_stub(self) -> str:
-        """Compose's own validation; the wrapper runs it inside the checkout."""
-        refusal_branch = ""
-        refusal = self._compose_config_refusal
-        if refusal is not None:
-            condition = (
-                "true"
-                if refusal.when_compose_file_contains is None
-                else f"grep -qsF -- {shlex.quote(refusal.when_compose_file_contains)} "
-                "docker-compose.yml"
-            )
-            refusal_branch = (
-                f"    if {condition}; then\n"
-                f"        printf '%s\\n' {shlex.quote(refusal.stderr)} >&2\n"
-                "        exit 1\n"
-                "    fi\n"
-            )
-        return (
-            'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--quiet" ]]; then\n'
-            '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
-            '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
-            "    fi\n"
-            + refusal_branch
-            + "    exit 0\n"
-            "fi\n"
-        )
-
     def _write_docker_stub(self) -> None:
         write_executable(
             self._bin / "docker",
@@ -277,7 +265,7 @@ class Checkout:
             'printf "%s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
             'printf "%s\\t%s\\t%s\\n" "$*" "${SONGMAKER_RELEASE-}" "${SONGMAKER_COMMIT-}" '
             '>> "$DOCKER_RELEASE_ENV_FILE"\n'
-            + self._compose_config_quiet_stub()
+            + compose_config_quiet_stub(self._compose_config_refusal)
             +
             'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--format" '
             '&& "$4" == "json" ]]; then\n'
@@ -285,8 +273,10 @@ class Checkout:
             '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
             "    fi\n"
             '    printf \'{"name":"%s","services":{"songmaker-web":'
-            '{"build":{"context":"."}},"postgres":{"image":"postgres:16"}}}\\n\' '
-            '"$DOCKER_COMPOSE_PROJECT_NAME"\n'
+            '{"build":{"context":"."}},"postgres":{"image":"postgres:16"}},'
+            f'"secrets":%s}}\\n\' '
+            '"$DOCKER_COMPOSE_PROJECT_NAME" '
+            f"{shlex.quote(self._compose_secrets_json)}\n"
             "    exit 0\n"
             "fi\n"
             'if [[ "$1" == "compose" && "$2" == "ps" ]]; then\n'

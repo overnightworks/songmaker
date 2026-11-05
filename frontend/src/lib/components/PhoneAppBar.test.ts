@@ -15,10 +15,10 @@ import {
 	ACCOUNT_MENU_LABEL,
 	APP_NAME,
 	HITBOX_FREQUENT_PX,
-	HOME_PAGE_LABEL,
 	RAIL_SEARCH_LABEL,
 	SEARCH_OPEN_LABEL
 } from '#lib/constants.ts';
+import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import type { ResolvedPathname } from '$app/types';

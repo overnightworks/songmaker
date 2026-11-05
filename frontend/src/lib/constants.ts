@@ -9,38 +9,10 @@ export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 // return to from this param.
 export const SIGN_IN_NEXT_PARAM = 'next';
 
-// The share succeeded server-side even when the follow-up clipboard write
-// throws (no permission, no focus, etc.) — that toast must never read as a
-// share failure, since the link exists and only the copy step didn't.
-export const SHARE_BUTTON_COPY_FAILED_TOAST =
-	'Shared — copy the link manually, clipboard write failed';
-export const SHARE_BUTTON_COPIED_TOAST = 'Link copied to clipboard';
-export const SHARE_BUTTON_UNSHARED_TOAST = 'Sharing disabled';
-export const SHARE_BUTTON_FAILED_TOAST = 'Share failed';
-
-export const SHARE_LINK_COPIED_TOAST = 'Link copied';
-export const SHARE_LINK_COPY_FAILED_TOAST = 'Copy failed';
-
 export const DIALOG_CANCEL_LABEL = 'Cancel';
 export const DIALOG_CONFIRM_LABEL = 'Confirm';
 
 export const EXPIRY_WARN_DAYS = 3;
-
-export const LORA_POLL_INTERVAL_MS = 5000;
-
-export const VOICE_PICKER_LABEL = 'Your Voice';
-export const VOICE_PICKER_NONE_LABEL = 'None';
-export const VOICE_PICKER_CREATE_LABEL = 'Create a voice';
-export const VOICE_PICKER_NOT_AVAILABLE_FOR_MODEL = 'not available for this model';
-export const VOICE_PICKER_DELETED_LABEL = 'voice deleted';
-
-export function voicePickerMobileLabel(modelMode: string): string {
-	return `${VOICE_PICKER_LABEL} · ${modelMode} model`;
-}
-
-export const LORA_MIN_SAMPLES_FOR_TRAINING = 3;
-
-export const LORA_MAX_SAMPLES = 20;
 
 export const ADMIN_VOICES_TAB_LABEL = 'Voices';
 export const ADMIN_VOICES_HEADING = 'Voice operations';
@@ -51,57 +23,7 @@ export const ADMIN_VOICES_NAME_LABEL = 'Voice';
 export const ADMIN_VOICES_OWNER_LABEL = 'Owner';
 export const ADMIN_VOICES_STATUS_LABEL = 'Status';
 
-export const LORA_AUDIO_EXTENSIONS = ['.wav', '.mp3', '.flac'] as const;
 export const REFERENCE_AUDIO_ACCEPT = '.mp3,.wav,.flac,.ogg';
-
-export const LORA_OWN_TAKES_LABEL = 'Your takes';
-export const LORA_OWN_TAKES_LOADING = 'Loading your takes...';
-export const LORA_OWN_TAKES_EMPTY = 'No playable takes yet.';
-export const LORA_OWN_TAKES_LOAD_FAILED = 'Could not load takes';
-export const LORA_OWN_TAKES_USE = 'Use as sample';
-export const LORA_OWN_TAKES_CLOSE = 'Close takes';
-export const LORA_OWN_TAKES_OPEN = 'Use a take';
-export const LORA_TAKE_LABEL_PREFIX = 'Take';
-export const LORA_SAMPLE_ADDING = 'Adding...';
-export const LORA_SAMPLE_COPY_FAILED = 'Could not add take';
-export const LORA_SAMPLE_UPLOAD_FAILED = 'Upload failed';
-export const LORA_CREATE_FAILED = 'Could not create voice';
-export const LORA_TRAINING_QUEUED_TOAST = 'Training queued';
-export const LORA_TRAINING_STARTING = 'Starting...';
-export const LORA_TRAINING_FAILED_LABEL = 'Training failed';
-export const LORA_TRAINING_RETRY_LABEL = 'Train again';
-export const LORA_TRAINING_START_FAILED = 'Training failed to start';
-export const LORA_TRAINING_CANCEL_LABEL = 'Cancel';
-export const LORA_TRAINING_CANCELLED = 'Training cancelled';
-export const LORA_TRAINING_CANCEL_FAILED = 'Could not cancel training';
-export const LORA_TRAINING_PROGRESS_LOAD_FAILED = 'Could not load training progress';
-export const LORA_TRAINING_PROGRESS_LABEL = 'Training progress';
-export const LORA_TRAINING_STATUS_LABEL = 'Training';
-export const LORA_TRAINING_WAITING_LABEL = 'Waiting';
-export const LORA_TRAINING_WAITING_DEFAULT_REASON = 'Waiting for the worker.';
-const LORA_TRAINING_QUEUE_POSITION_TEMPLATE = 'Position {position} in the queue';
-const LORA_TRAINING_EPOCH_TEMPLATE = 'Epoch {current} of {total}';
-export const LORA_TRAINING_REMAINING_CALCULATING = 'Calculating remaining time...';
-const LORA_TRAINING_REMAINING_TEMPLATE = '~ {time} remaining';
-
-export function loraTrainingQueuePositionLabel(position: number): string {
-	return LORA_TRAINING_QUEUE_POSITION_TEMPLATE.replace('{position}', String(position));
-}
-
-export function loraTrainingEpochLabel(current: number, total: number): string {
-	return LORA_TRAINING_EPOCH_TEMPLATE.replace('{current}', String(current)).replace(
-		'{total}',
-		String(total)
-	);
-}
-
-export function loraTrainingRemainingLabel(seconds: number): string {
-	const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
-	const hours = Math.floor(totalMinutes / 60);
-	const minutes = totalMinutes % 60;
-	const time = hours > 0 ? `${hours}h ${minutes}m` : `${Math.max(minutes, 1)}m`;
-	return LORA_TRAINING_REMAINING_TEMPLATE.replace('{time}', time);
-}
 
 export const QUEUE_STREAM_EMPTY_POOL_PREFIX = 'No playable takes in pool';
 
@@ -222,33 +144,6 @@ export function takesDraftBanner(
 	return `Draft — ${differs}. Generate creates v${nextVersionNumber}.`;
 }
 export const EDITOR_QUEUED_LABEL = 'Queued';
-export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remaining)';
-export const WORKER_POOL_RESTART_LABEL = 'Restart worker…';
-export const WORKER_POOL_RESTART_CONFIRM = 'Restart';
-export const WORKER_POOL_RESTART_TITLE = 'Restart {id}?';
-export const WORKER_POOL_RESTART_WARNING = 'Running takes will stop.';
-export const WORKER_POOL_LAST_ERROR_LABEL = 'Last error';
-export const WORKER_POOL_FULL_LOGS_LABEL = 'Full logs:';
-export const WORKER_POOL_VRAM_OFFLINE = 'VRAM unavailable while the worker is offline.';
-// Named when an admin panel's first read fails while no offline strip says why.
-export const WORKER_POOL_LOAD_FAILED = 'Cannot reach the worker pool API.';
-export const WORKER_POOL_REFRESH_FAILED = 'Worker pool not updating — retrying…';
-export const WORKER_POOL_MODELS_LABEL = 'Models on this GPU';
-export const WORKER_POOL_MODELS_LOADING_TEMPLATE = 'None yet — {mode} is loading.';
-export const WORKER_POOL_MODELS_OFFLINE_LABEL = 'Unknown while the worker is offline.';
-export const WORKER_POOL_NO_MODEL_LABEL = 'No model loaded';
-export const WORKER_POOL_KEEP_LOADED_LABEL = 'Keep loaded';
-export const WORKER_POOL_KEEP_LOADED_HINT = 'Keep loaded — never unloaded to make room';
-export const WORKER_POOL_UNLOAD_LABEL = 'Unload';
-export const WORKER_POOL_VRAM_LABEL = 'VRAM';
-export const WORKER_POOL_VRAM_UNKNOWN = 'unknown';
-export const WORKER_POOL_VRAM_ESTIMATE = 'est.';
-export const WORKER_POOL_VRAM_FREE = 'GB free';
-export const WORKER_POOL_VRAM_ESTIMATE_REASON =
-	'No GPU reading — the sizes of the loaded models, not a measurement';
-export const WORKER_POOL_VRAM_NO_HEARTBEAT = 'No heartbeat — nothing to read';
-export const WORKER_POOL_VRAM_NO_TOTAL = 'Worker does not report total VRAM';
-export const WORKER_POOL_VRAM_NO_FIELDS = 'Worker build does not report VRAM fields';
 export const MODEL_REGISTRY_LOAD_FAILED = 'Cannot reach the registry API.';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 
@@ -282,52 +177,7 @@ export const COWRITER_SINGLE_MESSAGE_COUNT = '1 msg';
 export const COWRITER_CONVERSATION_CONFIRM_TEMPLATE = '{name} · {count}';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-writer';
 
-export const PROVIDER_STATUS_UNAVAILABLE_DETAIL = 'Provider status is unavailable';
-export const PROVIDER_ROUTE_CLI_LABEL = 'CLI';
-export const PROVIDER_ROUTE_API_LABEL = 'API';
-
 export const AGENTS_HEADING = 'Agents';
-const MODELS_LOADING_LABEL = 'Loading…';
-const MODELS_UNAVAILABLE_LABEL = 'Unavailable';
-export const modelsRowStatus = (loadFailure: string | null): string =>
-	loadFailure ? MODELS_UNAVAILABLE_LABEL : MODELS_LOADING_LABEL;
-export const MODELS_TASK_COWRITER_LABEL = 'Co-Writer';
-export const MODELS_TASK_COVER_LABEL = 'Cover';
-export const MODELS_COLUMN_TASK_LABEL = 'Task';
-export const MODELS_COLUMN_PROVIDER_LABEL = 'Provider';
-export const MODELS_COLUMN_ROUTE_LABEL = 'Route';
-export const MODELS_COLUMN_MODEL_LABEL = 'Model';
-export const MODELS_COLUMN_STATUS_LABEL = 'Status';
-export const MODELS_SET_BY_AGENT_FILE_LABEL = 'Set by the agent file';
-export const MODELS_ROUTE_GATEWAY_LABEL = 'Gateway';
-export const MODELS_STATUS_CHECKING_LABEL = 'Checking…';
-export const MODELS_STATUS_READY_CLI_LABEL = 'Ready · CLI login';
-export const MODELS_STATUS_READY_KEY_LABEL = 'Ready · key set';
-export const MODELS_STATUS_NEEDS_API_KEY_LABEL = 'Needs its API key';
-export const MODELS_STATUS_NOT_SAVED_LABEL = 'Not saved';
-export const MODELS_OPTION_READY_LABEL = '✓ ready';
-export const MODELS_OPTION_NEEDS_API_KEY_PHRASE = 'needs its API key';
-export const MODELS_NO_MODELS_LABEL = 'No models';
-export const MODELS_LIST_NEEDS_KEY_HINT = 'List needs the key';
-export const MODELS_LIST_NEEDS_CLI_HINT = 'List needs the CLI';
-export const MODELS_SAVED_LABEL = 'Saved.';
-export const MODELS_RETRY_LABEL = 'Retry';
-export const MODELS_ADVANCED_LABEL = 'Advanced';
-export const MODELS_HISTORY_TAIL_LABEL = 'History tail (tokens)';
-export const MODELS_ROUTE_KEY_SET_PHRASE = 'key set';
-export const MODELS_ROUTE_KEY_NOT_SET_PHRASE = 'key not set';
-export const MODELS_ROUTE_LOGGED_IN_PHRASE = 'logged in';
-export const MODELS_ROUTE_NOT_LOGGED_IN_PHRASE = 'not logged in';
-export const MODELS_ROUTE_NO_IMAGE_TOOL_PHRASE = 'no image tool';
-export function modelsRouteNotAvailablePhrase(task: string): string {
-	return `not available for ${task.toLowerCase()}`;
-}
-
-export function modelsCannotDrawHint(provider: string): string {
-	return `${provider} cannot draw`;
-}
-
-export const MODELS_SAVE_FAILED_FALLBACK = 'The server rejected the change.';
 
 // The co-writer is one global conversation (REQ-COWRITER-01): a proposal
 // streamed while song X is open can target song Y. Every tool-call badge
@@ -373,15 +223,6 @@ export const EDITOR_SAVE_FAILED = 'Save failed';
 const VERSION_CHIP_DRAFT_LABEL = 'draft';
 export const VERSIONS_SHEET_LABEL = 'Versions';
 export const VERSIONS_SHEET_CLOSE_LABEL = 'Close versions';
-export const VERSION_CURRENT_TAG = 'current';
-export const VERSION_PICKED_LABEL = 'picked';
-export const VERSION_REPLACE_DRAFT_TITLE = 'Replace your unsaved draft?';
-export const VERSION_REPLACE_DRAFT_CONFIRM_LABEL = 'Replace';
-export const VERSION_DELETE_CONFIRM_LABEL = 'Delete version';
-export const VERSION_DELETE_DRAFT_GOES = 'Your unsaved draft goes too.';
-export const VERSION_DELETE_EMPTIES_EDITOR = 'Its lyrics leave the editor, which will be empty.';
-export const VERSION_DELETE_LOAD_UNDO_GOES = 'Undo for your earlier draft goes too.';
-export const VERSION_NO_LYRICS = 'No lyrics';
 export const TOAST_UNDO_LABEL = 'Undo';
 
 export function versionLabel(versionNumber: number): string {
@@ -452,8 +293,6 @@ export const SONG_MENU_RENAME_LABEL = 'Rename';
 export const SONG_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const SONG_MENU_DELETE_LABEL = 'Delete song';
 
-export const MODELS_LOAD_ERROR = 'Failed to load models';
-
 export const RECIPE_SOURCE_DURATION_DEFAULT_SECONDS = 180;
 
 export const RECIPE_PANEL_LABEL = 'Recipe';
@@ -488,8 +327,6 @@ export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
 	title: 'A–Z',
 	played: 'Last played'
 };
-// Home's head, and what a page's ‹ calls it (#1354 rules 25 and 31).
-export const HOME_PAGE_LABEL = 'Home';
 export const LIBRARY_PAGE_LABEL = 'Library';
 export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums';
 // Each page's head reads its name and count as one heading ('Library · 12').
@@ -770,26 +607,3 @@ export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
 // long enough for the page to resync, short enough that a refresh that never
 // runs does not leave a card behind.
 export const GENERATE_TAKE_ARRIVAL_WAIT_MS = 30_000;
-
-export const HOME_WRITE_LABEL = 'Write';
-export const HOME_WRITE_EMPTY = 'Songs you work on will appear here.';
-export const HOME_WRITE_LOADING = 'Loading Write…';
-export const HOME_WRITE_ERROR = 'Could not load Write.';
-// The row body and its pencil both open the editor; distinct names keep them apart for a screen reader.
-export function homeWriteOpenLabel(songTitle: string): string {
-	return `Open song ${songTitle}`;
-}
-export const HOME_WRITE_WORK_LABELS = {
-	created: 'new song',
-	lyrics: 'lyrics edited',
-	style: 'style edited',
-	renamed: 'renamed',
-	take: 'new take',
-	cowriter: 'co-writer',
-	edited: 'edited'
-} as const;
-export const HOME_LISTEN_LABEL = 'Listen';
-export const HOME_LISTEN_LIMIT = 3;
-export const HOME_LISTEN_EMPTY = 'Albums and playlists you play will appear here.';
-export const HOME_LISTEN_LOADING = 'Loading Listen…';
-export const HOME_LISTEN_ERROR = 'Could not load Listen.';

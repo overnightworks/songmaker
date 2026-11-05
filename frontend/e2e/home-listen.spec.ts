@@ -3,10 +3,9 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_DELETE_LABEL,
-	COLLECTION_MENU_ARCHIVE_LABEL,
-	HOME_LISTEN_EMPTY,
-	HOME_LISTEN_ERROR
+	COLLECTION_MENU_ARCHIVE_LABEL
 } from '../src/lib/constants';
+import { HOME_LISTEN_EMPTY, HOME_LISTEN_ERROR } from '../src/lib/constants/home';
 import {
 	sameOriginHeaders,
 	FlowGuard,
@@ -128,6 +127,9 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 			.getByRole('button', { name: `${COLLECTION_MENU_DELETE_LABEL} playlist`, exact: true })
 			.click();
 		await page.getByRole('button', { name: 'Delete Playlist', exact: true }).click();
+		await expect(
+			page.getByRole('alert').getByText('Playlist deleted', { exact: true })
+		).toBeVisible();
 		await openHome(page, shellOf(testInfo));
 		await expect(
 			listenRegion(page).getByRole('button', { name: titles[0], exact: true })

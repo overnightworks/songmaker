@@ -3,6 +3,6 @@
 The provider layer runs the turn; this package holds the four things that are
 songmaker's own: which route a musician's turn takes and whose permissions it
 acts under (``routing``), the tools it may call and how they execute
-(``tools``), the conversation history it is given (``history``), and the MCP
-server declaration Claude's CLI attaches (``mcp_spec``).
+(``tools``), the conversation history it is given (``history``), and the stdio
+MCP server declaration (``mcp_spec``).
 """
