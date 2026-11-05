@@ -34,6 +34,7 @@ LOCK_TIMEOUT_MILLISECONDS = 3000
 STATEMENT_TIMEOUT_MILLISECONDS = 4 * LOCK_TIMEOUT_MILLISECONDS
 DROP_TIMEOUT_MILLISECONDS = 30000
 TERMINATION_WAIT_MILLISECONDS = 5000
+CONNECT_TIMEOUT_SECONDS = 10
 DIAGNOSTIC_BACKEND_LIMIT = 20
 # A client that closed its connection may still be listed while its backend exits.
 CLOSING_BACKEND_POLL_SECONDS = 0.02
@@ -73,8 +74,11 @@ _RESTORE_SEQUENCE = text("SELECT setval(CAST(:sequence AS regclass), :value, :is
 _BACKENDS = text(
     "SELECT pid, state, wait_event_type, wait_event, backend_type, "
     "date_trunc('second', now() - xact_start)::text AS transaction_age "
-    "FROM pg_stat_activity WHERE datname = :database ORDER BY pid LIMIT :limit"
+    "FROM pg_stat_activity WHERE datname = :database AND pid <> pg_backend_pid() "
+    "ORDER BY pid LIMIT :limit"
 )
+# A transaction reads pg_stat_activity once and keeps that copy until it is cleared.
+_CLEAR_ACTIVITY_SNAPSHOT = text("SELECT pg_stat_clear_snapshot()")
 _OTHER_CLIENTS = text(
     "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() "
     "AND backend_type = 'client backend' AND pid <> pg_backend_pid()"
@@ -125,7 +129,11 @@ def _quote(engine: Engine, name: str) -> str:
 
 
 def _is_blocked(error: DBAPIError) -> bool:
-    blocking = postgresql_errors.LockNotAvailable | postgresql_errors.QueryCanceled
+    blocking = (
+        postgresql_errors.LockNotAvailable
+        | postgresql_errors.QueryCanceled
+        | postgresql_errors.DeadlockDetected
+    )
     return isinstance(error.orig, blocking)
 
 
@@ -159,6 +167,7 @@ class PostgresqlTestDatabases:
         self._worker_id = worker_id
         self._administration = create_engine(
             administration_url, isolation_level="AUTOCOMMIT", poolclass=NullPool,
+            connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
         )
         self._worker_name = database_name(run_id, worker_id)
         self._owned: set[str] = set()
@@ -217,62 +226,71 @@ class PostgresqlTestDatabases:
 
         Drift fails before anything is destroyed, and the database is recreated for the
         next test. A connection left open, in a transaction or not, is reported and
-        terminated, and the test fails.
+        terminated before any row is restored, and the test fails.
         """
         self._raise_if_unusable()
         try:
-            self._reset_once()
+            leak = self._reset_once()
         except DatabaseDriftError as drift:
             self._recreate_after(drift)
             raise
         except OperationalError as blocked:
             if not _is_blocked(blocked):
                 raise
-            leak = self._report_and_terminate_leaks(
-                f"waited past its {LOCK_TIMEOUT_MILLISECONDS} ms lock timeout on a "
-                "transaction the test left open"
-            )
+            self._dispose_maintenance()
+            with self._administration.connect() as administration:
+                leak = self._report_and_terminate_leaks(
+                    f"waited past its {LOCK_TIMEOUT_MILLISECONDS} ms lock timeout on a "
+                    "transaction the test left open",
+                    administration,
+                )
             try:
                 self._reset_once()
             except (OperationalError, DatabaseDriftError) as still_failing:
                 self._recreate_after(still_failing)
             raise leak from blocked
-        self._raise_on_lingering_connections()
+        if leak is not None:
+            raise leak
 
-    def _raise_on_lingering_connections(self) -> None:
+    def _terminate_lingering_clients(self, connection: Connection) -> LeakedConnectionError | None:
+        """Give closing connections time to end, then terminate every other client left.
+
+        It runs on the reset's connection while the reset holds its locks, so a client still
+        connected can no longer write a table, and it is gone before any row is restored.
+        """
         deadline = time.monotonic() + LOCK_TIMEOUT_MILLISECONDS / 1000
-        while self._other_clients():
+        while _other_clients(connection):
             if time.monotonic() >= deadline:
-                raise self._report_and_terminate_leaks(
+                return self._report_and_terminate_leaks(
                     f"found a connection the test left open {LOCK_TIMEOUT_MILLISECONDS} ms "
-                    "after it ended"
+                    "after it ended",
+                    connection,
                 )
             time.sleep(CLOSING_BACKEND_POLL_SECONDS)
+        return None
 
-    def _other_clients(self) -> int:
-        with self._maintenance_engine().connect() as connection:
-            return connection.execute(_OTHER_CLIENTS).scalar_one()
-
-    def _report_and_terminate_leaks(self, finding: str) -> LeakedConnectionError:
-        self._dispose_maintenance()
-        backends = self._backends()
-        self._terminate_backends()
+    def _report_and_terminate_leaks(
+        self, finding: str, connection: Connection,
+    ) -> LeakedConnectionError:
+        backends = self._backends(connection)
+        self._terminate_backends(connection)
         return LeakedConnectionError(
             f"The reset of {self._worker_name} {finding}; it was terminated.\n"
             f"Open backends (pid, state, wait type, wait event, backend, transaction age):\n"
             + "\n".join(str(backend) for backend in backends)
         )
 
-    def _reset_once(self) -> None:
+    def _reset_once(self) -> LeakedConnectionError | None:
         baseline = self._baseline
         if baseline is None:
-            return
+            return None
         with self._maintenance_engine().connect() as connection, connection.begin():
             connection.execute(text(f"SET LOCAL lock_timeout = {LOCK_TIMEOUT_MILLISECONDS}"))
             connection.execute(
                 text(f"SET LOCAL statement_timeout = {STATEMENT_TIMEOUT_MILLISECONDS}")
             )
             self._lock_and_raise_on_drift(connection, baseline)
+            leak = self._terminate_lingering_clients(connection)
             for table in reversed(baseline.tables_referenced_first):
                 connection.execute(text(f"DELETE FROM {table}"))
             cursor = connection.connection.driver_connection.cursor()
@@ -283,6 +301,7 @@ class PostgresqlTestDatabases:
                     _RESTORE_SEQUENCE,
                     {"sequence": sequence, "value": value, "is_called": is_called},
                 )
+        return leak
 
     def _lock_and_raise_on_drift(self, connection: Connection, baseline: Baseline) -> None:
         """Lock every table, then compare; a change committed while the lock waited is seen.
@@ -355,25 +374,22 @@ class PostgresqlTestDatabases:
             connection.execute(text(f"CREATE DATABASE {_quote(self._administration, name)}"))
         self._owned.add(name)
 
-    def _backends(self) -> list[tuple[object, ...]]:
-        with self._administration.connect() as connection:
-            rows = connection.execute(
-                _BACKENDS, {"database": self._worker_name, "limit": DIAGNOSTIC_BACKEND_LIMIT},
-            )
-            return [tuple(row) for row in rows]
+    def _backends(self, connection: Connection) -> list[tuple[object, ...]]:
+        rows = connection.execute(
+            _BACKENDS, {"database": self._worker_name, "limit": DIAGNOSTIC_BACKEND_LIMIT},
+        )
+        return [tuple(row) for row in rows]
 
-    def _terminate_backends(self) -> None:
-        with self._administration.connect() as connection:
-            connection.execute(
-                _TERMINATE,
-                {"database": self._worker_name, "wait": TERMINATION_WAIT_MILLISECONDS},
-            )
+    def _terminate_backends(self, connection: Connection) -> None:
+        connection.execute(
+            _TERMINATE, {"database": self._worker_name, "wait": TERMINATION_WAIT_MILLISECONDS},
+        )
 
     def _maintenance_engine(self) -> Engine:
         if self._maintenance is None:
             self._maintenance = create_engine(
                 self._database_url(self._worker_name), pool_size=1, max_overflow=0,
-                pool_pre_ping=True,
+                pool_pre_ping=True, connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
             )
         return self._maintenance
 
@@ -384,6 +400,11 @@ class PostgresqlTestDatabases:
 
     def _database_url(self, name: str) -> URL:
         return self._administration_url.set(database=name)
+
+
+def _other_clients(connection: Connection) -> int:
+    connection.execute(_CLEAR_ACTIVITY_SNAPSHOT)
+    return connection.execute(_OTHER_CLIENTS).scalar_one()
 
 
 def _structure(connection: Connection) -> frozenset[tuple[str, ...]]:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -232,7 +233,7 @@ def test_a_connection_left_open_fails_the_reset_and_only_it_is_terminated(
             postgresql_databases.reset()
 
         report = str(refusal.value)
-        assert f"({leaked_pid}, " in report
+        assert re.search(rf"\b{leaked_pid}\b", report)
         assert "leaked_marker" not in report
         with pytest.raises(OperationalError):
             leaked.execute(alive)
@@ -244,6 +245,37 @@ def test_a_connection_left_open_fails_the_reset_and_only_it_is_terminated(
         for engine in bystanders:
             engine.dispose()
     postgresql_databases.reset()
+
+
+def test_a_write_from_a_connection_left_open_never_outlives_the_reset(
+    postgresql_databases, pg_factory,
+):
+    """Cell 4: a leaked connection holding no lock writes while the reset runs.
+
+    The write starts half a second in, after a reset that checks too late has committed;
+    the outcome asserted does not depend on when it lands.
+    """
+    url = postgresql_databases.worker_url
+    baseline = _contents(url)
+    leaked = pg_factory.kw["bind"].execution_options(isolation_level="AUTOCOMMIT").connect()
+    leaked_pid = leaked.execute(text("SELECT pg_backend_pid()")).scalar_one()
+    answers: dict[str, object] = {}
+    late_write = in_thread(answers, "late write", lambda: leaked.execute(text(
+        "DO $$ BEGIN PERFORM pg_sleep(0.5); "
+        "INSERT INTO users (id, username, role, created_at, updated_at) "
+        "VALUES ('late', 'late', 'user', now(), now()); END $$"
+    )))
+    late_write.start()
+    try:
+        with pytest.raises(LeakedConnectionError) as refusal:
+            postgresql_databases.reset()
+    finally:
+        late_write.join(WAIT_SECONDS)
+        leaked.invalidate()
+    assert not late_write.is_alive(), "the leaked writer outlived its termination"
+
+    assert re.search(rf"\b{leaked_pid}\b", str(refusal.value))
+    assert _contents(url) == baseline
 
 
 @pytest.mark.parametrize(
@@ -321,9 +353,14 @@ def test_drift_committed_while_the_reset_waits_for_its_locks_fails_the_reset(ano
             drifting.execute(text("ALTER TABLE users ADD COLUMN stray integer"))
             holder = drifting.execute(text("SELECT pg_backend_pid()")).scalar_one()
             reset.start()
-            wait_until_blocked_behind(sessionmaker(bind=engine), holder)
-            drifting.commit()
-        reset.join(WAIT_SECONDS)
+            try:
+                wait_until_blocked_behind(sessionmaker(bind=engine), holder)
+                drifting.commit()
+            finally:
+                drifting.close()
+                reset.join(WAIT_SECONDS)
+                if reset.is_alive():
+                    pytest.fail(f"the reset still runs {WAIT_SECONDS} s after its blocker ended")
     finally:
         engine.dispose()
     assert isinstance(answers.get("reset"), DatabaseDriftError), answers
