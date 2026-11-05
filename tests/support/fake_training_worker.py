@@ -54,7 +54,7 @@ class FakeTrainingWorkerSettings:
     def from_environment(cls) -> FakeTrainingWorkerSettings:
         return cls(
             redis_url=os.environ["REDIS_URL"],
-            internal_token=os.environ["SONGMAKER_INTERNAL_TOKEN"],
+            internal_token=Path(os.environ["SONGMAKER_INTERNAL_TOKEN_FILE"]).read_text().strip(),
             audio_dir=Path(os.environ["AUDIO_DIR"]),
             control_plane_url=os.environ.get("CONTROL_PLANE_URL", DEFAULT_CONTROL_PLANE_URL),
             worker_id=os.environ.get("WORKER_ID", FAKE_WORKER_ID),
