@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
+	import { ApiError, NetworkError, describeFailure } from '#lib/api/fetch.ts';
 	import { createAlbumCoverSuggestions, selectAlbumCoverSuggestion } from '#lib/api/albums.ts';
 	import type { AlbumItem } from '#lib/api/types.ts';
 	import {
@@ -202,17 +202,20 @@
 			if (isCoverAskRetired(albumId, ask)) return;
 			endCoverSuggestion(albumId);
 			if (albumId !== currentAlbumId) return;
-			const refusal = error instanceof ApiError ? coverRefusalProblem(error.responseDetail) : null;
-			if (refusal) {
-				clickProblem = refusal;
-				void readCoverActivity(albumId);
-				return;
-			}
 			if (isRefusal(error)) {
 				await rereadAfterRefusal(albumId, error);
 				return;
 			}
-			showCoverActivityFailure(albumId, error, { keepData: true });
+			// A lost connection stays quiet and reloads; any other failed ask is no
+			// agent problem the person can act on, so it reads unavailable, never red.
+			if (error instanceof NetworkError) {
+				showCoverActivityFailure(albumId, error, { keepData: true });
+				return;
+			}
+			clickProblem =
+				(error instanceof ApiError ? coverRefusalProblem(error.responseDetail) : null) ??
+				'unavailable';
+			void readCoverActivity(albumId);
 		}
 	}
 

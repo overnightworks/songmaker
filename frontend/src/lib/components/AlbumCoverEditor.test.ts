@@ -666,22 +666,6 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
-	it('names a daily limit in the singular, once, without a toast', async () => {
-		const named = 'Daily cover suggestion limit reached';
-		createAlbumCoverSuggestions.mockRejectedValue(serverRefusal(named));
-		const target = await renderDetail();
-		await openCoverEditing(target);
-
-		await pressSuggestOnceLoaded(target);
-
-		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).not.toBeNull());
-		const alert = requireElement(target, '[role="alert"]');
-		expect(alert.textContent).toContain('Couldn’t make a cover suggestion');
-		expect(alert.textContent).toContain(named);
-		expect(target.textContent?.split(named)).toHaveLength(2);
-		expect(addToast).not.toHaveBeenCalled();
-	});
-
 	it.each([
 		{
 			reread: 'follows the run that still goes',
@@ -959,16 +943,25 @@ describe('C1: a cover suggestion that cannot run names one of the four problems'
 		return target.querySelector('.cover-editor .turn-error');
 	}
 
-	function refusedWith(status: number, problem: string): ApiError {
-		return new ApiError(status, '', '/api/albums/a-local/cover-suggestions', null, { problem });
+	function refusedWith(status: number, problem: string | null): ApiError {
+		const detail = problem === null ? LEAKED_ERROR : { problem };
+		return new ApiError(
+			status,
+			LEAKED_ERROR,
+			'/api/albums/a-local/cover-suggestions',
+			null,
+			detail
+		);
 	}
 
 	it.each([
 		{ problem: 'not_enabled', status: 403, text: NOT_ENABLED_TEXT, tone: 'off', closed: true },
 		{ problem: 'sign_in_again', status: 403, text: SIGN_IN_TEXT, tone: 'bad', closed: true },
-		{ problem: 'unavailable', status: 503, text: UNAVAILABLE_TEXT, tone: 'wait', closed: false }
+		{ problem: 'unavailable', status: 503, text: UNAVAILABLE_TEXT, tone: 'wait', closed: false },
+		{ problem: null, status: 500, text: UNAVAILABLE_TEXT, tone: 'wait', closed: false },
+		{ problem: null, status: 422, text: UNAVAILABLE_TEXT, tone: 'wait', closed: false }
 	])(
-		'a click refused as $problem shows its line in its tone, makes no run, and Suggest closed: $closed',
+		'a click answered $status $problem shows its line in its tone, makes no run, and Suggest closed: $closed',
 		async ({ problem, status, text, tone, closed }) => {
 			createAlbumCoverSuggestions.mockRejectedValue(refusedWith(status, problem));
 			const target = await renderDetail();
@@ -984,6 +977,8 @@ describe('C1: a cover suggestion that cannot run names one of the four problems'
 			);
 			expect(countLine(target).includes('left today')).toBe(!closed);
 			expect(FakeJobEventSource.sources).toHaveLength(0);
+			expect(target.querySelector('.cover-failure')).toBeNull();
+			expect(target.textContent).not.toContain(LEAKED_ERROR);
 		}
 	);
 

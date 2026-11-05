@@ -430,7 +430,7 @@ A version names its reference by `reference_recording_id` only. `reference_audio
 
 Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The web container is the sole cover executor: its runner claims queued jobs, owns recovery, and draws each picture through the gateway (see "Cover picture through the gateway"); no path falls back to a CLI or another image API. `covers.decode_cover_image` accepts one PNG or JPEG within `COVER_MAX_BYTES` and `COVER_MAX_PIXELS` and rewrites it as a metadata-free PNG. The prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
 
-All Codex text and cover CLI calls use one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps cover processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. The Co-Writer uses the server-owned text tool protocol, never Codex CLI tool permissions: every start and resume gets the read-only sandbox, `approval_policy="never"`, no shell tool, no web search, and no MCP servers. Its event gate aborts on every file, command, MCP, or web-search event before the process is reaped. Saturated Co-Writer calls return the named busy route error. No songmaker job starts a Codex process any more; the caps stay configured while the Codex mounts remain.
+In `agent_providers`, every Codex text and image CLI call uses one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps the wheel's image processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. The Co-Writer uses the server-owned text tool protocol, never Codex CLI tool permissions: every start and resume gets the read-only sandbox, `approval_policy="never"`, no shell tool, no web search, and no MCP servers. Its event gate aborts on every file, command, MCP, or web-search event before the process is reaped. Saturated Co-Writer calls return the named busy route error. No songmaker job starts a Codex process any more; the caps stay configured while the Codex mounts remain.
 
 **Deployment boundary**: This repository ships no reverse-proxy service or configuration (nginx, Caddy, Traefik, and tunnel configuration are absent). An operator who puts a proxy in front of Songmaker may add equivalent path-specific limits to reject oversized requests at the edge; those limits are defense in depth, not the application's only body limit. A blanket 1 MiB upstream limit would block the documented audio-upload and cover routes. The missing in-repository edge configuration is recorded in #327.
 
@@ -789,7 +789,7 @@ not a sandbox failure. Both the installer and the proof take the profile name
 as an optional first argument; a stack proven under another profile passes it
 to both.
 
-Codex has a resumable Co-Writer tool loop and a fixed cover-image command. The
+In `agent_providers`, Codex has a resumable Co-Writer tool loop and a fixed image command. The
 Co-Writer begins with `codex exec --json --sandbox read-only`; later rounds use
 `codex exec resume`. Both command shapes apply `--skip-git-repo-check`,
 `--ignore-user-config`, `--ignore-rules`, `approval_policy="never"`,
@@ -969,11 +969,12 @@ through a private prompt file. The text tool protocol does not grant Grok CLI
 tools: every start and resume keeps `--deny '*'`, and native tool-call events
 abort the turn. The scoring worker does not mount Codex.
 
-The cover-image route starts Codex with the fixed read-only image
+The wheel's image route, which no songmaker cover calls (the cover draws
+through the gateway), starts Codex with the fixed read-only image
 argv (`--sandbox read-only`, no MCP servers, and `web_search="disabled"`),
 with Code Mode enabled only for this image run. Its one variable part is the
-admin-stored cover model, appended as `--model <slug>` when that setting is
-not empty. Each run creates a private
+model its caller names, appended as `--model <slug>` when one is named.
+Each run creates a private
 `0700` root whose `codex-home/` and `work/` directories are separate `0700`
 siblings; the home contains only the redacted `auth.json` mirror (`0600`) and
 the process cwd is the resolved `work/` path. The streamed event gate admits a
@@ -987,7 +988,7 @@ as `ImageToolBlockedError`; the process is reaped before the route returns.
 The gate sees only what the CLI reports. This measurement does not establish
 whether other tools using the invisible path would be reported. The PNG is
 associated with the turn through its private `CODEX_HOME` location and
-normalization under the host `ImagePolicy`. The gate is defense in depth;
+normalization under the embedding host's `ImagePolicy`. The gate is defense in depth;
 containment rests on the Codex read-only sandbox and songmaker's AppArmor and
 seccomp profiles. Fixture replay proves event handling, not live containment.
 Every Co-Writer tool-loop round keeps Code Mode disabled.

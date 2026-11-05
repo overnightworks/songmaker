@@ -1179,11 +1179,11 @@ both subscription CLIs speak, `errors.py` owns the named route failures every
 transport raises, `catalog.py` owns the per-route model listing and the
 four-case provider setup answer, `dispatch.py` owns running one named route with
 the host's catalog and executor, `claude/adapter.py` and `openai_adapter.py`
-own the two co-writer wire formats, `images.py` owns the `ImagePolicy` port the
-host lends the image route, `grok/transport.py` owns the Grok CLI turn, and
+own the two co-writer wire formats, `images.py` owns the `ImagePolicy` port an
+embedding host lends the image route (songmaker's cover uses neither), `grok/transport.py` owns the Grok CLI turn, and
 `codex/` owns process admission (`pool.py`), the CLI plumbing both Codex routes
-share (`protocol.py`), the co-writer turn (`transport.py`) and the album-cover
-image turn (`image.py`), and `sandbox/paths.py` owns the private directory names
+share (`protocol.py`), the co-writer turn (`transport.py`) and the image turn
+(`image.py`), and `sandbox/paths.py` owns the private directory names
 both Codex turns and the host's mount policy have to agree on — songmaker's
 AppArmor profile spells them and a test holds it to that module, so an embedding
 project derives its profile from the library instead of guessing it.

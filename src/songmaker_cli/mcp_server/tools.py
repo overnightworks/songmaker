@@ -1,17 +1,12 @@
-"""Songmaker MCP tool implementations.
+"""The tool bodies the co-writer's hand tools in ``agent.tools`` call.
 
 Each function takes an open SQLAlchemy session + an ``AuthenticatedUser``
 and returns a Pydantic model. Ownership is enforced through the
 existing ``check_*_access()`` helpers; write tools delegate to the
 existing domain queries so new versions and track numbering behave the
 same as the HTTP endpoints. Every co-writer content write creates a
-new version.
-
-The ``server.py`` layer wires these into FastMCP tools — opening
-sessions, loading the user, committing writes; ``save_coherence_verdict`` is
-the exception, served only through the hand tools of ``agent.tools`` and the in-process dispatcher.
-Keeping the logic in pure functions makes everything directly unit-testable without
-speaking the MCP protocol.
+new version. The caller opens the session, loads the user and commits;
+keeping the logic in plain functions makes it directly unit-testable.
 """
 from __future__ import annotations
 
@@ -335,8 +330,8 @@ def tool_suggest_album_cover(
 ) -> CoverSuggestionRequestResult:
     """Queue one more cover suggestion through the album admission owner.
 
-    ``session_id`` is the session that asked; the cover runs as that session's person. A
-    caller with none (stdio) is refused, because the picture needs a browser login.
+    ``session_id`` is the browser session that asked; the cover runs as that session's
+    person. A caller without one is refused, because the picture needs a browser login.
     """
     if session_id is None:
         raise MCPToolError("Cover suggestions need a browser login.")
