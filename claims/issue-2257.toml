@@ -3,5 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "46d997f526e56f160595086cab28e5d3f2170eda"
 branch = "claude/issue-2257-postgres-coverage"
-scope = [".github/workflows/ci.yml", ".github/workflows/coveragerc-ci.ini", "docs/testing.md"]
+scope = [".github/workflows/ci.yml", ".github/workflows/coveragerc-ci.ini", "docs/testing.md", "quality/config.toml"]
 opened_commit = "97935c0a2e45eb7b17d2c0109a6a2f261d88744b"
+whole_reason = "One measurement path: the jobs that measure, the job that combines and judges, its mandatory listing and the document naming them change together."
