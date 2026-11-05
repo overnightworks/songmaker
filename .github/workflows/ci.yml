@@ -371,7 +371,7 @@ jobs:
           retention-days: 7
 
   quality:
-    needs: [backend, alert-rules, postgresql-contract, frontend, coverage]
+    needs: [backend, alert-rules, postgresql-contract, backend-coverage, frontend, coverage]
     if: ${{ !cancelled() }}
     permissions:
       contents: read
