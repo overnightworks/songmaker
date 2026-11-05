@@ -13,6 +13,7 @@ from pathlib import Path
 TESTS_ROOT = Path(__file__).resolve().parent
 OWNERS = frozenset({TESTS_ROOT / "conftest.py", Path(__file__).resolve()})
 POSTGRESQL_URL_VARIABLE = "TEST_DATABASE_URL"
+POSTGRESQL_URL_VARIABLE_BYTES = POSTGRESQL_URL_VARIABLE.encode()
 DOCUMENTED_NODES = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
 
 
@@ -33,8 +34,11 @@ def url_variable_mentions(root: Path) -> list[str]:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         documentation = _docstrings(tree)
         for node in ast.walk(tree):
-            is_text = isinstance(node, ast.Constant) and isinstance(node.value, str)
-            if is_text and POSTGRESQL_URL_VARIABLE in node.value and id(node) not in documentation:
+            names_variable = isinstance(node, ast.Constant) and (
+                (isinstance(node.value, str) and POSTGRESQL_URL_VARIABLE in node.value)
+                or (isinstance(node.value, bytes) and POSTGRESQL_URL_VARIABLE_BYTES in node.value)
+            )
+            if names_variable and id(node) not in documentation:
                 mentions.append(f"{path.relative_to(root)}:{node.lineno}")
     return mentions
 
