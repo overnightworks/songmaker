@@ -9,10 +9,11 @@ from typing import Any
 
 import pytest
 from httpx import Response
+from sqlalchemy import event
 from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.web_app import make_test_app, seed_session, seed_user
 
-from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, Version
+from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Score, Song, Version
 
 ADMIN = "admin-1"
 RETENTION_RUN = "/api/admin/generation-retention/run"
@@ -85,6 +86,15 @@ class _World:
 
     def delete(self, take: str) -> Callable[[], Response]:
         return lambda: self.client.delete(f"/api/generations/{take}")
+
+    def shared(self, take: str) -> bool:
+        with self.pg_factory() as session:
+            return session.get(Generation, take).is_shared
+
+    def bulk_delete(self, *takes: str) -> Callable[[], Response]:
+        return lambda: self.client.post(
+            "/api/generations/bulk-delete", json={"generation_ids": list(takes)},
+        )
 
     def state(self, take: str) -> dict[str, Any] | None:
         with self.pg_factory() as session:
@@ -249,9 +259,6 @@ def test_stage_one_waits_for_a_manual_delete_of_the_take_and_leaves_it_out_of_it
 
 
 CLEANUP_SCOPES = {"song": "songs/song-1", "album": "albums/album-1"}
-CANDIDATE_AND_OTHER = {
-    "x": {"archived": False, "old": False}, "other": {"archived": False, "old": False},
-}
 
 
 @pytest.mark.parametrize("scope", CLEANUP_SCOPES)
@@ -259,7 +266,9 @@ CANDIDATE_AND_OTHER = {
 def test_cleanup_leaves_a_take_that_a_keep_pick_or_share_commits_first(
     pg_factory, tmp_path, scope, route,
 ) -> None:
-    world = _World(pg_factory, tmp_path, CANDIDATE_AND_OTHER)
+    world = _World(pg_factory, tmp_path, {
+        "x": {"archived": False, "old": False}, "other": {"archived": False, "old": False},
+    })
     mark = world.share("x") if route == "share" else world.mark(route, "x")
     answers = race(
         pg_factory, mark, world.cleanup(CLEANUP_SCOPES[scope]), _holding_a_generation_write(),
@@ -272,6 +281,8 @@ def test_cleanup_leaves_a_take_that_a_keep_pick_or_share_commits_first(
     assert world.files["x"].exists()
     assert world.state("other") is None
     assert not world.files["other"].exists()
+    if route == "share":
+        assert world.shared("x")
 
 
 @pytest.mark.parametrize("scope", CLEANUP_SCOPES)
@@ -292,3 +303,32 @@ def test_a_pick_of_a_sibling_and_a_cleanup_both_finish_whichever_runs_first(
     assert world.state("y") == {"archived": False, "kept": True, "picked": True}
     assert world.state("a") is None
     assert world.state("z") is None
+
+
+def test_a_bulk_delete_of_a_scored_take_that_a_cleanup_has_locked_waits_and_both_finish(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path, {
+        "x": {"archived": False, "old": False}, "y": {"archived": False, "old": False},
+    })
+    with pg_factory() as session:
+        session.add(Score(generation_id="x", scorer="batch", value={}))
+        session.commit()
+    holding_after_the_locks = CommitPause(lambda _session: False)
+
+    def pause_before_the_deletes(session, _flush_context, _instances) -> None:
+        if session.deleted and not holding_after_the_locks.reached.is_set():
+            holding_after_the_locks.hold(session)
+
+    event.listen(pg_factory, "before_flush", pause_before_the_deletes)
+    try:
+        answers = race(
+            pg_factory, world.cleanup("songs/song-1"), world.bulk_delete("x"),
+            holding_after_the_locks,
+        )
+    finally:
+        event.remove(pg_factory, "before_flush", pause_before_the_deletes)
+    assert answers["first"].json()["deleted"] == 2
+    assert answers["second"].status_code == 200
+    assert world.state("x") is None
+    assert not world.files["x"].exists()
