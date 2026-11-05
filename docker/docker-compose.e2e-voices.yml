@@ -51,6 +51,7 @@ services:
       SONGMAKER_INTERNAL_TOKEN_FILE: /run/secrets/songmaker_internal_token
       CONTROL_PLANE_URL: http://songmaker-web:8080
       AUDIO_DIR: /app/data/audio
+      AUDIO_OUTPUT_DIR: /tmp/fake-worker-output
       WORKER_ID: voices-e2e-training-worker
       WORKER_HOST: songmaker-voices-e2e-worker
       WORKER_PORT: "8001"

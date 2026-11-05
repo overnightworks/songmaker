@@ -464,7 +464,7 @@ def post_process_generation(
     db_factory: sessionmaker[Session],
     job_id: str,
 ) -> str | None:
-    """Read worker WAV, decode/splice/master/encode, persist DB row.
+    """Read the take music fetched from the worker, decode/splice/master/encode, persist DB row.
 
     Synchronous (CPU-bound). Caller wraps in ``asyncio.to_thread`` from
     the async run_generation_job. Mastering + MP3 encoding release the

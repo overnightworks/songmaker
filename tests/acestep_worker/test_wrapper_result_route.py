@@ -92,7 +92,7 @@ def test_result_route_opens_no_file_the_store_did_not_record(world, tmp_path: Pa
         recorded, _ = await _finished_take(deps, root)
         secret = tmp_path / "secret.txt"
         secret.write_bytes(b"not a take")
-        (root / "planted.wav").write_bytes(b"planted")
+        (root / "planted.wav").write_bytes(b"PLANTED-BYTES")
         running = await deps.task_store.create("generate")
         failed = await deps.task_store.create("generate")
         await deps.task_store.fail(failed, "boom")
@@ -101,7 +101,7 @@ def test_result_route_opens_no_file_the_store_did_not_record(world, tmp_path: Pa
             for task_id in (*crafted, running, failed):
                 response = await http.get(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
                 assert response.status_code == 404, task_id
-                assert b"planted" not in response.content
+                assert b"PLANTED-BYTES" not in response.content
                 assert b"not a take" not in response.content
         assert recorded
 
@@ -176,7 +176,10 @@ def _settings(output_dir: Path, shared_root: Path) -> WorkerSettings:
 def _build(settings: WorkerSettings) -> WorkerDeps:
     with (
         patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
-        patch("acestep_worker.__main__.make_acestep_runner", return_value=(MagicMock(), MagicMock())),
+        patch(
+            "acestep_worker.__main__.make_acestep_runner",
+            return_value=(MagicMock(), MagicMock()),
+        ),
     ):
         return build_deps(settings)
 

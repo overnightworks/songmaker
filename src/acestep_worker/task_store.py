@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 from acestep_engine.progress import AceStepPhase
@@ -40,6 +41,8 @@ class _Task:
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
     terminal_at: datetime | None = None
+    # Never part of the snapshot: only the store knows where a result lives.
+    result_file: Path | None = None
     subscribers: list[asyncio.Queue[WorkerTaskEvent]] = field(default_factory=list)
 
     def snapshot(self) -> TaskSnapshot:
@@ -66,6 +69,15 @@ class _Task:
         if self.state == "error":
             return WorkerTaskEvent(type="error", data=snap)
         return WorkerTaskEvent(type="progress", data=snap)
+
+
+def _remove_file(path: Path | None) -> None:
+    if path is None:
+        return
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        log.warning("Failed to remove task result %s", path.name, exc_info=True)
 
 
 class TaskStore:
@@ -117,9 +129,12 @@ class TaskStore:
             current_epoch=current_epoch,
         )
 
-    async def complete(self, task_id: str, result: TaskResult) -> None:
+    async def complete(
+        self, task_id: str, result: TaskResult, *, result_file: Path | None = None,
+    ) -> None:
         await self._update(
-            task_id, state="done", progress=1.0, result=result, terminal=True
+            task_id, state="done", progress=1.0, result=result, terminal=True,
+            result_file=result_file,
         )
 
     async def fail(
@@ -142,6 +157,7 @@ class TaskStore:
         error: str | None = None,
         error_kind: TaskErrorKind | None = None,
         terminal: bool = False,
+        result_file: Path | None = None,
     ) -> None:
         async with self._lock:
             task = self._tasks.get(task_id)
@@ -159,6 +175,8 @@ class TaskStore:
                 task.training_started_at = training_started_at
             if result is not None:
                 task.result = result
+            if result_file is not None:
+                task.result_file = result_file
             if error is not None:
                 task.error = error
                 task.error_kind = error_kind
@@ -174,6 +192,22 @@ class TaskStore:
         async with self._lock:
             task = self._tasks.get(task_id)
             return task.snapshot() if task else None
+
+    async def result_file(self, task_id: str) -> Path | None:
+        """The file this store recorded for a finished task; no caller names a path."""
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            return task.result_file if task else None
+
+    async def discard_result(self, task_id: str) -> bool:
+        """Remove a task's result file; returns whether the task is known."""
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                return False
+            _remove_file(task.result_file)
+            task.result_file = None
+            return True
 
     async def subscribe(self, task_id: str) -> AsyncIterator[WorkerTaskEvent]:
         async with self._lock:
@@ -210,7 +244,7 @@ class TaskStore:
                 and (cutoff - task.terminal_at).total_seconds() > self._retention
             ]
             for tid in to_drop:
-                del self._tasks[tid]
+                _remove_file(self._tasks.pop(tid).result_file)
         return len(to_drop)
 
     async def sweep_terminal_tasks(

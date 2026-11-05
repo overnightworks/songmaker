@@ -173,6 +173,7 @@ class GenerationWorkerPeer:
             redis_url="redis://unused",
             internal_token=get_settings().songmaker_internal_token.get_secret_value(),
             audio_dir=self.audio_dir,
+            output_dir=tmp_path / "worker-output",
             control_plane_url="",
             worker_id="generation-test-worker",
             worker_host="127.0.0.1",

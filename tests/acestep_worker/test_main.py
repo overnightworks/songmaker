@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,6 +21,11 @@ from acestep_worker.gpu_util import GpuHealth
 from acestep_worker.lm_failure import LM_FAILURE_EXIT_CODE
 from acestep_worker.model_cache import CapacityError, LoadedModel, VramStats
 from acestep_worker.settings import DEFAULT_CONTAINER_BIND_HOST, WorkerSettings
+
+
+@pytest.fixture(autouse=True)
+def _local_output_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(tmp_path / "worker-output"))
 
 
 def test_worker_settings_default_to_container_network_bind_host() -> None:

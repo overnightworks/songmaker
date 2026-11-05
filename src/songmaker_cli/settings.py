@@ -30,6 +30,7 @@ from songmaker_cli.constants import (
     CODEX_CLI_MAX_CONCURRENT_PROCESSES,
     COVER_MAX_CONCURRENT_RUNS,
     COVER_UPLOAD_BODY_MAX_BYTES,
+    GENERATION_RESULT_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     REIMPORT_BODY_MAX_BYTES,
@@ -261,6 +262,7 @@ class Settings(BaseSettings):
     max_upload_body_bytes: int = Field(default=AUDIO_UPLOAD_BODY_MAX_BYTES)
     max_reimport_body_bytes: int = Field(default=REIMPORT_BODY_MAX_BYTES)
     max_cover_upload_body_bytes: int = Field(default=COVER_UPLOAD_BODY_MAX_BYTES)
+    generation_result_max_bytes: int = Field(default=GENERATION_RESULT_MAX_BYTES, gt=0)
 
     # ── Logging ───────────────────────────────────────────────────────
     log_format: Literal["text", "json"] = "text"

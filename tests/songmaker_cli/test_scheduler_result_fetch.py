@@ -69,7 +69,8 @@ def _dispatch(worker: _Worker):
     )
     picked = _PickedWorker(id="w1", host="worker", port=8001, loaded_modes=["sft"], queue_depth=0)
     return asyncio.run(dispatch_generation_on_worker(
-        worker=picked, ace_config=AceStepConfig(), target_mode="sft", options=options,
+        worker=picked, ace_config=AceStepConfig(prompt="p", lyrics="l"), target_mode="sft",
+        options=options,
     ))
 
 
@@ -121,7 +122,7 @@ def test_a_take_over_the_limit_aborts_at_the_limit_and_leaves_no_file(music_tmp:
     served = []
 
     def endless(request: httpx.Request) -> httpx.Response:
-        def chunks():
+        async def chunks():
             for _ in range(10_000):
                 served.append(1)
                 yield b"x" * 64
@@ -152,7 +153,7 @@ def test_a_take_announced_over_the_limit_is_refused_before_its_body_is_read(
 
 
 def _cut_off(request: httpx.Request) -> httpx.Response:
-    def body():
+    async def body():
         yield b"RIFF"
         raise httpx.RemoteProtocolError("peer closed connection")
 

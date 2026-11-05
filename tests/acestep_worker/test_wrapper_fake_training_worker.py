@@ -70,6 +70,7 @@ def test_fake_worker_registers_with_the_internal_api(tmp_path: Path, mock_arq_po
         redis_url="redis://unused",
         internal_token=get_settings().songmaker_internal_token.get_secret_value(),
         audio_dir=tmp_path,
+        output_dir=tmp_path / "worker-output",
     )
     registration = build_fake_worker_deps(settings).registration
     assert registration is not None
@@ -92,6 +93,7 @@ def test_fake_worker_publishes_the_worker_heartbeat(tmp_path: Path) -> None:
         redis_url="redis://unused",
         internal_token=get_settings().songmaker_internal_token.get_secret_value(),
         audio_dir=tmp_path,
+        output_dir=tmp_path / "worker-output",
         control_plane_url="",
     )
     deps = build_fake_worker_deps(settings, redis=redis)
@@ -119,6 +121,7 @@ def test_fake_worker_emits_epoch_progress_and_an_adapter_result(tmp_path: Path) 
         redis_url="redis://unused",
         internal_token=get_settings().songmaker_internal_token.get_secret_value(),
         audio_dir=tmp_path,
+        output_dir=tmp_path / "worker-output",
         control_plane_url="",
     )
     redis = fakeredis.aioredis.FakeRedis(decode_responses=False)

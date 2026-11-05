@@ -14,7 +14,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from redis.asyncio import Redis
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
@@ -375,6 +375,16 @@ class _WorkerRoutes:
             raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
         return snapshot
 
+    async def get_task_result(self, task_id: str) -> FileResponse:
+        result_file = await self._deps.task_store.result_file(task_id)
+        if result_file is None or not result_file.is_file():
+            raise HTTPException(status_code=404, detail=f"No result for task: {task_id}")
+        return FileResponse(result_file, media_type="audio/wav")
+
+    async def discard_task_result(self, task_id: str) -> None:
+        if not await self._deps.task_store.discard_result(task_id):
+            raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
+
     async def stream_task(self, task_id: str) -> StreamingResponse:
         snapshot = await self._deps.task_store.get(task_id)
         if snapshot is None:
@@ -687,6 +697,19 @@ def _register_protected_routes(router: APIRouter, routes: _WorkerRoutes) -> None
         "/tasks/{task_id}",
         routes.get_task,
         methods=["GET"],
+        responses={404: {"description": "Task does not exist"}},
+    )
+    router.add_api_route(
+        "/tasks/{task_id}/result",
+        routes.get_task_result,
+        methods=["GET"],
+        responses={404: {"description": "Task has no result file"}},
+    )
+    router.add_api_route(
+        "/tasks/{task_id}/result",
+        routes.discard_task_result,
+        methods=["DELETE"],
+        status_code=204,
         responses={404: {"description": "Task does not exist"}},
     )
     router.add_api_route(
@@ -1073,12 +1096,11 @@ async def default_generate_runner(
         out_path.write_bytes(result.wav_bytes)
         await task_store.complete(task_id, GenerationTaskResult(
             mode=mode,
-            audio_path=str(out_path),
             seed=result.seed,
             cot_caption=result.cot_caption,
             cot_lyrics=result.cot_lyrics,
             delivered_batch_size=result.delivered_batch_size,
-        ))
+        ), result_file=out_path)
     except Exception as exc:
         log.exception("Generation failed for task %s", task_id)
         cause = str(exc) if isinstance(exc, AceStepError) else f"{type(exc).__name__}: {exc}"
