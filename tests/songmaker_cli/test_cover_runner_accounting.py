@@ -199,7 +199,7 @@ def test_late_cancellation_preserves_publication_with_a_preloaded_job(
 
 
 @pytest.mark.parametrize(
-    "database_backend", [pytest.param("postgresql", marks=pytest.mark.postgresql)], indirect=True,
+    "database_backend", ["postgresql"], indirect=True,
 )
 @pytest.mark.parametrize("winner", ["publication", "cancellation"])
 def test_postgresql_serializes_publication_and_cancellation(

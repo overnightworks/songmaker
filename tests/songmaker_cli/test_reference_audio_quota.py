@@ -57,7 +57,7 @@ def backend_quota_context(tmp_path, database_pg_factory):
 
 
 POSTGRESQL_ONLY = pytest.mark.parametrize(
-    "database_backend", [pytest.param("postgresql", marks=pytest.mark.postgresql)], indirect=True,
+    "database_backend", ["postgresql"], indirect=True,
 )
 
 
