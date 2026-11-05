@@ -1074,6 +1074,10 @@ It does **not** have:
 
 A compromised worker can overwrite or delete any stored audio file, enqueue or alter arq jobs, rewrite rate-limit state, publish bogus state to Redis, register with a wrong host/port, or refuse to load models. User audio integrity and queue contents are within its reach. It has no direct database connection, but the jobs it forges or alters run in workers that hold `DATABASE_URL` (for example, a scoring job for a chosen generation writes that generation's scores), so database rows are reachable indirectly. The session secret is not.
 
+### How a take reaches music
+
+A worker writes a take only into its container-local output root, which it empties at every start. The `done` event names no path: music fetches the take by `task_id` with `GET /tasks/{task_id}/result` (the worker resolves the file only from its own task record, never from a caller's path) and then frees it with `DELETE`. Music streams the body into a temp file of its own and aborts at `generation_result_max_bytes`, which only music's settings hold; a refused, oversized, cut-off or timed-out fetch is one failed take with no retry. Both routes sit behind the internal token. The worker's expiry sweep removes a result file together with its task record. Reference, repaint and cover inputs and the LoRA export still use the shared audio volume.
+
 ### Trust model and accepted risks
 
 - **Subprocesses share the OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in Docker. `songmaker-acestep-worker-0`, `songmaker-music-worker` and `songmaker-scoring-worker` drop every capability (`cap_drop: [ALL]`, no `cap_add`) and set `no-new-privileges`; they carry none of `songmaker-web`'s seccomp, AppArmor or `systempaths` options, which exist only for its Bubblewrap sandbox. Compromised model weights or ACE-Step code get user-level disk access. Container isolation mitigates this; OS-user separation would need separate containers for marginal benefit. Accepted for a single-user deployment.

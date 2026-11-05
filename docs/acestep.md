@@ -43,7 +43,9 @@ music worker (songmaker_cli.music_worker.MusicWorkerSettings)
     → POST /generate on worker → task_id
     → consume SSE /tasks/{id}/stream until done
     → post_process_generation (in to_thread):
-      → read worker WAV from shared volume
+      → (before this, over the worker HTTP: GET /tasks/{id}/result into a
+        temp file of music's own, then DELETE it on the worker)
+      → read the fetched WAV
       → decode + splice (if repaint) + master + encode MP3
       → INSERT generation row
       → auto-enqueue a score job for it (own budget, not the user's
@@ -461,7 +463,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `GPU_ID` | None | CUDA device index passed deterministically to the inner process as `CUDA_VISIBLE_DEVICES` |
 | `NVIDIA_VISIBLE_DEVICES` | Compose: `0` | Host GPU exposed to the worker by the explicit NVIDIA container runtime |
 | `ACESTEP_CHECKPOINT_DIR` | `/opt/acestep` | Where ACE-Step model weights live |
-| `AUDIO_OUTPUT_DIR` | `/app/data/audio/worker_output` | Where the subprocess writes generated WAVs |
+| `AUDIO_OUTPUT_DIR` | `/app/data/worker_output` | The worker's container-local output root for generated WAVs. The worker empties it at every start and refuses one that overlaps its shared audio root. Music fetches each take from it with `GET /tasks/{task_id}/result`, then frees it with `DELETE` of the same path; the task store's expiry sweep removes a file left behind together with its task record. The `done` payload carries no path |
 | `ACESTEP_LOG_DIR` | `/opt/acestep/logs` | Where the subprocess's merged stdout+stderr is captured. Each load attempt appends a `=== {mode} attempt at {iso} ===` header so retry history isn't clobbered. Also forwarded line-by-line to the worker's own logger as `[ace-step {mode}] ...` (visible in `docker compose logs songmaker-acestep-worker-0`). |
 | `ACESTEP_INNER_PORT` | 8101 | Base port for ACE-Step subprocesses (inside the container). Each loaded model mode gets `base_port + offset`, offset taken from the mode's position in `MODEL_CONFIG_PATHS` (`subprocess_runner.MODEL_INNER_PORT_OFFSETS`) — this keeps two simultaneously loaded modes from colliding on one port, which used to make the second mode's health check see the first mode's still-running server and falsely report ready (issue #205) |
 | `ACESTEP_STARTUP_TIMEOUT_SECONDS` | 540 | Max seconds to wait for the subprocess to become healthy, which now includes the eager DiT and LM init. Cold xl-turbo + vLLM cold-init can take 5–8 min on the very first load after a container start (page cache and torch JIT cache are empty). Once warm, subsequent loads are <30 s. On timeout, the last 2 KB of the merged log is included in the `SubprocessStartError` and surfaces in the admin job error. |
