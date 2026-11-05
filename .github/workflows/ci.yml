@@ -176,25 +176,22 @@ jobs:
           import collections
           import xml.etree.ElementTree as ET
 
-          cases = [
-              case for case in ET.parse("postgresql-contract.xml").iter("testcase")
-              if case.attrib["classname"].endswith("test_reference_audio_quota")
-              and (
-                  "postgresql" in case.attrib["name"].partition("[")[2]
-                  or (
-                      "[" not in case.attrib["name"]
-                      and case.attrib["name"].startswith("test_postgresql_")
-                  )
-              )
-          ]
-          assert cases, "No PostgreSQL reference quota proofs executed"
-          assert not any(case.find("skipped") is not None for case in cases), "Quota proof skipped"
-          print(f"PostgreSQL reference quota proofs: {len(cases)} passed, 0 skipped")
-          cases = list(ET.parse("postgresql-contract.xml").iter("testcase"))
+          testcases = list(ET.parse("postgresql-contract.xml").iter("testcase"))
+          collection_skips = [case for case in testcases if not case.attrib["classname"]]
+          for case in collection_skips:
+              print(f"Skipped at collection, not a selected proof: {case.attrib['name']!r}")
+          cases = [case for case in testcases if case.attrib["classname"]]
           assert cases, "No PostgreSQL proof selected"
           skipped = [case for case in cases if case.find("skipped") is not None]
-          assert not skipped, f"PostgreSQL proofs skipped: {[case.attrib['classname'] for case in skipped]}"
-          for name, count in sorted(collections.Counter(case.attrib["classname"] for case in cases).items()):
+          assert not skipped, (
+              "PostgreSQL proofs skipped: "
+              f"{[(case.attrib['classname'], case.attrib['name']) for case in skipped]}"
+          )
+          counts = collections.Counter(case.attrib["classname"] for case in cases)
+          assert any(name.endswith("test_reference_audio_quota") for name in counts), (
+              "No PostgreSQL reference quota proofs executed"
+          )
+          for name, count in sorted(counts.items()):
               print(f"{name}: {count} passed, 0 skipped")
           PYTHON
 

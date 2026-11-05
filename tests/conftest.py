@@ -464,28 +464,18 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Mark every test that reaches PostgreSQL, so the contract job selects it with `-m postgresql`.
+    """Mark every test whose fixture closure holds `postgresql_url`, so `-m postgresql` selects it.
 
-    A test reaches PostgreSQL through the `postgresql_url` fixture (directly, or via `pg_factory`),
-    through a parameter value naming `postgresql`, or by a `test_postgresql_` name when it asks for
-    the fixture at run time. `postgresql_url` fails a test the rule missed.
+    A test that reaches PostgreSQL otherwise carries the mark on its backend parameter
+    (`database_backend`, or `pytest.param(..., marks=pytest.mark.postgresql)`).
+    tests/test_postgresql_selection.py rejects the paths collection cannot see.
     """
     for item in items:
-        callspec = getattr(item, "callspec", None)
-        parameters = callspec.params.values() if callspec else ()
-        if (
-            "postgresql_url" in item.fixturenames
-            or item.name.startswith("test_postgresql_")
-            or any(isinstance(value, str) and "postgresql" in value for value in parameters)
-        ):
+        if "postgresql_url" in item.fixturenames:
             item.add_marker(pytest.mark.postgresql)
 
 
-@pytest.fixture
-def postgresql_url(request: pytest.FixtureRequest) -> str:
-    """The PostgreSQL URL of this run; the one place a PostgreSQL test skips without it."""
-    if request.node.get_closest_marker("postgresql") is None:
-        pytest.fail("Test reaches PostgreSQL unmarked; see pytest_collection_modifyitems")
+def _postgresql_url() -> str:
     url = os.environ.get("TEST_DATABASE_URL", "")
     if not url.startswith("postgresql"):
         pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
@@ -493,7 +483,12 @@ def postgresql_url(request: pytest.FixtureRequest) -> str:
 
 
 @pytest.fixture
-def pg_factory(postgresql_url):
+def postgresql_url() -> str:
+    """The PostgreSQL URL of this run; the one place a PostgreSQL test skips without it."""
+    return _postgresql_url()
+
+
+def _pg_factory_until_teardown():
     from songmaker_cli.db.models import Base
 
     factory = _pg_session_factory()
@@ -501,3 +496,29 @@ def pg_factory(postgresql_url):
     engine = factory.kw["bind"]
     Base.metadata.drop_all(engine)
     engine.dispose()
+
+
+@pytest.fixture
+def pg_factory(postgresql_url):
+    yield from _pg_factory_until_teardown()
+
+
+@pytest.fixture(params=["sqlite", pytest.param("postgresql", marks=pytest.mark.postgresql)])
+def database_backend(request) -> str:
+    """The backend of a test that runs on SQLite and on PostgreSQL; only the second is marked."""
+    return request.param
+
+
+@pytest.fixture
+def database_postgresql_url(database_backend) -> str | None:
+    """The PostgreSQL URL on the PostgreSQL leg of `database_backend`, None on the SQLite leg."""
+    return _postgresql_url() if database_backend == "postgresql" else None
+
+
+@pytest.fixture
+def database_pg_factory(database_postgresql_url):
+    """The PostgreSQL session factory on the PostgreSQL leg of `database_backend`, else None."""
+    if database_postgresql_url is None:
+        yield None
+    else:
+        yield from _pg_factory_until_teardown()

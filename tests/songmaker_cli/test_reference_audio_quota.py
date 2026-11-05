@@ -32,12 +32,7 @@ from songmaker_cli.reference_audio import (
 from songmaker_cli.settings import Settings
 
 
-@pytest.fixture
-def quota_context(tmp_path, request):
-    backend = getattr(request.node, "callspec", None)
-    backend = backend.params.get("backend") if backend else None
-    postgres = backend == "postgresql" if backend else "postgresql" in request.node.name
-    factory = request.getfixturevalue("pg_factory") if postgres else None
+def _context_with_owners(tmp_path, factory):
     ctx = make_router_ctx(tmp_path, db=factory)
     with ctx.db() as session:
         session.add_all(
@@ -48,6 +43,22 @@ def quota_context(tmp_path, request):
         )
         session.commit()
     return ctx
+
+
+@pytest.fixture
+def quota_context(tmp_path):
+    return _context_with_owners(tmp_path, None)
+
+
+@pytest.fixture
+def backend_quota_context(tmp_path, database_pg_factory):
+    """The quota context on the leg of `database_backend`; the PostgreSQL leg is marked."""
+    return _context_with_owners(tmp_path, database_pg_factory)
+
+
+POSTGRESQL_ONLY = pytest.mark.parametrize(
+    "database_backend", [pytest.param("postgresql", marks=pytest.mark.postgresql)], indirect=True,
+)
 
 
 @pytest.mark.parametrize("field", ["reference_audio_quota_bytes", "reference_audio_quota_files"])
@@ -212,18 +223,17 @@ def _owner_with_room_for_one_more(ctx, capacity):
     return Settings(reference_audio_quota_bytes=1000)
 
 
-@pytest.mark.parametrize("backend", ["sqlite", "postgresql"])
 @pytest.mark.parametrize("capacity", ["bytes", "files"])
 def test_postgresql_reference_admission_is_atomic(
-    quota_context, held_reference_owner, capacity, backend
+    backend_quota_context, held_reference_owner, capacity, database_backend
 ):
     """1301-F3-Q-CONCURRENT: observe contention before allowing the first write."""
-    ctx = quota_context
+    ctx = backend_quota_context
     settings = _owner_with_room_for_one_more(ctx, capacity)
     entered, release = held_reference_owner
     engine = create_engine(
         ctx.db.kw["bind"].url,
-        **({"connect_args": {"timeout": 0.1}} if backend == "sqlite" else {}),
+        **({"connect_args": {"timeout": 0.1}} if database_backend == "sqlite" else {}),
     )
     contender = sessionmaker(bind=engine)
     waiting_pid = []
@@ -247,7 +257,7 @@ def test_postgresql_reference_admission_is_atomic(
                     store_reference_audio, contender, ctx.audio_dir, "owner", ".wav",
                     b"b" * 100, settings, "second.wav",
                 )
-                if backend == "postgresql":
+                if database_backend == "postgresql":
                     assert attempted.wait(timeout=5)
                     deadline = time.monotonic() + 5
                     with ctx.db() as observer:
@@ -267,7 +277,7 @@ def test_postgresql_reference_admission_is_atomic(
             finally:
                 release.set()
             assert (ctx.audio_dir / first.result(timeout=5).storage_path).read_bytes() == b"a" * 100
-            if backend == "postgresql":
+            if database_backend == "postgresql":
                 with pytest.raises(ReferenceAudioQuotaExceeded):
                     second.result(timeout=5)
             else:
@@ -283,7 +293,7 @@ def test_postgresql_reference_admission_is_atomic(
 
 
 @pytest.fixture
-def held_reference_owner(quota_context):
+def held_reference_owner(backend_quota_context):
     entered, release = threading.Event(), threading.Event()
 
     def hold(session, instance):
@@ -291,17 +301,20 @@ def held_reference_owner(quota_context):
             entered.set()
             assert release.wait(timeout=15), "Upload was never released"
 
-    event.listen(quota_context.db, "loaded_as_persistent", hold)
+    event.listen(backend_quota_context.db, "loaded_as_persistent", hold)
     try:
         yield entered, release
     finally:
         release.set()
-        event.remove(quota_context.db, "loaded_as_persistent", hold)
+        event.remove(backend_quota_context.db, "loaded_as_persistent", hold)
 
 
-def test_postgresql_reference_owners_do_not_block_each_other(quota_context, held_reference_owner):
+@POSTGRESQL_ONLY
+def test_postgresql_reference_owners_do_not_block_each_other(
+    backend_quota_context, held_reference_owner
+):
     """1301-F3-Q-CONCURRENT: issue criterion evidence."""
-    ctx = quota_context
+    ctx = backend_quota_context
     _seed_rows(ctx, "owner", 49)
     _seed_rows(ctx, "other", 49)
     entered, release = held_reference_owner
@@ -322,11 +335,12 @@ def test_postgresql_reference_owners_do_not_block_each_other(quota_context, held
         assert (ctx.audio_dir / first.result(timeout=5).storage_path).read_bytes() == b"a"
 
 
+@POSTGRESQL_ONLY
 def test_postgresql_unrelated_user_write_completes_during_upload(
-    quota_context, held_reference_owner
+    backend_quota_context, held_reference_owner
 ):
     """1301-F3-Q-CONCURRENT: issue criterion evidence."""
-    ctx = quota_context
+    ctx = backend_quota_context
     entered, release = held_reference_owner
 
     def write_song():
@@ -352,11 +366,12 @@ def test_postgresql_unrelated_user_write_completes_during_upload(
         assert session.get(Song, "song").album.created_by == "owner"
 
 
+@POSTGRESQL_ONLY
 def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
-    quota_context, held_reference_owner
+    backend_quota_context, held_reference_owner
 ):
     """1301-F3-Q-FAILURE: issue criterion evidence."""
-    ctx = quota_context
+    ctx = backend_quota_context
     entered, release = held_reference_owner
 
     async def cancel_upload():
@@ -392,13 +407,12 @@ def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
     assert _row_count(ctx) == 1
 
 
-@pytest.mark.parametrize("backend", ["sqlite", "postgresql"])
 @pytest.mark.parametrize("cleanup", ["removed", "denied"])
 def test_postgresql_failed_reference_write_releases_admission(
-    tmp_path, quota_context, backend, cleanup
+    tmp_path, backend_quota_context, database_backend, cleanup
 ):
     """1301-F3-Q-FAILURE: issue criterion evidence."""
-    factory = quota_context.db
+    factory = backend_quota_context.db
     result = subprocess.run(
         [
             sys.executable,

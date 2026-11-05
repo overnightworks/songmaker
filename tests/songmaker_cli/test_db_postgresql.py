@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -67,9 +66,6 @@ from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.lora_api import api_create_lora
 from songmaker_cli.settings import get_settings
 
-TEST_PG_URL = os.environ.get("TEST_DATABASE_URL", "")
-USES_POSTGRESQL = pytest.mark.usefixtures("postgresql_url")
-
 
 def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@host/db")
@@ -77,11 +73,12 @@ def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert url.render_as_string(hide_password=False) == "postgresql://user:pass@host/db"
 
 
-@USES_POSTGRESQL
-def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart() -> None:
+def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart(
+    postgresql_url: str,
+) -> None:
     name = f"secret_password_{uuid.uuid4().hex[:12]}"
     password = "p%a@s/s:w ord"
-    admin = create_engine(TEST_PG_URL)
+    admin = create_engine(postgresql_url)
     with admin.begin() as connection:
         role = text("SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :name, :password)")
         statement = connection.execute(role, {"name": name, "password": password}).scalar_one()
@@ -89,7 +86,7 @@ def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart() 
         connection.execute(text(statement.replace(":", r"\:")))
         connection.execute(text(f'CREATE SCHEMA "{name}" AUTHORIZATION "{name}"'))
         connection.execute(text(f'ALTER ROLE "{name}" SET search_path = "{name}"'))
-    base = make_url(TEST_PG_URL)._replace(username=name, password=None)
+    base = make_url(postgresql_url)._replace(username=name, password=None)
     factory = None
     try:
         factory = init_db(database_url_with_password(base, password))
@@ -105,7 +102,6 @@ def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart() 
         admin.dispose()
 
 
-@USES_POSTGRESQL
 def test_duration_stats_postgresql_values(pg_factory) -> None:
     now = datetime.now(timezone.utc)
     with pg_factory() as session:
@@ -125,7 +121,6 @@ def test_duration_stats_postgresql_values(pg_factory) -> None:
     assert stats.avg == pytest.approx(20.0, abs=1.0)
 
 
-@USES_POSTGRESQL
 def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(
     pg_factory,
 ) -> None:
@@ -251,7 +246,6 @@ def _seed_libraries_of_many_musicians(
     ])
 
 
-@USES_POSTGRESQL
 def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory) -> None:
     with pg_factory() as session:
         _seed_libraries_of_many_musicians(session, musicians=5, albums=20, songs=10)
@@ -286,7 +280,6 @@ def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory
     assert max(timings) < HOME_LIST_STATEMENT_BUDGET_MS
 
 
-@USES_POSTGRESQL
 def test_concurrent_job_creation(pg_factory) -> None:
     with pg_factory() as session:
         session.add(User(id="u1", username="testuser", role="user"))
@@ -315,7 +308,6 @@ def test_concurrent_job_creation(pg_factory) -> None:
     assert len(set(results)) == 10
 
 
-@USES_POSTGRESQL
 def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
     pg_factory, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -359,7 +351,6 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
         assert session.query(UserLora).filter(UserLora.deleted_at.is_(None)).count() == 1
 
 
-@USES_POSTGRESQL
 def test_stale_job_reaper_does_not_overwrite_fresh_heartbeat(pg_factory, monkeypatch) -> None:
     now = datetime.now(timezone.utc)
     with pg_factory() as session:
@@ -421,7 +412,6 @@ def test_stale_job_reaper_does_not_overwrite_fresh_heartbeat(pg_factory, monkeyp
         assert job.heartbeat_at > now - timedelta(minutes=1)
 
 
-@USES_POSTGRESQL
 def test_concurrent_lora_reconciliation_claims_one_locked_row(
     pg_factory, tmp_path, monkeypatch,
 ) -> None:
@@ -507,7 +497,6 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
     assert len(audits) == 1
 
 
-@USES_POSTGRESQL
 @pytest.mark.parametrize("first_operation", ["renew", "revoke"])
 def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_operation) -> None:
     """defect:#1590: either lock order ends with revocation, never resurrection."""
@@ -563,7 +552,6 @@ def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_opera
         assert db.get(UserSession, session_id) is None
 
 
-@USES_POSTGRESQL
 def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
     max_sessions = 3
     thread_count = 10
@@ -606,7 +594,6 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
         assert len(remaining) == max_sessions
 
 
-@USES_POSTGRESQL
 def test_concurrent_first_resource_event_allocations(pg_factory) -> None:
     """A missing cursor plus concurrent first events still allocate exactly once."""
     with pg_factory() as session:
@@ -644,7 +631,6 @@ def test_concurrent_first_resource_event_allocations(pg_factory) -> None:
         assert session.query(ResourceEventCursor).count() == 1
 
 
-@USES_POSTGRESQL
 def test_resource_event_rollback_is_atomic_on_postgresql(pg_factory) -> None:
     with pg_factory() as session:
         session.add(User(id="rollback-user", username="rollback"))
@@ -706,7 +692,6 @@ def test_resource_event_rollback_is_atomic_on_postgresql(pg_factory) -> None:
         assert event.sequence == 2
 
 
-@USES_POSTGRESQL
 def test_resource_event_retention_gap_on_postgresql(pg_factory) -> None:
     now = datetime.now(timezone.utc)
     with pg_factory() as session:
@@ -732,23 +717,22 @@ def test_resource_event_retention_gap_on_postgresql(pg_factory) -> None:
         assert get_oldest_resource_event_sequence(session, "retention-user") == 3
 
 
-@USES_POSTGRESQL
-def test_alembic_migrations_on_postgresql() -> None:
+def test_alembic_migrations_on_postgresql(postgresql_url: str) -> None:
     from alembic import command
     from alembic.config import Config
 
-    engine = create_engine(TEST_PG_URL)
+    engine = create_engine(postgresql_url)
     Base.metadata.drop_all(engine)
     with engine.connect() as conn:
         conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
         conn.commit()
     engine.dispose()
     cfg = Config(str(REPOSITORY_ROOT / "alembic.ini"))
-    cfg.set_main_option("sqlalchemy.url", TEST_PG_URL)
+    cfg.set_main_option("sqlalchemy.url", postgresql_url)
     command.upgrade(cfg, "202b0514cdde")
 
     now = datetime.now(timezone.utc)
-    engine = create_engine(TEST_PG_URL)
+    engine = create_engine(postgresql_url)
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -774,7 +758,7 @@ def test_alembic_migrations_on_postgresql() -> None:
     # code was reverted.  Prove that upgrading from that exact stamp preserves
     # rows it may already contain and backfills users without cursors.
     command.upgrade(cfg, "40a1c2d3e4f5")
-    engine = create_engine(TEST_PG_URL)
+    engine = create_engine(postgresql_url)
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -804,7 +788,7 @@ def test_alembic_migrations_on_postgresql() -> None:
 
     command.upgrade(cfg, "head")
 
-    engine = create_engine(TEST_PG_URL)
+    engine = create_engine(postgresql_url)
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     engine.dispose()
@@ -829,7 +813,7 @@ def test_alembic_migrations_on_postgresql() -> None:
     assert "user_resource_cursors" not in tables
     assert "user_resource_events" not in tables
 
-    engine = create_engine(TEST_PG_URL)
+    engine = create_engine(postgresql_url)
     with engine.connect() as conn:
         cursors = conn.execute(
             text(

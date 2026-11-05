@@ -32,19 +32,20 @@ def _alembic_config() -> Config:
     return Config(str(Path(__file__).resolve().parents[3] / "alembic.ini"))
 
 
-@pytest.fixture(params=["sqlite", "postgresql"])
-def database(request, tmp_path, isolated_logging):
+@pytest.fixture
+def database(database_postgresql_url, tmp_path, isolated_logging):
     """Yield (config, engine) of an empty database; PostgreSQL gets its own schema."""
-    if request.param == "sqlite":
+    if database_postgresql_url is None:
         url = make_url(f"sqlite:///{tmp_path / 'coherence.db'}")
         schema = None
     else:
-        base_url = request.getfixturevalue("postgresql_url")
         schema = "coherence_verdicts_" + uuid.uuid4().hex
-        admin = create_engine(base_url)
+        admin = create_engine(database_postgresql_url)
         with admin.begin() as connection:
             connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-        url = make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
+        url = make_url(database_postgresql_url).update_query_dict(
+            {"options": f"-csearch_path={schema}"}
+        )
     config = _alembic_config()
     rendered_url = url.render_as_string(hide_password=False).replace("%", "%%")
     config.set_main_option("sqlalchemy.url", rendered_url)

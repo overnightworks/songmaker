@@ -6,6 +6,7 @@ import asyncio
 import shutil
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -38,31 +39,39 @@ def _png_bytes() -> bytes:
     return output.getvalue()
 
 
-@pytest.fixture
-def accounting_pg_url(postgresql_url):
-    url = postgresql_url
-    engine = create_engine(url)
+@contextmanager
+def _accounting_schema(base_url):
+    engine = create_engine(base_url)
     schema = "cover_accounting_" + uuid.uuid4().hex
     with engine.begin() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     try:
-        yield make_url(url).update_query_dict({"options": f"-csearch_path={schema}"})
+        yield make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
     finally:
         with engine.begin() as connection:
             connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         engine.dispose()
 
 
-@pytest.fixture(params=["sqlite", "postgresql"])
-def accounting_factory(request, tmp_path):
-    if request.param == "sqlite":
+@pytest.fixture
+def accounting_pg_url(postgresql_url):
+    with _accounting_schema(postgresql_url) as url:
+        yield url
+
+
+@pytest.fixture
+def accounting_factory(database_postgresql_url, tmp_path):
+    if database_postgresql_url is None:
         factory = init_test_db(tmp_path / "accounting.db")
-    else:
-        engine = create_engine(request.getfixturevalue("accounting_pg_url"))
+        yield factory
+        factory.kw["bind"].dispose()
+        return
+    with _accounting_schema(database_postgresql_url) as url:
+        engine = create_engine(url)
         Base.metadata.create_all(engine)
         factory = sessionmaker(bind=engine)
-    yield factory
-    factory.kw["bind"].dispose()
+        yield factory
+        engine.dispose()
 
 
 @pytest.fixture
@@ -189,7 +198,9 @@ def test_late_cancellation_preserves_publication_with_a_preloaded_job(
         assert count_cover_jobs_since(verification, "album", STARTED) == 1
 
 
-@pytest.mark.parametrize("accounting_factory", ["postgresql"], indirect=True)
+@pytest.mark.parametrize(
+    "database_backend", [pytest.param("postgresql", marks=pytest.mark.postgresql)], indirect=True,
+)
 @pytest.mark.parametrize("winner", ["publication", "cancellation"])
 def test_postgresql_serializes_publication_and_cancellation(
     accounting_factory, running_cover, monkeypatch, winner,

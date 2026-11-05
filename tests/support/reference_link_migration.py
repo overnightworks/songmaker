@@ -61,12 +61,11 @@ def reference_link_sqlite(tmp_path: Path):
 
 @pytest.fixture
 def reference_link_postgresql(postgresql_url):
-    base_url = postgresql_url
     schema = "reference_link_" + uuid.uuid4().hex
-    admin = create_engine(base_url)
+    admin = create_engine(postgresql_url)
     with admin.begin() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    url = make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
+    url = make_url(postgresql_url).update_query_dict({"options": f"-csearch_path={schema}"})
     engine = create_engine(url)
     yield _config_for(url), engine
     engine.dispose()
@@ -75,7 +74,12 @@ def reference_link_postgresql(postgresql_url):
     admin.dispose()
 
 
-@pytest.fixture(params=["reference_link_sqlite", "reference_link_postgresql"])
+@pytest.fixture(
+    params=[
+        "reference_link_sqlite",
+        pytest.param("reference_link_postgresql", marks=pytest.mark.postgresql),
+    ]
+)
 def reference_link_database(request, isolated_logging) -> tuple[Config, Engine]:
     """Yield (config, engine) of an empty database."""
     return request.getfixturevalue(request.param)
