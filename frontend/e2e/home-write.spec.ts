@@ -245,6 +245,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await songMenuOf(page, shellOf(testInfo)).click();
 		await page.getByRole('button', { name: SONG_MENU_DELETE_LABEL, exact: true }).click();
 		await page.getByRole('button', { name: 'Delete Song', exact: true }).click();
+		await expect(page.getByRole('alert').getByText('Song deleted', { exact: true })).toBeVisible();
 		await openHome(page, shellOf(testInfo));
 		await expect(writeBodies(page).filter({ hasText: answer.items[0].song_title })).toHaveCount(0);
 		releaseRemoval?.();
