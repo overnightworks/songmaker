@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "d17e437127dbad2eed775601a99adbe2d24cafbc"
 branch = "claude/issue-2235-cli-docs"
-scope = ["AGENTS.md", "docs/architecture.md", "docs/security.md", "prompts/prompt-security-review.md", "src/songmaker_cli/cowriter/__init__.py", "src/songmaker_cli/settings.py"]
+scope = ["AGENTS.md", "docs/architecture.md", "docs/security.md", "prompts/prompt-architecture-review.md", "prompts/prompt-security-review.md", "src/songmaker_cli/cowriter/__init__.py", "src/songmaker_cli/settings.py"]
 opened_commit = "584a28fd71e1605a04990fd11163fd23a4265de9"
 whole_reason = "One fact (no Claude CLI call path) is stated in five places that must agree in one landing."
