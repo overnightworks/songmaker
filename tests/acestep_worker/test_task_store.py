@@ -365,3 +365,99 @@ def test_cleanup_terminal_keeps_running() -> None:
     dropped, size = _run(go())
     assert dropped == 0
     assert size == 1
+
+
+class _SweepClock:
+    """Fake clock whose sleep parks the sweep loop until the test releases the next tick."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.now = utcnow()
+        self.parked = asyncio.Event()
+        self._release = asyncio.Event()
+        monkeypatch.setattr("acestep_worker.task_store.utcnow", lambda: self.now)
+
+    async def sleep(self, seconds: float) -> None:
+        self.parked.set()
+        await self._release.wait()
+        self._release.clear()
+        self.now += timedelta(seconds=seconds)
+
+    async def next_tick(self) -> None:
+        self.parked.clear()
+        self._release.set()
+        await self.parked.wait()
+
+
+async def _finish(store: TaskStore) -> str:
+    task_id = await store.create("generate")
+    await store.complete(task_id, _generated())
+    return task_id
+
+
+def test_sweep_loop_drops_expired_terminal_tasks_and_keeps_the_rest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def go() -> tuple[int, set[str], set[str]]:
+        clock = _SweepClock(monkeypatch)
+        store = TaskStore()
+        old_done = await _finish(store)
+        running = await store.create("generate")
+        await store.mark_running(running)
+        sweep = asyncio.create_task(store.sweep_terminal_tasks(sleep=clock.sleep))
+        await clock.parked.wait()
+        await clock.next_tick()
+        fresh_done = await _finish(store)
+        await clock.next_tick()
+        remaining = set(store._tasks)
+        sweep.cancel()
+        await asyncio.wait([sweep])
+        return len(remaining), remaining, {old_done, running, fresh_done}
+
+    count, remaining, ids = _run(go())
+    assert count == 2
+    assert len(ids - remaining) == 1
+
+
+def test_sweep_loop_continues_after_a_failed_sweep(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    async def go() -> int:
+        clock = _SweepClock(monkeypatch)
+        store = TaskStore()
+        await _finish(store)
+        real_cleanup = store.cleanup_terminal
+        calls = 0
+
+        async def flaky_cleanup() -> int:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError("sweep failed")
+            return await real_cleanup()
+
+        monkeypatch.setattr(store, "cleanup_terminal", flaky_cleanup)
+        sweep = asyncio.create_task(store.sweep_terminal_tasks(sleep=clock.sleep))
+        await clock.parked.wait()
+        await clock.next_tick()
+        await clock.next_tick()
+        await clock.next_tick()
+        size = await store.size()
+        sweep.cancel()
+        await asyncio.wait([sweep])
+        return size
+
+    assert _run(go()) == 0
+    assert "sweep failed" in caplog.text
+
+
+def test_sweep_loop_ends_when_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def go() -> bool:
+        clock = _SweepClock(monkeypatch)
+        store = TaskStore()
+        sweep = asyncio.create_task(store.sweep_terminal_tasks(sleep=clock.sleep))
+        await clock.parked.wait()
+        sweep.cancel()
+        await asyncio.wait([sweep])
+        return sweep.cancelled()
+
+    assert _run(go())
