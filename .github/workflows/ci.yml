@@ -86,15 +86,33 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p reports
-          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci.ini | tee pytest-output.txt
+          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-config=.github/workflows/coveragerc-ci.ini | tee pytest-output.txt
 
-      - name: Coverage summary
+      - name: Coverage summary and floors
         if: always()
+        env:
+          LINE_FLOOR: "93"
+          BRANCH_FLOOR: "87"
         run: |
-          total=$(grep '^TOTAL' pytest-output.txt | awk '{print $NF}')
           passed=$(grep -oP '^\d+ passed' pytest-output.txt | awk '{print $1}')
           skipped=$(grep -oP '\d+ skipped' pytest-output.txt | awk '{print $1}')
-          echo "### Backend: ${passed} passed, ${skipped:-0} skipped — ${total} coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Backend: ${passed} passed, ${skipped:-0} skipped" >> "$GITHUB_STEP_SUMMARY"
+          # coverage.py's fail_under judges lines and branches combined, so each floor is checked here.
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse("reports/coverage.xml").getroot()
+          line_percent = 100 * int(root.get("lines-covered")) / int(root.get("lines-valid"))
+          branch_percent = 100 * int(root.get("branches-covered")) / int(root.get("branches-valid"))
+          line_floor = int(os.environ["LINE_FLOOR"])
+          branch_floor = int(os.environ["BRANCH_FLOOR"])
+          summary = f"Line coverage {line_percent:.2f} % (floor {line_floor} %), branch coverage {branch_percent:.2f} % (floor {branch_floor} %)"
+          print(summary)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as handle:
+              handle.write(summary + "\n")
+          raise SystemExit(0 if line_percent >= line_floor and branch_percent >= branch_floor else "coverage below a floor")
+          PY
 
       - name: Upload backend coverage
         if: ${{ !cancelled() }}
