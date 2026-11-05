@@ -171,7 +171,7 @@
 		text-transform: uppercase;
 	}
 
-	/* The cover editor places its stage, count and action row into these
+	/* The cover editor places its stage, count, problem line and action row into these
 	   areas itself; the titles keep their own. */
 	.header-identity.cover-editing {
 		display: grid;
@@ -179,8 +179,9 @@
 		grid-template-areas:
 			'stage titles'
 			'stage tryrow'
-			'count .';
-		grid-template-rows: auto 1fr auto;
+			'count .'
+			'problem .';
+		grid-template-rows: auto 1fr auto auto;
 		align-items: start;
 		column-gap: 1.5rem;
 		row-gap: 0.6rem;
@@ -252,6 +253,7 @@
 			grid-template-areas:
 				'stage'
 				'count'
+				'problem'
 				'tryrow'
 				'titles';
 			grid-template-rows: none;

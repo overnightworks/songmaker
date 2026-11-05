@@ -50,6 +50,17 @@
 	} from '#lib/stores/coverActivity.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
 	import { holdOpenWhile } from '#lib/stores/layers.ts';
+	import {
+		COVER_PROBLEM_TEXTS,
+		coverBusyWaitSeconds,
+		coverProblemClosesSuggest,
+		coverProblemHidesCount,
+		coverRefusalProblem,
+		coverRunProblem,
+		type CoverProblem
+	} from '#lib/utils/cover-problem.ts';
+	import { formatTime } from '#lib/utils/format.ts';
+	import AgentProblemLine from './AgentProblemLine.svelte';
 	import CoverRunElapsed from './CoverRunElapsed.svelte';
 	import Icon from './Icon.svelte';
 
@@ -74,6 +85,9 @@
 
 	let chosenSlot = $state<number | null>(null);
 	let followedRunId = $state<string | null>(null);
+	// A refusal at the click is this view's alone: the next load, sign-in or click asks again.
+	let clickProblem = $state<CoverProblem | null>(null);
+	let now = $state(Date.now());
 	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
 
 	const activity = $derived($coverActivity?.albumId === currentAlbumId ? $coverActivity : null);
@@ -93,23 +107,25 @@
 	const dailyLimitNote = $derived(
 		dailySuggestionsSpent ? (activity?.limitNote ?? ALBUM_COVER_DAILY_LIMIT_REACHED) : null
 	);
+	const busyWaitSeconds = $derived(coverBusyWaitSeconds(latestCoverJob, now));
+	const coverProblem = $derived(
+		clickProblem ??
+			coverRunProblem(
+				latestCoverJob,
+				{
+					followed: latestCoverJob !== null && latestCoverJob.id === followedRunId,
+					atDailyLimit: dailyLimitNote !== null
+				},
+				now
+			)
+	);
+	const suggestClosed = $derived(coverProblemClosesSuggest(coverProblem));
 	const canSuggestCover = $derived(
 		!isCoverSuggestionGenerating &&
 			!coverSuggestionsLoading &&
 			!coverSuggestionsBusy &&
-			!dailyLimitNote
-	);
-	// At the daily limit the limit is the one word the editor says, so the
-	// failure of a run from before this visit stays silent beside it; a run
-	// this visit followed still names how it ended (#1202).
-	const latestRunFailureShown = $derived(
-		latestCoverJob?.status === 'failed' && (!dailyLimitNote || latestCoverJob.id === followedRunId)
-	);
-	const coverSuggestionFailure = $derived(
-		coverSuggestionsFailure ??
-			(latestRunFailureShown
-				? (latestCoverJob?.error ?? ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
-				: null)
+			!dailyLimitNote &&
+			!suggestClosed
 	);
 	const suggestionCount = $derived(coverSuggestions?.suggestions.length ?? 0);
 	const hasSuggestions = $derived(suggestionCount > 0);
@@ -141,6 +157,7 @@
 	$effect(() => {
 		const albumId = currentAlbumId;
 		followedRunId = null;
+		clickProblem = null;
 		void readCoverActivity(albumId);
 		return () => void readCoverActivity(albumId);
 	});
@@ -149,10 +166,18 @@
 		if (activity?.runId) followedRunId = activity.runId;
 	});
 
+	// The clock ticks only while a busy wait is counted down, and stops at 0:00.
+	$effect(() => {
+		if (busyWaitSeconds === 0) return;
+		const timer = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(timer);
+	});
+
 	async function suggestCover(): Promise<void> {
 		if (!canSuggestCover) return;
 		const albumId = currentAlbumId;
 		chosenSlot = null;
+		clickProblem = null;
 		const ask = beginCoverSuggestion(albumId);
 		try {
 			const job = await createAlbumCoverSuggestions(albumId);
@@ -177,6 +202,12 @@
 			if (isCoverAskRetired(albumId, ask)) return;
 			endCoverSuggestion(albumId);
 			if (albumId !== currentAlbumId) return;
+			const refusal = error instanceof ApiError ? coverRefusalProblem(error.responseDetail) : null;
+			if (refusal) {
+				clickProblem = refusal;
+				void readCoverActivity(albumId);
+				return;
+			}
 			if (isRefusal(error)) {
 				await rereadAfterRefusal(albumId, error);
 				return;
@@ -347,7 +378,7 @@
 				onclick={() => retryCoverActivity(currentAlbumId)}
 				>{ALBUM_COVER_SUGGESTIONS_RETRY_LABEL}</button
 			>
-		{:else if coverSuggestions}
+		{:else if coverSuggestions && !coverProblemHidesCount(coverProblem)}
 			{#if shownSuggestionNumber}
 				<b>{albumCoverSuggestionPosition(shownSuggestionNumber, suggestionCount)}</b>
 				<span aria-hidden="true">·</span>
@@ -364,13 +395,18 @@
 		{#if dailyLimitNote}
 			<span class="cover-limit">{dailyLimitNote}</span>
 		{/if}
-		{#if coverSuggestionFailure}
+		{#if coverSuggestionsFailure}
 			<span class="cover-failure" role="alert">
 				<strong>{ALBUM_COVER_SUGGESTION_FAILED_TITLE}</strong>
-				{coverSuggestionFailure}
+				{coverSuggestionsFailure}
 			</span>
 		{/if}
 	</p>
+	{#if coverProblem}
+		<div class="cover-problem">
+			<AgentProblemLine text={COVER_PROBLEM_TEXTS[coverProblem]} problem={coverProblem} />
+		</div>
+	{/if}
 
 	<div class="cover-actions">
 		<button
@@ -383,10 +419,15 @@
 		<button
 			type="button"
 			class="cover-action"
+			class:cover-suggest-closed={suggestClosed && coverProblem !== 'busy'}
 			data-hitbox="frequent"
 			disabled={!canSuggestCover}
 			onclick={suggestCover}
-			>{hasSuggestions ? ALBUM_COVER_SUGGEST_ANOTHER_LABEL : ALBUM_COVER_SUGGEST_LABEL}</button
+			>{hasSuggestions
+				? ALBUM_COVER_SUGGEST_ANOTHER_LABEL
+				: ALBUM_COVER_SUGGEST_LABEL}{#if coverProblem === 'busy'}<span class="cover-wait-time"
+					>&nbsp;{formatTime(busyWaitSeconds)}</span
+				>{/if}</button
 		>
 		{#if hasSuggestions}
 			<button
@@ -423,7 +464,7 @@
 
 <style>
 	/* The editor's parts sit in the header's own grid areas (stage, count,
-	   tryrow), so the header can lay them out beside or above its titles. */
+	   problem, tryrow), so the header can lay them out beside or above its titles. */
 	.cover-editor {
 		display: contents;
 	}
@@ -606,6 +647,25 @@
 
 	.cover-action:disabled {
 		opacity: 0.5;
+	}
+
+	/* Closed for this person, in the shape Suggest closed takes (#1895). */
+	.cover-action.cover-suggest-closed {
+		border-style: dashed;
+		color: var(--text-muted);
+	}
+
+	.cover-wait-time {
+		font-family: var(--font-body);
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0;
+		text-transform: none;
+	}
+
+	.cover-problem {
+		grid-area: problem;
+		display: flex;
+		max-width: 18rem;
 	}
 
 	.cover-close {
