@@ -476,9 +476,7 @@ def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
             while not gateway.requests:
                 await asyncio.sleep(0)
             chat_job = canceller.query(Job).filter_by(type="chat").one()
-            api_cancel_job(
-                chat_job.id, request_in_session(app, first_session), _TURN_PERSON, canceller,
-            )
+            api_cancel_job(chat_job.id, _TURN_PERSON, canceller)
             second = await api_chat_turn(
                 ChatTurnV2Request(message="b"),
                 request_in_session(app, second_session), _TURN_PERSON, turn_b,
@@ -502,8 +500,10 @@ def test_a_cancelled_turn_that_asks_late_still_binds_its_own_session(world):
     assert job.session_id == first_session
 
 
-def test_the_stdio_server_records_no_session_while_a_web_turn_runs(world, monkeypatch):
+def test_the_stdio_server_is_refused_a_cover_while_a_web_turn_runs(world, monkeypatch):
     import asyncio
+
+    from mcp.server.mcpserver.exceptions import ToolError
 
     from songmaker_cli.api_models import ChatTurnV2Request
     from songmaker_cli.conversation_api import api_chat_turn
@@ -525,7 +525,8 @@ def test_the_stdio_server_records_no_session_while_a_web_turn_runs(world, monkey
             stream = response.body_iterator
             await anext(stream)
             stdio = server.build_server(session_factory=world.factory)
-            await stdio.call_tool("suggest_album_cover", {"album_id": f"alb-{USER_ID}"})
+            with pytest.raises(ToolError, match="need a browser login"):
+                await stdio.call_tool("suggest_album_cover", {"album_id": f"alb-{USER_ID}"})
             release.set()
             async for _frame in stream:
                 pass
@@ -535,5 +536,4 @@ def test_the_stdio_server_records_no_session_while_a_web_turn_runs(world, monkey
     finally:
         get_settings.cache_clear()
 
-    [job] = _cover_jobs(world)
-    assert job.session_id is None
+    assert _cover_jobs(world) == []

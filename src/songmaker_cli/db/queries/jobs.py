@@ -178,8 +178,8 @@ def claim_next_cover_job(session: Session) -> Job | None:
 class JobStatusUpdate:
     """One status write for a job; each field names the job column it writes.
 
-    Progress, error, error type and queue reason describe the job at this
-    write, so leaving them out resets them. The remaining fields only some
+    Progress, error, error type, the wait a busy refusal named and queue reason
+    describe the job at this write, so leaving them out resets them. The remaining fields only some
     writers know; ``UNSET`` keeps what the job already holds.
     """
 
@@ -188,6 +188,7 @@ class JobStatusUpdate:
     progress: float = 0.0
     error: str | None = None
     error_type: str | None = None
+    retry_after_seconds: int | None = None
     queue_reason: str | None = None
     worker_pid: int | _Unset = UNSET
     current_epoch: int | _Unset = UNSET

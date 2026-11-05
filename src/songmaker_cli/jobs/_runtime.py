@@ -7,30 +7,11 @@ import logging
 from contextlib import suppress
 from typing import Any, Callable, Final
 
-from agent_providers.codex.image import (
-    CodexImageCliError,
-    CodexImageError,
-    CodexImageLoginError,
-    CodexImageNotCreatedError,
-    CodexImageQuotaError,
-    ImageToolBlockedError,
-)
-from agent_providers.errors import CodexProcessPoolSaturatedError
 from sqlalchemy.orm import Session
 
 from acestep_engine.errors import AudioDownloadError
 from songmaker_cli.constants import (
-    COVER_IMAGE_TOOL_UNAVAILABLE_ERROR,
     JOB_ERROR_AUDIO_DOWNLOAD_FAILED,
-    JOB_ERROR_COVER_CLI_BUSY,
-    JOB_ERROR_COVER_CLI_LOGIN,
-    JOB_ERROR_COVER_CLI_MESSAGE_MAX_CHARS,
-    JOB_ERROR_COVER_IMAGE_CLI_FAILED,
-    JOB_ERROR_COVER_IMAGE_FAILED,
-    JOB_ERROR_COVER_IMAGE_NOT_CREATED,
-    JOB_ERROR_COVER_IMAGE_QUOTA,
-    JOB_ERROR_COVER_IMAGE_QUOTA_WITH_RETRY,
-    JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED,
     JOB_ERROR_GENERATION_TIMED_OUT,
     JOB_ERROR_INTERNAL,
     JOB_ERROR_NO_WORKERS,
@@ -44,7 +25,6 @@ from songmaker_cli.constants import (
     JOB_TERMINAL_STATUSES,
     JobStatus,
 )
-from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     get_job,
@@ -110,20 +90,6 @@ def _sanitize_generation_setup_error(exc: Exception) -> str:
     return message if message in _GENERATION_SETUP_MESSAGES else JOB_ERROR_UNEXPECTED
 
 
-def _sanitize_codex_image_quota_error(exc: CodexImageQuotaError) -> str:
-    if exc.retry_at is None:
-        return JOB_ERROR_COVER_IMAGE_QUOTA
-    return JOB_ERROR_COVER_IMAGE_QUOTA_WITH_RETRY.format(retry_at=exc.retry_at)
-
-
-def _sanitize_codex_image_cli_error(exc: CodexImageCliError) -> str:
-    message = str(exc)
-    if not message:
-        return JOB_ERROR_COVER_IMAGE_FAILED
-    first_line = message.splitlines()[0][:JOB_ERROR_COVER_CLI_MESSAGE_MAX_CHARS]
-    return JOB_ERROR_COVER_IMAGE_CLI_FAILED.format(message=first_line)
-
-
 def _default_error_message(exc: Exception) -> str:
     for exc_type, message in _USER_FACING_ERRORS:
         if isinstance(exc, exc_type):
@@ -134,17 +100,6 @@ def _default_error_message(exc: Exception) -> str:
 _ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...] = (
     (WorkerTaskFailed, str),
     (GenerationSetupError, _sanitize_generation_setup_error),
-    (
-        CoverImageToolUnavailableError,
-        lambda exc: COVER_IMAGE_TOOL_UNAVAILABLE_ERROR.format(provider=exc.provider.title()),
-    ),
-    (CodexImageLoginError, lambda _exc: JOB_ERROR_COVER_CLI_LOGIN),
-    (CodexProcessPoolSaturatedError, lambda _exc: JOB_ERROR_COVER_CLI_BUSY),
-    (ImageToolBlockedError, lambda _exc: JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED),
-    (CodexImageNotCreatedError, lambda _exc: JOB_ERROR_COVER_IMAGE_NOT_CREATED),
-    (CodexImageQuotaError, _sanitize_codex_image_quota_error),
-    (CodexImageCliError, _sanitize_codex_image_cli_error),
-    (CodexImageError, lambda _exc: JOB_ERROR_COVER_IMAGE_FAILED),
 )
 
 

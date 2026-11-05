@@ -335,8 +335,11 @@ def tool_suggest_album_cover(
 ) -> CoverSuggestionRequestResult:
     """Queue one more cover suggestion through the album admission owner.
 
-    ``session_id`` is the session that asked; a caller with none (stdio) passes ``None``.
+    ``session_id`` is the session that asked; the cover runs as that session's person. A
+    caller with none (stdio) is refused, because the picture needs a browser login.
     """
+    if session_id is None:
+        raise MCPToolError("Cover suggestions need a browser login.")
     try:
         job = request_cover_suggestions(
             session, album_id, user, session_id=session_id, require_owner=True,

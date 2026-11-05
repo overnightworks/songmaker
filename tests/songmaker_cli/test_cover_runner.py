@@ -1,38 +1,30 @@
-"""Dark web-runner coverage for album-cover suggestion jobs."""
+"""The web runner's queue: what it claims, what it leaves, and what a restart recovers."""
 
 from __future__ import annotations
 
 import asyncio
-import json
-import threading
 from io import BytesIO
 from pathlib import Path
 from typing import Final
 
-import pytest
-from agent_providers.catalog import ProviderRoute
-from agent_providers.codex import protocol as codex_protocol
-from agent_providers.codex.image import (
-    CodexImageCliError,
-    CodexImageEncoderUnavailableError,
-    CodexImageQuotaError,
-)
-from agent_providers.codex.pool import CodexProcessPool
-from agent_providers.images import ImagePolicy
-from agent_providers.process import CliRunOutcome, CliRunReason
+from agent_runtime_client.backend.fake_gateway import picture
 from PIL import Image
-from support.provider_runtime import override_provider_runtime, use_codex_process_pool
-from support.xmp_packet import read_digital_source_type
+from support.cowriter_gateway import CowriterStack, HeldGateway, attach_cowriter_gateway
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 import songmaker_cli.cover_runner as cover_runner
-from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
-from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
-from songmaker_cli.cowriter.routing import CoverImageDispatch
+from songmaker_cli.constants import (
+    COVER_PROMPT_MAX_CHARS,
+    COVER_PROMPT_SONG_FIELD_MAX_CHARS,
+    JobStatus,
+    JobType,
+)
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
 
 HANG_GUARD_SECONDS: Final = 30
+OWNER: Final = "u1"
 
 
 def _png_bytes() -> bytes:
@@ -41,45 +33,47 @@ def _png_bytes() -> bytes:
     return output.getvalue()
 
 
-def _codex_cover_dispatch() -> CoverImageDispatch:
-    return CoverImageDispatch(provider="codex", route=ProviderRoute.CLI, model="")
-
-
-def _cover_job(tmp_path: Path):
+def _cover_world(tmp_path: Path, *, song_field: str = "words"):
     factory = init_test_db(tmp_path / "songmaker.db")
-    audio_dir = tmp_path / "audio"
     with factory() as session:
-        user = User(id="u1", username="owner")
-        session.add(user)
+        session.add(User(id=OWNER, username="owner"))
         session.flush()
-        album = Album(id="album", title="Album", artist="Artist", created_by=user.id)
+        album = Album(id="album", title="Album", artist="Artist", created_by=OWNER)
         song = Song(id="song", album_id=album.id, title="Song", track_number=1)
         version = Version(
-            id="version", song_id=song.id, version_number=1, prompt="ambient", lyrics="words",
+            id="version", song_id=song.id, version_number=1, prompt=song_field, lyrics=song_field,
         )
-        job = Job(id="job", type=JobType.COVER, user_id=user.id, album_id=album.id)
-        session.add_all([album, song, version, job])
+        session.add_all([album, song, version])
         session.commit()
-    return factory, audio_dir, "job"
+    ctx = make_router_ctx(tmp_path, db=factory)
+    client = web_client(make_router_app(ctx, user=make_authenticated_user(OWNER)))
+    stack = attach_cowriter_gateway(client, factory, tmp_path, OWNER)
+    stack.replies(picture(_png_bytes()))
+    return client.app, factory, ctx.audio_dir, stack
 
 
-def test_cancelled_queued_web_cover_job_is_never_claimed(tmp_path: Path, monkeypatch) -> None:
-    factory, audio_dir, job_id = _cover_job(tmp_path)
+def _queue(factory, stack: CowriterStack, job_id: str = "job") -> str:
+    with factory() as session:
+        session.add(Job(
+            id=job_id, type=JobType.COVER, user_id=OWNER, album_id="album",
+            session_id=stack.session_id,
+        ))
+        session.commit()
+    return job_id
+
+
+def test_cancelled_queued_web_cover_job_is_never_claimed(tmp_path: Path) -> None:
+    app, factory, _audio_dir, stack = _cover_world(tmp_path)
+    job_id = _queue(factory, stack)
     with factory() as session:
         assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.CANCELLED))
         session.commit()
 
-    def should_not_run(*_args, **_kwargs) -> bytes:
-        raise AssertionError("cancelled queued job was started")
-
-    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", should_not_run)
-
-    assert not asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir,
-    ))
+    assert not asyncio.run(cover_runner.run_next_cover_job(app))
 
     with factory() as session:
         assert session.get(Job, job_id).status == JobStatus.CANCELLED
+    assert stack.gateway_requests == []
 
 
 def _add_pending_suggestion(factory, audio_dir: Path) -> Path:
@@ -92,7 +86,7 @@ def _add_pending_suggestion(factory, audio_dir: Path) -> Path:
             id="earlier",
             type=JobType.COVER,
             album_id="album",
-            user_id="u1",
+            user_id=OWNER,
             status=JobStatus.COMPLETED,
         ))
         session.flush()
@@ -107,43 +101,20 @@ def _add_pending_suggestion(factory, audio_dir: Path) -> Path:
 
 
 def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_ones(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
 ) -> None:
     """1301-F3-C1-ATOMIC: image and terminal state agree with usage."""
-    factory, audio_dir, job_id = _cover_job(tmp_path)
+    app, factory, audio_dir, stack = _cover_world(tmp_path)
+    job_id = _queue(factory, stack)
     pending_png = _add_pending_suggestion(factory, audio_dir)
-    image_started = threading.Event()
-    allow_image_return = threading.Event()
-    image_calls: list[str] = []
-
-    def fake_image_generator(
-        _prompt: str,
-        *,
-        policy: ImagePolicy,
-        deadline: float,
-        abort_signal: threading.Event,
-        model: str,
-    ) -> bytes:
-        assert deadline > 0
-        image_calls.append(_prompt)
-        image_started.set()
-        assert allow_image_return.wait(timeout=HANG_GUARD_SECONDS)
-        return _png_bytes()
-
-    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fake_image_generator)
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
-    )
+    held = HeldGateway(picture(_png_bytes()))
+    stack.uses(held)
 
     async def run_race() -> tuple[bool, bool]:
-        winner = asyncio.create_task(cover_runner.run_next_cover_job(
-            db_factory=factory, audio_dir=audio_dir,
-        ))
-        assert await asyncio.to_thread(image_started.wait, HANG_GUARD_SECONDS)
-        loser = await cover_runner.run_next_cover_job(
-            db_factory=factory, audio_dir=audio_dir,
-        )
-        allow_image_return.set()
+        winner = asyncio.create_task(cover_runner.run_next_cover_job(app))
+        assert await asyncio.to_thread(held.received.wait, HANG_GUARD_SECONDS)
+        loser = await cover_runner.run_next_cover_job(app)
+        held.released.set()
         return await winner, loser
 
     winner, loser = asyncio.run(run_race())
@@ -156,7 +127,7 @@ def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_on
         assert count_cover_jobs_since(session, "album", job.started_at) == 2
         assert sorted(item.job_id for item in suggestions) == ["earlier", job_id]
         assert all((audio_dir / item.png_path).is_file() for item in suggestions)
-    assert len(image_calls) == 1
+    assert len(held.requests) == 1
     assert pending_png.is_file()
     assert winner is True
     assert loser is False
@@ -164,364 +135,53 @@ def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_on
 
 
 def test_web_recovery_fails_interrupted_work_cleans_only_its_suggestion_and_leaves_queue_for_runner(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
 ) -> None:
-    factory, audio_dir, running_job_id = _cover_job(tmp_path)
+    app, factory, audio_dir, stack = _cover_world(tmp_path)
+    running_job_id = _queue(factory, stack)
     pending_png = _add_pending_suggestion(factory, audio_dir)
     interrupted_png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
-    interrupted_png.parent.mkdir(parents=True, exist_ok=True)
     interrupted_png.write_bytes(_png_bytes())
-    interrupted_staging_dir = cover_runner._staging_path(
-        audio_dir, "album", running_job_id,
-    )
+    interrupted_staging_dir = cover_runner._staging_path(audio_dir, "album", running_job_id)
     interrupted_staging_dir.mkdir()
     (interrupted_staging_dir / "partial.png").write_bytes(_png_bytes())
     with factory() as session:
-        running_job = session.get(Job, running_job_id)
-        assert running_job is not None
-        assert update_job_status(session, running_job.id, JobStatusUpdate(JobStatus.RUNNING))
+        assert update_job_status(session, running_job_id, JobStatusUpdate(JobStatus.RUNNING))
         session.add(AlbumCoverSuggestion(
             id="interrupted",
             album_id="album",
-            job_id=running_job.id,
+            job_id=running_job_id,
             png_path="cover-suggestions/album/interrupted.png",
         ))
-        session.add(Job(id="queued", type=JobType.COVER, album_id="album", user_id="u1"))
         session.commit()
+    _queue(factory, stack, "queued")
 
-    assert cover_runner.recover_web_cover_jobs(
-        factory, audio_dir,
-    ) == 1
+    assert cover_runner.recover_web_cover_jobs(factory, audio_dir) == 1
 
     with factory() as session:
-        assert session.get(Job, running_job_id).error_type == "server_restart"
+        interrupted = session.get(Job, running_job_id)
+        assert (interrupted.status, interrupted.error_type) == (JobStatus.FAILED, "server_restart")
+        assert interrupted.session_id is None
         assert session.get(Job, "queued").status == JobStatus.QUEUED
         assert [item.id for item in session.query(AlbumCoverSuggestion)] == ["pending"]
     assert not interrupted_png.exists()
     assert pending_png.is_file()
     assert not interrupted_staging_dir.exists()
 
-    def fake_image_generator(*_args, **_kwargs) -> bytes:
-        return _png_bytes()
-
-    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fake_image_generator)
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
-    )
-    assert asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir,
-    ))
+    assert asyncio.run(cover_runner.run_next_cover_job(app))
     with factory() as session:
         assert session.get(Job, "queued").status == JobStatus.COMPLETED
 
 
-@pytest.mark.parametrize("aborted", (False, True), ids=("no-abort-signal", "abort-requested"))
-def test_cover_job_passes_image_policy_and_reports_generator_abort(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, aborted: bool,
-) -> None:
-    factory, audio_dir, job_id = _cover_job(tmp_path)
+def test_cover_prompt_quotes_and_bounds_song_data(tmp_path: Path) -> None:
+    _app, factory, _audio_dir, _stack = _cover_world(
+        tmp_path, song_field="p" * (COVER_PROMPT_SONG_FIELD_MAX_CHARS + 10),
+    )
     with factory() as session:
-        assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.RUNNING))
-        session.commit()
-    abort_signal = threading.Event() if aborted else None
-    if abort_signal is not None:
-        abort_signal.set()
-        pending_png = _add_pending_suggestion(factory, audio_dir)
+        album = session.get(Album, "album")
+        prompt = cover_runner.build_cover_prompt(album, album.songs)
 
-    def generate_image(
-        _prompt: str,
-        *,
-        policy: ImagePolicy,
-        deadline: float,
-        abort_signal: threading.Event,
-        model: str,
-    ) -> bytes:
-        assert policy == cover_runner.COVER_IMAGE_POLICY
-        if abort_signal is not None and abort_signal.is_set():
-            raise CodexImageCliError("Image generation cancelled.")
-        return _png_bytes()
-
-    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", generate_image)
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
-    )
-
-    asyncio.run(cover_runner.run_claimed_cover_suggestion_job(
-        job_id,
-        db_factory=factory,
-        audio_dir=audio_dir,
-        abort_signal=abort_signal,
-    ))
-
-    with factory() as session:
-        job = session.get(Job, job_id)
-        if aborted:
-            assert job.status == JobStatus.FAILED
-            assert job.error == "Codex could not draw: Image generation cancelled."
-            assert job.error_type == "cover_suggestion_error"
-            assert [item.id for item in job.album.cover_suggestions] == ["pending"]
-            assert list(audio_dir.rglob("*.png")) == [pending_png]
-        else:
-            assert job.status == JobStatus.COMPLETED
-            assert len(job.album.cover_suggestions) == 1
-            assert all(
-                (audio_dir / item.png_path).is_file() for item in job.album.cover_suggestions
-            )
-    assert not list(audio_dir.rglob(".*.staging"))
-
-
-@pytest.mark.parametrize(
-    ("raised", "expected_job_error"),
-    (
-        (CodexImageCliError(), JOB_ERROR_COVER_IMAGE_FAILED),
-        (
-            CodexImageQuotaError(
-                "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
-                "to purchase more credits or try again at Sep 7th, 2026 8:45 PM.",
-                retry_at="Sep 7th, 2026 8:45 PM",
-            ),
-            "Codex usage limit reached, try again after Sep 7th, 2026 8:45 PM.",
-        ),
-        (
-            CodexImageCliError("The requested model is unavailable."),
-            "Codex could not draw: The requested model is unavailable.",
-        ),
-        (CodexImageEncoderUnavailableError(), JOB_ERROR_COVER_IMAGE_FAILED),
-    ),
-    ids=(
-        "generic-cli-error",
-        "usage-limit",
-        "cli-error-with-message",
-        "no-image-encoder-installed",
-    ),
-)
-def test_web_runner_names_the_cause_in_the_job_error(
-    tmp_path: Path,
-    monkeypatch,
-    raised: Exception,
-    expected_job_error: str,
-) -> None:
-    factory, audio_dir, job_id = _cover_job(tmp_path)
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
-    )
-
-    def fail_image_generator(
-        _prompt: str,
-        *,
-        policy: ImagePolicy,
-        deadline: float,
-        abort_signal: threading.Event,
-        model: str,
-    ) -> bytes:
-        raise raised
-
-    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", fail_image_generator)
-
-    assert asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir,
-    ))
-
-    with factory() as session:
-        job = session.get(Job, job_id)
-        assert job.status == JobStatus.FAILED
-        assert job.error == expected_job_error
-        assert job.error_type == "cover_suggestion_error"
-        assert list(job.album.cover_suggestions) == []
-
-
-def test_web_runner_reports_the_real_codex_usage_limit_transcript_end_to_end(
-    tmp_path: Path, monkeypatch, caplog,
-) -> None:
-    """Drive the real adapter with a faked CLI process, not a faked image generator."""
-    factory, audio_dir, job_id = _cover_job(tmp_path)
-    auth_file = tmp_path / "auth.json"
-    auth_file.write_text(json.dumps({
-        "auth_mode": "chatgpt",
-        "last_refresh": "2026-09-05T00:00:00Z",
-        "tokens": {
-            "id_token": "id-token",
-            "access_token": "access-token",
-            "account_id": "account-id",
-        },
-    }))
-    override_provider_runtime(codex_cli_auth_file=auth_file)
-    process_pool = CodexProcessPool(maximum_processes=8, maximum_image_runs=1)
-    transcript = (
-        Path(__file__).parents[1] / "fixtures" / "codex-cover-quota-exceeded.jsonl"
-    ).read_text()
-
-    def fake_runner(_command, **kwargs) -> CliRunOutcome:
-        kwargs["on_spawned"](123)
-        kwargs["on_reaped"](123, False)
-        return CliRunOutcome(
-            started=True,
-            spawn_error=None,
-            returncode=1,
-            stdout=transcript,
-            stderr="",
-            complete=True,
-            became_zombie=False,
-            reason=CliRunReason.COMPLETE,
-        )
-
-    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
-    use_codex_process_pool(monkeypatch, process_pool)
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
-    )
-    caplog.set_level("ERROR", logger="songmaker_cli.jobs._runtime")
-
-    assert asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir,
-    ))
-
-    with factory() as session:
-        job = session.get(Job, job_id)
-        assert job.status == JobStatus.FAILED
-        assert job.error == "Codex usage limit reached, try again after Sep 7th, 2026 8:45 PM."
-        assert job.error_type == "cover_suggestion_error"
-    assert "You've hit your usage limit" in caplog.text
-
-
-def _install_abortable_codex_cli(monkeypatch, tmp_path: Path) -> tuple[
-    threading.Event,
-    threading.Event,
-    threading.Event,
-    threading.Event,
-    CodexProcessPool,
-]:
-    auth_file = tmp_path / "auth.json"
-    auth_file.write_text(json.dumps({
-        "auth_mode": "chatgpt",
-        "last_refresh": "2026-09-05T00:00:00Z",
-        "tokens": {
-            "id_token": "id-token",
-            "access_token": "access-token",
-            "account_id": "account-id",
-        },
-    }))
-    spawned = threading.Event()
-    abort_requested = threading.Event()
-    allow_reap = threading.Event()
-    reaped = threading.Event()
-    process_pool = CodexProcessPool(maximum_processes=8, maximum_image_runs=1)
-
-    def fake_runner(_command, **kwargs):
-        kwargs["on_spawned"](123)
-        spawned.set()
-        assert kwargs["stdout_line_channel"]._abort_requested.wait(timeout=HANG_GUARD_SECONDS)
-        abort_requested.set()
-        assert allow_reap.wait(timeout=HANG_GUARD_SECONDS)
-        kwargs["on_reaped"](123, False)
-        reaped.set()
-        return CliRunOutcome(
-            started=True,
-            spawn_error=None,
-            returncode=-15,
-            stdout="",
-            stderr="",
-            complete=False,
-            became_zombie=False,
-            reason=CliRunReason.CANCELLED,
-        )
-
-    override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
-    use_codex_process_pool(monkeypatch, process_pool)
-    return spawned, abort_requested, allow_reap, reaped, process_pool
-
-
-def test_web_cancel_reaps_the_codex_process_and_keeps_the_job_cancelled(
-    tmp_path: Path, monkeypatch,
-) -> None:
-    """1301-F3-C1-CLEANUP: image and terminal state agree with usage."""
-    factory, audio_dir, job_id = _cover_job(tmp_path)
-    spawned, abort_requested, allow_reap, reaped, process_pool = _install_abortable_codex_cli(
-        monkeypatch, tmp_path,
-    )
-    registry = cover_runner.CoverJobCancellationRegistry()
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
-    )
-
-    async def cancel_running_job() -> bool:
-        task = asyncio.create_task(cover_runner.run_next_cover_job(
-            db_factory=factory,
-            audio_dir=audio_dir,
-            cancellation_registry=registry,
-        ))
-        assert await asyncio.to_thread(spawned.wait, HANG_GUARD_SECONDS)
-        with factory() as session:
-            assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.CANCELLED))
-            session.commit()
-        assert registry.abort(job_id)
-        assert await asyncio.to_thread(abort_requested.wait, HANG_GUARD_SECONDS)
-        assert not task.done()
-        assert process_pool.reservation_count() == 1
-        allow_reap.set()
-        return await task
-
-    assert asyncio.run(cancel_running_job())
-    assert reaped.is_set()
-    assert process_pool.reservation_count() == 0
-
-    with factory() as session:
-        job = session.get(Job, job_id)
-        assert job.status == JobStatus.CANCELLED
-        assert not job.album.cover_suggestions
-        assert count_cover_jobs_since(session, "album", job.started_at) == 0
-    assert not list(audio_dir.rglob(".*.staging"))
-
-
-def test_web_runner_task_cancellation_reaps_the_codex_process(tmp_path: Path, monkeypatch) -> None:
-    factory, audio_dir, _job_id = _cover_job(tmp_path)
-    spawned, abort_requested, allow_reap, reaped, process_pool = _install_abortable_codex_cli(
-        monkeypatch, tmp_path,
-    )
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
-    )
-
-    async def cancel_runner_task() -> None:
-        task = asyncio.create_task(cover_runner.run_next_cover_job(
-            db_factory=factory, audio_dir=audio_dir,
-        ))
-        assert await asyncio.to_thread(spawned.wait, HANG_GUARD_SECONDS)
-        task.cancel()
-        try:
-            assert await asyncio.to_thread(abort_requested.wait, HANG_GUARD_SECONDS)
-            assert not task.done()
-            assert process_pool.reservation_count() == 1
-        finally:
-            allow_reap.set()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-
-    asyncio.run(cancel_runner_task())
-    assert reaped.is_set()
-    assert process_pool.reservation_count() == 0
-    assert not list(audio_dir.rglob(".*.staging"))
-
-
-def test_published_cover_suggestion_carries_the_ai_mark_in_its_xmp(
-    tmp_path: Path, monkeypatch,
-) -> None:
-    factory, audio_dir, _job_id = _cover_job(tmp_path)
-    monkeypatch.setattr(
-        cover_runner, "generate_codex_cover_image", lambda *_args, **_kwargs: _png_bytes(),
-    )
-    monkeypatch.setattr(
-        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
-    )
-
-    assert asyncio.run(cover_runner.run_next_cover_job(
-        db_factory=factory, audio_dir=audio_dir,
-    ))
-
-    with factory() as session:
-        (suggestion,) = session.query(AlbumCoverSuggestion).all()
-        png_path = audio_dir / suggestion.png_path
-    assert read_digital_source_type(png_path) == IPTC_TRAINED_ALGORITHMIC_MEDIA
-    with Image.open(png_path) as published:
-        assert published.size == (16, 16)
+    assert len(prompt) <= COVER_PROMPT_MAX_CHARS
+    assert '"style_prompt":"' + "p" * COVER_PROMPT_SONG_FIELD_MAX_CHARS in prompt
+    assert '"lyrics_excerpt":"' + "p" * COVER_PROMPT_SONG_FIELD_MAX_CHARS in prompt
+    assert "p" * (COVER_PROMPT_SONG_FIELD_MAX_CHARS + 1) not in prompt

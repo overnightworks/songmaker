@@ -2743,28 +2743,6 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
     assert got.json()["error"] is None
 
 
-def test_cancel_running_cover_job_signals_the_web_runner(client: TestClient) -> None:
-    from songmaker_cli.constants import JobStatus, JobType
-    from songmaker_cli.cover_runner import CoverJobCancellationRegistry
-    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
-
-    ctx: AppContext = client.app.state.ctx
-    with ctx.db() as session:
-        job = create_job(session, JobType.COVER, user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
-        session.commit()
-        job_id = job.id
-    registry = CoverJobCancellationRegistry()
-    abort_signal = registry.register(job_id)
-    client.app.state.cover_job_cancellation_registry = registry
-
-    response = client.post(f"/api/jobs/{job_id}/cancel")
-
-    assert response.status_code == 200
-    assert response.json()["status"] == JobStatus.CANCELLED
-    assert abort_signal.is_set()
-
-
 def test_cancel_job_not_found(client: TestClient) -> None:
     resp = client.post("/api/jobs/nonexistent/cancel")
     assert resp.status_code == 404
@@ -4038,13 +4016,14 @@ def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
 
 
 def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
+    from support.setting_rows import store_setting_row
+
     from songmaker_cli.constants import SETTING_CLAUDE_CHAT_MODEL
-    from songmaker_cli.db.queries.settings import set_claude_model
 
     c = _make_authed_client(tmp_path, role="admin")
     with c.app.state.ctx.db() as session:
-        set_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, "claude-sonnet-4-6")
-        set_claude_model(session, "claude_scoring_model", "claude-haiku-4-5-20251001")
+        store_setting_row(session, SETTING_CLAUDE_CHAT_MODEL, "claude-sonnet-4-6")
+        store_setting_row(session, "claude_scoring_model", "claude-haiku-4-5-20251001")
         session.commit()
     resp = c.get("/api/capabilities")
     assert resp.status_code == 200

@@ -1,10 +1,11 @@
-"""One co-writer turn through the gateway backend.
+"""The agent runs songmaker makes through the gateway backend: a co-writer turn and a cover picture.
 
 ``compose_agent_backend`` builds the ``GatewayBackend`` once at startup and holds it on the
-app's state; ``run_cowriter_turn`` runs a turn on it. The turn yields songmaker-owned outcomes
-to ``conversation_api`` and never calls a model itself: every refusal or failure is one typed
-problem. The person's groups come from a fresh refresh grant at the issuer, so the API group
-the gateway demands is checked against the realm's current answer, never a cached one.
+app's state; ``run_cowriter_turn`` runs a turn on it and ``run_cover_picture`` draws one cover.
+Both yield songmaker-owned outcomes and never call a model themselves: every refusal or failure
+is one typed problem from the one classifier here. The person's groups come from a fresh refresh
+grant at the issuer, so the API group the gateway demands is checked against the realm's current
+answer, never a cached one.
 """
 
 from __future__ import annotations
@@ -29,14 +30,14 @@ from agent_runtime_client.backend import (
 )
 from agent_runtime_client.backend.gateway import GatewayBackend
 from agent_runtime_client.tools import Principal
-from agent_runtime_client.turn import RejectionCode, TurnMessage
+from agent_runtime_client.turn import RejectionCode, TurnMessage, TurnRole
 from webauth.config import installed_web_auth_config
 from webauth.oidc_login import AccessTokenRefusal, AccessTokenRefusalReason, current_groups
 
 from songmaker_cli.agent.tools import cowriter_hand_tools, cowriter_tool_declarations
 from songmaker_cli.api_models import (
+    AgentProblem,
     AssistantTextEvent,
-    ChatTurnProblem,
     ToolCallEvent,
     ToolResultEvent,
 )
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 _AGENT_FILE: Final = "cowriter.md"
+_COVER_AGENT_FILE: Final = "cover.md"
 _NOT_ENABLED_CODES: Final = frozenset({RejectionCode.NOT_ENABLED, RejectionCode.FORBIDDEN})
 
 
@@ -65,7 +67,7 @@ class TurnAnswer:
 class TurnProblem:
     """The turn did not run to an answer. ``detail`` is a closed name, safe to log and store."""
 
-    problem: ChatTurnProblem
+    problem: AgentProblem
     detail: str
     retry_after_seconds: int | None = None
 
@@ -89,17 +91,65 @@ class _GroupsRefusedError(Exception):
 
 
 def compose_agent_backend(app: FastAPI, settings: Settings) -> None:
-    """Hold the gateway backend on the app's state; an unset ``agent`` holds none."""
+    """Hold the gateway backend and its API group on the app's state; no ``agent`` holds none."""
     agent = settings.agent
     app.state.agent_backend = None
+    app.state.agent_api_group = None
     if agent is not None:
         tools = cowriter_hand_tools(app.state.ctx.db)
         app.state.agent_backend = GatewayBackend(agent, tools=tools)
+        app.state.agent_api_group = agent.api_group
 
 
 @functools.cache
 def _cowriter_agent() -> AgentDefinition:
     return load_agent(files("songmaker_cli") / "agents" / _AGENT_FILE, cowriter_tool_declarations())
+
+
+@functools.cache
+def _cover_agent() -> AgentDefinition:
+    return load_agent(files("songmaker_cli") / "agents" / _COVER_AGENT_FILE, [])
+
+
+def cover_admission(caller: TurnCaller) -> TurnProblem | None:
+    """Whether ``caller`` may ask for a cover now: none, or the problem that refuses the click.
+
+    It repeats the gateway client's own group comparison once, because the client offers no
+    admission call; the job's run checks again at its start. Call it with no transaction open
+    on the caller's session row, and off the event loop: it renews the session at the issuer.
+    """
+    api_group = getattr(caller.app.state, "agent_api_group", None)
+    if getattr(caller.app.state, "agent_backend", None) is None or api_group is None:
+        return TurnProblem(AgentProblem.UNAVAILABLE, "no agent configured")
+    try:
+        groups = _read_groups(caller)
+    except _GroupsRefusedError as refused:
+        return _problem_of_refusal(refused.refusal)
+    if api_group not in groups:
+        return TurnProblem(AgentProblem.NOT_ENABLED, "outside api group")
+    return None
+
+
+async def run_cover_picture(caller: TurnCaller, album_data: str) -> bytes | TurnProblem:
+    """Draw one cover from ``album_data`` for ``caller``: its bytes, or why there are none."""
+    backend = getattr(caller.app.state, "agent_backend", None)
+    if backend is None:
+        return TurnProblem(AgentProblem.UNAVAILABLE, "no agent configured")
+    try:
+        request = _cover_agent().request([TurnMessage(role=TurnRole.USER, text=album_data)])
+    except AgentFileError:
+        log.exception("The cover's agent file is refused")
+        return TurnProblem(AgentProblem.UNAVAILABLE, "agent file refused")
+    async with aclosing(backend.run(request, _person_of(caller))) as events:
+        try:
+            async for event in events:
+                if isinstance(event, turn_events.FinalEvent) and event.files:
+                    return event.files[0].content
+        except TurnStopped as stopped:
+            return _problem_of_stop(stopped)
+        except _GroupsRefusedError as refused:
+            return _problem_of_refusal(refused.refusal)
+    return TurnProblem(AgentProblem.UNAVAILABLE, "no picture")
 
 
 async def run_cowriter_turn(
@@ -120,12 +170,12 @@ def _prepared_turn(
 ) -> tuple[GatewayBackend, TurnRequest] | TurnProblem:
     backend = getattr(app.state, "agent_backend", None)
     if backend is None:
-        return TurnProblem(ChatTurnProblem.UNAVAILABLE, "no agent configured")
+        return TurnProblem(AgentProblem.UNAVAILABLE, "no agent configured")
     try:
         return backend, _cowriter_agent().request(messages)
     except AgentFileError:
         log.exception("The co-writer's agent file is refused")
-        return TurnProblem(ChatTurnProblem.UNAVAILABLE, "agent file refused")
+        return TurnProblem(AgentProblem.UNAVAILABLE, "agent file refused")
 
 
 async def _run(
@@ -150,19 +200,22 @@ def _person_of(caller: TurnCaller) -> TurnPerson:
 
 def _groups_of(caller: TurnCaller) -> GroupSource:
     async def groups() -> frozenset[str]:
-        app = caller.app
-        found = await asyncio.to_thread(
-            current_groups,
-            app.state.oidc_sign_in.relying_party,
-            caller.session_id,
-            session_transaction=DatabaseSessionTransaction(app.state.ctx.db),
-            config=installed_web_auth_config(app),
-        )
-        if isinstance(found, AccessTokenRefusal):
-            raise _GroupsRefusedError(found)
-        return frozenset(found)
+        return await asyncio.to_thread(_read_groups, caller)
 
     return groups
+
+
+def _read_groups(caller: TurnCaller) -> frozenset[str]:
+    app = caller.app
+    found = current_groups(
+        app.state.oidc_sign_in.relying_party,
+        caller.session_id,
+        session_transaction=DatabaseSessionTransaction(app.state.ctx.db),
+        config=installed_web_auth_config(app),
+    )
+    if isinstance(found, AccessTokenRefusal):
+        raise _GroupsRefusedError(found)
+    return frozenset(found)
 
 
 def _outcome_of(event: TurnEvent) -> TurnOutcome:
@@ -182,13 +235,13 @@ def _outcome_of(event: TurnEvent) -> TurnOutcome:
 def _problem_of_stop(stopped: TurnStopped) -> TurnProblem:
     detail = f"{stopped} {stopped.detail}" if stopped.detail else str(stopped)
     if stopped.kind is TurnStopKind.REFUSED and stopped.code in _NOT_ENABLED_CODES:
-        return TurnProblem(ChatTurnProblem.NOT_ENABLED, detail)
+        return TurnProblem(AgentProblem.NOT_ENABLED, detail)
     if stopped.kind is TurnStopKind.REFUSED and stopped.code is RejectionCode.BUSY:
-        return TurnProblem(ChatTurnProblem.BUSY, detail, stopped.retry_after_s)
-    return TurnProblem(ChatTurnProblem.UNAVAILABLE, detail)
+        return TurnProblem(AgentProblem.BUSY, detail, stopped.retry_after_s)
+    return TurnProblem(AgentProblem.UNAVAILABLE, detail)
 
 
 def _problem_of_refusal(refusal: AccessTokenRefusal) -> TurnProblem:
     if refusal.reason is AccessTokenRefusalReason.ISSUER_UNAVAILABLE:
-        return TurnProblem(ChatTurnProblem.UNAVAILABLE, "issuer unavailable")
-    return TurnProblem(ChatTurnProblem.SIGN_IN_AGAIN, refusal.reason.value)
+        return TurnProblem(AgentProblem.UNAVAILABLE, "issuer unavailable")
+    return TurnProblem(AgentProblem.SIGN_IN_AGAIN, refusal.reason.value)

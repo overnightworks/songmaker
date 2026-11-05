@@ -17,15 +17,11 @@ from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from support.admin_client import build_admin_client
 from support.cowriter_gateway import attach_cowriter_gateway
 from support.provider_runtime import override_provider_runtime, refresh_provider_snapshots
-from support.web_app import TEST_SECRET, make_authenticated_user, make_test_app, seed_user
+from support.setting_rows import store_setting_row
+from support.web_app import make_authenticated_user, make_test_app, seed_user
 
 from songmaker_cli.auth_dependencies import get_current_user
-from songmaker_cli.constants import (
-    COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
-    SETTING_COVER_MODEL,
-    SETTING_COVER_PROVIDER,
-    SETTING_COVER_ROUTE,
-)
+from songmaker_cli.constants import COWRITER_DEFAULT_TAIL_TOKEN_BUDGET
 from songmaker_cli.cowriter.tools import execute_cowriter_tool
 from songmaker_cli.db.models import (
     Album,
@@ -36,10 +32,6 @@ from songmaker_cli.db.models import (
     RateLimitSetting,
     Song,
     Version,
-)
-from songmaker_cli.db.queries.settings import (
-    get_cover_settings,
-    set_claude_model,
 )
 from songmaker_cli.mcp_server.tools import tool_create_song
 from songmaker_cli.settings import get_settings
@@ -150,8 +142,8 @@ def test_c15_put_cowriter_settings_saves_the_budget_and_records_the_audit_line(a
 def test_c15_put_cowriter_settings_refuses_a_choice_field_and_saves_nothing(admin_client, extra):
     client, factory = admin_client
     with factory() as session:
-        set_claude_model(session, "cowriter_provider", "grok")
-        set_claude_model(session, "cowriter_model", "grok-4.6")
+        store_setting_row(session, "cowriter_provider", "grok")
+        store_setting_row(session, "cowriter_model", "grok-4.6")
         session.commit()
     rows_before = _stored_choice_rows(factory)
 
@@ -169,8 +161,8 @@ def test_c15_put_cowriter_settings_refuses_a_choice_field_and_saves_nothing(admi
 def test_c15_put_cowriter_settings_leaves_the_stored_choice_rows_unread_and_unchanged(admin_client):
     client, factory = admin_client
     with factory() as session:
-        set_claude_model(session, "cowriter_provider", "retired-provider")
-        set_claude_model(session, "cowriter_model_grok", "grok-4.6")
+        store_setting_row(session, "cowriter_provider", "retired-provider")
+        store_setting_row(session, "cowriter_model_grok", "grok-4.6")
         session.commit()
     rows_before = _stored_choice_rows(factory)
 
@@ -293,12 +285,14 @@ def test_shared_cowriter_tool_executor_creates_an_immutable_song_version(admin_c
         assert session.query(Generation).filter_by(id="g1").one().version_id == "v1"
 
 
-def test_suggest_album_cover_tool_hits_the_canonical_admission_owner(admin_client):
-    _, factory = admin_client
+def test_suggest_album_cover_tool_hits_the_canonical_admission_owner(admin_client, tmp_path):
+    client, factory = admin_client
     user = make_authenticated_user("u-test", role="admin", username="u-u-test")
+    stack = attach_cowriter_gateway(client, factory, tmp_path, "u-test")
     with factory() as session:
         outcome = execute_cowriter_tool(
-            session, user, "suggest_album_cover", {"album_id": "alb1"}, session_id=None,
+            session, user, "suggest_album_cover", {"album_id": "alb1"},
+            session_id=stack.session_id,
         )
         assert outcome.is_error is False
         assert '"status": "queued"' in outcome.content
@@ -630,88 +624,29 @@ def test_provider_status_requires_admin(admin_client):
     assert resp.status_code == 403
 
 
-def test_cover_settings_are_admin_only(admin_client):
-    client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
-        "u-plain", username="u-u-plain"
-    )
-    try:
-        assert client.get("/api/settings/cover").status_code == 403
-        assert client.put(
-            "/api/settings/cover",
-            json={"provider": "claude", "route": "api", "model": "claude-sonnet-4-6"},
-        ).status_code == 403
-    finally:
-        client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
-            "u-test", role="admin", username="u-u-test"
-        )
+_STORED_COVER_ROWS = {"cover_provider": "claude", "cover_route": "api", "cover_model": "x"}
 
 
-def test_cover_settings_keep_an_unusable_combination_without_exposing_secrets(
-    admin_client,
-):
+def test_the_cover_settings_are_gone_and_their_stored_rows_stay_unread(admin_client):
     client, factory = admin_client
-    override_provider_runtime(anthropic_api_key=TEST_SECRET.decode())
-
-    allowed = ["claude", "codex", "grok"]
-    read = client.get("/api/settings/cover")
-    assert read.json() == dict(provider="codex", route="cli", model="", allowed_providers=allowed)
-    assert TEST_SECRET.decode() not in read.text
-    response = client.put(
-        "/api/settings/cover",
-        json={"provider": "claude", "route": "api", "model": "claude-sonnet-4-6"},
-    )
-
-    assert response.status_code == 200
-    assert response.json() == dict(
-        provider="claude", route="api", model="claude-sonnet-4-6", allowed_providers=allowed,
-    )
-    assert TEST_SECRET.decode() not in response.text
     with factory() as session:
-        assert get_cover_settings(session).model == "claude-sonnet-4-6"
+        for key, value in _STORED_COVER_ROWS.items():
+            store_setting_row(session, key, value)
+        session.commit()
+
+    assert client.get("/api/settings/cover").status_code == 404
+    assert client.put(
+        "/api/settings/cover", json={"provider": "codex", "route": "cli", "model": ""},
+    ).status_code == 404
+
+    with factory() as session:
         stored = {
-            setting.setting_key: setting.value_text
-            for setting in session.query(RateLimitSetting).filter(
-                RateLimitSetting.setting_key.in_(
-                    {SETTING_COVER_PROVIDER, SETTING_COVER_ROUTE, SETTING_COVER_MODEL},
-                ),
+            row.setting_key: row.value_text
+            for row in session.query(RateLimitSetting).filter(
+                RateLimitSetting.setting_key.in_(_STORED_COVER_ROWS),
             )
         }
-    assert stored == {
-        SETTING_COVER_PROVIDER: "claude",
-        SETTING_COVER_ROUTE: "api",
-        SETTING_COVER_MODEL: "claude-sonnet-4-6",
-    }
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
-        {"provider": "openai", "route": "cli", "model": ""},
-        {"provider": "codex", "route": "grpc", "model": ""},
-    ],
-)
-def test_cover_settings_reject_an_unknown_provider_or_route(admin_client, payload):
-    client, factory = admin_client
-
-    assert client.put("/api/settings/cover", json=payload).status_code == 422
-
-    with factory() as session:
-        assert get_cover_settings(session).provider == "codex"
-        assert get_cover_settings(session).route == "cli"
-
-
-def test_cover_settings_accept_an_empty_model(admin_client):
-    client, factory = admin_client
-
-    response = client.put(
-        "/api/settings/cover", json={"provider": "codex", "route": "cli", "model": ""},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["model"] == ""
-    with factory() as session:
-        assert get_cover_settings(session).model == ""
+    assert stored == _STORED_COVER_ROWS
 
 
 def _cover_routes(client) -> dict[str, dict]:
@@ -958,7 +893,7 @@ def test_startup_and_settings_reads_leave_stored_judge_rows_unread_and_unchanged
 ):
     def seed_leftover_rows(session) -> None:
         for key, value in _LEFTOVER_JUDGE_ROWS.items():
-            set_claude_model(session, key, value)
+            store_setting_row(session, key, value)
 
     client, factory = make_test_app(tmp_path, seed_db=seed_leftover_rows)
     client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
@@ -966,7 +901,7 @@ def test_startup_and_settings_reads_leave_stored_judge_rows_unread_and_unchanged
     )
 
     with client:
-        for path in ("/api/settings/providers", "/api/settings/cover", "/api/capabilities"):
+        for path in ("/api/settings/providers", "/api/capabilities"):
             assert client.get(path).status_code == 200
 
     assert _leftover_judge_rows(factory) == _LEFTOVER_JUDGE_ROWS
