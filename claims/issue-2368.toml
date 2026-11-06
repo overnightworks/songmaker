@@ -1,8 +1,0 @@
-claim_id = "3b36760aa5144646b485861835c529ed"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "ce33ce832e48ace53f8fe79672f9306f03d73774"
-branch = "claude/issue-2368-references-v9b1-the-take-deletes-stamp-u"
-scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/reference_audio.py", "tests/songmaker_cli/db/queries/test_reference_unused_stamp_postgres.py", "tests/songmaker_cli/test_reference_audio_recordings.py", "tests/songmaker_cli/test_reference_unused_stamp.py"]
-opened_commit = "8ef27653feaa0873c368908ce949ae5b0f76cf98"
-whole_reason = "The two owners have their first callers in the take-delete routes, and their tests sit beside them; three production files."
