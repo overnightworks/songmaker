@@ -3,16 +3,10 @@
 from __future__ import annotations
 
 import json
-import threading
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 from agent_providers.catalog import ProviderRoute
-from agent_providers.errors import (
-    SafeRouteReasonCode,
-    normalize_route_failure,
-)
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from support.admin_client import build_admin_client
 from support.cowriter_gateway import attach_cowriter_gateway

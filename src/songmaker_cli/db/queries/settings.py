@@ -14,7 +14,6 @@ from songmaker_cli.constants import (
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
-from songmaker_cli.settings import get_settings
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
