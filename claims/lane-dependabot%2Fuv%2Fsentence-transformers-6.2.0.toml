@@ -1,7 +1,0 @@
-claim_id = "94953b4e546349deba97e882cc4430c8"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "431325051674f8bc0d241bb18602dc9645802040"
-branch = "dependabot/uv/sentence-transformers-6.2.0"
-scope = ["uv.lock"]
-opened_commit = "0157006dc3f4fa9de1d9b7f3f2a02ffe86f70074"
