@@ -397,7 +397,7 @@ def test_list_workers_offline_when_gpu_broken(client: TestClient) -> None:
     _seed_worker(client, "w1")
     pool = _make_fake_pool()
     pool._store[worker_state_key("w1")] = json.dumps(
-        {"loaded": [{"mode": "sft", "size_gb": 6.0}], "gpu_healthy": False},
+        {"loaded": [{"mode": "sft", "size_gb": 0}], "gpu_healthy": False},
     )
     _override_pool(client, pool)
 
@@ -414,7 +414,7 @@ def test_list_workers_includes_queue_depth(client: TestClient) -> None:
     _login_as_admin(client)
     _seed_worker(client, "w1")
     pool = _make_fake_pool()
-    pool._store[worker_state_key("w1")] = json.dumps({"loaded": [{"mode": "sft", "size_gb": 6.0}]})
+    pool._store[worker_state_key("w1")] = json.dumps({"loaded": [{"mode": "sft", "size_gb": 0}]})
     pool._store[queue_depth_key("w1")] = "3"
     _override_pool(client, pool)
 
@@ -459,7 +459,7 @@ def test_registry_union_across_workers(client: TestClient) -> None:
     pool = _make_fake_pool()
     pool._store[worker_state_key("w1")] = json.dumps(
         {
-            "loaded": [{"mode": "sft", "size_gb": 6.0}], "target_loading": None,
+            "loaded": [{"mode": "sft", "size_gb": 0}], "target_loading": None,
             "available_modes": ["sft"], "gpu_healthy": True,
         },
     )
@@ -483,21 +483,21 @@ def test_registry_union_across_workers(client: TestClient) -> None:
     assert by_mode["xl-sft"]["availability"] == "not_downloaded"
 
 
-def test_registry_unknown_availability_when_only_worker_gpu_broken(
-    client: TestClient,
-) -> None:
+def test_registry_unknown_availability_when_only_worker_gpu_broken(client: TestClient) -> None:
     """Same as "no worker online" (issue #252) — a worker whose only
     heartbeat says gpu_healthy: false must not make the registry think a
     real worker is answering."""
     import json
 
     from songmaker_cli.acestep_state import worker_state_key
-
     _login_as_admin(client)
     _seed_worker(client, "w1")
     pool = _make_fake_pool()
     pool._store[worker_state_key("w1")] = json.dumps(
-        {"loaded": [{"mode": "sft", "size_gb": 6.0}], "available_modes": ["sft"], "gpu_healthy": False},
+        {
+            "loaded": [{"mode": "sft", "size_gb": 0}], "available_modes": ["sft"],
+            "gpu_healthy": False,
+        },
     )
     _override_pool(client, pool)
 
