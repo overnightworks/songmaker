@@ -1113,12 +1113,9 @@ function followPicksAheadInAlbumQueue(songs: SongItem[]): void {
 
 songList.subscribe(followPicksAheadInAlbumQueue);
 
-// Whether the transport holds an entry's take: the same generation played
-// from the same file.
+// Whether the transport holds an entry's take: the same generation.
 function holdsEntryTake(current: PlaybackInfo, entry: PlaylistEntryItem): boolean {
-	return (
-		current.generation.id === entry.generation_id && current.generation.mp3_path === entry.mp3_path
-	);
+	return current.generation.id === entry.generation_id;
 }
 
 function currentPlaylistIndex(
