@@ -27,7 +27,7 @@ sudo ./scripts/install-autostart.sh               # start the stack after every 
 
 ## Operations
 
-- **Updates:** a systemd timer (`scripts/install-autodeploy.sh` installs it) runs `scripts/auto-deploy.sh`, which redeploys a release tag (`vYYYY.MM.DD.N` on `main`) once its checks are green and no job is running; a merge to `main` alone deploys nothing, and the header owns the rules.
+- **Updates:** a systemd timer (`scripts/install-autodeploy.sh` installs it) runs `scripts/auto-deploy.sh`, which redeploys a release tag (`vYYYY.MM.DD.N` on `main`) once its checks are green and no job is running (the operator dispatches the Release workflow, which gates `main`, pushes the images to GHCR and sets the tag); a merge to `main` alone deploys nothing, and the header owns the rules.
 - **Logs and status:** `docker compose logs -f <service>` (the containers log through journald, so `journalctl -t <container>` reads the same lines) and `docker compose ps -a` (`-a` also shows a created-but-never-started container).
 - **Stop and start:** `docker compose stop` / `docker compose start` keep the volumes.
 - **Backup:** PostgreSQL and the audio volume must be backed up together with `scripts/backup.sh`; setup, cron and restore are in [`scripts/BACKUP.md`](scripts/BACKUP.md).
