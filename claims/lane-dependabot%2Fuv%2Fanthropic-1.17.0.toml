@@ -1,7 +1,0 @@
-claim_id = "791c6fa02eaa4cecb5cb69737819f641"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "33e0eec63987e3444f995ea330036bc874a4a0ea"
-branch = "dependabot/uv/anthropic-1.17.0"
-scope = ["uv.lock"]
-opened_commit = "823badee2d70d900829aa0abcfb9bbf2d8f5c4b4"
