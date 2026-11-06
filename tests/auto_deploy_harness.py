@@ -363,7 +363,7 @@ class Checkout:
         (self.check_runs_directory / commit_sha).write_text(check_runs_response(*runs))
 
     def set_workflow_runs(self, *runs: tuple[str, str]) -> None:
-        """Make GitHub list these (check suite id, workflow path) dynamic runs."""
+        """Make GitHub list these (check suite id, workflow path) workflow runs."""
         self.set_workflow_runs_raw_response(
             json.dumps({
                 "total_count": len(runs),

@@ -136,8 +136,17 @@ def test_only_the_check_suites_of_ignored_runs_leave_the_deploy_guard(
         ("workflow_dispatch", ".github/workflows/e2e.yml"),
         ("push", CI_WORKFLOW_PATH),
         ("workflow_dispatch", ".github/workflows/release-notes.yml"),
+        ("workflow_dispatch", ".github/workflows/release.yml.bak"),
+        ("workflow_dispatch", "x/.github/workflows/release.yml"),
     ],
-    ids=["dispatched-ci", "dispatched-e2e", "pushed-ci", "release-lookalike"],
+    ids=[
+        "dispatched-ci",
+        "dispatched-e2e",
+        "pushed-ci",
+        "release-lookalike",
+        "release-suffixed",
+        "release-prefixed",
+    ],
 )
 def test_a_failed_run_of_another_workflow_is_judged_whatever_started_it(
     checkout: Checkout,

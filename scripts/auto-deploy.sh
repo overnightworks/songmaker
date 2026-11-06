@@ -1090,6 +1090,9 @@ lookup_ignored_suites() {
             "$RELEASE_WORKFLOW_PATH")
                 ignored_suites_by_id["${run_suite_ids[run_index]}"]="Release"
                 ;;
+            *)
+                # Any other workflow's run stays judged.
+                ;;
         esac
     done
 }
