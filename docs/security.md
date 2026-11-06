@@ -3,7 +3,9 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to a release wheel, hash-locked in `uv.lock`; `pyproject.toml` names the tag.
+the `server` extra to a git tag; `pyproject.toml` names the tag and `uv.lock` the commit.
+Every image and CI sync passes `--frozen`, which installs that commit: the flag is the integrity
+control, since `uv lock --check` does not notice a force-moved tag.
 Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
@@ -11,8 +13,8 @@ songmaker's decision, built in `request_policies.py`.
 The provider layer is likewise not in this repository. `agent_providers` ships
 as the distribution `overnightworks-agent-providers` from
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers),
-pinned bare in the `server` extra to the release wheel of tag `v0.1.3` and
-hash-locked in `uv.lock` (#886). Module names below such as
+pinned bare in the `server` extra to the git tag `v0.1.3`, its commit
+locked in `uv.lock` (#886). Module names below such as
 `agent_providers.claude.provider` are its import paths; the runtime values it
 runs on — binaries, credential mirrors, secret-scrub list, the sandbox
 directory names — remain songmaker's decision, installed through
@@ -1119,7 +1121,13 @@ images are installed through `uv` with the committed `uv.lock`; Bandit and
 pip-audit run in separate tool environments so they do not change that lock.
 The repository itself is installed as the trusted local editable project. All
 third-party dependencies must be wheels except `nvidia-ml-py3`, whose locked,
-hash-verified release has no published wheel.
+hash-verified release has no published wheel. The three first-party libraries
+are git pins built from source at image build; the three images that sync them
+(web, music worker, scoring worker) carry `git`, and the music worker builds
+only those three from source, after a `--no-build` step that refuses any
+third-party source distribution. Their build requirements (`setuptools`, `wheel`)
+float on PyPI, unlocked and unhashed: a malicious release would run at image
+build, as root in the web image. This risk is accepted.
 
 ## Audit Trail
 

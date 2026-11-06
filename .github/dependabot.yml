@@ -15,6 +15,8 @@ updates:
       # torchcodec's minor tracks torch's, which pyproject pins to one minor
       - dependency-name: "torchcodec"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # why: git pins by tag; Dependabot looks a direct reference up on PyPI by name
+      - dependency-name: "overnightworks-*"
 
   - package-ecosystem: npm
     directory: /frontend

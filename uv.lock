@@ -1204,39 +1204,20 @@ wheels = [
 [[package]]
 name = "overnightworks-agent-providers"
 version = "0.1.3"
-source = { url = "https://github.com/overnightworks/agent-providers/releases/download/v0.1.3/overnightworks_agent_providers-0.1.3-py3-none-any.whl" }
+source = { git = "https://github.com/overnightworks/agent-providers?rev=v0.1.3#c8f309a85d20a7bd5f261f2372ed40bea68e2af3" }
 dependencies = [
     { name = "anyio" },
     { name = "httpx" },
     { name = "pydantic" },
 ]
-wheels = [
-    { url = "https://github.com/overnightworks/agent-providers/releases/download/v0.1.3/overnightworks_agent_providers-0.1.3-py3-none-any.whl", hash = "sha256:9981c47a5cd91b43ad8d7394ad5d97f9470a784c29dcc962631121aa12854df7" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "anthropic", marker = "extra == 'api'", specifier = ">=0.26,<2" },
-    { name = "anyio", specifier = ">=4,<5" },
-    { name = "httpx", specifier = ">=0.27,<1" },
-    { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2,<3" },
-    { name = "pillow", marker = "extra == 'image'", specifier = ">=12.3,<13" },
-    { name = "pydantic", specifier = ">=2,<3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7,<10" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
-]
-provides-extras = ["api", "image", "dev"]
 
 [[package]]
 name = "overnightworks-agent-runtime-client"
 version = "0.20.0"
-source = { url = "https://github.com/overnightworks/agent-runtime/releases/download/v0.20.0/overnightworks_agent_runtime_client-0.20.0-py3-none-any.whl" }
+source = { git = "https://github.com/overnightworks/agent-runtime?subdirectory=packages%2Fclient&rev=v0.20.0#62f302b0f2588743ed321c1ae5780b519d773793" }
 dependencies = [
     { name = "pydantic" },
     { name = "ruamel-yaml" },
-]
-wheels = [
-    { url = "https://github.com/overnightworks/agent-runtime/releases/download/v0.20.0/overnightworks_agent_runtime_client-0.20.0-py3-none-any.whl", hash = "sha256:f43aed7225c13eee56a4597fc5735474e229489fade57aa42da482b70443601e" },
 ]
 
 [package.optional-dependencies]
@@ -1244,21 +1225,10 @@ backend = [
     { name = "httpx2" },
 ]
 
-[package.metadata]
-requires-dist = [
-    { name = "cryptography", marker = "extra == 'mcp-server'", specifier = ">=50.0.2" },
-    { name = "httpx2", marker = "extra == 'backend'", specifier = ">=2.12,<3" },
-    { name = "overnightworks-agent-runtime-client", extras = ["backend"], marker = "extra == 'dev'" },
-    { name = "pydantic", specifier = ">=2.7,<3" },
-    { name = "pyjwt", extras = ["crypto"], marker = "extra == 'mcp-server'", specifier = ">=2.15.1,<3" },
-    { name = "ruamel-yaml", specifier = ">=0.19.1,<0.20" },
-]
-provides-extras = ["backend", "dev", "mcp-server"]
-
 [[package]]
 name = "overnightworks-webauth"
 version = "0.30.0"
-source = { url = "https://github.com/overnightworks/webauth/releases/download/v0.30.0/overnightworks_webauth-0.30.0-py3-none-any.whl" }
+source = { git = "https://github.com/overnightworks/webauth?rev=v0.30.0#69bdf2af24b3256ba818d1d2d1028d1aac6dad78" }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
@@ -1268,27 +1238,11 @@ dependencies = [
     { name = "starlette" },
     { name = "urllib3" },
 ]
-wheels = [
-    { url = "https://github.com/overnightworks/webauth/releases/download/v0.30.0/overnightworks_webauth-0.30.0-py3-none-any.whl", hash = "sha256:c224a80092efc0c958a2d44452fd0c30882924e97f6969d0faf36f2d54cacbbe" },
-]
 
 [package.optional-dependencies]
 redis = [
     { name = "redis" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "anyio", specifier = ">=4.0,<5" },
-    { name = "cryptography", specifier = ">=50.0.2,<51" },
-    { name = "fastapi", specifier = ">=0.123.7,<1" },
-    { name = "pydantic", specifier = ">=2.12,<3" },
-    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15.1,<3" },
-    { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0,<9" },
-    { name = "starlette", specifier = ">=0.46,<2" },
-    { name = "urllib3", specifier = ">=2.6.3,<3" },
-]
-provides-extras = ["redis"]
 
 [[package]]
 name = "packaging"
@@ -2024,10 +1978,10 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
     { name = "nvidia-ml-py3", marker = "extra == 'scoring'", specifier = ">=7.352,<8" },
-    { name = "overnightworks-agent-providers", marker = "extra == 'server'", url = "https://github.com/overnightworks/agent-providers/releases/download/v0.1.3/overnightworks_agent_providers-0.1.3-py3-none-any.whl" },
-    { name = "overnightworks-agent-runtime-client", marker = "extra == 'server'", url = "https://github.com/overnightworks/agent-runtime/releases/download/v0.20.0/overnightworks_agent_runtime_client-0.20.0-py3-none-any.whl" },
-    { name = "overnightworks-agent-runtime-client", extras = ["backend"], marker = "extra == 'agent'", url = "https://github.com/overnightworks/agent-runtime/releases/download/v0.20.0/overnightworks_agent_runtime_client-0.20.0-py3-none-any.whl" },
-    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", url = "https://github.com/overnightworks/webauth/releases/download/v0.30.0/overnightworks_webauth-0.30.0-py3-none-any.whl" },
+    { name = "overnightworks-agent-providers", marker = "extra == 'server'", git = "https://github.com/overnightworks/agent-providers?rev=v0.1.3" },
+    { name = "overnightworks-agent-runtime-client", marker = "extra == 'server'", git = "https://github.com/overnightworks/agent-runtime?subdirectory=packages%2Fclient&rev=v0.20.0" },
+    { name = "overnightworks-agent-runtime-client", extras = ["backend"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agent-runtime?subdirectory=packages%2Fclient&rev=v0.20.0" },
+    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.30.0" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },
     { name = "pydantic", specifier = ">=2.0,<3" },
