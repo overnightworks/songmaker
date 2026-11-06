@@ -57,6 +57,6 @@ trap 'teardown; exit 143' TERM
 # stores are healthy, and the fake worker only once web is.
 "${compose[@]}" up -d --wait postgres redis
 "${compose[@]}" up -d --build --wait songmaker-web songmaker-music-worker
-"${compose[@]}" up -d --wait songmaker-voices-e2e-worker
+"${compose[@]}" up -d --build --wait songmaker-voices-e2e-worker
 
 pnpm --dir frontend exec playwright test e2e/voices.spec.ts

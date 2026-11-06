@@ -1723,8 +1723,10 @@ When the ephemeral signal disappears, a missing signal within the 300-second
 restart grace after the last observation is `alive`; only a longer absence can
 be `dead`. The grace covers a
 container restart: ACE-Step's 30-second healthcheck start period and the
-Music/Scoring workers' 120-second Docker Compose healthcheck period, plus image
-start and reserve. An empty ACE-Step registry is `unknown` only when it has
+Music/Scoring workers' 600-second Docker Compose start period, plus image
+start and reserve. A worker still starting more than 300 seconds after its
+last observation (a long migration or a late store) shows as `dead` in
+`/health` until its first heartbeat, while Compose still shows it starting. An empty ACE-Step registry is `unknown` only when it has
 never been observed; with a newer observation, it is `alive`.
 
 - `generate`, `load_model_on_worker`, and `download_model_on_worker` use the
@@ -1984,4 +1986,4 @@ Install once, from the deploy checkout `~/srv/songmaker`, with `sudo ./scripts/i
 
 Unattended deploy means unattended migration too: every app process (web, music and scoring worker) runs `init_db` at start, which migrates to head under a PostgreSQL advisory lock, so a release that adds a new required `.env` variable without also adding it on the host could bring up a broken stack with nobody watching the terminal to catch it before a user does. A variable `docker-compose.yml` requires with `${VAR:?…}` is now refused by the configuration guard before any build; the risk remains for a variable only the app's own settings require, which compose cannot see. The operator's safety net is `journalctl -t songmaker-autodeploy` (and the consecutive-failure ALERT above), not a human running `docker compose up` by hand and reading the scrollback.
 
-A migration that fails now fails after compose has replaced web and the workers: the new containers restart in a loop and the app is down, and `docker compose up -d --wait` waits its full timeout, because each restart resets the health to "starting", before the tick counts as failed. The data is safe, because a failed migration rolls back fully. Recovery is a fixed release, which auto-deploy deploys by itself; the `:previous` image tags are not used for it. Web, music and scoring have a 600 s start period, so a starter blocked behind a running migration stays "starting" and goes healthy when the migration ends; a migration that holds the lock longer turns the waiters unhealthy and the wait fails. The advisory lock has no `lock_timeout`, so a hung migration blocks every starter.
+A migration that fails now fails after compose has replaced web and the workers: the new containers restart in a loop and the app is down, and `docker compose up -d --wait` aborts within seconds with "container … is unhealthy", because compose ends its wait on a container in restart backoff; the tick counts as failed. The data is safe, because a failed migration rolls back fully. Recovery is a fixed release, which auto-deploy deploys by itself; the `:previous` image tags are not used for it. Web, music and scoring have a 600 s start period, so a starter blocked behind a running migration stays "starting" and goes healthy when the migration ends; a migration that holds the lock longer turns the waiters unhealthy and the wait fails. The advisory lock has no `lock_timeout`, so a hung migration blocks every starter.

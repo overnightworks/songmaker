@@ -40,14 +40,21 @@ def test_two_concurrent_starts_on_an_empty_database_both_succeed_and_reach_head(
         **os.environ,
         "START_URL": empty_postgresql_url.render_as_string(hide_password=False),
     }
-    starts = [
-        subprocess.Popen(
-            [sys.executable, "-c", START_PROCESS],
-            env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-        )
-        for _ in range(2)
-    ]
-    outputs = [start.communicate(timeout=START_TIMEOUT_SECONDS)[0] for start in starts]
+    starts: list[subprocess.Popen[str]] = []
+    try:
+        for _ in range(2):
+            starts.append(
+                subprocess.Popen(
+                    [sys.executable, "-c", START_PROCESS],
+                    env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                )
+            )
+        outputs = [start.communicate(timeout=START_TIMEOUT_SECONDS)[0] for start in starts]
+    finally:
+        for start in starts:
+            if start.poll() is None:
+                start.kill()
+            start.wait()
 
     assert [start.returncode for start in starts] == [0, 0], outputs
     assert _stored_revisions(empty_postgresql_url) == [migration_head()]
