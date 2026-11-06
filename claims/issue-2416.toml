@@ -1,8 +1,0 @@
-claim_id = "06edd3dd56d44b9683fc9659f9c196c1"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "4a1cc8393b79132edf98f9e5b1727ce22fb20c9d"
-branch = "claude/issue-2416-release-images-s5-acestep-worker"
-scope = [".github/workflows/release.yml", "docs/architecture.md", "docs/security.md", "tests/workflows/test_release_workflow.py"]
-opened_commit = "0e658aee552d3141767dcf6bd6f100024d09b8c8"
-whole_reason = "One more image in the release matrix and the repin it needs, held by the test that ties the matrix to compose and the two sentences that name the released images."
