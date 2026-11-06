@@ -5,7 +5,6 @@ Drives:
 - needs_audio / device metadata for the child's pipeline scheduler
 - output_keys for SongScores.to_dict()
 - VALID_SCORER_NAMES used by ScoreRequest validation
-- /scoring/schema API endpoint
 """
 
 from __future__ import annotations

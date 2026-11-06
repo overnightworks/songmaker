@@ -2251,23 +2251,8 @@ def test_repaint_and_cover_report_an_unavailable_job_queue(
     assert response.json()["detail"] == "Job queue unavailable"
 
 
-def test_scoring_schema_endpoint(client: TestClient) -> None:
-    from songmaker_cli.scoring.registry import SCORERS
-
-    resp = client.get("/api/scoring/schema")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "scorers" in body
-    returned_names = {s["name"] for s in body["scorers"]}
-    assert returned_names == set(SCORERS.keys())
-
-    by_name = {s["name"]: s for s in body["scorers"]}
-    assert by_name["audiobox"]["device"] == "gpu"
-    assert by_name["audiobox"]["needs_audio"] is False
-    assert "lyrical_coherence" not in by_name
-    assert all("host" not in scorer for scorer in body["scorers"])
-    assert "audiobox_enjoyment" in by_name["audiobox"]["output_keys"]
-    assert "silence_gaps" in by_name["silence"]["output_keys"]
+def test_scoring_schema_route_is_gone(client: TestClient) -> None:
+    assert client.get("/api/scoring/schema").status_code == 404
 
 
 def test_score_generation_not_found(client: TestClient) -> None:
