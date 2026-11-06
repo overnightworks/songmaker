@@ -10,11 +10,9 @@ from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
-    AUDIO_UPLOAD_FILE_MAX_BYTES,
     COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     REFERENCE_AUDIO_MAX_BYTES,
-    REIMPORT_BODY_MAX_BYTES,
 )
 from songmaker_cli.db.models import Album, User
 from songmaker_cli.db.queries.loras import create_user_lora
@@ -26,9 +24,6 @@ from songmaker_cli.settings import get_settings
     "/api/loras/abc-id/samples/extra",
     "/api/other/samples",
     "/api/loras//samples",
-    "/api/songs//reimport",
-    "/api/other/song-id/reimport",
-    "/api/songs/song-id/reimport/extra",
     "/api/playlists//cover",
 ])
 def test_a_route_that_only_looks_like_an_upload_keeps_the_json_budget(path: str) -> None:
@@ -37,15 +32,20 @@ def test_a_route_that_only_looks_like_an_upload_keeps_the_json_budget(path: str)
     )
 
 
-def test_body_limits_keep_json_small_and_uploads_larger() -> None:
-    policy = build_body_size_policy(get_settings())
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/api/songs", JSON_REQUEST_BODY_MAX_BYTES),
+        ("/api/references", AUDIO_UPLOAD_BODY_MAX_BYTES),
+        ("/api/loras/x/samples", AUDIO_UPLOAD_BODY_MAX_BYTES),
+        ("/api/playlists/x/cover", COVER_UPLOAD_BODY_MAX_BYTES),
+    ],
+)
+def test_body_limits_keep_json_small_and_uploads_larger(path: str, expected: int) -> None:
+    assert build_body_size_policy(get_settings()).max_bytes(path, "POST") == expected
 
-    assert policy.max_bytes("/api/songs", "POST") == JSON_REQUEST_BODY_MAX_BYTES
-    assert policy.max_bytes("/api/references", "POST") == AUDIO_UPLOAD_BODY_MAX_BYTES
-    assert policy.max_bytes("/api/loras/x/samples", "POST") == AUDIO_UPLOAD_BODY_MAX_BYTES
-    assert policy.max_bytes("/api/songs/x/reimport", "POST") == REIMPORT_BODY_MAX_BYTES
-    assert policy.max_bytes("/api/playlists/x/cover", "POST") == COVER_UPLOAD_BODY_MAX_BYTES
-    assert REIMPORT_BODY_MAX_BYTES == 2 * AUDIO_UPLOAD_FILE_MAX_BYTES + 1024 * 1024
+
+def test_the_audio_upload_budget_leaves_room_for_the_file() -> None:
     assert AUDIO_UPLOAD_BODY_MAX_BYTES > REFERENCE_AUDIO_MAX_BYTES
 
 
@@ -97,32 +97,3 @@ def test_json_route_still_rejects_over_1mib(tmp_path: Path) -> None:
         headers={"content-type": "application/json"},
     )
     assert resp.status_code == 413
-
-
-def test_reimport_suffix_does_not_expand_unrelated_route_budget(tmp_path: Path) -> None:
-    client = _authed_app(tmp_path)
-    resp = client.post(
-        "/api/other/resource/reimport",
-        content=b"x" * (JSON_REQUEST_BODY_MAX_BYTES + 1),
-        headers={"content-type": "application/octet-stream"},
-    )
-    assert resp.status_code == 413
-
-
-@pytest.mark.parametrize(
-    "field, content_type, detail",
-    [("mp3", "audio/mpeg", "MP3 file too large"), ("wav", "audio/wav", "WAV file too large")],
-)
-def test_reimport_keeps_per_file_limit_separate(
-    tmp_path: Path, monkeypatch, field: str, content_type: str, detail: str,
-) -> None:
-    client = _authed_app(tmp_path)
-    song_resp = client.post("/api/songs", json={"title": "Song", "album_id": "a1"})
-    assert song_resp.status_code == 200
-    monkeypatch.setattr("songmaker_cli.reimport_api.AUDIO_UPLOAD_FILE_MAX_BYTES", 4)
-    resp = client.post(
-        f"/api/songs/{song_resp.json()['id']}/reimport",
-        files={field: (f"take.{field}", b"12345", content_type)},
-    )
-    assert resp.status_code == 413
-    assert resp.json()["detail"] == detail

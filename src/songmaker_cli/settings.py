@@ -32,7 +32,6 @@ from songmaker_cli.constants import (
     COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    REIMPORT_BODY_MAX_BYTES,
     SCORER_TIMEOUT_SECONDS,
     SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT,
     SESSION_IDLE_SECONDS_DEFAULT,
@@ -259,7 +258,6 @@ class Settings(BaseSettings):
     reference_audio_quota_bytes: int = Field(default=500_000_000, gt=0)
     reference_audio_quota_files: int = Field(default=50, gt=0)
     max_upload_body_bytes: int = Field(default=AUDIO_UPLOAD_BODY_MAX_BYTES)
-    max_reimport_body_bytes: int = Field(default=REIMPORT_BODY_MAX_BYTES)
     max_cover_upload_body_bytes: int = Field(default=COVER_UPLOAD_BODY_MAX_BYTES)
 
     # ── Logging ───────────────────────────────────────────────────────

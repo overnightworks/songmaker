@@ -1346,13 +1346,13 @@ Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), 
 
 `UserSongWork` is keyed by (user, song) and upserted by `record_song_edit()` and `record_song_played()` in `db/queries/activity.py` when that person creates a song (`POST /api/songs`, the co-writer's `create_song`), saves an edit that changes something, or starts a listen. `create_song()` in `db/queries/songs.py` records the creation for its `created_by`, and `update_song()` and `rename_song()` there decide whether an edit changed the content or the title and record it for their `edited_by`; the song update and rename endpoints and the co-writer's MCP song-edit tools `update_song_lyrics`, `update_song_prompt`, `update_song_style` and `rename_song` pass the caller, so a save that changes nothing (`PUT /api/songs/{id}` with `{}`, the same lyrics or title again) records nothing. An edit also records its kind (`SongWorkKind` in `constants.py`): `created`, `renamed`, `lyrics` when the lyrics changed, else `style` (prompt, BPM, key, duration, language or generation params), so a save that changes the lyrics and the style is `lyrics`. A listen without a `playlist_id` also stamps `album_played_at`; a library-wide shuffle names no playlist, so it counts. It starts empty: past edits and listens are not backfilled, and a `played_at` from before `album_played_at` existed cannot tell an album listen from a playlist listen, so nothing reads it. `/api/library/listen` and `/api/library/write` read these rows (owner: `db/queries/activity.py`), always the viewer's own. Nothing writes `Song.last_played_at` any more; the column waits for its drop.
 
-A take's `created_by` names the user who made it — the job's user for a generated take, the acting user for a reimported one — set by `create_generation()` in `db/queries/generations.py`, which every creation path goes through. It is a fact of the row, so a take already saved keeps its maker even when the rest of its batch is cancelled or fails; it is never derived from job time windows. Takes saved before the column existed keep `created_by = NULL`, since their maker is not honestly recoverable, and deleting a user clears the field rather than the take.
+A take's `created_by` names the user who made it (the job's user), set by `create_generation()` in `db/queries/generations.py`, which every creation path goes through. It is a fact of the row, so a take already saved keeps its maker even when the rest of its batch is cancelled or fails; it is never derived from job time windows. Takes saved before the column existed keep `created_by = NULL`, since their maker is not honestly recoverable, and deleting a user clears the field rather than the take.
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
 
 ### Resource event ledger
 
-Every successfully persisted generation from the generation job or reimport path
+Every successfully persisted generation from the generation job
 writes one `generation.created` row in the same transaction. A per-user cursor is
 incremented with `UPDATE … RETURNING`, so PostgreSQL serializes concurrent writers
 without a process-local lock. The event stores immutable song and generation IDs;
@@ -1552,7 +1552,6 @@ close the stream.
 | GET | `/shared/song/{slug}/audio/{file}` | public | Stream shared song audio by take id (`{generation_id}.mp3`) once the share presents that take |
 | GET | `/shared/gen/{slug}/audio/{file}` | public | Stream the shared take's audio by its id (`{generation_id}.mp3`) |
 | GET | `/shared/playlist/{slug}/audio/{file}` | public | Stream shared playlist audio by take id (`{generation_id}.mp3`) once the playlist presents that take |
-| POST | `/api/songs/{id}/reimport` | user | Upload MP3/WAV to reimport into a song |
 | GET | `/audio/{owner_id}/{file}` | user | Serve audio files (MP3/WAV, ownership-checked by user ID) |
 
 ## Generation Flow

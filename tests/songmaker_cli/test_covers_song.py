@@ -37,7 +37,6 @@ from songmaker_cli.constants import (
     COVER_VARIANT_ORIGINAL,
     COVER_VARIANT_UNKNOWN,
     JSON_REQUEST_BODY_MAX_BYTES,
-    REIMPORT_BODY_MAX_BYTES,
     SONG_COVER_DIRNAME,
 )
 from songmaker_cli.covers import (
@@ -120,19 +119,20 @@ def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
     return _authed_app(tmp_path, "alice", ALICE_PASSWORD)
 
 
-def test_song_cover_upload_path_is_cover_sized_and_reimport_unchanged() -> None:
-    policy = build_body_size_policy(get_settings())
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/api/songs/alice-song/cover", COVER_UPLOAD_BODY_MAX_BYTES),
+        ("/api/songs/alice-song/cover/extra", JSON_REQUEST_BODY_MAX_BYTES),
+        ("/api/songs//cover", JSON_REQUEST_BODY_MAX_BYTES),
+    ],
+)
+def test_song_cover_upload_path_gets_the_cover_budget(path: str, expected: int) -> None:
+    assert build_body_size_policy(get_settings()).max_bytes(path, "POST") == expected
 
-    assert policy.max_bytes("/api/songs/alice-song/cover", "POST") == COVER_UPLOAD_BODY_MAX_BYTES
-    assert (
-        policy.max_bytes("/api/songs/alice-song/cover/extra", "POST")
-        == JSON_REQUEST_BODY_MAX_BYTES
-    )
-    assert policy.max_bytes("/api/songs//cover", "POST") == JSON_REQUEST_BODY_MAX_BYTES
-    assert policy.max_bytes("/api/songs/alice-song/reimport", "POST") == REIMPORT_BODY_MAX_BYTES
-    assert COVER_UPLOAD_BODY_MAX_BYTES != REIMPORT_BODY_MAX_BYTES
+
+def test_cover_budget_exceeds_the_cover_ceiling_and_differs_from_the_audio_budget() -> None:
     assert COVER_UPLOAD_BODY_MAX_BYTES > COVER_MAX_BYTES
-    assert policy.max_bytes("/api/references", "POST") == AUDIO_UPLOAD_BODY_MAX_BYTES
     assert AUDIO_UPLOAD_BODY_MAX_BYTES != COVER_UPLOAD_BODY_MAX_BYTES
 
 
