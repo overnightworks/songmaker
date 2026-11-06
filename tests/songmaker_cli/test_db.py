@@ -285,10 +285,12 @@ def test_create_generation_first_for_song_uses_initial_number(
     seeded_session.add(Album(id="a2", title="A2", artist="X"))
     seeded_session.add(Song(id="s2", title="S2", album_id="a2", track_number=1))
     seeded_session.flush()
+    seeded_session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="l", prompt="p"))
+    seeded_session.flush()
     gen = create_generation(
         seeded_session,
         song_id="s2",
-        version_id=None,
+        version_id="v2",
         mp3_path="x.mp3",
         model_mode="sft",
         audio_dir=tmp_path,
@@ -367,12 +369,14 @@ def test_generation_missing_version_lyrics_is_null(
     gen = create_generation(
         seeded_session,
         song_id="s1",
-        version_id=None,
+        version_id="v1",
         mp3_path="test/no_version.mp3",
         model_mode="sft",
         audio_dir=tmp_path,
         created_by=take_maker,
     )
+    gen.version_id = None
+    seeded_session.flush()
     seeded_session.commit()
     loaded = get_generation(seeded_session, gen.id)
     assert GenerationResponse.from_orm(loaded).version_lyrics is None
@@ -1070,32 +1074,16 @@ def test_create_generation_canonicalizes_mp3_path(
     assert gen.mp3_path == "test/new_gen.mp3"
 
 
-def test_create_generation_preserves_empty_mp3_path_for_wav_only_take(
-    seeded_session: Session, take_maker: str, tmp_path: Path,
+@pytest.mark.parametrize("mp3_path", ["", "../outside.mp3"])
+def test_create_generation_rejects_an_mp3_path_that_is_empty_or_outside_the_audio_directory(
+    seeded_session: Session, take_maker: str, tmp_path: Path, mp3_path: str,
 ) -> None:
-    gen = create_generation(
-        seeded_session,
-        "s1",
-        "v1",
-        "",
-        model_mode="sft",
-        wav_path="test/new_gen.wav",
-        audio_dir=tmp_path,
-        created_by=take_maker,
-    )
-
-    assert gen.mp3_path == ""
-
-
-def test_create_generation_rejects_an_mp3_path_outside_the_audio_directory(
-    seeded_session: Session, take_maker: str, tmp_path: Path,
-) -> None:
-    with pytest.raises(ValueError, match="must stay within the audio directory"):
+    with pytest.raises(ValueError, match="audio directory"):
         create_generation(
             seeded_session,
             "s1",
             "v1",
-            "../outside.mp3",
+            mp3_path,
             model_mode="sft",
             audio_dir=tmp_path,
             created_by=take_maker,

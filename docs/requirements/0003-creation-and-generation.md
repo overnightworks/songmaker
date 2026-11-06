@@ -5,7 +5,8 @@
 A musician can start audio generation from lyrics, a style prompt, a chosen
 available model, and generation settings, then compare the resulting takes. A
 pinned seed from an earlier take can be reused with changed settings; a take
-records the seed that actually produced it. Scoring and transcription inform the musician and do not choose the album take.
+records the seed that actually produced it. Scoring and transcription inform
+the musician and do not choose the album take.
 
 ## Rules
 
