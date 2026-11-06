@@ -167,8 +167,7 @@ async function guardDirtyNavigation(
 }
 
 // The rail context (and every other "song open" entry point — search hits,
-// history restore, and, since issue #284, a redirected legacy `?song=` link
-// once its canonical route mounts) never leaves the rail empty: whenever
+// history restore) never leaves the rail empty: whenever
 // the selected song's album is not the open collection, the collection
 // follows the song. Opening a collection explicitly (openAlbum/openPlaylist)
 // is unaffected — this only reacts to a *song* becoming current.
@@ -185,9 +184,7 @@ function ensureCollectionMatchesSong(song: SongItem): void {
 // the address along -- it fires only on a slug change of the *same* song,
 // never on an ordinary selection (that already writes its own entry) or on
 // unrelated song edits (lyrics/prompt autosave), and only while the address
-// bar is already a song address; a legacy `?song=` entry never reaches this
-// function at all -- (library)/+page.svelte redirects it onto its canonical
-// address first (issue #284).
+// bar is already a song address.
 let addressedSong: { id: string; slug: string } | null = null;
 
 function syncSongAddressToRename(song: SongItem): void {

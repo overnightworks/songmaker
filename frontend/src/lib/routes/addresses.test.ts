@@ -9,7 +9,6 @@ import {
 	libraryRouteShape,
 	pendingTakeRoutePath,
 	playlistRoutePath,
-	readLegacySongQuery,
 	sharePagePath,
 	songAlbumRoutePath,
 	songRoutePath,
@@ -124,15 +123,7 @@ describe('library route addresses', () => {
 	);
 });
 
-describe('legacy song query addresses', () => {
-	it.each([
-		['song and generation', 'song=s1&gen=g1', { songId: 's1', generationId: 'g1' }],
-		['song only', 'song=s1', { songId: 's1', generationId: null }],
-		['generation only', 'gen=g1', { songId: null, generationId: 'g1' }]
-	])('reads %s', (_name, query, expected) => {
-		expect(readLegacySongQuery(new URLSearchParams(query))).toEqual(expected);
-	});
-
+describe('pending take addresses', () => {
 	it('appends a pending generation to a song route', () => {
 		expect(pendingTakeRoutePath('/album/anfield/tide', 'g1')).toBe('/album/anfield/tide?gen=g1');
 	});

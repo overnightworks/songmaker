@@ -95,16 +95,6 @@ export function standsOnPlaylistsPage(pathname: string): boolean {
 	return libraryRouteShape(pathname) === 'playlists';
 }
 
-export function readLegacySongQuery(searchParams: Pick<URLSearchParams, 'get'>): {
-	songId: string | null;
-	generationId: string | null;
-} {
-	return {
-		songId: searchParams.get('song'),
-		generationId: searchParams.get('gen')
-	};
-}
-
 export function pendingTakeRoutePath(songPath: string, generationId: string): string {
 	return `${songPath}?gen=${generationId}`;
 }

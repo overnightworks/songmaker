@@ -187,7 +187,7 @@ describe('RailLibraryGroup', () => {
 		{ address: LIBRARY_ROUTE_ID, current: true },
 		{ address: '/settings', current: false },
 		{ address: '/(library)/playlists', current: false },
-		{ address: '/(library)?song=s1', current: false }
+		{ address: '/(library)?x=1', current: false }
 	] as const)(
 		'defect:#1523: with the surface still on browse, the word Library is current: $current and its group is unfolded at $address',
 		async ({ address, current }) => {

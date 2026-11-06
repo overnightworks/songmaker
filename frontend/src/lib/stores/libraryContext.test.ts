@@ -138,7 +138,6 @@ import {
 	libraryScrollRestore,
 	openSongAddress,
 	openTakeAddress,
-	resolveLegacySongQueryAddress,
 	libraryRootState,
 	rememberedSongTab,
 	resetLibraryContextForTests,
@@ -1466,102 +1465,6 @@ describe('openTakeAddress', () => {
 		await expect(openTakeAddress('ghost', 'tide', 1)).resolves.toBe('unknown-album');
 
 		expect(get(selectedSongId)).toBeNull();
-	});
-});
-
-describe('resolveLegacySongQueryAddress', () => {
-	it('resolves a bare legacy song id onto the song address', async () => {
-		fetchSong.mockResolvedValueOnce(
-			song({
-				title: 'Tide',
-				album_title: 'Nachtstrom',
-				generation_count: 0,
-				id: 's9',
-				slug: 'tide',
-				album_id: 'a9'
-			})
-		);
-
-		await expect(resolveLegacySongQueryAddress('s9', null)).resolves.toEqual({
-			kind: 'found',
-			path: '/album/a9/tide',
-			droppedUnknownTake: false
-		});
-	});
-
-	it('resolves a legacy song+gen id pair onto the take address by number', async () => {
-		fetchSong.mockResolvedValueOnce(
-			song({
-				title: 'Tide',
-				album_title: 'Nachtstrom',
-				id: 's9',
-				slug: 'tide',
-				album_id: 'a9',
-				generation_count: 1,
-				generations: [
-					generation({ song_id: 's9', mp3_path: '/audio/g1.mp3', seed: 1, generation_number: 3 })
-				]
-			})
-		);
-
-		await expect(resolveLegacySongQueryAddress('s9', 'g1')).resolves.toEqual({
-			kind: 'found',
-			path: '/album/a9/tide/take/3',
-			droppedUnknownTake: false
-		});
-	});
-
-	it('drops an unknown generation id, lands on the song address, and flags the drop -- the song still exists', async () => {
-		fetchSong.mockResolvedValueOnce(
-			song({
-				title: 'Tide',
-				album_title: 'Nachtstrom',
-				id: 's9',
-				slug: 'tide',
-				album_id: 'a9',
-				generation_count: 1,
-				generations: [generation({ song_id: 's9', mp3_path: '/audio/g1.mp3', seed: 1 })]
-			})
-		);
-
-		await expect(resolveLegacySongQueryAddress('s9', 'ghost-gen')).resolves.toEqual({
-			kind: 'found',
-			path: '/album/a9/tide',
-			droppedUnknownTake: true
-		});
-	});
-
-	it('upserts the resolved song into songList so the redirect target finds it without fetching again', async () => {
-		fetchSong.mockResolvedValueOnce(
-			song({
-				title: 'Tide',
-				album_title: 'Nachtstrom',
-				generation_count: 0,
-				id: 's9',
-				slug: 'tide',
-				album_id: 'a9'
-			})
-		);
-
-		await resolveLegacySongQueryAddress('s9', null);
-
-		expect(get(songList).some((item) => item.id === 's9' && item.slug === 'tide')).toBe(true);
-	});
-
-	it('reports an unknown song id as the same honest 404 an unknown slug gets', async () => {
-		const { ApiError } = await import('#lib/api/fetch.ts');
-		fetchSong.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/songs/dead'));
-
-		await expect(resolveLegacySongQueryAddress('dead', null)).resolves.toEqual({
-			kind: 'unknown-song'
-		});
-	});
-
-	it('propagates a failure that is not a missing song instead of calling it unknown', async () => {
-		const { ApiError } = await import('#lib/api/fetch.ts');
-		fetchSong.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/songs/s9'));
-
-		await expect(resolveLegacySongQueryAddress('s9', null)).rejects.toThrow('boom');
 	});
 });
 

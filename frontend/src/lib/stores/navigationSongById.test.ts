@@ -97,8 +97,7 @@ afterEach(() => {
 // A search hit hands navigation its song id alone, and a playlist row its
 // song_id alone: neither carries the album or slug a song address names, and
 // the song is in no list yet. The address keeps the page the user is on while
-// the song loads, then takes the song's own address; it is never the legacy
-// `?song=` form.
+// the song loads, then takes the song's own address.
 describe('a song opened by id alone', () => {
 	const openers = [
 		{
