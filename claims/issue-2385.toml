@@ -1,7 +1,0 @@
-claim_id = "cbfe00abec224e14b25568b46cadc1db"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "1475530167e05de04097d9c7ff62f061b2970673"
-branch = "claude/issue-2385-docs-security-md-loses-its-history-and-p"
-scope = ["docs/security.md"]
-opened_commit = "0a2086c07cb16b226e8aa571ccdd414d1c6ea24d"
