@@ -1,8 +1,0 @@
-claim_id = "cddfa40f9abb42b68b45e7899968b0b5"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3377f34f49deec749b466b87eb533b7bfa38e1ff"
-branch = "claude/issue-2136-git-pins"
-scope = [".github/dependabot.yml", "AGENTS.md", "Dockerfile", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile", "docs/architecture.md", "docs/security.md", "docs/testing.md", "pyproject.toml", "uv.lock"]
-opened_commit = "ed8c57ba997430ea9331959b9a5db553dad52aed"
-whole_reason = "The lock change breaks every image's sync of the server extra at once, so pins, lock, the git-capable images, Dependabot and the prose that describes them land together; a split leaves main with an image that cannot build."
