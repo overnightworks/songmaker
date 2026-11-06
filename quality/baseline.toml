@@ -15,7 +15,7 @@
 "frontend/e2e/helpers.ts" = 833
 "frontend/e2e/library.spec.ts" = 1304
 "frontend/e2e/offline.spec.ts" = 807
-"frontend/e2e/seed.ts" = 1180
+"frontend/e2e/seed.ts" = 1178
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
 "frontend/src/lib/api/types.ts" = 1154

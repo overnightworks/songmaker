@@ -177,7 +177,7 @@ export interface SeededLibrary {
 	listenReorderSongs: Record<'desktop' | 'mobile', SeededSong>;
 	/** Takes a per-attempt playlist starts with, in playlist order. */
 	playlistTakes: SeededTake[];
-	/** Row label of a reimported take, which carries no version. */
+	/** Row label of a seeded take, which carries no version. */
 	takeLabel: string;
 	/** A sibling album, open in the rail beside `albumTitle` -- the rail's one-open-album rule. */
 	secondAlbumTitle: string;
@@ -206,8 +206,6 @@ interface CreatedPlaylist extends CreatedResource {
 interface ShareLink {
 	share_slug: string;
 }
-
-type MultipartFile = { name: string; mimeType: string; buffer: Buffer };
 
 function seededSong(songIdByTitle: Map<string, string>, title: string): SeededSong {
 	const id = songIdByTitle.get(title);
@@ -317,10 +315,6 @@ class SeedApi {
 		return this.send<T>(url, { data });
 	}
 
-	async postFile<T>(url: string, multipart: Record<string, MultipartFile>): Promise<T> {
-		return this.send<T>(url, { multipart });
-	}
-
 	async getJson<T>(url: string): Promise<T> {
 		const response = await this.api.get(url);
 		if (!response.ok()) {
@@ -338,10 +332,7 @@ class SeedApi {
 		}
 	}
 
-	private async send<T>(
-		url: string,
-		body: { data?: unknown; multipart?: Record<string, MultipartFile> }
-	): Promise<T> {
+	private async send<T>(url: string, body: { data?: unknown }): Promise<T> {
 		const response = await this.api.post(url, {
 			// Playwright's request context sends no fetch metadata, so the origin
 			// header is what the origin check reads; without it a write gets 403.
@@ -355,12 +346,66 @@ class SeedApi {
 	}
 }
 
+/**
+ * Gives a song one playable take of `audio` (the fixture tone by default)
+ * directly against the database (`scripts/seed_e2e_song_takes.py`), owned by
+ * `ownerUsername` (the run's admin by default). `api` carries a session that
+ * may read the song.
+ */
+export async function seedTake(
+	api: APIRequestContext,
+	songId: string,
+	audio: Buffer = readFileSync(TAKE_FIXTURE),
+	ownerUsername: string = requiredAdminUsername()
+): Promise<ImportedTake> {
+	await runTakeSeeder(['--song-id', songId], 1, ownerUsername, audio);
+	const song = await SeedApi.fromSession(api).getJson<{ generations: ImportedTake[] }>(
+		`/api/songs/${songId}`
+	);
+	if (song.generations.length !== 1) {
+		throw new Error(`Song ${songId} has ${song.generations.length} takes, not one`);
+	}
+	return song.generations[0];
+}
+
+/** Runs `scripts/seed_e2e_song_takes.py` in the web container and returns the song id it prints. */
+async function runTakeSeeder(
+	targetArgs: string[],
+	takeCount: number,
+	ownerUsername: string,
+	audio: Buffer,
+	extraArgs: string[] = []
+): Promise<string> {
+	const { stdout } = await execWithStdin(
+		'docker',
+		[
+			...COMPOSE_ARGS,
+			'exec',
+			'-T',
+			'songmaker-web',
+			'/app/.venv/bin/python',
+			'scripts/seed_e2e_song_takes.py',
+			...targetArgs,
+			'--take-count',
+			String(takeCount),
+			'--owner-username',
+			ownerUsername,
+			...extraArgs
+		],
+		{ cwd: REPO_ROOT },
+		audio
+	);
+	const songId = stdout.trim();
+	if (!songId) throw new Error('seed_e2e_song_takes.py printed no song id on stdout');
+	return songId;
+}
+
 /** Seeds `SONG_TITLES` into the album in that order, each with one imported take. */
 async function seedSongsWithOneTakeEach(
+	api: APIRequestContext,
 	seed: SeedApi,
 	albumId: string
 ): Promise<SeededAlbumSong[]> {
-	const takeAudio = readFileSync(TAKE_FIXTURE);
 	const songs: SeededAlbumSong[] = [];
 	for (const title of SONG_TITLES) {
 		const song = await seed.postJson<CreatedResource>('/api/songs', {
@@ -369,9 +414,7 @@ async function seedSongsWithOneTakeEach(
 			lyrics: `${title} — seeded lyrics`,
 			prompt: 'calm test tone'
 		});
-		const take = await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
-			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: takeAudio }
-		});
+		const take = await seedTake(api, song.id);
 		songs.push({
 			songId: song.id,
 			takeId: take.id,
@@ -391,7 +434,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		artist: ALBUM_ARTIST
 	});
 
-	const albumSongs = await seedSongsWithOneTakeEach(seed, album.id);
+	const albumSongs = await seedSongsWithOneTakeEach(api, seed, album.id);
 	const songIdByTitle = new Map(albumSongs.map((song) => [song.track.songTitle, song.songId]));
 	const takeBySongTitle = new Map(albumSongs.map((song) => [song.track.songTitle, song.takeId]));
 
@@ -476,34 +519,13 @@ export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoice
 		artist: ALBUM_ARTIST
 	});
 	try {
-		const { stdout } = await execWithStdin(
-			'docker',
-			[
-				...COMPOSE_ARGS,
-				'exec',
-				'-T',
-				'songmaker-web',
-				'/app/.venv/bin/python',
-				'scripts/seed_e2e_song_takes.py',
-				'--album-id',
-				album.id,
-				'--title',
-				songTitle,
-				'--take-count',
-				'1',
-				'--owner-username',
-				requiredAdminUsername(),
-				'--lyrics',
-				lyrics,
-				'--prompt',
-				caption
-			],
-			{ cwd: REPO_ROOT },
-			readFileSync(TAKE_FIXTURE)
+		const songId = await runTakeSeeder(
+			['--album-id', album.id, '--title', songTitle],
+			1,
+			requiredAdminUsername(),
+			readFileSync(TAKE_FIXTURE),
+			['--lyrics', lyrics, '--prompt', caption]
 		);
-		const songId = stdout.trim();
-		if (!songId)
-			throw new Error('seed_e2e_song_takes.py printed no song id for the Voices source take');
 		const versions = await seed.getJson<VersionResource[]>(`/api/songs/${songId}/versions`);
 		const versionId = versions.at(-1)?.id;
 		if (!versionId) throw new Error(`Voices source song ${songId} has no version`);
@@ -661,17 +683,13 @@ function takeId(takes: Map<string, string>, songTitle: string): string {
 
 /**
  * A song of its own, seeded with `takeCount` takes directly against the
- * database (`scripts/seed_e2e_song_takes.py`) rather than through
- * `takeCount` individual `POST /api/songs/{id}/reimport` calls — the exact
- * mistake issue #344 already found and fixed for the rail's filler albums
- * (see `seedFillerAlbums` above): the server's IP rate limiter counts every
- * request it receives regardless of which Playwright context sent it, and
- * those calls exercise no API semantics worth spending that budget on. Its
- * own song rather than piling extra generations onto one of the base
- * seed's `SONG_TITLES`: those are shared across every flow in the run, and
- * more than one of them (`library.spec.ts`'s own `takeLabel`, `takeId`
- * above) depends on the base seed's one-take-per-song count staying exactly
- * one. Used by a flow that needs a song with many takes.
+ * database (`scripts/seed_e2e_song_takes.py`) rather than through API calls:
+ * the server's IP rate limiter counts every request regardless of which
+ * Playwright context sent it (issue #344), and those calls exercise no API
+ * semantics worth that budget. Its own song rather than extra generations on
+ * one of the base seed's `SONG_TITLES`: those are shared across every flow in
+ * the run, and `library.spec.ts`'s `takeLabel` and `takeId` above depend on
+ * their one-take-per-song count. Used by a flow that needs many takes.
  */
 export async function seedTakeStripSong(
 	albumId: string,
@@ -679,30 +697,12 @@ export async function seedTakeStripSong(
 	takeCount: number
 ): Promise<string> {
 	try {
-		const { stdout } = await execWithStdin(
-			'docker',
-			[
-				...COMPOSE_ARGS,
-				'exec',
-				'-T',
-				'songmaker-web',
-				'/app/.venv/bin/python',
-				'scripts/seed_e2e_song_takes.py',
-				'--album-id',
-				albumId,
-				'--title',
-				title,
-				'--take-count',
-				String(takeCount),
-				'--owner-username',
-				requiredAdminUsername()
-			],
-			{ cwd: REPO_ROOT },
+		return await runTakeSeeder(
+			['--album-id', albumId, '--title', title],
+			takeCount,
+			requiredAdminUsername(),
 			readFileSync(TAKE_FIXTURE)
 		);
-		const songId = stdout.trim();
-		if (!songId) throw new Error('seed_e2e_song_takes.py printed no song id on stdout');
-		return songId;
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
 		throw new Error(`Seeding the song's takes failed: ${detail}`, { cause: err });
@@ -741,7 +741,7 @@ export function requiredSeedId(id: string): string {
  * A song already at `versionNumber` with `takeCount` real takes on that
  * version, seeded directly against the database
  * (`scripts/seed_e2e_job_states.py`) rather than through `versionNumber - 1`
- * individual saves and `takeCount` reimports — the same reasoning
+ * individual saves and `takeCount` API calls — the same reasoning
  * `seedTakeStripSong` above already uses (issue #344): those requests would
  * exercise no API semantics `song-phone.spec.ts` needs, only cost its
  * budget. Returns the song's id.
@@ -1019,7 +1019,9 @@ export async function seedUnpickedLibrary(api: APIRequestContext): Promise<Seede
 		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: ALBUM_ARTIST
 	});
-	const songs = await seedAfterAlbum(api, album.id, () => seedSongsWithOneTakeEach(seed, album.id));
+	const songs = await seedAfterAlbum(api, album.id, () =>
+		seedSongsWithOneTakeEach(api, seed, album.id)
+	);
 	return { albumId: album.id, tracks: songs.map((song) => song.track) };
 }
 
@@ -1068,9 +1070,7 @@ export async function seedOwnTakeAddress(
 	const seed = SeedApi.fromSession(api);
 	const song = await createOwnSong(api, seed, account.username, songTitle);
 	await seedAfterAlbum(api, song.albumId, () =>
-		seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
-			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-		})
+		seedTake(api, song.id, readFileSync(TAKE_FIXTURE), account.username)
 	);
 	return song.address;
 }
@@ -1123,9 +1123,7 @@ export async function seedPhoneLibrary(api: APIRequestContext): Promise<PhoneLib
 				title: songTitle,
 				album_id: album.id
 			});
-			const take = await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
-				mp3: { name: 'phone-proof.mp3', mimeType: 'audio/mpeg', buffer: audio }
-			});
+			const take = await seedTake(api, song.id, audio);
 			tracks[album.id].push({ title: songTitle, audioPath: AUDIO_PATH_PREFIX + take.mp3_path });
 			if (index === 1) {
 				await execWithStdin(

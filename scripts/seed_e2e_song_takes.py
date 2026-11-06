@@ -1,20 +1,21 @@
 # ruff: noqa: E402
-"""Bulk-seed a song with many playable takes directly against the database.
+"""Seed playable takes directly against the database for the end-to-end specs.
 
-The end-to-end specs that need a song with dozens of takes (the take folds,
-menu and selection flows) seed it here. Seeding that many takes through
-``POST /api/songs/{id}/reimport`` one at a time would repeat the exact
-mistake issue #344 already found and fixed for the rail's filler albums:
-the server's IP rate limiter counts every request it receives regardless of
-which Playwright context sent it, and each of those calls exercises no API
-semantics worth spending that budget on — they only need the rows and files
-to exist. This does the same inserts (and the same file write) in one
-process instead, mirroring ``songmaker_cli.reimport.reimport_files()``
-field-for-field so the resulting rows are indistinguishable from a real
-reimport.
+The specs that need a song with takes (the take folds, menu, rail and share
+flows) seed them here, either on a song this script creates or on a song the
+spec already created through the API (``--song-id``). Seeding takes one
+request at a time would spend the server's IP rate limiter, which counts every
+request regardless of which Playwright context sent it (issue #344), on calls
+that exercise no API semantics.
+
+Each take is a generation row (``created_by`` the owner, ``mp3_path`` as
+``<owner id>/<generation id>.mp3``, the default model mode, no seed) with its
+audio file under the audio directory and a ``generation_created`` event for
+the owner. A take has no version unless the song is created here with lyrics
+or a prompt, which links each take to the song's version like a generated one.
 
 The take audio has no fixture inside this container (``frontend/e2e/`` is
-not part of the backend image), so it is read once from stdin — the caller
+not part of the backend image), so it is read once from stdin; the caller
 pipes ``frontend/e2e/fixtures/take.mp3`` in rather than this script owning
 a copy of it.
 
@@ -27,9 +28,9 @@ are mounted. Use the venv's Python directly:
         --take-count 25 --owner-username e2e-ci-admin \\
         < frontend/e2e/fixtures/take.mp3
 
-Prints the created song's id on stdout. Connects to the database only —
-never runs schema migrations, even implicitly, matching every other one-off
-script here (see ``connect_db()`` in ``db/engine.py``).
+Prints the song's id on stdout. Connects to the database only; never runs
+schema migrations, even implicitly, matching every other one-off script here
+(see ``connect_db()`` in ``db/engine.py``).
 """
 # ruff: noqa: T201 - this seed helper prints the song id its caller reads
 
@@ -62,6 +63,55 @@ def _resolve_audio_dir() -> Path:
     return project_root / get_settings().audio_dir
 
 
+def _add_takes(
+    session: Session,
+    audio_dir: Path,
+    mp3_bytes: bytes,
+    song_id: str,
+    version_id: str | None,
+    take_count: int,
+    owner_id: str,
+) -> None:
+    owner_directory_name = os.path.basename(owner_id)
+    if owner_directory_name in ("", ".", "..") or owner_directory_name != owner_id:
+        raise ValueError(f"Owner id is not a single directory name: {owner_id!r}")
+    owner_directory = Path(audio_dir) / owner_directory_name
+    for _ in range(take_count):
+        generation_id = str(uuid.uuid4())
+        owner_directory.mkdir(parents=True, exist_ok=True)
+        (owner_directory / f"{generation_id}.mp3").write_bytes(mp3_bytes)
+        gen = create_generation(
+            session,
+            song_id=song_id,
+            version_id=version_id,
+            mp3_path=f"{owner_id}/{generation_id}.mp3",
+            model_mode=MODEL_DEFAULT_MODE,
+            generation_id=generation_id,
+            audio_dir=audio_dir,
+            created_by=owner_id,
+        )
+        create_generation_created_event(
+            session,
+            user_id=owner_id,
+            song_id=song_id,
+            generation_id=gen.id,
+        )
+
+
+def seed_takes_into_song(
+    session: Session,
+    audio_dir: Path,
+    mp3_bytes: bytes,
+    *,
+    song_id: str,
+    take_count: int,
+    owner_id: str,
+) -> None:
+    """Add ``take_count`` versionless takes to a song that already exists."""
+    _add_takes(session, audio_dir, mp3_bytes, song_id, None, take_count, owner_id)
+    session.commit()
+
+
 def seed_song_takes(
     session: Session,
     audio_dir: Path,
@@ -76,52 +126,30 @@ def seed_song_takes(
 ) -> str:
     """Create one song under ``album_id`` with ``take_count`` takes.
 
-    The default creates reimport-style takes. Passing lyrics and a prompt
-    links each take to the song's version, so consumers receive the same
-    metadata as a generated take. Returns the song's id.
+    Passing lyrics or a prompt links each take to the song's version, so
+    consumers receive the same metadata as a generated take. Returns the
+    song's id.
     """
-    owner_directory_name = os.path.basename(owner_id)
-    if owner_directory_name in ("", ".", "..") or owner_directory_name != owner_id:
-        raise ValueError(f"Owner id is not a single directory name: {owner_id!r}")
-    owner_directory = Path(audio_dir) / owner_directory_name
     slug = unique_song_slug(session, album_id, title)
     song = create_song(session, title, album_id, slug, lyrics=lyrics, prompt=prompt)
     version_id = song.latest_version.id if lyrics or prompt else None
-
-    for _ in range(take_count):
-        generation_id = str(uuid.uuid4())
-        owner_directory.mkdir(parents=True, exist_ok=True)
-        (owner_directory / f"{generation_id}.mp3").write_bytes(mp3_bytes)
-        gen = create_generation(
-            session,
-            song_id=song.id,
-            version_id=version_id,
-            mp3_path=f"{owner_id}/{generation_id}.mp3",
-            model_mode=MODEL_DEFAULT_MODE,
-            generation_id=generation_id,
-            audio_dir=audio_dir,
-            created_by=owner_id,
-        )
-        create_generation_created_event(
-            session,
-            user_id=owner_id,
-            song_id=song.id,
-            generation_id=gen.id,
-        )
-
+    _add_takes(session, audio_dir, mp3_bytes, song.id, version_id, take_count, owner_id)
     session.commit()
     return song.id
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--album-id", required=True)
-    parser.add_argument("--title", required=True)
+    parser.add_argument("--song-id", help="add the takes to this song instead of creating one")
+    parser.add_argument("--album-id")
+    parser.add_argument("--title")
     parser.add_argument("--take-count", type=int, required=True)
     parser.add_argument("--owner-username", required=True)
     parser.add_argument("--lyrics", default="")
     parser.add_argument("--prompt", default="")
     args = parser.parse_args(argv)
+    if args.song_id is None and not (args.album_id and args.title):
+        parser.error("--album-id and --title are required unless --song-id is given")
 
     mp3_bytes = sys.stdin.buffer.read()
     if not mp3_bytes:
@@ -134,17 +162,28 @@ def main(argv: list[str] | None = None) -> int:
         if owner is None:
             print(f"No user named {args.owner_username!r}", file=sys.stderr)
             return 1
-        song_id = seed_song_takes(
-            session,
-            _resolve_audio_dir(),
-            mp3_bytes,
-            album_id=args.album_id,
-            title=args.title,
-            take_count=args.take_count,
-            owner_id=owner.id,
-            lyrics=args.lyrics,
-            prompt=args.prompt,
-        )
+        if args.song_id is not None:
+            seed_takes_into_song(
+                session,
+                _resolve_audio_dir(),
+                mp3_bytes,
+                song_id=args.song_id,
+                take_count=args.take_count,
+                owner_id=owner.id,
+            )
+            song_id = args.song_id
+        else:
+            song_id = seed_song_takes(
+                session,
+                _resolve_audio_dir(),
+                mp3_bytes,
+                album_id=args.album_id,
+                title=args.title,
+                take_count=args.take_count,
+                owner_id=owner.id,
+                lyrics=args.lyrics,
+                prompt=args.prompt,
+            )
 
     print(song_id)
     return 0

@@ -1,18 +1,8 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { expect, test, type Page } from '@playwright/test';
 import { EDITOR_LYRICS_LABEL, RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
 import { NOW_PLAYING_UNPICK_LABEL } from '../src/lib/constants/now-playing';
-import { archiveOwnedAlbum } from './seed';
+import { archiveOwnedAlbum, seedTake } from './seed';
 import { ONLY_IN_SHELL, sameOriginHeaders } from './helpers';
-
-const TAKE_FIXTURE = path.join(
-	path.dirname(fileURLToPath(import.meta.url)),
-	'fixtures',
-	'take.mp3'
-);
 
 interface CreatedResource {
 	id: string;
@@ -36,15 +26,8 @@ async function createSongWithTake(
 		album_id: albumId,
 		prompt: 'quiet test song'
 	});
-	const imported = await page.request.post(`/api/songs/${song.id}/reimport`, {
-		headers: await sameOriginHeaders(page),
-		multipart: {
-			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-		}
-	});
-	expect(imported.ok(), `Take import failed: ${await imported.text()}`).toBeTruthy();
+	const take = await seedTake(page.request, song.id);
 	if (!options.picked) return song.id;
-	const take = (await imported.json()) as CreatedResource;
 	await postJson(page, `/api/generations/${take.id}/pick`, {});
 	return song.id;
 }

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from '@playwright/test';
 import { LIBRARY_PAGE_LABEL, RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
-import { archiveOwnedAlbum, BASE_URL } from './seed';
+import { archiveOwnedAlbum, BASE_URL, seedTake } from './seed';
 import {
 	boundingBoxes,
 	sameOriginHeaders,
@@ -43,14 +43,7 @@ async function createSongWithTake(
 		album_id: albumId,
 		prompt: 'quiet test song'
 	});
-	const reimport = await page.request.post(`/api/songs/${created.id}/reimport`, {
-		headers: await sameOriginHeaders(page),
-		multipart: {
-			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-		}
-	});
-	expect(reimport.ok(), `Take import failed: ${await reimport.text()}`).toBeTruthy();
-	return { song: created, take: (await reimport.json()) as CreatedResource };
+	return { song: created, take: await seedTake(page.request, created.id) };
 }
 
 async function postCover(page: Page, albumId: string): Promise<void> {

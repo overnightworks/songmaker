@@ -15,7 +15,7 @@ import {
 	workspace,
 	type Shell
 } from './helpers';
-import { archiveOwnedAlbum, runMarker, seedSongPhoneSong } from './seed';
+import { archiveOwnedAlbum, runMarker, seedSongPhoneSong, seedTake } from './seed';
 
 /**
  * Measured in CI: 40 to 47 requests on either shell for opening the album and
@@ -283,11 +283,7 @@ async function importSongWithTake(
 	});
 	expect(created.ok(), `Song creation failed: ${await created.text()}`).toBe(true);
 	const { id } = (await created.json()) as { id: string };
-	const imported = await page.request.post(`/api/songs/${id}/reimport`, {
-		headers: await sameOriginHeaders(page),
-		multipart: { mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: audio } }
-	});
-	expect(imported.ok(), `Take import failed: ${await imported.text()}`).toBe(true);
+	await seedTake(page.request, id, audio);
 }
 
 /** A song of a flow's own album; its take is the fixture's unless its audio is given. */
