@@ -1,6 +1,6 @@
 # ACE-Step Integration
 
-Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored submodule is pinned to `ae8abf2` on the fork branch `songmaker/vendor-2026-10-30`, which adds only the Python 3.14 lift (`requires-python` `<3.15` and its re-lock) to `songmaker/vendor-2026-08-24` (`924604f`). That line is based on upstream `main` at `14c0211` and folds in, as clean merges (no squashes), the focused patches tracked upstream as [#1091](https://github.com/ace-step/ACE-Step-1.5/pull/1091) (VRAM preflight opt-out), [#1092](https://github.com/ace-step/ACE-Step-1.5/pull/1092) (DiT param exposure), [#1300](https://github.com/ace-step/ACE-Step-1.5/pull/1300) (failure-cache carries `error`), and [#1301](https://github.com/ace-step/ACE-Step-1.5/pull/1301) (duration-aware LM/DiT VRAM reserve). It also folds in `fix/batch-reduction-surfaced` on `FlexOr2/ACE-Step-1.5` (issue #211: `requested_batch_size`/`delivered_batch_size` in the job result), not yet submitted upstream. `songmaker/vendor-2026-08-24` supersedes the prior `songmaker/vendor-2026-08-20` line and the two loose fix branches it grew (`fix/failure-cache-carries-error`, `fix/duration-aware-lm-reserve`) — those branches still exist for their upstream PRs but are no longer tracked independently; sync by fast-forwarding `songmaker/vendor-2026-10-30`, the branch the submodule tracks.
+Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored submodule is pinned to `ae8abf2` on the fork branch `songmaker/vendor-2026-10-30`, which adds only the Python 3.14 lift (`requires-python` `<3.15` and its re-lock) to `songmaker/vendor-2026-08-24` (`924604f`). That line is based on upstream `main` at `14c0211` and folds in, as clean merges (no squashes), the focused patches tracked upstream as [#1091](https://github.com/ace-step/ACE-Step-1.5/pull/1091) (VRAM preflight opt-out), [#1092](https://github.com/ace-step/ACE-Step-1.5/pull/1092) (DiT param exposure), [#1300](https://github.com/ace-step/ACE-Step-1.5/pull/1300) (failure-cache carries `error`), and [#1301](https://github.com/ace-step/ACE-Step-1.5/pull/1301) (duration-aware LM/DiT VRAM reserve). It also folds in `fix/batch-reduction-surfaced` on `FlexOr2/ACE-Step-1.5` (`requested_batch_size`/`delivered_batch_size` in the job result), not yet submitted upstream. `songmaker/vendor-2026-08-24` supersedes the prior `songmaker/vendor-2026-08-20` line and the two loose fix branches it grew (`fix/failure-cache-carries-error`, `fix/duration-aware-lm-reserve`) — those branches still exist for their upstream PRs but are no longer tracked independently; sync by fast-forwarding `songmaker/vendor-2026-10-30`, the branch the submodule tracks.
 
 ## How Songmaker Uses ACE-Step
 
@@ -82,7 +82,7 @@ was stale), and the new child passes the same LM check as any load. The price is
 one warm reload per training (under 30 seconds with a warm page cache). A kept
 (pinned) mode stays pinned but is not resident until that reload.
 
-**Auto-scoring (issue #222).** Every successfully persisted generation gets a
+**Auto-scoring.** Every successfully persisted generation gets a
 score job automatically — `jobs.generation._auto_score_generation`, called
 from the generation job's own success path. This job is created with
 `user_id=None` so it never counts against the manual re-score button's
@@ -119,11 +119,11 @@ XL models (4B DiT) require ~12GB VRAM with offload, 20GB+ recommended.
 LM models (text planner):
 - `acestep-5Hz-lm-0.6B` — creative, good structure
 - `acestep-5Hz-lm-1.7B` — ACE-Step's own `GPU_TIER_CONFIGS["tier6b"]` (`vendor/acestep/acestep/gpu_config.py`, 20-24GB cards, e.g. RTX 3090/4090) names this the `recommended_lm_model` for that VRAM class; a reasonable choice for a tighter card via `ACESTEP_LM_MODEL_PATH`
-- `acestep-5Hz-lm-4B` — this deployment's default (`WorkerSettings.acestep_lm_model_path`), by operator decision (issue #202, 2026-08-24): 123 historical xl-turbo takes over 120s ran on this card with 4B and never OOMed, and switching the LM would silently change the sound of existing productions. ACE-Step's own tier6b table only recommends 4B once VRAM is `"unlimited"` (≥24GB free for the LM allocator on top of the DiT) — see the VRAM Pre-flight Note below for how this deployment reconciles that gap
+- `acestep-5Hz-lm-4B` — this deployment's default (`WorkerSettings.acestep_lm_model_path`), by operator decision: 123 historical xl-turbo takes over 120s ran on this card with 4B and never OOMed, and switching the LM would silently change the sound of existing productions. ACE-Step's own tier6b table only recommends 4B once VRAM is `"unlimited"` (≥24GB free for the LM allocator on top of the DiT) — see the VRAM Pre-flight Note below for how this deployment reconciles that gap
 
 ### Downloading models
 
-The Admin → ACE-Step → Model Registry panel has a **Download** button on each row that's marked `not downloaded`. Clicking it enqueues a `download_model_on_worker` arq job that picks an online worker, calls `POST /download_model` on the worker, and streams progress (via the worker's `/tasks/{id}/stream` SSE → PG `Job` row → the existing `/api/jobs/{id}/stream` poll loop → the browser). Once `huggingface_hub.snapshot_download` finishes, the worker's next 5-second heartbeat publishes the new `available_modes` and the registry row flips to ✓ downloaded within ~10 seconds. With no worker online, a row's download state is `unknown_no_worker`, not `not_downloaded` — nobody is available to answer the question, so there is no Download button either (issue #252).
+The Admin → ACE-Step → Model Registry panel has a **Download** button on each row that's marked `not downloaded`. Clicking it enqueues a `download_model_on_worker` arq job that picks an online worker, calls `POST /download_model` on the worker, and streams progress (via the worker's `/tasks/{id}/stream` SSE → PG `Job` row → the existing `/api/jobs/{id}/stream` poll loop → the browser). Once `huggingface_hub.snapshot_download` finishes, the worker's next 5-second heartbeat publishes the new `available_modes` and the registry row flips to ✓ downloaded within ~10 seconds. With no worker online, a row's download state is `unknown_no_worker`, not `not_downloaded` — nobody is available to answer the question, so there is no Download button either.
 
 Concurrency guard: a Redis flag (`songmaker:acestep:download:{mode}`, 30-minute TTL) prevents two concurrent downloads of the same mode. The flag is set in the arq job's `try` block and cleared in `finally`; the TTL is the safety net for crashed workers.
 
@@ -131,11 +131,11 @@ For bootstrap (no worker yet running, fresh install, CI), use the CLI escape hat
 
 ## Operating the worker pool
 
-This section is the operator-facing reference for the ACE-Step worker pool architecture (Phases 1–6). For the cross-cutting flow (web → music-worker → acestep-worker) see [architecture.md](architecture.md). For trust boundaries and the internal token, see [security.md](security.md).
+This section is the operator-facing reference for the ACE-Step worker pool architecture. For the cross-cutting flow (web → music-worker → acestep-worker) see [architecture.md](architecture.md). For trust boundaries and the internal token, see [security.md](security.md).
 
 ### Building the worker images
 
-As of Phase 8, the worker images form a small hierarchy with reusable base layers. Building them naively with `docker compose build` will fail because compose doesn't understand the base→leaf dependency. Use the orchestration script:
+The worker images form a small hierarchy with reusable base layers. Building them naively with `docker compose build` will fail because compose doesn't understand the base→leaf dependency. Use the orchestration script:
 
 ```bash
 scripts/build_images.sh           # build everything (bases + leaves)
@@ -163,7 +163,7 @@ python:3.14-slim
 
 **GPU telemetry and health:** NVML (`pynvml`) is used only in `src/acestep_worker/gpu_util.py`. The worker reports VRAM in its heartbeat, which is republished on `/metrics`. `check_gpu_health()` makes the worker's `/health` answer 503 when `pynvml` is present but the device cannot be opened. A missing `pynvml` (CI, a unit test, a laptop) is not a broken worker and never blocks a job.
 
-**The inner ACE-Step venv is baked into `acestep-base` at `/opt/acestep/.venv`.** Pre-Phase-8, it lived in a host bind mount that uv re-resynced from scratch on every fresh container (5–15 minute model-load gate). Now it's in the image. The bind mount on `acestep-worker` only carries `./vendor/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `vendor/acestep/` is COPYed into the image at build time.
+**The inner ACE-Step venv is baked into `acestep-base` at `/opt/acestep/.venv`.** A host bind mount would make uv re-sync it from scratch on every fresh container (a 5–15 minute model-load gate), so it is baked into the image. The bind mount on `acestep-worker` only carries `./vendor/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `vendor/acestep/` is COPYed into the image at build time.
 
 **FFmpeg is a system dependency of the ACE-Step worker image.** `gpu-torch-base` installs the distro `ffmpeg` package, so the inner ACE-Step venv can load TorchCodec's shared FFmpeg libraries while decoding training audio and operators have `ffprobe` available for diagnosis.
 
@@ -176,7 +176,7 @@ with vLLM, and 540 s plus one eviction (15 s grace, 5 s kill) stays under the
 scheduler's 600-second load timeout, so a slow load ends as the worker's own
 error with its log tail.
 
-**Music-worker image bloat fix:** prior to Phase 8, music-worker shared `Dockerfile.worker` with scoring-worker and carried ~5 GB of unused torch + scoring + whisper wheels. Phase 8 split that file into `docker/music-worker.Dockerfile` (server extras only) and `docker/scoring-worker.Dockerfile` (server + scoring + whisper). Music-worker is now ~860 MB. This is safe because music-worker's import chain (`music_worker.py` → `jobs.py` → `scoring.{pipeline,models}`) is torch-free at module load — torch imports inside the scoring stack are lazy (inside function bodies) and music-worker never registers `run_scoring_job`.
+**Music-worker image bloat fix:** music-worker has its own `docker/music-worker.Dockerfile` (server extras only), separate from `docker/scoring-worker.Dockerfile` (server + scoring + whisper), so it carries none of the ~5 GB of torch + scoring + whisper wheels and is ~860 MB. This is safe because music-worker's import chain (`music_worker.py` → `jobs.py` → `scoring.{pipeline,models}`) is torch-free at module load — torch imports inside the scoring stack are lazy (inside function bodies) and music-worker never registers `run_scoring_job`.
 
 ### Prometheus metric keys
 
@@ -197,7 +197,7 @@ The web container's `/metrics` endpoint exposes the following worker pool gauges
 - `sum(songmaker_acestep_worker_queue_depth)` — total backlog across all workers
 - `max by (worker_id) (songmaker_acestep_worker_loaded_models)` — distribution of cached models per worker
 
-**Histograms (deferred):** `songmaker_acestep_model_load_duration_seconds`, `songmaker_acestep_generation_duration_seconds`, and `songmaker_acestep_download_duration_seconds` are NOT in the current `/metrics` output. They need persistent state across requests (`prometheus_client.Histogram`), which would force a new dependency. They're listed for a follow-up phase. For now, use the `Job.started_at`/`completed_at` columns directly via SQL for ad-hoc duration analysis.
+**Durations:** `/metrics` exports no duration histograms (they would need persistent state across requests and a new dependency). Use the `Job.started_at`/`completed_at` columns directly via SQL for ad-hoc duration analysis.
 
 ### Redis key namespace reference
 
@@ -252,7 +252,7 @@ The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container 
 
 ### Restart procedure
 
-The Worker Pool admin panel has a separated **Restart worker…** button at the end of each card. Clicking it opens a confirmation inside that card: **Restart `<id>`?**, **Running takes will stop.**, **Cancel** and **Restart**. Cancel or Escape closes it without restarting; only confirming with Restart calls `POST /api/admin/workers/{id}/restart`, which proxies to the worker's `POST /restart` endpoint. The worker logs the restart request, schedules `os.kill(os.getpid(), SIGTERM)` after a 100 ms delay (so the HTTP response is flushed first), and returns `{"status": "restarting", "pid": ...}`. Restart only works while the worker process is alive to receive that signal; when the card shows offline, the button is disabled and points at restarting the worker's container directly instead (issue #252).
+The Worker Pool admin panel has a separated **Restart worker…** button at the end of each card. Clicking it opens a confirmation inside that card: **Restart `<id>`?**, **Running takes will stop.**, **Cancel** and **Restart**. Cancel or Escape closes it without restarting; only confirming with Restart calls `POST /api/admin/workers/{id}/restart`, which proxies to the worker's `POST /restart` endpoint. The worker logs the restart request, schedules `os.kill(os.getpid(), SIGTERM)` after a 100 ms delay (so the HTTP response is flushed first), and returns `{"status": "restarting", "pid": ...}`. Restart only works while the worker process is alive to receive that signal; when the card shows offline, the button is disabled and points at restarting the worker's container directly instead.
 
 The container is already running when the SIGTERM lands, so the Docker daemon's `restart: unless-stopped` policy restarts *that same container* automatically — this narrow in-process case needs neither docker compose nor a reboot. See [Restart-policy limits and boot autostart](#restart-policy-limits-and-boot-autostart) below for what `unless-stopped` does **not** cover. The new process goes through the normal startup sequence above (FastAPI bind → `/health` 503 → register → `/health` 200). Expected total downtime: ~10–15 s.
 
@@ -264,7 +264,7 @@ To verify the restart cycle from the admin UI: the Worker Pool card flips `onlin
 
 ### Restart-policy limits and boot autostart
 
-`restart: unless-stopped` is a per-container Docker Engine policy, not a docker-compose feature: the daemon consults it whenever a container's own process exits, and again for every container whose last recorded state was `running` when the daemon itself restarts. It has one hard limit — **it only ever applies to a container that has been started at least once.** A container docker compose merely *created* but never started (e.g. `docker compose up` failing partway through, such as the NVIDIA driver mismatch in #252) sits in state `Created` with `RestartCount: 0`. Docker ignores `Created` containers on every daemon start and every host reboot, indefinitely — there is no timeout and no self-heal. The only way out is an explicit `docker start <container>` or `docker compose up -d`.
+`restart: unless-stopped` is a per-container Docker Engine policy, not a docker-compose feature: the daemon consults it whenever a container's own process exits, and again for every container whose last recorded state was `running` when the daemon itself restarts. It has one hard limit — **it only ever applies to a container that has been started at least once.** A container docker compose merely *created* but never started (e.g. `docker compose up` failing partway through, such as an NVIDIA driver mismatch) sits in state `Created` with `RestartCount: 0`. Docker ignores `Created` containers on every daemon start and every host reboot, indefinitely — there is no timeout and no self-heal. The only way out is an explicit `docker start <container>` or `docker compose up -d`.
 
 **`docker compose ps` hides this.** Without `-a` it omits containers in `Created`, so the stack can look fully up when a container has in fact never run once. Diagnose a suspected stuck container with:
 
@@ -295,7 +295,7 @@ sudo reboot
 docker compose ps -a                                # confirm: State = running, no manual `docker start` needed
 ```
 
-### Auto-deploy and generation jobs (issue #298)
+### Auto-deploy and generation jobs
 
 `scripts/auto-deploy.sh` (a systemd timer, see [Auto-Deploy](architecture.md#auto-deploy) in `docs/architecture.md` for the full mechanism) redeploys the stack when a release tag (`vYYYY.MM.DD.N`) is cut on a green `main` commit; a merge alone deploys nothing. The honest guarantee is never against a job that was active at the moment the guard last checked, not "never mid-generation" outright: it checks `jobs.status IN ('queued', 'running')` before checking out, again right after the image build (which does not touch running containers) and immediately before `docker compose up -d --wait` (the step that recreates acestep-worker and music-worker, killing whatever ACE-Step subprocess call is in flight — incident 2026-08-30 18:31, a redeploy mid-generation dropped every active stream). Splitting the build from the recreate keeps that residual window to the few seconds between the second check and the recreate, not the build's 8-15 minutes. A tick that finds jobs active defers to the next one — same "the next tick retries" tolerance this doc already gives migration lock_timeout failures like `c9d4a2f18e37` — and the next tick finds the image already built, so its own recheck lands within seconds.
 
@@ -465,7 +465,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `ACESTEP_CHECKPOINT_DIR` | `/opt/acestep` | Where ACE-Step model weights live |
 | `AUDIO_OUTPUT_DIR` | `/app/data/worker_output` | The worker's container-local output root for generated WAVs. The worker empties it at every start and refuses one that overlaps its shared audio root. Music fetches each take from it with `GET /tasks/{task_id}/result`, then frees it with `DELETE` of the same path; the task store's expiry sweep removes a file left behind together with its task record. The `done` payload carries no path |
 | `ACESTEP_LOG_DIR` | `/opt/acestep/logs` | Where the subprocess's merged stdout+stderr is captured. Each load attempt appends a `=== {mode} attempt at {iso} ===` header so retry history isn't clobbered. Also forwarded line-by-line to the worker's own logger as `[ace-step {mode}] ...` (visible in `docker compose logs songmaker-acestep-worker-0`). |
-| `ACESTEP_INNER_PORT` | 8101 | Base port for ACE-Step subprocesses (inside the container). Each loaded model mode gets `base_port + offset`, offset taken from the mode's position in `MODEL_CONFIG_PATHS` (`subprocess_runner.MODEL_INNER_PORT_OFFSETS`) — this keeps two simultaneously loaded modes from colliding on one port, which used to make the second mode's health check see the first mode's still-running server and falsely report ready (issue #205) |
+| `ACESTEP_INNER_PORT` | 8101 | Base port for ACE-Step subprocesses (inside the container). Each loaded model mode gets `base_port + offset`, offset taken from the mode's position in `MODEL_CONFIG_PATHS` (`subprocess_runner.MODEL_INNER_PORT_OFFSETS`) — this keeps two simultaneously loaded modes from colliding on one port, which used to make the second mode's health check see the first mode's still-running server and falsely report ready |
 | `ACESTEP_STARTUP_TIMEOUT_SECONDS` | 540 | Max seconds to wait for the subprocess to become healthy, which now includes the eager DiT and LM init. Cold xl-turbo + vLLM cold-init can take 5–8 min on the very first load after a container start (page cache and torch JIT cache are empty). Once warm, subsequent loads are <30 s. On timeout, the last 2 KB of the merged log is included in the `SubprocessStartError` and surfaces in the admin job error. |
 | `ACESTEP_SHUTDOWN_GRACE_SECONDS` | 15 | SIGTERM grace period before SIGKILL |
 | `ACESTEP_SHUTDOWN_KILL_SECONDS` | 5 | SIGKILL grace period |
@@ -485,7 +485,7 @@ Most of these are set on the subprocess by `subprocess_runner.py:build_env()` wh
 | `ACESTEP_CONFIG_PATH` | per-mode (e.g. `acestep-v15-sft`) | DiT model variant — set dynamically per `load_model` call from `MODEL_CONFIG_PATHS` |
 | `ACESTEP_NO_INIT` | `0` (hardcoded) | Load the DiT and the LM before the subprocess answers `/health`, so a load returns only when both are resident (ACE-Step's default defers them to the first generation) |
 | `ACESTEP_INIT_LLM` | `1` | Load the LM on startup |
-| `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name. Default is this deployment's proven setup (operator decision, issue #202); lower to `acestep-5Hz-lm-1.7B` on a tighter card — ACE-Step's own `tier6b` `recommended_lm_model` (see Model Variants above) |
+| `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name. Default is this deployment's proven setup; lower to `acestep-5Hz-lm-1.7B` on a tighter card — ACE-Step's own `tier6b` `recommended_lm_model` (see Model Variants above) |
 | `ACESTEP_LM_DIT_RESERVE_DURATION_S` | unset → GPU tier's `max_duration_with_lm` (480 on a 24GB card) | Longest track the LM keeps DiT inference room for. Lower it for a larger LM KV cache, raise it for longer tracks — see the VRAM Pre-flight Note |
 | `ACESTEP_LM_DIT_RESERVE_BATCH` | unset → `1` | Samples per request the LM keeps DiT inference room for — see "The batch cliff" |
 | `ACESTEP_SKIP_VRAM_PREFLIGHT` | `0` | Emergency bypass of the DiT VRAM pre-flight; a refused generation then OOMs instead — see the VRAM Pre-flight Note |
@@ -542,7 +542,7 @@ The `S8-*` cases in the scheduler, generation-failure, jobs and API tests verify
 this contract through persistence, GET and live SSE. Reload recovers timestamped
 OOM PARTIAL jobs until a newer generate-family attempt or a non-archived take
 created strictly after completion supersedes them. Historical PARTIAL rows without
-completion timestamps are not backfilled. UI presentation remains slice 14 of #916.
+completion timestamps are not backfilled.
 The client and worker contract is verified by the `S7-*` cases in
 [`test_client.py`](../tests/acestep_engine/test_client.py),
 [`test_task_store.py`](../tests/acestep_worker/test_task_store.py) and
@@ -558,11 +558,11 @@ The vendored fork keeps `_vram_preflight_check()` enabled by default. Before che
 
 Targeted fork tests lock both branches of the policy: the pre-flight runs when the flag is unset and is bypassed only for an explicit truthy opt-out.
 
-### How the LM leaves room for the DiT (issue #202)
+### How the LM leaves room for the DiT
 
 The pre-flight and the LM allocator used to measure the same GPU with different rulers, and that is what rejected long xl-turbo takes on this card. ACE-Step's LM allocator (`gpu_config.py:get_lm_gpu_memory_ratio`) kept a *constant* `dit_reserve_gb = 1.5` free, while the pre-flight demands `DIT_INFERENCE_VRAM_PER_BATCH[dit_key] * batch * duration/60 + 0.5`. The two agree at 120s and diverge after that, so with `acestep-5Hz-lm-4B` resident the DiT was left 1.30 GB where a 165s take needs 1.88 GB.
 
-The fork now sizes that reserve with the pre-flight's own formula — folded into `songmaker/vendor-2026-08-24` on `FlexOr2/ACE-Step-1.5` (originally `fix/duration-aware-lm-reserve`), upstream PR [#1301](https://github.com/ace-step/ACE-Step-1.5/pull/1301). Three things changed:
+The fork now sizes that reserve with the pre-flight's own formula — folded into `songmaker/vendor-2026-08-24` on `FlexOr2/ACE-Step-1.5`, upstream PR [#1301](https://github.com/ace-step/ACE-Step-1.5/pull/1301). Three things changed:
 
 - **The reserve is duration- and batch-aware.** `get_dit_inference_reserve_gb()` mirrors the pre-flight and adds `DIT_RESERVE_HEADROOM_GB = 0.5`. The LM initializes before any request, so the reserve is sized for the longest track and the batch size the deployment intends to render with the LM resident — the GPU tier's `max_duration_with_lm` (480s here) and one sample, overridable with `ACESTEP_LM_DIT_RESERVE_DURATION_S` and `ACESTEP_LM_DIT_RESERVE_BATCH`. The resident DiT's checkpoint path now reaches the LM init, so an XL DiT reserves XL activations instead of the default profile.
 - **The reserve comes out of the KV cache, never out of the LM weights — and never below what the LM can legally need.** The floor is what nano-vllm's scheduler actually requires: blocks for a full `max_model_len` window, doubled because classifier-free guidance (`lm_cfg_scale > 1`, which songmaker sends on every request) schedules the conditional and the unconditional sequence as a pair. The floor is derived from the checkpoint's own `config.json` (layers × KV heads × head dim × dtype), not from an estimate table — for `acestep-5Hz-lm-4B` that is 2 × 4096 tokens × 144 KB = **1.13 GB**. When the reserve would cut into that floor, the shortfall is logged with the track length that *is* supported; when even the floor does not fit, the LM fails to initialize with that message instead of the DiT hitting an OOM or nano-vllm raising `Insufficient KV cache to schedule sequence` mid-generation. The `min(0.9, …)` ratio clamp logs a warning when it caps, too.
@@ -597,9 +597,9 @@ A refused batch job fails cleanly and its message names the remedy — `Insuffic
 
 `ACESTEP_LM_DIT_RESERVE_DURATION_S` is the other lever: lowering it hands the LM a larger KV cache (better for long lyrics), raising it hands the DiT more room. This deployment leaves both unset and takes the tier default, which on a 24 GB card with the 4B LM lands in the capped case and says so once per subprocess start.
 
-### Batch reduction is surfaced, not refused (issue #211)
+### Batch reduction is surfaced, not refused
 
-The pre-flight above only ever sees the batch size it's handed — and it isn't handed the one the caller asked for. `memory_utils.py:_vram_guard_reduce_batch()` runs first, inside `_prepare_generate_music_runtime()`, and can shrink a requested `batch_size` down to what free VRAM actually supports (e.g. 2 → 1) *before* `_vram_preflight_check()` ever runs on the (already-shrunk) number. Operator decision 2026-08-24: don't turn this into a hard refusal — deliver what VRAM allows, but never silently. The fork now threads both numbers through the same job-result path issue #202 added `error` to:
+The pre-flight above only ever sees the batch size it's handed — and it isn't handed the one the caller asked for. `memory_utils.py:_vram_guard_reduce_batch()` runs first, inside `_prepare_generate_music_runtime()`, and can shrink a requested `batch_size` down to what free VRAM actually supports (e.g. 2 → 1) *before* `_vram_preflight_check()` ever runs on the (already-shrunk) number. Operator decision: don't turn this into a hard refusal — deliver what VRAM allows, but never silently. The fork now threads both numbers through the same job-result path `error` rides on:
 
 - `GenerateMusicRequestMixin._prepare_generate_music_runtime()` returns `requested_batch_size` alongside the already-existing `actual_batch_size`.
 - `_build_generate_music_success_payload()` puts both on the handler's result dict as `requested_batch_size` / `delivered_batch_size`.
@@ -607,25 +607,4 @@ The pre-flight above only ever sees the batch size it's handed — and it isn't 
 
 On the songmaker side, `acestep_engine.models.ResultItem`/`AceStepResult` parse the two fields (mirroring `error`/`status_message`). `StoredGenerationParams.batch_size` persists the *requested* side onto `Generation.generation_params` whenever it isn't the trivial default of 1 (previously dropped silently, even though `ParamControls`/`acestep-param-fields.ts` already expose it as an editable knob). The chain is wired all the way through the worker: `acestep_worker.models.GenerationTaskResult` and `src/songmaker_cli/scheduler.py`'s `GenerationTaskResultDTO` both carry `delivered_batch_size` (kept in lockstep by `tests/songmaker_cli/test_scheduler.py::test_dto_keys_match_worker_model_fields`, a drift guard), `wrapper.py`'s `default_generate_runner` copies `AceStepResult.delivered_batch_size` onto the task result, and `_persist_generation_row()` writes `StoredGenerationParams.delivered_batch_size` onto the generation — but only when it actually diverges from the requested `batch_size` (the fork always reports a concrete delivered count, matching or not, so the persistence layer is what keeps an unreduced batch from adding noise to every row).
 
-`frontend/src/lib/constants/now-playing.ts:takeBatchReductionLabel()` turns the pair into a `⚠ N of M` badge on the take row (`TakesList.svelte`, pattern from the model badge in #213) whenever both are present and differ. The take recipe panel (`recipe-summary.ts`) shows the same value next to "Batch Size" under Model & Sampling — `delivered_batch_size` isn't an editable `ParamControls` knob, so it gets an explicit registry-adjacent entry rather than falling into the generic "Other" catch-all.
-
-## Deferred features (blocked upstream)
-
-Things we'd like to expose but can't until ACE-Step changes — written down so we don't repeatedly investigate the same dead ends.
-
-### `use_cot_metas` toggle
-
-**What it would do:** Let the user disable the LM's automatic inference of BPM, key signature, and time signature from caption + lyrics, forcing the engine to respect explicit values instead.
-
-**Why it's blocked:** The flag exists internally in the ACE-Step engine ([`acestep/api/job_generation_setup.py`](../vendor/acestep/acestep/api/job_generation_setup.py) sets it from `sample_mode`) and in the unrelated [`openrouter_models.py`](../vendor/acestep/acestep/openrouter_models.py) compatibility schema, but **the canonical `/release_task` HTTP request schema does not accept it as user input**:
-
-- [`release_task_models.py`](../vendor/acestep/acestep/api/http/release_task_models.py) declares only `use_cot_caption` and `use_cot_language` as boolean inputs
-- [`release_task_param_parser.py`](../vendor/acestep/acestep/api/http/release_task_param_parser.py) parameter alias allowlist does not include `use_cot_metas` under any name
-
-Sending the field in the wire payload would be silently dropped. A UI toggle would appear to work but have **zero effect** on generation.
-
-**What needs to change upstream:** ACE-Step needs to add `use_cot_metas` to the `/release_task` request model and the param parser allowlist.
-
-**Investigation date:** 2026-04-09. Re-check after a vendored submodule bump.
-
-**When unblocked:** ~10 lines of plumbing — add field to [`AceStepConfig`](../src/acestep_engine/models.py), [`GenerationParams`](../src/songmaker_cli/api_models/songs.py), [`AceStepProfile`](../src/songmaker_cli/acestep_capabilities.py), and the wire payload in [`acestep_engine/client.py`](../src/acestep_engine/client.py); add a tooltip in [`acestep-params.ts`](../frontend/src/lib/constants/acestep-params.ts) and a field definition in [`acestep-param-fields.ts`](../frontend/src/lib/constants/acestep-param-fields.ts), which [`ParamControls.svelte`](../frontend/src/lib/components/ParamControls.svelte) renders automatically.
+`frontend/src/lib/constants/now-playing.ts:takeBatchReductionLabel()` turns the pair into a `⚠ N of M` badge on the take row (`TakesList.svelte`, the same pattern as the model badge) whenever both are present and differ. The take recipe panel (`recipe-summary.ts`) shows the same value next to "Batch Size" under Model & Sampling — `delivered_batch_size` isn't an editable `ParamControls` knob, so it gets an explicit registry-adjacent entry rather than falling into the generic "Other" catch-all.

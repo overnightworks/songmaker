@@ -4,9 +4,6 @@
 # gpu-torch-base. The pre-installed torch from gpu-torch-base is preserved;
 # `uv sync --frozen` only installs the delta deps (diffusers, transformers,
 # peft, nano-vllm, gradio, etc).
-#
-# Verified by HARD checkpoint A.5 in plans/acestep-worker-pool-phase8-subplan.md
-# that the delta install does NOT reinstall torch/torchvision/torchaudio/cuda libs.
 FROM songmaker/gpu-torch-base:latest
 
 USER songmaker
