@@ -1,0 +1,8 @@
+claim_id = "68878f000e8c4b7596ed06bb0ae52dd5"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "4c93aaabec21eda3df0f20c7d9ce67743d2dd4d6"
+branch = "claude/issue-2350-get-scoring-schema-leaves"
+scope = ["frontend/src/lib/api/types.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/scoring/registry.py", "tests/songmaker_cli/test_api.py"]
+opened_commit = "d02dc0a0c7ae9bc0b56bf3d33eca529c2712f238"
+whole_reason = "One route and the two models only it uses leave together, with the generated types that mirror them."
