@@ -332,35 +332,7 @@ true by then; a playlist opened before its slug is known falls back to
 stays the rail context behind it, Home addresses `/` and
 the wall `/library`, and an album or playlist that is only the rail context
 behind either stays on that address (only an album's own detail addresses
-`/album/<slug>`). The legacy `/?song=<id>[&gen=…]` form a pre-#275/#281 bookmark
-or shared link still carries is no longer read as its own entry point:
-`(library)/+page.svelte` resolves it (`resolveLegacySongQueryAddress` in
-`stores/libraryContext.ts` — one `fetchSong` call gets both the slug and,
-when `?gen=` names a generation the song still has, its `generation_number`)
-and redirects, `replaceState`, onto the canonical song or take address —
-issue #284 — so Back does not step back through the query form, and an
-unknown song id gets the same honest 404 treatment `openSongAddress`'s
-unknown-song case does rather than a silent landing on the wall. Home's route
-calls `openHomeAddress` only when the query names no song, so a legacy address
-is never written over with `/` while its lookup is in flight (#1506); the
-Library's route ignores `?song=` altogether. An unknown `?gen=` on an
-otherwise known song is dropped rather than 404ed — the song still exists,
-and takes are pruned by ordinary cleanup, so a dead take is not the song's
-own failure — but not silently: dropping it without saying so would still
-hide a fact the surface knows, so the page toasts
-`LEGACY_TAKE_LINK_NOT_FOUND_TOAST` once the redirect has landed on the song
-address (never before — the bar must already read the new address when the
-toast explains why it isn't the take one). A tab whose history entry
-already names this exact legacy entry (a song not yet in `songList` when its
-address was written keeps the query form as a same-shape fallback —
-`libraryHistoryUrl`'s own comment — so a later Back/Forward can return to
-one) has `onPopstate` apply that state instantly from its history entry; the
-page checks for exactly this before resolving anything itself and, when it
-matches, skips its own network round trip and the overlay entirely rather
-than re-resolving the same address in parallel (issue #265's S7 closed the
-double-resolve this way, once removing the hand-built router guard below
-made writing this check the smaller fix — no other read of the entry
-here needed it, so it stayed a known, self-healing race until then).
+`/album/<slug>`). Home's route calls `openHomeAddress`, which replaces the entry with `/` and drops any query; the Library's route ignores one.
 `isLibraryWorkspacePath` still counts all seven by pathname (every address
 `libraryRouteShape` in `routes/addresses.ts` gives a library shape) rather
 than by the route group, since `routes/+layout.svelte` sits outside
@@ -488,8 +460,7 @@ mirrors this for the currently open playlist, subscribed to `selectedPlaylist`
 (derived from `playlistList` + the open collection) rather than a song-list
 upsert, since a playlist rename already writes its own row back into
 `playlistList` via `updatePlaylistInList`. An ordinary edit (lyrics, prompt,
-cover, entry reorder) does not re-touch either address, and a still-legacy
-`/?song=…` address is left alone rather than upgraded mid-session.
+cover, entry reorder) does not re-touch either address.
 
 The single source of navigation truth for "what collection is open" is the
 leaf store `stores/collection.ts` (`openCollection: {kind: 'album'|'playlist',
@@ -497,7 +468,7 @@ id} | null`), which nothing but `openAlbum`/`openPlaylist`/history restore in
 `stores/navigation.ts` and `loadPlaylistDetail` in `stores/playlists.ts`
 write. `playlists.ts`'s `selectedPlaylistId` is derived from it, not
 independently writable. Opening a song — whatever the entry point (rail row,
-search hit, a redirected legacy `?song=` link, history restore) — always leaves the rail
+search hit, history restore) — always leaves the rail
 context pointing at that song's album: a module-level subscription in
 `navigation.ts` sets `openCollection` to the song's album whenever it doesn't
 already match, so the album is never unreachable while a song is open (the
@@ -1457,7 +1428,7 @@ album list's bounded reload lives in `stores/libraryData.ts`, which the rail and
 the wall only read. The Admin, My Voices and cleanup pages read through it, and
 a list that never loaded claims no empty state; the admin panels' polling
 (`stores/adminPolling.ts`) resumes once back online. An address page with
-nothing loaded (playlist, album, song, take, Home `?song=`) keeps its one line
+nothing loaded (playlist, album, song, take) keeps its one line
 with Try again under the strip and opens by itself once back online. The audio
 player words a lost network as its generic "Playback failed". Such a self-healing failed refresh retries on the streams'
 backoff capped below 10 seconds, so a network that returns without an `online`

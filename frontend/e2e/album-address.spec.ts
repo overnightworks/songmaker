@@ -12,29 +12,19 @@
 // layout mounts LibraryWorkspace once, so a crossing swaps only the thin leaf
 // page underneath. That the app writes these addresses when an album, a song
 // or a take opens is pinned in the unit suite (stores/navigation.test.ts),
-// which costs the stack nothing. The fifth address this file drives, the
-// legacy `/?song=<uuid>` a pre-#275 bookmark or link still carries, is not a
-// fifth route -- (library)/+page.svelte redirects it onto the song address
-// above (issue #284) -- so what only a real browser and router show is that
-// the redirect actually lands there and that Back does not step back through
-// the query form; the id -> slug lookup itself is pinned in the unit suite
-// (resolveLegacySongQueryAddress in stores/libraryContext.test.ts).
+// which costs the stack nothing.
 
 import { expect, test, type Page } from '@playwright/test';
 import { RESOURCE_SYNC_ERROR, songEditorOpenLabel } from '../src/lib/constants';
-import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
-import { FlowGuard, ONLY_IN_SHELL, workspace, HOME_PATH } from './helpers';
+import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
  * What each test costs the API, measured in CI: 30 for the cold album open +
  * one-step track click + Back/Forward, 20 for the standalone cold song open and
  * 17 to 20 for the standalone cold take open, since neither crosses a route to
- * begin with. The two legacy `/?song=` rows with a genuine earlier page are two
- * cold page loads (that page, then the bookmark): 27 to 29. The third is one
- * cold load held while its lookup is in flight: 15. Those counts are not fixed
- * costs: the second load's own snapshot bootstrap can lose its race against the
- * redirect's own fetch the way a cold take open's already does. One shared
+ * begin with. Those counts are not fixed costs: a cold load's own snapshot
+ * bootstrap can lose its race against the address's own fetch. One shared
  * ceiling, sized to the largest with the same headroom the library flow
  * carries — all of this file's flows share one 60-second IP rate-limit window,
  * so a jump here is a regression to find, not a number to raise.
@@ -43,7 +33,6 @@ const ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET = 33;
 
 const LIVE_STREAM_PATH = '/api/resource-events/stream';
 const WORKSPACE_LOADING_TEXT = 'Loading...';
-const WORKSPACE_RESOLVING_SONG_TEXT = 'Loading song...';
 
 let guard: FlowGuard;
 
@@ -98,8 +87,7 @@ test(
 		await expectWorkspaceStanding(page);
 
 		// A track click lands under the song's own address, its slug, in one
-		// navigation step — `/album/<slug>/<song-slug>` rather than the address-less
-		// `/?song=…` issue #269 left this on. Both are a route-file crossing (a
+		// navigation step — `/album/<slug>/<song-slug>`. Both are a route-file crossing (a
 		// different +page.svelte owns each of the three addresses), but the
 		// `(library)` route group's own layout keeps LibraryWorkspace standing
 		// across it (issue #276), so the editor no longer remounts on the way
@@ -174,123 +162,6 @@ test(
 		await page.goto(takeAddress);
 
 		await expect(surface.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
-		await expectWorkspaceStanding(page);
-	}
-);
-
-interface LegacyAddressSong {
-	id: string;
-	address: string;
-	takeId: string;
-	takeNumber: number;
-}
-
-/** The seeded picked song, with the ids a pre-#275 bookmark or link carried. */
-async function legacyAddressSong(page: Page): Promise<LegacyAddressSong> {
-	const library = readSeededLibrary();
-	const songsResponse = await page.request.get(`/api/songs?album_id=${library.albumId}`);
-	const songs = (await songsResponse.json()).items as { id: string; title: string }[];
-	const pickedSong = songs.find((item) => item.title === library.pickedSongTitle);
-	if (!pickedSong) {
-		throw new Error(`Seeded song "${library.pickedSongTitle}" was not in the album listing`);
-	}
-	const song = await (await page.request.get(`/api/songs/${pickedSong.id}`)).json();
-	const [take] = song.generations as { id: string; generation_number: number }[];
-	return {
-		id: pickedSong.id,
-		address: `/album/${library.albumId}/${expectedSongSlug(library.pickedSongTitle)}`,
-		takeId: take.id,
-		takeNumber: take.generation_number
-	};
-}
-
-const homeHeading = (page: Page) =>
-	workspace(page).getByRole('heading', { name: HOME_PAGE_LABEL, exact: true });
-
-test(
-	'1354_rule_31 row 9a: a legacy /?song= bookmark redirects onto the song address, and Back lands the entry before it, not the old form',
-	{ tag: ONLY_IN_SHELL.desktop },
-	async ({ page }) => {
-		// Same reasoning as the three cold-opens above: shell-independent router
-		// behaviour, and this file's flows already share a budget window. The
-		// redirect itself -- resolving the id, dropping an unknown ?gen=, and 404ing
-		// an unknown song id -- is pinned cheaply in the unit suite
-		// (resolveLegacySongQueryAddress in stores/libraryContext.test.ts); what
-		// only a real browser and a real router show is that the address bar
-		// actually lands on the canonical form and that Back does not step back
-		// through the query one -- issue #284's own done-when.
-
-		const library = readSeededLibrary();
-		const song = await legacyAddressSong(page);
-		const surface = workspace(page);
-
-		// A genuine earlier page first, so Back has somewhere honest to land --
-		// the legacy address itself must not be that place.
-		await page.goto(HOME_PATH);
-		await expectWorkspaceStanding(page);
-
-		await page.goto(`/?song=${song.id}`);
-		await expect(page).toHaveURL(song.address);
-		await expect(surface.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
-		await expectWorkspaceStanding(page);
-
-		await page.goBack();
-		await expect(page).toHaveURL(HOME_PATH);
-		await expect(homeHeading(page)).toBeVisible();
-	}
-);
-
-test(
-	'1354_rule_31 row 9b: a legacy /?song=&gen= bookmark redirects onto the take address, and Back lands the entry before it',
-	{ tag: ONLY_IN_SHELL.desktop },
-	async ({ page }) => {
-		const library = readSeededLibrary();
-		const song = await legacyAddressSong(page);
-		await page.goto(HOME_PATH);
-		await expectWorkspaceStanding(page);
-
-		await page.goto(`/?song=${song.id}&gen=${song.takeId}`);
-
-		await expect(page).toHaveURL(`${song.address}/take/${song.takeNumber}`);
-		await expect(
-			workspace(page).getByRole('heading', { name: library.pickedSongTitle })
-		).toBeVisible();
-		await expectWorkspaceStanding(page);
-		await page.goBack();
-		await expect(page).toHaveURL(HOME_PATH);
-		await expect(homeHeading(page)).toBeVisible();
-	}
-);
-
-test(
-	'1354_rule_31 row 9c: Home never strips a legacy /?song= address while its lookup is still in flight',
-	{ tag: ONLY_IN_SHELL.desktop },
-	async ({ page }) => {
-		const library = readSeededLibrary();
-		const song = await legacyAddressSong(page);
-		let releaseLookup!: () => void;
-		const lookupReleased = new Promise<void>((release) => (releaseLookup = release));
-		let heldLookups = 0;
-		await page.route(
-			(url) => url.pathname === `/api/songs/${song.id}`,
-			async (route) => {
-				heldLookups += 1;
-				await lookupReleased;
-				await route.continue();
-			}
-		);
-
-		await page.goto(`/?song=${song.id}`);
-		await expect.poll(() => heldLookups, 'the lookup is held in flight').toBeGreaterThan(0);
-
-		await expect(page.getByText(WORKSPACE_RESOLVING_SONG_TEXT, { exact: true })).toBeVisible();
-		await expect(page).toHaveURL(`/?song=${song.id}`);
-		releaseLookup();
-
-		await expect(page).toHaveURL(song.address);
-		await expect(
-			workspace(page).getByRole('heading', { name: library.pickedSongTitle })
-		).toBeVisible();
 		await expectWorkspaceStanding(page);
 	}
 );

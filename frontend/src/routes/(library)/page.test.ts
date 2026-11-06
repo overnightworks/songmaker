@@ -10,9 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
-import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import { browserReportsOnline } from '#lib/test-utils/network.ts';
-import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { resetCollectionForTests } from '#lib/stores/collection.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
@@ -85,7 +82,7 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 }));
 
 import { goto } from '$app/navigation';
-import LegacySongQueryHarness from './harness.svelte';
+import HomeAddressHarness from './harness.svelte';
 import LibraryAddressHarness from './library/harness.svelte';
 
 interface RoutePage {
@@ -99,7 +96,7 @@ interface RoutePage {
 const ROUTE_PAGES: RoutePage[] = [
 	{
 		route: HOME_ROUTE_PATH,
-		harness: LegacySongQueryHarness,
+		harness: HomeAddressHarness,
 		surface: 'home',
 		shown: '.library-home',
 		hidden: ['.library-wall']
@@ -164,14 +161,14 @@ function workspaceWrapper(root: HTMLElement): HTMLElement {
 	return requireElement(root, '.workspace-wrapper');
 }
 
-function openAddress(harness: Component = LegacySongQueryHarness): HTMLElement {
+function openAddress(harness: Component = HomeAddressHarness): HTMLElement {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted.push(mount(harness, { target }));
 	return target;
 }
 
-// A tab that knows nothing but a legacy `?song=` (and maybe `&gen=`) address:
+// A tab that knows nothing but its address:
 // no library stores, no history state, nothing opened before -- with the
 // live library stream running, which routes/+layout.svelte starts for every
 // signed-in library route.
@@ -215,7 +212,7 @@ beforeEach(() => {
 	api.fetchVersions.mockReset().mockResolvedValue([]);
 	api.fetchLastFailedGeneration.mockReset().mockResolvedValue({ job: null });
 	api.fetchActiveModels.mockReset().mockResolvedValue([]);
-	coldTabAt(`?song=${SONG_ID}`);
+	coldTabAt('');
 });
 
 afterEach(() => {
@@ -229,7 +226,7 @@ afterEach(() => {
 });
 
 describe.each(ROUTE_PAGES)(
-	'$route with no ?song= query',
+	'$route with no query',
 	({ route, harness, surface, shown, hidden }) => {
 		it('1354_rule_31: resolves its entry without adding a Back step', async () => {
 			coldTabAt('', route);
@@ -246,7 +243,7 @@ describe.each(ROUTE_PAGES)(
 	}
 );
 
-describe('/ with no ?song= query', () => {
+describe('/ with no query', () => {
 	it('renders nothing and leaves the workspace reachable', async () => {
 		coldTabAt('');
 
@@ -258,8 +255,8 @@ describe('/ with no ?song= query', () => {
 	});
 });
 
-describe('/library with a legacy ?song= query', () => {
-	it('1354_rule_31: ignores the query, since only Home redirects the legacy form', async () => {
+describe('/library with a song query', () => {
+	it('1354_rule_31: ignores the query', async () => {
 		coldTabAt(`?song=${SONG_ID}`, LIBRARY_ROUTE_PATH);
 
 		const target = openAddress(LibraryAddressHarness);
@@ -274,9 +271,15 @@ describe('/library with a legacy ?song= query', () => {
 	});
 });
 
-describe('an empty legacy song query', () => {
-	it.each(['?song=', '?song=&gen=' + GENERATION_ID])(
-		'1354_rule_31: shows Home without fetching a song for %s',
+describe('/ with a query', () => {
+	it.each([
+		'?song=',
+		'?song=&gen=' + GENERATION_ID,
+		`?song=${SONG_ID}`,
+		`?song=${SONG_ID}&gen=${GENERATION_ID}`,
+		'?x=1'
+	])(
+		'1354_rule_31: shows Home, drops the query and fetches no song for %s',
 		async (query) => {
 			coldTabAt(query);
 			const target = openAddress();
@@ -291,383 +294,4 @@ describe('an empty legacy song query', () => {
 			expect(api.fetchSong).not.toHaveBeenCalled();
 		}
 	);
-});
-
-describe('a legacy /?song= address redirects', () => {
-	it.each(['?song=' + SONG_ID, `?song=${SONG_ID}&gen=${GENERATION_ID}`])(
-		'1354_rule_31: preserves %s while legacy resolution waits',
-		async (query) => {
-			coldTabAt(query);
-			api.fetchSong.mockReturnValue(new Promise(() => {}));
-
-			const target = openAddress();
-
-			await vi.waitFor(() => expect(target.textContent).toContain('Loading song'));
-			expect(location.search).toBe(query);
-		}
-	);
-
-	it('resolves the id and replaces the address with the canonical song address', async () => {
-		api.fetchSong.mockResolvedValue(
-			song({
-				album_title: 'Anfield',
-				generation_count: 0,
-				id: SONG_ID,
-				slug: SONG_SLUG,
-				title: TRACK_TITLE,
-				album_id: ALBUM_SLUG
-			})
-		);
-
-		openAddress();
-
-		await vi.waitFor(() =>
-			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replace: true,
-				reset: false
-			})
-		);
-		expect(window.location.pathname).toBe(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
-	});
-
-	it('resolves a song+gen pair onto the canonical take address', async () => {
-		coldTabAt(`?song=${SONG_ID}&gen=${GENERATION_ID}`);
-		api.fetchSong.mockResolvedValue(
-			song({
-				album_title: 'Anfield',
-				id: SONG_ID,
-				slug: SONG_SLUG,
-				title: TRACK_TITLE,
-				album_id: ALBUM_SLUG,
-				generation_count: 1,
-				generations: [
-					{
-						id: GENERATION_ID,
-						song_id: SONG_ID,
-						version_id: 'v1',
-						version_number: 1,
-						generation_number: 3,
-						mp3_path: '/audio/g.mp3',
-						wav_path: null,
-						seed: 1,
-						status: 'completed',
-						is_archived: false,
-						is_picked: false,
-						is_kept: false,
-						is_shared: false,
-						model_mode: 'turbo',
-						whisper_text: null,
-						whisper_cues: null,
-						version_lyrics: null,
-						scores: null,
-						generation_params: null,
-						audio_duration_sec: null,
-						created_at: '2026-01-01T00:00:00+00:00'
-					}
-				]
-			})
-		);
-
-		openAddress();
-
-		await vi.waitFor(() =>
-			expect(goto).toHaveBeenCalledWith(
-				`/album/${ALBUM_SLUG}/${SONG_SLUG}/take/3`,
-				expect.objectContaining({ replace: true })
-			)
-		);
-	});
-
-	it('shows the resolving overlay, inert over the workspace, while the fetch is in flight', async () => {
-		let resolveFetch: ((value: SongItem) => void) | undefined;
-		api.fetchSong.mockReturnValue(
-			new Promise((res) => {
-				resolveFetch = res;
-			})
-		);
-
-		const target = openAddress();
-
-		await vi.waitFor(() => expect(target.textContent).toContain('Loading song'));
-		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
-
-		resolveFetch?.(
-			song({
-				album_title: 'Anfield',
-				generation_count: 0,
-				id: SONG_ID,
-				slug: SONG_SLUG,
-				title: TRACK_TITLE,
-				album_id: ALBUM_SLUG
-			})
-		);
-		await vi.waitFor(() => expect(goto).toHaveBeenCalled());
-	});
-});
-
-// Issue #265's S7: a song not yet in songList when its address was first
-// written keeps the legacy query form as writeLibraryHistory's own
-// same-shape fallback (libraryHistoryUrl's comment on the songId branch), so
-// a later Back/Forward can land back on it. onPopstate (navigation.ts)
-// applies that restore state instantly from its history entry -- this page used
-// to re-resolve the same address over the network in parallel every time,
-// a redundant round trip and a brief overlay flash this check now skips.
-describe('a legacy /?song= address whose history entry already carries the answer', () => {
-	it('skips the network resolution once a matching restore state is already applied', async () => {
-		replaceHistoryEntry(`/?song=${SONG_ID}`, {
-			...libraryRootState(),
-			surface: 'detail',
-			collection: { kind: 'album', id: ALBUM_SLUG },
-			songId: SONG_ID,
-			generationId: null
-		});
-
-		const target = openAddress();
-		await Promise.resolve();
-		await Promise.resolve();
-
-		expect(api.fetchSong).not.toHaveBeenCalled();
-		expect(goto).not.toHaveBeenCalled();
-		expect(target.querySelector('.address-overlay')).toBeNull();
-	});
-
-	it('still resolves over the network when the restore state names a different song', async () => {
-		replaceHistoryEntry(`/?song=${SONG_ID}`, {
-			...libraryRootState(),
-			surface: 'detail',
-			collection: { kind: 'album', id: ALBUM_SLUG },
-			songId: 'some-other-song',
-			generationId: null
-		});
-		api.fetchSong.mockResolvedValue(
-			song({
-				album_title: 'Anfield',
-				generation_count: 0,
-				id: SONG_ID,
-				slug: SONG_SLUG,
-				title: TRACK_TITLE,
-				album_id: ALBUM_SLUG
-			})
-		);
-
-		openAddress();
-
-		await vi.waitFor(() =>
-			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replace: true,
-				reset: false
-			})
-		);
-	});
-});
-
-describe('a legacy /?song= address naming no song', () => {
-	beforeEach(() => {
-		api.fetchSong.mockRejectedValue(new ApiError(404, 'Song not found', `/api/songs/${SONG_ID}`));
-	});
-
-	it('1354_rule_31: states the address names no song, with a way back to the library', async () => {
-		const target = openAddress();
-
-		await vi.waitFor(() => expect(target.textContent).toContain('No such song'));
-		expect(target.querySelector('[role="alert"]')).not.toBeNull();
-		const back = requireElement(target, 'a.address-action');
-		expect(back.getAttribute('href')).toBe(LIBRARY_ROUTE_PATH);
-	});
-
-	it('never navigates away -- the query address stays, honestly 404ing in place', async () => {
-		openAddress();
-
-		await vi.waitFor(() => expect(vi.mocked(goto)).not.toHaveBeenCalled());
-		expect(window.location.pathname + window.location.search).toBe(`/?song=${SONG_ID}`);
-	});
-
-	it('marks the workspace inert while the 404 overlay is up', async () => {
-		const target = openAddress();
-
-		await vi.waitFor(() => expect(target.textContent).toContain('No such song'));
-		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
-	});
-});
-
-describe('a legacy /?song= address whose song cannot be reached', () => {
-	beforeEach(() => {
-		api.fetchSong.mockRejectedValue(new ApiError(500, 'Song service is down', '/api/songs'));
-	});
-
-	it('states the failure instead of claiming the song does not exist', async () => {
-		const target = openAddress();
-
-		await vi.waitFor(() => expect(target.textContent).toContain('Song service is down'));
-		expect(target.textContent).not.toContain('No such');
-	});
-
-	it('names a lost connection in its own words, never the browser text', async () => {
-		api.fetchSong.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
-		const target = openAddress();
-
-		await vi.waitFor(() => expect(target.textContent).toContain('This song could not be loaded.'));
-		expect(target.textContent).not.toContain('Failed to fetch');
-	});
-
-	it('offline, shows its one line with Try again and opens by itself once back online', async () => {
-		browserReportsOnline(false);
-		api.fetchSong.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
-		const target = openAddress();
-		await vi.waitFor(() => expect(target.textContent).toContain('This song could not be loaded.'));
-		expect(requireElement(target, 'button.address-action').textContent).toBe('Try again');
-
-		api.fetchSong.mockResolvedValue(
-			song({
-				album_title: 'Anfield',
-				generation_count: 0,
-				id: SONG_ID,
-				slug: SONG_SLUG,
-				title: TRACK_TITLE,
-				album_id: ALBUM_SLUG
-			})
-		);
-		browserReportsOnline(true);
-
-		await vi.waitFor(() =>
-			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replace: true,
-				reset: false
-			})
-		);
-	});
-
-	it('redirects after Try again once the failure is over', async () => {
-		const target = openAddress();
-		await vi.waitFor(() => expect(target.textContent).toContain('Song service is down'));
-		api.fetchSong.mockResolvedValue(
-			song({
-				album_title: 'Anfield',
-				generation_count: 0,
-				id: SONG_ID,
-				slug: SONG_SLUG,
-				title: TRACK_TITLE,
-				album_id: ALBUM_SLUG
-			})
-		);
-
-		requireElement(target, 'button.address-action').click();
-
-		await vi.waitFor(() =>
-			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replace: true,
-				reset: false
-			})
-		);
-	});
-
-	it('marks the workspace inert, and lifts that once Try again succeeds', async () => {
-		const target = openAddress();
-		await vi.waitFor(() => expect(target.textContent).toContain('Song service is down'));
-		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
-
-		api.fetchSong.mockResolvedValue(
-			song({
-				album_title: 'Anfield',
-				generation_count: 0,
-				id: SONG_ID,
-				slug: SONG_SLUG,
-				title: TRACK_TITLE,
-				album_id: ALBUM_SLUG
-			})
-		);
-		requireElement(target, 'button.address-action').click();
-
-		await vi.waitFor(() => expect(goto).toHaveBeenCalled());
-	});
-});
-
-describe('a legacy /?song=&gen= address whose take is gone', () => {
-	it('drops the take, lands on the song address, and toasts the loss only after the redirect lands', async () => {
-		coldTabAt(`?song=${SONG_ID}&gen=${GENERATION_ID}`);
-		api.fetchSong.mockResolvedValue(
-			song({
-				album_title: 'Anfield',
-				generation_count: 0,
-				id: SONG_ID,
-				slug: SONG_SLUG,
-				title: TRACK_TITLE,
-				album_id: ALBUM_SLUG
-			})
-		);
-		let releaseGoto: (() => void) | undefined;
-		const navigate = vi.mocked(goto).getMockImplementation();
-		vi.mocked(goto).mockImplementationOnce((url, options) => {
-			void navigate?.(url, options);
-			return new Promise<void>((res) => {
-				releaseGoto = () => res(undefined);
-			});
-		});
-
-		openAddress();
-
-		await vi.waitFor(() =>
-			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-				replace: true,
-				reset: false
-			})
-		);
-		// The redirect has landed (goto was called and the address already
-		// changed) but its own promise is still pending -- the toast must not
-		// have fired yet, or a person would read it while the bar still shows
-		// the address they are leaving.
-		expect(get(toasts)).toHaveLength(0);
-
-		releaseGoto?.();
-
-		await vi.waitFor(() => expect(get(toasts)).toHaveLength(1));
-		expect(get(toasts)[0]).toMatchObject({
-			type: 'error',
-			message: LEGACY_TAKE_LINK_NOT_FOUND_TOAST
-		});
-	});
-
-	it('does not toast when the requested take still exists', async () => {
-		coldTabAt(`?song=${SONG_ID}&gen=${GENERATION_ID}`);
-		api.fetchSong.mockResolvedValue(
-			song({
-				album_title: 'Anfield',
-				id: SONG_ID,
-				slug: SONG_SLUG,
-				title: TRACK_TITLE,
-				album_id: ALBUM_SLUG,
-				generation_count: 1,
-				generations: [
-					{
-						id: GENERATION_ID,
-						song_id: SONG_ID,
-						version_id: 'v1',
-						version_number: 1,
-						generation_number: 1,
-						mp3_path: '/audio/g.mp3',
-						wav_path: null,
-						seed: 1,
-						status: 'completed',
-						is_archived: false,
-						is_picked: false,
-						is_kept: false,
-						is_shared: false,
-						model_mode: 'turbo',
-						whisper_text: null,
-						whisper_cues: null,
-						version_lyrics: null,
-						scores: null,
-						generation_params: null,
-						audio_duration_sec: null,
-						created_at: '2026-01-01T00:00:00+00:00'
-					}
-				]
-			})
-		);
-
-		openAddress();
-
-		await vi.waitFor(() => expect(goto).toHaveBeenCalled());
-		expect(get(toasts)).toHaveLength(0);
-	});
 });

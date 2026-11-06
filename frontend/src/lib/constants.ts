@@ -42,14 +42,6 @@ export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
 
 export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been deleted';
 
-// A legacy `/?song=<id>&gen=<id>` link whose take is gone still opens the
-// song (issue #284) -- the song is the durable value, and takes are pruned
-// by ordinary cleanup, so a dead take is not the same failure a dead song
-// is. Falling back silently would still hide a fact the app knows, so this
-// says so instead of just landing on the song.
-export const LEGACY_TAKE_LINK_NOT_FOUND_TOAST =
-	'This take no longer exists — opened the song instead';
-
 // The transport's play button is named after the state its click leaves:
 // "Pause" while the listener asked for sound — playing, a take loading or a
 // stalled one recovering, or one waiting for the network — "Retry" once it

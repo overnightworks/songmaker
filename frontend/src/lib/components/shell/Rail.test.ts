@@ -297,7 +297,7 @@ describe('Rail', () => {
 	it.each(['home', 'browse', 'detail'] as const)(
 		'1354_rule_40: Home is not current over an unresolved song on %s',
 		async (surface) => {
-			replaceHistoryEntry('/?song=missing');
+			replaceHistoryEntry('/');
 			librarySurface.set(surface);
 			selectedSongId.set('missing');
 			const target = await render();

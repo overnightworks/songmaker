@@ -1364,9 +1364,8 @@ describe('the library route group', () => {
 			'+layout.svelte',
 			'+page.svelte',
 			'album',
-			// Home's own test harness and spec (issue #284's legacy `?song=`
-			// redirect) -- listed here rather than left to break this assertion
-			// silently, the same way `album/[slug]` already carries its own
+			// Home's own test harness and spec -- listed here rather than left to
+			// break this assertion silently, the same way `album/[slug]` already carries its own
 			// harness.svelte/page.test.ts one level down.
 			'harness.svelte',
 			'library',

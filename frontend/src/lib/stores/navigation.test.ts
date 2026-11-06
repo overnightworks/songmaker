@@ -809,16 +809,6 @@ describe("a rename pulls the open song's address along (issue #275)", () => {
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 		expect(window.location.pathname).toBe('/album/a1/s1');
 	});
-
-	it("leaves a legacy ?song= address alone -- redirecting it onto its canonical address is (library)/+page.svelte's job (issue #284), not this rename-follow", async () => {
-		replaceHistoryEntry('/?song=s1');
-		selectedSongId.set('s1');
-
-		updateSongInList('s1', (s) => ({ ...s, slug: 'renamed' }));
-
-		expect(vi.mocked(goto)).not.toHaveBeenCalled();
-		expect(window.location.pathname + window.location.search).toBe('/?song=s1');
-	});
 });
 
 // The open playlist's address names it by slug (issue #286), and a rename
@@ -1934,11 +1924,6 @@ describe('revealPlayingSong', () => {
 	});
 });
 
-// A legacy `/?song=<uuid>` (and `&gen=<uuid>`) deep link used to be read and
-// applied right here; since issue #284, (library)/+page.svelte owns that
-// instead -- resolveLegacySongQueryAddress (libraryContext.test.ts) covers
-// the id -> slug/number lookup and its unknown-song 404, and
-// e2e/album-address.spec.ts covers the redirect landing on the real router.
 describe('initNavigation', () => {
 	it('applies the library a popstate lands on from its router entry', async () => {
 		const cleanup = initNavigation();
