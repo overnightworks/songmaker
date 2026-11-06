@@ -4,16 +4,21 @@
 	import MenuPopover from './MenuPopover.svelte';
 
 	const MENU_LABEL = 'Reference menu';
+	const SHOW_TAKES_LABEL = 'Show takes';
 	const DELETE_LABEL = 'Delete';
 	const IN_USE_HINT = 'In use';
 
 	let {
 		filename,
 		inUse,
+		usesCount,
+		onshowuses,
 		ondelete
 	}: {
 		filename: string;
 		inUse: boolean;
+		usesCount: number;
+		onshowuses: () => void;
 		ondelete: () => void;
 	} = $props();
 
@@ -28,6 +33,18 @@
 >
 	{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
 	<p class="menu-heading">{filename}</p>
+	{#if inUse}
+		<button
+			class="menu-item"
+			onclick={() => {
+				popover?.close();
+				onshowuses();
+			}}
+		>
+			{SHOW_TAKES_LABEL}
+			<span class="menu-item-hint">{usesCount}</span>
+		</button>
+	{/if}
 	<button
 		class="menu-item destructive"
 		disabled={inUse}

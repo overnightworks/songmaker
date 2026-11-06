@@ -9,6 +9,7 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 
 const mocks = vi.hoisted(() => ({
 	listReferences: vi.fn(),
+	getReferenceUses: vi.fn(),
 	uploadReference: vi.fn(),
 	deleteReference: vi.fn()
 }));
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('#lib/api/references.ts', async (importActual) => ({
 	...(await importActual<typeof import('#lib/api/references.ts')>()),
 	listReferences: (...args: unknown[]) => mocks.listReferences(...args),
+	getReferenceUses: (...args: unknown[]) => mocks.getReferenceUses(...args),
 	uploadReference: (...args: unknown[]) => mocks.uploadReference(...args),
 	deleteReference: (...args: unknown[]) => mocks.deleteReference(...args)
 }));
@@ -28,6 +30,7 @@ import {
 	listedReferences,
 	renderReferencesPage,
 	referenceRecording,
+	takeUse,
 	unmountReferencesPage
 } from '#lib/test-utils/references.ts';
 
@@ -83,6 +86,7 @@ beforeEach(() => {
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(new Date('2026-11-02T09:00:00Z'));
 	mocks.listReferences.mockReset();
+	mocks.getReferenceUses.mockReset();
 	mocks.uploadReference.mockReset();
 	mocks.deleteReference.mockReset();
 });
@@ -542,6 +546,12 @@ describe('deleting a reference', () => {
 
 	it('shows the in-use notice on the row and greys Delete when the server refuses with 409', async () => {
 		const target = await renderTwoReferences();
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([
+				referenceRecording({ id: 'a', filename: 'voice-memo.mp3', in_use: true, used_by_takes: 2 }),
+				referenceRecording({ id: 'b', filename: 'storytime-drums.wav' })
+			])
+		);
 		mocks.deleteReference.mockRejectedValue(
 			new ApiError(409, 'Reference audio is in use.', '/api/references/a')
 		);
@@ -555,6 +565,7 @@ describe('deleting a reference', () => {
 		expect(faultOf(rowOf(target, 'storytime-drums.wav'))).toBeUndefined();
 		await openMenuOf(target, 'voice-memo.mp3');
 		expect(buttonNamed(menuPanel(), 'Delete').disabled).toBe(true);
+		expect(rowOf(target, 'voice-memo.mp3').textContent).toContain('Used in 2 takes');
 	});
 
 	it('shows another failure in the same row slot and keeps the row', async () => {
@@ -632,5 +643,97 @@ describe('deleting a reference', () => {
 		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(1));
 		expect(target.querySelector('.reference-row.playing')).toBeNull();
 		expect(preview.getAttribute('src')).toBeNull();
+	});
+});
+
+describe('where a reference is used', () => {
+	function usedRow(target: HTMLElement): HTMLElement {
+		return target.querySelector('.reference-row') as HTMLElement;
+	}
+
+	async function renderUsedReference(): Promise<HTMLElement> {
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([
+				referenceRecording({
+					id: 'a',
+					filename: 'storytime-drums.wav',
+					in_use: true,
+					used_by_takes: 2,
+					used_by_versions: 1
+				}),
+				referenceRecording({ id: 'b', filename: 'voice-memo.mp3' })
+			])
+		);
+		mocks.getReferenceUses.mockResolvedValue({ takes: [takeUse()], versions: [] });
+		const target = await renderReferencesPage();
+		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
+		return target;
+	}
+
+	function marker(target: HTMLElement): HTMLButtonElement {
+		return target.querySelector('.reference-used') as HTMLButtonElement;
+	}
+
+	it('names each kind of use in the meta line, and only on a used reference', async () => {
+		const target = await renderUsedReference();
+
+		expect(listedReferences(target).map((row) => row.meta)).toEqual([
+			expect.stringContaining('Used in 2 takes, 1 version'),
+			expect.not.stringContaining('Used')
+		]);
+	});
+
+	it('opens one expansion from the marker, closes it again and lists where it is used', async () => {
+		const target = await renderUsedReference();
+
+		await pressReferenceControl(marker(target));
+		await vi.waitFor(() => expect(target.querySelector('.uses a')).not.toBeNull());
+
+		expect(marker(target).getAttribute('aria-expanded')).toBe('true');
+		expect(
+			document.getElementById(marker(target).getAttribute('aria-controls') ?? '')
+		).not.toBeNull();
+		await pressReferenceControl(marker(target));
+		expect(marker(target).getAttribute('aria-expanded')).toBe('false');
+		expect(target.querySelector('.uses')).toBeNull();
+	});
+
+	it('opens the same expansion from the Show takes menu row', async () => {
+		const target = await renderUsedReference();
+
+		await pressReferenceControl(
+			usedRow(target).querySelector('[aria-haspopup="dialog"]') as HTMLElement
+		);
+		const showTakes = Array.from(
+			document.body.querySelectorAll<HTMLButtonElement>('.menu-panel button')
+		).find((button) => button.textContent?.includes('Show takes')) as HTMLButtonElement;
+		expect(showTakes.textContent).toContain('3');
+		await pressReferenceControl(showTakes);
+
+		expect(target.querySelectorAll('.uses')).toHaveLength(1);
+		expect(marker(target).getAttribute('aria-expanded')).toBe('true');
+	});
+
+	it('keeps one expansion open at a time and does not start the preview', async () => {
+		mocks.listReferences.mockResolvedValue(
+			listAnswer([
+				referenceRecording({ id: 'a', filename: 'one.wav', in_use: true, used_by_takes: 1 }),
+				referenceRecording({ id: 'b', filename: 'two.wav', in_use: true, used_by_takes: 1 })
+			])
+		);
+		mocks.getReferenceUses.mockResolvedValue({ takes: [takeUse()], versions: [] });
+		const target = await renderReferencesPage();
+		await vi.waitFor(() => expect(listedReferences(target)).toHaveLength(2));
+		const markers = Array.from(target.querySelectorAll<HTMLButtonElement>('.reference-used'));
+
+		await pressReferenceControl(markers[0]);
+		await pressReferenceControl(markers[1]);
+
+		expect(target.querySelectorAll('.uses')).toHaveLength(1);
+		expect(markers.map((button) => button.getAttribute('aria-expanded'))).toEqual([
+			'false',
+			'true'
+		]);
+		expect(referenceElement()).toBeUndefined();
 	});
 });
