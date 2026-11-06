@@ -1,7 +1,0 @@
-claim_id = "9b98e0a1e6eb44ebb4b6cbfca1734f26"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "eadee53056f152d0120ffcaf8b3e314cf62513ff"
-branch = "claude/issue-2395-an-album-or-song-queue-finds-its-take-by"
-scope = ["frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "quality/baseline.toml"]
-opened_commit = "b0abf0aef41f54a9c5aa266e040daaa21c5e2955"
