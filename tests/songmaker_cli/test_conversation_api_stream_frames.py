@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 
 from songmaker_cli.api_models import (
+    AgentProblem,
     AssistantTextEvent,
     ChatMessageResponse,
     ChatTurnFailureFrame,
     ChatTurnFinalFrame,
-    ChatTurnProblem,
     ChatTurnProblemFrame,
     ToolCallEvent,
     ToolResultEvent,
@@ -57,24 +57,24 @@ FINAL_FRAME = (
 
 ERROR_FRAMES = [
     (
-        ChatTurnProblemFrame(status=503, problem=ChatTurnProblem.UNAVAILABLE),
+        ChatTurnProblemFrame(status=503, problem=AgentProblem.UNAVAILABLE),
         'data: {"type": "error", "status": 503, "problem": "unavailable",'
         ' "retry_after_seconds": null}\n\n',
     ),
     (
         ChatTurnProblemFrame(
-            status=429, problem=ChatTurnProblem.BUSY, retry_after_seconds=30,
+            status=429, problem=AgentProblem.BUSY, retry_after_seconds=30,
         ),
         'data: {"type": "error", "status": 429, "problem": "busy",'
         ' "retry_after_seconds": 30}\n\n',
     ),
     (
-        ChatTurnProblemFrame(status=403, problem=ChatTurnProblem.NOT_ENABLED),
+        ChatTurnProblemFrame(status=403, problem=AgentProblem.NOT_ENABLED),
         'data: {"type": "error", "status": 403, "problem": "not_enabled",'
         ' "retry_after_seconds": null}\n\n',
     ),
     (
-        ChatTurnProblemFrame(status=401, problem=ChatTurnProblem.SIGN_IN_AGAIN),
+        ChatTurnProblemFrame(status=401, problem=AgentProblem.SIGN_IN_AGAIN),
         'data: {"type": "error", "status": 401, "problem": "sign_in_again",'
         ' "retry_after_seconds": null}\n\n',
     ),

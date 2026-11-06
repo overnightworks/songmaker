@@ -24,35 +24,21 @@ def _alembic_config() -> Config:
 
 
 @pytest.fixture
-def database(database_postgresql_url, tmp_path, isolated_logging):
-    """Yield (config, engine) of an empty database; PostgreSQL gets its own schema."""
-    if database_postgresql_url is None:
-        url = make_url(f"sqlite:///{tmp_path / 'reference.db'}")
-        schema = None
-    else:
-        schema = "reference_recordings_" + uuid.uuid4().hex
-        admin = create_engine(database_postgresql_url)
-        with admin.begin() as connection:
-            connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-        url = make_url(database_postgresql_url).update_query_dict(
-            {"options": f"-csearch_path={schema}"}
-        )
+def database(database_empty_postgresql_url, tmp_path, isolated_logging):
+    """Yield (config, engine) of an empty database."""
+    url = database_empty_postgresql_url or make_url(f"sqlite:///{tmp_path / 'reference.db'}")
     config = _alembic_config()
     config.set_main_option(
         "sqlalchemy.url", url.render_as_string(hide_password=False).replace("%", "%%"),
     )
     engine = create_engine(url)
-    if database_postgresql_url is None:
+    if database_empty_postgresql_url is None:
         # Alembic's engine does not enable foreign keys; this connection does, as init_test_db does.
         event.listen(
             engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"),
         )
     yield config, engine
     engine.dispose()
-    if schema is not None:
-        with admin.begin() as connection:
-            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        admin.dispose()
 
 
 @pytest.fixture

@@ -30,24 +30,6 @@ JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
 JOB_ERROR_USER_LORA_UNAVAILABLE: Final[str] = "Selected voice is unavailable for this generation"
-JOB_ERROR_COVER_CLI_LOGIN: Final[str] = (
-    "Codex CLI is not logged in. Log in on the operator host, then try again."
-)
-JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED: Final[str] = (
-    "Image tool blocked. Ask an administrator to enable the image tool."
-)
-JOB_ERROR_COVER_IMAGE_NOT_CREATED: Final[str] = (
-    "Codex did not create a cover image. Try generating the cover again."
-)
-JOB_ERROR_COVER_IMAGE_FAILED: Final[str] = "Cover suggestion could not be generated"
-JOB_ERROR_COVER_CLI_BUSY: Final[str] = "Codex is busy. Try generating the cover again shortly."
-JOB_ERROR_COVER_IMAGE_CLI_FAILED: Final[str] = "Codex could not draw: {message}"
-JOB_ERROR_COVER_CLI_MESSAGE_MAX_CHARS: Final[int] = 200
-JOB_ERROR_COVER_IMAGE_QUOTA: Final[str] = "Codex usage limit reached. Try again later."
-JOB_ERROR_COVER_IMAGE_QUOTA_WITH_RETRY: Final[str] = (
-    "Codex usage limit reached, try again after {retry_at}."
-)
-COVER_IMAGE_TOOL_UNAVAILABLE_ERROR: Final[str] = "{provider} · no image tool"
 HTTP_NOT_FOUND: Final[str] = "Not Found"
 AUDIO_FILE_NOT_FOUND: Final[str] = "Audio file not found"
 JOB_ERROR_GENERATION_CANCELLED: Final[str] = (
@@ -150,15 +132,6 @@ WHISPER_TEMPERATURE = 0.0
 
 SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105  # noqa: S105 - a setting key for an LLM token budget and no secret
-SETTING_COVER_PROVIDER = "cover_provider"
-SETTING_COVER_ROUTE = "cover_route"
-SETTING_COVER_MODEL = "cover_model"
-# Cover is its own task with its own provider, route, and model. Its defaults
-# keep today's behaviour: the Codex CLI route, run without an explicit model
-# flag, which is what an empty model means everywhere on the cover path (#822).
-COVER_DEFAULT_PROVIDER: Final[str] = "codex"
-COVER_DEFAULT_ROUTE: Final[str] = "cli"
-COVER_DEFAULT_MODEL: Final[str] = ""
 
 MEMORY_SCOPE_USER = "user"
 MEMORY_SCOPE_SONG = "song"
@@ -407,7 +380,6 @@ WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = 1100
 JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 120
 JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
-COVER_CLI_DEADLINE_SECONDS: Final[int] = 88
 COVER_MAX_CONCURRENT_RUNS: Final[int] = 1
 CODEX_CLI_MAX_CONCURRENT_PROCESSES: Final[int] = 8
 COVER_PROMPT_SONG_FIELD_MAX_CHARS: Final[int] = 500
@@ -506,8 +478,6 @@ COVER_JPEG_EXTENSION: Final[str] = ".jpg"
 COVER_PNG_EXTENSION: Final[str] = ".png"
 COVER_JPEG_MAGIC: Final[bytes] = b"\xff\xd8\xff"
 COVER_PNG_MAGIC: Final[bytes] = b"\x89PNG\r\n\x1a\n"
-COVER_GENERATED_IMAGE_FORMAT: Final[str] = "PNG"
-COVER_GENERATED_EDGE_PIXELS: Final[int] = 1024
 COVER_FORMAT_JPEG: Final[str] = "jpeg"
 COVER_FORMAT_PNG: Final[str] = "png"
 COVER_MEDIA_TYPE_JPEG: Final[str] = "image/jpeg"
@@ -684,7 +654,6 @@ class ResourceType(StrEnum):
     MODEL = "model"
     DEFAULT_CONFIG = "default_config"
     COWRITER = "cowriter"
-    COVER = "cover"
     RATE_LIMITS = "rate_limits"
     JOB = "job"
     SESSION = "session"

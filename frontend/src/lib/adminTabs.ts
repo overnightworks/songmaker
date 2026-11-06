@@ -4,7 +4,7 @@ export const ADMIN_TABS = [
 	{ id: 'voices', label: ADMIN_VOICES_TAB_LABEL },
 	{ id: 'ratelimits', label: 'Rate Limits' },
 	{ id: 'generation', label: 'Generation' },
-	{ id: 'agents', label: 'Agents' },
+	{ id: 'models', label: 'Models' },
 	{ id: 'acestep', label: 'ACE-Step' },
 	{ id: 'cleanup', label: 'Cleanup' }
 ] as const;

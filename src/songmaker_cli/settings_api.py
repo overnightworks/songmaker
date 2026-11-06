@@ -26,8 +26,6 @@ from songmaker_cli.api_models import (
 from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.api_models.settings import (
     AvailableModelResponse,
-    CoverSettingsRequest,
-    CoverSettingsResponse,
     CowriterSettingsRequest,
     CowriterSettingsResponse,
     DefaultConfigRequest,
@@ -57,7 +55,6 @@ from songmaker_cli.db.queries.settings import (
     create_preset,
     delete_preset,
     get_claude_chat_model,
-    get_cover_settings,
     get_cowriter_tail_token_budget,
     get_preset,
     list_active_models,
@@ -65,7 +62,6 @@ from songmaker_cli.db.queries.settings import (
     list_presets,
     list_shared_presets,
     name_exists,
-    set_cover_settings,
     set_cowriter_tail_token_budget,
     set_default_preset,
     toggle_model,
@@ -393,40 +389,9 @@ def api_get_provider_status(
         ProviderStatusResponse(
             provider=name,
             cowriter_routes=_route_statuses(snapshots.get(name)),
-            cover_routes=_cover_route_readiness(name),
         )
         for name in sorted(COWRITER_PROVIDERS)
     ]
-
-
-def _cover_route_readiness(provider: str) -> dict[str, ProviderRouteReadiness]:
-    """Project the one image-capability answer for every route of one provider."""
-    from agent_providers.catalog import (
-        ProviderRoute,
-        ProviderRouteCapability,
-        ProviderRouteReadinessState,
-        route_setup_label,
-    )
-    from agent_providers.dispatch import cover_image_capability
-
-    readiness: dict[str, ProviderRouteReadiness] = {}
-    for route in ProviderRoute:
-        capability = cover_image_capability(provider, route)
-        readiness[route.value] = ProviderRouteReadiness(
-            state=(
-                ProviderRouteReadinessState.READY
-                if capability.failure is None
-                else ProviderRouteReadinessState.NOT_CONFIGURED
-            ).value,
-            capability=(
-                ProviderRouteCapability.TOOLS_AVAILABLE
-                if capability.carries_image_tool
-                else ProviderRouteCapability.TEXT_ONLY
-            ).value,
-            reason=capability.failure,
-            setup_label=route_setup_label(route),
-        )
-    return readiness
 
 
 def _cowriter_response(session: Session) -> CowriterSettingsResponse:
@@ -504,50 +469,6 @@ def api_set_cowriter_settings(
     return _cowriter_response(session)
 
 
-# ── Cover provider settings ─────────────────────────────────────────
-
-
-def _cover_response(session: Session) -> CoverSettingsResponse:
-    selection = get_cover_settings(session)
-    return CoverSettingsResponse(
-        provider=selection.provider,
-        route=selection.route,
-        model=selection.model,
-        allowed_providers=sorted(COWRITER_PROVIDERS),
-    )
-
-
-@router.get("/settings/cover")
-def api_get_cover_settings(
-    _admin: AuthenticatedUser = Depends(require_admin),
-    session: Session = Depends(get_db_session),
-) -> CoverSettingsResponse:
-    return _cover_response(session)
-
-
-@router.put(
-    "/settings/cover",
-    responses={422: {"description": "Unknown cover provider or route"}},
-)
-def api_set_cover_settings(
-    req: CoverSettingsRequest,
-    admin: AuthenticatedUser = Depends(require_admin),
-    session: Session = Depends(get_db_session),
-) -> CoverSettingsResponse:
-    """Persist the cover selection, including one no route can currently run."""
-    from agent_providers.catalog import ProviderRoute
-
-    if req.provider not in COWRITER_PROVIDERS:
-        raise HTTPException(422, f"Unknown cover provider '{req.provider}'")
-    if req.route not in {route.value for route in ProviderRoute}:
-        raise HTTPException(422, f"Unknown cover route '{req.route}'")
-    set_cover_settings(session, req.provider, req.route, req.model)
-    record_audit(
-        session, admin.id, AuditAction.UPDATE, ResourceType.COVER,
-        detail=f"provider={req.provider} route={req.route} model={req.model}",
-    )
-    session.commit()
-    return _cover_response(session)
 
 
 # ── Rate limits ────────────────────────────────────────────────────

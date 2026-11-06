@@ -30,7 +30,7 @@ _ctx = multiprocessing.get_context("spawn")
 
 def _set_required_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Let monkeypatch restore settings after an in-process child run scrubs them."""
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", os.environ["DATABASE_URL"])
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("SESSION_SECRET", "x" * 64)
     for key in SECRET_ENV_KEYS:

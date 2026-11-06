@@ -269,7 +269,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
-	it('names a throttled ask as an ordinary failure, rereads the count and keeps Suggest open', async () => {
+	it('a throttled ask reads like the daily limit in the server words, never red, and keeps Suggest open', async () => {
 		createAlbumCoverSuggestions.mockRejectedValue(
 			new ApiError(429, 'Too many requests, slow down', '/api/albums/a-local')
 		);
@@ -279,11 +279,11 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		await pressSuggestOnceLoaded(target);
 		await vi.waitFor(() =>
-			expect(failureAlert(target)?.textContent).toContain('Too many requests, slow down')
+			expect(countLine(target)).toBe('7 of 10 left today Too many requests, slow down')
 		);
 
 		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
-		expect(countLine(target)).toContain('7 of 10 left today');
+		expect(failureAlert(target)).toBeNull();
 		expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest').disabled).toBe(false);
 	});
 
@@ -317,8 +317,11 @@ describe('AlbumCoverEditor in the album header', () => {
 
 			await openCoverEditing(target);
 			await vi.waitFor(() =>
-				expect(failureAlert(target)?.textContent).toContain('Couldn’t make a cover suggestion')
+				expect(failureAlert(target)?.textContent).toContain(
+					'Cover suggestions are unavailable right now. Try again later.'
+				)
 			);
+			expect(target.textContent).not.toContain('Cover suggestion could not be generated');
 
 			expect(countLine(target)).toContain(counted);
 			expect(shownImage(target)).toBe(shown);
@@ -625,7 +628,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
-	it('shows the elapsed time only while the suggestion runs and names a run that hit its time limit', async () => {
+	it('shows the elapsed time only while the suggestion runs and names a run that hit its time limit unavailable', async () => {
 		vi.stubGlobal('EventSource', FakeJobEventSource);
 		const fortyTwoSecondsAgo = new Date(Date.now() - 42_000).toISOString();
 		fetchAlbumCoverSuggestions
@@ -654,31 +657,13 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		await vi.waitFor(() =>
 			expect(target.querySelector('[role="alert"]')?.textContent).toContain(
-				'Couldn’t make a cover suggestion'
+				'Cover suggestions are unavailable right now. Try again later.'
 			)
 		);
-		expect(target.querySelector('[role="alert"]')?.textContent).toContain(
-			'Cover suggestion could not be generated'
-		);
+		expect(target.textContent).not.toContain('Cover suggestion could not be generated');
 		expect(target.querySelector('.cover-stage [role="status"]')).toBeNull();
 		expect(target.querySelector('.suggestion-placeholder')).toBeNull();
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
-	});
-
-	it('names a daily limit in the singular, once, without a toast', async () => {
-		const named = 'Daily cover suggestion limit reached';
-		createAlbumCoverSuggestions.mockRejectedValue(serverRefusal(named));
-		const target = await renderDetail();
-		await openCoverEditing(target);
-
-		await pressSuggestOnceLoaded(target);
-
-		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).not.toBeNull());
-		const alert = requireElement(target, '[role="alert"]');
-		expect(alert.textContent).toContain('Couldn’t make a cover suggestion');
-		expect(alert.textContent).toContain(named);
-		expect(target.textContent?.split(named)).toHaveLength(2);
-		expect(addToast).not.toHaveBeenCalled();
 	});
 
 	it.each([
@@ -737,8 +722,12 @@ describe('AlbumCoverEditor in the album header', () => {
 				job: coverJob({ id: 'ended-run', status: 'failed', error: 'The model ran out of memory' }),
 				used_today: 10
 			}),
-			shows: (target: HTMLElement) =>
-				expect(failureAlert(target)?.textContent).toContain('The model ran out of memory')
+			shows: (target: HTMLElement) => {
+				expect(failureAlert(target)?.textContent).toContain(
+					'Cover suggestions are unavailable right now. Try again later.'
+				);
+				expect(target.textContent).not.toContain('The model ran out of memory');
+			}
 		}
 	])(
 		"a refused ask whose run already ended shows that run's result: $result",

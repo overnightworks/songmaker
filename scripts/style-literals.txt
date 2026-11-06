@@ -1,4 +1,5 @@
 lib/components/AccountMenu.svelte 1
+lib/components/AgentProblemLine.svelte 2
 lib/components/AiNotice.svelte 2
 lib/components/AlbumCoverEditor.svelte 7
 lib/components/AlbumDetailView.svelte 2
@@ -6,7 +7,6 @@ lib/components/AlbumMetaEditor.svelte 4
 lib/components/Breadcrumb.svelte 1
 lib/components/ChatInput.svelte 2
 lib/components/CoWriterPanel.svelte 24
-lib/components/CoWriterTurnError.svelte 2
 lib/components/CollectionHeader.svelte 3
 lib/components/CollectionHeaderFrame.svelte 3
 lib/components/CollectionMenu.svelte 3
@@ -21,7 +21,6 @@ lib/components/MemoryEditor.svelte 9
 lib/components/MentionDropdown.svelte 3
 lib/components/ModelRegistryPanel.svelte 12
 lib/components/ModelsServiceRow.svelte 6
-lib/components/ModelsTaskRow.svelte 18
 lib/components/NewPlaceCard.svelte 3
 lib/components/NewPlaceMenu.svelte 2
 lib/components/NowPlayingCuration.svelte 2

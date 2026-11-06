@@ -12,6 +12,7 @@ from webauth.config import installed_web_auth_config
 from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.backend import TurnCaller, cover_admission
 from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,
@@ -22,10 +23,12 @@ from songmaker_cli.api_helpers import (
     unique_album_id,
 )
 from songmaker_cli.api_models import (
+    AgentProblem,
     AlbumCreateRequest,
     AlbumResponse,
     AlbumUpdateRequest,
     CleanupResponse,
+    CoverSuggestionRefusal,
     CoverSuggestionSelectionRequest,
     CoverSuggestionsResponse,
     JobResponse,
@@ -33,6 +36,10 @@ from songmaker_cli.api_models import (
     PaginatedResponse,
     ShareResponse,
     StatusResponse,
+)
+from songmaker_cli.api_models.cover_suggestions import (
+    CoverSuggestionForbiddenBody,
+    CoverSuggestionUnavailableBody,
 )
 from songmaker_cli.api_models.songs import ShareKind, UnplayableSongSummary, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
@@ -417,9 +424,17 @@ async def api_upload_album_cover(
     "/albums/{album_id}/cover-suggestions",
     responses={
         401: {"description": "The asking session has ended"},
+        403: {
+            "description": "A browser login is needed, or the account may not suggest covers",
+            "model": CoverSuggestionForbiddenBody,
+        },
         404: {"description": "Album not found"},
         409: {"description": "Cover suggestions are already running"},
         429: {"description": "Daily suggestion limit reached"},
+        503: {
+            "description": "Cover suggestions are unavailable",
+            "model": CoverSuggestionUnavailableBody,
+        },
     },
 )
 def api_create_cover_suggestions(
@@ -429,11 +444,17 @@ def api_create_cover_suggestions(
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
     session.commit()
-    try:
-        job = request_cover_suggestions(
-            session, album_id, user,
-            session_id=session_id_from_request(request, installed_web_auth_config(request.app)),
+    session_id = session_id_from_request(request, installed_web_auth_config(request.app))
+    if session_id is None:
+        raise HTTPException(403, "Cover suggestions need a browser login.")
+    refusal = cover_admission(TurnCaller(request.app, session_id, user))
+    if refusal is not None:
+        raise HTTPException(
+            503 if refusal.problem is AgentProblem.UNAVAILABLE else 403,
+            CoverSuggestionRefusal(problem=refusal.problem).model_dump(),
         )
+    try:
+        job = request_cover_suggestions(session, album_id, user, session_id=session_id)
         record_audit(session, user.id, AuditAction.GENERATE, ResourceType.ALBUM, job.album_id)
         session.commit()
     except CoverSuggestionRequestError as exc:

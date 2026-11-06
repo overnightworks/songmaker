@@ -126,23 +126,9 @@ class CowriterSettingsResponse(BaseModel):
     tail_token_budget: int
 
 
-class CoverSettingsRequest(BaseModel):
-    provider: str
-    route: str
-    model: str
-
-
-class CoverSettingsResponse(BaseModel):
-    provider: str
-    route: Literal["cli", "api"]
-    model: str
-    allowed_providers: list[str]
-
-
 class ProviderStatusResponse(BaseModel):
     provider: str
     cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse]
-    cover_routes: dict[Literal["cli", "api"], ProviderRouteReadiness]
 
 
 class ChatMessageResponse(BaseModel):
@@ -262,8 +248,8 @@ class ChatTurnFinalFrame(BaseModel):
     assistant_message: ChatMessageResponse
 
 
-class ChatTurnProblem(StrEnum):
-    """Why a co-writer turn could not run; the panel words each one."""
+class AgentProblem(StrEnum):
+    """Why an agent run (a co-writer turn or a cover picture) did not run; each surface words it."""
 
     UNAVAILABLE = "unavailable"
     BUSY = "busy"
@@ -279,7 +265,7 @@ class ChatTurnProblemFrame(BaseModel):
 
     type: Literal["error"] = "error"
     status: int
-    problem: ChatTurnProblem
+    problem: AgentProblem
     retry_after_seconds: int | None = None
 
 

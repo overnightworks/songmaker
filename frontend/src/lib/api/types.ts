@@ -204,17 +204,8 @@ export interface CoverRequest {
 	seed?: number | null;
 }
 
-export interface CoverSettingsRequest {
-	provider: string;
-	route: string;
-	model: string;
-}
-
-export interface CoverSettingsResponse {
-	provider: string;
-	route: 'cli' | 'api';
-	model: string;
-	allowed_providers: string[];
+export interface CoverSuggestionRefusal {
+	problem: 'unavailable' | 'busy' | 'not_enabled' | 'sign_in_again';
 }
 
 export interface CoverSuggestionResponse {
@@ -389,6 +380,7 @@ export interface JobItem {
 	remaining_time_estimate?: number | 'calculating' | null;
 	error?: string | null;
 	error_type?: string | null;
+	retry_after_seconds?: number | null;
 	queue_reason?: string | null;
 	queue_position?: number | null;
 	started_at?: string | null;
@@ -626,7 +618,6 @@ export interface ProviderRouteStatusResponse {
 export interface ProviderStatus {
 	provider: string;
 	cowriter_routes: Record<'cli' | 'api', ProviderRouteStatusResponse>;
-	cover_routes: Record<'cli' | 'api', ProviderRouteReadiness>;
 }
 
 export interface QueueStreamManifest {

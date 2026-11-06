@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from songmaker_cli.api_models.auth import AuthMeResponse
 from songmaker_cli.api_models.cover_suggestions import (
+    CoverSuggestionRefusal,
     CoverSuggestionResponse,
     CoverSuggestionSelectionRequest,
     CoverSuggestionsResponse,
@@ -82,19 +83,17 @@ from songmaker_cli.api_models.resource_events import (
     ResourceResyncEvent,
 )
 from songmaker_cli.api_models.settings import (
+    AgentProblem,
     AssistantTextEvent,
     CapabilitiesResponse,
     ChatMessageResponse,
     ChatTurnFailureFrame,
     ChatTurnFinalFrame,
-    ChatTurnProblem,
     ChatTurnProblemFrame,
     ChatTurnV2Request,
     ConversationListResponse,
     ConversationMessagesResponse,
     ConversationResponse,
-    CoverSettingsRequest,
-    CoverSettingsResponse,
     CowriterSettingsRequest,
     CowriterSettingsResponse,
     DefaultConfigRequest,
@@ -238,7 +237,7 @@ __all__ = [
     "ChatTurnV2Request",
     "ChatTurnFailureFrame",
     "ChatTurnFinalFrame",
-    "ChatTurnProblem",
+    "AgentProblem",
     "ChatTurnProblemFrame",
     "AssistantTextEvent",
     "ToolCallEvent",
@@ -252,9 +251,8 @@ __all__ = [
     "CowriterSettingsResponse",
     "ConversationMessagesResponse",
     "ConversationResponse",
-    "CoverSettingsRequest",
-    "CoverSettingsResponse",
     "CoverRequest",
+    "CoverSuggestionRefusal",
     "CoverSuggestionResponse",
     "CoverSuggestionSelectionRequest",
     "CoverSuggestionsResponse",

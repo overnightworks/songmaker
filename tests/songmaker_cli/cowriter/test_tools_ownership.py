@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from agent_runtime_client.backend.fake_gateway import completion, tool_call, tool_round
@@ -10,10 +11,21 @@ from agent_runtime_client.tools import Principal
 from support.cowriter_gateway import attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.agent.tools import cowriter_hand_tools
+from songmaker_cli.agent.tools import CallingTurn, bound_to_turn, cowriter_hand_tools
+from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, UserSongWork, Version
+from songmaker_cli.db.models import (
+    Album,
+    Generation,
+    Job,
+    Score,
+    Song,
+    User,
+    UserSession,
+    UserSongWork,
+    Version,
+)
 from songmaker_cli.mcp_server import auth
 
 
@@ -44,8 +56,18 @@ def ownership_factory(tmp_path):
                 generation_id=f"generation-{identity}", scorer="batch",
                 value={"bpm_detected": 96.0},
             ))
+        now = datetime.now(timezone.utc)
+        DatabaseSessionRecordStore(session).create(
+            "actor", now=now, expires_at=now + timedelta(hours=1),
+            refresh_token=None, id_token=None,
+        )
         session.commit()
     return factory
+
+
+def _actor_session_id(factory) -> str:
+    with factory() as session:
+        return session.query(UserSession).filter_by(user_id="actor").one().id
 
 
 VERDICT_TOOL = "save_coherence_verdict"
@@ -78,12 +100,13 @@ def _dispatch_ownership_tool(factory, monkeypatch, route, name, arguments):
     if route == "hand-tool":
         hand_tool = next(t for t in cowriter_hand_tools(factory) if t.declaration.name == name)
         principal = Principal(iss="issuer.test", sub="actor")
-        result = asyncio.run(hand_tool.handler(principal, arguments))
+        with bound_to_turn(CallingTurn(_actor_session_id(factory))):
+            result = asyncio.run(hand_tool.handler(principal, arguments))
         return result.is_error, result.content if result.is_error else json.loads(result.content)
     with factory() as session:
         result = execute_cowriter_tool(
             session, auth.load_user(session, "actor"), name, arguments,
-            session_id=None,
+            session_id=_actor_session_id(factory),
         )
     return result.is_error, result.content if result.is_error else json.loads(result.content)
 
@@ -91,6 +114,27 @@ def _dispatch_ownership_tool(factory, monkeypatch, route, name, arguments):
 def test_ownership_matrix_covers_every_registered_tool():
     """1301-F2-TOOLS, 1301-F2-ENTRY: adding a tool requires an ownership row."""
     assert set(_ownership_arguments("actor")) == {tool.name for tool in COWRITER_TOOLS}
+
+
+def _assert_owned_answer(name, identity, payload):
+    if name == "list_albums":
+        assert [album["id"] for album in payload] == ["album-actor"]
+    elif name in {"list_songs", "search_songs"}:
+        assert [song["id"] for song in payload] == (
+            [] if identity == "foreign" else ["song-actor"]
+        )
+    elif name in {"get_song", "get_version", "get_generation"}:
+        expected_id = _ownership_arguments(identity)[name][
+            {
+                "get_song": "song_id", "get_version": "version_id",
+                "get_generation": "generation_id",
+            }[name]
+        ]
+        assert payload["id"] == expected_id
+    elif name == "suggest_album_cover":
+        assert payload["status"] == "queued"
+    else:
+        assert payload["ok"] is True
 
 
 @pytest.mark.parametrize("name", USER_TOOL_NAMES)
@@ -111,24 +155,8 @@ def test_tools_only_reach_owned_resources(
     assert is_error is denied
     if denied:
         assert "not found" in payload
-    elif name == "list_albums":
-        assert [album["id"] for album in payload] == ["album-actor"]
-    elif name in {"list_songs", "search_songs"}:
-        assert [song["id"] for song in payload] == (
-            [] if identity == "foreign" else ["song-actor"]
-        )
-    elif name in {"get_song", "get_version", "get_generation"}:
-        expected_id = _ownership_arguments(identity)[name][
-            {
-                "get_song": "song_id", "get_version": "version_id",
-                "get_generation": "generation_id",
-            }[name]
-        ]
-        assert payload["id"] == expected_id
-    elif name == "suggest_album_cover":
-        assert payload["status"] == "queued"
     else:
-        assert payload["ok"] is True
+        _assert_owned_answer(name, identity, payload)
 
     with ownership_factory() as session:
         foreign = session.get(Song, "song-foreign")

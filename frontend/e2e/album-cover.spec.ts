@@ -1,43 +1,59 @@
 // Album cover suggestions are deliberately started by a person: tapping the
 // dashed Add cover place grows the header cover into its editor, which makes
-// nothing until Suggest is tapped (#1186). Since #822 the
-// one dispatch owner is asked inside the cover job, not in a request
-// preflight: the isolated E2E stack mounts no Codex CLI, so the POST succeeds
-// and creates a job, and it is that job which ends failed with the named
-// reason the album never gets its covers. A seeded suggestion is optional:
-// this stack cannot manufacture one without the unavailable image route, but a
-// local stack that already has one proves selection, and removal from the
-// cover editor that the album ⋯ Cover row opens, below.
+// nothing until Suggest is tapped (#1186). Suggest asks the gateway's API group
+// at the click (#2055 C1): the isolated E2E stack configures a gateway but its
+// seeded session holds no refresh grant, so the real click is refused with
+// "log in again" and makes no job. The other three of the agent's problems
+// cannot come from this stack, so a run is seeded running and ended with each
+// (scripts/seed_e2e_job_states.py) on a fresh album that is archived after.
+// A seeded suggestion is optional: a local stack that already has one proves
+// selection, and removal from the cover editor that the album ⋯ Cover row
+// opens, below.
 
-import { expect, test, type Page } from '@playwright/test';
-import { readSeededLibrary } from './seed';
-import { workspace } from './helpers';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { archiveOwnedAlbum, readSeededLibrary } from './seed';
+import { failCoverJob, seedRunningCoverJob } from './seed-cover';
+import { sameOriginHeaders, workspace } from './helpers';
 import {
 	ALBUM_COVER_EDITING_LABEL,
 	ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
 	HITBOX_FREQUENT_PX,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '../src/lib/constants';
+import { COVER_PROBLEM_TEXTS } from '../src/lib/utils/cover-problem';
 
-// What a stack without the mounted Codex CLI puts on the failed job:
-// cover_image_capability() names CLI_BINARY_UNAVAILABLE, which the runner
-// reports as the generic image failure. Which provider route was unusable, and
-// why, is answered by GET /api/settings/providers, not by this job.
-const COVER_JOB_FAILURE = 'Cover suggestion could not be generated';
+const PHONE_VIEWPORT = { width: 375, height: 844 };
+// What a cover job's row may hold and no page may show (#2055 matrix cell 26).
+const STORED_ERROR_CANARY = 'gateway detail sk-e2e-canary for session e2e-canary';
+const BUSY_WAIT_SECONDS = 300;
 
-interface CoverJobOutcome {
-	id: string;
-	status: string;
-	error: string | null;
+interface ProblemLook {
+	borderColor: string;
+	borderStyle: string;
 }
 
-test('Add cover asks for nothing until Suggest, whose one suggestion ends in a named failure shown once, at desktop and 390 px', async ({
+function problemLine(editing: Locator): Locator {
+	return editing.getByRole('alert');
+}
+
+function suggestButton(editing: Locator): Locator {
+	return editing.getByRole('button', { name: /^Suggest/ });
+}
+
+async function lookOf(line: Locator): Promise<ProblemLook> {
+	return line.evaluate((el) => {
+		const style = getComputedStyle(el);
+		return { borderColor: style.borderLeftColor, borderStyle: style.borderLeftStyle };
+	});
+}
+
+test('Add cover asks for nothing until Suggest, whose refused click says log in again in red and makes no job, at desktop and 375 px', async ({
 	page,
 	isMobile
 }) => {
 	const library = readSeededLibrary();
 	const surface = workspace(page);
-	if (isMobile) await page.setViewportSize({ width: 390, height: 844 });
+	if (isMobile) await page.setViewportSize(PHONE_VIEWPORT);
 	const suggestionsPath = `/api/albums/${library.albumId}/cover-suggestions`;
 	const isSuggestionAsk = (method: string, url: string): boolean =>
 		method === 'POST' && new URL(url).pathname === suggestionsPath;
@@ -60,31 +76,24 @@ test('Add cover asks for nothing until Suggest, whose one suggestion ends in a n
 	await surface.getByRole('button', { name: 'Add cover' }).click();
 	await expect(editing.getByText(/left today$/)).toHaveText(leftBeforeMistap ?? '');
 	expect(suggestionAsks).toBe(0);
+	const latestJobBefore = await latestCoverJobId(page, library.albumId);
 
-	const createdJob = page.waitForResponse((response) =>
+	const refused = page.waitForResponse((response) =>
 		isSuggestionAsk(response.request().method(), response.url())
 	);
 	await editing.getByRole('button', { name: 'Suggest', exact: true }).click();
-	const response = await createdJob;
-	expect(response.status()).toBe(200);
-	const job = (await response.json()) as { id: string };
+	const response = await refused;
+	expect(response.status()).toBe(403);
+	expect(await response.json()).toEqual({ detail: { problem: 'sign_in_again' } });
 
-	const namedFailure: CoverJobOutcome = {
-		id: job.id,
-		status: 'failed',
-		error: COVER_JOB_FAILURE
-	};
-	await expect
-		.poll(() => coverJobOutcome(page, library.albumId), { timeout: 60_000 })
-		.toEqual(namedFailure);
-
-	const failure = editing.getByRole('alert');
-	await expect(failure).toContainText('Couldn’t make a cover suggestion');
-	await expect(failure).toContainText(COVER_JOB_FAILURE);
-	await expect(page.getByText(COVER_JOB_FAILURE)).toHaveCount(1);
-	await expect(editing.getByRole('progressbar')).toHaveCount(0);
+	const line = problemLine(editing);
+	await expect(line).toContainText(COVER_PROBLEM_TEXTS.sign_in_again);
+	await expect(line.getByRole('link', { name: 'Log in' })).toBeVisible();
+	await expect(suggestButton(editing)).toBeDisabled();
+	await expect(editing.getByText(/left today$/)).toHaveCount(0);
+	await expect(editing.getByRole('button', { name: 'Upload', exact: true })).toBeEnabled();
+	expect(await latestCoverJobId(page, library.albumId)).toBe(latestJobBefore);
 	expect(suggestionAsks).toBe(1);
-	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 
 	const albumAddress = page.url();
 	if (isMobile) await editing.getByRole('button', { name: 'Close cover editing' }).click();
@@ -93,6 +102,81 @@ test('Add cover asks for nothing until Suggest, whose one suggestion ends in a n
 	await expect(page).toHaveURL(albumAddress);
 	await expect(surface.getByRole('button', { name: 'Add cover' })).toBeVisible();
 });
+
+test('a run that ends busy, not enabled or unavailable shows its own line in its own look, and only busy and a followed refusal close Suggest', async ({
+	page,
+	isMobile
+}, testInfo) => {
+	if (isMobile) await page.setViewportSize(PHONE_VIEWPORT);
+	const looks: Record<string, ProblemLook> = {};
+	for (const problem of ['busy', 'not_enabled', 'unavailable'] as const) {
+		const album = await createFreshAlbum(page, `${problem} ${isMobile ? 'phone' : 'desktop'}`);
+		try {
+			const jobId = await seedRunningCoverJob(album.id);
+			await page.goto(`/album/${album.id}`);
+			await workspace(page).getByRole('button', { name: 'Add cover' }).click();
+			const editing = workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
+			await expect(suggestButton(editing)).toBeDisabled();
+
+			await failCoverJob(
+				jobId,
+				problem,
+				STORED_ERROR_CANARY,
+				problem === 'busy' ? BUSY_WAIT_SECONDS : undefined
+			);
+
+			const line = problemLine(editing);
+			await expect(line).toContainText(COVER_PROBLEM_TEXTS[problem]);
+			looks[problem] = await lookOf(line);
+			await expect(suggestButton(editing)).toBeEnabled({ enabled: problem === 'unavailable' });
+			if (problem === 'busy') await expect(suggestButton(editing)).toContainText(/[45]:\d\d/);
+			await expect(editing.getByText(/left today$/)).toHaveCount(problem === 'not_enabled' ? 0 : 1);
+			await expect(page.getByText(STORED_ERROR_CANARY)).toHaveCount(0);
+			await attachShot(page, testInfo, `cover-${problem}`);
+
+			// A reload is a new view: busy keeps its wait, a refusal of the person asks again.
+			await page.reload();
+			await workspace(page).getByRole('button', { name: 'Add cover' }).click();
+			await expect(editing.getByText(/left today$/)).toBeVisible();
+			if (problem === 'not_enabled') {
+				await expect(problemLine(editing)).toHaveCount(0);
+				await expect(suggestButton(editing)).toBeEnabled();
+			} else {
+				await expect(problemLine(editing)).toContainText(COVER_PROBLEM_TEXTS[problem]);
+				await expect(suggestButton(editing)).toBeEnabled({ enabled: problem === 'unavailable' });
+			}
+			await expect(page.getByText(STORED_ERROR_CANARY)).toHaveCount(0);
+		} finally {
+			await archiveOwnedAlbum(page.request, album.id);
+		}
+	}
+
+	// Busy and unavailable wait in amber; not enabled is grey and dashed (picture l).
+	expect(looks.busy.borderColor).toBe(looks.unavailable.borderColor);
+	expect(looks.busy.borderStyle).toBe('solid');
+	expect(looks.not_enabled.borderStyle).toBe('dashed');
+	expect(looks.not_enabled.borderColor).not.toBe(looks.busy.borderColor);
+});
+
+async function createFreshAlbum(page: Page, label: string): Promise<{ id: string }> {
+	const response = await page.request.post('/api/albums', {
+		headers: await sameOriginHeaders(page),
+		data: { title: `E2E Cover Problem ${label} ${Date.now()}`, artist: '' }
+	});
+	expect(response.ok()).toBe(true);
+	return (await response.json()) as { id: string };
+}
+
+async function latestCoverJobId(page: Page, albumId: string): Promise<string | null> {
+	const response = await page.request.get(`/api/albums/${albumId}/cover-suggestions`);
+	expect(response.ok()).toBe(true);
+	const { job } = (await response.json()) as { job: { id: string } | null };
+	return job?.id ?? null;
+}
+
+async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
+	await testInfo.attach(name, { body: await page.screenshot(), contentType: 'image/png' });
+}
 
 test.describe('cover suggestions retry', () => {
 	test('keeps a quiet touch target and reloads suggestions after bounded failures (1160-F8-hitbox)', async ({
@@ -143,13 +227,6 @@ test.describe('cover suggestions retry', () => {
 		});
 	});
 });
-
-async function coverJobOutcome(page: Page, albumId: string): Promise<CoverJobOutcome | null> {
-	const response = await page.request.get(`/api/albums/${albumId}/cover-suggestions`);
-	expect(response.ok()).toBe(true);
-	const { job } = (await response.json()) as { job: CoverJobOutcome | null };
-	return job && { id: job.id, status: job.status, error: job.error };
-}
 
 test('an API-seeded suggestion can be chosen and its selected cover removed', async ({ page }) => {
 	const library = readSeededLibrary();

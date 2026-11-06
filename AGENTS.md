@@ -30,7 +30,7 @@ The live app is Docker-only; there is no local server path. `.venv` is for tests
 
 CI runs the pinned reusable quality gate (`quality / verdict`, mandatory jobs in `quality/config.toml`); coverage floors, Sonar and transport are in [testing](docs/testing.md#static-analysis-sonarcloud).
 
-Local runs are targeted: `pytest -q` on the named files, `pnpm exec vitest run` on the named frontend file.
+Local runs are targeted: `pytest -q` on the named files, `scripts/test_postgresql.sh <files>` for database tests (a disposable PostgreSQL, no lock), `pnpm exec vitest run` on the named frontend file.
 
 Before reporting a tip, run `bash scripts/static_checks.sh`: it runs CI's static gates (ruff, import contracts, the repository scripts, svelte-check, eslint, prettier, quality hygiene at CI's pin) and stops at the first red one, naming it. It needs `.venv` and `frontend/node_modules`; the script lists the gates.
 
@@ -58,7 +58,7 @@ Schema changes: `alembic revision --autogenerate -m "..."`, then `alembic upgrad
 ## Constraints and known debt
 
 - **No co-writer turn or cover runs on a Claude CLI, so no song content reaches one.** The web process still runs the mounted CLI for the catalog's login and `/model` checks ([Claude Chat Security](docs/security.md#claude-chat-security)).
-- **Agent-CLI bind mounts** never expose an operator profile; `ANTHROPIC_API_KEY` serves the API route (catalog) but does not replace the mounted CLI the CLI route (cover) needs: [Agent-CLI Mounts](docs/security.md#agent-cli-mounts).
+- **Agent-CLI bind mounts** never expose an operator profile; no co-writer turn or cover uses them, and `ANTHROPIC_API_KEY` serves the catalog's API route but does not replace the mounted CLI the catalog's checks read: [Agent-CLI Mounts](docs/security.md#agent-cli-mounts).
 - **The DB owns session validity** (`touch()` must return a real `bool`). `get_current_user` commits renewal in its own short transaction; stores never commit endpoint writes; stream callers commit before streaming. Keycloak group changes apply only at the next sign-in or the next token call, so removing someone ends nothing until their sessions expire: revoke as described in [Authentication](docs/security.md#revocation).
 - **Trust model** (subprocesses share the OS user, one shared worker token, single-node): accepted for a single-user deployment; rationale and limits in [Worker Pool Trust Boundary](docs/security.md#ace-step-worker-pool-trust-boundary).
 - **GPU isolation is by container.** Only `songmaker-acestep-worker-N` has a GPU; `songmaker-scoring-worker` runs `SCORING_DEVICE=cpu`, so nothing arbitrates VRAM. NVML and worker health: [ACE-Step](docs/acestep.md#operating-the-worker-pool).

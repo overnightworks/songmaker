@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,7 +12,7 @@ import pytest
 import sqlalchemy as sa
 from alembic.config import Config
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.engine import URL, Engine, make_url
+from sqlalchemy.engine import URL, Engine
 from support.migration_chain import seeded_then_upgraded
 
 RECORDING_COLUMN = "reference_recording_id"
@@ -60,18 +59,10 @@ def reference_link_sqlite(tmp_path: Path):
 
 
 @pytest.fixture
-def reference_link_postgresql(postgresql_url):
-    schema = "reference_link_" + uuid.uuid4().hex
-    admin = create_engine(postgresql_url)
-    with admin.begin() as connection:
-        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    url = make_url(postgresql_url).update_query_dict({"options": f"-csearch_path={schema}"})
-    engine = create_engine(url)
-    yield _config_for(url), engine
+def reference_link_postgresql(empty_postgresql_url):
+    engine = create_engine(empty_postgresql_url)
+    yield _config_for(empty_postgresql_url), engine
     engine.dispose()
-    with admin.begin() as connection:
-        connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-    admin.dispose()
 
 
 @pytest.fixture(
