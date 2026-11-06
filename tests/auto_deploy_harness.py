@@ -321,7 +321,7 @@ class Checkout:
             'check_runs_prefix="repos/overnightworks/songmaker/commits/"\n'
             'check_runs_suffix="/check-runs?per_page=100"\n'
             'workflow_runs_prefix="repos/overnightworks/songmaker/actions/runs?head_sha="\n'
-            'workflow_runs_suffix="&event=dynamic&per_page=100"\n'
+            'workflow_runs_suffix="&per_page=100"\n'
             'if [[ "$3" == "$check_runs_prefix"*"$check_runs_suffix" ]]; then\n'
             '    commit_sha="${3#"$check_runs_prefix"}"\n'
             '    commit_sha="${commit_sha%"$check_runs_suffix"}"\n'
