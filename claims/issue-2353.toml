@@ -1,8 +1,0 @@
-claim_id = "720a1f32c9ba46a78da3935ff9f65427"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c4a3f41c417bd4745a0e789187cbcb73bf746d80"
-branch = "claude/issue-2353-the-app-stops-writing-legacy-song-addres"
-scope = ["docs/architecture.md", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/routes/addresses.test.ts", "frontend/src/lib/routes/addresses.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/navigationSongById.test.ts", "quality/baseline.toml"]
-opened_commit = "484259bdd0a394960bacf983d82837fd2df89fac"
-whole_reason = "The writer and every comment that describes its fallback change together."
