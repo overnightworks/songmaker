@@ -494,8 +494,9 @@ def postgresql_databases(testrun_uid: str, worker_id: str):
 
     A missing, malformed or unreachable server fails every database test; none skips.
     """
-    from sqlalchemy.engine import make_url
     from support.postgresql import PostgresqlTestDatabases
+
+    from songmaker_cli.db.database_url import database_url_with_password
 
     configured = os.environ.get(_DATABASE_SERVER_VARIABLE, "")
     if not configured:
@@ -503,7 +504,7 @@ def postgresql_databases(testrun_uid: str, worker_id: str):
             "TEST_DATABASE_URL is not set: run database tests through "
             "scripts/test_postgresql.sh, which starts a disposable PostgreSQL."
         )
-    administration_url = make_url(configured)
+    administration_url = database_url_with_password(configured, None)
     if administration_url.get_backend_name() != "postgresql":
         pytest.fail("TEST_DATABASE_URL must name a PostgreSQL server")
     databases = PostgresqlTestDatabases(
