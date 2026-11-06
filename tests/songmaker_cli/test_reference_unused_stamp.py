@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event, text
+from support.failing_reference_stamp import failing_stamp_trigger
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
@@ -38,12 +39,6 @@ def _take_row(take_id: str, number: int, reference_id: str | None) -> Generation
     )
 
 
-FAIL_STAMP_TRIGGER = (
-    "CREATE TRIGGER fail_stamp BEFORE UPDATE OF unused_since ON reference_recordings "
-    "BEGIN SELECT RAISE(ABORT, 'secret.wav'); END"
-)
-
-
 def _seed_stamp_world(
     session, takes: dict[str, str | None], version_reference: str | None, *, failing_stamp=False,
 ) -> None:
@@ -63,7 +58,7 @@ def _seed_stamp_world(
         _take_row(name, number, ref) for number, (name, ref) in enumerate(takes.items(), 1)
     )
     if failing_stamp:
-        session.execute(text(FAIL_STAMP_TRIGGER))
+        session.execute(text(failing_stamp_trigger()))
 
 
 def _world(
