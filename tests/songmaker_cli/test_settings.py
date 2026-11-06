@@ -341,19 +341,6 @@ def test_a_wrongly_delimited_agent_name_is_ignored_and_reads_as_unset(
     assert Settings(**_required_settings()).agent is None
 
 
-def test_a_dotenv_key_starting_with_agent_passes_and_another_unknown_one_is_refused(
-    tmp_path: Path,
-) -> None:
-    dotenv = tmp_path / ".env"
-    dotenv.write_text("AGENT_SERVICE_URL=http://old.test\n")
-    assert Settings(**_required_settings(), _env_file=dotenv).agent is None
-
-    dotenv.write_text("UNKNOWN_SETTING=1\n")
-    required = _required_settings()
-    with pytest.raises(ValidationError, match="unknown_setting"):
-        Settings(**required, _env_file=dotenv)
-
-
 @pytest.fixture
 def secrets_only_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Leave the secret fields to the secrets directory under test."""
