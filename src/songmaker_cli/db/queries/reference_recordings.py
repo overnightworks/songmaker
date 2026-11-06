@@ -114,6 +114,37 @@ def lock_and_mark_reference_used(
     return recording
 
 
+def mark_newly_unused(session: Session, reference_ids: Collection[str]) -> int:
+    """Stamp ``unused_since`` on each unstamped, unkept row that no version or take links.
+
+    The rows are locked in id order, then the links are counted by a fresh statement, so an
+    attach that committed first is seen and one that comes later waits and clears the stamp.
+    Unknown ids are ignored. Returns the stamped count.
+    """
+    if not reference_ids:
+        return 0
+    candidates = session.execute(
+        select(ReferenceRecording)
+        .where(
+            ReferenceRecording.id.in_(reference_ids),
+            ReferenceRecording.unused_since.is_(None),
+            ReferenceRecording.is_kept.is_(False),
+        )
+        .order_by(ReferenceRecording.id)
+        .with_for_update(),
+    ).scalars().all()
+    link_counts = reference_link_counts(session, [row.id for row in candidates])
+    unlinked = [
+        row for row in candidates
+        if link_counts[row.id] == ReferenceLinkCounts(versions=0, takes=0)
+    ]
+    stamped_at = utcnow()
+    for row in unlinked:
+        row.unused_since = stamped_at
+    session.flush()
+    return len(unlinked)
+
+
 def delete_reference_recording(session: Session, recording: ReferenceRecording) -> str:
     """Delete the row and flush; returns its storage path.
 
