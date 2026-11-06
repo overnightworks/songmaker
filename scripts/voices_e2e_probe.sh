@@ -44,8 +44,8 @@ compose=(docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml
 
 teardown() {
     trap - EXIT TERM
-    # The CI override puts the music worker in the gpu profile; without the
-    # profile, down leaves it running.
+    # The overlay puts alertmanager in the gpu profile; without the profile,
+    # down leaves it running.
     "${compose[@]}" --profile gpu down -v --remove-orphans
     rm -rf "$secrets_dir"
     rm -f "$secret_file" "$gateway_key_file"
@@ -53,8 +53,10 @@ teardown() {
 trap teardown EXIT
 trap 'teardown; exit 143' TERM
 
-"${compose[@]}" up -d --build --wait \
-    postgres redis migrate songmaker-web songmaker-music-worker \
-    songmaker-voices-e2e-worker
+# Two steps: the stack has no restart policy, so the apps start only once the
+# stores are healthy, and the fake worker only once web is.
+"${compose[@]}" up -d --wait postgres redis
+"${compose[@]}" up -d --build --wait songmaker-web songmaker-music-worker
+"${compose[@]}" up -d --build --wait songmaker-voices-e2e-worker
 
 pnpm --dir frontend exec playwright test e2e/voices.spec.ts

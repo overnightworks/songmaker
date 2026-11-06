@@ -29,10 +29,14 @@ env:
 
 jobs:
   smoke:
-    name: Boot stack + library flows
+    name: Boot stack + library flows (${{ matrix.project }})
     runs-on: ubuntu-latest
-    # The suite runs 19-25 min (measured 17.10.2026); this ceiling guards against a hang, not a slow suite.
+    # Each project runs 15-22 min on its own runner; this ceiling guards against a hang, not a slow suite.
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [desktop, mobile]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -73,7 +77,11 @@ jobs:
           # the smoke test and Playwright drive it through below.
           PUBLIC_BASE_URL: http://localhost:${{ env.WEB_PORT }}
           SONGMAKER_COMMIT: ${{ github.sha }}
-        run: docker compose $COMPOSE_FILES up -d --build --wait postgres redis migrate songmaker-web
+        # Two steps: this stack has no restart policy, so the apps start only
+        # once the stores are healthy.
+        run: |
+          docker compose $COMPOSE_FILES up -d --wait postgres redis
+          docker compose $COMPOSE_FILES up -d --build --wait songmaker-music-worker songmaker-web
 
       - name: Smoke test
         run: |
@@ -88,8 +96,8 @@ jobs:
           }
 
           # The details always answer 200 regardless of body, so assert the body:
-          # no music/scoring worker runs in this stack, so "degraded" is
-          # expected, but db and redis must both be reachable.
+          # no scoring or ACE-Step worker runs in this stack, so those report
+          # absent; db and redis must both be reachable.
           health="$(curl -fsS -H "Authorization: Bearer $(cat "$SONGMAKER_SECRETS_DIR/monitoring-token")" "$base/health/details")"
           db_ok="$(jq -r '.db' <<<"$health")"
           redis_ok="$(jq -r '.redis' <<<"$health")"
@@ -108,7 +116,7 @@ jobs:
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.x
         with:
-          version: 10
+          package_json_file: frontend/package.json
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.x
         with:
@@ -121,15 +129,18 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      # why: the apt mirror once served at a few dozen kB/s and the install took
+      # 12.4 min; past 15 min the step is a hang, and it must not eat the job's ceiling.
       - name: Install Playwright Chromium
         working-directory: frontend
+        timeout-minutes: 15
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Library flows (desktop and mobile)
+      - name: Library flows (${{ matrix.project }})
         working-directory: frontend
         env:
           E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}
-        run: pnpm test:e2e
+        run: pnpm test:e2e --project=${{ matrix.project }}
 
       # The E2E-only IP_RATE_LIMIT in docker/docker-compose.ci.yml is sized
       # from this peak (#1555), so every run prints it rather than leaving a
@@ -150,7 +161,7 @@ jobs:
         if: failure() || hashFiles('frontend/test-results/**/trace.zip') != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
-          name: e2e-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}
+          name: e2e-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.project }}
           path: |
             frontend/playwright-report
             frontend/test-results
@@ -164,7 +175,7 @@ jobs:
         if: failure() || hashFiles('frontend/test-results/**/trace.zip') != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
-          name: e2e-compose-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          name: e2e-compose-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.project }}
           path: compose-logs.txt
           retention-days: 14
 

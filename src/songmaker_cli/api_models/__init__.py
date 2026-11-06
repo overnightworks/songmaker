@@ -72,7 +72,10 @@ from songmaker_cli.api_models.queue_streams import (
 from songmaker_cli.api_models.references import (
     ReferenceListResponse,
     ReferenceRecordingResponse,
+    ReferenceTakeUseResponse,
     ReferenceUsageResponse,
+    ReferenceUsesResponse,
+    ReferenceVersionUseResponse,
 )
 from songmaker_cli.api_models.resource_events import (
     GenerationCreatedResourceEvent,
@@ -82,7 +85,6 @@ from songmaker_cli.api_models.resource_events import (
 from songmaker_cli.api_models.settings import (
     AgentProblem,
     AssistantTextEvent,
-    CapabilitiesResponse,
     ChatMessageResponse,
     ChatTurnFailureFrame,
     ChatTurnFinalFrame,
@@ -102,7 +104,6 @@ from songmaker_cli.api_models.settings import (
     PresetCreateRequest,
     PresetResponse,
     PresetUpdateRequest,
-    ProviderStatusResponse,
     RateLimitItem,
     RateLimitsResponse,
     RateLimitUpdateRequest,
@@ -224,9 +225,11 @@ __all__ = [
     "BulkDeleteResponse",
     "ReferenceListResponse",
     "ReferenceRecordingResponse",
+    "ReferenceTakeUseResponse",
     "ReferenceUsageResponse",
+    "ReferenceUsesResponse",
+    "ReferenceVersionUseResponse",
     "AuthMeResponse",
-    "CapabilitiesResponse",
     "ChatMessageResponse",
     "ChatTurnV2Request",
     "ChatTurnFailureFrame",
@@ -297,7 +300,6 @@ __all__ = [
     "PresetCreateRequest",
     "PresetResponse",
     "PresetUpdateRequest",
-    "ProviderStatusResponse",
     "QueueStreamManifestResponse",
     "QueueStreamSkipResponse",
     "QueueStreamTrackResponse",

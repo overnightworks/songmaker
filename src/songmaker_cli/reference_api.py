@@ -20,6 +20,7 @@ from songmaker_cli.api_models import (
     ReferenceListResponse,
     ReferenceRecordingResponse,
     ReferenceUsageResponse,
+    ReferenceUsesResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
@@ -33,11 +34,13 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.reference_recordings import (
+    ReferenceLinkCounts,
     delete_reference_recording,
     get_owned_reference_recording,
     list_owned_reference_recordings,
     owner_reference_usage,
-    reference_ids_in_use,
+    reference_link_counts,
+    reference_uses,
 )
 from songmaker_cli.reference_audio import (
     REFERENCE_AUDIO_STORAGE_DETAIL,
@@ -88,16 +91,30 @@ def api_list_references(
     session: Annotated[Session, Depends(get_db_session)],
 ) -> ReferenceListResponse:
     recordings = list_owned_reference_recordings(session, user.id)
-    in_use = reference_ids_in_use(session, [recording.id for recording in recordings])
+    counts = reference_link_counts(session, [recording.id for recording in recordings])
     return ReferenceListResponse(
         references=[
-            ReferenceRecordingResponse.from_orm(recording, in_use=recording.id in in_use)
+            ReferenceRecordingResponse.from_orm(recording, counts[recording.id])
             for recording in recordings
         ],
         usage=ReferenceUsageResponse.from_orm(
             owner_reference_usage(session, user.id), get_settings()
         ),
     )
+
+
+@router.get(
+    "/references/{reference_id}/uses",
+    responses={404: {"description": "Reference audio not found"}},
+)
+def api_reference_uses(
+    reference_id: str,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_db_session)],
+) -> ReferenceUsesResponse:
+    if get_owned_reference_recording(session, user.id, reference_id) is None:
+        raise HTTPException(404)
+    return ReferenceUsesResponse.from_orm(reference_uses(session, reference_id))
 
 
 @router.get(
@@ -231,4 +248,6 @@ def _stored_reference_response(
 ) -> ReferenceRecordingResponse:
     with ctx.db() as session:
         recording = get_owned_reference_recording(session, user_id, recording_id)
-        return ReferenceRecordingResponse.from_orm(recording, in_use=False)
+        return ReferenceRecordingResponse.from_orm(
+            recording, ReferenceLinkCounts(versions=0, takes=0),
+        )

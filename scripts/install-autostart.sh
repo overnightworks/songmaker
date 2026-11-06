@@ -16,7 +16,7 @@
 # Starting the unit immediately (see the final message this script prints)
 # runs `docker compose up -d` against whatever is running right now: if
 # .env or code changed since the containers were last started, compose may
-# recreate them (and re-run the migrate container), which can kill an
+# recreate them (and migrate at start), which can kill an
 # in-flight generation. Do that deliberately, in a maintenance window —
 # this script does not do it for you.
 #

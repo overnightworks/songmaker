@@ -47,7 +47,7 @@ def _seeded(references: list[str]):
             for name in FILES
         )
         session.flush()
-        session.add(AvailableModel(id="sft", is_active=True))
+        session.merge(AvailableModel(id="sft", is_active=True))
         session.add(Album(id="album-a", title="A", artist="A", created_by=OWNER))
         session.flush()
         song = create_song(

@@ -1,4 +1,4 @@
-"""PostgreSQL contracts; the postgresql_url fixture skips without TEST_DATABASE_URL."""
+"""PostgreSQL contracts on this worker's databases; they fail without a PostgreSQL server."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from functools import partial
 
 import pytest
 from sqlalchemy import create_engine, event, insert, inspect, text
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import URL
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from support.repository_root import REPOSITORY_ROOT
@@ -20,12 +20,11 @@ from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
-from songmaker_cli.db.database_url import database_url_with_password
+from songmaker_cli.db.database_url import POSTGRESQL_PSYCOPG2_DRIVERNAME, database_url_with_password
 from songmaker_cli.db.engine import init_db, resolve_database_url
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
-    Base,
     ChatMessage,
     Conversation,
     Generation,
@@ -70,15 +69,15 @@ from songmaker_cli.settings import get_settings
 def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@host/db")
     url = resolve_database_url()
-    assert url.render_as_string(hide_password=False) == "postgresql://user:pass@host/db"
+    assert url.render_as_string(hide_password=False) == f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://user:pass@host/db"
 
 
 def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart(
-    postgresql_url: str,
+    empty_postgresql_url: URL,
 ) -> None:
     name = f"secret_password_{uuid.uuid4().hex[:12]}"
     password = "p%a@s/s:w ord"
-    admin = create_engine(postgresql_url)
+    admin = create_engine(empty_postgresql_url)
     with admin.begin() as connection:
         role = text("SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :name, :password)")
         statement = connection.execute(role, {"name": name, "password": password}).scalar_one()
@@ -86,7 +85,7 @@ def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart(
         connection.execute(text(statement.replace(":", r"\:")))
         connection.execute(text(f'CREATE SCHEMA "{name}" AUTHORIZATION "{name}"'))
         connection.execute(text(f'ALTER ROLE "{name}" SET search_path = "{name}"'))
-    base = make_url(postgresql_url)._replace(username=name, password=None)
+    base = empty_postgresql_url._replace(username=name, password=None)
     factory = None
     try:
         factory = init_db(database_url_with_password(base, password))
@@ -717,22 +716,17 @@ def test_resource_event_retention_gap_on_postgresql(pg_factory) -> None:
         assert get_oldest_resource_event_sequence(session, "retention-user") == 3
 
 
-def test_alembic_migrations_on_postgresql(postgresql_url: str) -> None:
+def test_alembic_migrations_on_postgresql(empty_postgresql_url: URL) -> None:
     from alembic import command
     from alembic.config import Config
 
-    engine = create_engine(postgresql_url)
-    Base.metadata.drop_all(engine)
-    with engine.connect() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
-        conn.commit()
-    engine.dispose()
     cfg = Config(str(REPOSITORY_ROOT / "alembic.ini"))
-    cfg.set_main_option("sqlalchemy.url", postgresql_url)
+    rendered_url = empty_postgresql_url.render_as_string(hide_password=False)
+    cfg.set_main_option("sqlalchemy.url", rendered_url.replace("%", "%%"))
     command.upgrade(cfg, "202b0514cdde")
 
     now = datetime.now(timezone.utc)
-    engine = create_engine(postgresql_url)
+    engine = create_engine(empty_postgresql_url)
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -758,7 +752,7 @@ def test_alembic_migrations_on_postgresql(postgresql_url: str) -> None:
     # code was reverted.  Prove that upgrading from that exact stamp preserves
     # rows it may already contain and backfills users without cursors.
     command.upgrade(cfg, "40a1c2d3e4f5")
-    engine = create_engine(postgresql_url)
+    engine = create_engine(empty_postgresql_url)
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -788,7 +782,7 @@ def test_alembic_migrations_on_postgresql(postgresql_url: str) -> None:
 
     command.upgrade(cfg, "head")
 
-    engine = create_engine(postgresql_url)
+    engine = create_engine(empty_postgresql_url)
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     engine.dispose()
@@ -813,7 +807,7 @@ def test_alembic_migrations_on_postgresql(postgresql_url: str) -> None:
     assert "user_resource_cursors" not in tables
     assert "user_resource_events" not in tables
 
-    engine = create_engine(postgresql_url)
+    engine = create_engine(empty_postgresql_url)
     with engine.connect() as conn:
         cursors = conn.execute(
             text(

@@ -41,9 +41,14 @@
 #     consequence is that a checkout installed behind the newest release stays on
 #     the stale stack until the operator deploys it once by hand (see
 #     docs/architecture.md).
-#   - Migrations occasionally abort loudly on lock_timeout (see the
-#     c9d4a2f18e37 unique-slug-index migration). That is not fatal — the
-#     next tick retries the same deploy. A tick that could not deploy
+#   - Every app process migrates at its own start under an advisory lock,
+#     after compose has replaced the containers. A migration that aborts
+#     (for example on lock_timeout, see the c9d4a2f18e37 unique-slug-index
+#     migration) rolls back fully, but the new containers restart in a loop
+#     and the app is down until a fixed release; `up --wait` then aborts within
+#     seconds with "container ... is unhealthy" (compose ends its wait on a
+#     container in restart backoff) and the tick counts as failed; the next
+#     tick deploys the fixed release by itself. A tick that could not deploy
 #     despite a release being pending (a hard refusal, or a fetch/build/up
 #     failure) increments a consecutive-FAILURE counter; only the tick
 #     that crosses N in a row escalates to a prio=err journal line worth
@@ -254,8 +259,10 @@ SAFE_GIT_COMMAND=(
     -c core.hooksPath=/dev/null
     -c core.fsmonitor=false
 )
+# Fd 200 is the tick's lock; a detached git child (maintenance, a transport)
+# that inherited it would keep the next tick out after this one has ended.
 safe_git() {
-    "${SAFE_GIT_COMMAND[@]}" -C "$REPO_ROOT" "$@"
+    "${SAFE_GIT_COMMAND[@]}" -C "$REPO_ROOT" "$@" 200>&-
 }
 
 # Templates and the stale-file sweep share these names; keep existing prefixes
@@ -306,7 +313,7 @@ safe_git_fetch() {
         return 1
     fi
     setsid timeout --kill-after="$GIT_FETCH_KILL_GRACE_SECONDS" "$GIT_FETCH_TIMEOUT_SECONDS" \
-        "${SAFE_GIT_COMMAND[@]}" -C "$repository" fetch --quiet "$@" >"$output_file" 2>&1 &
+        "${SAFE_GIT_COMMAND[@]}" -C "$repository" fetch --quiet "$@" >"$output_file" 2>&1 200>&- &
     fetch_group=$!
     if wait "$fetch_group"; then
         fetch_exit_code=0
@@ -1295,7 +1302,7 @@ release_schema_of() {
     alembic_head_of "$commit_sha"
 }
 
-# A schema change is the one thing `compose up` (the one-shot migrate) cannot
+# A schema change is the one thing `compose up` (the apps' start-time migration) cannot
 # take back, so hal's pre-apply backup runs first. Any doubt about either schema
 # counts as a change. A failed or missing backup is a counted refusal: nothing
 # is built or recreated, and the next tick tries again.

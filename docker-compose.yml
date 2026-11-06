@@ -56,21 +56,6 @@ services:
       - SETUID
       - SETGID
 
-  migrate:
-    build: *web-image-build
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
-    secrets:
-      - postgres_password
-    entrypoint: ["uv", "run", "--no-sync", "--frozen", "--no-build", "alembic", "upgrade", "head"]
-    restart: "no"
-    logging: *service-logging
-    cap_drop:
-      - ALL
-
   songmaker-web:
     build: *web-image-build
     restart: unless-stopped
@@ -78,12 +63,21 @@ services:
     init: true
     logging: *service-logging
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+      - postgres
+      - redis
+    # Every process migrates in init_db under an advisory lock, so a starter
+    # blocked behind a running migration is "starting" until it ends; the
+    # start period outlasts any migration.
+    healthcheck:
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8080/health')
+      interval: 30s
+      timeout: 5s
+      start_period: 600s
+      retries: 3
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
@@ -225,15 +219,11 @@ services:
       test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "music"]
       interval: 30s
       timeout: 5s
-      start_period: 120s
+      start_period: 600s
       retries: 3
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+      - postgres
+      - redis
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
@@ -266,8 +256,7 @@ services:
       - no-new-privileges:true
     logging: *service-logging
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     environment:
       WORKER_ID: "acestep-worker-0"
       WORKER_HOST: "songmaker-acestep-worker-0"
@@ -321,15 +310,11 @@ services:
       test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "scoring"]
       interval: 30s
       timeout: 5s
-      start_period: 120s
+      start_period: 600s
       retries: 3
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+      - postgres
+      - redis
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
@@ -371,10 +356,8 @@ services:
       # A cold Prometheus may replay its WAL before its ready endpoint responds.
       start_period: 60s
     depends_on:
-      songmaker-web:
-        condition: service_healthy
-      alertmanager:
-        condition: service_started
+      - songmaker-web
+      - alertmanager
     cap_drop:
       - ALL
 

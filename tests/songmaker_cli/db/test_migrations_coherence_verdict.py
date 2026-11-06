@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import json
 import logging
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,29 +32,15 @@ def _alembic_config() -> Config:
 
 
 @pytest.fixture
-def database(database_postgresql_url, tmp_path, isolated_logging):
-    """Yield (config, engine) of an empty database; PostgreSQL gets its own schema."""
-    if database_postgresql_url is None:
-        url = make_url(f"sqlite:///{tmp_path / 'coherence.db'}")
-        schema = None
-    else:
-        schema = "coherence_verdicts_" + uuid.uuid4().hex
-        admin = create_engine(database_postgresql_url)
-        with admin.begin() as connection:
-            connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-        url = make_url(database_postgresql_url).update_query_dict(
-            {"options": f"-csearch_path={schema}"}
-        )
+def database(database_empty_postgresql_url, tmp_path, isolated_logging):
+    """Yield (config, engine) of an empty database."""
+    url = database_empty_postgresql_url or make_url(f"sqlite:///{tmp_path / 'coherence.db'}")
     config = _alembic_config()
     rendered_url = url.render_as_string(hide_password=False).replace("%", "%%")
     config.set_main_option("sqlalchemy.url", rendered_url)
     engine = create_engine(url)
     yield config, engine
     engine.dispose()
-    if schema is not None:
-        with admin.begin() as connection:
-            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        admin.dispose()
 
 
 @pytest.fixture

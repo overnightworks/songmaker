@@ -61,17 +61,20 @@ async function postJson<T>(api: APIRequestContext, path: string, data: object): 
 	return (await response.json()) as T;
 }
 
-async function linkReferenceToSong(api: APIRequestContext, referenceId: string): Promise<string> {
+async function linkReferenceToSong(
+	api: APIRequestContext,
+	referenceId: string
+): Promise<{ albumId: string; songId: string }> {
 	const album = await postJson<{ id: string }>(api, '/api/albums', {
 		title: `E2E reference album ${runMarker()}`,
 		artist: 'E2E'
 	});
-	await postJson(api, '/api/songs', {
+	const song = await postJson<{ id: string }>(api, '/api/songs', {
 		title: 'E2E reference song',
 		album_id: album.id,
 		reference_recording_id: referenceId
 	});
-	return album.id;
+	return { albumId: album.id, songId: song.id };
 }
 
 async function trackCreatedAudio(page: Page): Promise<void> {
@@ -295,7 +298,10 @@ test('Settings › References greys Delete for a recording a song uses', async (
 	let albumId: string | undefined;
 	let testPassed = false;
 	try {
-		albumId = await linkReferenceToSong(api, await postReferenceAudio(api, 'storytime-drums.mp3'));
+		({ albumId } = await linkReferenceToSong(
+			api,
+			await postReferenceAudio(api, 'storytime-drums.mp3')
+		));
 		await page.goto('/settings/references');
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
 
@@ -328,7 +334,7 @@ test('Settings › References shows the in-use notice on the row when a song too
 		await page.goto('/settings/references');
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
 		await expect(row).toBeVisible();
-		albumId = await linkReferenceToSong(api, referenceId);
+		({ albumId } = await linkReferenceToSong(api, referenceId));
 
 		await row.getByRole('button', { name: 'Reference menu' }).click();
 		await page
@@ -345,6 +351,77 @@ test('Settings › References shows the in-use notice on the row when a song too
 		await expect(
 			page.getByRole('dialog', { name: 'Reference menu' }).getByRole('button', { name: /Delete/ })
 		).toBeDisabled();
+		guard.assertClean();
+		testPassed = true;
+	} finally {
+		await cleanUp(api, albumId, testPassed);
+	}
+});
+
+test('Settings › References shows where a recording is used and links to the song', async ({
+	context,
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const account = await signInFreshAccount(context, 'references-uses', testInfo.project.name);
+	const api = await signedInApi(account);
+	let albumId: string | undefined;
+	let testPassed = false;
+	try {
+		({ albumId } = await linkReferenceToSong(
+			api,
+			await postReferenceAudio(api, 'storytime-drums.mp3')
+		));
+		await page.goto('/settings/references');
+		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
+
+		await row.getByRole('button', { name: 'Used in 1 version' }).click();
+		await page.evaluate(() => {
+			(window as unknown as { __clientSideMarker: boolean }).__clientSideMarker = true;
+		});
+		await row.getByRole('link', { name: /Version v1/ }).click();
+
+		await expect(page).toHaveURL(new RegExp(`/album/${albumId}/`));
+		expect(
+			await page.evaluate(
+				() => (window as unknown as { __clientSideMarker?: boolean }).__clientSideMarker
+			),
+			'The link must navigate client-side, not reload the document'
+		).toBe(true);
+		guard.assertClean();
+		testPassed = true;
+	} finally {
+		await cleanUp(api, albumId, testPassed);
+	}
+});
+
+test('Settings › References tags a deleted song without a link', async ({
+	context,
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const account = await signInFreshAccount(context, 'references-deleted', testInfo.project.name);
+	const api = await signedInApi(account);
+	let albumId: string | undefined;
+	let testPassed = false;
+	try {
+		const linked = await linkReferenceToSong(
+			api,
+			await postReferenceAudio(api, 'storytime-drums.mp3')
+		);
+		albumId = linked.albumId;
+		const deletion = await api.delete(`/api/songs/${linked.songId}`, {
+			headers: { origin: BASE_URL }
+		});
+		expect(deletion.ok(), `Song delete failed: ${await deletion.text()}`).toBeTruthy();
+		await page.goto('/settings/references');
+		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
+
+		await row.getByRole('button', { name: 'Used in 1 version' }).click();
+
+		await expect(row.getByText('Deleted')).toBeVisible();
+		await expect(row.getByText('Version v1')).toBeVisible();
+		await expect(row.getByRole('link')).toHaveCount(0);
 		guard.assertClean();
 		testPassed = true;
 	} finally {

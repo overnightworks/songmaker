@@ -295,8 +295,8 @@ class Settings(BaseSettings):
     )
     cookie_secure: bool = Field(default=True, alias="COOKIE_SECURE")
     # The OpenID Connect relying party. All three are required to serve the web
-    # app and are checked only where the relying party is built, so workers and
-    # the migrate step start without them. The secret is a file, never a value.
+    # app and are checked only where the relying party is built, so workers
+    # start without them. The secret is a file, never a value.
     oidc_issuer: str | None = None
     oidc_client_id: str | None = None
     oidc_client_secret_file: Path | None = None

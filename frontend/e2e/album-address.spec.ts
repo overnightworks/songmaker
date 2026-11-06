@@ -82,9 +82,9 @@ test(
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
 		// One shell only. What this pins is the router's behaviour across an
-		// address that changes the route — the same code on both shells — and the
-		// two projects share one IP rate-limit window with the library flow, which
-		// walks the compact shell's own differences already.
+		// address that changes the route — the same code on both shells — and,
+		// locally, the two projects share one IP rate-limit window with the library
+		// flow, which walks the compact shell's own differences already.
 
 		const library = readSeededLibrary();
 		const albumAddress = `/album/${library.albumId}`;

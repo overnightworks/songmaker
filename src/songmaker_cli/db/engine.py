@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
+from songmaker_cli.constants import (
+    STORE_STARTUP_CONNECT_TIMEOUT_SECONDS,
+    STORE_STARTUP_RETRY_DELAY_SECONDS,
+    STORE_STARTUP_WAIT_SECONDS,
+)
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.models import Base
 from songmaker_cli.db.soft_delete import install_soft_delete_filter
@@ -22,6 +30,12 @@ MIGRATIONS_DIR = str(Path(__file__).parent / "migrations")
 
 _DEFAULT_SQLITE_TIMEOUT = 30
 
+_RETRIED_SERVER_FATALS = (
+    "the database system is starting up",
+    "the database system is shutting down",
+    "the database system is in recovery mode",
+)
+
 
 def resolve_database_url() -> URL:
     """Return the full connection URL from Settings (base plus password file).
@@ -29,6 +43,57 @@ def resolve_database_url() -> URL:
     A ``URL`` object, so the password never travels as plain text.
     """
     return connection_url_from_settings(get_settings())
+
+
+def _is_connection_level_failure(error: OperationalError) -> bool:
+    # A message without a server-sent FATAL is a client or network error (refused,
+    # unresolved, timed out, reset) that a wait can outlast; psycopg2 sets no pgcode
+    # before authentication. Other server FATALs (password, database, pg_hba) are
+    # configuration a wait cannot fix.
+    message = str(error.orig).lower()
+    if "fatal:" not in message:
+        return True
+    return any(fragment in message for fragment in _RETRIED_SERVER_FATALS)
+
+
+def _probe_database(url: URL | str) -> None:
+    # SQLite takes no connect_timeout.
+    is_postgresql = make_url(url).get_backend_name() == "postgresql"
+    connect_args = (
+        {"connect_timeout": STORE_STARTUP_CONNECT_TIMEOUT_SECONDS} if is_postgresql else {}
+    )
+    engine = create_engine(url, connect_args=connect_args)
+    try:
+        with engine.connect() as connection:
+            connection.exec_driver_sql("SELECT 1")
+    finally:
+        engine.dispose()
+
+
+def wait_for_database(
+    url: URL | str,
+    *,
+    probe: Callable[[URL | str], None] = _probe_database,
+    now: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
+    """Block until the database accepts a connection; raise the last error after the bound."""
+    shown = make_url(url)
+    log.info(
+        "Waiting up to %ss for the database at %s:%s",
+        STORE_STARTUP_WAIT_SECONDS, shown.host, shown.port,
+    )
+    deadline = now() + STORE_STARTUP_WAIT_SECONDS
+    while True:
+        try:
+            probe(url)
+        except OperationalError as error:
+            if not _is_connection_level_failure(error) or now() >= deadline:
+                raise
+            sleep(STORE_STARTUP_RETRY_DELAY_SECONDS)
+        else:
+            log.info("Database answers at %s:%s", shown.host, shown.port)
+            return
 
 
 def _run_migrations(url: URL | str) -> None:
@@ -82,7 +147,8 @@ def connect_db(url: URL | str) -> sessionmaker[Session]:
 
 
 def init_db(url: URL | str) -> sessionmaker[Session]:
-    """Create the PostgreSQL engine, run migrations, and return a session factory."""
+    """Wait for the database, run migrations, and return a session factory."""
+    wait_for_database(url)
     _run_migrations(url)
     return connect_db(url)
 

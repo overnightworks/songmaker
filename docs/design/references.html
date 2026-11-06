@@ -133,6 +133,10 @@ ol.dec .r{display:block}ol.dec .a{display:block;color:var(--ink-soft)}
 .ph .usage .ur{min-height:44px;padding-left:56px}
 .usage .ur small{color:var(--muted);font-size:.8rem}
 .usage .ur .ic{color:var(--disabled);margin-left:auto}
+.usage .tg{padding:0 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--muted)}
+.usage .ur.plain{color:var(--text)}
+.usage .note{margin:0;padding:4px 12px 2px 52px;font-size:12px;color:var(--muted)}
+.ph .usage .note{padding-left:56px}
 /* empty state */
 .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;color:var(--muted);padding:24px}
 .empty .ic{width:40px;height:40px;color:var(--disabled)}
@@ -405,7 +409,7 @@ ol.dec .r{display:block}ol.dec .a{display:block;color:var(--ink-soft)}
             </div>
             <div class="rr">
               <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
-              <div class="nm"><span class="fn">take-sketch-07.wav</span><span class="meta">2:44 · 30 Aug · <span class="use"><svg class="ic xs"><use href="#i-link"/></svg>Used by v3</span></span></div>
+              <div class="nm"><span class="fn">take-sketch-07.wav</span><span class="meta">2:44 · 30 Aug · <span class="use"><svg class="ic xs"><use href="#i-link"/></svg>Used in 1 version</span></span></div>
               <button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button>
               <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
             </div>
@@ -413,7 +417,7 @@ ol.dec .r{display:block}ol.dec .a{display:block;color:var(--ink-soft)}
         </div>
         <div class="actionbar"><button class="btn-primary"><svg class="ic sm"><use href="#i-up"/></svg>Upload</button></div>
       </div></div>
-      <figcaption>Die Füllanzeige erscheint erst <b>ab 80 %</b> einer der beiden Grenzen (500 MB / 50 Dateien, aus <code>settings.py</code>) und ist bernsteinfarben, weil sie warnt und noch nichts kaputt ist. Darunter liegt kein Rot. „Used by v3“ zeigt den Fall, dass eine Version die Referenz trägt, aber noch kein Take.</figcaption>
+      <figcaption>Die Füllanzeige erscheint erst <b>ab 80 %</b> einer der beiden Grenzen (500 MB / 50 Dateien, aus <code>settings.py</code>) und ist bernsteinfarben, weil sie warnt und noch nichts kaputt ist. Darunter liegt kein Rot. „Used in 1 version“ zeigt den Fall, dass eine Version die Referenz trägt, aber noch kein Take.</figcaption>
     </figure>
 
     <figure class="w390">
@@ -477,14 +481,18 @@ ol.dec .r{display:block}ol.dec .a{display:block;color:var(--ink-soft)}
             <div class="rrwrap">
               <div class="rr" style="background:var(--tint2)">
                 <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
-                <div class="nm"><span class="fn">storytime-drums.wav</span><span class="meta">0:42 · 14 Oct · <span class="use open"><svg class="ic xs"><use href="#i-link"/></svg>Used in 2 takes</span></span></div>
+                <div class="nm"><span class="fn">storytime-drums.wav</span><span class="meta">0:42 · 14 Oct · <span class="use open"><svg class="ic xs"><use href="#i-link"/></svg>Used in 3 takes, 1 version</span></span></div>
                 <button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button>
                 <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
               </div>
               <div class="usage">
-                <div class="uh">Storytime · v6 <button class="info" style="width:16px;height:16px;font-size:10px !important;margin-left:4px" aria-label="Why it stays">i</button></div>
-                <div class="ur">Take 11 <small>3:13</small><svg class="ic sm"><use href="#i-right"/></svg></div>
-                <div class="ur">Take 9 <small>3:21</small><svg class="ic sm"><use href="#i-right"/></svg></div>
+                <div class="uh">Storytime</div>
+                <div class="ur">Take 11 · v6 <small>3:13</small><svg class="ic sm"><use href="#i-right"/></svg></div>
+                <div class="ur">Take 9 · v6 <small>3:21</small><span class="tg">Archived</span><svg class="ic sm"><use href="#i-right"/></svg></div>
+                <div class="ur">Version v3<svg class="ic sm"><use href="#i-right"/></svg></div>
+                <div class="uh">Berlin Nights <span class="tg">Deleted</span></div>
+                <div class="ur plain">Take 4 · v2 <small>2:58</small></div>
+                <p class="note">It stays while a take or version uses it.</p>
               </div>
             </div>
             <div class="rr">
@@ -496,7 +504,7 @@ ol.dec .r{display:block}ol.dec .a{display:block;color:var(--ink-soft)}
           </div>
         </div>
       </div></div>
-      <figcaption>Der Link „Used in 2 takes“ (oder „Show takes“) klappt die Takes unter der Zeile auf. Jeder Take führt zu seiner Songseite. Das ⓘ sagt: „It stays while a take or version uses it. Delete those takes — or let them expire — and its 30 days start.“ So bleibt die Regel „was an einem Take hängt, bleibt immer“ wahr, und der Musiker sieht, wie er die Referenz frei bekommt.</figcaption>
+      <figcaption>Der Link „Used in 3 takes, 1 version“ (oder „Show takes“) klappt die Takes und Versionen unter der Zeile auf, nach Song gruppiert; es nennt jede Art über 0, mit richtigem Plural („Used in 1 version“, „Used in 2 takes“). Ein Take führt zu seiner Take-Seite, eine Version zur Songseite; ein archivierter Take trägt „Archived“ und bleibt verlinkt. Ein gelöschter Song trägt „Deleted“, seine Zeilen sind Text ohne Link, weil die App keinen Papierkorb zeigt. Darunter steht: „It stays while a take or version uses it.“ So bleibt die Regel „was an einem Take hängt, bleibt immer“ wahr, und der Musiker sieht, wie er die Referenz frei bekommt.</figcaption>
     </figure>
 
     <figure class="w390">

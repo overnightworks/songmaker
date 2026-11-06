@@ -99,10 +99,12 @@ songmaker_cli/playlist_api.py:api_share_playlist # HTTP dispatcher: router.post(
 songmaker_cli/playlist_api.py:api_unshare_playlist # HTTP dispatcher: router.delete('/playlists/{playlist_id}/share', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_update_playlist # HTTP dispatcher: router.put('/playlists/{playlist_id}', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_upload_playlist_cover # HTTP dispatcher: router.put('/playlists/{playlist_id}/cover', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/provider_status.py:provider_snapshots # only the refresh tests read it now; it leaves with the loop and this module in #2342
 songmaker_cli/redis_client.py:RedisConnectionSettings # Operational caller scripts/arq_healthcheck.py outside src
 songmaker_cli/reference_api.py:api_delete_reference # HTTP dispatcher: router.delete('/references/{reference_id}', status_code=204, responses={404: {'description': 'Reference audio not found'}, 409: {'description': 'Reference audio is in use'}, 500: {'description': 'Reference audio storage could not be checked'}})
 songmaker_cli/reference_api.py:api_reference_audio # HTTP dispatcher: router.get('/references/{reference_id}/audio', response_class=FileResponse)
 songmaker_cli/reference_api.py:api_list_references # HTTP dispatcher: router.get('/references')
+songmaker_cli/reference_api.py:api_reference_uses # HTTP dispatcher: router.get('/references/{reference_id}/uses', responses={404: {'description': 'Reference audio not found'}})
 songmaker_cli/reference_api.py:api_upload_reference # HTTP dispatcher: router.post('/references', responses={400: {'description': 'Reference audio upload is invalid'}, 409: {'description': 'Reference audio storage limit reached'}, 500: {'description': 'Reference audio storage could not be checked'}})
 songmaker_cli/reimport_api.py:api_reimport # HTTP dispatcher: router.post('/songs/{song_id}/reimport', responses={413: {'description': 'Uploaded audio file is too large'}, 422: {'description': 'Reimport upload is invalid'}})
 songmaker_cli/resource_event_api.py:api_stream_resource_events # HTTP dispatcher: router.get(_ROUTE_PATH, responses={400: {'description': 'Last event ID is invalid'}, 429: {'description': 'Too many open resource event streams'}, 503: {'description': 'Resource event stream capacity is unavailable'}})
@@ -115,14 +117,12 @@ songmaker_cli/scoring/spectral_quality.py:score_spectral_quality # Scorer regist
 songmaker_cli/scoring/text_accuracy.py:clear_cache # Whisper cache cleanup seam used by tests/songmaker_cli/test_scoring_scorers_extended.py
 songmaker_cli/scoring/text_accuracy.py:score_text_accuracy # Scorer registry: register('text_accuracy')
 songmaker_cli/scoring_worker.py:ScoringWorkerSettings # arq CLI entry point selected by docker-compose.yml scoring-worker command
-songmaker_cli/settings_api.py:api_capabilities # HTTP dispatcher: router.get('/capabilities')
 songmaker_cli/settings_api.py:api_create_preset # HTTP dispatcher: router.post('/settings/presets', responses={400: {'description': 'Requested model is not available'}, 409: {'description': PRESET_NAME_EXISTS_DETAIL}})
 songmaker_cli/settings_api.py:api_delete_preset # HTTP dispatcher: router.delete('/settings/presets/{preset_id}', responses={404: {'description': 'Preset does not exist'}})
 songmaker_cli/settings_api.py:api_get_builtins # HTTP dispatcher: router.get('/settings/generation-builtins')
 songmaker_cli/settings_api.py:api_get_cowriter_settings # HTTP dispatcher: router.get('/settings/cowriter')
 songmaker_cli/settings_api.py:api_get_default_config # HTTP dispatcher: router.get('/settings/default-config')
 songmaker_cli/settings_api.py:api_get_generation_defaults # HTTP dispatcher: router.get('/settings/generation-defaults')
-songmaker_cli/settings_api.py:api_get_provider_status # HTTP dispatcher: router.get('/settings/providers')
 songmaker_cli/settings_api.py:api_get_theme # HTTP dispatcher: router.get('/settings/theme')
 songmaker_cli/settings_api.py:api_list_active_models # HTTP dispatcher: router.get('/settings/models')
 songmaker_cli/settings_api.py:api_list_all_models # HTTP dispatcher: router.get('/settings/models/all')

@@ -3,6 +3,9 @@ merge_method = "squash"
 lane_shared = ["quality/baseline.toml", "scripts/vulture_whitelist.py"]
 dependency_paths = [
   ".github/workflows/",
+  "Dockerfile",
+  "docker-compose.yml",
+  "docker/",
   "frontend/package.json",
   "frontend/pnpm-lock.yaml",
   "pyproject.toml",

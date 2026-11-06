@@ -60,7 +60,7 @@ from songmaker_cli.db.queries.activity import record_song_played
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError, get_album
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.playlists import best_playable_generation, playlist_holds_song
-from songmaker_cli.db.queries.reference_recordings import get_owned_reference_recording
+from songmaker_cli.db.queries.reference_recordings import lock_and_mark_reference_used
 from songmaker_cli.db.queries.sharing import has_playable_pick
 from songmaker_cli.db.queries.songs import (
     EmptySongTitleError,
@@ -86,13 +86,14 @@ from songmaker_cli.db.queries.versions import VersionInUseError, delete_version
 
 
 def _attach_reference(session: Session, user_id: str, reference_id: str | None) -> None:
-    """Lock the owner's row for the link being saved; the caller's commit releases it.
+    """Lock the owner's row for the link being saved and mark it used; the caller's commit
+    releases the lock.
 
     A missing or foreign id answers like any other missing resource.
     """
     if reference_id is None:
         return
-    if get_owned_reference_recording(session, user_id, reference_id, lock=True) is None:
+    if lock_and_mark_reference_used(session, user_id, reference_id) is None:
         raise HTTPException(404)
 
 

@@ -13,6 +13,8 @@ excludes the base-image label.
 # Backend — targeted (local / agents)
 pytest tests/songmaker_cli/db -q --tb=short
 pytest tests/songmaker_cli/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py -q
+# PostgreSQL tests — a disposable server per run, -n auto
+scripts/test_postgresql.sh tests/songmaker_cli/test_db_postgresql.py -q
 
 # Frontend — targeted (local / agents)
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
@@ -75,6 +77,7 @@ Coverage exclusions are intentionally narrower and identical in `.github/workflo
 
 CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
 - Each test gets its own `tmp_path` and SQLite database
+- A PostgreSQL test gets its run's and worker's own database, migrated through `init_db()` and reset to that migrated state after the test (see CI PostgreSQL contract)
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
 - `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state
 - Settings/worker singletons are reset by fixtures; scorer model caches live in subprocesses
@@ -84,7 +87,7 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 
 - **CI backend**: two separate floors, one on statement lines and one on branches, judged by the "Coverage summary and floors" step of the `backend-coverage` job in `.github/workflows/ci.yml`. That job combines the raw coverage data of the `backend` job and the `postgresql-contract` job (`coverage combine`) into the one `reports/coverage.xml` that Sonar reads, so a dialect branch counts from whichever side runs it. The step reads the two measured percentages from that report, owns the floor values in its own environment and prints both in the step summary (coverage.py's `fail_under` would judge both combined, so it is not used). Both producing jobs measure with `.github/workflows/coveragerc-ci.ini`, which turns branch measurement on and records relative paths so the data of separate runners merges. Both cover `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the three heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci.ini`). `backend-coverage` is a mandatory job in `quality/config.toml`, so a red floor turns `quality / verdict` red.
 - **CI frontend**: `pnpm test:coverage` plus `pnpm build`. Vitest measures every `.ts` and `.svelte` file under `frontend/src/`, loaded by a test or not, except the test files and the test setup file (which Vitest leaves out itself; other test support under `src/tests/` is measured). The config excludes the generated `src/lib/api/types.ts`, the re-export barrel `src/lib/index.ts` and `src/service-worker.ts` (browser/build runtime proven outside Vitest). Floors for statements, lines and branches on that set, and the preserved statement and line floors on `src/lib/**/*.ts`, live in `frontend/vitest.config.ts`, which owns the values.
-- **CI PostgreSQL contract**: the `postgresql-contract` job (`.github/workflows/ci.yml`) runs `pytest -m postgresql tests/` serially (`-n 0`) against PostgreSQL 16 with coverage measured and its raw data uploaded for the `backend-coverage` job to combine. `tests/conftest.py` marks every test whose fixture closure holds `postgresql_url` (which `pg_factory` and the migration databases request) and every test whose `database_backend` value is `postgresql`, also when a parametrization overrides it indirectly. Nothing is inferred from names, so a new PostgreSQL test joins the job without a list. One function in `tests/conftest.py` reads `TEST_DATABASE_URL` and hands out the URL to every PostgreSQL fixture; before it may skip, it fails a test that carries no `postgresql` mark, so a path collection cannot see (a `getfixturevalue` of a PostgreSQL fixture, however named) turns the Backend job red. `tests/test_postgresql_selection.py` rejects a string or bytes constant containing `TEST_DATABASE_URL` in code anywhere under `tests/` but `conftest.py` and the check file itself, which has to name it; docstrings and comments are exempt, so any literal spelling of an environment read is caught. A computed environment key or a loop over `os.environ` gets past that check; only deliberate obfuscation does. It is the mandatory proof for migrations, concurrent writes and the locks that order them, transactional rollback, retention gaps and accounting; SQLite tests do not stand in for these guarantees. A job step fails the build when no case was selected, when any selected case skipped, or when no reference quota case ran, and prints the case count of every module; a module skipped at import is printed apart, since it selects nothing; collection alone is not evidence. The write-lock modules share `tests/support/postgres_lock_harness.py` (hold one writer at its commit, start the second, require through `pg_blocking_pids` that it waits behind the first). Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
+- **CI PostgreSQL contract**: the `postgresql-contract` job (`.github/workflows/ci.yml`) runs `pytest -m postgresql tests/ -n auto` against a PostgreSQL 16 service with coverage measured and its raw data uploaded for the `backend-coverage` job to combine; a step before it turns off the service's `fsync`, `synchronous_commit` and `full_page_writes` and checks they took effect. The Backend job deselects these tests (`-m "not postgresql"`). Locally, `scripts/test_postgresql.sh <files>` runs the same tests against a disposable container of Compose's PostgreSQL image. `tests/support/postgresql.py` owns the databases: each run and xdist worker gets one database, named with the run and worker id and migrated through production `init_db()`; after every test that used it, the owner locks every table, under a lock and statement timeout, then checks that the schemas and columns are those recorded after migration and the revision is at head, then empties every application table except `alembic_version` and restores the rows the migration seeded. Drift, or a check that cannot read the tables, fails that test before anything is removed, and the database is recreated; if that fails, or the first migration fails, every later database fixture of the worker errors with the original cause. A connection the test left open fails its teardown: one in a transaction makes the reset wait past its lock timeout, and every other client connected to the worker database while the reset holds its locks is found and ended before it can write, while one that connects only after the reset commits is the next reset's to find. The owner reports the open backends of that database (no SQL text) and terminates only those, before it restores a row. The administration URL names its database in its path; a query option that selects a database is refused. Migration tests get additional empty databases (`empty_postgresql_url`). The owner never migrates, empties or drops the server's administration database, and it drops its own at the end of the run, also after an interrupt. `tests/test_postgresql_databases.py` proves these rules. `tests/conftest.py` marks every test whose fixture closure holds `postgresql_databases` (which `postgresql_url`, `pg_factory` and `empty_postgresql_url` request) and every test whose `database_backend` value is `postgresql`, also when a parametrization overrides it indirectly. Nothing is inferred from names, so a new PostgreSQL test joins the job without a list. One fixture in `tests/conftest.py` reads `TEST_DATABASE_URL`; a missing, malformed or unreachable server fails every database test, none skips. A database fixture fails a test that carries no `postgresql` mark, so a path collection cannot see (a `getfixturevalue` of a PostgreSQL fixture, however named) turns the Backend job red. `tests/test_postgresql_selection.py` rejects a string or bytes constant containing `TEST_DATABASE_URL` in code anywhere under `tests/` but `conftest.py` and the check file itself, which has to name it; docstrings and comments are exempt, so any literal spelling of an environment read is caught. A computed environment key or a loop over `os.environ` gets past that check; only deliberate obfuscation does. It is the mandatory proof for migrations, concurrent writes and the locks that order them, transactional rollback, retention gaps and accounting; SQLite tests do not stand in for these guarantees. A job step fails the build when no case was selected, when any selected case skipped, or when no reference quota case ran, and prints the case count of every module; a module skipped at import is printed apart, since it selects nothing; collection alone is not evidence. The write-lock modules share `tests/support/postgres_lock_harness.py` (hold one writer at its commit, start the second, require through `pg_blocking_pids` that it waits behind the first). Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
 - **Resource-event transport**: `tests/songmaker_cli/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
 GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml`, and `security.yml`) run on push/PR to `main`.
@@ -93,11 +96,11 @@ Security verification also runs weekly. The live checks are:
 | Job | What |
 |---|---|
 | Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_root_layout.py` · `scripts/generate_types.py --check` · pytest collecting coverage data, judged in Combine backend coverage |
-| PostgreSQL contract | Serial PostgreSQL 16 tests with coverage for dialect-specific migrations, concurrency, rollback, and event retention gaps |
+| PostgreSQL contract | PostgreSQL 16 tests, one database per xdist worker, with coverage for dialect-specific migrations, concurrency, rollback, and event retention gaps |
 | Combine backend coverage | Combines the Backend and PostgreSQL coverage data and judges the line and branch floors (see Coverage Targets) |
 | Quality | `quality / verdict`: hygiene, Sonar findings, mandatory jobs and both coverage reports |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
-| E2E | Boots the CI stack (`docker/docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
+| E2E | Boots the CI stack (`docker/docker-compose.ci.yml`: Postgres, Redis, web and the music worker; web migrates at start, and the boot is two `up --wait` steps, the stores first, so a worker image that cannot start fails the boot), curl-smokes it, then drives the library flows in Chromium against it, one job per Playwright project (`desktop`, `mobile`), each with its own runner and stack |
 | Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit (Python lockfiles are covered by quality's advisory rule; the frontend has only devDependencies, so no production audit applies, and its `pnpm-lock.yaml` is not audited until quality's advisory rule reads it) |
 
 ### No-silent-fallbacks check
@@ -170,7 +173,7 @@ docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
 
 ## End-to-end flows
 
-`frontend/e2e/` drives the real stack — Postgres, Redis, migrations and the web
+`frontend/e2e/` drives the real stack — Postgres, Redis and the web
 container from `docker/docker-compose.ci.yml` — through the click paths an operator
 walks by hand. Unit tests keep missing those: every operator bug from
 2026-08-23 (dead picker, ▶ after an album switch, shuffle, 429 storm) passed
@@ -211,9 +214,10 @@ scrolled. Any 429 or 5xx response, failed request, browser console error or
 uncaught page exception fails the flow, and each flow holds a named `/api`
 request budget per shell.
 
-- **Projects run serially** (`fullyParallel: false`, one worker). Both shells
-  share one stack behind one IP rate-limit window, so their cost is additive
-  and measurable instead of a burst. Each flow's measured count and budget are
+- **Projects run serially** (`fullyParallel: false`, one worker). In CI each
+  project has its own job, stack and IP rate-limit window; locally both shells
+  run one after the other in one stack behind one window, so their cost is
+  additive and measurable instead of a burst. Each flow's measured count and budget are
   a code comment on its constant (`LIBRARY_FLOW_API_REQUEST_BUDGET`,
   `RAIL_FLOW_API_REQUEST_BUDGET` in `frontend/e2e/helpers.ts`) — that is the
   one place the number is written down, so it cannot drift out of sync with
@@ -340,14 +344,14 @@ frontend/e2e/
 
 The auth library's own tests are not in this repository. They moved with
 `webauth` to [overnightworks/webauth](https://github.com/overnightworks/webauth)
-in #879 and run in that repository's CI; songmaker installs its pinned release wheel
+in #879 and run in that repository's CI; songmaker installs its pinned git tag
 and proves the auth surface it builds on it through `test_auth_api_sign_in.py`,
 `test_auth_api.py`, `test_auth_dependencies.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
 
 The provider library's own tests likewise left with it. They moved with
 `agent_providers` to
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
-in #886 and run in that repository's CI; songmaker installs the released wheel
+in #886 and run in that repository's CI; songmaker installs the git pin
 (tag `v0.1.3`) and proves the surface it builds on it — the co-writer — through
 `test_conversation_api.py`.
 
@@ -389,12 +393,12 @@ middleware and lifecycle tests continue to use `make_test_app`.
 
 ### Python
 
-- **Real SQLite** for DB tests (`tmp_path` per test, `seeded_db` fixture in `tests/support/generation_job_world.py`)
+- **Real SQLite** for DB tests (`tmp_path` per test, `seeded_db` fixture in `tests/support/generation_job_world.py`); the PostgreSQL tests use `pg_factory` on their worker's database
 - **Synthesized audio** for mastering/scoring tests (sine waves via numpy)
 - **Mock external services**: scheduler dispatch, Whisper model, Claude API, ffmpeg
 - **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.dispatch_generation_on_worker")`
 - **Factory fixtures** in conftest.py for WAV bytes and stereo audio
-- **`Settings` constructed with explicit kwargs** in tests; no monkeypatching of `os.environ` for the fields. Use `monkeypatch.setenv` only for the import-time env vars set in `conftest.py` (`DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `WORKER_ID`, `PUBLIC_BASE_URL`). A compose stack gets the four songmaker secrets as files: the CI e2e workflow and `scripts/voices_e2e_probe.sh` write throwaway ones into a temporary directory and set `SONGMAKER_SECRETS_DIR`, and `tests/test_compose_secret_files.py` renders the real compose to prove no service receives one as an environment variable
+- **`Settings` constructed with explicit kwargs** in tests; no monkeypatching of `os.environ` for the fields. Use `monkeypatch.setenv` only for the import-time env vars set in `conftest.py` (`DATABASE_URL`, which names no usable database so an engine built from settings fails at once, `REDIS_URL`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `WORKER_ID`, `PUBLIC_BASE_URL`). A compose stack gets the four songmaker secrets as files: the CI e2e workflow and `scripts/voices_e2e_probe.sh` write throwaway ones into a temporary directory and set `SONGMAKER_SECRETS_DIR`, and `tests/test_compose_secret_files.py` renders the real compose to prove no service receives one as an environment variable
 
 ### Frontend
 

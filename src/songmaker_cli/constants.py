@@ -130,7 +130,6 @@ WHISPER_COMPUTE_TYPE = "int8_float16"
 WHISPER_BEAM_SIZE = 5
 WHISPER_TEMPERATURE = 0.0
 
-SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105  # noqa: S105 - a setting key for an LLM token budget and no secret
 
 MEMORY_SCOPE_USER = "user"
@@ -208,6 +207,9 @@ REDIS_JOB_STREAM_LEASE_USER_PREFIX = f"{REDIS_KEY_PREFIX}:job-stream:user"
 REDIS_JOB_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:job-stream:global"
 SESSION_CLEANUP_INTERVAL_SECONDS = 300
 REDIS_SOCKET_TIMEOUT_SECONDS: Final[float] = 2.0
+STORE_STARTUP_WAIT_SECONDS: Final[int] = 300
+STORE_STARTUP_RETRY_DELAY_SECONDS: Final[int] = 1
+STORE_STARTUP_CONNECT_TIMEOUT_SECONDS: Final[int] = 3
 
 # Session lifetime: seven days without a request, thirty days from sign-in at most.
 SESSION_IDLE_SECONDS_DEFAULT: Final = 7 * 24 * 60 * 60
