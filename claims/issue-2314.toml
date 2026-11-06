@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "3377f34f49deec749b466b87eb533b7bfa38e1ff"
 branch = "claude/issue-2314-store-startup-wait"
-scope = ["src/songmaker_cli/constants.py", "src/songmaker_cli/db/engine.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/server.py", "tests/songmaker_cli/test_store_startup_wait.py"]
+scope = ["src/songmaker_cli/constants.py", "src/songmaker_cli/db/engine.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/server.py", "src/songmaker_cli/worker_base.py", "tests/songmaker_cli/test_store_startup_wait.py"]
 opened_commit = "e87d5e30d2d72540904278c249922f2e156bf0bc"
 whole_reason = "The constant, its two store owners and the web call site are one bounded-wait contract; split, a wait exists without its bound or its caller."
