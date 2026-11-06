@@ -369,7 +369,7 @@ For the cross-cutting flow (web → music-worker → acestep-worker), see [archi
 
 The user-facing ACE-Step knobs are stored in `Version.generation_params`, can be set per-model in admin defaults, and are merged into `AceStepConfig`.
 
-Priority: CLI overrides, when supplied > song params > preset params > admin defaults > model defaults. Top-level song/version fields (`bpm`, `audio_duration`, `key_scale`, `vocal_language`) are applied after that merge.
+Priority: song params > preset params > admin defaults > model defaults. Top-level song/version fields (`bpm`, `audio_duration`, `key_scale`, `vocal_language`) are applied after that merge.
 
 | Parameter | Range | Default (turbo) | Default (SFT) | Effect |
 |-----------|-------|-----------------|---------------|--------|

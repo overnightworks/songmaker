@@ -1708,7 +1708,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
     sync_redis.set(
         worker_state_key("acestep-worker-0"),
         json.dumps({
-            "loaded": ["sft", "xl-sft"],
+            "loaded": [{"mode": "sft", "size_gb": 0}, {"mode": "xl-sft", "size_gb": 0}],
             "target_loading": None,
             "queue_depth": 0,
             "vram_used_gb": 18.0,
