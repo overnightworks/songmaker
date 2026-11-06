@@ -182,6 +182,22 @@ def reference_link_counts(
     }
 
 
+def linked_reference_ids(session: Session, song_ids: Collection[str]) -> set[str]:
+    """The references the given songs' versions and takes link, archived takes included."""
+    if not song_ids:
+        return set()
+    linked: set[str] = set()
+    for model in (Version, Generation):
+        linked.update(
+            session.scalars(
+                select(model.reference_recording_id).where(
+                    model.song_id.in_(song_ids), model.reference_recording_id.is_not(None),
+                ),
+            ),
+        )
+    return linked
+
+
 def reference_uses(session: Session, reference_id: str) -> ReferenceUses:
     """The versions and takes linking the reference, newest first, trashed ones included."""
     trashed = or_(Song.deleted_at.is_not(None), Album.deleted_at.is_not(None))

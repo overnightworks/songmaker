@@ -99,8 +99,11 @@ from songmaker_cli.db.queries.jobs import (
     count_cover_jobs_since,
     get_last_cover_job_for_album,
 )
+from songmaker_cli.db.queries.reference_recordings import linked_reference_ids
 from songmaker_cli.db.queries.sentinels import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
+from songmaker_cli.db.queries.songs import list_song_ids_for_albums
+from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -325,12 +328,14 @@ def api_cleanup_album(
 ) -> CleanupResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
+    candidates = linked_reference_ids(session, list_song_ids_for_albums(session, [album_id]))
     count, paths = cleanup_album(session, album_id)
     record_audit(
         session, user.id, AuditAction.CLEANUP, ResourceType.ALBUM,
         album_id, f"deleted={count}",
     )
     session.commit()
+    commit_unused_stamps(session, candidates)
     cleanup_generation_files(ctx.audio_dir, paths)
     return CleanupResponse(deleted=count)
 
