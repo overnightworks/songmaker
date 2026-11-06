@@ -187,7 +187,7 @@ function ensureCollectionMatchesSong(song: SongItem): void {
 // unrelated song edits (lyrics/prompt autosave), and only while the address
 // bar is already a song address; a legacy `?song=` entry never reaches this
 // function at all -- (library)/+page.svelte redirects it onto its canonical
-// address first (issue #284) -- see the note on libraryHistoryUrl.
+// address first (issue #284).
 let addressedSong: { id: string; slug: string } | null = null;
 
 function syncSongAddressToRename(song: SongItem): void {
