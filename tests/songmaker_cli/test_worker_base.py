@@ -162,7 +162,7 @@ def test_recover_on_startup_acquires_lock_and_recovers() -> None:
 
 def test_recover_on_startup_skips_when_lock_held() -> None:
     worker = _DummyWorker()
-    worker.get_db_factory = MagicMock()  # not called when lock is held
+    worker.get_db_factory = MagicMock()  # the database opens first; recovery is still skipped
 
     ctx = {"redis": AsyncMock()}
     ctx["redis"].set = AsyncMock(return_value=False)
