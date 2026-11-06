@@ -388,7 +388,7 @@ All responses include:
 - **API errors**: HTTPException messages on ordinary validation paths are human-readable strings with no internal paths or stack traces (`settings_api.py`).
 - **Validation errors**: The custom `RequestValidationError` handler returns only affected field names, not full Pydantic error details (constraints, expected types, internal schema) (`server.py:273-290`).
 - **ACE-Step errors**: Worker failures map through `_sanitize_error` to a fixed message before the generation job persists `job.error`; only the silent-stream dose stays distinct (`jobs/_runtime.py:38-45,62-78`; `jobs/generation.py:469-480`).
-- **Co-writer errors**: A co-writer turn the agent did not run ends with an SSE error frame on an otherwise HTTP 200 response: `status` (503, 429, 403 or 401), the named `problem` (`unavailable`, `busy`, `not_enabled`, `sign_in_again`) and, for `busy`, `retry_after_seconds`. The frame carries no gateway or provider detail; the reason is logged server side. The model catalog passes the fixed HTTP-facing dose through the catalog adapter after #476 closed (`agent_providers/catalog.py`; `settings_api.py` `_route_statuses`).
+- **Co-writer errors**: A co-writer turn the agent did not run ends with an SSE error frame on an otherwise HTTP 200 response: `status` (503, 429, 403 or 401), the named `problem` (`unavailable`, `busy`, `not_enabled`, `sign_in_again`) and, for `busy`, `retry_after_seconds`. The frame carries no gateway or provider detail; the reason is logged server side.
 - **OpenAPI/docs**: Disabled (`server.py:167`).
 
 ## Request Size Limits
@@ -1014,8 +1014,7 @@ gateway"); [the Models page](architecture.md#the-models-page) shows both rows
 read-only.
 
 **#327 F5:** Settings reads and validation never start an agent CLI or catalog
-request. `provider_status_refresh` owns those probes; an empty snapshot is reported
-as `unverified` rather than guessed as usable.
+request. `provider_status_refresh` owns those probes.
 
 ## Child Process Secret Scrubbing
 

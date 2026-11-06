@@ -1375,8 +1375,7 @@ the event loop closes.
 | `provider_status_refresh` | 30 seconds | The co-writer catalog refreshes each provider's reachability and model snapshot. One provider failure is logged without stopping the sweep; `/health/details` reports the loop through the shared registry. |
 
 The first provider refresh is the loop's first tick after lifespan startup, not a
-synchronous boot probe. Settings requests read the last snapshot only; an empty
-snapshot is `unverified` with no probe timestamp.
+synchronous boot probe.
 
 `GET /api/resource-events/stream` is the authenticated read side. Its auth check and
 handshake use one function-local DB session that closes before the response begins;

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -370,6 +371,51 @@ def test_refresh_records_unparseable_cli_output_without_claiming_readiness(
         snapshot.routes[ProviderRoute.API].readiness is ProviderRouteReadinessState.NOT_CONFIGURED
     )
     assert snapshot.probed_at is not None
+
+
+@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
+def test_refresh_treats_a_hanging_cli_as_logged_out(monkeypatch, provider):
+    from agent_providers import process
+    from agent_providers.catalog import ProviderRouteReadinessState
+
+    from songmaker_cli.provider_status import provider_snapshots
+
+    _configure_only_these_api_keys()
+    _stub_cli_runners(monkeypatch)
+
+    def timed_out():
+        raise process.CliProbeBudgetExceeded("probe timed out")
+
+    release = threading.Event()
+    started = threading.Event()
+    if provider == "claude":
+
+        def _hanging_output(_binary: str) -> str | None:
+            started.set()
+            release.wait(timeout=1)
+            return None
+
+        monkeypatch.setattr("agent_providers.process._claude_output", _hanging_output)
+        monkeypatch.setattr("agent_providers.process.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.01)
+    elif provider == "grok":
+        monkeypatch.setattr(process._grok_status_probe, "get", timed_out)
+    else:
+        monkeypatch.setattr(process._codex_login_probe, "get", timed_out)
+
+    try:
+        refresh_provider_snapshots()
+    finally:
+        release.set()
+
+    snapshot = provider_snapshots()[provider]
+    if provider == "claude":
+        assert started.is_set()
+    assert (
+        snapshot.routes[ProviderRoute.CLI].readiness is ProviderRouteReadinessState.NOT_CONFIGURED
+    )
+    assert (
+        snapshot.routes[ProviderRoute.API].readiness is ProviderRouteReadinessState.NOT_CONFIGURED
+    )
 
 
 @pytest.mark.parametrize("provider", ["grok", "codex"])

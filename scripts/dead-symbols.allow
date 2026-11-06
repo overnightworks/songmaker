@@ -99,7 +99,7 @@ songmaker_cli/playlist_api.py:api_share_playlist # HTTP dispatcher: router.post(
 songmaker_cli/playlist_api.py:api_unshare_playlist # HTTP dispatcher: router.delete('/playlists/{playlist_id}/share', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_update_playlist # HTTP dispatcher: router.put('/playlists/{playlist_id}', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_upload_playlist_cover # HTTP dispatcher: router.put('/playlists/{playlist_id}/cover', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
-songmaker_cli/provider_status.py:provider_snapshots # its last reader, the provider-status route, is gone; the refresh loop and this module leave with the provider-catalog removal of #1476 line 8 part B
+songmaker_cli/provider_status.py:provider_snapshots # only the refresh tests read it now; it leaves with the loop and this module in #2342
 songmaker_cli/redis_client.py:RedisConnectionSettings # Operational caller scripts/arq_healthcheck.py outside src
 songmaker_cli/reference_api.py:api_delete_reference # HTTP dispatcher: router.delete('/references/{reference_id}', status_code=204, responses={404: {'description': 'Reference audio not found'}, 409: {'description': 'Reference audio is in use'}, 500: {'description': 'Reference audio storage could not be checked'}})
 songmaker_cli/reference_api.py:api_reference_audio # HTTP dispatcher: router.get('/references/{reference_id}/audio', response_class=FileResponse)
