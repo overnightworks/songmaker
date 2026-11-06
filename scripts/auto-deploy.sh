@@ -84,8 +84,8 @@
 #     fetch_acestep_pin makes the pinned commit available in the submodule
 #     (a network failure or an uninitialised submodule is a counted refusal
 #     that moves nothing), and right after it checkout_acestep_pin checks the
-#     pinned commit out locally. A pin change is also a base-image input
-#     (BASE_IMAGE_INPUT_PATHS). Both git fetches of a tick run under
+#     pinned commit out locally. A pin change invalidates the COPY of
+#     vendor/acestep in the compose build. Both git fetches of a tick run under
 #     GIT_FETCH_TIMEOUT_SECONDS: a hung fetch would hold the flock forever and
 #     never reach the consecutive-failure ALERT. Each fetch runs in a process
 #     group of its own that is killed outright once git has exited, so a
@@ -163,15 +163,7 @@ RELEASE_TAG_GRAMMAR='^v([0-9]{4})\.([0-9]{2})\.([0-9]{2})\.([1-9][0-9]{0,8})$'
 PRUNE_RETENTION_HOURS=48
 PRUNE_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS:-600}"
 PREVIOUS_IMAGE_TAG="previous"
-BASE_IMAGE_LABEL="songmaker.base-image=true"
-BASE_IMAGES=(
-    "songmaker/gpu-torch-base:latest"
-    "songmaker/acestep-base:latest"
-)
 ACESTEP_SUBMODULE_PATH="vendor/acestep"
-# What the local-only base images are built from: a difference in any of these
-# between the running revision and the selected candidate rebuilds them.
-BASE_IMAGE_INPUT_PATHS=(docker/base/ "$ACESTEP_SUBMODULE_PATH")
 # A release that changes the alembic head is backed up first by edge's backup
 # owner; systemd's minimal PATH does not reach it, so its path is configuration.
 MIGRATIONS_VERSIONS_PATH="src/songmaker_cli/db/migrations/versions"
@@ -538,10 +530,7 @@ prune_docker_resources() {
     local prune_failed=false
     local prune_exit_code
 
-    # Docker accepts a negated label filter for image prune. Keep the base
-    # images even when they become unreferenced, because compose leaf builds
-    # need them locally and Docker Hub does not host them.
-    if timeout "$PRUNE_TIMEOUT_SECONDS" docker image prune --force --filter "$prune_filter" --filter "label!=${BASE_IMAGE_LABEL}"; then
+    if timeout "$PRUNE_TIMEOUT_SECONDS" docker image prune --force --filter "$prune_filter"; then
         :
     else
         prune_exit_code=$?
@@ -562,39 +551,6 @@ prune_docker_resources() {
     fi
 
     return 0
-}
-
-# Returns 0 when the candidate needs its bases rebuilt, 1 when the existing
-# bases match the deployed revision, and 2 when the comparison cannot be made.
-base_images_need_build() {
-    local deployed_sha="$1"
-    local candidate_sha="$2"
-    local base_image
-    local changed_base_inputs
-
-    for base_image in "${BASE_IMAGES[@]}"; do
-        if ! docker image inspect "$base_image" >/dev/null 2>&1; then
-            log_info "base image $base_image is missing; rebuilding base images before compose build"
-            return 0
-        fi
-    done
-
-    if [[ -z "$deployed_sha" ]]; then
-        log_info "deployed revision is unknown; rebuilding base images before compose build"
-        return 0
-    fi
-
-    if ! changed_base_inputs="$(safe_git diff --ignore-submodules=none --name-only "$deployed_sha..$candidate_sha" -- "${BASE_IMAGE_INPUT_PATHS[@]}" 2>&1)"; then
-        log_err "cannot compare base image inputs between deployed $deployed_sha and candidate $candidate_sha: $changed_base_inputs"
-        return 2
-    fi
-
-    if [[ -n "$changed_base_inputs" ]]; then
-        log_info "base image inputs changed since deployed revision $deployed_sha (${changed_base_inputs//$'\n'/, }); rebuilding base images before compose build"
-        return 0
-    fi
-
-    return 1
 }
 
 reload_prometheus_rules() {
@@ -1682,7 +1638,7 @@ fi
 export SONGMAKER_RELEASE="${RELEASE_TAG_OF[$DEPLOY_COMMIT]}" SONGMAKER_COMMIT="$DEPLOY_COMMIT"
 
 # The selected commit may require a variable the previous one did not; name
-# it before the base-image and compose builds rather than after them.
+# it before the compose build rather than after them.
 compose_config_refusal "after checking out $DEPLOY_COMMIT"
 
 # The selected release's compose may declare secret files; refuse one whose
@@ -1696,24 +1652,6 @@ if ! SECRET_FILES_ERROR="$(python3 -B "$SCRIPT_DIR/secret_files.py" --verify 2>&
 fi
 
 backup_before_schema_change "$DEPLOY_COMMIT" "${RELEASE_TAG_OF[$DEPLOY_COMMIT]}"
-
-# Base images are local-only. Check the selected release against the revision
-# that is actually running, rather than against the checkout's previous HEAD:
-# a prior build-only deferral may already have moved this checkout.
-if base_images_need_build "$DEPLOYED_SHA" "$DEPLOY_COMMIT"; then
-    if "$SCRIPT_DIR/build_images.sh" bases; then
-        :
-    else
-        BASE_BUILD_EXIT_CODE=$?
-        log_err "base image build failed in $REPO_ROOT (exit $BASE_BUILD_EXIT_CODE)"
-        fail_tick "base image build failed"
-    fi
-else
-    BASE_IMAGE_CHECK_EXIT_CODE=$?
-    if ((BASE_IMAGE_CHECK_EXIT_CODE != 1)); then
-        fail_tick "cannot determine whether base images need rebuilding"
-    fi
-fi
 
 if compose build; then
     :

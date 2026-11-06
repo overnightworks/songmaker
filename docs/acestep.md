@@ -135,37 +135,26 @@ This section is the operator-facing reference for the ACE-Step worker pool archi
 
 ### Building the worker images
 
-The worker images form a small hierarchy with reusable base layers. Building them naively with `docker compose build` will fail because compose doesn't understand the base→leaf dependency. Use the orchestration script:
-
-```bash
-scripts/build_images.sh           # build everything (bases + leaves)
-scripts/build_images.sh bases     # bases only
-scripts/build_images.sh leaves    # compose leaves only (assumes bases exist)
-```
-
-**Image hierarchy:**
+`docker/acestep-worker.Dockerfile` builds the worker in three stages, so `docker compose build` builds the whole chain and no image has to exist beforehand:
 
 ```
 python:3.14-slim
-  ├── songmaker/gpu-torch-base   (torch 2.10+cu128 + cudnn — heavy CUDA layer)
-  │     └── songmaker/acestep-base   (upstream ACE-Step source + delta deps at /opt/acestep)
-  │           └── songmaker-acestep-worker   (wrapper venv + entrypoint)
-  ├── songmaker-music-worker     (server extras only — no torch, no scoring)
-  ├── songmaker-scoring-worker   (server + scoring + whisper, CPU torch)
-  └── songmaker-web              (server extras + frontend build, no torch)
+  └── gpu-torch-base   (torch 2.10+cu128 + cudnn — heavy CUDA layer)
+        └── acestep-base   (upstream ACE-Step source + delta deps at /opt/acestep)
+              └── acestep-worker   (wrapper venv + entrypoint; the image compose runs)
 ```
 
-**One Python for every image:** the `FROM python:3.14…` line of each Dockerfile is the only owner of the version. `gpu-torch-base` creates the model venv on the image's own Python, so the model venv and the wrapper venv both run 3.14.
+The other services are single-stage images (`songmaker-music-worker`: server extras only, no torch, no scoring; `songmaker-scoring-worker`: server + scoring + whisper, CPU torch; `songmaker-web`: server extras + frontend build, no torch).
 
-**The rule:** if you edit any `docker/base/*.Dockerfile`, run `scripts/build_images.sh` first before `docker compose up --build`. Otherwise compose fails with `manifest unknown` for `FROM songmaker/acestep-base:latest`.
+**One Python for every image:** the `FROM python:3.14…` line of each Dockerfile is the only owner of the version. The `gpu-torch-base` stage creates the model venv on the image's own Python, so the model venv and the wrapper venv both run 3.14.
 
 **Who gets the GPU:** only `songmaker-acestep-worker-N` (`runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES` pinned to its `GPU_ID`). `songmaker-scoring-worker` is given no GPU device and defaults to `SCORING_DEVICE=cpu`, so it carries CPU torch and never touches VRAM. Generation VRAM therefore has exactly one owner and needs no cross-container arbitration. Setting `SCORING_DEVICE=cuda` would break that assumption: the scoring worker would additionally need GPU access in `docker-compose.yml` and a release/verify protocol against the acestep-worker, neither of which exists today.
 
 **GPU telemetry and health:** NVML (`pynvml`) is used only in `src/acestep_worker/gpu_util.py`. The worker reports VRAM in its heartbeat, which is republished on `/metrics`. `check_gpu_health()` makes the worker's `/health` answer 503 when `pynvml` is present but the device cannot be opened. A missing `pynvml` (CI, a unit test, a laptop) is not a broken worker and never blocks a job.
 
-**The inner ACE-Step venv is baked into `acestep-base` at `/opt/acestep/.venv`.** A host bind mount would make uv re-sync it from scratch on every fresh container (a 5–15 minute model-load gate), so it is baked into the image. The bind mount on `acestep-worker` only carries `./vendor/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `vendor/acestep/` is COPYed into the image at build time.
+**The inner ACE-Step venv is baked into the `acestep-base` stage at `/opt/acestep/.venv`.** A host bind mount would make uv re-sync it from scratch on every fresh container (a 5–15 minute model-load gate), so it is baked into the image. The bind mount on `acestep-worker` only carries `./vendor/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `vendor/acestep/` is COPYed into the image at build time.
 
-**FFmpeg is a system dependency of the ACE-Step worker image.** `gpu-torch-base` installs the distro `ffmpeg` package, so the inner ACE-Step venv can load TorchCodec's shared FFmpeg libraries while decoding training audio and operators have `ffprobe` available for diagnosis.
+**FFmpeg is a system dependency of the ACE-Step worker image.** The `gpu-torch-base` stage installs the distro `ffmpeg` package, so the inner ACE-Step venv can load TorchCodec's shared FFmpeg libraries while decoding training audio and operators have `ffprobe` available for diagnosis.
 
 The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The
 Python settings and `docker-compose.yml` both default `ARQ_JOB_TIMEOUT` to

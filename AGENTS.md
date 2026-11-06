@@ -10,7 +10,7 @@ The **co-writer** is one conversation per musician, not per song, only via `POST
 
 The live app is Docker-only; `.venv` is for tests and type checking. Settings and some secrets live in the ignored `.env` of the deploy checkout `~/srv/songmaker`, the others in `~/.secrets/songmaker/`; only systemd units start the stack.
 
-A deploy's `docker compose up --build --wait` never runs in a `timeout` (SIGTERM leaves a partial deploy). After changing a Dockerfile under `docker/base/`, run `scripts/build_images.sh` first.
+A deploy's `docker compose up --build --wait` never runs in a `timeout` (SIGTERM leaves a partial deploy).
 
 ## Checks
 

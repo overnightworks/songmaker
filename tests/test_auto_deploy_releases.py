@@ -86,7 +86,6 @@ def test_a_release_tag_deploys_its_commit_detached_and_the_journal_names_the_tag
     assert result.returncode == 0
     assert checkout.head == commit
     assert _is_detached(checkout)
-    assert "image inspect" in checkout.docker_calls
     assert any("compose build" in call for call in checkout.build_and_recreate_calls)
     assert any(call.startswith("compose up") for call in checkout.build_and_recreate_calls)
     assert _deployed_sha(checkout) == commit
