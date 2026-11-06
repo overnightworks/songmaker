@@ -18,6 +18,7 @@ from songmaker_cli.reference_audio import ReconciledStamps, reconcile_unused_sta
 OWNER = "owner"
 OLD_STAMP = datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 SECRET_NAME = "secret-reference"
+EARLIER_NAME = "aaa-earlier-reference"
 
 
 def _recording(name: str, *, stamp: datetime | None = None, kept: bool = False):
@@ -142,12 +143,13 @@ def test_a_used_row_without_a_stamp_stays_unstamped(factory) -> None:
     assert _stamp(factory, "used") is None
 
 
-def test_a_failing_stamp_half_logs_counts_only_and_leaves_the_clear_half_standing(
+def test_a_failing_stamp_half_rolls_back_every_candidate_and_spares_the_clear_half(
     factory, caplog,
 ) -> None:
     with factory() as session:
         session.add_all([
-            _recording(SECRET_NAME), _recording("stamped-kept", stamp=OLD_STAMP, kept=True),
+            _recording(SECRET_NAME), _recording(EARLIER_NAME),
+            _recording("stamped-kept", stamp=OLD_STAMP, kept=True),
         ])
         session.execute(text(failing_stamp_trigger(SECRET_NAME)))
         session.commit()
@@ -160,7 +162,9 @@ def test_a_failing_stamp_half_logs_counts_only_and_leaves_the_clear_half_standin
     assert len(errors) == 1
     assert errors[0].exc_info is None
     assert SECRET_NAME not in errors[0].getMessage()
+    assert "for 2 reference candidates" in errors[0].getMessage()
     assert errors[0].getMessage().endswith("Error")
+    assert _stamp(factory, EARLIER_NAME) is None
     assert _stamp(factory, SECRET_NAME) is None
     assert _stamp(factory, "stamped-kept") is None
 

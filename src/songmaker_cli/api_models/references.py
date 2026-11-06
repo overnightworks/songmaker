@@ -40,7 +40,7 @@ class ReferenceRecordingResponse(BaseModel):
             size_bytes=recording.size_bytes,
             duration_sec=recording.duration_sec,
             created_at=recording.created_at.isoformat(),
-            in_use=counts.versions + counts.takes > 0,
+            in_use=not counts.is_unlinked,
             used_by_versions=counts.versions,
             used_by_takes=counts.takes,
         )

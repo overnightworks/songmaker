@@ -5,7 +5,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
+from support.postgres_lock_harness import (
+    WAIT_SECONDS,
+    CommitPause,
+    in_thread,
+    race,
+    stop_workers,
+    wrote_to_tables,
+)
 from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
@@ -70,20 +77,22 @@ class _World:
             session.get(ReferenceRecording, REFERENCE_ID).unused_since = datetime.now(timezone.utc)
             session.commit()
 
-    def clear_stale_stamp(self) -> int:
+    def clear_stale_stamp_held_before_commit(self, pause: CommitPause) -> int:
+        """The clear half, held after it counted the link and before it commits."""
         with self.pg_factory() as session:
             cleared = clear_stamps_on_used_or_kept(session)
+            pause.hold(session)
             session.commit()
         return cleared
 
-    def detach_and_stamp(self) -> int:
-        """Delete the linking version, commit, then stamp in a transaction of its own."""
+    def delete_linking_version(self) -> None:
         with self.pg_factory() as session:
             session.delete(session.get(Version, "version-a"))
             session.commit()
+
+    def stamp_after_detach(self) -> None:
         with self.pg_factory() as session:
             commit_unused_stamps(session, {REFERENCE_ID})
-        return 1
 
     def unused_since(self) -> datetime | None:
         with self.pg_factory() as session:
@@ -126,14 +135,27 @@ def test_a_reconciliation_stamp_half_that_waits_for_an_attach_finds_the_link_and
     assert world.unused_since() is None
 
 
-def test_a_detach_stamp_that_runs_after_the_clear_half_commits_still_stamps_the_row(
+def test_a_detach_that_commits_while_the_clear_half_is_held_is_stamped_after_the_clear_commits(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path)
     world.link_with_stale_stamp()
+    pause = CommitPause()
+    answers: dict[str, int] = {}
+    clearing = in_thread(
+        answers, "cleared", lambda: world.clear_stale_stamp_held_before_commit(pause),
+    )
+    clearing.start()
+    try:
+        assert pause.reached.wait(WAIT_SECONDS), "The clear half never reached its pause"
+        world.delete_linking_version()
+        detached_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    finally:
+        pause.release.set()
+        stuck = stop_workers(pg_factory, (clearing,), (pause.backend_pid,))
+    assert not stuck
+    assert answers["cleared"] == 1
 
-    cleared = world.clear_stale_stamp()
-    world.detach_and_stamp()
+    world.stamp_after_detach()
 
-    assert cleared == 1
-    assert world.unused_since() is not None
+    assert world.unused_since().replace(tzinfo=None) >= detached_at

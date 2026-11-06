@@ -231,14 +231,15 @@ def _log_commit_failure(user_id: str, failure: BaseException) -> None:
     log.error("Reference audio commit failed for user %s: %s", user_id, type(failure).__name__)
 
 
-def commit_unused_stamps(session: Session, candidates: Collection[str]) -> None:
+def commit_unused_stamps(session: Session, candidates: Collection[str]) -> int:
     """Stamp the candidates that lost their last link, in a transaction of their own.
 
     Call after the detaching site's commit. A failure is logged with counts and error kind
     only; the SQLAlchemy failure is not re-raised: the caller's answer and file removal stand.
+    Returns how many rows were stamped, 0 after a failure.
     """
     if not candidates:
-        return
+        return 0
     try:
         stamped = mark_newly_unused(session, candidates)
         session.commit()
@@ -248,8 +249,9 @@ def commit_unused_stamps(session: Session, candidates: Collection[str]) -> None:
             "Unused-since stamp failed for %d reference candidates: %s",
             len(candidates), type(failure).__name__,
         )
-        return
+        return 0
     log.info("Stamped %d of %d reference candidates unused", stamped, len(candidates))
+    return stamped
 
 
 @dataclass(frozen=True)
@@ -259,7 +261,8 @@ class ReconciledStamps:
 
 
 def _stamp_unstamped_unkept(session: Session) -> int:
-    return mark_newly_unused(session, list_unstamped_unkept_reference_ids(session))
+    """Stamp through the one commit wrapper, which logs the candidate count on failure."""
+    return commit_unused_stamps(session, list_unstamped_unkept_reference_ids(session))
 
 
 def _run_reconciliation_half(
