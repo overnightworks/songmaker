@@ -1,0 +1,7 @@
+claim_id = "204f2f8d51c14633a015b5fdcf923e85"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "8aa3bace781c788549b277aa516c57f277f13aa8"
+branch = "dependabot/uv/cyclopts-5.3.3"
+scope = ["uv.lock"]
+opened_commit = "bf9f6cd88c40692aca351e84e623ca2936ab16fc"
