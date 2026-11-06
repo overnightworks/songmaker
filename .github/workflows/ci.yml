@@ -127,22 +127,13 @@ jobs:
         run: |
           python - <<'PYTHON'
           import collections
-          import pathlib
-          import re
           import xml.etree.ElementTree as ET
 
-          database_fixtures = re.compile(
-              r"postgresql_databases|postgresql_url|pg_factory|reference_link_database"
-          )
-          database_modules = {
-              path.with_suffix("").as_posix().replace("/", ".")
-              for path in pathlib.Path("tests").rglob("test_*.py")
-              if database_fixtures.search(path.read_text(encoding="utf-8"))
-          }
-          testcases = ET.parse("reports/backend-junit.xml").iter("testcase")
           cases = [
-              case for case in testcases
-              if any(case.attrib["classname"].startswith(module) for module in database_modules)
+              case for case in ET.parse("reports/backend-junit.xml").iter("testcase")
+              if any(
+                  prop.attrib["name"] == "database_case" for prop in case.iter("property")
+              )
           ]
           assert cases, "No database proof selected"
           skipped = [case for case in cases if case.find("skipped") is not None]

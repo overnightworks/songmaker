@@ -69,6 +69,12 @@ def test_an_upload_creates_one_complete_row_for_its_0600_file(ctx, tmp_path):
     assert row.id
 
 
+def test_an_upload_is_unused_since_the_instant_it_was_created(ctx):
+    _store(ctx)
+    [row] = _rows(ctx)
+    assert row.unused_since == row.created_at
+
+
 def test_unparseable_audio_still_creates_a_row_without_duration(ctx):
     """Q12."""
     _store(ctx, b"not audio" * 20)

@@ -27,7 +27,6 @@ import {
 	fetchJob,
 	pickGeneration,
 	unpickGeneration,
-	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
 	fetchMe,
@@ -174,12 +173,6 @@ describe('API client', () => {
 		mockOk({});
 		await unpickGeneration('g1');
 		expect(mockFetch.mock.calls[0][0]).toBe('/api/generations/g1/unpick');
-	});
-
-	it('fetchCapabilities', async () => {
-		mockOk({ generation: true, scoring: true });
-		const result = await fetchCapabilities();
-		expect(result.generation).toBe(true);
 	});
 
 	it('fetchGenerationDefaults', async () => {

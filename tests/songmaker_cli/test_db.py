@@ -3111,35 +3111,6 @@ def test_playlist_listen_reference_after_its_song_is_removed(
     assert listened.last_played_song_id == referenced_song_id
 
 
-# ── Claude model settings ───────────────────────────────────────────
-
-
-def test_get_claude_chat_model_fallback(db_session: Session) -> None:
-    from songmaker_cli.db.queries.settings import get_claude_chat_model
-
-    # No DB row → falls back to Settings default ("claude-opus-4-6")
-    assert get_claude_chat_model(db_session) == "claude-opus-4-6"
-
-
-def test_a_stored_claude_chat_model_overrides_the_default(db_session: Session) -> None:
-    from support.setting_rows import store_setting_row
-
-    from songmaker_cli.db.queries.settings import get_claude_chat_model
-
-    store_setting_row(db_session, "claude_chat_model", "claude-sonnet-4-6")
-    assert get_claude_chat_model(db_session) == "claude-sonnet-4-6"
-
-
-def test_the_last_stored_claude_chat_model_wins(db_session: Session) -> None:
-    from support.setting_rows import store_setting_row
-
-    from songmaker_cli.db.queries.settings import get_claude_chat_model
-
-    store_setting_row(db_session, "claude_chat_model", "claude-sonnet-4-6")
-    store_setting_row(db_session, "claude_chat_model", "claude-haiku-4-5-20251001")
-    assert get_claude_chat_model(db_session) == "claude-haiku-4-5-20251001"
-
-
 # ── Generation retention tests ──────────────────────────────────────
 
 

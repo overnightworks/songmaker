@@ -18,7 +18,7 @@
 "frontend/e2e/seed.ts" = 1180
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
-"frontend/src/lib/api/types.ts" = 1154
+"frontend/src/lib/api/types.ts" = 1119
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -47,7 +47,7 @@
 "frontend/src/lib/stores/player.ts" = 2242
 "frontend/src/lib/stores/resourceSync.test.ts" = 2039
 "frontend/src/lib/stores/resourceSync.ts" = 1063
-"frontend/src/routes/layout.test.ts" = 1414
+"frontend/src/routes/layout.test.ts" = 1407
 "frontend/src/routes/settings/users/+page.svelte" = 946
 "src/acestep_worker/wrapper.py" = 1088
 "src/songmaker_cli/conversation_api.py" = 968
@@ -60,8 +60,8 @@
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4694
-"tests/songmaker_cli/test_db.py" = 3573
+"tests/songmaker_cli/test_api.py" = 4671
+"tests/songmaker_cli/test_db.py" = 3544
 "tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_jobs.py" = 3215
 "tests/songmaker_cli/test_library_api.py" = 1627
@@ -71,7 +71,6 @@
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1285
 "tests/songmaker_cli/test_server.py" = 1944
-"tests/songmaker_cli/test_settings_api_providers.py" = 846
 "tests/songmaker_cli/test_sharing_api.py" = 2499
 "tests/test_auto_deploy_alerting.py" = 1384
 
