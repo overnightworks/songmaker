@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 from httpx import Response
-from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
+from sqlalchemy import select
+from support.postgres_lock_harness import (
+    WAIT_SECONDS,
+    CommitPause,
+    in_thread,
+    race,
+    wrote_to_tables,
+)
 from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.songs import create_song
+from songmaker_cli.timestamps import utcnow
 
 OWNER = "u1"
 REFERENCE_ID = "reference-1"
@@ -25,7 +34,7 @@ def _seed(session) -> None:
     session.add(Album(id="album-a", title="A", artist="A", created_by=OWNER))
     session.add(ReferenceRecording(
         id=REFERENCE_ID, user_id=OWNER, storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/F.wav",
-        original_filename="F.wav", size_bytes=4,
+        original_filename="F.wav", size_bytes=4, unused_since=utcnow(),
     ))
     session.flush()
     create_song(session, "Existing", "album-a", "existing", created_by=OWNER)
@@ -61,6 +70,10 @@ class _World:
         with self.pg_factory() as session:
             return session.query(ReferenceRecording).count()
 
+    def unused_since(self) -> datetime | None:
+        with self.pg_factory() as session:
+            return session.get(ReferenceRecording, REFERENCE_ID).unused_since
+
     def titles(self) -> list[str]:
         with self.pg_factory() as session:
             return sorted(title for (title,) in session.query(Song.title))
@@ -77,6 +90,7 @@ def test_a_delete_waits_for_a_save_that_links_the_row_and_then_answers_in_use(
     assert answers["second"].json() == IN_USE
     assert world.reference_rows() == 1
     assert REFERENCE_ID in world.linked_keys()
+    assert world.unused_since() is None
 
 
 @pytest.mark.parametrize("route", ["create", "update"])
@@ -94,3 +108,24 @@ def test_a_save_waits_for_a_delete_of_the_row_and_then_answers_not_found(
     assert world.reference_rows() == 0
     assert world.linked_keys() == [None]
     assert world.titles() == ["Existing"]
+
+
+def test_a_save_without_a_reference_does_not_wait_for_a_locked_reference_row(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    answers: dict[str, Response] = {}
+    save = in_thread(
+        answers, "save",
+        lambda: world.client.put(f"/api/songs/{world.song_id}", json={"prompt": "no reference"}),
+    )
+    with pg_factory() as holder:
+        holder.execute(select(ReferenceRecording).with_for_update()).all()
+        save.start()
+        save.join(WAIT_SECONDS)
+        finished_while_locked = not save.is_alive()
+        holder.rollback()
+    save.join(WAIT_SECONDS)
+    assert finished_while_locked
+    assert answers["save"].status_code == 200
+    assert world.unused_since() is not None

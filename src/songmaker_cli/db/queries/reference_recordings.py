@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, Version
+from songmaker_cli.timestamps import utcnow
 
 REFERENCE_LINK_COLUMNS: Final = (
     Version.reference_recording_id,
@@ -67,7 +68,10 @@ def create_reference_recording(
     size_bytes: int,
     duration_sec: float | None,
 ) -> ReferenceRecording:
+    unused_since = utcnow()
     recording = ReferenceRecording(
+        created_at=unused_since,
+        unused_since=unused_since,
         user_id=user_id,
         storage_path=storage_path,
         original_filename=original_filename,
@@ -93,6 +97,20 @@ def get_owned_reference_recording(
     if lock:
         query = query.with_for_update()
     return session.execute(query).scalar_one_or_none()
+
+
+def lock_and_mark_reference_used(
+    session: Session, user_id: str, reference_id: str,
+) -> ReferenceRecording | None:
+    """The owner's own row, locked until the transaction ends and no longer unused.
+
+    None for a missing or foreign id. Every path that newly links a version or a take
+    to a reference takes its link through here.
+    """
+    recording = get_owned_reference_recording(session, user_id, reference_id, lock=True)
+    if recording is not None:
+        recording.unused_since = None
+    return recording
 
 
 def delete_reference_recording(session: Session, recording: ReferenceRecording) -> str:
