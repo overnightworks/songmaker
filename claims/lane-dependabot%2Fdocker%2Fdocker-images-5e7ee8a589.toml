@@ -1,8 +1,0 @@
-claim_id = "9b65f69b7e3d4f2ea3a9fe920f898625"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "94c983baf74ab563cacf8a8f0d64a54ef9823478"
-branch = "dependabot/docker/docker-images-5e7ee8a589"
-scope = ["Dockerfile", "docker/base/gpu-torch-base.Dockerfile", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile"]
-opened_commit = "e1f37b0b02cc4cd2cc8814dc06a4d84a20749099"
-whole_reason = "One uv release is pinned in every Dockerfile that copies it; split, the images would build with different uv versions."
