@@ -714,6 +714,35 @@ describe('where a reference is used', () => {
 		expect(marker(target).getAttribute('aria-expanded')).toBe('true');
 	});
 
+	it('sets aria-controls only while the expansion it names is in the document', async () => {
+		const target = await renderUsedReference();
+
+		expect(marker(target).hasAttribute('aria-controls')).toBe(false);
+		await pressReferenceControl(marker(target));
+		expect(marker(target).hasAttribute('aria-controls')).toBe(true);
+	});
+
+	it('lets a link in the expansion reach the document unstopped, without starting the preview', async () => {
+		const target = await renderUsedReference();
+		await pressReferenceControl(marker(target));
+		await vi.waitFor(() => expect(target.querySelector('.uses a')).not.toBeNull());
+		const reached: boolean[] = [];
+		const observe = (event: Event) => {
+			reached.push(!event.defaultPrevented);
+			event.preventDefault();
+		};
+		document.addEventListener('click', observe);
+
+		try {
+			await pressReferenceControl(target.querySelector('.uses a') as HTMLElement);
+		} finally {
+			document.removeEventListener('click', observe);
+		}
+
+		expect(reached).toEqual([true]);
+		expect(referenceElement()).toBeUndefined();
+	});
+
 	it('keeps one expansion open at a time and does not start the preview', async () => {
 		mocks.listReferences.mockResolvedValue(
 			listAnswer([

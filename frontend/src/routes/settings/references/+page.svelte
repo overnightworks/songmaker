@@ -38,7 +38,6 @@
 	const METER_FROM_SHARE = 0.8;
 	const CONFLICT_STATUS = 409;
 	const BYTES_PER_MB = 1_000_000;
-	const USED_FALLBACK = 'In use';
 
 	let references = $state<ReferenceRecordingResponse[] | null>(null);
 	let usage = $state<ReferenceUsageResponse | null>(null);
@@ -179,21 +178,15 @@
 
 	let openUsesId = $state<string | null>(null);
 
-	function toggleUses(referenceId: string) {
-		openUsesId = openUsesId === referenceId ? null : referenceId;
-	}
-
 	function usedLabel(reference: ReferenceRecordingResponse): string {
-		const kinds = [
-			pluralized(reference.used_by_takes, 'take'),
-			pluralized(reference.used_by_versions, 'version')
-		].filter((kind) => kind !== null);
-		return kinds.length === 0 ? USED_FALLBACK : `Used in ${kinds.join(', ')}`;
-	}
-
-	function pluralized(count: number, noun: string): string | null {
-		if (count === 0) return null;
-		return `${count} ${noun}${count === 1 ? '' : 's'}`;
+		const counts = [
+			[reference.used_by_takes, 'take'],
+			[reference.used_by_versions, 'version']
+		] as const;
+		const kinds = counts
+			.filter(([count]) => count > 0)
+			.map(([count, noun]) => `${count} ${noun}${count === 1 ? '' : 's'}`);
+		return `Used in ${kinds.join(', ')}`;
 	}
 
 	async function confirmDelete(reference: ReferenceRecordingResponse) {
@@ -332,7 +325,14 @@
 				{@const playing = activeId === reference.id}
 				<!-- Keyboard users reach the row through its button, so the row takes no focus. -->
 				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-				<li class="reference-row" class:playing onclick={() => toggle(reference.id)}>
+				<li
+					class="reference-row"
+					class:playing
+					onclick={(event) => {
+						if ((event.target as Element).closest('.reference-uses')) return;
+						toggle(reference.id);
+					}}
+				>
 					<button
 						type="button"
 						class="reference-play"
@@ -351,10 +351,10 @@
 									type="button"
 									class="reference-used"
 									aria-expanded={openUsesId === reference.id}
-									aria-controls={`uses-${reference.id}`}
+									aria-controls={openUsesId === reference.id ? `uses-${reference.id}` : undefined}
 									onclick={(event) => {
 										event.stopPropagation();
-										toggleUses(reference.id);
+										openUsesId = openUsesId === reference.id ? null : reference.id;
 									}}>{usedLabel(reference)}</button
 								>
 							{/if}</span
@@ -375,9 +375,7 @@
 						/>
 					</span>
 					{#if openUsesId === reference.id}
-						<!-- The expansion's clicks are its links' own, never the row's preview toggle. -->
-						<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-						<div class="reference-uses" onclick={(event) => event.stopPropagation()}>
+						<div class="reference-uses">
 							<ReferenceUses id={`uses-${reference.id}`} referenceId={reference.id} />
 						</div>
 					{/if}
@@ -739,6 +737,7 @@
 	}
 
 	.reference-used {
+		position: relative;
 		padding: 0;
 		background: none;
 		border: none;
@@ -747,6 +746,13 @@
 		text-decoration: underline;
 		text-underline-offset: 2px;
 		cursor: pointer;
+	}
+
+	/* The text stays 12px in the meta line; the pointer target grows around it. */
+	.reference-used::after {
+		content: '';
+		position: absolute;
+		inset: calc((100% - var(--hitbox-frequent)) / 2) 0;
 	}
 
 	.reference-fault {

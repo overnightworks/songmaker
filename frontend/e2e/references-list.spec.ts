@@ -376,9 +376,18 @@ test('Settings › References shows where a recording is used and links to the s
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
 
 		await row.getByRole('button', { name: 'Used in 1 version' }).click();
+		await page.evaluate(() => {
+			(window as unknown as { __clientSideMarker: boolean }).__clientSideMarker = true;
+		});
 		await row.getByRole('link', { name: /Version v1/ }).click();
 
 		await expect(page).toHaveURL(new RegExp(`/album/${albumId}/`));
+		expect(
+			await page.evaluate(
+				() => (window as unknown as { __clientSideMarker?: boolean }).__clientSideMarker
+			),
+			'The link must navigate client-side, not reload the document'
+		).toBe(true);
 		guard.assertClean();
 		testPassed = true;
 	} finally {
