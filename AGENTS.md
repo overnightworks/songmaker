@@ -4,7 +4,7 @@
 
 An **album** holds **songs**; **playlists** collect songs across albums. Saving rewrites a song's latest **version** until a take is queued or rendering for it, or until it has a take and lyrics, prompt, BPM, key or length change; then it makes a new version. Each attempt is a **generation**; scoring is purely informational. **Pick** is the one generation per song on the album; **keep** only protects from cleanup.
 
-The **co-writer** is one conversation per musician, not per song, only via `POST /chat/turn`; it runs `agents/cowriter.md` through the LiteLLM gateway, no local fallback ([architecture](docs/architecture.md)); expansion is frozen until needed.
+The **co-writer** is one conversation per musician, not per song, only via `POST /chat/turn`; it runs `agents/cowriter.md` through the LiteLLM gateway, no local fallback; expansion is frozen until needed.
 
 ## Setup and run
 
@@ -20,11 +20,11 @@ CI runs the pinned quality gate; floors in [testing](docs/testing.md#static-anal
 
 - **Query functions `flush()`, endpoints `commit()`**. Exceptions: the sign-in callback in `auth_api.py` commits admission and session together; `create_job_with_rate_limit()` and `unique_album_id()` commit before an exclusive lock, so callers hold no uncommitted mutation.
 - **Response models use `from_orm()`**, not hand-built dicts.
-- **Engine packages are independent**: `acestep_engine`, `audio_engine`, `acestep_worker` never import `songmaker_cli` (the worker image lacks it); `.importlinter` owns it.
+- **Engine packages are independent**: `acestep_engine`, `audio_engine`, `acestep_worker` never import `songmaker_cli`; `.importlinter` owns it.
 - **Ownership checks on every resource endpoint**, GET included: `check_*_access()` in `api_helpers.py`.
 - **Middleware order in `server.py` is security-critical.**
 - **DB queries split by domain** (`db/queries/`); callers import the domain module.
-- **Sharing** (Album, Song, Generation, Playlist): `enable_sharing()`/`disable_sharing()` from `db/queries/sharing.py`; side effects in the domain wrapper.
+- **Sharing**: `enable_sharing()`/`disable_sharing()` from `db/queries/sharing.py`; side effects in the domain wrapper.
 - **Constants:** reused or behaviour-configuring strings go in `constants.py` or a `Final`; one-off messages stay inline.
 - **Required configuration has no silent default**: raise or 422, or use a NAMED constant; never `next(iter(d))` or insertion order. `scripts/check_no_silent_fallbacks.py` enforces it.
 
@@ -40,7 +40,8 @@ CI runs the pinned quality gate; floors in [testing](docs/testing.md#static-anal
 - No co-writer turn or cover runs on a Claude CLI, so no song content reaches one; agent-CLI mounts never expose an operator profile.
 - The DB owns session validity (`touch()` returns a real `bool`); removing someone ends no session early ([revocation](docs/security.md#revocation)).
 - Only `songmaker-acestep-worker-N` has a GPU; nothing arbitrates VRAM.
+- Trust model (shared OS user, one worker token, single node), accepted for one user: [security](docs/security.md#ace-step-worker-pool-trust-boundary).
 - `vendor/acestep` is our fork; its HTTP API code is the source of truth for param names; pin and patches in [ACE-Step](docs/acestep.md).
 - Seed reproducibility needs `use_random_seed: false` (ACE-Step ignores `seed` otherwise).
-- Backup and restore need both DB and audio files (`scripts/backup.sh`).
-- A scorer-test segfault after `uv sync` is a stale numba cache: delete `*.nbc` and `*.nbi` under `.venv/lib/python*/site-packages/librosa`.
+- Backup and restore need both DB and audio files.
+- A scorer-test segfault after `uv sync` is a stale numba cache: delete librosa's `*.nbc` and `*.nbi` in `.venv`.
