@@ -781,11 +781,10 @@ describe('the library pages opened over a collection', () => {
 	});
 });
 
-// The open song's address names it by slug (issue #275). A rename changes
-// that slug server-side, and SongDetailView writes the renamed song straight
-// back into songList (see onRenameSong) -- the same write every other song
-// edit (lyrics, prompt, cover) already makes. This is the one place that can
-// tell a slug change apart from those and pull the address along.
+// The open song's address names it by slug (issue #275). SongDetailView writes
+// a renamed song straight back into songList (see onRenameSong), the same
+// write every other song edit makes; this is the one place that can tell a
+// slug change apart from those and pull the address along.
 describe("a rename pulls the open song's address along (issue #275)", () => {
 	it('replaces the address when the open song is renamed', async () => {
 		await openAlbum('a1');
@@ -813,10 +812,7 @@ describe("a rename pulls the open song's address along (issue #275)", () => {
 	it('leaves the address alone when it is not a song address', async () => {
 		replaceHistoryEntry('/');
 		selectedSongId.set('s1');
-		vi.mocked(goto).mockClear();
-
 		updateSongInList('s1', (s) => ({ ...s, slug: 'renamed' }));
-
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 		expect(window.location.pathname).toBe('/');
 	});
@@ -1902,9 +1898,7 @@ describe('revealPlayingSong', () => {
 	it('opens the song at its own address, then crosses again to the take', async () => {
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
-		// The song's own address crosses the route boundary once; the take is
-		// its own route file too (issue #281), so pinning it crosses a second
-		// time, right after the first.
+		// The song and its take are each a route file, so the reveal crosses twice.
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		await vi.waitFor(() =>
@@ -1916,12 +1910,6 @@ describe('revealPlayingSong', () => {
 		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1');
 	});
 
-	// Issue #265's S7 removed the separate ensureLibraryWorkspaceRoute guard
-	// (#264) that used to force a `goto('/')` detour before anything else ran;
-	// writeLibraryHistory's own crossing check (libraryRouteShape's 'external'
-	// shape) now reaches the router directly, so a reveal from off the
-	// library route lands straight on the song's own address instead of
-	// stopping at '/' first.
 	it('crosses directly from another route to the song address, with no detour through /', async () => {
 		replaceHistoryEntry('/settings');
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
