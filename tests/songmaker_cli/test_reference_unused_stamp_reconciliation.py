@@ -209,26 +209,27 @@ def test_a_successful_run_logs_one_info_line_with_the_counts(factory, caplog) ->
     assert [message for message in messages if "1 stamped, 1 cleared" in message]
 
 
-def test_after_a_keep_the_run_leaves_the_row_unstamped_and_after_an_unkeep_it_keeps_the_fresh_stamp(
-    factory,
-) -> None:
+def test_after_a_keep_the_run_leaves_the_row_unstamped(factory) -> None:
     _add(factory, _recording("held"))
     with factory() as session:
         keep_reference(session, OWNER, "held")
         session.commit()
 
-    kept_report = reconcile_unused_stamps(factory)
+    report = reconcile_unused_stamps(factory)
 
-    assert kept_report == ReconciledStamps(stamped=0, cleared=0)
+    assert report == ReconciledStamps(stamped=0, cleared=0)
     assert _stamp(factory, "held") is None
 
+
+def test_after_an_unkeep_the_run_keeps_the_fresh_stamp(factory) -> None:
+    _add(factory, _recording("held", kept=True))
     with factory() as session:
         unkeep_reference(session, OWNER, "held")
         session.commit()
     fresh_stamp = _stamp(factory, "held")
 
-    unkept_report = reconcile_unused_stamps(factory)
+    report = reconcile_unused_stamps(factory)
 
-    assert unkept_report == ReconciledStamps(stamped=0, cleared=0)
+    assert report == ReconciledStamps(stamped=0, cleared=0)
     assert _stamp(factory, "held") == fresh_stamp
     assert fresh_stamp is not None

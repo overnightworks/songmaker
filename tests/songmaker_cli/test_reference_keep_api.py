@@ -47,7 +47,7 @@ def _kept_and_stamp(client: TestClient, reference_id: str) -> tuple[bool, dateti
     return row.is_kept, row.unused_since
 
 
-def test_k1_keep_marks_an_unused_stamped_row_kept_and_clears_its_stamp(
+def test_keep_marks_an_unused_stamped_row_kept_and_clears_its_stamp(
     signed_in: TestClient,
 ) -> None:
     reference_id = _seed_kept_case(signed_in, stamp=OLD_STAMP)
@@ -59,7 +59,7 @@ def test_k1_keep_marks_an_unused_stamped_row_kept_and_clears_its_stamp(
     assert _kept_and_stamp(signed_in, reference_id) == (True, None)
 
 
-def test_k2_keep_marks_a_used_row_kept_and_leaves_it_unstamped(signed_in: TestClient) -> None:
+def test_keep_marks_a_used_row_kept_and_leaves_it_unstamped(signed_in: TestClient) -> None:
     reference_id = _seed_kept_case(signed_in, used=True)
 
     response = _post(signed_in, reference_id, "keep")
@@ -68,7 +68,7 @@ def test_k2_keep_marks_a_used_row_kept_and_leaves_it_unstamped(signed_in: TestCl
     assert _kept_and_stamp(signed_in, reference_id) == (True, None)
 
 
-def test_k3_unkeep_of_a_kept_unused_row_starts_a_fresh_countdown(signed_in: TestClient) -> None:
+def test_unkeep_of_a_kept_unused_row_starts_a_fresh_countdown(signed_in: TestClient) -> None:
     reference_id = _seed_kept_case(signed_in, kept=True)
     started = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -81,7 +81,7 @@ def test_k3_unkeep_of_a_kept_unused_row_starts_a_fresh_countdown(signed_in: Test
     assert stamp.replace(tzinfo=None) >= started
 
 
-def test_k4_unkeep_of_a_kept_used_row_leaves_it_unstamped(signed_in: TestClient) -> None:
+def test_unkeep_of_a_kept_used_row_leaves_it_unstamped(signed_in: TestClient) -> None:
     reference_id = _seed_kept_case(signed_in, kept=True, used=True)
 
     response = _post(signed_in, reference_id, "unkeep")
@@ -98,7 +98,7 @@ def test_k4_unkeep_of_a_kept_used_row_leaves_it_unstamped(signed_in: TestClient)
         pytest.param("unkeep", False, None, id="unkeep-of-an-unkept-unstamped-row"),
     ],
 )
-def test_k5_a_repeat_changes_nothing(
+def test_a_repeat_changes_nothing(
     signed_in: TestClient, action: str, kept: bool, stamp: datetime | None,
 ) -> None:
     reference_id = _seed_kept_case(signed_in, kept=kept, stamp=stamp)
@@ -111,7 +111,7 @@ def test_k5_a_repeat_changes_nothing(
 
 @pytest.mark.parametrize("who", ["other", "boss", "nobody"])
 @pytest.mark.parametrize("action", ["keep", "unkeep"])
-def test_k6_a_foreign_or_missing_reference_answers_the_global_404_and_stays(
+def test_a_foreign_or_missing_reference_answers_the_global_404_and_stays(
     signed_in: TestClient, who: str, action: str,
 ) -> None:
     kept = action == "unkeep"

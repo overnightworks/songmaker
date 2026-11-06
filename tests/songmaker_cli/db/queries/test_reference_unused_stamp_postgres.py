@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from httpx import Response
 from support.postgres_lock_harness import (
     WAIT_SECONDS,
     CommitPause,
@@ -19,8 +20,6 @@ from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import (
     clear_stamps_on_used_or_kept,
-    delete_reference_recording,
-    get_owned_reference_recording,
     keep_reference,
     lock_and_mark_reference_used,
     mark_newly_unused,
@@ -103,11 +102,11 @@ class _World:
             session.commit()
         return kept
 
-    def delete(self) -> None:
-        with self.pg_factory() as session:
-            recording = get_owned_reference_recording(session, OWNER, REFERENCE_ID, lock=True)
-            delete_reference_recording(session, recording)
-            session.commit()
+    def delete_over_http(self) -> Response:
+        return self.client.delete(f"/api/references/{REFERENCE_ID}")
+
+    def keep_over_http(self) -> Response:
+        return self.client.post(f"/api/references/{REFERENCE_ID}/keep")
 
     def is_kept(self) -> bool:
         with self.pg_factory() as session:
@@ -210,13 +209,15 @@ def test_a_detach_stamping_that_waits_for_a_keep_that_commits_first_leaves_the_r
     assert world.unused_since() is None
 
 
-def test_a_keep_that_waits_for_a_delete_that_commits_first_finds_no_row(
+def test_a_keep_request_that_waits_for_a_delete_that_commits_first_answers_not_found(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path)
     delete_pause = CommitPause(lambda session: wrote_to_tables(session, "reference_recordings"))
 
-    answers = race(pg_factory, world.delete, world.keep, delete_pause)
+    answers = race(pg_factory, world.delete_over_http, world.keep_over_http, delete_pause)
 
-    assert answers["second"] is False
+    assert answers["first"].status_code == 204
+    assert answers["second"].status_code == 404
+    assert answers["second"].json() == {"detail": "Not Found"}
     assert not world.exists()
