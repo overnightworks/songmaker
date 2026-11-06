@@ -246,15 +246,16 @@ def test_served_worker_exits_75_after_an_lm_failure_and_answers_the_load_first(
     assert not [watchdog for watchdog in watchdogs if watchdog.is_alive()]
 
 
-def test_served_worker_with_a_failing_retry_exits_with_uvicorns_startup_failure(
+def test_served_worker_with_a_failing_retry_exits_through_uvicorns_startup_failure(
     worker: _Worker,
 ) -> None:
     worker.plant_key("sft")
     _fail_the_lm(worker)
 
-    exit_code = worker.serve_until_it_stops(lambda client: None)
+    with pytest.raises(SystemExit) as exit_info:
+        worker.serve_until_it_stops(lambda client: None)
 
-    assert exit_code == STARTUP_FAILURE
+    assert exit_info.value.code == STARTUP_FAILURE
     assert worker.key() == b"sft"
 
 

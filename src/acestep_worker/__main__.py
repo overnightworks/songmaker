@@ -11,7 +11,6 @@ from pathlib import Path
 
 import uvicorn
 from redis.asyncio import Redis
-from uvicorn.main import STARTUP_FAILURE
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.gpu_util import check_gpu_health, read_gpu_vram_stats
@@ -171,6 +170,7 @@ def serve(
 ) -> int:
     """Run the server until it stops; returns the exit code the process owes.
 
+    A start that fails exits through uvicorn's `SystemExit(STARTUP_FAILURE)` instead of returning.
     A requested exit that the shutdown does not finish within `forced_exit_seconds` ends the
     process through `force_exit`, so a running take cannot delay the restart.
     """
@@ -202,8 +202,6 @@ def serve(
         # Once run() has returned no executor thread is left to hold the process.
         for watchdog in watchdogs:
             watchdog.cancel()
-    if not server.started:
-        return STARTUP_FAILURE
     return exit_codes[0] if exit_codes else 0
 
 

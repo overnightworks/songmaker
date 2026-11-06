@@ -38,7 +38,7 @@ whisper = [
 ]
 server = [
     "fastapi>=0.100,<1",
-    "uvicorn>=0.20,<1",
+    "uvicorn>=0.50,<1",
     "sqlalchemy>=2.0,<3",
     "alembic>=1.13,<2",
     "python-dotenv>=1.0,<2",
@@ -78,7 +78,7 @@ agent = [
 ]
 acestep-worker = [
     "fastapi>=0.100,<1",
-    "uvicorn>=0.20,<1",
+    "uvicorn>=0.50,<1",
     "redis[hiredis]>=5.0,<9",
     "huggingface_hub>=0.20,<3",
     "nvidia-ml-py3>=7.352,<8",
