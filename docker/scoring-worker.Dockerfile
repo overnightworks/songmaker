@@ -5,6 +5,7 @@ FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     gcc \
+    git \
     libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
