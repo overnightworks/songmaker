@@ -1,7 +1,0 @@
-claim_id = "1fef2c3685204f6ebee8d4692f266118"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "af1bcf6896ca011f818ef5344be90b920a0912ab"
-branch = "claude/issue-2326-dotenv-unknown-key-test"
-scope = ["tests/songmaker_cli/test_settings.py"]
-opened_commit = "06f270bfc1401e7a8034664d6383df4cab0088f5"
