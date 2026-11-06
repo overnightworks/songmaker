@@ -1,0 +1,8 @@
+claim_id = "be1f329a76c74beaa54306f4fa6acd05"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "1c756d980c9c16987537d49dda8efe45c0aeccf5"
+branch = "claude/issue-2402-release-images-s2-numeric-uid"
+scope = ["Dockerfile", "docker/acestep-worker.Dockerfile", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile", "docs/architecture.md", "docs/security.md", "tests/test_packaging_boundary.py"]
+opened_commit = "296cc3879108dad2ea6a94265cc8526ffe319c24"
+whole_reason = "One user identity across the four compose-built Dockerfiles, held by one static test beside the Dockerfile parser, plus the sentence that documents it."
