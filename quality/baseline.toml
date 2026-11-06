@@ -61,7 +61,6 @@
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_admin_api.py" = 1036
 "tests/songmaker_cli/test_api.py" = 4694
-"tests/songmaker_cli/test_conversation_api.py" = 704
 "tests/songmaker_cli/test_db.py" = 3573
 "tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_jobs.py" = 3215
@@ -210,7 +209,6 @@
 
 [function_lines."tests/songmaker_cli/test_reference_audio_quota.py"]
 "test_postgresql_failed_reference_write_releases_admission" = 75
-"test_postgresql_reference_admission_is_atomic" = 66
 
 [function_lines."tests/songmaker_cli/test_server.py"]
 "test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker" = 75
