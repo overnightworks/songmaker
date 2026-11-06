@@ -1,8 +1,0 @@
-claim_id = "b40439748d134f1b823bb946b180c179"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "92deeb3d24fd2cd6a531d1140f66209421230a28"
-branch = "claude/issue-2375-agents-md-fits-the-document-set-budget"
-scope = [".github/workflows/coveragerc-ci.ini", "AGENTS.md", "README.md", "tests/conftest.py"]
-opened_commit = "cf96f13142e5c6e516d843be6edc001929536344"
-whole_reason = "One document shrinks to its budget, and the few facts it drops land beside the config or test they describe in the same landing."
