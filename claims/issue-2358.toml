@@ -1,0 +1,7 @@
+claim_id = "2833a797ddf44daf9cce855e0915bc73"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "c4a3f41c417bd4745a0e789187cbcb73bf746d80"
+branch = "claude/issue-2358-two-unimported-dependencies-leave"
+scope = ["docker/scoring-worker.Dockerfile", "pyproject.toml", "uv.lock"]
+opened_commit = "2d9eb8156b9f9753b2fb0789250404b296141b26"
