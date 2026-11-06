@@ -1,0 +1,7 @@
+claim_id = "e9b241cca264497abf04a54a984dcc8a"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "1475530167e05de04097d9c7ff62f061b2970673"
+branch = "claude/issue-2386-docs-acestep-md-loses-its-plans-and-prov"
+scope = ["docker/base/acestep-base.Dockerfile", "docs/acestep.md"]
+opened_commit = "ff8a7c8b3e78aec1f8676b2a667576e1c68845a8"
