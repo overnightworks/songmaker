@@ -20,7 +20,7 @@ REFERENCE_IDS = (
 )
 
 
-def _seed_song(engine, song_id: str, *, trashed: bool) -> None:
+def _seed_live_or_trashed_song(engine, song_id: str, *, trashed: bool) -> None:
     execute(
         engine,
         "INSERT INTO songs (id, title, album_id, vocal_language, track_number, created_at, "
@@ -44,7 +44,7 @@ def _seed_version(engine, version_id: str, song_id: str, reference_id: str | Non
     )
 
 
-def _seed_take(
+def _seed_linking_take(
     engine, take_id: str, version_id: str, reference_id: str, *, number: int, archived: bool,
 ) -> None:
     execute(
@@ -77,15 +77,19 @@ def _seed_world(engine) -> None:
             "size_bytes, created_at) VALUES (:id, 'u1', :id, 'a.wav', 10, CURRENT_TIMESTAMP)",
             id=reference_id,
         )
-    _seed_song(engine, "live", trashed=False)
-    _seed_song(engine, "trashed", trashed=True)
+    _seed_live_or_trashed_song(engine, "live", trashed=False)
+    _seed_live_or_trashed_song(engine, "trashed", trashed=True)
     _seed_version(engine, "live-linked", "live", "by-version")
     _seed_version(engine, "live-plain", "live", None)
     _seed_version(engine, "trashed-linked", "trashed", "by-trashed-version")
     _seed_version(engine, "trashed-plain", "trashed", None)
-    _seed_take(engine, "take", "live-plain", "by-take", number=1, archived=False)
-    _seed_take(engine, "archived-take", "live-plain", "by-archived-take", number=2, archived=True)
-    _seed_take(engine, "trashed-take", "trashed-plain", "by-trashed-take", number=1, archived=False)
+    _seed_linking_take(engine, "take", "live-plain", "by-take", number=1, archived=False)
+    _seed_linking_take(
+        engine, "archived-take", "live-plain", "by-archived-take", number=2, archived=True,
+    )
+    _seed_linking_take(
+        engine, "trashed-take", "trashed-plain", "by-trashed-take", number=1, archived=False,
+    )
 
 
 def _upgraded(reference_link_database):
@@ -94,7 +98,7 @@ def _upgraded(reference_link_database):
     )
 
 
-def _rows(engine) -> dict[str, tuple[bool, object]]:
+def _keep_columns_by_reference(engine) -> dict[str, tuple[bool, object]]:
     with engine.connect() as connection:
         return {
             reference_id: (is_kept, unused_since)
@@ -105,7 +109,7 @@ def _rows(engine) -> dict[str, tuple[bool, object]]:
 
 
 def test_the_upgrade_stamps_exactly_the_rows_nothing_links(reference_link_database) -> None:
-    rows = _rows(_upgraded(reference_link_database))
+    rows = _keep_columns_by_reference(_upgraded(reference_link_database))
 
     assert {reference_id for reference_id, (_, stamp) in rows.items() if stamp is not None} == {
         "unlinked",
