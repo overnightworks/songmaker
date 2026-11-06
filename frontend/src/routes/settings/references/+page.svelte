@@ -10,23 +10,15 @@
 	import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import Icon from '#lib/components/Icon.svelte';
-	import ReferenceMenu from '#lib/components/ReferenceMenu.svelte';
-	import ReferenceUses from '#lib/components/ReferenceUses.svelte';
-	import {
-		APP_NAME,
-		REFERENCE_AUDIO_ACCEPT,
-		TRANSPORT_PAUSE_LABEL,
-		TRANSPORT_PLAY_LABEL
-	} from '#lib/constants.ts';
+	import ReferenceRow from '#lib/components/ReferenceRow.svelte';
+	import { APP_NAME, REFERENCE_AUDIO_ACCEPT } from '#lib/constants.ts';
 	import { audioPlayer, transportOffersPause } from '#lib/services/audioPlayer.svelte.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
-	import { formatTime, localDayAndMonth } from '#lib/utils/format.ts';
 
 	const LOAD_FAILED = 'Failed to load references';
 	const LOADING = 'Loading references…';
 	const RETRY_LABEL = 'Try again';
 	const SKELETON_ROWS = 3;
-	const NO_LENGTH = '—';
 	const PLAY_FAULT = "Can't play this recording";
 	const IN_USE_FAULT = 'In use — not deleted.';
 	const DELETE_FAILED = "Couldn't delete this recording";
@@ -53,15 +45,6 @@
 		} catch (e) {
 			referenceReloads.nameLoadFailure(e, LOAD_FAILED);
 		}
-	}
-
-	function lengthLabel(durationSec: number | null): string {
-		return durationSec === null ? NO_LENGTH : formatTime(durationSec);
-	}
-
-	function metaLabel(reference: ReferenceRecordingResponse, now: Date): string {
-		const uploaded = localDayAndMonth(new Date(reference.created_at), now);
-		return `${lengthLabel(reference.duration_sec)} · ${uploaded}`;
 	}
 
 	const megabytes = (bytes: number) => Math.floor(bytes / BYTES_PER_MB);
@@ -177,17 +160,6 @@
 	}
 
 	let openUsesId = $state<string | null>(null);
-
-	function usedLabel(reference: ReferenceRecordingResponse): string {
-		const counts = [
-			[reference.used_by_takes, 'take'],
-			[reference.used_by_versions, 'version']
-		] as const;
-		const kinds = counts
-			.filter(([count]) => count > 0)
-			.map(([count, noun]) => `${count} ${noun}${count === 1 ? '' : 's'}`);
-		return `Used in ${kinds.join(', ')}`;
-	}
 
 	async function confirmDelete(reference: ReferenceRecordingResponse) {
 		pendingDelete = null;
@@ -323,63 +295,17 @@
 		<ul class="reference-list">
 			{#each references as reference (reference.id)}
 				{@const playing = activeId === reference.id}
-				<!-- Keyboard users reach the row through its button, so the row takes no focus. -->
-				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-				<li
-					class="reference-row"
-					class:playing
-					onclick={(event) => {
-						if ((event.target as Element).closest('.reference-uses')) return;
-						toggle(reference.id);
-					}}
-				>
-					<button
-						type="button"
-						class="reference-play"
-						aria-label={`${playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${reference.filename}`}
-						onclick={(event) => {
-							event.stopPropagation();
-							toggle(reference.id);
-						}}
-					>
-						<Icon name={playing ? 'pause' : 'play'} size={16} />
-					</button>
-					<span class="reference-text">
-						<span class="reference-name" title={reference.filename}>{reference.filename}</span>
-						<span class="reference-meta"
-							>{metaLabel(reference, now)}{#if reference.in_use}{PROGRESS_SEPARATOR}<button
-									type="button"
-									class="reference-used"
-									aria-expanded={openUsesId === reference.id}
-									aria-controls={openUsesId === reference.id ? `uses-${reference.id}` : undefined}
-									onclick={(event) => {
-										event.stopPropagation();
-										openUsesId = openUsesId === reference.id ? null : reference.id;
-									}}>{usedLabel(reference)}</button
-								>
-							{/if}</span
-						>
-						{#if rowFault?.id === reference.id}
-							<span class="reference-meta reference-fault" role="alert">{rowFault.words}</span>
-						{/if}
-					</span>
-					<!-- The menu's clicks are the menu's own, never the row's preview toggle. -->
-					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-					<span class="reference-menu" onclick={(event) => event.stopPropagation()}>
-						<ReferenceMenu
-							filename={reference.filename}
-							inUse={reference.in_use}
-							usesCount={reference.used_by_takes + reference.used_by_versions}
-							onshowuses={() => (openUsesId = reference.id)}
-							ondelete={() => (pendingDelete = reference)}
-						/>
-					</span>
-					{#if openUsesId === reference.id}
-						<div class="reference-uses">
-							<ReferenceUses id={`uses-${reference.id}`} referenceId={reference.id} />
-						</div>
-					{/if}
-				</li>
+				<ReferenceRow
+					{reference}
+					{now}
+					{playing}
+					fault={rowFault?.id === reference.id ? rowFault.words : null}
+					usesOpen={openUsesId === reference.id}
+					ontoggle={() => toggle(reference.id)}
+					onusestoggle={() => (openUsesId = openUsesId === reference.id ? null : reference.id)}
+					onshowuses={() => (openUsesId = reference.id)}
+					ondelete={() => (pendingDelete = reference)}
+				/>
 			{/each}
 		</ul>
 	{/if}
@@ -664,99 +590,8 @@
 		overflow: hidden;
 	}
 
-	.reference-row {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 12px;
-		min-width: 0;
-		min-height: 56px;
-		padding: 6px 14px;
-		cursor: pointer;
-	}
-
-	.reference-uses {
-		flex: 1 0 100%;
-		margin: 0 -14px -6px;
-		cursor: default;
-	}
-
-	.reference-row.playing {
-		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-	}
-
-	.reference-play {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex: none;
-		width: 32px;
-		height: 32px;
-		padding: 0;
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 50%;
-		color: var(--text);
-		cursor: pointer;
-	}
-
-	.reference-row.playing .reference-play {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	.reference-text {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		flex: 1;
-		min-width: 0;
-	}
-
-	.reference-menu {
-		display: flex;
-		flex: none;
-	}
-
-	.reference-row + .reference-row {
+	.reference-list > :global(li + li) {
 		border-top: 1px solid var(--border);
-	}
-
-	.reference-name {
-		font-size: 15px;
-		color: var(--text);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.reference-meta {
-		font-size: 12px;
-		color: var(--text-muted);
-		font-variant-numeric: tabular-nums;
-	}
-
-	.reference-used {
-		position: relative;
-		padding: 0;
-		background: none;
-		border: none;
-		font: inherit;
-		color: var(--accent);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-		cursor: pointer;
-	}
-
-	/* The text stays 12px in the meta line; the pointer target grows around it. */
-	.reference-used::after {
-		content: '';
-		position: absolute;
-		inset: calc((100% - var(--hitbox-frequent)) / 2) 0;
-	}
-
-	.reference-fault {
-		color: var(--score-bad);
 	}
 
 	@media (max-width: 640px) {
@@ -784,15 +619,6 @@
 		.upload-button {
 			width: 100%;
 			height: 44px;
-		}
-
-		.reference-row {
-			min-height: 64px;
-		}
-
-		.reference-play {
-			width: 40px;
-			height: 40px;
 		}
 	}
 </style>
