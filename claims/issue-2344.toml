@@ -1,0 +1,7 @@
+claim_id = "aeaed1cd80084c50b9d7648135a22a99"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "b6baa9dcdb43cec2230b9c9452e91e87c5d2b0a0"
+branch = "claude/issue-2344-songmaker-takes-agent-runtime-v0-21-0"
+scope = ["pyproject.toml", "uv.lock"]
+opened_commit = "2571def0c7a9cb516f9487fa8d590bf8cc933029"
