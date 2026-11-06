@@ -32,19 +32,11 @@ export const LIBRARY_TAKE_POOL_LABELS: Record<LibraryTakePool, string> = {
 
 const POOL_STORAGE_KEY = 'libraryTakePool';
 const VALID_POOLS: ReadonlySet<string> = new Set<string>(LIBRARY_TAKE_POOLS);
-// A pool value from before the trio migration: 'keeps' (keeps-only) is no
-// longer offered, and its closest surviving meaning is 'mix' (+ Keeps).
-const LEGACY_POOL_MIGRATIONS: Readonly<Record<string, LibraryTakePool>> = { keeps: 'mix' };
 
 function readStoredPool(): LibraryTakePool {
 	if (typeof window === 'undefined') return DEFAULT_LIBRARY_TAKE_POOL;
 	const stored = readStorage(POOL_STORAGE_KEY);
 	if (stored && VALID_POOLS.has(stored)) return stored as LibraryTakePool;
-	const migrated = stored ? LEGACY_POOL_MIGRATIONS[stored] : undefined;
-	if (migrated) {
-		writeStorage(POOL_STORAGE_KEY, migrated);
-		return migrated;
-	}
 	return DEFAULT_LIBRARY_TAKE_POOL;
 }
 

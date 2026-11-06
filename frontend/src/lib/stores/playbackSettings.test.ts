@@ -32,14 +32,6 @@ describe('library take pool trio', () => {
 		expect(get(fresh.libraryTakePool)).toBe('picks');
 	});
 
-	it('reads a legacy stored "keeps" pool as "mix" and rewrites storage', async () => {
-		localStorage.setItem(POOL_STORAGE_KEY, 'keeps');
-		vi.resetModules();
-		const fresh = await import('./playbackSettings');
-		expect(get(fresh.libraryTakePool)).toBe('mix');
-		expect(localStorage.getItem(POOL_STORAGE_KEY)).toBe('mix');
-	});
-
 	it('falls back to the default for an unrecognized stored value', async () => {
 		localStorage.setItem(POOL_STORAGE_KEY, 'bogus');
 		vi.resetModules();
@@ -123,13 +115,4 @@ it('imports with the defaults when every browser storage call throws', async () 
 
 	expect(get(libraryTakePool)).toBe('picks');
 	expect(get(desktopNowPlayingSurface)).toBe('docked');
-});
-
-it('imports a legacy keeps pool as mix when the migration write is blocked', async () => {
-	blockStorage({ [POOL_STORAGE_KEY]: 'keeps' });
-	vi.resetModules();
-	const { libraryTakePool } = await import('./playbackSettings');
-	vi.restoreAllMocks();
-
-	expect(get(libraryTakePool)).toBe('mix');
 });
