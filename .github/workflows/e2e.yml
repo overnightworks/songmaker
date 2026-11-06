@@ -92,8 +92,8 @@ jobs:
           }
 
           # The details always answer 200 regardless of body, so assert the body:
-          # no scoring worker runs in this stack, so "degraded" may be
-          # reported, but db and redis must both be reachable.
+          # no scoring or ACE-Step worker runs in this stack, so those report
+          # absent; db and redis must both be reachable.
           health="$(curl -fsS -H "Authorization: Bearer $(cat "$SONGMAKER_SECRETS_DIR/monitoring-token")" "$base/health/details")"
           db_ok="$(jq -r '.db' <<<"$health")"
           redis_ok="$(jq -r '.redis' <<<"$health")"
