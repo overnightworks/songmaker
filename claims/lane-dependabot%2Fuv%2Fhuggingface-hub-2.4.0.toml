@@ -1,7 +1,0 @@
-claim_id = "3cbf03e3976f4b4db699f0d76c3d5dbf"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "279a26988cd645ec9dbcde35dd0a1e05023dc74e"
-branch = "dependabot/uv/huggingface-hub-2.4.0"
-scope = ["uv.lock"]
-opened_commit = "a1baad8d0d416d2162b8123ac304fd903ab5dcac"
