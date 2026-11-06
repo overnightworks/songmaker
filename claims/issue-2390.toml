@@ -1,7 +1,0 @@
-claim_id = "ab6240234b4b4392be985151db157c9b"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "35a896832d9b80e8dfde67c70937464fd977e319"
-branch = "claude/issue-2390-a-playlist-entry-s-take-is-held-by-its-g"
-scope = ["frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "quality/baseline.toml"]
-opened_commit = "e208277cc8b6a4e31637cdb87151f88dd5064cd3"
