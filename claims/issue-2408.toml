@@ -1,0 +1,8 @@
+claim_id = "48057d87c99e496aadb8acd3ebd0f043"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "1c756d980c9c16987537d49dda8efe45c0aeccf5"
+branch = "claude/issue-2408-references-v9e1-keep-and-unkeep-api"
+scope = ["docs/architecture.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/test-utils/references.ts", "src/songmaker_cli/api_models/references.py", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/reference_api.py", "tests/songmaker_cli/db/queries/test_reference_unused_stamp_postgres.py", "tests/songmaker_cli/test_reference_api.py", "tests/songmaker_cli/test_reference_keep_api.py", "tests/songmaker_cli/test_reference_unused_stamp_reconciliation.py"]
+opened_commit = "3b94784ada257249177ac2353fffdad553523552"
+whole_reason = "One capability, keep and unkeep, through its query owner, two routes and the list field the UI slice needs, proven by one new route test module, the list and reconciliation tests and two PostgreSQL race cells."
