@@ -319,16 +319,16 @@ song's slug is known from `songList`, a selected take addresses one segment
 deeper still, `/album/<slug>/<song-slug>/take/<n>`, once that take's
 `generation_number` is known among the song's loaded generations — a take
 selected before its number is known keeps writing the `?gen=…` appendage
-until it is (a search hit or a playlist row opened by id alone, before its
-own upsert into `songList` lands — see `libraryHistoryUrl`'s own comment) —
-an album that is the visible surface but has no song open addresses
+until it is. A song opened by id alone (a search hit or a playlist row) is
+in no list yet, so while it loads the address keeps the standing path; once it
+has loaded, the entry takes the song's own address (`settleSongAddress` in
+`navigation.ts`), unless the user has moved on meanwhile. An album that is the
+visible surface but has no song open addresses
 `/album/<slug>`, an open playlist addresses `/playlist/<slug>` once its slug
 is known from `playlistList` (`openPlaylist` in `navigation.ts` awaits
 `ensurePlaylistsLoaded` before pushing history precisely so this is already
-true by then; a playlist opened before its slug is known — the same rare
-in-flight gap a song's legacy `?song=` form covers — falls back to `/library` rather
-than a broken address, since a playlist never had a legacy form of its own to
-fall back to), the Playlists page addresses `/playlists` whichever collection
+true by then; a playlist opened before its slug is known falls back to
+`/library` rather than a broken address), the Playlists page addresses `/playlists` whichever collection
 stays the rail context behind it, Home addresses `/` and
 the wall `/library`, and an album or playlist that is only the rail context
 behind either stays on that address (only an album's own detail addresses

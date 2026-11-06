@@ -72,8 +72,8 @@
 	const filtering = $derived(query.length > 0);
 	const shownAlbumId = $derived(albumWhoseSongsShow(surface, collection));
 	// The Library wall is the surface in view: it unfolds the group (#1354 D1).
-	// The surface alone also reads `browse` on /settings and while /?song= looks
-	// its song up, so it does not make the word current (#1523).
+	// The surface alone also reads `browse` on /settings and while a legacy /?song= link
+	// looks its song up, so it does not make the word current (#1523).
 	const libraryWallIsSurface = $derived(libraryWallShows(surface, currentSongId));
 	const onLibraryPage = $derived(
 		placeShown('library', surface, currentSongId, standingPathname(page.state))

@@ -52,7 +52,6 @@ import { deselectPlaylist, loadPlaylistDetail, playlistList } from '#lib/stores/
 import {
 	albumRoutePath,
 	HOME_ROUTE_PATH,
-	legacySongRoutePath,
 	LIBRARY_ROUTE_PATH,
 	libraryRouteShape,
 	pendingTakeRoutePath,
@@ -195,13 +194,13 @@ export function libraryRootState(): LibraryHistoryState {
 // the song's loaded generations; a take selected before its number is known
 // keeps writing the query appendage until it is. A song not yet hydrated
 // into songList -- a search hit or a playlist row opened by id alone
-// (PlaylistDetailView, LibraryWall), before its own upsert lands -- keeps
-// writing the legacy `/?song=<uuid>`/`&gen=<uuid>` form for the same reason:
-// there is no slug yet to build the canonical path from, and the very next
-// write, once the song has loaded, replaces it. A stale bookmark that still
-// carries that older form is a different case: it never reaches this
-// function's songId branch at all -- (library)/+page.svelte resolves and
-// redirects it onto the canonical address first (issue #284).
+// (PlaylistDetailView, LibraryWall), which hand over neither album nor slug
+// -- has no address to build, so the write keeps the path history stands on:
+// the page the user is on, until the song has loaded and navigation.ts
+// replaces the entry with the song's own address. A stale bookmark that still
+// carries the older `/?song=` form is a different case: it never reaches this function's songId branch at
+// all -- (library)/+page.svelte resolves and redirects it onto the canonical
+// address first (issue #284).
 export function libraryHistoryUrl(state: LibraryHistoryState): string {
 	if (state.songId) {
 		const song = get(songList).find((item) => item.id === state.songId);
@@ -215,7 +214,7 @@ export function libraryHistoryUrl(state: LibraryHistoryState): string {
 				? takeRoutePath(song.album_id, song.slug, takeNumber)
 				: pendingTakeRoutePath(path, state.generationId);
 		}
-		return legacySongRoutePath(state.songId, state.generationId);
+		return standingAddress().pathname;
 	}
 	if (state.surface === 'home') return HOME_ROUTE_PATH;
 	if (state.surface === 'playlists') return PLAYLISTS_ROUTE_PATH;

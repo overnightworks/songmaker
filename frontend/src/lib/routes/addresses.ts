@@ -105,12 +105,6 @@ export function readLegacySongQuery(searchParams: Pick<URLSearchParams, 'get'>):
 	};
 }
 
-export function legacySongRoutePath(songId: string, generationId: string | null): string {
-	return generationId
-		? `${HOME_ROUTE_PATH}?song=${songId}&gen=${generationId}`
-		: `${HOME_ROUTE_PATH}?song=${songId}`;
-}
-
 export function pendingTakeRoutePath(songPath: string, generationId: string): string {
 	return `${songPath}?gen=${generationId}`;
 }

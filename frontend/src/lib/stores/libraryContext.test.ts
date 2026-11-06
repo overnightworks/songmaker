@@ -779,7 +779,7 @@ describe('libraryHistoryUrl', () => {
 		).toBe('/album/anfield/tide?gen=g1');
 	});
 
-	it('falls back to the legacy song address while the song is not yet known', () => {
+	it('keeps the standing address while the song is not yet known', () => {
 		expect(
 			libraryHistoryUrl({
 				...libraryRootState(),
@@ -787,7 +787,7 @@ describe('libraryHistoryUrl', () => {
 				collection: { kind: 'album', id: 'anfield' },
 				songId: 's1'
 			})
-		).toBe('/?song=s1');
+		).toBe(window.location.pathname);
 	});
 
 	it.each([
