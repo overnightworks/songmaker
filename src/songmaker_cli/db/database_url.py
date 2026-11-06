@@ -9,7 +9,7 @@ the application configuration; it reads only the secret-file location constants.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from sqlalchemy.engine import URL, make_url
 
@@ -18,14 +18,21 @@ from songmaker_cli.settings import DATABASE_PASSWORD_SECRET_FILE, SECRETS_DIRECT
 if TYPE_CHECKING:
     from songmaker_cli.settings import Settings
 
+BARE_POSTGRESQL_DRIVERNAME: Final = "postgresql"
+# SQLAlchemy 2.1 reads a bare ``postgresql://`` as psycopg 3, which is not installed.
+POSTGRESQL_PSYCOPG2_DRIVERNAME: Final = "postgresql+psycopg2"
+
 
 def database_url_with_password(base_url: URL | str, password: str | None) -> URL:
     """Return ``base_url`` as a ``URL``, with ``password`` set when one is given.
 
+    A bare ``postgresql`` URL names the psycopg2 driver; any other driver stays.
     The password is set on the ``URL`` object, so it needs no escaping, and it
     is never part of an error message.
     """
     url = make_url(base_url)
+    if url.drivername == BARE_POSTGRESQL_DRIVERNAME:
+        url = url.set(drivername=POSTGRESQL_PSYCOPG2_DRIVERNAME)
     if password is None:
         return url
     if url.password is not None:

@@ -1075,9 +1075,9 @@ Trust, tokens and the network: [Security](security.md#cover-picture-through-the-
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to a release wheel (`pyproject.toml` names the tag); `uv.lock`
-records that wheel's hash, so every image installs the same bytes and no image
-needs `git`. The import package is `webauth`. Its own tests live in its repository.
+pinned in the `server` extra to a git tag (`pyproject.toml` names the tag); `uv.lock`
+records its commit, so every image installs the same source; the web, music-worker
+and scoring images carry `git`. The import package is `webauth`. Its own tests live in its repository.
 
 Inside the library, `config.py` owns the `WebAuthConfig` the host installs,
 `cookies.py`/`proxies.py` own the cookie crypto and the client-identity
@@ -1158,9 +1158,9 @@ headers; CORS preflights remain outside the library stack.
 The provider layer left this repository with #886. It ships as the distribution
 `overnightworks-agent-providers` from
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
-and is pinned in the `server` extra to the release wheel of tag `v0.1.3`;
-`uv.lock` records that wheel's hash, so every image installs the same bytes and
-no image needs `git`. The pin is bare — not `[api,image]` in its brackets — so
+and is pinned in the `server` extra to the git tag `v0.1.3`;
+`uv.lock` records its commit, so every image installs the same source and
+the three images carry `git`. The pin is bare — not `[api,image]` in its brackets — so
 the library's own optional capabilities never leak `anthropic` into the music
 worker or Pillow into the scoring worker. The import package is still
 `agent_providers`, so nothing in `songmaker_cli` changed when the source moved.

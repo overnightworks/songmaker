@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
+import time
 import uuid
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from arq.connections import RedisSettings
@@ -15,6 +18,9 @@ from songmaker_cli.constants import (
     REDIS_METRICS_HTTP_KEY,
     REDIS_METRICS_TOTAL_KEY,
     REDIS_SOCKET_TIMEOUT_SECONDS,
+    REDIS_STARTUP_ERROR,
+    STORE_STARTUP_RETRY_DELAY_SECONDS,
+    STORE_STARTUP_WAIT_SECONDS,
 )
 
 if TYPE_CHECKING:
@@ -50,7 +56,13 @@ def create_redis(url: str) -> Redis:
 
 
 def build_arq_redis_settings(url: str) -> RedisSettings:
-    return RedisSettings.from_dsn(url)
+    """arq's pool-creation retry covers at least ``STORE_STARTUP_WAIT_SECONDS``."""
+    settings = RedisSettings.from_dsn(url)
+    settings.conn_retry_delay = STORE_STARTUP_RETRY_DELAY_SECONDS
+    settings.conn_retries = math.ceil(
+        STORE_STARTUP_WAIT_SECONDS / STORE_STARTUP_RETRY_DELAY_SECONDS,
+    )
+    return settings
 
 
 def redis_health(r: Redis) -> bool:
@@ -58,6 +70,37 @@ def redis_health(r: Redis) -> bool:
         return r.ping()
     except Exception:
         return False
+
+
+def wait_for_redis(
+    r: Redis,
+    shown_url: str,
+    *,
+    now: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
+    """Block until Redis answers a ping; raise ``RuntimeError`` after the bound.
+
+    ``shown_url`` is the credential-free address used in log and error text.
+    """
+    from redis.exceptions import AuthenticationError, ConnectionError, TimeoutError
+
+    log.info("Waiting up to %ss for Redis at %s", STORE_STARTUP_WAIT_SECONDS, shown_url)
+    deadline = now() + STORE_STARTUP_WAIT_SECONDS
+    while True:
+        try:
+            r.ping()
+        except AuthenticationError:
+            raise
+        except (ConnectionError, TimeoutError) as error:
+            # Retried: refused, unresolved or timed-out connections. An authentication
+            # error is a ConnectionError subclass but a wait cannot fix it.
+            if now() >= deadline:
+                raise RuntimeError(REDIS_STARTUP_ERROR.format(url=shown_url)) from error
+            sleep(STORE_STARTUP_RETRY_DELAY_SECONDS)
+        else:
+            log.info("Redis answers at %s", shown_url)
+            return
 
 
 class RedisConcurrentLeaseLimiter:

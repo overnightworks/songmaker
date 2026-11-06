@@ -20,7 +20,7 @@ from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
-from songmaker_cli.db.database_url import database_url_with_password
+from songmaker_cli.db.database_url import POSTGRESQL_PSYCOPG2_DRIVERNAME, database_url_with_password
 from songmaker_cli.db.engine import init_db, resolve_database_url
 from songmaker_cli.db.models import (
     Album,
@@ -69,7 +69,7 @@ from songmaker_cli.settings import get_settings
 def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@host/db")
     url = resolve_database_url()
-    assert url.render_as_string(hide_password=False) == "postgresql://user:pass@host/db"
+    assert url.render_as_string(hide_password=False) == f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://user:pass@host/db"
 
 
 def test_init_db_connects_and_migrates_as_a_role_whose_password_is_kept_apart(

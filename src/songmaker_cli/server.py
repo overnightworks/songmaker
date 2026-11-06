@@ -353,17 +353,17 @@ def create_app(
 
 
 def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
-    from songmaker_cli.constants import REDIS_STARTUP_ERROR
     from songmaker_cli.db.database_url import connection_url_from_settings
     from songmaker_cli.db.engine import init_db
-    from songmaker_cli.redis_client import create_redis, redis_health
+    from songmaker_cli.redis_client import create_redis, wait_for_redis
 
     settings = get_settings()
     redis_instance = create_redis(settings.redis_url)
-    if not redis_health(redis_instance):
+    try:
+        wait_for_redis(redis_instance, settings.redis_url.split("@")[-1])
+    except BaseException:
         redis_instance.close()
-        raise RuntimeError(REDIS_STARTUP_ERROR.format(url=settings.redis_url.split("@")[-1]))
-    log.info("Redis connected: %s", settings.redis_url.split("@")[-1])
+        raise
     return AppContext(
         db=init_db(connection_url_from_settings(settings)),
         audio_dir=audio_dir,
