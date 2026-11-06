@@ -1,4 +1,3 @@
-body_contract = "block"
 merge_method = "squash"
 lane_shared = ["quality/baseline.toml"]
 dependency_paths = [
