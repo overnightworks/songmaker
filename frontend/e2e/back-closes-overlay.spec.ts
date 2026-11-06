@@ -71,7 +71,7 @@ const PLAY_PLAYLIST_LABEL = collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlis
 const SETTINGS_SECTION = 'Voices';
 const SETTINGS_SECTION_HEADING = 'My Voices';
 const SONG_ADDRESS = /\/album\/[^/]+\/[^/]+/;
-// The base library's songs each carry one reimported take, their first.
+// The base library's songs each carry one seeded take, their first.
 const SEEDED_TAKE_NUMBER = 1;
 const PLAYLIST_PICKER_LABEL = 'Add to Playlist';
 const SHARE_WARNING_LABEL = 'Missing from the share page';
