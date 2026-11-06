@@ -248,7 +248,7 @@ test('an open page whose session ended on the server leaves for the sign-in star
 	const guard = new FlowGuard(page, { refusalsExpectedOn: [{ path: '/api/', statuses: [401] }] });
 	await signInAs(page, account);
 	// Finish this empty account's initial requests before revoking the session they use.
-	const initialPaths = ['/api/capabilities'];
+	const initialPaths = ['/api/auth/me'];
 	if (shell === 'desktop') {
 		initialPaths.push(
 			'/api/albums',

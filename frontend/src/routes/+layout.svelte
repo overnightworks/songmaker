@@ -3,7 +3,6 @@
 	import { onDestroy } from 'svelte';
 	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
-	import { fetchCapabilities } from '#lib/api/client.ts';
 	import {
 		installRefusalReactions,
 		NO_ACCESS_PATH,
@@ -266,7 +265,6 @@
 
 		const user = await checkAuth(() => void initAuth());
 		if (user) {
-			fetchCapabilities().catch(() => {});
 			void loadThemeChoice();
 			return;
 		}

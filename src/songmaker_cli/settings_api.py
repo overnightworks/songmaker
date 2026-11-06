@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from agent_providers.claude.provider import is_available as is_claude_cli_available
-from agent_providers.constants import COWRITER_PROVIDERS
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -13,7 +9,6 @@ from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import gen_params_to_json
 from songmaker_cli.api_models import (
-    CapabilitiesResponse,
     GenerationDefaultsRequest,
     PresetCreateRequest,
     PresetResponse,
@@ -30,9 +25,6 @@ from songmaker_cli.api_models.settings import (
     CowriterSettingsResponse,
     DefaultConfigRequest,
     DefaultConfigResponse,
-    ProviderRouteReadiness,
-    ProviderRouteStatusResponse,
-    ProviderStatusResponse,
     ThemeSettings,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
@@ -54,7 +46,6 @@ from songmaker_cli.db.queries.rate_limits import (
 from songmaker_cli.db.queries.settings import (
     create_preset,
     delete_preset,
-    get_claude_chat_model,
     get_cowriter_tail_token_budget,
     get_preset,
     list_active_models,
@@ -68,9 +59,6 @@ from songmaker_cli.db.queries.settings import (
     update_preset,
 )
 from songmaker_cli.settings import get_settings
-
-if TYPE_CHECKING:
-    from songmaker_cli.provider_status import ProviderSnapshot
 
 router = APIRouter()
 
@@ -348,24 +336,6 @@ def api_set_default_config(
     return DefaultConfigResponse(config=req.config)
 
 
-# ── Capabilities ─────────────────────────────────────────────────
-
-
-@router.get("/capabilities")
-def api_capabilities(
-    _user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> CapabilitiesResponse:
-    api_key = get_settings().anthropic_api_key
-    return CapabilitiesResponse(
-        claude_api=api_key is not None and bool(api_key.get_secret_value()),
-        claude_cli=is_claude_cli_available(api_key=None),
-        generation=True,
-        scoring=True,
-        chat_model=get_claude_chat_model(session),
-    )
-
-
 # ── Release ──────────────────────────────────────────────────────
 
 
@@ -374,70 +344,10 @@ def api_release(_user: AuthenticatedUser = Depends(get_current_user)) -> Release
     return ReleaseInfo.from_settings(get_settings())
 
 
-# ── Provider reachability (shared by Co-Writer and Scoring) ────────
-
-
-@router.get("/settings/providers")
-def api_get_provider_status(
-    _admin: AuthenticatedUser = Depends(require_admin),
-) -> list[ProviderStatusResponse]:
-    from songmaker_cli.provider_status import provider_snapshots
-
-    snapshots = provider_snapshots()
-
-    return [
-        ProviderStatusResponse(
-            provider=name,
-            cowriter_routes=_route_statuses(snapshots.get(name)),
-        )
-        for name in sorted(COWRITER_PROVIDERS)
-    ]
-
-
 def _cowriter_response(session: Session) -> CowriterSettingsResponse:
     return CowriterSettingsResponse(
         tail_token_budget=get_cowriter_tail_token_budget(session),
     )
-
-
-def _route_statuses(
-    snapshot: "ProviderSnapshot | None",
-) -> dict[str, ProviderRouteStatusResponse]:
-    from agent_providers.catalog import (
-        ProviderRoute,
-        ProviderRouteReadinessState,
-        provider_route_capability,
-        route_setup_label,
-    )
-
-    if snapshot is None:
-        return {
-            route.value: ProviderRouteStatusResponse(
-                models=[],
-                readiness=ProviderRouteReadiness(
-                    state=ProviderRouteReadinessState.UNVERIFIED.value,
-                    capability=provider_route_capability().value,
-                    setup_label=route_setup_label(route),
-                ),
-            )
-            for route in ProviderRoute
-        }
-    result: dict[str, ProviderRouteStatusResponse] = {}
-    for route, route_snapshot in snapshot.routes.items():
-        result[route.value] = ProviderRouteStatusResponse(
-            models=list(route_snapshot.models),
-            catalogue_failure=route_snapshot.catalogue_failure,
-            catalog_source=route_snapshot.catalog_source,
-            catalog_version=route_snapshot.catalog_version,
-            readiness=ProviderRouteReadiness(
-                state=route_snapshot.readiness.value,
-                capability=route_snapshot.capability.value,
-                reason=route_snapshot.reason,
-                probed_at=route_snapshot.probed_at.isoformat(),
-                setup_label=route_snapshot.setup_label,
-            ),
-        )
-    return result
 
 
 @router.get("/settings/cowriter")

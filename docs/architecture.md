@@ -976,7 +976,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
 | Auth | Sign-in through Keycloak (webauth's start, callback, logout and back-channel routes, composed in `install_sign_in`), session dependencies bound to the database | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
-| API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings and capabilities, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `reference_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `settings_api.py`, `admin_api.py` |
+| API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `reference_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
@@ -1375,8 +1375,7 @@ the event loop closes.
 | `provider_status_refresh` | 30 seconds | The co-writer catalog refreshes each provider's reachability and model snapshot. One provider failure is logged without stopping the sweep; `/health/details` reports the loop through the shared registry. |
 
 The first provider refresh is the loop's first tick after lifespan startup, not a
-synchronous boot probe. Settings requests read the last snapshot only; an empty
-snapshot is `unverified` with no probe timestamp.
+synchronous boot probe.
 
 `GET /api/resource-events/stream` is the authenticated read side. Its auth check and
 handshake use one function-local DB session that closes before the response begins;
@@ -1527,12 +1526,10 @@ close the stream.
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
 | GET/PUT | `/api/settings/theme` | user | The person's `light`, `dark` or `system` (follow the device) choice, new people start at `system`; any other value is rejected with 422. |
-| GET | `/api/settings/providers` | admin | `cowriter_routes` carries shared provider readiness and catalogs for both routes; it reads no saved route, and no page reads it. |
 | GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
 | PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
 | PUT | `/api/memory/albums/{id}` | user | Replace album-scope co-writer notes |
-| GET | `/api/capabilities` | user | Feature flags |
 | GET | `/api/release` | user | The release tag and commit the running image was built for, the `release` object `/health/details` also reports; Settings › About shows it |
 | * | `/api/admin/*` | admin | ACE-Step control |
 | GET | `/api/auth/me` | user | The signed-in account |

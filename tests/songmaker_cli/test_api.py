@@ -813,12 +813,6 @@ def test_rate_invalid(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
-def test_capabilities(client: TestClient) -> None:
-    resp = client.get("/api/capabilities")
-    assert resp.status_code == 200
-    assert "generation" in resp.json()
-
-
 # ── Delete endpoints ─────────────────────────────────────────────────
 
 
@@ -4013,23 +4007,6 @@ def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
 
 
 # ── Rate limits ───────────────────────────────────────────────────────
-
-
-def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
-    from support.setting_rows import store_setting_row
-
-    from songmaker_cli.constants import SETTING_CLAUDE_CHAT_MODEL
-
-    c = _make_authed_client(tmp_path, role="admin")
-    with c.app.state.ctx.db() as session:
-        store_setting_row(session, SETTING_CLAUDE_CHAT_MODEL, "claude-sonnet-4-6")
-        store_setting_row(session, "claude_scoring_model", "claude-haiku-4-5-20251001")
-        session.commit()
-    resp = c.get("/api/capabilities")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["chat_model"] == "claude-sonnet-4-6"
-    assert "scoring_model" not in data
 
 
 @pytest.mark.parametrize(
