@@ -321,7 +321,7 @@ class Checkout:
             'check_runs_prefix="repos/overnightworks/songmaker/commits/"\n'
             'check_runs_suffix="/check-runs?per_page=100"\n'
             'workflow_runs_prefix="repos/overnightworks/songmaker/actions/runs?head_sha="\n'
-            'workflow_runs_suffix="&event=dynamic&per_page=100"\n'
+            'workflow_runs_suffix="&per_page=100"\n'
             'if [[ "$3" == "$check_runs_prefix"*"$check_runs_suffix" ]]; then\n'
             '    commit_sha="${3#"$check_runs_prefix"}"\n'
             '    commit_sha="${commit_sha%"$check_runs_suffix"}"\n'
@@ -363,7 +363,7 @@ class Checkout:
         (self.check_runs_directory / commit_sha).write_text(check_runs_response(*runs))
 
     def set_workflow_runs(self, *runs: tuple[str, str]) -> None:
-        """Make GitHub list these (check suite id, workflow path) dynamic runs."""
+        """Make GitHub list these (check suite id, workflow path) workflow runs."""
         self.set_workflow_runs_raw_response(
             json.dumps({
                 "total_count": len(runs),
