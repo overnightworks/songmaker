@@ -34,6 +34,7 @@ People sign in through the operator's Keycloak realm (OpenID Connect, authorizat
 - **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB leak alone does not yield usable cookies. The secret is the file `session-secret` in the secrets directory (mounted as `/run/secrets/session_secret`, min 32 chars) and is required at startup — Settings raises `ValidationError` if it is missing or empty. There is no auto-generation fallback.
 - **Cookie flags and names**: The session cookie is `HttpOnly`, `SameSite=Strict`, `Secure` when `COOKIE_SECURE` is true (the default), and is then named with the `__Host-` prefix (`__Host-session_id`), which a browser accepts only on a `Secure` cookie carrying no `Domain`. The library's pending-login cookie is `SameSite=Lax`, because the return from Keycloak is a cross-site navigation. Sign-in sets no other cookie: no CSRF cookie and no logout hint cookie; a browser that still holds either from an earlier version keeps it until its own `Max-Age` runs out, and neither is read or cleared. `COOKIE_SECURE=false` drops `Secure` and the `__Host-` prefix together, for local plain-http development and the CI stack; production never sets it false.
 - **Session lifetime**: `SESSION_IDLE_SECONDS` (default 7 days) is renewed by every authenticated request, including `GET /api/auth/me`, up to `SESSION_ABSOLUTE_MAX_AGE` (default 30 days) from `created_at`. The cap per account is `MAX_CONCURRENT_SESSIONS_PER_USER` (default 10); a sign-in ends the session its request carried and prunes only the oldest overflow.
+- **Tokens at rest**: the session row holds the issuer's refresh token in `user_sessions.refresh_token` (`NULL` when the issuer gave none) and the ID token in `user_sessions.id_token`. Both are secrets at rest: plain text in the database dump, handed out only as a `SecretStr` by `UserSession`, and the engine hides SQL parameters (`hide_parameters=True`) so a failed insert keeps them out of the traceback. No response, log line or `/health` carries either; both leave with the row on logout, expiry, pruning and revocation. The refresh token serves the co-writer turn, which reads the person's groups with it (`current_groups` stores a rotated refresh token before it answers; see "Co-writer turn through the gateway"); the ID token's one use is the hint on the logout page.
 - **Logout**: `POST /auth/logout` is a top-level form POST from the SPA, which first checks that the server answers (`GET /api/auth/me`; unreachable means it stays signed in and says so) and then leaves through the history controller. The route deletes the DB session in one transaction, clears the session cookie and answers the library's page (`no-store`, under its own Content-Security-Policy): a form that posts the client ID, the post-logout address and the ID token stored in the session row to Keycloak's end-session endpoint and submits itself, so Keycloak ends its session without asking and returns to `/login` ("You are logged out."). With no script the page shows one button, "Sign out" (`LOGOUT_BUTTON_LABEL`, the label of the SPA's account menu entry). Without a session, or with a row from before the upgrade that holds no ID token, the page posts no hint and Keycloak asks once. The route is behind the origin check like every write. A database failure answers a plain 500 with no page and no cookie cleared. The ID token appears in no log line, URL or header; the one response that carries it is this page. Sign-out also leaves a cross-tab marker in `localStorage` under `playbackLogout:<user id>` so other tabs stop saving playback; its key holds the user's id and its value is an opaque random string, no secret.
 - **Session cookies of the old login**: the 0.14 library's cookies are refused (`401`); the migration also deletes every session row.
 - **Frontend auth-check classification**: A non-public 401 navigates the whole page to `/login/oidc?next=…`; the public paths (`/shared/*`, `/share/*`) never redirect. A 429, a 5xx or a network error on the SPA's startup `GET /api/auth/me` is transient: the known session state is kept and the layout shows a retry-able error instead of forcing a sign-out.
@@ -50,10 +51,6 @@ Keycloak is the account owner, but songmaker applies its answers only at sign-in
 2. Delete the sessions in the database (a person token is not a session: signing out, a back-channel logout or a Keycloak block leaves it valid until its expiry plus leeway, and a copied token is the person until then): `DELETE FROM user_sessions WHERE user_id = '<subject>';` (all of them: `DELETE FROM user_sessions;`). The next request is a 401.
 
 **Back-channel logout.** Keycloak posts a signed Logout Token to `POST /auth/backchannel-logout`, and songmaker ends every session of the token's subject (webauth's back-channel route, audited as a `delete` of resource `session` without a person). The token must be a `logout+jwt` of the bound issuer for this client, carry the back-channel logout event and a `sub`, and no `nonce`; the realm client sets `backchannel.logout.session.required` to `false` because `sid` is ignored. The route answers 200 only after the commit and an empty 400 for any refusal or failure (a failure is re-raised after the answer and logged by the server), in its own worker-thread session and transaction; an audit failure after the deletion rolls the deletion back too. The boundary is the Logout Token's signature (webauth verifies the issuer's RS256 key, `typ`, `aud`, age, event, `sub` and the absent `nonce`) and the edge's public deny of the path. The Host check only filters routing: the realm posts to `<PUBLIC_BASE_URL host>:8080` on the external network `hal_backchannel_songmaker` (declared `external: true`, created by the edge stack, joined by `songmaker-web` alone, which carries the public host as its alias there); any other admitted Host, the public host without the port and `songmaker-web:8080` included, gets an empty 404 (a dependency on the route, answered by an exception handler), an unlisted Host gets TrustedHost's 400, and the body is capped at 32 KiB. The exact path (`SignInPaths.backchannel`) is exempt from the rate limit and from the origin check, and from nothing else; a variant such as `/auth/backchannel-logoutx` is not. A logout that completes before a later sign-in cannot end that later session; this limit is accepted. Two residues are accepted: webauth keeps no `jti` store, so a token can be replayed within its short validity window (about two minutes); and a transient failure answers 400, is logged and is not retried, so the session lasts until its idle or absolute bound.
-
-### Rollback
-
-A deploy that must be undone is undone by restore (`scripts/backup.sh` and `scripts/restore.sh`, which need both the database and the audio files): the migration drops the password-era columns and tables and its downgrade recreates them empty. Restore the paired database and audio backup taken before the deploy, then deploy the previous revision.
 
 ## Authorization
 
@@ -179,30 +176,6 @@ Three-layer defense, with the origin check as the only guard:
 3. **Origin verification**: Without `Sec-Fetch-Site`, a state-changing request (every route, not only `/api/`: the `/shared/*/stream` share manifests and `POST /auth/logout` too) needs an `Origin` that matches `ALLOWED_HOSTS` by exact host name (localhost by default), and with `COOKIE_SECURE` on the origin must be `https`. A request with neither header gets 403 `Missing Origin header`; `Referer` is not read. The allowlist is server-side, not the request's `Host` header, so a spoofed `Host` does not help.
 
 For a cookie no token is involved: the session cookie is `SameSite=Strict` and the origin layer decides. A request with a verified token on a person path bypasses the check, because a browser never attaches `Authorization` by itself. Two routes are exempt because their callers are no browser and prove themselves otherwise: the exact path `/auth/backchannel-logout` (the Logout Token's signature) and the prefix `/api/internal/` (the internal token). Variants such as `/auth/backchannel-logoutx` or `/api/internalx` are not exempt. A browser that sends neither fetch-metadata header on a write (older than the current Chrome, Edge, Firefox and Safari) is refused. [Server tests](../tests/songmaker_cli/test_server_middleware.py) prove the accepted and rejected header cases.
-
-### History: deliberate changes with the webauth migration (#905)
-
-- The per-IP middleware starts fresh budgets once at deployment because its Redis keys change to the class-qualified names documented below. Session keys, stored data and rights are unchanged.
-- The fetch-metadata check above hardens mutating `/api/` requests. Songmaker's frontend is same-origin; CLI and workers omit `Sec-Fetch-Site` and keep their existing behavior. A cross-site browser client cannot make these mutations, even when its Origin is configured.
-- Logout clears both cookies with `SameSite=Strict`, previously Starlette's `lax`. The header text changes; deletion still matches the same cookie name, domain and path. The logout behavior remains covered by [auth API tests](../tests/songmaker_cli/test_auth_api.py); no test pins this deletion attribute.
-
-### History: deliberate changes with webauth v0.11.0 (#1320)
-
-- The session and CSRF cookie names are no longer request-scheme-dependent: they are fixed at startup from the static `COOKIE_SECURE` setting (`__Host-session_id` / `__Host-csrf_token` when true, `session_id` / `csrf_token` when false). `X-Forwarded-Proto` and `TRUSTED_PROXIES` no longer influence the `Secure` flag or `Strict-Transport-Security`; see "Authentication" and "Proxy trust" above.
-
-### History: deliberate changes with webauth v0.21.0 to v0.23.0 (#1807)
-
-- The session-bound CSRF token, its `csrf_token` cookie, the `X-CSRF-Token` header, the `Referer` fallback and the form-submit blocking are gone; the origin layer above is the only guard, and `/api/internal/` joined the exempt paths in the same change.
-- Sign-out changed from a same-origin fetch answering `{logout_url}` to a top-level form POST answering the library's page, and the logout hint cookie went with it: the ID token now lives in the session row.
-- A session opened before the upgrade holds no ID token, so its first sign-out after the deploy shows Keycloak's "Do you want to log out?" page once; every later one goes through. A sign-out whose songmaker session has already ended still reaches Keycloak and ends its session there.
-- A tab opened before the deploy still runs the old page: its sign-out fetch gets the new page where it expects JSON and shows "Couldn't log out", although the server has ended the session; a reload ends it. Accepted for the single-user deployment.
-
-### History: deliberate changes with webauth v0.19.0 and v0.20.0 (#1765)
-
-- Sign-in moved from a password form to Keycloak; the password hasher, the login-attempt budget and the account lockout left with it, and the migration `7c3e91d0a4b2` dropped `users.password_hash`, `users.is_active`, `login_attempts` and the session origin columns (`ip_address`, `user_agent`), and the unique index on `users.username`. Every session row was deleted, so everyone signed in again once.
-- With v0.20.0 the session row holds the issuer's refresh token in `user_sessions.refresh_token` (added by the same migration; `NULL` when the issuer gave none, for example in seeded e2e sessions). It is a secret at rest: the column holds it as plain text (it is in the database dump), the `UserSession.refresh_token` property hands it out only as a `SecretStr`, the engine hides SQL parameters (`hide_parameters=True`) so a failed insert keeps it out of the traceback, and no response, log line or `/health` carries it; the only session-related response is a count of active sessions. It leaves with the row on logout, expiry, pruning and revocation. The co-writer turn reads the person's groups with it (`current_groups`, which stores a rotated refresh token before it answers); see "Co-writer turn through the gateway" below.
-- With v0.23.0 the session row also holds the ID token in `user_sessions.id_token` (`NULL` for a session opened before the upgrade). Like the refresh token it is a secret at rest: plain text in the database dump, handed out only as a `SecretStr` by `UserSession.id_token`, and it leaves with the row. Its one use is the hint on the logout page; the browser keeps no copy.
-- The Host check is songmaker's own `TrustedHostMiddleware` over `ALLOWED_HOSTS` (the library's host lists are Origin allowlists only). A request for another Host is answered 400. Compose always appends `localhost`, `127.0.0.1` and `songmaker-web` to the list, because the container health check, the ACE-Step control plane and Prometheus call the web service by those names; the public host still comes from `ALLOWED_HOSTS`.
 
 ## Rate Limiting
 
@@ -1097,10 +1070,7 @@ A worker writes a take only into its container-local output root, which it empti
 - **Secret files are readable by every child of the same uid.** The session secret, database password, internal token and monitoring token are files under `/run/secrets` in the containers that read them, as the Keycloak client secret is: the scrub cannot hide a file from the agent-CLI and scorer children of the same OS user, and the files are mode 0644 inside a 0700 host directory because postgres (uid 70) and Prometheus (65534) read theirs under other uids. Only a process on the host as the operator, or root, reaches the host directory.
 - **One shared token.** All workers hold the same internal token (`internal-token`); compromising one grants full internal-API access. Multi-node deployments should move to per-worker tokens or mTLS.
 - **Single node.** One acestep-worker per GPU on one host, the ACE-Step HTTP subprocess inside the worker container. Multi-node distribution (separate hosts, shared model storage, cross-host Redis heartbeats) is untested, and the image/packaging refactor that would precede it (decoupling the ACE-Step subprocess image from the worker image) is unwritten.
-
-### Future hardening
-
-If exposure to untrusted traffic becomes a concern, the next step is to bind `/api/internal/*` to a separate port (and bind it to the Docker network, not `0.0.0.0`). Today the single-port design has no repository-provided edge path filter; its safety depends on the loopback-only published port and on any operator-provided upstream access policy.
+- **No repository-provided edge path filter.** The single-port design serves `/api/internal/*` on the same port as the rest; its safety rests on the loopback-only published port and on any operator-provided upstream access policy.
 
 ## CI Supply Chain
 
@@ -1149,7 +1119,7 @@ Mutating operations are logged to the `audit_log` table. Account creation, role 
 | CORS origin | Leave unset when the interface and API share an origin. For a separate trusted browser client, set one exact origin, for example `CORS_ORIGIN=https://client.yourdomain.com`. Cross-site browser mutations to `/api/` remain rejected by `Sec-Fetch-Site`, even with this permission. Startup rejects `*`, subdomain wildcards, and comma-separated lists; `SameSite=Strict` does not make sibling subdomains separate sites. |
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting — see "Proxy trust". Cookie `Secure`/HSTS are unaffected either way; they follow `COOKIE_SECURE` alone. |
 | Public base URL | Set `PUBLIC_BASE_URL=https://yourdomain.com` (scheme + host, no trailing path). The one owner of "what address am I reachable at from outside": the `Settings.public_base_url` validator parses it once at startup and stores the bare origin (a query or fragment is dropped, a path is refused). The one builder of an absolute share address (album/song/generation/playlist — issue #339) is `public_share_url()` in `api_models/songs.py`; the song summary's `share_url` carries it to the song page's link chip. The sign-in redirect addresses (`oidc_client.py`) and the back-channel host (`auth_api.py`) read the same validated setting. Not derived from the request: `request.base_url` reflects the literal ASGI transport's scheme, which is always `http` behind a TLS-terminating proxy since `proxy_headers=False` (see "Proxy trust") leaves nothing to rewrite it. A missing or malformed value stops the web app at startup rather than building a link with a guessed scheme. |
-| Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated exact host names; an entry containing `*` stops startup). Used by CSRF origin verification and as the Host allowlist. Compose always adds `localhost`, `127.0.0.1` and `songmaker-web`. |
+| Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated exact host names; an entry containing `*` stops startup). Used by CSRF origin verification and, through songmaker's own `TrustedHostMiddleware`, as the Host allowlist: a request for another Host is answered 400 (the library's host lists are Origin allowlists only). Compose always adds `localhost`, `127.0.0.1` and `songmaker-web`. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` only when the deployment's network policy keeps the service private. The Docker deployment does set `HOST=0.0.0.0` — that binding is *inside* the container, where the Compose network needs it. |
 | Published ports | `docker-compose.yml` publishes `songmaker-web`, Grafana, and Prometheus as `127.0.0.1:8080:8080` / `127.0.0.1:3000:3000` / `127.0.0.1:9090:9090`. Do not drop the `127.0.0.1:` prefix: Docker's NAT chain bypasses the host INPUT chain, so a plain `8080:8080` reaches the whole LAN no matter what UFW says. The Prometheus API is host-local for the same reason; its lifecycle HTTP endpoints stay disabled, so Compose-network peers cannot stop or reload it. The tunnel (`cloudflared`), the Vite dev proxy, and the CLI all run host-local; in-cluster callers use `songmaker-web:8080` on the compose network. |
 | Workers | Production runs in Docker only. The web container uses a single uvicorn process; concurrency comes from arq worker containers (`MUSIC_MAX_JOBS`, `SCORING_MAX_JOBS`). PostgreSQL is the only supported production DB — SQLite is test-only. |
@@ -1163,16 +1133,16 @@ The two-minute auto-deploy tick first runs `docker compose config --quiet` on th
 
 Under the deploy lock, each tick first removes leftovers directly in its Git admin directory whose names match the script’s four temp prefixes (`songmaker-autodeploy.git-fetch.`, `songmaker-autodeploy.compose-stderr.`, `songmaker-autodeploy.prometheus-ps-stderr.`, `songmaker-autodeploy.gh-stderr.`) followed by exactly six ASCII letters or digits. Symlinks are unlinked without following their targets; state files and nested worktree admin directories are untouched. Each removal is logged; a failed removal refuses the tick and counts toward the third-tick alert, including when already up to date. In-tick removal remains best-effort: an interrupted tick’s leftovers are removed by the next tick that acquires the lock and can remove them. This assumes one lock per Git admin directory; overriding `SONGMAKER_AUTODEPLOY_LOCK_FILE` to share an admin directory between independently locked ticks is unsupported.
 
-When the selected release's schema differs from the running commit's (the `schema:` line of the release's annotated tag message when it has one, else the alembic head of its commit; any doubt, such as an unreadable running state or several heads, counts as differing), the tick first runs `hal backup songmaker --pre-apply` (path from `SONGMAKER_AUTODEPLOY_HAL`); a failed or missing backup is a counted refusal before any build or recreate. Before its Compose build, the tick inspects the two local-only base images. It runs `scripts/build_images.sh bases` without a timeout when either image is missing, when `docker/base/**` or the `vendor/acestep` submodule pin changed between the deployed revision and the selected release, or when the deployed revision cannot be compared. Its output streams directly into the service journal. After a successful recreate, the tick runs `docker image prune --force --filter until=48h --filter label!=songmaker.base-image=true`: Docker accepts this negated label filter, and `scripts/build_images.sh` applies that label to both base images so the cleanup never selects them. Before recreating, it tags only running Compose services with a `build:` section as `<project>-<service>:previous`; `<project>` comes from `docker compose config --format json --no-interpolate | jq -r '.name'`, so the tag follows the actual Compose project without materializing `.env` secrets. To roll back a built service, run `project="$(docker compose config --format json --no-interpolate | jq -r '.name')"; docker tag "${project}-<service>:previous" "${project}-<service>:latest" && docker compose up -d --force-recreate <service>`. Both cleanup commands are bounded by `SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS` (600 seconds by default); an error or timeout is logged at `err` with its command and exit code, while the completed deployment remains successful and the tick does not change either counter. The builder cleanup deliberately uses `docker builder prune --all --force --filter until=48h`, preserving cache used in the last 48 hours but allowing a quiet host's next rebuild to take its normal cold-cache 8–15 minutes.
+When the selected release's schema differs from the running commit's (the `schema:` line of the release's annotated tag message when it has one, else the alembic head of its commit; any doubt, such as an unreadable running state or several heads, counts as differing), the tick first runs `hal backup songmaker --pre-apply` (path from `SONGMAKER_AUTODEPLOY_HAL`); a failed or missing backup is a counted refusal before any build or recreate. A deploy that changed the schema is undone by restoring the paired database and audio backup taken before it (`scripts/restore.sh`; both are needed), then deploying the previous revision. Before its Compose build, the tick inspects the two local-only base images. It runs `scripts/build_images.sh bases` without a timeout when either image is missing, when `docker/base/**` or the `vendor/acestep` submodule pin changed between the deployed revision and the selected release, or when the deployed revision cannot be compared. Its output streams directly into the service journal. After a successful recreate, the tick runs `docker image prune --force --filter until=48h --filter label!=songmaker.base-image=true`: Docker accepts this negated label filter, and `scripts/build_images.sh` applies that label to both base images so the cleanup never selects them. Before recreating, it tags only running Compose services with a `build:` section as `<project>-<service>:previous`; `<project>` comes from `docker compose config --format json --no-interpolate | jq -r '.name'`, so the tag follows the actual Compose project without materializing `.env` secrets. To roll back a built service, run `project="$(docker compose config --format json --no-interpolate | jq -r '.name')"; docker tag "${project}-<service>:previous" "${project}-<service>:latest" && docker compose up -d --force-recreate <service>`. Both cleanup commands are bounded by `SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS` (600 seconds by default); an error or timeout is logged at `err` with its command and exit code, while the completed deployment remains successful and the tick does not change either counter. The builder cleanup deliberately uses `docker builder prune --all --force --filter until=48h`, preserving cache used in the last 48 hours but allowing a quiet host's next rebuild to take its normal cold-cache 8–15 minutes.
 
-### arq JSON queue deployment (#1684)
+### arq JSON queue codec
 
-For the operator changing queue format: the web producer and both workers use
+The web producer and both workers use
 one UTF-8 JSON codec (`arq_codec.py`) for jobs and results. Unsupported objects,
 non-string object keys and nonfinite numbers are rejected. No class is imported
 or reconstructed, and there is no pickle fallback. The wire tests in
 [`test_arq_codec.py`](../tests/songmaker_cli/test_arq_codec.py) cover the configured entry points.
-Redis access control and network isolation remain separate requirements (#1301).
+The codec is not Redis access control or network isolation; those are separate requirements.
 
 arq 0.27 cannot JSON-encode exception objects in failed or cancelled results. It
 logs one serialization warning and stores inert `r="unable to serialize result"`
@@ -1181,71 +1151,6 @@ does not read arq results. A leftover pickle job is rejected visibly with its jo
 ID, executes nothing and leaves a readable failed result. A legacy pickle result
 read fails explicitly. Preserve that evidence and reconcile the application job
 before retrying; never purge or silently retry these entries.
-
-Use a coordinated operator window. Mixed pickle/JSON processes are unsupported,
-and the auto-deploy guard checks database jobs, not queue-format compatibility.
-Run host commands from the deployment checkout:
-
-1. **Before the release tag**, stop `songmaker-autodeploy.timer` with
-   `sudo systemctl stop songmaker-autodeploy.timer`. Record the running pre-merge
-   git SHA for rollback. Keep the old release running.
-2. The head's named landing task merges the PR, and the head tags the merge SHA
-   once all Actions checks on `main` are green for it. The deploy script selects
-   the newest fully green release; keep the window coordinated with other
-   landings so the release is that SHA. If checks fail, leave the timer stopped
-   and the old release running; fix forward with a newer tag and wait for green
-   before draining.
-3. Stop submissions. There is no maintenance switch: first wait until no cover
-   jobs are queued or running (covers run in the web process), then run
-   `docker compose stop songmaker-web`.
-4. Wait for all application jobs and both arq queues to drain, including follow-on
-   scoring. This read-only database check must return no rows:
-
-   ```sh
-   docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
-   SELECT type, status, count(*) FROM jobs
-   WHERE status IN ('queued', 'running') GROUP BY type, status;
-   SQL
-   ```
-
-   For step 3, the same query's `cover` rows must be absent before stopping web.
-   These queue checks must both print `0` (names owned by the worker settings):
-
-   ```sh
-   docker compose exec -T redis redis-cli ZCARD arq:queue:music
-   docker compose exec -T redis redis-cli ZCARD arq:queue:scoring
-   ```
-
-   If anything remains, postpone; never purge. Once both checks are clear, run
-   `docker compose stop songmaker-music-worker songmaker-scoring-worker`.
-   Re-run both `ZCARD` checks after the workers stop; both must return `0`.
-   If either is nonzero, for example because a cron job was enqueued between
-   the drain check and shutdown, start the old workers again, let them drain,
-   stop them again and repeat both checks. Proceed only when both return `0`;
-   never purge. A pickle job that still appears is rejected visibly with its
-   job ID by the JSON worker after restart; keep that fallback evidence.
-5. With the timer still stopped, run one deploy tick:
-   `sudo systemctl start songmaker-autodeploy.service`. The script owns fetch,
-   release checkout, submodule update, build and joint startup. Check
-   `journalctl -t songmaker-autodeploy -n 20` and its deployed-SHA marker against
-   the tagged merge SHA. By default the marker is
-   `$(git rev-parse --absolute-git-dir)/songmaker-autodeploy.deployed-sha`;
-   `SONGMAKER_AUTODEPLOY_DEPLOYED_SHA_FILE` can override it. If the tick refuses or
-   defers, fix the cause named in the journal (work clone or dirty checkout,
-   Compose or alert configuration, mount preflight, database or CI) and rerun it.
-6. Complete one smoke generation with scoring on that SHA, then run
-   `sudo systemctl start songmaker-autodeploy.timer`. If smoke fails, drain again
-   using steps 3–4 before rollback.
-
-If the JSON release cannot deploy within the window, restart the old release
-only with empty queues. If the tick has already checked out the release,
-rebuild from the recorded pre-merge SHA. Rollback requires the same drain and a
-joint restart of web and both workers. Name the rollback release by git SHA:
-rollback image tags skip stopped services and can still point at the release
-before the pickle release. Before restarting the timer, leave the deployment
-checkout detached at a release; the tick never moves a checkout backwards, so
-later ticks deploy only a release that contains it. See [auto-deploy architecture](architecture.md) for the tick's
-existing guards.
 
 ### Secrets
 
@@ -1295,22 +1200,4 @@ Moving scoring onto the GPU (`SCORING_DEVICE=cuda`) would put two containers on 
 - **Worker control endpoints have no cooldown**: `POST /api/admin/workers/{id}/restart`, `POST /api/admin/workers/{id}/pin_model`, and `POST /api/admin/registry/{mode}/download` are not rate-limited. Repeated calls by a compromised admin could disrupt GPU workers or exhaust download bandwidth. Admin-only auth is the only gate.
 - **`/health/details` names the running release and commit** for the monitoring-token holder; signed-in people read them from `/api/release`. Anonymous `/health` carries neither. Both values are non-secret and public in the repository's tags.
 - **`/metrics` requires the monitoring token**: it exposes request counts, latencies, queue depth and VRAM usage, so `require_monitoring_token` in `health_api.py` admits only `Authorization: Bearer <the monitoring token>` (constant-time comparison, one uniform 401 for every wrong or missing credential, 503 while the token is unset). The token is the `monitoring-token` file; compose mounts it into web as `songmaker_monitoring_token` and into Prometheus as `monitoring_token`. The deploy preflight refuses a missing or empty file.
-
-## Hardening Roadmap (for public internet exposure)
-
-The application-layer security (auth, CSRF, IDOR, injection, error sanitization) is solid for a self-hosted tool. The gaps below are infrastructure-level and would need addressing before exposing the app to untrusted public traffic at scale; any public edge configuration is operator-owned, not shipped by this repository.
-
-### ~~1. Replace SQLite with PostgreSQL~~ (Done)
-PostgreSQL is now required for production. SQLite is used only in tests (`init_test_db()`).
-
-### ~~2. Persistent rate limiting (Redis)~~ (Done)
-Redis-backed sliding-window rate limiting is now the only implementation. Rate limit state survives restarts and is shared across workers.
-
-### ~~3. Account lockout / progressive delays~~ (Gone)
-Passwords left with the Keycloak sign-in; lockout and brute-force throttling are Keycloak's.
-
-### 4. Multi-worker architecture
-**Priority: Medium** — PostgreSQL and Redis are in place. Multiple uvicorn workers can be added via `--workers N`. The arq worker already runs as a separate process.
-
-### 5. Content Security Policy — remove `'unsafe-inline'` from `style-src`
-**Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The production build needs `style-src 'unsafe-inline'` for Svelte's inline styles and style attributes. Tightening means style hashes or nonces (`'unsafe-hashes'` for the attributes).
+- **The production CSP keeps `style-src 'unsafe-inline'`**: the build needs it for Svelte's inline styles and style attributes. Removing it would take style hashes or nonces (`'unsafe-hashes'` for the attributes).
