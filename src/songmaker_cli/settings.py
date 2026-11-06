@@ -40,6 +40,18 @@ from songmaker_cli.constants import (
     generate_job_heartbeat_stale_threshold_seconds,
 )
 
+# The most a worker may hand music for one take. Songmaker asks ACE-Step for `audio_format:
+# "wav"` (acestep_engine/client.py); the pinned vendor/acestep saves that with
+# `torchaudio.save(..., backend="soundfile")` in acestep/audio_utils.py: stereo at 48 kHz, at
+# most 4 bytes per sample (a float tensor saves as 32-bit FLOAT). A song request asks
+# for at most 600 seconds (`audio_duration`, le=600 in api_models/songs.py). The product,
+# 600 s * 48000 Hz * 2 channels * 4 bytes = 230,400,000 bytes, plus a header allowance, is
+# rounded up to a whole 256 MiB. The bound covers every generated take. A repaint or cover
+# follows its source's length, so one of a longer reimported source can exceed it and then
+# fails as a refused take; raising the setting
+# `generation_result_max_bytes` (environment GENERATION_RESULT_MAX_BYTES) admits it.
+GENERATION_RESULT_MAX_BYTES: Final[int] = 256 * 1024 * 1024
+
 # The web server's port: the CLI and server default, and the port of the back-channel Host.
 DEFAULT_SERVER_PORT: Final = 8080
 
@@ -259,6 +271,7 @@ class Settings(BaseSettings):
     reference_audio_quota_files: int = Field(default=50, gt=0)
     max_upload_body_bytes: int = Field(default=AUDIO_UPLOAD_BODY_MAX_BYTES)
     max_cover_upload_body_bytes: int = Field(default=COVER_UPLOAD_BODY_MAX_BYTES)
+    generation_result_max_bytes: int = Field(default=GENERATION_RESULT_MAX_BYTES, gt=0)
 
     # ── Logging ───────────────────────────────────────────────────────
     log_format: Literal["text", "json"] = "text"

@@ -95,7 +95,6 @@ class WorkerTaskEvent(BaseModel):
 
 class GenerationTaskResult(BaseModel):
     mode: str
-    audio_path: str
     seed: int
     cot_caption: str = ""
     cot_lyrics: str = ""

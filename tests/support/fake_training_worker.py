@@ -44,6 +44,7 @@ class FakeTrainingWorkerSettings:
     redis_url: str
     internal_token: str
     audio_dir: Path
+    output_dir: Path
     control_plane_url: str = DEFAULT_CONTROL_PLANE_URL
     worker_id: str = FAKE_WORKER_ID
     worker_host: str = FAKE_WORKER_HOST
@@ -56,6 +57,7 @@ class FakeTrainingWorkerSettings:
             redis_url=os.environ["REDIS_URL"],
             internal_token=Path(os.environ["SONGMAKER_INTERNAL_TOKEN_FILE"]).read_text().strip(),
             audio_dir=Path(os.environ["AUDIO_DIR"]),
+            output_dir=Path(os.environ["AUDIO_OUTPUT_DIR"]),
             control_plane_url=os.environ.get("CONTROL_PLANE_URL", DEFAULT_CONTROL_PLANE_URL),
             worker_id=os.environ.get("WORKER_ID", FAKE_WORKER_ID),
             worker_host=os.environ.get("WORKER_HOST", FAKE_WORKER_HOST),
@@ -124,8 +126,7 @@ async def _queued_generate_runner(
     audio_path = audio_output_dir / f"{task_id}.wav"
     audio_path.write_bytes(fake_generation_wav_bytes(prompt, seed, lora_path))
     await task_store.complete(
-        task_id,
-        GenerationTaskResult(mode=FAKE_MODEL_MODE, audio_path=str(audio_path), seed=seed),
+        task_id, GenerationTaskResult(mode=FAKE_MODEL_MODE, seed=seed), result_file=audio_path,
     )
 
 
@@ -201,7 +202,7 @@ def build_fake_worker_deps(
             vram_total_gb=FAKE_WORKER_VRAM_GB,
         ),
         checkpoint_dir=settings.audio_dir,
-        audio_output_dir=settings.audio_dir,
+        audio_output_dir=settings.output_dir,
         generate_runner=lambda task_store, task_id, **kwargs: _queued_generate_runner(
             task_store,
             task_id,

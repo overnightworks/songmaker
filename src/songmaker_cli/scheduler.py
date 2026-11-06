@@ -24,9 +24,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import tempfile
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass, is_dataclass
-from typing import Final
+from pathlib import Path
+from typing import BinaryIO, Final
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -36,6 +39,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase
+from acestep_engine.thread_handoff import acquire_in_thread
 from songmaker_cli.acestep_state import (
     admit_generation as admit_generation_occupancy,
 )
@@ -64,6 +68,7 @@ GenerationProgressCallback = Callable[[AceStepPhase, float], Awaitable[None] | N
 ProgressEventHandler = Callable[[dict], Awaitable[None]]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
 WORKER_STREAM_WENT_SILENT = JOB_ERROR_WORKER_STREAM_SILENT
+WORKER_RESULT_TOO_LARGE = "Worker result is larger than the longest take allowed"
 WORKER_ERROR_GPU_OUT_OF_MEMORY: Final = "gpu_out_of_memory"
 NO_ONLINE_ACESTEP_WORKERS_DETAIL: Final = "No online ACE-Step workers"
 
@@ -121,11 +126,16 @@ class DownloadTaskResultDTO(BaseModel):
 
 class GenerationTaskResultDTO(BaseModel):
     mode: str
-    audio_path: str
     seed: int
     cot_caption: str = ""
     cot_lyrics: str = ""
     delivered_batch_size: int | None = None
+
+
+class FetchedGeneration(GenerationTaskResultDTO):
+    """A finished take: the worker's result and music's own copy of its WAV."""
+
+    audio_path: str
 
 
 @dataclass
@@ -154,6 +164,7 @@ class DispatchOptions:
     generate_submit_timeout_seconds: float = GENERATE_SUBMIT_TIMEOUT_SECONDS
     sse_connect_timeout_seconds: float = ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS
     sse_read_timeout_seconds: float = ACESTEP_SSE_READ_TIMEOUT_SECONDS
+    result_fetch_timeout_seconds: float = GENERATE_SUBMIT_TIMEOUT_SECONDS
     initial_reconnect_backoff_seconds: float = 1.0
     max_reconnect_backoff_seconds: float = 30.0
     transport: httpx.AsyncBaseTransport | None = None
@@ -470,6 +481,92 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 
 
+def _open_take_file() -> tuple[Path, BinaryIO]:
+    fd, name = tempfile.mkstemp(prefix="songmaker_take_", suffix=".wav")
+    return Path(name), os.fdopen(fd, "wb")
+
+
+def _discard_take_file(opened: tuple[Path, BinaryIO]) -> None:
+    path, take = opened
+    take.close()
+    path.unlink(missing_ok=True)
+
+
+async def _fetch_generation_result(
+    worker: _PickedWorker, task_id: str, options: DispatchOptions,
+) -> Path:
+    """Copy the worker's take into a file of music's own, then free it on the worker.
+
+    One attempt: any failure leaves no file behind and surfaces as ``WorkerTaskFailed``.
+    The file work runs in a thread so a large take never blocks the event loop.
+    """
+    path, take = await acquire_in_thread(_open_take_file, _discard_take_file)
+    try:
+        try:
+            await _stream_generation_result(worker, task_id, take, options)
+        finally:
+            await asyncio.to_thread(take.close)
+        await _release_generation_result(worker, task_id, options)
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    return path
+
+
+async def _stream_generation_result(
+    worker: _PickedWorker, task_id: str, take: BinaryIO, options: DispatchOptions,
+) -> None:
+    # A content-encoded body could expand past the limit inside the decoder, before any
+    # byte is counted: music asks for identity, refuses anything else and counts raw bytes.
+    limit = get_settings().generation_result_max_bytes
+    timeout = httpx.Timeout(
+        options.result_fetch_timeout_seconds, connect=options.sse_connect_timeout_seconds,
+    )
+    try:
+        async with (
+            httpx.AsyncClient(timeout=timeout, transport=options.transport) as client,
+            client.stream(
+                "GET", f"{worker.base_url}/tasks/{task_id}/result",
+                headers={**_internal_headers(), "Accept-Encoding": "identity"},
+            ) as response,
+        ):
+            response.raise_for_status()
+            if response.headers.get("content-encoding", "identity").strip().lower() != "identity":
+                raise WorkerTaskFailed("Worker result arrived content-encoded")
+            if int(response.headers.get("content-length", 0)) > limit:
+                raise WorkerTaskFailed(WORKER_RESULT_TOO_LARGE)
+            received = 0
+            async for chunk in response.aiter_raw():
+                received += len(chunk)
+                if received > limit:
+                    raise WorkerTaskFailed(WORKER_RESULT_TOO_LARGE)
+                await asyncio.to_thread(take.write, chunk)
+    except httpx.HTTPError as exc:
+        raise WorkerTaskFailed(f"Worker result fetch failed: {exc}") from exc
+
+
+async def _release_generation_result(
+    worker: _PickedWorker, task_id: str, options: DispatchOptions,
+) -> None:
+    """Free the worker's copy; a failure only delays the worker's own expiry sweep.
+
+    Only the status counts: the answer's body is never read, so its size cannot matter.
+    """
+    try:
+        async with (
+            httpx.AsyncClient(
+                timeout=options.result_fetch_timeout_seconds, transport=options.transport,
+            ) as client,
+            client.stream(
+                "DELETE", f"{worker.base_url}/tasks/{task_id}/result",
+                headers=_internal_headers(),
+            ) as response,
+        ):
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        log.warning("Worker %s kept the result of task %s: %s", worker.id, task_id, exc)
+
+
 async def _consume_stream_event[_TaskResultT: BaseModel](
     event_type: str,
     data: dict,
@@ -630,7 +727,7 @@ async def dispatch_generation_on_worker(
     on_progress: GenerationProgressCallback | None = None,
     on_heartbeat: HeartbeatCallback | None = None,
     options: DispatchOptions = DispatchOptions(),
-) -> GenerationTaskResultDTO:
+) -> FetchedGeneration:
     await _ensure_loaded(worker, target_mode, options, on_progress)
     try:
         task_id = await _submit_generation(worker, ace_config, target_mode, options)
@@ -641,10 +738,12 @@ async def dispatch_generation_on_worker(
             task_id = await _submit_generation(worker, ace_config, target_mode, options)
         except WorkerModeNotLoaded as exc:
             raise WorkerGenerationUnavailable(str(exc)) from exc
-    return await consume_task_stream(
+    result = await consume_task_stream(
         worker,
         task_id,
         on_progress=on_progress,
         on_heartbeat=on_heartbeat,
         options=options,
     )
+    take = await _fetch_generation_result(worker, task_id, options)
+    return FetchedGeneration(**result.model_dump(), audio_path=str(take))

@@ -32,7 +32,7 @@ def test_lifespan_sweeps_expired_terminal_tasks_until_shutdown(
     async def go() -> None:
         store = TaskStore(retention_seconds=0.0)
         expired = await store.create("generate")
-        await store.complete(expired, GenerationTaskResult(mode="sft", audio_path="/x.wav", seed=1))
+        await store.complete(expired, GenerationTaskResult(mode="sft", seed=1))
         later = utcnow() + timedelta(seconds=1)
         monkeypatch.setattr("acestep_worker.task_store.utcnow", lambda: later)
 

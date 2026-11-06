@@ -110,7 +110,7 @@ User clicks "Generate"                    User clicks "Score"
   │                                              ├── save scores to DB
   │                                              └── Job status: completed
   ├── post_process_generation (to_thread):
-  │   ├── read worker WAV from volume
+  │   ├── fetch the take by task id over the worker HTTP, then read it
   │   ├── decode + splice (if repaint)
   │   ├── master → MP3 + ID3 tags
   │   └── INSERT generation + `generation.created` event (one DB transaction)
@@ -1569,7 +1569,7 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
     → build config (model defaults + admin defaults + preset + song params)
       → POST /load_model if the target mode is not loaded
       → POST /generate and consume /tasks/{id}/stream SSE until done
-    → read worker WAV from the shared audio volume
+    → fetch the take over the authenticated worker HTTP (`GET /tasks/{id}/result`, size-limited by `GENERATION_RESULT_MAX_BYTES`, one attempt) into music's own temp file, then `DELETE` the worker's copy
     → persist Generation + per-user `generation.created` event atomically
     → decode → splice if repaint → master (multiband compress, LUFS normalize) → MP3
     → create Generation record in DB
@@ -1667,7 +1667,7 @@ SIGKILLed and even the values the run did produce would be lost.
   reference-audio files that no row names. The
   `generate` and `lora_training` job types are recovered on MusicWorker
   startup and shutdown.
-- Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
+- Fetches each take from the worker over HTTP (no shared output volume; a failed fetch is one failed take), post-processes it → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
 - Owns scorer subprocess (Whisper, AudioBox, audio scorers); calls no provider,

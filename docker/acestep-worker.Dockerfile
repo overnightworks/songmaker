@@ -29,4 +29,8 @@ RUN uv pip install --python .venv/bin/python --no-deps --no-build \
 # image that mounts it must carry it, owned by songmaker.
 RUN mkdir -p /app/data/audio
 
+# Takes land in this container-local folder, never on the shared volume: music fetches
+# them over the authenticated worker HTTP. The worker empties it at every start.
+RUN mkdir -p /app/data/worker_output
+
 ENTRYPOINT ["uv", "run", "--no-sync", "--frozen", "--no-build", "python", "-m", "acestep_worker"]
