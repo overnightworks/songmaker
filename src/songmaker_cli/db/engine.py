@@ -57,15 +57,15 @@ def _is_connection_level_failure(error: OperationalError) -> bool:
 
 
 def _probe_database(url: URL | str) -> None:
-    # SQLite takes no connect_timeout; this check leaves with the SQLite removal.
+    # SQLite takes no connect_timeout.
     is_postgresql = make_url(url).get_backend_name() == "postgresql"
     connect_args = (
         {"connect_timeout": STORE_STARTUP_CONNECT_TIMEOUT_SECONDS} if is_postgresql else {}
     )
     engine = create_engine(url, connect_args=connect_args)
     try:
-        with engine.connect():
-            pass
+        with engine.connect() as connection:
+            connection.exec_driver_sql("SELECT 1")
     finally:
         engine.dispose()
 
