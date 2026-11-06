@@ -1,0 +1,8 @@
+claim_id = "ba290184357f4313be415cd3723cfb87"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "c4a3f41c417bd4745a0e789187cbcb73bf746d80"
+branch = "claude/issue-2359-a2-the-database-tests-run-in-the-backend"
+scope = [".github/workflows/ci.yml", "docs/testing.md", "quality/config.toml", "tests/conftest.py", "tests/songmaker_cli/db/test_migrations_coherence_verdict.py", "tests/songmaker_cli/db/test_migrations_reference_recordings.py", "tests/songmaker_cli/test_cover_runner_accounting.py", "tests/songmaker_cli/test_reference_audio_quota.py", "tests/support/postgresql_probe.py", "tests/support/reference_link_migration.py", "tests/test_postgresql_databases.py", "tests/test_postgresql_selection.py", "tests/workflows/test_ci_quality_gate.py"]
+opened_commit = "12b526a01cc215d0c97da4d09e12e468ba567c5a"
+whole_reason = "The CI job, the mandatory list and the test marker that selects for it change together, or the gate test or the verdict breaks."
