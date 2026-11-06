@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from pydantic import BaseModel, Field, field_validator
 
 from songmaker_cli.constants import DEFAULT_ARTIST
@@ -17,8 +15,6 @@ class SongMeta(BaseModel):
     genre: str = ""
     prompt: str = ""
     lyrics: str = ""
-    status: str = ""
-    source_path: Path = Path()
     bpm: int = 0
     audio_duration: int = 0
     key_scale: str = ""
@@ -43,6 +39,3 @@ class SongMeta(BaseModel):
 class AlbumMeta(BaseModel):
     title: str
     artist: str = DEFAULT_ARTIST
-    subtitle: str = ""
-    year: str = ""
-    colors: dict[str, str] | None = None

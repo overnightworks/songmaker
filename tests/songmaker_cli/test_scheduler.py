@@ -191,7 +191,7 @@ def test_pick_worker_skips_offline(db_session) -> None:
     _seed(db_session, "online-w", host="h1")
     _seed(db_session, "offline-w", host="h2")
     redis = _InMemoryRedis()
-    _set_state(redis, "online-w", {"loaded": ["sft"]})
+    _set_state(redis, "online-w", {"loaded": [{"mode": "sft", "size_gb": 0}]})
 
     picked = _run(pick_worker(db_session, redis, "sft"))
     assert picked.id == "online-w"
@@ -210,7 +210,7 @@ def test_pick_worker_defers_when_every_online_worker_is_held(db_session) -> None
 
     _seed(db_session, "w1")
     redis = _InMemoryRedis()
-    _set_state(redis, "w1", {"loaded": ["sft"]})
+    _set_state(redis, "w1", {"loaded": [{"mode": "sft", "size_gb": 0}]})
     redis.store[gpu_hold_key("w1")] = "hold-token"
     operation = pick_worker(db_session, redis, "sft")
 
@@ -224,7 +224,7 @@ def test_admit_generation_uses_redis_lua_without_incrementing_behind_a_hold(db_s
         _seed(db_session, "w1")
         await redis.set(
             worker_state_key("w1"),
-            json.dumps({"gpu_healthy": True, "loaded": ["sft"]}),
+            json.dumps({"gpu_healthy": True, "loaded": [{"mode": "sft", "size_gb": 0}]}),
         )
 
         async def pick_then_hold(*_args, **_kwargs):
@@ -298,7 +298,7 @@ def test_pick_worker_skips_a_held_worker_for_a_free_online_worker(db_session) ->
     _seed(db_session, "held", host="h1")
     _seed(db_session, "free", host="h2")
     redis = _InMemoryRedis()
-    _set_state(redis, "held", {"loaded": ["sft"]})
+    _set_state(redis, "held", {"loaded": [{"mode": "sft", "size_gb": 0}]})
     _set_state(redis, "free", {"loaded": []})
     _set_queue(redis, "held", 0)
     _set_queue(redis, "free", 9)
@@ -323,20 +323,20 @@ def test_pick_worker_skips_worker_with_broken_gpu(db_session) -> None:
     not make it a candidate. Simulated via gpu_healthy: False in the
     heartbeat, never a lucky real GPU — the scheduler must route the job to
     its healthy neighbor instead."""
-    _seed(db_session, "broken-gpu-w", host="h1")
+    _seed(db_session, "broken-w", host="h1")
     _seed(db_session, "healthy-w", host="h2")
     redis = _InMemoryRedis()
-    _set_state(redis, "broken-gpu-w", {"loaded": ["sft"], "gpu_healthy": False})
-    _set_state(redis, "healthy-w", {"loaded": ["sft"], "gpu_healthy": True})
+    _set_state(redis, "broken-w", {"loaded": [{"mode": "sft", "size_gb": 0}]}, gpu_healthy=False)
+    _set_state(redis, "healthy-w", {"loaded": [{"mode": "sft", "size_gb": 0}]}, gpu_healthy=True)
 
     picked = _run(pick_worker(db_session, redis, "sft"))
     assert picked.id == "healthy-w"
 
 
 def test_pick_worker_no_online_when_only_worker_has_broken_gpu(db_session) -> None:
-    _seed(db_session, "broken-gpu-w")
+    _seed(db_session, "broken-w")
     redis = _InMemoryRedis()
-    _set_state(redis, "broken-gpu-w", {"loaded": ["sft"], "gpu_healthy": False})
+    _set_state(redis, "broken-w", {"loaded": [{"mode": "sft", "size_gb": 0}]}, gpu_healthy=False)
     operation = pick_worker(db_session, redis, "sft")
     with pytest.raises(NoCapacityError):
         _run(operation)
@@ -348,7 +348,7 @@ def test_pick_worker_missing_gpu_healthy_field_is_treated_as_not_online(db_sessi
     routed a job on the silent assumption that it is fine."""
     _seed(db_session, "w1")
     redis = _InMemoryRedis()
-    _set_state(redis, "w1", {"loaded": ["sft"]}, gpu_healthy=None)
+    _set_state(redis, "w1", {"loaded": [{"mode": "sft", "size_gb": 0}]}, gpu_healthy=None)
     operation = pick_worker(db_session, redis, "sft")
     with pytest.raises(NoCapacityError):
         _run(operation)

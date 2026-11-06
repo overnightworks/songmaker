@@ -218,7 +218,11 @@ def test_read_worker_state_missing(redis, event_loop) -> None:
 
 
 def test_read_worker_state_present(redis, event_loop) -> None:
-    payload = {"loaded": ["xl-sft"], "target_loading": None, "vram_used_gb": 12.4}
+    payload = {
+        "loaded": [{"mode": "xl-sft", "size_gb": 0}],
+        "target_loading": None,
+        "vram_used_gb": 12.4,
+    }
     event_loop.run_until_complete(
         redis.set(worker_state_key("w1"), json.dumps(payload)),
     )

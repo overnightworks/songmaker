@@ -44,15 +44,3 @@ def test_song_meta_with_generation_params() -> None:
 def test_album_meta_defaults() -> None:
     meta = AlbumMeta(title="Test")
     assert meta.artist == "Flex0r"
-    assert meta.subtitle == ""
-    assert meta.year == ""
-    assert meta.colors is None
-
-
-def test_album_meta_full() -> None:
-    meta = AlbumMeta(
-        title="Album", artist="Band", subtitle="Sub", year="2025",
-        colors={"primary": "#ff0000"},
-    )
-    assert meta.title == "Album"
-    assert meta.colors["primary"] == "#ff0000"

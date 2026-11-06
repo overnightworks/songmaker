@@ -143,32 +143,6 @@ def report_codex_image_sandbox_runtime() -> Literal["ready", "not_set_up"]:
     return "ready"
 
 
-async def provider_status_refresh_loop(app: FastAPI) -> None:
-    """Refresh provider reachability and catalogs outside request handling."""
-    from agent_providers.constants import (
-        CLI_LOGIN_STATUS_CACHE_SECONDS,
-        COWRITER_PROVIDERS,
-    )
-
-    from songmaker_cli.provider_status import refresh_provider_snapshot
-
-    registry = background_loop_registry(app)
-    while True:
-        error: Exception | None = None
-        for provider in COWRITER_PROVIDERS:
-            try:
-                await asyncio.to_thread(refresh_provider_snapshot, provider)
-            except Exception as exc:
-                if error is None:
-                    error = exc
-                log.exception("Provider status refresh failed for %s", provider)
-        if error is None:
-            registry.record_success(BackgroundLoopName.PROVIDER_STATUS_REFRESH)
-        else:
-            registry.record_failure(BackgroundLoopName.PROVIDER_STATUS_REFRESH, error)
-        await asyncio.sleep(CLI_LOGIN_STATUS_CACHE_SECONDS)
-
-
 def cleanup_expired_resource_events(ctx: AppContext) -> int:
     """Delete delivered event history beyond retention, preserving cursors."""
     from songmaker_cli.db.queries.resource_events import delete_resource_events_before

@@ -16,7 +16,6 @@ class BackgroundLoopName(StrEnum):
     RESOURCE_EVENT_CLEANUP = "resource_event_cleanup"
     SCORE_BACKFILL = "score_backfill"
     STALE_JOB_REAPER = "stale_job_reaper"
-    PROVIDER_STATUS_REFRESH = "provider_status_refresh"
 
 
 class BackgroundLoopStatus(StrEnum):

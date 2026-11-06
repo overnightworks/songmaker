@@ -48,7 +48,6 @@ from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.lifecycle import (
     cleanup_expired_resource_events,
-    provider_status_refresh_loop,
     reap_stale_jobs,
     reconcile_crashed_loras,
     report_codex_image_sandbox_runtime,
@@ -130,10 +129,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         ),
         (BackgroundLoopName.SCORE_BACKFILL, asyncio.create_task(score_backfill_loop(app))),
         (BackgroundLoopName.STALE_JOB_REAPER, asyncio.create_task(stale_job_reaper_loop(app))),
-        (
-            BackgroundLoopName.PROVIDER_STATUS_REFRESH,
-            asyncio.create_task(provider_status_refresh_loop(app)),
-        ),
         (
             BackgroundLoopName.COVER_RUNNER,
             asyncio.create_task(cover_runner_loop(app, registry)),

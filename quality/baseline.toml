@@ -60,7 +60,7 @@
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4656
+"tests/songmaker_cli/test_api.py" = 4655
 "tests/songmaker_cli/test_db.py" = 3544
 "tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_jobs.py" = 3215
@@ -84,7 +84,7 @@
 "_register_protected_routes" = 76
 
 [function_lines."src/songmaker_cli/config.py"]
-"build_ace_config" = 65
+"build_ace_config" = 63
 
 [function_lines."src/songmaker_cli/cowriter/history.py"]
 "compact_conversation" = 60
@@ -143,7 +143,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 65
+"_lifespan" = 61
 "create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
@@ -349,14 +349,14 @@ stranger_client = [["tests/songmaker_cli/test_conversation_api_memory.py", "stra
 
 [clones."tests/songmaker_cli/test_conversation_api_memory.py"]
 _seed = [["tests/songmaker_cli/test_conversation_api_mentions.py", "_seed"]]
-_stream_events = [["tests/songmaker_cli/test_conversation_api_mentions.py", "_stream_events"], ["tests/songmaker_cli/test_conversation_api_takes.py", "_stream_events"], ["tests/songmaker_cli/test_settings_api_providers.py", "_stream_events"]]
+_stream_events = [["tests/songmaker_cli/test_conversation_api_mentions.py", "_stream_events"], ["tests/songmaker_cli/test_conversation_api_takes.py", "_stream_events"], ["tests/songmaker_cli/test_cowriter_settings_api.py", "_stream_events"]]
 client = [["tests/songmaker_cli/test_conversation_api_takes.py", "client"]]
 
 [clones."tests/songmaker_cli/test_conversation_api_mentions.py"]
-_stream_events = [["tests/songmaker_cli/test_conversation_api_takes.py", "_stream_events"], ["tests/songmaker_cli/test_settings_api_providers.py", "_stream_events"]]
+_stream_events = [["tests/songmaker_cli/test_conversation_api_takes.py", "_stream_events"], ["tests/songmaker_cli/test_cowriter_settings_api.py", "_stream_events"]]
 
 [clones."tests/songmaker_cli/test_conversation_api_takes.py"]
-_stream_events = [["tests/songmaker_cli/test_settings_api_providers.py", "_stream_events"]]
+_stream_events = [["tests/songmaker_cli/test_cowriter_settings_api.py", "_stream_events"]]
 
 [clones."tests/songmaker_cli/test_cover_runner.py"]
 _png_bytes = [["tests/songmaker_cli/test_playlist_api.py", "_png_bytes"]]

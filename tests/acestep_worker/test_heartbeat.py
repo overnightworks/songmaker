@@ -23,7 +23,7 @@ def _make_loop(provider=None, interval=0.05, ttl=2):
     redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
 
     async def default_provider() -> dict[str, object]:
-        return {"loaded": ["sft"], "queue_depth": 3}
+        return {"loaded": [{"mode": "sft", "size_gb": 0}], "queue_depth": 3}
 
     return HeartbeatLoop(
         redis=redis,
@@ -50,7 +50,7 @@ def test_publish_once_writes_to_redis() -> None:
     raw, ttl = _run(go())
     assert raw is not None
     payload = json.loads(raw)
-    assert payload["loaded"] == ["sft"]
+    assert payload["loaded"] == [{"mode": "sft", "size_gb": 0}]
     assert "last_heartbeat_at" in payload
     assert 0 < ttl <= 2
 

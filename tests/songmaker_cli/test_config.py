@@ -56,14 +56,6 @@ def test_build_ace_config_seed_kwarg() -> None:
     assert config.audio_duration == 60
 
 
-def test_build_ace_config_cli_overrides_typed() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", bpm=120)
-    config = build_ace_config(meta, {"shift": 4.0}, seed=99)
-    assert config.bpm == 120
-    assert config.shift == 4.0
-    assert config.seed == 99
-
-
 def test_build_ace_config_keeps_voice_selection_out_of_engine_config() -> None:
     meta = SongMeta(
         prompt="test",
@@ -257,13 +249,6 @@ def test_build_ace_config_sft_global_defaults() -> None:
     defaults = {"sft": {"inference_steps": 60}}
     config = build_ace_config(meta, model_name="acestep-v15-sft", global_defaults=defaults)
     assert config.inference_steps == 60
-
-
-def test_build_ace_config_cli_overrides_global_defaults() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", bpm=120)
-    defaults = {"sft": {"shift": 5.0}}
-    config = build_ace_config(meta, cli_overrides={"shift": 1.0}, global_defaults=defaults)
-    assert config.shift == 1.0
 
 
 def test_build_ace_config_seed_applied() -> None:

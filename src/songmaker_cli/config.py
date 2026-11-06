@@ -170,9 +170,9 @@ def _coerce_to_params(
 ) -> BaseGenerationParams | None:
     """Accept either a typed model or a raw dict, return the typed model.
 
-    Raises :class:`ValidationError` if the dict cannot be validated. Used so
-    that legacy callers (CLI, tests) passing dicts still work without losing
-    the boundary check that catches typos.
+    Raises :class:`ValidationError` if the dict cannot be validated. The dict
+    branch serves ``global_defaults`` read from the database, keeping the
+    boundary check that catches typos.
     """
     if value is None:
         return None
@@ -211,16 +211,15 @@ def _merge_layers(
 
 def build_ace_config(
     meta: "SongMeta",
-    cli_overrides: BaseGenerationParams | dict | None = None,
     model_name: str = MODEL_DEFAULT_MODE,
     global_defaults: dict[str, dict] | None = None,
-    preset_params: BaseGenerationParams | dict | None = None,
+    preset_params: BaseGenerationParams | None = None,
     seed: int | None = None,
 ) -> AceStepConfig:
     """Build an AceStepConfig from a typed SongMeta + typed override layers.
 
     Layering (later wins): model defaults < user global defaults < preset
-    params < song meta < CLI overrides. Each layer is a
+    params < song meta. Each layer is a
     :class:`BaseGenerationParams`; merging happens field-by-field, never via
     raw ``dict.update``. Top-of-meta scalars (``bpm``, ``audio_duration``,
     ``key_scale``, ``vocal_language``) and the seed are applied last.
@@ -235,7 +234,6 @@ def build_ace_config(
     user_defaults_layer = _coerce_to_params(user_defaults_dict)
     preset_layer = _coerce_to_params(preset_params)
     song_layer = meta.generation_params
-    cli_layer = _coerce_to_params(cli_overrides)
 
     log.debug(
         "build_ace_config: model=%s (%s), preset=%s, user_defaults=%s, song_params=%s",
@@ -252,7 +250,7 @@ def build_ace_config(
         {
             key: value
             for key, value in _merge_layers(
-                builtin_layer, user_defaults_layer, preset_layer, song_layer, cli_layer
+                builtin_layer, user_defaults_layer, preset_layer, song_layer
             ).items()
             if key in _ACE_STEP_CONFIG_FIELDS
         }

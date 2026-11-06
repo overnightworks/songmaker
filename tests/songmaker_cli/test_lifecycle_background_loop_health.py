@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from support.provider_runtime import override_provider_runtime
 from support.web_app import make_test_app
 
 import songmaker_cli.lifecycle as lifecycle
@@ -204,7 +204,6 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
         BackgroundLoopName.RESOURCE_EVENT_CLEANUP: BackgroundLoopStatus.OK,
         BackgroundLoopName.SCORE_BACKFILL: BackgroundLoopStatus.OK,
         BackgroundLoopName.STALE_JOB_REAPER: BackgroundLoopStatus.OK,
-        BackgroundLoopName.PROVIDER_STATUS_REFRESH: BackgroundLoopStatus.OK,
         BackgroundLoopName.COVER_RUNNER: BackgroundLoopStatus.OK,
     }
 
@@ -247,88 +246,27 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
     assert recovered == [True]
 
 
-def test_provider_status_loop_fills_snapshots_and_is_healthy(
-    tmp_path, monkeypatch, mock_arq_pool,
-    monitoring_headers,
+def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(
+    tmp_path, monkeypatch, mock_arq_pool, monitoring_headers,
 ) -> None:
-    from agent_providers.catalog import ProviderRoute
-    from agent_providers.constants import COWRITER_PROVIDERS
+    from songmaker_cli.constants import CLAUDE_CLI_BINARY, CODEX_CLI_BINARY, GROK_CLI_BINARY
 
-    from songmaker_cli.provider_status import provider_snapshots
-
-    refreshed = threading.Event()
-    refreshed_routes: set[tuple[str, ProviderRoute]] = set()
-    expected_routes = {
-        (provider, route)
-        for provider in COWRITER_PROVIDERS
-        for route in ProviderRoute
-    }
-
-    monkeypatch.setattr(
-        "agent_providers.catalog._cli_is_logged_in",
-        lambda _provider: True,
-    )
-    monkeypatch.setattr(
-        "agent_providers.catalog._anthropic_sdk_available",
-        lambda: True,
-    )
-
-    def list_provider_models(provider: str, route: ProviderRoute) -> list[str]:
-        refreshed_routes.add((provider, route))
-        if refreshed_routes == expected_routes:
-            refreshed.set()
-        return [f"{provider}-model"]
-
-    monkeypatch.setattr(
-        "agent_providers.catalog.list_provider_models",
-        list_provider_models,
-    )
-    monkeypatch.setattr(
-        server, "provider_status_refresh_loop", lifecycle.provider_status_refresh_loop,
-    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    spawn_log = tmp_path / "spawns.log"
+    for binary in (CLAUDE_CLI_BINARY, GROK_CLI_BINARY, CODEX_CLI_BINARY):
+        stub = bin_dir / binary
+        stub.write_text(f"#!/bin/sh\necho {binary} >> {spawn_log}\n")
+        stub.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
     client, _ = make_test_app(tmp_path)
-    override_provider_runtime(
-        anthropic_api_key="test-key",
-        xai_api_key="test-key",
-        openai_api_key="test-key",
-    )
 
     with client:
-        assert client.portal.call(asyncio.to_thread, refreshed.wait, 1)
         health = client.get(
             "/health/details", headers=monitoring_headers,
         ).json()["background_loops"]
 
-    assert all(provider in provider_snapshots() for provider in COWRITER_PROVIDERS)
-    assert refreshed_routes == expected_routes
-    assert health[BackgroundLoopName.PROVIDER_STATUS_REFRESH]["state"] == BackgroundLoopStatus.OK
-
-
-def test_provider_status_loop_marks_the_sweep_failed_but_continues_refreshing(
-    monkeypatch,
-) -> None:
-    from agent_providers.constants import COWRITER_PROVIDERS
-
-    registry = BackgroundLoopRegistry()
-    app = SimpleNamespace(state=SimpleNamespace(background_loop_registry=registry))
-    refreshed: list[str] = []
-
-    async def refresh(_function, provider: str) -> None:
-        refreshed.append(provider)
-        if provider == "grok":
-            raise RuntimeError("grok unavailable")
-
-    async def stop_after_sweep(_seconds: float) -> None:
-        raise asyncio.CancelledError()
-
-    monkeypatch.setattr(lifecycle.asyncio, "to_thread", refresh)
-    monkeypatch.setattr(lifecycle.asyncio, "sleep", stop_after_sweep)
-
-    loop = lifecycle.provider_status_refresh_loop(app)
-    with pytest.raises(asyncio.CancelledError):
-        asyncio.run(loop)
-
-    health = registry.loop_health()[BackgroundLoopName.PROVIDER_STATUS_REFRESH]
-    assert refreshed == list(COWRITER_PROVIDERS)
-    assert health.consecutive_failures == 1
-    assert health.last_error == "RuntimeError"
+    assert {name: loop["state"] for name, loop in health.items()} == {
+        name.value: BackgroundLoopStatus.OK for name in BackgroundLoopName
+    }
+    assert not spawn_log.exists()
