@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import wave
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -130,6 +131,21 @@ def test_take_links_the_reference_the_job_resolved(
     _run_job(seeded_db, tmp_path)
 
     assert _recorded_references(seeded_db) == [reference_id]
+
+
+def test_a_saved_take_clears_the_unused_stamp_of_the_reference_it_links(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+    with seeded_db() as session:
+        session.get(ReferenceRecording, reference_id).unused_since = datetime.now(timezone.utc)
+        session.commit()
+
+    _run_job(seeded_db, tmp_path)
+
+    with seeded_db() as session:
+        assert session.get(ReferenceRecording, reference_id).unused_since is None
 
 
 def test_take_keeps_the_reference_the_job_captured_when_the_version_changes_mid_take(

@@ -51,7 +51,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries.generations import create_generation, get_generation
 from songmaker_cli.db.queries.jobs import create_job, lock_active_job
-from songmaker_cli.db.queries.reference_recordings import get_owned_reference_recording
+from songmaker_cli.db.queries.reference_recordings import lock_and_mark_reference_used
 from songmaker_cli.db.queries.resource_events import create_generation_created_event
 from songmaker_cli.db.queries.sentinels import unset_if_none
 from songmaker_cli.db.queries.settings import get_default_preset
@@ -590,7 +590,7 @@ def _lock_reference_or_fail(session: Session, ctx: GenerationContext) -> None:
     reference_id = ctx.reference_recording_id
     if reference_id is None:
         return
-    if get_owned_reference_recording(session, ctx.user_id, reference_id, lock=True) is None:
+    if lock_and_mark_reference_used(session, ctx.user_id, reference_id) is None:
         raise ReferenceDeletedDuringTake(JOB_ERROR_REFERENCE_DELETED_DURING_TAKE)
 
 
