@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "c4a3f41c417bd4745a0e789187cbcb73bf746d80"
 branch = "claude/issue-2351-the-e2e-seed-creates-takes-without-the-r"
-scope = ["frontend/e2e", "scripts/seed_e2e_song_takes.py", "tests/scripts/test_seed_e2e_song_takes.py"]
+scope = ["frontend/e2e", "quality/baseline.toml", "scripts/seed_e2e_song_takes.py", "tests/scripts/test_seed_e2e_song_takes.py"]
 opened_commit = "8800a1307a40f8b2925bc719cad39ed6d9c0ed2d"
 whole_reason = "The e2e seed and every spec that relies on its uploaded takes move off the reimport route together, or a spec loses its takes."
