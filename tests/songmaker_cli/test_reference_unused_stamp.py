@@ -5,16 +5,16 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import text
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import mark_newly_unused
+from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.timestamps import utcnow
 
 OWNER = "owner"
@@ -36,7 +36,15 @@ def _take_row(take_id: str, number: int, reference_id: str | None) -> Generation
     )
 
 
-def _seed_stamp_world(session, takes: dict[str, str | None], version_reference: str | None) -> None:
+FAIL_STAMP_TRIGGER = (
+    "CREATE TRIGGER fail_stamp BEFORE UPDATE OF unused_since ON reference_recordings "
+    "BEGIN SELECT RAISE(ABORT, 'secret.wav'); END"
+)
+
+
+def _seed_stamp_world(
+    session, takes: dict[str, str | None], version_reference: str | None, *, failing_stamp=False,
+) -> None:
     session.add(User(id=OWNER, username=OWNER))
     session.flush()
     session.add(Album(id="album", title="A", artist="A", created_by=OWNER))
@@ -52,11 +60,22 @@ def _seed_stamp_world(session, takes: dict[str, str | None], version_reference: 
     session.add_all(
         _take_row(name, number, ref) for number, (name, ref) in enumerate(takes.items(), 1)
     )
+    if failing_stamp:
+        session.execute(text(FAIL_STAMP_TRIGGER))
 
 
-def _world(tmp_path: Path, takes: dict[str, str | None], version_reference: str | None = None):
+def _world(
+    tmp_path: Path,
+    takes: dict[str, str | None],
+    version_reference: str | None = None,
+    *,
+    failing_stamp: bool = False,
+):
     ctx = make_router_ctx(
-        tmp_path, seed_db=lambda s: _seed_stamp_world(s, takes, version_reference),
+        tmp_path,
+        seed_db=lambda s: _seed_stamp_world(
+            s, takes, version_reference, failing_stamp=failing_stamp,
+        ),
     )
     (tmp_path / "audio" / OWNER).mkdir(parents=True, exist_ok=True)
     for name in takes:
@@ -114,19 +133,15 @@ def test_a_reference_another_version_or_take_still_links_keeps_no_stamp(tmp_path
 def test_a_failing_stamp_leaves_the_answer_and_the_unlink_and_logs_one_counts_only_error(
     tmp_path, caplog, route,
 ):
-    client, ctx = _world(tmp_path, {"ta": "r1"})
-    failure = OperationalError("UPDATE secret.wav", {}, Exception("secret.wav"))
-    with (
-        patch("songmaker_cli.reference_audio.mark_newly_unused", side_effect=failure),
-        caplog.at_level(logging.ERROR),
-    ):
+    client, ctx = _world(tmp_path, {"ta": "r1"}, failing_stamp=True)
+    with caplog.at_level(logging.ERROR):
         response = _delete_through_route(client, route, ["ta"])
     assert response.status_code == 200
     assert not (tmp_path / "audio" / OWNER / "ta.mp3").exists()
     assert _stamps(ctx)["r1"] is None
     [record] = [r for r in caplog.records if r.levelno == logging.ERROR]
     message = record.getMessage()
-    assert "OperationalError" in message
+    assert "IntegrityError" in message
     assert "secret" not in message
     assert "ta.mp3" not in message
     assert record.exc_info is None
@@ -165,11 +180,9 @@ def test_unknown_ids_and_an_empty_set_stamp_nothing(tmp_path):
     assert _stamps(ctx)["r1"] is None
 
 
-def test_an_empty_candidate_set_does_not_touch_the_session(tmp_path):
-    from unittest.mock import MagicMock
-
-    from songmaker_cli.reference_audio import commit_unused_stamps
-
-    session = MagicMock()
-    commit_unused_stamps(session, set())
-    assert session.method_calls == []
+def test_an_empty_candidate_set_opens_no_transaction(tmp_path):
+    ctx = _owner_ctx(tmp_path)
+    with ctx.db() as session:
+        session.commit()
+        commit_unused_stamps(session, set())
+        assert not session.in_transaction()

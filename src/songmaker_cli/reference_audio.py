@@ -7,7 +7,7 @@ import logging
 import os
 import stat
 import uuid
-from collections.abc import Collection, Iterable
+from collections.abc import Collection
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from enum import StrEnum
@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from songmaker_cli.api_helpers import _begin_exclusive
 from songmaker_cli.audio_files import read_audio_duration
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSIONS
-from songmaker_cli.db.models import Generation, User
+from songmaker_cli.db.models import User
 from songmaker_cli.db.queries.auth import list_user_ids
 from songmaker_cli.db.queries.reference_recordings import (
     create_reference_recording,
@@ -229,16 +229,11 @@ def _log_commit_failure(user_id: str, failure: BaseException) -> None:
     log.error("Reference audio commit failed for user %s: %s", user_id, type(failure).__name__)
 
 
-def linked_reference_ids(takes: Iterable[Generation]) -> set[str]:
-    """The references the takes link, as plain ids that outlive the commit expiring them."""
-    return {take.reference_recording_id for take in takes if take.reference_recording_id}
-
-
 def commit_unused_stamps(session: Session, candidates: Collection[str]) -> None:
     """Stamp the candidates that lost their last link, in a transaction of their own.
 
     Call after the detaching site's commit. A failure is logged with counts and error kind
-    only and never raised: the caller's answer and file removal stand.
+    only; the SQLAlchemy failure is not re-raised: the caller's answer and file removal stand.
     """
     if not candidates:
         return

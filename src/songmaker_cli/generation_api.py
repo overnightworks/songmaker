@@ -90,7 +90,7 @@ from songmaker_cli.jobs.generation_failure import (
     is_visible_generation_failure,
     musician_job_response,
 )
-from songmaker_cli.reference_audio import commit_unused_stamps, linked_reference_ids
+from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
 from songmaker_cli.timestamps import aware_timestamp
 
@@ -201,7 +201,7 @@ def api_delete_generation(
     ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
     gen = check_generation_access(session, gen_id, user)
-    candidates = linked_reference_ids([gen])
+    candidates = {gen.reference_recording_id} if gen.reference_recording_id else set()
     try:
         paths = delete_generation(session, gen_id)
     except ValueError:
@@ -227,7 +227,9 @@ def api_bulk_delete_generations(
         return BulkDeleteResponse(deleted=0)
     deduplicated_ids = list(set(req.generation_ids))
     generations = check_generations_access(session, deduplicated_ids, user)
-    candidates = linked_reference_ids(generations)
+    candidates = {
+        take.reference_recording_id for take in generations if take.reference_recording_id
+    }
     paths = bulk_delete_generations(session, generations)
     for gen_id in deduplicated_ids:
         record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
