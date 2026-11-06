@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,17 +17,25 @@ QUALITY_USES = re.compile(r"uses:\s*overnightworks/quality/\S+@(\S+)")
 UNRELEASED_DOCKERFILES = frozenset({"docker/acestep-worker.Dockerfile"})
 
 
-def _compose_dockerfiles() -> set[str]:
-    return {
-        service["build"]["dockerfile"]
-        for service in COMPOSE_SERVICES.values()
-        if isinstance(service.get("build"), dict)
-    }
+def _compose_dockerfiles(services: dict[str, dict] = COMPOSE_SERVICES) -> set[str]:
+    dockerfiles = set()
+    for name, service in services.items():
+        build = service.get("build")
+        if build is None:
+            continue
+        assert isinstance(build, dict), f"service {name} writes build as a string"
+        dockerfiles.add(build["dockerfile"])
+    return dockerfiles
 
 
 def test_released_dockerfiles_are_the_compose_built_ones_without_the_unreleased():
     released = {entry["file"] for entry in RELEASE_JOBS["image"]["strategy"]["matrix"]["include"]}
     assert released == _compose_dockerfiles() - UNRELEASED_DOCKERFILES
+
+
+def test_a_compose_build_written_as_a_string_fails_loudly():
+    with pytest.raises(AssertionError, match="writes build as a string"):
+        _compose_dockerfiles({"extra": {"build": "./extra"}})
 
 
 def test_every_quality_workflow_is_pinned_to_one_commit():

@@ -28,6 +28,7 @@ jobs:
       form: YYYY.MM.DD.N
 
   image:
+    name: image (${{ matrix.image }})
     needs: gate
     strategy:
       fail-fast: false
@@ -52,7 +53,7 @@ jobs:
       image: ${{ matrix.image }}
       file: ${{ matrix.file }}
       version: ${{ inputs.version }}
-      build-args: ${{ matrix.build-args }}
+      build-args: ${{ matrix.build-args || '' }}
       push: true
 
   tag:

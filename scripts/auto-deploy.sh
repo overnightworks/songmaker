@@ -4,9 +4,10 @@
 # A GitOps timer, not a webhook or a self-hosted CI runner: this script polls
 # origin every couple of minutes (see songmaker-autodeploy.timer) and deploys
 # only a release tag. A landing on main deploys nothing by itself; the Release
-# workflow sets a tag `vYYYY.MM.DD.N` on a green main commit, and the next tick checks
-# that commit out detached in the deploy checkout and redeploys it. Tags are
-# read from origin into a private ref namespace, never from local refs/tags.
+# workflow sets a tag `vYYYY.MM.DD.N` on a green main commit, and the next tick
+# checks that commit out detached in the deploy checkout and redeploys it.
+# Tags are read from origin into a private ref namespace, never from local
+# refs/tags.
 # Before it checks out, it verifies through GitHub that every GitHub Actions
 # check run for the newest green release has completed successfully, skipped,
 # or neutral, with at least one success; check runs from other apps are
