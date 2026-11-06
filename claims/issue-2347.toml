@@ -1,7 +1,0 @@
-claim_id = "d503ff420bb743d58b5517d7bd37dba4"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c4a3f41c417bd4745a0e789187cbcb73bf746d80"
-branch = "claude/issue-2347-take-appkit-v0-16-0"
-scope = ["frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/lib/components/AccountMenu.svelte"]
-opened_commit = "cbd55a651fd52517bc968e29f31eaa0834f08a49"
