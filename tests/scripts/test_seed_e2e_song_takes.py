@@ -305,3 +305,25 @@ def test_completion_of_a_job_without_a_version_writes_no_takes(seeded_job):
         seed_e2e_job_states.complete_generation_job(session, audio_dir, b"mp3", job_id=job.id)
 
     assert {g.id for g in session.query(Generation)} == ids_before
+
+
+def test_takes_seeded_into_an_existing_song_carry_no_version_and_play_the_given_audio(tmp_path):
+    from songmaker_cli.db.queries.songs import create_song, get_song
+
+    audio_dir = tmp_path / "audio"
+    factory = init_test_db(tmp_path / "attach.db")
+    with factory() as session:
+        session.add(User(id=_OWNER_ID, username=_OWNER_ID))
+        session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
+        session.commit()
+        song = create_song(session, "Own", _ALBUM_ID, "own", lyrics="words", prompt="tone")
+        session.commit()
+
+        seed_e2e_song_takes.seed_takes_into_song(
+            session, audio_dir, b"mp3", song_id=song.id, take_count=2, owner_id=_OWNER_ID,
+        )
+
+        takes = get_song(session, song.id).generations
+        assert len(takes) == 2
+        assert {(g.version_id, g.created_by) for g in takes} == {(None, _OWNER_ID)}
+        assert all((audio_dir / g.mp3_path).read_bytes() == b"mp3" for g in takes)

@@ -97,8 +97,9 @@ is also where the e2e admin account (`E2E_ADMIN_USERNAME`) comes from.
 with the run. The helper sits outside `scripts/`, which the image copies, so it
 never ships. No flow types a password: there is none.
 
-The seed builds one base album with three songs, a real take per song imported from
-`fixtures/take.mp3` via `POST /api/songs/{id}/reimport`, one pick, a playlist
+The seed builds one base album with three songs, a real take per song seeded from
+`fixtures/take.mp3` straight into the database (`seedTake` in `seed.ts`, which runs
+`scripts/seed_e2e_song_takes.py --song-id` inside the web container), one pick, a playlist
 holding two of those takes, and a public link for the album — plus a second,
 songs-only album for the rail's one-open-album proof, and enough filler albums
 (`RAIL_FILLER_ALBUM_COUNT` in `seed.ts`) to overflow the rail's own scroll

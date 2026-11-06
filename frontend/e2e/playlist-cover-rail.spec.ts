@@ -10,10 +10,9 @@ import {
 	RAIL_PLAYLISTS_NAV_LABEL
 } from '../src/lib/constants';
 import { sameOriginHeaders, openPlaylistsPage, openRailNav } from './helpers';
-import { archiveOwnedAlbum } from './seed';
+import { archiveOwnedAlbum, seedTake } from './seed';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
-const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
 const COVER_PNG = readFileSync(path.join(E2E_DIR, '..', 'static', 'icon-192.png'));
 
 interface CreatedResource {
@@ -65,14 +64,7 @@ test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop
 		lyrics: 'A playlist mosaic needs one covered album.',
 		prompt: 'quiet test song'
 	});
-	const reimport = await page.request.post(`/api/songs/${song.id}/reimport`, {
-		headers: await sameOriginHeaders(page),
-		multipart: {
-			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-		}
-	});
-	expect(reimport.ok(), `Take import failed: ${await reimport.text()}`).toBeTruthy();
-	const take = (await reimport.json()) as CreatedResource;
+	const take = await seedTake(page.request, song.id);
 	const cover = await page.request.post(`/api/albums/${album.id}/cover`, {
 		headers: await sameOriginHeaders(page),
 		multipart: {

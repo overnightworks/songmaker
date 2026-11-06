@@ -768,17 +768,6 @@ export interface ScoreRequest {
 	scorers?: string[] | null;
 }
 
-export interface ScorerSchemaItem {
-	name: string;
-	output_keys: string[];
-	needs_audio: boolean;
-	device: string;
-}
-
-export interface ScoringSchemaResponse {
-	scorers: ScorerSchemaItem[];
-}
-
 export interface ShareResult {
 	status: string;
 	share_url: string;
