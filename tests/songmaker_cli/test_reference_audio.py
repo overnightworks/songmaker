@@ -8,7 +8,7 @@ import pytest
 from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
-from songmaker_cli.db.models import Album, Song, User, Version
+from songmaker_cli.db.models import Album, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import create_reference_recording
 from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,
@@ -238,6 +238,33 @@ def test_create_with_an_owned_reference_links_the_row_and_answers_its_filename(w
     assert _linked_ids(factory, response.json()["id"]) == [reference_id]
 
 
+def _unused_since(factory, reference_id: str):
+    with factory() as session:
+        return session.get(ReferenceRecording, reference_id).unused_since
+
+
+@pytest.mark.parametrize("route", ["create", "update", "update_as_new_version"])
+def test_saving_a_version_with_a_reference_commits_it_unstamped(world, route: str) -> None:
+    client, factory = world
+    reference_id = _record_reference(factory, "user-a")
+    bystander_id = _record_reference(factory, "user-a", "bystander.wav")
+    song_id = client.post("/api/songs", json={"title": "S", "album_id": "album-a"}).json()["id"]
+    assert _unused_since(factory, reference_id) is not None
+
+    if route == "create":
+        response = client.post("/api/songs", json={
+            "title": "Own ref", "album_id": "album-a", "reference_recording_id": reference_id,
+        })
+    else:
+        response = client.put(f"/api/songs/{song_id}", json={
+            "reference_recording_id": reference_id, "new_version": route == "update_as_new_version",
+        })
+
+    assert response.status_code == 200, response.text
+    assert _unused_since(factory, reference_id) is None
+    assert _unused_since(factory, bystander_id) is not None
+
+
 def test_create_without_the_field_links_nothing(world) -> None:
     client, factory = world
 
@@ -269,6 +296,7 @@ def test_a_foreign_or_unknown_reference_answers_404_and_writes_nothing(
     assert response.json() == {"detail": "Not Found"}
     with factory() as session:
         assert session.query(Song).filter_by(title="Foreign").first() is None
+        assert all(row.unused_since is not None for row in session.query(ReferenceRecording))
     assert _linked_ids(factory, song_id) == [None]
 
 

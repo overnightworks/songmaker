@@ -12,7 +12,7 @@
 // one card per task, and whether the page ever scrolls sideways.
 //
 // Both rows are read-only: each agent file names its model and the gateway runs
-// it, so the page asks no provider for its status (#2055 C1). The stack behind it
+// it (#2055 C1). The stack behind it
 // configures a gateway it cannot reach, so a co-writer turn ends with a named
 // problem instead of silently switching provider.
 
@@ -72,7 +72,6 @@ const NAMED_TURN_FAILURES =
 // the agent file names the model, so the row says so.
 const SERVICE_ROW_WORDS = [MODELS_SET_BY_AGENT_FILE_LABEL, MODELS_ROUTE_GATEWAY_LABEL];
 const TASKS = [MODELS_TASK_COWRITER_LABEL, MODELS_TASK_COVER_LABEL];
-const PROVIDER_STATUS_PATH = '/api/settings/providers';
 
 async function openModelsTab(page: Page): Promise<void> {
 	await page.goto('/settings/users');
@@ -111,15 +110,6 @@ async function expectRowsReadOnly(page: Page): Promise<void> {
 		await expect(row.getByRole('button')).toHaveCount(0);
 		await expect(row.getByRole('link')).toHaveCount(0);
 	}
-}
-
-/** Counts the provider-status reads the page makes; the Models page makes none (#2055). */
-function countProviderStatusReads(page: Page): () => number {
-	let reads = 0;
-	page.on('request', (request) => {
-		if (new URL(request.url()).pathname === PROVIDER_STATUS_PATH) reads += 1;
-	});
-	return () => reads;
 }
 
 function columnHeader(page: Page, column: string): Locator {
@@ -161,7 +151,6 @@ test(
 	'the Models table shows both rows read-only and keeps every column on screen at every desktop width',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }, testInfo) => {
-		const providerStatusReads = countProviderStatusReads(page);
 		await openModelsTab(page);
 
 		// One row per task, and nothing else; each only reads, because its agent
@@ -193,7 +182,6 @@ test(
 			await expectNoSidewaysScroll(page);
 			await attachShot(page, testInfo, `admin-models-${width}`);
 		}
-		expect(providerStatusReads()).toBe(0);
 	}
 );
 
@@ -232,7 +220,6 @@ test(
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }, testInfo) => {
 		await page.setViewportSize(PHONE_VIEWPORT);
-		const providerStatusReads = countProviderStatusReads(page);
 		await openModelsTab(page);
 
 		// The table's one header row gives way to a label on every line of every
@@ -256,7 +243,6 @@ test(
 		const cover = taskRow(page, MODELS_TASK_COVER_LABEL);
 		await cover.scrollIntoViewIfNeeded();
 		await expect(cover).toBeInViewport();
-		expect(providerStatusReads()).toBe(0);
 
 		await expectNoSidewaysScroll(page);
 		await attachShot(page, testInfo, 'admin-models-375', true);

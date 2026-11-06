@@ -24,6 +24,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 
@@ -486,6 +487,8 @@ class ReferenceRecording(Base):
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+    is_kept: Mapped[bool] = mapped_column(Boolean, server_default=false(), nullable=False)
+    unused_since: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
 
 
 class ResourceEventCursor(Base):

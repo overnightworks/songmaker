@@ -11,11 +11,9 @@ from songmaker_cli.constants import (
     COWRITER_MAX_TAIL_TOKEN_BUDGET,
     COWRITER_MIN_TAIL_TOKEN_BUDGET,
     PRESET_GLOBAL_DEFAULTS_NAME,
-    SETTING_CLAUDE_CHAT_MODEL,
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
-from songmaker_cli.settings import get_settings
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
@@ -189,28 +187,6 @@ def save_global_defaults(session: Session, model_mode: str, params: dict) -> Non
         )
         session.add(preset)
     session.flush()
-
-
-def _get_claude_model_row(session: Session, setting_key: str) -> str | None:
-    row = (
-        session.query(RateLimitSetting)
-        .filter(
-            RateLimitSetting.setting_key == setting_key,
-            RateLimitSetting.user_id.is_(None),
-        )
-        .first()
-    )
-    if row is not None and row.value_text:
-        return str(row.value_text)
-    return None
-
-
-def get_claude_chat_model(session: Session) -> str:
-    """Return the configured chat model: DB row override or Settings default."""
-    return (
-        _get_claude_model_row(session, SETTING_CLAUDE_CHAT_MODEL)
-        or get_settings().claude_chat_model
-    )
 
 
 def get_cowriter_tail_token_budget(session: Session) -> int:

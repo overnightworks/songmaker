@@ -130,7 +130,6 @@ WHISPER_COMPUTE_TYPE = "int8_float16"
 WHISPER_BEAM_SIZE = 5
 WHISPER_TEMPERATURE = 0.0
 
-SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105  # noqa: S105 - a setting key for an LLM token budget and no secret
 
 MEMORY_SCOPE_USER = "user"

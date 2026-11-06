@@ -120,13 +120,6 @@ vi.mock('#lib/stores/auth.ts', async (importOriginal) => {
 		})
 	};
 });
-vi.mock('#lib/api/client.ts', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
-	return {
-		...actual,
-		fetchCapabilities: vi.fn().mockResolvedValue({})
-	};
-});
 vi.mock('#lib/stores/resourceSync.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/stores/resourceSync.ts')>();
 	return {

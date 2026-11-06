@@ -61,8 +61,7 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 		fetchPlaylists: vi.fn().mockResolvedValue([]),
 		fetchPlaylist: vi.fn(),
 		removeFromPlaylist: vi.fn().mockResolvedValue(undefined),
-		reorderPlaylistEntry: vi.fn().mockResolvedValue(undefined),
-		fetchCapabilities: vi.fn().mockResolvedValue({})
+		reorderPlaylistEntry: vi.fn().mockResolvedValue(undefined)
 	};
 });
 vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
