@@ -53,8 +53,10 @@ teardown() {
 trap teardown EXIT
 trap 'teardown; exit 143' TERM
 
-"${compose[@]}" up -d --build --wait \
-    postgres redis migrate songmaker-web songmaker-music-worker \
-    songmaker-voices-e2e-worker
+# Two steps: the stack has no restart policy, so the apps start only once the
+# stores are healthy, and the fake worker only once web is.
+"${compose[@]}" up -d --wait postgres redis
+"${compose[@]}" up -d --build --wait songmaker-web songmaker-music-worker
+"${compose[@]}" up -d --wait songmaker-voices-e2e-worker
 
 pnpm --dir frontend exec playwright test e2e/voices.spec.ts

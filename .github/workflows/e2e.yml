@@ -77,7 +77,11 @@ jobs:
           # the smoke test and Playwright drive it through below.
           PUBLIC_BASE_URL: http://localhost:${{ env.WEB_PORT }}
           SONGMAKER_COMMIT: ${{ github.sha }}
-        run: docker compose $COMPOSE_FILES up -d --build --wait postgres redis migrate songmaker-music-worker songmaker-web
+        # Two steps: this stack has no restart policy, so the apps start only
+        # once the stores are healthy.
+        run: |
+          docker compose $COMPOSE_FILES up -d --wait postgres redis
+          docker compose $COMPOSE_FILES up -d --build --wait songmaker-music-worker songmaker-web
 
       - name: Smoke test
         run: |

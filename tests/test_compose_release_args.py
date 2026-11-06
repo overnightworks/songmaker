@@ -20,7 +20,7 @@ SCRATCH_REQUIRED = (
     "GRAFANA_PASSWORD=scratch-grafana-password-not-a-secret\n"
     "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
 )
-WEB_IMAGE_SERVICES = ("migrate", "songmaker-web")
+WEB_IMAGE_SERVICES = ("songmaker-web",)
 RELEASE = {"SONGMAKER_RELEASE": "v2026.10.28.4", "SONGMAKER_COMMIT": "c" * 40}
 
 
@@ -45,12 +45,11 @@ def _build_args(tmp_path: Path, environment: dict[str, str]) -> dict[str, dict[s
             if "build" in service}
 
 
-def test_both_web_image_services_build_with_the_same_release_arguments(
+def test_the_web_image_service_builds_with_the_release_arguments(
     tmp_path: Path,
 ) -> None:
     build_args = _build_args(tmp_path, RELEASE)
 
-    assert build_args["migrate"] == RELEASE
     assert build_args["songmaker-web"] == RELEASE
 
 
