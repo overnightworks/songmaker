@@ -1,0 +1,8 @@
+claim_id = "760687f33063430bbe3412d8f40cda00"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "cbec9946eae7b8c6187c52f0496f4d5ada2019f4"
+branch = "claude/issue-2398-release-images-s1-the-acestep-worker-bui"
+scope = [".dockerignore", ".github/dependabot.yml", "AGENTS.md", "docker/acestep-worker.Dockerfile", "docker/base/acestep-base.Dockerfile", "docker/base/gpu-torch-base.Dockerfile", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "docs/testing.md", "scripts/auto-deploy.sh", "scripts/build_images.sh", "tests/auto_deploy_harness.py", "tests/test_auto_deploy_alerting.py", "tests/test_packaging_boundary.py"]
+opened_commit = "32090e432e6dc57199f26e3c5f7afce53e91cced"
+whole_reason = "The worker's FROM, the base Dockerfiles and the deploy's base step change together, or the PC calls a deleted build or builds the worker from a tag nobody rebuilds; docs and pinning tests follow in the same change."
