@@ -1,8 +1,0 @@
-claim_id = "90fd8ef994754c83a22851c6c1c09197"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "4c93aaabec21eda3df0f20c7d9ce67743d2dd4d6"
-branch = "claude/issue-2356-the-finished-one-off-scripts-leave"
-scope = [".aco/board.toml", "README.md", "docs/architecture.md", "pyproject.toml", "scripts/migrate_generation_params.py", "scripts/switch_deploy_checkout.sh", "scripts/vulture_whitelist.py", "tests/scripts/test_migrate_generation_params.py", "tests/scripts/test_switch_deploy_checkout.py"]
-opened_commit = "cfb6556deba2ee37b01004f4506fcd8d701315af"
-whole_reason = "Three whole-file deletions of finished one-off tools with their only mentions; none has a caller."
