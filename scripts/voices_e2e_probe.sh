@@ -44,8 +44,8 @@ compose=(docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml
 
 teardown() {
     trap - EXIT TERM
-    # The CI override puts the music worker in the gpu profile; without the
-    # profile, down leaves it running.
+    # The overlay puts alertmanager in the gpu profile; without the profile,
+    # down leaves it running.
     "${compose[@]}" --profile gpu down -v --remove-orphans
     rm -rf "$secrets_dir"
     rm -f "$secret_file" "$gateway_key_file"

@@ -1,6 +1,7 @@
-# CI override for docker-compose.yml — boots only the web-facing services
-# (no GPU, no monitoring) so the stack fits an ubuntu-latest runner.
-# `profiles: [gpu]` keeps the GPU/monitoring services out of both
+# CI override for docker-compose.yml — boots the web-facing services and the
+# music worker (no GPU, no monitoring) so the stack fits an ubuntu-latest runner.
+# `profiles: [gpu]` keeps the ACE-Step worker, the scoring worker (torch and a
+# baked Whisper checkpoint) and the monitoring services out of both
 # `docker compose config` and `up` without needing to delete them here.
 x-gha-cache: &gha_cache
   cache_from:
@@ -31,7 +32,6 @@ services:
     profiles: ["gpu"]
   songmaker-music-worker:
     <<: *test_stack_service
-    profiles: ["gpu"]
   songmaker-scoring-worker:
     <<: *test_stack_service
     profiles: ["gpu"]

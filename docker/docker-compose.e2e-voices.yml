@@ -18,7 +18,6 @@ services:
       COOKIE_SECURE: "false"
 
   songmaker-music-worker:
-    profiles: !reset []
     build:
       context: .
       dockerfile: Dockerfile
