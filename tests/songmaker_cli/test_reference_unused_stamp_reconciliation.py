@@ -180,7 +180,9 @@ def test_a_failing_candidate_listing_logs_the_error_kind_without_a_count_and_spa
     def fail_listing(session):
         raise OperationalError("listing", {}, Exception(SECRET_NAME))
 
-    monkeypatch.setattr("songmaker_cli.reference_audio.list_unstamped_unkept_reference_ids", fail_listing)
+    monkeypatch.setattr(
+        "songmaker_cli.reference_audio.list_unstamped_unkept_reference_ids", fail_listing,
+    )
 
     with caplog.at_level(logging.INFO):
         report = reconcile_unused_stamps(factory)
