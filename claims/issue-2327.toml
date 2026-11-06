@@ -1,8 +1,0 @@
-claim_id = "c15d8885b8974101961e4420add3549c"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "9223ea93902fe0ad53e1f0a8f4ad10c418a11fe3"
-branch = "claude/issue-2327-uvicorn-startup-exit"
-scope = ["pyproject.toml", "src/acestep_worker/__main__.py", "tests/acestep_worker/test_lm_failure.py", "uv.lock"]
-opened_commit = "2257aa6b5def1b47de36a16a1e4841b845bc54eb"
-whole_reason = "The uvicorn floor, its lock entry, the dead branch and its test are one contract; split, a tree either keeps a branch no uvicorn reaches or runs a test against a uvicorn it no longer has."
