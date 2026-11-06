@@ -5,7 +5,7 @@ The specs that need a song with takes (the take folds, menu, rail and share
 flows) seed them here, either on a song this script creates or on a song the
 spec already created through the API (``--song-id``). Seeding takes one
 request at a time would spend the server's IP rate limiter, which counts every
-request regardless of which Playwright context sent it (issue #344), on calls
+request regardless of which Playwright context sent it, on calls
 that exercise no API semantics.
 
 Each take is a generation row (``created_by`` the owner, ``mp3_path`` as

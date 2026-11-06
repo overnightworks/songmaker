@@ -139,7 +139,7 @@ interface VoiceLifecycle {
 	deleted_at: string | null;
 }
 
-interface ImportedTake extends CreatedResource {
+interface SeededTakeResource extends CreatedResource {
 	mp3_path: string;
 }
 
@@ -349,19 +349,17 @@ class SeedApi {
 /**
  * Gives a song one playable take of `audio` (the fixture tone by default)
  * directly against the database (`scripts/seed_e2e_song_takes.py`), owned by
- * `ownerUsername` (the run's admin by default). `api` carries a session that
- * may read the song.
+ * the account `api`'s session belongs to, which may read the song.
  */
 export async function seedTake(
 	api: APIRequestContext,
 	songId: string,
-	audio: Buffer = readFileSync(TAKE_FIXTURE),
-	ownerUsername: string = requiredAdminUsername()
-): Promise<ImportedTake> {
-	await runTakeSeeder(['--song-id', songId], 1, ownerUsername, audio);
-	const song = await SeedApi.fromSession(api).getJson<{ generations: ImportedTake[] }>(
-		`/api/songs/${songId}`
-	);
+	audio: Buffer = readFileSync(TAKE_FIXTURE)
+): Promise<SeededTakeResource> {
+	const seed = SeedApi.fromSession(api);
+	const { username } = await seed.getJson<{ username: string }>('/api/auth/me');
+	await runTakeSeeder(['--song-id', songId], 1, username, audio);
+	const song = await seed.getJson<{ generations: SeededTakeResource[] }>(`/api/songs/${songId}`);
 	if (song.generations.length !== 1) {
 		throw new Error(`Song ${songId} has ${song.generations.length} takes, not one`);
 	}
@@ -369,7 +367,7 @@ export async function seedTake(
 }
 
 /** Runs `scripts/seed_e2e_song_takes.py` in the web container and returns the song id it prints. */
-async function runTakeSeeder(
+export async function runTakeSeeder(
 	targetArgs: string[],
 	takeCount: number,
 	ownerUsername: string,
@@ -400,7 +398,7 @@ async function runTakeSeeder(
 	return songId;
 }
 
-/** Seeds `SONG_TITLES` into the album in that order, each with one imported take. */
+/** Seeds `SONG_TITLES` into the album in that order, each with one seeded take. */
 async function seedSongsWithOneTakeEach(
 	api: APIRequestContext,
 	seed: SeedApi,
@@ -685,7 +683,7 @@ function takeId(takes: Map<string, string>, songTitle: string): string {
  * A song of its own, seeded with `takeCount` takes directly against the
  * database (`scripts/seed_e2e_song_takes.py`) rather than through API calls:
  * the server's IP rate limiter counts every request regardless of which
- * Playwright context sent it (issue #344), and those calls exercise no API
+ * Playwright context sent it, and those calls exercise no API
  * semantics worth that budget. Its own song rather than extra generations on
  * one of the base seed's `SONG_TITLES`: those are shared across every flow in
  * the run, and `library.spec.ts`'s `takeLabel` and `takeId` above depend on
@@ -742,7 +740,7 @@ export function requiredSeedId(id: string): string {
  * version, seeded directly against the database
  * (`scripts/seed_e2e_job_states.py`) rather than through `versionNumber - 1`
  * individual saves and `takeCount` API calls — the same reasoning
- * `seedTakeStripSong` above already uses (issue #344): those requests would
+ * `seedTakeStripSong` above already uses those requests would
  * exercise no API semantics `song-phone.spec.ts` needs, only cost its
  * budget. Returns the song's id.
  */
@@ -1069,9 +1067,7 @@ export async function seedOwnTakeAddress(
 ): Promise<string> {
 	const seed = SeedApi.fromSession(api);
 	const song = await createOwnSong(api, seed, account.username, songTitle);
-	await seedAfterAlbum(api, song.albumId, () =>
-		seedTake(api, song.id, readFileSync(TAKE_FIXTURE), account.username)
-	);
+	await seedAfterAlbum(api, song.albumId, () => seedTake(api, song.id, readFileSync(TAKE_FIXTURE)));
 	return song.address;
 }
 
