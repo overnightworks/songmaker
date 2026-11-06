@@ -90,6 +90,7 @@ from songmaker_cli.jobs.generation_failure import (
     is_visible_generation_failure,
     musician_job_response,
 )
+from songmaker_cli.reference_audio import commit_unused_stamps, linked_reference_ids
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
 from songmaker_cli.timestamps import aware_timestamp
 
@@ -199,13 +200,15 @@ def api_delete_generation(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
-    check_generation_access(session, gen_id, user)
+    gen = check_generation_access(session, gen_id, user)
+    candidates = linked_reference_ids([gen])
     try:
         paths = delete_generation(session, gen_id)
     except ValueError:
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
     session.commit()
+    commit_unused_stamps(session, candidates)
     cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
 
@@ -224,10 +227,12 @@ def api_bulk_delete_generations(
         return BulkDeleteResponse(deleted=0)
     deduplicated_ids = list(set(req.generation_ids))
     generations = check_generations_access(session, deduplicated_ids, user)
+    candidates = linked_reference_ids(generations)
     paths = bulk_delete_generations(session, generations)
     for gen_id in deduplicated_ids:
         record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
     session.commit()
+    commit_unused_stamps(session, candidates)
     cleanup_generation_files(ctx.audio_dir, paths)
     return BulkDeleteResponse(deleted=len(generations))
 

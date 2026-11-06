@@ -7,6 +7,7 @@ import logging
 import os
 import stat
 import uuid
+from collections.abc import Collection, Iterable
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from enum import StrEnum
@@ -19,11 +20,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from songmaker_cli.api_helpers import _begin_exclusive
 from songmaker_cli.audio_files import read_audio_duration
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSIONS
-from songmaker_cli.db.models import User
+from songmaker_cli.db.models import Generation, User
 from songmaker_cli.db.queries.auth import list_user_ids
 from songmaker_cli.db.queries.reference_recordings import (
     create_reference_recording,
     get_owned_reference_recording,
+    mark_newly_unused,
     owned_reference_storage_paths,
     owner_reference_usage,
 )
@@ -225,6 +227,32 @@ def _record_reference(
 def _log_commit_failure(user_id: str, failure: BaseException) -> None:
     """Log the user and the error kind only: the message and traceback can carry paths."""
     log.error("Reference audio commit failed for user %s: %s", user_id, type(failure).__name__)
+
+
+def linked_reference_ids(takes: Iterable[Generation]) -> set[str]:
+    """The references the takes link, as plain ids that outlive the commit expiring them."""
+    return {take.reference_recording_id for take in takes if take.reference_recording_id}
+
+
+def commit_unused_stamps(session: Session, candidates: Collection[str]) -> None:
+    """Stamp the candidates that lost their last link, in a transaction of their own.
+
+    Call after the detaching site's commit. A failure is logged with counts and error kind
+    only and never raised: the caller's answer and file removal stand.
+    """
+    if not candidates:
+        return
+    try:
+        stamped = mark_newly_unused(session, candidates)
+        session.commit()
+    except SQLAlchemyError as failure:
+        session.rollback()
+        log.error(
+            "Unused-since stamp failed for %d reference candidates: %s",
+            len(candidates), type(failure).__name__,
+        )
+        return
+    log.info("Stamped %d of %d reference candidates unused", stamped, len(candidates))
 
 
 def store_reference_audio(
