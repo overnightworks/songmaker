@@ -42,13 +42,3 @@ def use_codex_process_pool(monkeypatch, process_pool) -> None:
 
     for module in (image, protocol, transport):
         monkeypatch.setattr(module, "get_codex_process_pool", lambda: process_pool)
-
-
-def refresh_provider_snapshots() -> None:
-    """Refresh every provider after a test changes its catalog dependencies."""
-    from agent_providers.constants import COWRITER_PROVIDERS
-
-    from songmaker_cli.provider_status import refresh_provider_snapshot
-
-    for provider in COWRITER_PROVIDERS:
-        refresh_provider_snapshot(provider)

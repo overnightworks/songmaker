@@ -57,8 +57,8 @@ Schema changes: `alembic revision --autogenerate -m "..."`, then `alembic upgrad
 
 ## Constraints and known debt
 
-- **No co-writer turn or cover runs on a Claude CLI, so no song content reaches one.** The web process still runs the mounted CLI for the catalog's login and `/model` checks ([Claude Chat Security](docs/security.md#claude-chat-security)).
-- **Agent-CLI bind mounts** never expose an operator profile; no co-writer turn or cover uses them, and `ANTHROPIC_API_KEY` serves the catalog's API route but does not replace the mounted CLI the catalog's checks read: [Agent-CLI Mounts](docs/security.md#agent-cli-mounts).
+- **No co-writer turn or cover runs on a Claude CLI, so no song content reaches one.**
+- **Agent-CLI bind mounts** never expose an operator profile; no co-writer turn or cover uses them: [Agent-CLI Mounts](docs/security.md#agent-cli-mounts).
 - **The DB owns session validity** (`touch()` must return a real `bool`). `get_current_user` commits renewal in its own short transaction; stores never commit endpoint writes; stream callers commit before streaming. Keycloak group changes apply only at the next sign-in or the next token call, so removing someone ends nothing until their sessions expire: revoke as described in [Authentication](docs/security.md#revocation).
 - **Trust model** (subprocesses share the OS user, one shared worker token, single-node): accepted for a single-user deployment; rationale and limits in [Worker Pool Trust Boundary](docs/security.md#ace-step-worker-pool-trust-boundary).
 - **GPU isolation is by container.** Only `songmaker-acestep-worker-N` has a GPU; `songmaker-scoring-worker` runs `SCORING_DEVICE=cpu`, so nothing arbitrates VRAM. NVML and worker health: [ACE-Step](docs/acestep.md#operating-the-worker-pool).
