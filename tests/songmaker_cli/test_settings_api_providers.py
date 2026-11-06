@@ -317,17 +317,6 @@ def _configure_only_these_api_keys(**keys_by_environment: str) -> None:
     })
 
 
-def _route_states(cli: str, api: str) -> dict[str, str]:
-    return {"cli": cli, "api": api}
-
-
-def _route_readiness(provider_status: dict) -> dict[str, dict]:
-    return {
-        route: status["readiness"]
-        for route, status in provider_status["cowriter_routes"].items()
-    }
-
-
 def _stub_cli_runners(
     monkeypatch,
     *,
@@ -361,128 +350,6 @@ def _stub_cli_runners(
     return calls
 
 
-@pytest.mark.parametrize(
-    ("keys", "claude_login", "grok_login", "codex_login", "sdk_available", "expected_states"),
-    [
-        (
-            {},
-            LOGGED_OUT,
-            LOGGED_OUT,
-            LOGGED_OUT,
-            True,
-            {
-                "claude": _route_states(cli="not_configured", api="not_configured"),
-                "grok": _route_states(cli="not_configured", api="not_configured"),
-                "codex": _route_states(cli="not_configured", api="not_configured"),
-            },
-        ),
-        (
-            {},
-            CliLogin(logged_in=True, auth_method="claude.ai"),
-            CliLogin(logged_in=True, auth_method="grok"),
-            CliLogin(logged_in=True, auth_method="chatgpt"),
-            True,
-            {
-                "claude": _route_states(cli="ready", api="not_configured"),
-                "grok": _route_states(cli="ready", api="not_configured"),
-                "codex": _route_states(cli="ready", api="not_configured"),
-            },
-        ),
-        (
-            {"ANTHROPIC_API_KEY": "ant", "XAI_API_KEY": "xai", "OPENAI_API_KEY": "oa"},
-            LOGGED_OUT,
-            LOGGED_OUT,
-            LOGGED_OUT,
-            True,
-            {
-                "claude": _route_states(cli="not_configured", api="ready"),
-                "grok": _route_states(cli="not_configured", api="ready"),
-                "codex": _route_states(cli="not_configured", api="ready"),
-            },
-        ),
-        (
-            {"ANTHROPIC_API_KEY": "ant"},
-            LOGGED_OUT,
-            LOGGED_OUT,
-            LOGGED_OUT,
-            False,
-            {
-                "claude": _route_states(cli="not_configured", api="disturbed"),
-                "grok": _route_states(cli="not_configured", api="not_configured"),
-                "codex": _route_states(cli="not_configured", api="not_configured"),
-            },
-        ),
-    ],
-)
-def test_provider_status_projects_the_catalog_contract(
-    admin_client,
-    monkeypatch,
-    keys,
-    claude_login,
-    grok_login,
-    codex_login,
-    sdk_available,
-    expected_states,
-):
-    _configure_only_these_api_keys(**keys)
-    monkeypatch.setattr(
-        "agent_providers.catalog.find_spec",
-        lambda _name: object() if sdk_available else None,
-    )
-    monkeypatch.setattr(
-        "agent_providers.catalog.grok_cli_token_is_present",
-        lambda: grok_login.logged_in,
-    )
-    monkeypatch.setattr(
-        "agent_providers.catalog.codex_cli_access_token_is_present",
-        lambda: codex_login.logged_in,
-    )
-    grok = GrokCliStatus(login=grok_login, model_names=("grok-4.6",))
-    calls = _stub_cli_runners(
-        monkeypatch, claude=claude_login, grok=grok, codex=codex_login,
-    )
-    refresh_provider_snapshots()
-
-    client, _ = admin_client
-    response = client.get("/api/settings/providers")
-
-    assert response.status_code == 200
-    actual = {item["provider"]: item for item in response.json()}
-    for provider, item in actual.items():
-        readiness = _route_readiness(item)
-        assert {route: state["state"] for route, state in readiness.items()} == (
-            expected_states[provider]
-        )
-        assert all(state["probed_at"] is not None for state in readiness.values())
-    assert all(count <= 1 for count in calls.values())
-
-
-def test_grok_cli_token_readies_the_cli_route_but_not_the_api_route_without_an_api_key(
-    admin_client, monkeypatch,
-):
-    override_provider_runtime(xai_api_key=None)
-    monkeypatch.setattr(
-        "agent_providers.catalog.grok_cli_token_is_present", lambda: True,
-    )
-    _stub_cli_runners(
-        monkeypatch,
-        grok=GrokCliStatus(
-            login=CliLogin(logged_in=True, auth_method="grok"),
-            model_names=("grok-4.6",),
-        ),
-    )
-    refresh_provider_snapshots()
-
-    client, _ = admin_client
-    statuses = {
-        item["provider"]: item for item in client.get("/api/settings/providers").json()
-    }
-    grok_routes = statuses["grok"]["cowriter_routes"]
-    assert grok_routes["cli"]["readiness"]["state"] == "ready"
-    assert grok_routes["api"]["readiness"]["state"] == "not_configured"
-    assert grok_routes["api"]["readiness"]["reason"]["code"] == "api_key_not_set"
-
-
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
 def test_refresh_records_unparseable_cli_output_without_claiming_readiness(
     admin_client, monkeypatch, provider,
@@ -509,16 +376,6 @@ def test_refresh_records_unparseable_cli_output_without_claiming_readiness(
         snapshot.routes[ProviderRoute.API].readiness is ProviderRouteReadinessState.NOT_CONFIGURED
     )
     assert snapshot.probed_at is not None
-
-    client, _ = admin_client
-    response = client.get("/api/settings/providers")
-
-    assert response.status_code == 200
-    by_provider = {item["provider"]: item for item in response.json()}
-    readiness = _route_readiness(by_provider[provider])
-    assert readiness["cli"]["state"] == expected_cli_state.value
-    assert readiness["api"]["state"] == "not_configured"
-    assert all(state["probed_at"] is not None for state in readiness.values())
 
 
 @pytest.mark.parametrize("provider", ["grok", "codex"])
@@ -548,82 +405,6 @@ def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
     assert snapshot.routes[ProviderRoute.CLI].readiness is ProviderRouteReadinessState.DISTURBED
 
 
-def test_settings_responses_project_one_snapshot_generation_per_provider(
-    admin_client, monkeypatch,
-):
-    refresh_provider_snapshots()
-    client, _ = admin_client
-
-    assert client.get("/api/settings/providers").status_code == 200
-
-
-@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
-def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkeypatch, provider):
-    from agent_providers import process
-
-    _configure_only_these_api_keys()
-    _stub_cli_runners(monkeypatch)
-
-    def timed_out():
-        raise process.CliProbeBudgetExceeded("probe timed out")
-
-    if provider == "claude":
-        started = threading.Event()
-        release = threading.Event()
-
-        def _hanging_output(_binary: str) -> str | None:
-            started.set()
-            release.wait(timeout=1)
-            return None
-
-        monkeypatch.setattr("agent_providers.process._claude_output", _hanging_output)
-        monkeypatch.setattr("agent_providers.process.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.01)
-    elif provider == "grok":
-        monkeypatch.setattr(
-            process._grok_status_probe,
-            "get",
-            timed_out,
-        )
-    else:
-        monkeypatch.setattr(
-            process._codex_login_probe,
-            "get",
-            timed_out,
-        )
-
-    client, _ = admin_client
-    try:
-        refresh_provider_snapshots()
-        response = client.get("/api/settings/providers")
-    finally:
-        if provider == "claude":
-            release.set()
-
-    assert response.status_code == 200
-    if provider == "claude":
-        assert started.is_set()
-    readiness = _route_readiness(
-        next(item for item in response.json() if item["provider"] == provider),
-    )
-    assert readiness["cli"]["state"] != "ready"
-    assert readiness["api"]["state"] == "not_configured"
-
-
-def test_provider_status_requires_admin(admin_client):
-    client, _ = admin_client
-    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
-        "u-plain", username="u-u-plain"
-    )
-    try:
-        resp = client.get("/api/settings/providers")
-    finally:
-        client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
-            "u-test", role="admin", username="u-u-test"
-        )
-
-    assert resp.status_code == 403
-
-
 _STORED_COVER_ROWS = {"cover_provider": "claude", "cover_route": "api", "cover_model": "x"}
 
 
@@ -649,144 +430,15 @@ def test_the_cover_settings_are_gone_and_their_stored_rows_stay_unread(admin_cli
     assert stored == _STORED_COVER_ROWS
 
 
-def test_provider_status_reports_no_cover_routes(admin_client):
-    client, _ = admin_client
-
-    items = client.get("/api/settings/providers").json()
-
-    assert items
-    for item in items:
-        assert set(item) == {"provider", "cowriter_routes"}
-
-
-def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
-    admin_client, monkeypatch,
-):
-    calls = 0
-
-    def _counting_popen(*_args, **_kwargs):
-        nonlocal calls
-        calls += 1
-        raise AssertionError("settings request started a process")
-
-    monkeypatch.setattr("agent_providers.process.subprocess.Popen", _counting_popen)
-    client, _ = admin_client
-
-    providers = client.get("/api/settings/providers")
-
-    assert providers.status_code == 200
-    for provider in providers.json():
-        for route_status in provider["cowriter_routes"].values():
-            assert route_status["readiness"]["state"] == "unverified"
-            assert route_status["readiness"]["probed_at"] is None
-    assert calls == 0
-
-
-# ── Provider-status response pin ───────────────────────────────────
-#
-# The pin drives ``GET /api/settings/providers`` from one fixed snapshot set
-# so the whole response body — not a field the assertion happens to name —
-# is compared byte for byte.
-
-_PINNED_PROBED_AT = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc)
-
-
-def _pinned_route_snapshot(
-    *,
-    models: tuple[str, ...] = (),
-    catalogue_failure: SafeRouteReasonCode | None = None,
-    catalog_source: str | None = None,
-    readiness: str,
-    reason: SafeRouteReasonCode | None = None,
-    setup_label: str,
-):
-    from agent_providers.catalog import (
-        ProviderRouteCapability,
-        ProviderRouteReadinessState,
-        ProviderRouteSnapshot,
-    )
-
-    return ProviderRouteSnapshot(
-        models,
-        normalize_route_failure(catalogue_failure) if catalogue_failure else None,
-        catalog_source,
-        None,
-        ProviderRouteReadinessState(readiness),
-        ProviderRouteCapability.TOOLS_AVAILABLE,
-        normalize_route_failure(reason) if reason else None,
-        _PINNED_PROBED_AT,
-        setup_label,
-    )
-
-
-def _pinned_snapshots(case: str):
-    from songmaker_cli.provider_status import ProviderSnapshot
-
-    routes = {
-        "claude": {
-            ProviderRoute.CLI: _pinned_route_snapshot(
-                models=("claude-opus-4-6",), catalog_source="provider CLI",
-                readiness="ready", setup_label="CLI login",
-            ),
-            ProviderRoute.API: _pinned_route_snapshot(
-                readiness="ready" if case == "ready" else "disturbed",
-                reason=None if case == "ready" else SafeRouteReasonCode.API_HTTP_ERROR,
-                setup_label="API key",
-            ),
-        },
-        "grok": {
-            ProviderRoute.CLI: _pinned_route_snapshot(
-                readiness="not_configured",
-                reason=SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED,
-                setup_label="CLI login",
-            ),
-            ProviderRoute.API: _pinned_route_snapshot(
-                models=("grok-4.6",), catalog_source="provider API",
-                readiness="ready", setup_label="API key",
-            ),
-        },
-        "codex": {
-            ProviderRoute.CLI: _pinned_route_snapshot(
-                catalogue_failure=SafeRouteReasonCode.CATALOGUE_HTTP_ERROR,
-                readiness="disturbed",
-                reason=SafeRouteReasonCode.CATALOGUE_HTTP_ERROR,
-                setup_label="CLI login",
-            ),
-            ProviderRoute.API: _pinned_route_snapshot(
-                models=("gpt-5.4",), catalog_source="provider API",
-                readiness="ready", setup_label="API key",
-            ),
-        },
-    }
-    return {
-        provider: ProviderSnapshot(
-            probed_at=_PINNED_PROBED_AT,
-            routes=routes[provider],
-        )
-        for provider in sorted(LIVE_CATALOG)
-    }
-
-
-def _pinned_response_body(case: str) -> bytes:
-    return (
-        Path(__file__).parents[1] / "fixtures" / f"provider_status_{case}.json"
-    ).read_bytes()
-
-
-@pytest.mark.parametrize("case", ["ready", "capability_missing"])
-def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
-    admin_client, monkeypatch, case: str,
-) -> None:
-    client, _ = admin_client
-    snapshots = _pinned_snapshots(case)
-    monkeypatch.setattr(
-        "songmaker_cli.provider_status.provider_snapshots", lambda: snapshots,
-    )
-
-    response = client.get("/api/settings/providers")
-
-    assert response.status_code == 200
-    assert response.content == _pinned_response_body(case)
+@pytest.mark.parametrize("role", ["admin", "user"])
+@pytest.mark.parametrize("path", ["/api/capabilities", "/api/settings/providers"])
+def test_removed_provider_routes_answer_ordinary_not_found(tmp_path, mock_arq_pool, path, role):
+    overrides = (client := make_test_app(tmp_path)[0]).app.dependency_overrides
+    overrides[get_current_user] = lambda: make_authenticated_user("u", role=role)
+    with client:
+        unknown, removed = client.get("/api/nope"), client.get(path)
+    assert removed.status_code == unknown.status_code == 404
+    assert removed.content == unknown.content
 
 
 @pytest.mark.parametrize("role", ["admin", "user"])
@@ -840,7 +492,7 @@ def test_startup_and_settings_reads_leave_stored_judge_rows_unread_and_unchanged
     )
 
     with client:
-        for path in ("/api/settings/providers", "/api/capabilities"):
+        for path in ("/api/settings/cowriter", "/api/settings/models"):
             assert client.get(path).status_code == 200
 
     assert _leftover_judge_rows(factory) == _LEFTOVER_JUDGE_ROWS

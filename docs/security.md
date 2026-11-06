@@ -385,7 +385,7 @@ All responses include:
 ## Error Handling
 
 - **Generation, scoring, and LoRA job errors**: `_sanitize_error` maps known worker and setup doses to fixed musician-facing messages and logs raw failures with the job ID only on the server; generation, scoring, and LoRA store that returned message in `job.error` (`jobs/_runtime.py:38-45,62-78`; `jobs/generation.py:473-483`; `jobs/scoring.py:194-213`; `jobs/lora_training.py:506-515,618-631`). Raw reasons live in the service's JSON container log, retained as five rotated 10 MB files.
-- **API errors**: HTTPException messages on ordinary validation paths are human-readable strings with no internal paths or stack traces (`settings_api.py`); the model-catalog failure path now uses a fixed message (`settings_api.py` `_route_statuses`, which shows the catalogue's fixed failure message in the route's `catalogue_failure`; #476 closed).
+- **API errors**: HTTPException messages on ordinary validation paths are human-readable strings with no internal paths or stack traces (`settings_api.py`).
 - **Validation errors**: The custom `RequestValidationError` handler returns only affected field names, not full Pydantic error details (constraints, expected types, internal schema) (`server.py:273-290`).
 - **ACE-Step errors**: Worker failures map through `_sanitize_error` to a fixed message before the generation job persists `job.error`; only the silent-stream dose stays distinct (`jobs/_runtime.py:38-45,62-78`; `jobs/generation.py:469-480`).
 - **Co-writer errors**: A co-writer turn the agent did not run ends with an SSE error frame on an otherwise HTTP 200 response: `status` (503, 429, 403 or 401), the named `problem` (`unavailable`, `busy`, `not_enabled`, `sign_in_again`) and, for `busy`, `retry_after_seconds`. The frame carries no gateway or provider detail; the reason is logged server side. The model catalog passes the fixed HTTP-facing dose through the catalog adapter after #476 closed (`agent_providers/catalog.py`; `settings_api.py` `_route_statuses`).
@@ -1006,8 +1006,7 @@ mounted; a compromised container cannot add host-side profile settings or hooks.
 through the deployment `.env` and become `Settings` secrets. Only
 the web image installs the `api` extra (the Anthropic SDK), so
 `ANTHROPIC_API_KEY` serves the model catalog there. It does not replace the web
-container's Claude CLI mirror. The API and DOM expose only safe readiness
-metadata (`set`/`not set` through route state), never a key value, raw
+container's Claude CLI mirror. Neither the API nor the DOM exposes a key value, raw
 provider body, command output, or a secret-derived value. The co-writer has no
 route to select: it runs through the gateway (see "Co-writer turn through the
 gateway"), and neither has the cover (see "Cover picture through the

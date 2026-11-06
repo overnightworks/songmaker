@@ -1,11 +1,10 @@
-"""Settings, presets, chat, and capabilities API models."""
+"""Settings, presets and chat API models."""
 
 from __future__ import annotations
 
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
-from agent_providers.errors import SafeRouteReason
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 
 from songmaker_cli.api_models.fields import ComputedTimestamp
@@ -105,30 +104,8 @@ class CowriterSettingsRequest(BaseModel):
     tail_token_budget: int
 
 
-class ProviderRouteReadiness(BaseModel):
-    state: Literal["ready", "not_configured", "disturbed", "unverified"]
-    capability: Literal["tools_available", "text_only"]
-    reason: SafeRouteReason | None = None
-    probed_at: ComputedTimestamp = None
-    setup_label: str
-
-
-class ProviderRouteStatusResponse(BaseModel):
-    models: list[str]
-    catalogue_failure: SafeRouteReason | None = None
-    catalog_source: str | None = None
-    catalog_version: str | None = None
-    readiness: ProviderRouteReadiness
-    retained_model_id: str | None = None
-
-
 class CowriterSettingsResponse(BaseModel):
     tail_token_budget: int
-
-
-class ProviderStatusResponse(BaseModel):
-    provider: str
-    cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse]
 
 
 class ChatMessageResponse(BaseModel):
@@ -303,14 +280,6 @@ class MemoryBundleResponse(BaseModel):
 
 class MemoryUpdateRequest(BaseModel):
     body: str = Field(max_length=MEMORY_MAX_LENGTH)
-
-
-class CapabilitiesResponse(BaseModel):
-    claude_api: bool
-    claude_cli: bool
-    generation: bool
-    scoring: bool
-    chat_model: str
 
 
 class RateLimitItem(BaseModel):

@@ -72,7 +72,6 @@
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1285
 "tests/songmaker_cli/test_server.py" = 1944
-"tests/songmaker_cli/test_settings_api_providers.py" = 846
 "tests/songmaker_cli/test_sharing_api.py" = 2499
 "tests/test_auto_deploy_alerting.py" = 1384
 

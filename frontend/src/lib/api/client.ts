@@ -86,7 +86,6 @@ export {
 export type { CoWriterStreamEvent } from './conversations';
 export { fetchMemory, saveUserMemory, saveSongMemory, saveAlbumMemory } from './memory';
 export {
-	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
 	fetchActiveModels,
