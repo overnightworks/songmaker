@@ -87,9 +87,10 @@ def test_m1_an_upload_answers_the_stored_record(
     body = response.json()
     assert set(body) == {
         "id", "filename", "size_bytes", "duration_sec", "created_at", "in_use",
-        "used_by_versions", "used_by_takes",
+        "is_kept", "used_by_versions", "used_by_takes",
     }
     assert body["in_use"] is False
+    assert body["is_kept"] is False
     assert (body["used_by_versions"], body["used_by_takes"]) == (0, 0)
     assert body["id"] == row.id
     assert body["filename"] == row.original_filename == f"ref.{kind}"
@@ -559,6 +560,20 @@ def test_l8_the_list_marks_a_linked_reference_as_in_use(
     }
     assert counts == {
         "linked.wav": (1, 0) if link["via"] == "version" else (0, 1), "free.wav": (0, 0),
+    }
+
+
+def test_the_list_carries_is_kept_for_kept_and_unkept_rows(signed_in: TestClient) -> None:
+    kept = seed_reference(signed_in, "owner-id", "kept.wav")
+    seed_reference(signed_in, "owner-id", "loose.wav")
+    with signed_in.app.state.ctx.db() as session:
+        session.get(ReferenceRecording, kept).is_kept = True
+        session.commit()
+
+    listed = signed_in.get(REFERENCES_PATH).json()["references"]
+
+    assert {item["filename"]: item["is_kept"] for item in listed} == {
+        "kept.wav": True, "loose.wav": False,
     }
 
 

@@ -14,6 +14,7 @@ from support.failing_reference_stamp import failing_stamp_trigger
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
+from songmaker_cli.db.queries.reference_recordings import keep_reference, unkeep_reference
 from songmaker_cli.reference_audio import ReconciledStamps, reconcile_unused_stamps
 
 OWNER = "owner"
@@ -206,3 +207,28 @@ def test_a_successful_run_logs_one_info_line_with_the_counts(factory, caplog) ->
 
     messages = [record.getMessage() for record in caplog.records if record.levelno == logging.INFO]
     assert [message for message in messages if "1 stamped, 1 cleared" in message]
+
+
+def test_after_a_keep_the_run_leaves_the_row_unstamped_and_after_an_unkeep_it_keeps_the_fresh_stamp(
+    factory,
+) -> None:
+    _add(factory, _recording("held"))
+    with factory() as session:
+        keep_reference(session, OWNER, "held")
+        session.commit()
+
+    kept_report = reconcile_unused_stamps(factory)
+
+    assert kept_report == ReconciledStamps(stamped=0, cleared=0)
+    assert _stamp(factory, "held") is None
+
+    with factory() as session:
+        unkeep_reference(session, OWNER, "held")
+        session.commit()
+    fresh_stamp = _stamp(factory, "held")
+
+    unkept_report = reconcile_unused_stamps(factory)
+
+    assert unkept_report == ReconciledStamps(stamped=0, cleared=0)
+    assert _stamp(factory, "held") == fresh_stamp
+    assert fresh_stamp is not None

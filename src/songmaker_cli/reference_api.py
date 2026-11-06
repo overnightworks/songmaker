@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Final
 
@@ -21,6 +22,7 @@ from songmaker_cli.api_models import (
     ReferenceRecordingResponse,
     ReferenceUsageResponse,
     ReferenceUsesResponse,
+    StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
@@ -31,16 +33,18 @@ from songmaker_cli.constants import (
     AuditAction,
     ResourceType,
 )
-from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH
+from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH, ReferenceRecording
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.reference_recordings import (
     ReferenceLinkCounts,
     delete_reference_recording,
     get_owned_reference_recording,
+    keep_reference,
     list_owned_reference_recordings,
     owner_reference_usage,
     reference_link_counts,
     reference_uses,
+    unkeep_reference,
 )
 from songmaker_cli.reference_audio import (
     REFERENCE_AUDIO_STORAGE_DETAIL,
@@ -187,6 +191,40 @@ def api_delete_reference(
         "Reference %s of user %s deleted: file %s", recording_id, user.id, outcome.value,
     )
     return Response(status_code=204)
+
+
+def _toggle_keep(
+    reference_id: str, user: AuthenticatedUser, session: Session,
+    action: Callable[[Session, str, str], ReferenceRecording | None],
+) -> StatusResponse:
+    if action(session, user.id, reference_id) is None:
+        raise HTTPException(404)
+    session.commit()
+    return StatusResponse()
+
+
+@router.post(
+    "/references/{reference_id}/keep",
+    responses={404: {"description": "Reference audio not found"}},
+)
+def api_keep_reference(
+    reference_id: str,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_db_session)],
+) -> StatusResponse:
+    return _toggle_keep(reference_id, user, session, keep_reference)
+
+
+@router.post(
+    "/references/{reference_id}/unkeep",
+    responses={404: {"description": "Reference audio not found"}},
+)
+def api_unkeep_reference(
+    reference_id: str,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_db_session)],
+) -> StatusResponse:
+    return _toggle_keep(reference_id, user, session, unkeep_reference)
 
 
 @router.post(
