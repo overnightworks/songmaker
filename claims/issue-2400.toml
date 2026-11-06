@@ -1,7 +1,0 @@
-claim_id = "f0fb5560c10c49e78eba8abb90d80198"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "cbec9946eae7b8c6187c52f0496f4d5ada2019f4"
-branch = "claude/issue-2400-release-images-m1-measure-every-image"
-scope = [".github/workflows/measure-images.yml"]
-opened_commit = "d8f43f40f763808d71df580e13fda8eaa7fe0ba0"
