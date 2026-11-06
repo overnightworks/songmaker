@@ -27,7 +27,6 @@ scoring = [
     "torch>=2.14,<2.15",
     "torchaudio>=2.11,<3",
     "torchcodec>=0.14,<0.15",  # torchaudio 2.9+ decodes through torchcodec, whose minor tracks torch's
-    "nvidia-ml-py3>=7.352,<8",
 ]
 whisper = [
     "faster-whisper>=1.1,<2",
@@ -41,7 +40,6 @@ server = [
     "uvicorn>=0.50,<1",
     "sqlalchemy>=2.0,<3",
     "alembic>=1.13,<2",
-    "python-dotenv>=1.0,<2",
     "structlog>=24.0,<27",
     "redis[hiredis]>=5.0,<9",
     "psycopg2-binary>=2.9,<3",

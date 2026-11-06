@@ -19,7 +19,7 @@ USER songmaker
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project \
-    --extra server --extra scoring --extra whisper # why: The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source distribution, so this locked sync alone may build it. Every dependency remains resolved from uv.lock.
+    --extra server --extra scoring --extra whisper
 
 ARG MODEL_WARMUP_TIMEOUT_SECONDS=1800
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub \
