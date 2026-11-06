@@ -1,7 +1,7 @@
 # End-to-end flows
 
 Playwright drives the real stack — `docker/docker-compose.ci.yml` (Postgres, Redis,
-migrations, web) — through the click paths an operator walks by hand. Unit
+migrations, web, music worker) — through the click paths an operator walks by hand. Unit
 tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 
 ## What runs
@@ -297,7 +297,7 @@ export GATEWAY_KEY_FILE="$(mktemp)" && echo e2e-ci-gateway-key > "$GATEWAY_KEY_F
 export GRAFANA_PASSWORD=e2e-ci-grafana-password    # compose refuses up/down without it
 export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or the web app refuses to start
 docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
-  up -d --build --wait postgres redis migrate songmaker-web
+  up -d --build --wait postgres redis migrate songmaker-music-worker songmaker-web
 
 cd frontend
 E2E_BASE_URL=http://localhost:18080 pnpm test:e2e            # both shells

@@ -77,7 +77,7 @@ jobs:
           # the smoke test and Playwright drive it through below.
           PUBLIC_BASE_URL: http://localhost:${{ env.WEB_PORT }}
           SONGMAKER_COMMIT: ${{ github.sha }}
-        run: docker compose $COMPOSE_FILES up -d --build --wait postgres redis migrate songmaker-web
+        run: docker compose $COMPOSE_FILES up -d --build --wait postgres redis migrate songmaker-music-worker songmaker-web
 
       - name: Smoke test
         run: |
@@ -92,8 +92,8 @@ jobs:
           }
 
           # The details always answer 200 regardless of body, so assert the body:
-          # no music/scoring worker runs in this stack, so "degraded" is
-          # expected, but db and redis must both be reachable.
+          # no scoring or ACE-Step worker runs in this stack, so those report
+          # absent; db and redis must both be reachable.
           health="$(curl -fsS -H "Authorization: Bearer $(cat "$SONGMAKER_SECRETS_DIR/monitoring-token")" "$base/health/details")"
           db_ok="$(jq -r '.db' <<<"$health")"
           redis_ok="$(jq -r '.redis' <<<"$health")"
