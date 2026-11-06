@@ -23,10 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
-RUN useradd --create-home --shell /bin/bash songmaker
+# Uid and gid 1000 own the volumes and the checkpoints bind mount, and Kubernetes' runAsNonRoot
+# can verify only a numeric USER.
+RUN groupadd --gid 1000 songmaker \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash songmaker
 RUN install -d -o songmaker -g songmaker /opt/acestep
 
-USER songmaker
+USER 1000:1000
 WORKDIR /opt/acestep
 
 # Pre-create the venv at the path acestep-base will COPY the upstream source
@@ -51,7 +54,7 @@ ENV PYTHONUNBUFFERED=1
 # peft, nano-vllm, gradio, etc).
 FROM gpu-torch-base AS acestep-base
 
-USER songmaker
+USER 1000:1000
 WORKDIR /opt/acestep
 
 # Layer 1: lockfile + manifest only — caches independently of source churn.
@@ -79,7 +82,7 @@ FROM acestep-base
 
 USER root
 RUN install -d -o songmaker -g songmaker /app
-USER songmaker
+USER 1000:1000
 WORKDIR /app
 
 # Wrapper venv at /app/.venv installs only fastapi/uvicorn/redis/huggingface_hub
