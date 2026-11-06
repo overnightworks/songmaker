@@ -1721,13 +1721,14 @@ The liveness owner maps each type to the signal that can execute it. It writes
 the last observed `alive` state for each signal to Redis with a seven-day TTL.
 When the ephemeral signal disappears, a missing signal within the 300-second
 restart grace after the last observation is `alive`; only a longer absence can
-be `dead`. The grace covers a
-container restart: ACE-Step's 30-second healthcheck start period and the
-Music/Scoring workers' 600-second Docker Compose start period, plus image
-start and reserve. A worker still starting more than 300 seconds after its
-last observation (a long migration or a late store) shows as `dead` in
-`/health` until its first heartbeat, while Compose still shows it starting. An empty ACE-Step registry is `unknown` only when it has
-never been observed; with a newer observation, it is `alive`.
+be `dead`. The grace covers an ordinary container restart: ACE-Step's
+30-second healthcheck start period plus image start and reserve. It does not
+cover the Music/Scoring workers' full 600-second Docker Compose start period: a
+worker still starting more than 300 seconds after its last observation (a long
+migration or a late store) shows as `dead` in `/health` until its first
+heartbeat, while Compose still shows it starting. An empty ACE-Step registry is
+`unknown` only when it has never been observed; with a newer observation, it is
+`alive`.
 
 - `generate`, `load_model_on_worker`, and `download_model_on_worker` use the
   MusicWorker and registered ACE-Step worker together: MusicWorker executes the
