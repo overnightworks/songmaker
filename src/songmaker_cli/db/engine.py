@@ -12,7 +12,11 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.constants import STORE_STARTUP_RETRY_DELAY_SECONDS, STORE_STARTUP_WAIT_SECONDS
+from songmaker_cli.constants import (
+    STORE_STARTUP_CONNECT_TIMEOUT_SECONDS,
+    STORE_STARTUP_RETRY_DELAY_SECONDS,
+    STORE_STARTUP_WAIT_SECONDS,
+)
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.models import Base
 from songmaker_cli.db.soft_delete import install_soft_delete_filter
@@ -26,13 +30,10 @@ MIGRATIONS_DIR = str(Path(__file__).parent / "migrations")
 
 _DEFAULT_SQLITE_TIMEOUT = 30
 
-_PG_CANNOT_CONNECT_NOW = "57P03"
-_CONNECTION_LEVEL_MESSAGES = (
-    "connection refused",
-    "could not translate host name",
-    "name or service not known",
-    "temporary failure in name resolution",
+_RETRIED_SERVER_FATALS = (
     "the database system is starting up",
+    "the database system is shutting down",
+    "the database system is in recovery mode",
 )
 
 
@@ -45,16 +46,20 @@ def resolve_database_url() -> URL:
 
 
 def _is_connection_level_failure(error: OperationalError) -> bool:
-    # Retried: refused connection, unresolved name, "database system is starting up".
-    # Not retried: authentication or configuration errors, which a wait cannot fix.
-    if getattr(error.orig, "pgcode", None) == _PG_CANNOT_CONNECT_NOW:
-        return True
+    # A message without a server-sent FATAL is a client or network error (refused,
+    # unresolved, timed out, reset) that a wait can outlast; psycopg2 sets no pgcode
+    # before authentication. Other server FATALs (password, database, pg_hba) are
+    # configuration a wait cannot fix.
     message = str(error.orig).lower()
-    return any(fragment in message for fragment in _CONNECTION_LEVEL_MESSAGES)
+    if "fatal:" not in message:
+        return True
+    return any(fragment in message for fragment in _RETRIED_SERVER_FATALS)
 
 
 def _probe_database(url: URL | str) -> None:
-    engine = create_engine(url)
+    engine = create_engine(
+        url, connect_args={"connect_timeout": STORE_STARTUP_CONNECT_TIMEOUT_SECONDS},
+    )
     try:
         with engine.connect():
             pass
@@ -68,20 +73,21 @@ def wait_for_database(
     probe: Callable[[URL | str], None] = _probe_database,
     now: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
-    wait_seconds: float = STORE_STARTUP_WAIT_SECONDS,
-    retry_delay_seconds: float = STORE_STARTUP_RETRY_DELAY_SECONDS,
 ) -> None:
     """Block until the database accepts a connection; raise the last error after the bound."""
     shown = make_url(url)
-    log.info("Waiting up to %ss for the database at %s:%s", wait_seconds, shown.host, shown.port)
-    deadline = now() + wait_seconds
+    log.info(
+        "Waiting up to %ss for the database at %s:%s",
+        STORE_STARTUP_WAIT_SECONDS, shown.host, shown.port,
+    )
+    deadline = now() + STORE_STARTUP_WAIT_SECONDS
     while True:
         try:
             probe(url)
         except OperationalError as error:
             if not _is_connection_level_failure(error) or now() >= deadline:
                 raise
-            sleep(retry_delay_seconds)
+            sleep(STORE_STARTUP_RETRY_DELAY_SECONDS)
         else:
             log.info("Database answers at %s:%s", shown.host, shown.port)
             return

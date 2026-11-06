@@ -29,9 +29,13 @@ class FakeClock:
         self.seconds += seconds
 
 
-def _driver_failure(message: str, pgcode: str | None = None) -> OperationalError:
-    driver_error_type = type("DriverError", (psycopg2.OperationalError,), {"pgcode": pgcode})
-    return OperationalError("connect", {}, driver_error_type(message))
+def _driver_failure(message: str) -> OperationalError:
+    return OperationalError("connect", {}, psycopg2.OperationalError(message))
+
+
+def _server_fatal(text: str) -> OperationalError:
+    prefix = 'connection to server at "db" (10.0.0.5), port 5432 failed'
+    return _driver_failure(f"{prefix}: FATAL:  {text}")
 
 
 class ScriptedProbe:
@@ -64,11 +68,21 @@ def _wait_redis(probe: ScriptedProbe, clock: FakeClock) -> None:
 @pytest.mark.parametrize(
     "failure",
     [
-        _driver_failure('connection to server at "db" failed: Connection refused'),
-        _driver_failure('could not translate host name "db" to address: Name or service not known'),
-        _driver_failure("FATAL:  the database system is starting up", pgcode="57P03"),
+        _driver_failure('connection to server at "127.0.0.1", port 1 failed: Connection refused'),
+        _driver_failure(
+            'could not translate host name "no-such-host.invalid" to address: '
+            "Name or service not known",
+        ),
+        _driver_failure('connection to server at "db", port 5432 failed: timeout expired'),
+        _driver_failure("server closed the connection unexpectedly"),
+        _server_fatal("the database system is starting up"),
+        _server_fatal("the database system is shutting down"),
+        _server_fatal("the database system is in recovery mode"),
     ],
-    ids=["refused", "name-not-resolved", "starting-up"],
+    ids=[
+        "refused", "name-not-resolved", "timeout", "closed-unexpectedly",
+        "starting-up", "shutting-down", "recovery-mode",
+    ],
 )
 def test_database_that_answers_after_failures_is_waited_for(failure: OperationalError) -> None:
     probe = ScriptedProbe(failure, failure)
@@ -93,12 +107,13 @@ def test_database_that_never_answers_raises_after_the_bound() -> None:
 @pytest.mark.parametrize(
     "failure",
     [
-        _driver_failure('FATAL:  password authentication failed for user "user"', pgcode="28P01"),
-        _driver_failure('FATAL:  database "songs" does not exist'),
+        _server_fatal('password authentication failed for user "user"'),
+        _server_fatal('database "songs" does not exist'),
+        _server_fatal('no pg_hba.conf entry for host "10.0.0.9", user "user", database "songs"'),
     ],
-    ids=["authentication", "configuration"],
+    ids=["password", "unknown-database", "pg-hba"],
 )
-def test_database_authentication_or_configuration_error_raises_at_once(
+def test_database_server_rejection_raises_at_once(
     failure: OperationalError,
 ) -> None:
     probe = ScriptedProbe(failure)

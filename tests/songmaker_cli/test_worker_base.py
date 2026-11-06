@@ -176,6 +176,30 @@ def test_recover_on_startup_skips_when_lock_held() -> None:
     mock_recover.assert_not_called()
 
 
+def test_recover_on_startup_holds_no_lock_while_the_database_opens() -> None:
+    held: set[str] = set()
+    redis = AsyncMock()
+
+    async def set_lock(key: str, *_args: object, **_kwargs: object) -> bool:
+        held.add(key)
+        return True
+
+    redis.set = set_lock
+    worker = _make_worker_with_db(MagicMock())
+    locks_held_while_opening: list[set[str]] = []
+
+    def open_database() -> MagicMock:
+        locks_held_while_opening.append(set(held))
+        return MagicMock()
+
+    worker.get_db_factory = open_database
+
+    with patch("songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={}):
+        _run(worker._recover_on_startup({"redis": redis}))
+
+    assert locks_held_while_opening == [set()]
+
+
 def test_recover_on_startup_releases_lock_on_error() -> None:
     worker = _DummyWorker()
     mock_factory = MagicMock()

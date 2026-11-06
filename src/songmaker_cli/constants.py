@@ -210,6 +210,7 @@ SESSION_CLEANUP_INTERVAL_SECONDS = 300
 REDIS_SOCKET_TIMEOUT_SECONDS: Final[float] = 2.0
 STORE_STARTUP_WAIT_SECONDS: Final[int] = 300
 STORE_STARTUP_RETRY_DELAY_SECONDS: Final[int] = 1
+STORE_STARTUP_CONNECT_TIMEOUT_SECONDS: Final[int] = 3
 
 # Session lifetime: seven days without a request, thirty days from sign-in at most.
 SESSION_IDLE_SECONDS_DEFAULT: Final = 7 * 24 * 60 * 60

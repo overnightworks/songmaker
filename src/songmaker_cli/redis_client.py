@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 import uuid
 from collections.abc import Callable
@@ -58,7 +59,9 @@ def build_arq_redis_settings(url: str) -> RedisSettings:
     """arq's pool-creation retry covers at least ``STORE_STARTUP_WAIT_SECONDS``."""
     settings = RedisSettings.from_dsn(url)
     settings.conn_retry_delay = STORE_STARTUP_RETRY_DELAY_SECONDS
-    settings.conn_retries = -(-STORE_STARTUP_WAIT_SECONDS // STORE_STARTUP_RETRY_DELAY_SECONDS)
+    settings.conn_retries = math.ceil(
+        STORE_STARTUP_WAIT_SECONDS / STORE_STARTUP_RETRY_DELAY_SECONDS,
+    )
     return settings
 
 
@@ -75,8 +78,6 @@ def wait_for_redis(
     *,
     now: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
-    wait_seconds: float = STORE_STARTUP_WAIT_SECONDS,
-    retry_delay_seconds: float = STORE_STARTUP_RETRY_DELAY_SECONDS,
 ) -> None:
     """Block until Redis answers a ping; raise ``RuntimeError`` after the bound.
 
@@ -84,8 +85,8 @@ def wait_for_redis(
     """
     from redis.exceptions import AuthenticationError, ConnectionError, TimeoutError
 
-    log.info("Waiting up to %ss for Redis at %s", wait_seconds, shown_url)
-    deadline = now() + wait_seconds
+    log.info("Waiting up to %ss for Redis at %s", STORE_STARTUP_WAIT_SECONDS, shown_url)
+    deadline = now() + STORE_STARTUP_WAIT_SECONDS
     while True:
         try:
             r.ping()
@@ -96,7 +97,7 @@ def wait_for_redis(
             # error is a ConnectionError subclass but a wait cannot fix it.
             if now() >= deadline:
                 raise RuntimeError(REDIS_STARTUP_ERROR.format(url=shown_url)) from error
-            sleep(retry_delay_seconds)
+            sleep(STORE_STARTUP_RETRY_DELAY_SECONDS)
         else:
             log.info("Redis answers at %s", shown_url)
             return
