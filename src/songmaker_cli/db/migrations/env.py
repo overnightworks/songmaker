@@ -2,9 +2,9 @@
 
 Boundary script: alembic loads and executes this file directly. It reads
 DATABASE_URL from os.environ, and the password from its secret file when one
-is mounted, rather than going through Settings so the migrate container does
-not need to plumb unrelated Settings env vars (REDIS_URL, SESSION_SECRET,
-SONGMAKER_INTERNAL_TOKEN) just to run ``alembic upgrade``.
+is mounted, rather than going through Settings so ``alembic upgrade`` runs
+without unrelated Settings env vars (REDIS_URL, SESSION_SECRET,
+SONGMAKER_INTERNAL_TOKEN).
 """
 
 from __future__ import annotations

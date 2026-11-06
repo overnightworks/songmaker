@@ -296,8 +296,10 @@ export KEYCLOAK_CLIENT_SECRET_FILE="$(mktemp)" && echo e2e-ci-client-secret > "$
 export GATEWAY_KEY_FILE="$(mktemp)" && echo e2e-ci-gateway-key > "$GATEWAY_KEY_FILE"
 export GRAFANA_PASSWORD=e2e-ci-grafana-password    # compose refuses up/down without it
 export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or the web app refuses to start
+# Two steps: this stack has no restart policy, so the apps start once the stores are healthy.
+docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml up -d --wait postgres redis
 docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
-  up -d --build --wait postgres redis migrate songmaker-music-worker songmaker-web
+  up -d --build --wait songmaker-music-worker songmaker-web
 
 cd frontend
 E2E_BASE_URL=http://localhost:18080 pnpm test:e2e            # both shells

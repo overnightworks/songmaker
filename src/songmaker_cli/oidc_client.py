@@ -1,7 +1,7 @@
 """songmaker's relying party at the Keycloak realm, and who it admits.
 
-Built once where the web app is created, so workers and the migrate step start
-without the realm's settings. A missing or unreadable secret file stops the web
+Built once where the web app is created, so workers, which never create the web
+app, start without the realm's settings. A missing or unreadable secret file stops the web
 app and names only the path, never the secret.
 """
 

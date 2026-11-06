@@ -36,11 +36,6 @@ services:
     <<: *test_stack_service
     profiles: ["gpu"]
 
-  migrate:
-    <<: *test_stack_service
-    build:
-      <<: *gha_cache
-
   songmaker-web:
     <<: *test_stack_service
     build:
