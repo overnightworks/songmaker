@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
@@ -11,9 +11,11 @@ from support.web_app import make_test_app, seed_session
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import (
+    clear_stamps_on_used_or_kept,
     lock_and_mark_reference_used,
     mark_newly_unused,
 )
+from songmaker_cli.reference_audio import commit_unused_stamps, reconcile_unused_stamps
 
 OWNER = "u1"
 REFERENCE_ID = "reference-1"
@@ -58,6 +60,31 @@ class _World:
             session.commit()
         return stamped
 
+    def reconcile(self) -> int:
+        return reconcile_unused_stamps(self.pg_factory).stamped
+
+    def link_with_stale_stamp(self) -> None:
+        """The version links the row, which still carries a stamp the clear half must remove."""
+        with self.pg_factory() as session:
+            session.get(Version, "version-a").reference_recording_id = REFERENCE_ID
+            session.get(ReferenceRecording, REFERENCE_ID).unused_since = datetime.now(timezone.utc)
+            session.commit()
+
+    def clear_stale_stamp(self) -> int:
+        with self.pg_factory() as session:
+            cleared = clear_stamps_on_used_or_kept(session)
+            session.commit()
+        return cleared
+
+    def detach_and_stamp(self) -> int:
+        """Delete the linking version, commit, then stamp in a transaction of its own."""
+        with self.pg_factory() as session:
+            session.delete(session.get(Version, "version-a"))
+            session.commit()
+        with self.pg_factory() as session:
+            commit_unused_stamps(session, {REFERENCE_ID})
+        return 1
+
     def unused_since(self) -> datetime | None:
         with self.pg_factory() as session:
             return session.get(ReferenceRecording, REFERENCE_ID).unused_since
@@ -85,3 +112,28 @@ def test_an_attach_after_a_stamp_that_commits_first_clears_the_stamp(
 
     assert answers["first"] == 1
     assert world.unused_since() is None
+
+
+def test_a_reconciliation_stamp_half_that_waits_for_an_attach_finds_the_link_and_leaves_no_stamp(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    attach_pause = CommitPause(lambda session: wrote_to_tables(session, "generations"))
+
+    answers = race(pg_factory, world.attach, world.reconcile, attach_pause)
+
+    assert answers["second"] == 0
+    assert world.unused_since() is None
+
+
+def test_a_detach_stamp_that_runs_after_the_clear_half_commits_still_stamps_the_row(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    world.link_with_stale_stamp()
+
+    cleared = world.clear_stale_stamp()
+    world.detach_and_stamp()
+
+    assert cleared == 1
+    assert world.unused_since() is not None

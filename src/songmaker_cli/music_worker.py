@@ -150,6 +150,12 @@ class MusicWorker(WorkerBase):
         )
         return report.removed
 
+    async def reference_unused_cron(self, _ctx) -> int:
+        from songmaker_cli.reference_audio import reconcile_unused_stamps
+
+        report = await asyncio.to_thread(reconcile_unused_stamps, self.get_db_factory())
+        return report.stamped + report.cleared
+
 
 _settings = get_settings()
 _music_worker = MusicWorker(_settings)
@@ -196,6 +202,12 @@ class MusicWorkerSettings:
         ),
         cron(
             _music_worker.reference_remnant_cron,
+            hour={DAILY_CLEANUP_HOUR_UTC},
+            minute={0},
+            second={0},
+        ),
+        cron(
+            _music_worker.reference_unused_cron,
             hour={DAILY_CLEANUP_HOUR_UTC},
             minute={0},
             second={0},

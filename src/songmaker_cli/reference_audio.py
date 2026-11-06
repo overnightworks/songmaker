@@ -7,7 +7,7 @@ import logging
 import os
 import stat
 import uuid
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from enum import StrEnum
@@ -23,8 +23,10 @@ from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSI
 from songmaker_cli.db.models import User
 from songmaker_cli.db.queries.auth import list_user_ids
 from songmaker_cli.db.queries.reference_recordings import (
+    clear_stamps_on_used_or_kept,
     create_reference_recording,
     get_owned_reference_recording,
+    list_unstamped_unkept_reference_ids,
     mark_newly_unused,
     owned_reference_storage_paths,
     owner_reference_usage,
@@ -248,6 +250,45 @@ def commit_unused_stamps(session: Session, candidates: Collection[str]) -> None:
         )
         return
     log.info("Stamped %d of %d reference candidates unused", stamped, len(candidates))
+
+
+@dataclass(frozen=True)
+class ReconciledStamps:
+    stamped: int = 0
+    cleared: int = 0
+
+
+def _stamp_unstamped_unkept(session: Session) -> int:
+    return mark_newly_unused(session, list_unstamped_unkept_reference_ids(session))
+
+
+def _run_reconciliation_half(
+    factory: sessionmaker[Session], half: Callable[[Session], int], label: str,
+) -> int:
+    """One half in a transaction of its own; a failure is logged with its kind and counts as 0."""
+    try:
+        with factory() as session:
+            count = half(session)
+            session.commit()
+    except SQLAlchemyError as failure:
+        log.error(  # NOSONAR(S8572) A traceback would name the path.
+            "Unused-since reconciliation failed to %s: %s", label, type(failure).__name__,
+        )
+        return 0
+    return count
+
+
+def reconcile_unused_stamps(factory: sessionmaker[Session]) -> ReconciledStamps:
+    """Clear the stamps of kept or linked rows, then stamp the unlinked, unkept rows without one.
+
+    Each half locks only reference rows in id order, in its own transaction; a failed half is
+    logged with its error kind and leaves the other half running. A row stamped here is stamped
+    late, never early.
+    """
+    cleared = _run_reconciliation_half(factory, clear_stamps_on_used_or_kept, "clear stamps")
+    stamped = _run_reconciliation_half(factory, _stamp_unstamped_unkept, "stamp rows")
+    log.info("Unused-since reconciliation: %d stamped, %d cleared", stamped, cleared)
+    return ReconciledStamps(stamped=stamped, cleared=cleared)
 
 
 def store_reference_audio(
