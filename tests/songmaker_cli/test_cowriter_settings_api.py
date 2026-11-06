@@ -1,17 +1,13 @@
-"""Co-writer provider switch (#34). Models come from the live catalog."""
+"""Co-writer settings, tools and the left-over judge rows (#34)."""
 
 from __future__ import annotations
 
 import json
-import threading
 from pathlib import Path
 
 import pytest
-from agent_providers.catalog import ProviderRoute
-from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
 from support.admin_client import build_admin_client
 from support.cowriter_gateway import attach_cowriter_gateway
-from support.provider_runtime import override_provider_runtime, refresh_provider_snapshots
 from support.setting_rows import store_setting_row
 from support.web_app import make_authenticated_user, make_test_app, seed_user
 
@@ -30,25 +26,6 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.mcp_server.tools import tool_create_song
 from songmaker_cli.settings import get_settings
-
-LIVE_CATALOG = {
-    "claude": ["claude-opus-4-6", "claude-sonnet-4-6"],
-    "grok": ["grok-4.6", "grok-4.5"],
-    "codex": ["gpt-5.4"],
-}
-
-
-@pytest.fixture(autouse=True)
-def _clear_agent_cli_caches(monkeypatch):
-    from agent_providers.process import clear_agent_cli_caches
-
-    from songmaker_cli import provider_status
-
-    monkeypatch.setattr(provider_status, "_provider_snapshots", {})
-
-    clear_agent_cli_caches()
-    yield
-    clear_agent_cli_caches()
 
 
 def _stream_events(response) -> list[dict]:
@@ -72,11 +49,7 @@ def _seed(session, user_id: str) -> None:
 
 
 @pytest.fixture
-def admin_client(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(
-        "agent_providers.catalog.list_provider_models",
-        lambda provider, _route: list(LIVE_CATALOG[provider]),
-    )
+def admin_client(tmp_path: Path):
     return build_admin_client(
         tmp_path,
         lambda session: _seed(session, "u-test"),
@@ -297,154 +270,6 @@ def test_suggest_album_cover_tool_hits_the_canonical_admission_owner(admin_clien
         assert job.type == "cover"
 
 
-_API_KEY_FIELD_BY_ENVIRONMENT = {
-    "ANTHROPIC_API_KEY": "anthropic_api_key",
-    "XAI_API_KEY": "xai_api_key",
-    "OPENAI_API_KEY": "openai_api_key",
-}
-
-
-def _configure_only_these_api_keys(**keys_by_environment: str) -> None:
-    """Leave the named provider API keys configured and every other one unset."""
-    override_provider_runtime(**{
-        field: keys_by_environment.get(environment)
-        for environment, field in _API_KEY_FIELD_BY_ENVIRONMENT.items()
-    })
-
-
-def _stub_cli_runners(
-    monkeypatch,
-    *,
-    claude: CliLogin = LOGGED_OUT,
-    grok: GrokCliStatus | None = None,
-    codex: CliLogin = LOGGED_OUT,
-) -> dict[str, int]:
-    calls = {"claude": 0, "grok": 0, "codex": 0}
-    monkeypatch.setattr("agent_providers.claude.provider._find_claude_binary", lambda: "claude")
-
-    def fake_claude_output(_binary: str) -> str:
-        calls["claude"] += 1
-        return json.dumps({"loggedIn": claude.logged_in, "authMethod": claude.auth_method})
-
-    def fake_cli_output(binary: str, _args: tuple[str, ...]) -> str:
-        if binary == "grok":
-            calls["grok"] += 1
-            status = grok or GrokCliStatus(login=LOGGED_OUT, model_names=())
-            if not status.login.logged_in:
-                return "You are not authenticated."
-            models = "\n".join(f"  * {model}" for model in status.model_names)
-            return (
-                f"You are logged in with {status.login.auth_method or 'grok.com'}."
-                f"\n\nAvailable models:\n{models}"
-            )
-        calls["codex"] += 1
-        return "Logged in using ChatGPT" if codex.logged_in else "Not logged in"
-
-    monkeypatch.setattr("agent_providers.process._claude_output", fake_claude_output)
-    monkeypatch.setattr("agent_providers.process._cli_output", fake_cli_output)
-    return calls
-
-
-@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
-def test_refresh_records_unparseable_cli_output_without_claiming_readiness(
-    admin_client, monkeypatch, provider,
-):
-    _configure_only_these_api_keys()
-    _stub_cli_runners(monkeypatch)
-
-    if provider == "claude":
-        monkeypatch.setattr("agent_providers.process._claude_output", lambda _binary: "not JSON")
-    else:
-        monkeypatch.setattr("agent_providers.process._cli_output", lambda *_args: "not status")
-    refresh_provider_snapshots()
-    from agent_providers.catalog import ProviderRouteReadinessState
-
-    from songmaker_cli.provider_status import provider_snapshots
-
-    snapshot = provider_snapshots()[provider]
-    expected_cli_state = (
-        ProviderRouteReadinessState.NOT_CONFIGURED
-        if provider == "claude" else ProviderRouteReadinessState.DISTURBED
-    )
-    assert snapshot.routes[ProviderRoute.CLI].readiness is expected_cli_state
-    assert (
-        snapshot.routes[ProviderRoute.API].readiness is ProviderRouteReadinessState.NOT_CONFIGURED
-    )
-    assert snapshot.probed_at is not None
-
-
-@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
-def test_refresh_treats_a_hanging_cli_as_logged_out(monkeypatch, provider):
-    from agent_providers import process
-    from agent_providers.catalog import ProviderRouteReadinessState
-
-    from songmaker_cli.provider_status import provider_snapshots
-
-    _configure_only_these_api_keys()
-    _stub_cli_runners(monkeypatch)
-
-    def timed_out():
-        raise process.CliProbeBudgetExceeded("probe timed out")
-
-    release = threading.Event()
-    started = threading.Event()
-    if provider == "claude":
-
-        def _hanging_output(_binary: str) -> str | None:
-            started.set()
-            release.wait(timeout=1)
-            return None
-
-        monkeypatch.setattr("agent_providers.process._claude_output", _hanging_output)
-        monkeypatch.setattr("agent_providers.process.CLI_PROBE_CALLER_TIMEOUT_SECONDS", 0.01)
-    elif provider == "grok":
-        monkeypatch.setattr(process._grok_status_probe, "get", timed_out)
-    else:
-        monkeypatch.setattr(process._codex_login_probe, "get", timed_out)
-
-    try:
-        refresh_provider_snapshots()
-    finally:
-        release.set()
-
-    snapshot = provider_snapshots()[provider]
-    if provider == "claude":
-        assert started.is_set()
-    assert (
-        snapshot.routes[ProviderRoute.CLI].readiness is ProviderRouteReadinessState.NOT_CONFIGURED
-    )
-    assert (
-        snapshot.routes[ProviderRoute.API].readiness is ProviderRouteReadinessState.NOT_CONFIGURED
-    )
-
-
-@pytest.mark.parametrize("provider", ["grok", "codex"])
-def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
-    monkeypatch, provider,
-):
-    from agent_providers.catalog import ProviderRoute, ProviderRouteReadinessState
-    from agent_providers.process import AgentCliUnavailableError
-
-    from songmaker_cli.provider_status import provider_snapshots, refresh_provider_snapshot
-
-    def unavailable_cli(_provider: str) -> bool:
-        raise AgentCliUnavailableError("unavailable")
-
-    monkeypatch.setattr(
-        "agent_providers.catalog._cli_is_logged_in",
-        unavailable_cli,
-    )
-    monkeypatch.setattr(
-        "agent_providers.catalog.list_provider_models",
-        lambda name, _route: [f"{name}-model"],
-    )
-
-    snapshot = refresh_provider_snapshot(provider)
-
-    assert snapshot == provider_snapshots()[provider]
-    assert snapshot.routes[ProviderRoute.CLI].readiness is ProviderRouteReadinessState.DISTURBED
-
-
 _STORED_COVER_ROWS = {"cover_provider": "claude", "cover_route": "api", "cover_model": "x"}
 
 
@@ -519,7 +344,7 @@ def test_startup_writes_no_judge_row_on_a_fresh_database(tmp_path, mock_arq_pool
     assert _leftover_judge_rows(factory) == {}
 
 
-def test_startup_and_settings_reads_leave_stored_judge_rows_unread_and_unchanged(
+def test_startup_and_settings_reads_leave_stored_judge_rows_unchanged(
     tmp_path, mock_arq_pool,
 ):
     def seed_leftover_rows(session) -> None:

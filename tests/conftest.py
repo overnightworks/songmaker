@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 
@@ -39,10 +38,6 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from support.fake_cli_process import close_fake_cli_processes  # noqa: E402
 from support.generation_failures import SONGMAKER_FAILURE_CASES  # noqa: E402
 from support.oidc_client import write_test_client_secret  # noqa: E402
-from support.provider_runtime import (  # noqa: E402
-    override_provider_runtime,
-    refresh_provider_snapshots,
-)
 from support.web_app import make_fake_redis  # noqa: E402
 from support.worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
@@ -215,26 +210,6 @@ def _no_codex_cover_sandbox_runtime_probe():
 
 
 @pytest.fixture(autouse=True)
-def _no_provider_status_probe():
-    """Keep TestClient lifespans from probing installed provider CLIs or APIs.
-
-    The provider-status loop refreshes immediately at application startup. A
-    developer machine can have all three CLIs installed, which would otherwise
-    make ordinary TestClient tests start login probes (and, with credentials,
-    reach provider model catalogs). The lifecycle-loop tests opt back into the
-    real loop where they provide its dependencies explicitly.
-    """
-    async def _idle_provider_status_loop(app) -> None:
-        from songmaker_cli.lifecycle import BackgroundLoopName, background_loop_registry
-
-        background_loop_registry(app).record_success(BackgroundLoopName.PROVIDER_STATUS_REFRESH)
-        await asyncio.Future()
-
-    with patch("songmaker_cli.server.provider_status_refresh_loop", _idle_provider_status_loop):
-        yield
-
-
-@pytest.fixture(autouse=True)
 def _reset_worker_singletons():
     yield
     from songmaker_cli import music_worker as mw_mod
@@ -353,24 +328,6 @@ def make_stereo_wav_bytes():
         return buf.getvalue()
 
     return _make
-
-
-@pytest.fixture
-def every_provider_is_configured(monkeypatch):
-    override_provider_runtime(
-        anthropic_api_key="test-key",
-        xai_api_key="test-key",
-        openai_api_key="test-key",
-    )
-    monkeypatch.setattr(
-        "agent_providers.catalog._cli_is_logged_in",
-        lambda _provider: True,
-    )
-    monkeypatch.setattr(
-        "agent_providers.catalog._anthropic_sdk_available",
-        lambda: True,
-    )
-    refresh_provider_snapshots()
 
 
 @pytest.fixture

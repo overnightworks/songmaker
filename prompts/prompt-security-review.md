@@ -86,7 +86,7 @@ These have been reviewed and accepted. Skip them unless the implementation has r
 - **CORS allows specific localhost ports**: Default `allow_origin_regex` matches `localhost` on ports 8080 and 5173 only. Acceptable for local-only dev mode. Production deployments must set `CORS_ORIGIN`.
 - **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged but not blocked to avoid breaking mobile users. Accepted tradeoff.
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
-- **Claude CLI use**: no co-writer turn or cover runs on a CLI; the catalog's login and `/model` checks run the mounted CLI with its defaults and send no song content.
+- **Claude CLI use**: no co-writer turn or cover runs on a CLI.
 - **Session secret in output directory**: Stored with 0600 permissions. Production deployments can use `SESSION_SECRET` env var instead.
 - **No `X-XSS-Protection` header**: Modern browsers use CSP instead. The buggy XSS auditor is deprecated.
 - **ACE-Step reinitialize has no cooldown**: Admin-only endpoint. Compromised admin has full access anyway.

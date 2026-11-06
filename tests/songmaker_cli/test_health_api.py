@@ -137,9 +137,6 @@ def test_health_and_metrics_report_background_loop_health(
         "stale_job_reaper": {
             "state": "ok", "consecutive_failures": 0, "last_error": None,
         },
-        "provider_status_refresh": {
-            "state": "ok", "consecutive_failures": 0, "last_error": None,
-        },
         "cover_runner": {
             "state": "ok", "consecutive_failures": 0, "last_error": None,
         },
@@ -237,8 +234,7 @@ def expected_health_json() -> bytes:
         b'"session_cleanup":{"state":"dead","consecutive_failures":0,"last_error":"task ended"},'
         b'"resource_event_cleanup":{"state":"ok","consecutive_failures":0,"last_error":null},'
         b'"score_backfill":{"state":"failing","consecutive_failures":3,"last_error":"RuntimeError"},'
-        b'"stale_job_reaper":{"state":"ok","consecutive_failures":0,"last_error":null},'
-        b'"provider_status_refresh":{"state":"ok","consecutive_failures":0,"last_error":null}},'
+        b'"stale_job_reaper":{"state":"ok","consecutive_failures":0,"last_error":null}},'
         b'"release":{"tag":"' + UNRELEASED_TAG.encode() + b'","commit":"'
         + UNKNOWN_COMMIT.encode() + b'"}}'
     )

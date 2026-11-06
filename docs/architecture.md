@@ -986,7 +986,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
-| Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
+| Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py`, `agent_providers/dispatch.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | Tool bodies | The co-writer's tool declarations and their execution, which the hand tools call | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
@@ -1200,7 +1200,7 @@ quietly win. A process that never configures gets a loud
 `ProviderRuntimeNotConfiguredError` at its first provider call, never a guessed
 path.
 
-The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one; the web process still runs the mounted CLI for the catalog's login and `/model` checks. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
+The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
 #### Provider constants: Go and Stay
 
@@ -1369,13 +1369,6 @@ ledger.
 After stopping its background loops, `server._lifespan` awaits
 `redis_client.drain_lease_releases()` so pending Redis lease releases finish before
 the event loop closes.
-
-| Loop | Cadence | Owner and result |
-| --- | --- | --- |
-| `provider_status_refresh` | 30 seconds | The co-writer catalog refreshes each provider's reachability and model snapshot. One provider failure is logged without stopping the sweep; `/health/details` reports the loop through the shared registry. |
-
-The first provider refresh is the loop's first tick after lifespan startup, not a
-synchronous boot probe.
 
 `GET /api/resource-events/stream` is the authenticated read side. Its auth check and
 handshake use one function-local DB session that closes before the response begins;

@@ -478,7 +478,7 @@ being in place.
 - **Co-writer authorization**: All thirteen co-writer tools require album ownership, including for administrators, through the gateway turn's hand tools. Lists and searches filter to owned resources; foreign resource IDs return not-found before creating versions, work records, songs, or cover jobs. HTTP administration retains its existing access. User-selected current-song, current-take, and @-mention context also retains admin access: an admin can load foreign context, but tool calls against it return not-found. Residual risk: foreign context or tool output can still steer writes to the admin’s own songs; the untrusted notice is guidance, while owner-only authorization enforces the foreign-resource boundary. [Ownership matrix](../tests/songmaker_cli/cowriter/test_tools_ownership.py) pins both paths (in-process dispatch and hand tools).
 - **Multi-turn history**: Stored in `chat_messages` and scoped to a conversation; the co-writer applies a token budget with a rolling summary for older messages (`conversation_api.py:477-503`; `cowriter/history.py:65-76,89-144`). Ownership is enforced via `check_song_access()` on every endpoint.
 - **Context built server-side**: Mentioned song/version IDs are sent by the frontend, but the backend resolves them from the DB — the client never sends raw context. Each mentioned song is ownership-checked.
-- **No co-writer turn or cover runs on a Claude CLI**, so no song content reaches one. The co-writer runs only through the gateway (next section). The web process still runs the mounted CLI for the catalog's login and `/model` checks.
+- **No co-writer turn or cover runs on a Claude CLI**, so no song content reaches one. The co-writer runs only through the gateway (next section).
 - **No per-song chat endpoint**: the legacy `POST /api/songs/{id}/chat` (`chat_api.py`) and its `/api/settings/claude-models` settings were removed (#1190); `POST /chat/turn` in `conversation_api.py` is the only co-writer entry point.
 
 ## Co-writer turn through the gateway
@@ -1014,7 +1014,7 @@ gateway"); [the Models page](architecture.md#the-models-page) shows both rows
 read-only.
 
 **#327 F5:** Settings reads and validation never start an agent CLI or catalog
-request. `provider_status_refresh` owns those probes.
+request.
 
 ## Child Process Secret Scrubbing
 
