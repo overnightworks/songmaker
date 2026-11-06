@@ -735,33 +735,6 @@ class ScoreRequest(BaseModel):
         return v
 
 
-class ScorerSchemaItem(BaseModel):
-    name: str
-    output_keys: list[str]
-    needs_audio: bool
-    device: str
-
-
-class ScoringSchemaResponse(BaseModel):
-    scorers: list[ScorerSchemaItem]
-
-    @classmethod
-    def from_registry(cls) -> "ScoringSchemaResponse":
-        from songmaker_cli.scoring.registry import SCORERS
-
-        return cls(
-            scorers=[
-                ScorerSchemaItem(
-                    name=spec.name,
-                    output_keys=list(spec.output_keys),
-                    needs_audio=spec.needs_audio,
-                    device=spec.device,
-                )
-                for spec in SCORERS.values()
-            ],
-        )
-
-
 class RateRequest(BaseModel):
     rating: float = Field(ge=0, le=100)
     notes: str = Field("", max_length=2_000)

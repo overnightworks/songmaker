@@ -38,7 +38,6 @@ from songmaker_cli.api_models import (
     RepaintRequest,
     RepaintTaskParams,
     ScoreRequest,
-    ScoringSchemaResponse,
     ShareResponse,
     StatusResponse,
 )
@@ -471,11 +470,6 @@ async def api_cover_generation(
         raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
-
-
-@router.get("/scoring/schema")
-def api_scoring_schema() -> ScoringSchemaResponse:
-    return ScoringSchemaResponse.from_registry()
 
 
 @router.post(

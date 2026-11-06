@@ -1,10 +1,9 @@
-import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { expect, type Page, type Route } from '@playwright/test';
 import type { AlbumCoverUrls, SharedPlaylistPayload } from '../src/lib/api/types';
 import { sameOriginHeaders } from './helpers';
 import { requiredAdminUsername } from './required-env';
-import { BASE_URL, TAKE_FIXTURE, archiveOwnedAlbum, runMarker } from './seed';
+import { BASE_URL, TAKE_FIXTURE, archiveOwnedAlbum, runMarker, runTakeSeeder } from './seed';
 
 export const PLAYLIST_TITLE = 'E2E Shared Journey';
 export const PLAYLIST_SLUG = 'proof-playlist';
@@ -112,43 +111,14 @@ export interface RealPlaylist {
 	cleanup(): Promise<void>;
 }
 
-async function seedMemberSong(albumId: string, position: number): Promise<string> {
-	const owner = requiredAdminUsername();
-	return new Promise((resolve, reject) => {
-		const child = execFile(
-			'docker',
-			[
-				'compose',
-				'-f',
-				'docker-compose.yml',
-				'-f',
-				'docker/docker-compose.ci.yml',
-				'exec',
-				'-T',
-				'songmaker-web',
-				'/app/.venv/bin/python',
-				'scripts/seed_e2e_song_takes.py',
-				'--album-id',
-				albumId,
-				'--title',
-				songTitle(position),
-				'--take-count',
-				'1',
-				'--owner-username',
-				owner,
-				'--lyrics',
-				songLyrics(position),
-				'--prompt',
-				'E2E tone'
-			],
-			{ cwd: '..' },
-			(error, stdout, stderr) => {
-				if (error) reject(new Error(`Playlist song seed failed: ${stderr}`, { cause: error }));
-				else resolve(stdout.trim());
-			}
-		);
-		child.stdin?.end(repeatedAudio(10));
-	});
+function seedMemberSong(albumId: string, position: number): Promise<string> {
+	return runTakeSeeder(
+		['--album-id', albumId, '--title', songTitle(position)],
+		1,
+		requiredAdminUsername(),
+		repeatedAudio(10),
+		['--lyrics', songLyrics(position), '--prompt', 'E2E tone']
+	);
 }
 
 export async function createRealPlaylist(owner: Page): Promise<RealPlaylist> {
