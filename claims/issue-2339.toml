@@ -1,0 +1,7 @@
+claim_id = "6c3b45beeb394e2296a86f2afa9cbd72"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "b6baa9dcdb43cec2230b9c9452e91e87c5d2b0a0"
+branch = "claude/issue-2339-pnpm-12"
+scope = ["Dockerfile", "frontend/package.json", "frontend/pnpm-lock.yaml"]
+opened_commit = "d5db689dda33b158b3d5a27e1dff847967347db4"
