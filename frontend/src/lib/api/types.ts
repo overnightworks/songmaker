@@ -695,6 +695,8 @@ export interface ReferenceRecordingResponse {
 	duration_sec: number | null;
 	created_at: string;
 	in_use: boolean;
+	used_by_versions: number;
+	used_by_takes: number;
 }
 
 export interface ReferenceResponse {
@@ -702,11 +704,37 @@ export interface ReferenceResponse {
 	filename: string;
 }
 
+export interface ReferenceTakeUseResponse {
+	song_id: string;
+	song_title: string;
+	song_slug: string;
+	album_id: string;
+	generation_number: number;
+	version_number: number | null;
+	is_archived: boolean;
+	is_trashed: boolean;
+	audio_duration_sec: number | null;
+}
+
 export interface ReferenceUsageResponse {
 	files: number;
 	bytes: number;
 	file_limit: number;
 	byte_limit: number;
+}
+
+export interface ReferenceUsesResponse {
+	versions: ReferenceVersionUseResponse[];
+	takes: ReferenceTakeUseResponse[];
+}
+
+export interface ReferenceVersionUseResponse {
+	song_id: string;
+	song_title: string;
+	song_slug: string;
+	album_id: string;
+	version_number: number;
+	is_trashed: boolean;
 }
 
 export interface RegistryModelItem {
