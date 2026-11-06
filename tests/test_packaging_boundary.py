@@ -114,6 +114,8 @@ def _dockerfile_instructions(dockerfile: Path) -> list[str]:
     instructions: list[str] = []
     current_instruction = ""
     for line in dockerfile.read_text().splitlines():
+        if line.lstrip().startswith("#"):
+            continue
         current_instruction += line.rstrip().removesuffix("\\") + " "
         if line.rstrip().endswith("\\"):
             continue
@@ -122,10 +124,18 @@ def _dockerfile_instructions(dockerfile: Path) -> list[str]:
     return instructions
 
 
+def _final_stage_instructions(dockerfile: Path) -> list[str]:
+    instructions = _dockerfile_instructions(dockerfile)
+    last_stage_start = max(
+        index for index, instruction in enumerate(instructions) if instruction.startswith("FROM ")
+    )
+    return instructions[last_stage_start:]
+
+
 def _sync_extras(dockerfile: Path) -> list[frozenset[str]]:
     return [
         frozenset(re.findall(r"--extra\s+([A-Za-z0-9-]+)", instruction))
-        for instruction in _dockerfile_instructions(dockerfile)
+        for instruction in _final_stage_instructions(dockerfile)
         if "uv sync" in instruction
     ]
 

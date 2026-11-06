@@ -52,7 +52,6 @@ updates:
     directories:
       - /
       - /docker
-      - /docker/base
     schedule:
       interval: weekly
     groups:
@@ -61,9 +60,6 @@ updates:
         update-types: ["patch"]
     open-pull-requests-limit: 5
     ignore:
-      # local tags built on the host, not on a registry
-      - dependency-name: "songmaker/acestep-base"
-      - dependency-name: "songmaker/gpu-torch-base"
       - dependency-name: "*"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: docker-compose

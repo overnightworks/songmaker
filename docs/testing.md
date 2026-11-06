@@ -5,9 +5,7 @@
 GitHub CI explicitly sets `-n auto` for parallel test runs and owns the full suite.
 
 The auto-deploy subprocess tests fake Docker and GitHub: they prove that a
-missing base image or a `docker/base/**` change rebuilds bases before Compose,
-that an unchanged candidate does not, and that the post-deploy image prune
-excludes the base-image label.
+changed `vendor/acestep` pin is fetched and checked out before Compose builds.
 
 ```bash
 # Backend — targeted (local / agents)
