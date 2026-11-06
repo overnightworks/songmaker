@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import BinaryIO
 from unittest.mock import MagicMock, patch
 
@@ -294,7 +295,9 @@ def test_a_result_whose_size_cannot_be_read_answers_an_error_and_closes_its_take
     async def go():
         deps, _ = _make_deps(tmp_path)
         task_id, _ = await _finished_take(deps, tmp_path / "out")
-        monkeypatch.setattr("acestep_worker.task_results.os.fstat", failing_fstat)
+        monkeypatch.setattr(
+            "acestep_worker.task_results.os", SimpleNamespace(fstat=failing_fstat),
+        )
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=create_app(deps), raise_app_exceptions=False),
             base_url="http://worker",
