@@ -1,5 +1,10 @@
 import { mount, tick, unmount } from 'svelte';
-import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
+import type {
+	ReferenceRecordingResponse,
+	ReferenceTakeUseResponse,
+	ReferenceUsageResponse,
+	ReferenceVersionUseResponse
+} from '#lib/api/types.ts';
 import ReferencesPage from '../../routes/settings/references/+page.svelte';
 
 export function referenceRecording(
@@ -55,4 +60,35 @@ export async function chooseFile(target: HTMLElement, file: File): Promise<void>
 	Object.defineProperty(input, 'files', { value: [file], configurable: true });
 	input.dispatchEvent(new Event('change', { bubbles: true }));
 	await tick();
+}
+
+export function takeUse(
+	overrides: Partial<ReferenceTakeUseResponse> = {}
+): ReferenceTakeUseResponse {
+	return {
+		song_id: 'song-1',
+		song_title: 'Storytime',
+		song_slug: 'storytime',
+		album_id: 'album-1',
+		generation_number: 11,
+		version_number: 6,
+		is_archived: false,
+		is_trashed: false,
+		audio_duration_sec: 193,
+		...overrides
+	};
+}
+
+export function versionUse(
+	overrides: Partial<ReferenceVersionUseResponse> = {}
+): ReferenceVersionUseResponse {
+	return {
+		song_id: 'song-1',
+		song_title: 'Storytime',
+		song_slug: 'storytime',
+		album_id: 'album-1',
+		version_number: 3,
+		is_trashed: false,
+		...overrides
+	};
 }

@@ -1,4 +1,8 @@
-import type { ReferenceListResponse, ReferenceRecordingResponse } from './types';
+import type {
+	ReferenceListResponse,
+	ReferenceRecordingResponse,
+	ReferenceUsesResponse
+} from './types';
 import { apiFetch, apiSend, apiUpload } from './fetch';
 
 export async function uploadReference(
@@ -17,6 +21,10 @@ export async function uploadReference(
 
 export async function listReferences(): Promise<ReferenceListResponse> {
 	return apiFetch<ReferenceListResponse>('/api/references');
+}
+
+export async function getReferenceUses(referenceId: string): Promise<ReferenceUsesResponse> {
+	return apiFetch<ReferenceUsesResponse>(`/api/references/${encodeURIComponent(referenceId)}/uses`);
 }
 
 export function referenceAudioUrl(referenceId: string): string {

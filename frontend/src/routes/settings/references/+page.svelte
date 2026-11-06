@@ -11,6 +11,7 @@
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import ReferenceMenu from '#lib/components/ReferenceMenu.svelte';
+	import ReferenceUses from '#lib/components/ReferenceUses.svelte';
 	import {
 		APP_NAME,
 		REFERENCE_AUDIO_ACCEPT,
@@ -175,11 +176,17 @@
 		element.play().catch(() => fail(referenceId));
 	}
 
-	function markInUse(referenceId: string) {
-		references =
-			references?.map((reference) =>
-				reference.id === referenceId ? { ...reference, in_use: true } : reference
-			) ?? null;
+	let openUsesId = $state<string | null>(null);
+
+	function usedLabel(reference: ReferenceRecordingResponse): string {
+		const counts = [
+			[reference.used_by_takes, 'take'],
+			[reference.used_by_versions, 'version']
+		] as const;
+		const kinds = counts
+			.filter(([count]) => count > 0)
+			.map(([count, noun]) => `${count} ${noun}${count === 1 ? '' : 's'}`);
+		return `Used in ${kinds.join(', ')}`;
 	}
 
 	async function confirmDelete(reference: ReferenceRecordingResponse) {
@@ -189,7 +196,7 @@
 			await deleteReference(reference.id);
 		} catch (error) {
 			if (error instanceof ApiError && error.status === CONFLICT_STATUS) {
-				markInUse(reference.id);
+				await load();
 				rowFault = { id: reference.id, words: IN_USE_FAULT };
 			} else {
 				rowFault = { id: reference.id, words: describeFailure(error, DELETE_FAILED) };
@@ -318,7 +325,14 @@
 				{@const playing = activeId === reference.id}
 				<!-- Keyboard users reach the row through its button, so the row takes no focus. -->
 				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-				<li class="reference-row" class:playing onclick={() => toggle(reference.id)}>
+				<li
+					class="reference-row"
+					class:playing
+					onclick={(event) => {
+						if ((event.target as Element).closest('.reference-uses')) return;
+						toggle(reference.id);
+					}}
+				>
 					<button
 						type="button"
 						class="reference-play"
@@ -332,7 +346,19 @@
 					</button>
 					<span class="reference-text">
 						<span class="reference-name" title={reference.filename}>{reference.filename}</span>
-						<span class="reference-meta">{metaLabel(reference, now)}</span>
+						<span class="reference-meta"
+							>{metaLabel(reference, now)}{#if reference.in_use}{PROGRESS_SEPARATOR}<button
+									type="button"
+									class="reference-used"
+									aria-expanded={openUsesId === reference.id}
+									aria-controls={openUsesId === reference.id ? `uses-${reference.id}` : undefined}
+									onclick={(event) => {
+										event.stopPropagation();
+										openUsesId = openUsesId === reference.id ? null : reference.id;
+									}}>{usedLabel(reference)}</button
+								>
+							{/if}</span
+						>
 						{#if rowFault?.id === reference.id}
 							<span class="reference-meta reference-fault" role="alert">{rowFault.words}</span>
 						{/if}
@@ -343,9 +369,16 @@
 						<ReferenceMenu
 							filename={reference.filename}
 							inUse={reference.in_use}
+							usesCount={reference.used_by_takes + reference.used_by_versions}
+							onshowuses={() => (openUsesId = reference.id)}
 							ondelete={() => (pendingDelete = reference)}
 						/>
 					</span>
+					{#if openUsesId === reference.id}
+						<div class="reference-uses">
+							<ReferenceUses id={`uses-${reference.id}`} referenceId={reference.id} />
+						</div>
+					{/if}
 				</li>
 			{/each}
 		</ul>
@@ -500,7 +533,7 @@
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
-		font-size: 1.5rem;
+		font-size: 22px;
 	}
 
 	.load-error {
@@ -562,7 +595,7 @@
 
 	.skeleton-bar {
 		height: 12px;
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		background: linear-gradient(
 			110deg,
 			var(--surface-hover) 20%,
@@ -618,7 +651,7 @@
 	.empty p {
 		margin: 0;
 		max-width: 28ch;
-		font-size: 0.95rem;
+		font-size: 15px;
 	}
 
 	.reference-list {
@@ -633,12 +666,19 @@
 
 	.reference-row {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 12px;
 		min-width: 0;
 		min-height: 56px;
 		padding: 6px 14px;
 		cursor: pointer;
+	}
+
+	.reference-uses {
+		flex: 1 0 100%;
+		margin: 0 -14px -6px;
+		cursor: default;
 	}
 
 	.reference-row.playing {
@@ -691,9 +731,28 @@
 	}
 
 	.reference-meta {
-		font-size: 12.5px;
+		font-size: 12px;
 		color: var(--text-muted);
 		font-variant-numeric: tabular-nums;
+	}
+
+	.reference-used {
+		position: relative;
+		padding: 0;
+		background: none;
+		border: none;
+		font: inherit;
+		color: var(--accent);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+	}
+
+	/* The text stays 12px in the meta line; the pointer target grows around it. */
+	.reference-used::after {
+		content: '';
+		position: absolute;
+		inset: calc((100% - var(--hitbox-frequent)) / 2) 0;
 	}
 
 	.reference-fault {
