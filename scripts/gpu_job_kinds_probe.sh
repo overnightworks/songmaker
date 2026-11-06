@@ -184,8 +184,15 @@ generate_kind() { # generate_kind LABEL PATH JSON SONG_ID
     prove_take "$label" "$(newest_take "$song")"
 }
 
+# The compose file declares this network external (edge creates it on the
+# deploy host, e2e.yml on a runner); the probe never removes it.
+docker network inspect hal_backchannel_songmaker >/dev/null 2>&1 \
+    || docker network create hal_backchannel_songmaker >/dev/null
+
+# Every process migrates itself in init_db, as in e2e.yml: the stores first, then the apps.
+"${compose[@]}" --profile gpu up -d --wait postgres redis
 "${compose[@]}" --profile gpu up -d --build --wait \
-    postgres redis migrate songmaker-web songmaker-music-worker "$WORKER_SERVICE"
+    songmaker-web songmaker-music-worker "$WORKER_SERVICE"
 
 echo "--- checkpoints read-only ---"
 if "${compose[@]}" exec -T "$WORKER_SERVICE" sh -c 'touch /opt/acestep/checkpoints/.gpu-probe-write' 2>/dev/null; then
