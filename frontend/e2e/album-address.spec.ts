@@ -87,7 +87,7 @@ test(
 		await expectWorkspaceStanding(page);
 
 		// A track click lands under the song's own address, its slug, in one
-		// navigation step — `/album/<slug>/<song-slug>`. Both are a route-file crossing (a
+		// navigation step — `/album/<slug>/<song-slug>`. The song address is a route-file crossing (a
 		// different +page.svelte owns each of the three addresses), but the
 		// `(library)` route group's own layout keeps LibraryWorkspace standing
 		// across it (issue #276), so the editor no longer remounts on the way

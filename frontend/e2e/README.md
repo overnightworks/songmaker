@@ -222,8 +222,7 @@ check the printed peak against the override rather than trusting the
 through.
 
 Opening a track from an open album address is still a route-file crossing
-(issue #269): a song addresses `/album/<slug>/<song-slug>` instead of the
-address-less `/`, and each of the four library addresses is still a
+(issue #269): a song addresses `/album/<slug>/<song-slug>`, and each of the four library addresses is still a
 different `+page.svelte`. #265's S3 (issue #275) measured what that crossing
 cost the library flow — 28 requests instead of a pre-address 25, because each
 address mounted its own `LibraryWorkspace` and a crossing tore the previous

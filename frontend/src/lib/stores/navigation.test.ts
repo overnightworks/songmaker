@@ -809,6 +809,17 @@ describe("a rename pulls the open song's address along (issue #275)", () => {
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 		expect(window.location.pathname).toBe('/album/a1/s1');
 	});
+
+	it('leaves the address alone when it is not a song address', async () => {
+		replaceHistoryEntry('/');
+		selectedSongId.set('s1');
+		vi.mocked(goto).mockClear();
+
+		updateSongInList('s1', (s) => ({ ...s, slug: 'renamed' }));
+
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+		expect(window.location.pathname).toBe('/');
+	});
 });
 
 // The open playlist's address names it by slug (issue #286), and a rename

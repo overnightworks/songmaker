@@ -332,7 +332,7 @@ true by then; a playlist opened before its slug is known falls back to
 stays the rail context behind it, Home addresses `/` and
 the wall `/library`, and an album or playlist that is only the rail context
 behind either stays on that address (only an album's own detail addresses
-`/album/<slug>`). Home's route calls `openHomeAddress`, which replaces the entry with `/` and drops any query; the Library's route ignores one.
+`/album/<slug>`). Home's route calls `openHomeAddress`, which replaces a foreign entry with `/`, dropping any query; the Library's route ignores one.
 `isLibraryWorkspacePath` still counts all seven by pathname (every address
 `libraryRouteShape` in `routes/addresses.ts` gives a library shape) rather
 than by the route group, since `routes/+layout.svelte` sits outside

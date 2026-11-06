@@ -21,8 +21,6 @@ import { toasts } from '#lib/stores/toast.ts';
 const SONG_ID = 'song-uuid-1';
 const GENERATION_ID = 'gen-uuid-1';
 const ALBUM_SLUG = 'anfield';
-const SONG_SLUG = 'stadion-lauf-a';
-const TRACK_TITLE = 'Stadion Lauf A';
 
 const api = vi.hoisted(() => ({
 	fetchAlbum: vi.fn(),
@@ -37,25 +35,9 @@ const api = vi.hoisted(() => ({
 vi.mock('$app/state', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
 );
-// Stands in for the router the way the real one behaves for a same-shape
-// write: it moves the history entry, but nothing here re-resolves the
-// mounted route -- a route-crossing `goto` from this page therefore never
-// actually swaps in the destination `+page.svelte` the way a real browser
-// would (that hop is the sibling suites' own job, plus
-// e2e/album-address.spec.ts for the real router). What this file can and
-// does pin is that `goto` is called with the right path and options, and
-// what the page renders while it waits or fails.
-vi.mock('$app/navigation', async () => {
-	const navigation = (await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation();
-	return {
-		...navigation,
-		goto: vi.fn(async (...args: Parameters<typeof navigation.goto>) => {
-			// A route crossing unmounts this leaf before the destination URL is exposed.
-			for (const app of mounted.splice(0)) await unmount(app);
-			await navigation.goto(...args);
-		})
-	};
-});
+vi.mock('$app/navigation', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
+);
 vi.mock('$app/paths', async () => (await import('#lib/test-utils/app-paths.ts')).fakeAppPaths());
 vi.mock('#lib/api/songs.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/api/songs.ts')>()),
@@ -80,7 +62,6 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 	fetchActiveModels: api.fetchActiveModels
 }));
 
-import { goto } from '$app/navigation';
 import HomeAddressHarness from './harness.svelte';
 import LibraryAddressHarness from './library/harness.svelte';
 
@@ -192,22 +173,12 @@ beforeEach(() => {
 		'fetch',
 		vi.fn(async () => Response.json({ items: [] }))
 	);
-	vi.mocked(goto).mockClear();
 	api.fetchAlbum
 		.mockReset()
 		.mockResolvedValue(album({ id: ALBUM_SLUG, title: 'Anfield', share_slug: null, cover: null }));
 	api.fetchAlbums.mockReset().mockResolvedValue(page([]));
 	api.fetchSongs.mockReset().mockResolvedValue(page([]));
-	api.fetchSong.mockReset().mockResolvedValue(
-		song({
-			album_title: 'Anfield',
-			generation_count: 0,
-			id: SONG_ID,
-			slug: SONG_SLUG,
-			title: TRACK_TITLE,
-			album_id: ALBUM_SLUG
-		})
-	);
+	api.fetchSong.mockReset().mockResolvedValue(song());
 	api.fetchVersions.mockReset().mockResolvedValue([]);
 	api.fetchLastFailedGeneration.mockReset().mockResolvedValue({ job: null });
 	api.fetchActiveModels.mockReset().mockResolvedValue([]);
@@ -239,21 +210,9 @@ describe.each(ROUTE_PAGES)('$route with no query', ({ route, harness, surface, s
 	});
 });
 
-describe('/ with no query', () => {
-	it('renders nothing and leaves the workspace reachable', async () => {
-		coldTabAt('');
-
-		const target = openAddress();
-
-		await Promise.resolve();
-		expect(target.querySelector('.address-overlay')).toBeNull();
-		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
-	});
-});
-
-describe('/library with a song query', () => {
+describe('/library with a query', () => {
 	it('1354_rule_31: ignores the query', async () => {
-		coldTabAt(`?song=${SONG_ID}`, LIBRARY_ROUTE_PATH);
+		coldTabAt('?x=1', LIBRARY_ROUTE_PATH);
 
 		const target = openAddress(LibraryAddressHarness);
 
