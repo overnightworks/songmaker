@@ -1,0 +1,7 @@
+claim_id = "de582b53f58e42db80b9e360aeafa680"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "af1bcf6896ca011f818ef5344be90b920a0912ab"
+branch = "claude/issue-2328-psycopg2-driver-name"
+scope = ["src/songmaker_cli/db/database_url.py", "tests/conftest.py", "tests/songmaker_cli/db/test_database_url.py"]
+opened_commit = "8df2ace697d24e96087eb473073e475cd8c4f476"
