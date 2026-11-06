@@ -687,7 +687,6 @@ class AuditAction(StrEnum):
     CANCEL = "cancel"
     SHARE = "share"
     UNSHARE = "unshare"
-    REMASTER = "remaster"
     MOVE = "move"
     CLEANUP = "cleanup"
     TRAIN_LORA = "train_lora"
