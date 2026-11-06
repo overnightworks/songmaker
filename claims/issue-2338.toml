@@ -1,0 +1,8 @@
+claim_id = "50e6f67b7dd54622a0b9c28200466361"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "b6baa9dcdb43cec2230b9c9452e91e87c5d2b0a0"
+branch = "claude/issue-2338-capabilities-routes-leave"
+scope = ["docs/architecture.md", "docs/security.md", "frontend/e2e/README.md", "frontend/e2e/admin-models.spec.ts", "frontend/e2e/auth-flows.spec.ts", "frontend/src/lib/api/client.test.ts", "frontend/src/lib/api/client.ts", "frontend/src/lib/api/settings.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "quality/baseline.toml", "scripts/dead-symbols.allow", "scripts/generate_types.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/settings.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/queries/settings.py", "src/songmaker_cli/settings_api.py", "tests/fixtures/provider_status_capability_missing.json", "tests/fixtures/provider_status_ready.json", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_db.py", "tests/songmaker_cli/test_settings_api_providers.py"]
+opened_commit = "6cf717bbcf342c3acea428f63f99a918b5098182"
+whole_reason = "Two routes, their response models, the generated types and the one frontend call are one contract; deleting a route without its types or its caller leaves a tree that does not build."
