@@ -177,9 +177,9 @@ def _isolate_codex_process_pool():
 def _no_claude_cli_builtin_tools_probe():
     """Never let a test spawn the real Claude CLI to list its built-in tools.
 
-    The catalog's login and ``/model`` checks ask the mounted binary; on a
-    developer machine that binary exists, so without this a catalog test would
-    start a real CLI session.
+    On a developer machine the Claude binary exists, so without this a test
+    reaching the Claude provider's built-in-tools check would start a real CLI
+    session.
     """
     from unittest.mock import AsyncMock
 
