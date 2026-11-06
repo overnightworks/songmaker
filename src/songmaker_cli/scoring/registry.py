@@ -5,7 +5,6 @@ Drives:
 - needs_audio / device metadata for the child's pipeline scheduler
 - output_keys for SongScores.to_dict()
 - VALID_SCORER_NAMES used by ScoreRequest validation
-- /scoring/schema API endpoint
 """
 
 from __future__ import annotations
@@ -22,7 +21,6 @@ TEXT_ACCURACY_SCORER: Final[str] = "text_accuracy"
 
 @dataclass(frozen=True)
 class ScorerSpec:
-    name: str
     output_keys: tuple[str, ...]
     needs_audio: bool = True
     device: str = DEVICE_CPU
@@ -30,13 +28,11 @@ class ScorerSpec:
 
 SCORERS: dict[str, ScorerSpec] = {
     TEXT_ACCURACY_SCORER: ScorerSpec(
-        name=TEXT_ACCURACY_SCORER,
         output_keys=("text_accuracy", "detected_language"),
         needs_audio=False,
         device=DEVICE_CPU,
     ),
     "emotional_dynamics": ScorerSpec(
-        name="emotional_dynamics",
         output_keys=(
             "dynamics",
             "dynamics_pitch_cv",
@@ -45,7 +41,6 @@ SCORERS: dict[str, ScorerSpec] = {
         ),
     ),
     "audiobox": ScorerSpec(
-        name="audiobox",
         output_keys=(
             "audiobox_enjoyment",
             "audiobox_understanding",
@@ -56,15 +51,12 @@ SCORERS: dict[str, ScorerSpec] = {
         device=DEVICE_GPU,
     ),
     "bpm_accuracy": ScorerSpec(
-        name="bpm_accuracy",
         output_keys=("bpm_detected", "bpm_deviation"),
     ),
     "silence": ScorerSpec(
-        name="silence",
         output_keys=("silence_gaps", "silence_longest"),
     ),
     "spectral_quality": ScorerSpec(
-        name="spectral_quality",
         output_keys=("spectral_artifacts",),
     ),
 }
