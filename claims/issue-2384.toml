@@ -1,0 +1,8 @@
+claim_id = "ea94870dcd854639823fb9bb1625bd53"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "1475530167e05de04097d9c7ff62f061b2970673"
+branch = "claude/issue-2384-references-v9b3-the-deletion-loops-stamp"
+scope = ["docs/architecture.md", "quality/baseline.toml", "src/songmaker_cli/cleanup.py", "tests/songmaker_cli/test_reference_unused_stamp.py", "tests/songmaker_cli/test_reference_unused_stamp_loops.py"]
+opened_commit = "fc2923252c3fa3c1bfc60103beb5c433eaee41f1"
+whole_reason = "The two background deletion loops gain their stamp calls in one production file, with their tests and V9b2's two test gaps beside them."
