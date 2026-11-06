@@ -23,8 +23,10 @@ from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSI
 from songmaker_cli.db.models import User
 from songmaker_cli.db.queries.auth import list_user_ids
 from songmaker_cli.db.queries.reference_recordings import (
+    clear_stamps_on_used_or_kept,
     create_reference_recording,
     get_owned_reference_recording,
+    list_unstamped_unkept_reference_ids,
     mark_newly_unused,
     owned_reference_storage_paths,
     owner_reference_usage,
@@ -229,14 +231,15 @@ def _log_commit_failure(user_id: str, failure: BaseException) -> None:
     log.error("Reference audio commit failed for user %s: %s", user_id, type(failure).__name__)
 
 
-def commit_unused_stamps(session: Session, candidates: Collection[str]) -> None:
+def commit_unused_stamps(session: Session, candidates: Collection[str]) -> int:
     """Stamp the candidates that lost their last link, in a transaction of their own.
 
     Call after the detaching site's commit. A failure is logged with counts and error kind
     only; the SQLAlchemy failure is not re-raised: the caller's answer and file removal stand.
+    Returns how many rows were stamped, 0 after a failure.
     """
     if not candidates:
-        return
+        return 0
     try:
         stamped = mark_newly_unused(session, candidates)
         session.commit()
@@ -246,8 +249,61 @@ def commit_unused_stamps(session: Session, candidates: Collection[str]) -> None:
             "Unused-since stamp failed for %d reference candidates: %s",
             len(candidates), type(failure).__name__,
         )
-        return
+        return 0
     log.info("Stamped %d of %d reference candidates unused", stamped, len(candidates))
+    return stamped
+
+
+@dataclass(frozen=True)
+class ReconciledStamps:
+    stamped: int = 0
+    cleared: int = 0
+
+
+def _log_reconciliation_failure(action: str, failure: SQLAlchemyError) -> None:
+    """Log the action and the error kind only: a traceback would name the path."""
+    log.error(  # NOSONAR(S8572) A traceback would name the path.
+        "Unused-since reconciliation failed to %s: %s", action, type(failure).__name__,
+    )
+
+
+def _clear_used_or_kept_stamps(factory: sessionmaker[Session]) -> int:
+    """The clear half in a transaction of its own; a failure is logged and counts as 0."""
+    try:
+        with factory() as session:
+            cleared = clear_stamps_on_used_or_kept(session)
+            session.commit()
+    except SQLAlchemyError as failure:
+        _log_reconciliation_failure("clear stamps", failure)
+        return 0
+    return cleared
+
+
+def _stamp_unstamped_unkept(factory: sessionmaker[Session]) -> int:
+    """The stamp half; the commit wrapper owns its transaction and its counted failure log.
+
+    A failure of the listing itself names no count: none is known.
+    """
+    with factory() as session:
+        try:
+            candidates = list_unstamped_unkept_reference_ids(session)
+        except SQLAlchemyError as failure:
+            _log_reconciliation_failure("list stamp candidates", failure)
+            return 0
+        return commit_unused_stamps(session, candidates)
+
+
+def reconcile_unused_stamps(factory: sessionmaker[Session]) -> ReconciledStamps:
+    """Clear the stamps of kept or linked rows, then stamp the unlinked, unkept rows without one.
+
+    Each half locks only reference rows in id order, in its own transaction; a failed half is
+    logged with its error kind and leaves the other half running. A row stamped here is stamped
+    late, never early.
+    """
+    cleared = _clear_used_or_kept_stamps(factory)
+    stamped = _stamp_unstamped_unkept(factory)
+    log.info("Unused-since reconciliation: %d stamped, %d cleared", stamped, cleared)
+    return ReconciledStamps(stamped=stamped, cleared=cleared)
 
 
 def store_reference_audio(

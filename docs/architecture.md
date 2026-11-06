@@ -1303,7 +1303,7 @@ User (id = Keycloak subject, username, role: admin|user)
   │           └── ChatMessage (role, content — per-song conversation history)
   ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
   ├── UserSongWork (song, edited_at?, edit_kind?, played_at?, album_played_at? — this person's own latest edit and its kind, latest listen, and latest listen outside a playlist, on any song they can open, owner or not)
-  ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?, is_kept — the owner keeps the reference, unused_since? — when it last became unused: set at upload and when a take delete, an in-place version edit, a version delete, a song cleanup, an album cleanup, the daily hard delete of an album or song or retention's final take deletion leaves it without a link (never overwritten, kept rows skipped), cleared under the row lock when a version or take links it; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row)
+  ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?, is_kept — the owner keeps the reference, unused_since? — when it last became unused: set at upload and when a take delete, an in-place version edit, a version delete, a song cleanup, an album cleanup, the trash expiry's hard delete of an album or song or retention's final take deletion leaves it without a link (never overwritten, kept rows skipped), cleared under the row lock when a version or take links it; the daily unused-stamp reconciliation stamps unstamped, unkept, unlinked rows late and clears the stamps of kept or linked rows, each half under the rows' locks in its own transaction; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
   ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start)
@@ -1635,7 +1635,8 @@ SIGKILLed and even the values the run did produce would be lost.
   acestep-worker)
 - Cron: audits orphaned audio files and applies file-expiry cleanup; once a day
   (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
-  reference-audio files that no row names. The
+  reference-audio files that no row names and reconciles the reference
+  `unused_since` stamps. The
   `generate` and `lora_training` job types are recovered on MusicWorker
   startup and shutdown.
 - Fetches each take from the worker over HTTP (no shared output volume; a failed fetch is one failed take), post-processes it → mastered MP3 → DB row in `asyncio.to_thread`

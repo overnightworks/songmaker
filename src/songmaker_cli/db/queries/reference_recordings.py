@@ -29,6 +29,10 @@ class ReferenceLinkCounts:
     versions: int
     takes: int
 
+    @property
+    def is_unlinked(self) -> bool:
+        return self.versions == 0 and self.takes == 0
+
 
 @dataclass(frozen=True)
 class VersionUse:
@@ -134,15 +138,46 @@ def mark_newly_unused(session: Session, reference_ids: Collection[str]) -> int:
         .with_for_update(),
     ).scalars().all()
     link_counts = reference_link_counts(session, [row.id for row in candidates])
-    unlinked = [
-        row for row in candidates
-        if link_counts[row.id] == ReferenceLinkCounts(versions=0, takes=0)
-    ]
+    unlinked = [row for row in candidates if link_counts[row.id].is_unlinked]
     stamped_at = utcnow()
     for row in unlinked:
         row.unused_since = stamped_at
     session.flush()
     return len(unlinked)
+
+
+def list_unstamped_unkept_reference_ids(session: Session) -> list[str]:
+    """Ids of the rows with no stamp that the owner has not kept, in id order."""
+    return list(session.execute(
+        select(ReferenceRecording.id)
+        .where(
+            ReferenceRecording.unused_since.is_(None),
+            ReferenceRecording.is_kept.is_(False),
+        )
+        .order_by(ReferenceRecording.id),
+    ).scalars())
+
+
+def clear_stamps_on_used_or_kept(session: Session) -> int:
+    """Clear ``unused_since`` on each stamped row that is kept or that a version or take links.
+
+    The stamped rows are locked in id order, then the links are counted by a fresh statement,
+    the way ``mark_newly_unused`` counts them. Flushes; returns the cleared count.
+    """
+    stamped = session.execute(
+        select(ReferenceRecording)
+        .where(ReferenceRecording.unused_since.is_not(None))
+        .order_by(ReferenceRecording.id)
+        .with_for_update(),
+    ).scalars().all()
+    link_counts = reference_link_counts(session, [row.id for row in stamped])
+    cleared = [
+        row for row in stamped if row.is_kept or not link_counts[row.id].is_unlinked
+    ]
+    for row in cleared:
+        row.unused_since = None
+    session.flush()
+    return len(cleared)
 
 
 def delete_reference_recording(session: Session, recording: ReferenceRecording) -> str:
