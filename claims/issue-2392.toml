@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "35a896832d9b80e8dfde67c70937464fd977e319"
 branch = "claude/issue-2392-references-v9c-the-daily-run-reconciles"
-scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/reference_audio.py", "tests/songmaker_cli/db/queries/test_reference_unused_stamp_postgres.py", "tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_reference_unused_stamp_reconciliation.py"]
+scope = ["docs/architecture.md", "src/songmaker_cli/api_models/references.py", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/reference_audio.py", "tests/songmaker_cli/db/queries/test_reference_unused_stamp_postgres.py", "tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_reference_unused_stamp_reconciliation.py"]
 opened_commit = "84d20644b4d1f1f825e1d40a41afab80a3cb824b"
 whole_reason = "One reconciliation: its two queries, its transaction wrapper and its cron in three production files, proven in one new test module plus the cron pins and two PostgreSQL race cells."
