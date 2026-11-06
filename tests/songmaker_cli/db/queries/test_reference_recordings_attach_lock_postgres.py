@@ -110,10 +110,18 @@ def test_a_save_waits_for_a_delete_of_the_row_and_then_answers_not_found(
     assert world.titles() == ["Existing"]
 
 
-def test_a_save_without_a_reference_does_not_wait_for_a_locked_reference_row(
+def test_a_save_that_sets_no_reference_does_not_wait_for_the_locked_row_its_version_carries(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path)
+    with pg_factory() as session:
+        session.add(ReferenceRecording(
+            id="carried", user_id=OWNER, storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/C.wav",
+            original_filename="C.wav", size_bytes=4,
+        ))
+        session.flush()
+        session.get(Song, world.song_id).latest_version.reference_recording_id = "carried"
+        session.commit()
     answers: dict[str, Response] = {}
     save = in_thread(
         answers, "save",

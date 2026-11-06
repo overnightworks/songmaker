@@ -110,6 +110,7 @@ def lock_and_mark_reference_used(
     recording = get_owned_reference_recording(session, user_id, reference_id, lock=True)
     if recording is not None:
         recording.unused_since = None
+        session.flush()
     return recording
 
 
