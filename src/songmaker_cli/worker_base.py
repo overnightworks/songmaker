@@ -130,6 +130,9 @@ class WorkerBase:
         from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_type
 
         redis = ctx["redis"]
+        # Opening the database may wait for it to start; take the lock only after,
+        # so the wait cannot outlive the lock's TTL.
+        session_factory = self.get_db_factory()
         if not await redis.set(
             self.recovery_lock_key, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True,
         ):
@@ -138,7 +141,7 @@ class WorkerBase:
 
         recovered: dict[str, int] = {}
         try:
-            with self.get_db_factory()() as session:
+            with session_factory() as session:
                 recovered = recover_stale_jobs_by_type(
                     session, self.recovery_statuses_by_type(),
                 )
