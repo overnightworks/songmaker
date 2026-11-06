@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from support.failing_reference_stamp import failing_stamp_trigger
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
@@ -165,6 +166,32 @@ def test_a_failing_stamp_half_rolls_back_every_candidate_and_spares_the_clear_ha
     assert "for 2 reference candidates" in errors[0].getMessage()
     assert errors[0].getMessage().endswith("Error")
     assert _stamp(factory, EARLIER_NAME) is None
+    assert _stamp(factory, SECRET_NAME) is None
+    assert _stamp(factory, "stamped-kept") is None
+
+
+def test_a_failing_candidate_listing_logs_the_error_kind_without_a_count_and_spares_the_clear_half(
+    factory, caplog, monkeypatch,
+) -> None:
+    _add(
+        factory, _recording(SECRET_NAME), _recording("stamped-kept", stamp=OLD_STAMP, kept=True),
+    )
+
+    def fail_listing(session):
+        raise OperationalError("listing", {}, Exception(SECRET_NAME))
+
+    monkeypatch.setattr("songmaker_cli.reference_audio.list_unstamped_unkept_reference_ids", fail_listing)
+
+    with caplog.at_level(logging.INFO):
+        report = reconcile_unused_stamps(factory)
+
+    errors = [record for record in caplog.records if record.levelno == logging.ERROR]
+    assert report == ReconciledStamps(stamped=0, cleared=1)
+    assert len(errors) == 1
+    assert errors[0].exc_info is None
+    assert errors[0].getMessage().endswith("OperationalError")
+    assert not any(character.isdigit() for character in errors[0].getMessage())
+    assert SECRET_NAME not in errors[0].getMessage()
     assert _stamp(factory, SECRET_NAME) is None
     assert _stamp(factory, "stamped-kept") is None
 
