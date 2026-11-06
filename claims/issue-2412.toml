@@ -1,8 +1,0 @@
-claim_id = "3d0478b25b1549afa263bd3a4fda6320"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "1a9003e9156d17798926db7883d894747e4969ba"
-branch = "claude/issue-2412-release-images-s4-release-workflow"
-scope = [".github/workflows/release.yml", "README.md", "docs/architecture.md", "docs/security.md", "scripts/auto-deploy.sh", "tests/workflows/test_release_workflow.py"]
-opened_commit = "2748ba441dec3fe8582532d3f52df12a0a897ac9"
-whole_reason = "One release workflow, the test that ties its image set to compose, and the four sentences that say who now sets the tag; a workflow without its docs would leave the hand-set tag documented as the path."
