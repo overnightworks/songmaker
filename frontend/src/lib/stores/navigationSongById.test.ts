@@ -58,6 +58,7 @@ import {
 	followShellLayers,
 	initNavigation,
 	openAlbum,
+	openAppPage,
 	openRailSearchTarget,
 	selectSong
 } from './navigation';
@@ -149,4 +150,18 @@ describe('a song opened by id alone', () => {
 			expect(location.search).toBe('');
 		}
 	);
+
+	it('leaves the user on Settings when the song loads after they moved there', async () => {
+		let finishLoad: (loaded: ReturnType<typeof song>) => void = () => undefined;
+		fetchSong.mockReturnValue(new Promise((resolve) => (finishLoad = resolve)));
+		await openFromAlbumPage(openers[0].open);
+
+		await openAppPage('/settings/voices');
+		finishLoad(
+			song({ id: 'unlisted', album_id: 'a1', slug: 'tide', generations: [makeGeneration()] })
+		);
+
+		await vi.waitFor(() => expect(get(songList).some((item) => item.id === 'unlisted')).toBe(true));
+		expect(location.pathname).toBe('/settings/voices');
+	});
 });

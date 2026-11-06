@@ -482,10 +482,12 @@ function loadSongContext(songId: string): Promise<void> {
 
 // A song opened by id alone (a search hit, a playlist row) wrote the path
 // history stood on, as its album and slug were unknown. Once it has loaded,
-// the same entry takes the song's own address, so a reload opens it. A newer
-// selection that has moved on keeps its own entry.
+// the same entry takes the song's own address, so a reload opens it. Only an
+// entry that still names this song settles: a user who moved on (another song,
+// Settings) keeps the page they are on.
 function settleSongAddress(songId: string): void {
-	if (get(selectedSongId) !== songId) return;
+	const standing = currentLibraryHistoryState();
+	if (!isLibraryHistoryState(standing) || standing.songId !== songId) return;
 	void replaceLibraryHistory();
 }
 
