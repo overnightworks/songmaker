@@ -5,7 +5,7 @@ Sub-modules:
     song_api        — song + version CRUD
     generation_api  — generation, scoring, rating, pick endpoints
     jobs_api        — job status, streaming, cancellation endpoints
-    settings_api    — capabilities, generation presets, builtins, global defaults
+    settings_api    — generation presets, builtins, global defaults
 
 Shared helpers live in api_helpers.py.
 """

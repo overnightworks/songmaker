@@ -121,14 +121,6 @@ export interface BulkDeleteResponse {
 	deleted: number;
 }
 
-export interface Capabilities {
-	claude_api: boolean;
-	claude_cli: boolean;
-	generation: boolean;
-	scoring: boolean;
-	chat_model: string;
-}
-
 export interface ChatMessageItem {
 	id: string;
 	role: string;
@@ -598,28 +590,6 @@ export interface PresetUpdateRequest {
 	is_default?: boolean | null;
 }
 
-export interface ProviderRouteReadiness {
-	state: 'ready' | 'not_configured' | 'disturbed' | 'unverified';
-	capability: 'tools_available' | 'text_only';
-	reason?: SafeRouteReason | null;
-	probed_at?: string | null;
-	setup_label: string;
-}
-
-export interface ProviderRouteStatusResponse {
-	models: string[];
-	catalogue_failure?: SafeRouteReason | null;
-	catalog_source?: string | null;
-	catalog_version?: string | null;
-	readiness: ProviderRouteReadiness;
-	retained_model_id?: string | null;
-}
-
-export interface ProviderStatus {
-	provider: string;
-	cowriter_routes: Record<'cli' | 'api', ProviderRouteStatusResponse>;
-}
-
 export interface QueueStreamManifest {
 	snapshot_id: string;
 	stream_url: string;
@@ -792,11 +762,6 @@ export interface ResourceHelloEvent {
 
 export interface ResourceResyncEvent {
 	high_water_mark: string;
-}
-
-export interface SafeRouteReason {
-	code: 'api_key_not_set' | 'cli_login_not_configured' | 'cli_auth_rejected' | 'cli_binary_unavailable' | 'cli_capacity_exhausted' | 'cli_protocol_error' | 'api_http_error' | 'api_protocol_error' | 'catalogue_http_error' | 'catalogue_protocol_error' | 'tool_execution_failed' | 'tool_protocol_error' | 'tool_limit_exceeded' | 'no_image_tool' | 'route_failed';
-	message: string;
 }
 
 export interface ScoreRequest {
