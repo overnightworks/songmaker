@@ -1,0 +1,7 @@
+claim_id = "94485cdaedbf402695633d60c2ce4e4f"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "586961c5e7fc1c833c9b40f9e995aeab7ac89451"
+branch = "claude/issue-2372-board-toml-drops-body-contract-which-res"
+scope = [".aco/board.toml"]
+opened_commit = "6438b3d5e559e1be44e3b547d9ace8af498fb34f"
