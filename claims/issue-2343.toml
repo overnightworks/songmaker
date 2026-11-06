@@ -1,0 +1,8 @@
+claim_id = "0614ba99d79f4669871b305e0ce9f346"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "b6baa9dcdb43cec2230b9c9452e91e87c5d2b0a0"
+branch = "claude/issue-2343-references-v9a-is-kept-and-unused-since"
+scope = ["src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/db/queries/test_reference_recordings_attach_lock_postgres.py", "tests/songmaker_cli/db/test_migrations_reference_keep.py", "tests/songmaker_cli/test_reference_api.py", "tests/songmaker_cli/test_reference_audio_recordings.py", "tests/support/reference_link_migration.py"]
+opened_commit = "ecd578bf60972e763bd3a777577d85317eab450e"
+whole_reason = "The two columns, the migration that stamps existing rows, and every writer that sets or clears the stamp arrive together, or a used reference could carry a stamp."
