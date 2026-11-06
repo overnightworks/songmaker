@@ -570,9 +570,7 @@ function nativeTakeIndex(
 		ctx.takes,
 		ctx.index ?? 0,
 		(take) => take === current,
-		(take) =>
-			take.generation.id === current.generation.id &&
-			take.generation.mp3_path === current.generation.mp3_path
+		(take) => take.generation.id === current.generation.id
 	);
 }
 
