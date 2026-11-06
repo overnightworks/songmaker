@@ -242,7 +242,7 @@ def commit_unused_stamps(session: Session, candidates: Collection[str]) -> None:
         session.commit()
     except SQLAlchemyError as failure:
         session.rollback()
-        log.error(
+        log.error(  # NOSONAR(S8572) A traceback would name the path.
             "Unused-since stamp failed for %d reference candidates: %s",
             len(candidates), type(failure).__name__,
         )
