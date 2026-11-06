@@ -3,5 +3,5 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "a885b03e7a5908830c2a2852c5935fa6f1aa1f29"
 branch = "claude/issue-2309-deploy-lock-children"
-scope = ["scripts/auto-deploy.sh", "tests/auto_deploy_harness.py", "tests/test_auto_deploy_alerting.py"]
+scope = ["scripts/auto-deploy.sh", "tests/test_auto_deploy_lock.py"]
 opened_commit = "0be9dea45cdc6adb016ec151010184a453d84585"
