@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event, text
+from support.failing_reference_stamp import failing_stamp_trigger
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
@@ -38,12 +39,6 @@ def _take_row(take_id: str, number: int, reference_id: str | None) -> Generation
     )
 
 
-FAIL_STAMP_TRIGGER = (
-    "CREATE TRIGGER fail_stamp BEFORE UPDATE OF unused_since ON reference_recordings "
-    "BEGIN SELECT RAISE(ABORT, 'secret.wav'); END"
-)
-
-
 def _seed_stamp_world(
     session, takes: dict[str, str | None], version_reference: str | None, *, failing_stamp=False,
 ) -> None:
@@ -63,7 +58,7 @@ def _seed_stamp_world(
         _take_row(name, number, ref) for number, (name, ref) in enumerate(takes.items(), 1)
     )
     if failing_stamp:
-        session.execute(text(FAIL_STAMP_TRIGGER))
+        session.execute(text(failing_stamp_trigger()))
 
 
 def _world(
@@ -236,6 +231,7 @@ class SongRequest:
     send: Callable[[TestClient], object]
     stamped: set[str]
     removed_file: str | None
+    answered_reference: str | None = None
 
 
 def _put_song(**body):
@@ -250,7 +246,7 @@ def _delete_version(*, with_takes: bool):
 
 SONG_REQUESTS = {
     "in_place_edit": SongRequest(
-        {}, "r1", _put_song(reference_recording_id="r2"), {"r1"}, None,
+        {}, "r1", _put_song(reference_recording_id="r2"), {"r1"}, None, "r2",
     ),
     "version_delete_with_takes": SongRequest(
         {"ta": "r1"}, "r2", _delete_version(with_takes=True), {"r1", "r2"}, "ta.mp3",
@@ -288,6 +284,12 @@ def test_saving_the_changed_reference_as_a_new_version_stamps_nothing(tmp_path):
     client, ctx = _world(tmp_path, {}, "r1")
     response = _put_song(reference_recording_id="r2", new_version=True)(client)
     assert response.status_code == 200
+    assert _stamped_ids(ctx) == set()
+
+
+def test_an_in_place_edit_keeps_the_stamp_off_a_reference_a_take_of_the_same_song_links(tmp_path):
+    client, ctx = _world(tmp_path, {"ta": "r1"}, "r1")
+    assert _put_song(reference_recording_id="r2")(client).status_code == 200
     assert _stamped_ids(ctx) == set()
 
 
@@ -337,6 +339,8 @@ def test_a_failing_stamp_keeps_the_answer_and_the_unlink_and_logs_a_counts_only_
     with caplog.at_level(logging.ERROR):
         response = scenario.send(client)
     assert response.status_code == 200
+    if scenario.answered_reference:
+        assert response.json()["reference"]["id"] == scenario.answered_reference
     if scenario.removed_file:
         assert not (tmp_path / "audio" / OWNER / scenario.removed_file).exists()
     assert _stamped_ids(ctx) == set()
