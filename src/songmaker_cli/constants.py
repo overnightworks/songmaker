@@ -208,6 +208,8 @@ REDIS_JOB_STREAM_LEASE_USER_PREFIX = f"{REDIS_KEY_PREFIX}:job-stream:user"
 REDIS_JOB_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:job-stream:global"
 SESSION_CLEANUP_INTERVAL_SECONDS = 300
 REDIS_SOCKET_TIMEOUT_SECONDS: Final[float] = 2.0
+STORE_STARTUP_WAIT_SECONDS: Final[int] = 300
+STORE_STARTUP_RETRY_DELAY_SECONDS: Final[int] = 1
 
 # Session lifetime: seven days without a request, thirty days from sign-in at most.
 SESSION_IDLE_SECONDS_DEFAULT: Final = 7 * 24 * 60 * 60

@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
+from songmaker_cli.constants import STORE_STARTUP_RETRY_DELAY_SECONDS, STORE_STARTUP_WAIT_SECONDS
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.models import Base
 from songmaker_cli.db.soft_delete import install_soft_delete_filter
@@ -22,6 +26,15 @@ MIGRATIONS_DIR = str(Path(__file__).parent / "migrations")
 
 _DEFAULT_SQLITE_TIMEOUT = 30
 
+_PG_CANNOT_CONNECT_NOW = "57P03"
+_CONNECTION_LEVEL_MESSAGES = (
+    "connection refused",
+    "could not translate host name",
+    "name or service not known",
+    "temporary failure in name resolution",
+    "the database system is starting up",
+)
+
 
 def resolve_database_url() -> URL:
     """Return the full connection URL from Settings (base plus password file).
@@ -29,6 +42,49 @@ def resolve_database_url() -> URL:
     A ``URL`` object, so the password never travels as plain text.
     """
     return connection_url_from_settings(get_settings())
+
+
+def _is_connection_level_failure(error: OperationalError) -> bool:
+    # Retried: refused connection, unresolved name, "database system is starting up".
+    # Not retried: authentication or configuration errors, which a wait cannot fix.
+    if getattr(error.orig, "pgcode", None) == _PG_CANNOT_CONNECT_NOW:
+        return True
+    message = str(error.orig).lower()
+    return any(fragment in message for fragment in _CONNECTION_LEVEL_MESSAGES)
+
+
+def _probe_database(url: URL | str) -> None:
+    engine = create_engine(url)
+    try:
+        with engine.connect():
+            pass
+    finally:
+        engine.dispose()
+
+
+def wait_for_database(
+    url: URL | str,
+    *,
+    probe: Callable[[URL | str], None] = _probe_database,
+    now: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    wait_seconds: float = STORE_STARTUP_WAIT_SECONDS,
+    retry_delay_seconds: float = STORE_STARTUP_RETRY_DELAY_SECONDS,
+) -> None:
+    """Block until the database accepts a connection; raise the last error after the bound."""
+    shown = make_url(url)
+    log.info("Waiting up to %ss for the database at %s:%s", wait_seconds, shown.host, shown.port)
+    deadline = now() + wait_seconds
+    while True:
+        try:
+            probe(url)
+        except OperationalError as error:
+            if not _is_connection_level_failure(error) or now() >= deadline:
+                raise
+            sleep(retry_delay_seconds)
+        else:
+            log.info("Database answers at %s:%s", shown.host, shown.port)
+            return
 
 
 def _run_migrations(url: URL | str) -> None:
@@ -82,7 +138,8 @@ def connect_db(url: URL | str) -> sessionmaker[Session]:
 
 
 def init_db(url: URL | str) -> sessionmaker[Session]:
-    """Create the PostgreSQL engine, run migrations, and return a session factory."""
+    """Wait for the database, run migrations, and return a session factory."""
+    wait_for_database(url)
     _run_migrations(url)
     return connect_db(url)
 
