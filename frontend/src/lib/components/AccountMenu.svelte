@@ -66,7 +66,7 @@
 				name={username}
 				{accountHref}
 				onAccountOpen={() => popover?.close(false)}
-				appRows={[{ label: RAIL_SETTINGS_LABEL, icon: 'settings', onSelect: openSettings }]}
+				appRows={[{ label: RAIL_SETTINGS_LABEL, onSelect: openSettings }]}
 				theme={{ choice: KIT_CHOICE_BY_STORED[$themeChoice], onChange: chooseKitTheme }}
 				legalLinks={LEGAL_SECTIONS}
 				onLogOut={() => void leaveForLogout(onlogout)}
