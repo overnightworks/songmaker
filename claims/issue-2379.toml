@@ -1,8 +1,0 @@
-claim_id = "68147f4525d24168baab802ba1008098"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3a4b1b90fec1a736211b4f4362321b2eb2cd5400"
-branch = "claude/issue-2379-reimport-s-leftovers-leave-test-only-cre"
-scope = ["docker/.env.docker.example", "docs/requirements/0003-creation-and-generation.md", "quality/baseline.toml", "src/songmaker_cli/db/queries/generations.py", "tests/songmaker_cli/test_db.py"]
-opened_commit = "2068de79d2ab05c58c088754538bee0cc130c9c8"
-whole_reason = "Three leftovers of the reimport removal, each a few lines, found by one review."
