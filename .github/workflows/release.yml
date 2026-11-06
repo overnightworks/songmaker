@@ -22,7 +22,7 @@ jobs:
       checks: read
       contents: read
       pull-requests: read
-    uses: overnightworks/quality/.github/workflows/release-gate.yml@7715afe5c911a00ae3076057691e0b5d4e4a65f7 # quality main, no tag yet
+    uses: overnightworks/quality/.github/workflows/release-gate.yml@31900fcd86975a1b657daded04f8fe439b2d1211 # quality main, no tag yet
     with:
       version: ${{ inputs.version }}
       form: YYYY.MM.DD.N
@@ -43,24 +43,28 @@ jobs:
             file: docker/music-worker.Dockerfile
           - image: scoring-worker
             file: docker/scoring-worker.Dockerfile
+          - image: acestep-worker
+            file: docker/acestep-worker.Dockerfile
+            submodules: true
     permissions:
       attestations: write
       contents: read
       id-token: write
       packages: write
-    uses: overnightworks/quality/.github/workflows/image.yml@7715afe5c911a00ae3076057691e0b5d4e4a65f7 # quality main, no tag yet
+    uses: overnightworks/quality/.github/workflows/image.yml@31900fcd86975a1b657daded04f8fe439b2d1211 # quality main, no tag yet
     with:
       image: ${{ matrix.image }}
       file: ${{ matrix.file }}
       version: ${{ inputs.version }}
       build-args: ${{ matrix.build-args || '' }}
+      submodules: ${{ matrix.submodules || false }}
       push: true
 
   tag:
     needs: [gate, image]
     permissions:
       contents: write
-    uses: overnightworks/quality/.github/workflows/release-tag.yml@7715afe5c911a00ae3076057691e0b5d4e4a65f7 # quality main, no tag yet
+    uses: overnightworks/quality/.github/workflows/release-tag.yml@31900fcd86975a1b657daded04f8fe439b2d1211 # quality main, no tag yet
     with:
       version: ${{ inputs.version }}
       commit: ${{ needs.gate.outputs.commit }}

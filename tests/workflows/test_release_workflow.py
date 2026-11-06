@@ -12,10 +12,6 @@ RELEASE_JOBS = yaml.safe_load(RELEASE_TEXT)["jobs"]
 COMPOSE_SERVICES = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
 QUALITY_USES = re.compile(r"uses:\s*overnightworks/quality/\S+@(\S+)")
 
-# The acestep worker image needs the vendor/acestep submodule, which quality's
-# image workflow does not check out.
-UNRELEASED_DOCKERFILES = frozenset({"docker/acestep-worker.Dockerfile"})
-
 
 def _compose_dockerfiles(services: dict[str, dict] = COMPOSE_SERVICES) -> set[str]:
     dockerfiles = set()
@@ -28,9 +24,9 @@ def _compose_dockerfiles(services: dict[str, dict] = COMPOSE_SERVICES) -> set[st
     return dockerfiles
 
 
-def test_released_dockerfiles_are_the_compose_built_ones_without_the_unreleased():
+def test_released_dockerfiles_are_the_compose_built_ones():
     released = {entry["file"] for entry in RELEASE_JOBS["image"]["strategy"]["matrix"]["include"]}
-    assert released == _compose_dockerfiles() - UNRELEASED_DOCKERFILES
+    assert released == _compose_dockerfiles()
 
 
 def test_a_compose_build_written_as_a_string_fails_loudly():
