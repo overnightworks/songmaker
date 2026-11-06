@@ -289,22 +289,30 @@ def _compose_built_dockerfiles() -> dict[str, Path]:
     return dockerfiles
 
 
-def _image_identity(dockerfile: Path) -> tuple[str, str]:
-    """The final ``USER`` as ``uid:gid`` plus the ``uid:gid`` the file creates."""
+def _image_identity(dockerfile: Path) -> tuple[str, set[str]]:
+    """The final ``USER`` as ``uid:gid`` plus every ``uid:gid`` the file creates."""
     final_users = [
         instruction.split(maxsplit=1)[1]
         for instruction in _final_stage_instructions(dockerfile)
         if instruction.upper().startswith("USER ")
     ]
     instructions = " ".join(_dockerfile_instructions(dockerfile))
-    created_gid = re.search(r"groupadd\s+--gid\s+(\d+)", instructions)
-    created_uid = re.search(r"useradd\s+--uid\s+(\d+)\s+--gid\s+(\d+)", instructions)
+    created_gids = re.findall(r"groupadd\s+--gid\s+(\d+)", instructions)
+    created_users = re.findall(r"useradd\s+--uid\s+(\d+)\s+--gid\s+(\d+)", instructions)
     assert final_users, f"{dockerfile.name}: no USER in the final stage"
-    assert created_gid and created_uid, f"{dockerfile.name}: no numeric groupadd and useradd"
-    assert created_gid.group(1) == created_uid.group(2), (
-        f"{dockerfile.name}: useradd joins a group other than the groupadd one"
+    assert created_gids, f"{dockerfile.name}: no numeric groupadd"
+    assert created_users, f"{dockerfile.name}: no numeric useradd"
+    assert len(created_gids) == instructions.count("groupadd"), (
+        f"{dockerfile.name}: a groupadd has no numeric --gid"
     )
-    return final_users[-1], f"{created_uid.group(1)}:{created_gid.group(1)}"
+    assert len(created_users) == instructions.count("useradd"), (
+        f"{dockerfile.name}: a useradd has no numeric --uid and --gid"
+    )
+    for _, joined_gid in created_users:
+        assert joined_gid in created_gids, (
+            f"{dockerfile.name}: useradd joins a group other than a groupadd one"
+        )
+    return final_users[-1], {f"{uid}:{gid}" for uid, gid in created_users}
 
 
 def test_every_compose_built_image_runs_as_the_numeric_user_it_creates() -> None:
@@ -317,8 +325,10 @@ def test_every_compose_built_image_runs_as_the_numeric_user_it_creates() -> None
         assert re.fullmatch(r"[1-9]\d*:[1-9]\d*", final_user), (
             f"{name}: final USER {final_user!r} is not a nonzero numeric uid:gid"
         )
-        assert final_user == created, f"{name}: USER {final_user} differs from created {created}"
-    assert len({created for _, created in identities.values()}) == 1, (
+        assert created == {final_user}, (
+            f"{name}: USER {final_user} differs from created {sorted(created)}"
+        )
+    assert len({final_user for final_user, _ in identities.values()}) == 1, (
         "images share volumes, so they must share one uid:gid"
     )
 
