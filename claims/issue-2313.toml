@@ -1,8 +1,0 @@
-claim_id = "a2c84818599442f3b24d5217f1f5a752"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3377f34f49deec749b466b87eb533b7bfa38e1ff"
-branch = "claude/issue-2313-compose-no-migrate"
-scope = [".github/workflows/e2e.yml", "Dockerfile", "docker-compose.yml", "docker/docker-compose.ci.yml", "docs/architecture.md", "docs/security.md", "docs/testing.md", "frontend/e2e/README.md", "scripts/auto-deploy.sh", "scripts/install-autostart.sh", "scripts/voices_e2e_probe.sh", "src/songmaker_cli/db/migrations/env.py", "src/songmaker_cli/oidc_client.py", "src/songmaker_cli/settings.py", "tests/songmaker_cli/db/test_migrate_at_start.py", "tests/test_compose_release_args.py"]
-opened_commit = "c93f973b1adaa6eff8d8306cfd0e51d7e88fade2"
-whole_reason = "The migrate service and every caller naming it must leave together, or the E2E boot and the CI override name a service that no longer exists; the healthcheck moves with the waiting depends_on it replaces."
