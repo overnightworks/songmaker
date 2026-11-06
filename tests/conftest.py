@@ -60,6 +60,7 @@ pytest_plugins = [
     "support.generation_job_world",
     "support.reference_link_migration",
     "support.database_case_record",
+    "pytester",
 ]
 
 os.environ.setdefault("OIDC_CLIENT_SECRET_FILE", write_test_client_secret())
