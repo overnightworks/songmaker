@@ -7,13 +7,12 @@ import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
 import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, unmount, type Component } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { resetCollectionForTests } from '#lib/stores/collection.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
-import { libraryRootState, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
+import { resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
@@ -225,23 +224,20 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-describe.each(ROUTE_PAGES)(
-	'$route with no query',
-	({ route, harness, surface, shown, hidden }) => {
-		it('1354_rule_31: resolves its entry without adding a Back step', async () => {
-			coldTabAt('', route);
-			const length = historyLength();
+describe.each(ROUTE_PAGES)('$route with no query', ({ route, harness, surface, shown, hidden }) => {
+	it('1354_rule_31: resolves its entry without adding a Back step', async () => {
+		coldTabAt('', route);
+		const length = historyLength();
 
-			const target = openAddress(harness);
+		const target = openAddress(harness);
 
-			await vi.waitFor(() => expect(target.querySelector(shown)).not.toBeNull());
-			await vi.waitFor(() => expect(historyEntry()).toMatchObject({ surface, songId: null }));
-			for (const selector of hidden) expect(target.querySelector(selector)).toBeNull();
-			expect(location.pathname).toBe(route);
-			expect(historyLength()).toBe(length);
-		});
-	}
-);
+		await vi.waitFor(() => expect(target.querySelector(shown)).not.toBeNull());
+		await vi.waitFor(() => expect(historyEntry()).toMatchObject({ surface, songId: null }));
+		for (const selector of hidden) expect(target.querySelector(selector)).toBeNull();
+		expect(location.pathname).toBe(route);
+		expect(historyLength()).toBe(length);
+	});
+});
 
 describe('/ with no query', () => {
 	it('renders nothing and leaves the workspace reachable', async () => {
@@ -278,20 +274,17 @@ describe('/ with a query', () => {
 		`?song=${SONG_ID}`,
 		`?song=${SONG_ID}&gen=${GENERATION_ID}`,
 		'?x=1'
-	])(
-		'1354_rule_31: shows Home, drops the query and fetches no song for %s',
-		async (query) => {
-			coldTabAt(query);
-			const target = openAddress();
+	])('1354_rule_31: shows Home, drops the query and fetches no song for %s', async (query) => {
+		coldTabAt(query);
+		const target = openAddress();
 
-			await vi.waitFor(() => {
-				expect(target.querySelector('.library-home')).not.toBeNull();
-				expect(target.querySelector('.library-wall')).toBeNull();
-				expect(target.querySelector('.address-overlay')).toBeNull();
-				expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
-				expect(location.search).toBe('');
-			});
-			expect(api.fetchSong).not.toHaveBeenCalled();
-		}
-	);
+		await vi.waitFor(() => {
+			expect(target.querySelector('.library-home')).not.toBeNull();
+			expect(target.querySelector('.library-wall')).toBeNull();
+			expect(target.querySelector('.address-overlay')).toBeNull();
+			expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
+			expect(location.search).toBe('');
+		});
+		expect(api.fetchSong).not.toHaveBeenCalled();
+	});
 });

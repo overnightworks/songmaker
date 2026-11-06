@@ -70,7 +70,6 @@ lib/components/shell/RailSearch.svelte 13
 lib/components/shell/RailSettings.svelte 2
 lib/styles/compact-ui.ts 2
 lib/utils/visualizer.ts 12
-routes/(library)/+page.svelte 2
 routes/(library)/album/[slug]/+page.svelte 2
 routes/(library)/album/[slug]/[song]/+page.svelte 2
 routes/(library)/album/[slug]/[song]/take/[n]/+page.svelte 2
