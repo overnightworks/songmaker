@@ -3,7 +3,9 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to a release wheel, hash-locked in `uv.lock`; `pyproject.toml` names the tag.
+the `server` extra to a git tag; `pyproject.toml` names the tag and `uv.lock` the commit.
+Every image and CI sync passes `--frozen`, which installs that commit: the flag is the integrity
+control, since `uv lock --check` does not notice a force-moved tag.
 Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
@@ -11,8 +13,8 @@ songmaker's decision, built in `request_policies.py`.
 The provider layer is likewise not in this repository. `agent_providers` ships
 as the distribution `overnightworks-agent-providers` from
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers),
-pinned bare in the `server` extra to the release wheel of tag `v0.1.3` and
-hash-locked in `uv.lock` (#886). Module names below such as
+pinned bare in the `server` extra to the git tag `v0.1.3`, its commit
+locked in `uv.lock` (#886). Module names below such as
 `agent_providers.claude.provider` are its import paths; the runtime values it
 runs on — binaries, credential mirrors, secret-scrub list, the sandbox
 directory names — remain songmaker's decision, installed through
@@ -430,7 +432,7 @@ A version names its reference by `reference_recording_id` only. `reference_audio
 
 Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The web container is the sole cover executor: its runner claims queued jobs, owns recovery, and draws each picture through the gateway (see "Cover picture through the gateway"); no path falls back to a CLI or another image API. `covers.decode_cover_image` accepts one PNG or JPEG within `COVER_MAX_BYTES` and `COVER_MAX_PIXELS` and rewrites it as a metadata-free PNG. The prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
 
-In `agent_providers`, every Codex text and image CLI call uses one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps the wheel's image processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. The Co-Writer uses the server-owned text tool protocol, never Codex CLI tool permissions: every start and resume gets the read-only sandbox, `approval_policy="never"`, no shell tool, no web search, and no MCP servers. Its event gate aborts on every file, command, MCP, or web-search event before the process is reaped. Saturated Co-Writer calls return the named busy route error. No songmaker job starts a Codex process any more; the caps stay configured while the Codex mounts remain.
+In `agent_providers`, every Codex text and image CLI call uses one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps the library's image processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. The Co-Writer uses the server-owned text tool protocol, never Codex CLI tool permissions: every start and resume gets the read-only sandbox, `approval_policy="never"`, no shell tool, no web search, and no MCP servers. Its event gate aborts on every file, command, MCP, or web-search event before the process is reaped. Saturated Co-Writer calls return the named busy route error. No songmaker job starts a Codex process any more; the caps stay configured while the Codex mounts remain.
 
 **Deployment boundary**: This repository ships no reverse-proxy service or configuration (nginx, Caddy, Traefik, and tunnel configuration are absent). An operator who puts a proxy in front of Songmaker may add equivalent path-specific limits to reject oversized requests at the edge; those limits are defense in depth, not the application's only body limit. A blanket 1 MiB upstream limit would block the documented audio-upload and cover routes. The missing in-repository edge configuration is recorded in #327.
 
@@ -968,7 +970,7 @@ through a private prompt file. The text tool protocol does not grant Grok CLI
 tools: every start and resume keeps `--deny '*'`, and native tool-call events
 abort the turn. The scoring worker does not mount Codex.
 
-The wheel's image route, which no songmaker cover calls (the cover draws
+The library's image route, which no songmaker cover calls (the cover draws
 through the gateway), starts Codex with the fixed read-only image
 argv (`--sandbox read-only`, no MCP servers, and `web_search="disabled"`),
 with Code Mode enabled only for this image run. Its one variable part is the
@@ -1119,7 +1121,13 @@ images are installed through `uv` with the committed `uv.lock`; Bandit and
 pip-audit run in separate tool environments so they do not change that lock.
 The repository itself is installed as the trusted local editable project. All
 third-party dependencies must be wheels except `nvidia-ml-py3`, whose locked,
-hash-verified release has no published wheel.
+hash-verified release has no published wheel. The three first-party libraries
+are git pins built from source at image build; the three images that sync them
+(web, music worker, scoring worker) carry `git`, and the music worker builds
+only those three from source, after a `--no-build` step that refuses any
+third-party source distribution. Their build requirements (`setuptools`, `wheel`)
+float on PyPI, unlocked and unhashed: a malicious release would run at image
+build, as root in the web image. This risk is accepted.
 
 ## Audit Trail
 
