@@ -780,7 +780,6 @@ describe('libraryHistoryUrl', () => {
 	});
 
 	it('keeps the standing address while the song is not yet known', () => {
-		replaceHistoryEntry('/album/anfield');
 		expect(
 			libraryHistoryUrl({
 				...libraryRootState(),
@@ -788,7 +787,7 @@ describe('libraryHistoryUrl', () => {
 				collection: { kind: 'album', id: 'anfield' },
 				songId: 's1'
 			})
-		).toBe('/album/anfield');
+		).toBe(window.location.pathname);
 	});
 
 	it.each([

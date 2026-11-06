@@ -2856,31 +2856,6 @@ describe('overlays outside the library', () => {
 	});
 });
 
-// A search hit hands navigation its song id alone, and a playlist row its
-// song_id alone: neither carries the album or slug a song address names, and
-// the song is in no list yet. The address stays where the user is rather than
-// pointing at the legacy `?song=` form.
-describe('a song opened by id alone', () => {
-	it.each([
-		{
-			opened: 'a search hit',
-			open: () => openRailSearchTarget({ kind: 'song', id: 'unlisted' })
-		},
-		{ opened: 'a playlist row', open: () => selectSong('unlisted') }
-	])('keeps the address of the page it was opened from for $opened', async ({ open }) => {
-		songList.set([]);
-		fetchSong.mockRejectedValue(new ApiError(500, 'unavailable', '/api/songs/unlisted'));
-		await openAlbum('a1');
-		const address = location.pathname;
-
-		await open();
-
-		expect(get(selectedSongId)).toBe('unlisted');
-		expect(location.pathname).toBe(address);
-		expect(location.search).toBe('');
-	});
-});
-
 describe('openRailSearchTarget', () => {
 	const destinations: { name: string; target: RailSearchTarget }[] = [
 		{ name: 'album', target: { kind: 'album', id: 'a1' } },

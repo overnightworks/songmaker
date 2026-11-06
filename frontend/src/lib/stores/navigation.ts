@@ -466,13 +466,27 @@ function loadSongContext(songId: string): Promise<void> {
 		if (isNotFound(err)) return;
 		addToast(describeFailure(err, API_ERROR_GENERIC_MESSAGE), 'error', err);
 	});
-	return ensureGenerationsLoaded(songId).catch(function acknowledgeOwnedFailure(err: unknown) {
-		if (isNotFound(err)) {
-			reportSongLinkNotFound(songId);
-		}
-		// refreshTakes owns the shared load's error and retry; this background
-		// caller must consume its rejection without reporting it a second time.
-	});
+	const listedBefore = get(songList).some((item) => item.id === songId);
+	return ensureGenerationsLoaded(songId)
+		.then(() => {
+			if (!listedBefore) settleSongAddress(songId);
+		})
+		.catch(function acknowledgeOwnedFailure(err: unknown) {
+			if (isNotFound(err)) {
+				reportSongLinkNotFound(songId);
+			}
+			// refreshTakes owns the shared load's error and retry; this background
+			// caller must consume its rejection without reporting it a second time.
+		});
+}
+
+// A song opened by id alone (a search hit, a playlist row) wrote the path
+// history stood on, as its album and slug were unknown. Once it has loaded,
+// the same entry takes the song's own address, so a reload opens it. A newer
+// selection that has moved on keeps its own entry.
+function settleSongAddress(songId: string): void {
+	if (get(selectedSongId) !== songId) return;
+	void replaceLibraryHistory();
 }
 
 // Only clears the selection if it still names the dead song: a caller may

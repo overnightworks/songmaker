@@ -196,9 +196,9 @@ export function libraryRootState(): LibraryHistoryState {
 // into songList -- a search hit or a playlist row opened by id alone
 // (PlaylistDetailView, LibraryWall), which hand over neither album nor slug
 // -- has no address to build, so the write keeps the path history stands on:
-// a stale entry that names the page the user is on, never a form the app
-// cannot open. A stale bookmark that still carries the older `/?song=` form
-// is a different case: it never reaches this function's songId branch at
+// the page the user is on, until the song has loaded and navigation.ts
+// replaces the entry with the song's own address. A stale bookmark that still
+// carries the older `/?song=` form is a different case: it never reaches this function's songId branch at
 // all -- (library)/+page.svelte resolves and redirects it onto the canonical
 // address first (issue #284).
 export function libraryHistoryUrl(state: LibraryHistoryState): string {

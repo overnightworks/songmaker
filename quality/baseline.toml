@@ -41,7 +41,7 @@
 "frontend/src/lib/share/sharePlayback.test.ts" = 837
 "frontend/src/lib/stores/jobs.test.ts" = 906
 "frontend/src/lib/stores/libraryContext.test.ts" = 2193
-"frontend/src/lib/stores/libraryContext.ts" = 1266
+"frontend/src/lib/stores/libraryContext.ts" = 1265
 "frontend/src/lib/stores/navigation.test.ts" = 3042
 "frontend/src/lib/stores/player.test.ts" = 5286
 "frontend/src/lib/stores/player.ts" = 2242
