@@ -1284,9 +1284,8 @@ def _register_worker_with_gpu_health(
         )
         session.commit()
 
-    mock_pool.get = AsyncMock(
-        return_value=json.dumps({"loaded": ["sft"], "gpu_healthy": gpu_healthy}).encode(),
-    )
+    heartbeat = {"loaded": [{"mode": "sft", "size_gb": 0}], "gpu_healthy": gpu_healthy}
+    mock_pool.get = AsyncMock(return_value=json.dumps(heartbeat).encode())
 
 
 def test_generate_song_submits_job(client: TestClient) -> None:

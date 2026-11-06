@@ -89,7 +89,7 @@ async def _seed_healthy_worker(redis, db_factory, worker_id: str = "w1") -> None
         session.commit()
     await redis.set(
         worker_state_key(worker_id),
-        json.dumps({"gpu_healthy": True, "loaded": ["sft"]}),
+        json.dumps({"gpu_healthy": True, "loaded": [{"mode": "sft", "size_gb": 0}]}),
     )
 
 

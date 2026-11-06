@@ -170,9 +170,9 @@ def _coerce_to_params(
 ) -> BaseGenerationParams | None:
     """Accept either a typed model or a raw dict, return the typed model.
 
-    Raises :class:`ValidationError` if the dict cannot be validated. Used so
-    that legacy callers (CLI, tests) passing dicts still work without losing
-    the boundary check that catches typos.
+    Raises :class:`ValidationError` if the dict cannot be validated. The dict
+    branch serves ``global_defaults`` read from the database, keeping the
+    boundary check that catches typos.
     """
     if value is None:
         return None
@@ -213,7 +213,7 @@ def build_ace_config(
     meta: "SongMeta",
     model_name: str = MODEL_DEFAULT_MODE,
     global_defaults: dict[str, dict] | None = None,
-    preset_params: BaseGenerationParams | dict | None = None,
+    preset_params: BaseGenerationParams | None = None,
     seed: int | None = None,
 ) -> AceStepConfig:
     """Build an AceStepConfig from a typed SongMeta + typed override layers.
