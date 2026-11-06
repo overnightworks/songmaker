@@ -1,0 +1,7 @@
+claim_id = "e25f9d94bdf342b6a00f0ad224b57e57"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3a4b1b90fec1a736211b4f4362321b2eb2cd5400"
+branch = "claude/issue-2377-frontend-readme-md-and-the-empty-migrati"
+scope = ["frontend/README.md", "src/songmaker_cli/db/migrations/README.md"]
+opened_commit = "186ddd6a0e0090e42cfa79636fc4595e783054dd"
