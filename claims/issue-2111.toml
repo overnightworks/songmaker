@@ -1,8 +1,0 @@
-claim_id = "3e039eae4f2d46c3a4106033910bda4c"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "250b2edf389f908d6c6b2d858564204171c45248"
-branch = "claude/issue-2111-e2e-music-worker"
-scope = [".github/workflows/e2e.yml", "docker/docker-compose.ci.yml", "docker/docker-compose.e2e-voices.yml", "docs/testing.md", "frontend/e2e/README.md", "scripts/voices_e2e_probe.sh", "src/songmaker_cli/arq_worker.py"]
-opened_commit = "a60b9e88b01a68e66a304c4a6e3c90e04fbd0388"
-whole_reason = "One CI change: starting the music worker in the E2E stack turns the voices overlay's profile reset into a no-op and makes the stack sentences in both docs false at once; arq_worker.py carries only the temporary, reverted proof commit."
