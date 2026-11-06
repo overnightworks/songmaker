@@ -1,8 +1,0 @@
-claim_id = "9c31d8d76a0f46df9faecf0ef71c3781"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "f128849580a3b6cc2edc7618898b90cf140d2021"
-branch = "claude/issue-2334-reference-show-takes"
-scope = ["docs/design/references.html", "frontend/e2e/references-list.spec.ts", "frontend/src/lib/api/references.ts", "frontend/src/lib/components/ReferenceMenu.svelte", "frontend/src/lib/components/ReferenceMenu.test.ts", "frontend/src/lib/components/ReferenceUses.svelte", "frontend/src/lib/components/ReferenceUses.test.ts", "frontend/src/lib/test-utils/references.ts", "frontend/src/routes/settings/references/+page.svelte", "frontend/src/routes/settings/references/page.test.ts", "scripts/style-literals.txt"]
-opened_commit = "57d3530a09a1c37bd4c120a79b4580198da204c0"
-whole_reason = "Show takes without the expansion is a dead control, and the expansion without its openers cannot be reached; the picture's d2 follows the built wording in the same change."
