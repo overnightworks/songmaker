@@ -1,5 +1,5 @@
 """Only `tests/conftest.py` names the PostgreSQL URL variable, so every PostgreSQL test gets its URL
-from the one function there, which fails a test that `-m postgresql` would not select.
+from the one fixture there.
 
 A computed environment key or a loop over `os.environ` gets past this check; only deliberate
 obfuscation does that.
