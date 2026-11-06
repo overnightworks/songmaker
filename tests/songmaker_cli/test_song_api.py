@@ -92,6 +92,12 @@ def generation_count_client(tmp_path: Path):
     return client, factory
 
 
+def test_the_removed_reimport_route_is_not_served(generation_count_client) -> None:
+    client, _ = generation_count_client
+    resp = client.post("/api/songs/one-take/reimport")
+    assert resp.status_code in {404, 405}
+
+
 def test_list_songs_generation_count_zero_when_no_takes(generation_count_client) -> None:
     client, _ = generation_count_client
     resp = client.get("/api/songs")

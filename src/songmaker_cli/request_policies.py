@@ -119,10 +119,9 @@ SIGN_IN_PATHS: Final = SignInPaths(
 )
 
 # Large multipart uploads are a path-exact allowlist, never a suffix match:
-# an unrelated route ending in `/reimport` must not inherit an upload budget.
+# an unrelated route ending in `/samples` must not inherit an upload budget.
 REFERENCE_UPLOAD_PATH: Final = "/api/references"
 LORA_SAMPLE_ROUTE: Final = re.compile(r"^/api/loras/[^/]+/samples\Z")
-SONG_REIMPORT_ROUTE: Final = re.compile(r"^/api/songs/[^/]+/reimport\Z")
 SONG_COVER_ROUTE: Final = re.compile(r"^/api/songs/[^/]+/cover\Z")
 ALBUM_COVER_ROUTE: Final = re.compile(r"^/api/albums/[^/]+/cover\Z")
 PLAYLIST_COVER_ROUTE: Final = re.compile(r"^/api/playlists/[^/]+/cover\Z")
@@ -190,10 +189,6 @@ def build_body_size_policy(settings: Settings) -> BodySizePolicy:
             BodySizeRule(
                 paths=PathRules(patterns=(LORA_SAMPLE_ROUTE,)),
                 max_bytes=settings.max_upload_body_bytes,
-            ),
-            BodySizeRule(
-                paths=PathRules(patterns=(SONG_REIMPORT_ROUTE,)),
-                max_bytes=settings.max_reimport_body_bytes,
             ),
             BodySizeRule(
                 paths=PathRules(patterns=(SONG_COVER_ROUTE,)),
