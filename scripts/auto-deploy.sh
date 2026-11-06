@@ -254,8 +254,10 @@ SAFE_GIT_COMMAND=(
     -c core.hooksPath=/dev/null
     -c core.fsmonitor=false
 )
+# Fd 200 is the tick's lock; a detached git child (maintenance, a transport)
+# that inherited it would keep the next tick out after this one has ended.
 safe_git() {
-    "${SAFE_GIT_COMMAND[@]}" -C "$REPO_ROOT" "$@"
+    "${SAFE_GIT_COMMAND[@]}" -C "$REPO_ROOT" "$@" 200>&-
 }
 
 # Templates and the stale-file sweep share these names; keep existing prefixes
@@ -306,7 +308,7 @@ safe_git_fetch() {
         return 1
     fi
     setsid timeout --kill-after="$GIT_FETCH_KILL_GRACE_SECONDS" "$GIT_FETCH_TIMEOUT_SECONDS" \
-        "${SAFE_GIT_COMMAND[@]}" -C "$repository" fetch --quiet "$@" >"$output_file" 2>&1 &
+        "${SAFE_GIT_COMMAND[@]}" -C "$repository" fetch --quiet "$@" >"$output_file" 2>&1 200>&- &
     fetch_group=$!
     if wait "$fetch_group"; then
         fetch_exit_code=0
