@@ -1074,6 +1074,14 @@ A worker writes a take only into its container-local output root, which it empti
 
 ## CI Supply Chain
 
+The Release workflow builds the web, music worker and scoring worker images on
+GitHub-hosted runners from the commit quality's gate judged, main's green head.
+Each job holds only its own permissions: only the tag job writes contents, and
+only the image jobs hold `packages`, `id-token` and `attestations`. Quality's
+`image.yml` signs each image's build provenance. Anyone with write access to the
+repository can dispatch the workflow; the gate bounds what that releases to main's
+green head, and the workflow passes no secret.
+
 Every third-party GitHub Action is pinned to the full commit SHA of its reviewed
 release tag (with the release series recorded beside it), so a moved tag cannot
 change a workflow.
