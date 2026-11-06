@@ -1,7 +1,0 @@
-claim_id = "7a56b5b059c2423da3e894b95de8cad0"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c4a3f41c417bd4745a0e789187cbcb73bf746d80"
-branch = "claude/issue-2355-auditaction-remaster-leaves"
-scope = ["src/songmaker_cli/constants.py", "tests/songmaker_cli/test_generation_api_remaster_retirement.py"]
-opened_commit = "78ae04346c7de19dd4c5da9e4964708183d9b179"
