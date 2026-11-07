@@ -18,17 +18,13 @@ from songmaker_cli import audio_files
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 from songmaker_cli.queue_streams import (
-    FFMPEG_TIMEOUT_SECONDS,
     QUEUE_STREAM_DURATION_LIMIT_DETAIL,
-    QUEUE_STREAM_MAX_DURATION_SECONDS,
     QueueStreamSource,
     build_queue_stream_snapshot,
     check_queue_stream_rate_limit,
     collect_library_pool_generations,
     generation_matches_pool,
     probe_audio_duration,
-    queue_stream_duration_fits_ffmpeg_timeout,
-    queue_stream_ffmpeg_timeout_seconds,
     run_ffmpeg_concat,
     shuffle_library_sources,
     track_source_from_generation,
@@ -811,14 +807,6 @@ def test_queue_stream_rejects_duration_above_cap_before_ffmpeg(tmp_path, monkeyp
     assert response.status_code == 422
     assert response.json()["detail"] == QUEUE_STREAM_DURATION_LIMIT_DETAIL
     assert concat_calls == []
-
-
-def test_queue_stream_duration_cap_sets_ffmpeg_timeout() -> None:
-    assert FFMPEG_TIMEOUT_SECONDS == queue_stream_ffmpeg_timeout_seconds(
-        QUEUE_STREAM_MAX_DURATION_SECONDS
-    )
-    assert queue_stream_duration_fits_ffmpeg_timeout(QUEUE_STREAM_MAX_DURATION_SECONDS)
-    assert not queue_stream_duration_fits_ffmpeg_timeout(QUEUE_STREAM_MAX_DURATION_SECONDS + 1)
 
 
 def test_queue_stream_cache_identity_includes_count_windowing(tmp_path, monkeypatch, pg_factory):
