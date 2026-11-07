@@ -94,6 +94,7 @@ services:
       AGENT__GATEWAY__ORIGIN: http://litellm-front:4000
       AGENT__GATEWAY__KEY_FILE: /run/secrets/gateway_key
       AGENT__API_GROUP: /services/agent-service/api
+      AGENT__MCP_AGENT_GROUP: /agents
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       TOKEN_CLIENTS: ${TOKEN_CLIENTS:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}

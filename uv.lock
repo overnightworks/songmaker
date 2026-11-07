@@ -1166,8 +1166,8 @@ wheels = [
 
 [[package]]
 name = "overnightworks-agent-runtime-client"
-version = "0.23.0"
-source = { git = "https://github.com/overnightworks/agent-runtime?rev=v0.23.0#1ea997c301c9c2bb42c392cc06f5f3d49be018c1" }
+version = "0.24.0"
+source = { git = "https://github.com/overnightworks/agent-runtime?rev=v0.24.0#bebc22b140bac80b268f0e9878fd7b46fb60b494" }
 dependencies = [
     { name = "pydantic" },
     { name = "ruamel-yaml" },
@@ -1183,8 +1183,8 @@ mcp-server = [
 
 [[package]]
 name = "overnightworks-webauth"
-version = "0.32.0"
-source = { git = "https://github.com/overnightworks/webauth?rev=v0.32.0#1e2790af60e0ff96f06d55af9791445395e5955e" }
+version = "0.33.0"
+source = { git = "https://github.com/overnightworks/webauth?rev=v0.33.0#2e11789358e58c467091ec5caac46befbdc04756" }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
@@ -1875,9 +1875,9 @@ requires-dist = [
     { name = "numba", marker = "extra == 'whisper'" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
-    { name = "overnightworks-agent-runtime-client", marker = "extra == 'server'", git = "https://github.com/overnightworks/agent-runtime?rev=v0.23.0" },
-    { name = "overnightworks-agent-runtime-client", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agent-runtime?rev=v0.23.0" },
-    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.32.0" },
+    { name = "overnightworks-agent-runtime-client", marker = "extra == 'server'", git = "https://github.com/overnightworks/agent-runtime?rev=v0.24.0" },
+    { name = "overnightworks-agent-runtime-client", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agent-runtime?rev=v0.24.0" },
+    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.33.0" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },
     { name = "pydantic", specifier = ">=2.0,<3" },

@@ -313,6 +313,28 @@ def test_a_fully_set_agent_is_read_from_the_nested_environment(
     )
 
 
+_MCP_ENVIRONMENT = {"AGENT__MCP_CLIENT_ID": "agents", "AGENT__MCP_SCOPE": "songmaker:mcp"}
+
+
+def test_an_agent_group_without_the_mcp_client_is_unused_and_stays_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _with_environment(monkeypatch, {**_AGENT_ENVIRONMENT, "AGENT__MCP_AGENT_GROUP": "/agents"})
+
+    agent = Settings(**_required_settings()).agent
+
+    assert agent is not None
+    assert (agent.mcp_client_id, agent.mcp_agent_group) == (None, "/agents")
+
+
+def test_mcp_on_without_an_agent_group_stops_startup(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_environment(monkeypatch, {**_AGENT_ENVIRONMENT, **_MCP_ENVIRONMENT})
+    required = _required_settings()
+
+    with pytest.raises(ValidationError, match="mcp_agent_group"):
+        Settings(**required)
+
+
 @pytest.mark.parametrize(
     "environment",
     [

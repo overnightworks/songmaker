@@ -673,6 +673,17 @@ The ffmpeg timeout is 336 seconds, derived from that cap, the measured-rate
 policy and its reserve. `tests/songmaker_cli/test_queue_streams.py` proves admission before
 ffmpeg and request-session release through the shared builders.
 
+Built snapshots live in `queue-streams/` under the data directory as
+`<id>.json` and `<id>.mp3`. A build reuses the newest unexpired snapshot of the
+same content whose manifest is named after the id it records and whose audio
+still exists. A snapshot lives eight hours. The sweep (at startup and in the
+maintenance loop) removes the files of expired or unreadable manifests, then
+every regular file of no live snapshot older than 24 hours (a running build's
+`.tmp.mp3` and `.concat.txt` are younger), then evicts the oldest finished
+snapshots once their audio exceeds 1 GiB; a build's own new snapshot is never
+evicted, and a running build's files never count or go.
+`tests/songmaker_cli/test_queue_stream_cache.py` proves each rule.
+
 Escape and Back close the same thing (#1182): the topmost open layer — a
 menu, picker, sheet, dialog, full Now Playing, the album
 cover editor, Edit details, the co-writer's Memory. `lib/stores/layers.ts`
@@ -956,7 +967,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
 | Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py` |
-| MCP front | The eight marked routes served as tools on `/mcp` to a person's own agent, and the `agent` settings section | `agent/mcp.py`, `agent/settings.py` |
+| MCP front | The eight marked routes served as tools on `/mcp` to a person's own agent or to an agent with its own account (kind `agent`, admitted as `user`), and the `agent` settings section | `agent/mcp.py`, `agent/settings.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | Tool bodies | The co-writer's tool declarations and their execution, which the hand tools call | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
@@ -1125,7 +1136,7 @@ headers; CORS preflights remain outside the library stack.
 
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
-A person's own agent reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools, the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
+A person's own agent, or an agent that signs in with its own client and holds its own account (kind `agent`, webauth's agent group), reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools, the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
 
 The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `webauth` is an installed distribution rather than a directory under `src/`, and its own boundaries are contracted in its repository; because `include_external_packages` is on, `.importlinter` still resolves it in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
 
