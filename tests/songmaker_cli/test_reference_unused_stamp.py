@@ -10,12 +10,11 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event, text
-from support.failing_reference_stamp import failing_stamp_trigger
+from sqlalchemy import event
+from support.failing_reference_stamp import install_failing_stamp
 from support.reference_rows import a_reference
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids, mark_newly_unused
 from songmaker_cli.reference_audio import commit_unused_stamps
@@ -33,7 +32,7 @@ def _take_row(take_id: str, number: int, reference_id: str | None) -> Generation
 
 
 def _seed_stamp_world(
-    session, takes: dict[str, str | None], version_reference: str | None, *, failing_stamp=False,
+    session, takes: dict[str, str | None], version_reference: str | None,
 ) -> None:
     session.add(User(id=OWNER, username=OWNER))
     session.flush()
@@ -51,8 +50,6 @@ def _seed_stamp_world(
     session.add_all(
         _take_row(name, number, ref) for number, (name, ref) in enumerate(takes.items(), 1)
     )
-    if failing_stamp:
-        session.execute(text(failing_stamp_trigger()))
 
 
 def _world(
@@ -60,15 +57,11 @@ def _world(
     pg_factory,
     takes: dict[str, str | None],
     version_reference: str | None = None,
-    *,
-    failing_stamp: bool = False,
 ):
     ctx = make_router_ctx(
         tmp_path,
         db=pg_factory,
-        seed_db=lambda s: _seed_stamp_world(
-            s, takes, version_reference, failing_stamp=failing_stamp,
-        ),
+        seed_db=lambda s: _seed_stamp_world(s, takes, version_reference),
     )
     (tmp_path / "audio" / OWNER).mkdir(parents=True, exist_ok=True)
     for name in takes:
@@ -155,11 +148,10 @@ def test_a_reference_another_version_or_take_still_links_keeps_no_stamp(
 
 @pytest.mark.parametrize("route", ROUTES)
 def test_a_failing_stamp_leaves_the_answer_and_the_unlink_and_logs_one_counts_only_error(
-    tmp_path, caplog, route,
+    tmp_path, pg_factory, caplog, request, route,
 ):
-    client, ctx = _world(
-        tmp_path, init_test_db(tmp_path / "test.db"), {"ta": "r1"}, failing_stamp=True,
-    )
+    client, ctx = _world(tmp_path, pg_factory, {"ta": "r1"})
+    install_failing_stamp(pg_factory, request)
     with caplog.at_level(logging.ERROR):
         response = _delete_through_route(client, route, ["ta"])
     assert response.status_code == 200
@@ -321,16 +313,11 @@ def test_a_reference_another_song_still_links_keeps_no_stamp_on_every_request(
 
 @pytest.mark.parametrize("request_id", REQUEST_IDS)
 def test_a_failing_stamp_keeps_the_answer_and_the_unlink_and_logs_a_counts_only_error_per_request(
-    tmp_path, caplog, request_id,
+    tmp_path, pg_factory, caplog, request, request_id,
 ):
     scenario = SONG_REQUESTS[request_id]
-    client, ctx = _world(
-        tmp_path,
-        init_test_db(tmp_path / "test.db"),
-        scenario.takes,
-        scenario.version_reference,
-        failing_stamp=True,
-    )
+    client, ctx = _world(tmp_path, pg_factory, scenario.takes, scenario.version_reference)
+    install_failing_stamp(pg_factory, request)
     with caplog.at_level(logging.ERROR):
         response = scenario.send(client)
     assert response.status_code == 200

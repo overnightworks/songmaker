@@ -24,11 +24,12 @@ from agent_runtime_client.agents import TurnRequest
 from agent_runtime_client.backend import AgentBackend, TurnEvent, TurnPerson, TurnStopped
 from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, completion
 from agent_runtime_client.backend.gateway import GatewayBackend
-from agent_runtime_client.config import AgentConfig, BackendKind, ChatGateway
+from agent_runtime_client.config import BackendKind, ChatGateway
 from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
 from support.fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
 from support.web_app import issued_cookies
 
+from songmaker_cli.agent.settings import AgentSettings
 from songmaker_cli.agent.tools import cowriter_hand_tools
 
 if TYPE_CHECKING:
@@ -44,11 +45,11 @@ MEMBER_GROUPS = ("/apps/songmaker", API_GROUP)
 Behavior = Callable[[TurnRequest, TurnPerson], AsyncGenerator[TurnEvent, None]]
 
 
-def agent_config(directory: Path, *, origin: str = GATEWAY_ORIGIN) -> AgentConfig:
+def agent_config(directory: Path, *, origin: str = GATEWAY_ORIGIN) -> AgentSettings:
     """The ``agent`` setting for a gateway at ``origin``, its dummy key written in ``directory``."""
     key_file = directory / _KEY_FILE_NAME
     key_file.write_text(_DUMMY_KEY + "\n", encoding="ascii")
-    return AgentConfig(
+    return AgentSettings(
         backend=BackendKind.LITELLM,
         gateway=ChatGateway(origin=origin, key_file=key_file),
         api_group=API_GROUP,
@@ -180,7 +181,7 @@ class CowriterStack:
     app: object
     issuer: FakeIssuer
     session_id: str
-    config: AgentConfig
+    config: AgentSettings
     turns: list[RecordedTurn] = field(default_factory=list)
     gateways: list[FakeGateway] = field(default_factory=list)
 

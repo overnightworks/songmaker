@@ -357,6 +357,7 @@
 		title={TAKE_DELETE_TITLE_TEMPLATE.replace('{number}', String(deleteFor.generation_number))}
 		message={TAKE_DELETE_MESSAGE}
 		confirmLabel={TAKE_DELETE_LABEL}
+		destructive={true}
 		onconfirm={() => {
 			const id = deleteFor?.id;
 			deleteFor = null;
@@ -371,6 +372,7 @@
 		title={bulkDeleteTitle(tickedIds.length)}
 		message={TAKE_DELETE_MESSAGE}
 		confirmLabel={TAKE_DELETE_LABEL}
+		destructive={true}
 		onconfirm={handleBulkDelete}
 		oncancel={() => (confirmingBulkDelete = false)}
 	/>

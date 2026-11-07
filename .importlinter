@@ -16,9 +16,18 @@
 #   workers, routes, runners, the gateway turn, co-writer and MCP, services,
 #   HTTP contract, scoring and health types, persistence, below persistence,
 #   settings, constants, leaves), and the routes never import each other.
-#   exhaustive: a module without a row breaks the contract.
+#   exhaustive: a module without a row breaks the contract. The one ignored import is
+#   settings reading the `agent` section's model from `agent.settings`, a leaf that
+#   imports no in-tree module (it holds the section the settings embed, as the
+#   agent-runtime client's `AgentConfig` does for every app).
 # scoring-is-self-contained: the scorers reach neither persistence nor the HTTP
 #   framework.
+# agent-runtime-client-importers: the installed agent runtime client is one opaque node, so
+#   this contract lists the modules that import it at all and a new importer shows as a
+#   diff here. Which of its submodules each may import is reviewed: only agent/backend.py
+#   and agent/mcp.py import its run and MCP machinery, agent/settings.py alone its
+#   `config`, and the route and tool modules only its `tools`,
+#   except conversation_api.py, which also imports its `turn`.
 [importlinter]
 include_external_packages = True
 root_packages =
@@ -79,6 +88,8 @@ layers =
     settings
     constants
     (acestep_capabilities) | (acestep_state) | (arq_codec) | (audio_files) | (audio_paths) | (cover_job_errors) | (env_override) | (errors) | (generation_params) | (invariants) | (theme_types) | (timestamps) | (whisper_cues)
+ignore_imports =
+    songmaker_cli.settings -> songmaker_cli.agent.settings
 
 [importlinter:contract:scoring-is-self-contained]
 name = Scorers reach neither persistence nor HTTP
@@ -90,3 +101,22 @@ forbidden_modules =
     sqlalchemy
     fastapi
     starlette
+
+[importlinter:contract:agent-runtime-client-importers]
+name = Only the agent, tool and route modules import the agent runtime client
+type = forbidden
+source_modules =
+    songmaker_cli
+forbidden_modules =
+    agent_runtime_client
+allow_indirect_imports = True
+ignore_imports =
+    songmaker_cli.agent.backend -> agent_runtime_client
+    songmaker_cli.agent.mcp -> agent_runtime_client
+    songmaker_cli.agent.settings -> agent_runtime_client
+    songmaker_cli.agent.tools -> agent_runtime_client
+    songmaker_cli.cowriter.tools -> agent_runtime_client
+    songmaker_cli.conversation_api -> agent_runtime_client
+    songmaker_cli.album_api -> agent_runtime_client
+    songmaker_cli.generation_api -> agent_runtime_client
+    songmaker_cli.song_api -> agent_runtime_client

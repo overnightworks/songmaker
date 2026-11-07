@@ -72,6 +72,46 @@
 		}
 	}
 
+	const defaultOptions = $derived([
+		{ id: null, name: 'Inherit', shared: false, unavailable: false },
+		...$userPresets.map((preset) => ({
+			id: preset.id,
+			name: preset.name,
+			shared: false,
+			unavailable: !activeIds.has(preset.model_mode)
+		})),
+		...$sharedPresets.map((preset) => ({
+			id: preset.id,
+			name: preset.name,
+			shared: true,
+			unavailable: !activeIds.has(preset.model_mode)
+		}))
+	]);
+
+	const tabbableIndex = $derived(
+		Math.max(
+			0,
+			defaultOptions.findIndex((option) => option.id === $defaultConfig)
+		)
+	);
+
+	const CHOOSER_KEY_STEPS: Readonly<Record<string, number>> = {
+		ArrowRight: 1,
+		ArrowDown: 1,
+		ArrowLeft: -1,
+		ArrowUp: -1
+	};
+
+	async function handleChooserKey(event: KeyboardEvent, index: number): Promise<void> {
+		const step = CHOOSER_KEY_STEPS[event.key];
+		if (step === undefined) return;
+		event.preventDefault();
+		const chips = (event.currentTarget as HTMLElement).parentElement?.children;
+		const nextIndex = (index + step + defaultOptions.length) % defaultOptions.length;
+		(chips?.[nextIndex] as HTMLElement | undefined)?.focus();
+		await handleSetDefaultConfig(defaultOptions[nextIndex].id);
+	}
+
 	function openNewPreset(): void {
 		editingPresetId = null;
 		presetName = '';
@@ -148,34 +188,23 @@
 	{/if}
 
 	<section>
-		<h2>Default for New Songs</h2>
+		<h2 id="default-config-heading">Default for New Songs</h2>
 		<p class="hint">When you create a song, this config is applied automatically.</p>
-		<div class="default-chips">
-			<button
-				class="default-chip"
-				class:active={$defaultConfig === null}
-				onclick={() => handleSetDefaultConfig(null)}
-			>
-				Inherit
-			</button>
-			{#each $userPresets as preset (preset.id)}
+		<div class="default-chips" role="radiogroup" aria-labelledby="default-config-heading">
+			{#each defaultOptions as option, index (option.id ?? 'inherit')}
 				<button
+					type="button"
+					role="radio"
+					aria-checked={$defaultConfig === option.id}
+					tabindex={index === tabbableIndex ? 0 : -1}
 					class="default-chip"
-					class:active={$defaultConfig === preset.id}
-					class:unavailable={!activeIds.has(preset.model_mode)}
-					onclick={() => handleSetDefaultConfig(preset.id)}
+					class:shared={option.shared}
+					class:active={$defaultConfig === option.id}
+					class:unavailable={option.unavailable}
+					onclick={() => handleSetDefaultConfig(option.id)}
+					onkeydown={(event) => handleChooserKey(event, index)}
 				>
-					{preset.name}
-				</button>
-			{/each}
-			{#each $sharedPresets as preset (preset.id)}
-				<button
-					class="default-chip shared"
-					class:active={$defaultConfig === preset.id}
-					class:unavailable={!activeIds.has(preset.model_mode)}
-					onclick={() => handleSetDefaultConfig(preset.id)}
-				>
-					{preset.name}
+					{option.name}
 				</button>
 			{/each}
 		</div>
@@ -311,6 +340,9 @@
 	}
 
 	.default-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
 		padding: 0.4rem 0.8rem;
 		border: 1px solid var(--border);
 		border-radius: 4px;
@@ -321,6 +353,20 @@
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
+	}
+
+	.default-chip::before {
+		content: '';
+		flex: none;
+		width: 0.6rem;
+		height: 0.6rem;
+		box-sizing: border-box;
+		border: 2px solid currentColor;
+		border-radius: 50%;
+	}
+
+	.default-chip[aria-checked='true']::before {
+		background: radial-gradient(circle, currentColor 0 28%, transparent 34%);
 	}
 
 	.default-chip:hover {
