@@ -85,9 +85,7 @@ def _optional_extras_by_distribution() -> dict[str, frozenset[str]]:
 
     A distribution the project also requires unconditionally is installed in
     every container whatever its extras, so naming it in an extra says what
-    that extra needs without making it omittable — ``httpx`` is both
-    songmaker's own HTTP client and part of the provider layer's ``api``
-    capability (issue #871).
+    that extra needs without making it omittable.
     """
     pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
     core = _core_distributions()
@@ -499,11 +497,10 @@ def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> 
         )
 
 
-def test_the_scoring_worker_imports_the_image_route_without_pillow() -> None:
+def test_the_scoring_worker_imports_the_job_runtime_without_pillow() -> None:
     """The scoring worker reaches the cover job's error names through
     ``jobs/_runtime.py`` but never produces an image, so it installs no
-    ``image`` extra. Pillow must therefore stay behind the
-    one call that encodes a picture (issue #871)."""
+    ``image`` extra. Pillow must therefore stay out of that import."""
     spec = CONTAINERS[SCORING_WORKER_SERVICE]
     blocked_roots = frozenset(
         root for root, owners in _root_owning_extras().items()
@@ -514,11 +511,11 @@ def test_the_scoring_worker_imports_the_image_route_without_pillow() -> None:
     completed = _run_with_blocked_optional_imports(
         spec,
         blocked_roots,
-        "importlib.import_module('agent_providers.codex.image')",
+        "importlib.import_module('songmaker_cli.jobs._runtime')",
     )
 
     assert completed.returncode == 0, (
-        f"agent_providers.codex.image reached an omitted optional "
+        f"songmaker_cli.jobs._runtime reached an omitted optional "
         f"dependency.\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
     )
 

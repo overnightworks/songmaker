@@ -164,16 +164,6 @@ COWRITER_DEFAULT_TAIL_TOKEN_BUDGET = 24_000
 COWRITER_MIN_TAIL_TOKEN_BUDGET = 2_000
 COWRITER_MAX_TAIL_TOKEN_BUDGET = 100_000
 
-CLAUDE_CLI_BINARY: Final[str] = "claude"
-GROK_CLI_BINARY: Final[str] = "grok"
-GROK_CLI_AUTH_FILE: Final[str] = "/home/songmaker/.grok/auth.json"
-GROK_CLI_PROMPT_FILE_PLACEHOLDER: Final[str] = "<songmaker-private-prompt>"
-CLI_PROMPT_FILE_PREFIX: Final[str] = "songmaker-cli-prompt-"
-CODEX_CLI_BINARY: Final[str] = "codex"
-CODEX_CLI_AUTH_FILE: Final[str] = "/home/songmaker/.codex/auth.json"
-CODEX_CODE_MODE_HOST_BINARY: Final[str] = "/usr/local/bin/codex-code-mode-host"
-CODEX_RESOURCES_DIRECTORY: Final[str] = "/usr/local/codex-resources"
-
 COWRITER_SUMMARY_TAG = "conversation_summary"
 COWRITER_MAX_SUMMARY_CHARS = 12_000
 
@@ -378,8 +368,6 @@ WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS: Final[int] = 1100
 JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 COVER_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 120
 JOB_HEARTBEAT_INTERVAL_SECONDS: Final[int] = 15
-COVER_MAX_CONCURRENT_RUNS: Final[int] = 1
-CODEX_CLI_MAX_CONCURRENT_PROCESSES: Final[int] = 8
 COVER_PROMPT_SONG_FIELD_MAX_CHARS: Final[int] = 500
 COVER_PROMPT_MAX_CHARS: Final[int] = 6000
 # These are not independently configurable timeouts. They document the
@@ -720,7 +708,7 @@ class LimiterFailurePolicy(StrEnum):
 
 
 # Env var names stripped from the environment of every child process this
-# package spawns (currently the Claude CLI, in claude/provider.py). The
+# package spawns (the scoring subprocess, in scoring/subprocess_runner.py). The
 # acestep_worker package keeps an identical tuple of the same name in
 # acestep_worker/constants.py (it cannot import this module, see AGENTS.md
 # "Engine packages are independent"); the parity test pins them equal.

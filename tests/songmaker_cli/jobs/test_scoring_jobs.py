@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from support.provider_runtime import override_provider_runtime
 from support.setting_rows import store_setting_row
 
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -85,7 +84,6 @@ def test_scoring_run_calls_no_provider_and_writes_no_verdict_key(tmp_path: Path)
             store_setting_row(session, key, value)
         session.add(Score(generation_id="g1", scorer="batch", value=dict(stored_pair)))
         session.commit()
-    override_provider_runtime(anthropic_api_key=None, xai_api_key=None)
 
     with (
         patch(
@@ -93,14 +91,6 @@ def test_scoring_run_calls_no_provider_and_writes_no_verdict_key(tmp_path: Path)
             return_value=MagicMock(score=MagicMock(
                 return_value=_scoring_result_with_transcript(),
             )),
-        ),
-        patch(
-            "agent_providers.dispatch.call_openai_compatible_once",
-            side_effect=AssertionError("a scoring run reached a provider"),
-        ),
-        patch(
-            "agent_providers.claude.adapter.call_claude",
-            side_effect=AssertionError("a scoring run reached a provider"),
         ),
     ):
         run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
