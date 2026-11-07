@@ -1,8 +1,0 @@
-claim_id = "0c33addece774e6f851fb7eb95157db8"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c0f4c91967ccda463f524599d0a41e246cef9248"
-branch = "claude/issue-2482-acestep-log-in-memory-tail"
-scope = [".dockerignore", "docker-compose.yml", "docs/acestep.md", "quality/baseline.toml", "src/acestep_worker/__main__.py", "src/acestep_worker/settings.py", "src/acestep_worker/subprocess_runner.py", "tests/acestep_worker/test_main.py", "tests/acestep_worker/test_subprocess_runner.py", "tests/acestep_worker/test_wrapper_training_child_stop.py"]
-opened_commit = "4a15fd484dc59c2dd41dd353551023cbf71598a0"
-whole_reason = "The file log, its setting and its compose line leave together; split, the worker or compose would name a setting that no longer exists."
