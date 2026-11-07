@@ -9,12 +9,21 @@ import tempfile
 import threading
 from collections.abc import Callable
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import annotated_types
 import httpx
 import pytest
+from support.generation_job_world import (
+    make_generation_dto,
+    patch_generation_dispatch,
+    run_async,
+)
 
 from songmaker_cli.api_models.songs import SongCreateRequest, SongUpdateRequest
+from songmaker_cli.db.models import Generation
+from songmaker_cli.db.queries.jobs import get_job
+from songmaker_cli.jobs import run_generation_job
 from songmaker_cli.scheduler import (
     DispatchOptions,
     WorkerTaskFailed,
@@ -298,3 +307,69 @@ def test_the_default_limit_admits_the_longest_take_songmaker_allows() -> None:
     longest_take_bytes = _longest_requested_seconds() * 48_000 * 2 * 4 + 44
 
     assert GENERATION_RESULT_MAX_BYTES >= longest_take_bytes
+
+
+def _run_generation_whose_terminal_check_fails_after_the_fetch(
+    seeded_db, tmp_path: Path, failure: BaseException
+) -> Path:
+    fetched_take = tmp_path / "songmaker_take_fetched.wav"
+    fetched_take.write_bytes(b"RIFF")
+    fetched = False
+
+    async def fetch_take(**_kwargs):
+        nonlocal fetched
+        fetched = True
+        return make_generation_dto(audio_path=str(fetched_take))
+
+    def terminal_check(*_args):
+        if fetched:
+            raise failure
+        return False
+
+    dispatch, post_process, defaults = patch_generation_dispatch(fetch_take)
+    with (
+        dispatch,
+        post_process,
+        defaults,
+        patch("songmaker_cli.jobs.generation._job_is_terminal", side_effect=terminal_check),
+    ):
+        run_async(
+            run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
+    return fetched_take
+
+
+def test_a_fetched_take_is_discarded_when_the_terminal_check_fails(
+    seeded_db, tmp_path: Path
+) -> None:
+    fetched_take = _run_generation_whose_terminal_check_fails_after_the_fetch(
+        seeded_db, tmp_path, RuntimeError("database unavailable")
+    )
+
+    assert not fetched_take.exists()
+    with seeded_db() as session:
+        assert get_job(session, "j1").status == "failed"
+        assert session.query(Generation).filter_by(song_id="s1").count() == 0
+
+
+def test_a_fetched_take_is_discarded_when_the_job_is_cancelled_after_the_fetch(
+    seeded_db, tmp_path: Path
+) -> None:
+    fetched_take = tmp_path / "songmaker_take_fetched.wav"
+    with pytest.raises(asyncio.CancelledError):
+        _run_generation_whose_terminal_check_fails_after_the_fetch(
+            seeded_db, tmp_path, asyncio.CancelledError()
+        )
+
+    assert not fetched_take.exists()
