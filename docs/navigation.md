@@ -67,6 +67,6 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 - **account_rule_5** Desktop: Kreis mit Menü oben rechts, wie am Telefon; keine Konto-Zeile mehr in der Leiste.
 - **account_rule_6** Cleanup ist der letzte Tab der Admin-Seite.
 - **account_rule_7** Rechtliches: Impressum · Datenschutz · Nutzungsbedingungen als stille Zeile unten im Konto-Menü, je in neuem Tab auf hallucinai.de; so bleibt das Impressum von jeder angemeldeten Seite erreichbar.
-- **account_rule_8** “No albums yet.” An empty Library or Playlists says so and points to + NEW; the tab never disappears.
+- **account_rule_8** An empty list says one line: “No albums yet.” An empty Library or Playlists says so and points to + NEW; the tab never disappears.
 - **account_rule_9** The desktop rail keeps the Settings group.
 - **account_rule_10** The account menu is the one popover form: Settings, the Light/Dark theme switch, Log out red and last.
