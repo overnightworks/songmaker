@@ -297,7 +297,7 @@ jobs:
       - name: Coverage summary and floors
         env:
           LINE_FLOOR: "93"
-          BRANCH_FLOOR: "88"
+          BRANCH_FLOOR: "89"
         run: |
           # coverage.py's fail_under judges lines and branches combined, so each floor is checked here.
           python3 - <<'PY'
