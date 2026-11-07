@@ -332,7 +332,8 @@ rewrite the file. The same check also fails on any `var(--x)` in `frontend/src`
 and prints each as `path:line --x`; a fallback does not excuse an undefined
 token, and there is no baseline. Declarations come from `frontend/src` (a
 `--x:` in CSS, `<style>` blocks and inline `style` attributes, `style:--x`, and
-`setProperty('--x', …)` with a literal name; comments define nothing) and from
+any quoted `'--x'` string in script code, which is how `setProperty` receives its
+name, directly or through a named constant; comments define nothing) and from
 the installed appkit stylesheet under `frontend/node_modules`, which is
 required: without it the check fails and names the path. The file fixtures in
 `tests/scripts/test_check_style_literals.py` prove detection and ratchet behavior.

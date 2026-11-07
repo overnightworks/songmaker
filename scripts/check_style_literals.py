@@ -26,7 +26,7 @@ TOKEN = re.compile(r"var\(\s*--[\w-]+\s*\)", re.IGNORECASE)
 TOKEN_USE = re.compile(r"var\(\s*(?P<name>--[\w-]+)", re.IGNORECASE)
 TOKEN_DECLARATION = re.compile(
     r"(?<![\w-])(?P<declared>--[\w-]+)(?=\s*:)|(?<=style:)(?P<directive>--[\w-]+)"
-    r"|setProperty\(\s*[\"'](?P<property>--[\w-]+)[\"']")
+    r"|[\"'`](?P<quoted>--[\w-]+)[\"'`]")
 APPKIT_STYLESHEET = Path("node_modules/overnightworks-appkit/src/appkit/static/appkit.css")
 RESET_VALUES = {"none", "inherit", "initial", "unset", "revert", "revert-layer"}
 FONT_KEYWORDS = {"xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large",
@@ -101,7 +101,7 @@ def style_sources(source: Path) -> list[Path]:
 
 
 def declared_tokens(code: str) -> set[str]:
-    return {match["declared"] or match["directive"] or match["property"]
+    return {match["declared"] or match["directive"] or match["quoted"]
             for match in TOKEN_DECLARATION.finditer(code)}
 
 

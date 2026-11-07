@@ -275,11 +275,13 @@ def test_gate_takes_no_path_from_the_command_line(monkeypatch):
          "a.css": "p { margin: var(--gap); }"},
         {"card.ts": 'node.style.setProperty( "--gap", 1);',
          "a.css": "p { margin: var(--gap); }"},
+        {"card.ts": "const GAP_VAR = '--gap';\nnode.style.setProperty(GAP_VAR, '1px');",
+         "a.css": "p { margin: var(--gap); }"},
         {"a.css": "p { margin: var(--appkit-gap); }"},
         {"a.css": "p { margin: var( --appkit-gap , 0); }"},
     ],
     ids=["app.css", "component css", "inline style", "style directive", "setProperty single",
-         "setProperty double", "appkit", "appkit spaced"],
+         "setProperty double", "named constant", "appkit", "appkit spaced"],
 )
 def test_use_of_a_declared_token_passes(gate, files):
     status, output, _ = gate(files)
