@@ -24,6 +24,7 @@
 	import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
 	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
+	import LoadFailure from './LoadFailure.svelte';
 	import LibraryHome from './LibraryHome.svelte';
 	import LibraryWall from './LibraryWall.svelte';
 	import SongDetailView from './SongDetailView.svelte';
@@ -67,10 +68,11 @@
 </script>
 
 {#if bootstrapFailed}
-	<div class="error" role="alert">
-		<p>{sync.error || RESOURCE_SYNC_ERROR}</p>
-		<button class="retry-btn" onclick={() => void retryLoad()}>{LIBRARY_RETRY_LABEL}</button>
-	</div>
+	<LoadFailure
+		message={sync.error || RESOURCE_SYNC_ERROR}
+		retryLabel={LIBRARY_RETRY_LABEL}
+		onretry={() => void retryLoad()}
+	/>
 {:else if !workspaceReady}
 	<div class="loading">Loading...</div>
 {:else}
@@ -122,7 +124,6 @@
 	}
 
 	.loading,
-	.error,
 	.sync-status {
 		display: flex;
 		align-items: center;
@@ -134,7 +135,6 @@
 		gap: 16px;
 	}
 
-	.error,
 	.sync-status {
 		color: var(--score-bad);
 	}

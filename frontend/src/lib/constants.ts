@@ -28,7 +28,7 @@ export const REFERENCE_AUDIO_ACCEPT = '.mp3,.wav,.flac,.ogg';
 export const QUEUE_STREAM_EMPTY_POOL_PREFIX = 'No playable takes in pool';
 
 export const LIBRARY_QUEUE_LOADING_TITLE = 'Loading';
-export const LIBRARY_QUEUE_EMPTY_TITLE = 'No takes';
+export const LIBRARY_QUEUE_EMPTY_TITLE = 'Nothing to play yet';
 export const LIBRARY_QUEUE_RETRY_DETAIL = 'Press play to retry';
 export const LIBRARY_QUEUE_PLAY_DETAIL = 'Play';
 export const PLAYLIST_LOADING_LABEL = 'Loading playlist…';
@@ -123,7 +123,6 @@ export const TAKE_DELETE_MESSAGE = 'Audio files will be permanently deleted';
 export const TAKE_RESCORE_LABEL = 'Re-score';
 export const TAKE_RESCORING_LABEL = 'Re-scoring…';
 export const TAKE_RESCORE_QUEUED_TOAST = 'Re-scoring this take…';
-export const TAKES_EMPTY = 'No takes yet · Generate on Write';
 export const TAKES_LOADING = 'Loading takes…';
 export const TAKES_ERROR = 'Failed to load takes';
 export const TAKES_RETRY_LABEL = 'Try again';
@@ -179,6 +178,7 @@ export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
 	'This proposal applies to a different song than the one you have open';
 
 export const EDITOR_GENERATE_LABEL = 'Generate';
+export const TAKES_EMPTY = `No takes yet · ${EDITOR_GENERATE_LABEL} makes the first`;
 export const EDITOR_GENERATE_QUEUED_TEMPLATE = `${EDITOR_QUEUED_LABEL} #{position}`;
 export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
 export const EDITOR_OPEN_WORKER_POOL_LABEL = 'Open worker pool';
@@ -500,7 +500,7 @@ export const RESOURCE_EVENT_STREAM_PATH = '/api/resource-events/stream';
 export const RESOURCE_EVENT_HELLO = 'hello';
 export const RESOURCE_EVENT_RESYNC = 'resync';
 export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
-export const RESOURCE_SYNC_ERROR = 'Library sync failed';
+export const RESOURCE_SYNC_ERROR = "Couldn't load your library";
 export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";
 // The edge's own answers for a server it cannot reach (down or restarting).
 // Only these, besides a request the network never carried, read as offline:

@@ -1443,7 +1443,7 @@ describe('starting a queue loads its first take on its own or reports an empty o
 		expect(get(playStartNotice)).toBe('empty');
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: `${LIBRARY_QUEUE_EMPTY_TITLE} (Nachtstrom)`,
+				message: LIBRARY_QUEUE_EMPTY_TITLE,
 				type: 'error'
 			})
 		]);
@@ -1467,7 +1467,7 @@ describe('starting a queue loads its first take on its own or reports an empty o
 		expect(get(playStartNotice)).toBe('empty');
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: `${LIBRARY_QUEUE_EMPTY_TITLE} (Night Drive)`,
+				message: LIBRARY_QUEUE_EMPTY_TITLE,
 				type: 'error'
 			})
 		]);
@@ -3012,7 +3012,7 @@ describe('curateAlbum', () => {
 		expect(get(curationActive)).toBe(false);
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: `${LIBRARY_QUEUE_EMPTY_TITLE} (Nachtstrom)`,
+				message: LIBRARY_QUEUE_EMPTY_TITLE,
 				type: 'error'
 			})
 		]);
@@ -3330,7 +3330,7 @@ describe('library take pool', () => {
 		expect(get(libraryQueueSkipped)).toEqual([]);
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: `${LIBRARY_QUEUE_EMPTY_TITLE} (+ Keeps)`,
+				message: LIBRARY_QUEUE_EMPTY_TITLE,
 				type: 'error'
 			})
 		]);

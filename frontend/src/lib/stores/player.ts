@@ -293,11 +293,11 @@ function isUnplayableStartError(err: unknown): boolean {
 	);
 }
 
-function reportNothingPlayable(label: string, retry: () => Promise<void>): void {
+function reportNothingPlayable(retry: () => Promise<void>): void {
 	retryPlayIntent = retry;
 	playStartNotice.set('empty');
 	clearLibraryQueueSkipFeedback();
-	addToast(`${LIBRARY_QUEUE_EMPTY_TITLE} (${label})`, 'error');
+	addToast(LIBRARY_QUEUE_EMPTY_TITLE, 'error');
 }
 
 function albumTitle(albums: AlbumItem[], albumId: string): string {
@@ -311,7 +311,7 @@ function toastAlbumSongsFailure(err: unknown): void {
 }
 
 function libraryStreamFailureToast(err: unknown): string {
-	if (isEmptyPoolError(err)) return `${LIBRARY_QUEUE_EMPTY_TITLE} (${poolLabel()})`;
+	if (isEmptyPoolError(err)) return LIBRARY_QUEUE_EMPTY_TITLE;
 	if (isUnplayableStartError(err)) return QUEUE_STREAM_UNPLAYABLE_START_DETAIL;
 	return `${poolLabel()} queue failed. Press play to retry.`;
 }
@@ -752,7 +752,7 @@ async function playLibrary(opts: QueueStart = {}): Promise<void> {
 	}
 	if (!playStartIsCurrent(seq)) return;
 	if (queue.takes.length === 0) {
-		reportNothingPlayable(poolLabel(), () => playLibrary(opts));
+		reportNothingPlayable(() => playLibrary(opts));
 		return;
 	}
 	playStartNotice.set('idle');
@@ -1621,7 +1621,7 @@ async function runAlbumStart(
 	}
 	if (!startTake) {
 		dropPendingStart();
-		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId, start));
+		reportNothingPlayable(() => playAlbum(albumId, start));
 		return;
 	}
 	playNativeAlbumTakes(albumId, [albumQueueTake(startTake.song, startTake.gen)], 0);
@@ -1683,7 +1683,7 @@ export async function curateAlbum(albumId: string): Promise<void> {
 	if (entries === null || !playStartIsCurrent(seq)) return;
 	if (entries.length === 0) {
 		playStartNotice.set('idle');
-		reportNothingPlayable(albumTitle(get(albumList), albumId), () => curateAlbum(albumId));
+		reportNothingPlayable(() => curateAlbum(albumId));
 		return;
 	}
 	playStartNotice.set('idle');
@@ -1719,7 +1719,7 @@ function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
 // playlist order.
 export function playPlaylist(playlist: PlaylistDetailItem): void {
 	if (playlist.entries.length === 0) {
-		reportNothingPlayable(playlist.title, () => {
+		reportNothingPlayable(() => {
 			playPlaylist(playlist);
 			return Promise.resolve();
 		});
