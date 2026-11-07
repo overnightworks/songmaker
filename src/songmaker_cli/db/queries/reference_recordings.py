@@ -375,7 +375,7 @@ def get_countdown_publication(session: Session) -> CountdownPublication:
     """The countdown row's epoch and the instant a page first showed it, None until then.
 
     Fails loud on a missing or duplicated row and on a value that is not an ISO-8601 UTC
-    instant; the log carries the row count and the fault kind only.
+    instant; the log carries the row count and the fault kind only (the exception message).
     """
     rows = session.scalars(select(RateLimitSetting).where(*_COUNTDOWN_ROWS)).all()
     try:
@@ -385,10 +385,7 @@ def get_countdown_publication(session: Session) -> CountdownPublication:
         [row] = rows
         return CountdownPublication(row.id, _published_instant(row.value_text))
     except CountdownRowUnusable as unusable:
-        log.error(
-            "Reference countdown row unusable: %s (rows=%d)",
-            unusable.fault.value, unusable.row_count,
-        )
+        log.exception("Reference countdown row unusable (rows=%d)", unusable.row_count)
         raise
 
 

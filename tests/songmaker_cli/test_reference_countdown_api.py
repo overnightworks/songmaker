@@ -276,9 +276,9 @@ def test_an_unusable_countdown_row_fails_the_list_without_logging_content(
         response = owner.get(REFERENCES_PATH)
 
     assert response.status_code == 500
-    logged = " ".join(record.getMessage() for record in caplog.records)
-    assert "secret-take-name" not in logged
-    assert "last-tuesday-ish" not in logged
+    assert caplog.records
+    assert "secret-take-name" not in caplog.text
+    assert "last-tuesday-ish" not in caplog.text
 
 
 def _delete_countdown_rows(client: TestClient) -> None:
