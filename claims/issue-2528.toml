@@ -1,0 +1,8 @@
+claim_id = "2424879e1da5473ab2aa50ceefcf688a"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "e24923c579708309491843f5d09144cf6eb6b33f"
+branch = "claude/issue-2528-lock-guard-suite"
+scope = ["tests/songmaker_cli/test_auth_stores.py", "tests/songmaker_cli/test_auth_stores_write_lock_postgres.py", "tests/songmaker_cli/test_lock_guard.py", "tests/songmaker_cli/test_lock_guard_postgres.py", "tests/support/lock_owners.py"]
+opened_commit = "78e52cc631f56d524703aed9b56da9b2cf6da396"
+whole_reason = "The SQLite suite leaves only when the PostgreSQL suite and the auth-store file carry every case it proved, so the move and the deletion land together."
