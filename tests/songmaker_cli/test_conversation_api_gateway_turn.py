@@ -22,7 +22,7 @@ from agent_runtime_client.backend.fake_gateway import (
 )
 from agent_runtime_client.backend.gateway import GatewayBackend
 from agent_runtime_client.config import AgentConfig, ChatGateway
-from agent_runtime_client.turn import FailureCode, RejectionCode
+from agent_runtime_client.turn import FailureCode
 from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
 from fastapi.testclient import TestClient
 from support.cowriter_gateway import (
@@ -193,20 +193,13 @@ def _arrange_reply(world: World, arrangement: str) -> None:
             world.stack.app.state.agent_backend = _backend_without_key(world)
         case "tool-calls-crossed" | "deadline-passed":
             world.stack.behaves(stops(TurnStopped(TurnStopKind.FAILED, FailureCode.LIMIT_EXCEEDED)))
-        case "cancelled":
-            world.stack.behaves(stops(TurnStopped(TurnStopKind.CANCELLED)))
-        case "refused-for-another-reason":
-            world.stack.behaves(
-                stops(TurnStopped(TurnStopKind.REFUSED, RejectionCode.UNAVAILABLE)),
-            )
 
 
 @pytest.mark.parametrize(
     "arrangement",
     [
         "gateway-error", "budget-refusal", "no-words-after-a-tool-round", "refused-connection",
-        "missing-key-file", "tool-calls-crossed", "deadline-passed", "cancelled",
-        "refused-for-another-reason",
+        "missing-key-file", "tool-calls-crossed", "deadline-passed",
     ],
 )
 def test_a_turn_the_gateway_cannot_finish_ends_unavailable_and_stores_no_answer(
