@@ -585,6 +585,7 @@ describe('PlayerBar stream boundaries', () => {
 		expect(next?.disabled).toBe(true);
 	});
 
+	// Spec: REQ-PLAYER-02 -- on the transport bar a first Play press queues playback while the audio loads.
 	it('keeps Play enabled and queues one loading tap until canplay', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		component = mount(PlayerBar, { target });
@@ -766,6 +767,27 @@ describe('PlayerBar transport labels', () => {
 	});
 });
 
+describe('PlayerBar loading presses', () => {
+	// Spec: REQ-PLAYER-02 -- on the transport bar a second Play press while the audio loads withdraws the queued playback.
+	it('a second Play press while loading cancels the queued play', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+		const playSpy = vi.spyOn(audio, 'play');
+
+		await clickAndSettle();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PAUSE_LABEL);
+		await clickAndSettle();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
+
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		audio.fire('canplay');
+		await tick();
+
+		expect(playSpy).not.toHaveBeenCalled();
+	});
+});
+
 describe('PlayerBar Now Playing', () => {
 	beforeEach(useDesktopLayout);
 
@@ -777,11 +799,13 @@ describe('PlayerBar Now Playing', () => {
 		return button;
 	}
 
+	// Spec: REQ-PLAYER-01 -- a playing take shows its song's name in the bar, and the bar's Now Playing control opens the one surface and puts it away again.
 	it('opens Now Playing, and puts the docked panel away again on a second press', async () => {
 		nowPlayingDockable.set(true);
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		component = mount(PlayerBar, { target });
 		await tick();
+		expect(target.querySelector('.track-title')?.textContent).toBe('Repeated take');
 		// A panel in the page is a disclosure, not a dialog trigger.
 		expect(nowPlayingButton().getAttribute('aria-expanded')).toBe('false');
 

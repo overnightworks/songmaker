@@ -1748,6 +1748,7 @@ describe('starting library playback from a take', () => {
 		});
 	});
 
+	// Spec: REQ-LISTENING-07 -- a bounded snapshot stops after its last loaded take and flags that more takes were not loaded.
 	it('does not wrap Mix next when the membership window is incomplete', async () => {
 		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
 			makePoolQueue({
@@ -3337,6 +3338,7 @@ describe('library take pool', () => {
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
+	// Spec: REQ-LISTENING-04 -- a pool change keeps the playing take and rebuilds the takes that follow.
 	it('changing pool mid-play rebuilds the library at the current take and time', async () => {
 		const gen = makeGen({ ...genDefaults, id: 'g-cur' });
 		const song = makeSong({ ...queuedSongDefaults(), generations: [gen] });
@@ -5272,6 +5274,15 @@ describe('collection transport', () => {
 			expect(get(shuffleEnabled)).toBe(true);
 		}
 	);
+});
+
+// Spec: REQ-LISTENING-03 -- a reloaded browser profile restores the Shuffle state the musician chose last.
+it.each([true, false])('restores Shuffle %s on the next visit', async (enabled) => {
+	setShuffle(enabled);
+	vi.resetModules();
+	const { shuffleEnabled } = await import('./player');
+
+	expect(get(shuffleEnabled)).toBe(enabled);
 });
 
 it('imports with the defaults when browser storage throws', async () => {

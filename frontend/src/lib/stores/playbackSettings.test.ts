@@ -39,6 +39,14 @@ describe('library take pool trio', () => {
 		expect(get(fresh.libraryTakePool)).toBe('picks');
 	});
 
+	// Spec: REQ-LISTENING-03 -- a reloaded browser profile restores the pool the musician chose last.
+	it.each(LIBRARY_TAKE_POOLS)('restores the stored %s pool on the next visit', async (pool) => {
+		setLibraryTakePool(pool);
+		vi.resetModules();
+		const fresh = await import('./playbackSettings');
+		expect(get(fresh.libraryTakePool)).toBe(pool);
+	});
+
 	it('setLibraryTakePool persists the chosen pool', () => {
 		setLibraryTakePool('all');
 		expect(localStorage.getItem(POOL_STORAGE_KEY)).toBe('all');

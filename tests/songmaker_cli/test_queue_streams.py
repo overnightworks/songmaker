@@ -1039,6 +1039,7 @@ def _write_library_audio_files(root: Path) -> None:
 
 
 def test_library_pool_queue_order_and_tracks(tmp_path: Path, monkeypatch) -> None:
+    """Spec: REQ-LISTENING-01 -- with Shuffle off, songs follow album and then track order."""
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
@@ -1659,6 +1660,9 @@ def test_library_pool_queue_without_shuffle_keeps_album_track_order(
 
 
 def test_library_pool_queue_shuffle_uses_injected_rng(tmp_path: Path, monkeypatch) -> None:
+    """Spec: REQ-LISTENING-02 -- Shuffle reorders the pool, keeps its takes and starts with the
+    clicked take.
+    """
     _patch_audio_build(monkeypatch)
     monkeypatch.setattr("songmaker_cli.queue_streams.random.shuffle", _reverse_in_place)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
@@ -2087,6 +2091,11 @@ def _write_pool_audio_files(root: Path) -> None:
 def test_library_pool_queue_pool_sets(
     tmp_path: Path, monkeypatch, pool: str, expected: list[str]
 ) -> None:
+    """Spec: REQ-LIBRARY-03, REQ-LIBRARY-04, REQ-LIBRARY-05, REQ-LIBRARY-06, REQ-LIBRARY-07,
+    REQ-LIBRARY-08, REQ-LISTENING-01 -- each pool holds exactly its takes: Mix lists a take that
+    is both picked and kept once, no pool holds the archived or the missing-file take, one song
+    contributes several takes, and a song's takes run from newest to oldest.
+    """
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
@@ -2099,6 +2108,7 @@ def test_library_pool_queue_pool_sets(
 
 
 def test_library_pool_queue_default_pool_is_mix(tmp_path: Path, monkeypatch) -> None:
+    """Spec: REQ-LIBRARY-07 -- a take whose audio file is missing is left out and reported."""
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
@@ -2119,7 +2129,126 @@ def test_library_pool_queue_default_pool_is_mix(tmp_path: Path, monkeypatch) -> 
     ]
 
 
+def _seed_library_ordering_ties(session) -> None:
+    moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    session.add(User(id="user-a", username="usera"))
+    session.flush()
+    session.add(Album(id="album-z", title="Alpha", artist="A", created_by="user-a"))
+    session.add(Album(id="album-a", title="Zulu", artist="A", created_by="user-a"))
+    session.flush()
+    for song_id, album_id in (
+        ("song-b", "album-z"),
+        ("song-a", "album-z"),
+        ("song-c", "album-a"),
+    ):
+        session.add(
+            Song(id=song_id, title=song_id, album_id=album_id, track_number=1, slug=song_id)
+        )
+    session.flush()
+    for song_id in ("song-b", "song-a", "song-c"):
+        session.add(Version(id=f"v-{song_id}", song_id=song_id, version_number=1, lyrics=""))
+    session.flush()
+    take_times = (
+        ("song-a", "take-b", moment + timedelta(days=2)),
+        ("song-a", "take-a", moment + timedelta(days=2)),
+        ("song-a", "take-old", moment),
+        ("song-a", "take-mid", moment + timedelta(days=1)),
+        ("song-b", "take-only-b", moment),
+        ("song-c", "take-only-c", moment),
+    )
+    for number, (song_id, take_id, created_at) in enumerate(take_times, start=1):
+        session.add(
+            Generation(
+                id=take_id,
+                song_id=song_id,
+                version_id=f"v-{song_id}",
+                generation_number=number,
+                mp3_path=f"user-a/{take_id}.mp3",
+                seed=number,
+                is_picked=True,
+                created_at=created_at,
+            )
+        )
+
+
+def test_library_pool_queue_orders_ties_by_album_title_then_stable_identifiers(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Spec: REQ-LISTENING-01 -- album title outranks album id, tied tracks fall back to the song
+    id and tied takes to the take id, and a song's takes still run newest to oldest.
+    """
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_ordering_ties)
+    audio_path = tmp_path / "audio" / "user-a"
+    audio_path.mkdir(parents=True)
+    for take_id in (
+        "take-a", "take-b", "take-old", "take-mid", "take-only-b", "take-only-c",
+    ):
+        (audio_path / f"{take_id}.mp3").write_bytes(b"source")
+    seed_session(client, "usera")
+
+    resp = client.get("/api/library/pool-queue", params={"pool": "all"})
+
+    assert resp.status_code == 200
+    assert [track["generation_id"] for track in resp.json()["takes"]] == [
+        "take-a",
+        "take-b",
+        "take-mid",
+        "take-old",
+        "take-only-b",
+        "take-only-c",
+    ]
+
+
+def test_library_pool_queue_never_replaces_an_unavailable_pick_with_another_take(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Spec: REQ-LISTENING-06 -- a Pick whose audio file is missing is reported and its song
+    contributes no other take, although another take of that song is playable.
+    """
+
+    def seed_unavailable_pick(session) -> None:
+        _seed_library_pool_data(session)
+        session.add_all(
+            [
+                Generation(
+                    id="g-pick-gone",
+                    song_id="s2",
+                    version_id="v2",
+                    generation_number=3,
+                    mp3_path="user-a/g-pick-gone.mp3",
+                    is_picked=True,
+                ),
+                Generation(
+                    id="g-spare",
+                    song_id="s2",
+                    version_id="v2",
+                    generation_number=4,
+                    mp3_path="user-a/g-spare.mp3",
+                ),
+            ]
+        )
+
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=seed_unavailable_pick)
+    _write_pool_audio_files(tmp_path)
+    (tmp_path / "audio" / "user-a" / "g-spare.mp3").write_bytes(b"source")
+    seed_session(client, "usera")
+
+    resp = client.get("/api/library/pool-queue", params={"pool": "picks"})
+
+    assert resp.status_code == 200
+    assert resp.json()["skipped"] == [
+        {"song_id": "s2", "generation_id": "g-pick-gone", "reason": "missing_file"}
+    ]
+    assert [track["song_id"] for track in resp.json()["takes"]] == ["s1", "s1", "s3"]
+    assert "g-spare" not in [track["generation_id"] for track in resp.json()["takes"]]
+
+
 def test_library_pool_queue_reports_every_unplayable_reason(tmp_path: Path, monkeypatch) -> None:
+    """Spec: REQ-LISTENING-05, REQ-LIBRARY-07 -- a take with no audio path, a missing file or an
+    unreadable file is reported with its own reason and is not queued.
+    """
     def seed_with_unplayable(session) -> None:
         _seed_library_pool_data(session)
         session.add_all(
@@ -2158,6 +2287,8 @@ def test_library_pool_queue_reports_every_unplayable_reason(tmp_path: Path, monk
         {"song_id": "s3", "generation_id": "g-directory", "reason": "unreadable_file"},
     ]
     assert resp.json()["skipped_complete"] is True
+    queued = {track["generation_id"] for track in resp.json()["takes"]}
+    assert queued.isdisjoint({"g-no-path", "g-missing", "g-directory"})
 
 
 def test_library_skip_classifies_missing_path(tmp_path: Path) -> None:

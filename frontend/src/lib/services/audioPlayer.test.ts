@@ -2072,6 +2072,7 @@ describe('toggle / play / pause', () => {
 		expect(fakeAudio.playMock).toHaveBeenCalled();
 	});
 
+	// Spec: REQ-PLAYER-02 -- a second Play press while the audio loads withdraws the queued playback in the shared player.
 	it('a second press while loading withdraws the queued play (#1312)', () => {
 		audioPlayer.toggle();
 		audioPlayer.toggle();
