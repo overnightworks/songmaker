@@ -132,15 +132,15 @@ def test_invalid_completion_writes_neither_takes_nor_audio(seeded_job, status, t
 
 
 def _drop_second_take_rejection(factory, open_session):
-    from sqlalchemy import text
+    from support.failing_reference_stamp import drop_with_bounded_waits
 
     # The per-test reset restores tables, not triggers; the fixture's open transaction
     # would block the drop.
     open_session.rollback()
-    with factory() as session:
-        session.execute(text("DROP TRIGGER reject_second_take ON generations"))
-        session.execute(text("DROP FUNCTION reject_second_take()"))
-        session.commit()
+    drop_with_bounded_waits(factory, (
+        "DROP TRIGGER IF EXISTS reject_second_take ON generations",
+        "DROP FUNCTION IF EXISTS reject_second_take()",
+    ))
 
 
 def test_failed_second_take_rolls_back_the_batch_and_terminal_status(
@@ -152,6 +152,7 @@ def test_failed_second_take_rolls_back_the_batch_and_terminal_status(
     session, audio_dir, job = seeded_job
     ids_before = {g.id for g in session.query(Generation)}
     files_before = set(audio_dir.rglob("*.mp3"))
+    request.addfinalizer(lambda: _drop_second_take_rejection(pg_factory, session))
     # A real database refusal on the second addition, after the first was flushed.
     session.execute(text("""
         CREATE FUNCTION reject_second_take() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -168,7 +169,6 @@ def test_failed_second_take_rolls_back_the_batch_and_terminal_status(
         FOR EACH ROW EXECUTE FUNCTION reject_second_take()
     """))
     session.commit()
-    request.addfinalizer(lambda: _drop_second_take_rejection(pg_factory, session))
 
     with pytest.raises(IntegrityError, match="fixture rejects second take"):
         seed_e2e_job_states.complete_generation_job(session, audio_dir, b"mp3", job_id=job.id)
@@ -229,9 +229,7 @@ def test_cover_running_command_prints_an_owned_job_started_in_the_past(cover_alb
     assert (job.user_id, job.album_id, job.type, job.status) == (
         _OWNER_ID, _ALBUM_ID, JobType.COVER, JobStatus.RUNNING,
     )
-    # SQLite returns the stored UTC instant without its zone.
-    started_at = job.started_at.replace(tzinfo=timezone.utc)
-    assert datetime.now(timezone.utc) - started_at >= timedelta(seconds=90)
+    assert datetime.now(timezone.utc) - job.started_at >= timedelta(seconds=90)
     assert job.heartbeat_at is not None
 
 
