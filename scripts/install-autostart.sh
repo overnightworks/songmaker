@@ -69,7 +69,6 @@ ALERT_SCRIPT="$SCRIPT_DIR/alert.sh"
 # configure the channel — a checkout missing it has no alert channel at
 # all, which is exactly what must not be discovered during an outage.
 ALERT_CONFIG_LIB="$SCRIPT_DIR/alert-config.sh"
-PREFLIGHT_SCRIPT="$SCRIPT_DIR/check_agent_cli_mounts.sh"
 
 if [[ ! -f "$UNIT_SOURCE" ]]; then
     echo "ERROR: $UNIT_SOURCE not found." >&2
@@ -88,11 +87,6 @@ fi
 
 if [[ ! -f "$ALERT_CONFIG_LIB" ]]; then
     echo "ERROR: $ALERT_CONFIG_LIB not found." >&2
-    exit 1
-fi
-
-if [[ ! -x "$PREFLIGHT_SCRIPT" ]]; then
-    echo "ERROR: $PREFLIGHT_SCRIPT not found or not executable." >&2
     exit 1
 fi
 
@@ -119,8 +113,6 @@ sed_escape_replacement() {
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
 ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/alert.sh")"
-ESCAPED_PREFLIGHT="$(sed_escape_replacement \
-    "$PREFLIGHT_SCRIPT")"
 
 # shellcheck source=scripts/agent_cli_paths.sh
 source "$SCRIPT_DIR/agent_cli_paths.sh"
@@ -131,27 +123,11 @@ refuse_silent_takeover "$UNIT_TARGET" WorkingDirectory \
 refuse_silent_takeover "$ALERT_UNIT_TARGET" ExecStart \
     "$PROJECT_ROOT/scripts/alert.sh" "$FORCE" command || exit 1
 
-if PREFLIGHT_OUTPUT="$(sudo -u "$INSTALL_USER" "$PREFLIGHT_SCRIPT" 2>&1)"; then
-    :
-else
-    echo "ERROR: the agent-CLI mount preflight does not pass yet." >&2
-    if [[ -n "$PREFLIGHT_OUTPUT" ]]; then
-        printf '%s\n' "$PREFLIGHT_OUTPUT" >&2
-    fi
-    echo "songmaker.service would then refuse to start the stack at boot." >&2
-    echo "Set the login mirror up first:" >&2
-    echo "  sudo ./scripts/install-cli-credentials-mirror.sh" >&2
-    echo "Then re-run this installer. To see what is missing:" >&2
-    echo "  ./scripts/check_agent_cli_mounts.sh" >&2
-    exit 1
-fi
-
 TMP_UNIT="$(mktemp)"
 TMP_ALERT_UNIT="$(mktemp)"
 trap 'rm -f "$TMP_UNIT" "$TMP_ALERT_UNIT"' EXIT
 
 sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
-    -e "s#^ExecStartPre=.*#ExecStartPre=$ESCAPED_PREFLIGHT#" \
     -e "s#^User=.*#User=$ESCAPED_INSTALL_USER#" \
     "$UNIT_SOURCE" > "$TMP_UNIT"
 

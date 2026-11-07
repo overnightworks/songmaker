@@ -20,7 +20,6 @@ AUTOSTART_FILES = (
     "agent_cli_paths.sh",
     "alert-config.sh",
     "alert.sh",
-    "check_agent_cli_mounts.sh",
     "install-autostart.sh",
     "main_checkout.py",
     "songmaker-alert@.service",
@@ -73,18 +72,12 @@ def run_autostart(tmp_path: Path):
 
     def _run(
         *arguments: str, from_checkout: Path | None = None,
-        sudo_u_exit: str | None = None, sudo_u_output: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         started_from = from_checkout or checkout
-        environment = _environment()
-        if sudo_u_exit is not None:
-            environment["FAKE_SUDO_U_EXIT"] = sudo_u_exit
-        if sudo_u_output is not None:
-            environment["FAKE_SUDO_U_OUTPUT"] = sudo_u_output
         return subprocess.run(
             [str(started_from / "scripts" / "install-autostart.sh"), *arguments],
             cwd=started_from,
-            env=environment,
+            env=_environment(),
             text=True,
             capture_output=True,
             check=False,
@@ -144,28 +137,18 @@ def test_installer_refuses_matching_compose_commands_from_another_checkout(
     assert not run_autostart.recording.read_text()
 
 
-def test_installer_runs_the_argumentless_preflight_as_the_operator(
+def test_installer_writes_a_unit_without_preflight_or_mirror_requirement(
     run_autostart,
 ) -> None:
     result = run_autostart()
 
     assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     unit = (run_autostart.units / "songmaker.service").read_text()
-    checkout = run_autostart.checkout
-    assert f"WorkingDirectory={checkout}" in unit
-    assert f"ExecStartPre={checkout}/scripts/check_agent_cli_mounts.sh" in unit
-    assert (
-        f"sudo -u operator {checkout}/scripts/check_agent_cli_mounts.sh"
-        in run_autostart.recording.read_text().splitlines()
-    )
-
-
-def test_installer_keeps_a_failing_preflight_diagnosis(run_autostart) -> None:
-    result = run_autostart(
-        sudo_u_exit="1", sudo_u_output="the mirror is missing",
-    )
-
-    assert result.returncode == 1
-    assert "the agent-CLI mount preflight does not pass yet" in result.stderr
-    assert "the mirror is missing" in result.stderr
-    assert not any(run_autostart.units.iterdir())
+    assert f"WorkingDirectory={run_autostart.checkout}" in unit
+    assert "ExecStartPre" not in unit
+    ordering = [
+        line for line in unit.splitlines()
+        if line.startswith(("After=", "Requires="))
+    ]
+    assert ordering
+    assert not any("songmaker-cli-credentials-mirror" in line for line in ordering)
