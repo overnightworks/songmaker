@@ -143,7 +143,7 @@ def _assert_owned_answer(name, identity, payload):
 def test_tools_only_reach_owned_resources(
     ownership_factory, monkeypatch, name, role, identity, route,
 ):
-    """1301-F2-TOOLS, 1301-F2-ENTRY: enforce ownership before work."""
+    """Spec: REQ-COWRITER-12 -- 1301-F2-TOOLS, 1301-F2-ENTRY: enforce ownership before work."""
     with ownership_factory() as session:
         session.get(User, "actor").role = role
         session.commit()

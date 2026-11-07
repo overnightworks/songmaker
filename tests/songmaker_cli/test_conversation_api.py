@@ -425,6 +425,7 @@ def test_chat_turn_closing_after_completion_keeps_job_completed(client, service)
 
 
 def test_chat_turn_reuses_active_conversation_across_turns(client, service):
+    """Spec: REQ-COWRITER-01 -- consecutive turns share the one active conversation."""
     c, factory = client
     service.replies(completion("ok"))
 
@@ -439,9 +440,29 @@ def test_chat_turn_reuses_active_conversation_across_turns(client, service):
         assert session.query(ChatMessage).count() == 4
 
 
+def test_switching_the_open_song_continues_the_same_conversation(client, service):
+    """Spec: REQ-COWRITER-03 -- a turn on another song neither starts nor archives a
+    conversation."""
+    c, factory = client
+    with factory() as session:
+        session.add(Song(id="s2", title="Rain", album_id="alb1", track_number=2, slug="rain"))
+        session.commit()
+    service.replies(completion("ok"))
+
+    first = c.post("/api/chat/turn", json={"message": "one", "current_song_id": "s1"})
+    second = c.post("/api/chat/turn", json={"message": "two", "current_song_id": "s2"})
+
+    first_final = _final_event(_stream_events(first))
+    second_final = _final_event(_stream_events(second))
+    assert first_final["conversation_id"] == second_final["conversation_id"]
+    with factory() as session:
+        conversation = session.query(Conversation).one()
+        assert conversation.archived_at is None
+
+
 def test_chat_turn_carries_history_memory_mentions_and_take_into_the_next_turn(client, service):
-    """Spec: REQ-COWRITER-05 -- every turn of the active conversation reaches the run with its
-    history, memory, mentions, and take context."""
+    """Spec: REQ-COWRITER-05, REQ-COWRITER-33 -- the next turn receives the earlier messages
+    verbatim, and the musician's memory, the song's memory and the album's notes."""
     c, factory = client
     with factory() as session:
         session.add(Generation(
@@ -496,6 +517,7 @@ def test_chat_turn_carries_history_memory_mentions_and_take_into_the_next_turn(c
 
 
 def test_chat_turn_injects_current_song_block(client, service):
+    """Spec: REQ-COWRITER-18 -- the open song's title, style prompt and lyrics reach the turn."""
     c, _ = client
 
     resp = c.post(
@@ -507,6 +529,7 @@ def test_chat_turn_injects_current_song_block(client, service):
     last_user = service.last_turn.messages[-1]["text"]
     assert f"{CURRENT_SONG_FRESHNESS_NOTE}\n<current_song>" in last_user
     assert "title: Thunder" in last_user
+    assert "style: rock" in last_user
     assert "lyrics:\nverse" in last_user
 
 
@@ -651,6 +674,7 @@ def test_get_conversation_404_when_unknown(client):
 
 
 def test_new_conversation_archives_active(client, service):
+    """Spec: REQ-COWRITER-01 -- a new conversation archives the old one, leaving one active."""
     c, factory = client
     turn = c.post("/api/chat/turn", json={"message": "hi"})
     old_id = _final_event(_stream_events(turn))["conversation_id"]
@@ -665,6 +689,7 @@ def test_new_conversation_archives_active(client, service):
         new = session.query(Conversation).filter_by(id=new_id).one()
         assert old.archived_at is not None
         assert new.archived_at is None
+        assert session.query(Conversation).filter_by(archived_at=None).count() == 1
 
 
 def test_new_conversation_without_active(client):

@@ -16,6 +16,8 @@ def _msg(i: int, text: str, role: str = "user"):
 
 
 def test_under_budget_stays_verbatim():
+    """Spec: REQ-COWRITER-05 -- history within the token budget is rendered message for
+    message."""
     messages = [_msg(1, "hello"), _msg(2, "world")]
     compacted = compact_conversation(
         messages, budget=10_000, summarize=fold_summary,
@@ -78,6 +80,8 @@ def test_incremental_update_does_not_overlap_or_drop():
 
 
 def test_summarizer_failure_keeps_limited_tail_not_full_history():
+    """Spec: REQ-COWRITER-07 -- a failing summarizer leaves a summary-less turn with a tail
+    that is shorter than the history and within budget."""
     chunk = "x" * 80
     messages = [_msg(i, f"{chunk}-{i}") for i in range(8)]
 
