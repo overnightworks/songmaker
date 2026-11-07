@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from songmaker_cli.db.models import Album, Generation, Song, aware_timestamp
+from songmaker_cli.db.models import Album, Generation, Song
 from songmaker_cli.db.queries.generations import delete_takes, lock_songs
 from songmaker_cli.db.queries.jobs import ActiveJobError, has_active_job_for_songs
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
@@ -246,7 +246,7 @@ def restore_album(session: Session, album_id: str) -> Album:
         raise ValueError(f"Album not found: {album_id}")
     if album.deleted_at is None:
         return album
-    deleted_at = aware_timestamp(album.deleted_at)
+    deleted_at = album.deleted_at
     age = datetime.now(timezone.utc) - deleted_at
     window = timedelta(days=get_settings().final_deletion_days)
     if age > window:
@@ -261,7 +261,7 @@ def restore_album(session: Session, album_id: str) -> Album:
             song_ts = song.deleted_at
             if song_ts is None:
                 continue
-            if aware_timestamp(song_ts) == deleted_at:
+            if song_ts == deleted_at:
                 song.deleted_at = None
     session.flush()
     return album
