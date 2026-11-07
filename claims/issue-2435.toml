@@ -1,7 +1,0 @@
-claim_id = "1aa9fe81e7c645baa7835e5d9b7913a4"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6ac31ec9127acafe860a51dcf4c270336b361c84"
-branch = "claude/issue-2435-docs-slice-15-the-four-stale-account-rul"
-scope = ["docs/requirements/0005-sharing-and-administration.md"]
-opened_commit = "96ba4166eb794fd4a4a083e01e24a7f7e90750cc"
