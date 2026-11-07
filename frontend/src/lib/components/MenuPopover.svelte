@@ -31,7 +31,7 @@
 	const VIEWPORT_MARGIN_PX = 8;
 	const TRIGGER_GAP_PX = 8;
 
-	const open = historyLayerState(
+	const shown = historyLayerState(
 		untrack(() => layer),
 		false
 	);
@@ -43,7 +43,7 @@
 	let focusTriggerOnClose = true;
 
 	$effect(() => {
-		const isOpen = $open;
+		const isOpen = $shown;
 		if (wasOpen && !isOpen && focusTriggerOnClose) focusTrigger();
 		focusTriggerOnClose = true;
 		wasOpen = isOpen;
@@ -80,7 +80,7 @@
 	}
 
 	async function openMenu(): Promise<void> {
-		$open = true;
+		$shown = true;
 		await tick();
 		placeBelowOrAboveTrigger();
 		if (panel) focusFirstIn(panel);
@@ -90,24 +90,28 @@
 		queueMicrotask(() => triggerButton?.focus());
 	}
 
+	export function open(): void {
+		if (!$shown) void openMenu();
+	}
+
 	export function close(restoreFocus = true): void {
-		if (!$open) return;
+		if (!$shown) return;
 		focusTriggerOnClose = restoreFocus;
-		$open = false;
+		$shown = false;
 	}
 
 	function toggle(): void {
-		if ($open) close();
+		if ($shown) close();
 		else void openMenu();
 	}
 
 	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!$open || !panel) return;
+		if (!$shown || !panel) return;
 		handleFocusTrapKeydown(panel, event);
 	}
 
 	function onWindowResize(): void {
-		if ($open) placeBelowOrAboveTrigger();
+		if ($shown) placeBelowOrAboveTrigger();
 	}
 </script>
 
@@ -119,14 +123,14 @@
 	data-hitbox="frequent"
 	data-hitbox-face={hitboxFace ? '' : undefined}
 	aria-haspopup="dialog"
-	aria-expanded={$open}
+	aria-expanded={$shown}
 	class:pressed
 	aria-label={label}
 	onclick={toggle}
 >
 	{@render trigger()}
 </button>
-{#if $open}
+{#if $shown}
 	<div class="menu-backdrop-layer">
 		<button class="menu-backdrop" tabindex="-1" onclick={() => close()} aria-label={closeLabel}
 		></button>

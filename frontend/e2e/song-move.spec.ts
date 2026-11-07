@@ -5,14 +5,20 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
 	DIALOG_CANCEL_LABEL,
+	LIBRARY_RETRY_LABEL,
+	RAIL_NAV_LABEL,
+	RAIL_SEARCH_LABEL,
 	SONG_MENU_LABEL,
 	SONG_MENU_MOVE_LABEL,
+	SONG_MOVE_ALBUM_GONE,
 	SONG_MOVE_HEADING,
 	SONG_MOVE_NO_OTHER_ALBUM,
 	SONG_MOVE_SHARED_TITLE,
+	songMoveFailedLine,
 	songMovedToastLabel,
 	songMoveSharedMessage
 } from '../src/lib/constants';
+import { openSearchSheet } from './phone-search';
 import { FlowGuard, HOME_PATH, nameStartingWith, ONLY_IN_SHELL, type Shell } from './helpers';
 import {
 	archiveOwnedAlbum,
@@ -27,6 +33,7 @@ import {
 const WIDTH_PX: Record<Shell, number> = { desktop: 1440, mobile: 375 };
 const VIEWPORT_HEIGHT_PX = 844;
 const SONG_TITLE = 'E2E Move song';
+const OTHER_SONG_TITLE = 'E2E Move other song';
 const SAVED_LYRICS = 'saved lyrics';
 const DRAFT_LYRICS = 'E2E move draft that is not saved yet';
 
@@ -40,11 +47,21 @@ interface Person {
 	albumIds: string[];
 }
 
+const MOVE_ROUTE = '**/api/songs/*/album';
+
+// The two cells that answer the move route with a 4xx of their own; every other cell
+// fails on any refusal, and every cell on a 5xx.
+const REFUSED_MOVE_TAG = '@refused-move';
+
 let guard: FlowGuard;
 let people: Person[] = [];
 
-test.beforeEach(({ page }) => {
-	guard = new FlowGuard(page);
+test.beforeEach(({ page }, testInfo) => {
+	guard = new FlowGuard(page, {
+		refusalsExpectedOn: testInfo.tags.includes(REFUSED_MOVE_TAG)
+			? [{ path: '/api/songs/', statuses: [404, 422] }]
+			: []
+	});
 	people = [];
 });
 
@@ -99,10 +116,14 @@ async function titleOf(person: Person, albumId: string): Promise<string> {
 	return ((await response.json()) as { title: string }).title;
 }
 
-async function ownSong(person: Person, albumId: string): Promise<Created> {
+async function ownSong(
+	person: Person,
+	albumId: string,
+	title: string = SONG_TITLE
+): Promise<Created> {
 	const response = await person.api.post('/api/songs', {
 		headers: { origin: BASE_URL },
-		data: { title: SONG_TITLE, album_id: albumId, lyrics: SAVED_LYRICS, prompt: 'calm test tone' }
+		data: { title, album_id: albumId, lyrics: SAVED_LYRICS, prompt: 'calm test tone' }
 	});
 	expect(response.ok()).toBe(true);
 	return (await response.json()) as Created;
@@ -301,5 +322,129 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			await expect(page.getByRole('dialog', { name: SONG_MOVE_SHARED_TITLE })).toHaveCount(0);
 			expect(await albumIdOf(person, song.id)).toBe(privateId);
 		});
+
+		test('only the tapped row is busy while the move runs and a second tap starts nothing', async ({
+			page
+		}) => {
+			const { person, cookies } = await newPerson('busy');
+			const currentId = await ownAlbum(person, 'Current');
+			const firstId = await ownAlbum(person, 'First');
+			const secondId = await ownAlbum(person, 'Second');
+			const song = await ownSong(person, currentId);
+			await openSongAs(page, shell, cookies, currentId, song);
+			let release: () => void = () => undefined;
+			const held = new Promise<void>((resolve) => (release = resolve));
+			let moves = 0;
+			await page.route(MOVE_ROUTE, async (route) => {
+				moves += 1;
+				await held;
+				await route.continue();
+			});
+
+			const menu = await openPicker(page);
+			const tapped = albumRow(menu, await titleOf(person, firstId));
+			const other = albumRow(menu, await titleOf(person, secondId));
+			await tapped.click();
+
+			await expect(tapped).toHaveAttribute('aria-busy', 'true');
+			await expect(other).toBeDisabled();
+			await expect(menu.getByRole('searchbox')).toBeDisabled();
+			await tapped.click({ force: true, noWaitAfter: true }).catch(() => undefined);
+			release();
+			await expect(page).toHaveURL(new RegExp(`/album/${firstId}/${song.slug}$`));
+			expect(moves).toBe(1);
+		});
+
+		test('another song opened during a held move stays open when the move lands', async ({
+			page
+		}) => {
+			const { person, cookies } = await newPerson('elsewhere');
+			const currentId = await ownAlbum(person, 'Current');
+			const targetId = await ownAlbum(person, 'Target');
+			const first = await ownSong(person, currentId);
+			const second = await ownSong(person, currentId, OTHER_SONG_TITLE);
+			await openSongAs(page, shell, cookies, currentId, first);
+			let release: () => void = () => undefined;
+			const held = new Promise<void>((resolve) => (release = resolve));
+			await page.route(MOVE_ROUTE, async (route) => {
+				await held;
+				await route.continue();
+			});
+
+			const menu = await openPicker(page);
+			await albumRow(menu, await titleOf(person, targetId)).click();
+			await expect(menu.locator('.pk-row[aria-busy="true"]')).toBeVisible();
+			// The open picker's backdrop covers the page; closing it leaves the move running.
+			await page.keyboard.press('Escape');
+			await expect(menu).toBeHidden();
+			// The app's own search, so the page never reloads and the held request stays alive.
+			const rail =
+				shell === 'mobile'
+					? await openSearchSheet(page)
+					: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+			await rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(OTHER_SONG_TITLE);
+			await rail.getByRole('option', { name: nameStartingWith(OTHER_SONG_TITLE) }).click();
+			await expect(page).toHaveURL(new RegExp(`/album/${currentId}/${second.slug}$`));
+			release();
+
+			await expect.poll(() => albumIdOf(person, first.id)).toBe(targetId);
+			await expect(page).toHaveURL(new RegExp(`/album/${currentId}/${second.slug}$`));
+		});
+
+		test(
+			'a refused move shows its reason and Retry repeats it',
+			{ tag: REFUSED_MOVE_TAG },
+			async ({ page }) => {
+				const { person, cookies } = await newPerson('refused');
+				const currentId = await ownAlbum(person, 'Current');
+				const targetId = await ownAlbum(person, 'Target');
+				const song = await ownSong(person, currentId);
+				await openSongAs(page, shell, cookies, currentId, song);
+				let refused = false;
+				await page.route(MOVE_ROUTE, async (route) => {
+					if (refused) return route.continue();
+					refused = true;
+					return route.fulfill({ status: 422, json: { detail: 'Album is full' } });
+				});
+
+				const menu = await openPicker(page);
+				await albumRow(menu, await titleOf(person, targetId)).click();
+
+				const line = menu.getByRole('alert');
+				await expect(line).toContainText(songMoveFailedLine('Album is full'));
+				expect(await albumIdOf(person, song.id)).toBe(currentId);
+				await line.getByRole('button', { name: LIBRARY_RETRY_LABEL, exact: true }).click();
+
+				await expect(page).toHaveURL(new RegExp(`/album/${targetId}/${song.slug}$`));
+				expect(await albumIdOf(person, song.id)).toBe(targetId);
+			}
+		);
+
+		test(
+			'an album that is gone says so without Retry and loads the list again',
+			{ tag: REFUSED_MOVE_TAG },
+			async ({ page }) => {
+				const { person, cookies } = await newPerson('gone');
+				const currentId = await ownAlbum(person, 'Current');
+				const targetId = await ownAlbum(person, 'Target');
+				const song = await ownSong(person, currentId);
+				await openSongAs(page, shell, cookies, currentId, song);
+				await page.route(MOVE_ROUTE, (route) =>
+					route.fulfill({ status: 404, json: { detail: 'Song or album not found' } })
+				);
+
+				const menu = await openPicker(page);
+				const reloaded = page.waitForRequest(
+					(request) =>
+						new URL(request.url()).pathname === '/api/albums' && request.method() === 'GET'
+				);
+				await albumRow(menu, await titleOf(person, targetId)).click();
+
+				const line = menu.getByRole('alert');
+				await expect(line).toContainText(songMoveFailedLine(SONG_MOVE_ALBUM_GONE));
+				await expect(line.getByRole('button')).toHaveCount(0);
+				await reloaded;
+			}
+		);
 	});
 }
