@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -305,6 +306,38 @@ def test_m27_the_active_generation_tool_names_the_queued_job_and_none_without_on
 
     assert (idle.is_error, idle.json()) == (False, None)
     assert active.json()["id"] == queued.json()["id"]
+
+
+def test_m27_the_last_failed_generation_tool_names_the_failed_job_until_a_newer_attempt(
+    mcp: McpWorld,
+) -> None:
+    mcp.world.seed_take(TokenWorld.ALICE, "alices")
+    path = _PROGRESS_TOOLS["get_last_failed_generation"].format(song_id="song-alices")
+    with mcp.world.factory() as session:
+        session.query(Generation).update({"is_archived": True})
+        session.add(Job(
+            id="job-failed", type="generate", status="failed", song_id="song-alices",
+            error="out of memory", error_type="gpu_out_of_memory",
+            started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            completed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        ))
+        session.commit()
+
+    failed = mcp.call("get_last_failed_generation", {"song_id": "song-alices"})
+    failed_api = mcp.world.client.get(path, headers=mcp.agent())
+    with mcp.world.factory() as session:
+        session.add(Job(
+            id="job-newer", type="generate", status="queued", song_id="song-alices",
+            started_at=datetime(2025, 1, 2, tzinfo=timezone.utc),
+        ))
+        session.commit()
+    hidden = mcp.call("get_last_failed_generation", {"song_id": "song-alices"})
+    hidden_api = mcp.world.client.get(path, headers=mcp.agent())
+
+    assert failed.json()["job"] is not None
+    assert (failed.is_error, failed.json()) == (False, failed_api.json())
+    assert (hidden.is_error, hidden.json()) == (False, hidden_api.json())
+    assert hidden.json()["job"] is None
 
 
 @pytest.mark.parametrize("tool", _PROGRESS_TOOLS)
