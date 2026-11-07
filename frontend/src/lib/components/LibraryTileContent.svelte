@@ -10,6 +10,8 @@
 		title: string;
 		initialsSource?: string;
 		subtitle: string;
+		// A leading part of the subtitle that ellipsizes first when the line is too narrow.
+		subtitleYields?: string;
 		coverAlt: string;
 		coverUrl?: string | null;
 		fill?: string | null;
@@ -22,6 +24,7 @@
 		title,
 		initialsSource,
 		subtitle,
+		subtitleYields = '',
 		coverAlt,
 		coverUrl = null,
 		fill = null,
@@ -45,7 +48,9 @@
 <span class="tile-meta" class:row={presentation === 'row'} class:current>
 	<span class="tile-title">{title}</span>
 	<span class="tile-subtitle"
-		>{#if presentation === 'row'}<PlayingMark {current} />{/if}{subtitle}</span
+		>{#if presentation === 'row'}<PlayingMark {current} />{/if}{#if subtitleYields}<span
+				class="subtitle-yields">{subtitleYields}</span
+			>{subtitle.slice(subtitleYields.length)}{:else}{subtitle}{/if}</span
 	>
 </span>
 
@@ -132,6 +137,11 @@
 	}
 	.row.current .tile-title {
 		color: var(--accent);
+	}
+	.subtitle-yields {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.row .tile-subtitle {
 		display: flex;

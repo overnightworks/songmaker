@@ -53,4 +53,28 @@ describe('LibraryTileContent', () => {
 
 		expect(target.querySelector('.tile-cover-initials')?.textContent).toBe('OW');
 	});
+
+	it.each([
+		['marks the leading part that gives way first', 'Cold Harbour', 'Cold Harbour'],
+		['marks nothing without such a part', undefined, null]
+	])('%s and keeps the subtitle text whole', async (_name, subtitleYields, marked) => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(LibraryTileContent, {
+			target,
+			props: {
+				presentation: 'row',
+				title: 'Tide',
+				subtitle: 'Cold Harbour · new take · today',
+				subtitleYields,
+				coverAlt: 'Tide'
+			}
+		});
+		await tick();
+
+		expect(target.querySelector('.tile-subtitle')).toHaveTextContent(
+			'Cold Harbour · new take · today'
+		);
+		expect(target.querySelector('.subtitle-yields')?.textContent ?? null).toBe(marked);
+	});
 });

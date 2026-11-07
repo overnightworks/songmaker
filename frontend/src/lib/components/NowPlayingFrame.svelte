@@ -340,12 +340,7 @@
 				{#if onnext}
 					{@render iconButton('skip-forward', SONG_NEXT_LABEL, onnext, !canNext)}
 				{/if}
-				<span
-					class="transport-slot"
-					style:width="{HITBOX_FREQUENT_PX}px"
-					style:height="{HITBOX_FREQUENT_PX}px"
-					aria-hidden="true"
-				></span>
+				<span class="transport-slot" style={frequentHitbox} aria-hidden="true"></span>
 			</div>
 		</div>
 	{:else}
@@ -539,6 +534,7 @@
 		flex-shrink: 0;
 		display: flex;
 		flex-wrap: wrap;
+		justify-content: flex-end;
 		align-items: center;
 		gap: 0.3rem;
 	}
