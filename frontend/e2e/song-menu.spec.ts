@@ -204,15 +204,15 @@ async function expectTextSizesOfAlbumMenu(
 	expect(songSizes).toEqual(await menuTextSizes(await openAlbumMenu(page)));
 }
 
-async function failColor(page: Page): Promise<string> {
-	return page.evaluate(() => {
+async function tokenColor(page: Page, token: string): Promise<string> {
+	return page.evaluate((name) => {
 		const probe = document.createElement('span');
-		probe.style.color = 'var(--fail)';
+		probe.style.color = `var(${name})`;
 		document.body.append(probe);
 		const { color } = getComputedStyle(probe);
 		probe.remove();
 		return color;
-	});
+	}, token);
 }
 
 function relativeLuminance(cssColor: string): number {
@@ -235,17 +235,6 @@ function contrastRatio(foreground: string, background: string): number {
 	return (lighter + 0.05) / (darker + 0.05);
 }
 
-async function dangerColor(page: Page): Promise<string> {
-	return page.evaluate(() => {
-		const probe = document.createElement('span');
-		probe.style.color = 'var(--score-bad)';
-		document.body.append(probe);
-		const { color } = getComputedStyle(probe);
-		probe.remove();
-		return color;
-	});
-}
-
 async function expectAlbumForm(page: Page, menu: Locator, title: string): Promise<void> {
 	const rows = menu.locator('.menu-item');
 	await expect(rows).toHaveText(ROW_LABELS_IN_ORDER);
@@ -261,7 +250,7 @@ async function expectAlbumForm(page: Page, menu: Locator, title: string): Promis
 	const [panel] = await boundingBoxes(menu);
 	expect(panel.width).toBeCloseTo(ALBUM_FORM_MENU_WIDTH_PX, 0);
 
-	const danger = await dangerColor(page);
+	const danger = await tokenColor(page, '--score-bad');
 	await expect(rows.last()).toHaveText(SONG_MENU_DELETE_LABEL);
 	await expect(rows.last()).toHaveCSS('color', danger);
 	await expect(rows.first()).not.toHaveCSS('color', danger);
@@ -371,7 +360,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 					return { fill: backgroundColor, ink: color };
 				});
 
-				expect(fill).toBe(await failColor(page));
+				expect(fill).toBe(await tokenColor(page, '--fail'));
 				expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(4.5);
 			});
 		}
