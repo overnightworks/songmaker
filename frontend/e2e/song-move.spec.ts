@@ -10,7 +10,7 @@ import {
 	SONG_MOVE_NO_OTHER_ALBUM,
 	songMovedToastLabel
 } from '../src/lib/constants';
-import { FlowGuard, HOME_PATH, ONLY_IN_SHELL, type Shell } from './helpers';
+import { FlowGuard, HOME_PATH, nameStartingWith, ONLY_IN_SHELL, type Shell } from './helpers';
 import {
 	archiveOwnedAlbum,
 	BASE_URL,
@@ -109,7 +109,8 @@ async function openSongAs(
 async function openPicker(page: Page): Promise<Locator> {
 	await page.getByRole('button', { name: SONG_MENU_LABEL, exact: true }).click();
 	const menu = page.getByRole('dialog', { name: SONG_MENU_LABEL });
-	await menu.getByRole('button', { name: SONG_MENU_MOVE_LABEL, exact: true }).click();
+	// The row's › is drawn as content, so its accessible name reads "Move ›".
+	await menu.getByRole('button', { name: nameStartingWith(SONG_MENU_MOVE_LABEL) }).click();
 	await expect(menu.getByText(SONG_MOVE_HEADING, { exact: true })).toBeVisible();
 	return menu;
 }
