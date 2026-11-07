@@ -57,6 +57,8 @@
 	--primary: #d41a0a;
 	--accent: #7a18c0;
 	--on-accent: #fff;
+	/* The ink that reads on the failure colour, --fail. */
+	--on-fail: #fff;
 	--text-subtle: #555;
 	--text-disabled: #9a9a9a;
 	--text-decoration: #999;
@@ -134,6 +136,8 @@ html[data-transport-bar='hidden'] {
 	--accent: #b45cf5;
 	/* The ink that reads on the action colour, --accent. */
 	--on-accent: #111111;
+	/* The ink that reads on the failure colour, --fail. */
+	--on-fail: #111111;
 	--text-subtle: #888;
 	--text-disabled: #555;
 	--text-decoration: #444;
@@ -162,6 +166,8 @@ html[data-transport-bar='hidden'] {
 		--accent: #b45cf5;
 		/* The ink that reads on the action colour, --accent. */
 		--on-accent: #111111;
+		/* The ink that reads on the failure colour, --fail. */
+		--on-fail: #111111;
 		--text-subtle: #888;
 		--text-disabled: #555;
 		--text-decoration: #444;

@@ -204,6 +204,37 @@ async function expectTextSizesOfAlbumMenu(
 	expect(songSizes).toEqual(await menuTextSizes(await openAlbumMenu(page)));
 }
 
+async function failColor(page: Page): Promise<string> {
+	return page.evaluate(() => {
+		const probe = document.createElement('span');
+		probe.style.color = 'var(--fail)';
+		document.body.append(probe);
+		const { color } = getComputedStyle(probe);
+		probe.remove();
+		return color;
+	});
+}
+
+function relativeLuminance(cssColor: string): number {
+	const channels = cssColor
+		.match(/[\d.]+/g)
+		?.slice(0, 3)
+		.map(Number);
+	if (channels?.length !== 3) throw new Error(`not an rgb colour: ${cssColor}`);
+	const [red, green, blue] = channels.map((channel) => {
+		const unit = channel / 255;
+		return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
+	});
+	return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(foreground: string, background: string): number {
+	const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].sort(
+		(a, b) => b - a
+	);
+	return (lighter + 0.05) / (darker + 0.05);
+}
+
 async function dangerColor(page: Page): Promise<string> {
 	return page.evaluate(() => {
 		const probe = document.createElement('span');
@@ -325,3 +356,24 @@ test(
 		});
 	}
 );
+
+for (const colorScheme of ['light', 'dark'] as const) {
+	test(
+		`the song delete confirm is filled with the failure colour and its ink reads on it in the ${colorScheme} theme`,
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			await page.emulateMedia({ colorScheme });
+			await onOwnSong(page, TITLES[0], 390, async () => {
+				const confirm = await openDeleteConfirm(page, TITLES[0]);
+				const button = confirm.locator('.confirm-btn');
+				const { fill, ink } = await button.evaluate((node) => {
+					const { backgroundColor, color } = getComputedStyle(node);
+					return { fill: backgroundColor, ink: color };
+				});
+
+				expect(fill).toBe(await failColor(page));
+				expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(4.5);
+			});
+		}
+	);
+}
