@@ -54,6 +54,8 @@ pytest_plugins = [
     "support.cover_album_world",
     "support.generation_job_world",
     "support.reference_link_migration",
+    "support.database_case_record",
+    "pytester",
 ]
 
 os.environ.setdefault("OIDC_CLIENT_SECRET_FILE", write_test_client_secret())
@@ -392,41 +394,6 @@ def session_commit_failure():
     return fail_commit
 
 
-def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line(
-        "markers",
-        "postgresql: needs PostgreSQL; the CI postgresql-contract job runs exactly these tests",
-    )
-
-
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Mark every test that collection can see needs PostgreSQL, so `-m postgresql` selects it.
-
-    Two things make a test visible: `postgresql_databases` in its fixture closure, and the
-    value `postgresql` of the one backend fixture (`database_backend`), which an indirect
-    parametrization cannot hide. A path collection cannot see (a dynamic `getfixturevalue`)
-    ends in `_require_postgresql_mark`, which fails the unmarked test.
-    """
-    for item in items:
-        callspec = getattr(item, "callspec", None)
-        backend = callspec.params.get("database_backend") if callspec else None
-        if "postgresql_databases" in item.fixturenames or backend == "postgresql":
-            item.add_marker(pytest.mark.postgresql)
-
-
-def _require_postgresql_mark(node: pytest.Item) -> None:
-    """Fail a test that reaches PostgreSQL but is not selected by `-m postgresql`.
-
-    An unmarked test would never run in the contract job and fail in the Backend job.
-    """
-    if node.get_closest_marker("postgresql") is None:
-        pytest.fail(
-            "This test reaches PostgreSQL but is not selected by `-m postgresql`: request "
-            "`pg_factory`, `postgresql_url` or `empty_postgresql_url`, or parametrize "
-            "`database_backend` with 'postgresql'."
-        )
-
-
 _DATABASE_SERVER_VARIABLE = "TEST_DATABASE_URL"
 
 
@@ -472,17 +439,15 @@ def postgresql_databases(testrun_uid: str, worker_id: str):
 
 
 @pytest.fixture
-def postgresql_url(request, postgresql_databases):
+def postgresql_url(postgresql_databases):
     """This worker's migrated database; it is reset to its migrated baseline after the test."""
-    _require_postgresql_mark(request.node)
     yield postgresql_databases.worker_url
     postgresql_databases.reset()
 
 
 @pytest.fixture
-def empty_postgresql_url(request, postgresql_databases):
+def empty_postgresql_url(postgresql_databases):
     """An additional empty database for a test that migrates it itself; dropped afterwards."""
-    _require_postgresql_mark(request.node)
     url = postgresql_databases.create_empty_database()
     yield url
     postgresql_databases.drop_database(url)
@@ -504,25 +469,3 @@ def pg_factory(postgresql_url):
     )
     yield sessionmaker(bind=engine)
     engine.dispose()
-
-
-@pytest.fixture(params=["sqlite", "postgresql"])
-def database_backend(request) -> str:
-    """The backend of a test that runs on SQLite and on PostgreSQL; collection marks the second."""
-    return request.param
-
-
-@pytest.fixture
-def database_empty_postgresql_url(request, database_backend):
-    """An empty PostgreSQL database on the PostgreSQL leg of `database_backend`, else None."""
-    if database_backend == "postgresql":
-        return request.getfixturevalue("empty_postgresql_url")
-    return None
-
-
-@pytest.fixture
-def database_pg_factory(request, database_backend):
-    """The PostgreSQL session factory on the PostgreSQL leg of `database_backend`, else None."""
-    if database_backend == "postgresql":
-        return request.getfixturevalue("pg_factory")
-    return None
