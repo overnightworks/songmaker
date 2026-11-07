@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from support.generation_job_world import make_generation_dto, patch_generation_dispatch, run_async
+from support.generation_job_world import (
+    make_generation_dto,
+    patch_generation_dispatch,
+    run_async,
+    worker_up,
+)
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.db.models import Generation
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, get_job, update_job_status
@@ -61,3 +67,49 @@ def test_a_take_fetched_for_a_job_cancelled_meanwhile_leaves_no_local_file(
 
     assert _count_saved_takes(seeded_db) == saved_before
     assert not fetched.exists()
+
+
+def test_a_songs_settings_reach_the_worker_through_the_generate_request(
+    seeded_db, tmp_path: Path,
+) -> None:
+    """Spec: REQ-PARAM-01 -- the settings saved on a song reach the worker config."""
+    settings = {"inference_steps": 77, "lm_temperature": 0.3, "shift": 2.5, "thinking": False}
+    app = make_router_app(
+        make_router_ctx(tmp_path, db=seeded_db), user=make_authenticated_user("u1"),
+    )
+    client = web_client(app)
+    assert client.put("/api/songs/s1", json={"generation_params": settings}).status_code == 200
+    pool = AsyncMock()
+    with worker_up(), patch("songmaker_cli.generation_api.get_arq_pool", return_value=pool):
+        response = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
+    assert response.status_code == 200
+    _function, job_id, song_id, version_id, count, user_id, seed, model = (
+        pool.enqueue_job.call_args.args
+    )
+
+    dispatch = AsyncMock(return_value=make_generation_dto())
+    dispatch_patch, post_process, defaults = patch_generation_dispatch(dispatch)
+    with dispatch_patch, post_process, defaults:
+        run_async(run_generation_job(
+            job_id, song_id, version_id, count, user_id, db_factory=seeded_db,
+            audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=MagicMock(),
+            seed=seed, target_model=model,
+        ))
+
+    sent = dispatch.call_args.kwargs["ace_config"]
+    assert {name: getattr(sent, name) for name in settings} == settings
+
+
+def test_a_saved_take_records_the_seed_the_worker_reported(seeded_db, tmp_path: Path) -> None:
+    """Spec: REQ-SEED-03 -- the take row holds the worker's seed, not the one requested."""
+    dispatch_patch, post_process, defaults = patch_generation_dispatch(
+        make_generation_dto(seed=987654),
+    )
+    with dispatch_patch, post_process, defaults:
+        run_async(run_generation_job(
+            "j1", "s1", "v1", 1, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data", redis=MagicMock(), seed=5, target_model="sft",
+        ))
+
+    with seeded_db() as session:
+        assert [take.seed for take in session.query(Generation).filter_by(song_id="s1")] == [987654]
