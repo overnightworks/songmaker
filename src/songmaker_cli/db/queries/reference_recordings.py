@@ -412,7 +412,9 @@ def acknowledge_countdown_shown(session: Session, epoch: str, shown_at: datetime
     """
     written = session.execute(
         update(RateLimitSetting)
-        .where(*_COUNTDOWN_ROWS, RateLimitSetting.id == epoch, RateLimitSetting.value_text.is_(None))
+        .where(
+            *_COUNTDOWN_ROWS, RateLimitSetting.id == epoch, RateLimitSetting.value_text.is_(None),
+        )
         .values(value_text=shown_at.isoformat()),
     ).rowcount
     if written:

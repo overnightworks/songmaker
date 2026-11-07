@@ -27,6 +27,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
+from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
     REFERENCE_AUDIO_EXTENSIONS,
@@ -36,7 +37,6 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH, ReferenceRecording
 from songmaker_cli.db.queries.auth import record_audit
-from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.db.queries.reference_recordings import (
     ReferenceLinkCounts,
     acknowledge_countdown_shown,
@@ -321,5 +321,5 @@ def _stored_reference_response(
     with ctx.db() as session:
         recording = get_owned_reference_recording(session, user_id, recording_id)
         return ReferenceRecordingResponse.from_orm(
-            recording, ReferenceLinkCounts(versions=0, takes=0), None,
+            recording, ReferenceLinkCounts(versions=0, takes=0),
         )

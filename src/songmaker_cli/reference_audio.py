@@ -45,9 +45,9 @@ def reference_deletes_at(
     days: int,
     hour: int,
 ) -> datetime | None:
-    """The daily run, at or after the later of the stamp and the publication (or ``now``) plus ``days``.
+    """The first daily run at or after the countdown's end; None without a stamp (kept or in use).
 
-    None for a reference without a stamp, which is kept or in use.
+    The end is the later of the stamp and the publication (``now`` until published) plus ``days``.
     """
     if unused_since is None:
         return None

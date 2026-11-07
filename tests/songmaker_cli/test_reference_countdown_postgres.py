@@ -1,4 +1,4 @@
-"""The countdown row on PostgreSQL: the migrated schema carries it, a late acknowledgement is a no-op."""
+"""The countdown row on PostgreSQL: the migrated schema has it; a late acknowledgement is moot."""
 
 from __future__ import annotations
 

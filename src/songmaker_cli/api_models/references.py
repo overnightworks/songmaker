@@ -30,12 +30,12 @@ class ReferenceRecordingResponse(BaseModel):
     is_kept: bool
     used_by_versions: int
     used_by_takes: int
-    deletes_at: str | None
+    deletes_at: str | None = None
 
     @classmethod
     def from_orm(
         cls, recording: ReferenceRecording, counts: ReferenceLinkCounts,
-        deletes_at: datetime | None,
+        deletes_at: datetime | None = None,
     ) -> ReferenceRecordingResponse:
         link = ReferenceResponse.from_orm(recording)
         return cls(

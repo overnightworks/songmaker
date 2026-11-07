@@ -668,7 +668,7 @@ export interface ReferenceRecordingResponse {
 	is_kept: boolean;
 	used_by_versions: number;
 	used_by_takes: number;
-	deletes_at: string | null;
+	deletes_at?: string | null;
 }
 
 export interface ReferenceResponse {

@@ -12,8 +12,8 @@ from support import reference_api_world
 from support.reference_api_world import REFERENCES_PATH, seed_reference, signed_in_as
 from support.web_app import TEST_ORIGIN
 
-from songmaker_cli.constants import SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
+from songmaker_cli.constants import SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import RateLimitSetting, ReferenceRecording
 from songmaker_cli.reference_api import STALE_COUNTDOWN_EPOCH_DETAIL
@@ -56,7 +56,9 @@ def _set_published_text(client: TestClient, value_text: str | None) -> None:
         session.commit()
 
 
-def _stamp(client: TestClient, reference_id: str, *, unused_since, is_kept: bool = False) -> None:
+def _set_unused_since(
+    client: TestClient, reference_id: str, *, unused_since: datetime | None, is_kept: bool = False,
+) -> None:
     with client.app.state.ctx.db() as session:
         row = session.get(ReferenceRecording, reference_id)
         row.unused_since = unused_since
@@ -133,7 +135,7 @@ def test_unpublished_the_date_slides_with_now_and_the_epoch_is_the_rows_id(
     signed_in: TestClient,
 ) -> None:
     seed_reference(signed_in, "owner-id", "old.wav")
-    _stamp(signed_in, _only_reference_id(signed_in), unused_since=_utc(2026, 1, 1))
+    _set_unused_since(signed_in, _only_reference_id(signed_in), unused_since=_utc(2026, 1, 1))
     before = datetime.now(timezone.utc)
 
     body = _listing(signed_in)
@@ -157,8 +159,8 @@ def test_a_kept_or_used_reference_has_no_date_and_no_date_means_no_epoch(
 ) -> None:
     kept_id = seed_reference(signed_in, "owner-id", "kept.wav")
     used_id = seed_reference(signed_in, "owner-id", "used.wav")
-    _stamp(signed_in, kept_id, unused_since=None, is_kept=True)
-    _stamp(signed_in, used_id, unused_since=None)
+    _set_unused_since(signed_in, kept_id, unused_since=None, is_kept=True)
+    _set_unused_since(signed_in, used_id, unused_since=None)
 
     body = _listing(signed_in)
 
@@ -192,7 +194,7 @@ def test_after_publication_the_date_is_fixed_and_does_not_slide_with_now(
     signed_in: TestClient, unused_since: datetime, published: str, expected: str,
 ) -> None:
     reference_id = seed_reference(signed_in, "owner-id", "ref.wav")
-    _stamp(signed_in, reference_id, unused_since=unused_since)
+    _set_unused_since(signed_in, reference_id, unused_since=unused_since)
     _set_published_text(signed_in, published)
 
     first = _listing(signed_in)["references"][0]["deletes_at"]
@@ -206,7 +208,7 @@ def test_the_deletion_days_setting_moves_the_date(
     signed_in: TestClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     reference_id = seed_reference(signed_in, "owner-id", "ref.wav")
-    _stamp(signed_in, reference_id, unused_since=_utc(2026, 11, 1))
+    _set_unused_since(signed_in, reference_id, unused_since=_utc(2026, 11, 1))
     _set_published_text(signed_in, "2026-11-05T10:00:00+00:00")
     monkeypatch.setenv("FINAL_DELETION_DAYS", "7")
     get_settings.cache_clear()
@@ -238,7 +240,7 @@ def test_an_unusable_countdown_row_fails_the_list_without_logging_content(
     signed_in: TestClient, caplog: pytest.LogCaptureFixture, damage,
 ) -> None:
     reference_id = seed_reference(signed_in, "owner-id", "secret-take-name.wav")
-    _stamp(signed_in, reference_id, unused_since=_utc(2026, 11, 1))
+    _set_unused_since(signed_in, reference_id, unused_since=_utc(2026, 11, 1))
     damage(signed_in)
     owner = signed_in_as(signed_in, "owner")
 
