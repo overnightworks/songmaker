@@ -23,7 +23,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.middleware import install_web_auth_middleware
 
-from songmaker_cli.agent_runtime import configure_agent_providers
 from songmaker_cli.app_context import (
     AppContext,
     allowed_hosts,
@@ -168,7 +167,6 @@ def create_app(
     ctx: AppContext | None = None,
     oidc_sign_in: OidcSignIn | None = None,
 ) -> FastAPI:
-    configure_agent_providers(get_settings())
     app = FastAPI(
         title=APP_NAME,
         docs_url=None,

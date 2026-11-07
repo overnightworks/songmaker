@@ -6,10 +6,19 @@
 		SONG_MENU_MOVE_LABEL,
 		SONG_MENU_RENAME_LABEL,
 		SONG_MENU_SAVE_LABEL,
-		SONG_MENU_LABEL
+		SONG_MENU_LABEL,
+		SONG_MOVE_SHARED_TITLE,
+		songMoveSharedMessage
 	} from '#lib/constants.ts';
 	import Icon from '../Icon.svelte';
-	import { openSongMovePicker, songMovePicker } from '#lib/stores/songMove.ts';
+	import {
+		cancelSongMove,
+		confirmSongMove,
+		openSongMovePicker,
+		songMoveConfirm,
+		songMovePicker
+	} from '#lib/stores/songMove.ts';
+	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
 	import SongMovePicker from './SongMovePicker.svelte';
 
@@ -68,6 +77,16 @@
 		{/if}
 	</MenuPopover>
 </div>
+
+{#if $songMoveConfirm}
+	<ConfirmDialog
+		title={SONG_MOVE_SHARED_TITLE}
+		message={songMoveSharedMessage(title, $songMoveConfirm.title)}
+		confirmLabel={SONG_MENU_MOVE_LABEL}
+		onconfirm={() => void confirmSongMove()}
+		oncancel={cancelSongMove}
+	/>
+{/if}
 
 <style>
 	.menu-heading {

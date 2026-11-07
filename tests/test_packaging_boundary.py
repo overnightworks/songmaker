@@ -84,9 +84,7 @@ def _optional_extras_by_distribution() -> dict[str, frozenset[str]]:
 
     A distribution the project also requires unconditionally is installed in
     every container whatever its extras, so naming it in an extra says what
-    that extra needs without making it omittable — ``httpx`` is both
-    songmaker's own HTTP client and part of the provider layer's ``api``
-    capability (issue #871).
+    that extra needs without making it omittable.
     """
     pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
     core = _core_distributions()

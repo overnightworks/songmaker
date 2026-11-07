@@ -249,12 +249,10 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
 def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(
     tmp_path, monkeypatch, mock_arq_pool, monitoring_headers,
 ) -> None:
-    from songmaker_cli.constants import CLAUDE_CLI_BINARY, CODEX_CLI_BINARY, GROK_CLI_BINARY
-
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     spawn_log = tmp_path / "spawns.log"
-    for binary in (CLAUDE_CLI_BINARY, GROK_CLI_BINARY, CODEX_CLI_BINARY):
+    for binary in ("claude", "grok", "codex"):
         stub = bin_dir / binary
         stub.write_text(f"#!/bin/sh\necho {binary} >> {spawn_log}\n")
         stub.chmod(0o755)

@@ -794,7 +794,7 @@ The frame's `surface` prop is what separates the two. Full is `role="dialog"`, `
 
 **Menus, lists and sheets a component owns join the same stack (#1119).** The song menu, the collection menu, the take menu, the playlist entry menu, the co-writer's conversations menu and @-mention list, the voice picker list and the phone's Now Playing sheet keep what they show in `historyLayerState(id, closed)` from `stores/layers.ts` instead of local state: a writable store whose every write registers or leaves the layer synchronously, so a menu item that navigates or opens a dialog has its step back queued ahead of whatever it does next, and Escape or Back closes the menu by writing `closed`. The owner unmounting while the menu is open drops the store's last subscriber, which leaves the layer too. Layers stack — the sheet sits on top of Now Playing, so Back closes the sheet and the next Back closes Now Playing — and after a reload the stack steps off every stale layer entry it lands on, not just the top one. `NowPlayingFrame` owns the sheet's layer itself (`historyLayerState('now-playing-sheet', false)`): `stores/layers.ts` depends on nothing app-only, so the share pages that also render the frame hold the sheet on the same stack, where Escape and Back close it before Back leaves the page.
 
-**Dialogs join through `dialogHistoryLayer` and Back cancels them (#1125).** `ConfirmDialog`, `ConfirmDeleteDialog`, `ShareDialog` and `PlaylistPicker` are shown by their callers (`{#if}`, or `ShareDialog`'s non-empty song list), so each holds one layer from its own overlay element through `lib/utils/dialog-history-layer.ts`, the one owner of that lifecycle on top of `holdLayer`, with its cancel or close as the layer's `close`: Back cancels — it never confirms, saves, discards, shares or adds; on the unsaved-draft dialog it means Keep editing. Escape, like Back, closes the dialog through the layer's `close` (`closeTopLayer`), so it cancels or closes and never answers. Each of the dialog's own answers (Cancel, the backdrop, confirm, Discard, choosing a playlist) is wrapped by its `answer`, which leaves the layer synchronously before it acts, so a navigation the answer starts writes behind that step, and one Back afterwards leaves the page. A menu item that opens a dialog has already left the menu's entry, so the dialog layers onto the page below.
+**Dialogs join through `dialogHistoryLayer` and Back cancels them (#1125).** `ConfirmDialog`, `ConfirmDeleteDialog`, `ShareDialog` and `PlaylistPicker` are shown by their callers (`{#if}`, or `ShareDialog`'s non-empty song list), so each holds one layer from its own overlay element through `lib/utils/dialog-history-layer.ts`, the one owner of that lifecycle on top of `holdLayer`, with its cancel or close as the layer's `close`: Back cancels — it never confirms, saves, discards, shares or adds; on the unsaved-draft dialog it means Keep editing. Escape, like Back, closes the dialog through the layer's `close` (`closeTopLayer`), so it cancels or closes and never answers. Each of the dialog's own answers (Cancel, the backdrop, confirm, Discard, choosing a playlist) is wrapped by its `answer`, which leaves the layer synchronously before it acts, so a navigation the answer starts writes behind that step, and one Back afterwards leaves the page. A menu item that opens a dialog has already left the menu's entry, so the dialog layers onto the page below. A move into an album with a public page asks first through one such `ConfirmDialog`, rendered by `SongMenu` from `songMoveConfirm` outside the popover the move closes.
 
 **Closing a layer never loses typed text (#1184).** While Edit details saves, or the cover editor saves a used suggestion, an upload or a removal, the save runs inside `holdOpenWhile(id, save)` from `stores/layers.ts` (the upload and removal in `AlbumDetailView`, which owns them, the editor's × disabled meanwhile): a layer on top of its own that Escape cannot close and that Back, having already stepped off its entry, holds again with a fresh one, so the editor stays until the save closes it or, refused, leaves it open with the typed text and the reason. A create card (`NewPlaceCard`, under New album, New playlist and New song) keeps its title field as a session draft per card kind, and per album for a song: closed by Back, Escape or ×, it opens again on that text; CREATE or clearing the field drops it.
 
@@ -955,7 +955,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
-| Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py`, `agent_providers/dispatch.py` |
+| Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | Tool bodies | The co-writer's tool declarations and their execution, which the hand tools call | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
@@ -1122,147 +1122,9 @@ TrustedHost → AccessLog → Router. The bracketed bearer layer exists only whi
 library's host lists are Origin allowlists only. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
 
-### The provider library (`agent_providers`, external)
-
-The provider layer left this repository with #886. It ships as the distribution
-`overnightworks-agent-providers` from
-[overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
-and is pinned in the `server` extra to the git tag `v0.1.3`;
-`uv.lock` records its commit, so every image installs the same source and
-the three images carry `git`. The pin is bare — not `[api,image]` in its brackets — so
-the library's own optional capabilities never leak `anthropic` into the music
-worker or Pillow into the scoring worker. The import package is still
-`agent_providers`, so nothing in `songmaker_cli` changed when the source moved.
-Its own tests moved with it.
-
-Inside the library, `events.py` owns the streamed turn events every transport
-yields, `config.py` owns the `ProviderRuntimeConfig` the host installs,
-`constants.py` owns the mechanics that are the same in every deployment,
-`process.py` owns the one bounded CLI process layer, `claude/provider.py` owns
-the Claude CLI and API backends with their tool-surface gate, `tools.py` owns
-the `ToolCatalog` port the host lends it, `tool_loop.py` owns the
-transport-independent tool loop and `text_tool_protocol.py` the text wire format
-both agent CLIs speak, `errors.py` owns the named route failures every
-transport raises, `catalog.py` owns the per-route model listing and the
-four-case provider setup answer, `dispatch.py` owns running one named route with
-the host's catalog and executor, `claude/adapter.py` and `openai_adapter.py`
-own the two co-writer wire formats, `images.py` owns the `ImagePolicy` port an
-embedding host lends the image route (songmaker's cover uses neither), `grok/transport.py` owns the Grok CLI turn, and
-`codex/` owns process admission (`pool.py`), the CLI plumbing both Codex routes
-share (`protocol.py`), the co-writer turn (`transport.py`) and the image turn
-(`image.py`), and `sandbox/paths.py` owns the private directory names
-both Codex turns and the host's mount policy have to agree on — songmaker's
-AppArmor profile spells them and a test holds it to that module, so an embedding
-project derives its profile from the library instead of guessing it.
-
-The provider layer never reads songmaker's settings. Its binaries, credential
-mirrors, mounted Codex resources, chat model, API keys, process caps, the
-secret-scrub list all arrive as
-one frozen `ProviderRuntimeConfig`, installed by
-`songmaker_cli/agent_runtime.py::configure_agent_providers(settings)`. Exactly
-two places call it: `server.create_app` for the web container, and
-`worker_base.WorkerBase.on_startup` for the music and scoring workers, which run
-no lifespan. Installing the same value again is a no-op, so those two paths need
-no ordering; installing a differing one raises
-`ProviderRuntimeAlreadyConfiguredError` rather than letting the later caller
-quietly win. A process that never configures gets a loud
-`ProviderRuntimeNotConfiguredError` at its first provider call, never a guessed
-path.
-
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
-#### Provider constants: Go and Stay
-
-The constants of the provider layer are split the same way as its
-configuration. A value that is a fact about Claude, Codex or Grok — a probe
-budget, a read limit, an endpoint, the wording a CLI prints — is the same in
-every deployment and lives in `agent_providers/constants.py` (**Go**). A value
-that is songmaker's own — a default someone may change, a container path, a
-history or cover rule, a text a musician reads — stays in
-`songmaker_cli/constants.py` (**Stay**) and reaches the provider layer through
-`ProviderRuntimeConfig` when the layer needs it at all. The transitional
-re-export that carried the Go names through `songmaker_cli/constants.py` is
-gone: every module reads a Go constant from the library directly.
-
-The table's universe is those two `constants.py` modules, and moving the
-provider code into the library does not widen it: a module-level invariant
-that only its own module reads — the probe's caller budget in `process.py`,
-the Codex catalog's larger read limit, the Claude provider's error texts, the
-tool loop's round cap `COWRITER_MAX_TOOL_ROUNDS` in `tool_loop.py` — stays a
-named constant beside its owner, exactly as it was before the move, and is not
-a value the host and the library could disagree about.
-
-`tests/songmaker_cli/test_constants_agent_providers.py` reads this table and holds both
-modules to it in both directions, so a constant cannot quietly change sides.
-
-| Constant | Side | Reason |
-|---|---|---|
-| `ANTHROPIC_API_VERSION` | Go | The version header Anthropic's HTTP API requires. |
-| `CLAUDE_CLI_AUTH_METHOD_FIELD` | Go | Field name in the Claude CLI's login-status JSON. |
-| `CLAUDE_CLI_COMPLETION_TIMEOUT_SECONDS` | Go | Budget for one Claude CLI completion. |
-| `CLAUDE_CLI_LOGGED_IN_FIELD` | Go | Field name in the Claude CLI's login-status JSON. |
-| `CLAUDE_CLI_MAX_CONCURRENT_PROCESSES` | Go | Fail-closed ceiling on live Claude CLI processes. |
-| `CLAUDE_CLI_NO_TOOL_SURFACE_TIMEOUT_SECONDS` | Go | Budget for the tool-free surface probe. |
-| `CLAUDE_CLI_SIGTERM_GRACE_SECONDS` | Go | Grace a probe gives SIGTERM before SIGKILL. |
-| `CLAUDE_CLI_STATUS_ARGS` | Go | The Claude CLI's login-status subcommand. |
-| `CLAUDE_CLI_TOOL_SURFACE_FAILURE_CACHE_SECONDS` | Go | TTL of an unusable probe answer. |
-| `CLAUDE_CLI_TOOL_SURFACE_TIMEOUT_SECONDS` | Go | Budget for the MCP-attached surface probe. |
-| `CLAUDE_CLI_ZOMBIE_FAILURE_CACHE_SECONDS` | Go | TTL of a verdict about a process that outlived SIGKILL. |
-| `CLAUDE_CLI_ZOMBIE_REAP_TIMEOUT_SECONDS` | Go | Bound on reaping a killed CLI process. |
-| `CLI_LOGIN_STATUS_CACHE_SECONDS` | Go | How long a login verdict is reused before re-probing. |
-| `CLI_OUTPUT_READ_LIMIT_BYTES` | Go | Cap on how much output a bounded CLI run reads. |
-| `CLI_TERMINATION_GRACE_SECONDS` | Go | Grace before a bounded run kills its process group. |
-| `CODEX_CLI_LOGGED_IN_MARKER` | Go | Wording the Codex CLI prints when signed in. |
-| `CODEX_CLI_LOGGED_OUT_MARKER` | Go | Wording the Codex CLI prints when signed out. |
-| `CODEX_CLI_MODELS_ARGS` | Go | The Codex CLI's model-list subcommand. |
-| `CODEX_CLI_STATUS_ARGS` | Go | The Codex CLI's login-status subcommand. |
-| `COWRITER_ANTHROPIC_MODELS_URL` | Go | Anthropic's model-catalog endpoint. |
-| `COWRITER_CLAUDE_API_MAX_TOKENS` | Go | Response cap the Claude API transport sends. |
-| `COWRITER_CLAUDE_CLI_MODEL_LIST_MARKER` | Go | Wording the Claude CLI prints before its model list. |
-| `COWRITER_CLAUDE_MODEL_PREFIX` | Go | How Anthropic names its models. |
-| `COWRITER_CLI_TIMEOUT_SECONDS` | Go | Budget for one CLI turn. |
-| `COWRITER_GROK_CHAT_URL` | Go | xAI's chat endpoint. |
-| `COWRITER_GROK_CLI_LINE_CHANNEL_CAPACITY` | Go | Backpressure bound of the Grok CLI line reader. |
-| `COWRITER_GROK_MODELS_URL` | Go | xAI's model-catalog endpoint. |
-| `COWRITER_GROK_MODEL_PREFIX` | Go | How xAI names its models. |
-| `COWRITER_GROK_NON_CHAT_MARKERS` | Go | Which xAI models are not chat models. |
-| `COWRITER_MODELS_TIMEOUT_SECONDS` | Go | Budget for a model-catalog probe. |
-| `COWRITER_OPENAI_CHAT_PREFIXES` | Go | How OpenAI names its chat models. |
-| `COWRITER_OPENAI_CHAT_URL` | Go | OpenAI's chat endpoint. |
-| `COWRITER_OPENAI_MODELS_URL` | Go | OpenAI's model-catalog endpoint. |
-| `COWRITER_OPENAI_NON_CHAT_MARKERS` | Go | Which OpenAI models are not chat models. |
-| `COWRITER_PROVIDERS` | Go | The three providers this layer drives. |
-| `GROK_CLI_LOGGED_IN_MARKER` | Go | Wording the Grok CLI prints when signed in. |
-| `GROK_CLI_LOGGED_OUT_MARKER` | Go | Wording the Grok CLI prints when signed out. |
-| `GROK_CLI_MODEL_BULLETS` | Go | Bullets the Grok CLI lists its models with. |
-| `GROK_CLI_MODEL_LIST_MARKER` | Go | Wording the Grok CLI prints before its model list. |
-| `GROK_CLI_STATUS_ARGS` | Go | The Grok CLI's login-status subcommand. |
-| `GROK_CLI_STREAMING_OUTPUT_FORMAT` | Go | The Grok CLI's streaming output format. |
-| `JUDGE_FAILURE_TIMEOUT` | Go | The one reason a judge turn reports when it runs out of time. |
-| `CLAUDE_CLI_BINARY` | Stay | Songmaker's default binary name; the live value arrives as `ProviderRuntimeConfig.claude_cli_binary`. |
-| `CODEX_CLI_AUTH_FILE` | Stay | A container path; deployment fact, arrives through the runtime configuration. |
-| `CODEX_CLI_BINARY` | Stay | Songmaker's default binary name; arrives as `ProviderRuntimeConfig.codex_cli_binary`. |
-| `CODEX_CLI_MAX_CONCURRENT_PROCESSES` | Stay | Default of the `codex_cli_max_concurrent_processes` setting; the live cap arrives through the configuration. |
-| `CODEX_CODE_MODE_HOST_BINARY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
-| `CODEX_RESOURCES_DIRECTORY` | Stay | A mounted host path; deployment fact, arrives through the runtime configuration. |
-| `COVER_MAX_CONCURRENT_RUNS` | Stay | Default of the `cover_max_concurrent_runs` setting; the live cap arrives through the configuration. |
-| `COVER_PROMPT_MAX_CHARS` | Stay | How long songmaker's cover prompt may grow. |
-| `COVER_PROMPT_SONG_FIELD_MAX_CHARS` | Stay | How much of a song a cover prompt may quote. |
-| `COWRITER_DEFAULT_TAIL_TOKEN_BUDGET` | Stay | How much conversation history songmaker sends verbatim. |
-| `COWRITER_MAX_SUMMARY_CHARS` | Stay | How long that rolling summary may grow. |
-| `COWRITER_MAX_TAIL_TOKEN_BUDGET` | Stay | Upper bound a musician may set for that history budget. |
-| `COWRITER_MIN_TAIL_TOKEN_BUDGET` | Stay | Lower bound a musician may set for that history budget. |
-| `COWRITER_SUMMARY_TAG` | Stay | The tag songmaker's rolling summary is wrapped in. |
-| `GROK_CLI_AUTH_FILE` | Stay | A container path; deployment fact, arrives through the runtime configuration. |
-| `GROK_CLI_BINARY` | Stay | Songmaker's default binary name; arrives as `ProviderRuntimeConfig.grok_cli_binary`. |
-| `CLI_PROMPT_FILE_PREFIX` | Stay | The temporary prompt file carries songmaker's name; injected as `ProviderRuntimeConfig.cli_prompt_file_prefix`. |
-| `COVER_MAX_BYTES` | Stay | The byte ceiling for any cover songmaker accepts, uploaded or drawn by the gateway. |
-| `COVER_MAX_PIXELS` | Stay | The pixel ceiling for any cover songmaker accepts, uploaded or drawn by the gateway. |
-| `COVER_PNG_MAGIC` | Stay | The signature a stored cover suggestion carries; `cover_runner.py` writes every drawn picture as PNG after `covers.decode_cover_image` checks it. |
-| `GROK_CLI_PROMPT_FILE_PLACEHOLDER` | Stay | Mechanics, but its value carries songmaker's name; injected as `ProviderRuntimeConfig.cli_prompt_file_placeholder`. |
-| `SECRET_ENV_KEYS` | Stay | Songmaker's own secret names; injected as `ProviderRuntimeConfig.secret_env_keys`. |
-
-The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `agent_providers` and `webauth` are now installed distributions rather than directories under `src/`, and their own boundaries are contracted in their repositories; because `include_external_packages` is on, `.importlinter` still resolves them in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
+The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `webauth` is an installed distribution rather than a directory under `src/`, and its own boundaries are contracted in its repository; because `include_external_packages` is on, `.importlinter` still resolves it in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
 
 Persistence sits beneath the HTTP contract: `db/` never imports `api_models/`, directly or through another in-tree module. The value objects both use — generation knobs (`generation_params.py`) and Whisper time marks (`whisper_cues.py`) — live beside them in `songmaker_cli/`; `api_models` re-exports them because `scripts/generate_types.py` reads its `__all__`. `.importlinter` enforces the direction (#925 G1).
 

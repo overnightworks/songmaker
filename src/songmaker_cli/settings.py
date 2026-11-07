@@ -27,8 +27,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from acestep_engine.settings import EngineSettings
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
-    CODEX_CLI_MAX_CONCURRENT_PROCESSES,
-    COVER_MAX_CONCURRENT_RUNS,
     COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
@@ -247,8 +245,6 @@ class Settings(BaseSettings):
                 f"{LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS} < "
                 f"{self.lora_training_job_timeout})",
             )
-        if self.cover_max_concurrent_runs > self.codex_cli_max_concurrent_processes:
-            raise ValueError("Cover process cap cannot exceed the Codex process cap")
         return self
 
     # ── HTTP server ───────────────────────────────────────────────────
@@ -308,10 +304,6 @@ class Settings(BaseSettings):
     scoring_rate_limit_user: int = 100
     chat_rate_limit_user: int = 300
     cover_suggestions_daily_limit: int = Field(default=10, ge=1)
-    codex_cli_max_concurrent_processes: int = Field(
-        default=CODEX_CLI_MAX_CONCURRENT_PROCESSES, ge=1,
-    )
-    cover_max_concurrent_runs: int = Field(default=COVER_MAX_CONCURRENT_RUNS, ge=1)
     max_queue_depth: int = 100
     max_user_active_jobs: int = 10
     ip_rate_limit: int = 120
@@ -443,12 +435,6 @@ class Settings(BaseSettings):
         default=7, alias="GENERATION_RETENTION_DAYS",
     )
 
-    # ── Claude ────────────────────────────────────────────────────────
-    claude_chat_model: str = "claude-opus-4-6"
-    anthropic_api_key: SecretStr | None = None
-    xai_api_key: SecretStr | None = None
-    openai_api_key: SecretStr | None = None
-
     # ── Release (written into the image by the build arguments) ───────
     songmaker_release: str = UNRELEASED_TAG
     songmaker_commit: str = UNKNOWN_COMMIT
@@ -471,8 +457,14 @@ class Settings(BaseSettings):
     grafana_user: str | None = None
     grafana_password: SecretStr | None = None
     hf_token: SecretStr | None = None
-    # Retired key: declared and unread so an old .env still validates.
+    # Retired keys: declared and unread so an old .env still validates.
     claude_scoring_model: str | None = None
+    claude_chat_model: str | None = None
+    anthropic_api_key: SecretStr | None = None
+    xai_api_key: SecretStr | None = None
+    openai_api_key: SecretStr | None = None
+    codex_cli_max_concurrent_processes: int | None = None
+    cover_max_concurrent_runs: int | None = None
 
     # ── Alert channel (issue #333) ─────────────────────────────────────
     # Read directly from .env by scripts/alert.sh (systemd OnFailure=)

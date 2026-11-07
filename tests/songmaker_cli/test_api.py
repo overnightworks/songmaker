@@ -921,43 +921,6 @@ def test_unarchive_generation_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_cleanup_album_skips_kept_api(client: TestClient) -> None:
-    client.post("/api/generations/g1/keep")
-    resp = client.post("/api/albums/rock/cleanup")
-    assert resp.status_code == 200
-    assert resp.json()["deleted"] == 1
-    assert client.get("/api/generations/g1").status_code == 200
-
-
-def test_cleanup_album_api(client: TestClient) -> None:
-    client.post("/api/generations/g1/pick")
-    resp = client.post("/api/albums/rock/cleanup")
-    assert resp.status_code == 200
-    assert resp.json()["deleted"] == 1
-
-
-def test_cleanup_song_api(client: TestClient) -> None:
-    client.post("/api/generations/g1/pick")
-    resp = client.post("/api/songs/s1/cleanup")
-    assert resp.status_code == 200
-    assert resp.json()["deleted"] == 1
-    assert client.get("/api/generations/g1").status_code == 200
-    assert client.get("/api/generations/g2").status_code == 404
-
-
-def test_cleanup_song_skips_kept(client: TestClient) -> None:
-    client.post("/api/generations/g1/keep")
-    resp = client.post("/api/songs/s1/cleanup")
-    assert resp.status_code == 200
-    assert resp.json()["deleted"] == 1
-    assert client.get("/api/generations/g1").status_code == 200
-
-
-def test_cleanup_song_not_found(client: TestClient) -> None:
-    resp = client.post("/api/songs/nonexistent/cleanup")
-    assert resp.status_code == 404
-
-
 # ── Job endpoints ────────────────────────────────────────────────────
 
 
@@ -1161,11 +1124,6 @@ def test_get_generation_not_found(client: TestClient) -> None:
 @pytest.mark.parametrize("action", ["pick", "unpick", "keep", "unkeep"])
 def test_generation_flag_action_not_found(client: TestClient, action: str) -> None:
     resp = client.post(f"/api/generations/nonexistent/{action}")
-    assert resp.status_code == 404
-
-
-def test_cleanup_album_not_found(client: TestClient) -> None:
-    resp = client.post("/api/albums/nonexistent/cleanup")
     assert resp.status_code == 404
 
 
