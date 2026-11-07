@@ -36,8 +36,9 @@ AGENTS_CLIENT = "agents"
 MCP_SCOPE = "songmaker:mcp"
 RESOURCE_URL = "https://songmaker.test/mcp"
 METADATA_URL = "https://songmaker.test/.well-known/oauth-protected-resource/mcp"
-SIX_TOOLS = {
+MARKED_TOOLS = {
     "list_albums", "create_album", "list_songs", "create_song", "get_song", "generate_song",
+    "get_active_generation", "get_last_failed_generation",
 }
 _AGENT_ENVIRONMENT = {
     "AGENT__BACKEND": "litellm",
@@ -158,11 +159,11 @@ def _worker_ready():
         yield pool
 
 
-# -- M1: exactly the six tools ---------------------------------------------------------
+# -- M1: exactly the marked tools ---------------------------------------------------------
 
 
-def test_m1_a_members_agent_is_offered_exactly_the_six_tools(mcp: McpWorld) -> None:
-    assert mcp.tool_names() == SIX_TOOLS
+def test_m1_a_members_agent_is_offered_exactly_the_marked_tools(mcp: McpWorld) -> None:
+    assert mcp.tool_names() == MARKED_TOOLS
 
 
 def test_m1_the_description_of_generate_names_the_valid_models(mcp: McpWorld) -> None:
@@ -270,6 +271,60 @@ def test_m24_an_admins_agent_cannot_write_into_or_generate_for_another_persons_c
     pool.enqueue_job.assert_not_called()
 
 
+_PROGRESS_TOOLS = {
+    "get_active_generation": "/api/songs/{song_id}/active-generation",
+    "get_last_failed_generation": "/api/songs/{song_id}/last-failed-generation",
+}
+
+
+@pytest.mark.parametrize("tool", _PROGRESS_TOOLS)
+def test_m27_a_progress_tool_answers_for_the_persons_own_song_as_the_api_does(
+    mcp: McpWorld, tool: str,
+) -> None:
+    mcp.world.seed_take(TokenWorld.ALICE, "alices")
+    with _worker_ready():
+        mcp.call("generate_song", {"song_id": "song-alices", "model": "sft"})
+
+    reply = mcp.call(tool, {"song_id": "song-alices"})
+
+    api = mcp.world.client.get(
+        _PROGRESS_TOOLS[tool].format(song_id="song-alices"), headers=mcp.agent(),
+    )
+    assert (reply.is_error, reply.json()) == (False, api.json())
+
+
+def test_m27_the_active_generation_tool_names_the_queued_job_and_none_without_one(
+    mcp: McpWorld,
+) -> None:
+    mcp.world.seed_take(TokenWorld.ALICE, "alices")
+    idle = mcp.call("get_active_generation", {"song_id": "song-alices"})
+    with _worker_ready():
+        queued = mcp.call("generate_song", {"song_id": "song-alices", "model": "sft"})
+
+    active = mcp.call("get_active_generation", {"song_id": "song-alices"})
+
+    assert (idle.is_error, idle.json()) == (False, None)
+    assert active.json()["id"] == queued.json()["id"]
+
+
+@pytest.mark.parametrize("tool", _PROGRESS_TOOLS)
+def test_m28_a_progress_tool_for_another_persons_song_is_not_found_and_reveals_nothing(
+    mcp: McpWorld, tool: str,
+) -> None:
+    mcp.world.seed_take(TokenWorld.BOB, "bobs")
+    bobs = mcp.agent(TokenWorld.BOB)
+    with _worker_ready():
+        mcp.world.client.post(
+            "/api/songs/song-bobs/generate", json={"model": "sft"}, headers=bobs,
+        )
+
+    others = mcp.call(tool, {"song_id": "song-bobs"})
+
+    assert others.is_error
+    assert "Not Found" in others.text
+    assert "generate" not in others.text
+
+
 # -- M6: what the agent's token cannot reach ------------------------------------------
 
 _UNMARKED_ROUTES = [
@@ -337,7 +392,7 @@ def test_m8_a_token_of_a_non_member_of_the_mcp_group_is_refused(mcp: McpWorld) -
 
 
 def test_m9_a_member_of_the_mcp_group_alone_is_admitted_as_an_app_member(mcp: McpWorld) -> None:
-    assert mcp.tool_names(groups=(OIDC_MCP_GROUP,)) == SIX_TOOLS
+    assert mcp.tool_names(groups=(OIDC_MCP_GROUP,)) == MARKED_TOOLS
 
 
 def test_m10_an_expired_token_is_refused(mcp: McpWorld) -> None:
@@ -653,7 +708,7 @@ def test_m25_each_marked_method_and_template_resolves_to_its_marked_endpoint(
         ]["operationId"]
         for mark in marks
     }
-    assert len(marks) == len(SIX_TOOLS)
+    assert len(marks) == len(MARKED_TOOLS)
     assert {(method, path) for method, path, _ in resolved} == expected.keys()
     for method, path, endpoint_name in resolved:
         assert expected[(method, path)].startswith(f"{endpoint_name}_")
