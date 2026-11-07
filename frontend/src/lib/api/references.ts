@@ -36,3 +36,11 @@ export async function deleteReference(referenceId: string): Promise<void> {
 		method: 'DELETE'
 	});
 }
+
+export async function keepReference(referenceId: string): Promise<void> {
+	await apiFetch(`/api/references/${encodeURIComponent(referenceId)}/keep`, { method: 'POST' });
+}
+
+export async function unkeepReference(referenceId: string): Promise<void> {
+	await apiFetch(`/api/references/${encodeURIComponent(referenceId)}/unkeep`, { method: 'POST' });
+}
