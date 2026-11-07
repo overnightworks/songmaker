@@ -500,12 +500,8 @@ def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> 
 AGENT_CLI_MOUNT_ROOTS = (Path("/home/songmaker"), Path("/usr/local"))
 
 
-_COLON_OUTSIDE_INTERPOLATION = re.compile(r":(?![^{]*\})")
-_INTERPOLATION = re.compile(r"\$\{[^}:]*(?::?-([^}]*))?\}")
-
-
 def _short_volume_source_and_target(service_name: str, volume: str) -> tuple[str, str]:
-    source, *rest = _COLON_OUTSIDE_INTERPOLATION.split(volume)
+    source, *rest = volume.split(":")
     assert rest, (
         f"{service_name} declares the anonymous volume {volume!r}; "
         f"mount a declared named volume instead"
@@ -575,94 +571,110 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
 
 
 CONTAINER_HOME = Path("/home/songmaker")
-MIRROR_DIRECTORY_MARKERS = ("agent-cli-credentials", "SONGMAKER_CLI_CREDENTIALS_DIR")
+MIRROR_DIRECTORY_MARKER = "agent-cli-credentials"
 EVERY_COMPOSE_FILE = (
     *sorted(REPOSITORY_ROOT.glob("docker-compose*.yml")),
     *sorted(DOCKER_ROOT.glob("docker-compose*.yml")),
 )
+PRODUCTION_COMPOSE_FILES = ("-f", "docker-compose.yml")
+PRODUCTION_ENV_FILE = DOCKER_ROOT / ".env.docker.example"
+SCRATCH_PROJECT_ARGS = ("-p", "songmaker-packaging-boundary-test")
 
 
-def _bind_source_and_target(service_name: str, volume: object) -> tuple[str, str] | None:
-    if isinstance(volume, dict):
-        if volume.get("type") != "bind":
-            return None
-        return str(volume.get("source", "")), posixpath.normpath(str(volume.get("target", "")))
-    assert isinstance(volume, str), f"{service_name} has an unsupported volume: {volume!r}"
-    source, target = _short_volume_source_and_target(service_name, volume)
-    if "/" not in source and not source.startswith(("~", "$", ".")):
-        return None
-    return source, target
-
-
-def _agent_login_binds(services: dict[str, object]) -> list[str]:
+def _agent_login_binds(services: dict[str, dict]) -> list[str]:
+    """Binds of rendered services; Compose prints every volume in long form."""
     offences = []
     for service_name, service in services.items():
-        assert isinstance(service, dict)
         for volume in service.get("volumes", []):
-            bind = _bind_source_and_target(service_name, volume)
-            if bind is None:
+            if volume["type"] != "bind":
                 continue
-            source, target = bind
+            source, target = volume["source"], volume["target"]
             under_home = any(
-                posixpath.isabs(resolved)
-                and Path(posixpath.normpath(resolved)).is_relative_to(CONTAINER_HOME)
-                for resolved in (_INTERPOLATION.sub(r"\1", path) for path in (source, target))
+                Path(path).is_relative_to(CONTAINER_HOME) for path in (source, target)
             )
-            if under_home or any(marker in source for marker in MIRROR_DIRECTORY_MARKERS):
+            if under_home or MIRROR_DIRECTORY_MARKER in source:
                 offences.append(f"{service_name} binds {source} to {target}")
     return offences
 
 
-@pytest.mark.parametrize("compose_path", EVERY_COMPOSE_FILE, ids=_relative)
-def test_no_container_binds_an_agent_cli_or_a_login(compose_path: Path) -> None:
-    services = _compose_file(compose_path)["services"]
+def _render_services(compose_args: tuple[str, ...], env_file: Path) -> dict[str, dict]:
+    rendered = run_compose_config(
+        (*compose_args, *SCRATCH_PROJECT_ARGS, "--profile", "*"),
+        ("--format", "json"),
+        env_file=env_file,
+        environment={},
+    )
+    assert rendered.returncode == 0, rendered.stderr
+    return json.loads(rendered.stdout)["services"]
+
+
+def _compose_files_of(compose_args: tuple[str, ...]) -> set[Path]:
+    return {
+        (REPOSITORY_ROOT / name).resolve() for name in compose_args if name != "-f"
+    }
+
+
+@pytest.mark.parametrize("stack", ["production", *TEST_STACKS], ids=str)
+def test_no_stack_binds_an_agent_cli_or_a_login(stack: str) -> None:
+    if stack == "production":
+        services = _render_services(PRODUCTION_COMPOSE_FILES, PRODUCTION_ENV_FILE)
+    else:
+        services = _rendered_test_stack_services(TEST_STACKS[stack])
 
     assert _agent_login_binds(services) == []
 
 
-def _long_bind(source: str, target: str) -> dict[str, str]:
-    return {"type": "bind", "source": source, "target": target}
+def test_every_compose_file_belongs_to_a_rendered_stack() -> None:
+    rendered = _compose_files_of(PRODUCTION_COMPOSE_FILES).union(
+        *(_compose_files_of(files) for files in TEST_STACKS.values())
+    )
+
+    assert {path.resolve() for path in EVERY_COMPOSE_FILE} <= rendered
+
+
+_HOME_AUTH = "/home/songmaker/.grok/auth.json"
+_MIRROR = "/x/agent-cli-credentials"
+AGENT_LOGIN_BIND_FIXTURES = {
+    "long-target-under-home": (
+        f"{{type: bind, source: /srv/a, target: {_HOME_AUTH}}}",
+        f"/srv/a to {_HOME_AUTH}",
+    ),
+    "long-source-under-home": (
+        "{type: bind, source: /home/songmaker/c, target: /usr/bin/c}",
+        "/home/songmaker/c to /usr/bin/c",
+    ),
+    "long-source-from-mirror-directory": (
+        f"{{type: bind, source: '${{DIR:-{_MIRROR}}}/c.json', target: /c.json}}",
+        f"{_MIRROR}/c.json to /c.json",
+    ),
+    "short-target-under-home": (f"/srv/a:{_HOME_AUTH}:ro", f"/srv/a to {_HOME_AUTH}"),
+    "short-source-under-home": (f"{_HOME_AUTH}:/auth.json", f"{_HOME_AUTH} to /auth.json"),
+    "short-source-from-mirror-directory": (
+        f"'${{DIR:-{_MIRROR}}}/claude.json:/c.json'",
+        f"{_MIRROR}/claude.json to /c.json",
+    ),
+    "short-nested-default-target": (
+        f"/srv/a:${{A:-${{B:-{_HOME_AUTH}}}}}:ro",
+        f"/srv/a to {_HOME_AUTH}",
+    ),
+    "short-dash-default-target": (f"'/srv/a:${{X-{_HOME_AUTH}}}:ro'", f"/srv/a to {_HOME_AUTH}"),
+}
 
 
 @pytest.mark.parametrize(
-    "volume",
-    [
-        pytest.param(
-            _long_bind("/srv/login.json", "/home/songmaker/.grok/auth.json"),
-            id="long-target-under-home",
-        ),
-        pytest.param(
-            _long_bind("/home/songmaker/.local/bin/claude", "/usr/bin/claude"),
-            id="long-source-under-home",
-        ),
-        pytest.param(
-            _long_bind("${DIR:-~/.x/agent-cli-credentials}/c.json", "/c.json"),
-            id="long-source-from-mirror-directory",
-        ),
-        pytest.param("/srv/a:/home/songmaker/.grok/auth.json:ro", id="short-target-under-home"),
-        pytest.param("/home/songmaker/.grok/auth.json:/auth.json", id="short-source-under-home"),
-        pytest.param(
-            "${SONGMAKER_CLI_CREDENTIALS_DIR}/claude.json:/c.json",
-            id="short-source-from-mirror-directory",
-        ),
-        pytest.param(
-            "./${LOGIN_FILE:-login.json}:/home/songmaker/.grok/auth.json:ro",
-            id="short-interpolated-source-with-colon-default",
-        ),
-        pytest.param(
-            "./login.json:${LOGIN_TARGET:-/home/songmaker/.grok/auth.json}:ro",
-            id="short-interpolated-target-default-under-home",
-        ),
-    ],
+    ("volume", "bind"), AGENT_LOGIN_BIND_FIXTURES.values(), ids=AGENT_LOGIN_BIND_FIXTURES.keys()
 )
-def test_the_agent_login_bind_check_names_the_service_and_the_bind(volume: object) -> None:
-    offences = _agent_login_binds({"songmaker-web": {"volumes": [volume]}})
+def test_the_agent_login_bind_check_names_the_service_and_the_bind(
+    volume: str, bind: str, tmp_path: Path
+) -> None:
+    compose_file = tmp_path / "docker-compose.yml"
+    compose_file.write_text(
+        f"services:\n  songmaker-web:\n    image: scratch\n    volumes:\n      - {volume}\n"
+    )
 
-    assert [offence.split(" binds ")[0] for offence in offences] == ["songmaker-web"]
-    assert len(offences) == 1
-    source, target = _bind_source_and_target("songmaker-web", volume) or ("", "")
-    assert source in offences[0]
-    assert target in offences[0]
+    services = _render_services(("-f", str(compose_file)), Path(os.devnull))
+
+    assert _agent_login_binds(services) == [f"songmaker-web binds {bind}"]
 
 
 WORKER_SERVICES = (

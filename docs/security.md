@@ -691,7 +691,7 @@ inspects it.
 `mirror_agent_cli_credentials.py --verify`, which applies those same checks to
 each published file, parses the JSON, and refuses any non-empty value under a
 renewal-token key found anywhere in it — so a login copied in by hand is
-caught rather than kept. It also asks systemd whether the mirror service,
+caught by verification. It also asks systemd whether the mirror service,
 its login watch and its timer are installed and enabled, whether the two
 triggers are running, and whether the service itself has failed: files that
 look right prove nothing about currency if what rewrites them has been
