@@ -1,8 +1,0 @@
-claim_id = "6229b9cdedd64e409b02c6117dd99a73"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "bbbba9115a0c7cd3c18de91b4260a370bcd03b33"
-branch = "claude/issue-2555-b5c1-tests-pg"
-scope = ["quality/baseline.toml", "tests/songmaker_cli/db/queries/test_take_deletion_owner.py", "tests/songmaker_cli/db/queries/test_versions_in_use.py", "tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_scheduler.py", "tests/songmaker_cli/test_server.py"]
-opened_commit = "50b68d5d5e9dae2cc09a525013d7287be8228d23"
-whole_reason = "One mechanical fixture swap in five test files by one rewrite rule, judged by one grep; splitting it buys no smaller review."
