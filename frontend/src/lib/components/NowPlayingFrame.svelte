@@ -162,6 +162,7 @@
 		curationBar?: Snippet;
 	} = $props();
 
+	const frequentHitbox = `min-width: ${HITBOX_FREQUENT_PX}px; min-height: ${HITBOX_FREQUENT_PX}px`;
 	const isDocked = $derived(surface === 'docked');
 	const isPage = $derived(surface === 'page');
 	const isLayer = $derived(surface === 'full');
@@ -300,8 +301,7 @@
 	<button
 		type="button"
 		class="icon-btn"
-		style:min-width="{HITBOX_FREQUENT_PX}px"
-		style:min-height="{HITBOX_FREQUENT_PX}px"
+		style={frequentHitbox}
 		{onclick}
 		{disabled}
 		aria-label={label}
@@ -322,8 +322,7 @@
 						type="button"
 						class="icon-btn"
 						class:active={shuffle}
-						style:min-width="{HITBOX_FREQUENT_PX}px"
-						style:min-height="{HITBOX_FREQUENT_PX}px"
+						style={frequentHitbox}
 						onclick={onToggleShuffle}
 						aria-pressed={shuffle}
 						aria-label={shuffleLabel}
@@ -341,12 +340,7 @@
 				{#if onnext}
 					{@render iconButton('skip-forward', SONG_NEXT_LABEL, onnext, !canNext)}
 				{/if}
-				<span
-					class="transport-slot"
-					style:width="{HITBOX_FREQUENT_PX}px"
-					style:height="{HITBOX_FREQUENT_PX}px"
-					aria-hidden="true"
-				></span>
+				<span class="transport-slot" style={frequentHitbox} aria-hidden="true"></span>
 			</div>
 		</div>
 	{:else}
@@ -378,6 +372,14 @@
 	{/if}
 	{@render transportControls()}
 	{@render progress()}
+{/snippet}
+
+{#snippet goToSongButton()}
+	{#if onGoToSong}
+		<button type="button" class="go-song" style={frequentHitbox} onclick={onGoToSong}
+			>{NOW_PLAYING_GO_TO_SONG}</button
+		>
+	{/if}
 {/snippet}
 
 <div
@@ -430,6 +432,7 @@
 					<h2 id="now-playing-title" class="np-title">{info.songTitle}</h2>
 				</div>
 				<div class="np-header-actions">
+					{#if stacked}{@render goToSongButton()}{/if}
 					{#if isDocked && onExpand}
 						<button type="button" class="surface-btn" onclick={onExpand}
 							>{NOW_PLAYING_EXPAND_LABEL}</button
@@ -458,15 +461,7 @@
 
 				<section class="np-lyrics-col">
 					{@render lyrics()}
-					{#if onGoToSong}
-						<button
-							type="button"
-							class="go-song"
-							style:min-width="{HITBOX_FREQUENT_PX}px"
-							style:min-height="{HITBOX_FREQUENT_PX}px"
-							onclick={onGoToSong}>{NOW_PLAYING_GO_TO_SONG}</button
-						>
-					{/if}
+					{#if !stacked}{@render goToSongButton()}{/if}
 				</section>
 
 				{#if rightPanel && !stacked}
@@ -538,6 +533,8 @@
 	.np-header-actions {
 		flex-shrink: 0;
 		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 		align-items: center;
 		gap: 0.3rem;
 	}
@@ -886,10 +883,9 @@
 	.now-playing.stacked .np-lyrics-col {
 		min-height: min-content;
 	}
-	/* The take sheet's backdrop dims the surface, yet × and "Go to song" stay
+	/* The take sheet's backdrop dims the surface, yet the header's × and "Go to song" stay
 	   above it: a tap meant for them must not only close the sheet. */
-	.now-playing.stacked .np-header,
-	.now-playing.stacked .go-song {
+	.now-playing.stacked .np-header {
 		position: relative;
 		z-index: 2;
 	}
