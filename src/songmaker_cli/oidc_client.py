@@ -12,10 +12,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, overload
 
 from pydantic import SecretStr
+from webauth.admission import AdmissionConfig
 from webauth.https_client import fetch_key_set_over_https
 from webauth.middleware.bearer_gate import BearerGate, PersonPaths
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
-from webauth.oidc_login import AdmissionConfig
 from webauth.oidc_transport import post_token_request_over_https
 from webauth.policies import AuthorizedParties, PathRules
 
