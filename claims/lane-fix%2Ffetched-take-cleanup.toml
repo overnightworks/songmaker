@@ -3,5 +3,5 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "42f8f1b81b0486e72a2a6890050dbb86cf9185a6"
 branch = "fix/fetched-take-cleanup"
-scope = ["src/songmaker_cli/jobs/generation.py", "tests/songmaker_cli/test_jobs.py"]
+scope = ["src/songmaker_cli/jobs/generation.py", "tests/songmaker_cli/test_scheduler_result_fetch.py"]
 opened_commit = "0f0b53b11ed47037966b105fea98bcc29900021c"
