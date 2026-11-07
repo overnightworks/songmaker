@@ -1,0 +1,8 @@
+claim_id = "0a1e5ff44cb348f1a3d6ac939bd024c6"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "eb770a70f9fdebaac84194bb813ac60781848f5d"
+branch = "claude/issue-2495-catalog-requirements-cited"
+scope = ["docs/catalog.md", "frontend/src/lib/stores/selection.test.ts", "tests/songmaker_cli/db/queries/test_versions_in_use.py", "tests/songmaker_cli/jobs/test_generation_fetched_take.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_cleanup_generation_retention.py", "tests/songmaker_cli/test_cleanup_generation_retention_lock_postgres.py", "tests/songmaker_cli/test_generation_api_archived_take_refusal.py"]
+opened_commit = "57eb926c1f4d54c70d156675fd8426ebffdd4a55"
+whole_reason = "One citation rule over the tests that prove one documentation page; the files are independent, and a split would only repeat the rule."
