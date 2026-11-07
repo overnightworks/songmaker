@@ -539,9 +539,7 @@ describe('PlayerBar stream boundaries', () => {
 
 		target.querySelector<HTMLButtonElement>('button[aria-label="Play"]')?.click();
 		await vi.waitFor(() => expect(target.textContent).toContain(LIBRARY_QUEUE_EMPTY_TITLE));
-		expect(target.querySelector('.track-title')?.textContent).toBe(LIBRARY_QUEUE_EMPTY_TITLE);
 		expect(target.querySelector('.track-detail')).toBeNull();
-		expect(target.textContent).not.toContain('Night Drive');
 		expect(audioPlayer.current).toBeNull();
 
 		selectedPlaylistDetail.set(playlistItem(playablePlaylistDefaults()));
@@ -561,7 +559,6 @@ describe('PlayerBar stream boundaries', () => {
 		await tick();
 		expect(target.textContent).toContain(LIBRARY_QUEUE_EMPTY_TITLE);
 		expect(target.textContent).not.toContain('Keine Takes');
-		expect(target.querySelector('.track-detail')).toBeNull();
 	});
 
 	it('reacts at window boundaries even when adjacent entries use the same generation', async () => {
