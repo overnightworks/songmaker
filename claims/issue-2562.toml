@@ -1,8 +1,0 @@
-claim_id = "93e6c4ce862f4a8384277f343d55957c"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "86be2f6f82b0e8843097e65afff254c6df93e52a"
-branch = "claude/issue-2562-s3b-failure-literals"
-scope = ["frontend/src/app.css", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/LoraDetail.svelte", "frontend/src/lib/components/ModelRegistryPanel.svelte", "frontend/src/lib/components/NowPlayingTake.svelte", "frontend/src/lib/components/ParamControls.svelte", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/ShareDialog.svelte", "frontend/src/lib/components/TakeRetentionPanel.svelte", "frontend/src/lib/components/ToastContainer.svelte", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/components/VoicePicker.svelte", "frontend/src/lib/components/WorkerPoolPanel.svelte", "frontend/src/lib/components/editor/RecipeTabs.svelte", "frontend/src/lib/components/editor/SongMovePicker.svelte", "frontend/src/lib/components/editor/TakeRow.svelte", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/voices/+page.svelte", "scripts/style-literals.txt"]
-opened_commit = "bbeede7deefa3682b0b646309639639094b345a9"
-whole_reason = "The last meanings of --score-bad and --score-bad-bg leave together with the failure literals they stand beside, and one drive measures every surface."
