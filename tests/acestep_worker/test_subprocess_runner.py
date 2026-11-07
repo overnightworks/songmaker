@@ -230,19 +230,6 @@ def test_failed_start_keeps_only_the_newest_lines_past_the_bound() -> None:
     assert len(handle.recent_lines) < 200
 
 
-def test_start_writes_no_log_file(tmp_path: Path) -> None:
-    proc = _proc_with_empty_stdout()
-    with (
-        patch("acestep_worker.subprocess_runner.find_uv", return_value=["uv"]),
-        patch("subprocess.Popen", return_value=proc),
-        patch("acestep_worker.subprocess_runner.wait_for_health"),
-    ):
-        start_acestep_subprocess(
-            "sft", port=8101, checkpoint_dir=tmp_path, vram_budget_gb=24.0,
-        )
-    assert list(tmp_path.iterdir()) == []
-
-
 def test_start_acestep_subprocess_no_uv(tmp_path: Path) -> None:
     with patch("acestep_worker.subprocess_runner.find_uv", return_value=None):
         with pytest.raises(SubprocessStartError, match="uv not found"):

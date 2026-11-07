@@ -180,7 +180,7 @@ def inner_port_for_mode(base_port: int, mode: str) -> int:
 
 
 def _read_stderr_tail(handle: SubprocessHandle, max_chars: int = 500) -> str:
-    return "\n".join(handle.recent_lines)[-max_chars:]
+    return "\n".join(list(handle.recent_lines))[-max_chars:]
 
 
 def _stream_subprocess_logs(
