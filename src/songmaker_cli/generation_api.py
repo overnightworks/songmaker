@@ -111,6 +111,19 @@ _GENERATE_DESCRIPTION: Final = (
 )
 
 
+_ACTIVE_GENERATION_DESCRIPTION: Final = (
+    "The generation job of one of the person's own songs that is waiting or running, with "
+    "its status, progress and queue position. The answer is null when no job is active: "
+    "then the takes are finished, or the job failed, which get_last_failed_generation tells."
+)
+
+_LAST_FAILED_GENERATION_DESCRIPTION: Final = (
+    "The latest failed generation job of one of the person's own songs, with its error. "
+    "The job is null when the last attempt did not fail, or when a newer attempt has "
+    "superseded the failure; a partial result with saved takes is returned with them."
+)
+
+
 def _check_model_active(session: Session, model: str) -> None:
     active_ids = {m.id for m in list_active_models(session)}
     if model not in active_ids:
@@ -310,7 +323,11 @@ async def api_generate_song(
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
-@router.get("/songs/{song_id}/active-generation")
+@router.get(
+    "/songs/{song_id}/active-generation",
+    description=_ACTIVE_GENERATION_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_active_generation", effect=ToolEffect.READ_ONLY),
+)
 def api_active_generation(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -323,7 +340,11 @@ def api_active_generation(
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
-@router.get("/songs/{song_id}/last-failed-generation")
+@router.get(
+    "/songs/{song_id}/last-failed-generation",
+    description=_LAST_FAILED_GENERATION_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_last_failed_generation", effect=ToolEffect.READ_ONLY),
+)
 def api_last_failed_generation(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
