@@ -33,7 +33,6 @@ E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 VOICES_E2E_OVERLAY = ("-f", "docker/docker-compose.e2e-voices.yml")
 DOCKER_DEFAULT_RESTART_POLICY = "no"
 WEB_SERVER_MODULE = "songmaker_cli.server"
-SCORING_WORKER_SERVICE = "songmaker-scoring-worker"
 
 
 @dataclass(frozen=True)
@@ -577,8 +576,6 @@ EVERY_COMPOSE_FILE = (
     *sorted(DOCKER_ROOT.glob("docker-compose*.yml")),
 )
 PRODUCTION_COMPOSE_FILES = ("-f", "docker-compose.yml")
-PRODUCTION_ENV_FILE = DOCKER_ROOT / ".env.docker.example"
-SCRATCH_PROJECT_ARGS = ("-p", "songmaker-packaging-boundary-test")
 
 
 def _agent_login_binds(services: dict[str, dict]) -> list[str]:
@@ -589,17 +586,16 @@ def _agent_login_binds(services: dict[str, dict]) -> list[str]:
             if volume["type"] != "bind":
                 continue
             source, target = volume["source"], volume["target"]
-            under_home = any(
+            if MIRROR_DIRECTORY_MARKER in source or any(
                 Path(path).is_relative_to(CONTAINER_HOME) for path in (source, target)
-            )
-            if under_home or MIRROR_DIRECTORY_MARKER in source:
+            ):
                 offences.append(f"{service_name} binds {source} to {target}")
     return offences
 
 
 def _render_services(compose_args: tuple[str, ...], env_file: Path) -> dict[str, dict]:
     rendered = run_compose_config(
-        (*compose_args, *SCRATCH_PROJECT_ARGS, "--profile", "*"),
+        (*compose_args, "-p", "songmaker-packaging-boundary-test", "--profile", "*"),
         ("--format", "json"),
         env_file=env_file,
         environment={},
@@ -608,16 +604,10 @@ def _render_services(compose_args: tuple[str, ...], env_file: Path) -> dict[str,
     return json.loads(rendered.stdout)["services"]
 
 
-def _compose_files_of(compose_args: tuple[str, ...]) -> set[Path]:
-    return {
-        (REPOSITORY_ROOT / name).resolve() for name in compose_args if name != "-f"
-    }
-
-
 @pytest.mark.parametrize("stack", ["production", *TEST_STACKS], ids=str)
 def test_no_stack_binds_an_agent_cli_or_a_login(stack: str) -> None:
     if stack == "production":
-        services = _render_services(PRODUCTION_COMPOSE_FILES, PRODUCTION_ENV_FILE)
+        services = _render_services(PRODUCTION_COMPOSE_FILES, DOCKER_ROOT / ".env.docker.example")
     else:
         services = _rendered_test_stack_services(TEST_STACKS[stack])
 
@@ -625,9 +615,9 @@ def test_no_stack_binds_an_agent_cli_or_a_login(stack: str) -> None:
 
 
 def test_every_compose_file_belongs_to_a_rendered_stack() -> None:
-    rendered = _compose_files_of(PRODUCTION_COMPOSE_FILES).union(
-        *(_compose_files_of(files) for files in TEST_STACKS.values())
-    )
+    stacks = (PRODUCTION_COMPOSE_FILES, *TEST_STACKS.values())
+    names = {name for files in stacks for name in files if name != "-f"}
+    rendered = {(REPOSITORY_ROOT / name).resolve() for name in names}
 
     assert {path.resolve() for path in EVERY_COMPOSE_FILE} <= rendered
 
@@ -636,13 +626,9 @@ _HOME_AUTH = "/home/songmaker/.grok/auth.json"
 _MIRROR = "/x/agent-cli-credentials"
 AGENT_LOGIN_BIND_FIXTURES = {
     "long-target-under-home": (
-        f"{{type: bind, source: /srv/a, target: {_HOME_AUTH}}}",
-        f"/srv/a to {_HOME_AUTH}",
-    ),
+        f"{{type: bind, source: /srv/a, target: {_HOME_AUTH}}}", f"/srv/a to {_HOME_AUTH}"),
     "long-source-under-home": (
-        "{type: bind, source: /home/songmaker/c, target: /usr/bin/c}",
-        "/home/songmaker/c to /usr/bin/c",
-    ),
+        "{type: bind, source: /home/songmaker/c, target: /c}", "/home/songmaker/c to /c"),
     "long-source-from-mirror-directory": (
         f"{{type: bind, source: '${{DIR:-{_MIRROR}}}/c.json', target: /c.json}}",
         f"{_MIRROR}/c.json to /c.json",
@@ -650,13 +636,9 @@ AGENT_LOGIN_BIND_FIXTURES = {
     "short-target-under-home": (f"/srv/a:{_HOME_AUTH}:ro", f"/srv/a to {_HOME_AUTH}"),
     "short-source-under-home": (f"{_HOME_AUTH}:/auth.json", f"{_HOME_AUTH} to /auth.json"),
     "short-source-from-mirror-directory": (
-        f"'${{DIR:-{_MIRROR}}}/claude.json:/c.json'",
-        f"{_MIRROR}/claude.json to /c.json",
-    ),
+        f"'${{DIR:-{_MIRROR}}}/c.json:/c.json'", f"{_MIRROR}/c.json to /c.json"),
     "short-nested-default-target": (
-        f"/srv/a:${{A:-${{B:-{_HOME_AUTH}}}}}:ro",
-        f"/srv/a to {_HOME_AUTH}",
-    ),
+        f"/srv/a:${{A:-${{B:-{_HOME_AUTH}}}}}:ro", f"/srv/a to {_HOME_AUTH}"),
     "short-dash-default-target": (f"'/srv/a:${{X-{_HOME_AUTH}}}:ro'", f"/srv/a to {_HOME_AUTH}"),
 }
 
@@ -677,31 +659,47 @@ def test_the_agent_login_bind_check_names_the_service_and_the_bind(
     assert _agent_login_binds(services) == [f"songmaker-web binds {bind}"]
 
 
-WORKER_SERVICES = (
+CONFINED_SERVICES = (
+    "songmaker-web",
     "songmaker-music-worker",
     "songmaker-acestep-worker-0",
     "songmaker-scoring-worker",
 )
-WEB_ONLY_SECURITY_OPTIONS = ("seccomp", "apparmor", "systempaths")
+CONFINEMENT_REPLACING_OPTIONS = ("seccomp", "apparmor", "systempaths")
 
 
-@pytest.mark.parametrize("service_name", WORKER_SERVICES)
-def test_a_worker_drops_every_capability_and_blocks_privilege_gain(
+@pytest.mark.parametrize("service_name", CONFINED_SERVICES)
+def test_a_confined_service_drops_every_capability_and_blocks_privilege_gain(
     service_name: str,
 ) -> None:
     service = _raw_compose_services()[service_name]
     assert isinstance(service, dict)
-    security_options = service["security_opt"]
 
     assert service["cap_drop"] == ["ALL"]
     assert "cap_add" not in service
     assert not service.get("privileged")
-    assert "no-new-privileges:true" in security_options
-    assert not [
-        option
-        for option in security_options
-        if option.startswith(WEB_ONLY_SECURITY_OPTIONS)
-    ]
+    assert "no-new-privileges:true" in service["security_opt"]
+
+
+def _confinement_replacements(services: dict) -> dict[str, str]:
+    return {
+        service_name: option
+        for service_name, service in services.items()
+        if isinstance(service, dict)
+        for option in service.get("security_opt", [])
+        if option.startswith(CONFINEMENT_REPLACING_OPTIONS)
+    }
+
+
+def test_no_service_replaces_dockers_default_confinement() -> None:
+    assert not _confinement_replacements(_raw_compose_services())
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_no_test_stack_service_replaces_dockers_default_confinement(
+    compose_files: tuple[str, ...],
+) -> None:
+    assert not _confinement_replacements(_rendered_test_stack_services(compose_files))
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
