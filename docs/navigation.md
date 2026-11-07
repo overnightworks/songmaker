@@ -9,7 +9,7 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 - **1354_rule_3** 'Played' means your own listening, the same in Listen, in the Last played sort and in the desktop list. Creating or editing an album does not count. *e.g. You create album 'Test' and Listen does not change. Not: A new album that was never played jumps to the top.*
 - **1354_rule_4** A song you hear inside a playlist puts the playlist into Listen, not the song's album. *e.g. You play Late Drive and it shows 'stopped at song 5'. Not: Cold Harbour moves up as well.*
 - **1354_rule_05** Write counts your own work on a song: a new song, saved lyrics or style, a rename, a new take, a co-writer message. Listening does not count. *e.g. 'Quiet Fire · lyrics edited · 10:01'. Not: A song you only listened to shows up in Write.*
-- **1354_rule_6** **1354_rule_06** Listen and Write show only what you did; someone else playing or editing your songs never moves them. *e.g. A second account plays your album and your Home stays the same. Not: Another person's work lifts your album.*
+- **1354_rule_06** Listen and Write show only what you did; someone else playing or editing your songs never moves them. *e.g. A second account plays your album and your Home stays the same. Not: Another person's work lifts your album.*
 - **1354_rule_7** Library shows only albums and Playlists only playlists, as covers on the desktop. The mixed wall and the 'Added' sort go. *e.g. 'Library · 12' shows 12 albums. Not: A playlist among the albums.*
 - **1354_rule_8** One switch, A–Z or Last played, sorts Library, Playlists and the desktop list the same way, and this device remembers it. *e.g. You choose Last played, the left list follows, and it is still Last played tomorrow. Not: The left list stays A–Z.*
 - **1354_rule_9** An empty Library or Playlists says so in one line and points to + NEW. The tab never disappears. *e.g. 'No playlists yet.' Not: A blank page.*
@@ -56,7 +56,7 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 - **album_rule_7** Delete and Archive keep their confirmation and rights; nothing here changes who may do what.
 - **album_rule_8** The grown cover keeps its place and shows a turning ring and the time since the server started the run, Making a cover · 0:42; no percentage, because the image call has none. The time comes from the job’s start, so it is right after coming back and on a second device.
 - **album_rule_9** The cover carries a quiet strip at its foot: a small turning ring and the time, 0:58. It counts every unused suggestion, from the server, the same on every device (“● 3 waiting”). The mark stays until USE, Upload or × discards the unused ones; opening and closing the editor does not remove it.
-- **album_rule_10** Rows carry no play glyph — the row is the target, the playing row shows the equalizer. Measured: row 62 high.
+- **album_rule_10** Rows carry no play glyph — the row is the target, the playing row shows the equalizer.
 
 ## Create, account and settings
 
@@ -67,3 +67,6 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 - **account_rule_5** Desktop: Kreis mit Menü oben rechts, wie am Telefon; keine Konto-Zeile mehr in der Leiste.
 - **account_rule_6** Cleanup ist der letzte Tab der Admin-Seite.
 - **account_rule_7** Rechtliches: Impressum · Datenschutz · Nutzungsbedingungen als stille Zeile unten im Konto-Menü, je in neuem Tab auf hallucinai.de; so bleibt das Impressum von jeder angemeldeten Seite erreichbar.
+- **account_rule_8** “No albums yet.” An empty Library or Playlists says so and points to + NEW; the tab never disappears.
+- **account_rule_9** The desktop rail keeps the Settings group.
+- **account_rule_10** The account menu is the one popover form: Settings, the Light/Dark theme switch, Log out red and last.

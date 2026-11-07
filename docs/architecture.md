@@ -140,7 +140,7 @@ Newly generated audio (MP3, WAV) and generated album covers (the suggestion PNG 
 
 SvelteKit single-page app. All state in Svelte stores.
 
-**Ruled, not yet built (#1354).** The 41 rules the operator
+**Ruled, not yet built (#1354).** The rules the operator
 ruled on 15.10.2026 stand in `docs/navigation.md`. They
 govern the phone shell, the library wall and its sort, and the `PlayerBar`
 described below. Until #1354's slices land, this section describes what runs.

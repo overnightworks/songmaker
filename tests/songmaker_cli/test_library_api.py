@@ -435,7 +435,7 @@ def test_a_listen_inside_a_playlist_lifts_the_playlist_and_leaves_the_album(
 def test_1354_47_A5_an_admins_actions_leave_the_owners_lists_byte_identical_and_move_the_admins_own(
     library_ctx: tuple[object, object],
 ) -> None:
-    """1354_rule_6: each viewer's lists reflect only their own activity."""
+    """1354_rule_06: each viewer's lists reflect only their own activity."""
     factory, ctx = library_ctx
 
     def seed(session) -> None:
