@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,7 +22,6 @@ from songmaker_cli.constants import (
     LoraStatus,
     WorkerLivenessSignal,
 )
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
@@ -228,14 +226,13 @@ class TestLifecycleReaper:
         ),
     )
     def test_alive_queued_job_ignores_the_unknown_age_guard_until_a_full_queue(
-        self, ctx, tmp_path: Path, job_type: JobType,
+        self, ctx, job_type: JobType,
     ) -> None:
-        ctx = replace(ctx, db=init_test_db(tmp_path / "songmaker.db"))
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)
         thresholds = STALE_JOB_THRESHOLDS[job_type]
         full_queue_bound = thresholds.full_queue_bound_seconds(get_settings().max_queue_depth)
         _add_job(
-            ctx, job_id=f"{job_type}-queued-alive", job_type=job_type,
+            ctx, job_id=f"{job_type}-alive", job_type=job_type,
             status=JobStatus.QUEUED,
             started_at=now - timedelta(seconds=thresholds.queued_seconds + 1), heartbeat_at=now,
         )
@@ -247,10 +244,10 @@ class TestLifecycleReaper:
         )
 
         assert recovered == 0
-        assert _job_status(ctx, f"{job_type}-queued-alive") == JobStatus.QUEUED
+        assert _job_status(ctx, f"{job_type}-alive") == JobStatus.QUEUED
 
         with ctx.db() as session:
-            job = session.query(Job).filter_by(id=f"{job_type}-queued-alive").one()
+            job = session.query(Job).filter_by(id=f"{job_type}-alive").one()
             job.started_at = now - timedelta(seconds=full_queue_bound + 1)
             session.commit()
 
@@ -258,7 +255,7 @@ class TestLifecycleReaper:
             ctx, now=now, worker_liveness={job_type: WorkerLiveness.ALIVE},
         ) == 1
         with ctx.db() as session:
-            job = session.query(Job).filter_by(id=f"{job_type}-queued-alive").one()
+            job = session.query(Job).filter_by(id=f"{job_type}-alive").one()
             assert job.error == "Queued longer than a full queue could take — please retry."
             assert job.error_type == "queued_full_queue_bound"
 
