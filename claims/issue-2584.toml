@@ -1,8 +1,0 @@
-claim_id = "d123ffdb1c714e83940c43f72507d243"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "558279419b72e796312ce7238c9cb778ba6a66c7"
-branch = "claude/issue-2584-sync-leaves-gone-song"
-scope = ["docs/architecture.md", "frontend/src/lib/stores/librarySearch.test.ts", "frontend/src/lib/stores/librarySearch.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/navigationGoneSong.test.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/routes/(library)/album/[slug]/[song]/page.test.ts", "frontend/src/routes/(library)/album/[slug]/[song]/take/[n]/page.test.ts", "frontend/src/routes/(library)/album/[slug]/page.test.ts", "frontend/src/routes/(library)/page.test.ts", "frontend/src/routes/(library)/playlist/[slug]/page.test.ts", "frontend/src/routes/+layout.svelte", "quality/baseline.toml"]
-opened_commit = "7177823084d6b4d16e1005cea004d5ae1de69e09"
-whole_reason = "The hook's export, injection and call, the clear it replaces, the callers that start the sync and the one document sentence move together; apart, a deletion elsewhere would close nothing or clear twice."
