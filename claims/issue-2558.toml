@@ -1,0 +1,7 @@
+claim_id = "acb8b3443ec34474918d2f9a6b366495"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "9c6b01f93642f438d7edf36b0f966f74205816dd"
+branch = "claude/issue-2558-b5b-test-db-pg"
+scope = ["quality/baseline.toml", "tests/songmaker_cli/test_db.py"]
+opened_commit = "341ade15f7fcca2eadda34189f32d527af490105"
