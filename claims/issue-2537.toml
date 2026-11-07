@@ -1,8 +1,0 @@
-claim_id = "387f8934cb1d4f8fba9848a476bd7a05"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6e0eb8b76f262a823e4aadd249f0cfc1ebef4130"
-branch = "claude/issue-2537-confirm-dialog-destructive"
-scope = ["frontend/e2e/contrast.ts", "frontend/e2e/song-menu.spec.ts", "frontend/e2e/take-menu.spec.ts", "frontend/src/lib/components/ConfirmDialog.svelte", "frontend/src/lib/components/ConfirmDialog.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/editor/SongMenu.svelte", "frontend/src/lib/components/editor/TakesList.svelte", "scripts/style-literals.txt"]
-opened_commit = "500f6ebd4a5b854ba261d87a19207200b13e698c"
-whole_reason = "A required prop compiles only when every caller sets it in the same commit, and its e2e proof shares the contrast helpers with the slice before it."
