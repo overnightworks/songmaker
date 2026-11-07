@@ -1,0 +1,8 @@
+claim_id = "802db8d6b1fd4a708e1137f903dfe9c2"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "130bd6fe8193427b45f8f20da80b4ecfb5a9d20f"
+branch = "claude/issue-2453-the-codex-mounts-the-codex-sandbox-repor"
+scope = ["docker-compose.yml", "docker/.env.docker.example", "docs/architecture.md", "docs/security.md", "scripts/dead-symbols.allow", "scripts/prove_codex_image_sandbox.py", "scripts/test_helper_ratchet.txt", "src/songmaker_cli/api_models/health.py", "src/songmaker_cli/health_api.py", "src/songmaker_cli/health_types.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/server.py", "tests/conftest.py", "tests/scripts/test_apparmor_install.py", "tests/scripts/test_prove_codex_image_sandbox.py", "tests/songmaker_cli/test_health_api.py", "tests/songmaker_cli/test_lifecycle_codex_image_sandbox.py", "tests/support/codex_sandbox_proof.py"]
+opened_commit = "59dfb555a204c5430e1ed5caaf7465e024d0dd1b"
+whole_reason = "The Codex binds, the sandbox report and its proof are one Codex sandbox that leaves together; a split would leave a proof without its subject or a report without its proof."
