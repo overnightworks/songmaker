@@ -1,8 +1,0 @@
-claim_id = "a26913f29e3a4ac89dd3dcae2cd1a310"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "130bd6fe8193427b45f8f20da80b4ecfb5a9d20f"
-branch = "claude/issue-2455-agent-providers-leaves-songmaker-with-it"
-scope = [".importlinter", "Dockerfile", "docker-compose.yml", "docker/.env.docker.example", "docker/music-worker.Dockerfile", "docs/architecture.md", "docs/security.md", "docs/testing.md", "pyproject.toml", "quality/baseline.toml", "scripts/generate_types.py", "src/songmaker_cli/agent/tools.py", "src/songmaker_cli/agent_runtime.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/cowriter/tools.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "src/songmaker_cli/worker_base.py", "tests/conftest.py", "tests/scripts/test_generate_types.py", "tests/songmaker_cli/jobs/test_scoring_jobs.py", "tests/songmaker_cli/test_agent_runtime.py", "tests/songmaker_cli/test_constants_agent_providers.py", "tests/songmaker_cli/test_constants_secret_scrub_parity.py", "tests/songmaker_cli/test_lifecycle_background_loop_health.py", "tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_server.py", "tests/songmaker_cli/test_settings.py", "tests/support/provider_runtime.py", "tests/test_import_boundaries.py", "tests/test_packaging_boundary.py", "tests/test_sandbox_profile.py", "uv.lock"]
-opened_commit = "78851cde3c3bb7dd7afed4366e46a48fb268b080"
-whole_reason = "Rule (i) puts the library's last caller, its pin and lock entry, and every value only it reads into one landing"
