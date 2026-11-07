@@ -571,9 +571,12 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
 
 CONTAINER_HOME = Path("/home/songmaker")
 MIRROR_DIRECTORY_MARKER = "agent-cli-credentials"
-EVERY_COMPOSE_FILE = (
-    *sorted(REPOSITORY_ROOT.glob("docker-compose*.yml")),
-    *sorted(DOCKER_ROOT.glob("docker-compose*.yml")),
+EVERY_COMPOSE_FILE = tuple(
+    REPOSITORY_ROOT / name
+    for name in subprocess.run(
+        ["git", "ls-files"], cwd=REPOSITORY_ROOT, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    if re.search(r"(^|/)(docker-)?compose[^/]*\.ya?ml$", name)
 )
 PRODUCTION_COMPOSE_FILES = ("-f", "docker-compose.yml")
 
@@ -587,7 +590,8 @@ def _agent_login_binds(services: dict[str, dict]) -> list[str]:
                 continue
             source, target = volume["source"], volume["target"]
             if MIRROR_DIRECTORY_MARKER in source or any(
-                Path(path).is_relative_to(CONTAINER_HOME) for path in (source, target)
+                Path(posixpath.normpath(path)).is_relative_to(CONTAINER_HOME)
+                for path in (source, target)
             ):
                 offences.append(f"{service_name} binds {source} to {target}")
     return offences
@@ -639,6 +643,8 @@ AGENT_LOGIN_BIND_FIXTURES = {
         f"'${{DIR:-{_MIRROR}}}/c.json:/c.json'", f"{_MIRROR}/c.json to /c.json"),
     "short-nested-default-target": (
         f"/srv/a:${{A:-${{B:-{_HOME_AUTH}}}}}:ro", f"/srv/a to {_HOME_AUTH}"),
+    "short-source-escaping-home-by-dotdot": (
+        "/home/../home/songmaker/c:/c", "/home/../home/songmaker/c to /c"),
     "short-dash-default-target": (f"'/srv/a:${{X-{_HOME_AUTH}}}:ro'", f"/srv/a to {_HOME_AUTH}"),
 }
 
