@@ -152,9 +152,7 @@ def test_share_album_response_lists_songs_without_playable_take(tmp_path: Path, 
     }
 
 
-def test_share_warning_agrees_with_what_the_share_page_actually_plays(
-    tmp_path: Path, pg_factory
-) -> None:
+def test_share_warning_agrees_with_what_the_share_page_actually_plays(tmp_path, pg_factory) -> None:
     """The owner-facing warning list and the public share page must use the
     same playability rule -- a song can't vanish from one without showing up
     in the other (#147)."""
@@ -1778,9 +1776,7 @@ def test_shared_playlist_page_manifest_exposes_at_most_four_share_bound_mosaic_c
     assert all(public.get(url).status_code == 200 for url in mosaic_urls)
 
 
-def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(
-    tmp_path: Path, pg_factory
-) -> None:
+def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(tmp_path, pg_factory):
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
     seed_session(client, "admin")
     with client.app.state.ctx.db() as session:
@@ -1844,9 +1840,7 @@ def test_shared_playlist_entries_carry_a_serving_album_cover_only_when_the_file_
     assert public.get(expected["detail"]).status_code == 200
 
 
-def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(
-    tmp_path: Path, pg_factory,
-) -> None:
+def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(tmp_path, pg_factory,):
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
     seed_session(client, "admin")
     with client.app.state.ctx.db() as session:
@@ -1873,9 +1867,7 @@ def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(
     assert foreign.status_code == 404
 
 
-def test_unshared_playlist_answers_404_and_serves_no_entry_cover_1374_rule_8(
-    tmp_path: Path, pg_factory,
-) -> None:
+def test_unshared_playlist_answers_404_and_serves_no_entry_cover_1374_rule_8(tmp_path, pg_factory,):
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
     seed_session(client, "admin")
     with client.app.state.ctx.db() as session:
@@ -2007,9 +1999,7 @@ def _shared_album_slug(client: TestClient) -> str:
 
 
 @pytest.mark.parametrize("stream", [False, True], ids=["page", "stream"])
-def test_shared_rate_limit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stream: bool, pg_factory,
-) -> None:
+def test_shared_rate_limit(tmp_path, monkeypatch: pytest.MonkeyPatch, stream: bool, pg_factory,):
     import songmaker_cli.constants as consts
 
     client, _ = _make_sharing_app(tmp_path, pg_factory)

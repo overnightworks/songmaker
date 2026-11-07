@@ -557,9 +557,7 @@ def test_listen_leaves_out_an_album_without_a_live_album_listen(
     assert _listen_items(client) == []
 
 
-def test_1354_47_A5_an_album_falls_back_to_its_newest_listened_live_song(
-    tmp_path: Path, pg_factory
-) -> None:
+def test_1354_47_A5_an_album_falls_back_to_its_newest_listened_live_song(tmp_path, pg_factory):
     client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
@@ -710,9 +708,7 @@ def test_1354_47_A4_a_playlist_whose_last_played_song_left_it_resumes_from_the_s
     assert {key: item[key] for key in _RESUMES_FROM_THE_START} == _RESUMES_FROM_THE_START
 
 
-def test_listen_leaves_out_a_playlist_never_played_and_one_deleted(
-    tmp_path: Path, pg_factory
-) -> None:
+def test_listen_leaves_out_a_playlist_never_played_and_one_deleted(tmp_path, pg_factory) -> None:
     client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
@@ -1007,9 +1003,7 @@ def test_unarchiving_a_take_restores_it_to_write(alice: TestClient, library_ctx)
     ],
     ids=["deleted-song", "archived-album", "deleted-album"],
 )
-def test_write_leaves_out_a_song_that_was_removed(
-    tmp_path: Path, remove: Callable, pg_factory
-) -> None:
+def test_write_leaves_out_a_song_that_was_removed(tmp_path, remove: Callable, pg_factory) -> None:
     client, factory = _make_client(tmp_path, pg_factory, USER_A)
     _seed(factory, _seed_own_take)
     assert _works(_write_items(client)) == [("song-tide", SongWorkKind.TAKE)]
@@ -1019,9 +1013,7 @@ def test_write_leaves_out_a_song_that_was_removed(
     assert _write_items(client) == []
 
 
-def test_write_shows_the_three_songs_worked_on_last_with_their_covers(
-    tmp_path: Path, pg_factory
-) -> None:
+def test_write_shows_the_three_songs_worked_on_last_with_their_covers(tmp_path, pg_factory) -> None:
     client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
@@ -1373,9 +1365,7 @@ def test_list_songs_q_and_sort(alice: TestClient) -> None:
     assert data["items"][0]["album_title"] == "Nachtstrom"
 
 
-def test_list_songs_without_album_id_excludes_archived_album_songs(
-    tmp_path: Path, pg_factory
-) -> None:
+def test_list_songs_without_album_id_excludes_archived_album_songs(tmp_path, pg_factory) -> None:
     """GET /api/songs browse (no album_id) must hide songs of archived albums --
     both from items and from total/has_more, since count_songs and list_songs
     can drift independently if only one is filtered (#223 review finding)."""
@@ -1406,9 +1396,7 @@ def test_list_songs_without_album_id_excludes_archived_album_songs(
     assert data["has_more"] is False
 
 
-def test_list_songs_with_album_id_shows_songs_of_an_archived_album(
-    tmp_path: Path, pg_factory
-) -> None:
+def test_list_songs_with_album_id_shows_songs_of_an_archived_album(tmp_path, pg_factory) -> None:
     """Direct-by-ID access (album_id set) must keep working for an archived
     album's songs -- AlbumDetailView depends on this (#223 review finding)."""
     client, factory = _make_client(tmp_path, pg_factory, USER_A)
@@ -1595,9 +1583,7 @@ def test_search_excludes_songs_of_archived_album(tmp_path: Path, pg_factory) -> 
     assert resp.json()["items"] == []
 
 
-def test_pool_queue_excludes_generations_from_archived_albums(
-    tmp_path: Path, monkeypatch, pg_factory,
-) -> None:
+def test_pool_queue_excludes_generations_from_archived_albums(tmp_path, monkeypatch, pg_factory,):
     import songmaker_cli.queue_streams as queue_streams
 
     monkeypatch.setattr(queue_streams, "probe_audio_duration", lambda _path: 10.0)

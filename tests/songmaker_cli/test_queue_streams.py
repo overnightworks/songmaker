@@ -806,9 +806,7 @@ def test_queue_stream_accepts_duration_at_cap(tmp_path: Path, monkeypatch, pg_fa
     assert resp.json()["total_duration"] == 10
 
 
-def test_queue_stream_rejects_duration_above_cap_before_ffmpeg(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_queue_stream_rejects_duration_above_cap_before_ffmpeg(tmp_path, monkeypatch, pg_factory):
     import songmaker_cli.queue_streams as qs
 
     concat_calls: list[object] = []
@@ -838,9 +836,7 @@ def test_queue_stream_duration_cap_sets_ffmpeg_timeout() -> None:
     assert not queue_stream_duration_fits_ffmpeg_timeout(QUEUE_STREAM_MAX_DURATION_SECONDS + 1)
 
 
-def test_queue_stream_cache_identity_includes_count_windowing(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_queue_stream_cache_identity_includes_count_windowing(tmp_path, monkeypatch, pg_factory):
     _patch_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
@@ -860,9 +856,7 @@ def test_queue_stream_cache_identity_includes_count_windowing(
     assert complete.json()["snapshot_id"] != windowed.json()["snapshot_id"]
 
 
-def test_queue_stream_not_windowed_when_within_limits(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_queue_stream_not_windowed_when_within_limits(tmp_path, monkeypatch, pg_factory) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
@@ -896,9 +890,7 @@ def test_legacy_manifest_without_windowed_field_loads_as_unwindowed(
     assert second.json()["windowed"] is False
 
 
-def test_queue_stream_first_track_too_long_raises_422(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_queue_stream_first_track_too_long_raises_422(tmp_path, monkeypatch, pg_factory) -> None:
     import songmaker_cli.queue_streams as qs
 
     _patch_audio_build(monkeypatch)
@@ -1062,9 +1054,7 @@ def test_library_pool_queue_order_and_tracks(tmp_path: Path, monkeypatch, pg_fac
     assert data["skipped_complete"] is True
 
 
-def test_library_pool_queue_picks_picked_over_first(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_picks_picked_over_first(tmp_path, monkeypatch, pg_factory) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
@@ -1078,9 +1068,7 @@ def test_library_pool_queue_picks_picked_over_first(
     assert s1_track["generation_id"] == "g1b"
 
 
-def test_library_pool_queue_excludes_archived_generations(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_excludes_archived_generations(tmp_path, monkeypatch, pg_factory):
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
@@ -1109,9 +1097,7 @@ def test_library_pool_queue_skips_songs_without_playable_generations(
     assert "s4" not in song_ids  # s4 has no generations at all
 
 
-def test_library_pool_queue_rotation_via_start_generation_id(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_rotation_via_start_generation_id(tmp_path, monkeypatch, pg_factory):
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
@@ -1233,9 +1219,7 @@ def test_library_pool_queue_archived_start_generation_returns_422(
     assert resp.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 
 
-def test_library_pool_queue_returns_one_more_than_track_limit(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_returns_one_more_than_track_limit(tmp_path, monkeypatch, pg_factory):
     _patch_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
@@ -1332,9 +1316,7 @@ def test_library_pool_queue_query_count_is_constant_not_per_song(
     )
 
 
-def test_library_pool_queue_empty_playable_library_is_422(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_empty_playable_library_is_422(tmp_path, monkeypatch, pg_factory):
     """Songs with only archived or missing generations make an honest 422, not an empty pool."""
 
     def seed_unplayable(session) -> None:
@@ -1414,9 +1396,7 @@ def test_queue_stream_audio_rejects_unknown_snapshot_ids(
     assert audio.status_code == 404
 
 
-def test_crashed_json_tmp_file_cleaned_up_as_orphan(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path, monkeypatch, pg_factory) -> None:
     """A leftover .json.tmp file from a crashed QueueStreamManifest.save must be
     recognised as belonging to its (orphaned) snapshot and removed by the sweep.
 
@@ -1682,9 +1662,7 @@ def test_library_pool_queue_without_shuffle_keeps_album_track_order(
     ]
 
 
-def test_library_pool_queue_shuffle_uses_injected_rng(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_shuffle_uses_injected_rng(tmp_path, monkeypatch, pg_factory) -> None:
     _patch_audio_build(monkeypatch)
     monkeypatch.setattr("songmaker_cli.queue_streams.random.shuffle", _reverse_in_place)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_shuffle_data)
@@ -1822,9 +1800,7 @@ def test_library_pool_queue_scan_stops_after_one_more_than_track_limit(
     assert resp.json()["skipped_complete"] is False
 
 
-def test_library_pool_queue_shuffles_before_bounded_scan(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_shuffles_before_bounded_scan(tmp_path, monkeypatch, pg_factory) -> None:
     _patch_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as queue_streams
 
@@ -2147,9 +2123,7 @@ def test_library_pool_queue_default_pool_is_mix(tmp_path: Path, monkeypatch, pg_
     ]
 
 
-def test_library_pool_queue_reports_every_unplayable_reason(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_reports_every_unplayable_reason(tmp_path, monkeypatch, pg_factory):
     def seed_with_unplayable(session) -> None:
         _seed_library_pool_data(session)
         session.add_all(
@@ -2284,9 +2258,7 @@ def test_library_skip_maps_file_failures_to_unreadable(
     }
 
 
-def test_library_pool_queue_out_of_pool_start_is_temporary(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_out_of_pool_start_is_temporary(tmp_path, monkeypatch, pg_factory):
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
@@ -2307,9 +2279,7 @@ def test_library_pool_queue_out_of_pool_start_is_temporary(
     ]
 
 
-def test_library_pool_queue_matches_collect_without_ffmpeg(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_matches_collect_without_ffmpeg(tmp_path, monkeypatch, pg_factory):
     concat_calls: list[object] = []
     import songmaker_cli.queue_streams as qs
 
@@ -2355,9 +2325,7 @@ def test_library_pool_queue_matches_collect_without_ffmpeg(
     assert take_ids == [generation.id for generation in collected]
 
 
-def test_library_pool_queue_foreign_start_generation_is_404(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_foreign_start_generation_is_404(tmp_path, monkeypatch, pg_factory):
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
@@ -2407,9 +2375,7 @@ def test_library_pool_queue_rate_limited(tmp_path: Path, monkeypatch, pg_factory
     assert second.headers["Retry-After"] == str(consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS)
 
 
-def test_library_pool_queue_rate_limiter_failure_is_503(
-    tmp_path: Path, monkeypatch, pg_factory
-) -> None:
+def test_library_pool_queue_rate_limiter_failure_is_503(tmp_path, monkeypatch, pg_factory) -> None:
     class BrokenLimiter:
         def is_allowed(self, _user_id, *, limit: int, window_seconds: int):
             raise RuntimeError("down")

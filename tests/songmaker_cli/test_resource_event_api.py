@@ -210,9 +210,7 @@ def test_wire_models_preserve_bigint_precision_as_decimal_strings() -> None:
     assert isinstance(frame["data"]["sequence"], str)
 
 
-def test_max_bigint_replay_preserves_cursor_and_sequence_exactly(
-    tmp_path: Path, pg_factory
-) -> None:
+def test_max_bigint_replay_preserves_cursor_and_sequence_exactly(tmp_path, pg_factory) -> None:
     clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     _create_event(factory, users["alice"], 1)
     with factory() as session:
@@ -408,9 +406,7 @@ def test_gap_resync_advances_to_live_without_a_second_resync(tmp_path: Path, pg_
     assert [frame.get("id") for frame in frames] == ["0", "2", "3"]
 
 
-def test_internal_replay_hole_resyncs_before_delivering_later_rows(
-    tmp_path: Path, pg_factory
-) -> None:
+def test_internal_replay_hole_resyncs_before_delivering_later_rows(tmp_path, pg_factory) -> None:
     clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     for number in range(1, 4):
         _create_event(factory, users["alice"], number)
@@ -1178,9 +1174,7 @@ def test_outer_app_deadline_propagates_application_and_regular_send_errors() -> 
         asyncio.run(starts_call)
 
 
-def test_per_user_open_rate_is_bounded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory
-) -> None:
+def test_per_user_open_rate_is_bounded(tmp_path, monkeypatch: pytest.MonkeyPatch, pg_factory):
     clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
     open_limit = get_settings().resource_event_stream_open_limit
@@ -1228,9 +1222,7 @@ def test_stream_rejects_when_db_pool_has_no_spare_capacity(
     assert response.json()["detail"] == RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE
 
 
-def test_stream_limiter_fails_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory
-) -> None:
+def test_stream_limiter_fails_closed(tmp_path, monkeypatch: pytest.MonkeyPatch, pg_factory) -> None:
     clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
 
