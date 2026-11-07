@@ -6,7 +6,9 @@
 # Run it only under the probe lock, as one capped command:
 #   flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 120 1700 scripts/voices_e2e_probe.sh
 # CAP 1700 + K 120 = 1820, within the lock contract's 1830. K covers the
-# teardown (`--profile gpu down -v --remove-orphans`), measured at about 2 s, with room for a slower disk.
+# teardown (`--profile gpu down -v --remove-orphans --rmi local`), measured at
+# about 2 s without the image removal; 120 s leaves room for removing the
+# probe's images.
 #
 # The exit code is the proof's own; a failed build or start exits non-zero too.
 
@@ -45,8 +47,8 @@ compose=(docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml
 teardown() {
     trap - EXIT TERM
     # The overlay puts alertmanager in the gpu profile; without the profile,
-    # down leaves it running.
-    "${compose[@]}" --profile gpu down -v --remove-orphans
+    # down leaves it running. --rmi local removes the images the run built.
+    "${compose[@]}" --profile gpu down -v --remove-orphans --rmi local
     rm -rf "$secrets_dir"
     rm -f "$secret_file" "$gateway_key_file"
 }
