@@ -1,8 +1,0 @@
-claim_id = "bd17e16691d64ebfb3478c795fa43e74"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "22d9fd2c2251e49a7b61a2ddd48f8f6a79b7eaf3"
-branch = "claude/issue-2498-sharing-requirements-cited"
-scope = ["docs/sharing.md", "frontend/src/lib/components/ShareStatus.test.ts", "frontend/src/routes/share/[slug]/page.test.ts", "quality/baseline.toml", "tests/songmaker_cli/test_auth_api_sessions.py", "tests/songmaker_cli/test_auth_api_sign_in.py", "tests/songmaker_cli/test_share_access_rules.py", "tests/songmaker_cli/test_sharing_api.py"]
-opened_commit = "85bbac98787b88a3d37074eafe4f98e24d3ea304"
-whole_reason = "One citation rule over the tests that prove one documentation page; the files are independent, and a split would only repeat the rule."
