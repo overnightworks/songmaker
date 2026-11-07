@@ -500,7 +500,7 @@ export const RESOURCE_EVENT_STREAM_PATH = '/api/resource-events/stream';
 export const RESOURCE_EVENT_HELLO = 'hello';
 export const RESOURCE_EVENT_RESYNC = 'resync';
 export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
-export const RESOURCE_SYNC_ERROR = "Couldn't load your library";
+export const RESOURCE_SYNC_ERROR = "Couldn't reach your library";
 export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";
 // The edge's own answers for a server it cannot reach (down or restarting).
 // Only these, besides a request the network never carried, read as offline:
