@@ -72,7 +72,7 @@ def test_a_take_fetched_for_a_job_cancelled_meanwhile_leaves_no_local_file(
 def test_a_songs_settings_reach_the_worker_through_the_generate_request(
     seeded_db, tmp_path: Path,
 ) -> None:
-    """Spec: REQ-PARAM-01 -- the settings saved on a song arrive in the config sent to the worker."""
+    """Spec: REQ-PARAM-01 -- the settings saved on a song reach the worker config."""
     settings = {"inference_steps": 77, "lm_temperature": 0.3, "shift": 2.5, "thinking": False}
     app = make_router_app(
         make_router_ctx(tmp_path, db=seeded_db), user=make_authenticated_user("u1"),
