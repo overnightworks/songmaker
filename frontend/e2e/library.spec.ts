@@ -80,7 +80,7 @@ import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist, type SeededPlaylist
 // The phone's mini player keeps previous · play · next in one row this tall;
 // the seek timeline and shuffle live in Now Playing (see TransportBarFrame.svelte).
 const MOBILE_TRANSPORT_HEIGHT_PX = 64;
-// Frame A2 of docs/design/album-browsing.html: a phone's album and playlist row.
+// album_rule_10 in docs/navigation.md: a phone's album and playlist row.
 const PHONE_ROW_HEIGHT_PX = 62;
 // The album header promises its title a readable floor at any width — it wraps
 // the action cluster onto its own row rather than shrinking the title past

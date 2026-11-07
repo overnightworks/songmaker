@@ -109,9 +109,15 @@ def lock_and_mark_reference_used(
     """The owner's own row, locked until the transaction ends and no longer unused.
 
     None for a missing or foreign id. Every path that newly links a version or a take
-    to a reference takes its link through here.
+    to a reference takes its link through here. The lock is ``FOR NO KEY UPDATE``: it
+    excludes a delete and another link, but not the key-share lock a save takes on the
+    row at a version insert.
     """
-    recording = get_owned_reference_recording(session, user_id, reference_id, lock=True)
+    recording = session.execute(
+        select(ReferenceRecording)
+        .where(ReferenceRecording.id == reference_id, ReferenceRecording.user_id == user_id)
+        .with_for_update(key_share=True),
+    ).scalar_one_or_none()
     if recording is not None:
         recording.unused_since = None
         session.flush()
