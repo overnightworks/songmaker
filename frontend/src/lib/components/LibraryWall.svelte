@@ -59,6 +59,7 @@
 		wallHeadingLabel,
 		type LibraryWallOrder
 	} from '#lib/constants.ts';
+	import EmptyState from './EmptyState.svelte';
 	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 	import NewPlaceMenu from './NewPlaceMenu.svelte';
@@ -83,6 +84,7 @@
 		loading: string;
 		failed: string;
 		empty: string;
+		emptyIcon: string;
 	};
 
 	const WALL_COPY: Record<WallKind, WallCopy> = {
@@ -91,14 +93,16 @@
 			orderGroup: LIBRARY_WALL_ORDER_GROUP_LABEL,
 			loading: 'Loading library…',
 			failed: 'Could not load library.',
-			empty: LIBRARY_WALL_EMPTY
+			empty: LIBRARY_WALL_EMPTY,
+			emptyIcon: 'library'
 		},
 		playlists: {
 			pageLabel: PLAYLISTS_PAGE_LABEL,
 			orderGroup: PLAYLISTS_WALL_ORDER_GROUP_LABEL,
 			loading: LIBRARY_PLAYLISTS_LOADING,
 			failed: LIBRARY_PLAYLISTS_ERROR,
-			empty: PLAYLISTS_WALL_EMPTY
+			empty: PLAYLISTS_WALL_EMPTY,
+			emptyIcon: 'playlists'
 		}
 	};
 
@@ -364,7 +368,7 @@
 			<p class="empty" role="alert">{copy.failed}</p>
 			<button class="retry-btn" onclick={retryLoad}>Retry</button>
 		{:else}
-			<p class="empty">{copy.empty}</p>
+			<EmptyState icon={copy.emptyIcon} text={copy.empty} />
 		{/if}
 	</div>
 </div>
