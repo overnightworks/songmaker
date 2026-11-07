@@ -14,28 +14,6 @@ For anyone building or reviewing public shares and administration: the ruled pro
 
 ### REQ-SHARE-06: Ending a share is authorized on that album, song, take, or playlist; Songmaker does not provide a generic unshare action.
 
-### REQ-SHARE-07: A musician's share inventory lists every currently public share of that musician's albums, songs, audio takes, and playlists, including a shared take whose song was never opened in the library.
-
-### REQ-SHARE-08: Share-inventory membership is exactly currently public shares: shared and publicly reachable, not soft-deleted; an archived take remains if it is still public.
-
-### REQ-SHARE-09: Share-inventory truth comes from the musician's own share state, not from whichever library pages the client has loaded.
-
-### REQ-SHARE-10: Share inventory and its total count include only the signed-in user's shares; they never include another user's shares, including when the signed-in user is an administrator.
-
-### REQ-SHARE-11: The unfiltered share-inventory total is the true count of that user's public shares; a type filter pages a subset and does not change that total.
-
-### REQ-SHARE-12: Each inventory entry identifies its resource form, title, needed parent context, and public link.
-
-### REQ-SHARE-13: A musician can open a listed share, copy its public link, and end that share.
-
-### REQ-SHARE-14: Ending a listed share confirms that the public link will stop working.
-
-### REQ-SHARE-15: Share inventory is a secondary status and entry to the inventory, not a peer library working mode.
-
-### REQ-SHARE-16: “Nothing shared” appears only after a complete server inventory response.
-
-### REQ-SHARE-17: Loading, empty, partial, and failed inventory states are distinct; a partial page is not presented as the complete inventory.
-
 ### REQ-SHARE-18: An invalid or removed public share names the missing resource type and does not disclose internal identifiers, paths, or authorization details.
 
 ### REQ-SHARE-19: An invalid or removed public share offers exactly one primary recovery action to the public start or login surface.
@@ -56,14 +34,8 @@ For anyone building or reviewing public shares and administration: the ruled pro
 
 ### REQ-ADMIN-05: A user cannot create another user.
 
-### REQ-ADMIN-06: Songmaker refuses to demote or deactivate the last active administrator.
-
-### REQ-ADMIN-07: An administrator cannot deactivate or permanently delete their own account.
-
 ### REQ-ADMIN-08: A successful login adds an independent session and does not end every other valid session of the same account.
 
 ### REQ-ADMIN-09: Logout ends only the current session.
 
 ### REQ-ADMIN-11: When a user's concurrent sessions exceed Songmaker's concurrent-session cap, Songmaker ends the oldest sessions until the cap is met and does not end every session.
-
-### REQ-ADMIN-12: An administrator can revoke a listed session without being shown that session's raw token.
