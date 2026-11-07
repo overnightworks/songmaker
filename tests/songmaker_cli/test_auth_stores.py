@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from webauth.ports import (
     AccountEvent,
     AccountEventKind,
+    AccountKind,
     AuditSink,
     SessionRecordStore,
     SubjectUserStore,
@@ -62,7 +63,7 @@ def _later(hours: int = 1) -> datetime:
 
 
 def test_an_account_created_for_a_subject_has_the_subject_as_its_id(accounts, session) -> None:
-    account = accounts.create_for_subject(_SUBJECT, "nina", "user")
+    account = accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     session.commit()
 
     assert (account.id, account.username, account.role) == (_SUBJECT, "nina", "user")
@@ -70,16 +71,16 @@ def test_an_account_created_for_a_subject_has_the_subject_as_its_id(accounts, se
 
 
 def test_two_accounts_may_show_the_same_username(accounts) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
 
-    other = accounts.create_for_subject("another-subject", "nina", "user")
+    other = accounts.create_for_subject("another-subject", "nina", "user", AccountKind.PERSON)
 
     assert other.username == "nina"
 
 
 @pytest.mark.parametrize("lookalike", [_SUBJECT.upper(), f"{_SUBJECT} ", f" {_SUBJECT}"])
 def test_an_account_is_found_by_its_exact_id_only(accounts, session, lookalike: str) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     session.commit()
 
     assert accounts.get(_SUBJECT) is not None
@@ -89,7 +90,7 @@ def test_an_account_is_found_by_its_exact_id_only(accounts, session, lookalike: 
 def test_changing_a_role_returns_the_account_and_stays_in_the_callers_transaction(
     accounts, session,
 ) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     session.commit()
 
     assert accounts.set_role(_SUBJECT, "admin").role == "admin"
@@ -103,8 +104,34 @@ def test_changing_the_role_of_an_unknown_account_raises(accounts) -> None:
         accounts.set_role("nobody", "admin")
 
 
+@pytest.mark.parametrize("kind", list(AccountKind))
+def test_an_account_stores_the_kind_it_is_created_with(accounts, session, kind) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user", kind)
+    session.commit()
+    session.expire_all()
+
+    assert accounts.get(_SUBJECT).kind == kind
+
+
+def test_changing_a_kind_returns_the_account_and_stays_in_the_callers_transaction(
+    accounts, session,
+) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
+    session.commit()
+
+    assert accounts.set_kind(_SUBJECT, AccountKind.AGENT).kind == AccountKind.AGENT
+    session.rollback()
+
+    assert accounts.get(_SUBJECT).kind == AccountKind.PERSON
+
+
+def test_changing_the_kind_of_an_unknown_account_raises(accounts) -> None:
+    with pytest.raises(ValueError, match="User not found"):
+        accounts.set_kind("nobody", AccountKind.AGENT)
+
+
 def test_a_session_is_stored_with_the_instants_it_is_given(accounts, sessions) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     created = datetime(2026, 10, 1, 8, 0, tzinfo=timezone.utc)
     expires = created + timedelta(days=7)
 
@@ -119,7 +146,7 @@ def test_a_session_is_stored_with_the_instants_it_is_given(accounts, sessions) -
 
 
 def test_a_session_without_a_refresh_token_answers_none(accounts, sessions) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
     )
@@ -130,7 +157,7 @@ def test_a_session_without_a_refresh_token_answers_none(accounts, sessions) -> N
 def test_a_stored_refresh_token_is_returned_secret_and_kept_out_of_the_repr(
     accounts, sessions, session,
 ) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=SecretStr("rt-one"),
         id_token=None,
@@ -163,7 +190,7 @@ def test_a_failed_session_insert_raises_without_the_refresh_token_in_the_traceba
 
 
 def test_replacing_a_refresh_token_updates_only_an_existing_session(accounts, sessions) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=SecretStr("rt-one"),
         id_token=None,
@@ -180,7 +207,7 @@ def test_replacing_a_refresh_token_updates_only_an_existing_session(accounts, se
 
 def test_a_session_without_an_id_token_answers_none(accounts, sessions) -> None:
     """K1 (#1890): a row written without an ID token answers None."""
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
     )
@@ -193,7 +220,7 @@ def test_a_stored_id_token_is_returned_whole_secret_and_kept_out_of_the_repr(
     accounts, sessions, session, length: int,
 ) -> None:
     """K1 (#1890): the ID token lives in the row as a SecretStr, whole at 8192 characters."""
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     fake_token = "fake-id-token-" + "x" * (length - 14)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
@@ -210,7 +237,7 @@ def test_a_stored_id_token_is_returned_whole_secret_and_kept_out_of_the_repr(
 
 def test_renewal_and_refresh_rotation_leave_the_id_token_unchanged(accounts, sessions) -> None:
     """K1 (#1890): the ID token ends with its row, so renewal and rotation never touch it."""
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(1), refresh_token=SecretStr("rt-one"),
         id_token=SecretStr("fake-id-token"),
@@ -248,7 +275,7 @@ def test_an_unknown_session_is_absent(sessions) -> None:
 
 
 def test_touching_a_session_writes_the_given_expiry(accounts, sessions) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(1), refresh_token=None, id_token=None,
     )
@@ -262,7 +289,7 @@ def test_touching_a_session_writes_the_given_expiry(accounts, sessions) -> None:
 @pytest.mark.parametrize("removal", ["missing", "deleted", "revoked"])
 def test_touch_does_not_recreate_an_absent_session(accounts, sessions, removal: str) -> None:
     """defect:#1590: stale records cannot resurrect missing or revoked rows."""
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     session_id = "missing"
     if removal != "missing":
         session_id = sessions.create(
@@ -282,7 +309,7 @@ def test_deleting_an_unknown_session_is_not_an_error(sessions) -> None:
 
 
 def test_deleting_a_users_sessions_removes_all_of_them(accounts, sessions, session) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     for _ in range(2):
         sessions.create(
             _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
@@ -294,7 +321,7 @@ def test_deleting_a_users_sessions_removes_all_of_them(accounts, sessions, sessi
 
 @pytest.mark.parametrize("keep_newest", [0, 1, 2])
 def test_pruning_keeps_only_the_newest_sessions(accounts, sessions, keep_newest: int) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     base = datetime.now(timezone.utc)
     created = [
         sessions.create(
@@ -320,7 +347,7 @@ def test_pruning_keeps_only_the_newest_sessions(accounts, sessions, keep_newest:
 def test_account_events_become_audit_lines_without_a_person_behind_them(
     accounts, audit, session, kind: AccountEventKind, action: AuditAction,
 ) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     session.commit()
 
     audit.account_event(AccountEvent(kind=kind, actor_id=None, subject_id=_SUBJECT, role="admin"))
@@ -350,11 +377,29 @@ class _StoredRows:
         )
 
 
+def test_a_kind_change_becomes_an_update_line_naming_both_kinds(audit, session) -> None:
+    DatabaseSubjectUserStore(session).create_for_subject(
+        _SUBJECT, "nina", "user", AccountKind.AGENT,
+    )
+
+    audit.account_event(AccountEvent(
+        kind=AccountEventKind.KIND_CHANGED, actor_id=None, subject_id=_SUBJECT, role="user",
+        account_kind=AccountKind.AGENT, previous_account_kind=AccountKind.PERSON,
+    ))
+
+    entry = session.query(AuditLog).one()
+    assert (entry.user_id, entry.action, entry.resource_type, entry.resource_id, entry.detail) == (
+        None, AuditAction.UPDATE, ResourceType.USER, _SUBJECT, "kind=person->agent",
+    )
+
+
 @pytest.mark.parametrize(
     "write",
     [
         pytest.param(
-            lambda s: DatabaseSubjectUserStore(s).create_for_subject("rob-subject", "rob", "user"),
+            lambda s: DatabaseSubjectUserStore(s).create_for_subject(
+                "rob-subject", "rob", "user", AccountKind.PERSON,
+            ),
             id="creating an account",
         ),
         pytest.param(
@@ -382,7 +427,9 @@ class _StoredRows:
 def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
     """The endpoint owns the transaction. A request that fails after the auth
     machinery wrote must leave the database exactly as it found it."""
-    DatabaseSubjectUserStore(session).create_for_subject(_SUBJECT, "nina", "user")
+    DatabaseSubjectUserStore(session).create_for_subject(
+        _SUBJECT, "nina", "user", AccountKind.PERSON,
+    )
     DatabaseSessionRecordStore(session).create(
         _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
     )

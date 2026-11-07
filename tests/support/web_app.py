@@ -107,9 +107,13 @@ def seed_user(
     """Add an account the way admission would: its id is the issuer's subject."""
     import uuid
 
+    from webauth.ports import AccountKind
+
     from songmaker_cli.db.queries.auth import create_user
 
-    return create_user(session, user_id or str(uuid.uuid4()), username, role)
+    return create_user(
+        session, user_id or str(uuid.uuid4()), username, role, AccountKind.PERSON,
+    )
 
 
 def make_test_app(
@@ -166,6 +170,7 @@ def make_authenticated_user(
         id=user_id,
         username=user_id if username is None else username,
         role=role,
+        agent=None,
     )
 
 

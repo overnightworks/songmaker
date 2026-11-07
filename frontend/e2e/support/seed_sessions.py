@@ -31,6 +31,7 @@ from pydantic import SecretStr
 from starlette.responses import Response
 from webauth.config import WebAuthConfig
 from webauth.cookies import issue_session_cookies
+from webauth.ports import AccountKind
 
 from songmaker_cli.app_context import AppContext, build_web_auth_config, parse_trusted_proxies
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore, DatabaseSubjectUserStore
@@ -71,6 +72,7 @@ def _seed(session, config: WebAuthConfig, entry: dict[str, str]) -> dict[str, st
     accounts = DatabaseSubjectUserStore(session)
     user = get_user_by_username(session, entry["username"]) or accounts.create_for_subject(
         str(uuid.uuid4()), entry["username"], entry.get("role", DEFAULT_ROLE),
+        AccountKind.PERSON,
     )
     now = datetime.now(timezone.utc).replace(microsecond=0)
     record = DatabaseSessionRecordStore(session).create(

@@ -296,8 +296,9 @@ class Settings(BaseSettings):
     oidc_client_secret_file: Path | None = None
     # The co-writer's gateway, read as AGENT__BACKEND, AGENT__GATEWAY__ORIGIN,
     # AGENT__GATEWAY__KEY_FILE, AGENT__GATEWAY__CA_FILE and AGENT__API_GROUP, and the person's own
-    # agent's client as AGENT__MCP_CLIENT_ID and AGENT__MCP_SCOPE. Unset leaves the co-writer
-    # unavailable and MCP off; a partly set value stops startup.
+    # agent's client as AGENT__MCP_CLIENT_ID and AGENT__MCP_SCOPE, plus the realm group of the
+    # agents with their own client as AGENT__MCP_AGENT_GROUP. Unset leaves the co-writer
+    # unavailable and MCP off; a partly set value stops startup, and MCP on needs the group.
     agent: AgentSettings | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────

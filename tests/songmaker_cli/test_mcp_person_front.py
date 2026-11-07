@@ -47,7 +47,9 @@ _AGENT_ENVIRONMENT = {
     "AGENT__GATEWAY__KEY_FILE": "/run/secrets/gateway_key",
     "AGENT__API_GROUP": "/apps/songmaker/api",
 }
-_MCP_ENVIRONMENT = {"AGENT__MCP_CLIENT_ID": AGENTS_CLIENT, "AGENT__MCP_SCOPE": MCP_SCOPE}
+AGENT_GROUP = "/agents"
+_MCP_CLIENT_ENVIRONMENT = {"AGENT__MCP_CLIENT_ID": AGENTS_CLIENT, "AGENT__MCP_SCOPE": MCP_SCOPE}
+_MCP_ENVIRONMENT = {**_MCP_CLIENT_ENVIRONMENT, "AGENT__MCP_AGENT_GROUP": AGENT_GROUP}
 
 
 @dataclass(frozen=True)
@@ -524,17 +526,30 @@ def test_m13_with_the_mcp_values_unset_mcp_and_its_metadata_answer_as_they_did(
     assert "www-authenticate" not in {*posted.headers, *fetched.headers, *metadata.headers}
 
 
-@pytest.mark.parametrize("name", list(_MCP_ENVIRONMENT))
+@pytest.mark.parametrize("name", list(_MCP_CLIENT_ENVIRONMENT))
 def test_m13_one_mcp_value_without_the_other_stops_startup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker, name: str,
 ) -> None:
-    for key, value in {**_AGENT_ENVIRONMENT, name: _MCP_ENVIRONMENT[name]}.items():
+    for key, value in {**_AGENT_ENVIRONMENT, name: _MCP_CLIENT_ENVIRONMENT[name]}.items():
         monkeypatch.setenv(key, value)
     get_settings.cache_clear()
 
     with pytest.raises(ValidationError, match="agent"):
         Settings()
     with pytest.raises(ValidationError, match="agent"):
+        make_token_world(tmp_path, factory=pg_factory)
+
+
+def test_m13_mcp_on_without_the_agent_group_stops_startup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+) -> None:
+    for key, value in {**_AGENT_ENVIRONMENT, **_MCP_CLIENT_ENVIRONMENT}.items():
+        monkeypatch.setenv(key, value)
+    get_settings.cache_clear()
+
+    with pytest.raises(ValidationError, match="mcp_agent_group"):
+        Settings()
+    with pytest.raises(ValidationError, match="mcp_agent_group"):
         make_token_world(tmp_path, factory=pg_factory)
 
 
