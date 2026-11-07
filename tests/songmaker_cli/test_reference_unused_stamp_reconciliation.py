@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
-from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
-from support.failing_reference_stamp import failing_stamp_trigger
+from support.failing_reference_stamp import install_failing_stamp
 from support.reference_rows import a_reference
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import keep_reference, unkeep_reference
 from songmaker_cli.reference_audio import ReconciledStamps, reconcile_unused_stamps
@@ -48,8 +45,8 @@ def _link(session, name: str, *, via: str, trashed: bool = False, archived: bool
 
 
 @pytest.fixture
-def factory(tmp_path: Path):
-    factory = init_test_db(tmp_path / "reconciliation.db")
+def factory(pg_factory):
+    factory = pg_factory
     with factory() as session:
         session.add(User(id=OWNER, username=OWNER))
         session.commit()
@@ -141,7 +138,7 @@ def test_a_used_row_without_a_stamp_stays_unstamped(factory) -> None:
 
 
 def test_a_failing_stamp_half_rolls_back_every_candidate_and_spares_the_clear_half(
-    factory, caplog,
+    factory, caplog, request,
 ) -> None:
     with factory() as session:
         for name in (SECRET_NAME, EARLIER_NAME):
@@ -150,8 +147,8 @@ def test_a_failing_stamp_half_rolls_back_every_candidate_and_spares_the_clear_ha
             session, OWNER, name="stamped-kept.wav", reference_id="stamped-kept",
             unused_since=OLD_STAMP, is_kept=True,
         )
-        session.execute(text(failing_stamp_trigger(SECRET_NAME)))
         session.commit()
+    install_failing_stamp(factory, request, SECRET_NAME)
 
     with caplog.at_level(logging.INFO):
         report = reconcile_unused_stamps(factory)
