@@ -10,10 +10,10 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
+from support.reference_rows import a_reference
 from support.web_app import make_router_ctx
 
 from songmaker_cli.db.models import ReferenceRecording, User
-from songmaker_cli.db.queries.reference_recordings import create_reference_recording
 from songmaker_cli.reference_audio import (
     ReferenceAudioStorageError,
     RemnantReport,
@@ -50,9 +50,9 @@ def _file(ctx, name, user_id="owner", content=b"audio") -> Path:
 
 def _row(ctx, name, user_id="owner", storage_path=None) -> None:
     with ctx.db() as session:
-        create_reference_recording(
-            session, user_id=user_id, storage_path=storage_path or f"{user_id}/refs/{name}",
-            original_filename="x.wav", size_bytes=5, duration_sec=None,
+        a_reference(
+            session, user_id, name=name, size_bytes=5, storage_path=storage_path,
+            original_filename="x.wav",
         )
         session.commit()
 

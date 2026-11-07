@@ -17,6 +17,7 @@ from support.generation_job_world import (
     post_process_with_stubbed_audio,
     run_async,
 )
+from support.reference_rows import a_reference
 
 from songmaker_cli.api_models import (
     CoverTaskParams,
@@ -97,10 +98,9 @@ def _record_reference(seeded_db, relative: str, user_id: str = "u1") -> str:
         if session.get(User, user_id) is None:
             session.add(User(id=user_id, username=user_id))
             session.flush()
-        recording = ReferenceRecording(
-            user_id=user_id, storage_path=relative, original_filename="ref.wav", size_bytes=44,
+        recording = a_reference(
+            session, user_id, name="ref.wav", size_bytes=44, storage_path=relative,
         )
-        session.add(recording)
         session.commit()
         return recording.id
 

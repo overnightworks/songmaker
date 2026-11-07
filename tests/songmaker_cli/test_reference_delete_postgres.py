@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
+from support.reference_rows import a_reference
 from support.web_app import make_test_app, seed_session
 
 from acestep_engine.models import AceStepConfig
@@ -38,12 +39,8 @@ def _seed_take_and_reference(session) -> None:
     session.add_all([
         Version(id="version-a", song_id="song-a", version_number=1, lyrics="la", prompt="p"),
         Job(id="job-a", type="generate", status="running", user_id=OWNER),
-        ReferenceRecording(
-            id=REFERENCE_ID, user_id=OWNER,
-            storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/{STORED_NAME}",
-            original_filename=STORED_NAME, size_bytes=4,
-        ),
     ])
+    a_reference(session, OWNER, name=STORED_NAME, reference_id=REFERENCE_ID)
 
 
 class _World:
