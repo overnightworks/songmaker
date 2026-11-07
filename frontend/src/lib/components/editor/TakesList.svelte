@@ -510,8 +510,8 @@
 	}
 
 	.toolbar-btn.destructive {
-		border-color: var(--score-bad);
-		color: var(--score-bad);
+		border-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.toolbar-btn.destructive:hover {
@@ -576,7 +576,7 @@
 	.load-error {
 		padding: 0.6rem 0.8rem;
 		font-style: normal;
-		color: var(--score-bad);
+		color: var(--fail);
 		flex-direction: row;
 		justify-content: space-between;
 	}

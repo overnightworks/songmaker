@@ -49,7 +49,7 @@
 
 	.toast-error {
 		background: rgba(58, 17, 17, 0.9);
-		border: 1px solid var(--score-bad, #e53935);
+		border: 1px solid var(--fail, #e53935);
 		color: #ff8a80;
 		box-shadow: 0 4px 16px rgba(255, 68, 68, 0.15);
 	}

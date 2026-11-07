@@ -178,7 +178,7 @@
 	}
 
 	.field-reason {
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.8rem;
 	}
 

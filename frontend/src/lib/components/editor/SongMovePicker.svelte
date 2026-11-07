@@ -257,12 +257,12 @@
 	}
 
 	button.pk-row.failed {
-		border-left: 3px solid var(--score-bad);
+		border-left: 3px solid var(--fail);
 	}
 
 	.pk-row :global(.pk-warn) {
 		flex: none;
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.pk-spin {
@@ -386,7 +386,7 @@
 		gap: 8px;
 		padding: 8px 0.4rem 2px 0.6rem;
 		font-size: var(--label-font-size);
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.pk-error span {

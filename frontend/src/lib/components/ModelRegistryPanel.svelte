@@ -191,7 +191,7 @@
 	}
 
 	.panel-error {
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 	}
 
