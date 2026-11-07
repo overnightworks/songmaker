@@ -1269,21 +1269,20 @@ describe('TakesList load states', () => {
 		generateState.set(RUNNING);
 		const { target } = await render({ song: song({}) });
 		expect(target.querySelector('.status-slot')).not.toBeNull();
-		expect(target.textContent).not.toContain(TAKES_MOBILE_HINT);
+		expect(target.querySelector('.takes-info')).toBeNull();
 		vi.unstubAllGlobals();
 	});
 });
 
 describe('TakesList touch hint', () => {
-	it('shows the tap hint on a coarse pointer and hides it on a mouse', async () => {
-		// #141/11: a narrow desktop window is compact but still has a mouse.
+	it('offers the tap hint behind an info tip on a coarse pointer and not on a mouse', async () => {
 		stubCoarsePointer(true);
 		const { target: coarse } = await render();
-		expect(coarse.textContent).toContain(TAKES_MOBILE_HINT);
+		expect(coarse.querySelector('[role="tooltip"]')?.textContent).toBe(TAKES_MOBILE_HINT);
 
 		stubCoarsePointer(false);
 		const { target: fine } = await render();
-		expect(fine.textContent).not.toContain(TAKES_MOBILE_HINT);
+		expect(fine.querySelector('[role="tooltip"]')).toBeNull();
 		vi.unstubAllGlobals();
 	});
 });

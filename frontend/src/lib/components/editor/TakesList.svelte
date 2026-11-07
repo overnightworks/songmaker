@@ -56,6 +56,7 @@
 	import { describeFailure } from '#lib/api/fetch.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import Icon from '../Icon.svelte';
+	import InfoTip from '../InfoTip.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 	import { generateAction, isGenerateJobActive } from '#lib/stores/generateAction.ts';
@@ -330,7 +331,7 @@
 		{/each}
 
 		{#if touchPointer && song.generations.length > 0}
-			<p class="mobile-hint">{TAKES_MOBILE_HINT}</p>
+			<div class="takes-info"><InfoTip label="About takes" text={TAKES_MOBILE_HINT} /></div>
 		{/if}
 
 		{#if $selectionMode}
@@ -552,12 +553,9 @@
 		}
 	}
 
-	.mobile-hint {
-		margin: 0;
-		text-align: center;
-		font-size: 0.72rem;
-		color: var(--text-subtle);
-		font-style: italic;
+	.takes-info {
+		display: flex;
+		justify-content: flex-end;
 	}
 
 	.empty,

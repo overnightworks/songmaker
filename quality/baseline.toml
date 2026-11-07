@@ -32,7 +32,7 @@
 "frontend/src/lib/components/SongDetailView.svelte" = 1021
 "frontend/src/lib/components/SongDetailView.test.ts" = 2270
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
-"frontend/src/lib/components/editor/TakesList.test.ts" = 1304
+"frontend/src/lib/components/editor/TakesList.test.ts" = 1303
 "frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657

@@ -56,7 +56,7 @@ lib/components/editor/SongMenu.svelte 2
 lib/components/editor/TakeMenu.svelte 2
 lib/components/editor/TakeRow.svelte 18
 lib/components/editor/TakeTaskCard.svelte 7
-lib/components/editor/TakesList.svelte 8
+lib/components/editor/TakesList.svelte 7
 lib/components/editor/VersionsSheet.svelte 14
 lib/components/editor/WriteColumn.svelte 1
 lib/components/share/SharedCollection.svelte 7
@@ -77,6 +77,6 @@ routes/(library)/playlist/[slug]/+page.svelte 2
 routes/+layout.svelte 4
 routes/settings/+page.svelte 3
 routes/settings/about/+page.svelte 5
-routes/settings/generation/+page.svelte 16
+routes/settings/generation/+page.svelte 15
 routes/settings/users/+page.svelte 22
 routes/settings/voices/+page.svelte 20
