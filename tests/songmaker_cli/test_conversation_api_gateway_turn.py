@@ -408,8 +408,11 @@ def test_changing_the_agent_files_model_keeps_the_conversation_and_its_context(w
             mp3_path="take.mp3", whisper_text="a sung take",
         ))
         session.commit()
-    assert world.client.put("/api/memory/user", json={"body": "prefers vivid imagery"}).status_code == 200
-    assert world.client.put("/api/memory/songs/s1", json={"body": "chorus is locked"}).status_code == 200
+    saved = [
+        world.client.put("/api/memory/user", json={"body": "prefers vivid imagery"}),
+        world.client.put("/api/memory/songs/s1", json={"body": "chorus is locked"}),
+    ]
+    assert [response.status_code for response in saved] == [200, 200]
     request = {
         "current_song_id": "s1",
         "mentioned_version_ids": ["v-s1"],
@@ -464,7 +467,9 @@ def test_a_turn_with_a_take_sends_only_text_to_the_gateway(world):
 def test_a_turn_creates_a_song_in_an_owned_album(world):
     """Spec: REQ-COWRITER-30 -- a tool call of a turn creates a song in the musician's album."""
     world.stack.replies(
-        tool_round(tool_call("call-1", "create_song", {"album_id": "alb-u-test", "title": "Fresh"})),
+        tool_round(
+            tool_call("call-1", "create_song", {"album_id": "alb-u-test", "title": "Fresh"}),
+        ),
         completion("Made it."),
     )
 

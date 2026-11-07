@@ -18,7 +18,7 @@ const fullBundle: MemoryBundle = {
 	album: { scope: 'album', target_id: 'a1', body: 'A night-city album' }
 };
 
-async function render(bundle: MemoryBundle, proposals: MemoryProposal[] = []) {
+async function renderEditor(bundle: MemoryBundle, proposals: MemoryProposal[] = []) {
 	const onSave = vi.fn(async () => true);
 	const onAccept = vi.fn(async () => {});
 	const onReject = vi.fn();
@@ -69,7 +69,7 @@ describe('MemoryEditor', () => {
 		['Song memory', 'song', 's1', 'Chorus is locked'],
 		['Album notes', 'album', 'a1', 'A night-city album']
 	])('shows %s and saves the edit of it', async (label, scope, targetId, stored) => {
-		const { target, onSave } = await render(fullBundle);
+		const { target, onSave } = await renderEditor(fullBundle);
 		expect(field(target, label)?.value).toBe(stored);
 
 		await type(field(target, label), 'Edited by hand');
@@ -81,7 +81,7 @@ describe('MemoryEditor', () => {
 
 	// Spec: REQ-COWRITER-15 -- album notes appear only when the bundle carries them.
 	it('shows no album field when the album has no notes', async () => {
-		const { target } = await render({ user: fullBundle.user, song: fullBundle.song });
+		const { target } = await renderEditor({ user: fullBundle.user, song: fullBundle.song });
 
 		expect(field(target, 'User memory')).not.toBeNull();
 		expect(field(target, 'Song memory')).not.toBeNull();
@@ -97,7 +97,7 @@ describe('MemoryEditor', () => {
 
 	// Spec: REQ-COWRITER-17 -- a proposal changes nothing until Accept, and Reject hands nothing to save.
 	it('hands a proposal to its owner only on Accept, and saves nothing on Reject or when ignored', async () => {
-		const ignored = await render(fullBundle, [proposal]);
+		const ignored = await renderEditor(fullBundle, [proposal]);
 		expect(ignored.onAccept).not.toHaveBeenCalled();
 		expect(ignored.onSave).not.toHaveBeenCalled();
 
@@ -107,7 +107,7 @@ describe('MemoryEditor', () => {
 		expect(ignored.onAccept).not.toHaveBeenCalled();
 		expect(ignored.onSave).not.toHaveBeenCalled();
 
-		const accepted = await render(fullBundle, [proposal]);
+		const accepted = await renderEditor(fullBundle, [proposal]);
 		accepted.target.querySelector<HTMLButtonElement>('.proposal .accept')?.click();
 		await tick();
 		expect(accepted.onAccept).toHaveBeenCalledExactlyOnceWith(proposal);
