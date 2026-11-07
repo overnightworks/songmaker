@@ -26,6 +26,7 @@ class ReferenceRecordingResponse(BaseModel):
     duration_sec: float | None
     created_at: str
     in_use: bool
+    is_kept: bool
     used_by_versions: int
     used_by_takes: int
 
@@ -41,6 +42,7 @@ class ReferenceRecordingResponse(BaseModel):
             duration_sec=recording.duration_sec,
             created_at=recording.created_at.isoformat(),
             in_use=not counts.is_unlinked,
+            is_kept=recording.is_kept,
             used_by_versions=counts.versions,
             used_by_takes=counts.takes,
         )

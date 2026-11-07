@@ -100,9 +100,11 @@ songmaker_cli/playlist_api.py:api_upload_playlist_cover # HTTP dispatcher: route
 songmaker_cli/redis_client.py:RedisConnectionSettings # Operational caller scripts/arq_healthcheck.py outside src
 songmaker_cli/reference_api.py:api_delete_reference # HTTP dispatcher: router.delete('/references/{reference_id}', status_code=204, responses={404: {'description': 'Reference audio not found'}, 409: {'description': 'Reference audio is in use'}, 500: {'description': 'Reference audio storage could not be checked'}})
 songmaker_cli/reference_api.py:api_reference_audio # HTTP dispatcher: router.get('/references/{reference_id}/audio', response_class=FileResponse)
+songmaker_cli/reference_api.py:api_keep_reference # HTTP dispatcher: router.post('/references/{reference_id}/keep', responses={404: {'description': 'Reference audio not found'}})
 songmaker_cli/reference_api.py:api_list_references # HTTP dispatcher: router.get('/references')
 songmaker_cli/reference_api.py:api_reference_uses # HTTP dispatcher: router.get('/references/{reference_id}/uses', responses={404: {'description': 'Reference audio not found'}})
 songmaker_cli/reference_api.py:api_upload_reference # HTTP dispatcher: router.post('/references', responses={400: {'description': 'Reference audio upload is invalid'}, 409: {'description': 'Reference audio storage limit reached'}, 500: {'description': 'Reference audio storage could not be checked'}})
+songmaker_cli/reference_api.py:api_unkeep_reference # HTTP dispatcher: router.post('/references/{reference_id}/unkeep', responses={404: {'description': 'Reference audio not found'}})
 songmaker_cli/resource_event_api.py:api_stream_resource_events # HTTP dispatcher: router.get(_ROUTE_PATH, responses={400: {'description': 'Last event ID is invalid'}, 429: {'description': 'Too many open resource event streams'}, 503: {'description': 'Resource event stream capacity is unavailable'}})
 songmaker_cli/scoring/audiobox_aesthetics.py:clear_cache # GPU cache cleanup seam used by tests/songmaker_cli/test_scoring_scorers_extended.py
 songmaker_cli/scoring/audiobox_aesthetics.py:score_audiobox # Scorer registry: register('audiobox')

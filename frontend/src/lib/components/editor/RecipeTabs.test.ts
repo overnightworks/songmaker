@@ -339,6 +339,7 @@ describe('RecipeTabs', () => {
 			duration_sec: null,
 			created_at: '2026-11-02T10:00:00+00:00',
 			in_use: false,
+			is_kept: false,
 			used_by_versions: 0,
 			used_by_takes: 0
 		});
