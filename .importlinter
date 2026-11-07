@@ -3,7 +3,7 @@
 # contracts over the in-tree import
 # graph, so a chain through another in-tree module is caught as well as a
 # direct import. include_external_packages records an import of an installed
-# package (agent_providers, webauth) as one opaque node and never scans that
+# package (webauth) as one opaque node and never scans that
 # package's own imports, so a chain reaching the application through one of
 # them is not caught here.
 #
@@ -69,7 +69,6 @@ layers =
     (cover_runner)
     jobs
     agent
-    (agent_runtime)
     cowriter
     mcp_server
     (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (queue_streams) : (reference_audio) : (scheduler) : (app_context) : (arq_pool) : (covers) : (generate) : (logging_config) : (middleware) : (redis_client) : (request_policies) : (library_cursor)

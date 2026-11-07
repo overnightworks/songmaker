@@ -39,7 +39,7 @@ Local tests, lint, type checking and the Python and frontend toolchain are in [A
 ## Docs
 
 - [AGENTS.md](AGENTS.md): project conventions, code patterns, and known constraints. Read this first if you are contributing.
-- [docs/VISION.md](docs/VISION.md): why Songmaker exists, desired outcomes, guardrails, non-goals
+- [docs/VISION.md](docs/VISION.md): what Songmaker does, who uses it today, and what it deliberately is not
 - [docs/requirements/](docs/requirements/): ruled product sentences
 - [docs/architecture.md](docs/architecture.md): system design, data model, API endpoints, worker pool, monitoring
 - [docs/security.md](docs/security.md): auth, sessions, CSRF, rate limiting, security headers, trust boundaries

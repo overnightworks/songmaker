@@ -1,37 +1,32 @@
 # Songmaker vision
 
-Audience: the musician shaping generated ideas into songs and coherent albums,
-and the people deciding what Songmaker should become.
+## What it does
 
-## Why Songmaker exists
+Songmaker turns a musician's ideas into finished albums. Making one more audio
+take is easy. Keeping track of the lyrics, style, settings and many results
+behind it is hard. Songmaker is the one place where that work stays together.
 
-Generating another audio take is easy. Keeping the creative work understandable
-across lyrics, prompts, settings, versions, and many results is harder.
-Songmaker gives a musician one workspace for developing that material into an
-album without losing the relationship between an idea, the audio it produced,
-and the choices made while curating it.
+A musician can:
 
-## Desired outcomes
+- Gather songs into albums, and listen across all their albums and playlists.
+- Rework lyrics, style and settings, and always see which take came from which
+  choices, even after many rounds.
+- Compare many takes of a song, choose the one that stands for the album, and
+  mark any number of others as favourites to protect.
+- Ask a co-writer for help, and use transcription and scoring as aids.
 
-- Organize songs as coherent albums while still listening across the library.
-- Iterate on lyrics, style, and generation settings without losing the creative
-  context of earlier audio takes.
-- Compare many takes, choose one album take, and preserve any number of other
-  favourites.
-- Use generation, co-writing, transcription, and scoring as assistance while
-  the musician remains the author and curator.
+The musician stays the author and curator. Every aid advises and none decides.
+What went into a take and what the musician chose can always be traced. When
+something is missing, unavailable or unproven, Songmaker says so. It never
+shows a success that did not happen or swaps in a different take unannounced.
 
-## Guardrails
+## Who uses it today
 
-- The product keeps creative input, generated audio, and curation choices
-  traceable instead of flattening them into one mutable result.
-- A Pick and a Keep answer different questions and never silently replace one
-  another.
-- Missing, unavailable, or unproven states are shown honestly; the product does
-  not invent a successful result or substitute a different take without saying
-  so.
+Musicians admitted to Songmaker, each with their own albums and their own
+conversation with the co-writer.
 
 ## Deliberate non-goals
 
-- Scores do not automatically choose the album take.
-- Keeping a favourite does not silently make it the album take.
+- Scores never choose the album take. The musician does.
+- Marking a favourite never makes it the album take. Choosing and protecting
+  are separate acts, and neither replaces the other.

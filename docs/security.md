@@ -10,16 +10,6 @@ Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
 
-The provider layer is likewise not in this repository. `agent_providers` ships
-as the distribution `overnightworks-agent-providers` from
-[overnightworks/agent-providers](https://github.com/overnightworks/agent-providers),
-pinned bare in the `server` extra to the git tag `v0.1.3`, its commit
-locked in `uv.lock` (#886). Module names below such as
-`agent_providers.claude.provider` are its import paths; the runtime values it
-runs on — binaries, credential mirrors, secret-scrub list, the sandbox
-directory names — remain songmaker's decision, installed through
-`ProviderRuntimeConfig`.
-
 ## Authentication
 
 People sign in through the operator's Keycloak realm (OpenID Connect, authorization code with PKCE); songmaker holds no password, no password hash and no admin bootstrap. `GET /login/oidc?next=` starts the sign-in with a pending-login cookie, `GET /auth/callback` finishes it, `POST /auth/logout` ends it; webauth serves these routes and the back-channel one. After sign-in songmaker's own signed session cookie, backed by a DB row, is the credential; the realm is consulted only at sign-in and sign-out.
@@ -404,8 +394,6 @@ A version names its reference by `reference_recording_id` only. `reference_audio
 
 Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The web container is the sole cover executor: its runner claims queued jobs, owns recovery, and draws each picture through the gateway (see "Cover picture through the gateway"); no path falls back to a CLI or another image API. `covers.decode_cover_image` accepts one PNG or JPEG within `COVER_MAX_BYTES` and `COVER_MAX_PIXELS` and rewrites it as a metadata-free PNG. The prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
 
-In `agent_providers`, every Codex text and image CLI call uses one process-wide admission pool. `CODEX_CLI_MAX_CONCURRENT_PROCESSES` caps every reserved, running, and unreaped Codex process (default 8); `COVER_MAX_CONCURRENT_RUNS` additionally caps the library's image processes (default 1). A slot is reserved before spawn, bound only by the bounded runner's spawn callback, and released only by its reap callback. A call whose caller deadline expires before a delayed spawn therefore remains admitted until that late process is reaped; zombies cannot grow the pool. The Co-Writer uses the server-owned text tool protocol, never Codex CLI tool permissions: every start and resume gets the read-only sandbox, `approval_policy="never"`, no shell tool, no web search, and no MCP servers. Its event gate aborts on every file, command, MCP, or web-search event before the process is reaped. Saturated Co-Writer calls return the named busy route error. No songmaker job starts a Codex process any more; the caps stay configured while the Codex mounts remain.
-
 **Deployment boundary**: This repository ships no reverse-proxy service or configuration (nginx, Caddy, Traefik, and tunnel configuration are absent). An operator who puts a proxy in front of Songmaker may add equivalent path-specific limits to reject oversized requests at the edge; those limits are defense in depth, not the application's only body limit. A blanket 1 MiB upstream limit would block the documented audio-upload and cover routes. The missing in-repository edge configuration is recorded in #327.
 
 ## Response Compression
@@ -498,28 +486,12 @@ login into `~/.songmaker/agent-cli-credentials/`, kept current by
 `songmaker-cli-credentials-mirror.{service,path,timer}` and installed with
 `scripts/install-cli-credentials-mirror.sh`.
 
-Grok access tokens expire after six hours. Issue #350's host-side mirror
+Grok access tokens expire after six hours. The host-side mirror
 service, path watcher, and ten-minute timer are the sole refresh path: each
 host refresh replaces the mounted access token in place while keeping
-`refresh_token` empty. A Grok CLI turn with an expired or OIDC-rejected mirror
-returns `cli_login_expired`; it never changes to the API-key path mid-turn.
-Its single-turn command passes `--deny '*'`, a permission rule, plus
-`--max-turns 1`; neither proves that the CLI exposes no built-in tools. The
-streaming parser loudly rejects every reported `tool_call` or
-`tool_call_update`, so Songmaker refuses that turn after the CLI reports a
-tool call. The 2026-09-03 `Antworte nur OK` experiment without `XAI_API_KEY`
-still emitted `available_commands` events with built-in tools and no
-`tool_call`; it does not exclude a tool execution before such an event. R1
-does not add `--disallowed-tools` as a substitute for that reported-event
-gate.
-
-Codex uses its mirrored `tokens.access_token` only when it is a nonempty
-string; an absent or tokenless mirror selects the existing `OPENAI_API_KEY`
-path, while an unreadable or malformed mirror fails as `codex_cli_error`.
-The host remains the only refresh owner: the host's mirrored Codex document,
-which no container mounts, keeps `tokens.refresh_token` empty. A selected Codex CLI route never changes to HTTP
-within that turn; an expired login is `cli_login_expired` and other CLI
-failures retain the named Codex error.
+`refresh_token` empty. The host remains the only refresh owner: the host's
+mirrored Codex document, which no container mounts, keeps `tokens.refresh_token`
+empty.
 
 The web service alone runs under the host profile `songmaker-web` and the
 repository's `scripts/seccomp/songmaker-web.json`. The seccomp file is a pinned
@@ -617,15 +589,9 @@ preserves the observed inherited mount flags during remounts. Compose applies
 the profile only to `songmaker-web`, drops every container capability, and sets
 `no-new-privileges:true`.
 
-The three prefixes those private homes carry — the cover turn's, the
-Co-Writer turn's, and the probe's — live in `agent_providers/sandbox/paths.py`
-and nowhere else. The provider layer creates the directories, this profile is
-the only thing that permits their mounts, and `tests/test_sandbox_profile.py`
-reads the module and every rule form in the profile, including its brace
-lists, so a rename that reaches only one of them is a red test instead of a
-silently refused mount. A project that embeds `agent_providers` takes those
-prefixes and derives its own profile from them. The profile *name* is a
-parameter wherever it is used —
+The profile permits the private Codex-home mounts under three `/tmp` prefixes
+(the cover turn's, the Co-Writer turn's and the probe's); nothing in songmaker
+binds them. The profile *name* is a parameter wherever it is used —
 `sudo scripts/apparmor/install_profile.sh [profile]` and Compose's
 `SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`.
 `tests/scripts/test_apparmor_install.py` drives the installer without an
@@ -678,30 +644,6 @@ sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
 sudo rm /etc/apparmor.d/songmaker-web
 ```
 
-In `agent_providers`, Codex has a resumable Co-Writer tool loop and a fixed image command. The
-Co-Writer begins with `codex exec --json --sandbox read-only`; later rounds use
-`codex exec resume`. Both command shapes apply `--skip-git-repo-check`,
-`--ignore-user-config`, `--ignore-rules`, `approval_policy="never"`,
-`mcp_servers={}`, disabled shell, unified-exec, browser, computer, multi-agent,
-image-generation, plugin, hook, and Code Mode features, and disabled web search.
-They deliberately omit `--ephemeral`: the CLI's persisted, server-issued thread
-is required for the next `resume` round. The transport runs from an empty private
-`work/` directory beside its private `codex-home/`, requires a UUID from
-`thread.started` before it can resume, and passes prompts only on stdin. The
-cover-image command also uses a read-only sandbox, but enables `code_mode_host`
-only for that image run and adds `web_search="disabled"`; its only permitted Code
-Mode command is the measured read of the bundled image skill. Each receives the
-runner's secret-scrubbed environment, so `OPENAI_API_KEY` is never inherited.
-
-The Codex JSONL gate refuses every native Codex command, MCP, web-search,
-file-change, or other non-text tool item. Unknown or malformed items are
-`codex_cli_stream_protocol_error`. Only a completed `error` item is a named CLI
-failure when no completed turn follows; an error item
-that is started or updated remains a protocol failure. Event payloads, prompts,
-and stderr are not logged; failure logging contains only the return code and
-stderr length. `approval_policy="never"` means auto-approval within the sandbox,
-not that tools cannot run, so the transport's reported-event gate remains the
-execution boundary.
 
 **The renewal secret never leaves the host.** The mirror publishes the
 short-lived access token and blanks the long-lived one, so whatever eventually
@@ -822,46 +764,16 @@ refusals above, each of which turns it red when removed.
 
 ### What each service mounts
 
-No service mounts an agent CLI or a login. Grok turns
-run with a private `0700` working directory and their own session tree, both
-removed after success or abort; prompts and tool results reach the CLI only
-through a private prompt file. The text tool protocol does not grant Grok CLI
-tools: every start and resume keeps `--deny '*'`, and native tool-call events
-abort the turn.
-
-The library's image route, which no songmaker cover calls (the cover draws
-through the gateway), starts Codex with the fixed read-only image
-argv (`--sandbox read-only`, no MCP servers, and `web_search="disabled"`),
-with Code Mode enabled only for this image run. Its one variable part is the
-model its caller names, appended as `--model <slug>` when one is named.
-Each run creates a private
-`0700` root whose `codex-home/` and `work/` directories are separate `0700`
-siblings; the home contains only the redacted `auth.json` mirror (`0600`) and
-the process cwd is the resolved `work/` path. The streamed event gate admits a
-completed turn without requiring a command or an `image_gen` event. No command is admitted, including the former
-skill-read command. The measured Codex CLI 0.163.0 turn produced one PNG
-without reporting either a command or an `image_gen` event. Reported blocked
-items (including commands, file changes, MCP calls, web searches and
-collaboration) and unknown event or item types request abort and are reported
-as `ImageToolBlockedError`; the process is reaped before the route returns.
-
-The gate sees only what the CLI reports. This measurement does not establish
-whether other tools using the invisible path would be reported. The PNG is
-associated with the turn through its private `CODEX_HOME` location and
-normalization under the embedding host's `ImagePolicy`. The gate is defense in depth;
-containment rests on the Codex read-only sandbox and songmaker's AppArmor and
-seccomp profiles. Fixture replay proves event handling, not live containment.
-Every Co-Writer tool-loop round keeps Code Mode disabled.
+No service mounts an agent CLI or a login.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 
 ### Provider API keys
 
-`ANTHROPIC_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY` are configured only
-through the deployment `.env` and become `Settings` secrets. Only
-the web image installs the `api` extra (the Anthropic SDK). The three keys only
-reach the provider runtime configuration (`configure_agent_providers`); nothing
-reads them today. Neither the API nor the DOM exposes a key value, raw
+`ANTHROPIC_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY` are retired: no
+process reads them, compose passes none, and no image installs a provider SDK.
+`Settings` declares them unread so a `.env` that still holds them validates.
+Neither the API nor the DOM exposes a key value, raw
 provider body, command output, or a secret-derived value. The co-writer has no
 route to select: it runs through the gateway (see "Co-writer turn through the
 gateway"), and neither has the cover (see "Cover picture through the
@@ -873,11 +785,11 @@ request.
 
 ## Child Process Secret Scrubbing
 
-Two packages spawn *external* child processes that must not inherit every secret in the parent's environment: `agent_providers` (the Claude, Grok and Codex CLIs) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). The provider layer has one scrubber, `agent_providers.process.scrubbed_env()`, and all three CLI spawners go through it — the Claude backends in `agent_providers/claude/provider.py`, `agent_providers/grok/transport.py`, `agent_providers/codex/transport.py`, and the bounded runner's own `_child_env()`, which adds a spawner's explicit variables on top of that scrubbed base rather than beside it. Both packages scrub `os.environ.copy()` with a `SECRET_ENV_KEYS` tuple before passing `env=` to the child, covering `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `HF_TOKEN`, `GRAFANA_USER`, and `GRAFANA_PASSWORD`. A login is scrubbed as a pair — the name half is no secret on its own, but handing a child process one half of a credential buys nothing.
+Two places spawn child processes that must not inherit every secret in the parent's environment: the scoring subprocess (`songmaker_cli/scoring/subprocess_runner.py`) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). Both scrub their environment with a `SECRET_ENV_KEYS` tuple before the child runs, covering `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `HF_TOKEN`, `GRAFANA_USER`, and `GRAFANA_PASSWORD`. A login is scrubbed as a pair — the name half is no secret on its own, but handing a child process one half of a credential buys nothing.
 
 The Keycloak client secret is not in that list because it is not in the environment: it is a file, mounted into the web container only. The same holds for the four songmaker secret files in the container deployment (see "Secrets"): the list stays for direct runs and tests, which pass the same values as environment variables. The scrub cannot hide a file from a child that runs as the same OS user, so the agent-CLI processes can read it; see "Authentication".
 
-`acestep_worker` cannot import from `songmaker_cli` (engine packages are independent — see AGENTS.md "Code patterns"), so each package keeps its own `SECRET_ENV_KEYS` tuple: `songmaker_cli/constants.py` and `acestep_worker/constants.py`. `agent_providers` may import neither, so the provider layer scrubs with the list its host injects on `ProviderRuntimeConfig.secret_env_keys` — songmaker fills it from its own constant in `agent_runtime.py` (#836), which makes the injected runtime a third owner of the same list. `tests/songmaker_cli/test_constants_secret_scrub_parity.py` pins all three against the same literal expected set of keys — so they cannot silently drift apart the way the first two did before issue #157 (the Claude CLI child inherited `SONGMAKER_INTERNAL_TOKEN` because the two lists disagreed), no list can quietly shrink to empty and still pass, and a drifted list names its own owner.
+`acestep_worker` cannot import from `songmaker_cli` (engine packages are independent — see AGENTS.md "Code patterns"), so each package keeps its own `SECRET_ENV_KEYS` tuple: `songmaker_cli/constants.py` and `acestep_worker/constants.py`. `tests/songmaker_cli/test_constants_secret_scrub_parity.py` pins both against the same literal expected set of keys, so they cannot silently drift apart, no list can quietly shrink to empty and still pass, and a drifted list names its own owner.
 
 `HF_TOKEN` is scrubbed from the ACE-Step subprocess even though the subprocess genuinely does call Hugging Face: `vendor/acestep/acestep/api/model_download.py`'s `download_from_huggingface` runs both at subprocess startup (for the DiT and VAE models) and at request time (for LM models), and it passes no explicit `token=`, so `huggingface_hub` would pick up `HF_TOKEN` from the environment implicitly if it were present. However, every repo ID the subprocess can resolve on its own (via `MODEL_REPO_MAPPING` / `DEFAULT_REPO_ID` in that same module) is public and answers anonymously; the ACE-Step catalog's only two gated repos (`ACE-Step/acestep-v15-turbo`, `ACE-Step/acestep-5Hz-lm-1.7B`) are fetched exclusively by `acestep_worker.downloads.run_download`, which passes `token=` explicitly rather than relying on ambient env. So scrubbing `HF_TOKEN` here does not break any download this deployment performs — the consequence is that the subprocess's own Hugging Face requests go out anonymously and are subject to Hugging Face's stricter unauthenticated rate limits. See `acestep_worker/constants.py` for the same reasoning next to the list.
 
@@ -887,9 +799,9 @@ Everything a child scorer needs is resolved in the parent and carried into the c
 
 The invariant this protects: no module reachable from `subprocess_runner`'s own import chain may read `os.environ` or construct `Settings()` as a *module-level* side effect (that code runs before the scrub ever gets a chance to act), and no scorer module — all of them imported later, inside `_child_main`, after the scrub — may read `os.environ` or construct `Settings()` at call time either. A scorer that needs a secret does not belong in the child at all. Non-secret configuration reaches a child scorer through a new `PipelineConfig` field filled by the parent, never through a `get_settings()` call in the child.
 
-The scoring worker holds no provider credential: its container sets no `ANTHROPIC_API_KEY`, `XAI_API_KEY` or `OPENAI_API_KEY`, mounts no Claude, Grok or Codex binary or login, and installs no provider SDK extra.
+The scoring worker holds no provider credential: its container sets no `ANTHROPIC_API_KEY`, `XAI_API_KEY` or `OPENAI_API_KEY`, mounts no Claude, Grok or Codex binary or login.
 
-The scrub is also weaker than the Popen `env=` path used for the Claude CLI and ACE-Step children: `del os.environ[key]` calls libc's `unsetenv()`, which blocks `getenv()` — every subsequent read via `os.environ`/`os.getenv`, and every process this one execs from here on, sees the key as gone — but it does not erase the bytes the kernel copied onto the process's stack at its own `execve()`, which is what `/proc/<pid>/environ` reads directly. So the scrubbed keys stay visible in `/proc/<pid>/environ` for the child's entire lifetime even though `getenv()` can no longer see them. Accepted risk per [Trust model and accepted risks](#trust-model-and-accepted-risks) (subprocesses share the OS user): reading another process's `/proc/<pid>/environ` requires being that same OS user (or root), and the scoring-worker container's `songmaker` user has no other tenant sharing it, so this gap adds no new exploitation path beyond the one already accepted there. Never bind-mount `.env` into the `songmaker-scoring-worker` container — `Settings` walks up the filesystem looking for it, and doing so would hand the scrubbed child back every secret the scrub just removed.
+The scrub is also weaker than the Popen `env=` path used for the ACE-Step child: `del os.environ[key]` calls libc's `unsetenv()`, which blocks `getenv()` — every subsequent read via `os.environ`/`os.getenv`, and every process this one execs from here on, sees the key as gone — but it does not erase the bytes the kernel copied onto the process's stack at its own `execve()`, which is what `/proc/<pid>/environ` reads directly. So the scrubbed keys stay visible in `/proc/<pid>/environ` for the child's entire lifetime even though `getenv()` can no longer see them. Accepted risk per [Trust model and accepted risks](#trust-model-and-accepted-risks) (subprocesses share the OS user): reading another process's `/proc/<pid>/environ` requires being that same OS user (or root), and the scoring-worker container's `songmaker` user has no other tenant sharing it, so this gap adds no new exploitation path beyond the one already accepted there. Never bind-mount `.env` into the `songmaker-scoring-worker` container — `Settings` walks up the filesystem looking for it, and doing so would hand the scrubbed child back every secret the scrub just removed.
 
 The child never outlives a scorer it could not stop. A scorer's time budget is a ceiling: `_call_with_timeout` abandons a call that blows it (`shutdown(wait=False)`) instead of joining it, because a Python thread cannot be killed. Inside the child that abandoned thread goes on holding the Whisper/AudioBox model globals and their GPU memory, so the next request would otherwise reuse a child whose GPU memory is still held, beside a scorer still running. Two things prevent that. `ScorerProcess` marks itself tainted when a response reports `SongScores.any_child_scorer_timed_out`, under the same `_pipe_lock` that serializes requests, and `_ensure_started()` then refuses to hand that child to the next request — it kills and respawns instead. That holds even when the job that tainted it was cancelled and returned early. On top of it, `jobs/scoring.py` calls `ScorerProcess.recycle()` right after persisting the values of such a run, so the GPU is reclaimed immediately rather than at a next request that may be minutes away. Both paths kill the same way: SIGTERM first, so the child's own handler releases CUDA memory, SIGKILL after a 5-second grace period; the replacement child runs `_scrub_secret_env_vars()` again by construction. `tests/songmaker_cli/test_jobs.py` and `tests/songmaker_cli/scoring/test_subprocess_runner_scoring.py` pin every direction — a timed-out child scorer keeps its scores and loses its child, a cancelled job's tainted child is still not reused, a clean run keeps the child it had.
 
@@ -985,10 +897,10 @@ images are installed through `uv` with the committed `uv.lock`; Bandit and
 pip-audit run in separate tool environments so they do not change that lock.
 The repository itself is installed as the trusted local editable project. All
 third-party dependencies must be wheels except `nvidia-ml-py3`, whose locked,
-hash-verified release has no published wheel. The three first-party libraries
+hash-verified release has no published wheel. The two first-party libraries
 are git pins built from source at image build; the three images that sync them
 (web, music worker, scoring worker) carry `git`, and the music worker builds
-only those three from source, after a `--no-build` step that refuses any
+only those two from source, after a `--no-build` step that refuses any
 third-party source distribution. Their build requirements (`setuptools`, `wheel`)
 float on PyPI, unlocked and unhashed: a malicious release would run at image
 build, as root in the web image. This risk is accepted.
@@ -1051,7 +963,6 @@ before retrying; never purge or silently retry these entries.
 - `keycloak_client_secret`: the Keycloak client secret, a file owned by the edge (`~/.secrets/keycloak/clients/songmaker`, or `KEYCLOAK_CLIENT_SECRET_FILE` for a throwaway stack), mounted read-only into the web container at `/run/secrets/keycloak_client_secret`. Never an environment variable.
 - `gateway_key`: the app key for hal's LiteLLM gateway, a file owned by hal (`~/.secrets/litellm/apps/songmaker`, or `GATEWAY_KEY_FILE` for a throwaway stack), mounted read-only into `songmaker-web` alone at `/run/secrets/gateway_key`; `AGENT__GATEWAY__KEY_FILE` names that path. Never an environment variable.
 - The songmaker secret files: `session-secret`, `postgres-password`, `internal-token` and `monitoring-token` in `SONGMAKER_SECRETS_DIR` (default `~/.secrets/songmaker`, a 0700 directory with 0644 files, made by hal: `hal setup` creates a missing file with a generated value and keeps an existing one; `hf-token` is created empty by hand on a fresh host, since it is an unverified token. `scripts/secret_files.py` below stays the one-time copy from `.env` for an existing deploy, and a live value is never regenerated). Compose declares each as a file secret and mounts it only into the services that read them: the session secret into the web, music and scoring services; the database password into postgres (`POSTGRES_PASSWORD_FILE`), web, music and scoring; the internal token into web and the music, scoring and ACE-Step workers; the monitoring token into web and, as `monitoring_token`, Prometheus. `Settings` and `WorkerSettings` read `/run/secrets/<field name>`; none of the four is an environment variable, a `.env` key or a compose default, so `docker inspect` and `docker compose config` hold no value, and no service reads a `.env` key of the same name. Until the retirement of `.env` (#2206 B4), `scripts/secret_files.py --verify` in the deploy preflight still reads such a key when `.env` has it, and refuses a file that differs from it. A missing file stops `docker compose up` before it creates the service and names the file. An empty file stops web, music, scoring and the workers at startup for the session secret, the internal token and the database password (their settings require a value), but not postgres on an existing volume, which keeps the password it was initialised with; an empty `monitoring-token` does not stop web, `/metrics` answers 503. The deploy preflight refuses every empty file except `hf-token`, so an empty file never reaches a deploy. The web service checks the monitoring token on `/metrics`; Prometheus sends it. Rotating any of them is a file write plus a recreate of its readers (`docker compose up -d --force-recreate`), and until B4 also the same change to a same-named `.env` key if `.env` still has one, or the next auto-deploy preflight refuses the differing values: the mount points at the file's inode, so a replaced file stays unseen by a running container, and compose does not recreate a service whose secret file changed. Rotate `session-secret` and `postgres-password` only with their consequences in mind: a new session secret signs everyone out, and a new database password locks the app out until postgres has it too.
-- `ANTHROPIC_API_KEY`: Optional; it only reaches the provider runtime configuration, which nothing reads today. Never logged or returned in responses.
 - `GRAFANA_PASSWORD`: Required, with no default. When it is unset or empty, every `docker compose` command that reads `docker-compose.yml` refuses before it does anything, naming the variable — `up` and `build`, but also the recovery commands `down`, `logs`, and `ps` — so set it in `.env` first. `exec` into an already running service still works, and so do `ps`, `logs`, and `down` when the project is named without a file (`docker compose -p songmaker logs`, the project name being the checkout directory's name). Grafana never falls back to admin/admin. Setting it in the first place is the one command `./scripts/grafana_password.py`, run from the main checkout: if `.env` has no `GRAFANA_PASSWORD`, an empty one, or a publicly known one (`admin`, anything starting with `CHANGEME`), it writes a fresh random value there, then applies the `.env` value to the running Grafana and prints `set` (fresh value written) or `already set` once an authenticated API login with that value succeeds; if Grafana is not running, it says whether `.env` changed and asks you to start the stack and run it again. The value only seeds Grafana's first start, but the command applies whatever `.env` holds, so it also changes the admin password of an existing Grafana: put the new value in `.env` and run it. Without the command, put the new value in `.env`, run `docker compose up -d grafana`, then `docker compose exec -T grafana sh -c 'printf %s "$GF_SECURITY_ADMIN_PASSWORD" | grafana cli admin reset-admin-password --password-from-stdin'`. The password never appears in an argv (shell history, `ps`): the single quotes keep the host shell from expanding it, and `printf` is a builtin of the container's shell. Never pass it as the positional `<new password>` argument. CI uses a fixed throwaway literal (`.github/workflows/e2e.yml`).
 - `scripts/secret_files.py`: moves the stack's secrets (`SESSION_SECRET`, `POSTGRES_PASSWORD`, `SONGMAKER_INTERNAL_TOKEN`, `SONGMAKER_MONITORING_TOKEN`, optional `HF_TOKEN`) into one file each under `SONGMAKER_SECRETS_DIR` (default `~/.secrets/songmaker`, a directory with mode 0700 and files with mode 0644). Run without arguments it is the one-time migration for an existing deploy (a fresh host gets its files from `hal setup`); it copies the live `.env` values byte-exact, never regenerates one, skips and names a key absent from `.env`, and refuses to overwrite a file holding another value, a key exported in the shell with another value, a directory that is not yours with mode 0700, a symlinked file or directory, or a value with surrounding whitespace, and it publishes by hard link so a file that appears meanwhile is never overwritten; `.env` stays untouched. With `--verify` it reads `docker compose config --format json` in memory and judges the files compose declares: a missing, empty (except `hf-token`), differing or unknown file is refused, and a compose that declares none passes. Neither mode prints a value; a refusal names the file and the key.
 - `.env`: Gitignored. Never committed. Single source for pydantic Settings and
