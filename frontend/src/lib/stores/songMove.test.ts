@@ -13,7 +13,7 @@ import {
 	songMoveFailedLine
 } from '#lib/constants.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import type { AlbumItem } from '#lib/api/types.ts';
+import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 
 vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
@@ -257,6 +257,7 @@ describe('moving the open song', () => {
 		expect(location.pathname).toBe('/album/home/storytime');
 		expect(get(songMoveRun)).toEqual({
 			status: 'failed',
+			songId: 's1',
 			albumId: 'abend',
 			line: songMoveFailedLine('Album is full'),
 			retryable: true
@@ -294,6 +295,7 @@ describe('moving the open song', () => {
 
 		expect(get(songMoveRun)).toEqual({
 			status: 'failed',
+			songId: 's1',
 			albumId: 'abend',
 			line: songMoveFailedLine(SONG_MOVE_ALBUM_GONE),
 			retryable: false
@@ -307,7 +309,7 @@ describe('moving the open song', () => {
 
 		const moving = askToMoveOpenSongTo(ABEND);
 
-		expect(get(songMoveRun)).toEqual({ status: 'busy', albumId: 'abend' });
+		expect(get(songMoveRun)).toEqual({ status: 'busy', songId: 's1', albumId: 'abend' });
 		pending.resolve(movedSong);
 		await moving;
 		expect(get(songMoveRun)).toEqual({ status: 'idle' });
@@ -360,7 +362,7 @@ describe('moving the open song', () => {
 		await openSongMovePicker();
 		await askToMoveOpenSongTo(NEON);
 
-		expect(get(songMoveRun)).toEqual({ status: 'busy', albumId: 'abend' });
+		expect(get(songMoveRun)).toEqual({ status: 'busy', songId: 's1', albumId: 'abend' });
 		pending.resolve(movedSong);
 		await moving;
 		expect(moveSong).toHaveBeenCalledTimes(1);
@@ -382,6 +384,29 @@ describe('moving the open song', () => {
 		expect(get(songList).find((song) => song.id === 's1')?.album_id).toBe('abend');
 		const counts = Object.fromEntries(get(albumList).map((a) => [a.id, a.song_count]));
 		expect(counts).toMatchObject({ home: 2, abend: 6 });
+	});
+});
+
+describe('retrying after another song was opened', () => {
+	it('moves the song of the refused run, not the song that is open now', async () => {
+		const other = makeSong({ id: 's2', slug: 'other', album_id: 'home', generations: [] });
+		songList.set([OPEN_SONG, other]);
+		ownAlbums(HOME, ABEND);
+		await openSongMovePicker();
+		const moved = { ...OPEN_SONG, album_id: 'abend' };
+		const pending = Promise.withResolvers<SongItem>();
+		vi.mocked(moveSong).mockReturnValueOnce(pending.promise).mockResolvedValue(moved);
+		const moving = askToMoveOpenSongTo(ABEND);
+		await selectSong('s2');
+		pending.reject(new Error('boom'));
+		await moving;
+
+		await retrySongMove();
+
+		expect(moveSong).toHaveBeenLastCalledWith('s1', 'abend');
+		expect(get(songList).find((song) => song.id === 's1')?.album_id).toBe('abend');
+		expect(get(songList).find((song) => song.id === 's2')?.album_id).toBe('home');
+		expect(get(selectedSongId)).toBe('s2');
 	});
 });
 

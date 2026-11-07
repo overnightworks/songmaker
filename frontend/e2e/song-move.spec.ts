@@ -370,6 +370,9 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			const menu = await openPicker(page);
 			await albumRow(menu, await titleOf(person, targetId)).click();
 			await expect(menu.locator('.pk-row[aria-busy="true"]')).toBeVisible();
+			// The open picker's backdrop covers the page; closing it leaves the move running.
+			await page.keyboard.press('Escape');
+			await expect(menu).toBeHidden();
 			// The app's own search, so the page never reloads and the held request stays alive.
 			const rail =
 				shell === 'mobile'

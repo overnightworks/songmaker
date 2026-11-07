@@ -20,6 +20,7 @@
 		songMovePicker,
 		songMoveRun
 	} from '#lib/stores/songMove.ts';
+	import { selectedSongId } from '#lib/stores/player.ts';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
 	import SongMovePicker from './SongMovePicker.svelte';
@@ -39,7 +40,11 @@
 
 	// A refused move after the shared-album ask finds the menu closed; it comes back on the red row.
 	$effect(() => {
-		if ($songMoveRun.status === 'failed' && $songMovePicker.status === 'closed') {
+		if (
+			$songMoveRun.status === 'failed' &&
+			$songMoveRun.songId === $selectedSongId &&
+			$songMovePicker.status === 'closed'
+		) {
 			void openSongMovePicker();
 			popover?.open();
 		}

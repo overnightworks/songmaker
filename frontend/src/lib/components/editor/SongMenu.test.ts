@@ -426,6 +426,25 @@ describe('SongMenu move picker', () => {
 			expect(target.querySelector('.pk-error')?.textContent).not.toContain(LIBRARY_RETRY_LABEL);
 		});
 
+		it('reopens the picker for a failed run only while its song is the open song', async () => {
+			const pending = Promise.withResolvers<SongItem>();
+			vi.mocked(moveSong).mockReturnValue(pending.promise);
+			const target = await openPickerOver(albums, '.pk-list');
+			rowTitled(target, 'Berlin').click();
+			await tick();
+			window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+			await tick();
+			selectedSongId.set('s2');
+
+			pending.reject(new Error('boom'));
+			await vi.waitFor(() => expect(get(songMoveRun).status).toBe('failed'));
+			await tick();
+			expect(target.querySelector('.menu-panel')).toBeNull();
+
+			selectedSongId.set('s1');
+			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
+		});
+
 		it('reopens the picker with the red row when a move into a shared album is refused', async () => {
 			vi.mocked(moveSong).mockRejectedValue(new Error('boom'));
 			const target = await openPickerOver(

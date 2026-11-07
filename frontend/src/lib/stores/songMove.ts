@@ -40,8 +40,8 @@ export const songMoveFilter = writable('');
 
 type SongMoveRun =
 	| { status: 'idle' }
-	| { status: 'busy'; albumId: string }
-	| { status: 'failed'; albumId: string; line: string; retryable: boolean };
+	| { status: 'busy'; songId: string; albumId: string }
+	| { status: 'failed'; songId: string; albumId: string; line: string; retryable: boolean };
 
 const IDLE: SongMoveRun = { status: 'idle' };
 const NOT_FOUND = 404;
@@ -112,10 +112,11 @@ function onPhone(): boolean {
 	return typeof window.matchMedia === 'function' && window.matchMedia(COMPACT_LAYOUT_MEDIA).matches;
 }
 
-function refusal(err: unknown, albumId: string): SongMoveRun {
+function refusal(err: unknown, songId: string, albumId: string): SongMoveRun {
 	if (err instanceof ApiError && err.status === NOT_FOUND) {
 		return {
 			status: 'failed',
+			songId,
 			albumId,
 			line: songMoveFailedLine(SONG_MOVE_ALBUM_GONE),
 			retryable: false
@@ -124,23 +125,28 @@ function refusal(err: unknown, albumId: string): SongMoveRun {
 	const reason = describeFailure(err, SONG_MOVE_FAILED_REASON, {
 		offline: SONG_MOVE_NO_CONNECTION
 	});
-	return { status: 'failed', albumId, line: songMoveFailedLine(reason), retryable: true };
+	return {
+		status: 'failed',
+		songId,
+		albumId,
+		line: songMoveFailedLine(reason),
+		retryable: true
+	};
 }
 
 /**
- * Moves the open song into `album` and keeps the person on it, unless they opened another song
+ * Moves `song` into `album` and keeps the person on it, unless they opened another song
  * meanwhile. The crumb names the new album on a wide screen, where a phone has no crumb and gets a
  * toast. A refusal is kept in `songMoveRun`; the answer says whether the song moved.
  */
-async function moveOpenSongTo(album: AlbumItem): Promise<boolean> {
-	const song = get(selectedSong);
-	if (!song || song.album_id === album.id || get(songMoveRun).status === 'busy') return false;
-	songMoveRun.set({ status: 'busy', albumId: album.id });
+async function moveSongTo(song: SongItem, album: AlbumItem): Promise<boolean> {
+	if (song.album_id === album.id || get(songMoveRun).status === 'busy') return false;
+	songMoveRun.set({ status: 'busy', songId: song.id, albumId: album.id });
 	let moved: SongItem;
 	try {
 		moved = await moveSong(song.id, album.id);
 	} catch (err) {
-		const failed = refusal(err, album.id);
+		const failed = refusal(err, song.id, album.id);
 		songMoveRun.set(failed);
 		if (failed.status === 'failed' && !failed.retryable && get(load).status !== 'closed') {
 			await loadOwnAlbums(true);
@@ -161,6 +167,11 @@ async function moveOpenSongTo(album: AlbumItem): Promise<boolean> {
 	return true;
 }
 
+function moveOpenSongTo(album: AlbumItem): Promise<boolean> {
+	const song = get(selectedSong);
+	return song ? moveSongTo(song, album) : Promise.resolve(false);
+}
+
 export const songMoveConfirm = writable<AlbumItem | null>(null);
 
 /** Moves at once, except into an album with a public page, which asks first. */
@@ -177,13 +188,14 @@ export async function confirmSongMove(): Promise<boolean> {
 	return album ? moveOpenSongTo(album) : false;
 }
 
-/** Repeats the move that was refused, into the same album and without asking again. */
+/** Repeats the refused move of its own song, into the same album and without asking again. */
 export async function retrySongMove(): Promise<boolean> {
 	const run = get(songMoveRun);
 	const state = get(load);
 	if (run.status !== 'failed' || !run.retryable || state.status !== 'ready') return false;
 	const album = state.albums.find((candidate) => candidate.id === run.albumId);
-	return album ? moveOpenSongTo(album) : false;
+	const song = get(songList).find((candidate) => candidate.id === run.songId);
+	return album && song ? moveSongTo(song, album) : false;
 }
 
 export function cancelSongMove(): void {
