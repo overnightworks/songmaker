@@ -1,4 +1,4 @@
-"""Hold style literals outside app.css per file; only --update may lower an entry."""
+"""Hold style literals outside app.css per file and fail on a var(--x) no declaration defines."""
 # ruff: noqa: T201 - this check reports style literal counts and locations
 
 import argparse
@@ -23,6 +23,11 @@ DECLARATIONS = re.compile(
 DIMENSIONS = re.compile(r"(?<![\w-])(-?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)", re.IGNORECASE)
 IMPORTANT = re.compile(r"!important\b", re.IGNORECASE)
 TOKEN = re.compile(r"var\(\s*--[\w-]+\s*\)", re.IGNORECASE)
+TOKEN_USE = re.compile(r"var\(\s*(?P<name>--[\w-]+)", re.IGNORECASE)
+TOKEN_DECLARATION = re.compile(
+    r"(?<![\w-])(?P<declared>--[\w-]+)(?=\s*:)|(?<=style:)(?P<directive>--[\w-]+)"
+    r"|setProperty\(\s*[\"'](?P<property>--[\w-]+)[\"']")
+APPKIT_STYLESHEET = Path("node_modules/overnightworks-appkit/src/appkit/static/appkit.css")
 RESET_VALUES = {"none", "inherit", "initial", "unset", "revert", "revert-layer"}
 FONT_KEYWORDS = {"xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large",
                  "xxx-large", "smaller", "larger", "math"}
@@ -51,12 +56,16 @@ def without_important(value: str) -> str:
     return "".join(part.rstrip() for part in kept) + last
 
 
-def findings(text: str, suffix: str) -> list[Finding]:
+def code_without_comments(text: str, suffix: str) -> str:
     if suffix == ".svelte":
         text = re.sub(r"(<script\b[^>]*>)(.*?)(</script\b[^>]*>)",
                       lambda m: m[1] + without_comments(m[2], javascript=True) + m[3],
                       text, flags=re.DOTALL | re.IGNORECASE)
-    text = without_comments(text, javascript=suffix == ".ts")
+    return without_comments(text, javascript=suffix == ".ts")
+
+
+def findings(text: str, suffix: str) -> list[Finding]:
+    text = code_without_comments(text, suffix)
     found = [Finding(text.count("\n", 0, m.start()) + 1, m.lastgroup, m[0])
              for m in COLORS.finditer(text)]
     for match in DECLARATIONS.finditer(text):
@@ -78,13 +87,34 @@ def findings(text: str, suffix: str) -> list[Finding]:
     return sorted(found, key=lambda finding: finding.line)
 
 
-def style_sources(source: Path) -> list[Path]:
+def frontend_sources(source: Path) -> list[Path]:
     paths = sorted(path for path in source.rglob("*")
-                   if path.suffix in {".svelte", ".ts", ".css"} and path.name != "app.css"
+                   if path.suffix in {".svelte", ".ts", ".css"}
                    and not path.name.endswith((".test.ts", ".spec.ts")))
     if not source.is_dir() or not paths:
         raise ValueError(f"No frontend source files found in {source}")
     return paths
+
+
+def style_sources(source: Path) -> list[Path]:
+    return [path for path in frontend_sources(source) if path.name != "app.css"]
+
+
+def declared_tokens(code: str) -> set[str]:
+    return {match["declared"] or match["directive"] or match["property"]
+            for match in TOKEN_DECLARATION.finditer(code)}
+
+
+def undefined_uses(source: Path, appkit: Path) -> list[str]:
+    if not appkit.is_file():
+        raise ValueError(f"Missing {appkit}; install the frontend: cd frontend && pnpm install")
+    codes = {path.relative_to(source): code_without_comments(path.read_text(), path.suffix)
+             for path in frontend_sources(source)}
+    defined = declared_tokens(code_without_comments(appkit.read_text(), ".css")).union(
+        *map(declared_tokens, codes.values()))
+    return [f"{path}:{code.count(chr(10), 0, use.start()) + 1} {use['name']}"
+            for path, code in codes.items() for use in TOKEN_USE.finditer(code)
+            if use["name"] not in defined]
 
 
 def read_baseline(baseline: Path) -> dict[str, int]:
@@ -128,7 +158,7 @@ def print_drift(stored: dict[str, int], current: dict[str, int], grown: set[str]
         print(f"{path}: stored {stored[path]}, current {current.get(path, 0)} (stale)")
 
 
-def check(source: Path, baseline: Path, *, update: bool) -> int:
+def check_literals(source: Path, baseline: Path, *, update: bool) -> int:
     sites = [(path.relative_to(source), findings(path.read_text(), path.suffix))
              for path in style_sources(source)]
     counts = Counter(finding.kind for _, entries in sites for finding in entries)
@@ -150,9 +180,19 @@ def check(source: Path, baseline: Path, *, update: bool) -> int:
     return 0
 
 
-def run(source: Path, baseline: Path, *, update: bool) -> int:
+def check(source: Path, baseline: Path, appkit: Path, *, update: bool) -> int:
+    literals_status = check_literals(source, baseline, update=update)
+    undefined = undefined_uses(source, appkit)
+    if undefined:
+        print("Undefined custom properties; define the token or use another "
+              "(a token set only through a computed setProperty name is not seen):")
+        print("\n".join(undefined))
+    return 1 if undefined else literals_status
+
+
+def run(source: Path, baseline: Path, appkit: Path, *, update: bool) -> int:
     try:
-        return check(source, baseline, update=update)
+        return check(source, baseline, appkit, update=update)
     except (OSError, ValueError) as error:
         print(error)
         return 1
@@ -164,6 +204,7 @@ def main() -> int:
     parser.add_argument("--update", action="store_true")
     args = parser.parse_args()
     return run(repository / "frontend/src", repository / "scripts/style-literals.txt",
+               repository / "frontend" / APPKIT_STYLESHEET,
                update=args.update)
 
 

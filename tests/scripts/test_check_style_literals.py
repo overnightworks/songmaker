@@ -15,15 +15,19 @@ def gate(tmp_path, capsys):
     source = tmp_path / "frontend/src"
     source.mkdir(parents=True)
     baseline_path = tmp_path / "style-literals.txt"
+    appkit_path = tmp_path / "node_modules/appkit.css"
 
-    def run(files, *, baseline="", update=False):
+    def run(files, *, baseline="", update=False, appkit=":root { --appkit-gap: 4px; }"):
         for relative, content in files.items():
             path = source / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
         if baseline is not None:
             baseline_path.write_text(baseline)
-        status = CHECKER["run"](source, baseline_path, update=update)
+        if appkit is not None:
+            appkit_path.parent.mkdir(parents=True, exist_ok=True)
+            appkit_path.write_text(appkit)
+        status = CHECKER["run"](source, baseline_path, appkit_path, update=update)
         output = capsys.readouterr().out
         return status, output, baseline_path.read_text() if baseline_path.exists() else None
 
@@ -78,7 +82,8 @@ def test_vocabulary_font_scale_passes(gate, pixels, unit):
     ],
 )
 def test_tokens_resets_and_non_color_hashes_pass(gate, text):
-    assert gate({"styles.css": text})[0] == 0
+    tokens = ":root { --text: 0; --radius: 0; --font-12: 0; --shadow: 0; --a: 0; --b: 0; }"
+    assert gate({"styles.css": text}, appkit=tokens)[0] == 0
 
 
 @pytest.mark.parametrize(
@@ -257,3 +262,60 @@ def test_gate_takes_no_path_from_the_command_line(monkeypatch):
     with pytest.raises(SystemExit) as exit_info:
         CHECKER["main"]()
     assert exit_info.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"app.css": ":root { --accent: red; }", "card.css": "a { color: var(--accent); }"},
+        {"Card.svelte": "<style>p { --gap: 1px; }</style>\n<p style=\"margin: var(--gap)\"></p>"},
+        {"Card.svelte": "<p style=\"--gap: 1px\"></p>\n<style>p { margin: var(--gap); }</style>"},
+        {"Card.svelte": "<p style:--gap={gap}></p>\n<style>p { margin: var(--gap); }</style>"},
+        {"card.ts": "node.style.setProperty('--gap', '1px');",
+         "a.css": "p { margin: var(--gap); }"},
+        {"card.ts": 'node.style.setProperty( "--gap", 1);',
+         "a.css": "p { margin: var(--gap); }"},
+        {"a.css": "p { margin: var(--appkit-gap); }"},
+        {"a.css": "p { margin: var( --appkit-gap , 0); }"},
+    ],
+    ids=["app.css", "component css", "inline style", "style directive", "setProperty single",
+         "setProperty double", "appkit", "appkit spaced"],
+)
+def test_use_of_a_declared_token_passes(gate, files):
+    status, output, _ = gate(files)
+    assert status == 0
+    assert "Undefined" not in output
+
+
+@pytest.mark.parametrize(
+    "use", ["var(--ghost)", "var(--ghost, 0px)", "var( --ghost , var(--other, 1px))"],
+)
+def test_use_of_an_undefined_token_fails_with_its_location_also_with_a_fallback(gate, use):
+    status, output, _ = gate({"nested/card.css": f"\np {{ margin: {use}; }}"})
+    assert status == 1
+    assert "nested/card.css:2 --ghost" in output
+
+
+def test_token_declared_only_in_a_comment_does_not_define_it(gate):
+    status, output, _ = gate({
+        "card.css": "/* --ghost: 1px; */\np { margin: var(--ghost); }",
+        "card.ts": "// node.style.setProperty('--ghost', 1);",
+    })
+    assert status == 1
+    assert "card.css:2 --ghost" in output
+
+
+def test_declaration_in_a_test_file_does_not_define_a_token(gate):
+    status, output, _ = gate({
+        "card.test.ts": "el.style.setProperty('--ghost', 1);",
+        "card.css": "p { margin: var(--ghost); }",
+    })
+    assert status == 1
+    assert "card.css:1 --ghost" in output
+
+
+def test_missing_appkit_stylesheet_fails_naming_its_path(gate, tmp_path):
+    status, output, _ = gate({"card.css": ""}, appkit=None)
+    assert status == 1
+    assert f"Missing {tmp_path / 'node_modules/appkit.css'}" in output
+    assert "pnpm install" in output
