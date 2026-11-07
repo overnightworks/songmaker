@@ -42,7 +42,6 @@ from songmaker_cli.cover_suggestions import (
     remove_cover_suggestion_files,
     request_cover_suggestions,
 )
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, AuditLog, Job, User, UserSession
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since
@@ -111,8 +110,10 @@ def _add_suggestion(
     return suggestion_id
 
 
-def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(tmp_path: Path) -> None:
-    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
+def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(
+    tmp_path: Path, pg_factory,
+) -> None:
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
 
     with factory() as session:
         alice = make_authenticated_user("alice")
@@ -134,9 +135,9 @@ def _suggestion_file(audio_dir: Path, suggestion_id: str) -> Path:
 
 
 def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_suggestions(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
-    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
     pending_ids = _add_two_pending_suggestions(factory, tmp_path / "audio")
 
     with factory() as session:
@@ -153,10 +154,10 @@ def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_sugges
 
 
 def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     """1301-F3-C1-COUNT: active work blocks; completed work consumes the limit."""
-    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
     _add_cover_job(factory)
 
     with factory() as session:
@@ -179,9 +180,11 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
 
 
 @pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
-def test_unsuccessful_cover_attempts_allow_another_request(tmp_path, monkeypatch, status):
+def test_unsuccessful_cover_attempts_allow_another_request(
+    tmp_path, monkeypatch, status, pg_factory,
+):
     """1301-F3-C1-COUNT: failed and cancelled attempts leave the allowance free."""
-    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
     _add_cover_job(factory, status=status)
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
     get_settings.cache_clear()
@@ -503,9 +506,9 @@ def test_foreign_cover_suggestion_routes_are_not_found(
     tmp_path: Path,
     method: str,
     path: str,
-    kwargs: dict,
+    kwargs: dict, pg_factory,
 ) -> None:
-    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
+    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
     _add_suggestion(factory, tmp_path / "audio")
     with factory() as session:
         bob_id = session.query(User).filter_by(username="bob").one().id
@@ -584,20 +587,19 @@ ESCAPING_STORED_PATH = "../outside.png"
     ],
 )
 def test_a_suggestion_resolving_outside_the_audio_root_answers_like_a_missing_suggestion(
-    tmp_path: Path, method: str, path: str, kwargs: dict,
+    tmp_path: Path, method: str, path: str, kwargs: dict, pg_factory,
 ) -> None:
     # The router app keeps the endpoint's own detail; create_app rewrites every API 404.
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+    with pg_factory() as session:
         seed_cover_albums(session)
         session.commit()
         owner = album_owner(session)
     audio_dir = tmp_path / "audio"
-    _add_suggestion(factory, audio_dir)
+    _add_suggestion(pg_factory, audio_dir)
     album_dir = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
     album_dir.rename(tmp_path / "moved-album")
     album_dir.symlink_to(tmp_path / "moved-album", target_is_directory=True)
-    client = web_client(make_router_app(make_router_ctx(tmp_path, db=factory), user=owner))
+    client = web_client(make_router_app(make_router_ctx(tmp_path, db=pg_factory), user=owner))
 
     response = getattr(client, method)(path, **kwargs)
 
@@ -627,8 +629,8 @@ def test_discarding_suggestions_with_a_path_outside_the_audio_root_leaves_that_f
         assert session.query(AlbumCoverSuggestion).count() == 0
 
 
-def test_admin_can_list_and_read_another_users_suggestion(tmp_path: Path) -> None:
-    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
+def test_admin_can_list_and_read_another_users_suggestion(tmp_path: Path, pg_factory) -> None:
+    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
     seed_session(client, "admin")
 
@@ -660,16 +662,15 @@ def test_active_cover_job_blocks_a_new_request_before_unavailable_response(
 @pytest.mark.parametrize("status", list(JobStatus))
 @pytest.mark.parametrize("offset", [-1, 0, 1])
 def test_only_completed_cover_jobs_on_this_utc_day_count(
-    tmp_path: Path, status: JobStatus, offset: int,
+    tmp_path: Path, status: JobStatus, offset: int, pg_factory,
 ) -> None:
     """1301-F3-C1-COUNT: status and the start-day boundary decide usage."""
-    factory = init_test_db(tmp_path / "accounting.db")
     midnight = datetime(2026, 9, 4, tzinfo=timezone.utc)
-    with factory() as session:
+    with pg_factory() as session:
         seed_cover_albums(session)
         session.commit()
-    _add_cover_job(factory, status=status, started_at=midnight + timedelta(microseconds=offset))
-    with factory() as session:
+    _add_cover_job(pg_factory, status=status, started_at=midnight + timedelta(microseconds=offset))
+    with pg_factory() as session:
         assert count_cover_jobs_since(session, "alice-album", midnight) == int(
             status == JobStatus.COMPLETED and offset >= 0
         )

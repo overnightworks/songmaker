@@ -48,7 +48,6 @@ from songmaker_cli.covers import (
     resolve_cover_file,
     write_album_cover,
 )
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries.albums import get_album, soft_delete_album
 from songmaker_cli.request_policies import build_body_size_policy
@@ -106,15 +105,15 @@ def _seed_owners(session) -> None:
     session.add(Album(id="bob-album", title="Bob Album", artist="Bob", created_by=bob.id))
 
 
-def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClient, object]:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_owners)
+def _authed_app(tmp_path: Path, factory, username: str, password: str) -> tuple[TestClient, object]:
+    client, factory = make_test_app(tmp_path, seed_db=_seed_owners, factory=factory)
     seed_session(client, username)
     return client, factory
 
 
 @pytest.fixture
-def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
-    return _authed_app(tmp_path, "alice", ALICE_PASSWORD)
+def alice_app(tmp_path: Path, pg_factory) -> tuple[TestClient, object]:
+    return _authed_app(tmp_path, pg_factory, "alice", ALICE_PASSWORD)
 
 
 def test_only_the_album_cover_post_route_gets_the_cover_budget() -> None:
@@ -244,8 +243,8 @@ def test_upload_rejects_oversize_file(alice_app: tuple[TestClient, object]) -> N
     assert resp.status_code in {413, 422}
 
 
-def test_foreign_album_cover_is_404(tmp_path: Path) -> None:
-    client, _ = _authed_app(tmp_path, "bob", BOB_PASSWORD)
+def test_foreign_album_cover_is_404(tmp_path: Path, pg_factory) -> None:
+    client, _ = _authed_app(tmp_path, pg_factory, "bob", BOB_PASSWORD)
     jpeg = _jpeg_bytes()
     for method, path in (
         ("GET", "/api/albums/alice-album/cover"),
@@ -387,11 +386,10 @@ def test_soft_delete_album_keeps_cover_files(
     assert client.get("/api/albums/alice-album/cover?variant=detail").status_code == 200
 
 
-def test_cleanup_expired_removes_album_cover_files(tmp_path: Path) -> None:
-    factory = init_db(tmp_path / "covers.db")
+def test_cleanup_expired_removes_album_cover_files(tmp_path: Path, pg_factory) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
-    with factory() as session:
+    with pg_factory() as session:
         owner = seed_user(session, "alice")
         session.add(Album(id="expired-album", title="Expired", artist="A", created_by=owner.id))
         session.add(Album(id="live-album", title="Live", artist="A", created_by=owner.id))
@@ -404,7 +402,7 @@ def test_cleanup_expired_removes_album_cover_files(tmp_path: Path) -> None:
     assert expired_dir.is_dir()
     assert live_dir.is_dir()
 
-    with factory() as session:
+    with pg_factory() as session:
         soft_delete_album(session, "expired-album")
         album = get_album(session, "expired-album", include_deleted_rows=True)
         assert album is not None
@@ -413,7 +411,7 @@ def test_cleanup_expired_removes_album_cover_files(tmp_path: Path) -> None:
         )
         session.commit()
 
-    album_count, song_count = run_cleanup_expired(factory, audio_dir)
+    album_count, song_count = run_cleanup_expired(pg_factory, audio_dir)
     assert album_count == 1
     assert song_count == 0
     assert not expired_dir.exists()

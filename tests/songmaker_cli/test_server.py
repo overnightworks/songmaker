@@ -59,8 +59,8 @@ def _seed_server_data(session) -> None:
 
 
 @pytest.fixture
-def server_app(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_server_data)
+def server_app(tmp_path: Path, pg_factory) -> TestClient:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_server_data, factory=pg_factory)
     audio_dir = tmp_path / "audio"
     user_dir = audio_dir / _ADMIN_ID
     user_dir.mkdir(parents=True, exist_ok=True)
@@ -85,11 +85,13 @@ def test_security_headers(server_app: TestClient) -> None:
 
 
 @pytest.mark.parametrize("path", ["/", "/albums/any-album", "/api/albums"])
-def test_content_security_policy_is_pinned_on_pages_and_api(tmp_path: Path, path: str) -> None:
+def test_content_security_policy_is_pinned_on_pages_and_api(
+    tmp_path: Path, path: str, pg_factory,
+) -> None:
     """The build styles inline, so `style-src` carries `'unsafe-inline'`; scripts stay strict."""
     inline_script = "boot()"
     client, _ = make_test_app(
-        tmp_path, index_html=f"<html><script>{inline_script}</script></html>",
+        tmp_path, index_html=f"<html><script>{inline_script}</script></html>", factory=pg_factory,
     )
     policy = client.get(path).headers["Content-Security-Policy"]
     directives = dict(part.split(" ", 1) for part in policy.split("; "))
@@ -133,7 +135,7 @@ def test_api_songs(server_app: TestClient) -> None:
     assert data["total"] == 1
 
 
-def _sveltekit_app_client(tmp_path: Path, assets: dict[str, bytes]) -> TestClient:
+def _sveltekit_app_client(tmp_path: Path, factory, assets: dict[str, bytes]) -> TestClient:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -147,7 +149,6 @@ def _sveltekit_app_client(tmp_path: Path, assets: dict[str, bytes]) -> TestClien
         (sk_app_dir / name).write_bytes(content)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.commit()
 
@@ -161,14 +162,14 @@ def _sveltekit_app_client(tmp_path: Path, assets: dict[str, bytes]) -> TestClien
     return web_client(create_app(audio_dir, data_dir, project_root, ctx=ctx))
 
 
-def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
-    client = _sveltekit_app_client(tmp_path, {"dummy.js": b"// chunk"})
+def test_create_app_mounts_sveltekit_app(tmp_path: Path, pg_factory) -> None:
+    client = _sveltekit_app_client(tmp_path, pg_factory, {"dummy.js": b"// chunk"})
     resp = client.get("/_app/dummy.js")
     assert resp.status_code == 200
 
 
-def test_sveltekit_app_serves_woff2_fonts_as_font_woff2(tmp_path: Path) -> None:
-    client = _sveltekit_app_client(tmp_path, {"oswald-latin-400-normal.woff2": b"wOF2"})
+def test_sveltekit_app_serves_woff2_fonts_as_font_woff2(tmp_path: Path, pg_factory) -> None:
+    client = _sveltekit_app_client(tmp_path, pg_factory, {"oswald-latin-400-normal.woff2": b"wOF2"})
     resp = client.get("/_app/oswald-latin-400-normal.woff2")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "font/woff2"
@@ -178,9 +179,11 @@ def test_sveltekit_app_serves_woff2_fonts_as_font_woff2(tmp_path: Path) -> None:
     ("path", "expected"),
     [("/", "no-cache"), ("/x", "no-cache"), ("/api/x", "no-store"), ("/_app/c.js", None)],
 )
-def test_cache_control_per_response_kind(tmp_path: Path, path: str, expected: str | None) -> None:
+def test_cache_control_per_response_kind(
+    tmp_path: Path, path: str, expected: str | None, pg_factory,
+) -> None:
     """defect:#1899 The SPA shell is revalidated at every load; build files keep their caching."""
-    client = _sveltekit_app_client(tmp_path, {"c.js": b"// chunk"})
+    client = _sveltekit_app_client(tmp_path, pg_factory, {"c.js": b"// chunk"})
     assert client.get(path).headers.get("Cache-Control") == expected
 
 
@@ -189,7 +192,7 @@ def test_get_audio_path_traversal_denied(server_app: TestClient) -> None:
     assert resp.status_code in (403, 404)
 
 
-def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
+def test_get_audio_path_traversal_via_symlink(tmp_path: Path, pg_factory) -> None:
     import os
 
     audio_dir = tmp_path / "audio"
@@ -211,8 +214,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         admin = User(
             id=admin_id, username="admin6", role="admin",
         )
@@ -220,7 +222,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
         session.commit()
 
     ctx = AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
         signing_key=TEST_SECRET,
@@ -236,7 +238,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
 
 
 @pytest.fixture
-def auth_server_app(tmp_path: Path):
+def auth_server_app(tmp_path: Path, pg_factory):
     from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
     from songmaker_cli.db.queries.albums import create_album
@@ -252,8 +254,7 @@ def auth_server_app(tmp_path: Path):
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         owner = seed_user(session, "owner")
         other = seed_user(session, "other_user")
         session.flush()
@@ -280,7 +281,7 @@ def auth_server_app(tmp_path: Path):
         other_id = other.id
 
     ctx = AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
         signing_key=TEST_SECRET,
@@ -305,7 +306,7 @@ def test_get_audio_other_users_files_denied(auth_server_app) -> None:
     assert resp.status_code == 404
 
 
-def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
+def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_factory) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -318,8 +319,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
 
     from songmaker_cli.db.queries.auth import create_session as create_db_session
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         user = User(username="tester")
         session.add(user)
         session.flush()
@@ -327,12 +327,12 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
         create_db_session(session, user.id, expired)
         session.commit()
 
-    with factory() as session:
+    with pg_factory() as session:
         from songmaker_cli.db.models import UserSession
         assert session.query(UserSession).count() == 1
 
     ctx = AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
         signing_key=TEST_SECRET,
@@ -345,7 +345,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
 
     mock_reap.assert_called_once_with(ctx)
 
-    with factory() as session:
+    with pg_factory() as session:
         from songmaker_cli.db.models import UserSession
         assert session.query(UserSession).count() == 0
 
@@ -484,7 +484,7 @@ def test_a_spoofed_host_with_matching_origin_is_refused(server_app: TestClient) 
     assert resp.status_code == 403
 
 
-def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings) -> None:
+def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings, pg_factory) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -495,8 +495,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings) -> 
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         admin = User(username="admin2", role="admin")
         session.add(admin)
         album = Album(id="a1", title="A", artist="A")
@@ -506,7 +505,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings) -> 
     with patch.dict("os.environ", {"ALLOWED_HOSTS": "myapp.example.com,testserver"}):
         get_settings.cache_clear()
         ctx = AppContext(
-            db=factory,
+            db=pg_factory,
             audio_dir=audio_dir,
             data_dir=data_dir,
             signing_key=TEST_SECRET,
@@ -641,14 +640,13 @@ def test_run_server_leaves_forwarded_headers_to_the_application() -> None:
     assert mock_run.call_args.kwargs["proxy_headers"] is False
 
 
-def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path) -> None:
+def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path, pg_factory) -> None:
     from songmaker_cli.redis_client import release_lease_in_background
     from songmaker_cli.server import _lifespan
 
-    factory = init_db(tmp_path / "test.db")
     mock_app = MagicMock()
     mock_app.state.ctx = AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
@@ -701,7 +699,7 @@ def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path) -
     asyncio.run(_run())
 
 
-def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
+def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path, pg_factory) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     """The chat/lora_training reaper (#371) must actually be scheduled by the
     running server, not just exist as a function -- generate/score get their
@@ -709,10 +707,9 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
     only takes effect if _lifespan starts it like the other three loops."""
     from songmaker_cli.server import _lifespan
 
-    factory = init_db(tmp_path / "test.db")
     mock_app = MagicMock()
     mock_app.state.ctx = AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
@@ -757,13 +754,12 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
     asyncio.run(_run())
 
 
-def test_lifespan_fails_on_redis_unavailable(tmp_path: Path) -> None:
+def test_lifespan_fails_on_redis_unavailable(tmp_path: Path, pg_factory) -> None:
     from songmaker_cli.server import _lifespan
 
-    factory = init_db(tmp_path / "test.db")
     mock_app = MagicMock()
     mock_app.state.ctx = AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
@@ -927,7 +923,9 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
 # ── Wildcard ALLOWED_HOSTS refusal ─────────────────────────────────
 
 @pytest.mark.parametrize("allowed_hosts", ["*.trycloudflare.com,testserver", "*"])
-def test_wildcard_allowed_host_raises_at_startup(tmp_path: Path, fresh_settings, allowed_hosts):
+def test_wildcard_allowed_host_raises_at_startup(
+    tmp_path: Path, fresh_settings, allowed_hosts, pg_factory,
+):
     """defect:#1891 -- startup refuses a wildcard ALLOWED_HOSTS entry."""
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -939,7 +937,7 @@ def test_wildcard_allowed_host_raises_at_startup(tmp_path: Path, fresh_settings,
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
     ctx = AppContext(
-        db=init_db(data_dir / "songmaker.db"),
+        db=pg_factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
         signing_key=TEST_SECRET,
@@ -1015,7 +1013,7 @@ def test_ip_rate_limit_429(tmp_path: Path, monkeypatch) -> None:
     assert "Too many requests" in resp.json()["detail"]
 
 
-def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch) -> None:
+def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch, pg_factory) -> None:
     monkeypatch.setenv("IP_RATE_LIMIT", "2")
 
     audio_dir = tmp_path / "audio"
@@ -1029,12 +1027,11 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch) -> None:
     (sk_dir / "index.html").write_text("<html>Test</html>")
     (app_dir / "test.js").write_text("console.log('ok')")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         session.commit()
 
     ctx = AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
         signing_key=TEST_SECRET,
@@ -1050,7 +1047,7 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch) -> None:
 # ── Audio endpoint edge cases ──────────────────────────────────────
 
 
-def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
+def test_get_audio_other_user_id_denied(tmp_path: Path, pg_factory) -> None:
     audio_dir = tmp_path / "audio"
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True)
@@ -1065,14 +1062,13 @@ def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         admin = User(username="admin5")
         session.add(admin)
         session.commit()
 
     ctx = AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
         signing_key=TEST_SECRET,
@@ -1162,7 +1158,7 @@ class TestConfigureLogging:
 # ── health endpoint ──────────────────────────────────────────────
 
 
-def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
+def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1172,15 +1168,14 @@ def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers) 
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         admin = User(username="admin6", role="admin")
         session.add(admin)
         session.commit()
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1207,7 +1202,9 @@ def test_health_details_idle(tmp_path: Path, mock_arq_pool, monitoring_headers) 
     assert isinstance(data["uptime_seconds"], int)
 
 
-def test_health_with_worker_running(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
+def test_health_with_worker_running(
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1217,15 +1214,14 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool, monitoring_he
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         admin = User(username="admin7", role="admin")
         session.add(admin)
         session.commit()
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1249,7 +1245,9 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool, monitoring_he
     assert data["acestep_workers_total"] == 0
 
 
-def test_health_degraded_no_worker(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
+def test_health_degraded_no_worker(
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1259,15 +1257,14 @@ def test_health_degraded_no_worker(tmp_path: Path, mock_arq_pool, monitoring_hea
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         admin = User(username="admin8", role="admin")
         session.add(admin)
         session.commit()
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1284,7 +1281,9 @@ def test_health_degraded_no_worker(tmp_path: Path, mock_arq_pool, monitoring_hea
     assert resp.json()["status"] == "degraded"
 
 
-def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
+def test_health_queue_depth_cap_reached(
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+) -> None:
     from songmaker_cli.db.models import Job
 
     audio_dir = tmp_path / "audio"
@@ -1296,8 +1295,7 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool, monitorin
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         admin = User(username="admincap", role="admin")
         session.add(admin)
         for _ in range(3):
@@ -1306,7 +1304,7 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool, monitorin
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
@@ -1334,7 +1332,7 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool, monitorin
 # ── /metrics endpoint ────────────────────────────────────────────
 
 
-def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
+def _make_metrics_client(tmp_path: Path, factory, mock_arq_pool=None) -> TestClient:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1344,7 +1342,6 @@ def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(
             username="metrics_admin", role="admin",
@@ -1359,9 +1356,11 @@ def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
     return web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
 
-def test_metrics_serves_prometheus_text(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
+def test_metrics_serves_prometheus_text(
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+) -> None:
     from songmaker_cli.constants import PROM_CONTENT_TYPE
-    client = _make_metrics_client(tmp_path)
+    client = _make_metrics_client(tmp_path, pg_factory)
     with client:
         resp = client.get("/metrics", headers=monitoring_headers)
     assert resp.status_code == 200
@@ -1374,8 +1373,10 @@ def test_metrics_serves_prometheus_text(tmp_path: Path, mock_arq_pool, monitorin
     assert "songmaker_queue_depth" in body
 
 
-def test_metrics_reflects_http_traffic(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
-    client = _make_metrics_client(tmp_path)
+def test_metrics_reflects_http_traffic(
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
+) -> None:
+    client = _make_metrics_client(tmp_path, pg_factory)
     with client:
         client.get("/health")
         client.get("/health")
@@ -1384,7 +1385,7 @@ def test_metrics_reflects_http_traffic(tmp_path: Path, mock_arq_pool, monitoring
     assert 'songmaker_http_requests_total{method="GET",status="200"}' in body
 
 
-def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers) -> None:
+def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory) -> None:
     from songmaker_cli.db.models import Job
 
     audio_dir = tmp_path / "audio"
@@ -1396,9 +1397,8 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers) ->
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
     now = datetime.now(timezone.utc)
-    with factory() as session:
+    with pg_factory() as session:
         admin = User(
             username="metrics_admin2", role="admin",
         )
@@ -1409,7 +1409,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers) ->
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = web_client(app)
@@ -1422,7 +1422,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool, monitoring_headers) ->
 
 
 def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
-    tmp_path: Path, mock_arq_pool, monitoring_headers,
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
 ) -> None:
     """S9-F: The failure sample excludes newer timestamped PARTIAL jobs.
 
@@ -1432,7 +1432,7 @@ def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
     """
     from songmaker_cli.db.models import Job
 
-    client = _make_metrics_client(tmp_path)
+    client = _make_metrics_client(tmp_path, pg_factory)
     older = datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc)
     newest = datetime(2026, 8, 31, 8, 30, tzinfo=timezone.utc)
     partial = datetime(2026, 9, 1, tzinfo=timezone.utc)
@@ -1454,9 +1454,9 @@ def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
 
 
 def test_metrics_last_job_failure_timestamp_is_epoch_when_nothing_ever_failed(
-    tmp_path: Path, mock_arq_pool, monitoring_headers,
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
 ) -> None:
-    client = _make_metrics_client(tmp_path)
+    client = _make_metrics_client(tmp_path, pg_factory)
 
     with client:
         body = client.get("/metrics", headers=monitoring_headers).text
@@ -1648,7 +1648,7 @@ def _restore_arq_pool(saved) -> None:
 
 
 def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
-    tmp_path: Path, mock_arq_pool, monitoring_headers,
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
 ) -> None:
     import json
 
@@ -1670,8 +1670,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         register_worker(
             session,
             worker_id="acestep-worker-0",
@@ -1701,7 +1700,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
     sync_redis.set(queue_depth_key("acestep-worker-0"), "0")
 
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=sync_redis,
     )
     client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
@@ -1725,7 +1724,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
 
 
 def test_metrics_endpoint_offline_worker(
-    tmp_path: Path, mock_arq_pool, monitoring_headers,
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
 ) -> None:
     import fakeredis.aioredis
 
@@ -1740,8 +1739,7 @@ def test_metrics_endpoint_offline_worker(
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         register_worker(
             session,
             worker_id="acestep-worker-0",
@@ -1756,7 +1754,7 @@ def test_metrics_endpoint_offline_worker(
     async_pool = fakeredis.aioredis.FakeRedis()
 
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=redis,
     )
     client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
@@ -1780,7 +1778,7 @@ def test_metrics_endpoint_offline_worker(
 # ── PWA static routes ────────────────────────────────────────────────
 
 
-def _pwa_test_app(tmp_path: Path, *, create_files: bool) -> TestClient:
+def _pwa_test_app(tmp_path: Path, factory, *, create_files: bool) -> TestClient:
     """Build a test app with or without PWA static files present."""
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -1796,7 +1794,6 @@ def _pwa_test_app(tmp_path: Path, *, create_files: bool) -> TestClient:
         (sk_dir / "icon-192.png").write_bytes(b"\x89PNG\r\n\x1a\n")
         (sk_dir / "icon-512.png").write_bytes(b"\x89PNG\r\n\x1a\n")
 
-    factory = init_db(data_dir / "songmaker.db")
     ctx = AppContext(
         db=factory,
         audio_dir=audio_dir,
@@ -1809,9 +1806,9 @@ def _pwa_test_app(tmp_path: Path, *, create_files: bool) -> TestClient:
 
 
 def test_service_worker_served_with_correct_mime_and_sw_allowed_header(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
-    client = _pwa_test_app(tmp_path, create_files=True)
+    client = _pwa_test_app(tmp_path, pg_factory, create_files=True)
     resp = client.get("/service-worker.js")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/javascript")
@@ -1824,9 +1821,9 @@ def test_service_worker_served_with_correct_mime_and_sw_allowed_header(
     ("/icon-512.png", "image/png"),
 ])
 def test_pwa_static_served_with_correct_mime(
-    tmp_path: Path, path: str, expected_mime: str,
+    tmp_path: Path, path: str, expected_mime: str, pg_factory,
 ) -> None:
-    client = _pwa_test_app(tmp_path, create_files=True)
+    client = _pwa_test_app(tmp_path, pg_factory, create_files=True)
     resp = client.get(path)
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith(expected_mime)
@@ -1838,8 +1835,8 @@ def test_pwa_static_served_with_correct_mime(
     "/icon-192.png",
     "/icon-512.png",
 ])
-def test_pwa_route_honest_404_when_file_missing(tmp_path: Path, path: str) -> None:
-    client = _pwa_test_app(tmp_path, create_files=False)
+def test_pwa_route_honest_404_when_file_missing(tmp_path: Path, path: str, pg_factory) -> None:
+    client = _pwa_test_app(tmp_path, pg_factory, create_files=False)
     resp = client.get(path)
     assert resp.status_code == 404
     assert resp.headers.get("content-type", "").startswith("application/json")
@@ -1858,7 +1855,7 @@ def test_csp_allows_the_apps_own_workers(server_app: TestClient) -> None:
 
 
 def test_real_access_record_is_readable_by_rate_window_parser(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     """defect:#1576 -- format the actual request record while its context is still bound."""
     import importlib.util
@@ -1878,7 +1875,7 @@ def test_real_access_record_is_readable_by_rate_window_parser(
         spec.loader.exec_module(parser_module)
     parse_access_record = parser_module.parse_access_record
 
-    server_app, _ = make_test_app(tmp_path)
+    server_app, _ = make_test_app(tmp_path, factory=pg_factory)
     output = io.StringIO()
     handler = logging.StreamHandler(output)
     handler.setFormatter(structlog.stdlib.ProcessorFormatter(

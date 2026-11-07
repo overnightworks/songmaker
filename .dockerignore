@@ -14,8 +14,6 @@ vendor/acestep/.cache/
 vendor/acestep/checkpoints/
 vendor/acestep/gradio_outputs/
 vendor/acestep/manual_uv_sync.log
-vendor/acestep/acestep-*.stderr.log
-vendor/acestep/acestep_stderr.log
 
 # Frontend dev artifacts
 frontend/node_modules/

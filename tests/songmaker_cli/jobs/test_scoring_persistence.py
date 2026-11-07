@@ -169,6 +169,43 @@ def test_successful_scoring_persists_the_transcript_and_cues(
         assert session.get(Job, JOB_ID).status == "completed"
 
 
+@pytest.mark.parametrize("was_picked", [True, False])
+def test_scoring_a_take_leaves_the_pick_as_it_was(
+    scored_generation, tmp_path: Path, was_picked: bool,
+) -> None:
+    """Spec: REQ-SCORE-01 -- a scoring job neither selects nor unselects the take."""
+    with scored_generation() as session:
+        session.get(Generation, GENERATION_ID).is_picked = was_picked
+        session.commit()
+    result = SongScores(silence=FRESH_SILENCE, runs=(_run("silence", ScorerOutcome.OK),))
+
+    _score(scored_generation, result, tmp_path / "audio")
+
+    with scored_generation() as session:
+        assert session.get(Generation, GENERATION_ID).is_picked is was_picked
+
+
+def test_a_sung_transcript_is_stored_beside_the_lyrics_and_leaves_them_untouched(
+    scored_generation, tmp_path: Path,
+) -> None:
+    """Spec: REQ-SCORE-02 -- the transcript is kept on the take while the version's lyrics stay."""
+    result = SongScores(
+        text_accuracy=TextAccuracyScore(
+            similarity_ratio=0.2,
+            intended_line_texts=("hello world",),
+            transcribed_line_texts=("hallo welt",),
+            whisper_cues=(WhisperCue(start=0.0, end=1.0, text="hallo welt"),),
+        ),
+        runs=(_run("text_accuracy", ScorerOutcome.OK),),
+    )
+
+    _score(scored_generation, result, tmp_path / "audio")
+
+    with scored_generation() as session:
+        assert session.get(Generation, GENERATION_ID).whisper_text == "hallo welt"
+        assert session.get(Version, "v1").lyrics == "Hello world"
+
+
 def test_successful_scorer_overwrites_the_stored_score(
     scored_generation, tmp_path: Path,
 ) -> None:

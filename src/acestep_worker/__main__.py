@@ -107,7 +107,6 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     checkpoint_dir = Path(settings.acestep_checkpoint_dir)
     shared_audio_root = Path(settings.shared_audio_root)
     audio_dir = prepare_output_root(Path(settings.audio_output_dir), shared_audio_root)
-    log_dir = Path(settings.acestep_log_dir)
 
     redis_client: Redis = Redis.from_url(settings.redis_url, decode_responses=False)
 
@@ -125,7 +124,6 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         base_port=settings.acestep_inner_port,
         vram_budget_gb=settings.vram_budget_gb,
         gpu_id=settings.gpu_id,
-        log_dir=log_dir,
         on_log_line=log_sink,
     )
     cache = ModelCache(

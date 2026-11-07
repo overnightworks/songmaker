@@ -10,8 +10,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from support.failing_reference_stamp import failing_stamp_trigger
+from support.reference_rows import a_reference
 
-from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import keep_reference, unkeep_reference
@@ -21,13 +21,6 @@ OWNER = "owner"
 OLD_STAMP = datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 SECRET_NAME = "secret-reference"
 EARLIER_NAME = "aaa-earlier-reference"
-
-
-def _recording(name: str, *, stamp: datetime | None = None, kept: bool = False):
-    return ReferenceRecording(
-        id=name, user_id=OWNER, storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/{name}.wav",
-        original_filename=f"{name}.wav", size_bytes=4, unused_since=stamp, is_kept=kept,
-    )
 
 
 def _link(session, name: str, *, via: str, trashed: bool = False, archived: bool = False) -> None:
@@ -63,9 +56,12 @@ def factory(tmp_path: Path):
     return factory
 
 
-def _add(factory, *rows) -> None:
+def _add(factory, name: str, *, stamp: datetime | None = None, kept: bool = False) -> None:
     with factory() as session:
-        session.add_all(rows)
+        a_reference(
+            session, OWNER, name=f"{name}.wav", reference_id=name, unused_since=stamp,
+            is_kept=kept,
+        )
         session.commit()
 
 
@@ -75,7 +71,7 @@ def _stamp(factory, name: str) -> datetime | None:
 
 
 def test_an_unused_unkept_row_without_a_stamp_is_stamped_from_the_start_of_the_run(factory) -> None:
-    _add(factory, _recording("loose"))
+    _add(factory, "loose")
     started = datetime.now(timezone.utc).replace(tzinfo=None)
 
     report = reconcile_unused_stamps(factory)
@@ -85,7 +81,7 @@ def test_an_unused_unkept_row_without_a_stamp_is_stamped_from_the_start_of_the_r
 
 
 def test_a_row_with_a_stamp_keeps_its_exact_value(factory) -> None:
-    _add(factory, _recording("old", stamp=OLD_STAMP))
+    _add(factory, "old", stamp=OLD_STAMP)
 
     report = reconcile_unused_stamps(factory)
 
@@ -107,7 +103,9 @@ def test_a_stamped_row_that_a_version_or_take_links_loses_its_stamp(
     factory, via: str, trashed: bool, archived: bool,
 ) -> None:
     with factory() as session:
-        session.add(_recording("linked", stamp=OLD_STAMP))
+        a_reference(
+            session, OWNER, name="linked.wav", reference_id="linked", unused_since=OLD_STAMP,
+        )
         session.flush()
         _link(session, "linked", via=via, trashed=trashed, archived=archived)
         session.commit()
@@ -119,11 +117,8 @@ def test_a_stamped_row_that_a_version_or_take_links_loses_its_stamp(
 
 
 def test_a_kept_row_loses_a_stamp_and_an_unstamped_kept_row_stays_unstamped(factory) -> None:
-    _add(
-        factory,
-        _recording("kept-stamped", stamp=OLD_STAMP, kept=True),
-        _recording("kept", kept=True),
-    )
+    _add(factory, "kept-stamped", stamp=OLD_STAMP, kept=True)
+    _add(factory, "kept", kept=True)
 
     report = reconcile_unused_stamps(factory)
 
@@ -134,7 +129,7 @@ def test_a_kept_row_loses_a_stamp_and_an_unstamped_kept_row_stays_unstamped(fact
 
 def test_a_used_row_without_a_stamp_stays_unstamped(factory) -> None:
     with factory() as session:
-        session.add(_recording("used"))
+        a_reference(session, OWNER, name="used.wav", reference_id="used")
         session.flush()
         _link(session, "used", via="version")
         session.commit()
@@ -149,10 +144,12 @@ def test_a_failing_stamp_half_rolls_back_every_candidate_and_spares_the_clear_ha
     factory, caplog,
 ) -> None:
     with factory() as session:
-        session.add_all([
-            _recording(SECRET_NAME), _recording(EARLIER_NAME),
-            _recording("stamped-kept", stamp=OLD_STAMP, kept=True),
-        ])
+        for name in (SECRET_NAME, EARLIER_NAME):
+            a_reference(session, OWNER, name=f"{name}.wav", reference_id=name)
+        a_reference(
+            session, OWNER, name="stamped-kept.wav", reference_id="stamped-kept",
+            unused_since=OLD_STAMP, is_kept=True,
+        )
         session.execute(text(failing_stamp_trigger(SECRET_NAME)))
         session.commit()
 
@@ -174,9 +171,8 @@ def test_a_failing_stamp_half_rolls_back_every_candidate_and_spares_the_clear_ha
 def test_a_failing_candidate_listing_logs_the_error_kind_without_a_count_and_spares_the_clear_half(
     factory, caplog, monkeypatch,
 ) -> None:
-    _add(
-        factory, _recording(SECRET_NAME), _recording("stamped-kept", stamp=OLD_STAMP, kept=True),
-    )
+    _add(factory, SECRET_NAME)
+    _add(factory, "stamped-kept", stamp=OLD_STAMP, kept=True)
 
     def fail_listing(session):
         raise OperationalError("listing", {}, Exception(SECRET_NAME))
@@ -200,7 +196,8 @@ def test_a_failing_candidate_listing_logs_the_error_kind_without_a_count_and_spa
 
 
 def test_a_successful_run_logs_one_info_line_with_the_counts(factory, caplog) -> None:
-    _add(factory, _recording("loose"), _recording("kept", stamp=OLD_STAMP, kept=True))
+    _add(factory, "loose")
+    _add(factory, "kept", stamp=OLD_STAMP, kept=True)
 
     with caplog.at_level(logging.INFO):
         reconcile_unused_stamps(factory)
@@ -210,7 +207,7 @@ def test_a_successful_run_logs_one_info_line_with_the_counts(factory, caplog) ->
 
 
 def test_after_a_keep_the_run_leaves_the_row_unstamped(factory) -> None:
-    _add(factory, _recording("held"))
+    _add(factory, "held")
     with factory() as session:
         keep_reference(session, OWNER, "held")
         session.commit()
@@ -222,7 +219,7 @@ def test_after_a_keep_the_run_leaves_the_row_unstamped(factory) -> None:
 
 
 def test_after_an_unkeep_the_run_keeps_the_fresh_stamp(factory) -> None:
-    _add(factory, _recording("held", kept=True))
+    _add(factory, "held", kept=True)
     with factory() as session:
         unkeep_reference(session, OWNER, "held")
         session.commit()
