@@ -1,0 +1,8 @@
+claim_id = "0ddcdfe9feb4406f9492f9b883404b96"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "4a2ad4eb23db68d898cbe055d90d2779d4a8a745"
+branch = "claude/issue-2426-serving-deleting-and-queue-snapshots-dec"
+scope = ["docs/security.md", "src/songmaker_cli/audio_paths.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/queue_streams.py", "tests/songmaker_cli/test_audio_paths.py", "tests/songmaker_cli/test_queue_streams_confinement.py"]
+opened_commit = "23336b1d6e04a332c527dddcf42d5e82b4ed15c1"
+whole_reason = "The owner and its first three callers are one decision: the owner without its callers is a second decider, and the security sentence states what the callers now do."
