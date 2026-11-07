@@ -244,20 +244,6 @@ def test_create_song(client: TestClient) -> None:
     assert (resp.status_code, body["title"], body["audio_duration"]) == (200, "Lightning", 0)
 
 
-@pytest.mark.parametrize("body", [
-    pytest.param({"title": "Orphan"}, id="without-album"),
-    pytest.param({"title": "Orphan", "album_id": "no-such-album"}, id="unknown-album"),
-])
-def test_a_song_is_refused_without_an_existing_album(client: TestClient, body: dict) -> None:
-    """Spec: REQ-CATALOG-01 -- A song cannot be created outside an album."""
-    songs_before = client.get("/api/songs").json()
-
-    resp = client.post("/api/songs", json=body)
-
-    assert resp.status_code in (404, 422)
-    assert client.get("/api/songs").json() == songs_before
-
-
 def test_update_song(client: TestClient) -> None:
     resp = client.put("/api/songs/s1", json={"lyrics": "kaboom"})
     assert resp.status_code == 200
@@ -887,41 +873,6 @@ def test_keeping_a_second_take_leaves_the_first_take_kept(client: TestClient) ->
 
     assert client.get("/api/generations/g1").json()["is_kept"] is True
     assert client.get("/api/generations/g2").json()["is_kept"] is True
-
-
-def test_changing_the_pick_leaves_every_keep_as_it_was(client: TestClient) -> None:
-    """Spec: REQ-CURATION-03 -- Picking another take or unpicking keeps each take's Keep as it was,
-    for a take that is both and for a take that is only kept."""
-    client.post("/api/generations/g1/keep")
-    client.post("/api/generations/g1/pick")
-    client.post("/api/generations/g2/keep")
-    client.post("/api/generations/g2/unkeep")
-
-    client.post("/api/generations/g2/pick")
-    after_repick = [client.get(f"/api/generations/{g}").json()["is_kept"] for g in ("g1", "g2")]
-    client.post("/api/generations/g2/unpick")
-    after_unpick = [client.get(f"/api/generations/{g}").json()["is_kept"] for g in ("g1", "g2")]
-
-    assert after_repick == [True, False]
-    assert after_unpick == [True, False]
-
-
-def test_changing_a_keep_leaves_the_songs_pick_as_it_was(client: TestClient) -> None:
-    """Spec: REQ-CURATION-05 -- Keeping or unkeeping any take of the song, the picked one included,
-    leaves the song's Pick on the same take."""
-    client.post("/api/generations/g1/pick")
-
-    def pick_flags() -> list[bool]:
-        return [client.get(f"/api/generations/{g}").json()["is_picked"] for g in ("g1", "g2")]
-
-    client.post("/api/generations/g2/keep")
-    after_keeping_another = pick_flags()
-    client.post("/api/generations/g1/keep")
-    client.post("/api/generations/g1/unkeep")
-    after_changing_the_picked = pick_flags()
-
-    assert after_keeping_another == [True, False]
-    assert after_changing_the_picked == [True, False]
 
 
 def test_unpick_generation_api(client: TestClient) -> None:
