@@ -18,8 +18,8 @@ from datetime import datetime, timedelta, timezone
 from songmaker_cli.api_helpers import cleanup_generation_files
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
-from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
 from songmaker_cli.db.models import Song
+from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
 from songmaker_cli.db.queries.generations import (
     archive_generation,
     delete_expired_generation,
@@ -66,8 +66,8 @@ def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
     """Delete the expired albums, then the orphan songs, and flush; the caller commits.
 
     Every candidate song is locked first, in one id order, so two overlapping runs never
-    wait on each other in a cycle. An album or song with a queued or running job is left for a later run and stays out
-    of the result.
+    wait on each other in a cycle. An album or song with a queued or running job is left for
+    a later run and stays out of the result.
     """
     expired_album_ids = [album.id for album in list_expired_albums(session, cutoff)]
     orphan_song_candidates = [
