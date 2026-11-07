@@ -1,8 +1,0 @@
-claim_id = "999752c9ebac48f883b7a7fadee5ec85"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d868ba888e13512808838bb4f1b00404427d4522"
-branch = "claude/issue-2590-s3c-defined-tokens"
-scope = ["frontend/src/app.css", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/LibraryTileContent.svelte", "frontend/src/lib/components/ModelRegistryPanel.svelte", "frontend/src/lib/components/PlaylistCover.svelte", "frontend/src/lib/components/WorkerPoolPanel.svelte", "frontend/src/routes/settings/users/+page.svelte"]
-opened_commit = "15c9f5f8a91e8ebee59d326e8b7d5a647fd74b7a"
-whole_reason = "One invariant over seven one-line places, all needed on main before S4's check can be green."
