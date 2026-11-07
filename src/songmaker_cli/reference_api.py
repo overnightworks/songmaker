@@ -18,6 +18,7 @@ from starlette.types import Receive, Scope, Send
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_models import (
+    ReferenceCountdownShownRequest,
     ReferenceListResponse,
     ReferenceRecordingResponse,
     ReferenceUsageResponse,
@@ -35,9 +36,12 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH, ReferenceRecording
 from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.db.queries.reference_recordings import (
     ReferenceLinkCounts,
+    acknowledge_countdown_shown,
     delete_reference_recording,
+    get_countdown_publication,
     get_owned_reference_recording,
     keep_reference,
     list_owned_reference_recordings,
@@ -53,17 +57,20 @@ from songmaker_cli.reference_audio import (
     ReferenceAudioStorageError,
     RemovalOutcome,
     is_owner_storage_path,
+    reference_deletes_at,
     remove_reference_file,
     resolve_owned_reference_audio,
     store_reference_audio,
 )
 from songmaker_cli.settings import get_settings
+from songmaker_cli.timestamps import utcnow
 
 log = logging.getLogger(__name__)
 router = APIRouter()
 
 REFERENCE_IN_USE_DETAIL: Final = "Reference audio is in use."
 INVALID_FILENAME_DETAIL: Final = "Invalid filename."
+STALE_COUNTDOWN_EPOCH_DETAIL: Final = "The countdown epoch is no longer current."
 _CONTROL_CHARACTER: Final = re.compile(r"[\x00-\x1f]")
 
 
@@ -96,15 +103,42 @@ def api_list_references(
 ) -> ReferenceListResponse:
     recordings = list_owned_reference_recordings(session, user.id)
     counts = reference_link_counts(session, [recording.id for recording in recordings])
+    publication = get_countdown_publication(session)
+    settings = get_settings()
+    now = utcnow()
+    items = [
+        ReferenceRecordingResponse.from_orm(
+            recording, counts[recording.id],
+            reference_deletes_at(
+                recording.unused_since, publication.published, now,
+                settings.final_deletion_days, DAILY_CLEANUP_HOUR_UTC,
+            ),
+        )
+        for recording in recordings
+    ]
     return ReferenceListResponse(
-        references=[
-            ReferenceRecordingResponse.from_orm(recording, counts[recording.id])
-            for recording in recordings
-        ],
-        usage=ReferenceUsageResponse.from_orm(
-            owner_reference_usage(session, user.id), get_settings()
+        references=items,
+        usage=ReferenceUsageResponse.from_orm(owner_reference_usage(session, user.id), settings),
+        countdown_epoch=(
+            publication.epoch if any(item.deletes_at is not None for item in items) else None
         ),
     )
+
+
+@router.post(
+    "/references/countdown-shown",
+    status_code=204,
+    responses={409: {"description": "The countdown epoch is no longer current"}},
+)
+def api_countdown_shown(
+    body: ReferenceCountdownShownRequest,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_db_session)],
+) -> Response:
+    if not acknowledge_countdown_shown(session, body.epoch, utcnow()):
+        raise HTTPException(409, STALE_COUNTDOWN_EPOCH_DETAIL)
+    session.commit()
+    return Response(status_code=204)
 
 
 @router.get(
@@ -287,5 +321,5 @@ def _stored_reference_response(
     with ctx.db() as session:
         recording = get_owned_reference_recording(session, user_id, recording_id)
         return ReferenceRecordingResponse.from_orm(
-            recording, ReferenceLinkCounts(versions=0, takes=0),
+            recording, ReferenceLinkCounts(versions=0, takes=0), None,
         )

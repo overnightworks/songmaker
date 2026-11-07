@@ -648,9 +648,14 @@ export interface RateResult {
 	rating: number;
 }
 
+export interface ReferenceCountdownShownRequest {
+	epoch: string;
+}
+
 export interface ReferenceListResponse {
 	references: ReferenceRecordingResponse[];
 	usage: ReferenceUsageResponse;
+	countdown_epoch?: string | null;
 }
 
 export interface ReferenceRecordingResponse {
@@ -663,6 +668,7 @@ export interface ReferenceRecordingResponse {
 	is_kept: boolean;
 	used_by_versions: number;
 	used_by_takes: number;
+	deletes_at: string | null;
 }
 
 export interface ReferenceResponse {

@@ -4,21 +4,24 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import create_engine, event, inspect
+from sqlalchemy import create_engine, event, insert, inspect
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.constants import (
+    SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE,
     STORE_STARTUP_CONNECT_TIMEOUT_SECONDS,
     STORE_STARTUP_RETRY_DELAY_SECONDS,
     STORE_STARTUP_WAIT_SECONDS,
 )
 from songmaker_cli.db.database_url import connection_url_from_settings
-from songmaker_cli.db.models import Base
+from songmaker_cli.db.models import Base, RateLimitSetting
 from songmaker_cli.db.soft_delete import install_soft_delete_filter
 from songmaker_cli.settings import get_settings
 
@@ -174,7 +177,19 @@ def init_test_db(db_path: Path) -> sessionmaker[Session]:
 
     Base.metadata.create_all(engine)
     _seed_available_models(engine)
+    _seed_reference_countdown_row(engine)
     return sessionmaker(bind=engine)
+
+
+def _seed_reference_countdown_row(engine) -> None:
+    """Insert the row the migration chain creates; ``create_all`` skips the chain."""
+    with engine.begin() as conn:
+        conn.execute(insert(RateLimitSetting).values(
+            id=str(uuid.uuid4()),
+            setting_key=SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE,
+            value=0,
+            updated_at=datetime.now(timezone.utc),
+        ))
 
 
 def _seed_available_models(engine) -> None:
