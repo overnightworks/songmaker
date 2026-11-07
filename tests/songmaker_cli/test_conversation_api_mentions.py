@@ -54,6 +54,10 @@ def _seed(session, user_id: str) -> None:
         lyrics="rain lyrics", prompt="ballad", bpm=80, key_scale="C",
         audio_duration=200,
     ))
+    session.add(User(id="u-other", username="other", role="user"))
+    session.flush()
+    session.add(Album(id="alb-foreign", title="Elsewhere", artist="C", created_by="u-other"))
+    session.add(Song(id="s-foreign", title="Offshore", album_id="alb-foreign", track_number=1))
     session.query(AvailableModel).filter(
         AvailableModel.id.in_(["turbo", "sft"]),
     ).update({"is_active": True}, synchronize_session=False)
@@ -108,6 +112,8 @@ def stranger_client(tmp_path: Path) -> Musician:
 
 
 def test_mentioned_song_snapshot_is_server_loaded(client):
+    """Spec: REQ-COWRITER-19 -- a mentioned song's lyrics come from the stored song, named only
+    by its id in the request."""
     resp = client.turn({
         "message": "compare",
         "current_song_id": "s1",
@@ -124,6 +130,7 @@ def test_mentioned_song_snapshot_is_server_loaded(client):
 
 
 def test_album_mention_loads_tracks_from_album_id_only(client):
+    """Spec: REQ-COWRITER-22 -- an album mention carries the tracks of the musician's album."""
     resp = client.turn({
         "message": "album vibe",
         "current_song_id": "s1",
@@ -136,9 +143,11 @@ def test_album_mention_loads_tracks_from_album_id_only(client):
     assert "title: Rock" in content
     assert "title: Thunder" in content
     assert "title: Rain" in content
+    assert "Offshore" not in content
 
 
 def test_version_mention_uses_the_selected_version(client):
+    """Spec: REQ-COWRITER-23 -- a version mention carries the chosen version, not the latest."""
     resp = client.turn({
         "message": "old take on lyrics",
         "current_song_id": "s1",
@@ -151,6 +160,29 @@ def test_version_mention_uses_the_selected_version(client):
     assert "version_number: 1" in content
     assert "thunder lyrics" in content
     assert "thunder v2 lyrics" not in content.split("<mentioned_versions>")[1]
+
+
+def test_a_foreign_album_mention_is_404_and_its_tracks_stay_out(client):
+    """Spec: REQ-COWRITER-22 -- an album the musician cannot access is refused, not expanded."""
+    resp = client.turn({
+        "message": "x",
+        "current_song_id": "s1",
+        "mentioned_album_id": "alb-foreign",
+    })
+    assert resp.status_code == 404
+    assert not client.run_started
+
+
+def test_at_text_without_a_confirmed_id_stays_message_text(client):
+    """Spec: REQ-COWRITER-21 -- @-text with no picked identifier becomes no mention context and
+    stays in the message."""
+    resp = client.turn({"message": "make it like @Rain", "current_song_id": "s1"})
+    assert resp.status_code == 200
+    _stream_events(resp)
+    content = client.content
+    assert "make it like @Rain" in content
+    assert "<mentioned_songs>" not in content
+    assert "rain lyrics" not in content
 
 
 def test_duplicate_song_ids_emit_one_block(client):
@@ -167,6 +199,8 @@ def test_duplicate_song_ids_emit_one_block(client):
 
 
 def test_unknown_or_foreign_mention_is_404_before_provider(client, stranger_client):
+    """Spec: REQ-COWRITER-20 -- an unknown, foreign or unrelated mention id refuses the turn
+    before any run starts."""
     resp = client.turn({
         "message": "x",
         "current_song_id": "s1",

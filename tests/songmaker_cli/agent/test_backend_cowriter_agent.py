@@ -25,6 +25,8 @@ _PERSON_FIELDS = ("user", "owner", "created_by", "principal", "sub")
 
 
 def test_the_shipped_agent_file_loads_and_selects_exactly_the_declared_tools():
+    """Spec: REQ-COWRITER-12 -- the one agent file offers the declared tool set, whatever model
+    it names."""
     agent = load_agent(
         files("songmaker_cli") / "agents" / "cowriter.md", cowriter_tool_declarations(),
     )

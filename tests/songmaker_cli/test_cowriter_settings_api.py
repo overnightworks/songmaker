@@ -180,6 +180,8 @@ def test_chat_turns_beyond_the_chat_rate_limit_are_refused(admin_client, monkeyp
 
 
 def test_create_song_tool_hits_canonical_function(admin_client):
+    """Spec: REQ-COWRITER-30 -- the create_song tool adds a song to the musician's album through
+    the same function the API uses."""
     _, factory = admin_client
     user = make_authenticated_user("u-test", role="admin", username="u-u-test")
     with factory() as session:
@@ -221,7 +223,8 @@ def test_rename_song_tool_via_shared_session_pulls_slug_along(admin_client):
 
 
 def test_shared_cowriter_tool_executor_creates_an_immutable_song_version(admin_client):
-    """The Grok and Codex executor takes the same version-writing path as MCP."""
+    """Spec: REQ-COWRITER-31 -- the lyrics tool saves a new version at once and leaves the
+    earlier version and its take as they were."""
     _, factory = admin_client
     user = make_authenticated_user("u-test", role="admin", username="u-u-test")
     with factory() as session:
