@@ -77,8 +77,6 @@ import { songTakesLoaded } from '#lib/utils/playable.ts';
 type LibrarySurface = 'home' | 'browse' | 'playlists' | 'detail';
 // Song tabs (#1016): 'edit' hosts recipe, style, lyrics and Generate;
 // 'cowriter' hosts the conversation; 'takes' lists generations.
-// LEGACY_DETAIL_TAB_MAP below keeps history entries written under the older
-// 'write' and pre-#100 'generations'|'chat' names valid.
 export type DetailTab = 'edit' | 'cowriter' | 'takes';
 export const DETAIL_TABS: readonly DetailTab[] = ['edit', 'cowriter', 'takes'];
 
@@ -113,11 +111,6 @@ export const libraryScrollAnchor = writable(0);
 export const libraryScrollRestore = writable<{ top: number } | null>(null);
 
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['home', 'browse', 'playlists', 'detail']);
-const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
-	write: 'edit',
-	generations: 'takes',
-	chat: 'cowriter'
-};
 // Session memory only (#1047): a reload restores the open song's tab from its
 // history entry, and every other song lands on Edit again.
 const songTabs = new Map<string, DetailTab>();
@@ -156,7 +149,7 @@ function hasValidHistorySelection(state: Record<string, unknown>): boolean {
 	if (!isCollectionSnapshot(state.collection)) return false;
 	if (!isIdOrNull(state.songId)) return false;
 	if (!isIdOrNull(state.generationId)) return false;
-	if (state.detailTab !== undefined && !isDetailTabToken(state.detailTab)) return false;
+	if (state.detailTab !== undefined && !isDetailTab(state.detailTab)) return false;
 	return true;
 }
 
@@ -1173,15 +1166,8 @@ function isDetailTab(value: unknown): value is DetailTab {
 	return typeof value === 'string' && DETAIL_TABS.includes(value as DetailTab);
 }
 
-function isDetailTabToken(value: unknown): boolean {
-	return typeof value === 'string' && (isDetailTab(value) || value in LEGACY_DETAIL_TAB_MAP);
-}
-
 function normalizeDetailTab(value: unknown): DetailTab {
 	if (isDetailTab(value)) return value;
-	if (typeof value === 'string' && value in LEGACY_DETAIL_TAB_MAP) {
-		return LEGACY_DETAIL_TAB_MAP[value];
-	}
 	return DEFAULT_DETAIL_TAB;
 }
 

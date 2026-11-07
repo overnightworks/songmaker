@@ -40,8 +40,8 @@
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
 "frontend/src/lib/share/sharePlayback.test.ts" = 837
 "frontend/src/lib/stores/jobs.test.ts" = 906
-"frontend/src/lib/stores/libraryContext.test.ts" = 2096
-"frontend/src/lib/stores/libraryContext.ts" = 1206
+"frontend/src/lib/stores/libraryContext.test.ts" = 2093
+"frontend/src/lib/stores/libraryContext.ts" = 1192
 "frontend/src/lib/stores/navigation.test.ts" = 3026
 "frontend/src/lib/stores/player.test.ts" = 5286
 "frontend/src/lib/stores/player.ts" = 2236
@@ -143,7 +143,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"create_app" = 178
+"create_app" = 176
 
 [function_lines."tests/acestep_worker/test_wrapper_train_lora.py"]
 "_make_deps" = 76
