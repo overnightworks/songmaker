@@ -131,7 +131,7 @@
 		content: '•';
 		position: absolute;
 		left: 0;
-		color: var(--score-bad);
+		color: var(--text-muted);
 	}
 
 	.actions {

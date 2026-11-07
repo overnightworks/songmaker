@@ -515,7 +515,7 @@
 	}
 
 	.toolbar-btn.destructive:hover {
-		background: rgba(255, 68, 68, 0.1);
+		background: color-mix(in srgb, var(--fail) 10%, transparent);
 	}
 
 	.toolbar-count {

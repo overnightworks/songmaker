@@ -225,7 +225,7 @@
 	}
 
 	.option.deleted {
-		color: var(--danger, var(--primary));
+		color: var(--fail);
 		text-decoration: line-through;
 	}
 

@@ -401,7 +401,7 @@
 
 	.status-badge.bad {
 		background: var(--fail);
-		color: #fff;
+		color: var(--on-fail);
 	}
 
 	.status-badge.active {

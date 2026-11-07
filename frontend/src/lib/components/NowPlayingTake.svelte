@@ -635,7 +635,7 @@
 		margin-right: 0.3em;
 	}
 	.dev-token.changed {
-		color: #f44;
+		color: var(--accent);
 		text-decoration: underline dotted;
 		text-underline-offset: 2px;
 		cursor: help;

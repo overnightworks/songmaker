@@ -553,7 +553,7 @@
 
 	.banner.error {
 		border: 1px solid var(--fail);
-		background: rgba(255, 68, 68, 0.08);
+		background: color-mix(in srgb, var(--fail) 8%, transparent);
 		color: var(--fail);
 	}
 
@@ -827,10 +827,10 @@
 
 	.cancel-training-btn {
 		padding: 0.3rem 0.75rem;
-		border: 1px solid var(--score-bad);
+		border: 1px solid var(--accent);
 		border-radius: var(--btn-radius-sm);
 		background: transparent;
-		color: var(--score-bad);
+		color: var(--accent);
 		font-family: var(--font-display);
 		font-size: 0.75rem;
 		letter-spacing: 0.5px;
