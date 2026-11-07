@@ -1,0 +1,8 @@
+claim_id = "290f3e72459c45d3b0c4a2dbacbff1bd"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "eba494785942249dfa674c4b4c00dc44cb545f69"
+branch = "claude/issue-2463-move-into-shared-album-asks-first"
+scope = ["docs/architecture.md", "frontend/e2e/song-move.spec.ts", "frontend/src/lib/components/editor/SongMenu.svelte", "frontend/src/lib/components/editor/SongMenu.test.ts", "frontend/src/lib/components/editor/SongMovePicker.svelte", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/songMove.test.ts", "frontend/src/lib/stores/songMove.ts"]
+opened_commit = "65d77fc46fc8c089454c34fee87a4904a5d4ec9f"
+whole_reason = "The ask is one behaviour across the constants, the store, the picker row and the menu that hosts the dialog, with its proofs and one docs sentence; the dialog cannot live in the picker, which the closing popover destroys."
