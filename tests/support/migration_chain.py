@@ -48,8 +48,8 @@ def job_count(engine: Engine) -> int:
 def insert_bare_job(engine: Engine, *, job_type: str = "generate") -> None:
     """Insert the job ``job`` with only the columns every revision's ``jobs`` table has.
 
-    The SQLite chain builds a narrower table than PostgreSQL's, so the timestamps join only
-    where they exist.
+    Older revisions' ``jobs`` tables lack the timestamp columns, so they join only where
+    they exist.
     """
     present = column_names(engine, "jobs")
     timestamps = [name for name in ("heartbeat_at", "started_at") if name in present]
