@@ -19,7 +19,6 @@ from support.web_app import (
 
 from songmaker_cli.api_helpers import create_job_with_rate_limit
 from songmaker_cli.constants import JobStatus, JobType
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
@@ -75,9 +74,8 @@ def _seed(session) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    factory = init_test_db(tmp_path / "test.db")
-    ctx = make_router_ctx(tmp_path, db=factory, seed_db=_seed)
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed)
     wav = tmp_path / "audio" / "u" / "take.wav"
     wav.parent.mkdir(parents=True)
     wav.write_bytes(b"RIFF" + b"\x00" * 40)
