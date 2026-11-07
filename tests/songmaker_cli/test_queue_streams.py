@@ -2079,7 +2079,7 @@ def _write_pool_audio_files(root: Path) -> None:
 def test_library_pool_queue_pool_sets(
     tmp_path: Path, monkeypatch, pool: str, expected: list[str]
 ) -> None:
-    """Spec: REQ-LIBRARY-03, REQ-LIBRARY-04, REQ-LIBRARY-05, REQ-LIBRARY-06, REQ-LIBRARY-07,
+    """Spec: REQ-LIBRARY-03, REQ-LIBRARY-04, REQ-LIBRARY-06, REQ-LIBRARY-07,
     REQ-LIBRARY-08, REQ-LISTENING-01 -- each pool holds exactly its takes: Mix lists a take that
     is both picked and kept once, no pool holds the archived or the missing-file take, one song
     contributes several takes, and a song's takes run from newest to oldest.

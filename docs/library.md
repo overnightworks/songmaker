@@ -10,8 +10,6 @@ For anyone building or reviewing library playback pools, shuffle and the player:
 
 ### REQ-LIBRARY-04: Picks is exactly the set of playable Picks.
 
-### REQ-LIBRARY-05: Keeps is exactly the set of playable Keeps.
-
 ### REQ-LIBRARY-06: All is exactly the set of playable audio takes.
 
 ### REQ-LIBRARY-07: Archived takes and takes whose audio is missing or unreadable are excluded from library playback.
