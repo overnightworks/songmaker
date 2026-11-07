@@ -1,5 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
+import { ApiError } from '#lib/api/fetch.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	DIALOG_CANCEL_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -12,16 +14,20 @@ import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
 import {
+	SONG_MOVE_ALBUM_GONE,
 	SONG_MOVE_BACK_LABEL,
+	SONG_MOVE_FAILED_REASON,
 	SONG_MOVE_NO_MATCH,
 	SONG_MOVE_NO_OTHER_ALBUM,
 	SONG_MOVE_SHARED_TITLE,
+	songMoveFailedLine,
 	songMoveSharedMessage
 } from '#lib/constants.ts';
 import type { AlbumItem } from '#lib/api/types.ts';
 import { moveSong } from '#lib/api/songs.ts';
 import { songList } from '#lib/stores/libraryData.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
+import { songMoveConfirm } from '#lib/stores/songMove.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
 import SongMenu from './SongMenu.svelte';
 
@@ -32,6 +38,7 @@ vi.mock('#lib/api/client.ts', () => ({
 vi.mock('#lib/api/songs.ts', () => ({ moveSong: vi.fn() }));
 
 import { fetchAlbums } from '#lib/api/client.ts';
+import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -321,13 +328,12 @@ describe('SongMenu move picker', () => {
 				'.pk-list'
 			);
 			target.querySelector<HTMLButtonElement>('.pk-list .pk-row')?.click();
-			await tick();
+			await vi.waitFor(() => expect(target.querySelector('.pk-list')).toBeNull());
 			return target;
 		}
 
 		it('asks with the consequence line once the popover closed, and moves nothing on Cancel', async () => {
 			const target = await chooseSharedAlbum();
-
 			const dialog = document.body.querySelector('[role="dialog"], [role="alertdialog"]');
 			expect(dialog?.textContent).toContain(SONG_MOVE_SHARED_TITLE);
 			expect(dialog?.textContent).toContain(songMoveSharedMessage('Sommerlicht', 'Cologne'));
@@ -341,5 +347,109 @@ describe('SongMenu move picker', () => {
 			expect(document.body.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
 			expect(moveSong).not.toHaveBeenCalled();
 		});
+	});
+
+	describe('while a move runs and after it failed', () => {
+		const albums = [
+			homeAlbum,
+			makeAlbum({ id: 'b', title: 'Berlin' }),
+			makeAlbum({ id: 'd', title: 'Dresden' })
+		];
+
+		beforeEach(() => {
+			vi.mocked(moveSong).mockReset();
+		});
+
+		function rowTitled(target: HTMLElement, title: string): HTMLButtonElement {
+			const row = [...target.querySelectorAll<HTMLButtonElement>('.pk-list .pk-row')].find((item) =>
+				item.textContent?.includes(title)
+			);
+			if (!row) throw new Error(`no row for ${title}`);
+			return row;
+		}
+
+		it('marks only the tapped row busy, disables the rest and keeps the popover open', async () => {
+			vi.mocked(moveSong).mockReturnValue(new Promise(() => undefined));
+			const target = await openPickerOver(albums, '.pk-list');
+
+			rowTitled(target, 'Berlin').click();
+			await tick();
+
+			expect(rowTitled(target, 'Berlin').getAttribute('aria-busy')).toBe('true');
+			expect(rowTitled(target, 'Dresden').disabled).toBe(true);
+			expect(target.querySelector<HTMLInputElement>('.pk-filter')?.disabled).toBe(true);
+			expect(
+				target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_MOVE_BACK_LABEL}"]`)?.disabled
+			).toBe(true);
+			expect(target.querySelector('.menu-panel')).not.toBeNull();
+		});
+
+		it('keeps the picker open with a red row, one line and Retry that repeats the move', async () => {
+			vi.mocked(moveSong).mockRejectedValue(new Error('boom'));
+			const target = await openPickerOver(albums, '.pk-list');
+
+			rowTitled(target, 'Berlin').click();
+			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
+
+			expect(target.querySelector('.pk-error')?.getAttribute('role')).toBe('alert');
+			expect(target.querySelector('.pk-error span')?.textContent).toBe(
+				songMoveFailedLine(SONG_MOVE_FAILED_REASON)
+			);
+			expect(rowTitled(target, 'Berlin').classList.contains('failed')).toBe(true);
+			expect(rowTitled(target, 'Dresden').disabled).toBe(false);
+
+			target.querySelector<HTMLButtonElement>('.pk-retry')?.click();
+			await tick();
+			expect(moveSong).toHaveBeenCalledTimes(2);
+			expect(moveSong).toHaveBeenLastCalledWith('s1', 'b');
+		});
+
+		it('shows no Retry when the album is gone', async () => {
+			vi.mocked(moveSong).mockRejectedValue(
+				new ApiError(404, 'Song or album not found', '/api/songs/s1/album')
+			);
+			const target = await openPickerOver(albums, '.pk-list');
+
+			rowTitled(target, 'Berlin').click();
+			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
+
+			expect(target.querySelector('.pk-error')?.textContent).toContain(
+				songMoveFailedLine(SONG_MOVE_ALBUM_GONE)
+			);
+			expect(target.querySelector('.pk-error')?.textContent).not.toContain(LIBRARY_RETRY_LABEL);
+		});
+
+		it('reopens the picker with the red row when a move into a shared album is refused', async () => {
+			vi.mocked(moveSong).mockRejectedValue(new Error('boom'));
+			const target = await openPickerOver(
+				[homeAlbum, makeAlbum({ id: 'c', title: 'Cologne', is_shared: true })],
+				'.pk-list'
+			);
+			target.querySelector<HTMLButtonElement>('.pk-list .pk-row')?.click();
+			await vi.waitFor(() => expect(get(songMoveConfirm)).not.toBeNull());
+			[...document.body.querySelectorAll('button')]
+				.find((button) => button.textContent?.trim() === SONG_MENU_MOVE_LABEL)
+				?.click();
+
+			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
+
+			expect(target.querySelector('.pk-error span')?.textContent).toBe(
+				songMoveFailedLine(SONG_MOVE_FAILED_REASON)
+			);
+			expect(target.querySelector('.pk-list .pk-row.failed')).not.toBeNull();
+		});
+	});
+
+	it('forgets an open ask when the menu unmounts', async () => {
+		const target = await openPickerOver(
+			[homeAlbum, makeAlbum({ id: 'c', title: 'Cologne', is_shared: true })],
+			'.pk-list'
+		);
+		target.querySelector<HTMLButtonElement>('.pk-list .pk-row')?.click();
+		await vi.waitFor(() => expect(get(songMoveConfirm)).not.toBeNull());
+
+		await unmount(mounted.pop() as ReturnType<typeof mount>);
+
+		expect(get(songMoveConfirm)).toBeNull();
 	});
 });

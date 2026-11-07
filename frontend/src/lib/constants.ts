@@ -292,7 +292,10 @@ export const SONG_MOVE_FILTER_PLACEHOLDER = 'Filter';
 export const SONG_MOVE_LOADING_LABEL = 'Looking…';
 export const SONG_MOVE_NO_OTHER_ALBUM = 'No other album';
 export const SONG_MOVE_NO_MATCH = 'No album matches';
-export const SONG_MOVE_FAILED = 'Not moved';
+export const SONG_MOVE_ALBUM_GONE = 'album gone';
+export const SONG_MOVE_NO_CONNECTION = 'no connection';
+export const SONG_MOVE_FAILED_REASON = 'something went wrong';
+export const songMoveFailedLine = (reason: string) => `Not moved · ${reason}`;
 export const SONG_MOVE_SHARED_TITLE = 'Move to a shared album?';
 export function songMoveSharedMessage(songTitle: string, albumTitle: string): string {
 	return `${songTitle} appears on ${albumTitle}'s public page`;
