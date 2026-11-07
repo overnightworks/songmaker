@@ -1,8 +1,0 @@
-claim_id = "194094ce1f3f4128bd2e4f4aa1b856d1"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "30b0379ca861176226a93d03e323f8e07ce0b98e"
-branch = "claude/issue-2472-one-reference-row-builder"
-scope = ["tests/songmaker_cli/db/queries/test_reference_recordings_attach_lock_postgres.py", "tests/songmaker_cli/db/queries/test_reference_unused_stamp_postgres.py", "tests/songmaker_cli/db/queries/test_songs_version_lock_postgres.py", "tests/songmaker_cli/db/queries/test_versions_in_use.py", "tests/songmaker_cli/jobs/test_generation_reference_recording.py", "tests/songmaker_cli/test_generation_number_lock_postgres.py", "tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_reference_api.py", "tests/songmaker_cli/test_reference_audio.py", "tests/songmaker_cli/test_reference_audio_quota.py", "tests/songmaker_cli/test_reference_audio_reconciliation.py", "tests/songmaker_cli/test_reference_delete_api.py", "tests/songmaker_cli/test_reference_delete_postgres.py", "tests/songmaker_cli/test_reference_unused_stamp.py", "tests/songmaker_cli/test_reference_unused_stamp_loops.py", "tests/songmaker_cli/test_reference_unused_stamp_reconciliation.py", "tests/support/reference_api_world.py", "tests/support/reference_rows.py"]
-opened_commit = "d75011bb6f22f0a79ef02b4e8be7d0d192a1034e"
-whole_reason = "One test builder replaces its private copies; a split would leave copies of the same construction to drift apart."
