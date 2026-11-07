@@ -1,0 +1,8 @@
+claim_id = "2a8644579f6e4857a6353c436a146e1b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3c508729300ba87a70abf99d55d8dc66a00dcd4e"
+branch = "claude/issue-2541-d1a-migration-tests-pg"
+scope = ["quality/baseline.toml", "tests/songmaker_cli/db/test_migration_revisions.py", "tests/songmaker_cli/db/test_migrations_secret_password.py", "tests/songmaker_cli/test_auth_stores.py", "tests/songmaker_cli/test_db.py", "tests/support/migration_chain.py"]
+opened_commit = "43b474405d0f0da4129d81980bf8f3765ba52104"
+whole_reason = "The migration tests leave one file for one new file on one mechanism; splitting them would run the same revisions on two databases."
