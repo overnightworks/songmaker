@@ -1,7 +1,0 @@
-claim_id = "8aff9be4537849538cc6d3e9b950bb3d"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "42f8f1b81b0486e72a2a6890050dbb86cf9185a6"
-branch = "docs/security-release-exemption"
-scope = ["docs/security.md"]
-opened_commit = "39d9403112be958e0b7b6a549d3f8ce158500966"
