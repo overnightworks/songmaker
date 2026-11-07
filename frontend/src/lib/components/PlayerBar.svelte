@@ -272,7 +272,6 @@
 			<span class="track-detail">{idleTarget.label}</span>
 		{:else if startNotice === 'empty'}
 			<span class="track-title">{LIBRARY_QUEUE_EMPTY_TITLE}</span>
-			<span class="track-detail">{idleTarget.label}</span>
 		{:else if startNotice === 'error'}
 			<span class="track-title">{idleTarget.label} failed</span>
 			<span class="track-detail">{LIBRARY_QUEUE_RETRY_DETAIL}</span>
