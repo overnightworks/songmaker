@@ -367,9 +367,10 @@ def test_a_fetched_take_is_discarded_when_the_job_is_cancelled_after_the_fetch(
     seeded_db, tmp_path: Path
 ) -> None:
     fetched_take = tmp_path / "songmaker_take_fetched.wav"
+    cancellation = asyncio.CancelledError()
     with pytest.raises(asyncio.CancelledError):
         _run_generation_whose_terminal_check_fails_after_the_fetch(
-            seeded_db, tmp_path, asyncio.CancelledError()
+            seeded_db, tmp_path, cancellation
         )
 
     assert not fetched_take.exists()
