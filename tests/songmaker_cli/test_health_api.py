@@ -30,7 +30,7 @@ from songmaker_cli.health_types import BackgroundLoopName
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 
 
-def test_health_details_reports_no_codex_image_sandbox_runtime(
+def test_health_details_reports_no_sandbox_signal(
     tmp_path: Path, mock_arq_pool, monitoring_headers,
 ) -> None:
     client, _ = make_test_app(tmp_path)
@@ -38,7 +38,7 @@ def test_health_details_reports_no_codex_image_sandbox_runtime(
         resp = client.get("/health/details", headers=monitoring_headers)
 
     assert resp.status_code == 200
-    assert "codex_image_sandbox_runtime" not in resp.json()
+    assert not [key for key in resp.json() if "sandbox" in key]
 
 
 def test_web_start_looks_for_no_bubblewrap(
