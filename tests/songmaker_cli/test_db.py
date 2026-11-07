@@ -1582,9 +1582,7 @@ def test_set_user_role_unknown_user(db_session: Session) -> None:
 
 
 def test_create_user_keeps_the_given_id(db_session: Session) -> None:
-    from songmaker_cli.db.queries.auth import create_user
-
-    user = create_user(db_session, "7b3f0c1e-subject", "alice", "user")
+    user = seed_user(db_session, "alice", user_id="7b3f0c1e-subject")
     db_session.commit()
     assert get_user(db_session, "7b3f0c1e-subject") is user
 

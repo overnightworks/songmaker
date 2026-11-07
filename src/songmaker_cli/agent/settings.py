@@ -13,14 +13,19 @@ class AgentSettings(AgentConfig):
 
     ``mcp_client_id`` is the ``azp`` of the public client the person's agent signs in with and
     ``mcp_scope`` the one scope its token holds; both set turn the MCP endpoint on, neither set
-    leaves it off, and one alone stops startup.
+    leaves it off, and one alone stops startup. ``mcp_agent_group`` is the realm group of the
+    agents that sign in with their own client; it is read only while the endpoint is on, which
+    then requires it.
     """
 
     mcp_client_id: str | None = Field(None, min_length=1)
     mcp_scope: str | None = Field(None, min_length=1)
+    mcp_agent_group: str | None = Field(None, min_length=1)
 
     @model_validator(mode="after")
     def _mcp_values_are_set_together(self) -> Self:
         if (self.mcp_client_id is None) != (self.mcp_scope is None):
             raise ValueError("mcp_client_id and mcp_scope are set together or not at all")
+        if self.mcp_client_id is not None and self.mcp_agent_group is None:
+            raise ValueError("mcp_agent_group is required while the MCP endpoint is on")
         return self

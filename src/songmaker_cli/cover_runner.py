@@ -330,7 +330,7 @@ def _user_or_none(session, user_id: str | None) -> AuthenticatedUser | None:
     user = None if user_id is None else get_user(session, user_id)
     if user is None:
         return None
-    return AuthenticatedUser(id=user.id, username=user.username, role=user.role)
+    return AuthenticatedUser(id=user.id, username=user.username, role=user.role, agent=None)
 
 
 def _staging_directory(audio_dir: Path, album_id: str, job_id: str) -> Path:
