@@ -94,15 +94,6 @@ Quelle: DESK — CLAUDE.md ownership checks on every resource endpoint; corrobor
 ### REQ-ADMIN-01: A user has exactly one role: administrator or user.
 Quelle: DESK — current create and update user role is administrator or user.
 
-### REQ-ADMIN-02: When no users exist, completing setup creates the first administrator.
-Quelle: DESK — current first-run setup creates the first administrator.
-
-### REQ-ADMIN-03: After at least one user exists, Songmaker does not offer an open signup.
-Quelle: DESK — setup refuses once users exist; corroborated by the invite-only deployment (not an invite-token feature).
-
-### REQ-ADMIN-04: An administrator can create a user with a username, password, and role of administrator or user.
-Quelle: DESK — current admin create-user workflow.
-
 ### REQ-ADMIN-05: A user cannot create another user.
 Quelle: DESK — admin endpoints require administrator role; corroborated by current admin-role tests.
 
@@ -116,9 +107,6 @@ Quelle: DESK — current admin user endpoints and self-deactivation refusal.
 Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
 
 ### REQ-ADMIN-09: Logout ends only the current session.
-Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
-
-### REQ-ADMIN-10: Changing a user's password, deactivating a user, or deleting a user ends every session of that user.
 Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
 
 ### REQ-ADMIN-11: When a user's concurrent sessions exceed Songmaker's concurrent-session cap, Songmaker ends the oldest sessions until the cap is met and does not end every session.

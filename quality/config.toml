@@ -2,7 +2,6 @@
 mandatory_jobs = [
     "Backend (Python 3.14)",
     "Alert rules (promtool)",
-    "PostgreSQL contract (serial)",
     "Combine backend coverage",
     "Frontend",
 ]
@@ -216,3 +215,9 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1132 -> 11
 item = "#2197"
 date = 2026-11-03
 reason = "the reference list gains the generated in_use field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = 'mandatory job "PostgreSQL contract (serial)" removed'
+item = "#2359"
+date = 2026-11-06
+reason = "the operator ruled on 06.11.2026 that the database tests run in Backend (#2280 A2)"

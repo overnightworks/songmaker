@@ -13,7 +13,7 @@ from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
 
-from songmaker_cli.constants import REDIS_RL_IP_PREFIX, ROLE_ADMIN
+from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -60,7 +60,6 @@ def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
             idle_seconds=settings.session_idle_seconds,
             absolute_max_age_seconds=settings.session_absolute_max_age_seconds,
         ),
-        admin_role=ROLE_ADMIN,
         cookie_secure=settings.cookie_secure,
     )
 

@@ -282,6 +282,20 @@ def list_song_ids_for_albums(
 
 
 
+def next_track_number(session: Session, album_id: str) -> int:
+    """The track after the album's highest one, trashed songs included."""
+    track_query = (
+        session.query(Song.track_number)
+        .execution_options(include_deleted=True)
+        .filter_by(album_id=album_id)
+        .order_by(Song.track_number.desc())
+    )
+    if session.bind.dialect.name != "sqlite":
+        track_query = track_query.with_for_update()
+    max_track = track_query.first()
+    return (max_track[0] + 1) if max_track else INITIAL_TRACK_NUMBER
+
+
 def create_song(
     session: Session,
     title: str,
@@ -310,20 +324,9 @@ def create_song(
     if not album:
         raise ValueError(f"Album not found: {album_id}")
 
-    track_query = (
-        session.query(Song.track_number)
-        .execution_options(include_deleted=True)
-        .filter_by(album_id=album_id)
-        .order_by(Song.track_number.desc())
-    )
-    if session.bind.dialect.name != "sqlite":
-        track_query = track_query.with_for_update()
-    max_track = track_query.first()
-    track_number = (max_track[0] + 1) if max_track else INITIAL_TRACK_NUMBER
-
     song = Song(
         title=title, album_id=album_id, vocal_language=vocal_language,
-        track_number=track_number, slug=slug,
+        track_number=next_track_number(session, album_id), slug=slug,
     )
     session.add(song)
     session.flush()
@@ -606,7 +609,7 @@ def rename_song(
 
 
 def move_song(session: Session, song_id: str, new_album_id: str, slug: str) -> Song:
-    """Move a song to another album, re-slugging in the same flush.
+    """Move a song to another album as its last track, re-slugging in the same flush.
 
     ``slug`` (already reserved via unique_song_slug() against the target
     album) moves together with the album_id change in one flush — the
@@ -624,7 +627,9 @@ def move_song(session: Session, song_id: str, new_album_id: str, slug: str) -> S
     if song.album_id == new_album_id:
         return song
 
+    track_number = next_track_number(session, new_album_id)
     song.album_id = new_album_id
+    song.track_number = track_number
     song.slug = slug
     session.flush()
     return song

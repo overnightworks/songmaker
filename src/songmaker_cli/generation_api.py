@@ -229,13 +229,13 @@ def api_bulk_delete_generations(
     candidates = {
         take.reference_recording_id for take in generations if take.reference_recording_id
     }
-    paths = bulk_delete_generations(session, generations)
-    for gen_id in deduplicated_ids:
+    deletion = bulk_delete_generations(session, generations)
+    for gen_id in deletion.deleted_ids:
         record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
     session.commit()
     commit_unused_stamps(session, candidates)
-    cleanup_generation_files(ctx.audio_dir, paths)
-    return BulkDeleteResponse(deleted=len(generations))
+    cleanup_generation_files(ctx.audio_dir, deletion.paths)
+    return BulkDeleteResponse(deleted=len(deletion.deleted_ids))
 
 
 # ── Generation + Scoring ─────────────────────────────────────────────

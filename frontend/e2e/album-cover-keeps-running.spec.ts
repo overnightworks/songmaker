@@ -1,10 +1,10 @@
-// A cover suggestion keeps running when the person leaves (frames
-// C6-C9 of docs/design/album-browsing.html §(i)): leaving the cover editor
+// A cover suggestion keeps running when the person leaves (album_rule_6,
+// album_rule_8 and album_rule_9 in docs/navigation.md): leaving the cover editor
 // stops nothing, a run that finished while away waits as an unused suggestion,
-// and only × stops a run. The closed cover says so (E2, C8): a ring and the
+// and only × stops a run. The closed cover says so: a ring and the
 // time while it runs, "● n waiting" until USE, Upload or × discards them, and
-// a second device sees the same once it opens, reloads or returns to the page
-// (E6). CI's stack mounts no image route, so the run is
+// a second device sees the same once it opens, reloads or returns to the page.
+// CI's stack mounts no image route, so the run is
 // seeded in the database (scripts/seed_e2e_job_states.py). Each test makes a
 // fresh album of its own and archives it afterwards.
 

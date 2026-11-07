@@ -22,9 +22,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG, ROLE_ADMIN
+from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Song, User, Version
 
@@ -45,7 +46,7 @@ def _client_with_title(
             id=OWNER_ID, username="owner", role="user",
         ))
         session.add(User(
-            id=ADMIN_ID, username="admin", role=ROLE_ADMIN,
+            id=ADMIN_ID, username="admin", role=AppRole.ADMIN,
         ))
         session.flush()
         session.add(Album(
@@ -131,7 +132,7 @@ def test_search_finds_owners_em_dash_and_number_title(tmp_path: Path, query: str
 
 @pytest.mark.parametrize("query", ["Thomas", "Für", "42"])
 def test_admin_search_finds_another_users_album(tmp_path: Path, query: str) -> None:
-    admin = make_authenticated_user(ADMIN_ID, role=ROLE_ADMIN, username="admin")
+    admin = make_authenticated_user(ADMIN_ID, role=AppRole.ADMIN, username="admin")
     client = _client_with_title(
         tmp_path, album_title=ALBUM_236, song_title=SONG_236, searcher=admin,
     )

@@ -92,6 +92,7 @@ from songmaker_cli.db.queries.conversations import (
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     count_user_active_jobs,
+    lock_active_job,
     recover_stale_jobs_by_type,
     update_job_status,
 )
@@ -770,13 +771,15 @@ def _turn_problem_event(session: Session, job_id: str, turn_problem: TurnProblem
 
 
 def _chat_failure_event(session: Session, job_id: str, exc: Exception) -> str:
+    log.error("Co-writer chat failed (%s)", type(exc).__name__)
+    return _fail_turn_event(session, job_id, _CHAT_REQUEST_FAILED, "chat_error")
+
+
+def _fail_turn_event(session: Session, job_id: str, message: str, error_type: str) -> str:
     from songmaker_cli.jobs._runtime import _fail_chat_job
 
-    log.error("Co-writer chat failed (%s)", type(exc).__name__)
-    _fail_chat_job(session, job_id, _CHAT_REQUEST_FAILED, "chat_error")
-    return _sse_format(
-        ChatTurnFailureFrame(status=_TURN_FAILED_STATUS, message=_CHAT_REQUEST_FAILED),
-    )
+    _fail_chat_job(session, job_id, message, error_type)
+    return _sse_format(ChatTurnFailureFrame(status=_TURN_FAILED_STATUS, message=message))
 
 
 def _complete_chat_turn(
@@ -784,7 +787,12 @@ def _complete_chat_turn(
     session: Session,
     prepared: PreparedChatTurn,
     assistant_text: str,
-) -> ChatTurnFinalFrame:
+) -> ChatTurnFinalFrame | ChatTurnFailureFrame:
+    # Locked before the append: a job the reaper failed must not answer a re-sent message twice.
+    if lock_active_job(session, prepared.job_id) is None:
+        session.rollback()
+        log.warning("Chat job %s was already terminal at completion", prepared.job_id)
+        return ChatTurnFailureFrame(status=_TURN_FAILED_STATUS, message="Reply came too late")
     assistant_message = append_message(
         session,
         prepared.conversation_id,
@@ -792,10 +800,7 @@ def _complete_chat_turn(
         assistant_text,
         song_id=req.current_song_id,
     )
-    if not update_job_status(
-        session, prepared.job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0),
-    ):
-        log.warning("Chat job %s was already terminal at completion", prepared.job_id)
+    update_job_status(session, prepared.job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0))
     session.commit()
     return ChatTurnFinalFrame(
         conversation_id=prepared.conversation_id,
@@ -805,13 +810,8 @@ def _complete_chat_turn(
 
 
 def _chat_completion_failure_event(session: Session, job_id: str) -> str:
-    from songmaker_cli.jobs._runtime import _fail_chat_job
-
     log.exception("Co-writer chat completion failed")
-    _fail_chat_job(session, job_id, _CHAT_COMPLETION_FAILED, "completion_error")
-    return _sse_format(
-        ChatTurnFailureFrame(status=_TURN_FAILED_STATUS, message=_CHAT_COMPLETION_FAILED),
-    )
+    return _fail_turn_event(session, job_id, _CHAT_COMPLETION_FAILED, "completion_error")
 
 
 # ── Conversation CRUD ────────────────────────────────────────────────

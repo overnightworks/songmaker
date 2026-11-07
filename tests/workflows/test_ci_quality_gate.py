@@ -94,3 +94,13 @@ def test_g3_new_action_references_are_commit_pinned(job_id):
     )
     assert references
     assert all(re.fullmatch(r"[^@]+@[0-9a-f]{40}", ref) for ref in references)
+
+
+def test_backend_runs_the_database_tests_against_its_own_postgres_service():
+    backend = JOBS["backend"]
+    (test_step,) = [s for s in backend["steps"] if s.get("name") == "Run tests with coverage"]
+    assert " -m " not in test_step["run"]
+    service_port = backend["services"]["postgres"]["ports"][0].split(":")[0]
+    (database_url,) = [url for key, url in backend["env"].items() if key.endswith("DATABASE_URL")]
+    assert f"@localhost:{service_port}/" in database_url
+    assert not [job_id for job_id in JOBS if "postgresql" in job_id]

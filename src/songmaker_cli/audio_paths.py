@@ -20,13 +20,22 @@ def _resolved_audio_root(audio_dir: Path) -> Path:
     return audio_dir.resolve()
 
 
+def confined_under(root: Path, path: Path) -> Path | None:
+    """Return ``path`` resolved when it lies strictly below the resolved ``root``.
+
+    The root may itself be a symlink or a mount; a path counts where it resolves.
+    The root itself is not below it.
+    """
+    resolved_root = root.resolve()
+    resolved_path = path.resolve()
+    if resolved_path == resolved_root or not resolved_path.is_relative_to(resolved_root):
+        return None
+    return resolved_path
+
+
 def _resolved_within_root(audio_dir: Path, filename: str) -> Path | None:
     """Resolve ``filename`` and return it only when it stays below the root."""
-    audio_root = _resolved_audio_root(audio_dir)
-    audio_path = (audio_root / filename).resolve()
-    if not audio_path.is_relative_to(audio_root):
-        return None
-    return audio_path
+    return confined_under(audio_dir, audio_dir / filename)
 
 
 def require_canonical_audio_filename(filename: str) -> None:

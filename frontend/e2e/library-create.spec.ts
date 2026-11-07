@@ -1,9 +1,8 @@
 import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // + NEW on Home's head makes an album or a playlist at both widths, even from
-// an empty library (#1149, #1166, #915 F2a/F2b, #1529; pictures N1–N5 in
-// docs/design/navigation.html, I1 in the same file for Home). The desktop
+// an empty library (account_rule_1 in docs/navigation.md). The desktop
 // Library and Playlists heads keep it; the phone's list heads carry the order
-// switch only (#1354 rules 9 and 14). A card closed with a typed title opens again
+// switch only (1354_rule_9 and 1354_rule_14). A card closed with a typed title opens again
 // on it (#1184 K2). Escape folds each create card and returns focus, a refused
 // create says why in words that fit it, a repeat refusal replaces the toast
 // before it, and a long album title leaves the song card's × on screen
