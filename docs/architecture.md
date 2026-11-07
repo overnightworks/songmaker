@@ -1150,7 +1150,7 @@ flowchart TB
     entry --> workers --> routes --> runtime --> ai --> services --> contract --> typed --> persistence --> below --> base --> leaves
 ```
 
-The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list. A third lists the modules that import the agent runtime client at all, because the contract tool sees the installed package as one node; which submodule each imports is reviewed: only `agent/backend.py` and `agent/mcp.py` import its run and MCP machinery, only `agent/settings.py` its `config`, and the route and tool modules only its `tools`. A new module breaks the contract until it takes a row.
+The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list. A third lists the modules that import the agent runtime client at all, because the contract tool sees the installed package as one node; which submodule each imports is reviewed: only `agent/backend.py` and `agent/mcp.py` import its run and MCP machinery, only `agent/settings.py` its `config`, and the route and tool modules only its `tools`, except `conversation_api.py`, which also imports its `turn`. A new module breaks the contract until it takes a row.
 
 ## Data Model
 

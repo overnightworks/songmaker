@@ -106,7 +106,7 @@ _GENERATE_DESCRIPTION: Final = (
     "Queue music generation for one of the person's own songs, using the song's latest "
     "version, or the version named by version_id. The version needs lyrics and a style "
     "prompt. model is one of: " + ", ".join(sorted(MODEL_AVAILABLE_MODES)) + ". count is "
-    "how many takes to render (1 to 10). Jobs wait in one shared GPU queue and the "
+    "how many takes to render. Jobs wait in one shared GPU queue and the "
     "person's generation limit applies; the answer names the queued job."
 )
 

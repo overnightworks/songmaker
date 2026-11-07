@@ -1,8 +1,7 @@
 """A person's own agent on ``/mcp`` and on the marked routes, against a fake Keycloak realm.
 
 Every case drives the real app through the ASGI client; the relying party verifies the tokens
-exactly as in production and only its key set is the fake issuer's. Matrix cells M1 to M26 of
-the work item are named in the case ids.
+exactly as in production and only its key set is the fake issuer's.
 """
 
 from __future__ import annotations
@@ -23,7 +22,12 @@ from support.token_world import TokenWorld, make_token_world
 from support.web_app import TEST_ORIGIN, seed_session, seed_user
 
 from songmaker_cli.agent.mcp import collect_route_tools
-from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LOGIN_GROUP, OIDC_MCP_GROUP
+from songmaker_cli.constants import (
+    MODEL_AVAILABLE_MODES,
+    OIDC_ADMIN_GROUP,
+    OIDC_LOGIN_GROUP,
+    OIDC_MCP_GROUP,
+)
 from songmaker_cli.db.models import Album, Generation, Job, Song, Version
 from songmaker_cli.settings import Settings, get_settings
 
@@ -166,7 +170,7 @@ def test_m1_the_description_of_generate_names_the_valid_models(mcp: McpWorld) ->
         tool for tool in reply.json()["result"]["tools"] if tool["name"] == "generate_song"
     )
 
-    assert all(model in generate["description"] for model in ("turbo", "sft", "xl-base"))
+    assert all(model in generate["description"] for model in MODEL_AVAILABLE_MODES)
 
 
 # -- M2, M3: only the person's own content -------------------------------------------
