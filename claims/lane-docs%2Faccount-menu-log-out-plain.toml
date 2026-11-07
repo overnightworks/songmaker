@@ -1,7 +1,0 @@
-claim_id = "101b8f04e600436db0efc3b8d23c8c15"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "b8ae2acc96e84047c593bb0744d5ffcdfb07a20b"
-branch = "docs/account-menu-log-out-plain"
-scope = ["docs/navigation.md"]
-opened_commit = "9b38e6c5cd6aa2be57d03076021cfc8d6ed02999"
