@@ -1,7 +1,0 @@
-claim_id = "f5db04dcdd534a8a86f6d72dc259cf42"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "30b0379ca861176226a93d03e323f8e07ce0b98e"
-branch = "claude/issue-2473-scheduler-peer-tests-stop-racing"
-scope = ["tests/songmaker_cli/test_scheduler.py"]
-opened_commit = "7c360f065eb0f9a8fb13177f4b2863ae588a9a5c"
