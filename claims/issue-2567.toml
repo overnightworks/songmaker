@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "d868ba888e13512808838bb4f1b00404427d4522"
 branch = "claude/issue-2567-inline-explanations"
-scope = ["frontend/src/lib/components/InfoTip.svelte", "frontend/src/lib/components/InfoTip.test.ts", "frontend/src/lib/components/editor/RecipeTabs.svelte", "frontend/src/lib/components/editor/RecipeTabs.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/routes/settings/generation/+page.svelte"]
+scope = ["frontend/src/lib/components/InfoTip.svelte", "frontend/src/lib/components/InfoTip.test.ts", "frontend/src/lib/components/editor/RecipeTabs.svelte", "frontend/src/lib/components/editor/RecipeTabs.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/routes/settings/generation/+page.svelte", "quality/baseline.toml", "scripts/style-literals.txt"]
 opened_commit = "78a029fc0d7cfc3d7b827a019308ab74c91ec922"
 whole_reason = "One law over three places, with the new info tip and its first caller together."
