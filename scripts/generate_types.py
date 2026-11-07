@@ -182,10 +182,6 @@ MODEL_HOME_EXEMPTIONS = (
         packages=frozenset({"songmaker_cli.generation_params", "songmaker_cli.whisper_cues"}),
         reason="persistence-owned value objects that api_models re-exports (docs/architecture.md)",
     ),
-    ModelHomeExemption(
-        packages=frozenset({"agent_providers"}),
-        reason="installed wheel whose provider events and route reason are the co-writer frames",
-    ),
 )
 
 

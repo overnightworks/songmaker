@@ -95,4 +95,4 @@ def _execute(
         outcome = execute_cowriter_tool(
             session, user, name, arguments, session_id=session_id,
         )
-    return ToolOutcome(outcome.content, outcome.is_error)
+    return outcome

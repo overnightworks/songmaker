@@ -1,20 +1,15 @@
 """Pins that every owner of a secret-scrub list names the same environment keys.
 
 ``acestep_worker`` must never import ``songmaker_cli`` (see AGENTS.md "Engine
-packages are independent") and ``agent_providers`` must import neither, so the
-list exists three times: as a constant in each of the two packages, and as the
-value songmaker injects into the provider runtime at startup (issue #836).
-These tests are the only thing standing between them silently drifting apart
-again — see issue #157, where the Claude CLI child process inherited
-``SONGMAKER_INTERNAL_TOKEN`` because two lists disagreed. Each list is pinned
-against the same expected set, so agreement between them follows and a drifted
-list names its own owner.
+packages are independent"), so the list exists twice: as a constant in each of
+the two packages. These tests are the only thing standing between them silently
+drifting apart. Each list is pinned against the same expected set, so agreement
+between them follows and a drifted list names its own owner.
 """
 
 from __future__ import annotations
 
 import pytest
-from agent_providers.config import current_config
 
 from acestep_worker.constants import SECRET_ENV_KEYS as WORKER_SECRET_ENV_KEYS
 from songmaker_cli.constants import SECRET_ENV_KEYS as CLI_SECRET_ENV_KEYS
@@ -38,7 +33,6 @@ EXPECTED_SECRET_ENV_KEYS = frozenset({
 SECRET_ENV_KEY_OWNERS = {
     "songmaker_cli": lambda: CLI_SECRET_ENV_KEYS,
     "acestep_worker": lambda: WORKER_SECRET_ENV_KEYS,
-    "injected provider runtime": lambda: current_config().secret_env_keys,
 }
 
 
