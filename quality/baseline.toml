@@ -225,7 +225,7 @@
 "test_trace_channels_never_expose_config_values" = 75
 
 [function_lines."tests/test_install_autostart.py"]
-"run_autostart" = 66
+"run_autostart" = 60
 
 [function_lines."tests/test_install_cli_credentials_mirror.py"]
 "run_installer" = 94
