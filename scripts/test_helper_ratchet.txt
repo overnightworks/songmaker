@@ -1,5 +1,5 @@
 backend _add_job 2
-backend _alembic_config 3
+backend _alembic_config 2
 backend _authed_app 3
 backend _count_queries 4
 backend _files 2
