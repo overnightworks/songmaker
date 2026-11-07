@@ -13,7 +13,17 @@ from sqlalchemy import event
 from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.web_app import make_test_app, seed_session, seed_user
 
-from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Score, Song, Version
+from songmaker_cli.constants import AuditAction
+from songmaker_cli.db.models import (
+    Album,
+    AuditLog,
+    Generation,
+    Playlist,
+    PlaylistEntry,
+    Score,
+    Song,
+    Version,
+)
 
 ADMIN = "admin-1"
 RETENTION_RUN = "/api/admin/generation-retention/run"
@@ -95,6 +105,13 @@ class _World:
         return lambda: self.client.post(
             "/api/generations/bulk-delete", json={"generation_ids": list(takes)},
         )
+
+    def audited_deletions(self) -> list[str]:
+        with self.pg_factory() as session:
+            return sorted(
+                row.resource_id
+                for row in session.query(AuditLog).filter(AuditLog.action == AuditAction.DELETE)
+            )
 
     def delete_version(self) -> Callable[[], Response]:
         return lambda: self.client.delete("/api/versions/version-1?delete_generations=true")
@@ -259,6 +276,24 @@ def test_stage_one_waits_for_a_manual_delete_of_the_take_and_leaves_it_out_of_it
     assert answers["second"].status_code == 200
     assert answers["second"].json()["archived_ids"] == []
     assert world.state("x") is None
+
+
+def test_a_bulk_delete_waits_for_a_manual_delete_and_counts_and_audits_only_its_own_take(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path, {
+        "x": {"archived": False, "old": False}, "y": {"archived": False, "old": False},
+    })
+    answers = race(
+        pg_factory, world.delete("x"), world.bulk_delete("x", "y"),
+        _holding_a_generation_write(),
+    )
+    assert answers["first"].status_code == 200
+    assert answers["second"].status_code == 200
+    assert answers["second"].json() == {"deleted": 1}
+    assert world.state("y") is None
+    assert not world.files["y"].exists()
+    assert world.audited_deletions() == ["x", "y"]
 
 
 CLEANUP_SCOPES = {"song": "songs/song-1", "album": "albums/album-1"}
