@@ -1,5 +1,5 @@
-// Settings after Keycloak (#1784, picture navigation.html (j) and
-// admin-models.html #cleanup): the account circle and its menu on both
+// Settings after Keycloak (account_rule_4 to account_rule_7 in
+// docs/navigation.md): the account circle and its menu on both
 // shells, Settings without Account, Legal's old home and Cleanup, Cleanup as
 // the Admin page's last tab with its confirmation and empty state, and the two
 // old addresses behaving like any unknown one. Both shells drive every cell.

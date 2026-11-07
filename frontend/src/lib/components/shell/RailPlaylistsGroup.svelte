@@ -50,8 +50,7 @@
 	);
 	// Tracks exist only for the currently open playlist: loadPlaylistDetail
 	// navigates as a side effect (openPlaylist in stores/navigation.ts), and
-	// the frozen picture (docs/design/navigation.html) draws playlist rows
-	// with no chevron in any state.
+	// playlist rows carry no chevron in any state.
 	const openPlaylistId = $derived($selectedPlaylistId);
 	const openPlaylistDetail = $derived($selectedPlaylistDetail);
 	const shownPlaylistId = $derived(playlistWhoseDetailShows($librarySurface, $openCollection));
