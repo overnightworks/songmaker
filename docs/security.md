@@ -489,9 +489,9 @@ A cover suggestion runs `agents/cover.md` through the same `GatewayBackend` and 
 
 ## Agent-CLI Mounts
 
-`songmaker-web` mounts the Claude and Grok binaries and redacted
-credential mirrors read-only. Cover jobs run only in the web process; the music
-worker mounts no agent CLI. The scoring worker mounts no agent CLI.
+No container binds an agent CLI or a login: no service mounts anything under
+`/home/songmaker`, and none mounts the mirror directory; a CI test fails on a
+compose bind that does. The deploy tick runs no mount preflight.
 
 `scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
 login into `~/.songmaker/agent-cli-credentials/`, kept current by
@@ -759,9 +759,8 @@ finished oneshot is legitimately inactive.
 `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` take
 effect only when exported in the deployment environment, not when written only
 in `.env`: the preflight reads its values from the exported environment and
-does not load `.env`. For systemd boot and auto-deploy, these non-secret paths
-therefore belong in the persistent service environment. Compose currently
-mounts `SONGMAKER_CLAUDE_CLI` and `SONGMAKER_GROK_CLI` into `songmaker-web`.
+does not load `.env`. For systemd boot, these non-secret paths therefore belong
+in the persistent service environment. Compose reads none of them.
 
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
@@ -771,12 +770,9 @@ the boot catch-up stays off; a red preflight fails the unit and alerts through
 `OnFailure=`, while a missing or failed mirror aborts the start job as a
 dependency failure (journal: result 'dependency'), which is not covered by
 `OnFailure=`. Containers dockerd restarts itself under `restart: unless-stopped`
-are unaffected. The two-minute deploy tick runs that same argumentless
-preflight, so boot and deploy resolve the same mirror location. That preflight
-also requires all three agent-CLI binaries, including Codex's Node path, to be
-resolvable; this blast radius is likewise limited to the boot catch-up and the
-deploy tick, not to
-containers dockerd restarts itself.
+are unaffected. That preflight also requires all three agent-CLI binaries,
+including Codex's Node path, to be resolvable; this blast radius is limited to
+the boot catch-up, not to containers dockerd restarts itself.
 
 The mirror installer freezes its resolved directory in the mirror service's
 `--mirror-dir` argument. An argumentless preflight reads that installed service
@@ -792,9 +788,7 @@ That call has been deleted from this script once already, by an edit that
 rearranged the systemd checks around it, and nothing went red: the verifier's
 own tests kept passing while the surface the deploy tick runs stopped checking
 anything at all. The shell entry point therefore has its own tests, separate
-from the Python ones. The installer, boot, and the auto-deploy tick use this
-same check before Compose mounts the credential mirrors and the default or
-environment-selected CLI binaries.
+from the Python ones. The installer and boot use this same check.
 
 Where the mirror lives has one answer, owned by that same module: an exported
 `SONGMAKER_CLI_CREDENTIALS_DIR` wins, then the same key in `.env`, then the
@@ -836,19 +830,7 @@ refusals above, each of which turns it red when removed.
 
 ### What each service mounts
 
-These host files are received read-only:
-
-| Service | Host path | Container path |
-|---|---|---|
-| `songmaker-web` | `$SONGMAKER_CLAUDE_CLI` (default `~/.local/bin/claude`) | `/usr/local/bin/claude` |
-| `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/claude.json` | `/home/songmaker/.claude/.credentials.json` |
-| `songmaker-web` | `$SONGMAKER_GROK_CLI` (default `~/.grok/bin/grok`) | `/usr/local/bin/grok` |
-| `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/grok.json` | `/home/songmaker/.grok/auth.json` |
-
-`songmaker-scoring-worker` mounts no agent CLI and no login mirror: a scoring
-run calls no provider.
-
-The Grok mirror is mounted only into its `songmaker-web` consumer. Grok turns
+No service mounts an agent CLI or a login. Grok turns
 run with a private `0700` working directory and their own session tree, both
 removed after success or abort; prompts and tool results reach the CLI only
 through a private prompt file. The text tool protocol does not grant Grok CLI
@@ -880,10 +862,6 @@ seccomp profiles. Fixture replay proves event handling, not live containment.
 Every Co-Writer tool-loop round keeps Code Mode disabled.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
-Every bind uses Compose long syntax, `read_only: true`, and
-`bind.create_host_path: false`: a missing source fails before a writable host
-directory can be created. Only files, never an operator profile directory, are
-mounted; a compromised container cannot add host-side profile settings or hooks.
 
 ### Provider API keys
 
@@ -1052,7 +1030,7 @@ Mutating operations are logged to the `audit_log` table. Account creation, role 
 | Request timeout | `REQUEST_TIMEOUT` (default 30s) limits idle keep-alive connections, not full requests. The two SSE routes have their own 60-second walls; Songmaker has no general application request deadline. |
 | Auto-deploy cleanup timeout | `SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS` (default 600). Bounds each post-deploy Docker cleanup command. |
 
-The two-minute auto-deploy tick first runs `docker compose config --quiet` on the checked-out configuration, then checks the active-job queue and required alert-channel configuration before it checks out or builds. Compose owns the list of required variables (every `${VAR:?…}` in `docker-compose.yml`), so a missing one such as `GRAFANA_PASSWORD` is a named deploy refusal quoting compose's own message before anything is checked out — the job guard's `docker compose exec` would not notice it, and the build would fail only after the checkout. The refusal uses the same counter and alert escalation. The tick asks again right after the checkout, before any Compose build, so a variable that the newly selected commit requires is named before anything is built or recreated. `--quiet` is mandatory there: without it, compose prints the fully interpolated configuration, every `.env` secret included, into the journal. Right after it the tick runs `scripts/secret_files.py --verify`, which refuses a release whose declared secret files are missing, empty or different from `.env` (a counted refusal like the others); it reads the interpolated configuration in memory only, never writes it anywhere and prints no value. The tick also runs `scripts/check_agent_cli_mounts.sh` before those steps when that verifier is installed; a verifier failure is a named deploy refusal, so it increments the tick's existing consecutive-failure counter and follows its alert escalation. A checkout that predates the verifier logs `mount preflight not installed, skipping` and continues with its installed guards, making the temporary compatibility state visible rather than silently bypassing it. After fetching `origin/main` and its `v*` release tags into a private ref namespace, the tick asks GitHub about the newest ten eligible releases (configurable with `SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS`; see [auto-deploy architecture](architecture.md#auto-deploy) for what makes a tag eligible) and checks out detached only the newest release whose commit's GitHub Actions (`app.slug == github-actions`) runs have all completed, at least one of them successfully and every other one successfully, skipped, or neutral (a skipped or neutral run neither blocks nor passes a commit); other apps' runs are logged as advisory and ignored, and a check run without a job name is a malformed answer. A second lookup of the commit's workflow runs finds the check suites of Dependabot's update runs and of Release runs, matched by exactly the paths `dynamic/dependabot/dependabot-updates` and `.github/workflows/release.yml`; exactly those suites leave the judgement, so a failed update job or a Release run cannot block a release while every other failed or unknown run still does. Releases with running, cancelled, or failed Actions are named in the log once and skipped; no Actions runs stay neutral only for the 30-minute grace period measured from the local host clock when the HEAD SHA was first seen; a commit timestamp supplied by Git cannot postpone that alarm. An unavailable or malformed GitHub answer from either lookup, or a 60-second lookup timeout, is a named deploy refusal that uses the same counter and alert escalation. Every Git command in the tick disables repository hooks and the filesystem monitor and runs with a minimal Git environment. That includes the one network fetch the ACE-Step pin adds: before the checkout, the tick fetches the commit the selected revision pins `vendor/acestep` to, by SHA, from the submodule's `origin` (a public fork; the tick adds no credential of its own). With the scrubbed environment, no hooks and no filesystem monitor, nothing the fork serves can run code on the host while the fetch stores its objects. The submodule's own local Git configuration (`remote.origin.uploadpack`, `core.sshCommand`, `url.*.insteadOf`) is trusted like the superproject's, because it decides how the fetch connects. The tick then checks the pin out with `git submodule update --checkout --no-fetch`. If the pin cannot be fetched, or `vendor/acestep` is not initialised, the tick fails closed: a counted refusal that leaves the checkout, the running stack and `deployed.sha` untouched. Both git fetches of a tick run under `SONGMAKER_AUTODEPLOY_GIT_FETCH_TIMEOUT_SECONDS` (120 by default) with `SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS` (5) before the kill, so a hung transport reaches the same alert instead of holding the deploy lock forever. Each fetch runs in a process group of its own that the script kills outright once git has exited, so a transport that ignores the deadline's TERM cannot outlive the tick; a kill can leave a git lock file that an operator removes by hand, never the script. After a refused or failed tick past the checkout (`hal` missing, `hal` exiting non-zero, a compose failure), `HEAD` stays detached at the new release while `deployed.sha` keeps the old one, so the checkout is ahead of the running stack until a later tick succeeds; the next tick retries, and the third consecutive failure alerts.
+The two-minute auto-deploy tick first runs `docker compose config --quiet` on the checked-out configuration, then checks the active-job queue and required alert-channel configuration before it checks out or builds. Compose owns the list of required variables (every `${VAR:?…}` in `docker-compose.yml`), so a missing one such as `GRAFANA_PASSWORD` is a named deploy refusal quoting compose's own message before anything is checked out — the job guard's `docker compose exec` would not notice it, and the build would fail only after the checkout. The refusal uses the same counter and alert escalation. The tick asks again right after the checkout, before any Compose build, so a variable that the newly selected commit requires is named before anything is built or recreated. `--quiet` is mandatory there: without it, compose prints the fully interpolated configuration, every `.env` secret included, into the journal. Right after it the tick runs `scripts/secret_files.py --verify`, which refuses a release whose declared secret files are missing, empty or different from `.env` (a counted refusal like the others); it reads the interpolated configuration in memory only, never writes it anywhere and prints no value. After fetching `origin/main` and its `v*` release tags into a private ref namespace, the tick asks GitHub about the newest ten eligible releases (configurable with `SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS`; see [auto-deploy architecture](architecture.md#auto-deploy) for what makes a tag eligible) and checks out detached only the newest release whose commit's GitHub Actions (`app.slug == github-actions`) runs have all completed, at least one of them successfully and every other one successfully, skipped, or neutral (a skipped or neutral run neither blocks nor passes a commit); other apps' runs are logged as advisory and ignored, and a check run without a job name is a malformed answer. A second lookup of the commit's workflow runs finds the check suites of Dependabot's update runs and of Release runs, matched by exactly the paths `dynamic/dependabot/dependabot-updates` and `.github/workflows/release.yml`; exactly those suites leave the judgement, so a failed update job or a Release run cannot block a release while every other failed or unknown run still does. Releases with running, cancelled, or failed Actions are named in the log once and skipped; no Actions runs stay neutral only for the 30-minute grace period measured from the local host clock when the HEAD SHA was first seen; a commit timestamp supplied by Git cannot postpone that alarm. An unavailable or malformed GitHub answer from either lookup, or a 60-second lookup timeout, is a named deploy refusal that uses the same counter and alert escalation. Every Git command in the tick disables repository hooks and the filesystem monitor and runs with a minimal Git environment. That includes the one network fetch the ACE-Step pin adds: before the checkout, the tick fetches the commit the selected revision pins `vendor/acestep` to, by SHA, from the submodule's `origin` (a public fork; the tick adds no credential of its own). With the scrubbed environment, no hooks and no filesystem monitor, nothing the fork serves can run code on the host while the fetch stores its objects. The submodule's own local Git configuration (`remote.origin.uploadpack`, `core.sshCommand`, `url.*.insteadOf`) is trusted like the superproject's, because it decides how the fetch connects. The tick then checks the pin out with `git submodule update --checkout --no-fetch`. If the pin cannot be fetched, or `vendor/acestep` is not initialised, the tick fails closed: a counted refusal that leaves the checkout, the running stack and `deployed.sha` untouched. Both git fetches of a tick run under `SONGMAKER_AUTODEPLOY_GIT_FETCH_TIMEOUT_SECONDS` (120 by default) with `SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS` (5) before the kill, so a hung transport reaches the same alert instead of holding the deploy lock forever. Each fetch runs in a process group of its own that the script kills outright once git has exited, so a transport that ignores the deadline's TERM cannot outlive the tick; a kill can leave a git lock file that an operator removes by hand, never the script. After a refused or failed tick past the checkout (`hal` missing, `hal` exiting non-zero, a compose failure), `HEAD` stays detached at the new release while `deployed.sha` keeps the old one, so the checkout is ahead of the running stack until a later tick succeeds; the next tick retries, and the third consecutive failure alerts.
 
 Under the deploy lock, each tick first removes leftovers directly in its Git admin directory whose names match the script’s four temp prefixes (`songmaker-autodeploy.git-fetch.`, `songmaker-autodeploy.compose-stderr.`, `songmaker-autodeploy.prometheus-ps-stderr.`, `songmaker-autodeploy.gh-stderr.`) followed by exactly six ASCII letters or digits. Symlinks are unlinked without following their targets; state files and nested worktree admin directories are untouched. Each removal is logged; a failed removal refuses the tick and counts toward the third-tick alert, including when already up to date. In-tick removal remains best-effort: an interrupted tick’s leftovers are removed by the next tick that acquires the lock and can remove them. This assumes one lock per Git admin directory; overriding `SONGMAKER_AUTODEPLOY_LOCK_FILE` to share an admin directory between independently locked ticks is unsupported.
 
@@ -1087,8 +1065,8 @@ before retrying; never purge or silently retry these entries.
 - `.env`: Gitignored. Never committed. Single source for pydantic Settings and
   Docker Compose substitutions except the non-secret
   `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` path
-  overrides: systemd boot and auto-deploy must receive those as persistent
-  exported environment values so the preflight sees the same paths as Compose.
+  overrides: systemd boot must receive those as persistent
+  exported environment values so the boot preflight sees them.
 
 ## Input Validation
 

@@ -136,34 +136,6 @@ services:
     volumes:
       - audiofiles:/app/data/audio
       - queuestreams:/app/data/queue-streams
-      # Agent-CLI mounts: the container owns the writable profiles; it only
-      # receives read-only CLI binaries and redacted login mirrors. The
-      # preflight checks the mirror and the default or environment-selected
-      # CLI paths before deploy.
-      - type: bind
-        source: ${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}
-        target: /usr/local/bin/claude
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/claude.json
-        target: /home/songmaker/.claude/.credentials.json
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_GROK_CLI:-~/.grok/bin/grok}
-        target: /usr/local/bin/grok
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/grok.json
-        target: /home/songmaker/.grok/auth.json
-        read_only: true
-        bind:
-          create_host_path: false
     cap_drop:
       - ALL
     # Bubblewrap needs an explicit user-namespace permission; the custom
