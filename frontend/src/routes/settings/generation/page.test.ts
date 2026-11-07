@@ -149,30 +149,30 @@ describe('generation settings', () => {
 			id
 		});
 
-		async function openChooserWithDefault(): Promise<{
+		async function openChooserWithDefault(defaultId = 'a'): Promise<{
 			chips: () => HTMLElement[];
 			checked: () => (string | undefined)[];
 		}> {
 			const { target } = await openPageAs(makeAuthUser(), new Set(), {
 				...RESPONSES,
 				[PRESETS_PATH]: [presetNamed('a', 'Warm'), presetNamed('b', 'Bright')],
-				[DEFAULT_CONFIG_PATH]: { config: 'a' }
+				[DEFAULT_CONFIG_PATH]: { config: defaultId }
 			});
 			const group = target.querySelector('[role="radiogroup"]');
-			expect(
-				group?.getAttribute('aria-label') ?? group?.getAttribute('aria-labelledby')
-			).toBeTruthy();
+			const labelId = group?.getAttribute('aria-labelledby') ?? '';
+			expect(target.querySelector(`[id="${labelId}"]`)?.textContent).toBe('Default for New Songs');
 			const chips = () => [...(group?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
 			const checked = () =>
 				chips()
 					.filter((chip) => chip.getAttribute('aria-checked') === 'true')
 					.map((chip) => chip.textContent?.trim());
-			await vi.waitFor(() => expect(checked()).toEqual(['Warm']));
+			await vi.waitFor(() => expect(chips()).toHaveLength(3));
 			return { chips, checked };
 		}
 
 		it('checks exactly the current default and moves the check when another is chosen', async () => {
 			const { chips, checked } = await openChooserWithDefault();
+			await vi.waitFor(() => expect(checked()).toEqual(['Warm']));
 
 			chips()
 				.find((chip) => chip.textContent?.trim() === 'Bright')
@@ -183,12 +183,21 @@ describe('generation settings', () => {
 
 		it('moves the check to the next chip on ArrowRight and back on ArrowLeft', async () => {
 			const { chips, checked } = await openChooserWithDefault();
+			await vi.waitFor(() => expect(checked()).toEqual(['Warm']));
 
 			chips()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 			await vi.waitFor(() => expect(checked()).toEqual(['Bright']));
 
 			chips()[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
 			await vi.waitFor(() => expect(checked()).toEqual(['Warm']));
+		});
+
+		it('keeps the first chip in the tab order when no chip is checked', async () => {
+			const { chips, checked } = await openChooserWithDefault('deleted');
+
+			await vi.waitFor(() => expect(checked()).toEqual([]));
+			const tabbable = chips().filter((chip) => chip.getAttribute('tabindex') === '0');
+			expect(tabbable).toEqual([chips()[0]]);
 		});
 	});
 });

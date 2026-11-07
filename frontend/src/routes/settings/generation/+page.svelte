@@ -88,6 +88,13 @@
 		}))
 	]);
 
+	const tabbableIndex = $derived(
+		Math.max(
+			0,
+			defaultOptions.findIndex((option) => option.id === $defaultConfig)
+		)
+	);
+
 	const CHOOSER_KEY_STEPS: Readonly<Record<string, number>> = {
 		ArrowRight: 1,
 		ArrowDown: 1,
@@ -189,7 +196,7 @@
 					type="button"
 					role="radio"
 					aria-checked={$defaultConfig === option.id}
-					tabindex={$defaultConfig === option.id ? 0 : -1}
+					tabindex={index === tabbableIndex ? 0 : -1}
 					class="default-chip"
 					class:shared={option.shared}
 					class:active={$defaultConfig === option.id}
