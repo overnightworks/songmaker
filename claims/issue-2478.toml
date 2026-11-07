@@ -1,0 +1,8 @@
+claim_id = "d142e51777be4cf9b810ddfdf096d7be"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3c1c8863d03944910bc98211100a9e933464e57b"
+branch = "claude/issue-2478-requirements-become-surface-pages"
+scope = ["README.md", "docs/catalog.md", "docs/co-writer.md", "docs/generation.md", "docs/library.md", "docs/requirements/0001-creative-catalog-and-takes.md", "docs/requirements/0002-library-and-listening.md", "docs/requirements/0003-creation-and-generation.md", "docs/requirements/0004-co-writer.md", "docs/requirements/0005-sharing-and-administration.md", "docs/requirements/README.md", "docs/sharing.md"]
+opened_commit = "f6f6dbfefe374f5962faeed3ee1428037d5cf470"
+whole_reason = "Each requirements file becomes one surface page and the folder with its index leaves in one landing; split, the index would point at moved or missing files."
