@@ -755,7 +755,7 @@
 	}
 
 	.voice-status-active {
-		background: var(--score-warn);
+		background: var(--busy);
 		color: var(--bg);
 	}
 

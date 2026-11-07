@@ -60,8 +60,8 @@
 		flex: 0 0 var(--playlist-cover-size);
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		grid-template-rows: repeat(2, minmax(0, 1fr));
-		gap: var(--playlist-cover-gap, 1px);
-		padding: var(--playlist-cover-padding, 0);
+		gap: 1px;
+		padding: 0;
 		overflow: hidden;
 		border-radius: 3px;
 		background: var(--surface);
