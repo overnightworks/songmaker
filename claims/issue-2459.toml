@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "5dfcb6c584b67a220793b317de4849ace011ebec"
 branch = "claude/issue-2459-boot-unit-drops-mirror-and-preflight"
-scope = ["docs/acestep.md", "docs/security.md", "scripts/install-autostart.sh", "scripts/songmaker-cli-credentials-mirror.service", "scripts/songmaker.service", "tests/test_install_autostart.py"]
+scope = ["docs/acestep.md", "docs/security.md", "quality/baseline.toml", "scripts/install-autostart.sh", "scripts/songmaker-cli-credentials-mirror.service", "scripts/songmaker.service", "tests/test_install_autostart.py"]
 opened_commit = "f5bcb23704016f2bf1e55d3b4f91c210ff24a8db"
 whole_reason = "The unit, its installer, the installer's tests and the sentences describing the boot coupling are one boot contract; split, a unit would disagree with its installer or its documentation."
