@@ -12,7 +12,6 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.cleanup import run_cleanup_expired
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
@@ -56,9 +55,8 @@ _OTHER_USER_ID = "u-other"
 
 
 @pytest.fixture
-def db_session(tmp_path: Path) -> Session:
-    factory = init_db(tmp_path / "test.db")
-    session = factory()
+def db_session(pg_factory) -> Session:
+    session = pg_factory()
     yield session
     session.close()
 
@@ -334,9 +332,8 @@ def test_playlist_entries_filtered_when_song_soft_deleted(seeded: Session) -> No
 # ── API-layer tests ──────────────────────────────────────────────────
 
 
-def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
-    factory = init_db(tmp_path / "test.db")
-    with factory() as session:
+def _make_client(tmp_path: Path, pg_factory, role: str = "user") -> TestClient:
+    with pg_factory() as session:
         session.add(User(
             id=_DEFAULT_USER_ID, username="u_user", role=role,
         ))
@@ -354,29 +351,29 @@ def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
         session.commit()
 
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user(_DEFAULT_USER_ID, role=role, username=f"u_{role}"),
     )
     return web_client(app)
 
 
-def test_api_delete_album_soft_deletes(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
+def test_api_delete_album_soft_deletes(tmp_path: Path, pg_factory) -> None:
+    client = _make_client(tmp_path, pg_factory)
     r = client.delete("/api/albums/rock")
     assert r.status_code == 200
     assert client.get("/api/albums").json()["total"] == 0
 
 
-def test_api_restore_album_round_trip(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
+def test_api_restore_album_round_trip(tmp_path: Path, pg_factory) -> None:
+    client = _make_client(tmp_path, pg_factory)
     client.delete("/api/albums/rock")
     r = client.post("/api/albums/rock/restore")
     assert r.status_code == 200
     assert client.get("/api/albums").json()["total"] == 1
 
 
-def test_api_restore_album_410_after_window(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
+def test_api_restore_album_410_after_window(tmp_path: Path, pg_factory) -> None:
+    client = _make_client(tmp_path, pg_factory)
     client.delete("/api/albums/rock")
     factory = client.app.state.ctx.db
     with factory() as session:
@@ -392,8 +389,8 @@ def test_api_restore_album_410_after_window(tmp_path: Path) -> None:
     assert r.status_code == 410
 
 
-def test_api_restore_song_round_trip(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
+def test_api_restore_song_round_trip(tmp_path: Path, pg_factory) -> None:
+    client = _make_client(tmp_path, pg_factory)
     client.delete("/api/songs/s1")
     assert client.get("/api/songs").json()["total"] == 0
     r = client.post("/api/songs/s1/restore")
@@ -401,9 +398,8 @@ def test_api_restore_song_round_trip(tmp_path: Path) -> None:
     assert client.get("/api/songs").json()["total"] == 1
 
 
-def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
-    factory = init_db(tmp_path / "test.db")
-    with factory() as session:
+def test_api_restore_other_users_album_404(tmp_path: Path, pg_factory) -> None:
+    with pg_factory() as session:
         session.add(User(id="u1", username="u1", role="user"))
         session.add(User(id="u2", username="u2", role="user"))
         session.flush()
@@ -411,7 +407,8 @@ def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
         session.commit()
 
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory), user=make_authenticated_user("u1", username="u_user")
+        make_router_ctx(tmp_path, db=pg_factory),
+        user=make_authenticated_user("u1", username="u_user"),
     )
     c1 = web_client(app)
     c1.delete("/api/albums/rock")
@@ -424,8 +421,8 @@ def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
     assert r.status_code == 404
 
 
-def test_api_audit_records_delete_and_restore(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
+def test_api_audit_records_delete_and_restore(tmp_path: Path, pg_factory) -> None:
+    client = _make_client(tmp_path, pg_factory)
     client.delete("/api/albums/rock")
     client.post("/api/albums/rock/restore")
     factory = client.app.state.ctx.db
@@ -435,8 +432,8 @@ def test_api_audit_records_delete_and_restore(tmp_path: Path) -> None:
     assert "restore" in actions
 
 
-def test_api_unique_album_id_skips_soft_deleted(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
+def test_api_unique_album_id_skips_soft_deleted(tmp_path: Path, pg_factory) -> None:
+    client = _make_client(tmp_path, pg_factory)
     client.delete("/api/albums/rock")
     r = client.post("/api/albums", json={"title": "Rock"})
     assert r.status_code == 200

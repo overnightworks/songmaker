@@ -173,10 +173,12 @@ def test_discovers_routes_from_included_routers() -> None:
     assert {SeededChild, SeededRequest, SeededResponse} <= set(result.models)
 
 
-def test_route_routers_discover_every_openapi_path_in_the_real_app(tmp_path: Path) -> None:
+def test_route_routers_discover_every_openapi_path_in_the_real_app(
+    tmp_path: Path, pg_factory,
+) -> None:
     from support.web_app import make_test_app
 
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     discovered_route_paths = {
         route.path.replace(":path", "")
         for router in generate_types._route_routers()
