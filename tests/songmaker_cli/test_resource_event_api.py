@@ -50,8 +50,8 @@ def _seed_stream_users(session) -> None:
     seed_user(session, "admin", role="admin")
 
 
-def _authenticated_clients(tmp_path: Path):
-    base_client, factory = make_test_app(tmp_path, seed_db=_seed_stream_users)
+def _authenticated_clients(tmp_path: Path, pg_factory):
+    base_client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_stream_users)
     clients: dict[str, TestClient] = {}
     user_ids: dict[str, str] = {}
     expires_at = datetime.now(timezone.utc) + timedelta(days=1)
@@ -210,8 +210,8 @@ def test_wire_models_preserve_bigint_precision_as_decimal_strings() -> None:
     assert isinstance(frame["data"]["sequence"], str)
 
 
-def test_max_bigint_replay_preserves_cursor_and_sequence_exactly(tmp_path: Path) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+def test_max_bigint_replay_preserves_cursor_and_sequence_exactly(tmp_path, pg_factory) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     _create_event(factory, users["alice"], 1)
     with factory() as session:
         session.query(ResourceEvent).filter_by(user_id=users["alice"]).update(
@@ -244,8 +244,8 @@ def test_max_bigint_replay_preserves_cursor_and_sequence_exactly(tmp_path: Path)
     assert frames[1]["data"]["generation_id"] == "generation-1"
 
 
-def test_fresh_stream_hello_owns_cursor_and_skips_history(tmp_path: Path) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+def test_fresh_stream_hello_owns_cursor_and_skips_history(tmp_path: Path, pg_factory) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     _create_event(factory, users["alice"], 1)
     _create_event(factory, users["alice"], 2)
     ctx = clients["alice"].app.state.ctx
@@ -274,8 +274,8 @@ def test_fresh_stream_hello_owns_cursor_and_skips_history(tmp_path: Path) -> Non
     assert frames[1]["data"]["generation_id"] == "generation-3"
 
 
-def test_replay_is_ordered_bounded_to_handshake_then_goes_live(tmp_path: Path) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+def test_replay_is_ordered_bounded_to_handshake_then_goes_live(tmp_path: Path, pg_factory) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     for number in range(1, 4):
         _create_event(factory, users["alice"], number)
     ctx = clients["alice"].app.state.ctx
@@ -300,8 +300,8 @@ def test_replay_is_ordered_bounded_to_handshake_then_goes_live(tmp_path: Path) -
     assert "song_id" not in frames[1]["data"]
 
 
-def test_replay_hello_reasserts_cursor_before_any_replay_frame(tmp_path: Path) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+def test_replay_hello_reasserts_cursor_before_any_replay_frame(tmp_path: Path, pg_factory) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     _create_event(factory, users["alice"], 1)
     _create_event(factory, users["alice"], 2)
     ctx = clients["alice"].app.state.ctx
@@ -344,9 +344,9 @@ def test_handshake_gaps_emit_exactly_one_resync_with_data(
     tmp_path: Path,
     last_event_id: int,
     high_water_mark: int,
-    oldest: int | None,
+    oldest: int | None, pg_factory,
 ) -> None:
-    clients, _, users = _authenticated_clients(tmp_path)
+    clients, _, users = _authenticated_clients(tmp_path, pg_factory)
     frames = _collect(
         resource_api._resource_event_generator(
             clients["alice"].app.state.ctx,
@@ -369,8 +369,8 @@ def test_handshake_gaps_emit_exactly_one_resync_with_data(
     }
 
 
-def test_gap_resync_advances_to_live_without_a_second_resync(tmp_path: Path) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+def test_gap_resync_advances_to_live_without_a_second_resync(tmp_path: Path, pg_factory) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     _create_event(factory, users["alice"], 1)
     _create_event(factory, users["alice"], 2)
     with factory() as session:
@@ -406,8 +406,8 @@ def test_gap_resync_advances_to_live_without_a_second_resync(tmp_path: Path) -> 
     assert [frame.get("id") for frame in frames] == ["0", "2", "3"]
 
 
-def test_internal_replay_hole_resyncs_before_delivering_later_rows(tmp_path: Path) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+def test_internal_replay_hole_resyncs_before_delivering_later_rows(tmp_path, pg_factory) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     for number in range(1, 4):
         _create_event(factory, users["alice"], number)
     with factory() as session:
@@ -431,8 +431,8 @@ def test_internal_replay_hole_resyncs_before_delivering_later_rows(tmp_path: Pat
     assert frames[1]["id"] == "3"
 
 
-def test_retention_race_empty_page_resyncs_instead_of_advancing(tmp_path: Path) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+def test_retention_race_empty_page_resyncs_instead_of_advancing(tmp_path: Path, pg_factory) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     _create_event(factory, users["alice"], 1)
     _create_event(factory, users["alice"], 2)
     generator = resource_api._resource_event_generator(
@@ -457,8 +457,8 @@ def test_retention_race_empty_page_resyncs_instead_of_advancing(tmp_path: Path) 
     assert frames[1]["id"] == "2"
 
 
-def test_reconnect_delivery_is_at_least_once(tmp_path: Path) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+def test_reconnect_delivery_is_at_least_once(tmp_path: Path, pg_factory) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     _create_event(factory, users["alice"], 1)
     ctx = clients["alice"].app.state.ctx
     deliveries = []
@@ -480,9 +480,9 @@ def test_reconnect_delivery_is_at_least_once(tmp_path: Path) -> None:
 
 def test_heartbeat_is_comment_without_event_id_or_data(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, _, users = _authenticated_clients(tmp_path)
+    clients, _, users = _authenticated_clients(tmp_path, pg_factory)
     monkeypatch.setattr(resource_api, "SSE_HEARTBEAT_SECONDS", 0)
     frames = _collect(
         resource_api._resource_event_generator(
@@ -502,9 +502,9 @@ def test_heartbeat_is_comment_without_event_id_or_data(
 
 def test_connection_stops_at_the_sixty_second_wall(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, _, users = _authenticated_clients(tmp_path)
+    clients, _, users = _authenticated_clients(tmp_path, pg_factory)
     ticks = iter([0.0, 60.0, 60.0])
     monkeypatch.setattr(resource_api, "monotonic", lambda: next(ticks))
     assert RESOURCE_EVENT_STREAM_CONNECTION_SECONDS == 60
@@ -527,9 +527,9 @@ def test_connection_stops_at_the_sixty_second_wall(
 
 def test_poll_crossing_deadline_does_not_emit_a_late_heartbeat(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, _, users = _authenticated_clients(tmp_path)
+    clients, _, users = _authenticated_clients(tmp_path, pg_factory)
     ticks = iter([0.0, 0.0, 0.0, 60.0])
     monkeypatch.setattr(resource_api, "monotonic", lambda: next(ticks))
     monkeypatch.setattr(resource_api, "SSE_HEARTBEAT_SECONDS", 0)
@@ -578,9 +578,9 @@ def test_route_requires_auth_and_validates_cursor_after_auth(
     monkeypatch: pytest.MonkeyPatch,
     headers: dict[str, str],
     params: dict[str, str],
-    detail: str,
+    detail: str, pg_factory,
 ) -> None:
-    clients, _, _ = _authenticated_clients(tmp_path)
+    clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
     unauthenticated = web_client(clients["alice"].app, cookies={})
     assert unauthenticated.get("/api/resource-events/stream").status_code == 401
@@ -607,9 +607,9 @@ def test_route_replays_the_events_after_the_given_cursor(
     monkeypatch: pytest.MonkeyPatch,
     headers: dict[str, str],
     params: dict[str, str],
-    replayed: list[str],
+    replayed: list[str], pg_factory,
 ) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     for number in range(1, 4):
         _create_event(factory, users["alice"], number)
     _install_replay_bounded_route_stream(monkeypatch)
@@ -629,9 +629,9 @@ def test_route_replays_the_events_after_the_given_cursor(
 
 def test_full_app_preserves_resource_sse_headers_and_other_api_cache_policy(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
     with factory() as session:
         job = Job(type="generate", status="completed", user_id=users["alice"])
@@ -658,9 +658,9 @@ def test_full_app_preserves_resource_sse_headers_and_other_api_cache_policy(
 
 def test_auth_db_connection_is_returned_before_body_iteration(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, factory, _ = _authenticated_clients(tmp_path)
+    clients, factory, _ = _authenticated_clients(tmp_path, pg_factory)
     engine = factory.kw["bind"]
     checked_out = 0
     observed: list[int] = []
@@ -701,10 +701,10 @@ def test_auth_db_connection_is_returned_before_body_iteration(
 
 def test_each_reconnect_reauthenticates_an_ended_session(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     """defect:#1590: reconnect reads session revocation from the database."""
-    clients, factory, users = _authenticated_clients(tmp_path)
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
     assert clients["alice"].get("/api/resource-events/stream").status_code == 200
     with factory() as session:
@@ -715,9 +715,9 @@ def test_each_reconnect_reauthenticates_an_ended_session(
 
 def test_authenticated_stream_isolates_two_users_and_admin(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, factory, users = _authenticated_clients(tmp_path)
+    clients, factory, users = _authenticated_clients(tmp_path, pg_factory)
     generation_id = _create_event(factory, users["alice"], 1)
     _install_replay_bounded_route_stream(monkeypatch)
     bodies = {
@@ -734,8 +734,8 @@ def test_authenticated_stream_isolates_two_users_and_admin(
     assert all(user_id not in body for body in bodies.values() for user_id in users.values())
 
 
-def test_event_query_pages_and_rejects_non_positive_limit(tmp_path: Path) -> None:
-    _, factory, users = _authenticated_clients(tmp_path)
+def test_event_query_pages_and_rejects_non_positive_limit(tmp_path: Path, pg_factory) -> None:
+    _, factory, users = _authenticated_clients(tmp_path, pg_factory)
     for number in range(1, 4):
         _create_event(factory, users["alice"], number)
     with factory() as session:
@@ -967,9 +967,9 @@ async def _wait_for_released_lease(released: threading.Event) -> None:
 
 def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases_lease(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, _, user_ids = _authenticated_clients(tmp_path)
+    clients, _, user_ids = _authenticated_clients(tmp_path, pg_factory)
     app = clients["alice"].app
     released, release_calls = _stub_one_frame_stream(app, monkeypatch)
     _set_resource_stream_deadline(app, 2)
@@ -1020,9 +1020,9 @@ def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases
 
 def test_outer_app_deadline_does_not_duplicate_normal_stream_completion(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, _, _ = _authenticated_clients(tmp_path)
+    clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     app = clients["alice"].app
 
     class _OpenLimiter:
@@ -1072,9 +1072,9 @@ def test_outer_app_deadline_does_not_duplicate_normal_stream_completion(
 
 def test_outer_app_deadline_contains_synthetic_terminal_oserror_and_releases_lease(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, _, user_ids = _authenticated_clients(tmp_path)
+    clients, _, user_ids = _authenticated_clients(tmp_path, pg_factory)
     app = clients["alice"].app
     released, release_calls = _stub_one_frame_stream(app, monkeypatch)
     _set_resource_stream_deadline(app, 2)
@@ -1107,9 +1107,9 @@ def test_outer_app_deadline_contains_synthetic_terminal_oserror_and_releases_lea
 
 def test_outer_app_deadline_bounds_blocked_synthetic_terminal_and_releases_lease(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, _, user_ids = _authenticated_clients(tmp_path)
+    clients, _, user_ids = _authenticated_clients(tmp_path, pg_factory)
     app = clients["alice"].app
     monkeypatch.setattr(deadline_middleware, "_SYNTHETIC_TERMINAL_SEND_TIMEOUT_SECONDS", 0.05)
     released, release_calls = _stub_one_frame_stream(app, monkeypatch)
@@ -1174,8 +1174,8 @@ def test_outer_app_deadline_propagates_application_and_regular_send_errors() -> 
         asyncio.run(starts_call)
 
 
-def test_per_user_open_rate_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    clients, _, _ = _authenticated_clients(tmp_path)
+def test_per_user_open_rate_is_bounded(tmp_path, monkeypatch: pytest.MonkeyPatch, pg_factory):
+    clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
     open_limit = get_settings().resource_event_stream_open_limit
     responses = [clients["alice"].get("/api/resource-events/stream") for _ in range(open_limit + 1)]
@@ -1185,7 +1185,7 @@ def test_per_user_open_rate_is_bounded(tmp_path: Path, monkeypatch: pytest.Monke
 
 def test_per_user_open_rate_reads_settings_override(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     """The limit is a settings field, not the constant it used to be
     (issue #294): a `RESOURCE_EVENT_STREAM_OPEN_LIMIT` env override, the
@@ -1194,7 +1194,7 @@ def test_per_user_open_rate_reads_settings_override(
     default."""
     monkeypatch.setenv("RESOURCE_EVENT_STREAM_OPEN_LIMIT", "2")
     get_settings.cache_clear()
-    clients, _, _ = _authenticated_clients(tmp_path)
+    clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
 
     responses = [clients["alice"].get("/api/resource-events/stream") for _ in range(3)]
@@ -1204,9 +1204,9 @@ def test_per_user_open_rate_reads_settings_override(
 
 def test_stream_rejects_when_db_pool_has_no_spare_capacity(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
-    clients, _, _ = _authenticated_clients(tmp_path)
+    clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
     monkeypatch.setattr(
         resource_api,
@@ -1222,8 +1222,8 @@ def test_stream_rejects_when_db_pool_has_no_spare_capacity(
     assert response.json()["detail"] == RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE
 
 
-def test_stream_limiter_fails_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    clients, _, _ = _authenticated_clients(tmp_path)
+def test_stream_limiter_fails_closed(tmp_path, monkeypatch: pytest.MonkeyPatch, pg_factory) -> None:
+    clients, _, _ = _authenticated_clients(tmp_path, pg_factory)
     _install_finite_route_stream(monkeypatch)
 
     class _BrokenLimiter:

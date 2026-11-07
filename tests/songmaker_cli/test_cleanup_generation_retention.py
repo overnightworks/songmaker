@@ -91,6 +91,7 @@ def test_hard_delete_removes_row(retention_factory, tmp_path: Path) -> None:
 
 
 def test_picked_and_kept_are_preserved(retention_factory, tmp_path: Path) -> None:
+    """Spec: REQ-CURATION-06 -- A retention run leaves a picked and a kept take unarchived."""
     with retention_factory() as session:
         pick_generation(session, "g1")
         keep_generation(session, "g2")
@@ -206,6 +207,8 @@ def _mark_after_archiving(factory, gen_id: str, flag: str) -> None:
 def test_an_archived_pick_or_keep_past_the_window_is_not_deleted(
     retention_factory, tmp_path: Path, mark,
 ) -> None:
+    """Spec: REQ-CURATION-07 -- A take archived before it was picked or kept survives the run with
+    its files."""
     audio_dir = tmp_path / "audio"
     files = _seed_audio_files(retention_factory, audio_dir, "g1")
     _mark_after_archiving(retention_factory, "g1", mark)

@@ -90,8 +90,8 @@ def _seed_pick_scenarios(session) -> None:
 
 
 @pytest.fixture
-def picks_client(tmp_path: Path):
-    client, factory = make_test_app(tmp_path, seed_db=_seed_pick_scenarios)
+def picks_client(tmp_path: Path, pg_factory):
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_pick_scenarios)
     seed_session(client, _ADMIN_USER)
     return client, factory
 
@@ -209,7 +209,7 @@ def test_list_albums_computes_song_count_in_one_aggregate_query(picks_client) ->
     )
 
 
-def test_list_albums_song_count_excludes_soft_deleted_song(tmp_path: Path) -> None:
+def test_list_albums_song_count_excludes_soft_deleted_song(tmp_path: Path, pg_factory) -> None:
     """#340 F1: count_songs_by_album() must honor the global soft-delete
     filter (db/soft_delete.py) the same way the old joinedload(Album.songs)
     + len() path did -- a soft-deleted song was never visible through that
@@ -225,7 +225,7 @@ def test_list_albums_song_count_excludes_soft_deleted_song(tmp_path: Path) -> No
             deleted_at=datetime.now(timezone.utc),
         ))
 
-    client, _ = make_test_app(tmp_path, seed_db=_seed)
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed)
     seed_session(client, _ADMIN_USER)
     resp = client.get("/api/albums")
     assert resp.status_code == 200
@@ -275,8 +275,8 @@ _PLAYABLE_TAKE_EXPECTATIONS = {
 
 
 @pytest.fixture
-def playable_take_client(tmp_path: Path):
-    client, _ = make_test_app(tmp_path, seed_db=_seed_playable_take_scenarios)
+def playable_take_client(tmp_path: Path, pg_factory):
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playable_take_scenarios)
     seed_session(client, _ADMIN_USER)
     return client
 
@@ -317,8 +317,8 @@ def _seed_metadata_scenarios(session) -> None:
 
 
 @pytest.fixture
-def metadata_client(tmp_path: Path):
-    client, factory = make_test_app(tmp_path, seed_db=_seed_metadata_scenarios)
+def metadata_client(tmp_path: Path, pg_factory):
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_metadata_scenarios)
     seed_session(client, _ADMIN_USER)
     return client, factory
 
@@ -390,7 +390,7 @@ def test_update_album_no_fields_writes_no_audit_row(metadata_client) -> None:
         assert session.query(AuditLog).filter_by(resource_id="meta-album").count() == 0
 
 
-def test_update_album_metadata_other_user_blocked(tmp_path: Path) -> None:
+def test_update_album_metadata_other_user_blocked(tmp_path: Path, pg_factory) -> None:
     def _seed(session) -> None:
         session.add(User(
             id="u-owner", username="owner",
@@ -406,7 +406,7 @@ def test_update_album_metadata_other_user_blocked(tmp_path: Path) -> None:
             subtitle="Untouched",
         ))
 
-    client, factory = make_test_app(tmp_path, seed_db=_seed)
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed)
     seed_session(client, "intruder")
     resp = client.put("/api/albums/theirs", json={"subtitle": "Hijacked"})
     assert resp.status_code == 404
@@ -424,8 +424,8 @@ def _seed_archive_scenarios(session) -> None:
 
 
 @pytest.fixture
-def archive_client(tmp_path: Path):
-    client, factory = make_test_app(tmp_path, seed_db=_seed_archive_scenarios)
+def archive_client(tmp_path: Path, pg_factory):
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_archive_scenarios)
     seed_session(client, _ADMIN_USER)
     return client, factory
 
@@ -456,7 +456,9 @@ def test_archived_filter_shows_only_archived_albums(archive_client) -> None:
     assert ids == ["live-one"]
 
 
-def test_archived_filter_song_count_counts_songs_of_archived_album(tmp_path: Path) -> None:
+def test_archived_filter_song_count_counts_songs_of_archived_album(
+    tmp_path: Path, pg_factory
+) -> None:
     """#340 F1: song_count for an archived album, reached via ?archived=true,
     must still reflect its songs -- count_songs_by_album() is grouped by the
     album ids the caller passes in, not filtered by is_archived itself, so
@@ -469,7 +471,7 @@ def test_archived_filter_song_count_counts_songs_of_archived_album(tmp_path: Pat
         session.add(Song(id="s1", title="One", album_id="alb", track_number=1, slug="one"))
         session.add(Song(id="s2", title="Two", album_id="alb", track_number=2, slug="two"))
 
-    client, _ = make_test_app(tmp_path, seed_db=_seed)
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed)
     seed_session(client, _ADMIN_USER)
     resp = client.get("/api/albums", params={"archived": "true"})
     assert resp.status_code == 200
@@ -505,7 +507,7 @@ def test_archive_album_writes_audit_row(archive_client) -> None:
         assert len(rows) == 1
 
 
-def test_archive_other_users_album_is_404(tmp_path: Path) -> None:
+def test_archive_other_users_album_is_404(tmp_path: Path, pg_factory) -> None:
     def _seed(session) -> None:
         session.add(User(
             id="u-owner", username="owner",
@@ -518,7 +520,7 @@ def test_archive_other_users_album_is_404(tmp_path: Path) -> None:
         session.flush()
         session.add(Album(id="theirs", title="Theirs", artist="A", created_by="u-owner"))
 
-    client, factory = make_test_app(tmp_path, seed_db=_seed)
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed)
     seed_session(client, "intruder")
     resp = client.post("/api/albums/theirs/archive")
     assert resp.status_code == 404
@@ -526,7 +528,7 @@ def test_archive_other_users_album_is_404(tmp_path: Path) -> None:
         assert session.query(Album).filter_by(id="theirs").first().is_archived is False
 
 
-def test_unarchive_other_users_album_is_404(tmp_path: Path) -> None:
+def test_unarchive_other_users_album_is_404(tmp_path: Path, pg_factory) -> None:
     def _seed(session) -> None:
         session.add(User(
             id="u-owner", username="owner",
@@ -541,7 +543,7 @@ def test_unarchive_other_users_album_is_404(tmp_path: Path) -> None:
             id="theirs", title="Theirs", artist="A", created_by="u-owner", is_archived=True,
         ))
 
-    client, factory = make_test_app(tmp_path, seed_db=_seed)
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed)
     seed_session(client, "intruder")
     resp = client.post("/api/albums/theirs/unarchive")
     assert resp.status_code == 404
@@ -566,13 +568,13 @@ def test_archived_albums_share_link_stays_functional(archive_client) -> None:
 
 
 @pytest.fixture
-def creation_client(tmp_path: Path):
+def creation_client(tmp_path: Path, pg_factory):
     def _seed(session) -> None:
         session.add(User(
             username=_ADMIN_USER, role="admin",
         ))
 
-    client, factory = make_test_app(tmp_path, seed_db=_seed)
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed)
     seed_session(client, _ADMIN_USER)
     return client, factory
 
@@ -631,7 +633,7 @@ _PEOPLE_AND_THEIR_ALBUMS = (
 
 
 @pytest.fixture
-def two_people_client(tmp_path: Path):
+def two_people_client(tmp_path: Path, pg_factory):
     def _seed(session) -> None:
         for username, role, album_id in _PEOPLE_AND_THEIR_ALBUMS:
             person = User(username=username, role=role)
@@ -639,7 +641,7 @@ def two_people_client(tmp_path: Path):
             session.flush()
             session.add(Album(id=album_id, title=album_id, artist="A", created_by=person.id))
 
-    client, _ = make_test_app(tmp_path, seed_db=_seed)
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed)
     return client
 
 

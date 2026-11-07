@@ -510,8 +510,8 @@ def test_the_start_route_answers_a_redirect_to_the_realm(world: World) -> None:
     )
 
 
-def test_the_sign_in_asks_for_openid_alone(tmp_path: Path, fresh_settings) -> None:
-    client, _ = make_test_app(tmp_path)
+def test_the_sign_in_asks_for_openid_alone(tmp_path: Path, fresh_settings, pg_factory) -> None:
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
 
     started = client.get("/login/oidc", follow_redirects=False)
 
@@ -545,7 +545,7 @@ def test_with_the_issuer_down_signed_in_requests_work_and_a_new_sign_in_shows_th
 
 @pytest.mark.parametrize("fault", ["missing", "empty", "directory"])
 def test_an_unusable_secret_file_stops_the_web_app_and_names_only_its_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fresh_settings, fault: str,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str, pg_factory, fresh_settings,
 ) -> None:
     secret_file = tmp_path / "keycloak_client_secret"
     if fault == "empty":
@@ -555,7 +555,7 @@ def test_an_unusable_secret_file_stops_the_web_app_and_names_only_its_path(
     monkeypatch.setenv("OIDC_CLIENT_SECRET_FILE", str(secret_file))
 
     with pytest.raises(ValueError, match=str(secret_file)) as stopped:
-        make_test_app(tmp_path)
+        make_test_app(tmp_path, factory=pg_factory)
 
     assert TEST_CLIENT_SECRET not in str(stopped.value)
 
@@ -564,7 +564,7 @@ def test_an_unusable_secret_file_stops_the_web_app_and_names_only_its_path(
     "missing", ["OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET_FILE", "PUBLIC_BASE_URL"],
 )
 def test_a_missing_sign_in_setting_stops_the_web_app_but_not_the_settings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fresh_settings, missing: str,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str, pg_factory, fresh_settings,
 ) -> None:
     from songmaker_cli.settings import get_settings
 
@@ -572,7 +572,7 @@ def test_a_missing_sign_in_setting_stops_the_web_app_but_not_the_settings(
 
     assert get_settings().oidc_issuer is None or missing != "OIDC_ISSUER"
     with pytest.raises(ValueError, match=missing):
-        make_test_app(tmp_path)
+        make_test_app(tmp_path, factory=pg_factory)
 
 
 def test_the_music_and_scoring_workers_start_without_any_realm_variable_or_secret_file(
@@ -703,11 +703,11 @@ def test_health_carries_neither_the_secret_nor_the_path_it_is_read_from(
     ],
 )
 def test_only_the_configured_hosts_are_served(
-    tmp_path: Path, fresh_settings, host: str, status: int,
+    tmp_path: Path, host: str, status: int, pg_factory, fresh_settings,
 ) -> None:
     hosts = "songmaker.hallucinai.de,localhost,127.0.0.1,songmaker-web"
     with patch.dict("os.environ", {"ALLOWED_HOSTS": hosts}):
-        client, _ = make_test_app(tmp_path)
+        client, _ = make_test_app(tmp_path, factory=pg_factory)
 
     assert client.get("/api/auth/me", headers={"host": host}).status_code == status
 
