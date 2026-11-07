@@ -94,15 +94,24 @@ describe('the library workspace', () => {
 		expect(target.textContent).toContain('Loading...');
 	});
 
-	it('states the failure and offers a retry when the stream never came up', async () => {
+	it('shows the failure card with a retry when the stream never came up', async () => {
 		resourceSync.update((state) => ({ ...state, status: 'error', error: 'Stream refused' }));
 
 		const target = renderWorkspace();
-		expect(target.textContent).toContain('Stream refused');
+		const alert = target.querySelector('[role="alert"]');
+		expect(alert?.textContent).toContain('Stream refused');
+		expect(alert?.querySelector('svg')).not.toBeNull();
 
-		target.querySelector<HTMLButtonElement>('.retry-btn')?.click();
+		target.querySelector<HTMLButtonElement>(`button[aria-label="${LIBRARY_RETRY_LABEL}"]`)?.click();
 		expect(retryResourceSync).toHaveBeenCalled();
-		expect(target.textContent).not.toContain(RESOURCE_SYNC_ERROR + LIBRARY_RETRY_LABEL);
+	});
+
+	it('names the failure in the shared words when the stream gave none', async () => {
+		resourceSync.update((state) => ({ ...state, status: 'error', error: null }));
+
+		const target = renderWorkspace();
+
+		expect(target.querySelector('[role="alert"]')?.textContent).toContain(RESOURCE_SYNC_ERROR);
 	});
 
 	it('waits under the offline strip instead of showing a failure when the stream could not come up offline', async () => {

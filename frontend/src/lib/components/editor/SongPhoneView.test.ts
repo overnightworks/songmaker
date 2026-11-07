@@ -11,7 +11,11 @@ import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
-import { EDITOR_GENERATE_LABEL, EDITOR_MISSING_CONTENT_TITLE } from '#lib/constants.ts';
+import {
+	EDITOR_GENERATE_LABEL,
+	EDITOR_MISSING_CONTENT_TITLE,
+	TAKES_EMPTY
+} from '#lib/constants.ts';
 import type { GenerateState } from '#lib/stores/generateAction.ts';
 
 const IDLE_GENERATE: GenerateState = { kind: 'idle' };
@@ -149,7 +153,7 @@ describe('SongPhoneView', () => {
 	});
 
 	it.each([
-		['ready', 'No takes yet · Generate on Write'],
+		['ready', TAKES_EMPTY],
 		['loading', 'Loading takes…'],
 		['error', 'Failed to load takes']
 	] as const)(
