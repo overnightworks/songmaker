@@ -1,0 +1,8 @@
+claim_id = "04be3973a1e34e7aa3a3bb2b92cc299f"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3c1c8863d03944910bc98211100a9e933464e57b"
+branch = "claude/issue-2479-song-move-busy-and-not-moved"
+scope = ["frontend/e2e/song-move.spec.ts", "frontend/src/lib/components/editor/SongMenu.svelte", "frontend/src/lib/components/editor/SongMenu.test.ts", "frontend/src/lib/components/editor/SongMovePicker.svelte", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/songMove.test.ts", "frontend/src/lib/stores/songMove.ts"]
+opened_commit = "2df76fcdb8f4cdb9c52dd88efedb52ab447f90ab"
+whole_reason = "One picker state machine across its store, its picker and its menu, with its tests; cut, the picker would be half-wired."
