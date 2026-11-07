@@ -145,6 +145,19 @@ def test_put_and_get_memory_roundtrip(client):
     assert bundle["album"]["body"] == "night city"
 
 
+def test_a_bundle_without_album_notes_carries_no_album_body(client):
+    """Spec: REQ-COWRITER-14 -- album notes are optional: with none stored, the bundle's album
+    body is empty while user and song memory stay."""
+    c, _ = client
+    c.put("/api/memory/user", json={"body": "prefer German"})
+    c.put("/api/memory/songs/s1", json={"body": "locked chorus"})
+
+    bundle = c.get("/api/memory", params={"song_id": "s1"}).json()
+
+    assert (bundle["user"]["body"], bundle["song"]["body"]) == ("prefer German", "locked chorus")
+    assert bundle["album"]["body"] == ""
+
+
 def test_memory_put_does_not_change_lyrics(client):
     """Spec: REQ-COWRITER-16 -- a memory write leaves the song's lyrics as they were."""
     c, factory = client
@@ -152,6 +165,20 @@ def test_memory_put_does_not_change_lyrics(client):
     with factory() as session:
         version = session.get(Version, "v1")
         assert version.lyrics == "verse of thunder"
+
+
+def test_a_turn_after_a_memory_write_takes_its_lyrics_only_from_the_song(client, service):
+    """Spec: REQ-COWRITER-16 -- the turn carries the song's own lyrics once, and the memory
+    text only in the memory block."""
+    c, _ = client
+    c.put("/api/memory/songs/s1", json={"body": "keep the chorus short"})
+
+    _stream_events(c.post("/api/chat/turn", json={"message": "go", "current_song_id": "s1"}))
+
+    content = service.last_turn.messages[-1]["text"]
+    assert content.count("verse of thunder") == 1
+    assert content.count("keep the chorus short") == 1
+    assert "<song_memory>\nkeep the chorus short\n</song_memory>" in content
 
 
 def test_stranger_memory_is_404(stranger_client):
