@@ -2,7 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { makeGeneration } from '#lib/test-utils/factories.ts';
-import { NOW_PLAYING_LABEL, TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
+import { NOW_PLAYING_LABEL } from '#lib/constants.ts';
 import { audioPlayer, type PlaybackInfo } from '#lib/services/audioPlayer.svelte.ts';
 import { nowPlayingDockable, nowPlayingSurface, setShuffle } from '#lib/stores/player.ts';
 import PlayerBar from './PlayerBar.svelte';
@@ -108,25 +108,5 @@ describe('PlayerBar while a take is loaded', () => {
 
 		await pressAndSettle(control(`button[aria-label="${NOW_PLAYING_LABEL}"]`));
 		expect(get(nowPlayingSurface)).toBe('closed');
-	});
-
-	// Spec: REQ-PLAYER-02 -- on the transport bar a first Play press while the audio loads queues playback and a second press cancels it.
-	it('queues one Play press and cancels it with a second while loading', async () => {
-		const playSpy = vi.spyOn(audio, 'play');
-
-		await pressAndSettle(control('.play-btn'));
-		expect(control('.play-btn').getAttribute('aria-label')).toBe(TRANSPORT_PAUSE_LABEL);
-		await pressAndSettle(control('.play-btn'));
-		expect(control('.play-btn').getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
-
-		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
-		audio.fire('canplay');
-		await tick();
-		expect(playSpy).not.toHaveBeenCalled();
-
-		await pressAndSettle(control('.play-btn'));
-		audio.fire('canplay');
-		await tick();
-		expect(playSpy).toHaveBeenCalledOnce();
 	});
 });

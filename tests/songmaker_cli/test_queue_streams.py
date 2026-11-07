@@ -103,9 +103,6 @@ def _write_audio_files(root: Path) -> None:
         (path / name).write_bytes(b"source")
 
 
-_patch_audio_build = stub_audio_build
-
-
 def test_probe_audio_duration_reports_what_audio_files_measures(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -262,7 +259,7 @@ def test_queue_stream_track_uses_generation_version_lyrics(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_versioned_lyrics)
     audio_root = tmp_path / "audio" / "owner-id"
     audio_root.mkdir(parents=True, exist_ok=True)
@@ -292,7 +289,7 @@ def test_queue_stream_missing_version_lyrics_are_null(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_versioned_lyrics)
     audio_root = tmp_path / "audio" / "owner-id"
     audio_root.mkdir(parents=True, exist_ok=True)
@@ -318,7 +315,7 @@ def test_queue_stream_audio_reports_missing_snapshot_audio(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -386,7 +383,7 @@ def test_queue_stream_request_no_longer_sweeps_expired_snapshots(
     """Cleanup used to run inline before every build; a snapshot request must
     no longer sweep an unrelated expired snapshot out of the cache -- that is
     now the periodic background loop's job (see lifecycle.py)."""
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -425,7 +422,7 @@ def test_build_lock_entries_do_not_accumulate_across_builds(
     entry is removed once the build (or cache hit) using it has finished."""
     import songmaker_cli.queue_streams as qs
 
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
 
@@ -521,7 +518,7 @@ def test_shared_playlist_queue_stream_snapshot_and_audio(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -560,7 +557,7 @@ def test_shared_stream_manifests_only_playable_takes(
     share_endpoint: str,
     stream_endpoint: str,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -597,7 +594,7 @@ def test_shared_stream_manifests_skip_noncanonical_audio_paths(
     share_endpoint: str,
     stream_endpoint: str,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -632,7 +629,7 @@ def test_shared_queue_stream_skips_path_traversal_like_a_missing_take(
     share_endpoint: str,
     stream_url: str,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -683,7 +680,7 @@ def test_shared_queue_stream_revalidates_tracks(
     stream_endpoint: str,
     invalidates: str,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -723,7 +720,7 @@ def test_shared_playlist_queue_stream_revalidates_archived_takes(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -748,7 +745,7 @@ def test_queue_stream_cache_quota_keeps_new_snapshot(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_CACHE_BYTES", 1)
@@ -765,7 +762,7 @@ def test_queue_stream_cache_quota_keeps_new_snapshot(
 
 
 def test_queue_stream_windowed_by_track_count(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
@@ -783,7 +780,7 @@ def test_queue_stream_windowed_by_track_count(tmp_path: Path, monkeypatch) -> No
 
 
 def test_queue_stream_accepts_duration_at_cap(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 10)
@@ -830,7 +827,7 @@ def test_queue_stream_duration_cap_sets_ffmpeg_timeout() -> None:
 
 
 def test_queue_stream_cache_identity_includes_count_windowing(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
@@ -850,7 +847,7 @@ def test_queue_stream_cache_identity_includes_count_windowing(tmp_path: Path, mo
 
 
 def test_queue_stream_not_windowed_when_within_limits(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -864,7 +861,7 @@ def test_queue_stream_not_windowed_when_within_limits(tmp_path: Path, monkeypatc
 def test_legacy_manifest_without_windowed_field_loads_as_unwindowed(
     tmp_path: Path, monkeypatch
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -886,7 +883,7 @@ def test_legacy_manifest_without_windowed_field_loads_as_unwindowed(
 def test_queue_stream_first_track_too_long_raises_422(tmp_path: Path, monkeypatch) -> None:
     import songmaker_cli.queue_streams as qs
 
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     # first (and only) track duration exceeds the cap → empty window → 422
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 5)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
@@ -1031,7 +1028,7 @@ def _write_library_audio_files(root: Path) -> None:
 
 def test_library_pool_queue_order_and_tracks(tmp_path: Path, monkeypatch) -> None:
     """Spec: REQ-LISTENING-01 -- with Shuffle off, songs follow album and then track order."""
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1049,7 +1046,7 @@ def test_library_pool_queue_order_and_tracks(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_library_pool_queue_picks_picked_over_first(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1063,7 +1060,7 @@ def test_library_pool_queue_picks_picked_over_first(tmp_path: Path, monkeypatch)
 
 
 def test_library_pool_queue_excludes_archived_generations(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1079,7 +1076,7 @@ def test_library_pool_queue_skips_songs_without_playable_generations(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1092,7 +1089,7 @@ def test_library_pool_queue_skips_songs_without_playable_generations(
 
 
 def test_library_pool_queue_rotation_via_start_generation_id(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1109,7 +1106,7 @@ def test_library_pool_queue_start_take_is_the_clicked_generation(
     tmp_path: Path, monkeypatch,
 ) -> None:
     """The selected take leads the pool even when another take is picked."""
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1138,7 +1135,7 @@ def _library_answer(response) -> tuple[list[str], list[tuple[str, str]]]:
 def test_library_scan_skips_a_take_escaping_the_audio_root_as_missing(
     tmp_path: Path, monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_with_escaping_take)
     _write_library_audio_files(tmp_path)
     (tmp_path / "outside.mp3").write_bytes(b"outside")
@@ -1155,7 +1152,7 @@ def test_library_scan_skips_a_take_escaping_the_audio_root_as_missing(
 def test_library_scan_refuses_a_start_take_escaping_the_audio_root(
     tmp_path: Path, monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_with_escaping_take)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1170,7 +1167,7 @@ def test_library_pool_queue_start_generation_id_not_found_returns_404(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1184,7 +1181,7 @@ def test_library_pool_queue_start_generation_id_owned_by_other_user_returns_404(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1198,7 +1195,7 @@ def test_library_pool_queue_archived_start_generation_returns_422(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1210,7 +1207,7 @@ def test_library_pool_queue_archived_start_generation_returns_422(
 
 
 def test_library_pool_queue_returns_one_more_than_track_limit(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
@@ -1260,7 +1257,7 @@ def test_library_pool_queue_query_count_is_constant_not_per_song(
     from sqlalchemy import event
 
     song_count = 50
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, factory = make_test_app(
         tmp_path, seed_db=lambda s: _seed_large_library(s, song_count=song_count),
     )
@@ -1315,7 +1312,7 @@ def test_library_pool_queue_empty_playable_library_is_422(tmp_path: Path, monkey
             gen.is_archived = True
         session.flush()
 
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=seed_unplayable)
     seed_session(client, "usera")
 
@@ -1325,7 +1322,7 @@ def test_library_pool_queue_empty_playable_library_is_422(tmp_path: Path, monkey
 
 
 def test_library_pool_queue_cross_user_isolation(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1348,7 +1345,7 @@ def test_library_pool_queue_cross_user_isolation(tmp_path: Path, monkeypatch) ->
 
 
 def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -1401,7 +1398,7 @@ def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path: Path, monkeypatch)
         cleanup_expired_queue_streams,
     )
 
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
 
@@ -1454,7 +1451,7 @@ def test_corrupt_manifest_file_returns_404_not_500(
     """A manifest file that fails to parse or is missing a required field (a
     truncated write, disk corruption) must surface as a clean 404 -- never a
     raw KeyError/500 from indexing into an unvalidated dict."""
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -1475,7 +1472,7 @@ def test_cleanup_deletes_corrupt_manifest(tmp_path: Path, monkeypatch) -> None:
 
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     stream_dir = tmp_path / "data" / "queue-streams"
     stream_dir.mkdir(parents=True, exist_ok=True)
@@ -1490,7 +1487,7 @@ def test_cleanup_deletes_corrupt_manifest(tmp_path: Path, monkeypatch) -> None:
 def _expired_shared_snapshot_with_pin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[TestClient, Path]:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -1537,7 +1534,7 @@ def test_the_pin_routes_are_gone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, method: str
 ) -> None:
     """1859_R1 -- the pin addresses answer like any unknown address."""
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     seed_session(client, "owner")
@@ -1634,7 +1631,7 @@ def _write_shuffle_audio_files(root: Path) -> None:
 def test_library_pool_queue_without_shuffle_keeps_album_track_order(
     tmp_path: Path, monkeypatch
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -1654,7 +1651,7 @@ def test_library_pool_queue_shuffle_uses_injected_rng(tmp_path: Path, monkeypatc
     """Spec: REQ-LISTENING-02 -- Shuffle reorders the pool, keeps its takes and starts with the
     clicked take.
     """
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     monkeypatch.setattr("songmaker_cli.queue_streams.random.shuffle", _reverse_in_place)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
@@ -1676,7 +1673,7 @@ def test_library_pool_queue_shuffle_uses_injected_rng(tmp_path: Path, monkeypatc
 def test_library_pool_queue_scan_is_bounded_and_marks_unscanned_tail(
     tmp_path: Path, monkeypatch
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as queue_streams
 
     monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 2)
@@ -1766,7 +1763,7 @@ def test_library_pool_queue_default_scan_limit_is_explicitly_partial(
 def test_library_pool_queue_scan_stops_after_one_more_than_track_limit(
     tmp_path: Path, monkeypatch
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as queue_streams
 
     monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 10)
@@ -1792,7 +1789,7 @@ def test_library_pool_queue_scan_stops_after_one_more_than_track_limit(
 
 
 def test_library_pool_queue_shuffles_before_bounded_scan(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as queue_streams
 
     monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
@@ -1821,7 +1818,7 @@ def test_library_pool_queue_shuffles_before_bounded_scan(tmp_path: Path, monkeyp
 def test_library_pool_queue_start_is_first_and_scanned_once_with_small_budget(
     tmp_path: Path, monkeypatch
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as queue_streams
 
     monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
@@ -1851,7 +1848,7 @@ def test_library_pool_queue_start_is_first_and_scanned_once_with_small_budget(
 def test_library_pool_queue_unplayable_start_is_scanned_once_with_small_budget(
     tmp_path: Path, monkeypatch
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as queue_streams
 
     monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
@@ -1879,7 +1876,7 @@ def test_library_pool_queue_unplayable_start_is_scanned_once_with_small_budget(
 
 
 def test_library_pool_queue_unknown_pool_is_422(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -2087,7 +2084,7 @@ def test_library_pool_queue_pool_sets(
     is both picked and kept once, no pool holds the archived or the missing-file take, one song
     contributes several takes, and a song's takes run from newest to oldest.
     """
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -2100,7 +2097,7 @@ def test_library_pool_queue_pool_sets(
 
 def test_library_pool_queue_default_pool_is_mix(tmp_path: Path, monkeypatch) -> None:
     """Spec: REQ-LIBRARY-07 -- a take whose audio file is missing is left out and reported."""
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -2147,7 +2144,7 @@ def test_library_pool_queue_reports_every_unplayable_reason(tmp_path: Path, monk
             ]
         )
 
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=seed_with_unplayable)
     _write_pool_audio_files(tmp_path)
     (tmp_path / "audio" / "user-a" / "directory.mp3").mkdir()
@@ -2167,7 +2164,7 @@ def test_library_pool_queue_reports_every_unplayable_reason(tmp_path: Path, monk
 
 
 def test_library_pool_queue_out_of_pool_start_is_temporary(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -2236,7 +2233,7 @@ def test_library_pool_queue_matches_collect_without_ffmpeg(tmp_path: Path, monke
 def test_library_pool_queue_foreign_start_generation_is_404(
     tmp_path: Path, monkeypatch
 ) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
@@ -2258,7 +2255,7 @@ def test_library_pool_queue_empty_pool_is_422(tmp_path: Path, monkeypatch) -> No
             gen.is_archived = True
         session.flush()
 
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=seed_unplayable)
     seed_session(client, "usera")
 
@@ -2269,7 +2266,7 @@ def test_library_pool_queue_empty_pool_is_422(tmp_path: Path, monkeypatch) -> No
 
 
 def test_library_pool_queue_rate_limited(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     import songmaker_cli.constants as consts
 
     monkeypatch.setattr(consts, "QUEUE_STREAM_AUTH_RATE_LIMIT", 1)
@@ -2292,7 +2289,7 @@ def test_library_pool_queue_rate_limiter_failure_is_503(
         def is_allowed(self, _user_id, *, limit: int, window_seconds: int):
             raise RuntimeError("down")
 
-    _patch_audio_build(monkeypatch)
+    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     seed_session(client, "usera")
     monkeypatch.setattr(
