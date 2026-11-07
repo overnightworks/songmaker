@@ -493,158 +493,6 @@ host refresh replaces the mounted access token in place while keeping
 mirrored Codex document, which no container mounts, keeps `tokens.refresh_token`
 empty.
 
-The web service alone runs under the host profile `songmaker-web` and the
-repository's `scripts/seccomp/songmaker-web.json`. The seccomp file is a pinned
-copy of Docker's default profile with only Bubblewrap's namespace and mount
-setup syscalls freed from Docker's `CAP_SYS_ADMIN` filter; its adjacent README
-names the Moby revision and the test proves the exact diff. It grants no
-capability. AppArmor remains the mount-shape boundary inside the nested user
-and mount namespaces, while Compose still drops every container capability and
-sets `no-new-privileges:true`; neither profile replaces the other.
-
-### Masks by AppArmor instead of Docker
-
-`songmaker-web` sets `systempaths=unconfined`. Docker normally overlays its
-masked and read-only system paths, but those overmounts make Bubblewrap's fresh
-`--proc /proc` mount fail the kernel's `mount_too_revealing` check: a new procfs
-in the user namespace needs a source `/proc` without those overmounts. The
-`songmaker-web` AppArmor profile therefore enforces the relevant path policy
-instead, for every task carrying `songmaker-web`, including the Bubblewrap
-child. A fresh child procfs would not retain Docker's proc masks in any case,
-and `/sys` is where the rules do the real work: the cover command's
-`--ro-bind / /` carries the now-unmasked host `/sys` into the sandbox, so
-`/sys/firmware` and `/sys/devices/virtual/powercap` are out of reach there by
-AppArmor alone.
-
-This is a path-access replacement, not an inode-hiding replacement. Alias walks
-are covered: AppArmor mediates the resolved pathname, so a walk through
-`/proc/self/root/...` or `/proc/1/root/...` is denied like the plain path. What
-remains true is narrower — the inode itself stays present instead of being
-covered by an overmount, and a second mount of the same tree would carry a
-pathname the profile does not name. Every rule therefore uses the `{,/,/**}`
-form: AppArmor matches a directory only with its trailing slash, so without the
-middle alternative the directory itself stayed listable while only its contents
-were denied.
-
-| Docker system path | `songmaker-web` rule |
-| --- | --- |
-| `/proc/acpi` | `deny /proc/acpi{,/,/**} rwklx` |
-| `/proc/asound` | `deny /proc/asound{,/,/**} rwklx` |
-| `/proc/interrupts` | `deny /proc/interrupts{,/,/**} rwklx` |
-| `/proc/kcore` | `deny /proc/kcore{,/,/**} rwklx` |
-| `/proc/keys` | `deny /proc/keys{,/,/**} rwklx` |
-| `/proc/latency_stats` | `deny /proc/latency_stats{,/,/**} rwklx` |
-| `/proc/sched_debug` | `deny /proc/sched_debug{,/,/**} rwklx` |
-| `/proc/scsi` | `deny /proc/scsi{,/,/**} rwklx` |
-| `/proc/timer_list` | `deny /proc/timer_list{,/,/**} rwklx` |
-| `/proc/timer_stats` | `deny /proc/timer_stats{,/,/**} rwklx` |
-| `/sys/devices/virtual/powercap` | `deny /sys/devices/virtual/powercap{,/,/**} rwklx` |
-| `/sys/firmware` | `deny /sys/firmware{,/,/**} rwklx` |
-| `/proc/bus` | `deny /proc/bus{,/,/**} w` |
-| `/proc/fs` | `deny /proc/fs{,/,/**} w` |
-| `/proc/irq` | `deny /proc/irq{,/,/**} w` |
-| `/proc/sys` | `deny /proc/sys{,/,/**} w` |
-| `/proc/sysrq-trigger` | `deny /proc/sysrq-trigger{,/,/**} rwklx` (stricter than Docker's read-only mask) |
-
-The `/proc/sys` rule intentionally has no `shm*` write exception: Songmaker
-does not write those kernel settings.
-
-An operator installs the AppArmor policy with
-`sudo scripts/apparmor/install_profile.sh` and then recreates the service with
-`docker compose up -d songmaker-web`. The script stages a copy of the profile
-as a dotfile in `/etc/apparmor.d/`, checks that those staged bytes parse
-(`apparmor_parser -QK`) and declare the `songmaker-web` profile and no other
-(`apparmor_parser -QK -N`), and renames them over
-`/etc/apparmor.d/songmaker-web` (mode 0644, fresh mtime), so the boot-loaded
-pathname never holds a partial or unvalidated file and a source edited
-mid-run cannot slip past the check. It then loads that copy
-(`apparmor_parser -r`) and requires `aa-status` to list a profile of exactly
-that name. If the load or that check fails, the previous copy goes back and is
-reloaded (on a first install the new copy is removed), and the script fails.
-`apparmor_parser` skips dotfiles when it loads a directory, so a staged copy
-never reaches the boot load, and the script removes it on every exit.
-`apparmor.service` loads every profile under
-`/etc/apparmor.d/` before `sysinit.target`, and `docker.service` starts after
-it, so both Docker's own `unless-stopped` restarts and `songmaker.service`
-find the profile after a reboot without a manual step. Run the script once
-per change to the profile in the repository; running it twice gives the same
-result. Installing changes the host kernel policy, so the script deliberately
-requires root. The profile derives
-Docker Engine 29.1.3's `docker-default` template (Moby
-`profiles/apparmor`, ABI 3.0) and retains its `/proc` and `/sys` denials. It
-adds `userns` for Ubuntu's restricted unprivileged user namespaces, plus only
-Bubblewrap 0.12.0's private-root setup operations: recursive-slave propagation,
-construction and sandbox tmpfs mounts, root binds and remounts, both
-`pivot_root` calls, the retained-proc bind from `/oldroot/proc/` to `/proc/`,
-fresh `proc`, writable-proc covers, and minimal `dev`/`devpts`. Codex's
-per-run startup probe gets its own `tmpfs` at `/newroot/`, then read-only binds
-only `/bin`, `/etc`, `/lib`, `/lib64`, `/sbin`, and `/usr`; its `dev` and `proc`
-mounts use the same minimal rules as the cover command. The allowlist also
-names only the three traced protected-home overlays (`.git`, `.agents`, and
-`.codex`) below the cover, Co-Writer, and probe home prefixes:
-Bubblewrap mounts `tmpfs` there with `rw,nosuid,nodev`, after preparing each
-target with `--perms 555`, and then read-only remounts it. It accepts
-Bubblewrap's optional `silent` flag only where its mount syscall uses it and
-preserves the observed inherited mount flags during remounts. Compose applies
-the profile only to `songmaker-web`, drops every container capability, and sets
-`no-new-privileges:true`.
-
-The profile permits the private Codex-home mounts under three `/tmp` prefixes
-(the cover turn's, the Co-Writer turn's and the probe's); nothing in songmaker
-binds them. The profile *name* is a parameter wherever it is used —
-`sudo scripts/apparmor/install_profile.sh [profile]` and Compose's
-`SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`.
-`tests/scripts/test_apparmor_install.py` drives the installer without an
-argument and requires it to install the profile file beside it. The installer
-refuses a name that is not a regular profile file beside it, a symlink
-included, so a typo or a link to another host file never reaches
-`apparmor_parser`.
-
-Docker's default seccomp profile keeps `clone3` at `ENOSYS` without
-`CAP_SYS_ADMIN`, so Bubblewrap and libc use their `clone` fallback.
-
-Do not use `apparmor=unconfined` as a Sandbox diagnostic on this Ubuntu host.
-With `kernel.apparmor_restrict_unprivileged_userns=1`, an unconfined process is
-blocked before it can create the required user namespace; that result says
-nothing about the confined `songmaker-web` profile or its seccomp policy. The
-confined profile explicitly permits `userns`, so its child can create the
-namespace with the capabilities it needs inside that namespace.
-
-Unprivileged user namespaces enlarge the kernel attack surface; this is the
-deliberate #666 trade-off because the alternative is Option 2.
-
-That the profile survives a reboot is proven by unloading it from the kernel
-and letting `apparmor.service` load it again from the installed copy; a
-missing copy fails the second `aa-status` check. Each check matches the whole
-profile name, so a profile whose name merely contains `songmaker-web` never
-counts. A real reboot followed by the same checks counts as well:
-
-```sh
-docker compose stop songmaker-web
-sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
-sudo aa-status | awk 'NF == 1 && $1 == "songmaker-web" { found = 1 } END { print (found ? "present" : "absent"); exit !found }'   # prints absent
-sudo systemctl reload apparmor.service
-systemctl is-active --quiet apparmor.service && echo active
-sudo aa-status | awk 'NF == 1 && $1 == "songmaker-web" { found = 1 } END { print (found ? "present" : "absent"); exit !found }'   # prints present
-docker compose up -d songmaker-web
-```
-
-The installed copy does not follow later edits to the profile in the
-repository: until the installer runs again, every boot loads the rules it last
-installed.
-
-To remove the profile from the host, stop the service that requires it,
-unload the profile, then delete the installed copy. `apparmor_parser -R` reads
-the profile file to learn which profile to unload, so it runs before the copy
-is gone:
-
-```sh
-docker compose stop songmaker-web
-sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
-sudo rm /etc/apparmor.d/songmaker-web
-```
-
-
 **The renewal secret never leaves the host.** The mirror publishes the
 short-lived access token and blanks the long-lived one, so whatever eventually
 reads a copy can spend what it holds until it expires but cannot mint a new
@@ -815,7 +663,7 @@ The Keycloak client secret is not in that list because it is not in the environm
 
 `HF_TOKEN` is scrubbed from the ACE-Step subprocess even though the subprocess genuinely does call Hugging Face: `vendor/acestep/acestep/api/model_download.py`'s `download_from_huggingface` runs both at subprocess startup (for the DiT and VAE models) and at request time (for LM models), and it passes no explicit `token=`, so `huggingface_hub` would pick up `HF_TOKEN` from the environment implicitly if it were present. However, every repo ID the subprocess can resolve on its own (via `MODEL_REPO_MAPPING` / `DEFAULT_REPO_ID` in that same module) is public and answers anonymously; the ACE-Step catalog's only two gated repos (`ACE-Step/acestep-v15-turbo`, `ACE-Step/acestep-5Hz-lm-1.7B`) are fetched exclusively by `acestep_worker.downloads.run_download`, which passes `token=` explicitly rather than relying on ambient env. So scrubbing `HF_TOKEN` here does not break any download this deployment performs — the consequence is that the subprocess's own Hugging Face requests go out anonymously and are subject to Hugging Face's stricter unauthenticated rate limits. See `acestep_worker/constants.py` for the same reasoning next to the list.
 
-A third case needs a different mechanism: `songmaker_cli.scoring.subprocess_runner` starts the long-lived scorer child via `multiprocessing`'s `spawn` start method, which has no `env=` parameter — the child process inherits the parent's complete `os.environ` at spawn time, the same way it would inherit any other process-wide state. `_child_main` (the child's entry point) calls `_scrub_secret_env_vars()` as its literal first statement — but by the time `_child_main` runs, the spawn bootstrap has already imported the whole `subprocess_runner` module and everything it pulls in at module level (`scoring.pipeline`, `settings`, `auth`, `api_models`, ...), because multiprocessing's spawn target must be importable before it can be called. The scrub cannot undo anything a module-level import already did; it only guarantees that no code invoked *after* it — `default_registry.ensure_loaded()`'s scorer-module imports and every scorer function call that follows — can read a secret out of `os.environ`. `tests/songmaker_cli/scoring/test_subprocess_runner_scoring.py::test_scorer_child_drops_secret_env_keys_at_spawn` drives the real `_child_main` entry point (via the existing `_run_child_with_messages` test harness, not a stand-in) with every `SECRET_ENV_KEYS` entry (plus a non-secret marker) set in the parent's environment beforehand, sends it an `EnvProbeRequest`, and asserts none of them come back present while the marker does — a spawned process's own `os.environ` cannot be observed from outside it any other way, so this round trip is what makes deleting the `_scrub_secret_env_vars()` call site fail the test.
+The scoring subprocess needs a different mechanism: `songmaker_cli.scoring.subprocess_runner` starts the long-lived scorer child via `multiprocessing`'s `spawn` start method, which has no `env=` parameter — the child process inherits the parent's complete `os.environ` at spawn time, the same way it would inherit any other process-wide state. `_child_main` (the child's entry point) calls `_scrub_secret_env_vars()` as its literal first statement — but by the time `_child_main` runs, the spawn bootstrap has already imported the whole `subprocess_runner` module and everything it pulls in at module level (`scoring.pipeline`, `settings`, `auth`, `api_models`, ...), because multiprocessing's spawn target must be importable before it can be called. The scrub cannot undo anything a module-level import already did; it only guarantees that no code invoked *after* it — `default_registry.ensure_loaded()`'s scorer-module imports and every scorer function call that follows — can read a secret out of `os.environ`. `tests/songmaker_cli/scoring/test_subprocess_runner_scoring.py::test_scorer_child_drops_secret_env_keys_at_spawn` drives the real `_child_main` entry point (via the existing `_run_child_with_messages` test harness, not a stand-in) with every `SECRET_ENV_KEYS` entry (plus a non-secret marker) set in the parent's environment beforehand, sends it an `EnvProbeRequest`, and asserts none of them come back present while the marker does — a spawned process's own `os.environ` cannot be observed from outside it any other way, so this round trip is what makes deleting the `_scrub_secret_env_vars()` call site fail the test.
 
 Everything a child scorer needs is resolved in the parent and carried into the child as data — never re-read from the child's own environment — and none of it is a secret. `scoring_worker.py` and `jobs/scoring.py` call `get_settings()` at worker startup and per-job respectively, in the parent process; `scoring_device`, `scorer_timeout_seconds`, and `text_accuracy_timeout_seconds` flow into `PipelineConfig` fields (`device`, `scorer_timeout`, `text_accuracy_timeout`), and `scoring_max_jobs` separately bounds ARQ worker concurrency (`ScoringWorkerSettings.max_jobs`) — it never crosses the pipe at all. No scorer calls an external provider, so no scorer holds a credential and `PipelineConfig` carries no secret field: there is no key in the child's memory to leak through the model weights it loads.
 
@@ -881,9 +729,15 @@ A compromised worker can overwrite or delete any stored audio file, enqueue or a
 
 A worker writes a take only into its container-local output root, which it empties at every start. The `done` event names no path: music fetches the take by `task_id` with `GET /tasks/{task_id}/result` (the worker resolves the file only from its own task record, never from a caller's path) and then frees it with `DELETE`. Music streams the body into a temp file of its own and aborts at `generation_result_max_bytes`, which only music's settings hold; a refused, oversized, cut-off or timed-out fetch is one failed take with no retry. Both routes sit behind the internal token. The worker's expiry sweep removes a result file together with its task record. Reference, repaint and cover inputs and the LoRA export still use the shared audio volume.
 
+### Container confinement
+
+Every service runs under Docker's default AppArmor and seccomp profiles, and
+Docker masks its system paths. `songmaker-web` and the three workers drop every
+capability and set `no-new-privileges:true`.
+
 ### Trust model and accepted risks
 
-- **Subprocesses share the OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in Docker. Every image creates that user as uid and gid 1000 and runs `USER 1000:1000`: the named volumes and the checkpoints bind mount belong to that uid, and Kubernetes' `runAsNonRoot` can verify only a numeric `USER`. `songmaker-acestep-worker-0`, `songmaker-music-worker` and `songmaker-scoring-worker` drop every capability (`cap_drop: [ALL]`, no `cap_add`) and set `no-new-privileges`; they carry none of `songmaker-web`'s seccomp, AppArmor or `systempaths` options, which exist only for its Bubblewrap sandbox. Compromised model weights or ACE-Step code get user-level disk access. Container isolation mitigates this; OS-user separation would need separate containers for marginal benefit. Accepted for a single-user deployment.
+- **Subprocesses share the OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in Docker. Every image creates that user as uid and gid 1000 and runs `USER 1000:1000`: the named volumes and the checkpoints bind mount belong to that uid, and Kubernetes' `runAsNonRoot` can verify only a numeric `USER`. `songmaker-acestep-worker-0`, `songmaker-music-worker` and `songmaker-scoring-worker` drop every capability (`cap_drop: [ALL]`, no `cap_add`) and set `no-new-privileges`. Compromised model weights or ACE-Step code get user-level disk access. Container isolation mitigates this; OS-user separation would need separate containers for marginal benefit. Accepted for a single-user deployment.
 - **Secret files are readable by every child of the same uid.** The session secret, database password, internal token and monitoring token are files under `/run/secrets` in the containers that read them, as the Keycloak client secret is: the scrub cannot hide a file from the agent-CLI and scorer children of the same OS user, and the files are mode 0644 inside a 0700 host directory because postgres (uid 70) and Prometheus (65534) read theirs under other uids. Only a process on the host as the operator, or root, reaches the host directory.
 - **One shared token.** All workers hold the same internal token (`internal-token`); compromising one grants full internal-API access. Multi-node deployments should move to per-worker tokens or mTLS.
 - **Single node.** One acestep-worker per GPU on one host, the ACE-Step HTTP subprocess inside the worker container. Multi-node distribution (separate hosts, shared model storage, cross-host Redis heartbeats) is untested, and the image/packaging refactor that would precede it (decoupling the ACE-Step subprocess image from the worker image) is unwritten.

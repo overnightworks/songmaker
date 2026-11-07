@@ -55,12 +55,15 @@ from songmaker_cli.scheduler import (
     pick_worker,
 )
 
-_SOCKET_SSE_READ_TIMEOUT_SECONDS = 2
+# Beyond any scheduling delay: only a hung peer times out. Timeout outcomes are
+# scripted by the peer raising the transport error, never by waiting.
+_PEER_TIMEOUT_SECONDS = 60.0
 _PEER_DISPATCH_OPTIONS = DispatchOptions(
-    load_model_timeout_seconds=0.25,
-    generate_submit_timeout_seconds=0.25,
-    sse_connect_timeout_seconds=0.25,
-    sse_read_timeout_seconds=0.25,
+    load_model_timeout_seconds=_PEER_TIMEOUT_SECONDS,
+    generate_submit_timeout_seconds=_PEER_TIMEOUT_SECONDS,
+    sse_connect_timeout_seconds=_PEER_TIMEOUT_SECONDS,
+    sse_read_timeout_seconds=_PEER_TIMEOUT_SECONDS,
+    result_fetch_timeout_seconds=_PEER_TIMEOUT_SECONDS,
     initial_reconnect_backoff_seconds=0.0,
     max_reconnect_backoff_seconds=0.0,
 )
@@ -963,10 +966,7 @@ def test_generation_worker_peer_releases_resources(generation_worker_peer, db_fa
                 worker=worker,
                 ace_config=_make_ace_config(),
                 target_mode="sft",
-                options=replace(
-                    _PEER_DISPATCH_OPTIONS,
-                    sse_read_timeout_seconds=_SOCKET_SSE_READ_TIMEOUT_SECONDS,
-                ),
+                options=_PEER_DISPATCH_OPTIONS,
             )
             assert Path(result.audio_path).is_file()
             if stop_early:

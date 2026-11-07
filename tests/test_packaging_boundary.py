@@ -33,7 +33,6 @@ E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 VOICES_E2E_OVERLAY = ("-f", "docker/docker-compose.e2e-voices.yml")
 DOCKER_DEFAULT_RESTART_POLICY = "no"
 WEB_SERVER_MODULE = "songmaker_cli.server"
-SCORING_WORKER_SERVICE = "songmaker-scoring-worker"
 
 
 @dataclass(frozen=True)
@@ -570,31 +569,47 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             assert bind_options.get("create_host_path") is False
 
 
-WORKER_SERVICES = (
+CONFINED_SERVICES = (
+    "songmaker-web",
     "songmaker-music-worker",
     "songmaker-acestep-worker-0",
     "songmaker-scoring-worker",
 )
-WEB_ONLY_SECURITY_OPTIONS = ("seccomp", "apparmor", "systempaths")
+CONFINEMENT_REPLACING_OPTIONS = ("seccomp", "apparmor", "systempaths")
 
 
-@pytest.mark.parametrize("service_name", WORKER_SERVICES)
-def test_a_worker_drops_every_capability_and_blocks_privilege_gain(
+@pytest.mark.parametrize("service_name", CONFINED_SERVICES)
+def test_a_confined_service_drops_every_capability_and_blocks_privilege_gain(
     service_name: str,
 ) -> None:
     service = _raw_compose_services()[service_name]
     assert isinstance(service, dict)
-    security_options = service["security_opt"]
 
     assert service["cap_drop"] == ["ALL"]
     assert "cap_add" not in service
     assert not service.get("privileged")
-    assert "no-new-privileges:true" in security_options
-    assert not [
-        option
-        for option in security_options
-        if option.startswith(WEB_ONLY_SECURITY_OPTIONS)
-    ]
+    assert "no-new-privileges:true" in service["security_opt"]
+
+
+def _confinement_replacements(services: dict) -> dict[str, str]:
+    return {
+        service_name: option
+        for service_name, service in services.items()
+        if isinstance(service, dict)
+        for option in service.get("security_opt", [])
+        if option.startswith(CONFINEMENT_REPLACING_OPTIONS)
+    }
+
+
+def test_no_service_replaces_dockers_default_confinement() -> None:
+    assert not _confinement_replacements(_raw_compose_services())
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_no_test_stack_service_replaces_dockers_default_confinement(
+    compose_files: tuple[str, ...],
+) -> None:
+    assert not _confinement_replacements(_rendered_test_stack_services(compose_files))
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())

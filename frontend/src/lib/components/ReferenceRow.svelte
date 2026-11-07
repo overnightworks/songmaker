@@ -3,7 +3,12 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import ReferenceMenu from '#lib/components/ReferenceMenu.svelte';
 	import ReferenceUses from '#lib/components/ReferenceUses.svelte';
-	import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
+	import {
+		REFERENCE_KEEP_LABEL,
+		REFERENCE_UNKEEP_LABEL,
+		TRANSPORT_PAUSE_LABEL,
+		TRANSPORT_PLAY_LABEL
+	} from '#lib/constants.ts';
 	import { formatTime, localDayAndMonth } from '#lib/utils/format.ts';
 
 	const NO_LENGTH = '—';
@@ -18,6 +23,7 @@
 		ontoggle,
 		onusestoggle,
 		onshowuses,
+		onkeeptoggle,
 		ondelete
 	}: {
 		reference: ReferenceRecordingResponse;
@@ -28,6 +34,7 @@
 		ontoggle: () => void;
 		onusestoggle: () => void;
 		onshowuses: () => void;
+		onkeeptoggle: () => void;
 		ondelete: () => void;
 	} = $props();
 
@@ -37,7 +44,7 @@
 
 	function metaLabel(): string {
 		const uploaded = localDayAndMonth(new Date(reference.created_at), now);
-		return `${lengthLabel(reference.duration_sec)} · ${uploaded}`;
+		return `${lengthLabel(reference.duration_sec)}${META_SEPARATOR}${uploaded}`;
 	}
 
 	function usedLabel(): string {
@@ -92,6 +99,20 @@
 			<span class="reference-meta reference-fault" role="alert">{fault}</span>
 		{/if}
 	</span>
+	<button
+		type="button"
+		class="reference-keep"
+		class:kept={reference.is_kept}
+		data-hitbox="frequent"
+		aria-pressed={reference.is_kept}
+		aria-label={`${reference.is_kept ? REFERENCE_UNKEEP_LABEL : REFERENCE_KEEP_LABEL} ${reference.filename}`}
+		onclick={(event) => {
+			event.stopPropagation();
+			onkeeptoggle();
+		}}
+	>
+		<Icon name={reference.is_kept ? 'heart-filled' : 'heart'} size={16} />
+	</button>
 	<!-- The menu's clicks are the menu's own, never the row's preview toggle. -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<span class="reference-menu" onclick={(event) => event.stopPropagation()}>
@@ -158,6 +179,23 @@
 		gap: 2px;
 		flex: 1;
 		min-width: 0;
+	}
+
+	.reference-keep {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		padding: 0;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.reference-keep:hover,
+	.reference-keep.kept {
+		color: var(--keep);
 	}
 
 	.reference-menu {
