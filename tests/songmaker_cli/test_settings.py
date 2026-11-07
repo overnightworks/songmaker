@@ -329,9 +329,10 @@ def test_an_agent_group_without_the_mcp_client_is_unused_and_stays_off(
 
 def test_mcp_on_without_an_agent_group_stops_startup(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_environment(monkeypatch, {**_AGENT_ENVIRONMENT, **_MCP_ENVIRONMENT})
+    required = _required_settings()
 
     with pytest.raises(ValidationError, match="mcp_agent_group"):
-        Settings(**_required_settings())
+        Settings(**required)
 
 
 @pytest.mark.parametrize(
