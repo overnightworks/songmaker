@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -11,6 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from support.queue_stream_audio import stub_audio_build
 from support.route_budget import queries_without_session_auth
 from support.web_app import make_authenticated_user, make_test_app, seed_session, web_client
 
@@ -22,7 +22,6 @@ from songmaker_cli.queue_streams import (
     QUEUE_STREAM_DURATION_LIMIT_DETAIL,
     QUEUE_STREAM_MAX_DURATION_SECONDS,
     QueueStreamSource,
-    _library_skip,
     build_queue_stream_snapshot,
     check_queue_stream_rate_limit,
     collect_library_pool_generations,
@@ -104,15 +103,7 @@ def _write_audio_files(root: Path) -> None:
         (path / name).write_bytes(b"source")
 
 
-def _patch_audio_build(monkeypatch) -> None:
-    import songmaker_cli.queue_streams as qs
-
-    monkeypatch.setattr(qs, "probe_audio_duration", lambda _path: 10.0)
-
-    def _fake_concat(_concat_path: Path, output_path: Path) -> None:
-        output_path.write_bytes(b"\xff\xfb\x90\x00" * 100)
-
-    monkeypatch.setattr(qs, "run_ffmpeg_concat", _fake_concat)
+_patch_audio_build = stub_audio_build
 
 
 def test_probe_audio_duration_reports_what_audio_files_measures(
@@ -2129,122 +2120,6 @@ def test_library_pool_queue_default_pool_is_mix(tmp_path: Path, monkeypatch) -> 
     ]
 
 
-def _seed_library_ordering_ties(session) -> None:
-    moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    session.add(User(id="user-a", username="usera"))
-    session.flush()
-    session.add(Album(id="album-z", title="Alpha", artist="A", created_by="user-a"))
-    session.add(Album(id="album-a", title="Zulu", artist="A", created_by="user-a"))
-    session.flush()
-    for song_id, album_id in (
-        ("song-b", "album-z"),
-        ("song-a", "album-z"),
-        ("song-c", "album-a"),
-    ):
-        session.add(
-            Song(id=song_id, title=song_id, album_id=album_id, track_number=1, slug=song_id)
-        )
-    session.flush()
-    for song_id in ("song-b", "song-a", "song-c"):
-        session.add(Version(id=f"v-{song_id}", song_id=song_id, version_number=1, lyrics=""))
-    session.flush()
-    take_times = (
-        ("song-a", "take-b", moment + timedelta(days=2)),
-        ("song-a", "take-a", moment + timedelta(days=2)),
-        ("song-a", "take-old", moment),
-        ("song-a", "take-mid", moment + timedelta(days=1)),
-        ("song-b", "take-only-b", moment),
-        ("song-c", "take-only-c", moment),
-    )
-    for number, (song_id, take_id, created_at) in enumerate(take_times, start=1):
-        session.add(
-            Generation(
-                id=take_id,
-                song_id=song_id,
-                version_id=f"v-{song_id}",
-                generation_number=number,
-                mp3_path=f"user-a/{take_id}.mp3",
-                seed=number,
-                is_picked=True,
-                created_at=created_at,
-            )
-        )
-
-
-def test_library_pool_queue_orders_ties_by_album_title_then_stable_identifiers(
-    tmp_path: Path, monkeypatch
-) -> None:
-    """Spec: REQ-LISTENING-01 -- album title outranks album id, tied tracks fall back to the song
-    id and tied takes to the take id, and a song's takes still run newest to oldest.
-    """
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_library_ordering_ties)
-    audio_path = tmp_path / "audio" / "user-a"
-    audio_path.mkdir(parents=True)
-    for take_id in (
-        "take-a", "take-b", "take-old", "take-mid", "take-only-b", "take-only-c",
-    ):
-        (audio_path / f"{take_id}.mp3").write_bytes(b"source")
-    seed_session(client, "usera")
-
-    resp = client.get("/api/library/pool-queue", params={"pool": "all"})
-
-    assert resp.status_code == 200
-    assert [track["generation_id"] for track in resp.json()["takes"]] == [
-        "take-a",
-        "take-b",
-        "take-mid",
-        "take-old",
-        "take-only-b",
-        "take-only-c",
-    ]
-
-
-def test_library_pool_queue_never_replaces_an_unavailable_pick_with_another_take(
-    tmp_path: Path, monkeypatch
-) -> None:
-    """Spec: REQ-LISTENING-06 -- a Pick whose audio file is missing is reported and its song
-    contributes no other take, although another take of that song is playable.
-    """
-
-    def seed_unavailable_pick(session) -> None:
-        _seed_library_pool_data(session)
-        session.add_all(
-            [
-                Generation(
-                    id="g-pick-gone",
-                    song_id="s2",
-                    version_id="v2",
-                    generation_number=3,
-                    mp3_path="user-a/g-pick-gone.mp3",
-                    is_picked=True,
-                ),
-                Generation(
-                    id="g-spare",
-                    song_id="s2",
-                    version_id="v2",
-                    generation_number=4,
-                    mp3_path="user-a/g-spare.mp3",
-                ),
-            ]
-        )
-
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=seed_unavailable_pick)
-    _write_pool_audio_files(tmp_path)
-    (tmp_path / "audio" / "user-a" / "g-spare.mp3").write_bytes(b"source")
-    seed_session(client, "usera")
-
-    resp = client.get("/api/library/pool-queue", params={"pool": "picks"})
-
-    assert resp.status_code == 200
-    assert resp.json()["skipped"] == [
-        {"song_id": "s2", "generation_id": "g-pick-gone", "reason": "missing_file"}
-    ]
-    assert [track["song_id"] for track in resp.json()["takes"]] == ["s1", "s1", "s3"]
-    assert "g-spare" not in [track["generation_id"] for track in resp.json()["takes"]]
-
-
 def test_library_pool_queue_reports_every_unplayable_reason(tmp_path: Path, monkeypatch) -> None:
     """Spec: REQ-LISTENING-05, REQ-LIBRARY-07 -- a take with no audio path, a missing file or an
     unreadable file is reported with its own reason and is not queued.
@@ -2289,100 +2164,6 @@ def test_library_pool_queue_reports_every_unplayable_reason(tmp_path: Path, monk
     assert resp.json()["skipped_complete"] is True
     queued = {track["generation_id"] for track in resp.json()["takes"]}
     assert queued.isdisjoint({"g-no-path", "g-missing", "g-directory"})
-
-
-def test_library_skip_classifies_missing_path(tmp_path: Path) -> None:
-    generation = Generation(id="g-no-path", song_id="s2", mp3_path=None)
-    ctx = type("Context", (), {"audio_dir": tmp_path / "audio"})()
-
-    skip = _library_skip(ctx, generation)
-
-    assert skip is not None
-    assert skip.model_dump() == {
-        "song_id": "s2",
-        "generation_id": "g-no-path",
-        "reason": "missing_path",
-    }
-
-
-def test_library_skip_rejects_fifo_before_open(tmp_path: Path, monkeypatch) -> None:
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    fifo_path = audio_dir / "take.mp3"
-    os.mkfifo(fifo_path)
-    generation = Generation(id="g-fifo", song_id="s2", mp3_path="take.mp3")
-    ctx = type("Context", (), {"audio_dir": audio_dir})()
-    original_open = Path.open
-
-    def guarded_open(path: Path, *args, **kwargs):
-        if path == fifo_path:
-            pytest.fail("FIFO must be rejected before open")
-        return original_open(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "open", guarded_open)
-
-    skip = _library_skip(ctx, generation)
-
-    assert skip is not None
-    assert skip.reason == "unreadable_file"
-
-
-@pytest.mark.parametrize("failure", ["open", "read", "probe"])
-def test_library_skip_maps_file_failures_to_unreadable(
-    tmp_path: Path, monkeypatch, failure: str
-) -> None:
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    audio_path = audio_dir / "take.mp3"
-    audio_path.write_bytes(b"audio")
-    generation = Generation(id="g-broken", song_id="s-broken", mp3_path="take.mp3")
-    ctx = type("Context", (), {"audio_dir": audio_dir})()
-    original_open = Path.open
-
-    class FailingReader:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            return False
-
-        def read(self, _size: int):
-            raise OSError("read failed")
-
-    if failure == "open":
-
-        def fail_open(path: Path, *args, **kwargs):
-            if path == audio_path:
-                raise PermissionError("open failed")
-            return original_open(path, *args, **kwargs)
-
-        monkeypatch.setattr(Path, "open", fail_open)
-    elif failure == "read":
-
-        def fail_read(path: Path, *args, **kwargs):
-            if path == audio_path:
-                return FailingReader()
-            return original_open(path, *args, **kwargs)
-
-        monkeypatch.setattr(Path, "open", fail_read)
-    else:
-
-        def fail_probe(_path: Path) -> float:
-            raise HTTPException(422, "probe failed")
-
-        monkeypatch.setattr(
-            "songmaker_cli.queue_streams.probe_audio_duration",
-            fail_probe,
-        )
-
-    skip = _library_skip(ctx, generation)
-
-    assert skip is not None
-    assert skip.model_dump() == {
-        "song_id": "s-broken",
-        "generation_id": "g-broken",
-        "reason": "unreadable_file",
-    }
 
 
 def test_library_pool_queue_out_of_pool_start_is_temporary(tmp_path: Path, monkeypatch) -> None:
