@@ -350,3 +350,24 @@ def test_a_second_purge_finds_nothing_and_unlinks_no_file_twice(
     assert world.purge()() == (0, 0)
 
     assert world.unlinked == _owned_paths(OLD_TAKE)
+
+
+@pytest.mark.parametrize(
+    ("trashed_albums", "purged_counts"),
+    [
+        pytest.param(("album-1",), [(0, 0), (1, 0)], id="album"),
+        pytest.param((), [(0, 0), (0, 1)], id="orphan-song"),
+    ],
+)
+def test_two_purges_of_the_same_candidates_both_finish(
+    pg_factory, tmp_path, monkeypatch, trashed_albums, purged_counts,
+) -> None:
+    world = _World(pg_factory, tmp_path, trashed_albums=trashed_albums)
+    world.record_unlinks(monkeypatch)
+
+    answers = race(pg_factory, world.purge(), world.purge(), _held_after_song_lock())
+
+    assert sorted(answers.values()) == purged_counts
+    assert world.song_ids() == []
+    assert world.unlinked == _owned_paths(OLD_TAKE)
+    assert world.files_left(OLD_TAKE) == []

@@ -66,8 +66,10 @@ def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
     """Delete the expired albums, then the orphan songs, and flush; the caller commits.
 
     Every candidate song is locked first, in one id order, so two overlapping runs never
-    wait on each other in a cycle. An album or song with a queued or running job is left for
-    a later run and stays out of the result.
+    wait on each other in a cycle. Once the locks are held the expired albums and songs are
+    listed again: one an overlapping run already purged, or that was restored meanwhile, is
+    skipped and stays out of the result. An album or song with a queued or running job is
+    left for a later run and stays out of the result.
     """
     expired_album_ids = [album.id for album in list_expired_albums(session, cutoff)]
     orphan_song_candidates = [
@@ -81,12 +83,18 @@ def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
         session,
         Song.id.in_([*orphan_song_candidates, *(id for ids in album_songs.values() for id in ids)]),
     )
+    still_expired_album_ids = {album.id for album in list_expired_albums(session, cutoff)}
+    still_expired_song_ids = {
+        song.id for song in list_expired_songs(session, cutoff, list(still_expired_album_ids))
+    }
     paths: list[str] = []
     album_ids: list[str] = []
     orphan_song_ids: list[str] = []
     song_ids: list[str] = []
     reference_candidates: set[str] = set()
     for album_id, album_song_ids in album_songs.items():
+        if album_id not in still_expired_album_ids:
+            continue
         linked = linked_reference_ids(session, album_song_ids)
         try:
             paths.extend(delete_album(session, album_id))
@@ -96,6 +104,8 @@ def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
         song_ids.extend(album_song_ids)
         reference_candidates |= linked
     for song_id in orphan_song_candidates:
+        if song_id not in still_expired_song_ids:
+            continue
         linked = linked_reference_ids(session, [song_id])
         try:
             paths.extend(delete_song(session, song_id))
