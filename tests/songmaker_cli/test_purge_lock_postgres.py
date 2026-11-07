@@ -59,7 +59,8 @@ class _World:
         tmp_path: Path,
         *,
         songs: tuple[str, ...] = ("song-1",),
-        trashed_album: bool = False,
+        song_albums: dict[str, str] | None = None,
+        trashed_albums: tuple[str, ...] = (),
         scored_take: bool = True,
         jobs: dict[str, dict[str, str]] | None = None,
     ) -> None:
@@ -71,14 +72,16 @@ class _World:
         def seed(session) -> None:
             seed_user(session, "admin", "admin", user_id=OWNER)
             session.flush()
-            session.add(Album(
-                id="album-1", title="A", artist="A", created_by=OWNER,
-                deleted_at=trashed if trashed_album else None,
-            ))
+            album_of = {song_id: (song_albums or {}).get(song_id, "album-1") for song_id in songs}
+            for album_id in sorted(set(album_of.values())):
+                session.add(Album(
+                    id=album_id, title=album_id, artist="A", created_by=OWNER,
+                    deleted_at=trashed if album_id in trashed_albums else None,
+                ))
             session.flush()
             for number, song_id in enumerate(songs, start=1):
                 session.add(Song(
-                    id=song_id, title=song_id, album_id="album-1", slug=song_id,
+                    id=song_id, title=song_id, album_id=album_of[song_id], slug=song_id,
                     track_number=number, deleted_at=trashed,
                 ))
                 session.flush()
@@ -160,12 +163,25 @@ class _World:
         with self.pg_factory() as session:
             return sorted(take_id for (take_id,) in session.query(Generation.id))
 
-    def exists(self, take: str) -> bool:
-        return (self.audio_dir / OWNER / f"{take}.mp3").exists()
+    def trash_album(self, album_id: str) -> None:
+        with self.pg_factory() as session:
+            session.query(Album).filter_by(id=album_id).one().deleted_at = (
+                datetime.now(timezone.utc) - TRASHED_LONG_AGO
+            )
+            session.commit()
+
+    def files_left(self, take: str) -> list[str]:
+        return sorted(
+            path.name for path in (self.audio_dir / OWNER).glob(f"{take}.*")
+        )
 
 
 def _running_generation(song_id: str = "song-1") -> dict[str, str]:
     return {"type": JobType.GENERATE, "status": JobStatus.RUNNING, "song_id": song_id}
+
+
+def _queued_generation(song_id: str = "song-1") -> dict[str, str]:
+    return {"type": JobType.GENERATE, "status": JobStatus.QUEUED, "song_id": song_id}
 
 
 def _owned_paths(take: str) -> list[str]:
@@ -184,6 +200,7 @@ def test_a_purge_waits_for_retentions_delete_of_a_scored_take_and_unlinks_it_onc
     assert answers["second"] == (0, 1)
     assert world.song_ids() == []
     assert world.unlinked == _owned_paths(OLD_TAKE)
+    assert world.files_left(OLD_TAKE) == []
 
 
 def test_retention_waits_for_a_purge_that_holds_its_take_and_leaves_the_unlink_to_the_purge(
@@ -224,7 +241,7 @@ def test_a_purge_defers_a_song_whose_persist_holds_its_job_and_saves_the_take(
 def test_a_persist_waits_for_a_purge_that_holds_the_song_and_saves_its_take(
     pg_factory, tmp_path, monkeypatch,
 ) -> None:
-    world = _World(pg_factory, tmp_path, jobs={"job-new": _running_generation()})
+    world = _World(pg_factory, tmp_path, jobs={"job-new": _queued_generation()})
     world.record_unlinks(monkeypatch)
 
     answers = race(
@@ -251,15 +268,22 @@ def test_a_song_without_takes_and_with_only_finished_jobs_is_deleted_without_pat
     assert world.unlinked == []
 
 
-def test_an_album_purge_is_deferred_whole_while_one_of_its_songs_has_a_running_job(
-    pg_factory, tmp_path, monkeypatch,
+@pytest.mark.parametrize(
+    "active_job",
+    [
+        pytest.param(
+            {"type": JobType.COVER, "status": JobStatus.RUNNING, "album_id": "album-1"},
+            id="album-cover-job",
+        ),
+        pytest.param(_running_generation("song-2"), id="running-generation-on-a-song"),
+    ],
+)
+def test_an_album_purge_is_deferred_whole_while_the_album_or_one_of_its_songs_has_a_running_job(
+    pg_factory, tmp_path, monkeypatch, active_job,
 ) -> None:
-    running = {
-        "type": JobType.COVER, "status": JobStatus.RUNNING, "album_id": "album-1",
-    }
     world = _World(
-        pg_factory, tmp_path, songs=("song-1", "song-2"), trashed_album=True,
-        jobs={"job-cover": running},
+        pg_factory, tmp_path, songs=("song-1", "song-2"), trashed_albums=("album-1",),
+        jobs={"job-active": active_job},
     )
     world.record_unlinks(monkeypatch)
 
@@ -268,10 +292,52 @@ def test_an_album_purge_is_deferred_whole_while_one_of_its_songs_has_a_running_j
     assert world.song_ids() == ["song-1", "song-2"]
     assert world.take_ids() == [OLD_TAKE]
     assert world.unlinked == []
-    world.finish_job("job-cover")
+    world.finish_job("job-active")
     assert world.purge()() == (1, 0)
     assert world.song_ids() == []
     assert world.unlinked == _owned_paths(OLD_TAKE)
+
+
+def test_an_album_purge_is_deferred_whole_when_a_persist_on_one_song_holds_it_first(
+    pg_factory, tmp_path, monkeypatch,
+) -> None:
+    world = _World(
+        pg_factory, tmp_path, songs=("song-1", "song-2"), trashed_albums=("album-1",),
+        jobs={"job-new": _running_generation("song-2")},
+    )
+    world.record_unlinks(monkeypatch)
+
+    answers = race(
+        pg_factory, world.persist("new-take", "job-new", "song-2"), world.purge(),
+        _held_after_persist_song_lock(),
+    )
+
+    assert answers["second"] == (0, 0)
+    assert world.song_ids() == ["song-1", "song-2"]
+    assert world.take_ids() == sorted([OLD_TAKE, answers["first"]])
+    assert world.unlinked == []
+
+
+def test_two_purges_whose_candidates_differ_lock_their_songs_in_one_order(
+    pg_factory, tmp_path, monkeypatch,
+) -> None:
+    world = _World(
+        pg_factory, tmp_path, songs=("song-a", "song-b"), scored_take=False,
+        song_albums={"song-a": "album-a", "song-b": "album-b"}, trashed_albums=("album-b",),
+        jobs={
+            "job-a": _running_generation("song-a"), "job-b": _running_generation("song-b"),
+        },
+    )
+    world.record_unlinks(monkeypatch)
+
+    def purge_after_album_a_expires() -> tuple[int, int]:
+        world.trash_album("album-a")
+        return world.purge()()
+
+    answers = race(pg_factory, world.purge(), purge_after_album_a_expires, _held_after_song_lock())
+
+    assert answers == {"first": (0, 0), "second": (0, 0)}
+    assert world.song_ids() == ["song-a", "song-b"]
 
 
 def test_a_second_purge_finds_nothing_and_unlinks_no_file_twice(

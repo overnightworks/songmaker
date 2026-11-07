@@ -19,11 +19,13 @@ from songmaker_cli.api_helpers import cleanup_generation_files
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
 from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
+from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.generations import (
     archive_generation,
     delete_expired_generation,
     list_generations_expired_for_archive,
     list_generations_expired_for_delete,
+    lock_songs,
 )
 from songmaker_cli.db.queries.jobs import ActiveJobError
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids
@@ -63,20 +65,28 @@ class _ExpiredPurge:
 def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
     """Delete the expired albums, then the orphan songs, and flush; the caller commits.
 
-    An album or song with a queued or running job is left for a later run and stays out
+    Every candidate song is locked first, in one id order, so two overlapping runs never
+    wait on each other in a cycle. An album or song with a queued or running job is left for a later run and stays out
     of the result.
     """
     expired_album_ids = [album.id for album in list_expired_albums(session, cutoff)]
     orphan_song_candidates = [
         song.id for song in list_expired_songs(session, cutoff, expired_album_ids)
     ]
+    album_songs = {
+        album_id: list_song_ids_for_albums(session, [album_id], include_deleted_rows=True)
+        for album_id in expired_album_ids
+    }
+    lock_songs(
+        session,
+        Song.id.in_([*orphan_song_candidates, *(id for ids in album_songs.values() for id in ids)]),
+    )
     paths: list[str] = []
     album_ids: list[str] = []
     orphan_song_ids: list[str] = []
     song_ids: list[str] = []
     reference_candidates: set[str] = set()
-    for album_id in expired_album_ids:
-        album_song_ids = list_song_ids_for_albums(session, [album_id], include_deleted_rows=True)
+    for album_id, album_song_ids in album_songs.items():
         linked = linked_reference_ids(session, album_song_ids)
         try:
             paths.extend(delete_album(session, album_id))
