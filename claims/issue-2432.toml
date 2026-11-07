@@ -1,0 +1,8 @@
+claim_id = "35db5e5c680b40578cb623597d8fbb63"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "6ac31ec9127acafe860a51dcf4c270336b361c84"
+branch = "claude/issue-2432-take-locks-slice-1-the-persist-numbers-u"
+scope = ["docs/architecture.md", "docs/security.md", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/reference_recordings.py", "tests/songmaker_cli/test_generation_number_lock_postgres.py", "tests/support/postgres_lock_harness.py"]
+opened_commit = "28508172725013f403fa38eb1923cd3020b52f0a"
+whole_reason = "The song lock and the reference lock mode are the persist's one lock order: either alone leaves a take-losing deadlock, and the sentence documents both."
