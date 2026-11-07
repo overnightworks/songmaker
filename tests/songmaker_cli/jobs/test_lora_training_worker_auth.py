@@ -17,7 +17,6 @@ from support.worker_http_peer import LoopbackServer
 
 from songmaker_cli.acestep_state import worker_state_key
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER, JobStatus, JobType, LoraStatus
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
 from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.db.queries.loras import get_user_lora
@@ -64,9 +63,9 @@ class LoraAuthPeer:
 
 
 @pytest.fixture
-def lora_auth_db(tmp_path: Path):
+def lora_auth_db(tmp_path: Path, pg_factory):
     """1301-F10-HTTP: real persistence and sample input for the public job."""
-    factory = init_test_db(tmp_path / "lora.db")
+    factory = pg_factory
     (tmp_path / "sample.wav").write_bytes(b"RIFF0000WAVEfmt ")
     with factory() as session:
         session.add(User(id="user", username="trainer", role="user"))

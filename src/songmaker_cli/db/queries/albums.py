@@ -9,6 +9,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Album, Generation, Song, aware_timestamp
+from songmaker_cli.db.queries.generations import delete_takes, lock_songs
+from songmaker_cli.db.queries.jobs import ActiveJobError, has_active_job_for_songs
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import (
@@ -268,26 +270,19 @@ def restore_album(session: Session, album_id: str) -> Album:
 def delete_album(session: Session, album_id: str) -> list[str]:
     """Hard-delete an album and return file paths for post-commit cleanup.
 
-    Sees soft-deleted albums (used by cleanup_expired).
+    Sees soft-deleted albums (used by cleanup_expired). Locks the album's songs, then
+    their takes, and raises ActiveJobError before deleting anything while a queued or
+    running job points at the album or one of its songs.
     """
     with include_deleted(session):
         album = session.query(Album).filter_by(id=album_id).first()
         if not album:
             raise ValueError(f"Album not found: {album_id}")
 
-        gens = (
-            session.query(Generation)
-            .join(Song)
-            .options(joinedload(Generation.scores), joinedload(Generation.rating))
-            .filter(Song.album_id == album_id)
-            .all()
-        )
-        paths: list[str] = []
-        for gen in gens:
-            for p in [gen.mp3_path, gen.wav_path]:
-                if p:
-                    paths.append(p)
-            session.delete(gen)
+        song_ids = [song.id for song in lock_songs(session, Song.album_id == album_id)]
+        if has_active_job_for_songs(session, song_ids, album_id):
+            raise ActiveJobError(album_id)
+        paths = delete_takes(session, Generation.song_id.in_(song_ids))
 
         session.delete(album)
         session.flush()
@@ -326,5 +321,6 @@ def list_expired_albums(session: Session, cutoff: datetime) -> list[Album]:
         session.query(Album)
         .execution_options(include_deleted=True)
         .filter(Album.deleted_at.isnot(None), Album.deleted_at < cutoff)
+        .order_by(Album.id)
         .all()
     )

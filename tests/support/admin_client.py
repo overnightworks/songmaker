@@ -19,13 +19,16 @@ def build_admin_client(
     user_id: str,
     username: str,
     database_name: str = "admin.db",
+    factory: sessionmaker[Session] | None = None,
 ) -> tuple[TestClient, sessionmaker[Session]]:
     """Seed a fresh database, then sign in as its admin ``user_id`` on the API router.
 
     ``seed_db`` must add the account ``user_id``; the router app takes the
     authenticated user from the builder, not from a session cookie.
     """
-    ctx = make_router_ctx(tmp_path, db=init_test_db(tmp_path / database_name), seed_db=seed_db)
+    ctx = make_router_ctx(
+        tmp_path, db=factory or init_test_db(tmp_path / database_name), seed_db=seed_db,
+    )
     admin = make_authenticated_user(user_id, role="admin", username=username)
     app = make_router_app(ctx, user=admin)
     return web_client(app), ctx.db

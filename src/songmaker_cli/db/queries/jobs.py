@@ -8,7 +8,7 @@ from dataclasses import KW_ONLY, dataclass, fields
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
-from sqlalchemy import func, update
+from sqlalchemy import func, or_, update
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import (
@@ -48,6 +48,22 @@ def create_job(
     session.add(job)
     session.flush()
     return job
+
+
+class ActiveJobError(Exception):
+    """A queued or running job still points at the songs; their purge waits for a later run."""
+
+
+def has_active_job_for_songs(
+    session: Session, song_ids: Collection[str], album_id: str | None = None,
+) -> bool:
+    """True while a queued or running job points at one of the songs or at the album."""
+    owner = Job.song_id.in_(song_ids)
+    if album_id is not None:
+        owner = or_(owner, Job.album_id == album_id)
+    return session.query(
+        session.query(Job).filter(owner, Job.status.in_(JOB_ACTIVE_STATUSES)).exists()
+    ).scalar()
 
 
 def has_active_job_for_version(session: Session, version_id: str) -> bool:

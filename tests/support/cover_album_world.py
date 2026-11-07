@@ -37,8 +37,8 @@ def album_owner(session, album_id: str = "alice-album") -> AuthenticatedUser:
 
 
 @pytest.fixture
-def cover_album_app(tmp_path: Path) -> tuple[TestClient, object]:
-    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
+def cover_album_app(tmp_path: Path, pg_factory) -> tuple[TestClient, object]:
+    client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
     with factory() as session:
         alice_id = session.query(User).filter_by(username="alice").one().id
     attach_cowriter_gateway(client, factory, tmp_path, alice_id)
