@@ -23,7 +23,6 @@ from songmaker_cli.api_helpers import (
     unique_song_slug,
 )
 from songmaker_cli.api_models import (
-    CleanupResponse,
     LibrarySort,
     PaginatedResponse,
     ShareResponse,
@@ -68,7 +67,6 @@ from songmaker_cli.db.queries.sharing import has_playable_pick
 from songmaker_cli.db.queries.songs import (
     EmptySongTitleError,
     UnstorableSongTitleError,
-    cleanup_song,
     count_generations_by_song,
     count_songs,
     create_song,
@@ -369,26 +367,6 @@ def api_record_song_listen(
     )
     session.commit()
     return StatusResponse()
-
-
-@router.post("/songs/{song_id}/cleanup")
-def api_cleanup_song(
-    song_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-    ctx: AppContext = Depends(get_app_context),
-) -> CleanupResponse:
-    check_song_access(session, song_id, user)
-    candidates = linked_reference_ids(session, [song_id])
-    count, paths = cleanup_song(session, song_id)
-    record_audit(
-        session, user.id, AuditAction.CLEANUP, ResourceType.SONG,
-        song_id, f"deleted={count}",
-    )
-    session.commit()
-    commit_unused_stamps(session, candidates)
-    cleanup_generation_files(ctx.audio_dir, paths)
-    return CleanupResponse(deleted=count)
 
 
 @router.post(

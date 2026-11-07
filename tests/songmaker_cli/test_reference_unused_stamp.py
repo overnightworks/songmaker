@@ -254,14 +254,6 @@ SONG_REQUESTS = {
     "version_delete_without_takes": SongRequest(
         {}, "r1", _delete_version(with_takes=False), {"r1"}, None,
     ),
-    "song_cleanup": SongRequest(
-        {"ta": "r1", "tb": None}, "r2", lambda client: client.post("/api/songs/song/cleanup"),
-        {"r1"}, "ta.mp3",
-    ),
-    "album_cleanup": SongRequest(
-        {"ta": "r1", "tb": None}, "r2", lambda client: client.post("/api/albums/album/cleanup"),
-        {"r1"}, "ta.mp3",
-    ),
 }
 REQUEST_IDS = list(SONG_REQUESTS)
 
@@ -305,13 +297,6 @@ def test_deleting_a_version_without_its_takes_stamps_its_own_reference_only_if_n
     client, ctx = _world(tmp_path, {"ta": "r1"}, "r1")
     assert _delete_version(with_takes=False)(client).status_code == 200
     assert _stamped_ids(ctx) == set()
-
-
-def test_album_cleanup_stamps_the_references_its_removed_takes_across_songs_linked(tmp_path):
-    client, ctx = _world(tmp_path, {"ta": "r1"})
-    _add_linked_song(ctx, "song2", "album", links={"song2-v1": None, "take2": "r2"})
-    assert client.post("/api/albums/album/cleanup").status_code == 200
-    assert _stamped_ids(ctx) == {"r1", "r2"}
 
 
 @pytest.mark.parametrize("request_id", REQUEST_IDS)

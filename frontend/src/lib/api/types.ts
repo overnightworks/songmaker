@@ -157,11 +157,6 @@ export interface ChatTurnV2Request {
 	current_generation_id?: string | null;
 }
 
-export interface CleanupResult {
-	status: string;
-	deleted: number;
-}
-
 export interface ConversationItem {
 	id: string;
 	title: string | null;

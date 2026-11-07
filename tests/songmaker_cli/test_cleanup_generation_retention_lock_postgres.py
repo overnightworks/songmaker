@@ -91,9 +91,6 @@ class _World:
         with self.pg_factory() as session:
             return session.query(PlaylistEntry).count()
 
-    def cleanup(self, scope: str) -> Callable[[], Response]:
-        return lambda: self.client.post(f"/api/{scope}/cleanup")
-
     def delete(self, take: str) -> Callable[[], Response]:
         return lambda: self.client.delete(f"/api/generations/{take}")
 
@@ -296,55 +293,8 @@ def test_a_bulk_delete_waits_for_a_manual_delete_and_counts_and_audits_only_its_
     assert world.audited_deletions() == ["x", "y"]
 
 
-CLEANUP_SCOPES = {"song": "songs/song-1", "album": "albums/album-1"}
-
-
-@pytest.mark.parametrize("scope", CLEANUP_SCOPES)
-@pytest.mark.parametrize("route", ["keep", "pick", "share"])
-def test_cleanup_leaves_a_take_that_a_keep_pick_or_share_commits_first(
-    pg_factory, tmp_path, scope, route,
-) -> None:
-    world = _World(pg_factory, tmp_path, {
-        "x": {"archived": False, "old": False}, "other": {"archived": False, "old": False},
-    })
-    mark = world.share("x") if route == "share" else world.mark(route, "x")
-    answers = race(
-        pg_factory, mark, world.cleanup(CLEANUP_SCOPES[scope]), _holding_a_generation_write(),
-    )
-    assert answers["first"].status_code == 200
-    assert answers["second"].json()["deleted"] == 1
-    assert world.state("x") == {
-        "archived": False, "kept": route in ("keep", "share"), "picked": route == "pick",
-    }
-    assert world.files["x"].exists()
-    assert world.state("other") is None
-    assert not world.files["other"].exists()
-    if route == "share":
-        assert world.shared("x")
-
-
-@pytest.mark.parametrize("scope", CLEANUP_SCOPES)
-@pytest.mark.parametrize("cleanup_first", [True, False])
-def test_a_pick_of_a_sibling_and_a_cleanup_both_finish_whichever_runs_first(
-    pg_factory, tmp_path, scope, cleanup_first,
-) -> None:
-    world = _World(pg_factory, tmp_path, {
-        "a": {"archived": False, "old": False},
-        "y": {"archived": False, "old": False},
-        "z": {"archived": False, "old": False},
-    })
-    world.mark("keep", "y")()
-    cleanup, pick = world.cleanup(CLEANUP_SCOPES[scope]), world.mark("pick", "y")
-    first, second = (cleanup, pick) if cleanup_first else (pick, cleanup)
-    answers = race(pg_factory, first, second, _holding_a_generation_write())
-    assert answers["first"].status_code == answers["second"].status_code == 200
-    assert world.state("y") == {"archived": False, "kept": True, "picked": True}
-    assert world.state("a") is None
-    assert world.state("z") is None
-
-
 @pytest.mark.parametrize("delete_name", ["bulk_delete", "delete_version"])
-def test_a_scored_take_delete_that_a_cleanup_has_locked_waits_and_both_finish(
+def test_a_scored_take_delete_that_a_bulk_delete_has_locked_waits_and_both_finish(
     pg_factory, tmp_path, delete_name,
 ) -> None:
     world = _World(pg_factory, tmp_path, {
@@ -362,7 +312,7 @@ def test_a_scored_take_delete_that_a_cleanup_has_locked_waits_and_both_finish(
     event.listen(pg_factory, "before_flush", pause_before_the_deletes)
     try:
         answers = race(
-            pg_factory, world.cleanup("songs/song-1"),
+            pg_factory, world.bulk_delete("x", "y"),
             world.bulk_delete("x") if delete_name == "bulk_delete" else world.delete_version(),
             holding_after_the_locks,
         )
