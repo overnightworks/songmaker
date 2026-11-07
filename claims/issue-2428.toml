@@ -1,0 +1,8 @@
+claim_id = "d45eedf5d75a4d97895fa9065aab0111"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "6ac31ec9127acafe860a51dcf4c270336b361c84"
+branch = "claude/issue-2428-takes-are-cleaned-up-only-automatically"
+scope = ["frontend/src/lib/api/types.ts", "quality/baseline.toml", "scripts/dead-symbols.allow", "scripts/generate_types.py", "src/songmaker_cli/album_api.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_cleanup_generation_retention_lock_postgres.py", "tests/songmaker_cli/test_covers_song.py", "tests/songmaker_cli/test_db.py", "tests/songmaker_cli/test_reference_unused_stamp.py"]
+opened_commit = "d3501580ee7d3fb508a70be5e76dc537e6ef21b5"
+whole_reason = "A route, its query function, its response model, its generated type and its tests leave together; any split leaves dead code or a failing generator check."
