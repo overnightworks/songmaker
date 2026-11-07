@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 from sqlalchemy.orm.interfaces import ExecutableOption
 
 from songmaker_cli import audio_files
-from songmaker_cli.audio_paths import canonical_audio_filename
+from songmaker_cli.audio_paths import canonical_audio_filename, confined_under
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.models import Album, Generation, Rating, Score, Song
 from songmaker_cli.db.queries.sharing import (
@@ -516,8 +516,8 @@ def disable_generation_sharing(session: Session, generation_id: str) -> Generati
 
 def delete_generation_files(audio_dir: Path, mp3_rel: str) -> None:
     audio_root = audio_dir.resolve()
-    mp3 = (audio_dir / mp3_rel).resolve()
-    if not mp3.is_relative_to(audio_root):
+    mp3 = confined_under(audio_dir, audio_dir / mp3_rel)
+    if mp3 is None:
         log.warning("Path traversal blocked in delete: %s", mp3_rel)
         return
     for owned in generation_file_set(mp3.relative_to(audio_root).as_posix()):
