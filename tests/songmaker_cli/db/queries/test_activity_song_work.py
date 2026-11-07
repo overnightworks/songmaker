@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import SongWorkKind
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -88,8 +87,8 @@ def _seed(session: Session) -> None:
 
 
 @pytest.fixture
-def db(tmp_path: Path) -> sessionmaker[Session]:
-    return make_router_ctx(tmp_path, db=init_test_db(tmp_path / "work.db"), seed_db=_seed).db
+def db(tmp_path: Path, pg_factory) -> sessionmaker[Session]:
+    return make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed).db
 
 
 def _client(tmp_path: Path, db: sessionmaker[Session], *, user_id: str, role: str) -> TestClient:
