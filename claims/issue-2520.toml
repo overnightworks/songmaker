@@ -1,8 +1,0 @@
-claim_id = "1db333f246094dc49a18a6eab3576d96"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c0e133fd912664c11cbd44b4098f0a1868189908"
-branch = "claude/issue-2520-playlist-album-add-id-order"
-scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/playlists.py", "tests/songmaker_cli/test_playlist_album_add_lock_postgres.py"]
-opened_commit = "5e15602fa431f8c2a1694f67444695b33e28ee9b"
-whole_reason = "The lock change, its order sentence and docstring, and its race tests must land together, or the documented order is false."
