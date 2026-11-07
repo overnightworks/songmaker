@@ -1,7 +1,0 @@
-claim_id = "11c598b7b8d24dfd9cd98028c529e728"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c40206f4d22db9eacdb66dd5b20f70ba9eec89d8"
-branch = "claude/issue-2456-teardowns-remove-their-images"
-scope = ["frontend/e2e/README.md", "scripts/voices_e2e_probe.sh"]
-opened_commit = "4a69d2c435cd892c1f182388cf13349f9a789186"
