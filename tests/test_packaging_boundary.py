@@ -514,12 +514,9 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
 
     for service_name, service in services.items():
         assert isinstance(service, dict)
-        assert "extends" not in service, (
-            f"{service_name} must not inherit mounts through Compose extends"
-        )
-        assert "volumes_from" not in service, (
-            f"{service_name} must not inherit mounts through Compose volumes_from"
-        )
+        inheritance = "inherit mounts through Compose"
+        assert "extends" not in service, f"{service_name} must not {inheritance} extends"
+        assert "volumes_from" not in service, f"{service_name} must not {inheritance} volumes_from"
         volumes = service.get("volumes", [])
         assert isinstance(volumes, list)
         bind_mounts: list[dict[str, object]] = []
@@ -528,17 +525,15 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
                 source, target = _short_volume_source_and_target(service_name, volume)
                 if any(Path(target).is_relative_to(root) for root in AGENT_CLI_MOUNT_ROOTS):
                     assert source in declared_named_volumes, (
-                        f"{service_name} must mount {target!r} through Compose "
-                        f"long syntax (read-only, no host path creation) or a "
-                        f"declared named volume: {volume!r}"
+                        f"{service_name} must mount {target!r} through Compose long syntax "
+                        f"(read-only, no host path creation) or a declared named volume: {volume!r}"
                     )
                 assert source in declared_named_volumes or (
                     source.startswith("./") and ".." not in Path(source).parts
                 ), (
-                    f"{service_name} must use Compose long syntax for every host "
-                    f"bind mount so its read-only and host-path protections are "
-                    f"explicit: {volume!r} is neither a declared named volume nor "
-                    f"a repository-relative path"
+                    f"{service_name} must use Compose long syntax for every host bind mount so "
+                    f"its read-only and host-path protections are explicit: {volume!r} is "
+                    f"neither a declared named volume nor a repository-relative path"
                 )
                 continue
 
@@ -581,6 +576,10 @@ EVERY_COMPOSE_FILE = tuple(
 PRODUCTION_COMPOSE_FILES = ("-f", "docker-compose.yml")
 
 
+def _as_linux_resolves(path: str) -> Path:
+    return Path(posixpath.normpath(re.sub(r"^/+", "/", path)))
+
+
 def _agent_login_binds(services: dict[str, dict]) -> list[str]:
     """Binds of rendered services; Compose prints every volume in long form."""
     offences = []
@@ -590,8 +589,7 @@ def _agent_login_binds(services: dict[str, dict]) -> list[str]:
                 continue
             source, target = volume["source"], volume["target"]
             if MIRROR_DIRECTORY_MARKER in source or any(
-                Path(posixpath.normpath(path)).is_relative_to(CONTAINER_HOME)
-                for path in (source, target)
+                _as_linux_resolves(path).is_relative_to(CONTAINER_HOME) for path in (source, target)
             ):
                 offences.append(f"{service_name} binds {source} to {target}")
     return offences
@@ -631,6 +629,8 @@ AGENT_LOGIN_BIND_FIXTURES = {
         f"{{type: bind, source: /srv/a, target: {_HOME_AUTH}}}", f"/srv/a to {_HOME_AUTH}"),
     "long-source-under-home": (
         "{type: bind, source: /home/songmaker/c, target: /c}", "/home/songmaker/c to /c"),
+    "long-source-with-two-leading-slashes": (
+        "{type: bind, source: //home/songmaker/c, target: /c}", "//home/songmaker/c to /c"),
     "long-source-from-mirror-directory": (
         f"{{type: bind, source: '${{DIR:-{_MIRROR}}}/c.json', target: /c.json}}",
         f"{_MIRROR}/c.json to /c.json",
