@@ -1474,7 +1474,7 @@ close the stream.
 | GET/POST/DELETE | `/api/songs/{id}/cover` | user | Read, upload/replace, or remove the song's own cover (JPEG/PNG; ownership 404). JSON `cover` is the song file or null — never the parent album's URLs. |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
 | GET/PUT | `/api/songs/{id}` | user | Get/update song. A PUT rewrites the latest version in place until a queued or running job references it, or it has a take and the lyrics, prompt, BPM, key or length change; then it makes the next version. A save that changes no version content makes none. |
-| PUT | `/api/songs/{id}/album` | user | Move song to different album |
+| PUT | `/api/songs/{id}/album` | user | Move the caller's own song to another of their own albums, as its last track |
 | DELETE | `/api/versions/{id}?delete_generations=false` | user | Delete one version of a song: a missing version, or one the caller cannot open, answers 404; the owner, or an admin (every song they can open), may delete. `delete_generations=true` also deletes its takes. While a queued or running take job references the version, answers 409 "This version has a take rendering; wait for it to finish or cancel it." and changes nothing. |
 | POST | `/api/songs` | user | Create song in album |
 | POST | `/api/songs/{id}/generate` | user | Submit generation job (→ music queue). Like repaint and cover, missing music/online ACE-Step workers return 503 {detail, error_type, job_id}: "Generating isn't available right now.", generation_unavailable, and the stored FAILED job ID. |
