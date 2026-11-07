@@ -320,7 +320,6 @@ def pick_generation(session: Session, generation_id: str) -> None:
     session.flush()
 
 
-UNPICKED_AND_UNKEPT: Final = (Generation.is_picked.is_(False), Generation.is_kept.is_(False))
 DELETION_LOADING: Final = (selectinload(Generation.scores), selectinload(Generation.rating))
 
 

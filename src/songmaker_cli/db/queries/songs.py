@@ -24,10 +24,7 @@ from songmaker_cli.db.models import (
 from songmaker_cli.db.queries.activity import record_song_edit
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
 from songmaker_cli.db.queries.generations import (
-    DELETION_LOADING,
-    UNPICKED_AND_UNKEPT,
     ArchivedTakeError,
-    lock_takes,
     lock_unarchived_generation,
 )
 from songmaker_cli.db.queries.jobs import has_active_job_for_version
@@ -674,18 +671,3 @@ def enable_song_sharing(session: Session, song_id: str) -> Song:
 def disable_song_sharing(session: Session, song_id: str) -> Song:
     return disable_sharing(session, Song, song_id)
 
-
-def cleanup_song(session: Session, song_id: str) -> tuple[int, list[str]]:
-    """Remove unpicked+unkept generations from a song. Returns (count, paths)."""
-    gens = lock_takes(
-        session, Generation.song_id == song_id, *UNPICKED_AND_UNKEPT, options=DELETION_LOADING,
-    )
-    count = len(gens)
-    paths: list[str] = []
-    for gen in gens:
-        for p in [gen.mp3_path, gen.wav_path]:
-            if p:
-                paths.append(p)
-        session.delete(gen)
-    session.flush()
-    return count, paths
