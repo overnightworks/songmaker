@@ -6,7 +6,7 @@
 
 <!-- Whitespace between the glyph and the line would enter the text a caller reads. -->
 <!-- prettier-ignore -->
-<div class="empty"><Icon name={icon} size={40} /><p>{text}</p></div>
+<div class="empty"><span class="glyph" aria-hidden="true"><Icon name={icon} size={40} /></span><p>{text}</p></div>
 
 <style>
 	.empty {
@@ -19,7 +19,8 @@
 		color: var(--text-muted);
 	}
 
-	.empty :global(svg) {
+	.glyph {
+		display: flex;
 		color: var(--text-subtle);
 	}
 

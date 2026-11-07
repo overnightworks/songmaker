@@ -29,4 +29,9 @@ describe('EmptyState', () => {
 		if (!glyph || !line) throw new Error('Expected a glyph and a line');
 		expect(glyph.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
+
+	it('hides its glyph from assistive technology', async () => {
+		const root = await mountEmptyState('library', 'Nothing here yet.');
+		expect(root.querySelector('svg')?.closest('[aria-hidden="true"]')).not.toBeNull();
+	});
 });
