@@ -1,8 +1,0 @@
-claim_id = "d0459293aec74f5db9015bf5e62fd4c2"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5c9272626fbf8ec65a5853ba2ae9121ea2549a6f"
-branch = "claude/issue-2447-move-slices-2-and-3-move-lists-the-perso"
-scope = ["docs/architecture.md", "frontend/e2e/song-menu.spec.ts", "frontend/e2e/song-move.spec.ts", "frontend/src/lib/api/albums.ts", "frontend/src/lib/api/library.ts", "frontend/src/lib/api/songs.ts", "frontend/src/lib/components/editor/SongMenu.svelte", "frontend/src/lib/components/editor/SongMenu.test.ts", "frontend/src/lib/components/editor/SongMovePicker.svelte", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/songMove.test.ts", "frontend/src/lib/stores/songMove.ts", "src/songmaker_cli/album_api.py", "tests/songmaker_cli/test_album_api.py"]
-opened_commit = "8059a5a715e2e8416e5a31d71cf9f2d76c27d4f0"
-whole_reason = "The own-albums list, the move call, the picker and its menu row are one control: each part alone has no caller or is a dead control."
