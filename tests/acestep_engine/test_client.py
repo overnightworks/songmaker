@@ -52,6 +52,7 @@ def test_submit_task_success() -> None:
         (
             AceStepConfig(prompt="test", lyrics="test"),
             {
+                "seed": -1,
                 "sampler_mode": "euler",
                 "velocity_norm_threshold": 0.0,
                 "velocity_ema_factor": 0.0,
@@ -72,6 +73,7 @@ def test_submit_task_success() -> None:
                 latent_rescale=1.2,
             ),
             {
+                "seed": 42,
                 "sampler_mode": "heun",
                 "velocity_norm_threshold": 2.0,
                 "velocity_ema_factor": 0.1,
@@ -85,7 +87,10 @@ def test_submit_task_success() -> None:
 def test_submit_task_forwards_dit_params_and_seed_policy(
     config: AceStepConfig, expected: dict[str, object],
 ) -> None:
-    """The payload handed to the HTTP sender contains every visible DiT knob."""
+    """Spec: REQ-SEED-02 -- a pinned seed is sent as fixed, an unpinned one as random.
+
+    The payload handed to the HTTP sender also contains every visible DiT knob.
+    """
     client = AceStepClient(host="localhost", port=8001)
 
     with patch.object(

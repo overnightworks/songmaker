@@ -235,6 +235,7 @@ def test_build_ace_config_global_defaults_applied() -> None:
 
 
 def test_build_ace_config_song_overrides_global_defaults() -> None:
+    """Spec: REQ-PARAM-01 -- a song's own setting wins over the model's stored default."""
     meta = SongMeta(
         prompt="test", lyrics="test", bpm=120,
         generation_params={"shift": 2.0},
@@ -245,6 +246,7 @@ def test_build_ace_config_song_overrides_global_defaults() -> None:
 
 
 def test_build_ace_config_sft_global_defaults() -> None:
+    """Spec: REQ-PARAM-01 -- the stored defaults of the chosen model reach the config."""
     meta = SongMeta(prompt="test", lyrics="test", bpm=120)
     defaults = {"sft": {"inference_steps": 60}}
     config = build_ace_config(meta, model_name="acestep-v15-sft", global_defaults=defaults)
@@ -252,6 +254,7 @@ def test_build_ace_config_sft_global_defaults() -> None:
 
 
 def test_build_ace_config_seed_applied() -> None:
+    """Spec: REQ-SEED-02 -- a pinned non-negative seed reaches the config unchanged."""
     meta = SongMeta(prompt="test", lyrics="test")
     config = build_ace_config(meta, seed=42)
     assert config.seed == 42
@@ -264,6 +267,7 @@ def test_build_ace_config_seed_none_uses_default() -> None:
 
 
 def test_build_ace_config_seed_negative_one_uses_default() -> None:
+    """Spec: REQ-SEED-02 -- an unpinned seed leaves the config random."""
     meta = SongMeta(prompt="test", lyrics="test")
     config = build_ace_config(meta, seed=-1)
     assert config.seed == -1
