@@ -11,7 +11,6 @@ from support.generation_job_world import worker_up
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import JobType
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Song, User, Version
 from songmaker_cli.db.queries.jobs import create_job
 from songmaker_cli.settings import get_settings
@@ -40,16 +39,15 @@ def _seed_mp3_only_take(session: Session) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    with pg_factory() as session:
         _seed_mp3_only_take(session)
     audio = tmp_path / "audio" / "owner"
     audio.mkdir(parents=True)
     (audio / "take.mp3").write_bytes(b"mp3")
     (audio / "take.wav").write_bytes(b"RIFF" + b"\x00" * 40)
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user(OWNER_ID, username="owner"),
     )
     return web_client(app)

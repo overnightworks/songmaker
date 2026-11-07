@@ -14,8 +14,8 @@ from songmaker_cli.db.queries.loras import create_user_lora
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path)
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     return client
 
 

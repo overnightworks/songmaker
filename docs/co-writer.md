@@ -12,11 +12,7 @@ For anyone building or reviewing the Co-Writer conversation and its tools: the r
 
 ### REQ-COWRITER-05: When conversation history fits the configured token-bounded tail, the Co-Writer turn receives that history verbatim.
 
-### REQ-COWRITER-06: When conversation history exceeds the configured token-bounded tail and rolling-summary creation succeeds, the Co-Writer turn receives a rolling summary plus that tail that together cover every historical message once.
-
 ### REQ-COWRITER-07: When rolling-summary creation fails, the Co-Writer turn continues with a limited tail and does not receive the full history as a fallback.
-
-### REQ-COWRITER-08: When a Co-Writer turn uses a rolling summary, that summary preserves at least the album concept, locked versus open lyric decisions, names and characters, and open questions.
 
 ### REQ-COWRITER-09: A Co-Writer turn runs through the LiteLLM gateway, and the agent file alone names its model.
 

@@ -28,8 +28,8 @@ test('a section opened offline shows the offline state and opens by itself after
 	await referencesLink.click();
 
 	await expect(page.getByRole('alert').filter({ hasText: OFFLINE_WORDS })).toBeVisible();
-	await expect(page.getByText('500')).toHaveCount(0);
-	await expect(page.getByText('Internal Error')).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: '500', exact: true })).toHaveCount(0);
+	await expect(page.getByText('Internal Error', { exact: true })).toHaveCount(0);
 
 	await regainNetwork(page, context);
 

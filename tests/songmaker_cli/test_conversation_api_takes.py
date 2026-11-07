@@ -85,15 +85,14 @@ def _seed(session, user_id: str) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path):
-    factory = init_db(tmp_path / "takes.db")
-    with factory() as session:
+def client(tmp_path: Path, pg_factory):
+    with pg_factory() as session:
         _seed(session, "u-test")
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    return web_client(app), factory
+    return web_client(app), pg_factory
 
 
 @pytest.fixture
@@ -126,6 +125,8 @@ def _content(service: CowriterStack) -> str:
 
 
 def test_playing_take_wins_over_pick(client, service):
+    """Spec: REQ-COWRITER-24 -- the take being played is the turn's take though another is the
+    Pick."""
     c, _ = client
     resp = _turn(c, {
         "message": "how did this take sing",
@@ -143,6 +144,8 @@ def test_playing_take_wins_over_pick(client, service):
 
 
 def test_without_player_uses_playable_pick(client, service):
+    """Spec: REQ-COWRITER-25, REQ-COWRITER-26 -- with no player the turn's take is the playable
+    Pick, carrying its transcription, Pick, Keep and scores."""
     c, _ = client
     resp = _turn(c, {"message": "x", "current_song_id": "s1"})
     assert resp.status_code == 200
@@ -157,6 +160,8 @@ def test_without_player_uses_playable_pick(client, service):
 
 
 def test_without_pick_uses_newest_playable(client, service):
+    """Spec: REQ-COWRITER-25 -- with no player and no Pick the turn's take is the newest
+    playable take."""
     c, factory = client
     with factory() as session:
         session.query(Generation).filter_by(id="gA").update({"is_picked": False})
@@ -167,6 +172,7 @@ def test_without_pick_uses_newest_playable(client, service):
 
 
 def test_no_playable_take_is_named_empty_state(client, service):
+    """Spec: REQ-COWRITER-25 -- with no playable take the turn names the no-take state."""
     c, factory = client
     with factory() as session:
         session.query(Generation).filter(Generation.song_id == "s1").update({
@@ -182,6 +188,7 @@ def test_no_playable_take_is_named_empty_state(client, service):
 
 
 def test_missing_whisper_and_scores_stay_empty(client, service):
+    """Spec: REQ-COWRITER-26 -- a take without transcription or scores shows them empty."""
     c, _ = client
     resp = _turn(c, {
         "message": "x",
@@ -197,6 +204,7 @@ def test_missing_whisper_and_scores_stay_empty(client, service):
 
 
 def test_explicit_unknown_or_foreign_generation_is_404(client, service, stranger_client):
+    """Spec: REQ-COWRITER-29 -- an unknown or foreign take refuses the turn with no run."""
     stranger, stranger_service = stranger_client
     resp = _turn(client[0], {
         "message": "x",
@@ -216,6 +224,8 @@ def test_explicit_unknown_or_foreign_generation_is_404(client, service, stranger
 
 
 def test_wrong_song_or_unplayable_is_422(client, service):
+    """Spec: REQ-COWRITER-29 -- a take of another song or an unplayable take refuses the turn
+    with no run."""
     c, _ = client
     resp = _turn(c, {
         "message": "x",
@@ -235,6 +245,7 @@ def test_wrong_song_or_unplayable_is_422(client, service):
 
 
 def test_chat_turn_does_not_enqueue_scoring(client, service):
+    """Spec: REQ-COWRITER-27 -- a turn with a take starts no scoring or transcription job."""
     c, factory = client
     with patch("songmaker_cli.generation_api.api_score_generation") as score_ep, patch(
         "songmaker_cli.scoring.pipeline.run_pipeline", create=True,

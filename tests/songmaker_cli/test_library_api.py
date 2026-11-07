@@ -25,7 +25,6 @@ from songmaker_cli.constants import (
     PAGE_MAX_LIMIT,
     SongWorkKind,
 )
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     ChatMessage,
@@ -87,9 +86,8 @@ def _count_queries(engine) -> tuple[list[str], Callable]:
     return queries, _record
 
 
-def _library_env(tmp_path: Path) -> tuple[object, object]:
-    factory = init_db(tmp_path / "test.db")
-    with factory() as session:
+def _library_env(tmp_path: Path, pg_factory) -> tuple[object, object]:
+    with pg_factory() as session:
         session.add(User(
             id=USER_A, username="alice", role="user",
         ))
@@ -103,8 +101,8 @@ def _library_env(tmp_path: Path) -> tuple[object, object]:
         _seed_library(session)
         session.commit()
 
-    ctx = make_router_ctx(tmp_path, db=factory)
-    return factory, ctx
+    ctx = make_router_ctx(tmp_path, db=pg_factory)
+    return pg_factory, ctx
 
 
 def _client_for(ctx: object, user_id: str, role: str = "user") -> TestClient:
@@ -115,9 +113,9 @@ def _client_for(ctx: object, user_id: str, role: str = "user") -> TestClient:
 
 
 def _make_client(
-    tmp_path: Path, user_id: str, role: str = "user",
+    tmp_path: Path, pg_factory, user_id: str, role: str = "user",
 ) -> tuple[TestClient, object]:
-    factory, ctx = _library_env(tmp_path)
+    factory, ctx = _library_env(tmp_path, pg_factory)
     return _client_for(ctx, user_id, role), factory
 
 
@@ -161,8 +159,8 @@ def _seed_library(session) -> None:
 
 
 @pytest.fixture
-def library_ctx(tmp_path: Path) -> tuple[object, object]:
-    return _library_env(tmp_path)
+def library_ctx(tmp_path: Path, pg_factory) -> tuple[object, object]:
+    return _library_env(tmp_path, pg_factory)
 
 
 @pytest.fixture
@@ -551,16 +549,16 @@ def _seed_listen_in_a_deleted_album(session) -> None:
     ],
 )
 def test_listen_leaves_out_an_album_without_a_live_album_listen(
-    tmp_path: Path, seed: Callable,
+    tmp_path: Path, seed: Callable, pg_factory,
 ) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     _seed(factory, seed)
 
     assert _listen_items(client) == []
 
 
-def test_1354_47_A5_an_album_falls_back_to_its_newest_listened_live_song(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_1354_47_A5_an_album_falls_back_to_its_newest_listened_live_song(tmp_path, pg_factory):
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
         for song_id, offset in (("song-tide", 10), ("song-nacht", 20)):
@@ -616,11 +614,11 @@ _AN_ENTRY_STOPS_BEING_LIVE = pytest.mark.parametrize(
 
 
 def _played_playlist_item(
-    tmp_path: Path, *, entries: list[str], last_played_song_id: str,
+    tmp_path: Path, pg_factory, *, entries: list[str], last_played_song_id: str,
     remove: Callable | None = None,
 ) -> dict:
     """The one item Alice's Listen shows for her played ``late-drive``."""
-    client, factory = _make_client(tmp_path, USER_A)
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
         _seed_played_playlist(session, entries=entries, last_played_song_id=last_played_song_id)
@@ -657,10 +655,10 @@ _RESUMES_FROM_THE_START = {
 )
 def test_1354_47_a_played_playlist_names_its_first_live_entry(
     tmp_path: Path, entries: list[str], song_number: int, entry_id: str,
-    change: Callable | None,
+    change: Callable | None, pg_factory,
 ) -> None:
     item = _played_playlist_item(
-        tmp_path, entries=entries, last_played_song_id="quiet-3", remove=change,
+        tmp_path, pg_factory, entries=entries, last_played_song_id="quiet-3", remove=change,
     )
 
     assert _places([item]) == [("playlist", "late-drive", "quiet-3", song_number)]
@@ -670,11 +668,14 @@ def test_1354_47_a_played_playlist_names_its_first_live_entry(
 
 @_AN_ENTRY_STOPS_BEING_LIVE
 def test_1354_47_A3_an_entry_that_is_no_longer_live_never_raises_a_later_songs_number(
-    tmp_path: Path, remove_aside: Callable,
+    tmp_path: Path, remove_aside: Callable, pg_factory,
 ) -> None:
     """1354_rule_20: filtered entries do not contribute to live numbering."""
     item = _played_playlist_item(
-        tmp_path, entries=["aside-1", "quiet-1", "quiet-2"], last_played_song_id="quiet-2",
+        tmp_path,
+        pg_factory,
+        entries=["aside-1", "quiet-1", "quiet-2"],
+        last_played_song_id="quiet-2",
         remove=remove_aside,
     )
 
@@ -684,11 +685,11 @@ def test_1354_47_A3_an_entry_that_is_no_longer_live_never_raises_a_later_songs_n
 
 @_AN_ENTRY_STOPS_BEING_LIVE
 def test_1354_47_A4_a_playlist_without_a_live_occurrence_resumes_from_the_start(
-    tmp_path: Path, remove_aside: Callable,
+    tmp_path: Path, remove_aside: Callable, pg_factory,
 ) -> None:
     """1354_rule_20: filtered targets expose no entry identity."""
     item = _played_playlist_item(
-        tmp_path, entries=["quiet-1", "aside-1"], last_played_song_id="aside-1",
+        tmp_path, pg_factory, entries=["quiet-1", "aside-1"], last_played_song_id="aside-1",
         remove=remove_aside,
     )
 
@@ -696,19 +697,19 @@ def test_1354_47_A4_a_playlist_without_a_live_occurrence_resumes_from_the_start(
 
 
 def test_1354_47_A4_a_playlist_whose_last_played_song_left_it_resumes_from_the_start(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
     """1354_rule_20: removed targets expose no entry identity."""
     item = _played_playlist_item(
-        tmp_path, entries=["quiet-1", "aside-1"], last_played_song_id="aside-1",
+        tmp_path, pg_factory, entries=["quiet-1", "aside-1"], last_played_song_id="aside-1",
         remove=lambda session: session.delete(session.get(PlaylistEntry, "entry-1")),
     )
 
     assert {key: item[key] for key in _RESUMES_FROM_THE_START} == _RESUMES_FROM_THE_START
 
 
-def test_listen_leaves_out_a_playlist_never_played_and_one_deleted(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_listen_leaves_out_a_playlist_never_played_and_one_deleted(tmp_path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
         _seed_played_playlist(session, entries=["quiet-1"], last_played_song_id="quiet-1")
@@ -723,9 +724,9 @@ def test_listen_leaves_out_a_playlist_never_played_and_one_deleted(tmp_path: Pat
 
 
 def test_listen_shows_three_places_newest_first_ties_album_before_playlist_then_id(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
         for song_id, offset in (("song-tide", 50), ("song-alice", 50)):
@@ -748,8 +749,8 @@ def test_listen_shows_three_places_newest_first_ties_album_before_playlist_then_
     ]
 
 
-def test_listen_tiles_carry_the_cover_the_place_page_shows(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_listen_tiles_carry_the_cover_the_place_page_shows(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
         _add_playable_album(session, album_id="covered", owner=USER_A, songs=1)
@@ -807,9 +808,9 @@ def _add_playlist_the_viewer_listened_in(session, *, viewer_id: str, index: int)
     ids=["default-three", "all", "middle-window", "last-page", "past-the-end"],
 )
 def test_an_admins_listen_returns_the_window_of_places_asked_for(
-    tmp_path: Path, window: dict[str, int], expected_indexes: list[int],
+    tmp_path: Path, window: dict[str, int], expected_indexes: list[int], pg_factory,
 ) -> None:
-    client, factory = _make_client(tmp_path, ADMIN_ID, role="admin")
+    client, factory = _make_client(tmp_path, pg_factory, ADMIN_ID, role="admin")
 
     def seed(session) -> None:
         for index in range(8):
@@ -894,9 +895,9 @@ def _seed_own_cowriter_message(session) -> None:
     ids=["created", "legacy-edit-reads-as-edited", "take", "co-writer-message"],
 )
 def test_write_names_each_kind_of_own_work_once(
-    tmp_path: Path, seed: Callable, work: SongWorkKind,
+    tmp_path: Path, seed: Callable, work: SongWorkKind, pg_factory,
 ) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     _seed(factory, seed)
 
     assert _write_items(client) == [{
@@ -970,9 +971,9 @@ def test_the_newest_kind_of_work_on_a_song_wins_and_listens_never_count(
     ],
 )
 def test_write_leaves_out_work_that_is_not_the_viewers_own_or_is_archived(
-    tmp_path: Path, seed: Callable,
+    tmp_path: Path, seed: Callable, pg_factory,
 ) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     _seed(factory, lambda session: seed(session, song_id="song-tide", created_at=_later(10)))
 
     assert _write_items(client) == []
@@ -1002,8 +1003,8 @@ def test_unarchiving_a_take_restores_it_to_write(alice: TestClient, library_ctx)
     ],
     ids=["deleted-song", "archived-album", "deleted-album"],
 )
-def test_write_leaves_out_a_song_that_was_removed(tmp_path: Path, remove: Callable) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_write_leaves_out_a_song_that_was_removed(tmp_path, remove: Callable, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     _seed(factory, _seed_own_take)
     assert _works(_write_items(client)) == [("song-tide", SongWorkKind.TAKE)]
 
@@ -1012,8 +1013,8 @@ def test_write_leaves_out_a_song_that_was_removed(tmp_path: Path, remove: Callab
     assert _write_items(client) == []
 
 
-def test_write_shows_the_three_songs_worked_on_last_with_their_covers(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_write_shows_the_three_songs_worked_on_last_with_their_covers(tmp_path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
         session.get(Album, "nachtstrom").cover_key = "album-key"
@@ -1070,9 +1071,9 @@ def _seed_busy_library(session, *, viewer_id: str) -> None:
     ids=["listen", "write"],
 )
 def test_home_lists_read_in_a_fixed_number_of_statements(
-    tmp_path: Path, viewer_id: str, role: str, path: str, items: int, statements: int,
+    tmp_path: Path, viewer_id: str, role: str, path: str, items: int, statements: int, pg_factory,
 ) -> None:
-    client, factory = _make_client(tmp_path, viewer_id, role)
+    client, factory = _make_client(tmp_path, pg_factory, viewer_id, role)
     with factory() as session:
         _seed_busy_library(session, viewer_id=viewer_id)
         session.commit()
@@ -1202,8 +1203,8 @@ def test_admin_search_finds_every_album_and_song_the_admin_can_open(admin: TestC
     }
 
 
-def test_search_keyset_pages_without_dupes_or_gaps(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_search_keyset_pages_without_dupes_or_gaps(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         for i in range(8):
             _add_album(
@@ -1231,8 +1232,8 @@ def test_search_keyset_pages_without_dupes_or_gaps(tmp_path: Path) -> None:
     assert keys == expected_songs + expected_albums
 
 
-def test_search_title_sort_album_before_song_then_id(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_search_title_sort_album_before_song_then_id(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="z-album", title="Same Title",
@@ -1252,8 +1253,8 @@ def test_search_title_sort_album_before_song_then_id(tmp_path: Path) -> None:
     assert keys[1] == (LIBRARY_ITEM_SONG, "a-song")
 
 
-def test_insert_after_first_page_does_not_appear_on_second(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_insert_after_first_page_does_not_appear_on_second(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         for i in range(4):
             _add_album(
@@ -1364,11 +1365,11 @@ def test_list_songs_q_and_sort(alice: TestClient) -> None:
     assert data["items"][0]["album_title"] == "Nachtstrom"
 
 
-def test_list_songs_without_album_id_excludes_archived_album_songs(tmp_path: Path) -> None:
+def test_list_songs_without_album_id_excludes_archived_album_songs(tmp_path, pg_factory) -> None:
     """GET /api/songs browse (no album_id) must hide songs of archived albums --
     both from items and from total/has_more, since count_songs and list_songs
     can drift independently if only one is filtered (#223 review finding)."""
-    client, factory = _make_client(tmp_path, USER_A)
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="visibility-live", title="Visibility Live",
@@ -1395,10 +1396,10 @@ def test_list_songs_without_album_id_excludes_archived_album_songs(tmp_path: Pat
     assert data["has_more"] is False
 
 
-def test_list_songs_with_album_id_shows_songs_of_an_archived_album(tmp_path: Path) -> None:
+def test_list_songs_with_album_id_shows_songs_of_an_archived_album(tmp_path, pg_factory) -> None:
     """Direct-by-ID access (album_id set) must keep working for an archived
     album's songs -- AlbumDetailView depends on this (#223 review finding)."""
-    client, factory = _make_client(tmp_path, USER_A)
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="direct-archived", title="Direct Archived",
@@ -1416,8 +1417,8 @@ def test_list_songs_with_album_id_shows_songs_of_an_archived_album(tmp_path: Pat
     assert data["total"] == 1
 
 
-def test_list_albums_offset_pagination_stable_title_sort(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_list_albums_offset_pagination_stable_title_sort(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         for i in range(5):
             _add_album(
@@ -1466,8 +1467,8 @@ def test_oldest_sort_is_created_at_ascending(alice: TestClient) -> None:
     assert ids[0] == "alice-own"
 
 
-def test_search_album_hit_includes_picked_count(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_search_album_hit_includes_picked_count(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="picks-album", title="Picks Album",
@@ -1496,8 +1497,8 @@ def test_search_album_hit_includes_picked_count(tmp_path: Path) -> None:
     assert album_hit["album"]["picked_count"] == 1
 
 
-def test_search_album_hit_excludes_archived_pick(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_search_album_hit_excludes_archived_pick(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="archived-picks-album", title="Archived Picks Album",
@@ -1523,8 +1524,8 @@ def test_search_album_hit_excludes_archived_pick(tmp_path: Path) -> None:
     assert album_hit["album"]["picked_count"] == 0
 
 
-def test_list_albums_excludes_archived_by_default(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_list_albums_excludes_archived_by_default(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="arch-hidden", title="Archived Album",
@@ -1537,8 +1538,8 @@ def test_list_albums_excludes_archived_by_default(tmp_path: Path) -> None:
     assert "arch-hidden" not in ids
 
 
-def test_list_albums_archived_filter_shows_only_archived(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_list_albums_archived_filter_shows_only_archived(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="arch-visible", title="Archived Visible",
@@ -1552,8 +1553,8 @@ def test_list_albums_archived_filter_shows_only_archived(tmp_path: Path) -> None
     assert "nachtstrom" not in ids
 
 
-def test_search_excludes_archived_album(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_search_excludes_archived_album(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="arch-search", title="Archived Search Album",
@@ -1565,8 +1566,8 @@ def test_search_excludes_archived_album(tmp_path: Path) -> None:
     assert resp.json()["items"] == []
 
 
-def test_search_excludes_songs_of_archived_album(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+def test_search_excludes_songs_of_archived_album(tmp_path: Path, pg_factory) -> None:
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="arch-song-parent", title="Archived Song Parent",
@@ -1582,14 +1583,12 @@ def test_search_excludes_songs_of_archived_album(tmp_path: Path) -> None:
     assert resp.json()["items"] == []
 
 
-def test_pool_queue_excludes_generations_from_archived_albums(
-    tmp_path: Path, monkeypatch,
-) -> None:
+def test_pool_queue_excludes_generations_from_archived_albums(tmp_path, monkeypatch, pg_factory,):
     import songmaker_cli.queue_streams as queue_streams
 
     monkeypatch.setattr(queue_streams, "probe_audio_duration", lambda _path: 10.0)
 
-    client, factory = _make_client(tmp_path, USER_A)
+    client, factory = _make_client(tmp_path, pg_factory, USER_A)
     with factory() as session:
         _add_album(
             session, album_id="pool-live", title="Pool Live",

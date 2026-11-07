@@ -294,6 +294,20 @@ def test_v1_v2_a_latest_without_take_or_job_is_rewritten_in_place(client, edit):
     assert _holds(versions[2], edit)
 
 
+def test_lyrics_prompt_and_generation_settings_saved_together_read_back_as_one_version(client):
+    """Spec: REQ-VERSION-01 -- Lyrics, a style prompt and generation settings saved in one request
+    are read back together as one version."""
+    edit = {
+        "lyrics": "edited lyrics", "prompt": "edited prompt",
+        "generation_params": {"inference_steps": 50},
+    }
+    _save(client, **edit)
+
+    versions = _versions(client)
+    assert set(versions) == {1, 2}
+    assert _holds(versions[2], edit)
+
+
 @pytest.mark.parametrize("edit", CREATIVE_EDITS.values(), ids=list(CREATIVE_EDITS))
 def test_v3_a_creative_edit_of_a_version_with_a_take_makes_the_next_version(client, edit):
     _give_take_to_latest(client)

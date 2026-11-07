@@ -10,14 +10,17 @@
 		SONG_MOVE_SHARED_TITLE,
 		songMoveSharedMessage
 	} from '#lib/constants.ts';
+	import { onDestroy } from 'svelte';
 	import Icon from '../Icon.svelte';
 	import {
 		cancelSongMove,
 		confirmSongMove,
 		openSongMovePicker,
 		songMoveConfirm,
-		songMovePicker
+		songMovePicker,
+		songMoveRun
 	} from '#lib/stores/songMove.ts';
+	import { selectedSongId } from '#lib/stores/player.ts';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
 	import SongMovePicker from './SongMovePicker.svelte';
@@ -34,6 +37,20 @@
 	let { title, saveDisabled, onsave, onrename, onaddtoplaylist, ondelete }: Props = $props();
 
 	let popover: MenuPopover | undefined = $state();
+
+	// A refused move after the shared-album ask finds the menu closed; it comes back on the red row.
+	$effect(() => {
+		if (
+			$songMoveRun.status === 'failed' &&
+			$songMoveRun.songId === $selectedSongId &&
+			$songMovePicker.status === 'closed'
+		) {
+			void openSongMovePicker();
+			popover?.open();
+		}
+	});
+
+	onDestroy(cancelSongMove);
 
 	function runAndClose(action: () => void, restoreFocus = true): void {
 		popover?.close(restoreFocus);
@@ -73,7 +90,7 @@
 				{SONG_MENU_DELETE_LABEL}
 			</button>
 		{:else}
-			<SongMovePicker onmoved={() => popover?.close()} />
+			<SongMovePicker onclose={() => popover?.close()} />
 		{/if}
 	</MenuPopover>
 </div>

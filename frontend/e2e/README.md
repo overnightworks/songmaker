@@ -185,8 +185,9 @@ response, and once as a console error Chromium writes for every failed fetch,
 so `FlowGuard` takes a `refusalsExpectedOn` list of paths, each with the
 statuses that are the sentence under proof there: a 401, 403 or 429 on the
 session and admin reads, and in the admin flows a 404 on a stale session
-revoke or on a Disable of an account deleted meanwhile, and a 409 on a taken
-username. A path ending in `/` covers the ids
+revoke or on a Disable of an account deleted meanwhile, a 409 on a taken
+username, and in the song move flow a 404 or 422 on `/api/songs/` in the two
+cells that drive a refused move. A path ending in `/` covers the ids
 beneath it. Everywhere else, and for any 5xx, the guard is unchanged, and every
 flow, including each extra tab it opens, still asserts it clean.
 
