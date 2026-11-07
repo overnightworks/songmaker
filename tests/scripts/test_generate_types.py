@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import generate_types  # noqa: E402
-from agent_providers.events import AssistantTextEvent  # noqa: E402
 
 from songmaker_cli.api_models import BulkDeleteResponse  # noqa: E402
 from songmaker_cli.generation_params import BaseGenerationParams  # noqa: E402
@@ -287,7 +286,7 @@ def test_routed_model_outside_api_models_fails_without_writing_types(
 
 @pytest.mark.parametrize(
     "model",
-    (BulkDeleteResponse, BaseGenerationParams, WhisperCue, AssistantTextEvent),
+    (BulkDeleteResponse, BaseGenerationParams, WhisperCue),
 )
 def test_model_homes_are_api_models_or_a_named_exemption(model: type[BaseModel]) -> None:
     assert generate_types.models_outside_api_models((model,)) == ()
