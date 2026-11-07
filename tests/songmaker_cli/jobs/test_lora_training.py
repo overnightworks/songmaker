@@ -26,7 +26,6 @@ from songmaker_cli.constants import (
     JobType,
     LoraStatus,
 )
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora, UserLoraSample
 from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.db.queries.loras import get_user_lora
@@ -76,8 +75,8 @@ def test_worker_training_started_at_rejects_invalid_worker_values(value: object)
 
 
 @pytest.fixture
-def db_factory(tmp_path: Path):
-    return init_db(tmp_path / "test.db")
+def db_factory(pg_factory):
+    return pg_factory
 
 
 @pytest.fixture

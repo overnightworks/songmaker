@@ -15,7 +15,6 @@ from support.web_app import seed_user
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import ResourceEventKind, ResourceType
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -39,8 +38,8 @@ from songmaker_cli.lifecycle import (
 
 
 @pytest.fixture
-def db_factory(tmp_path: Path):
-    return init_test_db(tmp_path / "resource-events.db")
+def db_factory(pg_factory):
+    return pg_factory
 
 
 def _add_user(session: Session, user_id: str, username: str) -> None:

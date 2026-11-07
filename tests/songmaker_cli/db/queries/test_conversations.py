@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
     ChatMessage,
@@ -22,9 +20,8 @@ from songmaker_cli.db.queries import conversations as q
 
 
 @pytest.fixture
-def db_session(tmp_path: Path) -> Session:
-    factory = init_test_db(tmp_path / "conv.db")
-    session = factory()
+def db_session(pg_factory) -> Session:
+    session = pg_factory()
     yield session
     session.close()
 
