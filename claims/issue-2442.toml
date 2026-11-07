@@ -1,8 +1,0 @@
-claim_id = "a0af142da0e14de58f81b75972adeb03"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "b856ffbafd03b796e8e83a6fb2037427d062712d"
-branch = "claude/issue-2442-take-webauth-0-31-0"
-scope = ["pyproject.toml", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/app_context.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/oidc_client.py", "tests/songmaker_cli/test_app_context.py", "tests/songmaker_cli/test_constants.py", "tests/songmaker_cli/test_library_api_search.py", "uv.lock"]
-opened_commit = "fad3efbe3586c1b46c5403dcfd24104f01cba03e"
-whole_reason = "One dependency upgrade: the pin, the moved import, the removed role option, the role comparison that now uses webauth's AppRole, and the comment and test that name the option change in one landing."
