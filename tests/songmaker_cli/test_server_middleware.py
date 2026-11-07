@@ -158,9 +158,7 @@ def test_static_bundle_is_compressed_and_loses_accept_ranges(client: TestClient)
     it from compression, and once compressed the header must be dropped
     (byte offsets into the gzip stream no longer match the original file).
     """
-    resp = client.get(
-        "/_app/immutable/bundle.js", headers={"Accept-Encoding": "gzip"},
-    )
+    resp = client.get("/_app/immutable/bundle.js", headers={"Accept-Encoding": "gzip"})
     assert resp.status_code == 200
     assert resp.headers.get("content-encoding") == "gzip"
     assert "accept-ranges" not in resp.headers
@@ -264,8 +262,12 @@ def test_streaming_json_response_is_compressed_chunk_by_chunk() -> None:
     assert decompressed == b"".join(_JSON_STREAM_CHUNKS)
 
 
+def _middleware_classes(client: TestClient) -> list:
+    return [layer.cls for layer in client.app.user_middleware]
+
+
 def test_created_app_stacks_its_middleware_in_the_documented_security_order(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
     """defect:#1590, defect:#1521 -- pin the security-critical middleware order.
 
@@ -274,9 +276,9 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
     the default one is built here. An intended reorder updates this list and the
     comment block in `server.py` together.
     """
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
 
-    assert [layer.cls for layer in client.app.user_middleware] == [
+    assert _middleware_classes(client) == [
         ResourceStreamDeadlineMiddleware,
         SelectiveGZipMiddleware,
         CORSMiddleware,
@@ -290,17 +292,17 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
 
 
 def test_created_app_with_token_clients_puts_the_bearer_gate_between_rate_limit_and_csrf(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     """The enabled stack is the disabled one plus webauth's bearer layer, nothing moved."""
     from webauth.middleware.bearer_gate import BearerGateMiddleware
 
     from songmaker_cli.settings import get_settings
 
-    disabled = [layer.cls for layer in make_test_app(tmp_path)[0].app.user_middleware]
+    disabled = _middleware_classes(make_test_app(tmp_path, factory=pg_factory)[0])
     monkeypatch.setenv("TOKEN_CLIENTS", "hal")
     get_settings.cache_clear()
-    enabled = [layer.cls for layer in make_test_app(tmp_path)[0].app.user_middleware]
+    enabled = _middleware_classes(make_test_app(tmp_path, factory=pg_factory)[0])
 
     assert enabled == [*disabled[:6], BearerGateMiddleware, *disabled[6:]]
     assert disabled[5:7] == [IpRateLimitMiddleware, CsrfOriginMiddleware]
@@ -316,12 +318,12 @@ def test_created_app_with_token_clients_puts_the_bearer_gate_between_rate_limit_
 @pytest.mark.parametrize("metrics_fail", [False, True])
 def test_access_log_restores_context_and_records_each_http_outcome(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, outcome: str, started: bool,
-    metrics_fail: bool,
+    metrics_fail: bool, pg_factory,
 ) -> None:
     """defect:#1576 -- preserve streaming, status, metrics and caller context on every exit."""
     import structlog
 
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     metrics = client.app.state.http_metrics
     metrics_error = RuntimeError("metrics unavailable")
 
@@ -460,9 +462,9 @@ def test_access_log_passes_non_http_scopes_through(
 
 
 @pytest.fixture
-def security_exchange(tmp_path: Path):
+def security_exchange(tmp_path: Path, pg_factory):
     """Drive the installed host stack without a TestClient worker thread."""
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     app = client.app
 
     @app.post("/api/internal/security-proof")
@@ -556,9 +558,7 @@ def test_installed_stack_adds_security_headers_to_refusals(security_exchange, ou
         assert body == b"Internal Server Error"
 
 
-def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
-    monkeypatch, tmp_path: Path,
-):
+def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(monkeypatch, tmp_path: Path):
     """defect:#1590 -- the rate limiter runs before CSRF and remains inside headers."""
     import httpx
 

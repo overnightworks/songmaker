@@ -239,7 +239,6 @@ services:
       ACESTEP_SKIP_VRAM_PREFLIGHT: "${ACESTEP_SKIP_VRAM_PREFLIGHT:-0}"
       ACESTEP_CHECKPOINT_DIR: "/opt/acestep"
       AUDIO_OUTPUT_DIR: "/app/data/worker_output"
-      ACESTEP_LOG_DIR: "/opt/acestep/logs"
       REDIS_URL: redis://redis:6379/0
       CONTROL_PLANE_URL: "${ACESTEP_WORKER_CONTROL_PLANE_URL:-http://songmaker-web:8080}"
       HF_TOKEN: "${HF_TOKEN:-}"

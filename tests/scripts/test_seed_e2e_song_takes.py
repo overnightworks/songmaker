@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, User
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
@@ -37,10 +36,10 @@ def _seed_song_at_version(session, audio_dir: Path) -> str:
 
 @pytest.mark.parametrize("seed", [_seed_song_takes, _seed_song_at_version])
 def test_seeded_takes_record_the_owner_as_their_maker(
-    tmp_path: Path, seed: Callable[..., str],
+    tmp_path: Path, pg_factory, seed: Callable[..., str],
 ) -> None:
     audio_dir = tmp_path / "audio"
-    factory = init_test_db(tmp_path / "seed.db")
+    factory = pg_factory
     with factory() as session:
         session.add(User(id=_OWNER_ID, username=_OWNER_ID))
         session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
@@ -53,12 +52,22 @@ def test_seeded_takes_record_the_owner_as_their_maker(
 
 
 @pytest.fixture
-def seeded_job(tmp_path):
+def seeded_job(tmp_path, pg_factory):
+    yield from _seeded_job(tmp_path, pg_factory)
+
+
+@pytest.fixture
+def seeded_job_on_sqlite(tmp_path):
+    from songmaker_cli.db.engine import init_test_db
+
+    yield from _seeded_job(tmp_path, init_test_db(tmp_path / "seed.db"))
+
+
+def _seeded_job(tmp_path, factory):
     from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.db.queries.songs import get_song
 
-    factory = init_test_db(tmp_path / "completion.db")
     with factory() as session:
         session.add(User(id=_OWNER_ID, username=_OWNER_ID))
         session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
@@ -129,11 +138,11 @@ def test_invalid_completion_writes_neither_takes_nor_audio(seeded_job, status, t
     assert job.status == status
 
 
-def test_failed_second_take_rolls_back_the_batch_and_terminal_status(seeded_job):
+def test_failed_second_take_rolls_back_the_batch_and_terminal_status(seeded_job_on_sqlite):
     from sqlalchemy import text
     from sqlalchemy.exc import IntegrityError
 
-    session, audio_dir, job = seeded_job
+    session, audio_dir, job = seeded_job_on_sqlite
     ids_before = {g.id for g in session.query(Generation)}
     files_before = set(audio_dir.rglob("*.mp3"))
     # A real database refusal on the second addition, after the first was flushed.
@@ -176,8 +185,8 @@ def test_queued_command_prints_a_real_owned_job_with_a_computed_position(seeded_
 
 
 @pytest.fixture
-def cover_album(tmp_path):
-    factory = init_test_db(tmp_path / "cover.db")
+def cover_album(tmp_path, pg_factory):
+    factory = pg_factory
     with factory() as session:
         session.add(User(id=_OWNER_ID, username=_OWNER_ID))
         session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
@@ -256,10 +265,10 @@ def test_invalid_cover_publication_writes_neither_suggestion_nor_file(
 
 @pytest.mark.parametrize("owner_id", ["../outside", "..", ".", "", "/etc", "a/b"])
 def test_an_owner_id_that_is_not_one_directory_name_writes_nothing(
-    tmp_path: Path, owner_id: str
+    tmp_path: Path, pg_factory, owner_id: str
 ) -> None:
     audio_dir = tmp_path / "audio"
-    factory = init_test_db(tmp_path / "seed.db")
+    factory = pg_factory
     with factory() as session:
         session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
         session.commit()
@@ -277,9 +286,9 @@ def test_an_owner_id_that_is_not_one_directory_name_writes_nothing(
     [(40, [40, 41]), (None, [None, None])],
 )
 def test_1928_c10_take_seed_base_numbers_the_takes_and_without_it_they_have_no_seed(
-    tmp_path: Path, take_seed_base: int | None, expected_seeds: list[int | None],
+    tmp_path: Path, pg_factory, take_seed_base: int | None, expected_seeds: list[int | None],
 ) -> None:
-    factory = init_test_db(tmp_path / "seed.db")
+    factory = pg_factory
     with factory() as session:
         session.add(User(id=_OWNER_ID, username=_OWNER_ID))
         session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
@@ -307,11 +316,13 @@ def test_completion_of_a_job_without_a_version_writes_no_takes(seeded_job):
     assert {g.id for g in session.query(Generation)} == ids_before
 
 
-def test_takes_seeded_into_an_existing_song_carry_no_version_and_play_the_given_audio(tmp_path):
+def test_takes_seeded_into_an_existing_song_carry_no_version_and_play_the_given_audio(
+    tmp_path, pg_factory,
+):
     from songmaker_cli.db.queries.songs import create_song, get_song
 
     audio_dir = tmp_path / "audio"
-    factory = init_test_db(tmp_path / "attach.db")
+    factory = pg_factory
     with factory() as session:
         session.add(User(id=_OWNER_ID, username=_OWNER_ID))
         session.add(Album(id=_ALBUM_ID, title="A", artist="X"))

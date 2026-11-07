@@ -25,9 +25,15 @@ from songmaker_cli.db.queries.activity import record_song_edit
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
 from songmaker_cli.db.queries.generations import (
     ArchivedTakeError,
+    delete_takes,
+    lock_songs,
     lock_unarchived_generation,
 )
-from songmaker_cli.db.queries.jobs import has_active_job_for_version
+from songmaker_cli.db.queries.jobs import (
+    ActiveJobError,
+    has_active_job_for_songs,
+    has_active_job_for_version,
+)
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import (
@@ -490,19 +496,18 @@ def _carried_unless_set(
 def delete_song(session: Session, song_id: str) -> list[str]:
     """Hard-delete a song and all its versions/generations.
 
-    Sees soft-deleted songs (used by cleanup_expired). Returns file paths
-    for post-commit cleanup.
+    Sees soft-deleted songs (used by cleanup_expired). Locks the song, then its takes,
+    and raises ActiveJobError before deleting anything while a queued or running job
+    points at it. Returns file paths for post-commit cleanup.
     """
     with include_deleted(session):
-        song = session.query(Song).filter_by(id=song_id).first()
-        if not song:
+        songs = lock_songs(session, Song.id == song_id)
+        if not songs:
             raise ValueError(f"Song not found: {song_id}")
-
-        paths = [
-            p for g in song.generations
-            for p in [g.mp3_path, g.wav_path] if p
-        ]
-        session.delete(song)
+        if has_active_job_for_songs(session, [song_id]):
+            raise ActiveJobError(song_id)
+        paths = delete_takes(session, Generation.song_id == song_id)
+        session.delete(songs[0])
         session.flush()
     return paths
 
@@ -643,7 +648,7 @@ def list_expired_songs(
     )
     if exclude_album_ids:
         query = query.filter(Song.album_id.notin_(exclude_album_ids))
-    return query.all()
+    return query.order_by(Song.id).all()
 
 
 def get_song_by_slug(session: Session, slug: str) -> Song | None:

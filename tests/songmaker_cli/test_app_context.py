@@ -17,14 +17,13 @@ from songmaker_cli.app_context import (
 from songmaker_cli.constants import (
     REDIS_RL_IP_PREFIX,
 )
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.settings import get_settings
 
 
 @pytest.fixture
-def ctx(tmp_path: Path) -> AppContext:
+def ctx(tmp_path: Path, pg_factory) -> AppContext:
     return AppContext(
-        db=init_test_db(tmp_path / "songmaker.db"),
+        db=pg_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,

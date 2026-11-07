@@ -5,17 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from support.reference_rows import a_reference
 from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, ReferenceRecording, Song, User, Version
-from songmaker_cli.db.queries.reference_recordings import create_reference_recording
 from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,
     RemovalOutcome,
     remove_reference_file,
     resolve_owned_reference_audio,
 )
+from songmaker_cli.timestamps import utcnow
 
 
 def _write_ref(root: Path, user_id: str, name: str, data: bytes = b"RIFF") -> Path:
@@ -196,14 +197,7 @@ def _seed_users(session) -> None:
 
 def _record_reference(factory, user_id: str, name: str = "mine.wav") -> str:
     with factory() as session:
-        recording = create_reference_recording(
-            session,
-            user_id=user_id,
-            storage_path=f"{user_id}/{REFERENCE_AUDIO_DIR}/{name}",
-            original_filename=name,
-            size_bytes=4,
-            duration_sec=None,
-        )
+        recording = a_reference(session, user_id, name=name, unused_since=utcnow())
         session.commit()
         return recording.id
 

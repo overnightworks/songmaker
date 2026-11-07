@@ -10,7 +10,6 @@ from support.web_app import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS, JobStatus, JobType
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, UserSession
 from songmaker_cli.db.queries.auth import delete_expired_sessions, delete_session
 from songmaker_cli.db.queries.jobs import (
@@ -25,11 +24,10 @@ SESSION_ID = "s" * 43
 
 
 @pytest.fixture
-def ctx(tmp_path: Path) -> AppContext:
+def ctx(tmp_path: Path, pg_factory) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
-    factory = init_test_db(tmp_path / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         session.add(User(id="u1", username="u1", role="user"))
         session.flush()
         session.add(Album(id="alb", title="A", artist="B", created_by="u1"))
@@ -42,7 +40,7 @@ def ctx(tmp_path: Path) -> AppContext:
         )
         session.commit()
     return AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=audio_dir,
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,

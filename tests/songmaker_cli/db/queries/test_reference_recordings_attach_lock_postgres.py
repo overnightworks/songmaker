@@ -15,9 +15,9 @@ from support.postgres_lock_harness import (
     race,
     wrote_to_tables,
 )
+from support.reference_rows import a_reference
 from support.web_app import make_test_app, seed_session
 
-from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.songs import create_song
 from songmaker_cli.timestamps import utcnow
@@ -32,11 +32,9 @@ def _seed(session) -> None:
     session.add(User(id=OWNER, username="owner"))
     session.flush()
     session.add(Album(id="album-a", title="A", artist="A", created_by=OWNER))
-    session.add(ReferenceRecording(
-        id=REFERENCE_ID, user_id=OWNER, storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/F.wav",
-        original_filename="F.wav", size_bytes=4, unused_since=utcnow(),
-    ))
-    session.flush()
+    a_reference(
+        session, OWNER, name="F.wav", reference_id=REFERENCE_ID, unused_since=utcnow(),
+    )
     create_song(session, "Existing", "album-a", "existing", created_by=OWNER)
 
 
@@ -115,11 +113,7 @@ def test_a_save_that_sets_no_reference_does_not_wait_for_the_locked_row_its_vers
 ) -> None:
     world = _World(pg_factory, tmp_path)
     with pg_factory() as session:
-        session.add(ReferenceRecording(
-            id="carried", user_id=OWNER, storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/C.wav",
-            original_filename="C.wav", size_bytes=4,
-        ))
-        session.flush()
+        a_reference(session, OWNER, name="C.wav", reference_id="carried")
         session.get(Song, world.song_id).latest_version.reference_recording_id = "carried"
         session.commit()
     answers: dict[str, Response] = {}

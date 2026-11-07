@@ -18,15 +18,14 @@ from songmaker_cli.auth_dependencies import (
     get_current_user,
     require_admin,
 )
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries.auth import create_session
 
 _TEST_SECRET = b"a" * 64
 
 
 @pytest.fixture
-def _db(tmp_path: Path):
-    return init_db(tmp_path / "test.db")
+def _db(tmp_path: Path, pg_factory):
+    return pg_factory
 
 
 def _build_auth_app(_db, tmp_path: Path, redis=None):
