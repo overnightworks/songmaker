@@ -18,7 +18,7 @@ import {
 	songList,
 	upsertSongInList
 } from '#lib/stores/libraryData.ts';
-import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
 
 const SEARCH_FAILED_MESSAGE = 'Search failed';
 
@@ -179,10 +179,6 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 
 export function forgetSyncedSong(songId: string): void {
 	removeSongFromList(songId);
-	if (get(selectedSongId) === songId) {
-		selectedSongId.set(null);
-		selectedGenerationId.set(null);
-	}
 	librarySearch.update((state) => ({
 		...state,
 		items: state.items.filter((hit) => hit.type !== 'song' || hit.song.id !== songId)

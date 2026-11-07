@@ -160,6 +160,7 @@ function setup(options?: {
 	const snapshotStarts: number[] = [];
 	const cancelled: number[] = [];
 	const forgotten: string[] = [];
+	const left: { songId: string; forgottenBefore: string[] }[] = [];
 	const loadedWatch: { notify: (() => void) | null } = { notify: null };
 	const reachability: boolean[] = [];
 	const innerFetch =
@@ -195,6 +196,7 @@ function setup(options?: {
 				forgotten.push(songId);
 				options?.forgetSong?.(songId);
 			},
+			leaveGoneSong: (songId) => left.push({ songId, forgottenBefore: [...forgotten] }),
 			watchLoadedSongs:
 				options?.watchLoadedSongs ??
 				((onChange) => {
@@ -227,6 +229,7 @@ function setup(options?: {
 		snapshotStarts,
 		cancelled,
 		forgotten,
+		left,
 		loadedWatch,
 		reachability
 	};
@@ -1786,7 +1789,7 @@ describe('resource sync owner', () => {
 	});
 
 	it('drops a 404 song instead of retrying it forever', async () => {
-		const { controller, sources, store, forgotten } = setup({
+		const { controller, sources, store, forgotten, left } = setup({
 			fetchSong: async () => {
 				throw new ApiError(404, 'Song not found', '/api/songs/s1');
 			}
@@ -1798,6 +1801,7 @@ describe('resource sync owner', () => {
 		latestSource(sources).emit('generation.created', created('1', 'g1'));
 		await flush();
 		expect(forgotten).toEqual(['s1']);
+		expect(left).toEqual([{ songId: 's1', forgottenBefore: ['s1'] }]);
 		expect(get(store).status).toBe('live');
 		expect(get(store).error).toBeNull();
 	});
@@ -1900,7 +1904,7 @@ describe('library resource sync wiring', () => {
 				})
 			);
 
-			startLibraryResourceSync();
+			startLibraryResourceSync(vi.fn());
 			MockEventSource.instances[0].emit('hello', { high_water_mark: '0' });
 			await flush();
 			expect(await waitForResourceReady()).toBe(true);
@@ -1923,20 +1927,13 @@ describe('library resource sync wiring', () => {
 		await requestSongRefresh('s1');
 		expect(MockEventSource.instances).toHaveLength(0);
 		expect(await waitForResourceReady()).toBe(false);
+		expect(await retryResourceSync()).toBe(false);
 		expect(MockEventSource.instances).toHaveLength(0);
-	});
-
-	it('starts the singleton owner when retry is requested while stopped', () => {
-		vi.stubGlobal('EventSource', MockEventSource);
-
-		void retryResourceSync();
-
-		expect(MockEventSource.instances).toHaveLength(1);
 	});
 
 	it('starts a credentialed EventSource and stops it on demand', () => {
 		vi.stubGlobal('EventSource', MockEventSource);
-		startLibraryResourceSync();
+		startLibraryResourceSync(vi.fn());
 		expect(MockEventSource.instances).toHaveLength(1);
 		expect(MockEventSource.instances[0].url).toBe(RESOURCE_EVENT_STREAM_PATH);
 		expect(MockEventSource.instances[0].withCredentials).toBe(true);
@@ -1967,7 +1964,7 @@ describe('library resource sync wiring', () => {
 			);
 			currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 
-			startLibraryResourceSync();
+			startLibraryResourceSync(vi.fn());
 			MockEventSource.instances[0].error();
 			await flush();
 			await flush();
@@ -2028,7 +2025,7 @@ describe('library resource sync wiring', () => {
 			);
 			currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 
-			startLibraryResourceSync();
+			startLibraryResourceSync(vi.fn());
 			MockEventSource.instances[0].error();
 			await vi.waitFor(() => expect(happened).toContain('sync error'));
 			await flush();

@@ -153,7 +153,7 @@ function coldTabAt(pathname: string, search = ''): void {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetResourceSyncForTests();
-	startLibraryResourceSync();
+	startLibraryResourceSync(vi.fn());
 }
 
 beforeEach(() => {

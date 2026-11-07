@@ -493,7 +493,7 @@ function settleSongAddress(songId: string): void {
 // library entry names it (a Back or Forward onto the entry of a song deleted
 // meanwhile, whose selection the restore already cleared). A selection of
 // another song is a newer choice that wins over this late 404.
-function leaveGoneSong(songId: string): void {
+export function leaveGoneSong(songId: string): void {
 	const selected = get(selectedSongId);
 	if (selected !== null && selected !== songId) return;
 	if (selected === null) {
