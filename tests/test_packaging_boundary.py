@@ -573,9 +573,9 @@ CONTAINER_HOME = Path("/home/songmaker")
 MIRROR_DIRECTORY_MARKER = "agent-cli-credentials"
 EVERY_COMPOSE_FILE = tuple(
     REPOSITORY_ROOT / name
-    for name in subprocess.run(
-        ["git", "ls-files"], cwd=REPOSITORY_ROOT, capture_output=True, text=True, check=True
-    ).stdout.splitlines()
+    for name in subprocess.check_output(
+        ["git", "ls-files"], cwd=REPOSITORY_ROOT, text=True
+    ).splitlines()
     if re.search(r"(^|/)(docker-)?compose[^/]*\.ya?ml$", name)
 )
 PRODUCTION_COMPOSE_FILES = ("-f", "docker-compose.yml")
@@ -620,9 +620,7 @@ def test_no_stack_binds_an_agent_cli_or_a_login(stack: str) -> None:
 
 def test_every_compose_file_belongs_to_a_rendered_stack() -> None:
     stacks = (PRODUCTION_COMPOSE_FILES, *TEST_STACKS.values())
-    names = {name for files in stacks for name in files if name != "-f"}
-    rendered = {(REPOSITORY_ROOT / name).resolve() for name in names}
-
+    rendered = {(REPOSITORY_ROOT / n).resolve() for files in stacks for n in files if n != "-f"}
     assert {path.resolve() for path in EVERY_COMPOSE_FILE} <= rendered
 
 
@@ -639,12 +637,10 @@ AGENT_LOGIN_BIND_FIXTURES = {
     ),
     "short-target-under-home": (f"/srv/a:{_HOME_AUTH}:ro", f"/srv/a to {_HOME_AUTH}"),
     "short-source-under-home": (f"{_HOME_AUTH}:/auth.json", f"{_HOME_AUTH} to /auth.json"),
-    "short-source-from-mirror-directory": (
-        f"'${{DIR:-{_MIRROR}}}/c.json:/c.json'", f"{_MIRROR}/c.json to /c.json"),
+    "short-source-from-mirror-directory": (f"'${{DIR:-{_MIRROR}}}/c:/c'", f"{_MIRROR}/c to /c"),
     "short-nested-default-target": (
         f"/srv/a:${{A:-${{B:-{_HOME_AUTH}}}}}:ro", f"/srv/a to {_HOME_AUTH}"),
-    "short-source-escaping-home-by-dotdot": (
-        "/home/../home/songmaker/c:/c", "/home/../home/songmaker/c to /c"),
+    "dotdot-source-into-home": ("/a/../home/songmaker/c:/c", "/a/../home/songmaker/c to /c"),
     "short-dash-default-target": (f"'/srv/a:${{X-{_HOME_AUTH}}}:ro'", f"/srv/a to {_HOME_AUTH}"),
 }
 
