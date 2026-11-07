@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from support.migration_chain import column_names
 from support.reference_link_migration import execute
 
-from songmaker_cli.constants import MODEL_AVAILABLE_MODES
+from songmaker_cli.constants import MODEL_AVAILABLE_MODES, MODEL_DEFAULT_MODE
 from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.models import (
     PLAYLIST_SLUG_MAX_LENGTH,
@@ -94,35 +94,13 @@ def test_init_db_fresh_creates_all_tables(empty_postgresql_url) -> None:
     engine.dispose()
 
     expected = {
-        "albums",
-        "album_cover_suggestions",
-        "songs",
-        "versions",
-        "generations",
-        "scores",
-        "ratings",
-        "jobs",
-        "users",
-        "user_sessions",
-        "audit_log",
-        "generation_presets",
-        "rate_limit_settings",
-        "available_models",
-        "playlists",
-        "playlist_entries",
-        "chat_messages",
-        "conversations",
-        "conversation_summaries",
-        "cowriter_user_memories",
-        "cowriter_song_memories",
-        "cowriter_album_memories",
-        "acestep_workers",
-        "user_loras",
-        "user_lora_samples",
-        "resource_event_cursors",
-        "resource_events",
-        "user_song_work", "reference_recordings",
-        "alembic_version",
+        "albums", "album_cover_suggestions", "songs", "versions", "generations", "scores",
+        "ratings", "jobs", "users", "user_sessions", "audit_log", "generation_presets",
+        "rate_limit_settings", "available_models", "playlists", "playlist_entries",
+        "chat_messages", "conversations", "conversation_summaries", "cowriter_user_memories",
+        "cowriter_song_memories", "cowriter_album_memories", "acestep_workers", "user_loras",
+        "user_lora_samples", "resource_event_cursors", "resource_events", "user_song_work",
+        "reference_recordings", "alembic_version",
     }
     assert tables == expected
 
@@ -158,6 +136,42 @@ def test_init_db_stamps_existing_db(empty_postgresql_url) -> None:
         row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
         assert row is not None
     engine.dispose()
+
+
+def test_user_lora_model_mode_migration_backfills_constrains_and_removes(database) -> None:
+    migration = _migration("f41ebd8f5103_add_model_mode_to_user_loras")
+    config, _ = database
+    engine = _upgrade_to_previous_of(database, migration)
+    _seed_accounts(engine, "user-1")
+    execute(
+        engine,
+        "INSERT INTO user_loras (id, user_id, name, slug, status, created_at) "
+        "VALUES ('lora-1', 'user-1', 'Existing Voice', 'existing-voice', 'draft', "
+        "CURRENT_TIMESTAMP)",
+    )
+
+    command.upgrade(config, migration.revision)
+
+    inspector = inspect(engine)
+    columns = {column["name"]: column for column in inspector.get_columns("user_loras")}
+    checks = {check["name"] for check in inspector.get_check_constraints("user_loras")}
+    assert columns["model_mode"]["nullable"] is False
+    assert "ck_user_loras_model_mode" in checks
+    with engine.begin() as conn:
+        model_mode = conn.execute(text("SELECT model_mode FROM user_loras")).scalar_one()
+        assert model_mode == MODEL_DEFAULT_MODE
+        invalid_lora = text(
+            "INSERT INTO user_loras "
+            "(id, user_id, name, slug, status, model_mode, created_at) "
+            "VALUES ('lora-2', 'user-1', 'Invalid Voice', 'invalid-voice', "
+            "'draft', 'xl-sft', CURRENT_TIMESTAMP)"
+        )
+        with pytest.raises(IntegrityError):
+            conn.execute(invalid_lora)
+
+    command.downgrade(config, migration.down_revision)
+
+    assert "model_mode" not in column_names(engine, "user_loras")
 
 
 def test_generation_progress_migration_preserves_existing_jobs(database) -> None:
@@ -307,11 +321,7 @@ def test_acestep_canonical_names_migration_renames_json_keys(pg_factory, monkeyp
     assert params["reference_audio_path"] == "/audio/r.wav"
     assert params["thinking"] is True
     assert params["bpm"] == 120
-    assert "duration" not in params
-    assert "key" not in params
-    assert "src_audio" not in params
-    assert "reference_audio" not in params
-    assert "think_mode" not in params
+    assert not {"duration", "key", "src_audio", "reference_audio", "think_mode"} & params.keys()
 
 
 def test_acestep_canonical_names_migration_downgrade_reverses_json_keys(
@@ -661,12 +671,10 @@ def test_song_slug_index_promoted_to_unique_repairs_stragglers(database) -> None
 
 
 def test_playlist_slug_migration_backfills_dedupes_and_enforces_unique(database) -> None:
-    """d5f8a3b21c46: unlike the two-phase song migration (b8e3f1c07a25 then
-    c9d4a2f18e37), playlists have no second write path to guard a window
-    for, so backfill and UNIQUE(slug) land in one migration. Proves the
-    upgrade dedupes existing (pre-migration) playlists sharing
-    a title, handles a wide CJK title within the length budget, then blocks
-    a real collision — and that downgrade() cleanly drops the column again.
+    """d5f8a3b21c46: backfill and UNIQUE(slug) land in one migration, with no second write path.
+
+    Existing playlists sharing a title are deduped, a wide CJK title fits the length budget,
+    a real collision is blocked, and downgrade() drops the column again.
     """
     config, engine = database
     # At the revision before this one 'playlists' has no slug column yet,
