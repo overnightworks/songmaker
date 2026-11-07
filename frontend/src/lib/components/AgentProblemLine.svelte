@@ -68,8 +68,8 @@
 	}
 
 	.turn-error.bad {
-		border-left-color: var(--score-bad);
-		color: var(--score-bad);
+		border-left-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.turn-error.wait {

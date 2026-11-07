@@ -512,7 +512,7 @@
 	}
 
 	.panel-error {
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 		margin-bottom: 0.5rem;
 	}
@@ -634,8 +634,8 @@
 	.last-error {
 		margin-top: 0.35rem;
 		padding: 0.5rem 0.65rem;
-		border-left: 3px solid var(--score-bad);
-		background: color-mix(in srgb, var(--score-bad) 8%, transparent);
+		border-left: 3px solid var(--fail);
+		background: color-mix(in srgb, var(--fail) 8%, transparent);
 		display: flex;
 		flex-direction: column;
 		gap: 0.3rem;
@@ -651,7 +651,7 @@
 	}
 
 	.last-error-heading strong {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 	.last-error time,
 	.logs {

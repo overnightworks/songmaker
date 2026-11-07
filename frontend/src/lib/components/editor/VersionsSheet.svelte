@@ -389,7 +389,7 @@
 	}
 
 	.version-delete:hover {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.version-number {

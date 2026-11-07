@@ -295,7 +295,7 @@
 	.rail-status {
 		margin: 0;
 		font-size: 0.8rem;
-		color: var(--score-bad);
+		color: var(--fail);
 		overflow-wrap: anywhere;
 	}
 
@@ -305,8 +305,8 @@
 		min-width: 0;
 		margin: 4px 8px 8px;
 		padding: 8px;
-		border-left: 3px solid var(--score-bad);
-		background: var(--score-bad-bg);
+		border-left: 3px solid var(--fail);
+		background: var(--fail-soft);
 	}
 
 	.rail-retry {

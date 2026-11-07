@@ -324,7 +324,7 @@
 	}
 
 	.error {
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 		margin-bottom: 1rem;
 	}
@@ -586,8 +586,8 @@
 	}
 
 	.preset-action.delete:hover {
-		border-color: var(--score-bad);
-		color: var(--score-bad);
+		border-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.empty {

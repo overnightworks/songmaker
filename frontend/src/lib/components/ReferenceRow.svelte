@@ -237,7 +237,7 @@
 	}
 
 	.reference-fault {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	@media (max-width: 640px) {

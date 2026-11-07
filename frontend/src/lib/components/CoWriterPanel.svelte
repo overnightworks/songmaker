@@ -1310,7 +1310,7 @@
 	}
 
 	.conv-del:hover {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.history-loading {
@@ -1327,7 +1327,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.8rem;
 		padding: 20px;
 		text-align: center;

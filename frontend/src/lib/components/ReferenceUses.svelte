@@ -185,6 +185,6 @@
 	}
 
 	.uses-fault {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 </style>
