@@ -162,7 +162,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			await expect(lyrics).toHaveValue(DRAFT_LYRICS);
 			if (shell === 'desktop') {
 				const crumb = page.getByRole('navigation', { name: 'Breadcrumb' });
-				await expect(crumb.getByRole('button', { name: otherTitle, exact: true })).toBeVisible();
+				await expect(crumb.getByText(otherTitle, { exact: true })).toBeVisible();
 			} else {
 				await expect(
 					page.getByRole('alert').filter({ hasText: songMovedToastLabel(otherTitle) })
