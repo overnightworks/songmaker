@@ -59,8 +59,8 @@ def _seed_library_of_one_owner(session) -> None:
 
 
 @pytest.fixture
-def library_app(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_library_of_one_owner)
+def library_app(tmp_path: Path, pg_factory) -> TestClient:
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_of_one_owner)
     seed_session(client, "owner")
     return client
 

@@ -58,13 +58,13 @@ def _seed_library_ordering_ties(session) -> None:
 
 
 def test_library_pool_queue_orders_ties_by_album_title_then_stable_identifiers(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, pg_factory
 ) -> None:
     """Spec: REQ-LISTENING-01 -- album title outranks album id, tied tracks fall back to the song
     id and tied takes to the take id, and a song's takes still run newest to oldest.
     """
     stub_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_library_ordering_ties)
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_ordering_ties)
     audio_path = tmp_path / "audio" / "user-a"
     audio_path.mkdir(parents=True)
     for take_id in (
@@ -122,13 +122,13 @@ def _seed_unavailable_pick(session) -> None:
 
 
 def test_library_pool_queue_never_replaces_an_unavailable_pick_with_another_take(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, pg_factory
 ) -> None:
     """Spec: REQ-LISTENING-06 -- a Pick whose audio file is missing is reported and its song
     contributes no other take, although another take of that song is playable.
     """
     stub_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_unavailable_pick)
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_unavailable_pick)
     audio_path = tmp_path / "audio" / "user-a"
     audio_path.mkdir(parents=True)
     for take_id in ("g-pick-ok", "g-spare"):
