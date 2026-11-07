@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Final
 
 from sqlalchemy import ColumnElement, exists
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 from sqlalchemy.orm.interfaces import ExecutableOption
 
@@ -127,6 +128,36 @@ def all_generation_paths(session: Session) -> set[str]:
     }
 
 
+def _next_generation_number_under_song_lock(session: Session, song_id: str) -> int:
+    """The song's next take number, read after its row is locked until the transaction ends.
+
+    The lock is ``FOR NO KEY UPDATE`` so a take still waits for a save that holds the song
+    ``FOR UPDATE`` and another take, yet never conflicts with the key-share locks a version
+    or take insert takes on it. The number is read by a separate statement: under READ
+    COMMITTED it sees every take committed while the lock was awaited. A trashed song still
+    receives its takes; a song that is gone fails like its foreign key would.
+    """
+    locked = (
+        session.query(Song.id)
+        .filter_by(id=song_id)
+        .execution_options(include_deleted=True)
+        .with_for_update(key_share=True)
+        .first()
+    )
+    if locked is None:
+        raise IntegrityError(
+            "SELECT songs.id FOR NO KEY UPDATE", {"song_id": song_id},
+            LookupError(f"Song not found: {song_id}"),
+        )
+    highest = (
+        session.query(Generation.generation_number)
+        .filter_by(song_id=song_id)
+        .order_by(Generation.generation_number.desc())
+        .first()
+    )
+    return (highest[0] + 1) if highest else INITIAL_GENERATION_NUMBER
+
+
 def create_generation(
     session: Session,
     song_id: str,
@@ -150,17 +181,11 @@ def create_generation(
     the take's own length, never the requested
     ``generation_params.audio_duration`` parameter it was asked for.
     """
-    max_num = (
-        session.query(Generation.generation_number)
-        .filter_by(song_id=song_id)
-        .order_by(Generation.generation_number.desc())
-        .first()
-    )
-    gen_number = (max_num[0] + 1) if max_num else INITIAL_GENERATION_NUMBER
-
     canonical_mp3_path = canonical_audio_filename(audio_dir, mp3_path) if mp3_path else None
     if canonical_mp3_path is None:
         raise ValueError("Generation MP3 path must stay within the audio directory")
+
+    gen_number = _next_generation_number_under_song_lock(session, song_id)
 
     gen = Generation(
         song_id=song_id,

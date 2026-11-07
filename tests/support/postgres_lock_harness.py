@@ -40,29 +40,78 @@ def wrote_song_data(session: Session) -> bool:
     return wrote_to_tables(session, "songs", "versions")
 
 
-class CommitPause:
-    """Holds a writer at its pending commit and names the backend that holds its locks.
+class WriterPause:
+    """Holds one writer mid-transaction and names the backend that holds its locks."""
 
-    Install it as a ``before_commit`` listener: the first commit whose session satisfies
+    def __init__(self) -> None:
+        self.reached = threading.Event()
+        self.release = threading.Event()
+        self.backend_pid: int | None = None
+
+    def install(self, pg_factory: sessionmaker[Session]) -> None:
+        raise NotImplementedError
+
+    def remove(self, pg_factory: sessionmaker[Session]) -> None:
+        raise NotImplementedError
+
+    def hold_backend(self, backend_pid: int) -> None:
+        self.backend_pid = backend_pid
+        self.reached.set()
+        if not self.release.wait(WAIT_SECONDS):
+            raise RuntimeError("The paused writer was never released")
+
+
+class CommitPause(WriterPause):
+    """Holds a writer at its pending commit.
+
+    Installed as a ``before_commit`` listener: the first commit whose session satisfies
     ``at_commit`` is held until ``release`` is set. A writer that drives its own commit
     calls ``hold`` instead.
     """
 
     def __init__(self, at_commit: Callable[[Session], bool] = lambda _session: True) -> None:
+        super().__init__()
         self.at_commit = at_commit
-        self.reached = threading.Event()
-        self.release = threading.Event()
-        self.backend_pid: int | None = None
+
+    def install(self, pg_factory: sessionmaker[Session]) -> None:
+        event.listen(pg_factory, "before_commit", self)
+
+    def remove(self, pg_factory: sessionmaker[Session]) -> None:
+        event.remove(pg_factory, "before_commit", self)
 
     def hold(self, session: Session) -> None:
-        self.backend_pid = session.execute(text("SELECT pg_backend_pid()")).scalar_one()
-        self.reached.set()
-        if not self.release.wait(WAIT_SECONDS):
-            raise RuntimeError("The paused writer was never released")
+        self.hold_backend(session.execute(text("SELECT pg_backend_pid()")).scalar_one())
 
     def __call__(self, session: Session) -> None:
         if not self.reached.is_set() and self.at_commit(session):
             self.hold(session)
+
+
+class StatementPause(WriterPause):
+    """Holds a writer right after the first statement whose SQL satisfies ``at_statement``.
+
+    The writer keeps every lock that statement took and sends nothing further until
+    ``release`` is set.
+    """
+
+    def __init__(self, at_statement: Callable[[str], bool]) -> None:
+        super().__init__()
+        self.at_statement = at_statement
+
+    def install(self, pg_factory: sessionmaker[Session]) -> None:
+        event.listen(pg_factory.kw["bind"], "after_cursor_execute", self)
+
+    def remove(self, pg_factory: sessionmaker[Session]) -> None:
+        event.remove(pg_factory.kw["bind"], "after_cursor_execute", self)
+
+    def __call__(
+        self, connection, cursor, statement, parameters, context, executemany,
+    ) -> None:
+        if self.reached.is_set() or not self.at_statement(statement):
+            return
+        with connection.connection.cursor() as own_cursor:
+            own_cursor.execute("SELECT pg_backend_pid()")
+            self.hold_backend(own_cursor.fetchone()[0])
 
 
 def wait_until_blocked_behind(
@@ -127,7 +176,7 @@ def race(
     pg_factory: sessionmaker[Session],
     first: Callable[[], Any],
     second: Callable[[], Any],
-    pause: CommitPause | None = None,
+    pause: WriterPause | None = None,
 ) -> dict[str, Any]:
     """Runs ``first`` until ``pause`` holds it, starts ``second``, requires that it waits
     behind the first, releases the first and returns both answers as ``{"first", "second"}``.
@@ -138,7 +187,7 @@ def race(
     answers: dict[str, Any] = {}
     threads = (in_thread(answers, "first", first), in_thread(answers, "second", second))
     waiter_pid = None
-    event.listen(pg_factory, "before_commit", pause)
+    pause.install(pg_factory)
     try:
         threads[0].start()
         assert pause.reached.wait(WAIT_SECONDS), "The first writer never reached its pause"
@@ -148,7 +197,7 @@ def race(
     finally:
         pause.release.set()
         stuck = stop_workers(pg_factory, threads, (pause.backend_pid, waiter_pid))
-        event.remove(pg_factory, "before_commit", pause)
+        pause.remove(pg_factory)
     assert not stuck, f"Writer threads never stopped: {', '.join(stuck)}"
     for answer in answers.values():
         if isinstance(answer, BaseException):

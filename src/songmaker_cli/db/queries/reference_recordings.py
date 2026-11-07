@@ -89,17 +89,20 @@ def create_reference_recording(
 
 def get_owned_reference_recording(
     session: Session, user_id: str, reference_id: str, *, lock: bool = False,
+    link_only: bool = False,
 ) -> ReferenceRecording | None:
     """The owner's own row, or None for a missing or foreign id.
 
     ``lock`` takes the row lock until the transaction ends, so a concurrent delete
     waits for a link that is being saved and a link being saved waits for a delete.
+    ``link_only`` weakens it to ``FOR NO KEY UPDATE``: it still excludes a delete and
+    another link, but not the key-share lock a save takes on the row at a version insert.
     """
     query = select(ReferenceRecording).where(
         ReferenceRecording.id == reference_id, ReferenceRecording.user_id == user_id,
     )
     if lock:
-        query = query.with_for_update()
+        query = query.with_for_update(key_share=link_only)
     return session.execute(query).scalar_one_or_none()
 
 
@@ -111,7 +114,9 @@ def lock_and_mark_reference_used(
     None for a missing or foreign id. Every path that newly links a version or a take
     to a reference takes its link through here.
     """
-    recording = get_owned_reference_recording(session, user_id, reference_id, lock=True)
+    recording = get_owned_reference_recording(
+        session, user_id, reference_id, lock=True, link_only=True,
+    )
     if recording is not None:
         recording.unused_since = None
         session.flush()
