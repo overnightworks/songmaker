@@ -34,7 +34,6 @@ from songmaker_cli.constants import (
     PLAYLIST_COVER_DIRNAME,
 )
 from songmaker_cli.covers import write_playlist_cover
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -83,8 +82,8 @@ def _create_playlist(session: Session, title: str, user_id: str = _DEFAULT_USER_
 
 
 @pytest.fixture
-def db_factory(tmp_path: Path):
-    return init_db(tmp_path / "test.db")
+def db_factory(pg_factory):
+    return pg_factory
 
 
 def _seed_test_data(session: Session) -> None:
@@ -125,9 +124,8 @@ def seeded_session(db_factory) -> Session:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    factory = init_db(tmp_path / "test.db")
-    with factory() as session:
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    with pg_factory() as session:
         _seed_test_data(session)
         session.commit()
 
@@ -137,7 +135,7 @@ def client(tmp_path: Path) -> TestClient:
     for name in ("g1.mp3", "g2.mp3", "g3.mp3"):
         (owner_dir / name).write_bytes(b"source")
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user(_DEFAULT_USER_ID, username="test"),
     )
     return web_client(app)
@@ -944,8 +942,8 @@ def _seed_sharing_data(session) -> None:
     ))
 
 
-def test_shared_playlist_view(tmp_path: Path) -> None:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+def test_shared_playlist_view(tmp_path: Path, pg_factory) -> None:
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_sharing_data)
     seed_session(client, "admin")
 
     audio_dir = tmp_path / "audio" / "admin_user"
@@ -967,8 +965,8 @@ def test_shared_playlist_view(tmp_path: Path) -> None:
     assert data["entries"][0]["audio_url"] is not None
 
 
-def test_shared_playlist_audio(tmp_path: Path) -> None:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+def test_shared_playlist_audio(tmp_path: Path, pg_factory) -> None:
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_sharing_data)
     seed_session(client, "admin")
 
     audio_dir = tmp_path / "audio" / "admin_user"
@@ -984,9 +982,9 @@ def test_shared_playlist_audio(tmp_path: Path) -> None:
 
 
 def test_shared_playlist_stops_presenting_a_deleted_songs_take_1374_rule_9(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_sharing_data)
     seed_session(client, "admin")
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
@@ -1029,9 +1027,9 @@ def test_shared_playlist_stream_stops_presenting_a_deleted_songs_take_1374_rule_
     tmp_path: Path,
     deleted_song_ids: list[str],
     expected_new_stream_status: int,
-    expected_new_stream_takes: list[str] | None,
+    expected_new_stream_takes: list[str] | None, pg_factory,
 ) -> None:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_two_song_sharing_data)
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_two_song_sharing_data)
     seed_session(client, "admin")
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
@@ -1055,15 +1053,15 @@ def test_shared_playlist_stream_stops_presenting_a_deleted_songs_take_1374_rule_
         )
 
 
-def test_shared_playlist_not_found(tmp_path: Path) -> None:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+def test_shared_playlist_not_found(tmp_path: Path, pg_factory) -> None:
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_sharing_data)
     unauthed = web_client(client.app, cookies={})
     resp = unauthed.get("/shared/playlist/nonexistent-slug")
     assert resp.status_code == 404
 
 
-def test_shared_playlist_audio_wrong_file(tmp_path: Path) -> None:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+def test_shared_playlist_audio_wrong_file(tmp_path: Path, pg_factory) -> None:
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_sharing_data)
     seed_session(client, "admin")
 
     resp = client.post("/api/playlists/pl1/share")
@@ -1074,8 +1072,8 @@ def test_shared_playlist_audio_wrong_file(tmp_path: Path) -> None:
     assert resp.status_code == 404
 
 
-def test_unshare_playlist(tmp_path: Path) -> None:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+def test_unshare_playlist(tmp_path: Path, pg_factory) -> None:
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_sharing_data)
     seed_session(client, "admin")
 
     client.post("/api/playlists/pl1/share")

@@ -19,7 +19,6 @@ from songmaker_cli.constants import (
     TURN_BLOCK_USER_MEMORY,
 )
 from songmaker_cli.conversation_api import compose_turn_context
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
@@ -68,29 +67,27 @@ def _seed(session, user_id: str) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
-    factory = init_db(tmp_path / "memory.db")
-    with factory() as session:
+def client(tmp_path: Path, pg_factory) -> tuple[TestClient, sessionmaker[Session]]:
+    with pg_factory() as session:
         _seed(session, "u-test")
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    return web_client(app), factory
+    return web_client(app), pg_factory
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
-    factory = init_db(tmp_path / "memory_spy.db")
-    with factory() as session:
+def stranger_client(tmp_path: Path, pg_factory) -> tuple[TestClient, sessionmaker[Session]]:
+    with pg_factory() as session:
         _seed(session, "u-owner")
         session.add(User(id="u-spy", username="spy", role="user"))
         session.commit()
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    return web_client(app), factory
+    return web_client(app), pg_factory
 
 
 @pytest.fixture

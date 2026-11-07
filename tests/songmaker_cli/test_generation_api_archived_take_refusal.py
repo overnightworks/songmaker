@@ -70,8 +70,8 @@ def _seed_archive_world(session: Session) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    web, _ = make_test_app(tmp_path, seed_db=_seed_archive_world)
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    web, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_archive_world)
     seed_session(web, OWNER)
     return web
 
@@ -145,9 +145,9 @@ def test_a_restored_take_can_be_marked(client: TestClient, route: str) -> None:
 @pytest.mark.parametrize("route", MARKING_ROUTES)
 @pytest.mark.parametrize("who", ["a foreign take", "a missing take"])
 def test_marking_a_foreign_or_missing_take_answers_404(
-    tmp_path: Path, route: str, who: str,
+    tmp_path: Path, route: str, who: str, pg_factory,
 ) -> None:
-    web, _ = make_test_app(tmp_path, seed_db=_seed_archive_world)
+    web, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_archive_world)
     seed_session(web, STRANGER)
     gen_id = ARCHIVED_SIBLING if who == "a foreign take" else "g-missing"
 

@@ -86,8 +86,10 @@ def _seed_generation_count_scenarios(session) -> None:
 
 
 @pytest.fixture
-def generation_count_client(tmp_path: Path):
-    client, factory = make_test_app(tmp_path, seed_db=_seed_generation_count_scenarios)
+def generation_count_client(tmp_path: Path, pg_factory):
+    client, factory = make_test_app(
+        tmp_path, factory=pg_factory, seed_db=_seed_generation_count_scenarios
+    )
     seed_session(client, _ADMIN_USER)
     return client, factory
 
@@ -241,8 +243,8 @@ def _seed_worked_through_song(session) -> None:
 
 
 @pytest.fixture
-def worked_through_song_client(tmp_path: Path):
-    client, factory = make_test_app(tmp_path, seed_db=_seed_worked_through_song)
+def worked_through_song_client(tmp_path: Path, pg_factory):
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_worked_through_song)
     seed_session(client, _ADMIN_USER)
     return client, factory
 

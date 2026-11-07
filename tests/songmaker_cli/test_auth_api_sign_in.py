@@ -20,6 +20,7 @@ from support.oidc_world import World
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session, web_client
 
 from songmaker_cli.auth_api import LOGOUT_BUTTON_LABEL
+from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH, AuditLog, UserSession
 
 MEMBER = "/apps/songmaker"
@@ -509,8 +510,8 @@ def test_the_start_route_answers_a_redirect_to_the_realm(world: World) -> None:
     )
 
 
-def test_the_sign_in_asks_for_openid_alone(tmp_path: Path, fresh_settings) -> None:
-    client, _ = make_test_app(tmp_path)
+def test_the_sign_in_asks_for_openid_alone(tmp_path: Path, fresh_settings, pg_factory) -> None:
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
 
     started = client.get("/login/oidc", follow_redirects=False)
 
@@ -554,7 +555,7 @@ def test_an_unusable_secret_file_stops_the_web_app_and_names_only_its_path(
     monkeypatch.setenv("OIDC_CLIENT_SECRET_FILE", str(secret_file))
 
     with pytest.raises(ValueError, match=str(secret_file)) as stopped:
-        make_test_app(tmp_path)
+        make_test_app(tmp_path, factory=init_test_db(tmp_path / "data" / "songmaker.db"))
 
     assert TEST_CLIENT_SECRET not in str(stopped.value)
 
@@ -571,7 +572,7 @@ def test_a_missing_sign_in_setting_stops_the_web_app_but_not_the_settings(
 
     assert get_settings().oidc_issuer is None or missing != "OIDC_ISSUER"
     with pytest.raises(ValueError, match=missing):
-        make_test_app(tmp_path)
+        make_test_app(tmp_path, factory=init_test_db(tmp_path / "data" / "songmaker.db"))
 
 
 def test_the_music_and_scoring_workers_start_without_any_realm_variable_or_secret_file(
@@ -706,7 +707,9 @@ def test_only_the_configured_hosts_are_served(
 ) -> None:
     hosts = "songmaker.hallucinai.de,localhost,127.0.0.1,songmaker-web"
     with patch.dict("os.environ", {"ALLOWED_HOSTS": hosts}):
-        client, _ = make_test_app(tmp_path)
+        client, _ = make_test_app(
+            tmp_path, factory=init_test_db(tmp_path / "data" / "songmaker.db")
+        )
 
     assert client.get("/api/auth/me", headers={"host": host}).status_code == status
 

@@ -11,7 +11,7 @@ from songmaker_cli.db.models import Album, User
 
 @pytest.mark.parametrize("authenticated", [False, True])
 def test_seeded_router_data_is_committed_before_authenticated_requests(
-    tmp_path: Path, authenticated: bool,
+    tmp_path: Path, authenticated: bool, pg_factory,
 ) -> None:
     def seed_album(session: Session) -> None:
         session.add(User(id="owner", username="owner", role="user"))
@@ -20,7 +20,8 @@ def test_seeded_router_data_is_committed_before_authenticated_requests(
 
     user = make_authenticated_user("owner")
     app = make_router_app(
-        make_router_ctx(tmp_path, seed_db=seed_album), user=user if authenticated else None
+        make_router_ctx(tmp_path, db=pg_factory, seed_db=seed_album),
+        user=user if authenticated else None,
     )
 
     with app.state.ctx.db() as session:

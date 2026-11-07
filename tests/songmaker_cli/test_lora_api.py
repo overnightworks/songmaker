@@ -42,14 +42,12 @@ def _seed_users(session: Session) -> None:
     session.add(User(id=USER_B, username="bob", role="user"))
 
 
-@pytest.fixture
-def client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
+def _client_and_ctx(tmp_path: Path, factory) -> tuple[TestClient, AppContext]:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    factory = init_test_db(data_dir / "songmaker.db")
     with factory() as session:
         _seed_users(session)
         session.commit()
@@ -62,8 +60,24 @@ def client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
 
 
 @pytest.fixture
+def client_and_ctx(tmp_path: Path, pg_factory) -> tuple[TestClient, AppContext]:
+    return _client_and_ctx(tmp_path, pg_factory)
+
+
+@pytest.fixture
+def sqlite_client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
+    return _client_and_ctx(tmp_path, init_test_db(tmp_path / "data" / "songmaker.db"))
+
+
+@pytest.fixture
 def client_a(client_and_ctx: tuple[TestClient, AppContext]) -> TestClient:
     client, _ = client_and_ctx
+    return client
+
+
+@pytest.fixture
+def sqlite_client_a(sqlite_client_and_ctx: tuple[TestClient, AppContext]) -> TestClient:
+    client, _ = sqlite_client_and_ctx
     return client
 
 
@@ -100,12 +114,12 @@ def test_create_lora_allows_requests_below_configured_voice_limit(
 
 
 def test_create_lora_returns_named_voice_limit_error(
-    client_a: TestClient, monkeypatch: pytest.MonkeyPatch,
+    sqlite_client_a: TestClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("MAX_USER_LORAS", "1")
-    assert client_a.post("/api/loras", json={"name": "First"}).status_code == 200
+    assert sqlite_client_a.post("/api/loras", json={"name": "First"}).status_code == 200
 
-    response = client_a.post("/api/loras", json={"name": "Second"})
+    response = sqlite_client_a.post("/api/loras", json={"name": "Second"})
 
     assert response.status_code == 409
     assert response.json() == {
@@ -1187,9 +1201,9 @@ def test_train_rejects_when_already_active(
 
 
 def test_train_returns_named_training_queue_limit_error(
-    client_and_ctx: tuple[TestClient, AppContext], monkeypatch: pytest.MonkeyPatch,
+    sqlite_client_and_ctx: tuple[TestClient, AppContext], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client, ctx = client_and_ctx
+    client, ctx = sqlite_client_and_ctx
     monkeypatch.setenv("MAX_QUEUED_LORA_TRAINING_JOBS", "1")
     lora_id = _seed_trainable_lora(ctx)
     with ctx.db() as session:

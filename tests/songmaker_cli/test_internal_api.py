@@ -12,8 +12,8 @@ from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_id
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path)
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     return client
 
 

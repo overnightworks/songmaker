@@ -81,22 +81,21 @@ def _seed(session) -> None:
     session.commit()
 
 
-def build_world(tmp_path: Path, *, role: str = "user", **attach) -> World:
-    factory = init_test_db(tmp_path / "turn.db")
-    with factory() as session:
+def build_world(tmp_path: Path, pg_factory, *, role: str = "user", **attach) -> World:
+    with pg_factory() as session:
         _seed(session)
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user(USER_ID, role=role),
     )
     client = web_client(app)
-    stack = attach_cowriter_gateway(client, factory, tmp_path, USER_ID, **attach)
-    return World(client, factory, stack, tmp_path)
+    stack = attach_cowriter_gateway(client, pg_factory, tmp_path, USER_ID, **attach)
+    return World(client, pg_factory, stack, tmp_path)
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> World:
-    return build_world(tmp_path)
+def world(tmp_path: Path, pg_factory) -> World:
+    return build_world(tmp_path, pg_factory)
 
 
 def _frame(events: list[dict], kind: str) -> dict:
@@ -266,9 +265,9 @@ def test_a_busy_gateway_reads_busy_with_the_wait_it_named(world):
     ids=["outside-the-api-group", "role-outside-the-agents-roles"],
 )
 def test_a_person_the_agent_is_not_enabled_for_is_refused_and_no_request_leaves(
-    tmp_path, role, groups,
+    tmp_path, role, groups, pg_factory,
 ):
-    world = build_world(tmp_path, role=role, groups=groups)
+    world = build_world(tmp_path, pg_factory, role=role, groups=groups)
 
     problem = _frame(world.turn(), "error")
 
@@ -279,10 +278,12 @@ def test_a_person_the_agent_is_not_enabled_for_is_refused_and_no_request_leaves(
 
 @pytest.mark.parametrize("arrangement", ["no-refresh-token", "refresh-grant-refused"])
 def test_a_session_without_a_usable_refresh_grant_signs_in_again_and_no_request_leaves(
-    tmp_path, arrangement,
+    tmp_path, arrangement, pg_factory,
 ):
     world = build_world(
-        tmp_path, refresh_token=None if arrangement == "no-refresh-token" else "stale-token",
+        tmp_path,
+        pg_factory,
+        refresh_token=None if arrangement == "no-refresh-token" else "stale-token",
     )
     world.stack.issuer.refuses_refresh_with = (
         "invalid_grant" if arrangement == "refresh-grant-refused" else None
@@ -355,7 +356,7 @@ def _user_field_of_a_turn(tmp_path: Path, monkeypatch, issuer: str) -> tuple[str
 
     monkeypatch.setenv("OIDC_ISSUER", issuer)
     get_settings.cache_clear()
-    turn_world = build_world(tmp_path)
+    turn_world = build_world(tmp_path, init_test_db(tmp_path / "turn.db"))
     turn_world.stack.issuer.token_issuer = issuer.rstrip("/")
     turn_world.turn()
     request = turn_world.stack.gateway_requests[0]
@@ -365,7 +366,9 @@ def _user_field_of_a_turn(tmp_path: Path, monkeypatch, issuer: str) -> tuple[str
 def test_the_request_names_the_person_only_by_a_fingerprint_of_issuer_and_id(
     tmp_path, monkeypatch, fresh_settings,
 ):
-    bare, bare_body = _user_field_of_a_turn(tmp_path / "bare", monkeypatch, "https://issuer.test/realms/test")
+    bare, bare_body = _user_field_of_a_turn(
+        tmp_path / "bare", monkeypatch, "https://issuer.test/realms/test"
+    )
     slashed, slashed_body = _user_field_of_a_turn(
         tmp_path / "slashed", monkeypatch, "https://issuer.test/realms/test/",
     )

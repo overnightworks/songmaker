@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.api_helpers import check_lora_ready_for_generation
 from songmaker_cli.constants import JOB_ERROR_USER_LORA_UNAVAILABLE, LoraStatus
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, UserLora, Version
 from songmaker_cli.db.queries.loras import create_user_lora, update_user_lora
 from songmaker_cli.generation_params import (
@@ -27,13 +24,12 @@ USER_B = "u-bob"
 
 
 @pytest.fixture
-def db_factory(tmp_path: Path):
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+def db_factory(pg_factory):
+    with pg_factory() as session:
         session.add(User(id=USER_A, username="alice"))
         session.add(User(id=USER_B, username="bob"))
         session.commit()
-    return factory
+    return pg_factory
 
 
 def _make_ready_lora(
@@ -239,11 +235,10 @@ def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:
     assert result is config
 
 
-def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
+def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path, pg_factory) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+    with pg_factory() as session:
         session.add(User(id=USER_A, username="alice"))
         session.add(User(id=USER_B, username="bob", role="admin"))
         session.flush()
@@ -268,7 +263,7 @@ def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
 
     (tmp_path / "data").mkdir()
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory), user=make_authenticated_user(USER_B, role="admin")
+        make_router_ctx(tmp_path, db=pg_factory), user=make_authenticated_user(USER_B, role="admin")
     )
     client = web_client(app)
 

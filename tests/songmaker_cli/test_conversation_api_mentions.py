@@ -80,16 +80,15 @@ class Musician:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> Musician:
-    factory = init_db(tmp_path / "mentions.db")
-    with factory() as session:
+def client(tmp_path: Path, pg_factory) -> Musician:
+    with pg_factory() as session:
         _seed(session, "u-test")
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
     web = web_client(app)
-    return Musician(web, attach_cowriter_gateway(web, factory, tmp_path, "u-test"))
+    return Musician(web, attach_cowriter_gateway(web, pg_factory, tmp_path, "u-test"))
 
 
 @pytest.fixture

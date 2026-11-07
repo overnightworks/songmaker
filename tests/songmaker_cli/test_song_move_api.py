@@ -8,7 +8,6 @@ import pytest
 from fastapi.testclient import TestClient
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User
 
 _OWNER_ID = "owner"
@@ -16,9 +15,8 @@ _STRANGER_ID = "stranger"
 
 
 @pytest.fixture
-def make_client(tmp_path: Path):
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+def make_client(tmp_path: Path, pg_factory):
+    with pg_factory() as session:
         for user_id in (_OWNER_ID, _STRANGER_ID):
             session.add(User(id=user_id, username=user_id, role="user"))
         session.flush()
@@ -40,7 +38,7 @@ def make_client(tmp_path: Path):
                 ),
             )
         session.commit()
-    ctx = make_router_ctx(tmp_path, db=factory)
+    ctx = make_router_ctx(tmp_path, db=pg_factory)
 
     def open_as(user_id: str, *, role: str = "user") -> TestClient:
         user = make_authenticated_user(user_id, role=role)
