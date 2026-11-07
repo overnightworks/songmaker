@@ -17,6 +17,7 @@ from agent_runtime_client.mcp_wire import LATEST_PROTOCOL_VERSION as PROTOCOL_VE
 from agent_runtime_client.mcp_wire import PROTOCOL_VERSION_HEADER as PROTOCOL_HEADER
 from pydantic import ValidationError
 from sqlalchemy.orm import sessionmaker
+from starlette.routing import Match
 from starlette.types import ASGIApp, Receive, Scope, Send
 from support.token_world import TokenWorld, make_token_world
 from support.web_app import TEST_ORIGIN, seed_session, seed_user
@@ -275,7 +276,7 @@ _UNMARKED_ROUTES = [
     ("POST", "/api/generations/bulk-delete", {"generation_ids": ["take-alices"]}),
     ("DELETE", "/api/generations/take-alices", None),
     ("POST", "/api/albums/album-alices/share", None),
-    ("POST", "/api/songs/song-alices/repaint", None),
+    ("POST", "/api/generations/take-alices/repaint", None),
     ("DELETE", "/api/playlists/any", None),
     ("DELETE", "/api/albums/album-alices", None),
 ]
@@ -295,6 +296,17 @@ def test_m6_the_agent_token_is_refused_on_every_unmarked_route_and_nothing_chang
     assert reply.status_code in {401, 403}
     assert mcp.rows_of(Generation, "id") == [("take-alices",)]
     assert [row[0] for row in mcp.rows_of(Album, "deleted_at")] == [None]
+
+
+def test_m6_every_unmarked_route_of_the_list_is_a_real_route_of_the_app(mcp: McpWorld) -> None:
+    app = mcp.world.client.app
+
+    def is_routed(method: str, path: str) -> bool:
+        scope = {"type": "http", "method": method, "path": path}
+        return any(route.matches(scope)[0] == Match.FULL for route in app.routes)
+
+    assert [(method, path) for method, path, _ in _UNMARKED_ROUTES
+            if not is_routed(method, path)] == []
 
 
 # -- M7, M8, M9, M10, M22, M23: which tokens count ----------------------------------
@@ -440,28 +452,60 @@ def test_m13_one_mcp_value_without_the_other_stops_startup(
 # -- M14: the browser is unchanged -------------------------------------------------------
 
 
-def test_m14_a_cookie_session_still_works_on_marked_routes_and_csrf_still_refuses_forgery(
-    mcp: McpWorld,
+_SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
+_FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
+_MARKED_ROUTES = [
+    ("GET", "/api/albums", None),
+    ("POST", "/api/albums", {"title": "Browser"}),
+    ("GET", "/api/songs", None),
+    ("POST", "/api/songs", {"title": "Browser", "album_id": "album-alices"}),
+    ("GET", "/api/songs/song-alices", None),
+    ("POST", "/api/songs/song-alices/generate", {"model": "sft"}),
+]
+_MARKED_IDS = ["list_albums", "create_album", "list_songs", "create_song", "get_song",
+               "generate_song"]
+
+
+@pytest.mark.parametrize(("method", "path", "body"), _MARKED_ROUTES, ids=_MARKED_IDS)
+def test_m14_a_cookie_session_with_csrf_still_succeeds_on_each_marked_route(
+    mcp: McpWorld, method: str, path: str, body: dict | None,
 ) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
-    same_origin = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
-    forged = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
 
-    listed = mcp.world.client.get("/api/songs", headers=same_origin)
-    created = mcp.world.client.post(
-        "/api/songs", json={"title": "Browser", "album_id": "album-alices"}, headers=same_origin,
-    )
-    forged_create = mcp.world.client.post(
-        "/api/songs", json={"title": "Forged", "album_id": "album-alices"}, headers=forged,
-    )
-    forged_archive = mcp.world.client.post("/api/albums/album-alices/archive", headers=forged)
+    with _worker_ready():
+        reply = mcp.world.client.request(method, path, json=body, headers=_SAME_ORIGIN)
 
-    assert (listed.status_code, created.status_code) == (200, 200)
-    assert (forged_create.status_code, forged_archive.status_code) == (403, 403)
-    assert sorted(title for _, title in mcp.rows_of(Song, "id", "title")) == [
-        "Browser", "Song alices",
-    ]
+    assert reply.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"), [route for route in _MARKED_ROUTES if route[0] == "POST"],
+    ids=[name for name, route in zip(_MARKED_IDS, _MARKED_ROUTES, strict=True)
+         if route[0] == "POST"],
+)
+def test_m14_a_cookie_request_without_csrf_is_refused_on_each_state_changing_marked_route(
+    mcp: McpWorld, method: str, path: str, body: dict | None,
+) -> None:
+    mcp.world.seed_take(TokenWorld.ALICE, "alices")
+    seed_session(mcp.world.client, "alice")
+    before = (mcp.rows_of(Album, "id"), mcp.rows_of(Song, "id"), mcp.rows_of(Job, "id"))
+
+    with _worker_ready() as pool:
+        reply = mcp.world.client.request(method, path, json=body, headers=_FORGED)
+
+    assert reply.status_code == 403
+    assert (mcp.rows_of(Album, "id"), mcp.rows_of(Song, "id"), mcp.rows_of(Job, "id")) == before
+    pool.enqueue_job.assert_not_called()
+
+
+def test_m14_an_unmarked_route_keeps_working_with_the_cookie(mcp: McpWorld) -> None:
+    mcp.world.seed_take(TokenWorld.ALICE, "alices")
+    seed_session(mcp.world.client, "alice")
+
+    reply = mcp.world.client.get("/api/generations/take-alices", headers=_SAME_ORIGIN)
+
+    assert reply.status_code == 200
 
 
 # -- M15, M16, M17: generation ------------------------------------------------------------
