@@ -1,0 +1,8 @@
+claim_id = "6a249b7f198d4428ab2c473b2cc0cfce"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "9c8c68c3002b7c24450cac73dfe450eee7dcc217"
+branch = "claude/issue-2525-agent-progress-tools"
+scope = ["AGENTS.md", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/generation_api.py", "tests/songmaker_cli/test_mcp_person_front.py"]
+opened_commit = "fadd05f5ef1502cb8cddd030b1538cfc53305f63"
+whole_reason = "Two marks, their test and the three documents that count the tools change together, or a document states a wrong tool count."
