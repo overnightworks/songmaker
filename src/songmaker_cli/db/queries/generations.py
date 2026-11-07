@@ -453,23 +453,28 @@ def list_generations_expired_for_delete(
     return session.query(Generation).filter(*_expired_for_delete_filters(cutoff)).all()
 
 
-def _delete_locked_generation(session: Session, gen: Generation) -> list[str]:
-    paths = [p for p in [gen.mp3_path, gen.wav_path] if p]
-    session.delete(gen)
-    session.flush()
-    return paths
+@dataclass(frozen=True)
+class TakeDeletion:
+    """What a take delete removed: the take ids and their files for post-commit cleanup."""
+
+    deleted_ids: list[str]
+    paths: list[str]
 
 
-def delete_takes(session: Session, *criteria: ColumnElement[bool]) -> list[str]:
-    """Lock the takes that match the criteria, delete them with their scores and rating,
-    and return the file paths of the takes it deleted for post-commit cleanup.
+def delete_takes(session: Session, *criteria: ColumnElement[bool]) -> TakeDeletion:
+    """The one take deletion: lock the takes that match the criteria in id order, delete
+    them with their scores and rating, and return their ids and file paths for
+    post-commit cleanup.
 
     A take another writer deleted first is not found, so its files are not returned twice.
     """
+    locked = lock_takes(session, *criteria, options=DELETION_LOADING)
     paths: list[str] = []
-    for gen in lock_takes(session, *criteria, options=DELETION_LOADING):
-        paths.extend(_delete_locked_generation(session, gen))
-    return paths
+    for gen in locked:
+        paths.extend(path for path in (gen.mp3_path, gen.wav_path) if path)
+        session.delete(gen)
+    session.flush()
+    return TakeDeletion(deleted_ids=[gen.id for gen in locked], paths=paths)
 
 
 def delete_expired_generation(
@@ -480,16 +485,10 @@ def delete_expired_generation(
     Returns its file paths for post-commit cleanup, or None when it no longer
     qualifies or no longer exists.
     """
-    gen = (
-        session.query(Generation)
-        .filter(Generation.id == generation_id, *_expired_for_delete_filters(cutoff))
-        .with_for_update(of=Generation)
-        .populate_existing()
-        .first()
+    deletion = delete_takes(
+        session, Generation.id == generation_id, *_expired_for_delete_filters(cutoff),
     )
-    if gen is None:
-        return None
-    return _delete_locked_generation(session, gen)
+    return deletion.paths if deletion.deleted_ids else None
 
 
 def get_generations(session: Session, generation_ids: list[str]) -> list[Generation]:
@@ -502,27 +501,11 @@ def get_generations(session: Session, generation_ids: list[str]) -> list[Generat
     )
 
 
-@dataclass(frozen=True)
-class BulkDeletion:
-    """What a bulk delete removed: the take ids and their files for post-commit cleanup."""
-
-    deleted_ids: list[str]
-    paths: list[str]
-
-
-def bulk_delete_generations(session: Session, generations: list[Generation]) -> BulkDeletion:
+def bulk_delete_generations(session: Session, generations: list[Generation]) -> TakeDeletion:
     """Delete the requested generations that still exist once locked."""
-    locked = lock_takes(
-        session, Generation.id.in_([gen.id for gen in generations]), options=DELETION_LOADING,
-    )
-    paths: list[str] = []
-    for gen in locked:
-        paths.extend(p for p in [gen.mp3_path, gen.wav_path] if p)
-        session.delete(gen)
-
-    session.flush()
-    log.info("Bulk deleted %d generations", len(locked))
-    return BulkDeletion(deleted_ids=[gen.id for gen in locked], paths=paths)
+    deletion = delete_takes(session, Generation.id.in_([gen.id for gen in generations]))
+    log.info("Bulk deleted %d generations", len(deletion.deleted_ids))
+    return deletion
 
 
 def delete_generation(session: Session, generation_id: str) -> list[str]:
@@ -531,10 +514,10 @@ def delete_generation(session: Session, generation_id: str) -> list[str]:
     Callers must delete files AFTER committing the transaction to avoid
     inconsistency if the commit fails.
     """
-    # Lock the take before the ORM delete removes its scores and ratings, the order
-    # retention's final deletion uses, so the two never wait on each other in a cycle.
-    gen = _lock_generation(session, generation_id)
-    return _delete_locked_generation(session, gen)
+    deletion = delete_takes(session, Generation.id == generation_id)
+    if not deletion.deleted_ids:
+        raise ValueError(f"Generation not found: {generation_id}")
+    return deletion.paths
 
 
 def get_generation_by_slug(session: Session, slug: str) -> Generation | None:

@@ -324,3 +324,22 @@ def test_a_scored_take_delete_that_a_bulk_delete_has_locked_waits_and_both_finis
     assert answers["second"].status_code == 200
     assert world.state("x") is None
     assert not world.files["x"].exists()
+
+
+@pytest.mark.parametrize("bulk_first", [True, False])
+def test_a_bulk_delete_and_the_final_deletion_of_overlapping_takes_delete_each_once(
+    pg_factory, tmp_path, bulk_first,
+) -> None:
+    world = _World(pg_factory, tmp_path, {
+        "x": {"archived": True, "old": True}, "y": {"archived": False, "old": False},
+    })
+    bulk, retention = world.bulk_delete("x", "y"), world.retention()
+    answers = race(
+        pg_factory, *((bulk, retention) if bulk_first else (retention, bulk)),
+        _holding_a_generation_write(),
+    )
+    assert all(answer.status_code == 200 for answer in (answers["first"], answers["second"]))
+    assert world.state("x") is None
+    assert world.state("y") is None
+    assert not world.files["x"].exists()
+    assert not world.files["y"].exists()
