@@ -28,7 +28,7 @@ import wave  # noqa: E402
 from contextlib import contextmanager  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
-from unittest.mock import MagicMock, patch  # noqa: E402
+from unittest.mock import patch  # noqa: E402
 
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
@@ -144,56 +144,6 @@ def _reset_settings_cache():
     yield
     get_settings.cache_clear()
     get_worker_settings.cache_clear()
-
-
-@pytest.fixture(autouse=True)
-def _configure_agent_provider_runtime():
-    """Give every test the provider runtime songmaker installs at startup.
-
-    ``agent_providers`` refuses to run unconfigured, and production installs
-    its configuration exactly once — in ``server.create_app`` and in
-    ``WorkerBase.on_startup``. Tests reach provider code directly, so each one
-    starts from a configuration built the same way and drops it afterwards.
-    """
-    from agent_providers.config import reset_config
-
-    from songmaker_cli.agent_runtime import configure_agent_providers
-    from songmaker_cli.settings import Settings
-
-    configure_agent_providers(Settings())
-    yield
-    reset_config()
-
-
-@pytest.fixture(autouse=True)
-def _isolate_codex_process_pool():
-    """Keep each test independent of Codex CLI process reservations."""
-    import agent_providers.codex.pool as pool_mod
-
-    pool_mod._process_pool = None
-    yield
-    pool_mod._process_pool = None
-
-
-@pytest.fixture(autouse=True)
-def _no_claude_cli_builtin_tools_probe():
-    """Never let a test spawn the real Claude CLI to list its built-in tools.
-
-    On a developer machine the Claude binary exists, so without this a test
-    reaching the Claude provider's built-in-tools check would start a real CLI
-    session.
-    """
-    from unittest.mock import AsyncMock
-
-    with (
-        patch(
-            "agent_providers.claude.provider.averify_no_builtin_cli_tools", AsyncMock(),
-        ),
-        patch(
-            "agent_providers.claude.provider.verify_no_builtin_cli_tools", MagicMock(),
-        ),
-    ):
-        yield
 
 
 @pytest.fixture(autouse=True)

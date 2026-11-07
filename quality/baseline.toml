@@ -18,7 +18,7 @@
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
-"frontend/src/lib/api/types.ts" = 1109
+"frontend/src/lib/api/types.ts" = 1104
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -60,8 +60,8 @@
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1905
 "tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4655
-"tests/songmaker_cli/test_db.py" = 3532
+"tests/songmaker_cli/test_api.py" = 4613
+"tests/songmaker_cli/test_db.py" = 3484
 "tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_jobs.py" = 3215
 "tests/songmaker_cli/test_library_api.py" = 1627
@@ -70,7 +70,7 @@
 "tests/songmaker_cli/test_queue_streams.py" = 2417
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1284
-"tests/songmaker_cli/test_server.py" = 1944
+"tests/songmaker_cli/test_server.py" = 1925
 "tests/songmaker_cli/test_sharing_api.py" = 2499
 "tests/test_auto_deploy_alerting.py" = 1321
 
@@ -144,7 +144,7 @@
 
 [function_lines."src/songmaker_cli/server.py"]
 "_lifespan" = 57
-"create_app" = 179
+"create_app" = 178
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
 "_make_deps" = 57
@@ -199,7 +199,7 @@
 "prometheus_output_before_refactor" = 114
 
 [function_lines."tests/songmaker_cli/test_music_worker.py"]
-"test_startup_recovers_music_job_types_and_reconciles_lora_once" = 70
+"test_startup_recovers_music_job_types_and_reconciles_lora_once" = 66
 
 [function_lines."tests/songmaker_cli/test_queue_streams.py"]
 "_seed_library_data" = 113
@@ -237,7 +237,6 @@ main = [["scripts/seed_e2e_filler_albums.py", "main"]]
 "_Task.snapshot" = [["src/songmaker_cli/settings.py", "Settings.lora_training_config"]]
 
 [clones."src/songmaker_cli/album_api.py"]
-api_cleanup_album = [["src/songmaker_cli/song_api.py", "api_cleanup_song"]]
 api_delete_album_cover = [["src/songmaker_cli/song_api.py", "api_delete_song_cover"]]
 api_get_album = [["src/songmaker_cli/sharing_api.py", "get_shared_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_playlist_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_queue_stream_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_song_audio"]]
 api_get_album_cover = [["src/songmaker_cli/playlist_api.py", "api_get_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
@@ -329,7 +328,6 @@ test_list_albums_picked_count_zero_when_no_picks = [["tests/songmaker_cli/test_s
 "test_update_album_metadata_other_user_blocked._seed" = [["tests/songmaker_cli/test_request_policies_upload_limits.py", "_seed_owner"]]
 
 [clones."tests/songmaker_cli/test_api.py"]
-test_cleanup_album_api = [["tests/songmaker_cli/test_sharing_api.py", "test_unshare_album"]]
 test_create_album_duplicate_gets_suffix = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_create_album_slugifies_unicode = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_create_album_slugify_special_chars = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]

@@ -14,7 +14,7 @@
 	import type { AlbumItem } from '#lib/api/types.ts';
 	import {
 		closeSongMovePicker,
-		moveOpenSongTo,
+		askToMoveOpenSongTo,
 		openSongMovePicker,
 		songMoveFilter,
 		songMovePicker
@@ -46,7 +46,7 @@
 
 	function choose(album: AlbumItem): void {
 		onmoved();
-		void moveOpenSongTo(album);
+		void askToMoveOpenSongTo(album);
 	}
 </script>
 

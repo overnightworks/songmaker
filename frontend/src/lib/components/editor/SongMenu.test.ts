@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+	DIALOG_CANCEL_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_DELETE_LABEL,
 	SONG_MENU_MOVE_LABEL,
@@ -13,9 +14,12 @@ import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
 import {
 	SONG_MOVE_BACK_LABEL,
 	SONG_MOVE_NO_MATCH,
-	SONG_MOVE_NO_OTHER_ALBUM
+	SONG_MOVE_NO_OTHER_ALBUM,
+	SONG_MOVE_SHARED_TITLE,
+	songMoveSharedMessage
 } from '#lib/constants.ts';
 import type { AlbumItem } from '#lib/api/types.ts';
+import { moveSong } from '#lib/api/songs.ts';
 import { songList } from '#lib/stores/libraryData.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
@@ -25,6 +29,7 @@ vi.mock('#lib/api/client.ts', () => ({
 	fetchAlbums: vi.fn(),
 	fetchSongs: vi.fn()
 }));
+vi.mock('#lib/api/songs.ts', () => ({ moveSong: vi.fn() }));
 
 import { fetchAlbums } from '#lib/api/client.ts';
 
@@ -308,5 +313,33 @@ describe('SongMenu move picker', () => {
 		await tick();
 
 		expect(menuRowLabels(target)).toContain(SONG_MENU_MOVE_LABEL);
+	});
+	describe('moving into a shared album', () => {
+		async function chooseSharedAlbum() {
+			const target = await openPickerOver(
+				[homeAlbum, makeAlbum({ id: 'c', title: 'Cologne', is_shared: true })],
+				'.pk-list'
+			);
+			target.querySelector<HTMLButtonElement>('.pk-list .pk-row')?.click();
+			await tick();
+			return target;
+		}
+
+		it('asks with the consequence line once the popover closed, and moves nothing on Cancel', async () => {
+			const target = await chooseSharedAlbum();
+
+			const dialog = document.body.querySelector('[role="dialog"], [role="alertdialog"]');
+			expect(dialog?.textContent).toContain(SONG_MOVE_SHARED_TITLE);
+			expect(dialog?.textContent).toContain(songMoveSharedMessage('Sommerlicht', 'Cologne'));
+			expect(target.querySelector('.pk-list')).toBeNull();
+
+			[...document.body.querySelectorAll('button')]
+				.find((button) => button.textContent?.trim() === DIALOG_CANCEL_LABEL)
+				?.click();
+			await tick();
+
+			expect(document.body.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
+			expect(moveSong).not.toHaveBeenCalled();
+		});
 	});
 });

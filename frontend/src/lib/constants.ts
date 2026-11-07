@@ -297,6 +297,10 @@ export const SONG_MOVE_LOADING_LABEL = 'Looking…';
 export const SONG_MOVE_NO_OTHER_ALBUM = 'No other album';
 export const SONG_MOVE_NO_MATCH = 'No album matches';
 export const SONG_MOVE_FAILED = 'Not moved';
+export const SONG_MOVE_SHARED_TITLE = 'Move to a shared album?';
+export function songMoveSharedMessage(songTitle: string, albumTitle: string): string {
+	return `${songTitle} appears on ${albumTitle}'s public page`;
+}
 
 export function songMovedToastLabel(albumTitle: string): string {
 	return `Moved to ${albumTitle}`;

@@ -310,13 +310,6 @@ in #879 and run in that repository's CI; songmaker installs its pinned git tag
 and proves the auth surface it builds on it through `test_auth_api_sign_in.py`,
 `test_auth_api.py`, `test_auth_dependencies.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
 
-The provider library's own tests likewise left with it. They moved with
-`agent_providers` to
-[overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
-in #886 and run in that repository's CI; songmaker installs the git pin
-(tag `v0.1.3`) and proves the surface it builds on it — the co-writer — through
-`test_conversation_api.py`.
-
 ## Testing Patterns
 
 The frontend CI job runs `python3 ../scripts/check_style_literals.py` (from

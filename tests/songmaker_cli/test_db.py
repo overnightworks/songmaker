@@ -41,7 +41,7 @@ from songmaker_cli.db.models import (
     Version,
     aware_timestamp,
 )
-from songmaker_cli.db.queries.albums import cleanup_album, delete_album, get_album, list_albums
+from songmaker_cli.db.queries.albums import delete_album, get_album, list_albums
 from songmaker_cli.db.queries.auth import (
     create_session,
     delete_expired_sessions,
@@ -84,7 +84,6 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset, unset_if_none
 from songmaker_cli.db.queries.songs import (
-    cleanup_song,
     create_song,
     delete_song,
     enable_song_sharing,
@@ -487,12 +486,6 @@ def test_unpick_generation(seeded_session: Session) -> None:
     assert get_generation(seeded_session, "g1").is_picked is False
 
 
-def test_cleanup_album_no_picks_deletes_all(seeded_session: Session) -> None:
-    count, _paths = cleanup_album(seeded_session, "test")
-    seeded_session.commit()
-    assert count == 2
-
-
 # ── Keep tests ──────────────────────────────────────────────────────
 
 
@@ -518,47 +511,6 @@ def test_keep_generation_not_found(seeded_session: Session) -> None:
 def test_unkeep_generation_not_found(seeded_session: Session) -> None:
     with pytest.raises(ValueError, match="Generation not found"):
         unkeep_generation(seeded_session, "nonexistent")
-
-
-def test_cleanup_album_skips_picked_and_kept(seeded_session: Session) -> None:
-    pick_generation(seeded_session, "g1")
-    keep_generation(seeded_session, "g2")
-    seeded_session.commit()
-    count, paths = cleanup_album(seeded_session, "test")
-    seeded_session.commit()
-    assert count == 0
-    assert get_generation(seeded_session, "g1") is not None
-    assert get_generation(seeded_session, "g2") is not None
-
-
-@pytest.mark.parametrize(
-    "cleanup", [lambda s: cleanup_song(s, "s1"), lambda s: cleanup_album(s, "test")],
-)
-def test_cleanup_deletes_exactly_the_unpicked_unkept_takes_and_returns_their_files(
-    seeded_session: Session, cleanup,
-) -> None:
-    seeded_session.add_all([
-        Generation(id="g3", song_id="s1", version_id="v1", generation_number=3,
-                   mp3_path="test/v3.mp3", wav_path="test/v3.wav"),
-        Generation(id="g4", song_id="s1", version_id="v1", generation_number=4,
-                   mp3_path="test/v4.mp3"),
-        Score(id="sc3", generation_id="g3", scorer="batch", value={"dynamics": 1.0}),
-        Rating(id="r3", generation_id="g3", rating=50.0),
-    ])
-    pick_generation(seeded_session, "g1")
-    keep_generation(seeded_session, "g2")
-    seeded_session.commit()
-
-    count, paths = cleanup(seeded_session)
-    seeded_session.commit()
-
-    assert count == 2
-    assert sorted(paths) == ["test/v3.mp3", "test/v3.wav", "test/v4.mp3"]
-    assert [gen.id for gen in seeded_session.query(Generation).order_by(Generation.id)] == [
-        "g1", "g2",
-    ]
-    assert seeded_session.query(Score).filter_by(generation_id="g3").count() == 0
-    assert seeded_session.query(Rating).filter_by(generation_id="g3").count() == 0
 
 
 def test_sharing_generation_auto_sets_kept(seeded_session: Session) -> None:
