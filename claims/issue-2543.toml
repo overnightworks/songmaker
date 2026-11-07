@@ -1,0 +1,7 @@
+claim_id = "f5ad4fd99eae45799a4f032c7250fb3d"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3c508729300ba87a70abf99d55d8dc66a00dcd4e"
+branch = "claude/issue-2543-b5a-test-api-pg"
+scope = ["tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_reference_audio_reconciliation.py"]
+opened_commit = "6f7064a8a034621b284dd275e266c32405ca5ab2"
