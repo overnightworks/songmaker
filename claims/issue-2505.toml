@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "3c508729300ba87a70abf99d55d8dc66a00dcd4e"
 branch = "claude/issue-2505-keeps-pool-leaves"
-scope = ["frontend/src/lib/api/types.ts", "src/songmaker_cli/api_models/queue_streams.py", "src/songmaker_cli/queue_streams.py", "tests/songmaker_cli/test_library_pool_candidates.py", "tests/songmaker_cli/test_queue_streams.py"]
+scope = ["frontend/src/lib/api/types.ts", "quality/baseline.toml", "src/songmaker_cli/api_models/queue_streams.py", "src/songmaker_cli/queue_streams.py", "tests/songmaker_cli/test_library_pool_candidates.py", "tests/songmaker_cli/test_queue_streams.py"]
 opened_commit = "eaa3062960047963dd3b5ce432946b917b5d0c62"
 whole_reason = "One input value leaves its model, its one branch and the tests that drive it; a split would leave a branch no model admits."
