@@ -505,7 +505,7 @@ def _short_volume_source_and_target(service_name: str, volume: str) -> tuple[str
         f"{service_name} declares the anonymous volume {volume!r}; "
         f"mount a declared named volume instead"
     )
-    return source, posixpath.normpath(rest[0])
+    return source, str(_as_linux_resolves(rest[0]))
 
 
 def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None:
