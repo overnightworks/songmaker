@@ -7,6 +7,12 @@ mandatory_jobs = [
 ]
 
 [[gate.loosened]]
+what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 1104 -> 1122'
+item = "#2493"
+date = 2026-11-07
+reason = "the operator allowed it on the card on #2493 line 1 (ruling C, 07.11.2026) for the reference list's deletion date and countdown epoch; it lands through his emergency-merge, and #2509 takes the generated file out of the size rule"
+
+[[gate.loosened]]
 what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 1108 -> 1109'
 item = "#2408"
 date = 2026-11-07
