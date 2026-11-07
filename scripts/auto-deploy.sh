@@ -3,16 +3,17 @@
 #
 # A GitOps timer, not a webhook or a self-hosted CI runner: this script polls
 # origin every couple of minutes (see songmaker-autodeploy.timer) and deploys
-# only a release tag. A landing on main deploys nothing by itself; the head
-# cuts a tag `vYYYY.MM.DD.N` on a green main commit, and the next tick checks
-# that commit out detached in the deploy checkout and redeploys it. Tags are
-# read from origin into a private ref namespace, never from local refs/tags.
+# only a release tag. A landing on main deploys nothing by itself; the Release
+# workflow sets a tag `vYYYY.MM.DD.N` on a green main commit, and the next tick
+# checks that commit out detached in the deploy checkout and redeploys it.
+# Tags are read from origin into a private ref namespace, never from local
+# refs/tags.
 # Before it checks out, it verifies through GitHub that every GitHub Actions
 # check run for the newest green release has completed successfully, skipped,
 # or neutral, with at least one success; check runs from other apps are
-# advisory, and so are the check suites of Dependabot update runs, which a
-# second lookup finds by their workflow path. The script itself does not re-run
-# tests.
+# advisory, and so are the check suites of Dependabot update runs and of
+# Release runs, which a second lookup finds by their workflow path. The script
+# itself does not re-run tests.
 #
 # Safety rules below come from real incidents, not hypotheticals:
 #   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
@@ -191,6 +192,13 @@ CHECK_RUN_REPOSITORY="overnightworks/songmaker"
 # `dynamic` event; other managed workflows under that event (CodeQL default
 # setup) keep their other paths and stay judged.
 DEPENDABOT_UPDATE_WORKFLOW_PATH="dynamic/dependabot/dependabot-updates"
+# A Release run builds and publishes images of the commit it is dispatched on,
+# which is already the release commit. It judges nothing about that commit, and
+# one failed or running attempt must not hold the deploy of the commit it
+# releases, so its check suite leaves the guard like Dependabot's. Only this
+# workflow file's path matches; a dispatched run of any other workflow stays
+# judged.
+RELEASE_WORKFLOW_PATH=".github/workflows/release.yml"
 # The one conclusion that proves a required Actions job ran and passed. A
 # deploy needs at least one such job.
 PASSED_CHECK_RUN_CONCLUSION="success"
@@ -1019,17 +1027,18 @@ github_lookup() {
 }
 
 # Fills the associative array named by $2 with the check suite ids of the
-# Dependabot update runs on commit $1. Every workflow record is counted against
-# the envelope and validated before any is selected, so a record without a
-# suite id can never match one. GitHub gives no snapshot across this lookup and
-# the check-run lookup: an update run this lookup misses stays judged like any
+# Dependabot update runs and Release runs on commit $1, valued by the kind of
+# run. Every workflow record, whatever started it, is counted against the
+# envelope and validated before any is selected, so a record without a suite id
+# can never match one. GitHub gives no snapshot across this lookup and the
+# check-run lookup: an ignored run this lookup misses stays judged like any
 # other run.
-lookup_update_suites() {
+lookup_ignored_suites() {
     local commit_sha="$1"
-    local -n update_suites_by_id="$2"
+    local -n ignored_suites_by_id="$2"
     local workflow_runs
     github_lookup workflow_runs workflow-run \
-        "repos/$CHECK_RUN_REPOSITORY/actions/runs?head_sha=$commit_sha&event=dynamic&per_page=100" \
+        "repos/$CHECK_RUN_REPOSITORY/actions/runs?head_sha=$commit_sha&per_page=100" \
         'def record_path: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); if (type == "object" and (.total_count | type == "number") and (.workflow_runs | type == "array")) then "envelope\u001f\(.total_count)", (.workflow_runs[] | if ((.check_suite_id | type == "number") and (.path | record_path)) then "run\u001f\(.check_suite_id)\u001f\(.path)" else error("GitHub returned malformed workflow-run record") end) else error("GitHub returned malformed workflow-runs response") end' \
         || return 1
 
@@ -1075,9 +1084,17 @@ lookup_update_suites() {
     fi
     local run_index
     for run_index in "${!run_paths[@]}"; do
-        if [[ "${run_paths[run_index]}" == "$DEPENDABOT_UPDATE_WORKFLOW_PATH" ]]; then
-            update_suites_by_id["${run_suite_ids[run_index]}"]=1
-        fi
+        case "${run_paths[run_index]}" in
+            "$DEPENDABOT_UPDATE_WORKFLOW_PATH")
+                ignored_suites_by_id["${run_suite_ids[run_index]}"]="Dependabot update"
+                ;;
+            "$RELEASE_WORKFLOW_PATH")
+                ignored_suites_by_id["${run_suite_ids[run_index]}"]="Release"
+                ;;
+            *)
+                # Any other workflow's run stays judged.
+                ;;
+        esac
     done
 }
 
@@ -1088,7 +1105,7 @@ lookup_update_suites() {
 # A missing/malformed envelope is never mistaken for zero runs. Check runs in
 # the suites of Dependabot update runs are fetched and counted toward the
 # envelope but judged by nothing: they are not a required check, not running,
-# failed or passed.
+# failed or passed. The same holds for the check suites of Release runs.
 remote_check_status() {
     local commit_sha="$1"
     local commit_timestamp="$2"
@@ -1101,8 +1118,8 @@ remote_check_status() {
         "repos/$CHECK_RUN_REPOSITORY/commits/$commit_sha/check-runs?per_page=100" \
         'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.name | record_field) and (.status | record_field) and (.conclusion | optional_record_field)) then "check\u001f\(.app.slug)\u001f\(.name)\u001f\(.status)\u001f\(.conclusion // "")\u001f\((.check_suite | objects | .id | numbers) // "")" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' \
         || return 1
-    local -A update_suites=()
-    lookup_update_suites "$commit_sha" update_suites || return 1
+    local -A ignored_suites=()
+    lookup_ignored_suites "$commit_sha" ignored_suites || return 1
 
     local record app_slug name status conclusion check_suite_id
     local expected_check_count=""
@@ -1140,8 +1157,8 @@ remote_check_status() {
                     printf 'GitHub returned an incomplete check-run status'
                     return 1
                 fi
-                if [[ -n "${update_suites[$check_suite_id]:-}" ]]; then
-                    log_info "GitHub check run '$name' belongs to a Dependabot update run, ignored"
+                if [[ -n "${ignored_suites[$check_suite_id]:-}" ]]; then
+                    log_info "GitHub check run '$name' belongs to a ${ignored_suites[$check_suite_id]} run, ignored"
                     continue
                 fi
                 ((observed_required_check_count += 1))

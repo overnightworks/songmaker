@@ -50,7 +50,10 @@ COPY --from=frontend-builder /app/frontend/build frontend/build
 COPY docker/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-RUN useradd --create-home --shell /bin/bash songmaker
+# Uid and gid 1000 own the volumes and the checkpoints bind mount, and Kubernetes' runAsNonRoot
+# can verify only a numeric USER.
+RUN groupadd --gid 1000 songmaker \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash songmaker
 # The web consumer owns the mounted CLI profile directories; Compose mounts
 # the binaries and credential mirrors read-only.
 RUN install -d -o songmaker -g songmaker /home/songmaker/.claude /home/songmaker/.grok /home/songmaker/.codex
@@ -63,7 +66,7 @@ RUN chown -R songmaker:songmaker /app
 ARG SONGMAKER_RELEASE
 ARG SONGMAKER_COMMIT
 ENV SONGMAKER_RELEASE=$SONGMAKER_RELEASE SONGMAKER_COMMIT=$SONGMAKER_COMMIT
-USER songmaker
+USER 1000:1000
 
 EXPOSE 8080
 

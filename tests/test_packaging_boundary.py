@@ -127,7 +127,9 @@ def _dockerfile_instructions(dockerfile: Path) -> list[str]:
 def _final_stage_instructions(dockerfile: Path) -> list[str]:
     instructions = _dockerfile_instructions(dockerfile)
     last_stage_start = max(
-        index for index, instruction in enumerate(instructions) if instruction.startswith("FROM ")
+        index
+        for index, instruction in enumerate(instructions)
+        if instruction.upper().startswith("FROM ")
     )
     return instructions[last_stage_start:]
 
@@ -276,6 +278,59 @@ def test_every_uv_sync_line_of_a_dockerfile_installs_the_same_extras() -> None:
         assert all(extras == sync_extras[0] for extras in sync_extras), (
             f"{name}: {build['dockerfile']} installs different extras on its uv sync lines"
         )
+
+
+def _compose_built_dockerfiles() -> dict[str, Path]:
+    dockerfiles: dict[str, Path] = {}
+    for name, service in _raw_compose_services().items():
+        build = service.get("build")
+        if isinstance(build, dict):
+            dockerfiles[name] = REPOSITORY_ROOT / build["dockerfile"]
+    return dockerfiles
+
+
+def _image_identity(dockerfile: Path) -> tuple[str, set[str]]:
+    """The final ``USER`` as ``uid:gid`` plus every ``uid:gid`` the file creates."""
+    final_users = [
+        instruction.split(maxsplit=1)[1]
+        for instruction in _final_stage_instructions(dockerfile)
+        if instruction.upper().startswith("USER ")
+    ]
+    instructions = " ".join(_dockerfile_instructions(dockerfile))
+    created_gids = re.findall(r"groupadd\s+--gid\s+(\d+)", instructions)
+    created_users = re.findall(r"useradd\s+--uid\s+(\d+)\s+--gid\s+(\d+)", instructions)
+    assert final_users, f"{dockerfile.name}: no USER in the final stage"
+    assert created_gids, f"{dockerfile.name}: no numeric groupadd"
+    assert created_users, f"{dockerfile.name}: no numeric useradd"
+    assert len(created_gids) == instructions.count("groupadd"), (
+        f"{dockerfile.name}: a groupadd has no numeric --gid"
+    )
+    assert len(created_users) == instructions.count("useradd"), (
+        f"{dockerfile.name}: a useradd has no numeric --uid and --gid"
+    )
+    for _, joined_gid in created_users:
+        assert joined_gid in created_gids, (
+            f"{dockerfile.name}: useradd joins a group other than a groupadd one"
+        )
+    return final_users[-1], {f"{uid}:{gid}" for uid, gid in created_users}
+
+
+def test_every_compose_built_image_runs_as_the_numeric_user_it_creates() -> None:
+    identities = {
+        name: _image_identity(dockerfile)
+        for name, dockerfile in _compose_built_dockerfiles().items()
+    }
+    assert identities
+    for name, (final_user, created) in identities.items():
+        assert re.fullmatch(r"[1-9]\d*:[1-9]\d*", final_user), (
+            f"{name}: final USER {final_user!r} is not a nonzero numeric uid:gid"
+        )
+        assert created == {final_user}, (
+            f"{name}: USER {final_user} differs from created {sorted(created)}"
+        )
+    assert len({final_user for final_user, _ in identities.values()}) == 1, (
+        "images share volumes, so they must share one uid:gid"
+    )
 
 
 def _command_words(declaration: str | list[str]) -> tuple[str, ...]:
