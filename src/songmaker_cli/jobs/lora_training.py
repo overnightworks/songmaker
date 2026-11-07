@@ -17,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
+from songmaker_cli.audio_paths import confined_under
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     GPU_HOLD_POLL_INTERVAL_SECONDS,
@@ -321,7 +322,7 @@ def _materialize_dataset(
         dst_audio = dataset_dir / f"{base}{ext}"
         try:
             os.symlink(src, dst_audio)
-        except (OSError, NotImplementedError):
+        except OSError, NotImplementedError:
             shutil.copy2(src, dst_audio)
         (dataset_dir / f"{base}.caption.txt").write_text(
             sample.caption.strip() + "\n",
@@ -1295,7 +1296,7 @@ def _complete_lora_training(
         requested_mode=target_mode,
         worker_mode=worker_result.mode,
     )
-    _validated_lora_adapter_handoff(tmp_output, worker_result)
+    _validated_lora_adapter_handoff(audio_dir, user_id, tmp_output, worker_result)
     _record_completed_training_model_mode(
         audio_dir,
         user_id,
@@ -1323,10 +1324,19 @@ def _complete_lora_training(
 
 
 def _validated_lora_adapter_handoff(
+    audio_dir: Path,
+    user_id: str,
     tmp_output: Path,
     worker_result: TrainLoraTaskResultDTO,
 ) -> Path:
-    adapter_src = Path(worker_result.adapter_dir).resolve()
+    adapter_src = confined_under(
+        audio_dir / USER_LORAS_DIRNAME / user_id,
+        Path(worker_result.adapter_dir),
+    )
+    if adapter_src is None:
+        raise RuntimeError(
+            f"Worker reported adapter outside the user LoRA folder: {worker_result.adapter_dir}",
+        )
     if adapter_src != tmp_output.resolve():
         raise RuntimeError(f"Worker reported unexpected training handoff path: {adapter_src}")
     if not adapter_src.exists():

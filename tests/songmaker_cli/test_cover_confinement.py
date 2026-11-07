@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-from support.web_app import make_test_app, seed_session, seed_user, web_client
+from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
@@ -129,25 +129,15 @@ def test_a_covers_folder_that_is_a_link_still_serves_its_covers(
     assert alice_client.get(ORIGINAL_URL).status_code == 200
 
 
-def test_a_covers_root_that_cannot_be_resolved_is_a_server_error(
-    tmp_path: Path,
+def test_a_covers_folder_that_is_a_link_loop_is_not_found(
+    alice_client: TestClient,
     audio_dir: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app_client, _ = make_test_app(tmp_path, seed_db=_seed_alice_album)
-    client = web_client(app_client.app, raise_server_exceptions=False)
-    seed_session(client, "alice")
-    assert _post_cover(client).status_code == 200
-    covers_root = audio_dir / COVER_DIRNAME
-    real_resolve = Path.resolve
-
-    def failing_resolve(self: Path, strict: bool = False) -> Path:
-        if self == covers_root:
-            raise OSError("root unreadable")
-        return real_resolve(self, strict=strict)
-
-    monkeypatch.setattr(Path, "resolve", failing_resolve)
-    assert client.get(ORIGINAL_URL).status_code == 500
+    assert _post_cover(alice_client).status_code == 200
+    stored = audio_dir / COVER_DIRNAME
+    stored.rename(audio_dir / "moved")
+    stored.symlink_to(stored, target_is_directory=True)
+    assert alice_client.get(ORIGINAL_URL).status_code == 404
 
 
 def test_an_album_folder_linking_outside_rejects_a_new_cover_and_writes_nothing_outside(
