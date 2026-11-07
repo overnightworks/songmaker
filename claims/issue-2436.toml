@@ -3,5 +3,5 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "6ac31ec9127acafe860a51dcf4c270336b361c84"
 branch = "claude/issue-2436-docs-slice-14-the-vision-in-the-fleet-s"
-scope = ["docs/VISION.md"]
+scope = ["README.md", "docs/VISION.md"]
 opened_commit = "275631b870afcaadc832a54d9fa2b30bd5cde300"
