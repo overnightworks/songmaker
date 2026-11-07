@@ -1,0 +1,8 @@
+claim_id = "07be07a696fe4c3faca6dec2d6773d50"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "e24923c579708309491843f5d09144cf6eb6b33f"
+branch = "claude/issue-2526-ui-audit-11-13"
+scope = ["frontend/src/lib/components/HomeListSection.svelte", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/NowPlayingFrame.test.ts", "frontend/src/lib/components/NowPlayingTake.svelte", "frontend/src/lib/components/NowPlayingTake.test.ts", "frontend/src/lib/components/editor/DetailTabs.svelte", "frontend/src/lib/components/editor/ListenTabs.svelte"]
+opened_commit = "ee2de9ca6e9d1bcc6da6cfdc8ee5bf2640bf1afa"
+whole_reason = "Three small fixes from one UI audit that one UI drive at both widths proves together; none pays for its own review and drive."
