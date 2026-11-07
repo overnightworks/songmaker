@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
@@ -452,8 +453,16 @@ def get_generations(session: Session, generation_ids: list[str]) -> list[Generat
     )
 
 
-def bulk_delete_generations(session: Session, generations: list[Generation]) -> list[str]:
-    """Delete the generations and return relative file paths for post-commit cleanup."""
+@dataclass(frozen=True)
+class BulkDeletion:
+    """What a bulk delete removed: the take ids and their files for post-commit cleanup."""
+
+    deleted_ids: list[str]
+    paths: list[str]
+
+
+def bulk_delete_generations(session: Session, generations: list[Generation]) -> BulkDeletion:
+    """Delete the requested generations that still exist once locked."""
     locked = lock_takes(
         session, Generation.id.in_([gen.id for gen in generations]), options=DELETION_LOADING,
     )
@@ -464,7 +473,7 @@ def bulk_delete_generations(session: Session, generations: list[Generation]) -> 
 
     session.flush()
     log.info("Bulk deleted %d generations", len(locked))
-    return paths
+    return BulkDeletion(deleted_ids=[gen.id for gen in locked], paths=paths)
 
 
 def delete_generation(session: Session, generation_id: str) -> list[str]:

@@ -22,7 +22,6 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 
 from songmaker_cli import cover_runner
 from songmaker_cli.constants import JobStatus, JobType
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, aware_timestamp
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
 
@@ -39,13 +38,8 @@ def _png_bytes() -> bytes:
 
 
 @pytest.fixture
-def accounting_factory(database_pg_factory, tmp_path):
-    if database_pg_factory is not None:
-        yield database_pg_factory
-        return
-    factory = init_test_db(tmp_path / "accounting.db")
-    yield factory
-    factory.kw["bind"].dispose()
+def accounting_factory(pg_factory):
+    return pg_factory
 
 
 @dataclass
@@ -183,9 +177,6 @@ def test_late_cancellation_preserves_publication_with_a_preloaded_job(
         assert count_cover_jobs_since(verification, "album", STARTED) == 1
 
 
-@pytest.mark.parametrize(
-    "database_backend", ["postgresql"], indirect=True,
-)
 @pytest.mark.parametrize("winner", ["publication", "cancellation"])
 def test_postgresql_serializes_publication_and_cancellation(
     accounting_factory, running_cover, winner,

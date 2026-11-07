@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -11,7 +11,7 @@ from types import ModuleType
 import pytest
 import sqlalchemy as sa
 from alembic.config import Config
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, Engine
 from support.migration_chain import seeded_then_upgraded
 
@@ -46,34 +46,13 @@ def _config_for(url: URL) -> Config:
 
 
 @pytest.fixture
-def reference_link_sqlite(tmp_path: Path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'reference-link.db'}")
-    # Alembic's engine does not enable foreign keys; this connection does, as init_test_db does.
-    event.listen(
-        engine,
-        "connect",
-        lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"),
-    )
-    yield _config_for(engine.url), engine
-    engine.dispose()
-
-
-@pytest.fixture
-def reference_link_postgresql(empty_postgresql_url):
+def reference_link_database(
+    empty_postgresql_url, isolated_logging,
+) -> Iterator[tuple[Config, Engine]]:
+    """Yield (config, engine) of an empty database."""
     engine = create_engine(empty_postgresql_url)
     yield _config_for(empty_postgresql_url), engine
     engine.dispose()
-
-
-@pytest.fixture(
-    params=[
-        "reference_link_sqlite",
-        pytest.param("reference_link_postgresql", marks=pytest.mark.postgresql),
-    ]
-)
-def reference_link_database(request, isolated_logging) -> tuple[Config, Engine]:
-    """Yield (config, engine) of an empty database."""
-    return request.getfixturevalue(request.param)
 
 
 def execute(engine: Engine, statement: str, **values: object) -> None:

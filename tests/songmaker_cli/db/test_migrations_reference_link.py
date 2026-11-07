@@ -173,10 +173,6 @@ def test_deleting_a_linked_recording_is_refused_by_the_database(reference_link_d
         connection.execute(delete_recordings)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM reference_recordings")).scalar() == 1
-        if engine.dialect.name == "sqlite":
-            assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
-            keys = connection.execute(text(f"PRAGMA foreign_key_list({case.table})")).all()
-            assert any("RESTRICT" in tuple(key) for key in keys)
 
 
 @link_cases

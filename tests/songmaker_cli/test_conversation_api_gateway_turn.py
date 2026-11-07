@@ -23,6 +23,7 @@ from agent_runtime_client.backend.fake_gateway import (
 from agent_runtime_client.backend.gateway import GatewayBackend
 from agent_runtime_client.config import AgentConfig, ChatGateway
 from agent_runtime_client.turn import FailureCode, RejectionCode
+from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
 from fastapi.testclient import TestClient
 from support.cowriter_gateway import (
     API_GROUP,
@@ -37,8 +38,10 @@ from support.cowriter_gateway import (
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.agent.tools import cowriter_hand_tools
+from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, ChatMessage, Job, Song, User, UserSession, Version
+from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 
 USER_ID = "u-test"
 OTHER_SONG = "s-other"
@@ -217,6 +220,30 @@ def test_a_turn_the_gateway_cannot_finish_ends_unavailable_and_stores_no_answer(
     problem = _frame(events, "error")
     assert (problem["status"], problem["problem"]) == (503, "unavailable")
     assert _types(events)[-1] == "error"
+    assert world.stored_roles() == ["user"]
+    with world.factory() as session:
+        assert session.query(Job).filter_by(type="chat").one().status == "failed"
+
+
+def test_a_turn_whose_job_ended_while_the_reply_was_held_adds_no_answer(world):
+    async def reaped_while_held(_request, _person):
+        yield AssistantTextEvent(text="working on it")
+        with world.factory() as session:
+            job = session.query(Job).filter_by(type="chat").one()
+            update_job_status(
+                session,
+                job.id,
+                JobStatusUpdate(JobStatus.FAILED, error="heartbeat stopped"),
+            )
+            session.commit()
+        yield FinalEvent(text="late answer")
+
+    world.stack.behaves(reaped_while_held)
+
+    events = world.turn("hold on")
+
+    assert _types(events)[-1] == "error"
+    assert "final" not in _types(events)
     assert world.stored_roles() == ["user"]
     with world.factory() as session:
         assert session.query(Job).filter_by(type="chat").one().status == "failed"

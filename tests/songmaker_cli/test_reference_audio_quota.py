@@ -25,7 +25,6 @@ from songmaker_cli.db.queries.reference_recordings import create_reference_recor
 from songmaker_cli.reference_api import api_upload_reference
 from songmaker_cli.reference_audio import (
     ReferenceAudioQuotaExceeded,
-    ReferenceAudioStorageError,
     owner_reference_audio_root,
     store_reference_audio,
 )
@@ -51,14 +50,8 @@ def quota_context(tmp_path):
 
 
 @pytest.fixture
-def backend_quota_context(tmp_path, database_pg_factory):
-    """The quota context on the leg of `database_backend`; the PostgreSQL leg is marked."""
-    return _context_with_owners(tmp_path, database_pg_factory)
-
-
-POSTGRESQL_ONLY = pytest.mark.parametrize(
-    "database_backend", ["postgresql"], indirect=True,
-)
+def backend_quota_context(tmp_path, pg_factory):
+    return _context_with_owners(tmp_path, pg_factory)
 
 
 @pytest.mark.parametrize("field", ["reference_audio_quota_bytes", "reference_audio_quota_files"])
@@ -225,16 +218,13 @@ def _owner_with_room_for_one_more(ctx, capacity):
 
 @pytest.mark.parametrize("capacity", ["bytes", "files"])
 def test_postgresql_reference_admission_is_atomic(
-    backend_quota_context, held_reference_owner, capacity, database_backend
+    backend_quota_context, held_reference_owner, capacity
 ):
     """1301-F3-Q-CONCURRENT: observe contention before allowing the first write."""
     ctx = backend_quota_context
     settings = _owner_with_room_for_one_more(ctx, capacity)
     entered, release = held_reference_owner
-    engine = create_engine(
-        ctx.db.kw["bind"].url,
-        **({"connect_args": {"timeout": 0.1}} if database_backend == "sqlite" else {}),
-    )
+    engine = create_engine(ctx.db.kw["bind"].url)
     contender = sessionmaker(bind=engine)
     waiting_pid = []
     attempted = threading.Event()
@@ -257,35 +247,23 @@ def test_postgresql_reference_admission_is_atomic(
                     store_reference_audio, contender, ctx.audio_dir, "owner", ".wav",
                     b"b" * 100, settings, "second.wav",
                 )
-                if database_backend == "postgresql":
-                    assert attempted.wait(timeout=5)
-                    deadline = time.monotonic() + 5
-                    with ctx.db() as observer:
-                        while not observer.execute(
-                            text("SELECT count(*) FROM pg_locks WHERE locktype='advisory' "
-                                 "AND NOT granted AND pid=:pid"),
-                            {"pid": waiting_pid[0]},
-                        ).scalar_one():
-                            assert time.monotonic() < deadline, "Contender never waited on lock"
-                            time.sleep(0.01)
-                    assert not second.done()
-                else:
-                    with pytest.raises(ReferenceAudioStorageError) as refused:
-                        second.result(timeout=5)
-                    assert "database is locked" in str(refused.value.__cause__)
+                assert attempted.wait(timeout=5)
+                deadline = time.monotonic() + 5
+                with ctx.db() as observer:
+                    while not observer.execute(
+                        text("SELECT count(*) FROM pg_locks WHERE locktype='advisory' "
+                             "AND NOT granted AND pid=:pid"),
+                        {"pid": waiting_pid[0]},
+                    ).scalar_one():
+                        assert time.monotonic() < deadline, "Contender never waited on lock"
+                        time.sleep(0.01)
+                assert not second.done()
                 assert not _files(ctx)
             finally:
                 release.set()
             assert (ctx.audio_dir / first.result(timeout=5).storage_path).read_bytes() == b"a" * 100
-            if database_backend == "postgresql":
-                with pytest.raises(ReferenceAudioQuotaExceeded):
-                    second.result(timeout=5)
-            else:
-                with pytest.raises(ReferenceAudioQuotaExceeded):
-                    store_reference_audio(
-                        contender, ctx.audio_dir, "owner", ".wav", b"b" * 100, settings,
-                        "second.wav",
-                    )
+            with pytest.raises(ReferenceAudioQuotaExceeded):
+                second.result(timeout=5)
     finally:
         engine.dispose()
     assert [entry.read_bytes() for entry in _files(ctx)] == [b"a" * 100]
@@ -309,7 +287,6 @@ def held_reference_owner(backend_quota_context):
         event.remove(backend_quota_context.db, "loaded_as_persistent", hold)
 
 
-@POSTGRESQL_ONLY
 def test_postgresql_reference_owners_do_not_block_each_other(
     backend_quota_context, held_reference_owner
 ):
@@ -335,7 +312,6 @@ def test_postgresql_reference_owners_do_not_block_each_other(
         assert (ctx.audio_dir / first.result(timeout=5).storage_path).read_bytes() == b"a"
 
 
-@POSTGRESQL_ONLY
 def test_postgresql_unrelated_user_write_completes_during_upload(
     backend_quota_context, held_reference_owner
 ):
@@ -366,7 +342,6 @@ def test_postgresql_unrelated_user_write_completes_during_upload(
         assert session.get(Song, "song").album.created_by == "owner"
 
 
-@POSTGRESQL_ONLY
 def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
     backend_quota_context, held_reference_owner
 ):
@@ -409,7 +384,7 @@ def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
 
 @pytest.mark.parametrize("cleanup", ["removed", "denied"])
 def test_postgresql_failed_reference_write_releases_admission(
-    tmp_path, backend_quota_context, database_backend, cleanup
+    tmp_path, backend_quota_context, cleanup
 ):
     """1301-F3-Q-FAILURE: issue criterion evidence."""
     factory = backend_quota_context.db
