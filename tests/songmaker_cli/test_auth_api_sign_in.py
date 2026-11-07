@@ -286,6 +286,7 @@ def test_the_sign_in_returns_to_a_page_of_this_app_only(
 def test_an_admin_change_in_the_realm_applies_at_the_next_sign_in(
     world: World, first: tuple[str, ...], second: tuple[str, ...],
 ) -> None:
+    """Spec: REQ-ADMIN-01 -- the account holds one role, admin or user, and the groups pick it."""
     world.sign_in(Person(SUBJECT, "felix", first))
     role_before = world.client.get("/api/auth/me").json()["role"]
 

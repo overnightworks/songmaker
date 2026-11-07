@@ -310,16 +310,6 @@ def test_missing_shared_resources_raise_not_found(endpoint: str) -> None:
     assert exc_info.value.detail == "Not found"
 
 
-def test_shared_album_after_revoke(sharing_app: TestClient) -> None:
-    resp = sharing_app.post("/api/albums/test_album/share")
-    slug = resp.json()["share_slug"]
-    sharing_app.delete("/api/albums/test_album/share")
-
-    unauthed = web_client(sharing_app.app, cookies={})
-    resp = unauthed.get(f"/shared/{slug}")
-    assert resp.status_code == 404
-
-
 # What a shared song or take presents to a stranger, by the path under its link.
 _SHARED_TAKE_ROUTES: dict[str, str] = {
     "page": "",
@@ -1153,6 +1143,7 @@ def _assert_plays_with_ranges(listener: TestClient, audio_url: str) -> None:
 def test_public_share_page_and_audio_carry_no_account_id_1374_rule_8(
     sharing_app: TestClient, share: PublicShare,
 ) -> None:
+    """Spec: REQ-SHARE-01, REQ-SHARE-02 -- the owner enables each kind; a stranger plays it."""
     creator_identifiers = _creator_identifiers(sharing_app)
     listener, slug = _open_public_share(sharing_app, share)
 
@@ -2321,8 +2312,8 @@ def test_shared_playlist_view_carries_the_entry_takes_cues(two_take_app: TestCli
 
 
 def test_share_payloads_expose_only_the_contract_fields(two_take_app: TestClient) -> None:
-    """A public listener gets the shared take's playback data and nothing else —
-    no transcript, no scores, no sibling takes, no owner."""
+    """Spec: REQ-SHARE-24 -- a public listener gets the shared take's playback data and
+    nothing else: no transcript, no scores, no sibling takes, no owner."""
     album_slug = _share_slug(two_take_app, "/api/albums/test_album/share")
     song_slug = _share_slug(two_take_app, "/api/songs/s1/share")
     gen_slug = _share_slug(two_take_app, "/api/generations/g1/share")

@@ -25,6 +25,7 @@ afterEach(async () => {
 });
 
 describe('ShareStatus', () => {
+	// Spec: REQ-SHARE-18, REQ-SHARE-19
 	it('names a missing resource, focuses the state, and offers one way out', async () => {
 		const target = render({ kind: 'missing', resource: 'playlist' });
 		await tick();
@@ -38,6 +39,7 @@ describe('ShareStatus', () => {
 		expect(links[0].getAttribute('href')).toBe('/login');
 	});
 
+	// Spec: REQ-SHARE-20
 	it('offers retry plus a secondary exit for a technical error', async () => {
 		const onretry = vi.fn();
 		const target = render({ kind: 'error', resource: 'song', onretry });

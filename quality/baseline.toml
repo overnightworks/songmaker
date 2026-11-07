@@ -71,7 +71,7 @@
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1284
 "tests/songmaker_cli/test_server.py" = 1922
-"tests/songmaker_cli/test_sharing_api.py" = 2499
+"tests/songmaker_cli/test_sharing_api.py" = 2490
 "tests/test_auto_deploy_alerting.py" = 1299
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
