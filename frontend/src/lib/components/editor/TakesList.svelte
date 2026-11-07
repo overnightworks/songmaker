@@ -292,8 +292,8 @@
 					<span class="version-header">
 						{currentVersionHeadLabel(current.versionNumber ?? 0, current.generations.length)}
 					</span>
-					{@render openLink(current)}
 					{@render takesTip()}
+					{@render openLink(current)}
 				</div>
 				{#if current.generations.length === 0 && !jobRunning}
 					<div class="version-empty">{TAKES_EMPTY}</div>
@@ -329,8 +329,8 @@
 							>
 						{/if}
 					</button>
-					{#if open}{@render openLink(group)}{/if}
 					{#if !groups.current && index === 0}{@render takesTip()}{/if}
+					{#if open}{@render openLink(group)}{/if}
 				</div>
 				{#if open}
 					<div class="version-takes">{@render takeRows(group.generations)}</div>

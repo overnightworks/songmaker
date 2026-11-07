@@ -1,11 +1,12 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import InfoTip from './InfoTip.svelte';
 
 const TIP_TEXT = 'Plays here, details in Now Playing';
 let mounted: ReturnType<typeof mount> | undefined;
 
 afterEach(async () => {
+	vi.unstubAllGlobals();
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
@@ -22,7 +23,46 @@ async function mountTip(): Promise<{ button: HTMLButtonElement; tip: HTMLElement
 	return { button, tip };
 }
 
+const VIEWPORT_WIDTH = 375;
+const TIP_WIDTH = 212;
+
+// jsdom has no layout: the tip sits at the given left edge, moved by the
+// translate the component applies, the way a browser would place it.
+function placeTipAt(tip: HTMLElement, left: number): void {
+	tip.getBoundingClientRect = () => {
+		const shift = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(tip.style.transform);
+		const x = left + Number(shift?.[1] ?? 0);
+		const y = 20 + Number(shift?.[2] ?? 0);
+		return new DOMRect(x, y, TIP_WIDTH, 40);
+	};
+}
+
 describe('InfoTip', () => {
+	it.each([
+		['the left edge', -59],
+		['the right edge', 300]
+	])('keeps its box inside the viewport near %s', async (_edge, left) => {
+		vi.stubGlobal('innerWidth', VIEWPORT_WIDTH);
+		const { button, tip } = await mountTip();
+		placeTipAt(tip, left);
+		button.click();
+		await tick();
+		const box = tip.getBoundingClientRect();
+		expect(box.left).toBeGreaterThanOrEqual(0);
+		expect(box.right).toBeLessThanOrEqual(VIEWPORT_WIDTH);
+	});
+
+	it('keeps its box below the top of the viewport', async () => {
+		const { button, tip } = await mountTip();
+		tip.getBoundingClientRect = () => {
+			const shift = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(tip.style.transform);
+			return new DOMRect(10, -30 + Number(shift?.[2] ?? 0), TIP_WIDTH, 40);
+		};
+		button.click();
+		await tick();
+		expect(tip.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
+	});
+
 	it('is closed until asked', async () => {
 		const { tip } = await mountTip();
 		expect(tip.hidden).toBe(true);

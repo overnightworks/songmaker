@@ -14,6 +14,25 @@
 	let open = $state(false);
 	let wrapper: HTMLSpanElement | undefined = $state();
 	let button: HTMLButtonElement | undefined = $state();
+	let tip: HTMLSpanElement | undefined = $state();
+
+	const VIEWPORT_MARGIN_PX = 8;
+
+	// The tip stays anchored to its button and shifts only as far as it must to
+	// stay readable, whichever edge the button sits near.
+	function shiftIntoViewport(): void {
+		if (!tip) return;
+		tip.style.transform = '';
+		const box = tip.getBoundingClientRect();
+		const overRight = box.right - (window.innerWidth - VIEWPORT_MARGIN_PX);
+		const shiftX = Math.max(VIEWPORT_MARGIN_PX - box.left, -Math.max(overRight, 0));
+		const shiftY = Math.max(VIEWPORT_MARGIN_PX - box.top, 0);
+		tip.style.transform = `translate(${shiftX}px, ${shiftY}px)`;
+	}
+
+	$effect(() => {
+		if (open) shiftIntoViewport();
+	});
 
 	function closeOnOutsidePress(event: PointerEvent): void {
 		if (open && wrapper && !wrapper.contains(event.target as Node)) open = false;
@@ -48,7 +67,7 @@
 	>
 		<Icon name="info" size={14} />
 	</button>
-	<span id={tipId} class="info-tip-text" role="tooltip" hidden={!open}>{text}</span>
+	<span id={tipId} class="info-tip-text" role="tooltip" bind:this={tip} hidden={!open}>{text}</span>
 </span>
 
 <style>

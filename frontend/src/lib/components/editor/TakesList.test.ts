@@ -507,8 +507,7 @@ describe('TakesList', () => {
 				generations: [generation({ ...measuredTakeDefaults(), model_mode: 'xl-sft' })]
 			})
 		});
-		const badge = target.querySelector<HTMLElement>('.model-badge');
-		expect(badge).toBeNull();
+		expect(target.querySelector('.model-badge')).toBeNull();
 	});
 
 	it('shows its own measured length, not the "auto" (0) duration it was requested with', async () => {
@@ -1277,10 +1276,11 @@ describe('TakesList load states', () => {
 describe('TakesList touch hint', () => {
 	it('offers the tap hint behind an info tip on a coarse pointer and not on a mouse', async () => {
 		stubCoarsePointer(true);
-		const { target } = await render();
-		expect(target.querySelector('.version-head [role="tooltip"]')?.textContent).toBe(
-			TAKES_MOBILE_HINT
-		);
+		const tip = (await render()).target.querySelector('.version-head [role="tooltip"]');
+		expect(tip?.textContent).toBe(TAKES_MOBILE_HINT);
+		const unsaved = song({ version_count: 0, generations: [generation({})] });
+		const imported = (await render({ song: unsaved })).target;
+		expect(imported.querySelector('.version-header-row [role="tooltip"]')).not.toBeNull();
 		stubCoarsePointer(false);
 		expect((await render()).target.querySelector('[role="tooltip"]')).toBeNull();
 		vi.unstubAllGlobals();
