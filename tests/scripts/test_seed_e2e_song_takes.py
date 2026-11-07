@@ -56,13 +56,6 @@ def seeded_job(tmp_path, pg_factory):
     yield from _seeded_job(tmp_path, pg_factory)
 
 
-@pytest.fixture
-def seeded_job_on_sqlite(tmp_path):
-    from songmaker_cli.db.engine import init_test_db
-
-    yield from _seeded_job(tmp_path, init_test_db(tmp_path / "seed.db"))
-
-
 def _seeded_job(tmp_path, factory):
     from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
@@ -138,18 +131,42 @@ def test_invalid_completion_writes_neither_takes_nor_audio(seeded_job, status, t
     assert job.status == status
 
 
-def test_failed_second_take_rolls_back_the_batch_and_terminal_status(seeded_job_on_sqlite):
+def _drop_second_take_rejection(factory, open_session):
+    from support.failing_reference_stamp import drop_with_bounded_waits
+
+    # The per-test reset restores tables, not triggers; the fixture's open transaction
+    # would block the drop.
+    open_session.rollback()
+    drop_with_bounded_waits(factory, (
+        "DROP TRIGGER IF EXISTS reject_second_take ON generations",
+        "DROP FUNCTION IF EXISTS reject_second_take()",
+    ))
+
+
+def test_failed_second_take_rolls_back_the_batch_and_terminal_status(
+    seeded_job, pg_factory, request,
+):
     from sqlalchemy import text
     from sqlalchemy.exc import IntegrityError
 
-    session, audio_dir, job = seeded_job_on_sqlite
+    session, audio_dir, job = seeded_job
     ids_before = {g.id for g in session.query(Generation)}
     files_before = set(audio_dir.rglob("*.mp3"))
+    request.addfinalizer(lambda: _drop_second_take_rejection(pg_factory, session))
     # A real database refusal on the second addition, after the first was flushed.
     session.execute(text("""
+        CREATE FUNCTION reject_second_take() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            IF (SELECT COUNT(*) FROM generations) >= 3 THEN
+                RAISE EXCEPTION 'fixture rejects second take'
+                    USING ERRCODE = 'integrity_constraint_violation';
+            END IF;
+            RETURN NEW;
+        END $$
+    """))
+    session.execute(text("""
         CREATE TRIGGER reject_second_take BEFORE INSERT ON generations
-        WHEN (SELECT COUNT(*) FROM generations) >= 3
-        BEGIN SELECT RAISE(ABORT, 'fixture rejects second take'); END
+        FOR EACH ROW EXECUTE FUNCTION reject_second_take()
     """))
     session.commit()
 
@@ -212,9 +229,7 @@ def test_cover_running_command_prints_an_owned_job_started_in_the_past(cover_alb
     assert (job.user_id, job.album_id, job.type, job.status) == (
         _OWNER_ID, _ALBUM_ID, JobType.COVER, JobStatus.RUNNING,
     )
-    # SQLite returns the stored UTC instant without its zone.
-    started_at = job.started_at.replace(tzinfo=timezone.utc)
-    assert datetime.now(timezone.utc) - started_at >= timedelta(seconds=90)
+    assert datetime.now(timezone.utc) - job.started_at >= timedelta(seconds=90)
     assert job.heartbeat_at is not None
 
 

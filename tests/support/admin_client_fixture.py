@@ -12,11 +12,12 @@ from songmaker_cli.db.models import User
 
 
 @pytest.fixture
-def admin_client(tmp_path: Path) -> TestClient:
+def admin_client(tmp_path: Path, pg_factory) -> TestClient:
     client, _ = build_admin_client(
         tmp_path,
         lambda session: session.add(User(id="u-admin", username="admin", role="admin")),
         user_id="u-admin",
         username="admin",
+        factory=pg_factory,
     )
     return client

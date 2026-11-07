@@ -102,6 +102,6 @@
 	}
 
 	.menu-item.destructive:not(:disabled) {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 </style>

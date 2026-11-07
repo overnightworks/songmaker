@@ -11,7 +11,7 @@ from support.reference_link_migration import execute
 
 from songmaker_cli.constants import SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE
 
-PREVIOUS_REVISION = "3d9a6b1e5c80"
+PREVIOUS_REVISION = "a4c7e19b3d52"
 COUNTDOWN_REVISION = "e8db38b3b46c"
 
 

@@ -257,12 +257,12 @@ def test_a_suggestion_from_a_browser_session_records_that_session_and_never_show
 
 
 def test_suggest_with_a_hal_token_is_refused_and_creates_no_job(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     from support.token_world import TokenWorld, make_token_world
 
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = make_token_world(tmp_path)
+    world = make_token_world(tmp_path, factory=pg_factory)
     with world.factory() as session:
         seed_user(session, "alice", user_id=TokenWorld.ALICE)
         session.add(Album(id="bearer-album", title="B", artist="A", created_by=TokenWorld.ALICE))

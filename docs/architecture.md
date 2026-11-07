@@ -956,6 +956,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
 | Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py` |
+| MCP front | The eight marked routes served as tools on `/mcp` to a person's own agent or to an agent with its own account (kind `agent`, admitted as `user`), and the `agent` settings section | `agent/mcp.py`, `agent/settings.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | Tool bodies | The co-writer's tool declarations and their execution, which the hand tools call | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
@@ -1068,7 +1069,7 @@ read it through `webauth.config.web_auth_config(request)`; an application that
 never installed one fails loudly at its first auth-protected request. Redis
 remains the rate-limit backend; a request is admitted by its DB session, which is
 loaded on every authenticated request, or by a verified token on a person path
-(`/api/` and `/audio/`) when `TOKEN_CLIENTS` names the token's client. `session_cleanup_loop` periodically deletes expired DB
+(`/api/` and `/audio/`) when `TOKEN_CLIENTS` names the token's client, or by a person's own agent's resource token at `/mcp` and on the eight marked routes while MCP is on. `session_cleanup_loop` periodically deletes expired DB
 sessions without Redis.
 
 Sign-in is songmaker's composition of that library, in `auth_api.py` (`install_sign_in`),
@@ -1101,7 +1102,7 @@ business transaction. `auth_dependencies.get_current_user` owns a separate short
 transaction that commits session renewal before the endpoint runs. Manual stream
 callers commit authentication and close the connection before streaming.
 `DatabaseWriteLock` commits preceding auth work before acquiring advisory lock
-9 (SQLite: `BEGIN IMMEDIATE`); endpoints must have no business changes before
+9; endpoints must have no business changes before
 entry. Any further hold in the same transaction, nested or sequential, shares that
 lock; after a commit or rollback the next hold locks again. Exiting does not commit
 or release the database lock: the endpoint commits on success, and the request's
@@ -1117,12 +1118,14 @@ rules. `server.create_app` installs them with one
 `install_web_auth_middleware()` call; no middleware reads songmaker's settings.
 The pure-ASGI request order, outside to inside, is ResourceStreamDeadline →
 SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit → [BearerGate →] CsrfOrigin →
-TrustedHost → AccessLog → Router. The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client. The Host check is Starlette's
+TrustedHost → AccessLog → Router. The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
 `TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
 library's host lists are Origin allowlists only. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
 
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
+
+A person's own agent, or an agent that signs in with its own client and holds its own account (kind `agent`, webauth's agent group), reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools, the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
 
 The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `webauth` is an installed distribution rather than a directory under `src/`, and its own boundaries are contracted in its repository; because `include_external_packages` is on, `.importlinter` still resolves it in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
 
@@ -1147,7 +1150,7 @@ flowchart TB
     entry --> workers --> routes --> runtime --> ai --> services --> contract --> typed --> persistence --> below --> base --> leaves
 ```
 
-The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list. A new module breaks the contract until it takes a row.
+The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list. A third lists the modules that import the agent runtime client at all, because the contract tool sees the installed package as one node; which submodule each imports is reviewed: only `agent/backend.py` and `agent/mcp.py` import its run and MCP machinery, only `agent/settings.py` its `config`, and the route and tool modules only its `tools`, except `conversation_api.py`, which also imports its `turn`. A new module breaks the contract until it takes a row.
 
 ## Data Model
 
@@ -1179,7 +1182,7 @@ Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), 
 
 A take's `created_by` names the user who made it (the job's user), set by `create_generation()` in `db/queries/generations.py`, which every creation path goes through. It is a fact of the row, so a take already saved keeps its maker even when the rest of its batch is cancelled or fails; it is never derived from job time windows. Takes saved before the column existed keep `created_by = NULL`, since their maker is not honestly recoverable, and deleting a user clears the field rather than the take.
 
-A take's persist locks its job, then its reference recording (`FOR NO KEY UPDATE`), then its song (`FOR NO KEY UPDATE`, a trashed song included) before it numbers and inserts the take, so two takes of one song get consecutive numbers and a save of that song during the render cannot deadlock the persist. Admission locks the song `FOR UPDATE` before it inserts the job; a save of an existing song locks it `FOR UPDATE` before it writes the version, a save that sets a reference locks that reference (`FOR NO KEY UPDATE`) first, in the persist's order, and a carried reference takes only its foreign key's key-share lock; a reference delete takes the reference `FOR UPDATE`, so it waits for a link or wins before it. Purge runs serialize on their own lock; a purge of expired albums and songs locks the songs it listed `FOR UPDATE` at once in id order, a trashed song included, before it deletes anything, then their takes in id order; it leaves a song with a queued or running job for a later run; retention takes a take alone.
+A take's persist locks its job, then its reference recording (`FOR NO KEY UPDATE`), then its song (`FOR NO KEY UPDATE`, a trashed song included) before it numbers and inserts the take, so two takes of one song get consecutive numbers and a save of that song during the render cannot deadlock the persist. Admission locks the song `FOR UPDATE` before it inserts the job; a save of an existing song locks it `FOR UPDATE` before it writes the version, a save that sets a reference locks that reference (`FOR NO KEY UPDATE`) first, in the persist's order, and a carried reference takes only its foreign key's key-share lock; a reference delete takes the reference `FOR UPDATE`, so it waits for a link or wins before it. Purge runs serialize on their own lock; a purge of expired albums and songs locks the songs it listed `FOR UPDATE` at once in id order, a trashed song included, before it deletes anything, then their takes in id order; it leaves a song with a queued or running job for a later run. Every take deletion (those purges, the single and bulk delete, retention's final delete and a version delete with its takes) goes through one owner that locks the takes in id order. Every path that locks several takes (those deletions, a pick and an album's add to a playlist) locks them in id order through `lock_takes`, so none waits on another in a cycle.
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
 

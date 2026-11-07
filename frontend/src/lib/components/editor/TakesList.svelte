@@ -357,6 +357,7 @@
 		title={TAKE_DELETE_TITLE_TEMPLATE.replace('{number}', String(deleteFor.generation_number))}
 		message={TAKE_DELETE_MESSAGE}
 		confirmLabel={TAKE_DELETE_LABEL}
+		destructive={true}
 		onconfirm={() => {
 			const id = deleteFor?.id;
 			deleteFor = null;
@@ -371,6 +372,7 @@
 		title={bulkDeleteTitle(tickedIds.length)}
 		message={TAKE_DELETE_MESSAGE}
 		confirmLabel={TAKE_DELETE_LABEL}
+		destructive={true}
 		onconfirm={handleBulkDelete}
 		oncancel={() => (confirmingBulkDelete = false)}
 	/>
@@ -508,12 +510,12 @@
 	}
 
 	.toolbar-btn.destructive {
-		border-color: var(--score-bad);
-		color: var(--score-bad);
+		border-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.toolbar-btn.destructive:hover {
-		background: rgba(255, 68, 68, 0.1);
+		background: color-mix(in srgb, var(--fail) 10%, transparent);
 	}
 
 	.toolbar-count {
@@ -574,7 +576,7 @@
 	.load-error {
 		padding: 0.6rem 0.8rem;
 		font-style: normal;
-		color: var(--score-bad);
+		color: var(--fail);
 		flex-direction: row;
 		justify-content: space-between;
 	}

@@ -37,9 +37,9 @@ from songmaker_cli.db.queries.resource_events import create_generation_created_e
 
 
 @pytest.fixture
-def token_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TokenWorld:
+def token_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory) -> TokenWorld:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    return make_token_world(tmp_path)
+    return make_token_world(tmp_path, factory=pg_factory)
 
 
 
@@ -210,10 +210,10 @@ def test_t20_an_invalid_bearer_beside_a_valid_cookie_is_refused_without_a_write(
 
 
 def test_t11_without_token_clients_a_bearer_is_not_admitted_and_the_app_starts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", "")
-    world = make_token_world(tmp_path)
+    world = make_token_world(tmp_path, factory=pg_factory)
 
     response = world.client.get("/api/songs", headers=world.bearer())
 

@@ -20,11 +20,11 @@ from pathlib import Path
 from typing import Annotated, Final, Literal
 from urllib.parse import urlsplit
 
-from agent_runtime_client.config import AgentConfig
 from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from acestep_engine.settings import EngineSettings
+from songmaker_cli.agent.settings import AgentSettings
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     COVER_UPLOAD_BODY_MAX_BYTES,
@@ -295,9 +295,11 @@ class Settings(BaseSettings):
     oidc_client_id: str | None = None
     oidc_client_secret_file: Path | None = None
     # The co-writer's gateway, read as AGENT__BACKEND, AGENT__GATEWAY__ORIGIN,
-    # AGENT__GATEWAY__KEY_FILE, AGENT__GATEWAY__CA_FILE and AGENT__API_GROUP. Unset leaves the
-    # co-writer unavailable; a partly set value stops startup. The client owns the fields.
-    agent: AgentConfig | None = None
+    # AGENT__GATEWAY__KEY_FILE, AGENT__GATEWAY__CA_FILE and AGENT__API_GROUP, and the person's own
+    # agent's client as AGENT__MCP_CLIENT_ID and AGENT__MCP_SCOPE, plus the realm group of the
+    # agents with their own client as AGENT__MCP_AGENT_GROUP. Unset leaves the co-writer
+    # unavailable and MCP off; a partly set value stops startup, and MCP on needs the group.
+    agent: AgentSettings | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 30

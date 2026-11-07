@@ -19,7 +19,6 @@ from support.web_app import (
 
 from songmaker_cli.api_helpers import create_job_with_rate_limit
 from songmaker_cli.constants import JobStatus, JobType
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
@@ -75,9 +74,8 @@ def _seed(session) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    factory = init_test_db(tmp_path / "test.db")
-    ctx = make_router_ctx(tmp_path, db=factory, seed_db=_seed)
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed)
     wav = tmp_path / "audio" / "u" / "take.wav"
     wav.parent.mkdir(parents=True)
     wav.write_bytes(b"RIFF" + b"\x00" * 40)
@@ -291,6 +289,20 @@ def test_v1_v2_a_latest_without_take_or_job_is_rewritten_in_place(client, edit):
     versions = _versions(client)
     assert set(versions) == {1, 2}
     assert versions[2]["id"] == "v2"
+    assert _holds(versions[2], edit)
+
+
+def test_lyrics_prompt_and_generation_settings_saved_together_read_back_as_one_version(client):
+    """Spec: REQ-VERSION-01 -- Lyrics, a style prompt and generation settings saved in one request
+    are read back together as one version."""
+    edit = {
+        "lyrics": "edited lyrics", "prompt": "edited prompt",
+        "generation_params": {"inference_steps": 50},
+    }
+    _save(client, **edit)
+
+    versions = _versions(client)
+    assert set(versions) == {1, 2}
     assert _holds(versions[2], edit)
 
 

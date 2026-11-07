@@ -191,7 +191,7 @@
 	}
 
 	.panel-error {
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 	}
 
@@ -252,8 +252,8 @@
 	}
 
 	.badge.missing {
-		background: rgba(220, 80, 80, 0.15);
-		color: rgb(220, 80, 80);
+		background: color-mix(in srgb, var(--fail) 15%, transparent);
+		color: var(--fail);
 	}
 
 	.badge.unknown {

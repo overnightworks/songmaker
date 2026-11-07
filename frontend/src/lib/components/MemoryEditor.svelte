@@ -266,7 +266,7 @@
 
 	.memory-error {
 		margin: 0;
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.8rem;
 	}
 

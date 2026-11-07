@@ -9,7 +9,6 @@ from types import SimpleNamespace
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 
 from songmaker_cli import settings as settings_module
@@ -31,7 +30,10 @@ def test_run_migrations_hands_alembic_a_password_with_a_percent_sign_intact(
     url = database_url_with_password("postgresql://app@db/songs", PASSWORD_WITH_SPECIALS)
     handed_over: list[Config] = []
     monkeypatch.setattr(
-        engine_module, "create_engine", lambda _url: create_engine("sqlite://"),
+        engine_module, "create_engine", lambda _url: SimpleNamespace(dispose=lambda: None),
+    )
+    monkeypatch.setattr(
+        engine_module, "inspect", lambda _engine: SimpleNamespace(get_table_names=list),
     )
     monkeypatch.setattr("alembic.command.upgrade", lambda cfg, _revision: handed_over.append(cfg))
 

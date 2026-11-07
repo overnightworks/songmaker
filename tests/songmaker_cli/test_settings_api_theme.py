@@ -6,18 +6,17 @@ import pytest
 from fastapi.testclient import TestClient
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import User
 
 THEME_URL = "/api/settings/theme"
 
 
 @pytest.fixture
-def two_people(tmp_path) -> tuple[TestClient, TestClient]:
+def two_people(tmp_path, pg_factory) -> tuple[TestClient, TestClient]:
     def seed(session) -> None:
         session.add_all([User(id="u-ana", username="ana"), User(id="u-ben", username="ben")])
 
-    ctx = make_router_ctx(tmp_path, db=init_test_db(tmp_path / "theme.db"), seed_db=seed)
+    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=seed)
     return tuple(
         web_client(make_router_app(ctx, user=make_authenticated_user(user_id)))
         for user_id in ("u-ana", "u-ben")
@@ -25,8 +24,8 @@ def two_people(tmp_path) -> tuple[TestClient, TestClient]:
 
 
 @pytest.fixture
-def anonymous_client(tmp_path) -> TestClient:
-    return web_client(make_router_app(make_router_ctx(tmp_path)))
+def anonymous_client(tmp_path, pg_factory) -> TestClient:
+    return web_client(make_router_app(make_router_ctx(tmp_path, db=pg_factory)))
 
 
 def test_a_new_person_follows_the_device(two_people):

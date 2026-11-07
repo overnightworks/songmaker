@@ -23,6 +23,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.middleware import install_web_auth_middleware
 
+from songmaker_cli.agent.mcp import (
+    build_protected_resource,
+    collect_route_tools,
+    mount_mcp_front,
+)
 from songmaker_cli.app_context import (
     AppContext,
     allowed_hosts,
@@ -160,6 +165,57 @@ def _oidc_sign_in_or_default(given: OidcSignIn | None, settings: Settings) -> Oi
     return build_oidc_sign_in(settings) if given is None else given
 
 
+def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
+    """Serve the favicon, service worker, manifest and icons; return their exact paths."""
+    favicon_path = sveltekit_dir / "favicon.svg"
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    async def serve_favicon() -> FileResponse:
+        return FileResponse(favicon_path, media_type="image/svg+xml")
+
+    sw_path = sveltekit_dir / "service-worker.js"
+    manifest_path = sveltekit_dir / "manifest.webmanifest"
+    exact_paths = (
+        frozenset(
+            {
+                "/service-worker.js",
+                "/manifest.webmanifest",
+            }
+        )
+        | PWA_ICON_PATHS
+    )
+
+    @app.get("/service-worker.js", include_in_schema=False)
+    async def serve_service_worker() -> FileResponse:
+        if not sw_path.exists():
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
+        return FileResponse(
+            sw_path,
+            media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/"},
+        )
+
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    async def serve_webmanifest() -> FileResponse:
+        if not manifest_path.exists():
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+
+    def register_icon_route(icon_path: str) -> None:
+        icon_file = sveltekit_dir / icon_path.lstrip("/")
+
+        @app.get(icon_path, include_in_schema=False)
+        async def serve_icon() -> FileResponse:
+            if not icon_file.exists():
+                raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
+            return FileResponse(icon_file, media_type="image/png")
+
+    for icon_path in sorted(PWA_ICON_PATHS):
+        register_icon_route(icon_path)
+
+    return exact_paths
+
+
 def create_app(
     audio_dir: Path,
     data_dir: Path,
@@ -189,6 +245,20 @@ def create_app(
     install_sign_in(app)
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
+    from songmaker_cli.api import router as api_router
+    from songmaker_cli.health_api import router as health_router
+    from songmaker_cli.sharing_api import router as sharing_router
+
+    app.include_router(api_router)
+    app.include_router(health_router)
+    app.include_router(sharing_router)
+
+    # Every route that appears in the schema is registered, so the marks are read from a
+    # complete schema; the gate needs them before the middleware is added.
+    settings = get_settings()
+    agent_tools = collect_route_tools(app)
+    mcp_resource = build_protected_resource(settings, agent_tools.marks, ctx.db)
+
     # Middleware execution order (Starlette LIFO -- last added runs first):
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
     #   2. SelectiveGZipMiddleware    -- compress the finished response body
@@ -196,7 +266,8 @@ def create_app(
     #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
     #   5. BodySizeLimitMiddleware    -- reject oversized bodies before processing
     #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   7. BearerGateMiddleware       -- with TOKEN_CLIENTS: a verified person-path token skips CSRF
+    #   7. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified person-path or
+    #                                    resource token skips CSRF
     #   8. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
     #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
     #  10. AccessLogMiddleware        -- log all requests (after security checks)
@@ -220,14 +291,13 @@ def create_app(
     #     buffering, exactly as if it were absent (see `middleware/gzip.py`
     #     and `test_server_middleware.py`'s SSE test).
     script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
-    settings = get_settings()
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
     install_web_auth_middleware(
         app, security_headers=build_security_headers_policy(script_hashes),
         body_size=build_body_size_policy(settings), rate_limit=build_rate_limit_policy(settings),
         csrf_origin=build_csrf_origin_policy(),
-        bearer_gate=build_bearer_gate(settings, app.state.oidc_sign_in, ctx.db),
+        bearer_gate=build_bearer_gate(settings, app.state.oidc_sign_in, ctx.db, mcp_resource),
     )
 
     app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.
@@ -240,6 +310,11 @@ def create_app(
         compresslevel=GZIP_COMPRESS_LEVEL,
     )
     app.add_middleware(ResourceStreamDeadlineMiddleware)
+
+    # Starlette builds the middleware stack at the first request, so the routes added here
+    # still sit behind the whole block above.
+    if mcp_resource is not None:
+        mount_mcp_front(app, agent_tools, mcp_resource, app.state.oidc_sign_in)
 
     app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
 
@@ -254,14 +329,6 @@ def create_app(
             status_code=422,
         )
 
-    from songmaker_cli.api import router as api_router
-    from songmaker_cli.health_api import router as health_router
-    from songmaker_cli.sharing_api import router as sharing_router
-
-    app.include_router(api_router)
-    app.include_router(health_router)
-    app.include_router(sharing_router)
-
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"
 
@@ -272,53 +339,7 @@ def create_app(
             name="sveltekit-app",
         )
 
-    favicon_path = sveltekit_dir / "favicon.svg"
-
-    @app.get("/favicon.svg", include_in_schema=False)
-    async def serve_favicon() -> FileResponse:
-        return FileResponse(favicon_path, media_type="image/svg+xml")
-
-    sw_path = sveltekit_dir / "service-worker.js"
-    manifest_path = sveltekit_dir / "manifest.webmanifest"
-    icon_192_path = sveltekit_dir / "icon-192.png"
-    icon_512_path = sveltekit_dir / "icon-512.png"
-    _pwa_exact_paths = (
-        frozenset(
-            {
-                "/service-worker.js",
-                "/manifest.webmanifest",
-            }
-        )
-        | PWA_ICON_PATHS
-    )
-
-    @app.get("/service-worker.js", include_in_schema=False)
-    async def serve_service_worker() -> FileResponse:
-        if not sw_path.exists():
-            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
-        return FileResponse(
-            sw_path,
-            media_type="application/javascript",
-            headers={"Service-Worker-Allowed": "/"},
-        )
-
-    @app.get("/manifest.webmanifest", include_in_schema=False)
-    async def serve_webmanifest() -> FileResponse:
-        if not manifest_path.exists():
-            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
-        return FileResponse(manifest_path, media_type="application/manifest+json")
-
-    @app.get("/icon-192.png", include_in_schema=False)
-    async def serve_icon_192() -> FileResponse:
-        if not icon_192_path.exists():
-            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
-        return FileResponse(icon_192_path, media_type="image/png")
-
-    @app.get("/icon-512.png", include_in_schema=False)
-    async def serve_icon_512() -> FileResponse:
-        if not icon_512_path.exists():
-            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
-        return FileResponse(icon_512_path, media_type="image/png")
+    _pwa_exact_paths = _install_pwa_assets(app, sveltekit_dir)
 
     sk_index = sveltekit_dir / "index.html"
     app.state.spa_index = sk_index

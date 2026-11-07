@@ -15,6 +15,7 @@ function defaultProps() {
 		title: 'Unsaved changes',
 		message: 'Save this draft as a new version before leaving, or discard it?',
 		confirmLabel: 'Save',
+		destructive: false,
 		onconfirm: vi.fn(),
 		secondaryLabel: 'Discard',
 		onsecondary: vi.fn(),

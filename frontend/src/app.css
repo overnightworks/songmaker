@@ -57,6 +57,8 @@
 	--primary: #d41a0a;
 	--accent: #7a18c0;
 	--on-accent: #fff;
+	/* The ink that reads on the failure colour, --fail. */
+	--on-fail: #fff;
 	--text-subtle: #555;
 	--text-disabled: #9a9a9a;
 	--text-decoration: #999;
@@ -67,8 +69,7 @@
 	--score-good: #1e7a1e;
 	--score-ok-bg: #fef3e0;
 	--score-ok: #b07000;
-	--score-bad-bg: #fde8e8;
-	--score-bad: #c02020;
+	--score-bad: var(--text-muted);
 	--keep: #c03040;
 	--success: #1e7a1e;
 	--viz-primary-r: 212;
@@ -134,6 +135,8 @@ html[data-transport-bar='hidden'] {
 	--accent: #b45cf5;
 	/* The ink that reads on the action colour, --accent. */
 	--on-accent: #111111;
+	/* The ink that reads on the failure colour, --fail. */
+	--on-fail: #111111;
 	--text-subtle: #888;
 	--text-disabled: #555;
 	--text-decoration: #444;
@@ -144,8 +147,6 @@ html[data-transport-bar='hidden'] {
 	--score-good: #4f4;
 	--score-ok-bg: #2a1f10;
 	--score-ok: #f0a030;
-	--score-bad-bg: #3a1a1a;
-	--score-bad: #f44;
 	--keep: #e04050;
 	--success: #4a4;
 	--viz-primary-r: 255;
@@ -162,6 +163,8 @@ html[data-transport-bar='hidden'] {
 		--accent: #b45cf5;
 		/* The ink that reads on the action colour, --accent. */
 		--on-accent: #111111;
+		/* The ink that reads on the failure colour, --fail. */
+		--on-fail: #111111;
 		--text-subtle: #888;
 		--text-disabled: #555;
 		--text-decoration: #444;
@@ -172,8 +175,6 @@ html[data-transport-bar='hidden'] {
 		--score-good: #4f4;
 		--score-ok-bg: #2a1f10;
 		--score-ok: #f0a030;
-		--score-bad-bg: #3a1a1a;
-		--score-bad: #f44;
 		--keep: #e04050;
 		--success: #4a4;
 		--viz-primary-r: 255;

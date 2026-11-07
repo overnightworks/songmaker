@@ -26,7 +26,6 @@ from support.web_app import (
 )
 
 from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
@@ -60,22 +59,20 @@ def _seed_owned(session, user_id: str) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
-    factory = init_db(tmp_path / "conv_api.db")
-    with factory() as session:
+def client(tmp_path: Path, pg_factory) -> tuple[TestClient, sessionmaker[Session]]:
+    with pg_factory() as session:
         _seed_owned(session, "u-test")
 
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    return web_client(app), factory
+    return web_client(app), pg_factory
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
-    factory = init_db(tmp_path / "conv_api2.db")
-    with factory() as session:
+def stranger_client(tmp_path: Path, pg_factory) -> tuple[TestClient, sessionmaker[Session]]:
+    with pg_factory() as session:
         _seed_owned(session, "u-owner")
         session.add(User(
             id="u-spy", username="spy", role="user",
@@ -83,10 +80,10 @@ def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
         session.commit()
 
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    return web_client(app), factory
+    return web_client(app), pg_factory
 
 
 @pytest.fixture
@@ -262,7 +259,7 @@ def test_the_chat_job_decides_whether_a_turn_is_running(
 
 @pytest.mark.parametrize("chat_job_status", ["queued", "running"])
 def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
-    tmp_path, mock_arq_pool, chat_job_status,
+    tmp_path, mock_arq_pool, chat_job_status, pg_factory,
 ):
     """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
     from support.web_app import make_test_app, seed_session
@@ -273,7 +270,9 @@ def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
         session.add(ChatMessage(conversation_id="conv-1", role="user", content="Ja bitte"))
         session.add(Job(type="chat", user_id=musician.id, status=chat_job_status))
 
-    c, factory = make_test_app(tmp_path, seed_db=_seed_a_turn_the_restart_interrupted)
+    c, factory = make_test_app(
+        tmp_path, factory=pg_factory, seed_db=_seed_a_turn_the_restart_interrupted
+    )
     with c:
         seed_session(c, "musician")
         body = c.get("/api/conversations/conv-1").json()
@@ -425,6 +424,7 @@ def test_chat_turn_closing_after_completion_keeps_job_completed(client, service)
 
 
 def test_chat_turn_reuses_active_conversation_across_turns(client, service):
+    """Spec: REQ-COWRITER-01 -- consecutive turns share the one active conversation."""
     c, factory = client
     service.replies(completion("ok"))
 
@@ -439,9 +439,29 @@ def test_chat_turn_reuses_active_conversation_across_turns(client, service):
         assert session.query(ChatMessage).count() == 4
 
 
+def test_switching_the_open_song_continues_the_same_conversation(client, service):
+    """Spec: REQ-COWRITER-03 -- a turn on another song neither starts nor archives a
+    conversation."""
+    c, factory = client
+    with factory() as session:
+        session.add(Song(id="s2", title="Rain", album_id="alb1", track_number=2, slug="rain"))
+        session.commit()
+    service.replies(completion("ok"))
+
+    first = c.post("/api/chat/turn", json={"message": "one", "current_song_id": "s1"})
+    second = c.post("/api/chat/turn", json={"message": "two", "current_song_id": "s2"})
+
+    first_final = _final_event(_stream_events(first))
+    second_final = _final_event(_stream_events(second))
+    assert first_final["conversation_id"] == second_final["conversation_id"]
+    with factory() as session:
+        conversation = session.query(Conversation).one()
+        assert conversation.archived_at is None
+
+
 def test_chat_turn_carries_history_memory_mentions_and_take_into_the_next_turn(client, service):
-    """Spec: REQ-COWRITER-05 -- every turn of the active conversation reaches the run with its
-    history, memory, mentions, and take context."""
+    """Spec: REQ-COWRITER-05, REQ-COWRITER-33 -- the next turn receives the earlier messages
+    verbatim, and the musician's memory, the song's memory and the album's notes."""
     c, factory = client
     with factory() as session:
         session.add(Generation(
@@ -496,6 +516,7 @@ def test_chat_turn_carries_history_memory_mentions_and_take_into_the_next_turn(c
 
 
 def test_chat_turn_injects_current_song_block(client, service):
+    """Spec: REQ-COWRITER-18 -- the open song's title, style prompt and lyrics reach the turn."""
     c, _ = client
 
     resp = c.post(
@@ -507,6 +528,7 @@ def test_chat_turn_injects_current_song_block(client, service):
     last_user = service.last_turn.messages[-1]["text"]
     assert f"{CURRENT_SONG_FRESHNESS_NOTE}\n<current_song>" in last_user
     assert "title: Thunder" in last_user
+    assert "style: rock" in last_user
     assert "lyrics:\nverse" in last_user
 
 
@@ -651,6 +673,7 @@ def test_get_conversation_404_when_unknown(client):
 
 
 def test_new_conversation_archives_active(client, service):
+    """Spec: REQ-COWRITER-01 -- a new conversation archives the old one, leaving one active."""
     c, factory = client
     turn = c.post("/api/chat/turn", json={"message": "hi"})
     old_id = _final_event(_stream_events(turn))["conversation_id"]
@@ -665,6 +688,7 @@ def test_new_conversation_archives_active(client, service):
         new = session.query(Conversation).filter_by(id=new_id).one()
         assert old.archived_at is not None
         assert new.archived_at is None
+        assert session.query(Conversation).filter_by(archived_at=None).count() == 1
 
 
 def test_new_conversation_without_active(client):

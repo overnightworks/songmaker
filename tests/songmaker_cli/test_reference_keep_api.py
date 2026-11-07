@@ -18,9 +18,10 @@ from support.reference_api_world import (
 
 from songmaker_cli.db.models import AuditLog, ReferenceRecording
 
-signed_in = reference_api_world.signed_in
+OLD_STAMP = datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 
-OLD_STAMP = datetime(2020, 1, 2, 3, 4, 5)
+
+signed_in = reference_api_world.signed_in
 
 
 def _seed_kept_case(

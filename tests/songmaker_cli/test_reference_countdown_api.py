@@ -20,7 +20,6 @@ from support.web_app import TEST_ORIGIN
 from songmaker_cli import reference_api
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import RateLimitSetting, ReferenceRecording
 from songmaker_cli.reference_api import STALE_COUNTDOWN_EPOCH_DETAIL
 from songmaker_cli.reference_audio import reference_deletes_at
@@ -296,20 +295,6 @@ def _duplicate_countdown_row(client: TestClient) -> None:
             setting_key=SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE, value=0,
         ))
         session.commit()
-
-
-# the test schema
-
-def test_the_sqlite_test_schema_carries_exactly_one_countdown_row(tmp_path) -> None:
-    factory = init_test_db(tmp_path / "schema.db")
-
-    with factory() as session:
-        rows = session.scalars(select(RateLimitSetting).where(
-            RateLimitSetting.setting_key == SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE,
-        )).all()
-
-    assert len(rows) == 1
-    assert (rows[0].user_id, rows[0].value, rows[0].value_text) == (None, 0, None)
 
 
 # the acknowledgement

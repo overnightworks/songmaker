@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from support.lora_training_world import seed_queued_lora
 
 from songmaker_cli.constants import (
     JOB_ERROR_INTERNAL,
@@ -26,7 +27,7 @@ from songmaker_cli.constants import (
     JobType,
     LoraStatus,
 )
-from songmaker_cli.db.models import AuditLog, Job, User, UserLora, UserLoraSample
+from songmaker_cli.db.models import AuditLog, Job
 from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.jobs.lora_training import (
@@ -81,55 +82,7 @@ def db_factory(pg_factory):
 
 @pytest.fixture
 def seeded(db_factory, tmp_path: Path) -> dict:
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    user_id = "user-1"
-    lora_id = "lora-1"
-    sample_dir = audio_dir / USER_LORAS_DIRNAME / user_id / lora_id / "samples"
-    sample_dir.mkdir(parents=True)
-    sample_ids = ["sample-a", "sample-b", "sample-c"]
-    sample_files: list[str] = []
-    for sid in sample_ids:
-        f = sample_dir / f"{sid}.wav"
-        f.write_bytes(b"RIFF0000WAVEfmt ")
-        sample_files.append(
-            f"{USER_LORAS_DIRNAME}/{user_id}/{lora_id}/samples/{sid}.wav",
-        )
-
-    with db_factory() as session:
-        session.add(
-            User(id=user_id, username="u1", role="user"),
-        )
-        session.add(
-            UserLora(
-                id=lora_id,
-                user_id=user_id,
-                name="My LoRA",
-                slug="my-lora",
-                status=LoraStatus.QUEUED,
-                training_job_id="job-1",
-            ),
-        )
-        for idx, sid in enumerate(sample_ids):
-            session.add(
-                UserLoraSample(
-                    id=sid,
-                    user_lora_id=lora_id,
-                    audio_path=sample_files[idx],
-                    caption=f"caption {idx}",
-                    lyrics=f"lyrics {idx}",
-                    position=idx,
-                ),
-            )
-        session.add(Job(id="job-1", type=JobType.LORA_TRAINING, status="queued"))
-        session.commit()
-
-    return {
-        "audio_dir": audio_dir,
-        "user_id": user_id,
-        "lora_id": lora_id,
-        "sample_ids": sample_ids,
-    }
+    return seed_queued_lora(db_factory, tmp_path)
 
 
 class _FakeWorker:

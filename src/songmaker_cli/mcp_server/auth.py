@@ -20,4 +20,4 @@ def load_user(session: Session, user_id: str) -> AuthenticatedUser:
     user = get_user(session, user_id)
     if user is None:
         raise ToolUserNotFoundError(f"User not found: {user_id}")
-    return AuthenticatedUser(id=user.id, username=user.username, role=user.role)
+    return AuthenticatedUser(id=user.id, username=user.username, role=user.role, agent=None)

@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -52,6 +53,7 @@ from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_QUEUE_NAME,
+    MODEL_AVAILABLE_MODES,
     AuditAction,
     JobFunction,
     JobStatus,
@@ -100,6 +102,26 @@ router = APIRouter()
 GENERATION_NOT_FOUND_DETAIL: Final = "Generation not found"
 WORKER_NOT_RUNNING_DETAIL: Final = "Worker not running"
 JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
+_GENERATE_DESCRIPTION: Final = (
+    "Queue music generation for one of the person's own songs, using the song's latest "
+    "version, or the version named by version_id. The version needs lyrics and a style "
+    "prompt. model is one of: " + ", ".join(sorted(MODEL_AVAILABLE_MODES)) + ". count is "
+    "how many takes to render. Jobs wait in one shared GPU queue and the "
+    "person's generation limit applies; the answer names the queued job."
+)
+
+
+_ACTIVE_GENERATION_DESCRIPTION: Final = (
+    "The generation job of one of the person's own songs that is waiting or running, with "
+    "its status, progress and queue position. The answer is null when no job is active: "
+    "then the takes are finished, or the job failed, which get_last_failed_generation tells."
+)
+
+_LAST_FAILED_GENERATION_DESCRIPTION: Final = (
+    "The latest failed generation job of one of the person's own songs, with its error. "
+    "The job is null when the last attempt did not fail, or when a newer attempt has "
+    "superseded the failure; a partial result with saved takes is returned with them."
+)
 
 
 def _check_model_active(session: Session, model: str) -> None:
@@ -243,6 +265,8 @@ def api_bulk_delete_generations(
 
 @router.post(
     "/songs/{song_id}/generate",
+    description=_GENERATE_DESCRIPTION,
+    openapi_extra=agent_tool(name="generate_song", effect=ToolEffect.SIDE_EFFECTING),
     response_model=JobResponse,
     responses={
         400: {"description": "Generation request is invalid"},
@@ -299,7 +323,11 @@ async def api_generate_song(
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
-@router.get("/songs/{song_id}/active-generation")
+@router.get(
+    "/songs/{song_id}/active-generation",
+    description=_ACTIVE_GENERATION_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_active_generation", effect=ToolEffect.READ_ONLY),
+)
 def api_active_generation(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -312,7 +340,11 @@ def api_active_generation(
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
-@router.get("/songs/{song_id}/last-failed-generation")
+@router.get(
+    "/songs/{song_id}/last-failed-generation",
+    description=_LAST_FAILED_GENERATION_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_last_failed_generation", effect=ToolEffect.READ_ONLY),
+)
 def api_last_failed_generation(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),

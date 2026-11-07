@@ -1177,11 +1177,14 @@ dependencies = [
 backend = [
     { name = "httpx2" },
 ]
+mcp-server = [
+    { name = "anyio" },
+]
 
 [[package]]
 name = "overnightworks-webauth"
-version = "0.31.0"
-source = { git = "https://github.com/overnightworks/webauth?rev=v0.31.0#b889f4cc855b4bbbfc93c5735a5b01a52fc58aac" }
+version = "0.33.0"
+source = { git = "https://github.com/overnightworks/webauth?rev=v0.33.0#2e11789358e58c467091ec5caac46befbdc04756" }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
@@ -1805,7 +1808,7 @@ acestep-worker = [
     { name = "uvicorn" },
 ]
 agent = [
-    { name = "overnightworks-agent-runtime-client", extra = ["backend"] },
+    { name = "overnightworks-agent-runtime-client", extra = ["backend", "mcp-server"] },
 ]
 dev = [
     { name = "fakeredis", extra = ["lua"] },
@@ -1873,8 +1876,8 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
     { name = "overnightworks-agent-runtime-client", marker = "extra == 'server'", git = "https://github.com/overnightworks/agent-runtime?rev=v0.23.0" },
-    { name = "overnightworks-agent-runtime-client", extras = ["backend"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agent-runtime?rev=v0.23.0" },
-    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.31.0" },
+    { name = "overnightworks-agent-runtime-client", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agent-runtime?rev=v0.23.0" },
+    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.33.0" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },
     { name = "pydantic", specifier = ">=2.0,<3" },

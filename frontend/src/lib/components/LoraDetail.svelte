@@ -547,14 +547,14 @@
 	}
 
 	.banner.warn {
-		border: 1px solid var(--score-bad);
-		color: var(--score-bad);
+		border: 1px solid var(--fail);
+		color: var(--fail);
 	}
 
 	.banner.error {
-		border: 1px solid var(--score-bad);
-		background: rgba(255, 68, 68, 0.08);
-		color: var(--score-bad);
+		border: 1px solid var(--fail);
+		background: color-mix(in srgb, var(--fail) 8%, transparent);
+		color: var(--fail);
 	}
 
 	.section-head {
@@ -629,8 +629,8 @@
 	}
 
 	.remove-btn:hover:not(:disabled) {
-		border-color: var(--score-bad);
-		color: var(--score-bad);
+		border-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.remove-btn:disabled {
@@ -765,9 +765,9 @@
 	.sample-error {
 		margin: 0.7rem 0 0;
 		padding: 0.6rem 0.75rem;
-		border: 1px solid var(--score-bad);
+		border: 1px solid var(--fail);
 		border-radius: 4px;
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 	}
 
@@ -827,10 +827,10 @@
 
 	.cancel-training-btn {
 		padding: 0.3rem 0.75rem;
-		border: 1px solid var(--score-bad);
+		border: 1px solid var(--accent);
 		border-radius: var(--btn-radius-sm);
 		background: transparent;
-		color: var(--score-bad);
+		color: var(--accent);
 		font-family: var(--font-display);
 		font-size: 0.75rem;
 		letter-spacing: 0.5px;
@@ -927,9 +927,9 @@
 	.training-error {
 		margin: 0;
 		padding: 0.6rem 0.75rem;
-		border: 1px solid var(--score-bad);
+		border: 1px solid var(--fail);
 		border-radius: 4px;
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 		overflow-wrap: anywhere;
 		white-space: pre-line;
@@ -958,7 +958,7 @@
 		list-style: none;
 		padding: 0;
 		margin: 0;
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.8rem;
 	}
 

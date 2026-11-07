@@ -240,10 +240,24 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
         job.heartbeat_at = now
     if status in JOB_TERMINAL_STATUSES:
-        job.completed_at = now
-        job.session_id = None
+        _apply_terminal_values(job, now)
     session.flush()
     return True
+
+
+def _terminal_values(now: datetime) -> dict[str, object]:
+    """The columns every write that ends a job sets."""
+    return {
+        "completed_at": now,
+        "queue_reason": None,
+        "generation_started_at": None,
+        "session_id": None,
+    }
+
+
+def _apply_terminal_values(job: Job, now: datetime) -> None:
+    for column, value in _terminal_values(now).items():
+        setattr(job, column, value)
 
 
 def _enters_running(job: Job, status: str) -> bool:
@@ -434,10 +448,7 @@ def _recover_stale_job_if_unchanged(
             status=JobStatus.FAILED,
             error=error,
             error_type=error_type,
-            completed_at=completed_at,
-            queue_reason=None,
-            generation_started_at=None,
-            session_id=None,
+            **_terminal_values(completed_at),
         )
         .execution_options(synchronize_session=False),
     )
@@ -470,10 +481,7 @@ def recover_stale_jobs_by_type(
             job.status = JobStatus.FAILED
             job.error = "Server restarted while job was in progress"
             job.error_type = "server_restart"
-            job.completed_at = now
-            job.queue_reason = None
-            job.generation_started_at = None
-            job.session_id = None
+            _apply_terminal_values(job, now)
         if stale:
             recovered[job_type] = len(stale)
     session.flush()
@@ -610,14 +618,8 @@ def last_job_failure_time(session: Session) -> datetime | None:
     return aware_timestamp(newest)
 
 
-def _duration_seconds_expr(session: Session):
-    """Duration expression in seconds.
-
-    SQLite branch exists only for test databases (production uses PostgreSQL).
-    """
-    if session.bind.dialect.name == "sqlite":
-        days = func.julianday(Job.completed_at) - func.julianday(Job.started_at)
-        return days * 86400.0
+def _duration_seconds_expr():
+    """Duration expression in seconds."""
     return func.extract("epoch", Job.completed_at - Job.started_at)
 
 
@@ -632,7 +634,7 @@ class JobDurationStats:
 
 def job_duration_stats(session: Session) -> JobDurationStats:
     """Return avg/min/max duration in seconds for completed jobs."""
-    duration_expr = _duration_seconds_expr(session)
+    duration_expr = _duration_seconds_expr()
     row = (
         session.query(
             func.avg(duration_expr),

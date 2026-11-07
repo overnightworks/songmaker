@@ -53,6 +53,7 @@ pytest_plugins = [
     "support.admin_client_fixture",
     "support.cover_album_world",
     "support.generation_job_world",
+    "support.mcp_world",
     "support.reference_link_migration",
     "support.database_case_record",
     "pytester",
@@ -388,19 +389,54 @@ def empty_postgresql_url(postgresql_databases):
     postgresql_databases.drop_database(url)
 
 
-@pytest.fixture
-def pg_factory(postgresql_url):
-    """A session factory on this worker's migrated database, closed before its reset."""
+def _session_factory_on(url):
+    """A session factory on ``url`` with the pool limits of the settings."""
     from sqlalchemy import create_engine
 
     from songmaker_cli.settings import get_settings
 
     settings = get_settings()
     engine = create_engine(
-        postgresql_url,
+        url,
         pool_size=settings.database_pool_size,
         max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,
     )
-    yield sessionmaker(bind=engine)
-    engine.dispose()
+    return sessionmaker(bind=engine)
+
+
+@pytest.fixture
+def pg_factory(postgresql_url):
+    """A session factory on this worker's migrated database, closed before its reset.
+
+    A test that also takes ``fresh_settings`` lists ``pg_factory`` first, because
+    ``pg_factory`` reads and caches the settings.
+    """
+    factory = _session_factory_on(postgresql_url)
+    yield factory
+    factory.kw["bind"].dispose()
+
+
+@pytest.fixture
+def extra_pg_factory(postgresql_databases):
+    """Builds session factories on additional migrated databases; each call makes a new one.
+
+    Every engine is disposed and its database dropped after the test.
+    """
+    from songmaker_cli.db.engine import init_db
+
+    created = []
+
+    def build():
+        url = postgresql_databases.create_empty_database()
+        created.append((url, None))
+        init_db(url).kw["bind"].dispose()
+        factory = _session_factory_on(url)
+        created[-1] = (url, factory)
+        return factory
+
+    yield build
+    for url, factory in created:
+        if factory is not None:
+            factory.kw["bind"].dispose()
+        postgresql_databases.drop_database(url)

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
 from support.reference_rows import a_reference
 from support.web_app import make_test_app, seed_session, web_client
 
@@ -34,11 +35,18 @@ def _seed_owner_other_and_admin_accounts(session) -> None:
     ])
 
 
-@pytest.fixture
-def signed_in(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_owner_other_and_admin_accounts)
+def sign_in_owner(tmp_path: Path, factory: sessionmaker) -> TestClient:
+    """An app on ``factory`` with the owner, another member and an admin; the owner is signed in."""
+    client, _ = make_test_app(
+        tmp_path, factory=factory, seed_db=_seed_owner_other_and_admin_accounts,
+    )
     seed_session(client, "owner")
     return client
+
+
+@pytest.fixture
+def signed_in(tmp_path: Path, pg_factory) -> TestClient:
+    return sign_in_owner(tmp_path, pg_factory)
 
 
 def reference_rows(client: TestClient) -> list[ReferenceRecording]:

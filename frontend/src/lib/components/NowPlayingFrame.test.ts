@@ -10,6 +10,7 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
+	delete document.documentElement.dataset.pointer;
 });
 
 describe('NowPlayingFrame', () => {
@@ -47,6 +48,37 @@ describe('NowPlayingFrame', () => {
 		expect(cover).not.toHaveTextContent('Collection mosaic');
 		expect(cover?.querySelector('img')).toHaveAttribute('src', '/cover.webp');
 	});
+	it.each([
+		{ stacked: true, home: '.np-header' },
+		{ stacked: false, home: '.np-lyrics-col' }
+	])(
+		'keeps Go to song clear of the take sheet when stacked is $stacked',
+		async ({ stacked, home }) => {
+			if (stacked) document.documentElement.dataset.pointer = 'coarse';
+			const target = document.createElement('div');
+			document.body.append(target);
+			mounted = mount(NowPlayingFrame, {
+				target,
+				props: {
+					surface: 'full',
+					stacked,
+					coverUrl: null,
+					onGoToSong: () => undefined,
+					info: {
+						generation: makeGeneration(),
+						songId: 'song-1',
+						songTitle: 'Tide',
+						albumTitle: 'Night Drive',
+						artist: '',
+						lyrics: null
+					}
+				}
+			});
+			await tick();
+			expect(target.querySelector(`${home} .go-song`)).not.toBeNull();
+			expect(target.querySelectorAll('.go-song')).toHaveLength(1);
+		}
+	);
 	it.each([
 		{
 			name: 'a share song page',

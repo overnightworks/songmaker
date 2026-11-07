@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -112,7 +113,14 @@ VERSION_IN_USE_DETAIL: Final = (
 )
 
 
-@router.get("/songs")
+@router.get(
+    "/songs",
+    description=(
+        "List the person's own songs, one page at a time. "
+        "Filter by album_id or a search text q; offset and limit page through the result."
+    ),
+    openapi_extra=agent_tool(name="list_songs", effect=ToolEffect.READ_ONLY),
+)
 def api_list_songs(
     page: Pagination,
     album_id: str | None = Query(None),
@@ -153,7 +161,14 @@ def api_list_songs(
     )
 
 
-@router.get("/songs/{song_id}")
+@router.get(
+    "/songs/{song_id}",
+    description=(
+        "Read one of the person's own songs: its versions with lyrics and style prompt, "
+        "its takes with their scores and status, and its share link if it is shared."
+    ),
+    openapi_extra=agent_tool(name="get_song", effect=ToolEffect.READ_ONLY),
+)
 def api_get_song(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -169,6 +184,13 @@ def _title_refusal_detail(error: UnstorableSongTitleError) -> str:
 
 @router.post(
     "/songs",
+    description=(
+        "Create a song in one of the person's own albums. The title and album_id are "
+        "required; lyrics, the style prompt, bpm, key_scale, audio_duration in seconds "
+        "(0 lets the model choose) and vocal_language are optional. Creating a song does "
+        "not render music; generate_song does."
+    ),
+    openapi_extra=agent_tool(name="create_song", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Album or reference audio not found"},
         422: {"description": "Song title is required or too long"},

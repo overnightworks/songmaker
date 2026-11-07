@@ -31,13 +31,13 @@ CI runs the pinned quality gate; floors in [testing](docs/testing.md#static-anal
 ## Key rules
 
 1. PostgreSQL is the source of truth, not files.
-2. One code path: the web UI is the only API client; a person's hal token reaches the same API as that person; the CLI only starts the server; no passwords, admin bootstrap or local account commands. Sign-in is Keycloak: accounts keyed by its subject, membership and admin from groups `/apps/songmaker` and `/apps/songmaker/admin` at each sign-in.
+2. One code path: the web UI is the API's one client of songmaker's own; a person's hal token reaches the same API as that person, and a member's own agent reaches the eight marked routes of it over `/mcp` as that person, never as an admin; the CLI only starts the server; no passwords, admin bootstrap or local account commands. Sign-in is Keycloak: accounts keyed by its subject, membership and admin from groups `/apps/songmaker` and `/apps/songmaker/admin` at each sign-in.
 3. `api_models/` Pydantic models are the API contract; `python scripts/generate_types.py` generates `types.ts`.
 4. Test albums get a recognizable name prefix and are archived, not deleted.
 
 ## Constraints
 
-- No co-writer turn or cover runs on a Claude CLI, so no song content reaches one; agent-CLI mounts never expose an operator profile.
+- No co-writer turn or cover runs on a Claude CLI, so no song content reaches one; agent-CLI mounts never expose an operator profile. A member's own agent over `/mcp` reaches song content, with its provider, only at that person's request ([security](docs/security.md#mcp-endpoint-for-a-persons-own-agent)).
 - The DB owns session validity (`touch()` returns a real `bool`); removing someone ends no session early ([revocation](docs/security.md#revocation)).
 - Only `songmaker-acestep-worker-N` has a GPU; nothing arbitrates VRAM.
 - Trust model (shared OS user, one worker token, single node), accepted for one user: [security](docs/security.md#ace-step-worker-pool-trust-boundary).

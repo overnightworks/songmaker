@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event, text
-from support.failing_reference_stamp import failing_stamp_trigger
+from sqlalchemy import event
+from support.failing_reference_stamp import install_failing_stamp
 from support.reference_rows import a_reference
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
@@ -32,7 +32,7 @@ def _take_row(take_id: str, number: int, reference_id: str | None) -> Generation
 
 
 def _seed_stamp_world(
-    session, takes: dict[str, str | None], version_reference: str | None, *, failing_stamp=False,
+    session, takes: dict[str, str | None], version_reference: str | None,
 ) -> None:
     session.add(User(id=OWNER, username=OWNER))
     session.flush()
@@ -50,22 +50,18 @@ def _seed_stamp_world(
     session.add_all(
         _take_row(name, number, ref) for number, (name, ref) in enumerate(takes.items(), 1)
     )
-    if failing_stamp:
-        session.execute(text(failing_stamp_trigger()))
 
 
 def _world(
     tmp_path: Path,
+    pg_factory,
     takes: dict[str, str | None],
     version_reference: str | None = None,
-    *,
-    failing_stamp: bool = False,
 ):
     ctx = make_router_ctx(
         tmp_path,
-        seed_db=lambda s: _seed_stamp_world(
-            s, takes, version_reference, failing_stamp=failing_stamp,
-        ),
+        db=pg_factory,
+        seed_db=lambda s: _seed_stamp_world(s, takes, version_reference),
     )
     (tmp_path / "audio" / OWNER).mkdir(parents=True, exist_ok=True)
     for name in takes:
@@ -118,8 +114,8 @@ ROUTES = ["single", "bulk"]
 
 
 @pytest.mark.parametrize("route", ROUTES)
-def test_deleting_the_only_take_that_links_a_reference_stamps_it(tmp_path, route):
-    client, ctx = _world(tmp_path, {"ta": "r1", "tb": None})
+def test_deleting_the_only_take_that_links_a_reference_stamps_it(tmp_path, route, pg_factory):
+    client, ctx = _world(tmp_path, pg_factory, {"ta": "r1", "tb": None})
     assert _delete_through_route(client, route, ["ta"]).status_code == 200
     stamps = _stamps(ctx)
     assert stamps["r1"] is not None
@@ -133,26 +129,29 @@ def test_deleting_the_only_take_that_links_a_reference_stamps_it(tmp_path, route
         ({"ta": "r1", "tb": "r2"}, {"r1", "r2"}),
     ],
 )
-def test_a_bulk_delete_stamps_each_reference_its_takes_shared(tmp_path, takes, stamped):
-    client, ctx = _world(tmp_path, takes)
+def test_a_bulk_delete_stamps_each_reference_its_takes_shared(tmp_path, takes, stamped, pg_factory):
+    client, ctx = _world(tmp_path, pg_factory, takes)
     assert _delete_through_route(client, "bulk", ["ta", "tb"]).status_code == 200
     assert {ref for ref, stamp in _stamps(ctx).items() if stamp is not None} == stamped
 
 
 @pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("link", ["version", "other_take"])
-def test_a_reference_another_version_or_take_still_links_keeps_no_stamp(tmp_path, route, link):
+def test_a_reference_another_version_or_take_still_links_keeps_no_stamp(
+    tmp_path, route, link, pg_factory,
+):
     takes = {"ta": "r1", "tb": "r1"} if link == "other_take" else {"ta": "r1"}
-    client, ctx = _world(tmp_path, takes, "r1" if link == "version" else None)
+    client, ctx = _world(tmp_path, pg_factory, takes, "r1" if link == "version" else None)
     assert _delete_through_route(client, route, ["ta"]).status_code == 200
     assert _stamps(ctx)["r1"] is None
 
 
 @pytest.mark.parametrize("route", ROUTES)
 def test_a_failing_stamp_leaves_the_answer_and_the_unlink_and_logs_one_counts_only_error(
-    tmp_path, caplog, route,
+    tmp_path, pg_factory, caplog, request, route,
 ):
-    client, ctx = _world(tmp_path, {"ta": "r1"}, failing_stamp=True)
+    client, ctx = _world(tmp_path, pg_factory, {"ta": "r1"})
+    install_failing_stamp(pg_factory, request)
     with caplog.at_level(logging.ERROR):
         response = _delete_through_route(client, route, ["ta"])
     assert response.status_code == 200
@@ -166,14 +165,14 @@ def test_a_failing_stamp_leaves_the_answer_and_the_unlink_and_logs_one_counts_on
     assert record.exc_info is None
 
 
-def _owner_ctx(tmp_path, *, kept=False, stamp=None):
+def _owner_ctx(tmp_path, pg_factory, *, kept=False, stamp=None):
     def seed(session):
         session.add(User(id=OWNER, username=OWNER))
         session.flush()
         a_reference(
             session, OWNER, name="r1.wav", reference_id="r1", is_kept=kept, unused_since=stamp,
         )
-    return make_router_ctx(tmp_path, seed_db=seed)
+    return make_router_ctx(tmp_path, db=pg_factory, seed_db=seed)
 
 
 @pytest.mark.parametrize(
@@ -181,8 +180,10 @@ def _owner_ctx(tmp_path, *, kept=False, stamp=None):
     [(True, None, 0), (False, EARLIER, 0), (False, None, 1)],
     ids=["kept_gets_none", "stamped_keeps_its_stamp", "unstamped_unkept_is_stamped"],
 )
-def test_the_stamp_skips_kept_rows_and_never_overwrites(tmp_path, kept, stamp, expected):
-    ctx = _owner_ctx(tmp_path, kept=kept, stamp=stamp)
+def test_the_stamp_skips_kept_rows_and_never_overwrites(
+    tmp_path, kept, stamp, expected, pg_factory,
+):
+    ctx = _owner_ctx(tmp_path, pg_factory, kept=kept, stamp=stamp)
     before = _stamps(ctx)["r1"]
     with ctx.db() as session:
         assert mark_newly_unused(session, {"r1"}) == expected
@@ -193,16 +194,16 @@ def test_the_stamp_skips_kept_rows_and_never_overwrites(tmp_path, kept, stamp, e
         assert after == before
 
 
-def test_unknown_ids_and_an_empty_set_stamp_nothing(tmp_path):
-    ctx = _owner_ctx(tmp_path)
+def test_unknown_ids_and_an_empty_set_stamp_nothing(tmp_path, pg_factory):
+    ctx = _owner_ctx(tmp_path, pg_factory)
     with ctx.db() as session:
         assert mark_newly_unused(session, {"missing"}) == 0
         assert mark_newly_unused(session, set()) == 0
     assert _stamps(ctx)["r1"] is None
 
 
-def test_an_empty_candidate_set_sends_no_statement(tmp_path):
-    ctx = _owner_ctx(tmp_path)
+def test_an_empty_candidate_set_sends_no_statement(tmp_path, pg_factory):
+    ctx = _owner_ctx(tmp_path, pg_factory)
     statements: list[str] = []
 
     def record(connection, cursor, statement, parameters, context, executemany):
@@ -259,47 +260,49 @@ def _stamped_ids(ctx) -> set[str]:
 
 @pytest.mark.parametrize("request_id", REQUEST_IDS)
 def test_a_request_that_leaves_a_reference_without_links_stamps_it_after_its_commit(
-    tmp_path, request_id,
+    tmp_path, request_id, pg_factory,
 ):
     scenario = SONG_REQUESTS[request_id]
-    client, ctx = _world(tmp_path, scenario.takes, scenario.version_reference)
+    client, ctx = _world(tmp_path, pg_factory, scenario.takes, scenario.version_reference)
     assert scenario.send(client).status_code == 200
     assert _stamped_ids(ctx) == scenario.stamped
 
 
-def test_saving_the_changed_reference_as_a_new_version_stamps_nothing(tmp_path):
-    client, ctx = _world(tmp_path, {}, "r1")
+def test_saving_the_changed_reference_as_a_new_version_stamps_nothing(tmp_path, pg_factory):
+    client, ctx = _world(tmp_path, pg_factory, {}, "r1")
     response = _put_song(reference_recording_id="r2", new_version=True)(client)
     assert response.status_code == 200
     assert _stamped_ids(ctx) == set()
 
 
-def test_an_in_place_edit_keeps_the_stamp_off_a_reference_a_take_of_the_same_song_links(tmp_path):
-    client, ctx = _world(tmp_path, {"ta": "r1"}, "r1")
+def test_an_in_place_edit_keeps_the_stamp_off_a_reference_a_take_of_the_same_song_links(
+    tmp_path, pg_factory,
+):
+    client, ctx = _world(tmp_path, pg_factory, {"ta": "r1"}, "r1")
     assert _put_song(reference_recording_id="r2")(client).status_code == 200
     assert _stamped_ids(ctx) == set()
 
 
-def test_an_edit_that_leaves_the_reference_unset_stamps_nothing(tmp_path):
-    client, ctx = _world(tmp_path, {}, "r1")
+def test_an_edit_that_leaves_the_reference_unset_stamps_nothing(tmp_path, pg_factory):
+    client, ctx = _world(tmp_path, pg_factory, {}, "r1")
     assert _put_song(lyrics="new words")(client).status_code == 200
     assert _stamped_ids(ctx) == set()
 
 
 def test_deleting_a_version_without_its_takes_stamps_its_own_reference_only_if_no_take_links_it(
-    tmp_path,
+    tmp_path, pg_factory,
 ):
-    client, ctx = _world(tmp_path, {"ta": "r1"}, "r1")
+    client, ctx = _world(tmp_path, pg_factory, {"ta": "r1"}, "r1")
     assert _delete_version(with_takes=False)(client).status_code == 200
     assert _stamped_ids(ctx) == set()
 
 
 @pytest.mark.parametrize("request_id", REQUEST_IDS)
 def test_a_reference_another_song_still_links_keeps_no_stamp_on_every_request(
-    tmp_path, request_id,
+    tmp_path, request_id, pg_factory,
 ):
     scenario = SONG_REQUESTS[request_id]
-    client, ctx = _world(tmp_path, scenario.takes, scenario.version_reference)
+    client, ctx = _world(tmp_path, pg_factory, scenario.takes, scenario.version_reference)
     _add_linked_song(
         ctx, "keeper", "keeper-album",
         links={f"keeper-{ref}": ref for ref in sorted(scenario.stamped)},
@@ -310,12 +313,11 @@ def test_a_reference_another_song_still_links_keeps_no_stamp_on_every_request(
 
 @pytest.mark.parametrize("request_id", REQUEST_IDS)
 def test_a_failing_stamp_keeps_the_answer_and_the_unlink_and_logs_a_counts_only_error_per_request(
-    tmp_path, caplog, request_id,
+    tmp_path, pg_factory, caplog, request, request_id,
 ):
     scenario = SONG_REQUESTS[request_id]
-    client, ctx = _world(
-        tmp_path, scenario.takes, scenario.version_reference, failing_stamp=True,
-    )
+    client, ctx = _world(tmp_path, pg_factory, scenario.takes, scenario.version_reference)
+    install_failing_stamp(pg_factory, request)
     with caplog.at_level(logging.ERROR):
         response = scenario.send(client)
     assert response.status_code == 200
@@ -331,8 +333,10 @@ def test_a_failing_stamp_keeps_the_answer_and_the_unlink_and_logs_a_counts_only_
     assert record.exc_info is None
 
 
-def test_linked_reference_ids_unions_versions_and_takes_of_the_given_songs_only(tmp_path):
-    _, ctx = _world(tmp_path, {"ta": "r1", "tb": None})
+def test_linked_reference_ids_unions_versions_and_takes_of_the_given_songs_only(
+    tmp_path, pg_factory,
+):
+    _, ctx = _world(tmp_path, pg_factory, {"ta": "r1", "tb": None})
     _add_linked_song(ctx, "other", "album2", links={"other-v1": "r2"})
     with ctx.db() as session:
         session.get(Generation, "ta").is_archived = True
@@ -341,8 +345,8 @@ def test_linked_reference_ids_unions_versions_and_takes_of_the_given_songs_only(
         assert linked_reference_ids(session, ["song", "other"]) == {"r1", "r2"}
 
 
-def test_linked_reference_ids_answers_an_empty_input_without_a_statement(tmp_path):
-    ctx = _owner_ctx(tmp_path)
+def test_linked_reference_ids_answers_an_empty_input_without_a_statement(tmp_path, pg_factory):
+    ctx = _owner_ctx(tmp_path, pg_factory)
     statements: list[str] = []
 
     def record(connection, cursor, statement, parameters, context, executemany):

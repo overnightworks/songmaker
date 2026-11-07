@@ -577,7 +577,7 @@
 	.cover-failure {
 		flex-basis: 100%;
 		padding-top: 0.3rem;
-		border-top: 2px solid var(--score-bad);
+		border-top: 2px solid var(--fail);
 		text-align: center;
 	}
 

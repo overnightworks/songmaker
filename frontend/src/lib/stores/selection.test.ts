@@ -59,6 +59,7 @@ describe('selection', () => {
 		expect(get(selectionMode)).toBe(false);
 	});
 
+	// Spec: REQ-CURATION-06 -- Select all unkept never selects a picked or a kept take.
 	it('selects only generations that are neither picked nor kept', () => {
 		selectAllUnkept([
 			generation({

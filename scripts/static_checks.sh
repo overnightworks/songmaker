@@ -43,6 +43,7 @@ hygiene() {
 
 gate "Root layout" python scripts/check_root_layout.py
 gate "CI and compose pin the same Postgres image" python scripts/check_pinned_images_match.py
+gate "Every requirement is cited by a test" python scripts/check_requirement_citations.py
 gate "Ruff lint" ruff check src/ tests/
 gate "Test helper duplication ratchet" scripts/test_helper_ratchet.sh
 gate "No silent-fallback smell check" python scripts/check_no_silent_fallbacks.py src/

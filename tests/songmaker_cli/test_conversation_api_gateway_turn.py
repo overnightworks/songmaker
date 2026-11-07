@@ -38,9 +38,18 @@ from support.cowriter_gateway import (
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.agent.tools import cowriter_hand_tools
-from songmaker_cli.constants import JobStatus
-from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, ChatMessage, Job, Song, User, UserSession, Version
+from songmaker_cli.constants import JobStatus, JobType
+from songmaker_cli.db.models import (
+    Album,
+    ChatMessage,
+    Conversation,
+    Generation,
+    Job,
+    Song,
+    User,
+    UserSession,
+    Version,
+)
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 
 USER_ID = "u-test"
@@ -81,22 +90,21 @@ def _seed(session) -> None:
     session.commit()
 
 
-def build_world(tmp_path: Path, *, role: str = "user", **attach) -> World:
-    factory = init_test_db(tmp_path / "turn.db")
-    with factory() as session:
+def build_world(tmp_path: Path, pg_factory, *, role: str = "user", **attach) -> World:
+    with pg_factory() as session:
         _seed(session)
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user(USER_ID, role=role),
     )
     client = web_client(app)
-    stack = attach_cowriter_gateway(client, factory, tmp_path, USER_ID, **attach)
-    return World(client, factory, stack, tmp_path)
+    stack = attach_cowriter_gateway(client, pg_factory, tmp_path, USER_ID, **attach)
+    return World(client, pg_factory, stack, tmp_path)
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> World:
-    return build_world(tmp_path)
+def world(tmp_path: Path, pg_factory) -> World:
+    return build_world(tmp_path, pg_factory)
 
 
 def _frame(events: list[dict], kind: str) -> dict:
@@ -206,6 +214,8 @@ def _arrange_reply(world: World, arrangement: str) -> None:
 def test_a_turn_the_gateway_cannot_finish_ends_unavailable_and_stores_no_answer(
     world, arrangement,
 ):
+    """Spec: REQ-COWRITER-11 -- a turn the gateway refuses or fails ends with the named
+    unavailable error and no answer is stored."""
     _arrange_reply(world, arrangement)
 
     events = world.turn()
@@ -259,9 +269,9 @@ def test_a_busy_gateway_reads_busy_with_the_wait_it_named(world):
     ids=["outside-the-api-group", "role-outside-the-agents-roles"],
 )
 def test_a_person_the_agent_is_not_enabled_for_is_refused_and_no_request_leaves(
-    tmp_path, role, groups,
+    tmp_path, role, groups, pg_factory,
 ):
-    world = build_world(tmp_path, role=role, groups=groups)
+    world = build_world(tmp_path, pg_factory, role=role, groups=groups)
 
     problem = _frame(world.turn(), "error")
 
@@ -272,10 +282,12 @@ def test_a_person_the_agent_is_not_enabled_for_is_refused_and_no_request_leaves(
 
 @pytest.mark.parametrize("arrangement", ["no-refresh-token", "refresh-grant-refused"])
 def test_a_session_without_a_usable_refresh_grant_signs_in_again_and_no_request_leaves(
-    tmp_path, arrangement,
+    tmp_path, arrangement, pg_factory,
 ):
     world = build_world(
-        tmp_path, refresh_token=None if arrangement == "no-refresh-token" else "stale-token",
+        tmp_path,
+        pg_factory,
+        refresh_token=None if arrangement == "no-refresh-token" else "stale-token",
     )
     world.stack.issuer.refuses_refresh_with = (
         "invalid_grant" if arrangement == "refresh-grant-refused" else None
@@ -343,12 +355,15 @@ def test_an_event_the_turn_does_not_know_fails_the_turn_and_stores_no_answer(wor
 _FINGERPRINT = re.compile(r"fp-[0-9a-f]{64}")
 
 
-def _user_field_of_a_turn(tmp_path: Path, monkeypatch, issuer: str) -> tuple[str, bytes]:
+def _user_field_of_a_turn(
+    tmp_path: Path, monkeypatch, extra_pg_factory, issuer: str,
+) -> tuple[str, bytes]:
     from songmaker_cli.settings import get_settings
 
     monkeypatch.setenv("OIDC_ISSUER", issuer)
     get_settings.cache_clear()
-    turn_world = build_world(tmp_path)
+    tmp_path.mkdir()
+    turn_world = build_world(tmp_path, extra_pg_factory())
     turn_world.stack.issuer.token_issuer = issuer.rstrip("/")
     turn_world.turn()
     request = turn_world.stack.gateway_requests[0]
@@ -356,11 +371,13 @@ def _user_field_of_a_turn(tmp_path: Path, monkeypatch, issuer: str) -> tuple[str
 
 
 def test_the_request_names_the_person_only_by_a_fingerprint_of_issuer_and_id(
-    tmp_path, monkeypatch, fresh_settings,
+    tmp_path, monkeypatch, extra_pg_factory, fresh_settings,
 ):
-    bare, bare_body = _user_field_of_a_turn(tmp_path / "bare", monkeypatch, "https://issuer.test/realms/test")
+    bare, bare_body = _user_field_of_a_turn(
+        tmp_path / "bare", monkeypatch, extra_pg_factory, "https://issuer.test/realms/test"
+    )
     slashed, slashed_body = _user_field_of_a_turn(
-        tmp_path / "slashed", monkeypatch, "https://issuer.test/realms/test/",
+        tmp_path / "slashed", monkeypatch, extra_pg_factory, "https://issuer.test/realms/test/",
     )
 
     assert _FINGERPRINT.fullmatch(bare)
@@ -368,6 +385,167 @@ def test_the_request_names_the_person_only_by_a_fingerprint_of_issuer_and_id(
     for body in (bare_body, slashed_body):
         assert USER_ID.encode() not in body
         assert b"issuer.test" not in body
+
+
+def _sent_requests(world) -> list[dict]:
+    return [json.loads(request.content) for request in world.stack.gateway_requests]
+
+
+def test_a_turn_runs_on_the_model_the_agent_file_names(world):
+    """Spec: REQ-COWRITER-09 -- the gateway request of a turn names the model the agent file
+    names."""
+    from songmaker_cli.agent import backend
+
+    world.turn()
+
+    agent = backend._cowriter_agent()
+    assert [sent["model"] for sent in _sent_requests(world)] == [agent.model]
+
+
+def test_changing_the_agent_files_model_keeps_the_conversation_and_its_context(world, monkeypatch):
+    """Spec: REQ-COWRITER-12, REQ-COWRITER-13 -- a second turn on another model continues the
+    same conversation with its history, memory, mention and take, and offers the same tools."""
+    from songmaker_cli.agent import backend
+
+    with world.factory() as session:
+        session.add(Generation(
+            id="gen1", song_id="s1", version_id="v-s1", generation_number=1,
+            mp3_path="take.mp3", whisper_text="a sung take",
+        ))
+        session.commit()
+    saved = [
+        world.client.put("/api/memory/user", json={"body": "prefers vivid imagery"}),
+        world.client.put("/api/memory/songs/s1", json={"body": "chorus is locked"}),
+    ]
+    assert [response.status_code for response in saved] == [200, 200]
+    request = {
+        "current_song_id": "s1",
+        "mentioned_version_ids": ["v-s1"],
+        "current_generation_id": "gen1",
+    }
+
+    def turn(message: str) -> None:
+        response = world.client.post("/api/chat/turn", json={"message": message, **request})
+        assert response.status_code == 200
+        list(response.iter_lines())
+
+    turn("remember the verse")
+    file_model = backend._cowriter_agent().model
+    other_model = backend._cowriter_agent().model_copy(update={"model": "text/other"})
+    monkeypatch.setattr(backend, "_cowriter_agent", lambda: other_model)
+    turn("continue the verse")
+
+    first, second = _sent_requests(world)
+    assert (first["model"], second["model"]) == (file_model, "text/other")
+    assert second["tools"] == first["tools"]
+    texts = [m["content"] for m in second["messages"] if m["role"] != "system"]
+    assert texts[0] == "remember the verse"
+    context = texts[-1]
+    for expected in ("prefers vivid imagery", "chorus is locked", "v-s1", "gen1", "a sung take"):
+        assert expected in context
+    with world.factory() as session:
+        assert session.query(Conversation).count() == 1
+        assert session.query(ChatMessage).count() == 4
+
+
+def test_a_turn_with_a_take_sends_only_text_to_the_gateway(world):
+    """Spec: REQ-COWRITER-28 -- every message of a turn with a take is text, and no audio
+    path or content reaches the gateway."""
+    with world.factory() as session:
+        session.add(Generation(
+            id="gen1", song_id="s1", version_id="v-s1", generation_number=1,
+            mp3_path="secret-take.mp3", whisper_text="a sung take",
+        ))
+        session.commit()
+
+    response = world.client.post("/api/chat/turn", json={
+        "message": "how does it sing", "current_song_id": "s1", "current_generation_id": "gen1",
+    })
+
+    assert response.status_code == 200
+    (sent,) = _sent_requests(world)
+    assert all(isinstance(message["content"], str) for message in sent["messages"])
+    assert "a sung take" in sent["messages"][-1]["content"]
+    assert "secret-take.mp3" not in json.dumps(sent)
+
+
+def test_a_turn_creates_a_song_in_an_owned_album(world):
+    """Spec: REQ-COWRITER-30 -- a tool call of a turn creates a song in the musician's album."""
+    world.stack.replies(
+        tool_round(
+            tool_call("call-1", "create_song", {"album_id": "alb-u-test", "title": "Fresh"}),
+        ),
+        completion("Made it."),
+    )
+
+    events = world.turn("start a new song")
+
+    assert _frame(events, "tool_result")["is_error"] is False
+    with world.factory() as session:
+        created = session.query(Song).filter_by(title="Fresh").one()
+        assert created.album_id == "alb-u-test"
+
+
+def test_a_turn_saves_every_song_field_it_names_without_an_accept_step(world):
+    """Spec: REQ-COWRITER-31 -- tool calls of one turn persist title, lyrics, style prompt, BPM,
+    key and duration of an owned song."""
+    world.stack.replies(
+        tool_round(
+            tool_call("call-1", "rename_song", {"song_id": "s1", "title": "Renamed"}),
+            tool_call("call-2", "update_song_lyrics", {"song_id": "s1", "lyrics": "new verse"}),
+            tool_call("call-3", "update_song_prompt", {"song_id": "s1", "prompt": "synth pop"}),
+            tool_call(
+                "call-4", "update_song_style",
+                {"song_id": "s1", "bpm": 98, "key_scale": "Dm", "audio_duration": 200},
+            ),
+        ),
+        completion("Saved."),
+    )
+
+    events = world.turn("rework the song")
+
+    assert [e["is_error"] for e in events if e["type"] == "tool_result"] == [False] * 4
+    with world.factory() as session:
+        song = session.query(Song).filter_by(id="s1").one()
+        latest = max(song.versions, key=lambda version: version.version_number)
+        assert song.title == "Renamed"
+        assert (latest.lyrics, latest.prompt) == ("new verse", "synth pop")
+        assert (latest.bpm, latest.key_scale, latest.audio_duration) == (98, "Dm", 200)
+
+
+def test_no_tool_a_turn_runs_starts_audio_or_changes_pick_or_keep(world):
+    """Spec: REQ-COWRITER-32 -- after a turn that calls every song tool, no generate job exists
+    and the song's Pick and Keep are as they were."""
+    with world.factory() as session:
+        session.add(Generation(
+            id="gen1", song_id="s1", version_id="v-s1", generation_number=1,
+            mp3_path="take.mp3", is_picked=False, is_kept=False,
+        ))
+        session.add(Generation(
+            id="gen2", song_id="s1", version_id="v-s1", generation_number=2,
+            mp3_path="take2.mp3", is_picked=True, is_kept=True,
+        ))
+        session.commit()
+    world.stack.replies(
+        tool_round(
+            tool_call("call-1", "list_albums", {}),
+            tool_call("call-2", "get_song", {"song_id": "s1"}),
+            tool_call("call-3", "get_generation", {"generation_id": "gen1"}),
+            tool_call("call-4", "create_song", {"album_id": "alb-u-test", "title": "Fresh"}),
+            tool_call("call-5", "update_song_lyrics", {"song_id": "s1", "lyrics": "new verse"}),
+            tool_call("call-6", "update_song_style", {"song_id": "s1", "bpm": 98}),
+            tool_call("call-7", "rename_song", {"song_id": "s1", "title": "Renamed"}),
+        ),
+        completion("Done."),
+    )
+
+    events = world.turn("do everything you can")
+
+    assert [e["is_error"] for e in events if e["type"] == "tool_result"] == [False] * 7
+    with world.factory() as session:
+        assert session.query(Job).filter_by(type=JobType.GENERATE).count() == 0
+        picks = {g.id: (g.is_picked, g.is_kept) for g in session.query(Generation)}
+        assert picks == {"gen1": (False, False), "gen2": (True, True)}
 
 
 @pytest.mark.parametrize("answers", [True, False], ids=["an-answer", "a-problem"])

@@ -178,6 +178,7 @@ describe('shared album page', () => {
 		expect(mockFetch.mock.calls[0][0]).toBe('/shared/shared-album');
 	});
 
+	// Spec: REQ-SHARE-18, REQ-SHARE-19, REQ-SHARE-20
 	it('925_M2_W2: says in one line that a gone album link is no longer shared, with no player', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
 		const target = document.createElement('div');
@@ -187,6 +188,13 @@ describe('shared album page', () => {
 		await vi.waitFor(() => expect(target.querySelector('h1')?.textContent).toBe('Album not found'));
 		expect(target.textContent).toContain('This share link is invalid or was removed.');
 		expect(target.querySelector('.now-playing')).toBeNull();
+		expect(target.textContent).not.toContain('shared-album');
+		expect(target.textContent).not.toContain('/shared');
+		const status = target.querySelector('.share-status');
+		expect(status?.querySelector('button')).toBeNull();
+		expect(
+			Array.from(status?.querySelectorAll('a') ?? []).map((link) => link.getAttribute('href'))
+		).toEqual(['/login']);
 	});
 
 	it('shows loading during retry and can recover into the album', async () => {

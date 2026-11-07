@@ -32,6 +32,7 @@ from songmaker_cli.db.queries.auth import (
     record_audit,
     renew_session,
     replace_session_refresh_token,
+    set_user_kind,
     set_user_role,
 )
 
@@ -40,7 +41,7 @@ if TYPE_CHECKING:
 
     from pydantic import SecretStr
     from sqlalchemy.orm import Session, SessionTransaction, sessionmaker
-    from webauth.ports import AccountEvent
+    from webauth.ports import AccountEvent, AccountKind
 
     from songmaker_cli.db.models import User, UserSession
 
@@ -54,12 +55,17 @@ class DatabaseSubjectUserStore:
     def get(self, user_id: str) -> User | None:
         return get_user(self.session, user_id)
 
-    def create_for_subject(self, subject: str, username: str, role: str) -> User:
+    def create_for_subject(
+        self, subject: str, username: str, role: str, kind: AccountKind,
+    ) -> User:
         """The username is display text and may be longer than the column holds."""
-        return create_user(self.session, subject, username[:USERNAME_MAX_LENGTH], role)
+        return create_user(self.session, subject, username[:USERNAME_MAX_LENGTH], role, kind)
 
     def set_role(self, user_id: str, role: str) -> User:
         return set_user_role(self.session, user_id, role)
+
+    def set_kind(self, user_id: str, kind: AccountKind) -> User:
+        return set_user_kind(self.session, user_id, kind)
 
 
 @dataclass
@@ -151,11 +157,15 @@ class DatabaseAuditSink:
     session: Session
 
     def account_event(self, event: AccountEvent) -> None:
+        detail = f"role={event.role}"
         match event.kind:
             case AccountEventKind.USER_CREATED:
                 action = AuditAction.CREATE
             case AccountEventKind.ROLE_CHANGED:
                 action = AuditAction.UPDATE
+            case AccountEventKind.KIND_CHANGED:
+                action = AuditAction.UPDATE
+                detail = f"kind={event.previous_account_kind}->{event.account_kind}"
             case AccountEventKind.BACKCHANNEL_LOGOUT:
                 record_audit(
                     self.session, event.actor_id, AuditAction.DELETE, ResourceType.SESSION,
@@ -165,8 +175,7 @@ class DatabaseAuditSink:
             case _:
                 raise ValueError(f"Unsupported account event: {event.kind}")
         record_audit(
-            self.session, event.actor_id, action, ResourceType.USER, event.subject_id,
-            f"role={event.role}",
+            self.session, event.actor_id, action, ResourceType.USER, event.subject_id, detail,
         )
 
 

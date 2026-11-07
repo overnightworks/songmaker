@@ -9,12 +9,11 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
-from support.failing_reference_stamp import failing_stamp_trigger
+from support.failing_reference_stamp import install_failing_stamp
 from support.reference_rows import a_reference
 
 from songmaker_cli.cleanup import run_cleanup_expired, run_generation_retention
 from songmaker_cli.constants import SONG_COVER_DIRNAME
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 
 OWNER = "owner"
@@ -48,8 +47,8 @@ def audio_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def factory(tmp_path: Path):
-    factory = init_test_db(tmp_path / "loops.db")
+def factory(pg_factory):
+    factory = pg_factory
     with factory() as session:
         session.add(User(id=OWNER, username=OWNER))
         session.flush()
@@ -126,12 +125,6 @@ def _stamped(factory) -> set[str]:
         }
 
 
-def _add_failing_stamp(factory, reference_id: str | None = None) -> None:
-    with factory() as session:
-        session.execute(text(failing_stamp_trigger(reference_id)))
-        session.commit()
-
-
 @pytest.fixture(params=PURGE_SITES)
 def purge_site(request) -> PurgeSite:
     return PURGE_SITES[request.param]
@@ -159,13 +152,13 @@ def test_a_reference_another_song_still_links_keeps_no_stamp_in_a_hard_delete(
 
 
 def test_a_failing_stamp_keeps_the_counts_the_unlinks_and_the_cover_removals(
-    factory, audio_dir, purge_site, caplog,
+    factory, audio_dir, purge_site, caplog, request,
 ):
     _trash_song_world(factory, audio_dir, purge_site)
     cover = audio_dir / SONG_COVER_DIRNAME / "doomed"
     cover.mkdir(parents=True)
     (cover / "cover.png").write_bytes(b"png")
-    _add_failing_stamp(factory)
+    install_failing_stamp(factory, request)
     with caplog.at_level(logging.ERROR):
         counts = run_cleanup_expired(factory, audio_dir)
     assert counts == ((1, 0) if purge_site.album_trashed else (0, 1))
@@ -236,10 +229,10 @@ def test_retention_dry_run_stamps_nothing(factory, audio_dir):
 
 
 def test_a_failed_stamp_on_one_take_still_unlinks_and_reports_it_and_goes_on(
-    factory, audio_dir, caplog,
+    factory, audio_dir, caplog, request,
 ):
     _archived_takes(factory, audio_dir, {"ta": "r1", "tb": "r2"})
-    _add_failing_stamp(factory, "r1")
+    install_failing_stamp(factory, request, "r1")
     with caplog.at_level(logging.ERROR):
         report = run_generation_retention(factory, audio_dir)
     assert report.deleted_ids == ["ta-take", "tb-take"]

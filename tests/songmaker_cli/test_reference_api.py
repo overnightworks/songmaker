@@ -256,10 +256,10 @@ def test_m7c_no_session_with_origin_proof_is_unauthenticated(signed_in: TestClie
 
 
 def test_m7d_a_persons_token_without_origin_uploads_as_that_person(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = make_token_world(tmp_path)
+    world = make_token_world(tmp_path, factory=pg_factory)
 
     response = post_reference(world.client, headers=world.bearer(TokenWorld.ALICE))
 
@@ -521,10 +521,10 @@ def test_p9a_without_a_session_the_audio_is_unauthenticated(signed_in: TestClien
 
 
 def test_p9b_a_persons_token_plays_that_persons_reference(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = make_token_world(tmp_path)
+    world = make_token_world(tmp_path, factory=pg_factory)
     uploaded = post_reference(
         world.client, AUDIO_BYTES, "mine.wav", headers=world.bearer(TokenWorld.ALICE),
     )

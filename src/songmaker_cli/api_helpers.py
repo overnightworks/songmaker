@@ -102,18 +102,10 @@ def raise_audio_file_http_error(
 def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:
     """Acquire an exclusive write lock for check-then-act sequences.
 
-    PostgreSQL: advisory lock scoped to the transaction (auto-released on
+    An advisory lock scoped to the transaction (auto-released on
     commit/rollback). Different lock_ids allow independent serialization.
-    SQLite: BEGIN IMMEDIATE (global write lock, test databases only); inside a
-    transaction that already began it the database-wide lock is already held,
-    and a second BEGIN would raise.
     """
-    dialect = session.bind.dialect.name
-    if dialect == "sqlite":
-        if not session.connection().connection.dbapi_connection.in_transaction:
-            session.execute(text("BEGIN IMMEDIATE"))
-    else:
-        session.execute(text("SELECT pg_advisory_xact_lock(:id)").bindparams(id=lock_id))
+    session.execute(text("SELECT pg_advisory_xact_lock(:id)").bindparams(id=lock_id))
 
 
 def _transaction_has_written(session: Session) -> bool:
@@ -124,8 +116,6 @@ def _transaction_has_written(session: Session) -> bool:
     """
     if not session.in_transaction():
         return False
-    if session.bind.dialect.name == "sqlite":
-        return session.connection().connection.dbapi_connection.in_transaction
     return session.execute(text("SELECT pg_current_xact_id_if_assigned() IS NOT NULL")).scalar_one()
 
 
@@ -154,7 +144,7 @@ def lock_lora_capacity(session: Session) -> None:
     """Start the transaction that serializes voice creation and training enqueueing.
 
     Both capacity checks share one transaction-scoped advisory lock on
-    PostgreSQL (and SQLite's test-only ``BEGIN IMMEDIATE`` fallback).  Like
+    PostgreSQL.  Like
     ``create_job_with_rate_limit``, end the open transaction before taking
     the lock; callers must not have written yet.
     """
@@ -223,7 +213,7 @@ def create_job_with_rate_limit(
     version_id: str | None = None,
     redis: Redis,
 ) -> Job:
-    """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
+    """Atomically check rate limits and create a job under an advisory lock.
 
     Prevents TOCTOU races where two concurrent requests both pass the rate
     limit check before either creates a job.
@@ -231,7 +221,7 @@ def create_job_with_rate_limit(
     Liveness is observed before the initial commit and exclusive write lock so
     Redis round trips do not extend the serialized section. The initial commit
     closes the implicit transaction the endpoint's
-    reads opened so that BEGIN IMMEDIATE can acquire an exclusive write lock.
+    reads opened so that the advisory lock starts a fresh one.
 
     Callers must not write between dependency injection and this function;
     the guard refuses a session that did, because the commit() here would

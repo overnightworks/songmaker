@@ -136,7 +136,7 @@
 	}
 
 	.sync-status {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.sync-status {

@@ -19,7 +19,6 @@ from songmaker_cli.constants import (
     JobStatus,
     LoraStatus,
 )
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     LORA_SLUG_MAX_LENGTH,
     Album,
@@ -43,19 +42,18 @@ def _seed_users(session: Session) -> None:
 
 
 @pytest.fixture
-def client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
+def client_and_ctx(tmp_path: Path, pg_factory) -> tuple[TestClient, AppContext]:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    factory = init_test_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         _seed_users(session)
         session.commit()
 
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory), user=make_authenticated_user(USER_A)
+        make_router_ctx(tmp_path, db=pg_factory), user=make_authenticated_user(USER_A)
     )
     ctx = app.state.ctx
     return web_client(app), ctx
@@ -100,7 +98,7 @@ def test_create_lora_allows_requests_below_configured_voice_limit(
 
 
 def test_create_lora_returns_named_voice_limit_error(
-    client_a: TestClient, monkeypatch: pytest.MonkeyPatch,
+    client_a: TestClient, monkeypatch: pytest.MonkeyPatch, fresh_settings,
 ) -> None:
     monkeypatch.setenv("MAX_USER_LORAS", "1")
     assert client_a.post("/api/loras", json={"name": "First"}).status_code == 200
@@ -1188,6 +1186,7 @@ def test_train_rejects_when_already_active(
 
 def test_train_returns_named_training_queue_limit_error(
     client_and_ctx: tuple[TestClient, AppContext], monkeypatch: pytest.MonkeyPatch,
+    fresh_settings,
 ) -> None:
     client, ctx = client_and_ctx
     monkeypatch.setenv("MAX_QUEUED_LORA_TRAINING_JOBS", "1")

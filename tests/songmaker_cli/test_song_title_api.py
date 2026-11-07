@@ -8,7 +8,6 @@ import pytest
 from fastapi.testclient import TestClient
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AuditLog, Song, User, Version
 
 _OWNER_ID = "owner"
@@ -22,9 +21,8 @@ WRITES = pytest.mark.parametrize(
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    with pg_factory() as session:
         session.add(User(id=_OWNER_ID, username="owner", role="user"))
         session.flush()
         session.add(Album(id="rock", title="Rock", artist="Band", created_by=_OWNER_ID))
@@ -32,7 +30,7 @@ def client(tmp_path: Path) -> TestClient:
         session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="boom"))
         session.commit()
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user(_OWNER_ID, username="owner"),
     )
     return web_client(app)

@@ -306,9 +306,9 @@
 	.create-error {
 		margin: -0.5rem 0 1rem;
 		padding: 0.65rem 0.8rem;
-		border: 1px solid var(--score-bad);
+		border: 1px solid var(--fail);
 		border-radius: 4px;
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 		overflow-wrap: anywhere;
 		white-space: pre-line;
@@ -333,7 +333,7 @@
 	}
 
 	.error {
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 	}
 
@@ -400,8 +400,8 @@
 	}
 
 	.status-badge.bad {
-		background: var(--score-bad);
-		color: #fff;
+		background: var(--fail);
+		color: var(--on-fail);
 	}
 
 	.status-badge.active {
@@ -460,8 +460,8 @@
 	}
 
 	.danger:hover:not(:disabled) {
-		border-color: var(--score-bad);
-		color: var(--score-bad);
+		border-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.danger:disabled {
@@ -471,10 +471,10 @@
 
 	.deleted-tag {
 		padding: 0.15rem 0.5rem;
-		border: 1px dashed var(--score-bad);
+		border: 1px dashed var(--fail);
 		border-radius: 3px;
 		font-size: 0.7rem;
-		color: var(--score-bad);
+		color: var(--fail);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 		font-family: var(--font-display);

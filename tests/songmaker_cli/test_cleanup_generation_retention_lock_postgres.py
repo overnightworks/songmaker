@@ -129,6 +129,8 @@ def _holding_a_generation_write() -> CommitPause:
 def test_stage_one_leaves_a_take_that_a_keep_or_pick_commits_first(
     pg_factory, tmp_path, route,
 ) -> None:
+    """Spec: REQ-CURATION-08 -- A keep or pick that commits while retention is writing leaves the
+    take unarchived."""
     world = _World(pg_factory, tmp_path, {"x": {"archived": False, "old": True}})
     answers = race(
         pg_factory, world.mark(route, "x"), world.retention(), _holding_a_generation_write(),
@@ -322,3 +324,29 @@ def test_a_scored_take_delete_that_a_bulk_delete_has_locked_waits_and_both_finis
     assert answers["second"].status_code == 200
     assert world.state("x") is None
     assert not world.files["x"].exists()
+
+
+@pytest.mark.parametrize("bulk_first", [True, False])
+def test_a_bulk_delete_and_the_final_deletion_of_overlapping_takes_delete_each_once(
+    pg_factory, tmp_path, bulk_first,
+) -> None:
+    world = _World(pg_factory, tmp_path, {
+        "x": {"archived": True, "old": True}, "y": {"archived": False, "old": False},
+    })
+    bulk, retention = world.bulk_delete("x", "y"), world.retention()
+    answers = race(
+        pg_factory, *((bulk, retention) if bulk_first else (retention, bulk)),
+        _holding_a_generation_write(),
+    )
+    assert all(answer.status_code == 200 for answer in (answers["first"], answers["second"]))
+    bulk_answer, retention_answer = (
+        (answers["first"], answers["second"]) if bulk_first
+        else (answers["second"], answers["first"])
+    )
+    assert bulk_answer.json() == {"deleted": 2 if bulk_first else 1}
+    assert retention_answer.json()["deleted_ids"] == ([] if bulk_first else ["x"])
+    assert world.audited_deletions() == (["x", "y"] if bulk_first else ["y"])
+    assert world.state("x") is None
+    assert world.state("y") is None
+    assert not world.files["x"].exists()
+    assert not world.files["y"].exists()

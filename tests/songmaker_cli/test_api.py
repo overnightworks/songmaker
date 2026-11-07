@@ -20,7 +20,6 @@ from songmaker_cli import audio_files
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import build_ace_config
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, JobStatus
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     SONG_SLUG_MAX_LENGTH,
     Album,
@@ -44,8 +43,8 @@ _DEFAULT_USER_ID = "u-test"
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    factory = init_db(tmp_path / "test.db")
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    factory = pg_factory
     with factory() as session:
         session.add(User(
             id=_DEFAULT_USER_ID, username="test_user", role="user",
@@ -66,8 +65,8 @@ def client(tmp_path: Path) -> TestClient:
 
 
 @pytest.fixture
-def unauthed_client(tmp_path: Path) -> TestClient:
-    factory = init_db(tmp_path / "test.db")
+def unauthed_client(tmp_path: Path, pg_factory) -> TestClient:
+    factory = pg_factory
     with factory() as session:
         _seed_db(session)
 
@@ -101,14 +100,14 @@ def _whisper_cues_payload(word_count: int) -> list[dict]:
 
 
 @pytest.fixture
-def gzip_client(tmp_path: Path) -> TestClient:
+def gzip_client(tmp_path: Path, pg_factory) -> TestClient:
     """Same wiring as `client`, plus the real gzip middleware under test.
 
     Seeds gen1's `whisper_cues` with a realistic-size transcript so the
     `/api/songs/s1` payload matches the share-page scenario issue #172
     measured (~22 KB raw per take of word-level Whisper cues).
     """
-    factory = init_db(tmp_path / "test.db")
+    factory = pg_factory
     with factory() as session:
         session.add(User(
             id=_DEFAULT_USER_ID, username="test_user", role="user",
@@ -150,10 +149,11 @@ def test_song_detail_response_uncompressed_without_client_support(
 
 
 def _make_authed_client(
-    tmp_path: Path, role: str = "user", user_id: str = "u-test",
+    tmp_path: Path, pg_factory: sessionmaker[Session],
+    role: str = "user", user_id: str = "u-test",
 ) -> TestClient:
     """Create a TestClient with a fake authenticated user injected."""
-    factory = init_db(tmp_path / "test.db")
+    factory = pg_factory
     with factory() as session:
         session.add(User(
             id=user_id, username=f"test_{role}", role=role,
@@ -413,8 +413,8 @@ def test_rename_album_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
-    factory = init_db(tmp_path / "test.db")
+def test_rename_song_other_user_blocked(tmp_path: Path, pg_factory) -> None:
+    factory = pg_factory
     with factory() as session:
         session.add(User(
             id="u-test", username="test_user", role="user",
@@ -577,8 +577,8 @@ def test_listen_song_from_a_playlist_records_nothing_when_rejected(
     _assert_no_listen_recorded(client)
 
 
-def test_admin_listen_never_moves_another_musicians_playlist(tmp_path: Path) -> None:
-    client = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+def test_admin_listen_never_moves_another_musicians_playlist(tmp_path: Path, pg_factory) -> None:
+    client = _make_authed_client(tmp_path, pg_factory, role="admin", user_id="u-admin")
     _seed_listen_playlists(client)
 
     resp = client.post("/api/songs/s1/listen", json={"playlist_id": "p-foreign"})
@@ -589,9 +589,9 @@ def test_admin_listen_never_moves_another_musicians_playlist(tmp_path: Path) -> 
 
 
 def test_admin_listen_on_a_foreign_song_from_an_own_playlist_marks_only_the_playlist(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
-    client = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+    client = _make_authed_client(tmp_path, pg_factory, role="admin", user_id="u-admin")
     with client.app.state.ctx.db() as session:
         session.add(Playlist(id="p-admin", title="Mine", slug="p-admin", created_by="u-admin"))
         session.add(PlaylistEntry(playlist_id="p-admin", generation_id="g1", position=0))
@@ -609,8 +609,8 @@ def test_admin_listen_on_a_foreign_song_from_an_own_playlist_marks_only_the_play
 @pytest.mark.parametrize(
     "body", [None, {"playlist_id": "p-unknown"}], ids=["no-playlist", "from-a-playlist"],
 )
-def test_listen_song_hides_a_foreign_song(tmp_path: Path, body: dict | None) -> None:
-    client = _make_authed_client(tmp_path)
+def test_listen_song_hides_a_foreign_song(tmp_path: Path, pg_factory, body: dict | None) -> None:
+    client = _make_authed_client(tmp_path, pg_factory)
     with client.app.state.ctx.db() as session:
         session.add(User(
             id="u-other", username="other_user", role="user",
@@ -635,8 +635,8 @@ def test_listen_song_hides_a_foreign_song(tmp_path: Path, body: dict | None) -> 
     _assert_no_listen_recorded(client)
 
 
-def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
-    factory = init_db(tmp_path / "test.db")
+def test_rename_album_other_user_blocked(tmp_path: Path, pg_factory) -> None:
+    factory = pg_factory
     with factory() as session:
         session.add(User(
             id="u-test", username="test_user", role="user",
@@ -757,8 +757,8 @@ def test_get_generation_returns_word_cues_of_a_take_scored_with_them(
     }]
 
 
-def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:
-    factory = init_db(tmp_path / "test.db")
+def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path, pg_factory) -> None:
+    factory = pg_factory
     with factory() as session:
         session.add(User(
             id="u-test", username="test_user", role="user",
@@ -853,26 +853,26 @@ def test_pick_generation_api(client: TestClient) -> None:
     assert resp.json()["is_picked"] is True
 
 
-@pytest.mark.parametrize(
-    ("action", "flag", "previous_remains"),
-    [
-        pytest.param("pick", "is_picked", False, id="pick-replaces-previous"),
-        pytest.param("keep", "is_kept", True, id="keep-is-additive"),
-    ],
-)
-def test_pick_replaces_previous_while_keep_is_additive(
-    client: TestClient, action: str, flag: str, previous_remains: bool,
-) -> None:
-    """Spec: REQ-CURATION-02 -- After a musician selects a second take as a Pick for the same song,
-    the former Pick is not selected and the second take is selected."""
-    first = client.post(f"/api/generations/g1/{action}")
-    assert first.status_code == 200
-    second = client.post(f"/api/generations/g2/{action}")
-    assert second.status_code == 200
-    resp = client.get("/api/generations/g1")
-    assert resp.json()[flag] is previous_remains
-    resp = client.get("/api/generations/g2")
-    assert resp.json()[flag] is True
+def test_picking_a_second_take_replaces_the_songs_previous_pick(client: TestClient) -> None:
+    """Spec: REQ-CURATION-01, REQ-CURATION-02 -- After a musician picks a second take of the same
+    song, only that take is a Pick and the former Pick is not."""
+    assert client.post("/api/generations/g1/pick").status_code == 200
+    assert client.post("/api/generations/g2/pick").status_code == 200
+
+    picked = [
+        generation_id for generation_id in ("g1", "g2")
+        if client.get(f"/api/generations/{generation_id}").json()["is_picked"]
+    ]
+    assert picked == ["g2"]
+
+
+def test_keeping_a_second_take_leaves_the_first_take_kept(client: TestClient) -> None:
+    """Spec: REQ-CURATION-04 -- Two takes of the same song can both be kept."""
+    assert client.post("/api/generations/g1/keep").status_code == 200
+    assert client.post("/api/generations/g2/keep").status_code == 200
+
+    assert client.get("/api/generations/g1").json()["is_kept"] is True
+    assert client.get("/api/generations/g2").json()["is_kept"] is True
 
 
 def test_unpick_generation_api(client: TestClient) -> None:
@@ -1036,8 +1036,8 @@ def test_version_includes_generation_params(client: TestClient) -> None:
 # ── Generation defaults ─────────────────────────────────────────────
 
 
-def test_generation_defaults_roundtrip(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+def test_generation_defaults_roundtrip(tmp_path: Path, pg_factory) -> None:
+    c = _make_authed_client(tmp_path, pg_factory, role="admin", user_id="u-admin")
 
     resp = c.get("/api/settings/generation-defaults")
     assert resp.status_code == 200
@@ -1056,18 +1056,18 @@ def test_generation_defaults_roundtrip(tmp_path: Path) -> None:
     assert resp.json()["turbo"]["inference_steps"] == 12
 
 
-def test_generation_defaults_rejects_unknown_keys(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+def test_generation_defaults_rejects_unknown_keys(tmp_path: Path, pg_factory) -> None:
+    c = _make_authed_client(tmp_path, pg_factory, role="admin", user_id="u-admin")
     resp = c.put("/api/settings/generation-defaults", json={"turbo": {"bad_key": 1}})
     assert resp.status_code == 422
 
 
-def test_generation_defaults_are_readable_by_any_signed_in_user(tmp_path: Path) -> None:
-    admin = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+def test_generation_defaults_are_readable_by_any_signed_in_user(tmp_path: Path, pg_factory) -> None:
+    admin = _make_authed_client(tmp_path, pg_factory, role="admin", user_id="u-admin")
     saved = admin.put("/api/settings/generation-defaults", json={"turbo": {"inference_steps": 12}})
     assert saved.status_code == 200
     musician = make_router_app(
-        make_router_ctx(tmp_path, db=init_db(tmp_path / "test.db")),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-musician", role="user", username="musician"),
     )
 
@@ -1077,8 +1077,8 @@ def test_generation_defaults_are_readable_by_any_signed_in_user(tmp_path: Path) 
     assert resp.json() == admin.get("/api/settings/generation-defaults").json()
 
 
-def test_generation_defaults_change_stays_admin_only(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="user", user_id="u-user")
+def test_generation_defaults_change_stays_admin_only(tmp_path: Path, pg_factory) -> None:
+    c = _make_authed_client(tmp_path, pg_factory, role="user", user_id="u-user")
     resp = c.put("/api/settings/generation-defaults", json={"turbo": {"inference_steps": 12}})
     assert resp.status_code == 403
 
@@ -2506,8 +2506,8 @@ def test_get_song_user_rating_outranks_higher_quality_take(
 # ── Ownership / access control ──────────────────────────────────────
 
 
-def test_user_sees_own_album_only(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+def test_user_sees_own_album_only(tmp_path: Path, pg_factory) -> None:
+    c = _make_authed_client(tmp_path, pg_factory, role="user", user_id="u-test")
     resp = c.get("/api/albums")
     assert resp.status_code == 200
     items = resp.json()["items"]
@@ -2515,8 +2515,8 @@ def test_user_sees_own_album_only(tmp_path: Path) -> None:
     assert items[0]["id"] == "rock"
 
 
-def test_user_cannot_see_other_album(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+def test_user_cannot_see_other_album(tmp_path: Path, pg_factory) -> None:
+    c = _make_authed_client(tmp_path, pg_factory, role="user", user_id="u-test")
 
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
@@ -2530,8 +2530,8 @@ def test_user_cannot_see_other_album(tmp_path: Path) -> None:
     assert resp.status_code == 404
 
 
-def test_user_cannot_see_other_song(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+def test_user_cannot_see_other_song(tmp_path: Path, pg_factory) -> None:
+    c = _make_authed_client(tmp_path, pg_factory, role="user", user_id="u-test")
 
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
@@ -2550,8 +2550,8 @@ def test_user_cannot_see_other_song(tmp_path: Path) -> None:
     assert resp.status_code == 404
 
 
-def test_admin_product_index_is_personal_library(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+def test_admin_product_index_is_personal_library(tmp_path: Path, pg_factory) -> None:
+    c = _make_authed_client(tmp_path, pg_factory, role="admin", user_id="u-admin")
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         session.add(User(
@@ -2568,8 +2568,8 @@ def test_admin_product_index_is_personal_library(tmp_path: Path) -> None:
     assert by_id.json()["id"] == "other"
 
 
-def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+def test_authed_user_creates_album_with_ownership(tmp_path: Path, pg_factory) -> None:
+    c = _make_authed_client(tmp_path, pg_factory, role="user", user_id="u-test")
     resp = c.post("/api/albums", json={"title": "My New Album"})
     assert resp.status_code == 200
     from songmaker_cli.db.queries.albums import get_album
@@ -2580,11 +2580,11 @@ def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
         assert album.created_by == "u-test"
 
 
-def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
+def test_job_ownership_blocks_other_user(tmp_path: Path, pg_factory) -> None:
     from songmaker_cli.db.models import User
     from songmaker_cli.db.queries.jobs import create_job
 
-    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+    c = _make_authed_client(tmp_path, pg_factory, role="user", user_id="u-test")
 
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
@@ -2683,11 +2683,11 @@ def test_cancel_job_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_cancel_job_other_user_blocked(tmp_path: Path) -> None:
+def test_cancel_job_other_user_blocked(tmp_path: Path, pg_factory) -> None:
     from songmaker_cli.db.models import User
     from songmaker_cli.db.queries.jobs import create_job
 
-    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+    c = _make_authed_client(tmp_path, pg_factory, role="user", user_id="u-test")
 
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
@@ -2982,7 +2982,8 @@ def test_stream_job_auth_required(unauthed_client: TestClient) -> None:
 
 
 def _make_pool_capacity_limited_client(
-    tmp_path: Path, *, pool_size: int, max_overflow: int, pool_timeout: float,
+    tmp_path: Path, postgresql_url, request, *,
+    pool_size: int, max_overflow: int, pool_timeout: float,
 ):
     """A stripped-down app like the `client` fixture, but bound to a real
     (non-test-default) QueuePool sized down to `pool_size`/`max_overflow`.
@@ -2994,19 +2995,11 @@ def _make_pool_capacity_limited_client(
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    from songmaker_cli.db.engine import _enable_sqlite_pragmas, _seed_available_models
-    from songmaker_cli.db.models import Base
-
-    data_dir = tmp_path / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    url = f"sqlite:///{data_dir / 'songmaker.db'}"
     engine = create_engine(
-        url, echo=False, connect_args={"timeout": 30},
+        postgresql_url,
         pool_size=pool_size, max_overflow=max_overflow, pool_timeout=pool_timeout,
     )
-    _enable_sqlite_pragmas(engine)
-    Base.metadata.create_all(engine)
-    _seed_available_models(engine)
+    request.addfinalizer(engine.dispose)
     factory = sessionmaker(bind=engine)
 
     with factory() as session:
@@ -3048,7 +3041,7 @@ def _job_stream_scope(job_id: str, *, cookie: str) -> dict:
 
 
 def test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime(
-    tmp_path: Path,
+    tmp_path: Path, postgresql_url, request,
 ) -> None:
     """#331 Finding 1 (review 2026-09-01): api_stream_job must not hold a
     Depends(get_db_session) session open for the whole StreamingResponse --
@@ -3072,7 +3065,7 @@ def test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetim
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     client, factory = _make_pool_capacity_limited_client(
-        tmp_path, pool_size=1, max_overflow=0, pool_timeout=2,
+        tmp_path, postgresql_url, request, pool_size=1, max_overflow=0, pool_timeout=2,
     )
     app = client.app
     ctx: AppContext = app.state.ctx
@@ -3447,8 +3440,8 @@ def test_score_request_invalid_scorer_direct() -> None:
         ScoreRequest(scorers=["lyrical_coherence"])
 
 
-def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+def test_check_song_access_ownership_denied(tmp_path: Path, pg_factory) -> None:
+    c = _make_authed_client(tmp_path, pg_factory, role="user", user_id="u-test")
 
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
@@ -3697,13 +3690,13 @@ def test_create_album_records_audit(client: TestClient) -> None:
 # ── Body size limit middleware ───────────────────────────────────────
 
 
-def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
+def test_body_size_limit_rejects_large_request(tmp_path: Path, pg_factory) -> None:
     from webauth.middleware import BodySizeLimitMiddleware
 
     from songmaker_cli.request_policies import build_body_size_policy
     from songmaker_cli.settings import get_settings
 
-    factory = init_db(tmp_path / "test.db")
+    factory = pg_factory
 
     app = make_router_app(
         make_router_ctx(tmp_path, db=factory),
@@ -3960,8 +3953,10 @@ def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
         pytest.param("get", "/api/library/shares", id="library-shares"),
     ],
 )
-def test_removed_dead_routes_no_longer_answer(tmp_path: Path, method: str, path: str) -> None:
-    client = _make_authed_client(tmp_path, role="admin")
+def test_removed_dead_routes_no_longer_answer(
+    tmp_path: Path, method: str, path: str, pg_factory,
+) -> None:
+    client = _make_authed_client(tmp_path, pg_factory, role="admin")
     assert client.request(method, path, json={}).status_code == 404
 
 
@@ -3998,12 +3993,12 @@ def test_bulk_delete_not_found(client: TestClient) -> None:
 
 
 def _client_beside_a_foreign_take(
-    tmp_path: Path, role: str,
+    tmp_path: Path, pg_factory: sessionmaker[Session], role: str,
 ) -> tuple[TestClient, sessionmaker[Session], Path]:
     """A musician with one take of their own beside another musician's take on disk."""
     other_user_id = "u-other"
 
-    factory = init_db(tmp_path / "test.db")
+    factory = pg_factory
     with factory() as session:
         session.add(User(
             id="u-test", username="test_user", role=role,
@@ -4062,8 +4057,8 @@ def _delete_takes(tc: TestClient, route: str, take_ids: list[str]) -> int:
 
 
 @pytest.mark.parametrize("route", ["bulk", "single"])
-def test_admin_deletes_the_takes_of_a_foreign_song(tmp_path: Path, route: str) -> None:
-    tc, _, foreign_take_file = _client_beside_a_foreign_take(tmp_path, role="admin")
+def test_admin_deletes_the_takes_of_a_foreign_song(tmp_path: Path, route: str, pg_factory) -> None:
+    tc, _, foreign_take_file = _client_beside_a_foreign_take(tmp_path, pg_factory, role="admin")
 
     assert _delete_takes(tc, route, ["g-mine", "g-other"]) == 200
 
@@ -4074,9 +4069,11 @@ def test_admin_deletes_the_takes_of_a_foreign_song(tmp_path: Path, route: str) -
 
 @pytest.mark.parametrize("route", ["bulk", "single"])
 def test_musician_cannot_delete_a_foreign_take_and_nothing_is_touched(
-    tmp_path: Path, route: str,
+    tmp_path: Path, pg_factory, route: str,
 ) -> None:
-    tc, factory, foreign_take_file = _client_beside_a_foreign_take(tmp_path, role="user")
+    tc, factory, foreign_take_file = _client_beside_a_foreign_take(
+        tmp_path, pg_factory, role="user",
+    )
     take_ids = ["g-mine", "g-other"] if route == "bulk" else ["g-other"]
 
     assert _delete_takes(tc, route, take_ids) == 404
@@ -4087,8 +4084,8 @@ def test_musician_cannot_delete_a_foreign_take_and_nothing_is_touched(
     assert foreign_take_file.exists()
 
 
-def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
-    factory = init_db(tmp_path / "test.db")
+def test_bulk_delete_cleans_up_files(tmp_path: Path, pg_factory) -> None:
+    factory = pg_factory
     with factory() as session:
         session.add(User(
             id="u-test", username="test_user", role="user",

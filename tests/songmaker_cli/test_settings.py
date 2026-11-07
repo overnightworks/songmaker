@@ -142,13 +142,13 @@ def test_final_deletion_days_sets_the_archived_take_expiry(
 
 @pytest.mark.parametrize(("configured", "expected_days"), [(None, 30), ("7", 7)])
 def test_retention_preview_reports_the_final_deletion_setting(
-    tmp_path, monkeypatch: pytest.MonkeyPatch, fresh_settings,
+    tmp_path, pg_factory, monkeypatch: pytest.MonkeyPatch, fresh_settings,
     configured: str | None, expected_days: int,
 ) -> None:
     monkeypatch.delenv("FINAL_DELETION_DAYS", raising=False)
     if configured is not None:
         monkeypatch.setenv("FINAL_DELETION_DAYS", configured)
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client.app.state.ctx.db() as session:
         seed_user(session, "admin", "admin")
         session.commit()
@@ -311,6 +311,28 @@ def test_a_fully_set_agent_is_read_from_the_nested_environment(
         _AGENT_ENVIRONMENT["AGENT__GATEWAY__KEY_FILE"],
         _AGENT_ENVIRONMENT["AGENT__API_GROUP"],
     )
+
+
+_MCP_ENVIRONMENT = {"AGENT__MCP_CLIENT_ID": "agents", "AGENT__MCP_SCOPE": "songmaker:mcp"}
+
+
+def test_an_agent_group_without_the_mcp_client_is_unused_and_stays_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _with_environment(monkeypatch, {**_AGENT_ENVIRONMENT, "AGENT__MCP_AGENT_GROUP": "/agents"})
+
+    agent = Settings(**_required_settings()).agent
+
+    assert agent is not None
+    assert (agent.mcp_client_id, agent.mcp_agent_group) == (None, "/agents")
+
+
+def test_mcp_on_without_an_agent_group_stops_startup(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_environment(monkeypatch, {**_AGENT_ENVIRONMENT, **_MCP_ENVIRONMENT})
+    required = _required_settings()
+
+    with pytest.raises(ValidationError, match="mcp_agent_group"):
+        Settings(**required)
 
 
 @pytest.mark.parametrize(

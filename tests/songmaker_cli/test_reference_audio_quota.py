@@ -45,12 +45,7 @@ def _context_with_owners(tmp_path, factory):
 
 
 @pytest.fixture
-def quota_context(tmp_path):
-    return _context_with_owners(tmp_path, None)
-
-
-@pytest.fixture
-def backend_quota_context(tmp_path, pg_factory):
+def quota_context(tmp_path, pg_factory):
     return _context_with_owners(tmp_path, pg_factory)
 
 
@@ -211,10 +206,10 @@ def _owner_with_room_for_one_more(ctx, capacity):
 
 @pytest.mark.parametrize("capacity", ["bytes", "files"])
 def test_postgresql_reference_admission_is_atomic(
-    backend_quota_context, held_reference_owner, capacity
+    quota_context, held_reference_owner, capacity
 ):
     """1301-F3-Q-CONCURRENT: observe contention before allowing the first write."""
-    ctx = backend_quota_context
+    ctx = quota_context
     settings = _owner_with_room_for_one_more(ctx, capacity)
     entered, release = held_reference_owner
     engine = create_engine(ctx.db.kw["bind"].url)
@@ -264,7 +259,7 @@ def test_postgresql_reference_admission_is_atomic(
 
 
 @pytest.fixture
-def held_reference_owner(backend_quota_context):
+def held_reference_owner(quota_context):
     entered, release = threading.Event(), threading.Event()
 
     def hold(session, instance):
@@ -272,19 +267,19 @@ def held_reference_owner(backend_quota_context):
             entered.set()
             assert release.wait(timeout=15), "Upload was never released"
 
-    event.listen(backend_quota_context.db, "loaded_as_persistent", hold)
+    event.listen(quota_context.db, "loaded_as_persistent", hold)
     try:
         yield entered, release
     finally:
         release.set()
-        event.remove(backend_quota_context.db, "loaded_as_persistent", hold)
+        event.remove(quota_context.db, "loaded_as_persistent", hold)
 
 
 def test_postgresql_reference_owners_do_not_block_each_other(
-    backend_quota_context, held_reference_owner
+    quota_context, held_reference_owner
 ):
     """1301-F3-Q-CONCURRENT: issue criterion evidence."""
-    ctx = backend_quota_context
+    ctx = quota_context
     _seed_rows(ctx, "owner", 49)
     _seed_rows(ctx, "other", 49)
     entered, release = held_reference_owner
@@ -306,10 +301,10 @@ def test_postgresql_reference_owners_do_not_block_each_other(
 
 
 def test_postgresql_unrelated_user_write_completes_during_upload(
-    backend_quota_context, held_reference_owner
+    quota_context, held_reference_owner
 ):
     """1301-F3-Q-CONCURRENT: issue criterion evidence."""
-    ctx = backend_quota_context
+    ctx = quota_context
     entered, release = held_reference_owner
 
     def write_song():
@@ -336,10 +331,10 @@ def test_postgresql_unrelated_user_write_completes_during_upload(
 
 
 def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
-    backend_quota_context, held_reference_owner
+    quota_context, held_reference_owner
 ):
     """1301-F3-Q-FAILURE: issue criterion evidence."""
-    ctx = backend_quota_context
+    ctx = quota_context
     entered, release = held_reference_owner
 
     async def cancel_upload():
@@ -377,10 +372,10 @@ def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
 
 @pytest.mark.parametrize("cleanup", ["removed", "denied"])
 def test_postgresql_failed_reference_write_releases_admission(
-    tmp_path, backend_quota_context, cleanup
+    tmp_path, quota_context, cleanup
 ):
     """1301-F3-Q-FAILURE: issue criterion evidence."""
-    factory = backend_quota_context.db
+    factory = quota_context.db
     result = subprocess.run(
         [
             sys.executable,

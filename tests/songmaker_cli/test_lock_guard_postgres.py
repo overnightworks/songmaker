@@ -1,4 +1,4 @@
-"""The lock guard on PostgreSQL asks the database whether the transaction wrote."""
+"""A lock is refused while its transaction holds a write the lock's commit would persist."""
 
 from __future__ import annotations
 

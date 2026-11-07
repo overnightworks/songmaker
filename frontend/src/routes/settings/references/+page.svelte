@@ -11,6 +11,7 @@
 	} from '#lib/api/references.ts';
 	import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
+	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import LoadFailure from '#lib/components/LoadFailure.svelte';
 	import ReferenceRow from '#lib/components/ReferenceRow.svelte';
@@ -288,10 +289,10 @@
 		{/if}
 	{:else if references.length === 0}
 		{#if !$loadFailure}
-			<div class="empty">
-				<Icon name="audio-lines" size={40} />
-				<p>No references yet — upload a recording to guide a song's sound.</p>
-			</div>
+			<EmptyState
+				icon="audio-lines"
+				text="No references yet — upload a recording to guide a song's sound."
+			/>
 		{/if}
 	{:else}
 		{@const now = new Date()}
@@ -398,8 +399,8 @@
 
 	.upload-button.failed {
 		background: transparent;
-		border-color: var(--score-bad);
-		color: var(--score-bad);
+		border-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.upload-name {
@@ -418,7 +419,7 @@
 		margin: 0;
 		font-size: 13px;
 		line-height: 1.35;
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.quota {
@@ -521,26 +522,6 @@
 		.skeleton-bar {
 			animation: none;
 		}
-	}
-
-	.empty {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 10px;
-		padding: 24px;
-		text-align: center;
-		color: var(--text-muted);
-	}
-
-	.empty :global(svg) {
-		color: var(--text-subtle);
-	}
-
-	.empty p {
-		margin: 0;
-		max-width: 28ch;
-		font-size: 15px;
 	}
 
 	.reference-list {

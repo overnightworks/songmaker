@@ -1,7 +1,7 @@
 """the reference countdown has a publication row
 
 Revision ID: e8db38b3b46c
-Revises: 3d9a6b1e5c80
+Revises: a4c7e19b3d52
 Create Date: 2026-11-07 14:55:12.481903
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = 'e8db38b3b46c'
-down_revision: str | Sequence[str] | None = '3d9a6b1e5c80'
+down_revision: str | Sequence[str] | None = 'a4c7e19b3d52'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

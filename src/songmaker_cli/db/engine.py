@@ -4,24 +4,20 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import create_engine, event, insert, inspect
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.constants import (
-    SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE,
     STORE_STARTUP_CONNECT_TIMEOUT_SECONDS,
     STORE_STARTUP_RETRY_DELAY_SECONDS,
     STORE_STARTUP_WAIT_SECONDS,
 )
 from songmaker_cli.db.database_url import connection_url_from_settings
-from songmaker_cli.db.models import Base, RateLimitSetting
 from songmaker_cli.db.soft_delete import install_soft_delete_filter
 from songmaker_cli.settings import get_settings
 
@@ -30,8 +26,6 @@ install_soft_delete_filter()
 log = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = str(Path(__file__).parent / "migrations")
-
-_DEFAULT_SQLITE_TIMEOUT = 30
 
 _RETRIED_SERVER_FATALS = (
     "the database system is starting up",
@@ -60,12 +54,9 @@ def _is_connection_level_failure(error: OperationalError) -> bool:
 
 
 def _probe_database(url: URL | str) -> None:
-    # SQLite takes no connect_timeout.
-    is_postgresql = make_url(url).get_backend_name() == "postgresql"
-    connect_args = (
-        {"connect_timeout": STORE_STARTUP_CONNECT_TIMEOUT_SECONDS} if is_postgresql else {}
+    engine = create_engine(
+        url, connect_args={"connect_timeout": STORE_STARTUP_CONNECT_TIMEOUT_SECONDS}
     )
-    engine = create_engine(url, connect_args=connect_args)
     try:
         with engine.connect() as connection:
             connection.exec_driver_sql("SELECT 1")
@@ -155,51 +146,3 @@ def init_db(url: URL | str) -> sessionmaker[Session]:
     _run_migrations(url)
     return connect_db(url)
 
-
-# ── Test-only (SQLite) ───────────────────────────────────────────────
-
-
-def _enable_sqlite_pragmas(engine) -> None:
-    @event.listens_for(engine, "connect")
-    def _set_pragmas(dbapi_conn, _connection_record):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-
-def init_test_db(db_path: Path) -> sessionmaker[Session]:
-    """Fast test-only database init using create_all() instead of Alembic."""
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    url = f"sqlite:///{db_path}"
-    engine = create_engine(url, echo=False, connect_args={"timeout": _DEFAULT_SQLITE_TIMEOUT})
-    _enable_sqlite_pragmas(engine)
-
-    Base.metadata.create_all(engine)
-    _seed_available_models(engine)
-    _seed_reference_countdown_row(engine)
-    return sessionmaker(bind=engine)
-
-
-def _seed_reference_countdown_row(engine) -> None:
-    """Insert the row the migration chain creates; ``create_all`` skips the chain."""
-    with engine.begin() as conn:
-        conn.execute(insert(RateLimitSetting).values(
-            id=str(uuid.uuid4()),
-            setting_key=SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE,
-            value=0,
-            updated_at=datetime.now(timezone.utc),
-        ))
-
-
-def _seed_available_models(engine) -> None:
-    from sqlalchemy import text
-
-    from songmaker_cli.constants import MODEL_AVAILABLE_MODES, MODEL_DEFAULT_MODE
-
-    stmt = text(
-        "INSERT OR IGNORE INTO available_models (id, is_active) VALUES (:id, :active)",
-    )
-    with engine.begin() as conn:
-        for mode in MODEL_AVAILABLE_MODES:
-            conn.execute(stmt, {"id": mode, "active": int(mode == MODEL_DEFAULT_MODE)})

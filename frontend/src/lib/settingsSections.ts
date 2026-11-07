@@ -21,7 +21,7 @@ const SETTINGS_SECTIONS = [
 		id: 'references',
 		href: '/settings/references',
 		label: 'References',
-		icon: 'audio-lines',
+		icon: 'file-music',
 		adminOnly: false
 	},
 	{ id: 'admin', href: '/settings/users', label: 'Admin', icon: 'shield', adminOnly: true },

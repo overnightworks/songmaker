@@ -103,9 +103,6 @@ def utc_day_start() -> datetime:
 
 def _lock_cover_suggestion_request(session: Session) -> None:
     """Serialize cover-job admission until the caller commits or rolls back."""
-    if session.bind.dialect.name == "sqlite":
-        session.execute(text("BEGIN IMMEDIATE"))
-        return
     session.execute(
         text("SELECT pg_advisory_xact_lock(:id)").bindparams(
             id=_COVER_SUGGESTIONS_LOCK_ID,

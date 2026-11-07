@@ -123,12 +123,12 @@
 		content: '•';
 		position: absolute;
 		left: 0;
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.warning {
 		font-size: 0.8rem;
-		color: var(--score-bad);
+		color: var(--fail);
 		margin: 0;
 		font-family: var(--font-display);
 		text-transform: uppercase;
@@ -164,12 +164,12 @@
 	}
 
 	.confirm-btn {
-		background: var(--score-bad);
-		border: 1px solid var(--score-bad);
-		color: #fff;
+		background: var(--fail);
+		border: 1px solid var(--fail);
+		color: var(--on-fail);
 	}
 
 	.confirm-btn:hover {
-		box-shadow: 0 0 12px rgba(255, 68, 68, 0.3);
+		box-shadow: 0 0 12px color-mix(in srgb, var(--fail) 30%, transparent);
 	}
 </style>

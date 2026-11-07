@@ -194,9 +194,7 @@ def ensure_sources_detachable(sources: list[QueueStreamSource]) -> None:
     """
     for source in sources:
         gen = source.generation
-        song = gen.song
-        if song is not None:
-            _ = song.album
+        _ = gen.song.album
         _ = gen.version
 
 
@@ -329,16 +327,10 @@ def prepare_queue_stream_admission(
                 mtime_ns=stat.st_mtime_ns,
             )
         )
-    if not queue_stream_duration_fits_ffmpeg_timeout(total_duration):
-        raise RuntimeError("Queue stream duration exceeds the ffmpeg timeout budget")
     return QueueStreamAdmission(
         prepared_sources=prepared,
         windowed_by_count=windowed_by_count,
     )
-
-
-def queue_stream_duration_fits_ffmpeg_timeout(duration_seconds: float) -> bool:
-    return queue_stream_ffmpeg_timeout_seconds(duration_seconds) <= FFMPEG_TIMEOUT_SECONDS
 
 
 def _content_hash(
@@ -653,8 +645,6 @@ def _enforce_cache_quota(
 
 
 def delete_snapshot_files_from_dir(stream_dir: Path, snapshot_id: str) -> None:
-    if not _valid_snapshot_id(snapshot_id):
-        return
     for suffix in _SNAPSHOT_FILE_SUFFIXES:
         (stream_dir / f"{snapshot_id}{suffix}").unlink(missing_ok=True)
 
@@ -714,11 +704,7 @@ def generation_matches_pool(generation: Generation, pool: LibraryTakePool) -> bo
         return bool(generation.is_picked or generation.is_kept)
     if pool == "picks":
         return bool(generation.is_picked)
-    if pool == "keeps":
-        return bool(generation.is_kept)
-    if pool == "all":
-        return True
-    raise ValueError(f"Unknown library take pool: {pool}")
+    return True
 
 
 def _take_sort_key(generation: Generation) -> tuple[float, str]:
@@ -738,8 +724,6 @@ def collect_library_pool_generations(
         takes = [gen for gen in song.generations if generation_matches_pool(gen, pool)]
         takes.sort(key=_take_sort_key)
         for gen in takes:
-            if gen.id in seen:
-                continue
             seen.add(gen.id)
             selected.append(gen)
     if start_gen is not None and start_gen.id not in seen and not start_gen.is_archived:
@@ -814,17 +798,9 @@ def shuffle_library_sources(
     if start_generation_id is None:
         mix(unique)
         return unique
-    start: QueueStreamSource | None = None
-    rest: list[QueueStreamSource] = []
-    for item in unique:
-        if start is None and item.generation.id == start_generation_id:
-            start = item
-        else:
-            rest.append(item)
-    mix(rest)
-    if start is None:
-        return rest
-    return [start, *rest]
+    start = unique.pop(_source_position(unique, start_generation_id))
+    mix(unique)
+    return [start, *unique]
 
 
 def resolve_library_pool_membership(
@@ -918,17 +894,12 @@ def _rotate_sources_to_start(
     sources: list[QueueStreamSource],
     start_generation_id: str,
 ) -> list[QueueStreamSource]:
-    rotation_pos = next(
-        (
-            index
-            for index, source in enumerate(sources)
-            if source.generation.id == start_generation_id
-        ),
-        None,
-    )
-    if rotation_pos is None:
-        return sources
+    rotation_pos = _source_position(sources, start_generation_id)
     return sources[rotation_pos:] + sources[:rotation_pos]
+
+
+def _source_position(sources: list[QueueStreamSource], generation_id: str) -> int:
+    return [source.generation.id for source in sources].index(generation_id)
 
 
 def _scan_library_candidates(

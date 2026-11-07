@@ -16,18 +16,21 @@
 		closeSongMovePicker,
 		askToMoveOpenSongTo,
 		openSongMovePicker,
+		retrySongMove,
 		songMoveFilter,
-		songMovePicker
+		songMovePicker,
+		songMoveRun,
+		songMoveRunHere
 	} from '#lib/stores/songMove.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
-		/** Closes the whole popover once a move has been asked for. */
-		onmoved: () => void;
+		/** Closes the whole popover, as a move lands or before a shared album asks. */
+		onclose: () => void;
 	}
 
-	let { onmoved }: Props = $props();
+	let { onclose }: Props = $props();
 
 	let backButton: HTMLButtonElement | undefined = $state();
 	let filterInput: HTMLInputElement | undefined = $state();
@@ -44,9 +47,14 @@
 		}
 	});
 
-	function choose(album: AlbumItem): void {
-		onmoved();
-		void askToMoveOpenSongTo(album);
+	async function choose(album: AlbumItem): Promise<void> {
+		// The ask is a dialog over the page: it opens only after the popover's history layer left.
+		if (album.is_shared) onclose();
+		await askToMoveOpenSongTo(album, onclose);
+	}
+
+	async function retry(): Promise<void> {
+		await retrySongMove(onclose);
 	}
 </script>
 
@@ -68,6 +76,7 @@
 		type="button"
 		class="pk-back"
 		aria-label={SONG_MOVE_BACK_LABEL}
+		disabled={$songMoveRun.status === 'busy'}
 		onclick={closeSongMovePicker}
 	>
 		<Icon name="chevron-right" size={16} class="pk-back-icon" />
@@ -81,6 +90,7 @@
 		<input
 			bind:this={filterInput}
 			bind:value={$songMoveFilter}
+			disabled={$songMoveRun.status === 'busy'}
 			class="pk-filter"
 			type="search"
 			aria-label={SONG_MOVE_FILTER_LABEL}
@@ -96,10 +106,28 @@
 	{#if picker.hasOthers}
 		<ul class="pk-list">
 			{#each picker.others as album (album.id)}
+				{@const run = $songMoveRunHere}
+				{@const busy = run.status === 'busy' && run.albumId === album.id}
+				{@const failed = run.status === 'failed' && run.albumId === album.id}
 				<li>
-					<button type="button" class="pk-row" onclick={() => choose(album)}>
+					<button
+						type="button"
+						class="pk-row"
+						class:busy
+						class:failed
+						aria-busy={busy ? 'true' : undefined}
+						disabled={$songMoveRun.status === 'busy' && !busy}
+						onclick={() => void choose(album)}
+					>
 						{@render albumFace(album)}
-						<span class="pk-count">{album.song_count}</span>
+						{#if busy}
+							<span class="pk-spin" aria-hidden="true"></span>
+							<span class="pk-run" aria-hidden="true"></span>
+						{:else if failed}
+							<Icon name="circle-alert" size={16} class="pk-warn" />
+						{:else}
+							<span class="pk-count">{album.song_count}</span>
+						{/if}
 					</button>
 				</li>
 			{/each}
@@ -109,6 +137,17 @@
 		{/if}
 	{:else}
 		<p class="pk-empty">{SONG_MOVE_NO_OTHER_ALBUM}</p>
+	{/if}
+	{#if $songMoveRunHere.status === 'failed'}
+		<div class="pk-error pk-move-error" role="alert">
+			<Icon name="circle-alert" size={16} />
+			<span>{$songMoveRunHere.line}</span>
+			{#if $songMoveRunHere.retryable}
+				<button type="button" class="pk-retry" onclick={() => void retry()}>
+					{LIBRARY_RETRY_LABEL}
+				</button>
+			{/if}
+		</div>
 	{/if}
 {:else if $songMovePicker.status === 'failed'}
 	<div class="pk-error" role="alert">
@@ -171,6 +210,7 @@
 	}
 
 	.pk-list {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -201,8 +241,76 @@
 		cursor: pointer;
 	}
 
-	button.pk-row:hover {
+	button.pk-row:hover:not(:disabled) {
 		background: var(--surface-hover);
+	}
+
+	button.pk-row:disabled {
+		cursor: default;
+		opacity: 0.45;
+	}
+
+	button.pk-row.busy {
+		position: relative;
+		opacity: 1;
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
+	}
+
+	button.pk-row.failed {
+		border-left: 3px solid var(--fail);
+	}
+
+	.pk-row :global(.pk-warn) {
+		flex: none;
+		color: var(--fail);
+	}
+
+	.pk-spin {
+		flex: none;
+		width: 16px;
+		height: 16px;
+		border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: pk-spin 0.9s linear infinite;
+	}
+
+	.pk-run {
+		position: absolute;
+		left: 0;
+		bottom: 0;
+		width: 40%;
+		height: 2px;
+		background: var(--accent);
+		animation: pk-run 1.2s ease-in-out infinite;
+	}
+
+	@keyframes pk-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@keyframes pk-run {
+		from {
+			left: -40%;
+		}
+		to {
+			left: 100%;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.pk-spin,
+		.pk-run {
+			animation: none;
+		}
+
+		.pk-run {
+			left: 0;
+			width: 100%;
+			opacity: 0.5;
+		}
 	}
 
 	.pk-row.here {
@@ -267,13 +375,18 @@
 		font-style: italic;
 	}
 
+	.pk-move-error {
+		margin-top: 4px;
+		border-top: 1px solid var(--border);
+	}
+
 	.pk-error {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		padding: 8px 0.4rem 2px 0.6rem;
 		font-size: var(--label-font-size);
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.pk-error span {
@@ -286,8 +399,8 @@
 		flex: none;
 		padding: 4px 8px;
 		background: none;
-		border: 1px solid var(--score-bad);
-		color: var(--score-bad);
+		border: 1px solid var(--accent);
+		color: var(--accent);
 		font: inherit;
 		font-size: 0.75rem;
 		cursor: pointer;

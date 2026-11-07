@@ -19,7 +19,6 @@ from songmaker_cli.constants import (
     TURN_BLOCK_USER_MEMORY,
 )
 from songmaker_cli.conversation_api import compose_turn_context
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
@@ -68,29 +67,27 @@ def _seed(session, user_id: str) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
-    factory = init_db(tmp_path / "memory.db")
-    with factory() as session:
+def client(tmp_path: Path, pg_factory) -> tuple[TestClient, sessionmaker[Session]]:
+    with pg_factory() as session:
         _seed(session, "u-test")
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    return web_client(app), factory
+    return web_client(app), pg_factory
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
-    factory = init_db(tmp_path / "memory_spy.db")
-    with factory() as session:
+def stranger_client(tmp_path: Path, pg_factory) -> tuple[TestClient, sessionmaker[Session]]:
+    with pg_factory() as session:
         _seed(session, "u-owner")
         session.add(User(id="u-spy", username="spy", role="user"))
         session.commit()
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    return web_client(app), factory
+    return web_client(app), pg_factory
 
 
 @pytest.fixture
@@ -134,6 +131,7 @@ def test_compose_omits_empty_album_notes():
 
 
 def test_put_and_get_memory_roundtrip(client):
+    """Spec: REQ-COWRITER-14 -- user memory, song memory and album notes are stored apart."""
     c, _ = client
     assert c.put("/api/memory/user", json={"body": "prefer German"}).status_code == 200
     assert c.put("/api/memory/songs/s1", json={"body": "locked chorus"}).status_code == 200
@@ -144,12 +142,40 @@ def test_put_and_get_memory_roundtrip(client):
     assert bundle["album"]["body"] == "night city"
 
 
+def test_a_bundle_without_album_notes_carries_no_album_body(client):
+    """Spec: REQ-COWRITER-14 -- album notes are optional: with none stored, the bundle's album
+    body is empty while user and song memory stay."""
+    c, _ = client
+    c.put("/api/memory/user", json={"body": "prefer German"})
+    c.put("/api/memory/songs/s1", json={"body": "locked chorus"})
+
+    bundle = c.get("/api/memory", params={"song_id": "s1"}).json()
+
+    assert (bundle["user"]["body"], bundle["song"]["body"]) == ("prefer German", "locked chorus")
+    assert bundle["album"]["body"] == ""
+
+
 def test_memory_put_does_not_change_lyrics(client):
+    """Spec: REQ-COWRITER-16 -- a memory write leaves the song's lyrics as they were."""
     c, factory = client
     c.put("/api/memory/songs/s1", json={"body": "do not copy lyrics"})
     with factory() as session:
         version = session.get(Version, "v1")
         assert version.lyrics == "verse of thunder"
+
+
+def test_a_turn_after_a_memory_write_takes_its_lyrics_only_from_the_song(client, service):
+    """Spec: REQ-COWRITER-16 -- the turn carries the song's own lyrics once, and the memory
+    text only in the memory block."""
+    c, _ = client
+    c.put("/api/memory/songs/s1", json={"body": "keep the chorus short"})
+
+    _stream_events(c.post("/api/chat/turn", json={"message": "go", "current_song_id": "s1"}))
+
+    content = service.last_turn.messages[-1]["text"]
+    assert content.count("verse of thunder") == 1
+    assert content.count("keep the chorus short") == 1
+    assert "<song_memory>\nkeep the chorus short\n</song_memory>" in content
 
 
 def test_stranger_memory_is_404(stranger_client):
@@ -161,9 +187,12 @@ def test_stranger_memory_is_404(stranger_client):
 
 
 def test_new_conversation_keeps_memory(client, service):
+    """Spec: REQ-COWRITER-02 -- user memory, song memory and album notes reach the turn that
+    follows a new conversation."""
     c, _ = client
     c.put("/api/memory/user", json={"body": "standing rule"})
     c.put("/api/memory/songs/s1", json={"body": "open bridge"})
+    c.put("/api/memory/albums/alb1", json={"body": "night city"})
     c.post("/api/conversations/new")
     resp = c.post(
         "/api/chat/turn",
@@ -174,13 +203,22 @@ def test_new_conversation_keeps_memory(client, service):
     content = service.last_turn.messages[-1]["text"]
     assert "<user_memory>\nstanding rule\n</user_memory>" in content
     assert "<song_memory>\nopen bridge\n</song_memory>" in content
+    assert "<album_notes>\nnight city\n</album_notes>" in content
 
 
 def test_song_switch_swaps_song_memory_keeps_user_memory(client, service):
+    """Spec: REQ-COWRITER-04 -- after a turn on one song, a turn on another carries only the
+    other song's memory."""
     c, _ = client
     c.put("/api/memory/user", json={"body": "taste"})
     c.put("/api/memory/songs/s1", json={"body": "memory A"})
     c.put("/api/memory/songs/s2", json={"body": "memory B"})
+    first = c.post(
+        "/api/chat/turn",
+        json={"message": "work on thunder", "current_song_id": "s1"},
+    )
+    _stream_events(first)
+    assert "memory A" in service.last_turn.messages[-1]["text"]
     resp = c.post(
         "/api/chat/turn",
         json={"message": "work on rain", "current_song_id": "s2"},
@@ -189,11 +227,13 @@ def test_song_switch_swaps_song_memory_keeps_user_memory(client, service):
     content = service.last_turn.messages[-1]["text"]
     assert "<user_memory>\ntaste\n</user_memory>" in content
     assert "<song_memory>\nmemory B\n</song_memory>" in content
-    assert "memory A" not in content
+    assert all("memory A" not in message["text"] for message in service.last_turn.messages)
     assert "Thunder" not in content
 
 
 def test_proposal_in_assistant_text_does_not_write_memory(client, service):
+    """Spec: REQ-COWRITER-17 -- a proposal in the assistant's reply leaves stored memory
+    unchanged until the musician saves it."""
     c, _ = client
     c.put("/api/memory/user", json={"body": "old"})
     proposal = (

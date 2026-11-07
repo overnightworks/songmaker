@@ -618,7 +618,7 @@
 
 	.budget-error {
 		font-size: 0.76rem;
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.retry {
@@ -627,10 +627,10 @@
 		font-size: 0.72rem;
 		font-weight: 600;
 		padding: 0.18rem 0.7rem;
-		border: 1px solid var(--score-bad);
+		border: 1px solid var(--accent);
 		border-radius: 999px;
 		background: transparent;
-		color: var(--score-bad);
+		color: var(--accent);
 		cursor: pointer;
 	}
 
@@ -703,7 +703,7 @@
 	}
 
 	.error {
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 		margin-bottom: 1rem;
 	}
@@ -760,8 +760,8 @@
 	}
 
 	.voice-status-failed {
-		background: var(--score-bad);
-		color: white;
+		background: var(--fail);
+		color: var(--on-fail);
 	}
 
 	.actions {
@@ -776,7 +776,7 @@
 	}
 
 	.fail {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.hint {

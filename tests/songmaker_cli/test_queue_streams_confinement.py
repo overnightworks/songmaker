@@ -13,13 +13,13 @@ from songmaker_cli.queue_streams import QUEUE_STREAM_DIRNAME, queue_stream_audio
 SNAPSHOT_ID = "0123456789abcdef0123456789abcdef"
 
 
-def _app_context(tmp_path: Path):
-    client, _ = make_test_app(tmp_path)
+def _app_context(tmp_path: Path, pg_factory):
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     return client.app.state.ctx
 
 
-def test_a_snapshot_below_the_stream_folder_resolves(tmp_path: Path) -> None:
-    ctx = _app_context(tmp_path)
+def test_a_snapshot_below_the_stream_folder_resolves(tmp_path: Path, pg_factory) -> None:
+    ctx = _app_context(tmp_path, pg_factory)
     stream_dir = ctx.data_dir / QUEUE_STREAM_DIRNAME
     stream_dir.mkdir(parents=True)
     snapshot = stream_dir / f"{SNAPSHOT_ID}.mp3"
@@ -28,8 +28,10 @@ def test_a_snapshot_below_the_stream_folder_resolves(tmp_path: Path) -> None:
     assert queue_stream_audio_path(ctx, SNAPSHOT_ID) == snapshot.resolve()
 
 
-def test_a_planted_link_to_outside_the_stream_folder_answers_403(tmp_path: Path) -> None:
-    ctx = _app_context(tmp_path)
+def test_a_planted_link_to_outside_the_stream_folder_answers_403(
+    tmp_path: Path, pg_factory
+) -> None:
+    ctx = _app_context(tmp_path, pg_factory)
     stream_dir = ctx.data_dir / QUEUE_STREAM_DIRNAME
     stream_dir.mkdir(parents=True)
     outside = tmp_path / "outside.mp3"

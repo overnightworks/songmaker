@@ -11,11 +11,13 @@ const INSTANCE_DEFAULTS_PATH = '/api/settings/generation-defaults';
 const PRESETS_PATH = '/api/settings/presets';
 const MODEL = 'turbo';
 
+const DEFAULT_CONFIG_PATH = '/api/settings/default-config';
+
 const RESPONSES: Record<string, unknown> = {
 	[PRESETS_PATH]: [],
 	'/api/settings/generation-builtins': { [MODEL]: { inference_steps: 8, guidance_scale: 7 } },
 	'/api/settings/models': [{ id: MODEL, is_active: true }],
-	'/api/settings/default-config': { config: null },
+	[DEFAULT_CONFIG_PATH]: { config: null },
 	[INSTANCE_DEFAULTS_PATH]: { [MODEL]: { inference_steps: 20, shift: 3 } }
 };
 
@@ -46,7 +48,10 @@ function savedPreset(body: string): PresetItem {
 	};
 }
 
-function stubApi(failing: ReadonlySet<string>): StubbedApi {
+function stubApi(
+	failing: ReadonlySet<string>,
+	responses: Record<string, unknown> = RESPONSES
+): StubbedApi {
 	const requested: string[] = [];
 	const savedPresets: PresetItem[] = [];
 	vi.stubGlobal(
@@ -59,7 +64,10 @@ function stubApi(failing: ReadonlySet<string>): StubbedApi {
 				savedPresets.push(preset);
 				return new Response(JSON.stringify(preset), { status: 201 });
 			}
-			return new Response(JSON.stringify(RESPONSES[path]), { status: 200 });
+			if (path === DEFAULT_CONFIG_PATH && init?.method === 'PUT') {
+				return new Response(String(init.body), { status: 200 });
+			}
+			return new Response(JSON.stringify(responses[path]), { status: 200 });
 		})
 	);
 	return { requested, savedPresets };
@@ -67,10 +75,11 @@ function stubApi(failing: ReadonlySet<string>): StubbedApi {
 
 async function openPageAs(
 	user: AuthUser,
-	failing: ReadonlySet<string> = new Set()
+	failing: ReadonlySet<string> = new Set(),
+	responses: Record<string, unknown> = RESPONSES
 ): Promise<OpenedPage> {
 	currentUser.set(user);
-	const { requested, savedPresets } = stubApi(failing);
+	const { requested, savedPresets } = stubApi(failing, responses);
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(GenerationSettingsPage, { target });
@@ -132,5 +141,63 @@ describe('generation settings', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('.error')?.textContent).toBe('Failed to load generation defaults')
 		);
+	});
+
+	describe('the default chooser', () => {
+		const presetNamed = (id: string, name: string): PresetItem => ({
+			...savedPreset(JSON.stringify({ name, model_mode: MODEL, params: {}, is_default: false })),
+			id
+		});
+
+		async function openChooserWithDefault(defaultId = 'a'): Promise<{
+			chips: () => HTMLElement[];
+			checked: () => (string | undefined)[];
+		}> {
+			const { target } = await openPageAs(makeAuthUser(), new Set(), {
+				...RESPONSES,
+				[PRESETS_PATH]: [presetNamed('a', 'Warm'), presetNamed('b', 'Bright')],
+				[DEFAULT_CONFIG_PATH]: { config: defaultId }
+			});
+			const group = target.querySelector('[role="radiogroup"]');
+			const labelId = group?.getAttribute('aria-labelledby') ?? '';
+			expect(target.querySelector(`[id="${labelId}"]`)?.textContent).toBe('Default for New Songs');
+			const chips = () => [...(group?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+			const checked = () =>
+				chips()
+					.filter((chip) => chip.getAttribute('aria-checked') === 'true')
+					.map((chip) => chip.textContent?.trim());
+			await vi.waitFor(() => expect(chips()).toHaveLength(3));
+			return { chips, checked };
+		}
+
+		it('checks exactly the current default and moves the check when another is chosen', async () => {
+			const { chips, checked } = await openChooserWithDefault();
+			await vi.waitFor(() => expect(checked()).toEqual(['Warm']));
+
+			chips()
+				.find((chip) => chip.textContent?.trim() === 'Bright')
+				?.click();
+
+			await vi.waitFor(() => expect(checked()).toEqual(['Bright']));
+		});
+
+		it('moves the check to the next chip on ArrowRight and back on ArrowLeft', async () => {
+			const { chips, checked } = await openChooserWithDefault();
+			await vi.waitFor(() => expect(checked()).toEqual(['Warm']));
+
+			chips()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+			await vi.waitFor(() => expect(checked()).toEqual(['Bright']));
+
+			chips()[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+			await vi.waitFor(() => expect(checked()).toEqual(['Warm']));
+		});
+
+		it('keeps the first chip in the tab order when no chip is checked', async () => {
+			const { chips, checked } = await openChooserWithDefault('deleted');
+
+			await vi.waitFor(() => expect(checked()).toEqual([]));
+			const tabbable = chips().filter((chip) => chip.getAttribute('tabindex') === '0');
+			expect(tabbable).toEqual([chips()[0]]);
+		});
 	});
 });

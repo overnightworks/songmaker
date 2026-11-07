@@ -62,14 +62,14 @@ def install_app_context(app, ctx) -> None:
 def make_router_ctx(
     tmp_path: Path,
     *,
-    db: sessionmaker[Session] | None = None,
+    db: sessionmaker[Session],
     seed_db: Callable[[Session], None] | None = None,
 ) -> AppContext:
-    """Build a router context, preserving an existing DB and committing seed data."""
-    from songmaker_cli.db.engine import init_test_db
+    """Build a router context on the required ``db``, committing seed data.
 
+    The caller passes its database; no default builds one."""
     ctx = AppContext(
-        db=db if db is not None else init_test_db(tmp_path / "test.db"),
+        db=db,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,
@@ -107,25 +107,31 @@ def seed_user(
     """Add an account the way admission would: its id is the issuer's subject."""
     import uuid
 
+    from webauth.ports import AccountKind
+
     from songmaker_cli.db.queries.auth import create_user
 
-    return create_user(session, user_id or str(uuid.uuid4()), username, role)
+    return create_user(
+        session, user_id or str(uuid.uuid4()), username, role, AccountKind.PERSON,
+    )
 
 
 def make_test_app(
     tmp_path: Path,
     seed_db: Callable | None = None,
     index_html: str = "<html>Songmaker</html>",
-    factory: sessionmaker[Session] | None = None,
+    *,
+    factory: sessionmaker[Session],
     oidc_sign_in: OidcSignIn | None = None,
 ) -> tuple:
-    """Create a full test app with real middleware on ``factory`` or a fresh SQLite file.
+    """Create a full test app with real middleware on the required ``factory``.
+
+    The caller passes its database; no default builds one.
 
     Returns (TestClient, sessionmaker) so callers can seed data or log in.
     ``seed_db`` receives a Session to add models before the app starts;
     ``index_html`` is the built page whose inline scripts the policy hashes.
     """
-    from songmaker_cli.db.engine import init_test_db as init_db
     from songmaker_cli.server import create_app
 
     audio_dir = tmp_path / "audio"
@@ -138,7 +144,6 @@ def make_test_app(
     sk_dir.mkdir(parents=True, exist_ok=True)
     (sk_dir / "index.html").write_text(index_html)
 
-    factory = factory or init_db(data_dir / "songmaker.db")
     with factory() as session:
         if seed_db is not None:
             seed_db(session)
@@ -165,6 +170,7 @@ def make_authenticated_user(
         id=user_id,
         username=user_id if username is None else username,
         role=role,
+        agent=None,
     )
 
 

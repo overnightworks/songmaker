@@ -21,7 +21,6 @@ on live, unarchived albums, as ``owner_filter`` decides whose.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -38,7 +37,7 @@ from sqlalchemy import (
     select,
     union_all,
 )
-from sqlalchemy.dialects import postgresql, sqlite
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, aliased, contains_eager, selectinload
 
 from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_PLAYLIST, SongWorkKind
@@ -65,12 +64,6 @@ class SongWork(StrEnum):
     EDITED = "edited_at"
     PLAYED = "played_at"
     ALBUM_PLAYED = "album_played_at"
-
-
-_UPSERT_INSERT_BY_DIALECT: Final[dict[str, Callable]] = {
-    "postgresql": postgresql.insert,
-    "sqlite": sqlite.insert,
-}
 
 
 def record_song_edit(
@@ -103,7 +96,6 @@ def _stamp_song_work(
     **details: str,
 ) -> None:
     """Stamp ``works`` at one moment with ``details``, keeping the row's other columns."""
-    insert = _UPSERT_INSERT_BY_DIALECT[session.bind.dialect.name]
     now = utcnow()
     stamp = {work.value: now for work in works} | details
     session.execute(

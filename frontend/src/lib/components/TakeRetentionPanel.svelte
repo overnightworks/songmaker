@@ -218,7 +218,7 @@
 	}
 
 	.card.danger {
-		border-color: var(--score-bad);
+		border-color: var(--border);
 	}
 
 	.number {
@@ -227,7 +227,7 @@
 	}
 
 	.card.danger .number {
-		color: var(--score-bad);
+		color: var(--text);
 	}
 
 	.label {
@@ -260,20 +260,20 @@
 	}
 
 	.btn.danger {
-		border-color: var(--score-bad);
-		color: var(--score-bad);
+		border-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.btn.danger.solid {
-		background: var(--score-bad);
+		background: var(--fail);
 		color: var(--bg);
 	}
 
 	.confirm {
 		margin-top: 1.2rem;
 		padding: 1rem;
-		background: var(--score-bad-bg);
-		border: 1px solid var(--score-bad);
+		background: var(--fail-soft);
+		border: 1px solid var(--fail);
 		border-radius: 4px;
 	}
 
