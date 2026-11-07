@@ -27,7 +27,6 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -108,9 +107,8 @@ def test_aware_timestamp_preserves_explicit_offsets_and_interprets_naive_as_utc(
 
 
 @pytest.fixture
-def db_session(tmp_path: Path) -> Session:
-    factory = init_db(tmp_path / "test.db")
-    session = factory()
+def db_session(pg_factory) -> Session:
+    session = pg_factory()
     yield session
     session.close()
 
@@ -1229,10 +1227,9 @@ def test_save_scores_upsert(seeded_session: Session) -> None:
     assert batch_scores[0].value["dynamics"] == 99.0
 
 
-def test_save_scores_upsert_persists(tmp_path: Path) -> None:
+def test_save_scores_upsert_persists(pg_factory) -> None:
     """Verify score upsert actually persists to DB (not just in-memory)."""
-    factory = init_db(tmp_path / "test.db")
-    with factory() as session:
+    with pg_factory() as session:
         session.add(Album(id="t2", title="T2", artist="A"))
         session.add(Song(id="s2", title="S2", album_id="t2", track_number=1))
         session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="x", prompt="y"))
@@ -1248,11 +1245,11 @@ def test_save_scores_upsert_persists(tmp_path: Path) -> None:
         session.add(Score(id="scx", generation_id="gx", scorer="batch", value={"old": 1.0}))
         session.commit()
 
-    with factory() as s2:
+    with pg_factory() as s2:
         save_scores(s2, "gx", {"new": 99.0}, refreshed_keys={"old", "new"})
         s2.commit()
 
-    with factory() as s3:
+    with pg_factory() as s3:
         reloaded = get_generation(s3, "gx")
         batch = [s for s in reloaded.scores if s.scorer == "batch"]
         assert len(batch) == 1
