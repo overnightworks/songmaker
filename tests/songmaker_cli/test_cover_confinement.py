@@ -29,9 +29,10 @@ SUGGESTION_RELATIVE = f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/{ALBUM_ID}/s1.png"
 
 
 def _tiny_png() -> bytes:
-    buffer = BytesIO()
-    Image.new("RGB", (32, 24), (40, 80, 200)).save(buffer, format="PNG")
-    return buffer.getvalue()
+    image = Image.new("RGB", (32, 24), (40, 80, 200))
+    with BytesIO() as buffer:
+        image.save(buffer, "PNG")
+        return buffer.getvalue()
 
 
 def _seed_alice_album(session) -> None:

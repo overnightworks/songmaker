@@ -322,7 +322,7 @@ def _materialize_dataset(
         dst_audio = dataset_dir / f"{base}{ext}"
         try:
             os.symlink(src, dst_audio)
-        except OSError, NotImplementedError:
+        except (OSError, NotImplementedError):
             shutil.copy2(src, dst_audio)
         (dataset_dir / f"{base}.caption.txt").write_text(
             sample.caption.strip() + "\n",
@@ -1324,23 +1324,12 @@ def _complete_lora_training(
 
 
 def _validated_lora_adapter_handoff(
-    audio_dir: Path,
-    user_id: str,
-    tmp_output: Path,
-    worker_result: TrainLoraTaskResultDTO,
+    audio_dir: Path, user_id: str, tmp_output: Path, worker_result: TrainLoraTaskResultDTO
 ) -> Path:
-    adapter_src = confined_under(
-        audio_dir / USER_LORAS_DIRNAME / user_id,
-        Path(worker_result.adapter_dir),
-    )
-    if adapter_src is None:
-        raise RuntimeError(
-            f"Worker reported adapter outside the user LoRA folder: {worker_result.adapter_dir}",
-        )
-    if adapter_src != tmp_output.resolve():
-        raise RuntimeError(f"Worker reported unexpected training handoff path: {adapter_src}")
-    if not adapter_src.exists():
-        raise RuntimeError(f"Worker reported adapter at {adapter_src} but path is missing")
+    reported = worker_result.adapter_dir
+    adapter_src = confined_under(audio_dir / USER_LORAS_DIRNAME / user_id, Path(reported))
+    if adapter_src is None or adapter_src != tmp_output.resolve():
+        raise RuntimeError(f"Worker reported unexpected training handoff path: {reported}")
     if not adapter_src.is_dir():
         raise RuntimeError(f"Worker reported adapter at {adapter_src} but it is not a directory")
     return adapter_src

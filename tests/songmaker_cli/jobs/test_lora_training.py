@@ -215,8 +215,7 @@ def _patch_worker_calls(adapter_dir: str, *, events=None, submitted_requests=Non
 
 
 def test_lora_progress_throttles_until_interval_or_epoch_or_start_changes(
-    seeded,
-    db_factory,
+    seeded, db_factory,
 ) -> None:
     started_at = datetime(2026, 9, 19, 12, tzinfo=timezone.utc)
     now = 0.0
@@ -246,8 +245,7 @@ def test_lora_progress_throttles_until_interval_or_epoch_or_start_changes(
             job = get_job(session, "job-1")
             saved_start = (
                 job.training_started_at.replace(tzinfo=timezone.utc)
-                if job.training_started_at is not None
-                else None
+                if job.training_started_at is not None else None
             )
             saved_progress = (job.progress, job.current_epoch, saved_start)
             assert saved_progress == expected
@@ -349,15 +347,11 @@ def test_happy_path_transitions_and_persists(seeded, db_factory, tmp_path, caplo
 
 
 def test_matching_worker_mode_is_recorded_when_training_completes(
-    seeded,
-    db_factory,
+    seeded, db_factory,
 ) -> None:
     output_dir = (
-        seeded["audio_dir"]
-        / USER_LORAS_DIRNAME
-        / seeded["user_id"]
-        / seeded["lora_id"]
-        / "training_tmp"
+        seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"]
+        / seeded["lora_id"] / "training_tmp"
     )
 
     async def turbo_training_events(*_args, **_kwargs):
@@ -411,11 +405,8 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
     expected_error_type: str,
 ) -> None:
     output_dir = (
-        seeded["audio_dir"]
-        / USER_LORAS_DIRNAME
-        / seeded["user_id"]
-        / seeded["lora_id"]
-        / "training_tmp"
+        seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"]
+        / seeded["lora_id"] / "training_tmp"
     )
 
     async def invalid_mode_events(*_args, **_kwargs):
@@ -448,11 +439,8 @@ def test_invalid_worker_completion_mode_fails_without_readying_the_voice(
         assert job.error == expected_error
         assert job.error_type == expected_error_type
     assert not (
-        seeded["audio_dir"]
-        / USER_LORAS_DIRNAME
-        / seeded["user_id"]
-        / seeded["lora_id"]
-        / USER_LORA_OUTPUT_DIRNAME
+        seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"]
+        / seeded["lora_id"] / USER_LORA_OUTPUT_DIRNAME
     ).exists()
 
 
@@ -478,34 +466,26 @@ def fake_clock():
 
 
 def test_training_progress_keeps_a_long_running_lora_alive(
-    seeded,
-    db_factory,
-    fake_clock,
+    seeded, db_factory, fake_clock,
 ) -> None:
     generation_timeout_seconds = TEST_SETTINGS.arq_job_timeout
     assert TEST_LORA_TRAINING_CONFIG.train_epochs == 500
     assert TEST_SETTINGS.lora_training_job_timeout > generation_timeout_seconds
 
     output_dir = (
-        seeded["audio_dir"]
-        / USER_LORAS_DIRNAME
-        / seeded["user_id"]
-        / seeded["lora_id"]
-        / "training_tmp"
+        seeded["audio_dir"] / USER_LORAS_DIRNAME / seeded["user_id"]
+        / seeded["lora_id"] / "training_tmp"
     )
 
     async def progress_for_long_training(*_args, **_kwargs):
         yield ("progress", {"progress": 0.20, "current_epoch": 0, "train_epochs": 500})
         fake_clock.advance(generation_timeout_seconds + 1)
         yield ("progress", {"progress": 0.80, "current_epoch": 400, "train_epochs": 500})
-        assert (
-            reap_stale_jobs(
-                SimpleNamespace(db=db_factory),
-                now=fake_clock.now,
-                worker_liveness={JobType.LORA_TRAINING: WorkerLiveness.ALIVE},
-            )
-            == 0
-        )
+        assert reap_stale_jobs(
+            SimpleNamespace(db=db_factory),
+            now=fake_clock.now,
+            worker_liveness={JobType.LORA_TRAINING: WorkerLiveness.ALIVE},
+        ) == 0
         yield (
             "done",
             {"result": {"mode": "sft", "adapter_dir": "", "num_samples": 3}},
@@ -521,18 +501,13 @@ def test_training_progress_keeps_a_long_running_lora_alive(
         _patch_worker_calls(str(output_dir), events=progress_for_long_training),
         patch("songmaker_cli.jobs.lora_training._touch_heartbeat", touch_heartbeat),
     ):
-        _run(
-            run_lora_training_job(
-                {},
-                "job-1",
-                seeded["lora_id"],
-                seeded["user_id"],
-                db_factory=db_factory,
-                audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
-                training_config=TEST_LORA_TRAINING_CONFIG,
-            )
-        )
+        _run(run_lora_training_job(
+            {}, "job-1", seeded["lora_id"], seeded["user_id"],
+            db_factory=db_factory,
+            audio_dir=seeded["audio_dir"],
+            redis=MagicMock(),
+            training_config=TEST_LORA_TRAINING_CONFIG,
+        ))
 
     with db_factory() as session:
         assert get_user_lora(session, seeded["lora_id"]).status == LoraStatus.READY
@@ -690,8 +665,7 @@ def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
         )
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
-        assert lora.status == LoraStatus.FAILED
-        assert lora.error == JOB_ERROR_INTERNAL
+        assert (lora.status, lora.error) == (LoraStatus.FAILED, JOB_ERROR_INTERNAL)
 
 
 def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
@@ -852,9 +826,7 @@ def test_reconcile_ignores_a_stale_completion_mode_during_a_retrain_crash(
     assert not (final_dir / "partial-adapter").exists()
     assert not temporary_dir.exists()
     assert not lora_training._completed_training_mode_path(
-        seeded["audio_dir"],
-        seeded["user_id"],
-        seeded["lora_id"],
+        seeded["audio_dir"], seeded["user_id"], seeded["lora_id"],
     ).exists()
     assert "Ignoring stale completed LoRA training mode record for job job-1" in caplog.text
     with db_factory() as session:
@@ -1135,13 +1107,8 @@ def test_queued_generation_in_the_database_defers_lora_before_running(seeded, db
     ):
         _run(
             run_lora_training_job(
-                {},
-                "job-1",
-                seeded["lora_id"],
-                seeded["user_id"],
-                db_factory=db_factory,
-                audio_dir=seeded["audio_dir"],
-                redis=redis,
+                {}, "job-1", seeded["lora_id"], seeded["user_id"],
+                db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=redis,
             )
         )
 
@@ -1174,13 +1141,8 @@ def test_lora_defer_passes_do_not_sleep_or_hold_an_arq_slot(seeded, db_factory) 
         ):
             for _ in range(1100):
                 await run_lora_training_job(
-                    {},
-                    "job-1",
-                    seeded["lora_id"],
-                    seeded["user_id"],
-                    db_factory=db_factory,
-                    audio_dir=seeded["audio_dir"],
-                    redis=redis,
+                    {}, "job-1", seeded["lora_id"], seeded["user_id"],
+                    db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=redis,
                 )
 
         materialize.assert_not_called()
@@ -1560,13 +1522,8 @@ def test_lora_releases_its_hold_when_running_cannot_be_applied(seeded, db_factor
     ):
         _run(
             run_lora_training_job(
-                {},
-                "job-1",
-                seeded["lora_id"],
-                seeded["user_id"],
-                db_factory=db_factory,
-                audio_dir=seeded["audio_dir"],
-                redis=MagicMock(),
+                {}, "job-1", seeded["lora_id"], seeded["user_id"],
+                db_factory=db_factory, audio_dir=seeded["audio_dir"], redis=MagicMock(),
             )
         )
 
@@ -1690,7 +1647,6 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory, t
             await release_gpu_hold(redis, "w0", "hold-token")
 
         release = AsyncMock(side_effect=release_hold)
-
         async def events(*_args, **_kwargs):
             yield ("done", {"result": {"mode": "sft", "adapter_dir": str(tmp_path / "adapter")}})
 
@@ -1751,7 +1707,6 @@ def test_unknown_handover_probe_does_not_release_a_worker_owned_hold() -> None:
             raise httpx.ReadError("train request response lost")
 
         client.post = AsyncMock(side_effect=post)
-
         async def release_hold(*_args, **_kwargs) -> None:
             assert await release_gpu_hold(redis, "w0", "hold-token")
 
