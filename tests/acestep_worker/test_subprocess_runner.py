@@ -222,9 +222,10 @@ def test_failed_start_keeps_only_the_newest_lines_past_the_bound() -> None:
     handle = _handle_after_child_output(
         proc, *(f"line {number}".encode() for number in range(200)),
     )
+    times = iter([0.0, 0.0])
     with patch("acestep_worker.subprocess_runner.is_acestep_healthy", return_value=False):
         with pytest.raises(SubprocessStartError) as excinfo:
-            wait_for_health(handle, timeout=10, clock=iter([0.0, 0.0]).__next__)
+            wait_for_health(handle, timeout=10, clock=lambda: next(times))
     assert "line 199" in str(excinfo.value)
     assert "line 0\n" not in str(excinfo.value)
     assert len(handle.recent_lines) < 200
