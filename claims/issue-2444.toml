@@ -1,8 +1,0 @@
-claim_id = "8b53336177f042b4ae53a11535e99a5c"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "b856ffbafd03b796e8e83a6fb2037427d062712d"
-branch = "claude/issue-2444-docs-slice-13-finished-mockups-leave-the"
-scope = ["README.md", "docs/architecture.md", "docs/design", "docs/mockups", "docs/navigation.md", "docs/testing.md", "frontend/e2e/album-cover-keeps-running.spec.ts", "frontend/e2e/album-new-song.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/references-list.spec.ts", "frontend/e2e/settings-after-keycloak.spec.ts", "frontend/e2e/settings-phone.spec.ts", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "sonar-project.properties", "tests/songmaker_cli/test_library_api.py"]
-opened_commit = "08e504d3efba52a46ef1c29c7db2a7d7525a6c35"
-whole_reason = "The pictures link to each other and the tests cite them, so they leave in one landing to keep every pointer resolving, and the rules page is where their tested rules go."
