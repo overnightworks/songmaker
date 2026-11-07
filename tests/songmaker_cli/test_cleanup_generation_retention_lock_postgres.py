@@ -339,6 +339,13 @@ def test_a_bulk_delete_and_the_final_deletion_of_overlapping_takes_delete_each_o
         _holding_a_generation_write(),
     )
     assert all(answer.status_code == 200 for answer in (answers["first"], answers["second"]))
+    bulk_answer, retention_answer = (
+        (answers["first"], answers["second"]) if bulk_first
+        else (answers["second"], answers["first"])
+    )
+    assert bulk_answer.json() == {"deleted": 2 if bulk_first else 1}
+    assert retention_answer.json()["deleted_ids"] == ([] if bulk_first else ["x"])
+    assert world.audited_deletions() == (["x", "y"] if bulk_first else ["y"])
     assert world.state("x") is None
     assert world.state("y") is None
     assert not world.files["x"].exists()
