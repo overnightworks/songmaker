@@ -288,6 +288,49 @@ test('Settings › References deletes an unused recording from its menu after a 
 	}
 });
 
+test('Settings › References keeps and unkeeps a recording with its heart, without starting the preview', async ({
+	context,
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const account = await signInFreshAccount(context, 'references-keep', testInfo.project.name);
+	const api = await signedInApi(account);
+	await trackCreatedAudio(page);
+	try {
+		await postReferenceAudio(api, 'storytime-drums.mp3');
+		await page.goto('/settings/references');
+		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
+		const keep = row.getByRole('button', { name: 'Keep storytime-drums.mp3' });
+		await expect(keep).toHaveAttribute('aria-pressed', 'false');
+
+		await keep.click();
+
+		const unkeep = row.getByRole('button', { name: 'Unkeep storytime-drums.mp3' });
+		await expect(unkeep).toHaveAttribute('aria-pressed', 'true');
+		expect(
+			await page.evaluate(() => (window as unknown as { createdAudio?: unknown[] }).createdAudio)
+		).toBeUndefined();
+		const rowBox = await row.boundingBox();
+		expect(rowBox?.width ?? Infinity).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+
+		await page.reload();
+		await expect(row.getByRole('button', { name: 'Unkeep storytime-drums.mp3' })).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+
+		await row.getByRole('button', { name: 'Unkeep storytime-drums.mp3' }).click();
+
+		await expect(row.getByRole('button', { name: 'Keep storytime-drums.mp3' })).toHaveAttribute(
+			'aria-pressed',
+			'false'
+		);
+		guard.assertClean();
+	} finally {
+		await api.dispose();
+	}
+});
+
 test('Settings › References greys Delete for a recording a song uses', async ({
 	context,
 	page

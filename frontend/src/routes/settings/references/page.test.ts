@@ -272,12 +272,12 @@ describe('references page', () => {
 			expect(playSpy).toHaveBeenCalledTimes(2);
 		});
 
-		it('gives the row no focus stop of its own beside the play button and the menu', async () => {
+		it('gives the row no focus stop of its own beside the play button, the keep heart and the menu', async () => {
 			const target = await renderTwoReferences();
 
 			for (const row of target.querySelectorAll('.reference-row')) {
 				expect(row.hasAttribute('tabindex')).toBe(false);
-				expect(row.querySelectorAll('button')).toHaveLength(2);
+				expect(row.querySelectorAll('button')).toHaveLength(3);
 			}
 		});
 
