@@ -1,8 +1,0 @@
-claim_id = "1aecaed99a5b473cbd2f0e23bcd91e72"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "86be2f6f82b0e8843097e65afff254c6df93e52a"
-branch = "claude/issue-2561-webauth-0-33"
-scope = ["docker-compose.yml", "docs/architecture.md", "docs/security.md", "frontend/e2e/support/seed_sessions.py", "pyproject.toml", "quality/baseline.toml", "src/songmaker_cli/agent/mcp.py", "src/songmaker_cli/agent/settings.py", "src/songmaker_cli/auth_stores.py", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/db/migrations", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/auth.py", "src/songmaker_cli/mcp_server/auth.py", "src/songmaker_cli/settings.py", "tests", "uv.lock"]
-opened_commit = "d90dedeb7191d1f4ee5e95866a9105db3faf3398"
-whole_reason = "One pin bump with the account-port adaptation, the migration, the audit mapping and the one setting it forces, which CI passes only together."
