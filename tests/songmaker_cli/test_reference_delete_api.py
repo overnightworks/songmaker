@@ -182,10 +182,10 @@ def test_d8_a_row_with_a_corrupt_path_answers_500_and_keeps_the_row_and_the_file
 
 
 def test_d9_a_persons_token_deletes_that_persons_reference(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = make_token_world(tmp_path)
+    world = make_token_world(tmp_path, factory=pg_factory)
     uploaded = post_reference(
         world.client, AUDIO_BYTES, "mine.wav", headers=world.bearer(TokenWorld.ALICE),
     )

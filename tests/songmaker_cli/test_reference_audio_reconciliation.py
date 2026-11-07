@@ -28,13 +28,13 @@ READ_ONLY_OWNER = "qzx81"
 
 
 @pytest.fixture
-def ctx(tmp_path):
+def ctx(tmp_path, pg_factory):
     def seed(session):
         session.add_all([
             User(id=user_id, username=user_id) for user_id in ("owner", "other", READ_ONLY_OWNER)
         ])
 
-    return make_router_ctx(tmp_path, seed_db=seed)
+    return make_router_ctx(tmp_path, db=pg_factory, seed_db=seed)
 
 
 def _refs(ctx, user_id="owner") -> Path:

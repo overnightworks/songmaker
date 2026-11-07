@@ -1,4 +1,4 @@
-"""A client signed in as an admin on a fresh test database."""
+"""A client signed in as an admin on a caller-supplied test database."""
 
 from __future__ import annotations
 
@@ -9,8 +9,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.db.engine import init_test_db
-
 
 def build_admin_client(
     tmp_path: Path,
@@ -18,17 +16,14 @@ def build_admin_client(
     *,
     user_id: str,
     username: str,
-    database_name: str = "admin.db",
-    factory: sessionmaker[Session] | None = None,
+    factory: sessionmaker[Session],
 ) -> tuple[TestClient, sessionmaker[Session]]:
-    """Seed a fresh database, then sign in as its admin ``user_id`` on the API router.
+    """Seed the required ``factory`` database, then sign in as its admin ``user_id``.
 
     ``seed_db`` must add the account ``user_id``; the router app takes the
     authenticated user from the builder, not from a session cookie.
     """
-    ctx = make_router_ctx(
-        tmp_path, db=factory or init_test_db(tmp_path / database_name), seed_db=seed_db,
-    )
+    ctx = make_router_ctx(tmp_path, db=factory, seed_db=seed_db)
     admin = make_authenticated_user(user_id, role="admin", username=username)
     app = make_router_app(ctx, user=admin)
     return web_client(app), ctx.db

@@ -142,13 +142,13 @@ def test_final_deletion_days_sets_the_archived_take_expiry(
 
 @pytest.mark.parametrize(("configured", "expected_days"), [(None, 30), ("7", 7)])
 def test_retention_preview_reports_the_final_deletion_setting(
-    tmp_path, monkeypatch: pytest.MonkeyPatch, fresh_settings,
+    tmp_path, pg_factory, monkeypatch: pytest.MonkeyPatch, fresh_settings,
     configured: str | None, expected_days: int,
 ) -> None:
     monkeypatch.delenv("FINAL_DELETION_DAYS", raising=False)
     if configured is not None:
         monkeypatch.setenv("FINAL_DELETION_DAYS", configured)
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client.app.state.ctx.db() as session:
         seed_user(session, "admin", "admin")
         session.commit()

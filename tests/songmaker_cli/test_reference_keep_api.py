@@ -3,24 +3,30 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from support import reference_api_world
 from support.reference_api_world import (
     NOT_FOUND,
     REFERENCES_PATH,
     link_reference,
     reference_rows,
     seed_reference,
+    sign_in_owner,
     signed_in_as,
 )
 
+from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import AuditLog, ReferenceRecording
 
-signed_in = reference_api_world.signed_in
-
 OLD_STAMP = datetime(2020, 1, 2, 3, 4, 5)
+
+
+@pytest.fixture
+def signed_in(tmp_path: Path) -> TestClient:
+    """The stamp cases compare naive datetimes, which PostgreSQL returns time-zone aware."""
+    return sign_in_owner(tmp_path, init_test_db(tmp_path / "test.db"))
 
 
 def _seed_kept_case(

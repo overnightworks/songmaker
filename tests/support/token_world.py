@@ -103,9 +103,7 @@ class TokenWorld:
         return f"take-{name}"
 
 
-def make_token_world(
-    tmp_path: Path, *, factory: sessionmaker | None = None,
-) -> TokenWorld:
+def make_token_world(tmp_path: Path, *, factory: sessionmaker) -> TokenWorld:
     from songmaker_cli.settings import get_settings
 
     get_settings.cache_clear()

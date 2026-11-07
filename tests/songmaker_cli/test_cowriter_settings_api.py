@@ -49,13 +49,13 @@ def _seed(session, user_id: str) -> None:
 
 
 @pytest.fixture
-def admin_client(tmp_path: Path):
+def admin_client(tmp_path: Path, pg_factory):
     return build_admin_client(
         tmp_path,
         lambda session: _seed(session, "u-test"),
         user_id="u-test",
         username="u-u-test",
-        database_name="cowriter.db",
+        factory=pg_factory,
     )
 
 
