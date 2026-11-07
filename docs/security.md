@@ -10,6 +10,388 @@ Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
 
+## Authentication
+
+People sign in through the operator's Keycloak realm (OpenID Connect, authorization code with PKCE); songmaker holds no password, no password hash and no admin bootstrap. `GET /login/oidc?next=` starts the sign-in with a pending-login cookie, `GET /auth/callback` finishes it, `POST /auth/logout` ends it; webauth serves these routes and the back-channel one. After sign-in songmaker's own signed session cookie, backed by a DB row, is the credential; the realm is consulted only at sign-in and sign-out.
+
+- **Relying party**: `OIDC_ISSUER` and `OIDC_CLIENT_ID` come from the environment; the endpoints are derived from the issuer. The ID token's issuer is bound to the configured realm, so a token from another realm is refused. The settings are validated where the web relying party is built, so the workers start without them; a missing or unreadable client secret stops web and names only the path. `PUBLIC_BASE_URL` is also required: the redirect and post-logout addresses are built from it.
+- **Client secret**: the edge owns the file `~/.secrets/keycloak/clients/songmaker`. Compose mounts it read-only into `songmaker-web` alone, as the file-backed secret `keycloak_client_secret` at `/run/secrets/keycloak_client_secret`; `OIDC_CLIENT_SECRET_FILE` names that path. It is in no environment variable, log or response. The agent-CLI child processes of the web container run as the same OS user and can read the file; this is the accepted single-user trust model ([Trust model](#trust-model-and-accepted-risks)), not a boundary.
+- **Admission**: the ID token must carry the group `/apps/songmaker` or the sign-in ends at `/no-access` with no account, session or cookie. The group `/apps/songmaker/admin` makes the account an admin; both are re-read at every sign-in and at every token call ([Person tokens](#authentication)), so a promotion or demotion applies at the next one of them. The account id is the Keycloak subject. An existing row whose id equals the subject is reused, otherwise a fresh account is created, and the username is display text only (it is not unique, and it is cut to the column length of 100 characters). Account creation and role changes are written to the audit trail without a person.
+- **Callback outcomes**: success is a 303 to the validated `next` (a path of this app, else `/`); a non-member is a 303 to `/no-access`; every other refusal (state mismatch, expired or missing pending login, foreign issuer, token-exchange failure) is a 403 carrying the SPA shell, "Login failed" and a "Try again" link to `/login/oidc`. The library clears the pending-login cookie that the submitted state names (foreign issuer, expired login) and leaves the others, so a callback with an unknown state keeps another tab's pending login intact until it expires. Admission and the new session are one database transaction under the write lock, committed before the cookies are issued, so a failed commit leaves no cookie, account or session. `/login/oidc`, `/auth/callback` and `/auth/logout` answer `Cache-Control: no-store`, refusals included.
+- **Person tokens**: a token created through hal acts as the person behind it, with that person's rights, deletion included, on `/api/` and `/audio/` only. `TOKEN_CLIENTS` (comma list, empty by default, installs no gate) names the `azp` values admitted; the match is exact and case-sensitive, an empty entry in a non-empty list stops startup, and the token's only audience must be this client. `/shared/`, the sign-in routes and WebSockets are not reachable by token; `/api/internal/` lies under `/api/` but keeps its own internal-token dependency, so a token alone registers no worker. `Authorization` is not an allowed CORS header; a CLI needs no CORS. An unknown subject gets an account at its first token call as at a first sign-in (audited without a person), and no session is created. A token's groups rewrite the stored role at each token call, so an older token can write its older role back within its lifetime. The per-address rate limit is shared with the browser. The co-writer needs the browser session to read the person's groups, so `POST /api/chat/turn` answers 403 `The co-writer needs a browser login.` to a token before it writes any chat state (the token's admission may already have created the account).
+- **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in the DB.
+- **DB session authority**: Every authenticated request loads the session and account from the DB; the library checks the stored idle expiry and the absolute age from `created_at`. Renewal must update an existing row (`touch()` returns `True`); a missing or revoked row cannot be recreated. A request carrying a verified token on a person path has no session: the token decides (next item).
+- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB leak alone does not yield usable cookies. The secret is the file `session-secret` in the secrets directory (mounted as `/run/secrets/session_secret`, min 32 chars) and is required at startup — Settings raises `ValidationError` if it is missing or empty. There is no auto-generation fallback.
+- **Cookie flags and names**: The session cookie is `HttpOnly`, `SameSite=Strict`, `Secure` when `COOKIE_SECURE` is true (the default), and is then named with the `__Host-` prefix (`__Host-session_id`), which a browser accepts only on a `Secure` cookie carrying no `Domain`. The library's pending-login cookie is `SameSite=Lax`, because the return from Keycloak is a cross-site navigation. Sign-in sets no other cookie: no CSRF cookie and no logout hint cookie; a browser that still holds either from an earlier version keeps it until its own `Max-Age` runs out, and neither is read or cleared. `COOKIE_SECURE=false` drops `Secure` and the `__Host-` prefix together, for local plain-http development and the CI stack; production never sets it false.
+- **Session lifetime**: `SESSION_IDLE_SECONDS` (default 7 days) is renewed by every authenticated request, including `GET /api/auth/me`, up to `SESSION_ABSOLUTE_MAX_AGE` (default 30 days) from `created_at`. The cap per account is `MAX_CONCURRENT_SESSIONS_PER_USER` (default 10); a sign-in ends the session its request carried and prunes only the oldest overflow.
+- **Tokens at rest**: the session row holds the issuer's refresh token in `user_sessions.refresh_token` (`NULL` when the issuer gave none) and the ID token in `user_sessions.id_token`. Both are secrets at rest: plain text in the database dump, handed out only as a `SecretStr` by `UserSession`, and the engine hides SQL parameters (`hide_parameters=True`) so a failed insert keeps them out of the traceback. No response, log line or `/health` carries either; both leave with the row on logout, expiry, pruning and revocation. The refresh token serves the co-writer turn, which reads the person's groups with it (`current_groups` stores a rotated refresh token before it answers; see "Co-writer turn through the gateway"); the ID token's one use is the hint on the logout page.
+- **Logout**: `POST /auth/logout` is a top-level form POST from the SPA, which first checks that the server answers (`GET /api/auth/me`; unreachable means it stays signed in and says so) and then leaves through the history controller. The route deletes the DB session in one transaction, clears the session cookie and answers the library's page (`no-store`, under its own Content-Security-Policy): a form that posts the client ID, the post-logout address and the ID token stored in the session row to Keycloak's end-session endpoint and submits itself, so Keycloak ends its session without asking and returns to `/login` ("You are logged out."). With no script the page shows one button, "Sign out" (`LOGOUT_BUTTON_LABEL`, the label of the SPA's account menu entry). Without a session, or with a row from before the upgrade that holds no ID token, the page posts no hint and Keycloak asks once. The route is behind the origin check like every write. A database failure answers a plain 500 with no page and no cookie cleared. The ID token appears in no log line, URL or header; the one response that carries it is this page. Sign-out also leaves a cross-tab marker in `localStorage` under `playbackLogout:<user id>` so other tabs stop saving playback; its key holds the user's id and its value is an opaque random string, no secret.
+- **Session cookies of the old login**: the 0.14 library's cookies are refused (`401`); the migration also deletes every session row.
+- **Frontend auth-check classification**: A non-public 401 navigates the whole page to `/login/oidc?next=…`; the public paths (`/shared/*`, `/share/*`) never redirect. A 429, a 5xx or a network error on the SPA's startup `GET /api/auth/me` is transient: the known session state is kept and the layout shows a retry-able error instead of forcing a sign-out.
+
+### Keycloak outage
+
+Signed-in requests never call Keycloak: the session is songmaker's own, so the app, generation, scoring and the co-writer keep working while the realm is down. Web boots without reaching the issuer. During an outage a new sign-in fails at the browser (the redirect to Keycloak does not load) or, when the failure happens while songmaker exchanges the code, ends in the "Login failed" page; sign-out ends the songmaker session and the form POST to Keycloak then fails in the browser. Existing sessions are not affected.
+
+### Revocation
+
+Keycloak is the account owner, but songmaker applies its answers only at sign-in and at each token call. Disabling a user or removing them from `/apps/songmaker` ends nothing by itself: a session stays valid until it goes idle for `SESSION_IDLE_SECONDS` or reaches `SESSION_ABSOLUTE_MAX_AGE`, and continued use renews it, so the bound is the absolute age (30 days by default), not the idle time. Two ways to end access now:
+
+1. Sign out in Keycloak or in songmaker: `POST /auth/logout` on that device ends that device's session and the Keycloak session, and a sign-out at Keycloak ends every songmaker session of that account through the back channel (below).
+2. Delete the sessions in the database (a person token is not a session: signing out, a back-channel logout or a Keycloak block leaves it valid until its expiry plus leeway, and a copied token is the person until then): `DELETE FROM user_sessions WHERE user_id = '<subject>';` (all of them: `DELETE FROM user_sessions;`). The next request is a 401.
+
+**Back-channel logout.** Keycloak posts a signed Logout Token to `POST /auth/backchannel-logout`, and songmaker ends every session of the token's subject (webauth's back-channel route, audited as a `delete` of resource `session` without a person). The token must be a `logout+jwt` of the bound issuer for this client, carry the back-channel logout event and a `sub`, and no `nonce`; the realm client sets `backchannel.logout.session.required` to `false` because `sid` is ignored. The route answers 200 only after the commit and an empty 400 for any refusal or failure (a failure is re-raised after the answer and logged by the server), in its own worker-thread session and transaction; an audit failure after the deletion rolls the deletion back too. The boundary is the Logout Token's signature (webauth verifies the issuer's RS256 key, `typ`, `aud`, age, event, `sub` and the absent `nonce`) and the edge's public deny of the path. The Host check only filters routing: the realm posts to `<PUBLIC_BASE_URL host>:8080` on the external network `hal_backchannel_songmaker` (declared `external: true`, created by the edge stack, joined by `songmaker-web` alone, which carries the public host as its alias there); any other admitted Host, the public host without the port and `songmaker-web:8080` included, gets an empty 404 (a dependency on the route, answered by an exception handler), an unlisted Host gets TrustedHost's 400, and the body is capped at 32 KiB. The exact path (`SignInPaths.backchannel`) is exempt from the rate limit and from the origin check, and from nothing else; a variant such as `/auth/backchannel-logoutx` is not. A logout that completes before a later sign-in cannot end that later session; this limit is accepted. Two residues are accepted: webauth keeps no `jti` store, so a token can be replayed within its short validity window (about two minutes); and a transient failure answers 400, is logged and is not retried, so the session lasts until its idle or absolute bound.
+
+## Authorization
+
+Two-layer defense:
+
+1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` returns the account of a verified person token on a person path (no cookie or session is read, see Person tokens above) and otherwise validates the signed cookie and the DB session, checks expiry and lifetime, and renews the existing row with an update-only `touch`, so a session deleted meanwhile stays deleted. Its own short transaction commits renewal before the endpoint runs, without committing endpoint writes. Manual stream callers commit and close their authentication transaction before starting the stream.
+   The logout route does not depend on `get_current_user`: the library's logout route reads the session cookie itself, deletes the stored session it names, and clears the cookies either way.
+2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. The sign-in routes are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
+
+Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. The role is set from the Keycloak admin group at each sign-in and each token call; there is no in-app account administration.
+
+Generation invalidation history is partitioned by `user_id` in PostgreSQL. Its
+monotonic sequence allocator and event row participate in the same transaction as
+the generation, with unique constraints on `(user_id, sequence)` and
+`(kind, generation_id)`. Cursor and event rows cascade only with their owning user;
+historical song/generation identifiers are intentionally not foreign keys. The
+authenticated SSE endpoint reads only the exact authenticated user partition; admin
+role does not bypass this filter and frames contain no user ID. Authentication and
+the initial cursor reads finish in a function-local DB session before streaming
+begins. Polls use independent short sessions, and every connection ends after at
+most 60 seconds so session expiry or revocation is enforced on reconnect.
+
+## Proxy trust
+
+`TRUSTED_PROXIES` is a comma-separated list of IP addresses and CIDR networks
+(default: empty — no peer is trusted; the Docker deployment sets
+`172.16.0.0/12`, the bridge-network range the tunnel's container gateway sits
+in). `app_context.parse_trusted_proxies()` turns each entry into an
+`ip_network` at startup and puts the result into the `WebAuthConfig` the
+application installs, and a peer is trusted when its address falls inside one of them — so
+`172.16.0.0/12` covers the gateway address `172.18.0.1`, and a bare
+`10.0.0.1` covers only itself. An entry that is not a valid address or
+network (including one with host bits set, like `10.0.0.1/24`) raises at
+startup rather than being carried along as a rule that can never match. An
+entry carrying an interface zone (`fe80::1%eth0`) is rejected too: a zone is
+local to one host and is dropped when an address is matched against a network,
+so the entry would silently widen to every interface.
+
+That decision governs `X-Forwarded-For`: it is read for the real client IP
+(rightmost untrusted entry) — every per-IP budget and
+the access log use that address; from an
+untrusted peer the header is ignored and the direct peer address is used.
+`X-Forwarded-Proto` is read the same way for `request_is_https()` (used by
+share-link scheme resolution, see #339 below), but since webauth v0.11.0 it no
+longer decides the cookie `Secure` flag or `Strict-Transport-Security`: both
+follow the deployment's static `COOKIE_SECURE` setting instead — see
+"Authentication" above.
+
+`webauth.proxies.resolve_client_ip()` and `webauth.proxies.request_is_https()`
+own both decisions and read the trusted networks from the installed
+`WebAuthConfig`; no endpoint or middleware reads those headers itself. The chain is read from
+the right, where our own proxies appended, and only what it says there can
+become an identity:
+
+- Every `X-Forwarded-For` header field belongs to one ordered list, so the
+  fields are walked back to front too — reading only one of them would let a
+  client hide hops in another.
+- Starting at the newest hop, each entry a trusted proxy vouches for is
+  stepped over; the first entry that is not trusted is the client. Entries
+  further left are never read, so a client cannot change the answer by
+  prepending its own: `garbage, 203.0.113.7` from the address `203.0.113.7`
+  still keys on `203.0.113.7`. Reading left to right instead would let that
+  client void the chain and spend the gateway's shared budget rather than its
+  own.
+- An entry that is not a plain IP address, right of the client, names nobody:
+  `203.0.113.7, garbage` keys on the direct peer, because an empty string or a
+  word like `garbage` must never become an identity that binds a session and
+  buys a rate-limit budget.
+- At most `MAX_FORWARDED_FOR_HOPS` (16) entries are read; a real chain here is
+  three. Only the hops our own proxies appended are ever examined, so the
+  public client cannot reach that bound — everything it writes lands left of
+  the hop that decides. There is no bound on the chain's total length, because
+  rejecting a long chain would hand a client exactly the peer-key escape that
+  reading from the right removes.
+- A long chain is cheap rather than forbidden: entries are cut out of the
+  header field by index from the right, so a field carrying thousands of
+  separators costs only the entries actually read, and text longer than
+  `MAX_ADDRESS_CHARS` (45, the longest an address can be written) is refused
+  without being handed to the address parser. Neither rule can change an
+  identity — nothing they skip could have parsed as an address.
+- Both fallbacks to the peer are logged at `WARNING`. They pool unrelated
+  visitors into one budget, so they are a proxy misconfiguration to see rather
+  than a silent default. The public client cannot trigger either one: behind
+  Cloudflare → cloudflared → Docker the rightmost entry is always the one our
+  own tunnel appended. A caller on the host itself can, because it reaches the
+  server through the bridge gateway, which is a trusted pass-through hop and
+  forwards the caller's own chain unchanged — so a line there means either a
+  misconfigured proxy or a local caller, not a visitor from the internet.
+- Addresses are canonicalized: `::ffff:203.0.113.9` and `203.0.113.9` are one
+  identity, so nobody multiplies a budget by switching notation. An address
+  carrying an interface zone is treated as no address at all.
+- `X-Forwarded-Proto` is read by the same scan: only the rightmost value
+  counts, so a client that prepends its own cannot outvote the proxy behind it,
+  and a huge field costs no more than that one value.
+
+`run_server()` passes `proxy_headers=False` to uvicorn. Uvicorn's own
+forwarded-header handling would rewrite the peer address and the scheme before
+any application code runs, from any peer unless its separate
+`forwarded_allow_ips` is kept in sync with `TRUSTED_PROXIES` — two sources of
+truth for one decision. `TrustedProxies` is the only owner. Uvicorn's default
+`forwarded_allow_ips` is `127.0.0.1`, so this changes nothing for the Docker
+deployment (the peer is the bridge gateway, `172.18.0.1`); a proxy that ever
+reaches the server over loopback must be named in `TRUSTED_PROXIES` instead.
+
+One consequence (#339): with proxy header rewriting off, `scope["scheme"]` —
+and therefore Starlette's `request.base_url` — stays `http` for the whole
+life of the Docker deployment, because the literal connection into the
+container is never TLS; only `auth.request_is_https()` resolves the real
+(proxy-forwarded) scheme, by reading the same trusted, verified
+`X-Forwarded-Proto` this section describes. The four share endpoints
+(album/song/generation/playlist) do not read either signal at request time:
+building a public URL from a request is redundant when the public address is
+a deployment-time fact, so they call `public_share_url()`
+instead, backed by the validated `PUBLIC_BASE_URL` setting — see "Production
+Deployment" below.
+
+## CSRF Protection
+
+Three-layer defense, with the origin check as the only guard:
+
+1. **`SameSite=Strict` cookies**: Prevents cross-site cookie transmission in modern browsers
+2. **Fetch metadata**: A state-changing request is judged by `Sec-Fetch-Site` first. `same-origin` passes; `cross-site` and `none` are rejected (403), even with an allowed Origin; `same-site` falls through to the Origin allowlist.
+3. **Origin verification**: Without `Sec-Fetch-Site`, a state-changing request (every route, not only `/api/`: the `/shared/*/stream` share manifests and `POST /auth/logout` too) needs an `Origin` that matches `ALLOWED_HOSTS` by exact host name (localhost by default), and with `COOKIE_SECURE` on the origin must be `https`. A request with neither header gets 403 `Missing Origin header`; `Referer` is not read. The allowlist is server-side, not the request's `Host` header, so a spoofed `Host` does not help.
+
+For a cookie no token is involved: the session cookie is `SameSite=Strict` and the origin layer decides. A request with a verified token on a person path bypasses the check, because a browser never attaches `Authorization` by itself. Two routes are exempt because their callers are no browser and prove themselves otherwise: the exact path `/auth/backchannel-logout` (the Logout Token's signature) and the prefix `/api/internal/` (the internal token). Variants such as `/auth/backchannel-logoutx` or `/api/internalx` are not exempt. A browser that sends neither fetch-metadata header on a write (older than the current Chrome, Edge, Firefox and Safari) is refused. [Server tests](../tests/songmaker_cli/test_server_middleware.py) prove the accepted and rejected header cases.
+
+## Rate Limiting
+
+### Per-user (API endpoints)
+
+| Resource     | Limit             | Scope    |
+|-------------|-------------------|----------|
+| Generation   | 30 / hour         | Per user |
+| Scoring      | 100 / hour        | Per user |
+| Chat         | 300 / hour        | Per user |
+| Queue depth  | 100 total         | Global   |
+| Active jobs  | 10 concurrent     | Per user |
+
+Every account has the same limits; the operator sets them globally or per user in settings.
+
+Rate limit checks and job creation are atomic (`BEGIN IMMEDIATE`) to prevent TOCTOU races where concurrent requests bypass limits.
+
+### Shared endpoints (public, no auth)
+
+Album, song, generation, and playlist shares expose public read-only endpoints with a dedicated per-IP rate limiter (default: 60 requests/minute, configurable via `SHARED_RATE_LIMIT`):
+
+| Resource | JSON endpoint | Audio endpoint |
+|----------|---------------|----------------|
+| Album | `/shared/{slug}` | `/shared/{slug}/audio/{generation_id}.mp3`, `/shared/{slug}/cover` |
+| Song | `/shared/song/{slug}` | `/shared/song/{slug}/audio/{generation_id}.mp3`, `/shared/song/{slug}/cover`, `/shared/song/{slug}/album-cover` |
+| Generation | `/shared/gen/{slug}` | `/shared/gen/{slug}/audio/{generation_id}.mp3`, `/shared/gen/{slug}/album-cover` |
+| Playlist | `/shared/playlist/{slug}` | `/shared/playlist/{slug}/audio/{generation_id}.mp3`, `/shared/playlist/{slug}/cover`, `/shared/playlist/{slug}/album-cover/{album_id}` |
+
+Album and song shares serve the picked unarchived generation when one exists, otherwise the latest unarchived generation. Generation shares serve the shared generation. Playlist shares expose audio only for playable entry generations. Their page manifest supplies a playlist `cover` only when its uploaded file exists, otherwise up to four `album_covers` from its entries. Those mosaic URLs remain bound to the playlist share slug: the public route accepts an album only when it belongs to that shared playlist and its requested version key is current; it never redirects to or reveals a private `/api/albums/{id}/cover` URL. Stream manifests likewise contain only playable takes and no cover fields, so every listed audio URL is authorized to return bytes. `create_generation()` canonicalizes every non-empty MP3 path at the single write boundary and rejects a path that would leave the audio root; WAV-only takes retain their empty MP3 sentinel. Public audio addresses name the take (`{generation_id}.mp3`) and never contain the stored path or the creator's account id; JSON assembly builds them without filesystem resolution, and an old account-prefixed stored-path address answers `404`: authorization uses the take's identity, and a root-level stored file named `{generation_id}.mp3` is the new address itself. Public JSON responses omit scores and edit history; an audio URL is present only when its stored relative path is already canonical and remains below the audio root. A noncanonical stored path is a data defect: it is not silently repaired, is omitted from the response, and is logged at `WARNING`. Album JSON includes `cover` only while the album is shared and the cover file exists. Song JSON includes `cover` only while the song is shared and the **song** cover file exists. Song and generation JSON include `album_cover` only while their own share remains public and the parent album cover file exists. Public cover bytes are served through the matching album, song, generation, or playlist share slug — never a client-supplied path on `/audio/{owner_id}/{filename}`. Unshare, replace, or delete 404s the previous public cover URL. Share slugs are UUID v4 values (122 bits of entropy, unguessable). Sharing is revocable by the resource owner.
+
+`audio_paths` owns stored-audio path resolution: queue-stream assembly uses
+`resolve_audio_path()`, while the album, song, and playlist shared-audio
+handlers parse the take id from the requested name and authorize that take's
+membership in the share by id with one scalar query. Only a take that passed
+yields its canonical stored path, which is then checked for an existing file
+below the audio root before bytes are delivered. A take outside the share
+(even one stored in the same file as a presented take), a name that is not a
+take id, a missing file, and a path that would escape the audio root (including
+through a symlink) all return the indistinguishable visitor response `404 Not
+Found`. Traversal rejection is logged at `WARNING` without the caller-supplied
+path.
+
+### Per-IP (global middleware)
+
+Every request is subject to a global per-IP rate limit, split into three budget
+classes (issue #257) so that one traffic pattern cannot exhaust the budget
+another pattern from the same IP needs. `RateLimitPolicy.classify`
+(`webauth.policies`) is the single place that maps a path to a class, and
+the paths it reads are songmaker's own, built by
+`request_policies.build_rate_limit_policy` and installed on the middleware in
+`server.create_app`; every request gets exactly one class, and an unrecognized
+path falls back to the API class — fail closed, not fail open. Each class is a
+Redis sliding-window counter (`webauth.rate_limit.RedisRateLimitBackend`,
+supplied as `WebAuthConfig.rate_limits`) over its own 60-second window. Keys
+are `rl:ip:API:<ip>`, `rl:ip:MEDIA:<ip>` and `rl:ip:STREAM:<ip>`, so exhausting
+one class's counter never touches another's. These replace `rl:ip:<ip>`,
+`rl:ip-media:<ip>` and `rl:ip-stream:<ip>` respectively. Direct sharing, queue
+stream and resource-event limiters retain their existing `prefix:key` keys;
+each call supplies its limit and window, and `Retry-After` remains that window.
+
+| Class  | Paths | Default | Why |
+|--------|-------|---------|-----|
+| API    | Everything not matched below (including `/health` and unrecognized paths) | 120/min | Unchanged from the original single budget. `/health` is deliberately **not** exempt: it is the most expensive anonymous endpoint (a DB check and two DB queries, plus Redis reads that grow with the registered workers) and its callers are the container healthcheck (every 30 s), the CI smoke and CI's E2E (`offline-boot.spec.ts`) — exempting it would let an anonymous caller hammer the priciest endpoint for free. |
+| Media  | `/audio/*`; every `/shared/**/audio/*` and `/shared/queue-streams/{id}/audio` route; `/api/references/{id}/audio` | 600/min | Range-request media playback is normal use, not abuse: a single MP3 played with normal seeking is **estimated** at roughly 40 range requests (order-of-magnitude from typical browser Range-chunking, not measured), and comparing takes can move through several songs a minute (40 × 5 = 200/min in ordinary use). 600 leaves headroom for aggressive seeking while still bounding an IP's disk I/O — not unlimited. All of these paths serve a `FileResponse` (Range-capable) — the public share audio routes carry the same seek/scrub pattern as the owner's own player, just from a stranger listening to a public share, so they get the same class. The policy matches each share-audio route with a regex anchored on the literal `audio` segment at the position that route defines, so a slug that literally reads `audio` cannot pass as one by shape alone. The metadata routes on the same slug — `/shared/{slug}`, `/shared/song/{slug}`, `/shared/gen/{slug}`, `/shared/playlist/{slug}`, every one of their `/cover` routes (song and album cover are both API, deliberately, not just the album one), and the `/stream` manifest POSTs — are deliberately excluded and stay API: only the byte-serving audio routes are Range-served. `/api/references/{id}/audio` is the one `/api/` path in this class: it serves a person's own reference recording with Range, answers only the owner (an admin included, no bypass) and answers a foreign, unknown or unusable file with the same 404; it keeps the API-wide `no-store`, so a seek is a fresh request. |
+| Stream | `/api/resource-events/stream`, `/api/jobs/*/stream` | 45/min | SSE connection *opens*, not per-message traffic, sized between the legitimate worst case and the observed storm rate. Legitimate worst case: a normal page load opens one resource-events stream plus one job stream per active job; at the `max_user_active_jobs` default (10) that's 11 opens/load, and 3 page loads within a minute (full queue, operator reloads) is 33. Storm rate: the operator incident's reconnect storm, from job streams that reopened with no delay at all, ran at roughly 80 opens/min. Client pacing (`nextReconnectDelayMs` and `watchReconnectOpportunities` in `frontend/src/lib/stores/sseReconnect.ts`, constants in `frontend/src/lib/constants.ts`): a failing stream reopens after 2, 4, 8, 8… s — an 8 s ceiling plus 0–20% jitter, so no wait exceeds 9.6 s, because the #1032 ruling caps how long a take may lag the network's return at 10 s — and at once when the page becomes visible, regains focus, or the browser reports `online`. That is 8 reopens per failing stream in its first minute and 7.5/min after. After `JOB_STREAM_MAX_CONNECTION_ERRORS` (25) consecutive errors of its timed retries while the page is online, about three minutes, a job stream reads its job once over `GET /api/jobs/{id}` instead of dropping it: an ended job finishes, a running one keeps its card and its stream goes on at the same ceiling pace with a fresh count (#1141). An immediate reopen on return and a failure while the page is offline never count, and a stream that opens resets the count, so neither returning to the app nor any number of outages drops a running take; the one resource-events stream keeps retrying under its own per-user limit below. The reported incident's 5 failing streams (four job streams plus the resource stream) cost 40 reopens in the first minute and 37.5/min after — under this budget. **Accepted over-budget case:** at the theoretical ceiling of 11 concurrently failing streams the pacing alone asks for 88 reopens in the first minute and 82.5/min after — above both this 45/min budget and the 80/min storm rate it was sized against. The limiter, not the client, holds the budget there: every open past 45/min gets a 429, a 429 to an `EventSource` is fatal per spec (no browser auto-reconnect), so each stream counts it as one more failed attempt and waits out its own backoff, and a job stream re-reads its job over REST at 25 errors rather than reopening any faster. The API and Media classes are separate buckets, so the rejected opens never block API calls or playback. That is the price of a take arriving within seconds of the network's return (#1032). The budget itself is sized against page loads, not reconnects: 45 sits clearly above 33 and clearly below 80 — there is no live dependency on `max_user_active_jobs`; raising that setting should prompt re-checking this math, not a settings cross-reference. The resource-events endpoint additionally enforces its own tighter per-user open limit (`RESOURCE_EVENT_STREAM_OPEN_LIMIT`, see below). |
+
+Before this split, all three traffic patterns shared one 120/min bucket:
+a player streaming range requests plus a few reconnecting SSE streams could
+exhaust it in seconds, after which *every* request from that IP was rejected
+— including the audio that was already playing (issue #257: 5035 rejected
+responses in one operator session). The same bucket also gated a stranger
+listening to a public share: a share page is the operator's public face, so
+a listener range-requesting a shared album must not be locked out by
+unrelated API traffic from the same IP either.
+
+The public share audio routes are Media-classed at the *global* per-IP
+layer, but the dedicated shared-endpoint limiter described above
+(`SHARING_RATE_LIMIT`, 60/min) still runs *inside* the same endpoint handlers
+and is the one that fires in practice, since it is far tighter than the
+600/min Media budget. The two layers are not redundant: the global Media
+class exists so a share listener isn't punished for unrelated traffic
+sharing their IP (the regression this section fixes), while
+`SHARING_RATE_LIMIT` remains the actual anti-abuse ceiling on anonymous share
+traffic, unchanged by this split.
+
+Static `_app/` build assets and the static PWA root assets (`/manifest.webmanifest`, `/robots.txt`, `/favicon.svg`, `/icon-192.png`, `/icon-512.png`, `/service-worker.js`) are exempt from all three budgets — they're fetched by the browser and the service worker outside of user-driven navigation and would otherwise crowd out real calls from the same IP.
+
+When the request arrives from a peer inside a `TRUSTED_PROXIES` network, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), as every per-IP budget does — see "Proxy trust". Without it every visitor behind the same proxy shares one budget. If Redis is unavailable, the rate limiter fails closed (returns 503 with `Retry-After: 5`) rather than allowing all requests through.
+
+Configure via env vars: `GENERATION_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_USER`, `MAX_QUEUE_DEPTH`, `MAX_USER_ACTIVE_JOBS`, `IP_RATE_LIMIT`, `MEDIA_RATE_LIMIT`, `STREAM_RATE_LIMIT`, `RESOURCE_EVENT_STREAM_OPEN_LIMIT`.
+
+### Resource-event streams
+
+The global IP limit is supplemented by a fail-closed per-user opening limit,
+`RESOURCE_EVENT_STREAM_OPEN_LIMIT` (default 12 streams per minute, unchanged
+in production); rejected attempts are not retained in the bounded Redis
+window. CI overrides it to 200 in `docker/docker-compose.ci.yml`, the same shape as
+`IP_RATE_LIMIT`'s own override — the e2e suite reuses one seeded user across
+every browser context, so its stream opens are additive against this one
+per-user budget in a way real production traffic across many users never is.
+Redis leases cap live streams at six per user and at most 12
+globally, reduced automatically when the configured DB pool has less spare capacity.
+If reserving one non-stream DB slot leaves no capacity, stream admission returns 503.
+Acquire is one Lua operation across user and global sorted sets; UUID lease members
+carry absolute expiry scores and release targets that exact token on disconnect. A
+crashed process cannot retain a slot beyond 65 seconds. Lease release runs off the async loop; the
+Redis client bounds connect and socket waits to two seconds, with expiry as the final
+fallback. Redis failure returns 503 rather than opening an unbounded poller.
+
+### Job streams
+
+`GET /api/jobs/{id}/stream` polls a job's status once per second. It used
+to do that with blocking psycopg2 calls directly on the event loop — one
+waiting generation meant one blocking round trip per second on the loop,
+and an exhausted DB pool could stall it for up to 30 seconds. The poll now
+runs through `asyncio.to_thread()`, bounded by `asyncio.wait_for()` to the
+stream's remaining lifetime so a poll cannot itself outrun the deadline by
+waiting on an exhausted pool, matching the resource-event stream's
+`_read_event_page_before` pattern exactly.
+
+The endpoint also takes **no request-scoped `Depends()` at all** — matching
+`api_stream_resource_events` exactly, not just in spirit. A first attempt
+(review 2026-09-01) only dropped `Depends(get_db_session)` from the
+endpoint's own signature but kept `Depends(get_current_user)`; a second,
+independent review (2026-09-02) found that `get_current_user` itself takes
+`Depends(get_db_session)`, and FastAPI keeps a yield dependency open until
+the whole *response* finishes — for a `StreamingResponse` that's the full
+stream lifetime, so the connection was still pinned one level up (measured:
+`enter=1, exit=0` after the first body chunk, `exit=1` only once the stream
+closed). `api_stream_job` is now a plain (non-`async`) `def`, so FastAPI
+thread-offloads the whole handler body, exactly like
+`api_stream_resource_events`; auth (`authenticate_request(request, session)` from `auth_dependencies.py`)
+and the access check run as plain function calls against one short-lived
+`ctx.db()` session that closes before the lease is acquired or the
+`StreamingResponse` is even constructed, and every poll opens and closes
+its own short-lived session the same way. No open job stream pins a pool
+connection for longer than one query, at any point in the request.
+
+The stream has the same kind of bounded lifetime as the resource-event
+stream: a 60-second wall (`JOB_STREAM_CONNECTION_SECONDS`) after which it
+closes; the frontend's `EventSource` reconnect with backoff (`jobs.ts`)
+already handles the drop and resets its retry count on the next message. A
+Redis lease (`RedisConcurrentLeaseLimiter`, the same class the
+resource-event stream uses) caps concurrent job streams per user
+(`job_stream_lease_max_per_user`, default 10 — matches
+`max_user_active_jobs`) and globally (`job_stream_lease_max_global`,
+default 40). Unlike the resource-event lease, this one is not sized against
+spare DB pool capacity — precisely because no job stream holds a pool
+connection for its lifetime, there is no pool share to compute. It is a
+flat, hard concurrency cap against a runaway client opening far more
+streams than any real page load does. Redis failure fails closed (503),
+matching the resource-event lease.
+
+## Security Headers
+
+`SecurityHeadersMiddleware` (`webauth.middleware.security_headers`) writes
+them; the CSP line, its inline-script hashes, and which paths may be cached
+come from songmaker's `SecurityHeadersPolicy`
+(`request_policies.build_security_headers_policy`).
+
+All responses include:
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Content-Security-Policy: default-src 'none'; base-uri 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; form-action 'self'` (`script-src` also lists the hash of each inline script in the built `index.html`). The SvelteKit build applies inline styles, so `'unsafe-inline'` is the one source songmaker adds to webauth's default policy, in `request_policies.build_security_headers_policy`; no external host is allowed.
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (present whenever `COOKIE_SECURE` is true, the default; absent when it is false — see "Authentication")
+- `Cache-Control: no-store` (API responses only — prevents caching of authenticated data). The exact resource-event SSE path uses `no-cache, no-store` so intermediaries do not cache or transform its reconnect stream; other API and SSE paths retain `no-store`.
+- `Cache-Control: no-cache` on every response that carries the SPA shell (`spa_fallback`, so `/` and each client-side route), set by the shell response itself because a path rule cannot name every SPA path: the browser revalidates it at each load and a deploy reaches it, instead of reusing a shell whose hashed `/_app/` files the new build deleted. The hashed files under `/_app/` keep their caching.
+- `Cache-Control: private, max-age=31536000, immutable` on generation audio: `/audio/*` and every `/shared/**/audio/*` route (`sharing_api.py`). A generation file never changes under its name, so the listener's browser keeps it for a year, while `private` forbids any shared cache (CDN, proxy) from holding it. Consequence: a revoked share stays playable from that listener's own browser cache. Queue-stream snapshot audio is not a generation file — it expires within hours — so `/shared/queue-streams/{id}/audio` sends `no-store`.
+
+## CORS
+
+- **Methods**: `GET`, `POST`, `PUT`, `DELETE` (no wildcard)
+- **Headers**: `Content-Type`, `Cookie` (no wildcard)
+- **Credentials**: Allowed
+- **Origins**: The normal interface calls the API under the same origin, so it needs no CORS permission. A deliberately separate trusted browser client may set `CORS_ORIGIN` to its one literal origin, but cross-site browsers cannot make mutating `/api/` calls because the fetch-metadata check rejects them even with CORS permission; startup rejects wildcards and comma-separated lists. `SameSite=Strict` does not isolate sibling subdomains of the same site, so do not trust a credentialed subdomain wildcard. When unset, CORS defaults to `localhost`/`127.0.0.1` on ports 8080 and 5173 only for dev (not any arbitrary port).
+
+## Error Handling
+
+- **Generation, scoring, and LoRA job errors**: `_sanitize_error` maps known worker and setup doses to fixed musician-facing messages and logs raw failures with the job ID only on the server; generation, scoring, and LoRA store that returned message in `job.error` (`jobs/_runtime.py:38-45,62-78`; `jobs/generation.py:473-483`; `jobs/scoring.py:194-213`; `jobs/lora_training.py:506-515,618-631`). Raw reasons live in the service's JSON container log, retained as five rotated 10 MB files.
+- **API errors**: HTTPException messages on ordinary validation paths are human-readable strings with no internal paths or stack traces (`settings_api.py`).
+- **Validation errors**: The custom `RequestValidationError` handler returns only affected field names, not full Pydantic error details (constraints, expected types, internal schema) (`server.py:273-290`).
+- **ACE-Step errors**: Worker failures map through `_sanitize_error` to a fixed message before the generation job persists `job.error`; only the silent-stream dose stays distinct (`jobs/_runtime.py:38-45,62-78`; `jobs/generation.py:469-480`).
+- **Co-writer errors**: A co-writer turn the agent did not run ends with an SSE error frame on an otherwise HTTP 200 response: `status` (503, 429, 403 or 401), the named `problem` (`unavailable`, `busy`, `not_enabled`, `sign_in_again`) and, for `busy`, `retry_after_seconds`. The frame carries no gateway or provider detail; the reason is logged server side.
+- **OpenAPI/docs**: Disabled (`server.py:167`).
+
+## Request Size Limits
+
+Songmaker itself enforces these limits: `BodySizeLimitMiddleware` (`webauth.middleware.body_size`, raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Which route may exceed the default, and by how much, is songmaker's `BodySizePolicy` (`request_policies.build_body_size_policy`).
+
+JSON API requests are capped at 1 MiB (`MAX_REQUEST_BODY_BYTES`). Large multipart uploads use a path-exact allowlist, not a suffix match:
+
+| Path | File budget | Multipart body budget |
+|---|---|---|
+| Default JSON | — | 1 MiB |
+| `POST /api/references` | 50 MiB per file | 50 MiB + 1 MiB envelope |
+| `POST /api/loras/{lora_id}/samples` | 50 MiB per file | 50 MiB + 1 MiB envelope |
+| `POST /api/albums/{album_id}/cover` | 8 MiB per image | 8 MiB + 1 MiB envelope |
+| `POST /api/songs/{song_id}/cover` | 8 MiB per image | 8 MiB + 1 MiB envelope |
+| `POST /api/playlists/{playlist_id}/cover` | 8 MiB per image | 8 MiB + 1 MiB envelope |
+
+File limits and body limits are separate so a legal 50 MiB file is not rejected for multipart headers. `POST /api/loras/{id}/samples/{sample_id}` is not a large-upload path.
+
+### Reference audio upload
+
+`POST /api/references` accepts audio files (.mp3, .wav, .flac, .ogg) up to 50 MiB (52,428,800 bytes) per file. Files are stored in `{audio_dir}/{user_id}/refs/{uuid}.{ext}` — the UUID filename prevents name collisions and path injection. Each user also has a positive aggregate quota: `reference_audio_quota_bytes=500_000_000` (decimal 500 MB) and `reference_audio_quota_files=50`. Every upload is a `reference_recordings` row (owner, `storage_path`, original filename, size, duration) and the file is the row's `storage_path`; admission counts the owner's rows, never a directory listing. A file without a row (a remnant) counts nowhere, blocks nothing and is never touched by an upload; the daily reconciliation removes it. Existing overage refuses additions without deleting anything. A filename carrying NUL or another C0 control character is refused with 400 `{"detail":"Invalid filename."}`. The exact quota refusal is HTTP 409, `{"detail":"Reference audio storage limit reached."}`; the previous draft reference survives. A person deletes an unused reference through `DELETE /api/references/{id}`: it locks the row, refuses a used one with 409 `{"detail":"Reference audio is in use."}` (the two foreign keys from `versions` and `generations` decide, trashed songs and archived takes included), commits the row's removal with an audit record, then unlinks the file at once through the same `O_NOFOLLOW` walk; a failed unlink still answers 204 and the daily reconciliation removes the file. A stored path other than `<user>/refs/<one name>` refuses with 500 and keeps the row. The operator can raise these settings.
+
+`reference_audio.py` owns the synchronous operation and its database session. A PostgreSQL transaction-scoped advisory lock keyed by namespace and user (SQLite: `BEGIN IMMEDIATE`) covers the row count through the commit of the new row, including after request cancellation. It does not lock the user row, so unrelated writes referencing that user can proceed. Waiting uploads hold database connections; the existing upload rate limit bounds this accepted cost.
+
+The music worker's daily reconciliation (`DAILY_CLEANUP_HOUR_UTC`) deletes every regular file under a person's `refs/` directory that none of that person's rows names. Per person it takes the same owner lock, reads the person's `storage_path`s only after the lock (each statement under PostgreSQL's default READ COMMITTED takes a fresh snapshot, so a concurrent upload's commit is seen or its admission waits) and holds the lock through the unlinks. It walks to `refs/` without following a symlink and creates nothing. It refuses a symlinked or non-directory ancestor, a row whose `storage_path` is not exactly `<user>/refs/<one name>` (nothing is deleted for that person) and any non-regular entry (left in place). One person's failure leaves the others running. Logs carry the user id, counts and error kinds, never a file name or path.
+
+A version save (`POST /api/songs`, `PUT /api/songs/{song_id}`) that sets `reference_recording_id` loads the owner's row under `SELECT … FOR NO KEY UPDATE` and commits the link in the same transaction; a missing or foreign id answers 404 `{"detail":"Not Found"}` and writes nothing. A concurrent delete of that row either waits and fails on the foreign key (`versions.reference_recording_id`, ON DELETE RESTRICT) or commits first and the save answers 404, so no version links a missing row. A save that omits `reference_recording_id` takes no explicit reference-row lock. A take takes the same lock when it is saved: a reference deleted between the job's start and the take's persistence fails the job with "The reference track was deleted while this take was generating." and saves nothing, and the foreign key (`generations.reference_recording_id`, ON DELETE RESTRICT) backs the lock.
+
+A symlinked or non-directory owner root or ancestor fails closed with HTTP 500, `{"detail":"Reference audio storage could not be checked."}`; this also covers the configured `audio_dir`'s own ancestors. Logs carry the user id, the reference id, bytes and an error kind, never the original filename, a path, an OS error text or content. A database failure at any stage (owner lock, insert, flush, commit) answers with the same 500 body as a storage failure and is logged with a database error kind. A failure before the commit (write, insert, flush) removes the upload's own file; if that removal fails the file stays as a remnant until the next daily reconciliation. A commit that raises keeps the file, because the commit may have succeeded with its confirmation lost: without a row the file is an uncounted remnant until the next daily reconciliation, with the row committed row and file agree.
+
+A version names its reference by `reference_recording_id` only. `reference_audio_path` is not a field of a version, a preset or a global generation default: a request that sends it is refused with 422 (`extra="forbid"`). The reference is checked twice, the id at save time and the path at job time:
+
+1. **Song write**: the id must name a row of the authenticated user, loaded owner-scoped under its row lock
+2. **Job execution**: the job loads the job user's own row and resolves its `storage_path` under `{audio_dir}/{user_id}/refs` with the owner-root resolver; a foreign or missing row, a symlink or a missing file fails the job instead of falling back to no reference
+
+### Album, song, and playlist cover upload
+
+`POST /api/albums/{album_id}/cover`, `POST /api/songs/{song_id}/cover`, and `POST /api/playlists/{playlist_id}/cover` accept JPEG and PNG only (SVG and WebP are rejected). The server checks magic bytes, decodes with Pillow, applies EXIF orientation, and strips metadata before writing. Named pixel and byte ceilings reject decompression bombs. Card and detail derivatives are written at upload time; GET never resizes. Album files live at `{audio_dir}/covers/{album_id}/`; song files live at `{audio_dir}/song-covers/{song_id}/`; playlist files live at `{audio_dir}/playlist-covers/{playlist_id}/`. Authenticated GET/POST/DELETE use `check_album_access`, `check_song_access`, or the matching playlist ownership check (foreign resources 404). Authenticated and public song cover endpoints stream only that song's files — 404 when the song has no own cover, even if the parent album has one. Public bytes use the matching share slug. The song- and playlist-cover body budgets are the cover ceiling.
+
 Album cover suggestions are private rows bound to an album and its cover job. Every suggestion endpoint applies `check_album_access`; missing, foreign, malformed, and unsafe stored paths return the same 404 response. A suggestion path must equal `cover-suggestions/{album_id}/{suggestion_id}.png` under the audio volume, and selection passes the validated PNG through the existing album-cover writer. Suggestions have no public or share URL. Discard deletes database rows before their files, while album hard-delete removes the sibling suggestion tree after commit; neither action removes the selected `cover_key` image. The web container is the sole cover executor: its runner claims queued jobs, owns recovery, and draws each picture through the gateway (see "Cover picture through the gateway"); no path falls back to a CLI or another image API. `covers.decode_cover_image` accepts one PNG or JPEG within `COVER_MAX_BYTES` and `COVER_MAX_PIXELS` and rewrites it as a metadata-free PNG. The prompt quotes album values as data, limits each track's style and lyrics excerpts to 500 characters, and limits the complete prompt to 6,000 characters.
 
 **Deployment boundary**: This repository ships no reverse-proxy service or configuration (nginx, Caddy, Traefik, and tunnel configuration are absent). An operator who puts a proxy in front of Songmaker may add equivalent path-specific limits to reject oversized requests at the edge; those limits are defense in depth, not the application's only body limit. A blanket 1 MiB upstream limit would block the documented audio-upload and cover routes. The missing in-repository edge configuration is recorded in #327.
@@ -104,28 +486,12 @@ login into `~/.songmaker/agent-cli-credentials/`, kept current by
 `songmaker-cli-credentials-mirror.{service,path,timer}` and installed with
 `scripts/install-cli-credentials-mirror.sh`.
 
-Grok access tokens expire after six hours. Issue #350's host-side mirror
+Grok access tokens expire after six hours. The host-side mirror
 service, path watcher, and ten-minute timer are the sole refresh path: each
 host refresh replaces the mounted access token in place while keeping
-`refresh_token` empty. A Grok CLI turn with an expired or OIDC-rejected mirror
-returns `cli_login_expired`; it never changes to the API-key path mid-turn.
-Its single-turn command passes `--deny '*'`, a permission rule, plus
-`--max-turns 1`; neither proves that the CLI exposes no built-in tools. The
-streaming parser loudly rejects every reported `tool_call` or
-`tool_call_update`, so Songmaker refuses that turn after the CLI reports a
-tool call. The 2026-09-03 `Antworte nur OK` experiment without `XAI_API_KEY`
-still emitted `available_commands` events with built-in tools and no
-`tool_call`; it does not exclude a tool execution before such an event. R1
-does not add `--disallowed-tools` as a substitute for that reported-event
-gate.
-
-Codex uses its mirrored `tokens.access_token` only when it is a nonempty
-string; an absent or tokenless mirror selects the existing `OPENAI_API_KEY`
-path, while an unreadable or malformed mirror fails as `codex_cli_error`.
-The host remains the only refresh owner: the host's mirrored Codex document,
-which no container mounts, keeps `tokens.refresh_token` empty. A selected Codex
-CLI route never changes to HTTP within that turn; an expired login is
-`cli_login_expired` and other CLI failures retain the named Codex error.
+`refresh_token` empty. The host remains the only refresh owner: the host's
+mirrored Codex document, which no container mounts, keeps `tokens.refresh_token`
+empty.
 
 The web service alone runs under the host profile `songmaker-web` and the
 repository's `scripts/seccomp/songmaker-web.json`. The seccomp file is a pinned
@@ -424,12 +790,7 @@ These host files are received read-only:
 `songmaker-scoring-worker` mounts no agent CLI and no login mirror: a scoring
 run calls no provider.
 
-The Grok mirror is mounted only into its `songmaker-web` consumer. Grok turns
-run with a private `0700` working directory and their own session tree, both
-removed after success or abort; prompts and tool results reach the CLI only
-through a private prompt file. The text tool protocol does not grant Grok CLI
-tools: every start and resume keeps `--deny '*'`, and native tool-call events
-abort the turn.
+The Grok mirror is mounted only into its `songmaker-web` consumer.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and
@@ -566,10 +927,10 @@ images are installed through `uv` with the committed `uv.lock`; Bandit and
 pip-audit run in separate tool environments so they do not change that lock.
 The repository itself is installed as the trusted local editable project. All
 third-party dependencies must be wheels except `nvidia-ml-py3`, whose locked,
-hash-verified release has no published wheel. The three first-party libraries
+hash-verified release has no published wheel. The two first-party libraries
 are git pins built from source at image build; the three images that sync them
 (web, music worker, scoring worker) carry `git`, and the music worker builds
-only those three from source, after a `--no-build` step that refuses any
+only those two from source, after a `--no-build` step that refuses any
 third-party source distribution. Their build requirements (`setuptools`, `wheel`)
 float on PyPI, unlocked and unhashed: a malicious release would run at image
 build, as root in the web image. This risk is accepted.

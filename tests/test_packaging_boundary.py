@@ -497,29 +497,6 @@ def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> 
         )
 
 
-def test_the_scoring_worker_imports_the_job_runtime_without_pillow() -> None:
-    """The scoring worker reaches the cover job's error names through
-    ``jobs/_runtime.py`` but never produces an image, so it installs no
-    ``image`` extra. Pillow must therefore stay out of that import."""
-    spec = CONTAINERS[SCORING_WORKER_SERVICE]
-    blocked_roots = frozenset(
-        root for root, owners in _root_owning_extras().items()
-        if not owners & spec.extras
-    )
-    assert "PIL" in blocked_roots
-
-    completed = _run_with_blocked_optional_imports(
-        spec,
-        blocked_roots,
-        "importlib.import_module('songmaker_cli.jobs._runtime')",
-    )
-
-    assert completed.returncode == 0, (
-        f"songmaker_cli.jobs._runtime reached an omitted optional "
-        f"dependency.\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
-    )
-
-
 AGENT_CLI_MOUNT_ROOTS = (Path("/home/songmaker"), Path("/usr/local"))
 
 

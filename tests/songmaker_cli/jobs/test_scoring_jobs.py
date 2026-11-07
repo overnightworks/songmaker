@@ -1,4 +1,4 @@
-"""Scoring jobs: a scoring run calls no provider."""
+"""Scoring jobs: what a scoring run stores and leaves untouched."""
 
 from __future__ import annotations
 
@@ -69,10 +69,9 @@ def _scoring_result_with_transcript(*, silent: bool = False) -> SongScores:
     )
 
 
-def test_scoring_run_calls_no_provider_and_writes_no_verdict_key(tmp_path: Path) -> None:
-    """Whatever judge rows are left stored, a scoring run completes without
-    reaching a provider and leaves a stored verdict pair exactly as it is
-    (#1976, the operator's ruling of 28.10.2026)."""
+def test_scoring_run_writes_no_verdict_key_and_keeps_a_stored_pair(tmp_path: Path) -> None:
+    """Whatever judge rows are left stored, a scoring run completes and leaves
+    a stored verdict pair exactly as it is."""
     from songmaker_cli.db.models import Score
 
     factory, audio_dir = _seeded_generation(tmp_path)
