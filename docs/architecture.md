@@ -1256,7 +1256,8 @@ backoff to wait on — and that backoff never waits longer than 10 seconds, so a
 finished while the phone was away arrives within seconds of its return. Missed
 takes for other loaded songs arrive through EventSource replay. Song fetches run
 with bounded concurrency. A 404 drops the song from the loaded set instead of
-retrying forever.
+retrying forever; an open song found gone closes with the "Song not found" toast
+and an entry that names its collection.
 The open song editor reloads only when the selected song id changes or the user
 explicitly applies a fresh song, including after deleting the version on screen.
 A live refresh error stays visible across the 60-second reconnect; a later

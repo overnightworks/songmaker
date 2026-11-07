@@ -42,11 +42,11 @@
 "frontend/src/lib/stores/jobs.test.ts" = 906
 "frontend/src/lib/stores/libraryContext.test.ts" = 2092
 "frontend/src/lib/stores/libraryContext.ts" = 1192
-"frontend/src/lib/stores/navigation.test.ts" = 3026
+"frontend/src/lib/stores/navigation.test.ts" = 2971
 "frontend/src/lib/stores/player.test.ts" = 5277
 "frontend/src/lib/stores/player.ts" = 2236
-"frontend/src/lib/stores/resourceSync.test.ts" = 2039
-"frontend/src/lib/stores/resourceSync.ts" = 1063
+"frontend/src/lib/stores/resourceSync.test.ts" = 2036
+"frontend/src/lib/stores/resourceSync.ts" = 1062
 "frontend/src/routes/layout.test.ts" = 1406
 "frontend/src/routes/settings/users/+page.svelte" = 946
 "src/acestep_worker/wrapper.py" = 1087

@@ -40,6 +40,7 @@
 		backToCollection,
 		followShellLayers,
 		initNavigation,
+		leaveGoneSong,
 		isLibraryWorkspacePath,
 		openLibraryWall,
 		openHome,
@@ -226,7 +227,7 @@
 	// they are hydrated would overwrite a restorable entry with an empty one.
 	$effect(() => {
 		if (!libraryRouteActive) return;
-		startLibraryResourceSync();
+		startLibraryResourceSync(leaveGoneSong);
 		let left = false;
 		let stopNavigation: (() => void) | undefined;
 		void waitForResourceReady().then((ready) => {
