@@ -8,11 +8,11 @@ import signal
 import subprocess
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Final
+from typing import Final
 from urllib.request import Request, urlopen
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
@@ -23,6 +23,7 @@ from acestep_worker.settings import get_worker_settings
 log = logging.getLogger(__name__)
 
 SUBPROCESS_BIND_HOST: Final = "127.0.0.1"
+RECENT_LOG_LINE_COUNT: Final = 50
 
 # One inner port per model mode, derived deterministically from the mode's
 # position in MODEL_CONFIG_PATHS (not a hash — stable across restarts and
@@ -49,9 +50,8 @@ class LmInitFailedError(SubprocessStartError):
 @dataclass
 class SubprocessHandle:
     process: subprocess.Popen[bytes]
-    stderr_path: Path | None
     port: int
-    stderr_file: IO[str] | None = None
+    recent_lines: deque[str] = field(default_factory=lambda: deque(maxlen=RECENT_LOG_LINE_COUNT))
     log_thread: threading.Thread | None = None
 
 
@@ -138,7 +138,7 @@ def verify_requested_lm_is_up(handle: SubprocessHandle) -> None:
     if not get_worker_settings().acestep_init_llm:
         return
     if _read_llm_initialized(handle.port) is False:
-        tail = _read_stderr_tail(handle.stderr_path, max_chars=2000)
+        tail = _read_stderr_tail(handle, max_chars=2000)
         suffix = f"\n--- last log lines ---\n{tail}" if tail else ""
         raise LmInitFailedError(f"ACE-Step came up without its language model{suffix}")
 
@@ -161,10 +161,10 @@ def wait_for_health(
         if is_acestep_healthy(handle.port):
             return
         if handle.process.poll() is not None:
-            tail = _read_stderr_tail(handle.stderr_path)
+            tail = _read_stderr_tail(handle)
             raise SubprocessStartError(f"ACE-Step subprocess exited: {tail}")
         sleeper(poll)
-    tail = _read_stderr_tail(handle.stderr_path, max_chars=2000)
+    tail = _read_stderr_tail(handle, max_chars=2000)
     suffix = f"\n--- last log lines ---\n{tail}" if tail else ""
     raise SubprocessStartError(
         f"ACE-Step did not become healthy within {timeout}s{suffix}",
@@ -179,18 +179,15 @@ def inner_port_for_mode(base_port: int, mode: str) -> int:
     return base_port + offset
 
 
-def _read_stderr_tail(path: Path | None, max_chars: int = 500) -> str:
-    if path is None or not path.exists():
-        return ""
-    text = path.read_text(errors="replace")
-    return text[-max_chars:] if len(text) > max_chars else text
+def _read_stderr_tail(handle: SubprocessHandle, max_chars: int = 500) -> str:
+    return "\n".join(list(handle.recent_lines))[-max_chars:]
 
 
 def _stream_subprocess_logs(
     *,
     mode: str,
     process: subprocess.Popen[bytes],
-    log_file: IO[str] | None,
+    recent_lines: deque[str],
     on_log_line: LogLineSink | None,
 ) -> None:
     stdout = process.stdout
@@ -201,12 +198,7 @@ def _stream_subprocess_logs(
             line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
             if not line:
                 continue
-            if log_file is not None:
-                try:
-                    log_file.write(line + "\n")
-                    log_file.flush()
-                except (OSError, ValueError):
-                    pass
+            recent_lines.append(line)
             log.info("[ace-step %s] %s", mode, line)
             if on_log_line is not None:
                 try:
@@ -217,18 +209,6 @@ def _stream_subprocess_logs(
         log.warning("Subprocess log streamer crashed", exc_info=True)
 
 
-def _open_log_file(log_dir: Path | None, mode: str) -> tuple[Path | None, IO[str] | None]:
-    if log_dir is None:
-        return None, None
-    log_dir.mkdir(parents=True, exist_ok=True)
-    path = log_dir / f"acestep-{mode}.stderr.log"
-    handle = path.open("a", encoding="utf-8")
-    header = f"\n=== {mode} attempt at {datetime.now(timezone.utc).isoformat()} ===\n"
-    handle.write(header)
-    handle.flush()
-    return path, handle
-
-
 def start_acestep_subprocess(
     mode: str,
     *,
@@ -236,14 +216,12 @@ def start_acestep_subprocess(
     checkpoint_dir: Path,
     vram_budget_gb: float,
     gpu_id: int | None = None,
-    log_dir: Path | None = None,
     on_log_line: LogLineSink | None = None,
 ) -> SubprocessHandle:
     uv = find_uv()
     if uv is None:
         raise SubprocessStartError("uv not found — cannot start ACE-Step subprocess")
     env = build_env(mode, port, vram_budget_gb, gpu_id)
-    stderr_path, stderr_file = _open_log_file(log_dir, mode)
     cmd = [*uv, "run", "acestep-api", "--port", str(port)]
     process = subprocess.Popen(  # noqa: S603 - uv argv with an integer port and no shell
         cmd,
@@ -252,18 +230,13 @@ def start_acestep_subprocess(
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
-    handle = SubprocessHandle(
-        process=process,
-        stderr_path=stderr_path,
-        port=port,
-        stderr_file=stderr_file,
-    )
+    handle = SubprocessHandle(process=process, port=port)
     log_thread = threading.Thread(
         target=_stream_subprocess_logs,
         kwargs={
             "mode": mode,
             "process": process,
-            "log_file": stderr_file,
+            "recent_lines": handle.recent_lines,
             "on_log_line": on_log_line,
         },
         name=f"ace-step-log-{mode}",
@@ -306,12 +279,6 @@ def stop_acestep_subprocess(handle: SubprocessHandle) -> None:
         if handle.log_thread is not None and handle.log_thread.is_alive():
             handle.log_thread.join(timeout=2.0)
             handle.log_thread = None
-        if handle.stderr_file is not None:
-            try:
-                handle.stderr_file.close()
-            except OSError:
-                log.debug("Failed to close stderr file", exc_info=True)
-            handle.stderr_file = None
 
 
 def make_acestep_runner(
@@ -320,7 +287,6 @@ def make_acestep_runner(
     base_port: int,
     vram_budget_gb: float,
     gpu_id: int | None = None,
-    log_dir: Path | None = None,
     on_log_line: LogLineSink | None = None,
 ) -> tuple[Loader, Unloader]:
     async def loader(mode: str) -> LoadedModel:
@@ -332,7 +298,6 @@ def make_acestep_runner(
             checkpoint_dir=checkpoint_dir,
             vram_budget_gb=vram_budget_gb,
             gpu_id=gpu_id,
-            log_dir=log_dir,
             on_log_line=on_log_line,
         )
         return LoadedModel(mode=mode, handle=handle, port=handle.port)

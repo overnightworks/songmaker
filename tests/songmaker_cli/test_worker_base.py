@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import songmaker_cli.worker_base as wb_mod
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Song, Version
 from songmaker_cli.worker_base import WorkerBase
 
@@ -224,10 +223,9 @@ def test_recover_on_startup_releases_lock_on_error() -> None:
 
 
 def test_audit_reports_only_files_no_take_owns(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, pg_factory,
 ) -> None:
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+    with pg_factory() as session:
         session.add(Album(id="u1", title="Album", artist="Artist"))
         session.add(Song(id="s1", title="Song", album_id="u1", track_number=1, slug="song"))
         session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="la", prompt="rock"))
@@ -246,7 +244,7 @@ def test_audit_reports_only_files_no_take_owns(
         (audio_dir / "u1" / name).write_bytes(b"fake")
     worker = _DummyWorker()
     worker.audio_dir = lambda: audio_dir
-    worker.get_db_factory = lambda: factory
+    worker.get_db_factory = lambda: pg_factory
 
     with caplog.at_level(logging.WARNING):
         worker.audit_orphaned_files()

@@ -133,34 +133,6 @@ services:
     volumes:
       - audiofiles:/app/data/audio
       - queuestreams:/app/data/queue-streams
-      # Agent-CLI mounts: the container owns the writable profiles; it only
-      # receives read-only CLI binaries and redacted login mirrors. The
-      # preflight checks the mirror and the default or environment-selected
-      # CLI paths before deploy.
-      - type: bind
-        source: ${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}
-        target: /usr/local/bin/claude
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/claude.json
-        target: /home/songmaker/.claude/.credentials.json
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_GROK_CLI:-~/.grok/bin/grok}
-        target: /usr/local/bin/grok
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/grok.json
-        target: /home/songmaker/.grok/auth.json
-        read_only: true
-        bind:
-          create_host_path: false
     cap_drop:
       - ALL
     security_opt:
@@ -239,7 +211,6 @@ services:
       ACESTEP_SKIP_VRAM_PREFLIGHT: "${ACESTEP_SKIP_VRAM_PREFLIGHT:-0}"
       ACESTEP_CHECKPOINT_DIR: "/opt/acestep"
       AUDIO_OUTPUT_DIR: "/app/data/worker_output"
-      ACESTEP_LOG_DIR: "/opt/acestep/logs"
       REDIS_URL: redis://redis:6379/0
       CONTROL_PLANE_URL: "${ACESTEP_WORKER_CONTROL_PLANE_URL:-http://songmaker-web:8080}"
       HF_TOKEN: "${HF_TOKEN:-}"

@@ -34,6 +34,7 @@ const WIDTH_PX: Record<Shell, number> = { desktop: 1440, mobile: 375 };
 const VIEWPORT_HEIGHT_PX = 844;
 const SONG_TITLE = 'E2E Move song';
 const OTHER_SONG_TITLE = 'E2E Move other song';
+const SAVED_LYRICS = 'saved lyrics';
 const DRAFT_LYRICS = 'E2E move draft that is not saved yet';
 
 interface Created {
@@ -122,7 +123,7 @@ async function ownSong(
 ): Promise<Created> {
 	const response = await person.api.post('/api/songs', {
 		headers: { origin: BASE_URL },
-		data: { title, album_id: albumId, lyrics: 'saved lyrics', prompt: 'calm test tone' }
+		data: { title, album_id: albumId, lyrics: SAVED_LYRICS, prompt: 'calm test tone' }
 	});
 	expect(response.ok()).toBe(true);
 	return (await response.json()) as Created;
@@ -141,6 +142,9 @@ async function openSongAs(
 	await page.goto(HOME_PATH);
 	await page.goto(`/album/${albumId}/${song.slug}`);
 	await expect(page.getByRole('heading', { name: SONG_TITLE, exact: true })).toBeVisible();
+	const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+	await expect(lyrics).toBeEnabled();
+	await expect(lyrics).toHaveValue(SAVED_LYRICS);
 }
 
 async function openPicker(page: Page): Promise<Locator> {

@@ -8,6 +8,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	EDITOR_GENERATE_LABEL,
+	EDITOR_LYRICS_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
 	NOW_PLAYING_LABEL,
@@ -103,6 +104,7 @@ async function pressGenerate(page: Page): Promise<Record<string, unknown>> {
 	return (await request).postDataJSON() as Record<string, unknown>;
 }
 
+// Spec: REQ-SEED-01
 test('Use seed puts the chip at Generate and Generate sends the seed while the chip stays (S5, S6)', async ({
 	page
 }) => {
@@ -111,6 +113,24 @@ test('Use seed puts the chip at Generate and Generate sends the seed while the c
 	await showChip(page, 1);
 	expect(await pressGenerate(page)).toMatchObject({ seed: FIRST_TAKE_SEED });
 	await expect(chip(page)).toBeVisible();
+});
+
+// Spec: REQ-SEED-01
+test('Generate after the lyrics changed saves them and still sends the pinned seed', async ({
+	page
+}) => {
+	await openOwnSong(page);
+	await useSeedOfTakeOne(page);
+	await showChip(page, 1);
+	await page
+		.getByRole('textbox', { name: new RegExp(`^${EDITOR_LYRICS_LABEL}`) })
+		.fill('[Verse]\nA changed line');
+	const saved = page.waitForResponse(
+		(response) =>
+			response.request().method() === 'PUT' && /\/api\/songs\/[^/]+$/.test(response.url())
+	);
+	expect(await pressGenerate(page)).toMatchObject({ seed: FIRST_TAKE_SEED });
+	expect((await saved).ok()).toBe(true);
 });
 
 test('× takes the chip away and the next Generate sends no seed (S6)', async ({ page }) => {

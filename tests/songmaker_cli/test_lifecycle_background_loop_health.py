@@ -127,14 +127,14 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
 
 def test_finished_lifecycle_loop_is_dead_outside_shutdown(
     tmp_path, monkeypatch, mock_arq_pool, caplog,
-    monitoring_headers,
+    monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     async def stopped_loop(_app) -> None:
         return None
 
     monkeypatch.setattr(server, "session_cleanup_loop", stopped_loop)
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
         response = client.get("/health/details", headers=monitoring_headers)
 
@@ -146,14 +146,14 @@ def test_finished_lifecycle_loop_is_dead_outside_shutdown(
 
 def test_failed_lifecycle_loop_logs_its_exception(
     tmp_path, monkeypatch, mock_arq_pool, caplog,
-    monitoring_headers,
+    monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     async def failed_loop(_app) -> None:
         raise RuntimeError("redis unavailable")
 
     monkeypatch.setattr(server, "session_cleanup_loop", failed_loop)
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
         response = client.get("/health/details", headers=monitoring_headers)
 
@@ -168,14 +168,14 @@ def test_failed_lifecycle_loop_logs_its_exception(
 
 def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
     tmp_path, monkeypatch, mock_arq_pool,
-    monitoring_headers,
+    monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
     import songmaker_cli.arq_pool as arq_pool
 
     monkeypatch.setattr(arq_pool, "is_music_worker_healthy", AsyncMock(return_value=True))
     monkeypatch.setattr(arq_pool, "is_scoring_worker_healthy", AsyncMock(return_value=True))
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
         before_cancellation = client.get("/health/details", headers=monitoring_headers)
         assert before_cancellation.status_code == 200
@@ -209,9 +209,9 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
 
 
 def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
-    tmp_path, mock_arq_pool,
+    tmp_path, mock_arq_pool, pg_factory,
 ) -> None:
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
         registry = client.app.state.background_loop_registry
 
@@ -223,7 +223,7 @@ def test_lifecycle_shutdown_does_not_mark_cancelled_loops_dead(
 
 def test_web_cover_runner_is_visible_in_lifecycle_health(
     tmp_path, monkeypatch, mock_arq_pool,
-    monitoring_headers,
+    monitoring_headers, pg_factory,
 ) -> None:
     started = threading.Event()
     recovered = []
@@ -235,7 +235,7 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
 
     monkeypatch.setattr(server, "recover_web_cover_jobs", lambda *_args: recovered.append(True))
     monkeypatch.setattr(server, "cover_runner_loop", idle_cover_runner)
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
 
     with client:
         assert started.wait(timeout=1)
@@ -247,7 +247,7 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
 
 
 def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(
-    tmp_path, monkeypatch, mock_arq_pool, monitoring_headers,
+    tmp_path, monkeypatch, mock_arq_pool, monitoring_headers, pg_factory,
 ) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -257,7 +257,7 @@ def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(
         stub.write_text(f"#!/bin/sh\necho {binary} >> {spawn_log}\n")
         stub.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
 
     with client:
         health = client.get(

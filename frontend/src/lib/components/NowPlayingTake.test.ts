@@ -134,6 +134,7 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).toContain('No scores yet');
 	});
 
+	// Spec: REQ-SCORE-02
 	it('highlights only the sung word that differs from the lyrics word at that position', async () => {
 		await render({
 			lyrics: 'die Luft schmeckt weit',
