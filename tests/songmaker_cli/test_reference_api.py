@@ -27,6 +27,7 @@ from support.reference_api_world import (
     seed_reference,
     signed_in_as,
 )
+from support.reference_rows import a_reference
 from support.token_world import TokenWorld, make_token_world
 from support.wav_files import write_wav
 from support.web_app import TEST_ORIGIN, web_client
@@ -44,7 +45,6 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.reference_recordings import (
     REFERENCE_LINK_COLUMNS,
-    create_reference_recording,
 )
 from songmaker_cli.settings import get_settings
 
@@ -197,10 +197,7 @@ def test_m5_a_full_quota_refuses_with_409_and_stores_nothing(
     size = settings.reference_audio_quota_bytes if fullness == "bytes" else 1
     with signed_in.app.state.ctx.db() as session:
         for index in range(count):
-            create_reference_recording(
-                session, user_id="owner-id", storage_path=f"owner-id/refs/seed-{index}.wav",
-                original_filename=f"seed-{index}.wav", size_bytes=size, duration_sec=None,
-            )
+            a_reference(session, "owner-id", name=f"seed-{index}.wav", size_bytes=size)
         session.commit()
 
     response = post_reference(signed_in)
@@ -323,10 +320,7 @@ def test_l4_a_reference_without_a_length_answers_null(signed_in: TestClient) -> 
 
 def _seed_sized_reference(client: TestClient, user_id: str, size_bytes: int, index: int) -> None:
     with client.app.state.ctx.db() as session:
-        create_reference_recording(
-            session, user_id=user_id, storage_path=f"{user_id}/refs/sized-{index}.wav",
-            original_filename=f"sized-{index}.wav", size_bytes=size_bytes, duration_sec=None,
-        )
+        a_reference(session, user_id, name=f"sized-{index}.wav", size_bytes=size_bytes)
         session.commit()
 
 

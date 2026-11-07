@@ -7,6 +7,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from support.reference_rows import a_reference
+
 import songmaker_cli.music_worker as mw_mod
 from songmaker_cli.constants import (
     AuditAction,
@@ -392,10 +394,7 @@ def test_reference_unused_cron_stamps_unused_rows_and_returns_the_changed_count(
     with factory() as session:
         session.add(User(id="u1", username="u1"))
         session.flush()
-        session.add(ReferenceRecording(
-            id="r1", user_id="u1", storage_path="u1/refs/r1.wav",
-            original_filename="r1.wav", size_bytes=4,
-        ))
+        a_reference(session, "u1", name="r1.wav", reference_id="r1")
         session.commit()
     worker = MusicWorker(_settings())
     worker.get_db_factory = MagicMock(return_value=factory)

@@ -14,9 +14,9 @@ from support.postgres_lock_harness import (
     stop_workers,
     wrote_to_tables,
 )
+from support.reference_rows import a_reference
 from support.web_app import make_test_app, seed_session
 
-from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import (
     clear_stamps_on_used_or_kept,
@@ -36,11 +36,7 @@ def _seed_stamp_race(session) -> None:
     session.add(Album(id="album-a", title="A", artist="A", created_by=OWNER))
     session.flush()
     session.add(Song(id="song-a", title="S", album_id="album-a", track_number=1))
-    session.add(ReferenceRecording(
-        id=REFERENCE_ID, user_id=OWNER, storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/F.wav",
-        original_filename="F.wav", size_bytes=4,
-    ))
-    session.flush()
+    a_reference(session, OWNER, name="F.wav", reference_id=REFERENCE_ID)
     session.add(
         Version(id="version-a", song_id="song-a", version_number=1, lyrics="la", prompt="p"),
     )
