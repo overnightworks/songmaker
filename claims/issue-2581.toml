@@ -1,8 +1,0 @@
-claim_id = "f8c7cb35cfb4446b8e5a43d8837839ee"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "250b4dd1c6486c60c1b79bf067936c298f9e5bec"
-branch = "claude/issue-2581-g-sqlite-engine"
-scope = ["docs/security.md", "scripts/dead-symbols.allow", "src/songmaker_cli/db/engine.py", "src/songmaker_cli/db/queries/jobs.py", "tests/support/migration_chain.py"]
-opened_commit = "7656dadfee143ded755b8038e18a6227aee29618"
-whole_reason = "The SQLite engine, the last dialect arm it fed and the three lines that still name it leave together, so the dead-symbol check and the documents agree with the code."
