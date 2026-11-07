@@ -10,7 +10,12 @@ import {
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
-import { SONG_MOVE_BACK_LABEL, SONG_MOVE_NO_OTHER_ALBUM } from '#lib/constants.ts';
+import {
+	SONG_MOVE_BACK_LABEL,
+	SONG_MOVE_NO_MATCH,
+	SONG_MOVE_NO_OTHER_ALBUM
+} from '#lib/constants.ts';
+import type { AlbumItem } from '#lib/api/types.ts';
 import { songList } from '#lib/stores/libraryData.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
@@ -196,13 +201,13 @@ describeBackClosesOverlay({
 });
 
 describe('SongMenu move picker', () => {
-	async function openPicker() {
+	async function openPickerOver(albums: AlbumItem[], settled: string) {
 		libraryWallOrder.set('title');
 		songList.set([makeSong({ id: 's1', album_id: 'home' })]);
 		selectedSongId.set('s1');
 		vi.mocked(fetchAlbums).mockResolvedValue({
-			items: [makeAlbum({ id: 'home', title: 'Homeoffice' })],
-			total: 1,
+			items: albums,
+			total: albums.length,
 			offset: 0,
 			limit: 50,
 			has_more: false
@@ -211,9 +216,71 @@ describe('SongMenu move picker', () => {
 		openSongMenu(target);
 		await tick();
 		menuRow(target, SONG_MENU_MOVE_LABEL).click();
-		await vi.waitFor(() => expect(target.querySelector('.pk-empty')).not.toBeNull());
+		await vi.waitFor(() => expect(target.querySelector(settled)).not.toBeNull());
 		return target;
 	}
+
+	function openPicker() {
+		return openPickerOver([makeAlbum({ id: 'home', title: 'Homeoffice' })], '.pk-empty');
+	}
+
+	const homeAlbum = makeAlbum({ id: 'home', title: 'Homeoffice' });
+
+	it('lists the other albums with their cover or initials and a shared mark, and filters them', async () => {
+		const target = await openPickerOver(
+			[
+				homeAlbum,
+				makeAlbum({
+					id: 'b',
+					title: 'Berlin',
+					cover: { card: '/covers/b.webp' } as AlbumItem['cover']
+				}),
+				makeAlbum({ id: 'c', title: 'Cologne', is_shared: true })
+			],
+			'.pk-list'
+		);
+
+		expect(target.querySelectorAll('.pk-list .pk-row')).toHaveLength(2);
+		expect(target.querySelector('.pk-list img')).not.toBeNull();
+		expect(target.querySelector('.pk-list .pk-shared')).not.toBeNull();
+
+		const filter = target.querySelector<HTMLInputElement>('.pk-filter');
+		if (!filter) throw new Error('filter missing');
+		filter.value = 'zzz';
+		filter.dispatchEvent(new Event('input', { bubbles: true }));
+		await vi.waitFor(() =>
+			expect(target.querySelector('.pk-empty')?.textContent).toBe(SONG_MOVE_NO_MATCH)
+		);
+	});
+
+	it('shows no current-album row when the song album is not among the own albums', async () => {
+		const target = await openPickerOver([makeAlbum({ id: 'b', title: 'Berlin' })], '.pk-list');
+
+		expect(target.querySelector('.pk-row.here')).toBeNull();
+		expect(target.querySelectorAll('.pk-list .pk-row')).toHaveLength(1);
+	});
+
+	it('says when the albums did not load and loads them again on retry', async () => {
+		libraryWallOrder.set('title');
+		songList.set([makeSong({ id: 's1', album_id: 'home' })]);
+		selectedSongId.set('s1');
+		vi.mocked(fetchAlbums).mockRejectedValueOnce(new Error('offline'));
+		const { target } = await renderMenu();
+		openSongMenu(target);
+		await tick();
+		menuRow(target, SONG_MENU_MOVE_LABEL).click();
+		await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
+
+		vi.mocked(fetchAlbums).mockResolvedValue({
+			items: [homeAlbum],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		target.querySelector<HTMLButtonElement>('.pk-retry')?.click();
+		await vi.waitFor(() => expect(target.querySelector('.pk-empty')).not.toBeNull());
+	});
 
 	it("turns the popover into the person's albums and says when there is no other one", async () => {
 		const target = await openPicker();
