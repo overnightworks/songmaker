@@ -88,6 +88,7 @@ interface ResourceSyncDeps {
 	listLoadedSongIds: () => string[];
 	listPrioritySongIds: () => string[];
 	forgetSong: (songId: string) => void;
+	leaveGoneSong: (songId: string) => void;
 	watchLoadedSongs: (onChange: () => void) => () => void;
 	loadSnapshot: () => Promise<boolean>;
 	cancelSnapshot: () => void;
@@ -696,6 +697,7 @@ export class ResourceSyncController {
 			if (err instanceof ApiError && err.status === 404) {
 				this.forgetFailedSong(songId);
 				this.deps.forgetSong(songId);
+				this.deps.leaveGoneSong(songId);
 				this.clearLiveErrorIfHealed();
 				return;
 			}
@@ -1008,7 +1010,7 @@ function cancelLibrarySnapshot(): void {
 	cancelAlbumSongLoads();
 }
 
-function librarySyncDeps(): ResourceSyncDeps {
+function librarySyncDeps(leaveGoneSong: (songId: string) => void): ResourceSyncDeps {
 	return {
 		openEventStream: openResourceEventStream,
 		fetchSong,
@@ -1019,6 +1021,7 @@ function librarySyncDeps(): ResourceSyncDeps {
 			return selected ? [selected] : [];
 		},
 		forgetSong: forgetSyncedSong,
+		leaveGoneSong,
 		watchLoadedSongs: watchLoadedSongIds,
 		loadSnapshot: hydrateLibraryFromHistory,
 		cancelSnapshot: cancelLibrarySnapshot,
@@ -1030,13 +1033,9 @@ function librarySyncDeps(): ResourceSyncDeps {
 
 let libraryController: ResourceSyncController | null = null;
 
-function libraryOwner(): ResourceSyncController {
-	libraryController ??= new ResourceSyncController(librarySyncDeps());
-	return libraryController;
-}
-
-export function startLibraryResourceSync(): void {
-	libraryOwner().start();
+export function startLibraryResourceSync(leaveGoneSong: (songId: string) => void): void {
+	libraryController ??= new ResourceSyncController(librarySyncDeps(leaveGoneSong));
+	libraryController.start();
 }
 
 export function stopLibraryResourceSync(): void {
@@ -1044,11 +1043,11 @@ export function stopLibraryResourceSync(): void {
 }
 
 export function waitForResourceReady(): Promise<boolean> {
-	return libraryOwner().waitForReady();
+	return libraryController?.waitForReady() ?? Promise.resolve(false);
 }
 
 export function retryResourceSync(): Promise<boolean> {
-	return libraryOwner().retry();
+	return libraryController?.retry() ?? Promise.resolve(false);
 }
 
 export function requestSongRefresh(songId: string): Promise<void> {

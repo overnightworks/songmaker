@@ -95,7 +95,7 @@
 		flex-direction: column;
 		min-width: 0;
 		gap: 1px;
-		padding: var(--tile-meta-padding, 8px 40px 8px 8px);
+		padding: 8px 40px 8px 8px;
 	}
 
 	.tile-title {

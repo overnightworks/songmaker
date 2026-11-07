@@ -93,7 +93,6 @@ from songmaker_cli.jobs.generation_failure import (
 )
 from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
-from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -367,7 +366,7 @@ def api_last_failed_generation(
     newest_take = next((g for g in song.generations if not g.is_archived), None)
     if (
         newest_take is not None
-        and aware_timestamp(newest_take.created_at) > aware_timestamp(job.completed_at)
+        and newest_take.created_at > job.completed_at
     ):
         return LastFailedGenerationResponse(job=None)
     return LastFailedGenerationResponse(job=musician_job_response(job))

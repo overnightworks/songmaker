@@ -164,7 +164,7 @@ function coldTabAt(search: string, route: string = HOME_ROUTE_PATH): void {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetResourceSyncForTests();
-	startLibraryResourceSync();
+	startLibraryResourceSync(vi.fn());
 }
 
 beforeEach(() => {
