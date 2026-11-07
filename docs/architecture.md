@@ -673,6 +673,17 @@ The ffmpeg timeout is 336 seconds, derived from that cap, the measured-rate
 policy and its reserve. `tests/songmaker_cli/test_queue_streams.py` proves admission before
 ffmpeg and request-session release through the shared builders.
 
+Built snapshots live in `queue-streams/` under the data directory as
+`<id>.json` and `<id>.mp3`. A build reuses the newest unexpired snapshot of the
+same content whose manifest is named after the id it records and whose audio
+still exists. A snapshot lives eight hours. The sweep (at startup and in the
+maintenance loop) removes the files of expired or unreadable manifests, then
+every regular file of no live snapshot older than 24 hours (a running build's
+`.tmp.mp3` and `.concat.txt` are younger), then evicts the oldest finished
+snapshots once their audio exceeds 1 GiB; a build's own new snapshot is never
+evicted, and a running build's files never count or go.
+`tests/songmaker_cli/test_queue_stream_cache.py` proves each rule.
+
 Escape and Back close the same thing (#1182): the topmost open layer — a
 menu, picker, sheet, dialog, full Now Playing, the album
 cover editor, Edit details, the co-writer's Memory. `lib/stores/layers.ts`
