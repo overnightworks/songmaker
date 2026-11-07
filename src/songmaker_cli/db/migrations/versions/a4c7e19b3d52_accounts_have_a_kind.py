@@ -20,14 +20,11 @@ _KIND_CHECK = "kind IN ('person', 'agent')"
 
 def upgrade() -> None:
     op.add_column(
-        "users",
-        sa.Column("kind", sa.String(length=6), nullable=False, server_default="person"),
+        "users", sa.Column("kind", sa.String(length=6), nullable=False, server_default="person"),
     )
-    with op.batch_alter_table("users") as batch_op:
-        batch_op.create_check_constraint("ck_users_kind", _KIND_CHECK)
+    op.create_check_constraint("ck_users_kind", "users", _KIND_CHECK)
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("users") as batch_op:
-        batch_op.drop_constraint("ck_users_kind", type_="check")
-        batch_op.drop_column("kind")
+    op.drop_constraint("ck_users_kind", "users", type_="check")
+    op.drop_column("users", "kind")
