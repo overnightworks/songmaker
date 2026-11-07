@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, event
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import sessionmaker
 from support.reference_rows import a_reference
 from support.web_app import make_router_ctx
@@ -160,11 +160,14 @@ def test_an_owner_with_a_non_conforming_row_path_keeps_every_file(ctx, storage_p
     assert remnant.exists()
 
 
-def test_a_failure_to_list_the_users_ends_the_run_loudly(tmp_path):
-    empty_database = sessionmaker(bind=create_engine(f"sqlite:///{tmp_path / 'empty.db'}"))
-
-    with pytest.raises(OperationalError):
-        reconcile_reference_remnants(empty_database, tmp_path)
+def test_a_failure_to_list_the_users_ends_the_run_loudly(tmp_path, empty_postgresql_url):
+    engine = create_engine(empty_postgresql_url)
+    empty_database = sessionmaker(bind=engine)
+    try:
+        with pytest.raises(ProgrammingError):
+            reconcile_reference_remnants(empty_database, tmp_path)
+    finally:
+        engine.dispose()
 
 
 def test_a_missing_refs_directory_is_not_created(ctx):
