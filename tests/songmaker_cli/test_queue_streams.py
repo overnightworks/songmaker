@@ -1876,13 +1876,16 @@ def test_library_pool_queue_unplayable_start_is_scanned_once_with_small_budget(
     assert scanned == ["g4"]
 
 
-def test_library_pool_queue_unknown_pool_is_422(tmp_path: Path, monkeypatch, pg_factory) -> None:
+@pytest.mark.parametrize("pool", ["favorites", "keeps"])
+def test_library_pool_queue_unknown_pool_is_422(
+    tmp_path: Path, monkeypatch, pg_factory, pool: str
+) -> None:
     stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
 
-    resp = client.get("/api/library/pool-queue", params={"pool": "favorites"})
+    resp = client.get("/api/library/pool-queue", params={"pool": pool})
 
     assert resp.status_code == 422
 
@@ -1903,8 +1906,6 @@ def test_generation_matches_pool_rules() -> None:
     assert generation_matches_pool(archived, "mix") is False
     assert generation_matches_pool(picked, "picks") is True
     assert generation_matches_pool(kept, "picks") is False
-    assert generation_matches_pool(picked, "keeps") is False
-    assert generation_matches_pool(kept, "keeps") is True
     assert generation_matches_pool(plain, "all") is True
     assert generation_matches_pool(archived, "all") is False
 
@@ -2073,7 +2074,6 @@ def _write_pool_audio_files(root: Path) -> None:
     [
         ("mix", ["g-both", "g-keep-a", "g-pick", "g-keep-b", "g-pick-b"]),
         ("picks", ["g-both", "g-pick", "g-pick-b"]),
-        ("keeps", ["g-both", "g-keep-a", "g-keep-b"]),
         ("all", ["g-both", "g-keep-a", "g-pick", "g-old", "g-keep-b", "g-pick-b"]),
     ],
 )

@@ -714,8 +714,6 @@ def generation_matches_pool(generation: Generation, pool: LibraryTakePool) -> bo
         return bool(generation.is_picked or generation.is_kept)
     if pool == "picks":
         return bool(generation.is_picked)
-    if pool == "keeps":
-        return bool(generation.is_kept)
     if pool == "all":
         return True
     raise ValueError(f"Unknown library take pool: {pool}")
