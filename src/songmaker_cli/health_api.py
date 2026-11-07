@@ -47,7 +47,6 @@ from songmaker_cli.db.queries.jobs import (
     last_job_failure_time,
 )
 from songmaker_cli.db.queries.workers import list_worker_identities
-from songmaker_cli.lifecycle import codex_image_sandbox_runtime_health
 
 router = APIRouter()
 
@@ -379,7 +378,6 @@ async def _read_health_signals(request: Request) -> HealthSignals:
         workers_lm_failed=workers_lm_failed,
         queue_depth_cap_reached=queue_depth_cap_reached,
         uptime_seconds=uptime,
-        codex_image_sandbox_runtime=codex_image_sandbox_runtime_health(),
         background_loops=request.app.state.background_loop_registry.loop_health(),
         release=ReleaseInfo.from_settings(config),
     )

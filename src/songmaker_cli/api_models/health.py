@@ -13,7 +13,6 @@ from songmaker_cli.health_types import (
     BackgroundLoopHealth,
     BackgroundLoopName,
     BackgroundLoopStatus,
-    CodexImageSandboxRuntimeHealth,
 )
 
 HealthVerdict = Literal["ok", "degraded"]
@@ -33,7 +32,6 @@ class HealthSignals:
     workers_lm_failed: bool
     queue_depth_cap_reached: bool
     uptime_seconds: int
-    codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth
     background_loops: Mapping[BackgroundLoopName, BackgroundLoopHealth]
     release: ReleaseInfo
 
@@ -99,13 +97,6 @@ class HealthResponse(BaseModel):
     acestep_workers_online: int
     queue_depth_cap_reached: bool
     uptime_seconds: int
-    codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth = Field(description=(
-        "Whether the Codex cover-image sandbox user-namespace boot check last "
-        "succeeded: ready, not_set_up, or unverified. This live value comes from "
-        "lifecycle.codex_image_sandbox_runtime_health(), updated by every "
-        "report_codex_image_sandbox_runtime() call, so a later boot report overrides "
-        "an earlier one. Before the boot report runs, it reports unverified."
-    ))
     background_loops: dict[BackgroundLoopName, BackgroundLoopResponse]
     release: ReleaseInfo
 
@@ -125,7 +116,6 @@ class HealthResponse(BaseModel):
             acestep_workers_online=signals.workers_online,
             queue_depth_cap_reached=signals.queue_depth_cap_reached,
             uptime_seconds=signals.uptime_seconds,
-            codex_image_sandbox_runtime=signals.codex_image_sandbox_runtime,
             background_loops={
                 name: BackgroundLoopResponse.from_health(health)
                 for name, health in signals.background_loops.items()

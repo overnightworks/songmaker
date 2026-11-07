@@ -305,7 +305,7 @@ cd frontend
 E2E_BASE_URL=http://localhost:18080 pnpm test:e2e            # both shells
 E2E_BASE_URL=http://localhost:18080 pnpm test:e2e --project=mobile
 
-cd .. && docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml down -v
+cd .. && docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml down -v --remove-orphans --rmi local
 ```
 
 Re-running against the same stack repeatedly will trip the app's IP rate limit

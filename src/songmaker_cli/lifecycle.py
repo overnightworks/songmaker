@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import shutil
-import subprocess
-import threading
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Final, Literal
+from typing import Final
 
 from arq.connections import ArqRedis
 from fastapi import FastAPI
@@ -28,7 +25,6 @@ from songmaker_cli.constants import (
 from songmaker_cli.health_types import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
-    CodexImageSandboxRuntimeHealth,
 )
 from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
@@ -39,31 +35,6 @@ QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS: Final = 4 * 60 * 60
 _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
     1, QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS // RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS
 )
-_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS: Final = (
-    "--unshare-user",
-    "--unshare-net",
-    "--ro-bind", "/", "/",
-    "/bin/true",
-)
-_CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS: Final = (
-    "--new-session",
-    "--die-with-parent",
-    "--tmpfs", "/",
-    "--dev", "/dev",
-    "--ro-bind", "/bin", "/bin",
-    "--ro-bind", "/etc", "/etc",
-    "--ro-bind", "/lib", "/lib",
-    "--ro-bind", "/lib64", "/lib64",
-    "--ro-bind", "/sbin", "/sbin",
-    "--ro-bind", "/usr", "/usr",
-    "--unshare-user",
-    "--unshare-pid",
-    "--unshare-net",
-    "--proc", "/proc",
-    "--",
-    "/usr/bin/true",
-)
-
 # The web process owns stale-job recovery for every job type.
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
 JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
@@ -71,76 +42,6 @@ JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
 
 def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
     return app.state.background_loop_registry
-
-
-def bubblewrap_startup_probe_command() -> tuple[str, ...]:
-    """Build Codex's traced per-run Bubblewrap startup probe."""
-    return ("bwrap", *_CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS)
-
-
-def _codex_image_sandbox_runtime_error() -> str | None:
-    bubblewrap = shutil.which("bwrap")
-    if bubblewrap is None:
-        return "bubblewrap is not installed"
-    try:
-        for command in (
-            (bubblewrap, *_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS),
-            (bubblewrap, *_CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS),
-        ):
-            result = subprocess.run(  # noqa: S603 - bwrap argv from module constants without a shell
-                command,
-                check=False,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=5,
-            )
-            if result.returncode != 0:
-                return "bubblewrap user namespaces are unavailable"
-    except (OSError, subprocess.TimeoutExpired):
-        return "bubblewrap user namespaces are unavailable"
-    return None
-
-
-# The boot report's most recent verdict, for /health/details's
-# codex_image_sandbox_runtime field: a live value every call to
-# report_codex_image_sandbox_runtime() updates, not a value frozen at
-# whatever the process happened to see at startup. Defaults to
-# "unverified" (never a silent "ready") for the window before the boot
-# report has run at all.
-_codex_image_sandbox_runtime_health_lock = threading.Lock()
-_codex_image_sandbox_runtime_health: CodexImageSandboxRuntimeHealth = "unverified"
-
-
-def codex_image_sandbox_runtime_health() -> CodexImageSandboxRuntimeHealth:
-    """The sandbox boot report's most recent verdict -- what /health/details's
-    codex_image_sandbox_runtime field reports."""
-    with _codex_image_sandbox_runtime_health_lock:
-        return _codex_image_sandbox_runtime_health
-
-
-def record_codex_image_sandbox_runtime_health(state: CodexImageSandboxRuntimeHealth) -> None:
-    global _codex_image_sandbox_runtime_health
-    with _codex_image_sandbox_runtime_health_lock:
-        _codex_image_sandbox_runtime_health = state
-
-
-def report_codex_image_sandbox_runtime() -> Literal["ready", "not_set_up"]:
-    """Report whether the future web cover route can enter its user namespace.
-
-    Also records the outcome as the live /health/details state (see
-    codex_image_sandbox_runtime_health above) on every call, so a later
-    boot report always overrides an earlier one instead of /health/details being
-    stuck at whatever the process saw first.
-    """
-    error = _codex_image_sandbox_runtime_error()
-    if error is not None:
-        log.info("Codex cover image path not set up: %s", error)
-        record_codex_image_sandbox_runtime_health("not_set_up")
-        return "not_set_up"
-    log.info("Codex cover image sandbox runtime verified")
-    record_codex_image_sandbox_runtime_health("ready")
-    return "ready"
 
 
 def cleanup_expired_resource_events(ctx: AppContext) -> int:

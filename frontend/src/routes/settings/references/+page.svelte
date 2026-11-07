@@ -10,6 +10,7 @@
 	import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import LoadFailure from '#lib/components/LoadFailure.svelte';
 	import ReferenceRow from '#lib/components/ReferenceRow.svelte';
 	import { APP_NAME, REFERENCE_AUDIO_ACCEPT } from '#lib/constants.ts';
 	import { audioPlayer, transportOffersPause } from '#lib/services/audioPlayer.svelte.ts';
@@ -251,24 +252,7 @@
 	{/if}
 
 	{#if $loadFailure}
-		<div class="load-error" role="alert">
-			<span class="load-error-title">
-				<Icon name="triangle-alert" size={16} />{LOAD_FAILED}
-			</span>
-			<div class="load-error-foot">
-				<button
-					type="button"
-					class="retry-btn"
-					data-hitbox="frequent"
-					data-hitbox-face
-					onclick={retry}
-					aria-label={RETRY_LABEL}
-					title={RETRY_LABEL}
-				>
-					<Icon name="refresh-cw" size={16} />
-				</button>
-			</div>
-		</div>
+		<LoadFailure message={LOAD_FAILED} retryLabel={RETRY_LABEL} onretry={retry} />
 	{/if}
 
 	{#if references === null}
@@ -460,47 +444,6 @@
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
 		font-size: 22px;
-	}
-
-	.load-error {
-		display: flex;
-		flex-direction: column;
-		gap: 9px;
-		margin-bottom: 12px;
-		padding: 12px;
-		background: var(--surface);
-		border: 1px solid var(--score-bad);
-		border-radius: var(--card-radius);
-	}
-
-	.load-error-title {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-size: 15px;
-		color: var(--score-bad);
-	}
-
-	.load-error-foot {
-		display: flex;
-		justify-content: flex-end;
-		color: var(--score-bad);
-	}
-
-	.retry-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex: none;
-		padding: 0;
-		background: none;
-		border: none;
-		color: inherit;
-		cursor: pointer;
-	}
-
-	.retry-btn:hover {
-		color: var(--primary);
 	}
 
 	.skeleton {
