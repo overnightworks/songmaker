@@ -763,20 +763,12 @@ does not load `.env`. For systemd boot and auto-deploy, these non-secret paths
 therefore belong in the persistent service environment. Compose currently
 mounts `SONGMAKER_CLAUDE_CLI` and `SONGMAKER_GROK_CLI` into `songmaker-web`.
 
-**Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
-`songmaker-cli-credentials-mirror.service`, then runs the argumentless
-preflight as `ExecStartPre` from the main checkout. A failed or absent mirror
-means `songmaker.service` does not run its boot-time `docker compose up -d`:
-the boot catch-up stays off; a red preflight fails the unit and alerts through
-`OnFailure=`, while a missing or failed mirror aborts the start job as a
-dependency failure (journal: result 'dependency'), which is not covered by
-`OnFailure=`. Containers dockerd restarts itself under `restart: unless-stopped`
-are unaffected. The two-minute deploy tick runs that same argumentless
-preflight, so boot and deploy resolve the same mirror location. That preflight
-also requires all three agent-CLI binaries, including Codex's Node path, to be
-resolvable; this blast radius is likewise limited to the boot catch-up and the
-deploy tick, not to
-containers dockerd restarts itself.
+**Boot coupling.** `songmaker.service` orders itself only after
+`docker.service` and runs no preflight: it starts the stack with
+`docker compose up -d` whether or not the mirror runs. A missing mirror file
+fails the web container's start at its bind, because the bind creates no host
+path. The two-minute deploy tick still runs the argumentless preflight, so it
+refuses a deploy with a missing mount.
 
 The mirror installer freezes its resolved directory in the mirror service's
 `--mirror-dir` argument. An argumentless preflight reads that installed service
@@ -786,7 +778,7 @@ changing `SONGMAKER_CLI_CREDENTIALS_DIR` in `.env`, run
 `sudo ./scripts/install-cli-credentials-mirror.sh` again from the main
 checkout before the next boot or deploy.
 
-Refresh the mirror with `sudo systemctl start songmaker-cli-credentials-mirror.service`, not `restart`: restarting this required unit also restarts `songmaker.service` and therefore runs `docker compose up -d` against the live stack.
+Refresh the mirror with `sudo systemctl restart songmaker-cli-credentials-mirror.service`; that does not touch `songmaker.service` or the live stack.
 
 That call has been deleted from this script once already, by an edit that
 rearranged the systemd checks around it, and nothing went red: the verifier's
