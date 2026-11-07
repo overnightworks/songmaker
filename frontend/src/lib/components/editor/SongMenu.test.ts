@@ -426,6 +426,43 @@ describe('SongMenu move picker', () => {
 			expect(target.querySelector('.pk-error')?.textContent).not.toContain(LIBRARY_RETRY_LABEL);
 		});
 
+		it('shows no busy row and disables every row on another song while a move runs', async () => {
+			const pending = Promise.withResolvers<SongItem>();
+			vi.mocked(moveSong).mockReturnValue(pending.promise);
+			onTestFinished(async () => {
+				pending.reject(new Error('test over'));
+				await vi.waitFor(() => expect(get(songMoveRun).status).toBe('failed'));
+				closeSongMovePicker();
+			});
+			const target = await openPickerOver(albums, '.pk-list');
+			rowTitled(target, 'Berlin').click();
+			await tick();
+
+			selectedSongId.set('s2');
+			await tick();
+
+			expect(target.querySelector('[aria-busy="true"]')).toBeNull();
+			const rows = [...target.querySelectorAll<HTMLButtonElement>('.pk-list .pk-row')];
+			expect(rows.length).toBeGreaterThan(0);
+			expect(rows.every((row) => row.disabled)).toBe(true);
+		});
+
+		it('shows no red row and no Retry on another song after a move failed', async () => {
+			vi.mocked(moveSong).mockRejectedValue(new Error('boom'));
+			const target = await openPickerOver(albums, '.pk-list');
+			rowTitled(target, 'Berlin').click();
+			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
+
+			selectedSongId.set('s2');
+			await tick();
+
+			expect(target.querySelector('.pk-error')).toBeNull();
+			expect(target.querySelector('.pk-retry')).toBeNull();
+			expect(target.querySelector('.pk-row.failed')).toBeNull();
+			const rows = [...target.querySelectorAll<HTMLButtonElement>('.pk-list .pk-row')];
+			expect(rows.some((row) => row.disabled)).toBe(false);
+		});
+
 		it('reopens the picker for a failed run only while its song is the open song', async () => {
 			const pending = Promise.withResolvers<SongItem>();
 			vi.mocked(moveSong).mockReturnValue(pending.promise);

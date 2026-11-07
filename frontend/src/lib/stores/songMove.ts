@@ -49,6 +49,12 @@ const NOT_FOUND = 404;
 /** The move in flight or the one that was refused, for the picker to show. */
 export const songMoveRun = writable<SongMoveRun>(IDLE);
 
+/** The run, only while its song is the open song; any other song's picker shows nothing of it. */
+export const songMoveRunHere: Readable<SongMoveRun> = derived(
+	[songMoveRun, selectedSongId],
+	([$run, $openId]): SongMoveRun => ($run.status !== 'idle' && $run.songId === $openId ? $run : IDLE)
+);
+
 let generation = 0;
 
 export type SongMovePicker =

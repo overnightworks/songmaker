@@ -19,7 +19,8 @@
 		retrySongMove,
 		songMoveFilter,
 		songMovePicker,
-		songMoveRun
+		songMoveRun,
+		songMoveRunHere
 	} from '#lib/stores/songMove.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import Icon from '../Icon.svelte';
@@ -105,7 +106,7 @@
 	{#if picker.hasOthers}
 		<ul class="pk-list">
 			{#each picker.others as album (album.id)}
-				{@const run = $songMoveRun}
+				{@const run = $songMoveRunHere}
 				{@const busy = run.status === 'busy' && run.albumId === album.id}
 				{@const failed = run.status === 'failed' && run.albumId === album.id}
 				<li>
@@ -115,7 +116,7 @@
 						class:busy
 						class:failed
 						aria-busy={busy ? 'true' : undefined}
-						disabled={run.status === 'busy' && !busy}
+						disabled={$songMoveRun.status === 'busy' && !busy}
 						onclick={() => void choose(album)}
 					>
 						{@render albumFace(album)}
@@ -137,11 +138,11 @@
 	{:else}
 		<p class="pk-empty">{SONG_MOVE_NO_OTHER_ALBUM}</p>
 	{/if}
-	{#if $songMoveRun.status === 'failed'}
+	{#if $songMoveRunHere.status === 'failed'}
 		<div class="pk-error pk-move-error" role="alert">
 			<Icon name="circle-alert" size={16} />
-			<span>{$songMoveRun.line}</span>
-			{#if $songMoveRun.retryable}
+			<span>{$songMoveRunHere.line}</span>
+			{#if $songMoveRunHere.retryable}
 				<button type="button" class="pk-retry" onclick={() => void retry()}>
 					{LIBRARY_RETRY_LABEL}
 				</button>
