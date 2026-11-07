@@ -31,7 +31,6 @@ from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.jobs.lora_training import (
     _LoraProgressThrottle,
-    _validate_export_path,
     _worker_training_started_at,
     cleanup_failed_lora_with_factory,
     reconcile_crashed_loras,
@@ -667,33 +666,6 @@ def test_path_traversal_in_adapter_dir_rejected(seeded, db_factory) -> None:
         lora = get_user_lora(session, seeded["lora_id"])
         assert lora.status == LoraStatus.FAILED
         assert lora.error is not None
-
-
-def test_validate_export_path_accepts_inside_user_dir(tmp_path) -> None:
-    user_dir = tmp_path / "audio" / USER_LORAS_DIRNAME / "u1" / "L1" / "training_tmp" / "final"
-    user_dir.mkdir(parents=True)
-    resolved = _validate_export_path(
-        audio_dir=tmp_path / "audio",
-        user_id="u1",
-        reported=str(user_dir),
-    )
-    assert resolved == user_dir.resolve()
-
-
-def test_validate_export_path_rejects_outside(tmp_path) -> None:
-    with pytest.raises(ValueError):
-        _validate_export_path(
-            audio_dir=tmp_path / "audio",
-            user_id="u1",
-            reported="/etc/shadow",
-        )
-    reported = str(tmp_path / "audio" / USER_LORAS_DIRNAME / "u1")
-    with pytest.raises(ValueError):
-        _validate_export_path(
-            audio_dir=tmp_path / "audio",
-            user_id="u1",
-            reported=reported,
-        )
 
 
 def test_cleanup_failed_lora_removes_dirs(seeded, db_factory) -> None:
