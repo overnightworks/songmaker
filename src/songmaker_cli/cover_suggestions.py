@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import Actor, can_access_album
-from songmaker_cli.audio_paths import AudioPathRejectedError, canonical_audio_path
+from songmaker_cli.audio_paths import AudioPathRejectedError, canonical_audio_path, confined_under
 from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, JobType
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.albums import get_album
@@ -141,7 +141,7 @@ def remove_cover_suggestion_files(audio_dir: Path, paths: list[str]) -> None:
         except AudioPathRejectedError:
             log.warning("Cover suggestion path traversal denied: %r", stored_path)
             continue
-        if not path.is_relative_to(root) or path.suffix != ".png":
+        if confined_under(root, path) is None or path.suffix != ".png":
             log.warning("Cover suggestion path outside suggestion root: %r", stored_path)
             continue
         if path.is_file():
@@ -156,8 +156,9 @@ def remove_album_cover_suggestion_files(audio_dir: Path, album_id: str) -> None:
         log.warning("Cover suggestion album traversal denied: %r", album_id)
         return
     root = (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).resolve()
-    if path.is_relative_to(root) and path.is_dir():
-        shutil.rmtree(path)
+    confined = confined_under(root, path)
+    if confined is not None and confined.is_dir():
+        shutil.rmtree(confined)
 
 
 def _expected_relative_path(album_id: str, suggestion_id: str) -> str:

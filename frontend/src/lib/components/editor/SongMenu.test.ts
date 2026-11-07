@@ -3,12 +3,30 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_DELETE_LABEL,
+	SONG_MENU_MOVE_LABEL,
 	SONG_MENU_RENAME_LABEL,
 	SONG_MENU_SAVE_LABEL
 } from '#lib/constants.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
+import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
+import {
+	SONG_MOVE_BACK_LABEL,
+	SONG_MOVE_NO_MATCH,
+	SONG_MOVE_NO_OTHER_ALBUM
+} from '#lib/constants.ts';
+import type { AlbumItem } from '#lib/api/types.ts';
+import { songList } from '#lib/stores/libraryData.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { libraryWallOrder } from '#lib/stores/ui.ts';
 import SongMenu from './SongMenu.svelte';
+
+vi.mock('#lib/api/client.ts', () => ({
+	fetchAlbums: vi.fn(),
+	fetchSongs: vi.fn()
+}));
+
+import { fetchAlbums } from '#lib/api/client.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -55,7 +73,7 @@ describe('SongMenu', () => {
 		expect(target.querySelector('.share-btn')).toBeNull();
 	});
 
-	it('915_C3: lists Save version · Rename · Add to playlist · Delete song, each with an icon, Delete red and last', async () => {
+	it('915_C3: lists Save version · Rename · Add to playlist · Move · Delete song, each with an icon, Delete red and last', async () => {
 		const { target } = await renderMenu();
 		openSongMenu(target);
 		await tick();
@@ -64,10 +82,12 @@ describe('SongMenu', () => {
 			SONG_MENU_SAVE_LABEL,
 			SONG_MENU_RENAME_LABEL,
 			SONG_MENU_ADD_TO_PLAYLIST_LABEL,
+			SONG_MENU_MOVE_LABEL,
 			SONG_MENU_DELETE_LABEL
 		]);
 		expect(items.every((item) => item.querySelector('svg') !== null)).toBe(true);
 		expect(items.map((item) => item.classList.contains('destructive'))).toEqual([
+			false,
 			false,
 			false,
 			false,
@@ -178,4 +198,115 @@ describeBackClosesOverlay({
 			actionSawHistoryAt: () => renameSawHistoryAt
 		}
 	]
+});
+
+describe('SongMenu move picker', () => {
+	async function openPickerOver(albums: AlbumItem[], settled: string) {
+		libraryWallOrder.set('title');
+		songList.set([makeSong({ id: 's1', album_id: 'home' })]);
+		selectedSongId.set('s1');
+		vi.mocked(fetchAlbums).mockResolvedValue({
+			items: albums,
+			total: albums.length,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const { target } = await renderMenu();
+		openSongMenu(target);
+		await tick();
+		menuRow(target, SONG_MENU_MOVE_LABEL).click();
+		await vi.waitFor(() => expect(target.querySelector(settled)).not.toBeNull());
+		return target;
+	}
+
+	function openPicker() {
+		return openPickerOver([makeAlbum({ id: 'home', title: 'Homeoffice' })], '.pk-empty');
+	}
+
+	const homeAlbum = makeAlbum({ id: 'home', title: 'Homeoffice' });
+
+	it('lists the other albums with their cover or initials and a shared mark, and filters them', async () => {
+		const target = await openPickerOver(
+			[
+				homeAlbum,
+				makeAlbum({
+					id: 'b',
+					title: 'Berlin',
+					cover: { card: '/covers/b.webp' } as AlbumItem['cover']
+				}),
+				makeAlbum({ id: 'c', title: 'Cologne', is_shared: true })
+			],
+			'.pk-list'
+		);
+
+		expect(target.querySelectorAll('.pk-list .pk-row')).toHaveLength(2);
+		expect(target.querySelector('.pk-list img')).not.toBeNull();
+		expect(target.querySelector('.pk-list .pk-shared')).not.toBeNull();
+
+		const filter = target.querySelector<HTMLInputElement>('.pk-filter');
+		if (!filter) throw new Error('filter missing');
+		filter.value = 'zzz';
+		filter.dispatchEvent(new Event('input', { bubbles: true }));
+		await vi.waitFor(() =>
+			expect(target.querySelector('.pk-empty')?.textContent).toBe(SONG_MOVE_NO_MATCH)
+		);
+	});
+
+	it('shows no current-album row when the song album is not among the own albums', async () => {
+		const target = await openPickerOver([makeAlbum({ id: 'b', title: 'Berlin' })], '.pk-list');
+
+		expect(target.querySelector('.pk-row.here')).toBeNull();
+		expect(target.querySelectorAll('.pk-list .pk-row')).toHaveLength(1);
+	});
+
+	it('says when the albums did not load and loads them again on retry', async () => {
+		libraryWallOrder.set('title');
+		songList.set([makeSong({ id: 's1', album_id: 'home' })]);
+		selectedSongId.set('s1');
+		vi.mocked(fetchAlbums).mockRejectedValueOnce(new Error('offline'));
+		const { target } = await renderMenu();
+		openSongMenu(target);
+		await tick();
+		menuRow(target, SONG_MENU_MOVE_LABEL).click();
+		await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
+
+		vi.mocked(fetchAlbums).mockResolvedValue({
+			items: [homeAlbum],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		target.querySelector<HTMLButtonElement>('.pk-retry')?.click();
+		await vi.waitFor(() => expect(target.querySelector('.pk-empty')).not.toBeNull());
+	});
+
+	it("turns the popover into the person's albums and says when there is no other one", async () => {
+		const target = await openPicker();
+
+		expect(target.querySelector('.menu-item')).toBeNull();
+		expect(target.querySelector('.pk-row.here')?.textContent).toContain('Homeoffice');
+		expect(target.querySelector('.pk-empty')?.textContent).toBe(SONG_MOVE_NO_OTHER_ALBUM);
+	});
+
+	it('goes back to the menu rows with the back button', async () => {
+		const target = await openPicker();
+
+		target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_MOVE_BACK_LABEL}"]`)?.click();
+		await tick();
+
+		expect(menuRowLabels(target)).toContain(SONG_MENU_MOVE_LABEL);
+	});
+
+	it('opens on the menu rows again after the popover closed over the picker', async () => {
+		const target = await openPicker();
+
+		target.querySelector<HTMLButtonElement>('.menu-backdrop')?.click();
+		await tick();
+		openSongMenu(target);
+		await tick();
+
+		expect(menuRowLabels(target)).toContain(SONG_MENU_MOVE_LABEL);
+	});
 });

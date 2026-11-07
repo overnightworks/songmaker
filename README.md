@@ -45,7 +45,8 @@ Local tests, lint, type checking and the Python and frontend toolchain are in [A
 - [docs/security.md](docs/security.md): auth, sessions, CSRF, rate limiting, security headers, trust boundaries
 - [docs/testing.md](docs/testing.md): test structure, fixtures, coverage targets
 - [docs/acestep.md](docs/acestep.md): ACE-Step integration, model variants, worker pool, generation parameters
-- [docs/design/](docs/design/README.md): UI mockups
+- [docs/navigation.md](docs/navigation.md): the rules of navigation, each under the ID its test cites
+- [docs/mockups/](docs/mockups): pictures of surfaces not built yet
 
 ## License
 

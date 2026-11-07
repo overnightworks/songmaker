@@ -46,7 +46,7 @@ from songmaker_cli.api_models.queue_streams import (
 )
 from songmaker_cli.api_models.songs import generation_version_lyrics
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
+from songmaker_cli.audio_paths import AudioPathRejectedError, confined_under, resolve_audio_path
 from songmaker_cli.constants import REDIS_RL_QUEUE_STREAM_PREFIX, LimiterFailurePolicy
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
@@ -457,9 +457,9 @@ def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStream
 def queue_stream_audio_path(ctx: AppContext, snapshot_id: str) -> Path:
     if not _valid_snapshot_id(snapshot_id):
         raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-    path = (_stream_dir(ctx) / f"{snapshot_id}.mp3").resolve()
-    root = _stream_dir(ctx).resolve()
-    if not path.is_relative_to(root):
+    stream_dir = _stream_dir(ctx)
+    path = confined_under(stream_dir, stream_dir / f"{snapshot_id}.mp3")
+    if path is None:
         raise HTTPException(403, "Path traversal denied")
     return path
 

@@ -1,10 +1,11 @@
-"""A detach stamp and an attach to the same reference serialize on its row."""
+"""A detach stamp, an attach, a keep and a delete of the same reference serialize on its row."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
 
+from httpx import Response
 from support.postgres_lock_harness import (
     WAIT_SECONDS,
     CommitPause,
@@ -19,6 +20,7 @@ from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import (
     clear_stamps_on_used_or_kept,
+    keep_reference,
     lock_and_mark_reference_used,
     mark_newly_unused,
 )
@@ -94,6 +96,26 @@ class _World:
         with self.pg_factory() as session:
             commit_unused_stamps(session, {REFERENCE_ID})
 
+    def keep(self) -> bool:
+        with self.pg_factory() as session:
+            kept = keep_reference(session, OWNER, REFERENCE_ID) is not None
+            session.commit()
+        return kept
+
+    def delete_over_http(self) -> Response:
+        return self.client.delete(f"/api/references/{REFERENCE_ID}")
+
+    def keep_over_http(self) -> Response:
+        return self.client.post(f"/api/references/{REFERENCE_ID}/keep")
+
+    def is_kept(self) -> bool:
+        with self.pg_factory() as session:
+            return session.get(ReferenceRecording, REFERENCE_ID).is_kept
+
+    def exists(self) -> bool:
+        with self.pg_factory() as session:
+            return session.get(ReferenceRecording, REFERENCE_ID) is not None
+
     def unused_since(self) -> datetime | None:
         with self.pg_factory() as session:
             return session.get(ReferenceRecording, REFERENCE_ID).unused_since
@@ -159,3 +181,43 @@ def test_a_detach_that_commits_while_the_clear_half_is_held_is_stamped_after_the
     world.stamp_after_detach()
 
     assert world.unused_since().replace(tzinfo=None) >= detached_at
+
+
+def test_a_keep_that_waits_for_a_stamping_that_commits_first_clears_the_stamp(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    stamp_pause = CommitPause(lambda session: wrote_to_tables(session, "reference_recordings"))
+
+    answers = race(pg_factory, world.stamp, world.keep, stamp_pause)
+
+    assert answers == {"first": 1, "second": True}
+    assert world.is_kept()
+    assert world.unused_since() is None
+
+
+def test_a_detach_stamping_that_waits_for_a_keep_that_commits_first_leaves_the_row_unstamped(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    keep_pause = CommitPause(lambda session: wrote_to_tables(session, "reference_recordings"))
+
+    answers = race(pg_factory, world.keep, world.stamp, keep_pause)
+
+    assert answers == {"first": True, "second": 0}
+    assert world.is_kept()
+    assert world.unused_since() is None
+
+
+def test_a_keep_request_that_waits_for_a_delete_that_commits_first_answers_not_found(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path)
+    delete_pause = CommitPause(lambda session: wrote_to_tables(session, "reference_recordings"))
+
+    answers = race(pg_factory, world.delete_over_http, world.keep_over_http, delete_pause)
+
+    assert answers["first"].status_code == 204
+    assert answers["second"].status_code == 404
+    assert answers["second"].json() == {"detail": "Not Found"}
+    assert not world.exists()

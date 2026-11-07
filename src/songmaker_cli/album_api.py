@@ -129,11 +129,12 @@ def api_list_albums(
     q: str | None = Query(None),
     sort: LibrarySort | None = Query(None),
     archived: bool = Query(False),
+    owned: bool = Query(False),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PaginatedResponse[AlbumResponse]:
     query = parse_optional_search_query(q)
-    uid = owner_filter(user)
+    uid = owner_filter(user, require_owner=owned)
     total = count_albums(session, user_id=uid, q=query, archived=archived)
     albums = list_albums(
         session, user_id=uid, offset=page.offset, limit=page.limit,

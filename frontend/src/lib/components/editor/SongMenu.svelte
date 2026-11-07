@@ -3,12 +3,15 @@
 		COLLECTION_MENU_CLOSE_LABEL,
 		SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 		SONG_MENU_DELETE_LABEL,
+		SONG_MENU_MOVE_LABEL,
 		SONG_MENU_RENAME_LABEL,
 		SONG_MENU_SAVE_LABEL,
 		SONG_MENU_LABEL
 	} from '#lib/constants.ts';
 	import Icon from '../Icon.svelte';
+	import { openSongMovePicker, songMovePicker } from '#lib/stores/songMove.ts';
 	import MenuPopover from '../MenuPopover.svelte';
+	import SongMovePicker from './SongMovePicker.svelte';
 
 	interface Props {
 		title: string;
@@ -37,24 +40,32 @@
 		closeLabel={COLLECTION_MENU_CLOSE_LABEL}
 	>
 		{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
-		<p class="menu-heading">Song · {title}</p>
-		<button class="menu-item" disabled={saveDisabled} onclick={() => runAndClose(onsave)}>
-			<Icon name="check" size={14} />
-			{SONG_MENU_SAVE_LABEL}
-		</button>
-		<!-- The title field takes the focus the closing menu would give back to its trigger. -->
-		<button class="menu-item" onclick={() => runAndClose(onrename, false)}>
-			<Icon name="pencil" size={14} />
-			{SONG_MENU_RENAME_LABEL}
-		</button>
-		<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
-			<Icon name="list-plus" size={14} />
-			{SONG_MENU_ADD_TO_PLAYLIST_LABEL}
-		</button>
-		<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
-			<Icon name="trash" size={14} />
-			{SONG_MENU_DELETE_LABEL}
-		</button>
+		{#if $songMovePicker.status === 'closed'}
+			<p class="menu-heading">Song · {title}</p>
+			<button class="menu-item" disabled={saveDisabled} onclick={() => runAndClose(onsave)}>
+				<Icon name="check" size={14} />
+				{SONG_MENU_SAVE_LABEL}
+			</button>
+			<!-- The title field takes the focus the closing menu would give back to its trigger. -->
+			<button class="menu-item" onclick={() => runAndClose(onrename, false)}>
+				<Icon name="pencil" size={14} />
+				{SONG_MENU_RENAME_LABEL}
+			</button>
+			<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
+				<Icon name="list-plus" size={14} />
+				{SONG_MENU_ADD_TO_PLAYLIST_LABEL}
+			</button>
+			<button class="menu-item opens-list" onclick={() => void openSongMovePicker()}>
+				<Icon name="library" size={14} />
+				{SONG_MENU_MOVE_LABEL}
+			</button>
+			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
+				<Icon name="trash" size={14} />
+				{SONG_MENU_DELETE_LABEL}
+			</button>
+		{:else}
+			<SongMovePicker onmoved={() => popover?.close()} />
+		{/if}
 	</MenuPopover>
 </div>
 
@@ -85,6 +96,12 @@
 		border: none;
 		text-align: left;
 		cursor: pointer;
+	}
+
+	.menu-item.opens-list::after {
+		content: '›';
+		margin-left: auto;
+		color: var(--text-subtle);
 	}
 
 	.menu-item:hover:not(:disabled) {

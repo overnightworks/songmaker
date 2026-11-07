@@ -17,6 +17,7 @@ export function referenceRecording(
 		duration_sec: 31.4,
 		created_at: '2026-10-27T10:00:00Z',
 		in_use: false,
+		is_kept: false,
 		used_by_versions: 0,
 		used_by_takes: 0,
 		...overrides

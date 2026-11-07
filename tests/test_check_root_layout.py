@@ -23,7 +23,6 @@ DIRECTORY_ENTRIES = frozenset(
         "legal",
         "monitoring",
         "plans",
-        "prompts",
         "quality",
         "scripts",
         "src",

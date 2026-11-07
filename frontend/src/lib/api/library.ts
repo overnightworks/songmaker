@@ -22,6 +22,8 @@ export interface LibraryListOptions {
 	q?: string;
 	sort?: LibrarySort;
 	archived?: boolean;
+	/** Only the caller's own albums, even for an admin. */
+	owned?: boolean;
 }
 
 // eslint-disable-next-line no-restricted-syntax -- query arguments of one call, not a body

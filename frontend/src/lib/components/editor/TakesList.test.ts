@@ -415,7 +415,7 @@ describe('TakesList', () => {
 			expect(target.textContent).not.toContain(VRAM_CAUSE);
 			expect(target.querySelector('[role="alert"]')).toBeNull();
 			if (hasTakes) expect(target.querySelectorAll('.take-row')).toHaveLength(1);
-			else expect(target.textContent).toContain('No takes yet · Generate on Write');
+			else expect(target.textContent).toContain(TAKES_EMPTY);
 		}
 	);
 
@@ -484,7 +484,7 @@ describe('TakesList', () => {
 				song: song({ ...versionedSongDefaults(), generations: [] })
 			});
 			expect(target.querySelector('.status-slot') !== null).toBe(expectSlot);
-			expect(target.textContent?.includes('No takes yet · Generate on Write')).toBe(expectEmpty);
+			expect(target.textContent?.includes(TAKES_EMPTY)).toBe(expectEmpty);
 			if (state.kind === 'queued') {
 				expect(target.querySelector('.status-title')?.textContent).toContain('Queued #2');
 			}

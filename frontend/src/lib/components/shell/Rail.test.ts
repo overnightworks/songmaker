@@ -161,7 +161,7 @@ describe('Rail', () => {
 		// Settings.
 		const groupRows = target.querySelectorAll<HTMLElement>('.rail-group > .disclose-row');
 		expect(groupRows[0]?.textContent).toContain('Library');
-		expect(groupRows[0]?.querySelector('.meta')?.textContent).toBe('1');
+		await vi.waitFor(() => expect(groupRows[0]?.querySelector('.meta')?.textContent).toBe('1'));
 		expect(groupRows[1]?.textContent).toContain('Playlists');
 		expect(groupRows[2]?.textContent).toContain('Settings');
 		expect(target.querySelector('.rail-bottom, .user-row, .collapsed-account')).toBeNull();

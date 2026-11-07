@@ -12,6 +12,7 @@ from fastapi import Depends, HTTPException, Query, Request
 from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimitBackend
 
@@ -23,7 +24,6 @@ from songmaker_cli.constants import (
     PAGE_DEFAULT_LIMIT,
     PAGE_MAX_LIMIT,
     RATE_LIMIT_WINDOW_SECONDS,
-    ROLE_ADMIN,
     SETTING_CHAT_RATE_LIMIT,
     SETTING_GENERATION_RATE_LIMIT,
     SETTING_MAX_QUEUE_DEPTH,
@@ -388,7 +388,7 @@ def unique_playlist_slug(
 
 
 def owner_filter(user: AuthenticatedUser, *, require_owner: bool = False) -> str | None:
-    if user.role == ROLE_ADMIN and not require_owner:
+    if user.role == AppRole.ADMIN and not require_owner:
         return None
     return user.id
 
@@ -406,7 +406,7 @@ def can_access_album(album: Album | None, user: Actor, *, require_owner: bool = 
     The creator always does. An admin reaches everything they can open, even
     an album that no longer loads, unless the caller requires ownership.
     """
-    if user.role == ROLE_ADMIN and not require_owner:
+    if user.role == AppRole.ADMIN and not require_owner:
         return True
     return album is not None and album.created_by == user.id
 
@@ -458,7 +458,7 @@ def check_playlist_access(
     playlist = get_playlist(session, playlist_id)
     if not playlist:
         raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
-    if (require_owner or user.role != ROLE_ADMIN) and playlist.created_by != user.id:
+    if (require_owner or user.role != AppRole.ADMIN) and playlist.created_by != user.id:
         raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
     return playlist
 

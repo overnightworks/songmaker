@@ -660,6 +660,7 @@ export interface ReferenceRecordingResponse {
 	duration_sec: number | null;
 	created_at: string;
 	in_use: boolean;
+	is_kept: boolean;
 	used_by_versions: number;
 	used_by_takes: number;
 }

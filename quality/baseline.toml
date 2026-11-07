@@ -18,7 +18,7 @@
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
-"frontend/src/lib/api/types.ts" = 1103
+"frontend/src/lib/api/types.ts" = 1104
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -52,13 +52,13 @@
 "src/acestep_worker/wrapper.py" = 1087
 "src/songmaker_cli/conversation_api.py" = 968
 "src/songmaker_cli/jobs/generation.py" = 1149
-"src/songmaker_cli/jobs/lora_training.py" = 1552
+"src/songmaker_cli/jobs/lora_training.py" = 1529
 "src/songmaker_cli/queue_streams.py" = 963
 "src/songmaker_cli/sharing_api.py" = 861
 "tests/acestep_engine/test_client.py" = 818
 "tests/acestep_worker/test_wrapper.py" = 1626
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
-"tests/songmaker_cli/jobs/test_lora_training.py" = 1933
+"tests/songmaker_cli/jobs/test_lora_training.py" = 1905
 "tests/songmaker_cli/test_admin_api.py" = 1036
 "tests/songmaker_cli/test_api.py" = 4613
 "tests/songmaker_cli/test_db.py" = 3484
@@ -143,7 +143,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 61
+"_lifespan" = 57
 "create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]

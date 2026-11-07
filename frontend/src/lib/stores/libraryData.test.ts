@@ -38,6 +38,7 @@ import {
 	allAlbumsLoadFailure,
 	cancelAlbumSongLoads,
 	ensureAllAlbumsLoaded,
+	fetchEveryAlbum,
 	loadSongsForAlbum,
 	overlaySongList,
 	replaceSongInList,
@@ -611,4 +612,24 @@ describe('ensureAllAlbumsLoaded', () => {
 			expect(get(allAlbumsLoadFailure)).toBe(shown);
 		}
 	);
+});
+
+describe('fetchEveryAlbum', () => {
+	it('pages to the end and passes the options on to every page', async () => {
+		const first = [makeAlbum({ id: 'a1' })];
+		const second = [makeAlbum({ id: 'a2' })];
+		vi.mocked(fetchAlbums)
+			.mockResolvedValueOnce({ items: first, total: 2, offset: 0, limit: 1, has_more: true })
+			.mockResolvedValueOnce({ items: second, total: 2, offset: 1, limit: 1, has_more: false });
+
+		const every = await fetchEveryAlbum({ owned: true });
+
+		expect(every.map((album) => album.id)).toEqual(['a1', 'a2']);
+		expect(
+			vi.mocked(fetchAlbums).mock.calls.map(([offset, , options]) => [offset, options])
+		).toEqual([
+			[0, { owned: true }],
+			[1, { owned: true }]
+		]);
+	});
 });

@@ -17,7 +17,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from support.codex_sandbox_proof import proof
 from support.install_script_fakes import (
     INHERITED_ENVIRONMENT,
     RECORDER,
@@ -26,7 +25,8 @@ from support.install_script_fakes import (
 from support.repository_root import REPOSITORY_ROOT
 
 INSTALLER = REPOSITORY_ROOT / "scripts" / "apparmor" / "install_profile.sh"
-PROFILE = INSTALLER.parent / proof.DEFAULT_WEB_PROFILE
+(PROFILE,) = [path for path in INSTALLER.parent.iterdir() if path != INSTALLER]
+PROFILE_NAME = PROFILE.name
 A_STALE_COPY = b"profile songmaker-web { # rules from an older checkout\n}\n"
 A_LONG_AGO_NS = 1_600_000_000 * 10**9
 
@@ -125,7 +125,7 @@ def run_installer(tmp_path: Path):
     script_dir.mkdir()
     installer = script_dir / INSTALLER.name
     shutil.copy(INSTALLER, installer)
-    source = script_dir / proof.DEFAULT_WEB_PROFILE
+    source = script_dir / PROFILE_NAME
     source.write_bytes(PROFILE.read_bytes())
     os.utime(source, ns=(A_LONG_AGO_NS, A_LONG_AGO_NS))
     fake_bin = tmp_path / "bin"
@@ -187,7 +187,7 @@ def _directory_contents(directory: Path) -> dict[str, bytes]:
 def test_installs_a_byte_identical_world_readable_fresh_copy_and_loads_that_copy(
     run_installer, existing_copy: bytes | None,
 ) -> None:
-    installed = run_installer.installed_dir / proof.DEFAULT_WEB_PROFILE
+    installed = run_installer.installed_dir / PROFILE_NAME
     if existing_copy is not None:
         installed.write_bytes(existing_copy)
         installed.chmod(0o600)
@@ -196,7 +196,7 @@ def test_installs_a_byte_identical_world_readable_fresh_copy_and_loads_that_copy
 
     assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     assert _directory_contents(run_installer.installed_dir) == {
-        proof.DEFAULT_WEB_PROFILE: PROFILE.read_bytes(),
+        PROFILE_NAME: PROFILE.read_bytes(),
     }
     assert stat.S_IMODE(installed.stat().st_mode) == 0o644
     assert installed.stat().st_mtime_ns > run_installer.source.stat().st_mtime_ns
@@ -205,11 +205,11 @@ def test_installs_a_byte_identical_world_readable_fresh_copy_and_loads_that_copy
         "aa-status --enabled", f"apparmor_parser -r {installed}", "aa-status ",
     )
     assert validate.startswith(
-        f"apparmor_parser -QK {run_installer.installed_dir}/.{proof.DEFAULT_WEB_PROFILE}.",
+        f"apparmor_parser -QK {run_installer.installed_dir}/.{PROFILE_NAME}.",
     )
     assert names == validate.replace("-QK", "-QK -N", 1)
     assert _directory_contents(run_installer.kernel) == {
-        proof.DEFAULT_WEB_PROFILE: PROFILE.read_bytes(),
+        PROFILE_NAME: PROFILE.read_bytes(),
     }
     assert f"as {installed} and loaded it; it loads again at every boot" in result.stdout
 
@@ -234,7 +234,7 @@ def test_the_bytes_validated_are_the_bytes_installed_even_if_the_source_changes(
 
     assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     assert run_installer.source.read_bytes() != PROFILE.read_bytes()
-    installed = run_installer.installed_dir / proof.DEFAULT_WEB_PROFILE
+    installed = run_installer.installed_dir / PROFILE_NAME
     assert installed.read_bytes() == run_installer.validated.read_bytes() == PROFILE.read_bytes()
 
 
@@ -256,7 +256,7 @@ def test_each_failing_step_fails_loud_and_leaves_the_previous_copy_installed_and
     existing_copy: bytes | None,
 ) -> None:
     """A failure leaves the target directory as it was, without a staged dotfile."""
-    installed = run_installer.installed_dir / proof.DEFAULT_WEB_PROFILE
+    installed = run_installer.installed_dir / PROFILE_NAME
     if existing_copy is not None:
         installed.write_bytes(existing_copy)
         installed.chmod(0o640)
@@ -269,7 +269,7 @@ def test_each_failing_step_fails_loud_and_leaves_the_previous_copy_installed_and
     assert "Installed AppArmor profile" not in result.stdout
     assert _directory_contents(run_installer.installed_dir) == before
     expected_kernel = (
-        {proof.DEFAULT_WEB_PROFILE: existing_copy}
+        {PROFILE_NAME: existing_copy}
         if reloads_the_previous_copy and existing_copy is not None
         else {}
     )
@@ -295,7 +295,7 @@ def test_a_file_declaring_anything_but_the_requested_profile_is_refused_before_r
     run_installer.source.write_text(declared)
     if already_installed:
         for directory in (run_installer.installed_dir, run_installer.kernel):
-            (directory / proof.DEFAULT_WEB_PROFILE).write_bytes(A_STALE_COPY)
+            (directory / PROFILE_NAME).write_bytes(A_STALE_COPY)
     installed_before = _directory_contents(run_installer.installed_dir)
     loaded_before = _directory_contents(run_installer.kernel)
 

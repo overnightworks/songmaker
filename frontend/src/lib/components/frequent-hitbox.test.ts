@@ -704,8 +704,8 @@ describe('Escape yields to an open popover before the global one-level-up shortc
 	});
 });
 
-// Frame A2 of docs/design/album-browsing.html draws a phone's album and
-// playlist rows 62 px high (#1082).
+// album_rule_10 in docs/navigation.md: a phone's album and playlist rows are
+// 62 px high.
 const PHONE_ROW_HEIGHT_PX = 62;
 
 // jsdom matches no media feature, so a component's narrow-screen block never

@@ -22,41 +22,6 @@ pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_en
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
-## Finding similar functions
-
-`uv run --extra similarity python scripts/similar_functions.py src/ --report /tmp/similar.md`
-finds potential Python duplicates using local code embeddings and separate
-embeddings of one-sentence Claude summaries. This is an advisory audit.
-Methods are included; initializers, pure delegation, and bodies shorter than
-three normalized lines are excluded. Nested functions are not paired with their
-enclosing functions. `--include-tests` also scans `tests/`.
-`--code-threshold` and `--summary-threshold` select pairs by cosine similarity
-(defaults 0.92 and 0.90); either signal qualifies unless `--require-both` is set.
-Pairs are sorted by their mean score. `--fail-above N` exits with status 1 when
-a reported pair exceeds N; without this flag, the audit is not a gate.
-
-`--model` selects the local model (default `Alibaba-NLP/gte-modernbert-base`).
-The default model is pinned to the commit revision in `DEFAULT_MODEL_REVISION`
-in [the script](../scripts/similar_functions.py), so cold runs cannot load
-moving Hub weights; the model runs in float32 on the CPU, and the vector cache is keyed by model, the default model's pinned revision and dtype. The script runs no remote model code
-(`trust_remote_code` is never set); the model's architecture must be one the
-locked `transformers` implements. The first run downloads weights and computes embeddings on
-CPU. Each distinct uncached function content requires one Claude call.
-Before any model or Claude call, the audit prints the summary cache-miss count
-and aborts if it exceeds `--max-summaries N` (default 400); rerun with a higher
-limit or `--no-summaries` to proceed.
-
-`ANTHROPIC_API_KEY` selects the SDK (install the `api` extra); otherwise the audit
-uses `claude -p` without tools, MCP, or project settings. `SONGMAKER_CLAUDE_CLI`
-overrides the executable path. `--claude-model` or `CLAUDE_SCORING_MODEL` selects
-the summary model (default `claude-haiku-4-5-20251001`). `--summary-workers`
-limits concurrent Claude calls (default 4). The ignored content-hash cache at
-`.cache/similar_functions/` separates summaries and vectors by model and prompt;
-an unchanged repeat run needs neither Claude nor a model startup.
-`--no-summaries` explicitly disables the second signal. Otherwise unavailable
-models or Claude failures produce named errors (exit status 2).
-The [logic tests](../tests/scripts/test_similar_functions.py) use fakes and load no model.
-
 ## Static analysis (SonarCloud)
 
 GitHub CI calls the SHA-pinned `overnightworks/quality` v0.5.0 reusable gate from `.github/workflows/ci.yml`. Its `quality / verdict` check combines hygiene, Sonar findings and the mandatory job names in [`quality/config.toml`](../quality/config.toml). Failed or skipped dependencies still reach the verdict; cancelled runs do not start the caller. There are no actor or fork exclusions: missing `SONAR_TOKEN` fails closed, including tokenless forks. Dependabot needs the separately configured Dependabot secret.
@@ -67,7 +32,7 @@ Findings from the run's own analysis block the verdict, including accepted and f
 
 Adoption is complete only after authenticated enforcement checks and the post-merge main run prove the verdict and both reports. The operator enables `quality_gate=true` after a green verdict and verifies the required context is exactly `quality / verdict`; older open PRs must merge main to supply that check. Automatic analysis must be off. Red main blocks deployment; retain the last green deployment and forward-fix. Any temporary enforcement rollback requires an explicit operator ruling.
 
-The scope covers `src`, `frontend/src` and `scripts`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
+The scope covers `src`, `frontend/src` and `scripts`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/mockups/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
 
 Coverage exclusions are intentionally narrower and identical in `.github/workflows/coveragerc-ci.ini` and `sonar-project.properties`, except `scripts/**`, which only the Sonar side names because pytest `--cov` never measures `scripts` and its lines would otherwise read as 0 % new code: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers remain measured.
 

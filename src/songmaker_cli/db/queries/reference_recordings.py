@@ -109,12 +109,50 @@ def lock_and_mark_reference_used(
     """The owner's own row, locked until the transaction ends and no longer unused.
 
     None for a missing or foreign id. Every path that newly links a version or a take
-    to a reference takes its link through here.
+    to a reference takes its link through here. The lock is ``FOR NO KEY UPDATE``: it
+    excludes a delete and another link, but not the key-share lock a save takes on the
+    row at a version insert.
     """
-    recording = get_owned_reference_recording(session, user_id, reference_id, lock=True)
+    recording = session.execute(
+        select(ReferenceRecording)
+        .where(ReferenceRecording.id == reference_id, ReferenceRecording.user_id == user_id)
+        .with_for_update(key_share=True),
+    ).scalar_one_or_none()
     if recording is not None:
         recording.unused_since = None
         session.flush()
+    return recording
+
+
+def keep_reference(
+    session: Session, user_id: str, reference_id: str,
+) -> ReferenceRecording | None:
+    """Keep the owner's row under its lock and clear its stamp; None for a missing or foreign id.
+
+    A kept row is never stamped, so a detach's later stamping and the daily run leave it alone.
+    Flushes.
+    """
+    recording = get_owned_reference_recording(session, user_id, reference_id, lock=True)
+    if recording is not None:
+        recording.is_kept = True
+        recording.unused_since = None
+        session.flush()
+    return recording
+
+
+def unkeep_reference(
+    session: Session, user_id: str, reference_id: str,
+) -> ReferenceRecording | None:
+    """Unkeep the owner's kept row under its lock and stamp it now unless a link holds it.
+
+    The stamp starts a fresh full countdown. A row that is not kept stays as it is, so its
+    older stamp survives. None for a missing or foreign id. Flushes.
+    """
+    recording = get_owned_reference_recording(session, user_id, reference_id, lock=True)
+    if recording is not None and recording.is_kept:
+        recording.is_kept = False
+        session.flush()
+        mark_newly_unused(session, [recording.id])
     return recording
 
 

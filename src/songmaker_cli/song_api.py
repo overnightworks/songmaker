@@ -278,9 +278,9 @@ def api_move_song(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> SongResponse:
-    song = check_song_access(session, song_id, user)
+    song = check_song_access(session, song_id, user, require_owner=True)
     target_album = get_album(session, req.album_id)
-    check_album_access(target_album, user)
+    check_album_access(target_album, user, require_owner=True)
     slug = unique_song_slug(
         session, req.album_id, song.title, exclude_song_id=song_id,
     )
