@@ -16,7 +16,7 @@ from support.postgres_lock_harness import (
     stop_workers,
     wait_until_blocked_behind,
 )
-from support.web_app import make_test_app, web_client
+from support.web_app import make_test_app, seed_user, web_client
 
 from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.auth_api import backchannel_logout_host
@@ -68,6 +68,35 @@ def test_a_sequential_hold_keeps_the_lock_until_the_outer_commit(pg_factory) -> 
             _second_session_times_out_on_the_lock(pg_factory)
         session.commit()
     _second_session_gets_the_lock(pg_factory)
+
+
+def test_sequential_holds_in_one_transaction_roll_back_together(pg_factory) -> None:
+    with pg_factory() as session:
+        seed_user(session, "nina", user_id="owner")
+        session.commit()
+        lock = DatabaseWriteLock(session)
+
+        with lock.hold():
+            session.query(User).one().role = "admin"
+        with lock.hold():
+            session.query(User).one().role = "operator"
+        session.rollback()
+
+        assert session.query(User).one().role == "user"
+
+
+@pytest.mark.parametrize("end_transaction", ["commit", "rollback"])
+def test_the_next_hold_locks_again_after_the_transaction_ends(
+    pg_factory, end_transaction: str,
+) -> None:
+    with pg_factory() as session:
+        lock = DatabaseWriteLock(session)
+        with lock.hold():
+            _second_session_times_out_on_the_lock(pg_factory)
+        getattr(session, end_transaction)()
+        _second_session_gets_the_lock(pg_factory)
+        with lock.hold():
+            _second_session_times_out_on_the_lock(pg_factory)
 
 
 _FLUSHED_SIGN_IN = "flushed_sign_in"

@@ -1,4 +1,4 @@
-"""Arrangement shared by the SQLite and PostgreSQL lock-guard tests."""
+"""Arrangement of the PostgreSQL lock-guard tests: lock owners and early writes."""
 
 from __future__ import annotations
 
@@ -44,11 +44,26 @@ def _flush_a_business_row(session: Session) -> None:
     session.flush()
 
 
+def _add_a_business_row(session: Session) -> None:
+    session.add(Album(id="pending", title="Pending", artist="X", created_by=OWNER_ID))
+
+
+def _change_the_owner(session: Session) -> None:
+    session.query(User).one().username = "renamed"
+
+
+def _delete_the_owner(session: Session) -> None:
+    session.delete(session.query(User).one())
+
+
 def _run_a_raw_update(session: Session) -> None:
     session.execute(text("UPDATE users SET username = 'renamed'"))
 
 
 EARLY_WRITES: dict[str, Callable[[Session], None]] = {
+    "a pending add": _add_a_business_row,
+    "a pending change": _change_the_owner,
+    "a pending delete": _delete_the_owner,
     "a flushed row": _flush_a_business_row,
     "a raw update": _run_a_raw_update,
 }
