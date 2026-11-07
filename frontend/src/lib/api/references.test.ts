@@ -7,7 +7,14 @@ vi.mock('$app/navigation', async () =>
 );
 
 import { ApiError } from './fetch';
-import { deleteReference, listReferences, referenceAudioUrl, uploadReference } from './references';
+import {
+	deleteReference,
+	keepReference,
+	listReferences,
+	referenceAudioUrl,
+	unkeepReference,
+	uploadReference
+} from './references';
 
 describe('reference API', () => {
 	beforeEach(() => mockFetch.mockReset());
@@ -78,6 +85,39 @@ describe('reference API', () => {
 		await expect(deleteReference('reference-1')).rejects.toMatchObject({
 			status: 409,
 			message: 'Reference audio is in use.'
+		});
+	});
+
+	describe.each([
+		{ call: keepReference, name: 'keeps', path: '/api/references/reference%201/keep' },
+		{ call: unkeepReference, name: 'unkeeps', path: '/api/references/reference%201/unkeep' }
+	])('when it $name a reference', ({ call, path }) => {
+		it('posts to the reference path and accepts the empty answer', async () => {
+			mockFetch.mockResolvedValue({
+				ok: true,
+				status: 204,
+				json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input'))
+			});
+
+			await expect(call('reference 1')).resolves.toBeUndefined();
+
+			const [url, init] = mockFetch.mock.calls[0];
+			expect(url).toBe(path);
+			expect(init.method).toBe('POST');
+		});
+
+		it('rejects with the refusal', async () => {
+			mockFetch.mockResolvedValue({
+				ok: false,
+				status: 404,
+				headers: new Headers(),
+				json: () => Promise.resolve({ detail: 'Reference not found.' })
+			});
+
+			await expect(call('reference-1')).rejects.toMatchObject({
+				status: 404,
+				message: 'Reference not found.'
+			});
 		});
 	});
 
