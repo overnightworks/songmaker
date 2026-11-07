@@ -129,6 +129,8 @@ def _holding_a_generation_write() -> CommitPause:
 def test_stage_one_leaves_a_take_that_a_keep_or_pick_commits_first(
     pg_factory, tmp_path, route,
 ) -> None:
+    """Spec: REQ-CURATION-08 -- A keep or pick that commits while retention is writing leaves the
+    take unarchived."""
     world = _World(pg_factory, tmp_path, {"x": {"archived": False, "old": True}})
     answers = race(
         pg_factory, world.mark(route, "x"), world.retention(), _holding_a_generation_write(),
