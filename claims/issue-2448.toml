@@ -1,0 +1,8 @@
+claim_id = "96cb6cfc56614e8abb5a746e2abe4a08"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "102021f8d33fbbd404bc42a0e51620021e71263f"
+branch = "claude/issue-2448-path-owner-slice-2-covers-cover-suggesti"
+scope = ["docs/security.md", "quality/baseline.toml", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/covers.py", "src/songmaker_cli/jobs/lora_training.py", "tests/songmaker_cli/jobs/test_lora_export_handoff.py", "tests/songmaker_cli/jobs/test_lora_training.py", "tests/songmaker_cli/test_cover_confinement.py"]
+opened_commit = "b01e27dcced1f47e0393ca141db80341c8e4f1a2"
+whole_reason = "The cover sites and the LoRA export are the remaining deciders of one security rule; the parent cut them as one slice because each is a few lines and they share the owner's contract and the security sentence."
