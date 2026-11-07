@@ -1,8 +1,0 @@
-claim_id = "6662c5606e2648cdb1834eafd3ae3ff9"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "b8ae2acc96e84047c593bb0744d5ffcdfb07a20b"
-branch = "claude/issue-2566-shared-empty-state"
-scope = ["frontend/src/lib/components/EmptyState.svelte", "frontend/src/lib/components/EmptyState.test.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/routes/settings/references/+page.svelte"]
-opened_commit = "ec273a3e08826f5fd517335de465c0a2b0aa80b6"
-whole_reason = "One shared empty state and its two callers, which leave their copies in the same change."
