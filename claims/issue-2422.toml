@@ -1,7 +1,0 @@
-claim_id = "7b5725f3bd004b2bad654a020afa6351"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "4a2ad4eb23db68d898cbe055d90d2779d4a8a745"
-branch = "claude/issue-2422-a-bulk-delete-counts-and-audits-only-the"
-scope = ["src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/generation_api.py", "tests/songmaker_cli/test_cleanup_generation_retention_lock_postgres.py"]
-opened_commit = "8e23caac788f60f744986de252cc8a0c7db401d4"
