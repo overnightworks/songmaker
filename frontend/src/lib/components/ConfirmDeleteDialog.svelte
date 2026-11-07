@@ -123,12 +123,12 @@
 		content: '•';
 		position: absolute;
 		left: 0;
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.warning {
 		font-size: 0.8rem;
-		color: var(--score-bad);
+		color: var(--fail);
 		margin: 0;
 		font-family: var(--font-display);
 		text-transform: uppercase;

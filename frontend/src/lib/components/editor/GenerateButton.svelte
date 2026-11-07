@@ -169,8 +169,8 @@
 
 	.primary-button.failed {
 		background: none;
-		border-color: var(--score-bad);
-		color: var(--score-bad);
+		border-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.progress-button {
@@ -244,7 +244,7 @@
 
 	.failure {
 		margin-bottom: var(--row-gap);
-		color: var(--score-bad);
+		color: var(--fail);
 		white-space: pre-wrap;
 	}
 

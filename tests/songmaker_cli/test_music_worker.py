@@ -17,7 +17,6 @@ from songmaker_cli.constants import (
     JobType,
     LoraStatus,
 )
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AuditLog, Job, ReferenceRecording, User, UserLora
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.settings import Settings, get_settings
@@ -136,8 +135,8 @@ def test_generate_passes_repaint_params() -> None:
     assert kwargs["repaint_params"].repainting_end == 1.0
 
 
-def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog) -> None:
-    factory = init_test_db(tmp_path / "songmaker.db")
+def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog, pg_factory) -> None:
+    factory = pg_factory
     audio_dir = tmp_path / "audio"
     orphan = audio_dir / "u1" / "orphan.mp3"
     orphan.parent.mkdir(parents=True)
@@ -199,8 +198,8 @@ def test_on_shutdown_disposes_db() -> None:
     worker._db_engine.dispose.assert_called_once()
 
 
-def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> None:
-    factory = init_test_db(tmp_path / "songmaker.db")
+def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path, pg_factory) -> None:
+    factory = pg_factory
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     with factory() as session:
@@ -267,8 +266,8 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
     assert len(audits) == 1
 
 
-def test_queued_music_jobs_survive_worker_restart(tmp_path) -> None:
-    factory = init_test_db(tmp_path / "songmaker.db")
+def test_queued_music_jobs_survive_worker_restart(tmp_path, pg_factory) -> None:
+    factory = pg_factory
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     with factory() as session:
@@ -315,8 +314,8 @@ def test_queued_music_jobs_survive_worker_restart(tmp_path) -> None:
     assert lora.status == LoraStatus.QUEUED
 
 
-def test_file_cleanup_cron_leaves_queued_generate_job_untouched(tmp_path) -> None:
-    factory = init_test_db(tmp_path / "songmaker.db")
+def test_file_cleanup_cron_leaves_queued_generate_job_untouched(tmp_path, pg_factory) -> None:
+    factory = pg_factory
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     with factory() as session:
@@ -368,8 +367,10 @@ def test_the_daily_jobs_run_at_the_daily_cleanup_hour() -> None:
     }
 
 
-def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_count(tmp_path) -> None:
-    factory = init_test_db(tmp_path / "songmaker.db")
+def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_count(
+    tmp_path, pg_factory,
+) -> None:
+    factory = pg_factory
     audio_dir = tmp_path / "audio"
     refs = audio_dir / "u1" / "refs"
     refs.mkdir(parents=True)
@@ -389,8 +390,10 @@ def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_coun
     assert list(refs.iterdir()) == []
 
 
-def test_reference_unused_cron_stamps_unused_rows_and_returns_the_changed_count(tmp_path) -> None:
-    factory = init_test_db(tmp_path / "songmaker.db")
+def test_reference_unused_cron_stamps_unused_rows_and_returns_the_changed_count(
+    tmp_path, pg_factory,
+) -> None:
+    factory = pg_factory
     with factory() as session:
         session.add(User(id="u1", username="u1"))
         session.flush()

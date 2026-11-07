@@ -29,7 +29,6 @@ from webauth.cookies import sign_session_id
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.server import create_app, run_server
@@ -850,7 +849,9 @@ def test_body_size_streaming_too_large(tmp_path: Path, monkeypatch) -> None:
     "cors_origin",
     ["*.example.com", "*", "https://one.example.com,https://two.example.com"],
 )
-def test_cors_wildcard_or_list_raises_at_startup(tmp_path: Path, cors_origin: str) -> None:
+def test_cors_wildcard_or_list_raises_at_startup(
+    tmp_path: Path, cors_origin: str, pg_factory, fresh_settings,
+) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -860,9 +861,8 @@ def test_cors_wildcard_or_list_raises_at_startup(tmp_path: Path, cors_origin: st
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
     ctx = AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=audio_dir,
         data_dir=data_dir,
         signing_key=TEST_SECRET,
@@ -874,7 +874,7 @@ def test_cors_wildcard_or_list_raises_at_startup(tmp_path: Path, cors_origin: st
             create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
 
 
-def test_cors_specific_origin(tmp_path: Path) -> None:
+def test_cors_specific_origin(tmp_path: Path, pg_factory, fresh_settings) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -884,7 +884,7 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
+    factory = pg_factory
     with factory() as session:
         session.commit()
 
@@ -982,7 +982,7 @@ def test_a_missing_index_has_no_csp_hashes(tmp_path: Path) -> None:
 # ── IpRateLimitMiddleware ──────────────────────────────────────────
 
 
-def test_ip_rate_limit_429(tmp_path: Path, monkeypatch) -> None:
+def test_ip_rate_limit_429(tmp_path: Path, monkeypatch, pg_factory, fresh_settings) -> None:
     monkeypatch.setenv("IP_RATE_LIMIT", "2")
 
     audio_dir = tmp_path / "audio"
@@ -994,7 +994,7 @@ def test_ip_rate_limit_429(tmp_path: Path, monkeypatch) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
+    factory = pg_factory
     with factory() as session:
         session.commit()
 

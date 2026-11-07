@@ -481,7 +481,7 @@
 	}
 
 	.take-voice.deleted-voice {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.take-origin a {

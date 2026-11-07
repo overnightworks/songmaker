@@ -35,7 +35,7 @@
 		margin-bottom: 12px;
 		padding: 12px;
 		background: var(--surface);
-		border: 1px solid var(--score-bad);
+		border: 1px solid var(--fail);
 		border-radius: var(--card-radius);
 	}
 
@@ -44,13 +44,13 @@
 		align-items: center;
 		gap: 6px;
 		font-size: 15px;
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.load-error-foot {
 		display: flex;
 		justify-content: flex-end;
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.retry-btn {

@@ -324,9 +324,9 @@
 	}
 
 	.rail-search-error {
-		border-left: 3px solid var(--score-bad);
-		background: var(--score-bad-bg);
-		color: var(--score-bad);
+		border-left: 3px solid var(--fail);
+		background: var(--fail-soft);
+		color: var(--fail);
 	}
 
 	.rail-search-error p {

@@ -618,7 +618,7 @@
 
 	.budget-error {
 		font-size: 0.76rem;
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.retry {
@@ -703,7 +703,7 @@
 	}
 
 	.error {
-		color: var(--score-bad);
+		color: var(--fail);
 		font-size: 0.85rem;
 		margin-bottom: 1rem;
 	}
@@ -760,7 +760,7 @@
 	}
 
 	.voice-status-failed {
-		background: var(--score-bad);
+		background: var(--fail);
 		color: white;
 	}
 
@@ -776,7 +776,7 @@
 	}
 
 	.fail {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.hint {

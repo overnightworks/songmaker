@@ -151,6 +151,6 @@
 	}
 
 	.menu-item.destructive {
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 </style>

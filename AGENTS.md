@@ -31,7 +31,7 @@ CI runs the pinned quality gate; floors in [testing](docs/testing.md#static-anal
 ## Key rules
 
 1. PostgreSQL is the source of truth, not files.
-2. One code path: the web UI is the API's one client of songmaker's own; a person's hal token reaches the same API as that person, and a member's own agent reaches the six marked routes of it over `/mcp` as that person, never as an admin; the CLI only starts the server; no passwords, admin bootstrap or local account commands. Sign-in is Keycloak: accounts keyed by its subject, membership and admin from groups `/apps/songmaker` and `/apps/songmaker/admin` at each sign-in.
+2. One code path: the web UI is the API's one client of songmaker's own; a person's hal token reaches the same API as that person, and a member's own agent reaches the eight marked routes of it over `/mcp` as that person, never as an admin; the CLI only starts the server; no passwords, admin bootstrap or local account commands. Sign-in is Keycloak: accounts keyed by its subject, membership and admin from groups `/apps/songmaker` and `/apps/songmaker/admin` at each sign-in.
 3. `api_models/` Pydantic models are the API contract; `python scripts/generate_types.py` generates `types.ts`.
 4. Test albums get a recognizable name prefix and are archived, not deleted.
 

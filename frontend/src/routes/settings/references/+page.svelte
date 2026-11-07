@@ -398,8 +398,8 @@
 
 	.upload-button.failed {
 		background: transparent;
-		border-color: var(--score-bad);
-		color: var(--score-bad);
+		border-color: var(--fail);
+		color: var(--fail);
 	}
 
 	.upload-name {
@@ -418,7 +418,7 @@
 		margin: 0;
 		font-size: 13px;
 		line-height: 1.35;
-		color: var(--score-bad);
+		color: var(--fail);
 	}
 
 	.quota {

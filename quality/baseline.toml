@@ -61,7 +61,7 @@
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1857
 "tests/songmaker_cli/test_admin_api.py" = 1036
 "tests/songmaker_cli/test_api.py" = 4609
-"tests/songmaker_cli/test_db.py" = 2454
+"tests/songmaker_cli/test_db.py" = 2451
 "tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_jobs.py" = 3215
 "tests/songmaker_cli/test_library_api.py" = 1626
@@ -69,7 +69,7 @@
 "tests/songmaker_cli/test_playlist_api.py" = 1103
 "tests/songmaker_cli/test_queue_streams.py" = 2323
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
-"tests/songmaker_cli/test_scheduler.py" = 1284
+"tests/songmaker_cli/test_scheduler.py" = 1283
 "tests/songmaker_cli/test_server.py" = 1922
 "tests/songmaker_cli/test_sharing_api.py" = 2487
 "tests/test_auto_deploy_alerting.py" = 1299

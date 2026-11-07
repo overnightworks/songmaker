@@ -220,7 +220,7 @@ async function expectAlbumForm(page: Page, menu: Locator, title: string): Promis
 	const [panel] = await boundingBoxes(menu);
 	expect(panel.width).toBeCloseTo(ALBUM_FORM_MENU_WIDTH_PX, 0);
 
-	const danger = await tokenColor(page, '--score-bad');
+	const danger = await tokenColor(page, '--fail');
 	await expect(rows.last()).toHaveText(SONG_MENU_DELETE_LABEL);
 	await expect(rows.last()).toHaveCSS('color', danger);
 	await expect(rows.first()).not.toHaveCSS('color', danger);
