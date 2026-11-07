@@ -1,7 +1,0 @@
-claim_id = "6c7e3762b5d04fa0baf74c0466c888e9"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "9d0a9333196fb6af20ae6fb001b0c5b48a280162"
-branch = "claude/issue-2595-g2b-restore-timestamps"
-scope = ["src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/generation_api.py"]
-opened_commit = "7920dd9c410de9c467b890716bb5ec0845fc2c32"
