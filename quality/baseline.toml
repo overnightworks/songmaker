@@ -78,7 +78,7 @@
 "main" = 65
 
 [function_lines."src/acestep_worker/__main__.py"]
-"build_deps" = 76
+"build_deps" = 74
 
 [function_lines."src/acestep_worker/wrapper.py"]
 "_register_protected_routes" = 76
