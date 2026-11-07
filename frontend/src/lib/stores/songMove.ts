@@ -144,9 +144,14 @@ function refusal(err: unknown, songId: string, albumId: string): SongMoveRun {
 /**
  * Moves `song` into `album` and keeps the person on it, unless they opened another song
  * meanwhile. The crumb names the new album on a wide screen, where a phone has no crumb and gets a
- * toast. A refusal is kept in `songMoveRun`; the answer says whether the song moved.
+ * toast. A refusal is kept in `songMoveRun`; the answer says whether the song moved. `onlanded`
+ * runs once it moved, before the address changes.
  */
-async function moveSongTo(song: SongItem, album: AlbumItem): Promise<boolean> {
+async function moveSongTo(
+	song: SongItem,
+	album: AlbumItem,
+	onlanded: () => void = () => undefined
+): Promise<boolean> {
 	if (song.album_id === album.id || get(songMoveRun).status === 'busy') return false;
 	songMoveRun.set({ status: 'busy', songId: song.id, albumId: album.id });
 	let moved: SongItem;
@@ -169,22 +174,27 @@ async function moveSongTo(song: SongItem, album: AlbumItem): Promise<boolean> {
 		song_count: Math.max(0, previous.song_count - 1)
 	}));
 	updateAlbumInList(album.id, (target) => ({ ...target, song_count: target.song_count + 1 }));
+	// The menu's history layer leaves before the address is replaced, or its step back undoes the replace.
+	onlanded();
 	if (get(selectedSongId) === moved.id) await reselectMovedSong(moved);
 	if (onPhone()) addToast(songMovedToastLabel(album.title));
 	return true;
 }
 
-function moveOpenSongTo(album: AlbumItem): Promise<boolean> {
+function moveOpenSongTo(album: AlbumItem, onlanded?: () => void): Promise<boolean> {
 	const song = get(selectedSong);
-	return song ? moveSongTo(song, album) : Promise.resolve(false);
+	return song ? moveSongTo(song, album, onlanded) : Promise.resolve(false);
 }
 
 export const songMoveConfirm = writable<AlbumItem | null>(null);
 
 /** Moves at once, except into an album with a public page, which asks first. */
-export async function askToMoveOpenSongTo(album: AlbumItem): Promise<boolean> {
+export async function askToMoveOpenSongTo(
+	album: AlbumItem,
+	onlanded?: () => void
+): Promise<boolean> {
 	if (get(songMoveRun).status === 'busy') return false;
-	if (!album.is_shared) return moveOpenSongTo(album);
+	if (!album.is_shared) return moveOpenSongTo(album, onlanded);
 	songMoveConfirm.set(album);
 	return false;
 }
@@ -196,13 +206,13 @@ export async function confirmSongMove(): Promise<boolean> {
 }
 
 /** Repeats the refused move of its own song, into the same album and without asking again. */
-export async function retrySongMove(): Promise<boolean> {
+export async function retrySongMove(onlanded?: () => void): Promise<boolean> {
 	const run = get(songMoveRun);
 	const state = get(load);
 	if (run.status !== 'failed' || !run.retryable || state.status !== 'ready') return false;
 	const album = state.albums.find((candidate) => candidate.id === run.albumId);
 	const song = get(songList).find((candidate) => candidate.id === run.songId);
-	return album && song ? moveSongTo(song, album) : false;
+	return album && song ? moveSongTo(song, album, onlanded) : false;
 }
 
 export function cancelSongMove(): void {

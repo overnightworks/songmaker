@@ -26,7 +26,7 @@
 	import Icon from '../Icon.svelte';
 
 	interface Props {
-		/** Closes the whole popover, once a move succeeded or before a shared album asks. */
+		/** Closes the whole popover, as a move lands or before a shared album asks. */
 		onclose: () => void;
 	}
 
@@ -50,11 +50,11 @@
 	async function choose(album: AlbumItem): Promise<void> {
 		// The ask is a dialog over the page: it opens only after the popover's history layer left.
 		if (album.is_shared) onclose();
-		if (await askToMoveOpenSongTo(album)) onclose();
+		await askToMoveOpenSongTo(album, onclose);
 	}
 
 	async function retry(): Promise<void> {
-		if (await retrySongMove()) onclose();
+		await retrySongMove(onclose);
 	}
 </script>
 

@@ -5,6 +5,7 @@ import { get } from 'svelte/store';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
 import { installHistoryController } from '#lib/history/historyController.ts';
+import { historyLayerState } from '#lib/stores/layers.ts';
 import {
 	RAIL_LIBRARY_LOAD_ERROR,
 	SONG_MOVE_ALBUM_GONE,
@@ -237,6 +238,18 @@ describe('moving the open song', () => {
 		expect(get(selectedGenerationId)).toBe('g1');
 		expect(location.pathname).toBe('/album/abend/storytime/take/1');
 		expect(historyLength()).toBe(entries);
+	});
+
+	it('ends on the new address when the menu closes as the move lands', async () => {
+		const menu = historyLayerState('song-menu', false);
+		menu.set(true);
+		vi.mocked(moveSong).mockResolvedValue(movedSong);
+
+		await askToMoveOpenSongTo(ABEND, () => menu.set(false));
+		await new Promise((resolve) => setTimeout(resolve));
+
+		expect(get(menu)).toBe(false);
+		expect(location.pathname).toBe('/album/abend/storytime');
 	});
 
 	it('does nothing for the album the song already stands in', async () => {
