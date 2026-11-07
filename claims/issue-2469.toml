@@ -1,7 +1,0 @@
-claim_id = "11d68fb3224e4c95a598adb3907673e6"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "30b0379ca861176226a93d03e323f8e07ce0b98e"
-branch = "claude/issue-2469-testing-names-unmeasured-layers"
-scope = ["docs/testing.md"]
-opened_commit = "6bc97d65a2f6a91f1817a26517b21fa82d636bfd"
