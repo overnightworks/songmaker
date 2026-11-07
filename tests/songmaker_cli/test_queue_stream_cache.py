@@ -111,6 +111,19 @@ def test_a_build_passes_over_a_manifest_whose_name_is_not_the_id_it_records(
     assert _build_snapshot(ctx) != first
 
 
+def test_a_build_passes_over_a_manifest_recording_an_id_that_is_not_a_valid_snapshot_id(
+    ctx, stream_dir
+) -> None:
+    first = _build_snapshot(ctx)
+    manifest_path = stream_dir / f"{first}.json"
+    manifest = QueueStreamManifest.load(manifest_path)
+    manifest_path.unlink()
+    manifest.model_copy(update={"snapshot_id": "notes"}).save(stream_dir / "notes.json")
+    (stream_dir / f"{first}.mp3").rename(stream_dir / "notes.mp3")
+
+    assert _build_snapshot(ctx) != "notes"
+
+
 def test_the_sweep_keeps_every_file_of_a_live_snapshot_however_old(ctx, stream_dir) -> None:
     live = _build_snapshot(ctx)
     audio = stream_dir / f"{live}.mp3"

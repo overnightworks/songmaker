@@ -405,12 +405,12 @@ def _find_reusable_snapshot(
     )
     for manifest_path in manifests:
         manifest = QueueStreamManifest.load(manifest_path)
-        if manifest is None or manifest.snapshot_id != manifest_path.stem:
+        if manifest is None or not _valid_snapshot_id(manifest_path.stem):
             continue
-        if manifest.content_hash != content_hash or manifest.expires_at < now:
+        if manifest.snapshot_id != manifest_path.stem or manifest.content_hash != content_hash:
             continue
         audio_path = queue_stream_audio_path(ctx, manifest.snapshot_id)
-        if not audio_path.exists():
+        if manifest.expires_at < now or not audio_path.exists():
             continue
         return QueueStreamManifestResponse(
             snapshot_id=manifest.snapshot_id,
