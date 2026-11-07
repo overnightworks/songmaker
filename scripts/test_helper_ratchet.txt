@@ -17,7 +17,6 @@ backend _record_reference 2
 backend _reset_codex_image_sandbox_runtime_health 2
 backend _run 21
 backend _seed 13
-backend _seed_db 2
 backend _seed_owners 2
 backend _seed_sharing_data 2
 backend _seed_song 2

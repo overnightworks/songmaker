@@ -75,6 +75,7 @@ from acestep_worker.settings import (
     DEFAULT_TRAINING_WORKSPACE_DIRNAME,
 )
 from acestep_worker.subprocess_runner import SUBPROCESS_BIND_HOST, SubprocessStartError
+from acestep_worker.task_results import register_result_routes, write_result_file
 from acestep_worker.task_store import TaskStore
 
 log = logging.getLogger(__name__)
@@ -616,6 +617,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
     routes = _WorkerRoutes(deps)
     router = APIRouter(dependencies=[Depends(routes.verify_internal_token)])
     _register_protected_routes(router, routes)
+    register_result_routes(router, deps.task_store)
     return router
 
 
@@ -1068,17 +1070,14 @@ async def default_generate_runner(
                 *map(asyncio.wrap_future, scheduled_updates), return_exceptions=True,
             )):
                 log.warning("Progress write failed for task %s: %r", task_id, failure)
-        audio_output_dir.mkdir(parents=True, exist_ok=True)
-        out_path = audio_output_dir / f"{task_id}-{uuid4().hex[:8]}.wav"
-        out_path.write_bytes(result.wav_bytes)
+        out_path = write_result_file(audio_output_dir, task_id, result.wav_bytes)
         await task_store.complete(task_id, GenerationTaskResult(
             mode=mode,
-            audio_path=str(out_path),
             seed=result.seed,
             cot_caption=result.cot_caption,
             cot_lyrics=result.cot_lyrics,
             delivered_batch_size=result.delivered_batch_size,
-        ))
+        ), result_file=out_path)
     except Exception as exc:
         log.exception("Generation failed for task %s", task_id)
         cause = str(exc) if isinstance(exc, AceStepError) else f"{type(exc).__name__}: {exc}"

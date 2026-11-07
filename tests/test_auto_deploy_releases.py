@@ -16,7 +16,6 @@ from auto_deploy_harness import (
     Checkout,
 )
 from auto_deploy_support import (
-    CHECK_RUN_APPEARANCE_GRACE_SECONDS,
     DEPENDABOT_UPDATES_WORKFLOW_PATH,
     FAILURE_ALERT_THRESHOLD,
     UPDATE_CHECK_SUITE_ID,
@@ -27,10 +26,8 @@ from auto_deploy_support import (
 CODE_SCANNING_WORKFLOW_PATH = "dynamic/github-code-scanning/codeql"
 OTHER_CHECK_SUITE_ID = "3000"
 UPDATE_RUN = ("github-actions", "Dependabot", "completed", "failure", UPDATE_CHECK_SUITE_ID)
-UPDATE_SUITE = (UPDATE_CHECK_SUITE_ID, DEPENDABOT_UPDATES_WORKFLOW_PATH)
 PASSED_UPDATE_RUN = ("github-actions", "Dependabot", "completed", "success", UPDATE_CHECK_SUITE_ID)
 PASSED_CI = ("completed", "success")
-FAILED_CI = ("completed", "failure")
 
 OFF_GRAMMAR_TAGS = ["v1.0", "v2026.1.5.1", "v2026.10.25.01", "v2026.02.30.1"]
 
@@ -86,7 +83,6 @@ def test_a_release_tag_deploys_its_commit_detached_and_the_journal_names_the_tag
     assert result.returncode == 0
     assert checkout.head == commit
     assert _is_detached(checkout)
-    assert "image inspect" in checkout.docker_calls
     assert any("compose build" in call for call in checkout.build_and_recreate_calls)
     assert any(call.startswith("compose up") for call in checkout.build_and_recreate_calls)
     assert _deployed_sha(checkout) == commit
@@ -505,66 +501,6 @@ def test_a_release_with_the_running_schema_is_not_backed_up(checkout: Checkout) 
     assert result.returncode == 0
     assert len(checkout.backup_calls) == calls_before
     assert _deployed_sha(checkout) == checkout.head
-
-
-@pytest.mark.parametrize(
-    ("check_runs", "workflow_runs", "grace_elapsed", "outcome"),
-    [
-        pytest.param([PASSED_CI, UPDATE_RUN], [UPDATE_SUITE], False, "deploys", id="D1"),
-        pytest.param([FAILED_CI, PASSED_UPDATE_RUN], [UPDATE_SUITE], False, "failed", id="D2"),
-        pytest.param([PASSED_UPDATE_RUN], [UPDATE_SUITE], False, "waiting", id="D3"),
-        pytest.param([PASSED_UPDATE_RUN], [UPDATE_SUITE], True, "failed", id="D4"),
-        pytest.param(
-            [PASSED_UPDATE_RUN, ("completed", "skipped"), ("completed", "neutral")],
-            [UPDATE_SUITE], False, "failed", id="D4a",
-        ),
-        pytest.param(
-            [PASSED_UPDATE_RUN, ("in_progress", "")], [UPDATE_SUITE], False, "waiting", id="D4b",
-        ),
-        pytest.param(
-            [PASSED_UPDATE_RUN, ("unheard_of", "")], [UPDATE_SUITE], False, "refused", id="D4c",
-        ),
-        pytest.param(
-            [PASSED_CI, ("github-actions", "Dependabot", "in_progress", "", UPDATE_CHECK_SUITE_ID)],
-            [UPDATE_SUITE], False, "deploys", id="D5",
-        ),
-        pytest.param(
-            [PASSED_CI, ("github-actions", "Dependabot", "completed", "failure")],
-            [UPDATE_SUITE], False, "failed", id="D6",
-        ),
-        pytest.param(
-            [PASSED_CI, ("github-actions", "CodeQL", "completed", "failure", OTHER_CHECK_SUITE_ID)],
-            [(OTHER_CHECK_SUITE_ID, CODE_SCANNING_WORKFLOW_PATH)], False, "failed", id="D7",
-        ),
-        pytest.param([PASSED_CI, ("completed", "failure")], [], False, "failed", id="D9"),
-        pytest.param([PASSED_CI], [], False, "deploys", id="D9-green"),
-    ],
-)
-def test_only_the_check_suites_of_dependabot_update_runs_leave_the_deploy_guard(
-    checkout: Checkout,
-    check_runs: list[tuple[str, ...]],
-    workflow_runs: list[tuple[str, str]],
-    grace_elapsed: bool,
-    outcome: str,
-) -> None:
-    """defect:#2128 cells D1-D7, D9 -- an update run never decides, it never loosens either."""
-
-    checkout.move_main_forward()
-    candidate = checkout.remote_main_sha()
-    checkout.set_check_runs(*check_runs)
-    checkout.set_workflow_runs(*workflow_runs)
-    if grace_elapsed:
-        assert checkout.tick().returncode == 0
-        checkout.advance_clock(CHECK_RUN_APPEARANCE_GRACE_SECONDS)
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert (_deployed_sha(checkout) == candidate) == (outcome == "deploys")
-    assert ("cannot determine GitHub check status" in checkout.journal) == (outcome == "refused")
-    waited = outcome == "waiting" or grace_elapsed
-    assert (f"{candidate} is not green: waiting" in checkout.journal) == waited
-    assert (f"{candidate} is not green: failed" in checkout.journal) == (outcome == "failed")
 
 
 @pytest.mark.parametrize("other_run_failed", [False, True], ids=["update-only", "other-path"])

@@ -11,9 +11,12 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 
-RUN useradd --create-home --shell /bin/bash songmaker
+# Uid and gid 1000 own the volumes and the checkpoints bind mount, and Kubernetes' runAsNonRoot
+# can verify only a numeric USER.
+RUN groupadd --gid 1000 songmaker \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash songmaker
 RUN chown songmaker:songmaker /app
-USER songmaker
+USER 1000:1000
 RUN mkdir -p /home/songmaker/.codex
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
@@ -39,6 +42,6 @@ RUN uv pip install --python .venv/bin/python --no-deps --no-build \
 RUN chown root:root /app && chmod 755 /app && \
     chmod -R a-w src alembic.ini scripts && \
     install -d -o songmaker -g songmaker /app/data/audio
-USER songmaker
+USER 1000:1000
 
 ENTRYPOINT ["/app/.venv/bin/python", "-m", "songmaker_cli.arq_worker"]

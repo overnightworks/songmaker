@@ -13,6 +13,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from acestep_worker.constants import SECRETS_DIRECTORY
 
+# Container-local, outside the shared audio volume: music fetches a take over HTTP.
+DEFAULT_AUDIO_OUTPUT_DIR = "/app/data/worker_output"
 DEFAULT_SHARED_AUDIO_ROOT = "/app/data/audio"
 DEFAULT_TRAINING_WORKSPACE_DIRNAME = "training"
 # The worker accepts control-plane traffic over the container network.
@@ -39,7 +41,7 @@ class WorkerSettings(BaseSettings):
     worker_port: int = 8001
     vram_budget_gb: float = 24.0
     acestep_checkpoint_dir: str = "/opt/acestep"
-    audio_output_dir: str = "/app/data/audio/worker_output"
+    audio_output_dir: str = DEFAULT_AUDIO_OUTPUT_DIR
     shared_audio_root: str = DEFAULT_SHARED_AUDIO_ROOT
     acestep_training_workspace_dirname: str = DEFAULT_TRAINING_WORKSPACE_DIRNAME
     acestep_log_dir: str = "/opt/acestep/logs"

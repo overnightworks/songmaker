@@ -29,6 +29,10 @@ class ReferenceLinkCounts:
     versions: int
     takes: int
 
+    @property
+    def is_unlinked(self) -> bool:
+        return self.versions == 0 and self.takes == 0
+
 
 @dataclass(frozen=True)
 class VersionUse:
@@ -114,6 +118,68 @@ def lock_and_mark_reference_used(
     return recording
 
 
+def mark_newly_unused(session: Session, reference_ids: Collection[str]) -> int:
+    """Stamp ``unused_since`` on each unstamped, unkept row that no version or take links.
+
+    The rows are locked in id order, then the links are counted by a fresh statement, so an
+    attach that committed first is seen and one that comes later waits and clears the stamp.
+    Unknown ids are ignored. Returns the stamped count.
+    """
+    if not reference_ids:
+        return 0
+    candidates = session.execute(
+        select(ReferenceRecording)
+        .where(
+            ReferenceRecording.id.in_(reference_ids),
+            ReferenceRecording.unused_since.is_(None),
+            ReferenceRecording.is_kept.is_(False),
+        )
+        .order_by(ReferenceRecording.id)
+        .with_for_update(),
+    ).scalars().all()
+    link_counts = reference_link_counts(session, [row.id for row in candidates])
+    unlinked = [row for row in candidates if link_counts[row.id].is_unlinked]
+    stamped_at = utcnow()
+    for row in unlinked:
+        row.unused_since = stamped_at
+    session.flush()
+    return len(unlinked)
+
+
+def list_unstamped_unkept_reference_ids(session: Session) -> list[str]:
+    """Ids of the rows with no stamp that the owner has not kept, in id order."""
+    return list(session.execute(
+        select(ReferenceRecording.id)
+        .where(
+            ReferenceRecording.unused_since.is_(None),
+            ReferenceRecording.is_kept.is_(False),
+        )
+        .order_by(ReferenceRecording.id),
+    ).scalars())
+
+
+def clear_stamps_on_used_or_kept(session: Session) -> int:
+    """Clear ``unused_since`` on each stamped row that is kept or that a version or take links.
+
+    The stamped rows are locked in id order, then the links are counted by a fresh statement,
+    the way ``mark_newly_unused`` counts them. Flushes; returns the cleared count.
+    """
+    stamped = session.execute(
+        select(ReferenceRecording)
+        .where(ReferenceRecording.unused_since.is_not(None))
+        .order_by(ReferenceRecording.id)
+        .with_for_update(),
+    ).scalars().all()
+    link_counts = reference_link_counts(session, [row.id for row in stamped])
+    cleared = [
+        row for row in stamped if row.is_kept or not link_counts[row.id].is_unlinked
+    ]
+    for row in cleared:
+        row.unused_since = None
+    session.flush()
+    return len(cleared)
+
+
 def delete_reference_recording(session: Session, recording: ReferenceRecording) -> str:
     """Delete the row and flush; returns its storage path.
 
@@ -149,6 +215,22 @@ def reference_link_counts(
         )
         for reference_id in reference_ids
     }
+
+
+def linked_reference_ids(session: Session, song_ids: Collection[str]) -> set[str]:
+    """The references the given songs' versions and takes link, archived takes included."""
+    if not song_ids:
+        return set()
+    linked: set[str] = set()
+    for model in (Version, Generation):
+        linked.update(
+            session.scalars(
+                select(model.reference_recording_id).where(
+                    model.song_id.in_(song_ids), model.reference_recording_id.is_not(None),
+                ),
+            ),
+        )
+    return linked
 
 
 def reference_uses(session: Session, reference_id: str) -> ReferenceUses:

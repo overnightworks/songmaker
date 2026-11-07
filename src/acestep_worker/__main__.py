@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import sys
 import threading
 from collections.abc import Callable
@@ -82,13 +83,30 @@ def configure_logging(log_level: str) -> None:
     root.setLevel(log_level)
 
 
+def prepare_output_root(output_root: Path, shared_audio_root: Path) -> Path:
+    """Return an emptied output root; refuse one that overlaps the shared audio tree."""
+    output, shared = output_root.resolve(), shared_audio_root.resolve()
+    if output.is_relative_to(shared) or shared.is_relative_to(output):
+        raise ValueError(
+            f"audio_output_dir {output_root} must not overlap the shared audio root "
+            f"{shared_audio_root}",
+        )
+    output_root.mkdir(parents=True, exist_ok=True)
+    for entry in output_root.iterdir():
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+    return output_root
+
+
 def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     settings = settings or get_worker_settings()
     worker_id = settings.worker_id
     worker_host = settings.worker_host or worker_id
     checkpoint_dir = Path(settings.acestep_checkpoint_dir)
-    audio_dir = Path(settings.audio_output_dir)
     shared_audio_root = Path(settings.shared_audio_root)
+    audio_dir = prepare_output_root(Path(settings.audio_output_dir), shared_audio_root)
     log_dir = Path(settings.acestep_log_dir)
 
     redis_client: Redis = Redis.from_url(settings.redis_url, decode_responses=False)

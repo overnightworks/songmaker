@@ -61,7 +61,7 @@ async def _training_runs_until_cancelled(store: TaskStore, task_id: str, **_: ob
 
 async def _generation_completes(store: TaskStore, task_id: str, **_: object) -> None:
     await store.mark_running(task_id)
-    await store.complete(task_id, GenerationTaskResult(mode="sft", audio_path="/a.wav", seed=1))
+    await store.complete(task_id, GenerationTaskResult(mode="sft", seed=1))
 
 
 @dataclass(frozen=True)

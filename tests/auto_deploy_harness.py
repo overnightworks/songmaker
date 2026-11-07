@@ -74,7 +74,6 @@ class Checkout:
         self._releases_cut = 0
         self._hal_path = tmp_path / "hal"
         self._active_job_count = 0
-        self._base_images_present = True
         self._prune_exit_code = 0
         self._prune_sleep_seconds = 0
         self._compose_up_exit_code = 0
@@ -112,7 +111,6 @@ class Checkout:
         for source in (
             DEPLOY_SCRIPT,
             ALERT_CONFIG_LIB,
-            REPO_ROOT / "scripts" / "build_images.sh",
             REPO_ROOT / "scripts" / "secret_files.py",
             REPO_ROOT / "scripts" / "dotenv_file.py",
         ):
@@ -157,11 +155,6 @@ class Checkout:
     def set_active_jobs(self, count: int) -> None:
         """Stand in for `docker compose exec postgres psql …`."""
         self._active_job_count = count
-        self._write_docker_stub()
-
-    def set_base_images_present(self, present: bool) -> None:
-        """Control whether the fake Docker host has both local base images."""
-        self._base_images_present = present
         self._write_docker_stub()
 
     def set_prune_exit_code(self, exit_code: int) -> None:
@@ -294,13 +287,6 @@ class Checkout:
             '    echo sha256:previous-songmaker-web\n'
             "    exit 0\n"
             "fi\n"
-            'if [[ "$1" == "image" && "$2" == "inspect" ]]; then\n'
-            '    if [[ "$DOCKER_BASE_IMAGES_PRESENT" == "true" ]]; then\n'
-            '        echo sha256:base-image\n'
-            "        exit 0\n"
-            "    fi\n"
-            "    exit 1\n"
-            "fi\n"
             'if [[ "$1" == "kill" && "$2" == "-s" && "$3" == "HUP" '
             f'&& "$4" == {shlex.quote(self._prometheus_container)} ]]; then\n'
             f"    exit {self._prometheus_reload_exit_code}\n"
@@ -335,7 +321,7 @@ class Checkout:
             'check_runs_prefix="repos/overnightworks/songmaker/commits/"\n'
             'check_runs_suffix="/check-runs?per_page=100"\n'
             'workflow_runs_prefix="repos/overnightworks/songmaker/actions/runs?head_sha="\n'
-            'workflow_runs_suffix="&event=dynamic&per_page=100"\n'
+            'workflow_runs_suffix="&per_page=100"\n'
             'if [[ "$3" == "$check_runs_prefix"*"$check_runs_suffix" ]]; then\n'
             '    commit_sha="${3#"$check_runs_prefix"}"\n'
             '    commit_sha="${commit_sha%"$check_runs_suffix"}"\n'
@@ -377,7 +363,7 @@ class Checkout:
         (self.check_runs_directory / commit_sha).write_text(check_runs_response(*runs))
 
     def set_workflow_runs(self, *runs: tuple[str, str]) -> None:
-        """Make GitHub list these (check suite id, workflow path) dynamic runs."""
+        """Make GitHub list these (check suite id, workflow path) workflow runs."""
         self.set_workflow_runs_raw_response(
             json.dumps({
                 "total_count": len(runs),
@@ -470,15 +456,6 @@ class Checkout:
         config.write_text(config.read_text() + "\n# changed by deploy test\n")
         git(clone, "add", "monitoring/prometheus.yml")
         git(clone, "commit", "-m", "change Prometheus config")
-        self._land(clone, release=release)
-
-    def move_main_forward_with_changed_base_image(self, *, release: bool = True) -> None:
-        clone = self._up_to_date_pusher()
-        base_dockerfile = clone / "docker" / "base" / "acestep-base.Dockerfile"
-        base_dockerfile.parent.mkdir(parents=True)
-        base_dockerfile.write_text("# changed by deploy test\n")
-        git(clone, "add", "docker/base/acestep-base.Dockerfile")
-        git(clone, "commit", "-m", "change base image")
         self._land(clone, release=release)
 
     def add_acestep_submodule(self, fork: AcestepFork, *, initialised: bool = True) -> None:
@@ -707,7 +684,6 @@ class Checkout:
                 ),
                 "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS": str(PRUNE_TIMEOUT_SECONDS),
                 "DOCKER_PRUNE_SLEEP_SECONDS": str(self._prune_sleep_seconds),
-                "DOCKER_BASE_IMAGES_PRESENT": str(self._base_images_present).lower(),
                 "DOCKER_COMPOSE_PROJECT_NAME": self._compose_project_name,
                 "DOCKER_COMPOSE_STDERR": self.compose_stderr,
                 "SONGMAKER_AUTODEPLOY_HAL": str(self._hal_path),

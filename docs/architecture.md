@@ -110,7 +110,7 @@ User clicks "Generate"                    User clicks "Score"
   │                                              ├── save scores to DB
   │                                              └── Job status: completed
   ├── post_process_generation (to_thread):
-  │   ├── read worker WAV from volume
+  │   ├── fetch the take by task id over the worker HTTP, then read it
   │   ├── decode + splice (if repaint)
   │   ├── master → MP3 + ID3 tags
   │   └── INSERT generation + `generation.created` event (one DB transaction)
@@ -319,48 +319,20 @@ song's slug is known from `songList`, a selected take addresses one segment
 deeper still, `/album/<slug>/<song-slug>/take/<n>`, once that take's
 `generation_number` is known among the song's loaded generations — a take
 selected before its number is known keeps writing the `?gen=…` appendage
-until it is (a search hit or a playlist row opened by id alone, before its
-own upsert into `songList` lands — see `libraryHistoryUrl`'s own comment) —
-an album that is the visible surface but has no song open addresses
+until it is. A song opened by id alone (a search hit or a playlist row) is
+in no list yet, so while it loads the address keeps the standing path; once it
+has loaded, the entry takes the song's own address (`settleSongAddress` in
+`navigation.ts`), unless the user has moved on meanwhile. An album that is the
+visible surface but has no song open addresses
 `/album/<slug>`, an open playlist addresses `/playlist/<slug>` once its slug
 is known from `playlistList` (`openPlaylist` in `navigation.ts` awaits
 `ensurePlaylistsLoaded` before pushing history precisely so this is already
-true by then; a playlist opened before its slug is known — the same rare
-in-flight gap a song's legacy `?song=` form covers — falls back to `/library` rather
-than a broken address, since a playlist never had a legacy form of its own to
-fall back to), the Playlists page addresses `/playlists` whichever collection
+true by then; a playlist opened before its slug is known falls back to
+`/library` rather than a broken address), the Playlists page addresses `/playlists` whichever collection
 stays the rail context behind it, Home addresses `/` and
 the wall `/library`, and an album or playlist that is only the rail context
 behind either stays on that address (only an album's own detail addresses
-`/album/<slug>`). The legacy `/?song=<id>[&gen=…]` form a pre-#275/#281 bookmark
-or shared link still carries is no longer read as its own entry point:
-`(library)/+page.svelte` resolves it (`resolveLegacySongQueryAddress` in
-`stores/libraryContext.ts` — one `fetchSong` call gets both the slug and,
-when `?gen=` names a generation the song still has, its `generation_number`)
-and redirects, `replaceState`, onto the canonical song or take address —
-issue #284 — so Back does not step back through the query form, and an
-unknown song id gets the same honest 404 treatment `openSongAddress`'s
-unknown-song case does rather than a silent landing on the wall. Home's route
-calls `openHomeAddress` only when the query names no song, so a legacy address
-is never written over with `/` while its lookup is in flight (#1506); the
-Library's route ignores `?song=` altogether. An unknown `?gen=` on an
-otherwise known song is dropped rather than 404ed — the song still exists,
-and takes are pruned by ordinary cleanup, so a dead take is not the song's
-own failure — but not silently: dropping it without saying so would still
-hide a fact the surface knows, so the page toasts
-`LEGACY_TAKE_LINK_NOT_FOUND_TOAST` once the redirect has landed on the song
-address (never before — the bar must already read the new address when the
-toast explains why it isn't the take one). A tab whose history entry
-already names this exact legacy entry (a song not yet in `songList` when its
-address was written keeps the query form as a same-shape fallback —
-`libraryHistoryUrl`'s own comment — so a later Back/Forward can return to
-one) has `onPopstate` apply that state instantly from its history entry; the
-page checks for exactly this before resolving anything itself and, when it
-matches, skips its own network round trip and the overlay entirely rather
-than re-resolving the same address in parallel (issue #265's S7 closed the
-double-resolve this way, once removing the hand-built router guard below
-made writing this check the smaller fix — no other read of the entry
-here needed it, so it stayed a known, self-healing race until then).
+`/album/<slug>`). Home's route calls `openHomeAddress`, which replaces a foreign entry with `/`, dropping any query; the Library's route ignores one.
 `isLibraryWorkspacePath` still counts all seven by pathname (every address
 `libraryRouteShape` in `routes/addresses.ts` gives a library shape) rather
 than by the route group, since `routes/+layout.svelte` sits outside
@@ -488,8 +460,7 @@ mirrors this for the currently open playlist, subscribed to `selectedPlaylist`
 (derived from `playlistList` + the open collection) rather than a song-list
 upsert, since a playlist rename already writes its own row back into
 `playlistList` via `updatePlaylistInList`. An ordinary edit (lyrics, prompt,
-cover, entry reorder) does not re-touch either address, and a still-legacy
-`/?song=…` address is left alone rather than upgraded mid-session.
+cover, entry reorder) does not re-touch either address.
 
 The single source of navigation truth for "what collection is open" is the
 leaf store `stores/collection.ts` (`openCollection: {kind: 'album'|'playlist',
@@ -497,7 +468,7 @@ id} | null`), which nothing but `openAlbum`/`openPlaylist`/history restore in
 `stores/navigation.ts` and `loadPlaylistDetail` in `stores/playlists.ts`
 write. `playlists.ts`'s `selectedPlaylistId` is derived from it, not
 independently writable. Opening a song — whatever the entry point (rail row,
-search hit, a redirected legacy `?song=` link, history restore) — always leaves the rail
+search hit, history restore) — always leaves the rail
 context pointing at that song's album: a module-level subscription in
 `navigation.ts` sets `openCollection` to the song's album whenever it doesn't
 already match, so the album is never unreachable while a song is open (the
@@ -1332,7 +1303,7 @@ User (id = Keycloak subject, username, role: admin|user)
   │           └── ChatMessage (role, content — per-song conversation history)
   ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
   ├── UserSongWork (song, edited_at?, edit_kind?, played_at?, album_played_at? — this person's own latest edit and its kind, latest listen, and latest listen outside a playlist, on any song they can open, owner or not)
-  ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?, is_kept — the owner keeps the reference, unused_since? — when it last became unused: set at upload, cleared under the row lock when a version or take links it; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row)
+  ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?, is_kept — the owner keeps the reference, unused_since? — when it last became unused: set at upload and when a take delete, an in-place version edit, a version delete, a song cleanup, an album cleanup, the trash expiry's hard delete of an album or song or retention's final take deletion leaves it without a link (never overwritten, kept rows skipped), cleared under the row lock when a version or take links it; the daily unused-stamp reconciliation stamps unstamped, unkept, unlinked rows late and clears the stamps of kept or linked rows, each half under the rows' locks in its own transaction; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
   ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start)
@@ -1346,13 +1317,13 @@ Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), 
 
 `UserSongWork` is keyed by (user, song) and upserted by `record_song_edit()` and `record_song_played()` in `db/queries/activity.py` when that person creates a song (`POST /api/songs`, the co-writer's `create_song`), saves an edit that changes something, or starts a listen. `create_song()` in `db/queries/songs.py` records the creation for its `created_by`, and `update_song()` and `rename_song()` there decide whether an edit changed the content or the title and record it for their `edited_by`; the song update and rename endpoints and the co-writer's MCP song-edit tools `update_song_lyrics`, `update_song_prompt`, `update_song_style` and `rename_song` pass the caller, so a save that changes nothing (`PUT /api/songs/{id}` with `{}`, the same lyrics or title again) records nothing. An edit also records its kind (`SongWorkKind` in `constants.py`): `created`, `renamed`, `lyrics` when the lyrics changed, else `style` (prompt, BPM, key, duration, language or generation params), so a save that changes the lyrics and the style is `lyrics`. A listen without a `playlist_id` also stamps `album_played_at`; a library-wide shuffle names no playlist, so it counts. It starts empty: past edits and listens are not backfilled, and a `played_at` from before `album_played_at` existed cannot tell an album listen from a playlist listen, so nothing reads it. `/api/library/listen` and `/api/library/write` read these rows (owner: `db/queries/activity.py`), always the viewer's own. Nothing writes `Song.last_played_at` any more; the column waits for its drop.
 
-A take's `created_by` names the user who made it — the job's user for a generated take, the acting user for a reimported one — set by `create_generation()` in `db/queries/generations.py`, which every creation path goes through. It is a fact of the row, so a take already saved keeps its maker even when the rest of its batch is cancelled or fails; it is never derived from job time windows. Takes saved before the column existed keep `created_by = NULL`, since their maker is not honestly recoverable, and deleting a user clears the field rather than the take.
+A take's `created_by` names the user who made it (the job's user), set by `create_generation()` in `db/queries/generations.py`, which every creation path goes through. It is a fact of the row, so a take already saved keeps its maker even when the rest of its batch is cancelled or fails; it is never derived from job time windows. Takes saved before the column existed keep `created_by = NULL`, since their maker is not honestly recoverable, and deleting a user clears the field rather than the take.
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
 
 ### Resource event ledger
 
-Every successfully persisted generation from the generation job or reimport path
+Every successfully persisted generation from the generation job
 writes one `generation.created` row in the same transaction. A per-user cursor is
 incremented with `UPDATE … RETURNING`, so PostgreSQL serializes concurrent writers
 without a process-local lock. The event stores immutable song and generation IDs;
@@ -1457,7 +1428,7 @@ album list's bounded reload lives in `stores/libraryData.ts`, which the rail and
 the wall only read. The Admin, My Voices and cleanup pages read through it, and
 a list that never loaded claims no empty state; the admin panels' polling
 (`stores/adminPolling.ts`) resumes once back online. An address page with
-nothing loaded (playlist, album, song, take, Home `?song=`) keeps its one line
+nothing loaded (playlist, album, song, take) keeps its one line
 with Try again under the strip and opens by itself once back online. The audio
 player words a lost network as its generic "Playback failed". Such a self-healing failed refresh retries on the streams'
 backoff capped below 10 seconds, so a network that returns without an `online`
@@ -1552,7 +1523,6 @@ close the stream.
 | GET | `/shared/song/{slug}/audio/{file}` | public | Stream shared song audio by take id (`{generation_id}.mp3`) once the share presents that take |
 | GET | `/shared/gen/{slug}/audio/{file}` | public | Stream the shared take's audio by its id (`{generation_id}.mp3`) |
 | GET | `/shared/playlist/{slug}/audio/{file}` | public | Stream shared playlist audio by take id (`{generation_id}.mp3`) once the playlist presents that take |
-| POST | `/api/songs/{id}/reimport` | user | Upload MP3/WAV to reimport into a song |
 | GET | `/audio/{owner_id}/{file}` | user | Serve audio files (MP3/WAV, ownership-checked by user ID) |
 
 ## Generation Flow
@@ -1570,7 +1540,7 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
     → build config (model defaults + admin defaults + preset + song params)
       → POST /load_model if the target mode is not loaded
       → POST /generate and consume /tasks/{id}/stream SSE until done
-    → read worker WAV from the shared audio volume
+    → fetch the take over the authenticated worker HTTP (`GET /tasks/{id}/result`, size-limited by `GENERATION_RESULT_MAX_BYTES`, one attempt) into music's own temp file, then `DELETE` the worker's copy
     → persist Generation + per-user `generation.created` event atomically
     → decode → splice if repaint → master (multiband compress, LUFS normalize) → MP3
     → create Generation record in DB
@@ -1665,10 +1635,11 @@ SIGKILLed and even the values the run did produce would be lost.
   acestep-worker)
 - Cron: audits orphaned audio files and applies file-expiry cleanup; once a day
   (`DAILY_CLEANUP_HOUR_UTC`) it applies generation retention and removes
-  reference-audio files that no row names. The
+  reference-audio files that no row names and reconciles the reference
+  `unused_since` stamps. The
   `generate` and `lora_training` job types are recovered on MusicWorker
   startup and shutdown.
-- Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
+- Fetches each take from the worker over HTTP (no shared output volume; a failed fetch is one failed take), post-processes it → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
 - Owns scorer subprocess (Whisper, AudioBox, audio scorers); calls no provider,
@@ -1945,7 +1916,7 @@ Album covers live as files on that same audio volume (`covers/{album_id}/` for o
 
 ## Auto-Deploy
 
-A release tag goes live without a manual `git checkout && docker compose up` (issue #298): only a tag `vYYYY.MM.DD.N` (a real calendar date, `N` from 1 without a leading zero, ordered by date and then by `N`) on a commit of `origin/main` deploys, and a merge to `main` alone deploys nothing. The head cuts a tag after the last landing of a working session and right after a landing that fixes production; a pushed `v*` tag can never be moved or deleted. The host runs a **pull-based systemd timer** — `scripts/songmaker-autodeploy.timer` fires `scripts/songmaker-autodeploy.service` (`scripts/auto-deploy.sh`) every ~2 minutes — deliberately not a self-hosted CI runner (a permanent externally-triggered agent on the host) and not a webhook (a new inbound endpoint behind the tunnel). The script does not re-run tests: after fetching, it considers the newest ten eligible releases (configurable with `SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS`) and deploys the newest one whose commit's GitHub Actions (`app.slug == github-actions`) check runs all completed, at least one with conclusion `success` and every other one `success`, `skipped`, or `neutral`: a skipped or neutral job, such as the "Adjust Configuration" job of GitHub's CodeQL default setup, judged nothing, so it neither blocks nor greens a commit. A newer release whose Actions run is running, cancelled, or failed is logged and skipped; check runs from other apps, such as SonarCloud, are logged as advisory and ignored. An unknown GitHub result, including a check run without a job name, still refuses the deploy.
+A release tag goes live without a manual `git checkout && docker compose up` (issue #298): only a tag `vYYYY.MM.DD.N` (a real calendar date, `N` from 1 without a leading zero, ordered by date and then by `N`) on a commit of `origin/main` deploys, and a merge to `main` alone deploys nothing. The operator dispatches the Release workflow (`.github/workflows/release.yml`) with a version: it gates main's head through quality, pushes the web, music worker, scoring worker and acestep worker images privately to GHCR with a signed provenance, and then sets the tag and the release that auto-deploy deploys; a pushed `v*` tag can never be moved or deleted. The host runs a **pull-based systemd timer** — `scripts/songmaker-autodeploy.timer` fires `scripts/songmaker-autodeploy.service` (`scripts/auto-deploy.sh`) every ~2 minutes — deliberately not a self-hosted CI runner (a permanent externally-triggered agent on the host) and not a webhook (a new inbound endpoint behind the tunnel). The script does not re-run tests: after fetching, it considers the newest ten eligible releases (configurable with `SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS`) and deploys the newest one whose commit's GitHub Actions (`app.slug == github-actions`) check runs all completed, at least one with conclusion `success` and every other one `success`, `skipped`, or `neutral`: a skipped or neutral job, such as the "Adjust Configuration" job of GitHub's CodeQL default setup, judged nothing, so it neither blocks nor greens a commit. A newer release whose Actions run is running, cancelled, or failed is logged and skipped; check runs from other apps, such as SonarCloud, are logged as advisory and ignored. An unknown GitHub result, including a check run without a job name, still refuses the deploy.
 
 Each tick, in order, and non-blocking (`flock -n`, a run already in flight logs a debug line and exits 0):
 
@@ -1956,9 +1927,9 @@ Each tick, in order, and non-blocking (`flock -n`, a run already in flight logs 
 4. **Safe to touch?** A dirty working tree (`git status --porcelain`, itself checked for a failed exit code rather than trusted blindly) stops here with a loud (`prio=err`) journal line and touches nothing. The checkout never moves backwards: a selected release that does not contain the checked-out `HEAD` is refused in step 7.
 5. **Configuration complete?** `docker compose config --quiet` on the checked-out configuration must succeed. Compose owns the list of required variables (every `${VAR:?…}` in `docker-compose.yml`, `GRAFANA_PASSWORD` since #1357); a missing one is a counted refusal quoting compose's own message, before the job guard's `docker compose exec` (which would not notice it) and before anything is checked out. `--quiet` is mandatory: without it compose prints the interpolated configuration, every `.env` secret included, into the journal. The secret files compose declares under `SONGMAKER_SECRETS_DIR` are judged by `scripts/secret_files.py --verify` once the release is selected and checked out, because `compose config --quiet` accepts a missing file: a missing or empty file is a counted refusal naming the file, before any build or recreate.
 6. **Idle?** Before the checkout, a job guard checks `jobs.status IN ('queued', 'running')` via a `timeout`-bounded `docker compose exec postgres psql` (the DB round-trip gets a short timeout; the AGENTS.md never-`timeout`-compose rule is about the image build, not this query). Active jobs defer the deploy to the next tick. An unreachable database fails **closed** (no deploy), not open.
-7. **Select, check out detached, then build.** The tick walks the eligible releases newest first, logging every skipped running, cancelled, or failed candidate, and selects the first release whose commit's GitHub Actions (`app.slug == github-actions`) check runs are all `completed`, at least one with conclusion `success` and the rest `success`, `skipped`, or `neutral`. Check runs from other apps are logged as advisory and ignored; a check run without a job name is a malformed answer and refuses the deploy. Check runs in the check suites of Dependabot's update runs (found by a second lookup of the commit's `dynamic`-event workflow runs, whose path is `dynamic/dependabot/dependabot-updates`) are left out of the judgement: they are not a required check and not running, failed or passed, so a failed update job never blocks a release, a commit that carries only update runs still waits for its CI, and any other job, whatever its name, is judged as before. A failed or malformed answer of that lookup refuses the whole tick like a failed check-run lookup, with no fallback to an older release. Just before it checks out, the **pin gate** (`fetch_acestep_pin`) looks at the `vendor/acestep` gitlink of that selected commit: when the submodule does not already hold the pinned commit, it runs `git -C vendor/acestep fetch origin <pinned sha>`, so the new ACE-Step code is local before the checkout moves. An uninitialised `vendor/acestep` (no `.git` file or directory; checked against the checkout root first, because a bare `git -C vendor/acestep` on an empty directory would resolve to the superproject) or a failed or timed-out pin fetch is a counted refusal that moves no checked-out file and no HEAD, so the next tick retries from step 1; the consecutive-failure ALERT comes on the third in a row. It then runs `git checkout --detach` on exactly the commit the tag resolved to when its checks were read — never a tag fetched since — and logs the tag and the commit; `checkout_acestep_pin` runs `git submodule update --checkout --no-fetch vendor/acestep`, requiring a `git submodule status` without a `+`, `-` or `U` prefix. Without that submodule checkout, the detach alone would leave the submodule on its old commit and `git status --porcelain` would report ` M vendor/acestep`, which the dirty guard of step 4 would refuse on every later tick. The checkout runs before the configuration guard on purpose: a variable the new commit requires must not strand the submodule at the old pin. If the checkout itself fails, the tick refuses with the checkout error, and the next tick refuses as dirty; recover by hand with `git submodule update vendor/acestep` in the deploy checkout. The tick then repeats the step 5 configuration guard, so a variable the newly selected commit requires is refused before any build, `scripts/secret_files.py --verify` then refuses a declared secret file that is missing or differs from `.env`, and then, when the release's alembic head differs from the running commit's (the `schema:` line of the tag message when it has one, else the head of its migration files; any doubt counts as a difference), runs `hal backup songmaker --pre-apply` — edge's backup owner, found through `SONGMAKER_AUTODEPLOY_HAL` (default `~/.local/bin/hal`, because the unit's PATH is minimal; the call runs with `~/.local/bin` first on its PATH, because hal's launcher runs `uv` from there) — before anything is built, so the migration that web runs at start after the later `compose up` never runs on an unbacked database; a failing or missing backup command is a counted refusal that builds and recreates nothing, and the next tick tries again; the tick then verifies that its two local-only base images exist and that neither `docker/base/**` nor the `vendor/acestep` pin changed since the running revision (the comparison runs with `--ignore-submodules=none`, so a `diff.ignoreSubmodules` or `submodule.<name>.ignore` setting of the checkout cannot hide a pin change). A missing image, an unknown prior revision, or a changed base input runs `scripts/build_images.sh bases`, then the tick runs `docker compose build` (right after the checkout check it has exported `SONGMAKER_RELEASE` as the tag and `SONGMAKER_COMMIT` as the commit, so `compose config`, `compose build` and `compose up` see the same build arguments); neither build has a `timeout` wrapper (see the Docker section of `AGENTS.md`; a cold-cache rebuild legitimately takes 8-15 minutes). If no candidate is green it waits for a later tick. Both Git and Docker output stream straight to the process's own stdout/stderr (journaled under the unit by systemd) rather than being captured into a variable — a failed build can print far more output than a single `logger` invocation can safely carry as one argument; only a short `log_err` line with the exit code goes through `logger`. The build alone does not touch a running container.
+7. **Select, check out detached, then build.** The tick walks the eligible releases newest first, logging every skipped running, cancelled, or failed candidate, and selects the first release whose commit's GitHub Actions (`app.slug == github-actions`) check runs are all `completed`, at least one with conclusion `success` and the rest `success`, `skipped`, or `neutral`. Check runs from other apps are logged as advisory and ignored; a check run without a job name is a malformed answer and refuses the deploy. Check runs in the check suites of Dependabot's update runs and of Release runs (found by a second lookup of the commit's workflow runs, matched by exactly two paths: `dynamic/dependabot/dependabot-updates` and `.github/workflows/release.yml`) are left out of the judgement: they are not a required check and not running, failed or passed, because neither kind judges anything about the commit, so a failed or running update job or Release attempt never blocks a release, a commit that carries only such runs still waits for its CI, and any other job, whatever its name or what started its workflow, is judged as before. A failed or malformed answer of that lookup refuses the whole tick like a failed check-run lookup, with no fallback to an older release. Just before it checks out, the **pin gate** (`fetch_acestep_pin`) looks at the `vendor/acestep` gitlink of that selected commit: when the submodule does not already hold the pinned commit, it runs `git -C vendor/acestep fetch origin <pinned sha>`, so the new ACE-Step code is local before the checkout moves. An uninitialised `vendor/acestep` (no `.git` file or directory; checked against the checkout root first, because a bare `git -C vendor/acestep` on an empty directory would resolve to the superproject) or a failed or timed-out pin fetch is a counted refusal that moves no checked-out file and no HEAD, so the next tick retries from step 1; the consecutive-failure ALERT comes on the third in a row. It then runs `git checkout --detach` on exactly the commit the tag resolved to when its checks were read — never a tag fetched since — and logs the tag and the commit; `checkout_acestep_pin` runs `git submodule update --checkout --no-fetch vendor/acestep`, requiring a `git submodule status` without a `+`, `-` or `U` prefix. Without that submodule checkout, the detach alone would leave the submodule on its old commit and `git status --porcelain` would report ` M vendor/acestep`, which the dirty guard of step 4 would refuse on every later tick. The checkout runs before the configuration guard on purpose: a variable the new commit requires must not strand the submodule at the old pin. If the checkout itself fails, the tick refuses with the checkout error, and the next tick refuses as dirty; recover by hand with `git submodule update vendor/acestep` in the deploy checkout. The tick then repeats the step 5 configuration guard, so a variable the newly selected commit requires is refused before any build, `scripts/secret_files.py --verify` then refuses a declared secret file that is missing or differs from `.env`, and then, when the release's alembic head differs from the running commit's (the `schema:` line of the tag message when it has one, else the head of its migration files; any doubt counts as a difference), runs `hal backup songmaker --pre-apply` — edge's backup owner, found through `SONGMAKER_AUTODEPLOY_HAL` (default `~/.local/bin/hal`, because the unit's PATH is minimal; the call runs with `~/.local/bin` first on its PATH, because hal's launcher runs `uv` from there) — before anything is built, so the migration that web runs at start after the later `compose up` never runs on an unbacked database; a failing or missing backup command is a counted refusal that builds and recreates nothing, and the next tick tries again; the tick then runs `docker compose build` (right after the checkout check it has exported `SONGMAKER_RELEASE` as the tag and `SONGMAKER_COMMIT` as the commit, so `compose config`, `compose build` and `compose up` see the same build arguments); neither build has a `timeout` wrapper (see the Docker section of `AGENTS.md`; a cold-cache rebuild legitimately takes 8-15 minutes). If no candidate is green it waits for a later tick. Both Git and Docker output stream straight to the process's own stdout/stderr (journaled under the unit by systemd) rather than being captured into a variable — a failed build can print far more output than a single `logger` invocation can safely carry as one argument; only a short `log_err` line with the exit code goes through `logger`. The build alone does not touch a running container.
 8. **Recheck, preserve rollback images, then recreate.** The job guard from step 6 runs again immediately before `docker compose up -d --wait` (no `--build`, image is already built), the one step that actually recreates the acestep-worker and music-worker containers (incident 2026-08-30 18:31, a redeploy mid-generation dropped every active stream). Before that recreate, the tick reads Compose's JSON config without interpolating `.env` values and tags each currently running service with a `build:` section as its one `<project>-<service>:previous` rollback generation; `<project>` is the Compose config's own name. This rollback tagging needs `jq` on the host for the config's name and build-service list. If `jq` is unavailable, an idle tick remains successful; a pending deploy follows the ordinary deploy-refusal path, including its consecutive-failure alerting. A deploy deferred here logs "deferred after build" and exits 0; the next tick finds the release still newer than `deployed.sha` (step 2) and `HEAD` already on it, so it passes the guards to the job check and, once jobs clear, the (now-cached, fast) build and the recreate — the residual window a job can start and still collide with a recreate is seconds, not the build's 8-15 minutes, and a tick that keeps deferring here does not get stuck forever behind a false "up to date".
-9. **Bounded Docker cleanup.** After a successful recreate, the tick deletes dangling images older than 48 hours while preserving newer dangling images and images labelled `songmaker.base-image=true`, and prunes builder cache older than that threshold with `--all`; both commands have a 10-minute timeout. Cleanup never rolls back a successful deployment: an error or timeout is logged at `err` with its command and exit code, while the completed deployment stays booked and the tick exits 0. The operational boundary and rollback procedure are in `docs/security.md`.
+9. **Bounded Docker cleanup.** After a successful recreate, the tick deletes dangling images older than 48 hours while preserving newer dangling images, and prunes builder cache older than that threshold with `--all`; both commands have a 10-minute timeout. Cleanup never rolls back a successful deployment: an error or timeout is logged at `err` with its command and exit code, while the completed deployment stays booked and the tick exits 0. The operational boundary and rollback procedure are in `docs/security.md`.
 
 Two independent consecutive-tick counters distinguish "this is actually broken" from "this is just busy": a hard refusal (work clone, dirty tree, a release behind `HEAD`), a fail-closed DB check, or a `fetch`/`build`/`up` failure bumps the **failure** counter — only the Nth in a row (default 3) escalates to an emphatic `prio=err` "N ticks in a row deferred/failed, reason: …" line. A deferral because jobs are active (before or after the build) bumps a separate **busy-deferral** counter instead — a normal generation queue or an hours-long `lora_training` job legitimately keeps jobs active for a long time, so this one needs a much higher threshold (default 30 ticks) and a quieter `prio=warning` "deploy deferred on N ticks in a row, M jobs still active" line, not a page-worthy error. Both lines count ticks and say so; only the *repetition* of an escalation is measured in wall-clock time (see Alerting above). Both counters reset only on an actual deploy (record_success) or a genuine 'nothing to deploy' tick (step 2).
 

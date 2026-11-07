@@ -5,12 +5,10 @@ import {
 	HOME_ROUTE_PATH,
 	isPlaylistRoutePath,
 	isSongRoutePath,
-	legacySongRoutePath,
 	LIBRARY_ROUTE_PATH,
 	libraryRouteShape,
 	pendingTakeRoutePath,
 	playlistRoutePath,
-	readLegacySongQuery,
 	sharePagePath,
 	songAlbumRoutePath,
 	songRoutePath,
@@ -123,29 +121,9 @@ describe('library route addresses', () => {
 			expect(stands(pathname)).toBe(expected);
 		}
 	);
-
-	it('1354_rule_31: classifies the legacy song query address by its path alone, as Home', () => {
-		const { pathname } = new URL(legacySongRoutePath('s1', 'g1'), 'http://localhost');
-		expect(libraryRouteShape(pathname)).toBe('home');
-	});
 });
 
-describe('legacy song query addresses', () => {
-	it.each([
-		['song and generation', 'song=s1&gen=g1', { songId: 's1', generationId: 'g1' }],
-		['song only', 'song=s1', { songId: 's1', generationId: null }],
-		['generation only', 'gen=g1', { songId: null, generationId: 'g1' }]
-	])('reads %s', (_name, query, expected) => {
-		expect(readLegacySongQuery(new URLSearchParams(query))).toEqual(expected);
-	});
-
-	it.each([
-		['s1', 'g1', `${HOME_ROUTE_PATH}?song=s1&gen=g1`],
-		['s1', null, `${HOME_ROUTE_PATH}?song=s1`]
-	])('builds the legacy fallback route', (songId, generationId, path) => {
-		expect(legacySongRoutePath(songId, generationId)).toBe(path);
-	});
-
+describe('pending take addresses', () => {
 	it('appends a pending generation to a song route', () => {
 		expect(pendingTakeRoutePath('/album/anfield/tide', 'g1')).toBe('/album/anfield/tide?gen=g1');
 	});

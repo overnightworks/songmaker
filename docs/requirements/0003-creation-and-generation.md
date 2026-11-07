@@ -5,8 +5,8 @@
 A musician can start audio generation from lyrics, a style prompt, a chosen
 available model, and generation settings, then compare the resulting takes. A
 pinned seed from an earlier take can be reused with changed settings; a take
-records the seed that actually produced it. Reimport is a second take producer.
-Scoring and transcription inform the musician and do not choose the album take.
+records the seed that actually produced it. Scoring and transcription inform
+the musician and do not choose the album take.
 
 ## Rules
 
@@ -31,9 +31,6 @@ Quelle: DESK — CLAUDE.md, “Seed pinning”; corroborated by current generate
 ### REQ-SEED-03: A generated take records the seed that produced its audio.
 Quelle: DESK — CLAUDE.md, Known Technical Debt: the recorded seed is the engine-reported `seed_value`, not a different requested seed.
 
-### REQ-IMPORT-01: Reimporting audio into a song produces a take of that song.
-Quelle: DESK — current reimport workflow; corroborated by 0001 Non-goals treating imported audio as a take that may lack a version link.
-
 ### REQ-SCORE-01: Scoring a take does not select or change that song's Pick.
 Quelle: DESK — CLAUDE.md, “Product Context”, scoring is purely informational.
 
@@ -52,6 +49,6 @@ Quelle: DESK — CLAUDE.md, “Product Context”, Whisper transcript shows what
 - This document does not prescribe ACE-Step internals or the generation wire
   payload, LoRA or user-adapter fallback, or leftover stored settings that do
   not apply to the newly chosen model.
-- This revision does not decide whether a reimported take records a seed, which
-  scorers run, or whether every scoring run produces a transcription.
+- This revision does not decide which scorers run, or whether every scoring run
+  produces a transcription.
 - Pick and Keep meanings belong to `0001-creative-catalog-and-takes.md`.

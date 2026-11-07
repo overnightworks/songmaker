@@ -1,70 +1,47 @@
 # Songmaker
 
-Repository facts only. The global contract owns coordination, claims, worktrees, review and code policy; `CLAUDE.md` is exactly `@AGENTS.md`.
+## Product context
 
-AI-powered song generation platform: SvelteKit web UI (`frontend/`, pnpm, Node 26 LTS, 24 also allowed), FastAPI backend, PostgreSQL, Redis. Songs are created, generated via ACE-Step, scored and reviewed. The CLI only starts the server. Python 3.14, venv `.venv/`.
+An **album** holds **songs**; **playlists** collect songs across albums. Saving rewrites a song's latest **version** until a take is queued or rendering for it, or until it has a take and lyrics, prompt, BPM, key or length change; then it makes a new version. Each attempt is a **generation**; scoring is purely informational. **Pick** is the one generation per song on the album; **keep** only protects from cleanup.
 
-The README indexes the docs.
-
-## Product Context
-
-A musician creates an **album** (EP, LP or concept album) holding **songs**; each song belongs to one album. **Playlists** collect favourite songs across albums.
-
-Song workflow: write lyrics and a style prompt, **generate** audio via ACE-Step, listen, tweak, generate again. Saving rewrites the song's latest **version** (lyrics, prompt, generation params) until a take is queued or rendering for it, or until it has a take and the lyrics, prompt, BPM, key or length change; then the save makes a new version; each attempt produces a **generation** (an audio file tied to one version). A song has many versions, a version many generations.
-
-Two flags on generations: **pick** is THE one for this song on the album (one per song, replaces the previous pick); **keep** means "don't delete it" and survives cleanup but is not the album pick.
-
-**Scoring** is purely informational auto-rating: BPM accuracy, spectral quality, silence, emotional dynamics, text accuracy (Whisper transcript of what was sung vs the lyrics, which the user also sees).
-
-**Co-writer** is one active multi-turn conversation per musician, not per song (`chat_messages`, scoped via `conversations`); each turn runs `agents/cowriter.md` through the LiteLLM gateway (the agent file names the model; `Settings.agent` holds the gateway) and reads and writes songs through the hand tools of `agent/tools.py`, with no local provider fallback. Memory, tools and @-mentions: [architecture](docs/architecture.md). Co-writer expansion (more memory or mention features) is frozen until organically needed (operator ruling 2026-08-24). There is no per-song chat; the co-writer runs only through `POST /chat/turn` in `conversation_api.py`.
-
-**Seed pinning** reproduces a generation (pin a previous seed, regenerate with tweaked params).
+The **co-writer** is one conversation per musician, not per song, only via `POST /chat/turn`; it runs `agents/cowriter.md` through the LiteLLM gateway, no local fallback; expansion is frozen until needed.
 
 ## Setup and run
 
-The live app is Docker-only; there is no local server path. `.venv` is for tests, type checking and IDE only. Application settings, and the secrets not yet moved (`GRAFANA_PASSWORD`, `SMTP_PASSWORD`, `HF_TOKEN`, the provider keys), live in one gitignored `.env` at the root of the deploy checkout `~/srv/songmaker`; the session secret, the database password, the internal token and the monitoring token are files in `~/.secrets/songmaker/` (`SONGMAKER_SECRETS_DIR` moves it), which compose mounts into the services that read them; only its systemd units start the live stack, and a work clone has no `.env`. The non-secret `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI` and `SONGMAKER_CODEX_CLI` overrides are the exception: the preflight reads only their exported deployment environment values. Install, first start and model download (`scripts/download_models.sh`, needs `HF_TOKEN` in `.env`) are in the README; `pnpm dev` runs the frontend alone. The external network `hal_backchannel_songmaker` is edge's: edge's `hal apply` creates it, and CI's `e2e.yml` creates its own.
+The live app is Docker-only; `.venv` is for tests and type checking. Settings and some secrets live in the ignored `.env` of the deploy checkout `~/srv/songmaker`, the others in `~/.secrets/songmaker/`; only systemd units start the stack.
 
-**Docker:** a deploy's `docker compose up --build --wait` never runs in a `timeout`; a probe stack runs under the contract's cap, and tears itself down. A cold-cache rebuild of all 5 images takes 8-15 minutes (the acestep-worker alone is 8.84 GB); a shorter timeout SIGTERMs mid-build silently and leaves a partial deploy. After changing a Dockerfile under `docker/base/`, run `scripts/build_images.sh` first, or compose fails with `manifest unknown` for `songmaker/acestep-base:latest`.
+A deploy's `docker compose up --build --wait` never runs in a `timeout` (SIGTERM leaves a partial deploy).
 
 ## Checks
 
-CI runs the pinned reusable quality gate (`quality / verdict`, mandatory jobs in `quality/config.toml`); coverage floors, Sonar and transport are in [testing](docs/testing.md#static-analysis-sonarcloud).
-
-Local runs are targeted: `pytest -q` on the named files, `scripts/test_postgresql.sh <files>` for database tests (a disposable PostgreSQL, no lock), `pnpm exec vitest run` on the named frontend file.
-
-Before reporting a tip, run `bash scripts/static_checks.sh`: it runs CI's static gates (ruff, import contracts, the repository scripts, svelte-check, eslint, prettier, quality hygiene at CI's pin) and stops at the first red one, naming it. It needs `.venv` and `frontend/node_modules`; the script lists the gates.
-
-Schema changes: `alembic revision --autogenerate -m "..."`, then `alembic upgrade head`.
+CI runs the pinned quality gate; floors in [testing](docs/testing.md#static-analysis-sonarcloud). Targeted runs: `pytest -q <files>`, `scripts/test_postgresql.sh <files>` for DB tests, `pnpm exec vitest run <file>`. Before reporting a tip: `bash scripts/static_checks.sh`.
 
 ## Code patterns
 
-- **Query functions `flush()`, endpoints `commit()`.** Backend paths are under `src/songmaker_cli/`. `get_db_session` does not auto-commit; a missing `session.commit()` in an endpoint is silent data loss. Exception: the sign-in callback in `auth_api.py` commits the admission and the new session together, before it issues the cookies. `create_job_with_rate_limit()` and `unique_album_id()` commit the current transaction before taking an exclusive lock, so callers must hold no uncommitted business mutation.
-- **`from_orm()` classmethods on response models**; never hand-build response dicts.
-- **Engine packages are independent.** `acestep_engine`, `audio_engine` and `acestep_worker` never import `songmaker_cli`; the acestep-worker image does not install it and would crash at startup. `acestep_engine` and `acestep_worker` each own a `settings.py`. `.importlinter` (judged by quality's `import-contract` rule in CI) owns the boundary. `agent_providers` and `webauth` are installed git pins from their own repositories (tag in `pyproject.toml`, commit in `uv.lock`); `lint-imports` does not scan their internals, so a chain reaching the application through them is not caught. Neither imports `songmaker_cli` today.
-- **Ownership checks on every resource endpoint**, GET included: `check_song_access()`, `check_album_access()`, `check_generation_access()` from `api_helpers.py`.
-- **Middleware order in `server.py` is security-critical.** Do not reorder.
-- **DB queries split by domain** (`db/queries/songs.py`, `auth.py`, `jobs.py`); new ones go in the matching file, and callers import that domain module directly.
-- **Sharing via `ShareMixin`** (Album, Song, Generation, Playlist): use `enable_sharing()`/`disable_sharing()` from `db/queries/sharing.py`; entity side effects go in the domain wrapper.
-- **Constants:** reused or behaviour-configuring strings live in `constants.py` or as `Final` module-level values; one-off error, log and exception messages stay inline.
-- **Required configuration has no silent default.** Reject missing input (raise or 422) or use a NAMED constant; never fall through to `next(iter(some_dict))` or insertion order. Origin: 2026-04-08, a truncated `available_models` table made `resolve_model_mode(None)` return `'turbo'` for every generation. `scripts/check_no_silent_fallbacks.py` enforces it in CI.
+- **Query functions `flush()`, endpoints `commit()`**. Exceptions: the sign-in callback in `auth_api.py` commits admission and session together; `create_job_with_rate_limit()` and `unique_album_id()` commit before an exclusive lock, so callers hold no uncommitted mutation.
+- **Response models use `from_orm()`**, not hand-built dicts.
+- **Engine packages are independent**: `acestep_engine`, `audio_engine`, `acestep_worker` never import `songmaker_cli`; `.importlinter` owns it.
+- **Ownership checks on every resource endpoint**, GET included: `check_*_access()` in `api_helpers.py`.
+- **Middleware order in `server.py` is security-critical.**
+- **DB queries split by domain** (`db/queries/`); callers import the domain module.
+- **Sharing**: `enable_sharing()`/`disable_sharing()` from `db/queries/sharing.py`; side effects in the domain wrapper.
+- **Constants:** reused or behaviour-configuring strings go in `constants.py` or a `Final`; one-off messages stay inline.
+- **Required configuration has no silent default**: raise or 422, or use a NAMED constant; never `next(iter(d))` or insertion order. `scripts/check_no_silent_fallbacks.py` enforces it.
 
 ## Key rules
 
-1. The database is the source of truth: all data in PostgreSQL, not files.
-2. One code path: the web UI is this repository's only API client, a person's hal token reaches the same API from outside (`/api/` and `/audio/`, as that person), and the CLI only starts the server (`songmaker server`). People sign in through Keycloak (`GET /login/oidc`, `GET /auth/callback`, `POST /auth/logout`); the app holds no passwords, no admin bootstrap and no local account commands. Accounts are keyed by the Keycloak subject; membership and the admin role come from the groups `/apps/songmaker` and `/apps/songmaker/admin` at each sign-in.
-3. Pydantic models in `api_models/` define the API contract; `python scripts/generate_types.py` generates `types.ts`.
-4. Test albums (verify, proof, throwaway, QA runs) get a recognizable name prefix and are archived, not deleted, once verified.
+1. PostgreSQL is the source of truth, not files.
+2. One code path: the web UI is the only API client; a person's hal token reaches the same API as that person; the CLI only starts the server; no passwords, admin bootstrap or local account commands. Sign-in is Keycloak: accounts keyed by its subject, membership and admin from groups `/apps/songmaker` and `/apps/songmaker/admin` at each sign-in.
+3. `api_models/` Pydantic models are the API contract; `python scripts/generate_types.py` generates `types.ts`.
+4. Test albums get a recognizable name prefix and are archived, not deleted.
 
-## Constraints and known debt
+## Constraints
 
-- **No co-writer turn or cover runs on a Claude CLI, so no song content reaches one.**
-- **Agent-CLI bind mounts** never expose an operator profile; no co-writer turn or cover uses them: [Agent-CLI Mounts](docs/security.md#agent-cli-mounts).
-- **The DB owns session validity** (`touch()` must return a real `bool`). `get_current_user` commits renewal in its own short transaction; stores never commit endpoint writes; stream callers commit before streaming. Keycloak group changes apply only at the next sign-in or the next token call, so removing someone ends nothing until their sessions expire: revoke as described in [Authentication](docs/security.md#revocation).
-- **Trust model** (subprocesses share the OS user, one shared worker token, single-node): accepted for a single-user deployment; rationale and limits in [Worker Pool Trust Boundary](docs/security.md#ace-step-worker-pool-trust-boundary).
-- **GPU isolation is by container.** Only `songmaker-acestep-worker-N` has a GPU; `songmaker-scoring-worker` runs `SCORING_DEVICE=cpu`, so nothing arbitrates VRAM. NVML and worker health: [ACE-Step](docs/acestep.md#operating-the-worker-pool).
-- **ACE-Step submodule:** `vendor/acestep` is our fork [FlexOr2/ACE-Step-1.5](https://github.com/FlexOr2/ACE-Step-1.5); upstream remote `upstream`. The fork carries patches not yet upstream (see [ACE-Step](docs/acestep.md) for the pin and patch list). The fork's HTTP API code (`vendor/acestep/acestep/api/http/`) is the source of truth for param names. Check upstream PR status live: `gh pr list --repo ACE-Step/ACE-Step-1.5 --author FlexOr2 --state open`.
-- **Seed reproducibility needs `use_random_seed: false`**: ACE-Step ignores `seed` otherwise. The client sets it from `config.seed` (`-1` random, non-negative fixed); the DB stores the response's `seed_value`.
-- **Scoring modules in `.github/workflows/coveragerc-ci.ini` `omit` are excluded from CI coverage** (the CI image lacks their model weights); local runs include them. Scorer model caches are module-level globals in the scorer subprocess, so leaks die with it.
-- **Stale numba cache segfaults scorer tests after `uv sync`** (librosa's `.nbc`/`.nbi` files under `librosa/__pycache__/`). Fix: `find .venv/lib/python*/site-packages/librosa \( -name "*.nbc" -o -name "*.nbi" \) -delete`.
-- **Backup and restore need both** DB and audio files (`scripts/backup.sh`, `scripts/restore.sh`); restoring one leaves orphaned records or unreachable files.
-- **`slugify()` uses `python-slugify`**; the `"untitled"` fallback covers an empty transliteration.
+- No co-writer turn or cover runs on a Claude CLI, so no song content reaches one; agent-CLI mounts never expose an operator profile.
+- The DB owns session validity (`touch()` returns a real `bool`); removing someone ends no session early ([revocation](docs/security.md#revocation)).
+- Only `songmaker-acestep-worker-N` has a GPU; nothing arbitrates VRAM.
+- Trust model (shared OS user, one worker token, single node), accepted for one user: [security](docs/security.md#ace-step-worker-pool-trust-boundary).
+- `vendor/acestep` is our fork; its HTTP API code is the source of truth for param names; pin and patches in [ACE-Step](docs/acestep.md).
+- Seed reproducibility needs `use_random_seed: false` (ACE-Step ignores `seed` otherwise).
+- Backup and restore need both DB and audio files.
+- A scorer-test segfault after `uv sync` is a stale numba cache: delete librosa's `*.nbc` and `*.nbi` in `.venv`.

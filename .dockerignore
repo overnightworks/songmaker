@@ -4,7 +4,7 @@ __pycache__/
 *.pyc
 *.egg-info/
 
-# ACE-Step source tree is COPYed into the acestep-base image at /opt/acestep so
+# ACE-Step source tree is COPYed into the acestep-base stage at /opt/acestep so
 # the inner subprocess venv can be baked at build time. Only host-runtime
 # artifacts and the heavy weights are excluded; weights are bind-mounted at
 # runtime by the acestep-worker leaf service.

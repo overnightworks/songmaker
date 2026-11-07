@@ -478,7 +478,6 @@ def test_consume_task_stream_done_returns_dto() -> None:
         "task_id": "gen-1",
         "result": {
             "mode": "sft",
-            "audio_path": "/app/data/audio/worker_output/gen-1-abc.wav",
             "seed": 42,
             "cot_caption": "",
             "cot_lyrics": "",
@@ -491,7 +490,7 @@ def test_consume_task_stream_done_returns_dto() -> None:
 
     assert isinstance(result, GenerationTaskResultDTO)
     assert result.seed == 42
-    assert result.audio_path.endswith(".wav")
+    assert "audio_path" not in result.model_dump()
 
 
 def test_consume_task_stream_error_raises_with_the_workers_own_cause() -> None:
@@ -523,7 +522,7 @@ def test_consume_task_stream_hands_on_each_phase_and_drops_an_event_missing_phas
             "done",
             {
                 "task_id": "g",
-                "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1},
+                "result": {"mode": "sft", "seed": 1},
             },
         ),
     ]
@@ -550,7 +549,7 @@ def test_consume_task_stream_heartbeats_on_the_initial_stream_event() -> None:
             "done",
             {
                 "task_id": "gen-1",
-                "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1},
+                "result": {"mode": "sft", "seed": 1},
             },
         ),
     ]

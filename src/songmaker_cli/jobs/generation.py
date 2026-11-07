@@ -464,7 +464,7 @@ def post_process_generation(
     db_factory: sessionmaker[Session],
     job_id: str,
 ) -> str | None:
-    """Read worker WAV, decode/splice/master/encode, persist DB row.
+    """Read the take music fetched from the worker, decode/splice/master/encode, persist DB row.
 
     Synchronous (CPU-bound). Caller wraps in ``asyncio.to_thread`` from
     the async run_generation_job. Mastering + MP3 encoding release the
@@ -530,7 +530,7 @@ def post_process_generation(
         try:
             src_wav.unlink()
         except OSError:
-            log.warning("Failed to delete worker temp WAV: %s", src_wav)
+            log.warning("Failed to delete the take music fetched from the worker: %s", src_wav)
 
 
 def _persist_generation_row(
@@ -1104,7 +1104,7 @@ async def _generate_variant(
             on_heartbeat=_make_heartbeat_callback(db_factory, job_id),
         )
         if _job_is_terminal(db_factory, job_id):
-            _discard_worker_audio(worker_result.audio_path)
+            _discard_fetched_take(worker_result.audio_path)
             log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return None, None
         progress.start_saving_take()
@@ -1131,12 +1131,12 @@ async def _generate_variant(
         return None, exc
 
 
-def _discard_worker_audio(audio_path: str) -> None:
+def _discard_fetched_take(audio_path: str) -> None:
     path = Path(audio_path)
     try:
         path.unlink(missing_ok=True)
     except OSError:
-        log.warning("Failed to delete worker temp WAV: %s", path)
+        log.warning("Failed to delete the take music fetched from the worker: %s", path)
 
 
 def _cleanup_orphaned_files(audio_dir: Path, *rel_paths: str) -> None:

@@ -570,9 +570,7 @@ function nativeTakeIndex(
 		ctx.takes,
 		ctx.index ?? 0,
 		(take) => take === current,
-		(take) =>
-			take.generation.id === current.generation.id &&
-			take.generation.mp3_path === current.generation.mp3_path
+		(take) => take.generation.id === current.generation.id
 	);
 }
 
@@ -1113,12 +1111,9 @@ function followPicksAheadInAlbumQueue(songs: SongItem[]): void {
 
 songList.subscribe(followPicksAheadInAlbumQueue);
 
-// Whether the transport holds an entry's take: the same generation played
-// from the same file, since a re-import keeps the id but changes the path.
+// Whether the transport holds an entry's take: the same generation.
 function holdsEntryTake(current: PlaybackInfo, entry: PlaylistEntryItem): boolean {
-	return (
-		current.generation.id === entry.generation_id && current.generation.mp3_path === entry.mp3_path
-	);
+	return current.generation.id === entry.generation_id;
 }
 
 function currentPlaylistIndex(
@@ -1378,8 +1373,7 @@ async function playTakeRow(row: TakeRow): Promise<void> {
 }
 
 // Whether a take is the one the transport holds. The generation's id settles
-// it: a take row hands over the generation itself, unlike a playlist entry,
-// which names a file that a re-import can change under the same id.
+// it.
 function isTakeCurrent(gen: GenerationItem): boolean {
 	return audioPlayer.current?.generation.id === gen.id;
 }

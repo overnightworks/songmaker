@@ -204,7 +204,6 @@ def test_a_commit_needing_a_missing_variable_is_refused_after_the_fast_forward_b
     supplied deploys."""
     checkout = acestep_checkout
     deployed_before = checkout.deployed_sha_file.read_text()
-    checkout.set_base_images_present(False)
     checkout.refuse_compose_config(
         ComposeConfigRefusal(
             stderr=GRAFANA_PASSWORD_REFUSAL,
@@ -264,60 +263,10 @@ def test_green_checks_allow_the_fetched_commit_to_fast_forward_and_deploy(tmp_pa
     assert [
         call for call in checkout.docker_calls.splitlines() if " prune " in call
     ] == [
-        "image prune --force --filter until=48h --filter label!=songmaker.base-image=true",
+        "image prune --force --filter until=48h",
         "builder prune --all --force --filter until=48h",
     ]
     assert "pruned unreferenced Docker images and build cache older than 48h" in checkout.journal
-
-
-def test_a_missing_base_image_is_built_before_compose(tmp_path: Path) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.move_main_forward()
-    checkout.set_base_images_present(False)
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    docker_calls = checkout.docker_calls.splitlines()
-    base_builds = [call for call in docker_calls if call.startswith("build -f docker/base/")]
-    assert base_builds == [
-        "build -f docker/base/gpu-torch-base.Dockerfile --label "
-        "songmaker.base-image=true -t songmaker/gpu-torch-base:latest .",
-        "build -f docker/base/acestep-base.Dockerfile --label "
-        "songmaker.base-image=true -t songmaker/acestep-base:latest .",
-    ]
-    assert docker_calls.index(base_builds[-1]) < docker_calls.index("compose build")
-    assert "base image songmaker/gpu-torch-base:latest is missing" in checkout.journal
-
-
-def test_a_changed_base_image_is_built_before_compose(tmp_path: Path) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.move_main_forward_with_changed_base_image()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    docker_calls = checkout.docker_calls.splitlines()
-    base_builds = [call for call in docker_calls if call.startswith("build -f docker/base/")]
-    assert len(base_builds) == 2
-    assert docker_calls.index(base_builds[-1]) < docker_calls.index("compose build")
-
-
-def test_an_unchanged_base_image_is_not_built(tmp_path: Path) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.move_main_forward()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert "compose build" in checkout.docker_calls
-    assert "build -f docker/base/" not in checkout.docker_calls
 
 
 @pytest.fixture
@@ -335,13 +284,6 @@ def acestep_checkout(tmp_path: Path, acestep_fork: AcestepFork) -> Checkout:
     return checkout
 
 
-def _base_builds(checkout: Checkout) -> list[str]:
-    return [
-        call for call in checkout.docker_calls.splitlines()
-        if call.startswith("build -f docker/base/")
-    ]
-
-
 @pytest.mark.parametrize(
     "submodule_ignore_setting",
     [
@@ -350,11 +292,11 @@ def _base_builds(checkout: Checkout) -> list[str]:
         pytest.param(f"submodule.{ACESTEP_SUBMODULE_PATH}.ignore", id="submodule ignore=all"),
     ],
 )
-def test_a_changed_acestep_pin_is_checked_out_and_rebuilds_the_bases(
+def test_a_changed_acestep_pin_is_checked_out_before_compose_build(
     acestep_checkout: Checkout, acestep_fork: AcestepFork, submodule_ignore_setting: str | None,
 ) -> None:
     """defect:#1479 cell 1 -- a pin change in the selected commit is fetched, checked
-    out and rebuilds both bases before compose build, whatever diff ignores of submodules."""
+    out before compose build, whatever diff ignores of submodules."""
     if submodule_ignore_setting is not None:
         git(acestep_checkout.root, "config", submodule_ignore_setting, "all")
     new_pin = acestep_fork.commit()
@@ -370,10 +312,7 @@ def test_a_changed_acestep_pin_is_checked_out_and_rebuilds_the_bases(
     assert acestep_checkout.head == acestep_checkout.remote_main_sha()
     assert acestep_checkout.deployed_sha_file.read_text() == acestep_checkout.head
     assert acestep_checkout.uncommitted_changes == ""
-    docker_calls = acestep_checkout.docker_calls.splitlines()
-    base_builds = _base_builds(acestep_checkout)
-    assert len(base_builds) == 2
-    assert docker_calls.index(base_builds[-1]) < docker_calls.index("compose build")
+    assert "compose build" in acestep_checkout.docker_calls
 
 
 def test_an_unfetchable_pin_refuses_the_tick_until_it_can_be_fetched(
@@ -494,11 +433,10 @@ def test_a_fetch_that_cannot_finish_is_a_counted_refusal_that_leaves_no_process_
     assert not list((acestep_checkout.root / ".git").glob("songmaker-autodeploy.git-fetch.*"))
 
 
-def test_an_unchanged_acestep_pin_does_not_rebuild_the_bases(
+def test_an_unchanged_acestep_pin_never_asks_the_fork(
     acestep_checkout: Checkout, acestep_fork: AcestepFork,
 ) -> None:
-    """defect:#1479 cell 2 -- main moving with the pin unchanged builds no base and
-    never asks the fork."""
+    """defect:#1479 cell 2 -- main moving with the pin unchanged never asks the fork."""
     acestep_fork.make_unreachable()
     acestep_checkout.move_main_forward()
 
@@ -507,7 +445,6 @@ def test_an_unchanged_acestep_pin_does_not_rebuild_the_bases(
     assert result.returncode == 0
     assert acestep_checkout.deployed_sha_file.read_text() == acestep_checkout.remote_main_sha()
     assert "compose build" in acestep_checkout.docker_calls
-    assert _base_builds(acestep_checkout) == []
 
 
 def test_a_red_newest_commit_with_a_bad_pin_does_not_block_the_green_predecessor(

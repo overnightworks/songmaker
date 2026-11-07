@@ -18,7 +18,7 @@ from songmaker_cli.constants import (
     LoraStatus,
 )
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, AuditLog, Job, User, UserLora
+from songmaker_cli.db.models import Album, AuditLog, Job, ReferenceRecording, User, UserLora
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.settings import Settings, get_settings
 
@@ -354,6 +354,7 @@ def test_music_worker_settings_has_cron() -> None:
     assert "cron:MusicWorker.cleanup_files_cron" in names
     assert "cron:MusicWorker.generation_retention_cron" in names
     assert "cron:MusicWorker.reference_remnant_cron" in names
+    assert "cron:MusicWorker.reference_unused_cron" in names
 
 
 def test_the_daily_jobs_run_at_the_daily_cleanup_hour() -> None:
@@ -367,6 +368,7 @@ def test_the_daily_jobs_run_at_the_daily_cleanup_hour() -> None:
     assert daily == {
         "cron:MusicWorker.generation_retention_cron": {DAILY_CLEANUP_HOUR_UTC},
         "cron:MusicWorker.reference_remnant_cron": {DAILY_CLEANUP_HOUR_UTC},
+        "cron:MusicWorker.reference_unused_cron": {DAILY_CLEANUP_HOUR_UTC},
     }
 
 
@@ -389,6 +391,27 @@ def test_reference_remnant_cron_removes_files_without_a_row_and_returns_the_coun
 
     assert removed == 2
     assert list(refs.iterdir()) == []
+
+
+def test_reference_unused_cron_stamps_unused_rows_and_returns_the_changed_count(tmp_path) -> None:
+    factory = init_test_db(tmp_path / "songmaker.db")
+    with factory() as session:
+        session.add(User(id="u1", username="u1"))
+        session.flush()
+        session.add(ReferenceRecording(
+            id="r1", user_id="u1", storage_path="u1/refs/r1.wav",
+            original_filename="r1.wav", size_bytes=4,
+        ))
+        session.commit()
+    worker = MusicWorker(_settings())
+    worker.get_db_factory = MagicMock(return_value=factory)
+
+    changed = _run(worker.reference_unused_cron(_mock_ctx()))
+
+    with factory() as session:
+        stamp = session.get(ReferenceRecording, "r1").unused_since
+    assert changed == 1
+    assert stamp is not None
 
 
 def test_music_worker_settings_functions() -> None:

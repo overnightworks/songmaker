@@ -12,8 +12,7 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // real load produces (the entry and the live snapshot finish in either) and
 // assert the one outcome; 10d forces the route first by holding the snapshot.
 // The hydration-first order cannot be forced here and is proven in the unit
-// suite (libraryContext.test.ts) with controlled promises. Row 9 (the legacy
-// `/?song=` redirect) lives in album-address.spec.ts, which is desktop-only.
+// suite (libraryContext.test.ts) with controlled promises.
 
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type Page } from '@playwright/test';

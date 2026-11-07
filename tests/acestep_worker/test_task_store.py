@@ -15,8 +15,8 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _generated(audio_path: str = "/x.wav", seed: int = 42) -> GenerationTaskResult:
-    return GenerationTaskResult(mode="sft", audio_path=audio_path, seed=seed)
+def _generated(seed: int = 42) -> GenerationTaskResult:
+    return GenerationTaskResult(mode="sft", seed=seed)
 
 
 def test_create_returns_unique_ids() -> None:
@@ -159,14 +159,13 @@ def test_done_event_carries_the_result_as_json() -> None:
 
         consumer = asyncio.create_task(consume())
         await asyncio.sleep(0)
-        await store.complete(task_id, _generated(audio_path="/out.wav", seed=99))
+        await store.complete(task_id, _generated(seed=99))
         await consumer
         return events
 
     events = _run(go())
     assert events[-1].data["result"] == {
         "mode": "sft",
-        "audio_path": "/out.wav",
         "seed": 99,
         "cot_caption": "",
         "cot_lyrics": "",

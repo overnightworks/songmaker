@@ -3,16 +3,17 @@
 #
 # A GitOps timer, not a webhook or a self-hosted CI runner: this script polls
 # origin every couple of minutes (see songmaker-autodeploy.timer) and deploys
-# only a release tag. A landing on main deploys nothing by itself; the head
-# cuts a tag `vYYYY.MM.DD.N` on a green main commit, and the next tick checks
-# that commit out detached in the deploy checkout and redeploys it. Tags are
-# read from origin into a private ref namespace, never from local refs/tags.
+# only a release tag. A landing on main deploys nothing by itself; the Release
+# workflow sets a tag `vYYYY.MM.DD.N` on a green main commit, and the next tick
+# checks that commit out detached in the deploy checkout and redeploys it.
+# Tags are read from origin into a private ref namespace, never from local
+# refs/tags.
 # Before it checks out, it verifies through GitHub that every GitHub Actions
 # check run for the newest green release has completed successfully, skipped,
 # or neutral, with at least one success; check runs from other apps are
-# advisory, and so are the check suites of Dependabot update runs, which a
-# second lookup finds by their workflow path. The script itself does not re-run
-# tests.
+# advisory, and so are the check suites of Dependabot update runs and of
+# Release runs, which a second lookup finds by their workflow path. The script
+# itself does not re-run tests.
 #
 # Safety rules below come from real incidents, not hypotheticals:
 #   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
@@ -84,8 +85,8 @@
 #     fetch_acestep_pin makes the pinned commit available in the submodule
 #     (a network failure or an uninitialised submodule is a counted refusal
 #     that moves nothing), and right after it checkout_acestep_pin checks the
-#     pinned commit out locally. A pin change is also a base-image input
-#     (BASE_IMAGE_INPUT_PATHS). Both git fetches of a tick run under
+#     pinned commit out locally. A pin change invalidates the COPY of
+#     vendor/acestep in the compose build. Both git fetches of a tick run under
 #     GIT_FETCH_TIMEOUT_SECONDS: a hung fetch would hold the flock forever and
 #     never reach the consecutive-failure ALERT. Each fetch runs in a process
 #     group of its own that is killed outright once git has exited, so a
@@ -163,15 +164,7 @@ RELEASE_TAG_GRAMMAR='^v([0-9]{4})\.([0-9]{2})\.([0-9]{2})\.([1-9][0-9]{0,8})$'
 PRUNE_RETENTION_HOURS=48
 PRUNE_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS:-600}"
 PREVIOUS_IMAGE_TAG="previous"
-BASE_IMAGE_LABEL="songmaker.base-image=true"
-BASE_IMAGES=(
-    "songmaker/gpu-torch-base:latest"
-    "songmaker/acestep-base:latest"
-)
 ACESTEP_SUBMODULE_PATH="vendor/acestep"
-# What the local-only base images are built from: a difference in any of these
-# between the running revision and the selected candidate rebuilds them.
-BASE_IMAGE_INPUT_PATHS=(docker/base/ "$ACESTEP_SUBMODULE_PATH")
 # A release that changes the alembic head is backed up first by edge's backup
 # owner; systemd's minimal PATH does not reach it, so its path is configuration.
 MIGRATIONS_VERSIONS_PATH="src/songmaker_cli/db/migrations/versions"
@@ -199,6 +192,13 @@ CHECK_RUN_REPOSITORY="overnightworks/songmaker"
 # `dynamic` event; other managed workflows under that event (CodeQL default
 # setup) keep their other paths and stay judged.
 DEPENDABOT_UPDATE_WORKFLOW_PATH="dynamic/dependabot/dependabot-updates"
+# A Release run builds and publishes images of the commit it is dispatched on,
+# which is already the release commit. It judges nothing about that commit, and
+# one failed or running attempt must not hold the deploy of the commit it
+# releases, so its check suite leaves the guard like Dependabot's. Only this
+# workflow file's path matches; a dispatched run of any other workflow stays
+# judged.
+RELEASE_WORKFLOW_PATH=".github/workflows/release.yml"
 # The one conclusion that proves a required Actions job ran and passed. A
 # deploy needs at least one such job.
 PASSED_CHECK_RUN_CONCLUSION="success"
@@ -538,10 +538,7 @@ prune_docker_resources() {
     local prune_failed=false
     local prune_exit_code
 
-    # Docker accepts a negated label filter for image prune. Keep the base
-    # images even when they become unreferenced, because compose leaf builds
-    # need them locally and Docker Hub does not host them.
-    if timeout "$PRUNE_TIMEOUT_SECONDS" docker image prune --force --filter "$prune_filter" --filter "label!=${BASE_IMAGE_LABEL}"; then
+    if timeout "$PRUNE_TIMEOUT_SECONDS" docker image prune --force --filter "$prune_filter"; then
         :
     else
         prune_exit_code=$?
@@ -562,39 +559,6 @@ prune_docker_resources() {
     fi
 
     return 0
-}
-
-# Returns 0 when the candidate needs its bases rebuilt, 1 when the existing
-# bases match the deployed revision, and 2 when the comparison cannot be made.
-base_images_need_build() {
-    local deployed_sha="$1"
-    local candidate_sha="$2"
-    local base_image
-    local changed_base_inputs
-
-    for base_image in "${BASE_IMAGES[@]}"; do
-        if ! docker image inspect "$base_image" >/dev/null 2>&1; then
-            log_info "base image $base_image is missing; rebuilding base images before compose build"
-            return 0
-        fi
-    done
-
-    if [[ -z "$deployed_sha" ]]; then
-        log_info "deployed revision is unknown; rebuilding base images before compose build"
-        return 0
-    fi
-
-    if ! changed_base_inputs="$(safe_git diff --ignore-submodules=none --name-only "$deployed_sha..$candidate_sha" -- "${BASE_IMAGE_INPUT_PATHS[@]}" 2>&1)"; then
-        log_err "cannot compare base image inputs between deployed $deployed_sha and candidate $candidate_sha: $changed_base_inputs"
-        return 2
-    fi
-
-    if [[ -n "$changed_base_inputs" ]]; then
-        log_info "base image inputs changed since deployed revision $deployed_sha (${changed_base_inputs//$'\n'/, }); rebuilding base images before compose build"
-        return 0
-    fi
-
-    return 1
 }
 
 reload_prometheus_rules() {
@@ -1063,17 +1027,18 @@ github_lookup() {
 }
 
 # Fills the associative array named by $2 with the check suite ids of the
-# Dependabot update runs on commit $1. Every workflow record is counted against
-# the envelope and validated before any is selected, so a record without a
-# suite id can never match one. GitHub gives no snapshot across this lookup and
-# the check-run lookup: an update run this lookup misses stays judged like any
+# Dependabot update runs and Release runs on commit $1, valued by the kind of
+# run. Every workflow record, whatever started it, is counted against the
+# envelope and validated before any is selected, so a record without a suite id
+# can never match one. GitHub gives no snapshot across this lookup and the
+# check-run lookup: an ignored run this lookup misses stays judged like any
 # other run.
-lookup_update_suites() {
+lookup_ignored_suites() {
     local commit_sha="$1"
-    local -n update_suites_by_id="$2"
+    local -n ignored_suites_by_id="$2"
     local workflow_runs
     github_lookup workflow_runs workflow-run \
-        "repos/$CHECK_RUN_REPOSITORY/actions/runs?head_sha=$commit_sha&event=dynamic&per_page=100" \
+        "repos/$CHECK_RUN_REPOSITORY/actions/runs?head_sha=$commit_sha&per_page=100" \
         'def record_path: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); if (type == "object" and (.total_count | type == "number") and (.workflow_runs | type == "array")) then "envelope\u001f\(.total_count)", (.workflow_runs[] | if ((.check_suite_id | type == "number") and (.path | record_path)) then "run\u001f\(.check_suite_id)\u001f\(.path)" else error("GitHub returned malformed workflow-run record") end) else error("GitHub returned malformed workflow-runs response") end' \
         || return 1
 
@@ -1119,9 +1084,17 @@ lookup_update_suites() {
     fi
     local run_index
     for run_index in "${!run_paths[@]}"; do
-        if [[ "${run_paths[run_index]}" == "$DEPENDABOT_UPDATE_WORKFLOW_PATH" ]]; then
-            update_suites_by_id["${run_suite_ids[run_index]}"]=1
-        fi
+        case "${run_paths[run_index]}" in
+            "$DEPENDABOT_UPDATE_WORKFLOW_PATH")
+                ignored_suites_by_id["${run_suite_ids[run_index]}"]="Dependabot update"
+                ;;
+            "$RELEASE_WORKFLOW_PATH")
+                ignored_suites_by_id["${run_suite_ids[run_index]}"]="Release"
+                ;;
+            *)
+                # Any other workflow's run stays judged.
+                ;;
+        esac
     done
 }
 
@@ -1132,7 +1105,7 @@ lookup_update_suites() {
 # A missing/malformed envelope is never mistaken for zero runs. Check runs in
 # the suites of Dependabot update runs are fetched and counted toward the
 # envelope but judged by nothing: they are not a required check, not running,
-# failed or passed.
+# failed or passed. The same holds for the check suites of Release runs.
 remote_check_status() {
     local commit_sha="$1"
     local commit_timestamp="$2"
@@ -1145,8 +1118,8 @@ remote_check_status() {
         "repos/$CHECK_RUN_REPOSITORY/commits/$commit_sha/check-runs?per_page=100" \
         'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.name | record_field) and (.status | record_field) and (.conclusion | optional_record_field)) then "check\u001f\(.app.slug)\u001f\(.name)\u001f\(.status)\u001f\(.conclusion // "")\u001f\((.check_suite | objects | .id | numbers) // "")" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' \
         || return 1
-    local -A update_suites=()
-    lookup_update_suites "$commit_sha" update_suites || return 1
+    local -A ignored_suites=()
+    lookup_ignored_suites "$commit_sha" ignored_suites || return 1
 
     local record app_slug name status conclusion check_suite_id
     local expected_check_count=""
@@ -1184,8 +1157,8 @@ remote_check_status() {
                     printf 'GitHub returned an incomplete check-run status'
                     return 1
                 fi
-                if [[ -n "${update_suites[$check_suite_id]:-}" ]]; then
-                    log_info "GitHub check run '$name' belongs to a Dependabot update run, ignored"
+                if [[ -n "${ignored_suites[$check_suite_id]:-}" ]]; then
+                    log_info "GitHub check run '$name' belongs to a ${ignored_suites[$check_suite_id]} run, ignored"
                     continue
                 fi
                 ((observed_required_check_count += 1))
@@ -1682,7 +1655,7 @@ fi
 export SONGMAKER_RELEASE="${RELEASE_TAG_OF[$DEPLOY_COMMIT]}" SONGMAKER_COMMIT="$DEPLOY_COMMIT"
 
 # The selected commit may require a variable the previous one did not; name
-# it before the base-image and compose builds rather than after them.
+# it before the compose build rather than after them.
 compose_config_refusal "after checking out $DEPLOY_COMMIT"
 
 # The selected release's compose may declare secret files; refuse one whose
@@ -1696,24 +1669,6 @@ if ! SECRET_FILES_ERROR="$(python3 -B "$SCRIPT_DIR/secret_files.py" --verify 2>&
 fi
 
 backup_before_schema_change "$DEPLOY_COMMIT" "${RELEASE_TAG_OF[$DEPLOY_COMMIT]}"
-
-# Base images are local-only. Check the selected release against the revision
-# that is actually running, rather than against the checkout's previous HEAD:
-# a prior build-only deferral may already have moved this checkout.
-if base_images_need_build "$DEPLOYED_SHA" "$DEPLOY_COMMIT"; then
-    if "$SCRIPT_DIR/build_images.sh" bases; then
-        :
-    else
-        BASE_BUILD_EXIT_CODE=$?
-        log_err "base image build failed in $REPO_ROOT (exit $BASE_BUILD_EXIT_CODE)"
-        fail_tick "base image build failed"
-    fi
-else
-    BASE_IMAGE_CHECK_EXIT_CODE=$?
-    if ((BASE_IMAGE_CHECK_EXIT_CODE != 1)); then
-        fail_tick "cannot determine whether base images need rebuilding"
-    fi
-fi
 
 if compose build; then
     :

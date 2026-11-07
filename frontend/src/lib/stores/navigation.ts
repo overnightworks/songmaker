@@ -167,8 +167,7 @@ async function guardDirtyNavigation(
 }
 
 // The rail context (and every other "song open" entry point — search hits,
-// history restore, and, since issue #284, a redirected legacy `?song=` link
-// once its canonical route mounts) never leaves the rail empty: whenever
+// history restore) never leaves the rail empty: whenever
 // the selected song's album is not the open collection, the collection
 // follows the song. Opening a collection explicitly (openAlbum/openPlaylist)
 // is unaffected — this only reacts to a *song* becoming current.
@@ -185,9 +184,7 @@ function ensureCollectionMatchesSong(song: SongItem): void {
 // the address along -- it fires only on a slug change of the *same* song,
 // never on an ordinary selection (that already writes its own entry) or on
 // unrelated song edits (lyrics/prompt autosave), and only while the address
-// bar is already a song address; a legacy `?song=` entry never reaches this
-// function at all -- (library)/+page.svelte redirects it onto its canonical
-// address first (issue #284) -- see the note on libraryHistoryUrl.
+// bar is already a song address.
 let addressedSong: { id: string; slug: string } | null = null;
 
 function syncSongAddressToRename(song: SongItem): void {
@@ -466,13 +463,29 @@ function loadSongContext(songId: string): Promise<void> {
 		if (isNotFound(err)) return;
 		addToast(describeFailure(err, API_ERROR_GENERIC_MESSAGE), 'error', err);
 	});
-	return ensureGenerationsLoaded(songId).catch(function acknowledgeOwnedFailure(err: unknown) {
-		if (isNotFound(err)) {
-			reportSongLinkNotFound(songId);
-		}
-		// refreshTakes owns the shared load's error and retry; this background
-		// caller must consume its rejection without reporting it a second time.
-	});
+	const listedBefore = get(songList).some((item) => item.id === songId);
+	return ensureGenerationsLoaded(songId)
+		.then(() => {
+			if (!listedBefore) settleSongAddress(songId);
+		})
+		.catch(function acknowledgeOwnedFailure(err: unknown) {
+			if (isNotFound(err)) {
+				reportSongLinkNotFound(songId);
+			}
+			// refreshTakes owns the shared load's error and retry; this background
+			// caller must consume its rejection without reporting it a second time.
+		});
+}
+
+// A song opened by id alone (a search hit, a playlist row) wrote the path
+// history stood on, as its album and slug were unknown. Once it has loaded,
+// the same entry takes the song's own address, so a reload opens it. Only an
+// entry that still names this song settles: a user who moved on (another song,
+// Settings) keeps the page they are on.
+function settleSongAddress(songId: string): void {
+	const standing = currentLibraryHistoryState();
+	if (!isLibraryHistoryState(standing) || standing.songId !== songId) return;
+	void replaceLibraryHistory();
 }
 
 // Only clears the selection if it still names the dead song: a caller may

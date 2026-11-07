@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to release, YYYY.MM.DD.N
+        required: true
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+# The three quality workflows are pinned to one commit of quality's main, because no quality tag carries them yet.
+jobs:
+  gate:
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    uses: overnightworks/quality/.github/workflows/release-gate.yml@31900fcd86975a1b657daded04f8fe439b2d1211 # quality main, no tag yet
+    with:
+      version: ${{ inputs.version }}
+      form: YYYY.MM.DD.N
+
+  image:
+    name: image (${{ matrix.image }})
+    needs: gate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: web
+            file: Dockerfile
+            build-args: |
+              SONGMAKER_RELEASE=v${{ inputs.version }}
+              SONGMAKER_COMMIT=${{ needs.gate.outputs.commit }}
+          - image: music-worker
+            file: docker/music-worker.Dockerfile
+          - image: scoring-worker
+            file: docker/scoring-worker.Dockerfile
+          - image: acestep-worker
+            file: docker/acestep-worker.Dockerfile
+            submodules: true
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    uses: overnightworks/quality/.github/workflows/image.yml@31900fcd86975a1b657daded04f8fe439b2d1211 # quality main, no tag yet
+    with:
+      image: ${{ matrix.image }}
+      file: ${{ matrix.file }}
+      version: ${{ inputs.version }}
+      build-args: ${{ matrix.build-args || '' }}
+      submodules: ${{ matrix.submodules || false }}
+      push: true
+
+  tag:
+    needs: [gate, image]
+    permissions:
+      contents: write
+    uses: overnightworks/quality/.github/workflows/release-tag.yml@31900fcd86975a1b657daded04f8fe439b2d1211 # quality main, no tag yet
+    with:
+      version: ${{ inputs.version }}
+      commit: ${{ needs.gate.outputs.commit }}

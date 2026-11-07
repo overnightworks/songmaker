@@ -12,7 +12,7 @@ import pytest
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version
 from songmaker_cli.jobs import _persist_generation_row
-from songmaker_cli.scheduler import GenerationTaskResultDTO
+from songmaker_cli.scheduler import FetchedGeneration
 
 
 def run_async(coro):
@@ -23,8 +23,8 @@ def make_generation_dto(
     seed: int = 42,
     audio_path: str = "/worker-output/fake.wav",
     delivered_batch_size: int | None = None,
-) -> GenerationTaskResultDTO:
-    return GenerationTaskResultDTO(
+) -> FetchedGeneration:
+    return FetchedGeneration(
         mode="turbo",
         audio_path=audio_path,
         seed=seed,

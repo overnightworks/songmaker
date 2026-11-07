@@ -129,7 +129,7 @@ def all_generation_paths(session: Session) -> set[str]:
 def create_generation(
     session: Session,
     song_id: str,
-    version_id: str | None,
+    version_id: str,
     mp3_path: str,
     model_mode: str,
     audio_dir: Path,
@@ -157,8 +157,8 @@ def create_generation(
     )
     gen_number = (max_num[0] + 1) if max_num else INITIAL_GENERATION_NUMBER
 
-    canonical_mp3_path = canonical_audio_filename(audio_dir, mp3_path) if mp3_path else ""
-    if mp3_path and canonical_mp3_path is None:
+    canonical_mp3_path = canonical_audio_filename(audio_dir, mp3_path) if mp3_path else None
+    if canonical_mp3_path is None:
         raise ValueError("Generation MP3 path must stay within the audio directory")
 
     gen = Generation(

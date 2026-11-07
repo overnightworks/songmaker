@@ -104,14 +104,7 @@ def _make_deps(
         audio_output_dir: Path,
     ) -> None:
         await store.mark_running(task_id)
-        await store.complete(
-            task_id,
-            GenerationTaskResult(
-                mode=mode,
-                audio_path=f"/fake/{task_id}.wav",
-                seed=42,
-            ),
-        )
+        await store.complete(task_id, GenerationTaskResult(mode=mode, seed=42))
 
     deps = WorkerDeps(
         worker_id="acestep-worker-0",
@@ -684,7 +677,7 @@ def test_generate_passes_the_full_config_through_losslessly(tmp_path: Path) -> N
         await store.mark_running(task_id)
         await store.complete(
             task_id,
-            GenerationTaskResult(mode=mode, audio_path="/x", seed=0),
+            GenerationTaskResult(mode=mode, seed=0),
         )
 
     deps.generate_runner = capturing_runner
@@ -1012,7 +1005,8 @@ def test_default_generate_runner_error_kind_over_get_and_stream(
             assert snapshot["error_kind"] == expected_kind
             if diagnostic is None:
                 assert snapshot["error"] is None
-                assert Path(snapshot["result"]["audio_path"]).read_bytes() == boundary.wav_bytes
+                result = await client.get(f"/tasks/{snapshot['task_id']}/result")
+                assert result.content == boundary.wav_bytes
             else:
                 assert diagnostic in snapshot["error"]
                 if scenario in {"gpu", "generic"}:
@@ -1049,7 +1043,8 @@ def test_gpu_memory_last_error_survives_audio_success_and_is_replaced(real_gener
                 if failure is None:
                     assert snapshot["state"] == "done"
                     assert snapshot["error_kind"] is None
-                    assert Path(snapshot["result"]["audio_path"]).read_bytes() == boundary.wav_bytes
+                    taken = await client.get(f"/tasks/{snapshot['task_id']}/result")
+                    assert taken.content == boundary.wav_bytes
                 else:
                     assert snapshot["state"] == "error"
                     assert snapshot["error"] == failure
@@ -1385,7 +1380,7 @@ def test_generate_acquires_and_releases_refcount(tmp_path: Path) -> None:
         await release_event.wait()
         await store.complete(
             task_id,
-            GenerationTaskResult(mode=mode, audio_path="/x", seed=0),
+            GenerationTaskResult(mode=mode, seed=0),
         )
 
     deps.generate_runner = slow_runner

@@ -60,7 +60,10 @@ from songmaker_cli.db.queries.activity import record_song_played
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError, get_album
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.playlists import best_playable_generation, playlist_holds_song
-from songmaker_cli.db.queries.reference_recordings import lock_and_mark_reference_used
+from songmaker_cli.db.queries.reference_recordings import (
+    linked_reference_ids,
+    lock_and_mark_reference_used,
+)
 from songmaker_cli.db.queries.sharing import has_playable_pick
 from songmaker_cli.db.queries.songs import (
     EmptySongTitleError,
@@ -83,6 +86,7 @@ from songmaker_cli.db.queries.songs import (
     update_song,
 )
 from songmaker_cli.db.queries.versions import VersionInUseError, delete_version
+from songmaker_cli.reference_audio import commit_unused_stamps
 
 
 def _attach_reference(session: Session, user_id: str, reference_id: str | None) -> None:
@@ -220,8 +224,10 @@ def api_update_song(
     }
     if "generation_params" in req.model_fields_set:
         kwargs["generation_params"] = gen_params_to_json(req.generation_params)
+    candidates: set[str] = set()
     if "reference_recording_id" in req.model_fields_set:
         kwargs["reference_recording_id"] = req.reference_recording_id
+        candidates = linked_reference_ids(session, [song_id])
     try:
         version = update_song(
             session, song_id, force_new_version=req.new_version, edited_by=user.id, **kwargs,
@@ -230,6 +236,7 @@ def api_update_song(
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
+    commit_unused_stamps(session, candidates)
     return _song_response(version.song)
 
 
@@ -372,12 +379,14 @@ def api_cleanup_song(
     ctx: AppContext = Depends(get_app_context),
 ) -> CleanupResponse:
     check_song_access(session, song_id, user)
+    candidates = linked_reference_ids(session, [song_id])
     count, paths = cleanup_song(session, song_id)
     record_audit(
         session, user.id, AuditAction.CLEANUP, ResourceType.SONG,
         song_id, f"deleted={count}",
     )
     session.commit()
+    commit_unused_stamps(session, candidates)
     cleanup_generation_files(ctx.audio_dir, paths)
     return CleanupResponse(deleted=count)
 
@@ -517,6 +526,7 @@ def api_delete_version(
     if not ver:
         raise HTTPException(404, "Version not found")
     check_song_access(session, ver.song_id, user)
+    candidates = linked_reference_ids(session, [ver.song_id])
     try:
         paths = delete_version(
             session, version_id,
@@ -528,5 +538,6 @@ def api_delete_version(
         raise HTTPException(404, "Version not found")
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.VERSION, version_id)
     session.commit()
+    commit_unused_stamps(session, candidates)
     cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
