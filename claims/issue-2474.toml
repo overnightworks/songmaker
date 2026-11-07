@@ -1,0 +1,8 @@
+claim_id = "6de7978952da40a391fe1315b75c01fa"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "30b0379ca861176226a93d03e323f8e07ce0b98e"
+branch = "claude/issue-2474-purges-lock-songs-first"
+scope = ["docs/architecture.md", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/db/queries/songs.py", "tests/songmaker_cli/test_purge_lock_postgres.py", "tests/support/postgres_lock_harness.py"]
+opened_commit = "294fbb18642fae2fbb813cae0837db2e4b81793d"
+whole_reason = "The purge's song lock, its deferral for an active job and the order sentence are one lock order: without the deferral the purge still deadlocks a persist, and the sentence cannot be true."
