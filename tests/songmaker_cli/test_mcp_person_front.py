@@ -305,8 +305,9 @@ def test_m6_every_unmarked_route_of_the_list_is_a_real_route_of_the_app(mcp: Mcp
         scope = {"type": "http", "method": method, "path": path}
         return any(route.matches(scope)[0] == Match.FULL for route in app.routes)
 
-    assert [(method, path) for method, path, _ in _UNMARKED_ROUTES
-            if not is_routed(method, path)] == []
+    unrouted = [(method, path) for method, path, _ in _UNMARKED_ROUTES
+                if not is_routed(method, path)]
+    assert unrouted == []
 
 
 # -- M7, M8, M9, M10, M22, M23: which tokens count ----------------------------------
@@ -489,13 +490,14 @@ def test_m14_a_cookie_request_without_csrf_is_refused_on_each_state_changing_mar
 ) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
-    before = (mcp.rows_of(Album, "id"), mcp.rows_of(Song, "id"), mcp.rows_of(Job, "id"))
 
     with _worker_ready() as pool:
         reply = mcp.world.client.request(method, path, json=body, headers=_FORGED)
 
     assert reply.status_code == 403
-    assert (mcp.rows_of(Album, "id"), mcp.rows_of(Song, "id"), mcp.rows_of(Job, "id")) == before
+    assert mcp.rows_of(Album, "id") == [("album-alices",)]
+    assert mcp.rows_of(Song, "id") == [("song-alices",)]
+    assert mcp.rows_of(Job, "id") == []
     pool.enqueue_job.assert_not_called()
 
 
