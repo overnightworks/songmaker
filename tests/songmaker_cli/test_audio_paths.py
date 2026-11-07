@@ -23,6 +23,7 @@ class AudioLayout:
     requested: str
     take_file: Path
     is_confined: bool
+    stored_name: str = "u1/g1.mp3"
 
 
 def _child_file(tmp_path: Path, requested: str | None = None) -> AudioLayout:
@@ -35,7 +36,9 @@ def _child_file(tmp_path: Path, requested: str | None = None) -> AudioLayout:
 
 def _root_itself(tmp_path: Path, requested: str) -> AudioLayout:
     layout = _child_file(tmp_path)
-    return AudioLayout(layout.audio_dir, requested, layout.take_file, is_confined=False)
+    stem_file_of_root = layout.audio_dir / "..mp3"
+    stem_file_of_root.write_bytes(b"fake")
+    return AudioLayout(layout.audio_dir, requested, stem_file_of_root, is_confined=False)
 
 
 def _escape(tmp_path: Path) -> AudioLayout:
@@ -104,9 +107,7 @@ def test_storing_a_path_keeps_only_one_below_the_audio_folder(layout: AudioLayou
     stored = canonical_audio_filename(layout.audio_dir, layout.requested)
 
     if layout.is_confined:
-        assert (
-            stored == layout.take_file.resolve().relative_to(layout.audio_dir.resolve()).as_posix()
-        )
+        assert stored == layout.stored_name
     else:
         assert stored is None
 
