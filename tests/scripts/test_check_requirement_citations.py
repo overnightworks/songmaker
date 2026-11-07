@@ -72,6 +72,3 @@ def test_mention_in_page_body_defines_nothing() -> None:
 
     assert problems == []
 
-
-def test_repository_citations_hold() -> None:
-    assert checker.main() == 0

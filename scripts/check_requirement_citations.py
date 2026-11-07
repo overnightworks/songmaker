@@ -63,7 +63,7 @@ def find_problems(page_texts: Mapping[Path, str], test_texts: Mapping[Path, str]
 
 
 def _read_all(paths: Iterable[Path], root: Path) -> dict[Path, str]:
-    return {path.relative_to(root): path.read_text() for path in paths}
+    return {path.relative_to(root): path.read_text(encoding="utf-8") for path in paths}
 
 
 def run(root: Path) -> int:
