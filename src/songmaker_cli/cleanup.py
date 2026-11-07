@@ -25,6 +25,7 @@ from songmaker_cli.db.queries.generations import (
     list_generations_expired_for_archive,
     list_generations_expired_for_delete,
 )
+from songmaker_cli.db.queries.jobs import ActiveJobError
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids
 from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list_song_ids_for_albums
 from songmaker_cli.reference_audio import commit_unused_stamps
@@ -60,17 +61,39 @@ class _ExpiredPurge:
 
 
 def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
-    """Delete the expired albums, then the orphan songs, and flush; the caller commits."""
-    album_ids = [album.id for album in list_expired_albums(session, cutoff)]
-    album_song_ids = list_song_ids_for_albums(session, album_ids, include_deleted_rows=True)
-    orphan_song_ids = [song.id for song in list_expired_songs(session, cutoff, album_ids)]
-    song_ids = album_song_ids + orphan_song_ids
-    reference_candidates = linked_reference_ids(session, song_ids)
+    """Delete the expired albums, then the orphan songs, and flush; the caller commits.
+
+    An album or song with a queued or running job is left for a later run and stays out
+    of the result.
+    """
+    expired_album_ids = [album.id for album in list_expired_albums(session, cutoff)]
+    orphan_song_candidates = [
+        song.id for song in list_expired_songs(session, cutoff, expired_album_ids)
+    ]
     paths: list[str] = []
-    for album_id in album_ids:
-        paths.extend(delete_album(session, album_id))
-    for song_id in orphan_song_ids:
-        paths.extend(delete_song(session, song_id))
+    album_ids: list[str] = []
+    orphan_song_ids: list[str] = []
+    song_ids: list[str] = []
+    reference_candidates: set[str] = set()
+    for album_id in expired_album_ids:
+        album_song_ids = list_song_ids_for_albums(session, [album_id], include_deleted_rows=True)
+        linked = linked_reference_ids(session, album_song_ids)
+        try:
+            paths.extend(delete_album(session, album_id))
+        except ActiveJobError:
+            continue
+        album_ids.append(album_id)
+        song_ids.extend(album_song_ids)
+        reference_candidates |= linked
+    for song_id in orphan_song_candidates:
+        linked = linked_reference_ids(session, [song_id])
+        try:
+            paths.extend(delete_song(session, song_id))
+        except ActiveJobError:
+            continue
+        orphan_song_ids.append(song_id)
+        song_ids.append(song_id)
+        reference_candidates |= linked
     return _ExpiredPurge(paths, album_ids, orphan_song_ids, song_ids, reference_candidates)
 
 
