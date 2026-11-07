@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -52,6 +53,7 @@ from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_QUEUE_NAME,
+    MODEL_AVAILABLE_MODES,
     AuditAction,
     JobFunction,
     JobStatus,
@@ -100,6 +102,13 @@ router = APIRouter()
 GENERATION_NOT_FOUND_DETAIL: Final = "Generation not found"
 WORKER_NOT_RUNNING_DETAIL: Final = "Worker not running"
 JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
+_GENERATE_DESCRIPTION: Final = (
+    "Queue music generation for one of the person's own songs, using the song's latest "
+    "version, or the version named by version_id. The version needs lyrics and a style "
+    "prompt. model is one of: " + ", ".join(sorted(MODEL_AVAILABLE_MODES)) + ". count is "
+    "how many takes to render (1 to 10). Jobs wait in one shared GPU queue and the "
+    "person's generation limit applies; the answer names the queued job."
+)
 
 
 def _check_model_active(session: Session, model: str) -> None:
@@ -243,6 +252,8 @@ def api_bulk_delete_generations(
 
 @router.post(
     "/songs/{song_id}/generate",
+    description=_GENERATE_DESCRIPTION,
+    openapi_extra=agent_tool(name="generate_song", effect=ToolEffect.SIDE_EFFECTING),
     response_model=JobResponse,
     responses={
         400: {"description": "Generation request is invalid"},
