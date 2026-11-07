@@ -14,7 +14,6 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 from songmaker_cli.agent.tools import CallingTurn, bound_to_turn, cowriter_hand_tools
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -30,8 +29,8 @@ from songmaker_cli.mcp_server import auth
 
 
 @pytest.fixture
-def ownership_factory(tmp_path):
-    factory = init_test_db(tmp_path / "ownership.db")
+def ownership_factory(pg_factory):
+    factory = pg_factory
     with factory() as session:
         for identity in ("actor", "foreign"):
             session.add(User(id=identity, username=identity, role="user"))

@@ -323,6 +323,24 @@ def pick_generation(session: Session, generation_id: str) -> None:
 DELETION_LOADING: Final = (selectinload(Generation.scores), selectinload(Generation.rating))
 
 
+def lock_songs(session: Session, *criteria: ColumnElement[bool]) -> list[Song]:
+    """Lock the songs that match the criteria in id order, trashed ones included, and
+    reload them.
+
+    A purge takes its songs before their takes, in this order, so a persist that holds a
+    song finishes first; purge runs serialize on their own lock and never overlap.
+    """
+    return (
+        session.query(Song)
+        .execution_options(include_deleted=True)
+        .filter(*criteria)
+        .order_by(Song.id)
+        .with_for_update(of=Song)
+        .populate_existing()
+        .all()
+    )
+
+
 def lock_takes(
     session: Session,
     *criteria: ColumnElement[bool],
@@ -439,6 +457,18 @@ def _delete_locked_generation(session: Session, gen: Generation) -> list[str]:
     paths = [p for p in [gen.mp3_path, gen.wav_path] if p]
     session.delete(gen)
     session.flush()
+    return paths
+
+
+def delete_takes(session: Session, *criteria: ColumnElement[bool]) -> list[str]:
+    """Lock the takes that match the criteria, delete them with their scores and rating,
+    and return the file paths of the takes it deleted for post-commit cleanup.
+
+    A take another writer deleted first is not found, so its files are not returned twice.
+    """
+    paths: list[str] = []
+    for gen in lock_takes(session, *criteria, options=DELETION_LOADING):
+        paths.extend(_delete_locked_generation(session, gen))
     return paths
 
 
