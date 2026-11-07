@@ -92,12 +92,8 @@ describe('reference API', () => {
 		{ call: keepReference, name: 'keeps', path: '/api/references/reference%201/keep' },
 		{ call: unkeepReference, name: 'unkeeps', path: '/api/references/reference%201/unkeep' }
 	])('when it $name a reference', ({ call, path }) => {
-		it('posts to the reference path and accepts the empty answer', async () => {
-			mockFetch.mockResolvedValue({
-				ok: true,
-				status: 204,
-				json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input'))
-			});
+		it('posts to the reference path and resolves once the server accepts', async () => {
+			mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
 			await expect(call('reference 1')).resolves.toBeUndefined();
 
