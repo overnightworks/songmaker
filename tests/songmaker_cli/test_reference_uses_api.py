@@ -171,10 +171,10 @@ def test_without_a_session_the_uses_are_unauthenticated(signed_in: TestClient) -
 
 
 def test_a_persons_token_reads_the_uses_of_that_persons_reference(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = make_token_world(tmp_path)
+    world = make_token_world(tmp_path, factory=pg_factory)
     reference_id = post_reference(
         world.client, headers=world.bearer(TokenWorld.ALICE),
     ).json()["id"]

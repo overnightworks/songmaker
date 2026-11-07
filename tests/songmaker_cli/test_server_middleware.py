@@ -11,6 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import anyio
+import httpx
 import pytest
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -558,21 +559,20 @@ def test_installed_stack_adds_security_headers_to_refusals(security_exchange, ou
         assert body == b"Internal Server Error"
 
 
-def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(monkeypatch, tmp_path: Path):
+def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
+    tmp_path: Path, pg_factory, fresh_settings, monkeypatch,
+):
     """defect:#1590 -- the rate limiter runs before CSRF and remains inside headers."""
-    import httpx
-
     monkeypatch.setenv("IP_RATE_LIMIT", "1")
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
 
     async def drive():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=client.app), base_url="http://localhost",
         ) as http:
             for expected in (403, 429):
-                response = await http.post(
-                    LOGOUT_PATH, headers={"Origin": "https://foreign.example"},
-                )
+                foreign = {"Origin": "https://foreign.example"}
+                response = await http.post(LOGOUT_PATH, headers=foreign)
                 assert response.status_code == expected
                 assert response.headers["x-content-type-options"] == "nosniff"
                 assert response.headers["x-frame-options"] == "DENY"

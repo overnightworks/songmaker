@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,14 +14,23 @@ from support.reference_api_world import (
     link_reference,
     reference_rows,
     seed_reference,
+    sign_in_owner,
     signed_in_as,
 )
 
+from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import AuditLog, ReferenceRecording
+
+OLD_STAMP = datetime(2020, 1, 2, 3, 4, 5)
+
 
 signed_in = reference_api_world.signed_in
 
-OLD_STAMP = datetime(2020, 1, 2, 3, 4, 5)
+
+@pytest.fixture
+def signed_in_on_sqlite(tmp_path: Path) -> TestClient:
+    """The cases that compare a naive stamp, which PostgreSQL returns time-zone aware."""
+    return sign_in_owner(tmp_path, init_test_db(tmp_path / "test.db"))
 
 
 def _seed_kept_case(
@@ -91,16 +101,20 @@ def test_unkeep_of_a_kept_used_row_leaves_it_unstamped(signed_in: TestClient) ->
 
 
 @pytest.mark.parametrize(
-    ("action", "kept", "stamp"),
+    ("action", "kept", "stamp", "world"),
     [
-        pytest.param("keep", True, None, id="keep-of-a-kept-row"),
-        pytest.param("unkeep", False, OLD_STAMP, id="unkeep-of-an-unkept-row-keeps-its-stamp"),
-        pytest.param("unkeep", False, None, id="unkeep-of-an-unkept-unstamped-row"),
+        pytest.param("keep", True, None, "signed_in", id="keep-of-a-kept-row"),
+        pytest.param(
+            "unkeep", False, OLD_STAMP, "signed_in_on_sqlite",
+            id="unkeep-of-an-unkept-row-keeps-its-stamp",
+        ),
+        pytest.param("unkeep", False, None, "signed_in", id="unkeep-of-an-unkept-unstamped-row"),
     ],
 )
 def test_a_repeat_changes_nothing(
-    signed_in: TestClient, action: str, kept: bool, stamp: datetime | None,
+    request: pytest.FixtureRequest, action: str, kept: bool, stamp: datetime | None, world: str,
 ) -> None:
+    signed_in = request.getfixturevalue(world)
     reference_id = _seed_kept_case(signed_in, kept=kept, stamp=stamp)
 
     response = _post(signed_in, reference_id, action)
@@ -110,10 +124,13 @@ def test_a_repeat_changes_nothing(
 
 
 @pytest.mark.parametrize("who", ["other", "boss", "nobody"])
-@pytest.mark.parametrize("action", ["keep", "unkeep"])
+@pytest.mark.parametrize(
+    ("action", "world"), [("keep", "signed_in_on_sqlite"), ("unkeep", "signed_in")],
+)
 def test_a_foreign_or_missing_reference_answers_the_global_404_and_stays(
-    signed_in: TestClient, who: str, action: str,
+    request: pytest.FixtureRequest, who: str, action: str, world: str,
 ) -> None:
+    signed_in = request.getfixturevalue(world)
     kept = action == "unkeep"
     reference_id = _seed_kept_case(signed_in, kept=kept, stamp=None if kept else OLD_STAMP)
     target = "no-such-id" if who == "nobody" else reference_id

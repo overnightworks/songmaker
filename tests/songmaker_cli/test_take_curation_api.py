@@ -31,8 +31,8 @@ def _seed_album_with_two_takes(session) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    web, _ = make_test_app(tmp_path, seed_db=_seed_album_with_two_takes)
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    web, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_album_with_two_takes)
     seed_session(web, OWNER)
     return web
 

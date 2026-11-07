@@ -90,7 +90,9 @@ def test_rejects_symlink_outside_owner_root(tmp_path: Path) -> None:
     assert list(link.parent.iterdir()) == [link]
 
 
-def test_a_symlink_entry_without_a_row_is_left_alone_by_an_upload(tmp_path: Path) -> None:
+def test_a_symlink_entry_without_a_row_is_left_alone_by_an_upload(
+    tmp_path: Path, pg_factory,
+) -> None:
     """Q6: an unrecorded entry neither blocks the upload nor is followed."""
     from support.web_app import make_router_ctx
 
@@ -99,7 +101,7 @@ def test_a_symlink_entry_without_a_row_is_left_alone_by_an_upload(tmp_path: Path
 
     audio_dir = tmp_path / "audio"
     foreign, link = _symlink_to_foreign_secret(audio_dir)
-    ctx = make_router_ctx(tmp_path, seed_db=_seed_users)
+    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed_users)
     stored = store_reference_audio(
         ctx.db, audio_dir, "user-a", ".wav", b"audio", Settings(), "ref.wav",
     )
@@ -203,8 +205,8 @@ def _record_reference(factory, user_id: str, name: str = "mine.wav") -> str:
 
 
 @pytest.fixture
-def world(tmp_path: Path):
-    client, factory = make_test_app(tmp_path, seed_db=_seed_users)
+def world(tmp_path: Path, pg_factory):
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_users)
     seed_session(client, "owner")
     return client, factory
 
@@ -321,7 +323,7 @@ def test_a_version_request_still_sending_the_path_is_refused(world) -> None:
 
 
 @pytest.mark.parametrize("entry_kind", ["foreign-root", "ancestor-symlink"])
-def test_admission_rejects_a_symlinked_owner_root_or_ancestor(tmp_path, entry_kind):
+def test_admission_rejects_a_symlinked_owner_root_or_ancestor(tmp_path, entry_kind, pg_factory):
     """Q7: nothing is written through a symlink."""
     from support.web_app import make_router_ctx
 
@@ -333,7 +335,7 @@ def test_admission_rejects_a_symlinked_owner_root_or_ancestor(tmp_path, entry_ki
     )
     from songmaker_cli.settings import Settings
 
-    ctx = make_router_ctx(tmp_path, seed_db=_seed_users)
+    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed_users)
     foreign = _write_ref(ctx.audio_dir, "user-b", "secret.wav", b"SECRET")
     root = owner_reference_audio_root(ctx.audio_dir, "user-a")
     if entry_kind == "foreign-root":
@@ -356,7 +358,9 @@ def test_admission_rejects_a_symlinked_owner_root_or_ancestor(tmp_path, entry_ki
 
 
 @pytest.mark.parametrize("entry_kind", ["nested-directory", "fifo", "unreadable-file"])
-def test_unrecorded_entries_under_the_owner_root_do_not_block_an_upload(tmp_path, entry_kind):
+def test_unrecorded_entries_under_the_owner_root_do_not_block_an_upload(
+    tmp_path, entry_kind, pg_factory,
+):
     """Q6: only rows count, so entries nobody recorded cannot refuse an upload."""
     import os
 
@@ -365,7 +369,7 @@ def test_unrecorded_entries_under_the_owner_root_do_not_block_an_upload(tmp_path
     from songmaker_cli.reference_audio import owner_reference_audio_root, store_reference_audio
     from songmaker_cli.settings import Settings
 
-    ctx = make_router_ctx(tmp_path, seed_db=_seed_users)
+    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed_users)
     root = owner_reference_audio_root(ctx.audio_dir, "user-a")
     root.mkdir(parents=True)
     if entry_kind == "nested-directory":
@@ -386,7 +390,7 @@ def test_unrecorded_entries_under_the_owner_root_do_not_block_an_upload(tmp_path
     assert (ctx.audio_dir / stored.storage_path).read_bytes() == b"a" * 100
 
 
-def test_missing_reference_owner_is_refused_before_directory_creation(tmp_path):
+def test_missing_reference_owner_is_refused_before_directory_creation(tmp_path, pg_factory):
     """Q8: no directory and no row for an owner without a user row."""
     from support.web_app import make_router_ctx
 
@@ -394,7 +398,7 @@ def test_missing_reference_owner_is_refused_before_directory_creation(tmp_path):
     from songmaker_cli.reference_audio import ReferenceAudioStorageError, store_reference_audio
     from songmaker_cli.settings import Settings
 
-    ctx = make_router_ctx(tmp_path)
+    ctx = make_router_ctx(tmp_path, db=pg_factory)
     settings = Settings()
     with pytest.raises(ReferenceAudioStorageError):
         store_reference_audio(

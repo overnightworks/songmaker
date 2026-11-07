@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version
 from songmaker_cli.jobs import _persist_generation_row
 from songmaker_cli.scheduler import FetchedGeneration
@@ -80,9 +79,8 @@ def post_process_with_stubbed_audio(*, on_outputs_written, **kwargs):
 
 
 @pytest.fixture
-def db_factory(tmp_path: Path):
-    factory = init_db(tmp_path / "test.db")
-    return factory
+def db_factory(pg_factory, fresh_settings):
+    return pg_factory
 
 
 @pytest.fixture

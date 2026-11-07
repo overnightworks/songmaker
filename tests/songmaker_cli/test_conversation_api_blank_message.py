@@ -13,12 +13,13 @@ from songmaker_cli.db.models import ChatMessage, Job, User
 
 
 @pytest.fixture
-def client(tmp_path: Path):
+def client(tmp_path: Path, pg_factory):
     return build_admin_client(
         tmp_path,
         lambda session: session.add(User(id="u-test", username="u-test", role="admin")),
         user_id="u-test",
         username="u-test",
+        factory=pg_factory,
     )
 
 
