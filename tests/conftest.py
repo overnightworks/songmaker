@@ -53,6 +53,7 @@ pytest_plugins = [
     "support.admin_client_fixture",
     "support.cover_album_world",
     "support.generation_job_world",
+    "support.mcp_world",
     "support.reference_link_migration",
     "support.database_case_record",
     "pytester",

@@ -1,6 +1,6 @@
 """An agent that signs in with its own client reaches ``/mcp`` as an account of its own.
 
-The world is the person-front's: a fake realm, the real app, and header-exact requests.
+The world is `support.mcp_world`: a fake realm, the real app, and header-exact requests.
 """
 
 from __future__ import annotations
@@ -9,20 +9,14 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy.orm import sessionmaker
+from support.mcp_world import AGENT_GROUP, McpWorld, build_mcp_world
 from support.token_world import TokenWorld
-from test_mcp_person_front import AGENT_GROUP, McpWorld, _build_world
 from webauth.ports import AccountKind
 
-from songmaker_cli.constants import OIDC_LOGIN_GROUP, OIDC_MCP_GROUP
+from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LOGIN_GROUP, OIDC_MCP_GROUP
 from songmaker_cli.db.models import AuditLog, User
 
 AGENT_SUBJECT = "7c2e9d41-aaaa-4bbb-8ccc-00000000a9e1"
-
-
-@pytest.fixture
-def mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory) -> McpWorld:
-    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    return _build_world(tmp_path, monkeypatch, pg_factory)
 
 
 def _agent_claims(**overrides: object) -> dict[str, object]:
@@ -57,11 +51,18 @@ def test_m29_an_agent_is_admitted_as_user_whatever_role_a_stored_account_holds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = _build_world(tmp_path, monkeypatch, pg_factory, alice_role="admin")
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, alice_role="admin")
 
-    world.call("create_album", {"title": "x"}, **_agent_claims(username="alice"))
+    world.world.seed_take(TokenWorld.ALICE, "alices")
+    world.world.seed_take(TokenWorld.BOB, "bobs")
+    groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP, AGENT_GROUP)
 
-    assert dict(world.rows_of(User, "id", "role"))[TokenWorld.ALICE] == "admin"
+    songs = world.call("list_songs", **_agent_claims(username="alice", groups=groups))
+    others = world.call("get_song", {"song_id": "song-bobs"},
+                        **_agent_claims(username="alice", groups=groups))
+
+    assert [item["title"] for item in songs.json()["items"]] == ["Song alices"]
+    assert others.is_error
     assert _account_kinds(world)[TokenWorld.ALICE] == AccountKind.AGENT
 
 
