@@ -13,7 +13,6 @@ Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation
 Install and first start, in the deploy checkout `~/srv/songmaker` (a clone at a release tag; a work clone has no `.env` and cannot start the live stack):
 
 ```bash
-sudo ./scripts/apparmor/install_profile.sh        # songmaker-web does not start without its AppArmor profile
 cp docker/.env.docker.example .env                # fill in the required settings; the secrets are files, see docs/security.md ("Secrets")
 docker compose up -d --build --wait               # never wrap in `timeout`
 sudo ./scripts/install-cli-credentials-mirror.sh  # agent-CLI login mirror
@@ -23,7 +22,7 @@ sudo ./scripts/install-autostart.sh               # start the stack after every 
 - [`docker/.env.docker.example`](docker/.env.docker.example) lists every setting, which ones are required, and how to generate secrets.
 - A cold-cache build takes 8-15 minutes; [AGENTS.md](AGENTS.md#setup-and-run) says why it must not be interrupted. The first start also downloads the ACE-Step model weights into a Docker volume.
 - All persistent state (database, audio files, model cache, Grafana dashboards) lives in named Docker volumes and survives `docker compose down` and rebuilds.
-- AppArmor rollout, proof and removal: [docs/security.md](docs/security.md). Why Docker's restart policy alone does not survive every reboot, and what the autostart unit adds: [docs/acestep.md](docs/acestep.md#restart-policy-limits-and-boot-autostart).
+- Container confinement: [docs/security.md](docs/security.md#container-confinement). Why Docker's restart policy alone does not survive every reboot, and what the autostart unit adds: [docs/acestep.md](docs/acestep.md#restart-policy-limits-and-boot-autostart).
 
 ## Operations
 
