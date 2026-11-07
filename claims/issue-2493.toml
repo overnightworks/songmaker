@@ -1,0 +1,8 @@
+claim_id = "8f056a3956ed47149615125d87d3cb2f"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "eb770a70f9fdebaac84194bb813ac60781848f5d"
+branch = "claude/issue-2493-countdown-backend"
+scope = ["docs/architecture.md", "frontend/src/lib/api/types.ts", "src/songmaker_cli/api_models/references.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/engine.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/reference_api.py", "src/songmaker_cli/reference_audio.py", "tests/conftest.py", "tests/songmaker_cli/db/test_migrations_reference_countdown.py", "tests/songmaker_cli/test_reference_api.py", "tests/songmaker_cli/test_reference_countdown_api.py", "tests/songmaker_cli/test_reference_countdown_postgres.py"]
+opened_commit = "95a17702662ee2e31e2bbc45aff753a806d2d054"
+whole_reason = "The publication row, its reader, the formula and the acknowledgement route are one mechanism of invariant 6, unreached without each other; the migrations directory holds the alembic head for this lane."
