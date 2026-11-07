@@ -516,8 +516,8 @@ gate.
 Codex uses its mirrored `tokens.access_token` only when it is a nonempty
 string; an absent or tokenless mirror selects the existing `OPENAI_API_KEY`
 path, while an unreadable or malformed mirror fails as `codex_cli_error`.
-The host remains the only refresh owner: the mounted Codex document keeps
-`tokens.refresh_token` empty. A selected Codex CLI route never changes to HTTP
+The host remains the only refresh owner: the host's mirrored Codex document,
+which no container mounts, keeps `tokens.refresh_token` empty. A selected Codex CLI route never changes to HTTP
 within that turn; an expired login is `cli_login_expired` and other CLI
 failures retain the named Codex error.
 
@@ -854,6 +854,30 @@ removed after success or abort; prompts and tool results reach the CLI only
 through a private prompt file. The text tool protocol does not grant Grok CLI
 tools: every start and resume keeps `--deny '*'`, and native tool-call events
 abort the turn.
+
+The library's image route, which no songmaker cover calls (the cover draws
+through the gateway), starts Codex with the fixed read-only image
+argv (`--sandbox read-only`, no MCP servers, and `web_search="disabled"`),
+with Code Mode enabled only for this image run. Its one variable part is the
+model its caller names, appended as `--model <slug>` when one is named.
+Each run creates a private
+`0700` root whose `codex-home/` and `work/` directories are separate `0700`
+siblings; the home contains only the redacted `auth.json` mirror (`0600`) and
+the process cwd is the resolved `work/` path. The streamed event gate admits a
+completed turn without requiring a command or an `image_gen` event. No command is admitted, including the former
+skill-read command. The measured Codex CLI 0.163.0 turn produced one PNG
+without reporting either a command or an `image_gen` event. Reported blocked
+items (including commands, file changes, MCP calls, web searches and
+collaboration) and unknown event or item types request abort and are reported
+as `ImageToolBlockedError`; the process is reaped before the route returns.
+
+The gate sees only what the CLI reports. This measurement does not establish
+whether other tools using the invisible path would be reported. The PNG is
+associated with the turn through its private `CODEX_HOME` location and
+normalization under the embedding host's `ImagePolicy`. The gate is defense in depth;
+containment rests on the Codex read-only sandbox and songmaker's AppArmor and
+seccomp profiles. Fixture replay proves event handling, not live containment.
+Every Co-Writer tool-loop round keeps Code Mode disabled.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and

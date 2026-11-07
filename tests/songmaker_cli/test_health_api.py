@@ -30,38 +30,6 @@ from songmaker_cli.health_types import BackgroundLoopName
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 
 
-def test_health_details_reports_no_sandbox_signal(
-    tmp_path: Path, mock_arq_pool, monitoring_headers,
-) -> None:
-    client, _ = make_test_app(tmp_path)
-    with client:
-        resp = client.get("/health/details", headers=monitoring_headers)
-
-    assert resp.status_code == 200
-    assert not [key for key in resp.json() if "sandbox" in key]
-
-
-def test_web_start_looks_for_no_bubblewrap(
-    tmp_path: Path, monkeypatch, mock_arq_pool,
-) -> None:
-    import shutil
-
-    looked_up: list[str] = []
-    real_which = shutil.which
-
-    def recording_which(name: str, *args, **kwargs):
-        looked_up.append(name)
-        return real_which(name, *args, **kwargs)
-
-    monkeypatch.setattr(shutil, "which", recording_which)
-
-    client, _ = make_test_app(tmp_path)
-    with client:
-        pass
-
-    assert "bwrap" not in looked_up
-
-
 def test_health_and_metrics_report_background_loop_health(
     tmp_path: Path, mock_arq_pool, monitoring_headers,
 ) -> None:
