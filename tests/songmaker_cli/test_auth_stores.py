@@ -5,11 +5,9 @@ from __future__ import annotations
 import traceback
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from webauth.ports import (
     AccountEvent,
@@ -25,17 +23,23 @@ from songmaker_cli.auth_stores import (
     DatabaseSubjectUserStore,
 )
 from songmaker_cli.constants import AuditAction, ResourceType
-from songmaker_cli.db.engine import connect_db, init_test_db
-from songmaker_cli.db.models import AuditLog, Base, ResourceEventCursor, User, UserSession
+from songmaker_cli.db.engine import connect_db
+from songmaker_cli.db.models import AuditLog, ResourceEventCursor, User, UserSession
 
 _SUBJECT = "7b3f0c1e-5d2a-4c88-9e51-0a1b2c3d4e5f"
 
 
 @pytest.fixture
-def session(tmp_path: Path):
-    factory = init_test_db(tmp_path / "songmaker.db")
-    with factory() as db:
+def session(pg_factory):
+    with pg_factory() as db:
         yield db
+
+
+@pytest.fixture
+def production_factory(postgresql_url: str):
+    factory = connect_db(postgresql_url)
+    yield factory
+    factory.kw["bind"].dispose()
 
 
 @pytest.fixture
@@ -141,13 +145,9 @@ def test_a_stored_refresh_token_is_returned_secret_and_kept_out_of_the_repr(
 
 
 def test_a_failed_session_insert_raises_without_the_refresh_token_in_the_traceback(
-    tmp_path: Path,
+    production_factory,
 ) -> None:
-    database_url = f"sqlite:///{tmp_path / 'production-engine.db'}"
-    factory = connect_db(database_url)
-    with factory() as database_session:
-        Base.metadata.create_all(database_session.get_bind())
-        database_session.execute(text("PRAGMA foreign_keys=ON"))
+    with production_factory() as database_session:
         sessions = DatabaseSessionRecordStore(database_session)
         opened_at, expires_at = _later(0), _later()
         refresh_token = SecretStr("rt-in-a-failed-insert")
@@ -223,13 +223,10 @@ def test_renewal_and_refresh_rotation_leave_the_id_token_unchanged(accounts, ses
 
 
 def test_a_failed_session_insert_raises_without_the_id_token_in_the_traceback(
-    tmp_path: Path,
+    production_factory,
 ) -> None:
-    """K1 (#1890): a failed insert leaks the ID token into no traceback."""
-    factory = connect_db(f"sqlite:///{tmp_path / 'production-engine.db'}")
-    with factory() as database_session:
-        Base.metadata.create_all(database_session.get_bind())
-        database_session.execute(text("PRAGMA foreign_keys=ON"))
+    """A failed insert leaks the ID token into no traceback."""
+    with production_factory() as database_session:
         sessions = DatabaseSessionRecordStore(database_session)
         id_token = SecretStr("fake-id-token-in-a-failed-insert")
         creation_time = _later(0)
