@@ -10,9 +10,10 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 from support.failing_reference_stamp import failing_stamp_trigger
+from support.reference_rows import a_reference
 
 from songmaker_cli.cleanup import run_cleanup_expired, run_generation_retention
-from songmaker_cli.constants import REFERENCE_AUDIO_DIR, SONG_COVER_DIRNAME
+from songmaker_cli.constants import SONG_COVER_DIRNAME
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 
@@ -52,13 +53,8 @@ def factory(tmp_path: Path):
     with factory() as session:
         session.add(User(id=OWNER, username=OWNER))
         session.flush()
-        session.add_all(
-            ReferenceRecording(
-                id=name, user_id=OWNER, storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/{name}.wav",
-                original_filename=f"{name}.wav", size_bytes=4,
-            )
-            for name in REFERENCES
-        )
+        for name in REFERENCES:
+            a_reference(session, OWNER, name=f"{name}.wav", reference_id=name)
         session.add(Album(id="live", title="live", artist="A", created_by=OWNER))
         session.commit()
     return factory

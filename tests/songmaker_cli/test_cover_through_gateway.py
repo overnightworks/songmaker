@@ -133,8 +133,7 @@ class CoverWorld:
         ]
 
 
-def build_world(tmp_path: Path, **attach) -> CoverWorld:
-    factory = init_test_db(tmp_path / "cover.db")
+def build_world(tmp_path: Path, factory, **attach) -> CoverWorld:
     with factory() as session:
         _seed_open_windows_album(session)
     ctx = make_router_ctx(tmp_path, db=factory)
@@ -146,8 +145,8 @@ def build_world(tmp_path: Path, **attach) -> CoverWorld:
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> CoverWorld:
-    return build_world(tmp_path)
+def world(tmp_path: Path, pg_factory) -> CoverWorld:
+    return build_world(tmp_path, pg_factory)
 
 
 def _problem_of(response) -> str:
@@ -205,10 +204,10 @@ def test_a_jpeg_picture_is_stored_as_png(world):
     ],
 )
 def test_the_click_refuses_before_any_job_and_any_request(
-    tmp_path, arrangement, status, problem,
+    tmp_path, arrangement, status, problem, pg_factory,
 ):
     world = build_world(
-        tmp_path,
+        tmp_path, pg_factory,
         groups=NOT_A_MEMBER if arrangement == "outside-the-api-group" else ("/apps/songmaker",
                                                                            "/apps/songmaker/api"),
         refresh_token=None if arrangement == "no-refresh-grant" else "fake-refresh-token",
@@ -545,7 +544,9 @@ def test_no_key_session_or_fingerprint_reaches_any_surface(tmp_path, caplog):
     caplog.set_level(logging.DEBUG)
     outcomes = []
     for reply in (picture(_image_bytes("PNG")), Reply(status=429), Reply(status=400)):
-        world = build_world(tmp_path / str(len(outcomes)))
+        world = build_world(
+            tmp_path / str(len(outcomes)), init_test_db(tmp_path / str(len(outcomes)) / "cover.db"),
+        )
         world.stack.replies(reply)
         job_id = world.queue()
         world.run_next()
@@ -558,7 +559,9 @@ def test_no_key_session_or_fingerprint_reaches_any_surface(tmp_path, caplog):
             world.client.get(SUGGEST).text,
         ]
         outcomes.append((key, world.stack.session_id, fingerprint, seen))
-    refused = build_world(tmp_path / "refused", groups=NOT_A_MEMBER)
+    refused = build_world(
+        tmp_path / "refused", init_test_db(tmp_path / "refused" / "cover.db"), groups=NOT_A_MEMBER,
+    )
     refusal = refused.suggest().text
     refused_key = refused.stack.config.gateway.key_file.read_text().strip()
     outcomes.append((refused_key, refused.stack.session_id, None, [refusal]))

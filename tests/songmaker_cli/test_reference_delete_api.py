@@ -23,11 +23,11 @@ from support.reference_api_world import (
     seed_playable,
     signed_in_as,
 )
+from support.reference_rows import a_reference
 from support.token_world import TokenWorld, make_token_world
 from support.web_app import web_client
 
 from songmaker_cli.db.models import AuditLog, ReferenceRecording
-from songmaker_cli.db.queries.reference_recordings import create_reference_recording
 
 signed_in = reference_api_world.signed_in
 
@@ -164,9 +164,8 @@ def test_d8_a_row_with_a_corrupt_path_answers_500_and_keeps_the_row_and_the_file
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(AUDIO_BYTES)
     with signed_in.app.state.ctx.db() as session:
-        row = create_reference_recording(
-            session, user_id="owner-id", storage_path=stored_path,
-            original_filename="x.wav", size_bytes=4, duration_sec=None,
+        row = a_reference(
+            session, "owner-id", name="x.wav", storage_path=stored_path,
         )
         session.commit()
         reference_id = row.id

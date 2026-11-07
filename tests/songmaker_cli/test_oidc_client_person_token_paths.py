@@ -223,7 +223,7 @@ def test_t11_without_token_clients_a_bearer_is_not_admitted_and_the_app_starts(
 
 @pytest.mark.parametrize("malformed", ["hal,", ",hal", "hal,,other", " "])
 def test_t12_a_malformed_token_clients_list_stops_the_app_at_startup(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, malformed: str,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, malformed: str, pg_factory,
 ) -> None:
     from songmaker_cli.settings import get_settings
 
@@ -231,7 +231,7 @@ def test_t12_a_malformed_token_clients_list_stops_the_app_at_startup(
     get_settings.cache_clear()
 
     with pytest.raises(ValidationError, match="TOKEN_CLIENTS"):
-        make_test_app(tmp_path)
+        make_test_app(tmp_path, factory=pg_factory)
 
 
 # -- T13: the co-writer ----------------------------------------------------------------

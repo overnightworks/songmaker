@@ -45,8 +45,8 @@ def _post_cover(client: TestClient):
 
 
 @pytest.fixture
-def alice_client(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_alice_album)
+def alice_client(tmp_path: Path, pg_factory) -> TestClient:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_alice_album, factory=pg_factory)
     seed_session(client, "alice")
     return client
 

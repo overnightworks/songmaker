@@ -19,7 +19,6 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
 
@@ -33,8 +32,7 @@ def _png_bytes() -> bytes:
     return output.getvalue()
 
 
-def _cover_world(tmp_path: Path, *, song_field: str = "words"):
-    factory = init_test_db(tmp_path / "songmaker.db")
+def _cover_world(tmp_path: Path, factory, *, song_field: str = "words"):
     with factory() as session:
         session.add(User(id=OWNER, username="owner"))
         session.flush()
@@ -62,8 +60,8 @@ def _queue(factory, stack: CowriterStack, job_id: str = "job") -> str:
     return job_id
 
 
-def test_cancelled_queued_web_cover_job_is_never_claimed(tmp_path: Path) -> None:
-    app, factory, _audio_dir, stack = _cover_world(tmp_path)
+def test_cancelled_queued_web_cover_job_is_never_claimed(tmp_path: Path, pg_factory) -> None:
+    app, factory, _audio_dir, stack = _cover_world(tmp_path, pg_factory)
     job_id = _queue(factory, stack)
     with factory() as session:
         assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.CANCELLED))
@@ -101,10 +99,10 @@ def _add_pending_suggestion(factory, audio_dir: Path) -> Path:
 
 
 def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_ones(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
     """1301-F3-C1-ATOMIC: image and terminal state agree with usage."""
-    app, factory, audio_dir, stack = _cover_world(tmp_path)
+    app, factory, audio_dir, stack = _cover_world(tmp_path, pg_factory)
     job_id = _queue(factory, stack)
     pending_png = _add_pending_suggestion(factory, audio_dir)
     held = HeldGateway(picture(_png_bytes()))
@@ -135,9 +133,9 @@ def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_on
 
 
 def test_web_recovery_fails_interrupted_work_cleans_only_its_suggestion_and_leaves_queue_for_runner(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
-    app, factory, audio_dir, stack = _cover_world(tmp_path)
+    app, factory, audio_dir, stack = _cover_world(tmp_path, pg_factory)
     running_job_id = _queue(factory, stack)
     pending_png = _add_pending_suggestion(factory, audio_dir)
     interrupted_png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
@@ -173,9 +171,9 @@ def test_web_recovery_fails_interrupted_work_cleans_only_its_suggestion_and_leav
         assert session.get(Job, "queued").status == JobStatus.COMPLETED
 
 
-def test_cover_prompt_quotes_and_bounds_song_data(tmp_path: Path) -> None:
+def test_cover_prompt_quotes_and_bounds_song_data(tmp_path: Path, pg_factory) -> None:
     _app, factory, _audio_dir, _stack = _cover_world(
-        tmp_path, song_field="p" * (COVER_PROMPT_SONG_FIELD_MAX_CHARS + 10),
+        tmp_path, pg_factory, song_field="p" * (COVER_PROMPT_SONG_FIELD_MAX_CHARS + 10),
     )
     with factory() as session:
         album = session.get(Album, "album")

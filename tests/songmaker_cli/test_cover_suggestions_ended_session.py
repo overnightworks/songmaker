@@ -20,9 +20,9 @@ _ENDED_SESSION_ID = "e" * 43
 
 
 def test_cover_suggestion_request_owner_refuses_an_ended_session_without_job_or_log_trace(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, pg_factory,
 ) -> None:
-    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
     caplog.set_level(logging.DEBUG)
 
     with factory() as session:
@@ -68,11 +68,11 @@ def test_suggest_answers_401_when_the_session_ends_during_the_request(
 
 
 def test_the_co_writer_tool_reports_an_ended_session_as_a_tool_error(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, pg_factory,
 ) -> None:
     from songmaker_cli.cowriter.tools import execute_cowriter_tool
 
-    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums)
+    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
     caplog.set_level(logging.DEBUG)
 
     with factory() as session:

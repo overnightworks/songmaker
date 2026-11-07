@@ -16,7 +16,6 @@ from songmaker_cli.constants import (
     SCORE_BACKFILL_ATTEMPTS_KEY_PREFIX,
     SCORE_BACKFILL_BATCH_SIZE,
 )
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.lifecycle import (
     _exhausted_backfill_ids,
@@ -52,10 +51,9 @@ def _seed_song(factory, *, album_id: str = "a1", song_id: str = "s1") -> None:
 
 
 @pytest.fixture
-def seeded_generations(tmp_path: Path):
+def seeded_generations(tmp_path: Path, pg_factory):
     """Three generations on one song: g0 already scored, g1 and g2 are not."""
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+    with pg_factory() as session:
         session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Artist", created_by="u1"))
@@ -74,7 +72,7 @@ def seeded_generations(tmp_path: Path):
             value={"text_accuracy": 90},
         ))
         session.commit()
-    return factory
+    return pg_factory
 
 
 def test_pick_unscored_generations_excludes_scored_rows(seeded_generations) -> None:
@@ -148,9 +146,8 @@ def test_backfill_logs_every_failed_generation(seeded_generations, caplog) -> No
     assert [record.args for record in failure_records] == [("g1",), ("g2",)]
 
 
-def test_backfill_respects_the_named_batch_size(tmp_path: Path) -> None:
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+def test_backfill_respects_the_named_batch_size(tmp_path: Path, pg_factory) -> None:
+    with pg_factory() as session:
         session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Artist", created_by="u1"))
@@ -161,7 +158,7 @@ def test_backfill_respects_the_named_batch_size(tmp_path: Path) -> None:
             ))
         session.commit()
 
-    ctx = _FakeContext(db=factory)
+    ctx = _FakeContext(db=pg_factory)
     auto_score = AsyncMock()
     with patch("songmaker_cli.jobs._auto_score_generation", auto_score):
         result = _run(backfill_unscored_generations(ctx, redis=_fake_redis()))
@@ -173,7 +170,9 @@ def test_backfill_respects_the_named_batch_size(tmp_path: Path) -> None:
 # ── Starvation guard (issue #222 review) ───────────────────────────
 
 
-def test_backfill_stops_picking_a_chronically_unscorable_generation(tmp_path: Path) -> None:
+def test_backfill_stops_picking_a_chronically_unscorable_generation(
+    tmp_path: Path, pg_factory,
+) -> None:
     """A generation that never gets a Score row must not win every batch
     forever: once it hits SCORE_BACKFILL_MAX_ATTEMPTS the next-oldest
     unscored generation gets a turn instead.
@@ -183,8 +182,7 @@ def test_backfill_stops_picking_a_chronically_unscorable_generation(tmp_path: Pa
     size 1 it would return the same oldest, still-unscored generation on
     every single tick and g_good would never be reached.
     """
-    factory = init_test_db(tmp_path / "test.db")
-    with factory() as session:
+    with pg_factory() as session:
         session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Artist", created_by="u1"))
@@ -199,7 +197,7 @@ def test_backfill_stops_picking_a_chronically_unscorable_generation(tmp_path: Pa
         ))
         session.commit()
 
-    ctx = _FakeContext(db=factory)
+    ctx = _FakeContext(db=pg_factory)
     auto_score = AsyncMock()  # never actually creates a Score row for either
 
     async def _three_ticks() -> None:
@@ -232,17 +230,18 @@ def test_exhausted_backfill_ids_excludes_only_ids_at_or_over_the_limit() -> None
     assert exhausted == {"g1"}
 
 
-def test_backfill_becomes_eligible_again_once_its_attempt_key_expires(tmp_path: Path) -> None:
+def test_backfill_becomes_eligible_again_once_its_attempt_key_expires(
+    tmp_path: Path, pg_factory,
+) -> None:
     """The TTL is what lets a chronically-failing generation retry later
     (e.g. after a scorer bug fix) — simulated here by deleting the counter
     key directly, the same state a lapsed TTL leaves behind."""
-    factory = init_test_db(tmp_path / "test.db")
-    _seed_song(factory)
-    with factory() as session:
+    _seed_song(pg_factory)
+    with pg_factory() as session:
         session.add(Generation(id="g1", song_id="s1", generation_number=1, mp3_path="g1.mp3"))
         session.commit()
 
-    ctx = _FakeContext(db=factory)
+    ctx = _FakeContext(db=pg_factory)
     first_attempt = AsyncMock()
     retried = AsyncMock()
 
@@ -269,14 +268,13 @@ def test_backfill_becomes_eligible_again_once_its_attempt_key_expires(tmp_path: 
     retried.assert_awaited_once()
 
 
-def test_backfill_sets_a_ttl_on_the_attempt_counter(tmp_path: Path) -> None:
-    factory = init_test_db(tmp_path / "test.db")
-    _seed_song(factory)
-    with factory() as session:
+def test_backfill_sets_a_ttl_on_the_attempt_counter(tmp_path: Path, pg_factory) -> None:
+    _seed_song(pg_factory)
+    with pg_factory() as session:
         session.add(Generation(id="g1", song_id="s1", generation_number=1, mp3_path="g1.mp3"))
         session.commit()
 
-    ctx = _FakeContext(db=factory)
+    ctx = _FakeContext(db=pg_factory)
 
     async def _scenario() -> int:
         redis = _fake_redis()
@@ -290,18 +288,17 @@ def test_backfill_sets_a_ttl_on_the_attempt_counter(tmp_path: Path) -> None:
 
 
 def test_backfill_clears_attempt_tracking_once_a_generation_gets_scored(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
     """A tracked generation that finally has a score — however it got
     scored — has its counter actively dropped rather than left to expire,
     so it starts with a clean budget if it were ever unscored again."""
-    factory = init_test_db(tmp_path / "test.db")
-    _seed_song(factory)
-    with factory() as session:
+    _seed_song(pg_factory)
+    with pg_factory() as session:
         session.add(Generation(id="g1", song_id="s1", generation_number=1, mp3_path="g1.mp3"))
         session.commit()
 
-    ctx = _FakeContext(db=factory)
+    ctx = _FakeContext(db=pg_factory)
     second_tick = AsyncMock()
 
     async def _scenario() -> tuple[int, int]:
@@ -310,7 +307,7 @@ def test_backfill_clears_attempt_tracking_once_a_generation_gets_scored(
             await backfill_unscored_generations(ctx, redis)
         tracked_after_first_attempt = await redis.exists(_attempt_key("g1"))
 
-        with factory() as session:
+        with pg_factory() as session:
             session.add(Score(
                 id="sc1", generation_id="g1", scorer="batch", value={"text_accuracy": 90},
             ))

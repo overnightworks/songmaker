@@ -13,8 +13,8 @@ CONFIGURED_MONITORING_TOKEN = "scratch-monitoring-token"
 
 
 @pytest.fixture
-def metrics_client(tmp_path, mock_arq_pool):
-    client, _ = make_test_app(tmp_path)
+def metrics_client(tmp_path, mock_arq_pool, pg_factory):
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
         yield client
 

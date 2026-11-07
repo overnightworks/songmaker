@@ -17,19 +17,17 @@ from songmaker_cli.constants import (
     JobType,
     LoraStatus,
 )
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.lifecycle import _run_stale_job_reaper_tick, reconcile_crashed_loras
 
 
 @pytest.fixture
-def ctx(tmp_path: Path) -> AppContext:
+def ctx(tmp_path: Path, pg_factory) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
-    factory = init_test_db(tmp_path / "songmaker.db")
     return AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
+        db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
         signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
 

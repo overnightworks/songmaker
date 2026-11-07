@@ -57,7 +57,7 @@ def test_submit_task_success() -> None:
                 "velocity_ema_factor": 0.0,
                 "latent_shift": 0.0,
                 "latent_rescale": 1.0,
-                "use_random_seed": True,
+                "seed": -1, "use_random_seed": True,
             },
         ),
         (
@@ -77,7 +77,7 @@ def test_submit_task_success() -> None:
                 "velocity_ema_factor": 0.1,
                 "latent_shift": 0.05,
                 "latent_rescale": 1.2,
-                "use_random_seed": False,
+                "seed": 42, "use_random_seed": False,
             },
         ),
     ],
@@ -85,7 +85,7 @@ def test_submit_task_success() -> None:
 def test_submit_task_forwards_dit_params_and_seed_policy(
     config: AceStepConfig, expected: dict[str, object],
 ) -> None:
-    """The payload handed to the HTTP sender contains every visible DiT knob."""
+    """Spec: REQ-SEED-02 -- a pinned seed is sent as fixed, an unpinned one as random."""
     client = AceStepClient(host="localhost", port=8001)
 
     with patch.object(

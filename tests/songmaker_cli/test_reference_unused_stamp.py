@@ -12,9 +12,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event, text
 from support.failing_reference_stamp import failing_stamp_trigger
+from support.reference_rows import a_reference
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids, mark_newly_unused
 from songmaker_cli.reference_audio import commit_unused_stamps
@@ -22,14 +22,6 @@ from songmaker_cli.timestamps import utcnow
 
 OWNER = "owner"
 EARLIER = utcnow() - timedelta(days=3)
-
-
-def _reference_row(reference_id: str, *, is_kept: bool = False, stamp: datetime | None = None):
-    return ReferenceRecording(
-        id=reference_id, user_id=OWNER,
-        storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/{reference_id}.wav",
-        original_filename=f"{reference_id}.wav", size_bytes=4, is_kept=is_kept, unused_since=stamp,
-    )
 
 
 def _take_row(take_id: str, number: int, reference_id: str | None) -> Generation:
@@ -47,7 +39,8 @@ def _seed_stamp_world(
     session.add(Album(id="album", title="A", artist="A", created_by=OWNER))
     session.flush()
     session.add(Song(id="song", title="S", album_id="album", track_number=1, slug="s"))
-    session.add_all([_reference_row("r1"), _reference_row("r2")])
+    for name in ("r1", "r2"):
+        a_reference(session, OWNER, name=f"{name}.wav", reference_id=name)
     session.flush()
     session.add(Version(
         id="version", song_id="song", version_number=1, lyrics="la", prompt="p",
@@ -177,7 +170,9 @@ def _owner_ctx(tmp_path, *, kept=False, stamp=None):
     def seed(session):
         session.add(User(id=OWNER, username=OWNER))
         session.flush()
-        session.add(_reference_row("r1", is_kept=kept, stamp=stamp))
+        a_reference(
+            session, OWNER, name="r1.wav", reference_id="r1", is_kept=kept, unused_since=stamp,
+        )
     return make_router_ctx(tmp_path, seed_db=seed)
 
 

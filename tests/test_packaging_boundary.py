@@ -505,7 +505,7 @@ def _short_volume_source_and_target(service_name: str, volume: str) -> tuple[str
         f"{service_name} declares the anonymous volume {volume!r}; "
         f"mount a declared named volume instead"
     )
-    return source, posixpath.normpath(rest[0])
+    return source, str(_as_linux_resolves(rest[0]))
 
 
 def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None:
@@ -514,12 +514,9 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
 
     for service_name, service in services.items():
         assert isinstance(service, dict)
-        assert "extends" not in service, (
-            f"{service_name} must not inherit mounts through Compose extends"
-        )
-        assert "volumes_from" not in service, (
-            f"{service_name} must not inherit mounts through Compose volumes_from"
-        )
+        inheritance = "inherit mounts through Compose"
+        assert "extends" not in service, f"{service_name} must not {inheritance} extends"
+        assert "volumes_from" not in service, f"{service_name} must not {inheritance} volumes_from"
         volumes = service.get("volumes", [])
         assert isinstance(volumes, list)
         bind_mounts: list[dict[str, object]] = []
@@ -528,17 +525,15 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
                 source, target = _short_volume_source_and_target(service_name, volume)
                 if any(Path(target).is_relative_to(root) for root in AGENT_CLI_MOUNT_ROOTS):
                     assert source in declared_named_volumes, (
-                        f"{service_name} must mount {target!r} through Compose "
-                        f"long syntax (read-only, no host path creation) or a "
-                        f"declared named volume: {volume!r}"
+                        f"{service_name} must mount {target!r} through Compose long syntax "
+                        f"(read-only, no host path creation) or a declared named volume: {volume!r}"
                     )
                 assert source in declared_named_volumes or (
                     source.startswith("./") and ".." not in Path(source).parts
                 ), (
-                    f"{service_name} must use Compose long syntax for every host "
-                    f"bind mount so its read-only and host-path protections are "
-                    f"explicit: {volume!r} is neither a declared named volume nor "
-                    f"a repository-relative path"
+                    f"{service_name} must use Compose long syntax for every host bind mount so "
+                    f"its read-only and host-path protections are explicit: {volume!r} is "
+                    f"neither a declared named volume nor a repository-relative path"
                 )
                 continue
 
@@ -567,6 +562,103 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             bind_options = mount.get("bind")
             assert isinstance(bind_options, dict)
             assert bind_options.get("create_host_path") is False
+
+
+CONTAINER_HOME = Path("/home/songmaker")
+MIRROR_DIRECTORY_MARKER = "agent-cli-credentials"
+EVERY_COMPOSE_FILE = tuple(
+    REPOSITORY_ROOT / name
+    for name in subprocess.check_output(
+        ["git", "ls-files"], cwd=REPOSITORY_ROOT, text=True
+    ).splitlines()
+    if re.search(r"(^|/)(docker-)?compose[^/]*\.ya?ml$", name)
+)
+PRODUCTION_COMPOSE_FILES = ("-f", "docker-compose.yml")
+
+
+def _as_linux_resolves(path: str) -> Path:
+    return Path(posixpath.normpath(re.sub(r"^/+", "/", path)))
+
+
+def _agent_login_binds(services: dict[str, dict]) -> list[str]:
+    """Binds of rendered services; Compose prints every volume in long form."""
+    offences = []
+    for service_name, service in services.items():
+        for volume in service.get("volumes", []):
+            if volume["type"] != "bind":
+                continue
+            source, target = volume["source"], volume["target"]
+            if MIRROR_DIRECTORY_MARKER in source or any(
+                _as_linux_resolves(path).is_relative_to(CONTAINER_HOME) for path in (source, target)
+            ):
+                offences.append(f"{service_name} binds {source} to {target}")
+    return offences
+
+
+def _render_services(compose_args: tuple[str, ...], env_file: Path) -> dict[str, dict]:
+    rendered = run_compose_config(
+        (*compose_args, "-p", "songmaker-packaging-boundary-test", "--profile", "*"),
+        ("--format", "json"),
+        env_file=env_file,
+        environment={},
+    )
+    assert rendered.returncode == 0, rendered.stderr
+    return json.loads(rendered.stdout)["services"]
+
+
+@pytest.mark.parametrize("stack", ["production", *TEST_STACKS], ids=str)
+def test_no_stack_binds_an_agent_cli_or_a_login(stack: str) -> None:
+    if stack == "production":
+        services = _render_services(PRODUCTION_COMPOSE_FILES, DOCKER_ROOT / ".env.docker.example")
+    else:
+        services = _rendered_test_stack_services(TEST_STACKS[stack])
+
+    assert _agent_login_binds(services) == []
+
+
+def test_every_compose_file_belongs_to_a_rendered_stack() -> None:
+    stacks = (PRODUCTION_COMPOSE_FILES, *TEST_STACKS.values())
+    rendered = {(REPOSITORY_ROOT / n).resolve() for files in stacks for n in files if n != "-f"}
+    assert {path.resolve() for path in EVERY_COMPOSE_FILE} <= rendered
+
+
+_HOME_AUTH = "/home/songmaker/.grok/auth.json"
+_MIRROR = "/x/agent-cli-credentials"
+AGENT_LOGIN_BIND_FIXTURES = {
+    "long-target-under-home": (
+        f"{{type: bind, source: /srv/a, target: {_HOME_AUTH}}}", f"/srv/a to {_HOME_AUTH}"),
+    "long-source-under-home": (
+        "{type: bind, source: /home/songmaker/c, target: /c}", "/home/songmaker/c to /c"),
+    "long-source-with-two-leading-slashes": (
+        "{type: bind, source: //home/songmaker/c, target: /c}", "//home/songmaker/c to /c"),
+    "long-source-from-mirror-directory": (
+        f"{{type: bind, source: '${{DIR:-{_MIRROR}}}/c.json', target: /c.json}}",
+        f"{_MIRROR}/c.json to /c.json",
+    ),
+    "short-target-under-home": (f"/srv/a:{_HOME_AUTH}:ro", f"/srv/a to {_HOME_AUTH}"),
+    "short-source-under-home": (f"{_HOME_AUTH}:/auth.json", f"{_HOME_AUTH} to /auth.json"),
+    "short-source-from-mirror-directory": (f"'${{DIR:-{_MIRROR}}}/c:/c'", f"{_MIRROR}/c to /c"),
+    "short-nested-default-target": (
+        f"/srv/a:${{A:-${{B:-{_HOME_AUTH}}}}}:ro", f"/srv/a to {_HOME_AUTH}"),
+    "dotdot-source-into-home": ("/a/../home/songmaker/c:/c", "/a/../home/songmaker/c to /c"),
+    "short-dash-default-target": (f"'/srv/a:${{X-{_HOME_AUTH}}}:ro'", f"/srv/a to {_HOME_AUTH}"),
+}
+
+
+@pytest.mark.parametrize(
+    ("volume", "bind"), AGENT_LOGIN_BIND_FIXTURES.values(), ids=AGENT_LOGIN_BIND_FIXTURES.keys()
+)
+def test_the_agent_login_bind_check_names_the_service_and_the_bind(
+    volume: str, bind: str, tmp_path: Path
+) -> None:
+    compose_file = tmp_path / "docker-compose.yml"
+    compose_file.write_text(
+        f"services:\n  songmaker-web:\n    image: scratch\n    volumes:\n      - {volume}\n"
+    )
+
+    services = _render_services(("-f", str(compose_file)), Path(os.devnull))
+
+    assert _agent_login_binds(services) == [f"songmaker-web binds {bind}"]
 
 
 CONFINED_SERVICES = (
