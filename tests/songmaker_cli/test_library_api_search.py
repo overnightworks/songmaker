@@ -26,7 +26,6 @@ from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Song, User, Version
 
 OWNER_ID = "owner"
@@ -35,13 +34,13 @@ ADMIN_ID = "admin"
 
 def _client_with_title(
     tmp_path: Path,
+    pg_factory,
     *,
     album_title: str,
     song_title: str,
     searcher: AuthenticatedUser | None = None,
 ) -> TestClient:
-    factory = init_db(tmp_path / "test.db")
-    with factory() as session:
+    with pg_factory() as session:
         session.add(User(
             id=OWNER_ID, username="owner", role="user",
         ))
@@ -63,7 +62,7 @@ def _client_with_title(
         session.commit()
 
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=searcher or make_authenticated_user(OWNER_ID, username="owner"),
     )
     return web_client(app)
@@ -73,8 +72,10 @@ def _hit_types(items: list[dict]) -> set[str]:
     return {item["type"] for item in items}
 
 
-def test_search_finds_album_and_song_sharing_the_exact_title(tmp_path: Path) -> None:
-    client = _client_with_title(tmp_path, album_title="Sommerlicht", song_title="Sommerlicht")
+def test_search_finds_album_and_song_sharing_the_exact_title(tmp_path: Path, pg_factory) -> None:
+    client = _client_with_title(
+        tmp_path, pg_factory, album_title="Sommerlicht", song_title="Sommerlicht"
+    )
 
     resp = client.get("/api/library/search", params={"q": "Sommerlicht"})
 
@@ -84,8 +85,8 @@ def test_search_finds_album_and_song_sharing_the_exact_title(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize("query", ["Nächte", "nächte"])
-def test_search_matches_umlaut_title(tmp_path: Path, query: str) -> None:
-    client = _client_with_title(tmp_path, album_title="Nächte", song_title="Nächte")
+def test_search_matches_umlaut_title(tmp_path: Path, query: str, pg_factory) -> None:
+    client = _client_with_title(tmp_path, pg_factory, album_title="Nächte", song_title="Nächte")
 
     resp = client.get("/api/library/search", params={"q": query})
 
@@ -94,8 +95,12 @@ def test_search_matches_umlaut_title(tmp_path: Path, query: str) -> None:
     assert _hit_types(items) == {LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG}
 
 
-def test_search_matches_lowercase_query_against_capitalized_title(tmp_path: Path) -> None:
-    client = _client_with_title(tmp_path, album_title="Sommerlicht", song_title="Sommerlicht")
+def test_search_matches_lowercase_query_against_capitalized_title(
+    tmp_path: Path, pg_factory
+) -> None:
+    client = _client_with_title(
+        tmp_path, pg_factory, album_title="Sommerlicht", song_title="Sommerlicht"
+    )
 
     resp = client.get("/api/library/search", params={"q": "sommerlicht"})
 
@@ -114,14 +119,16 @@ SONG_236 = "42 (Thomas, du Legende)"
     ids=["album-title-word", "album-title-word-lower", "word-after-em-dash",
          "word-after-em-dash-lower", "number-token"],
 )
-def test_search_finds_owners_em_dash_and_number_title(tmp_path: Path, query: str) -> None:
+def test_search_finds_owners_em_dash_and_number_title(
+    tmp_path: Path, query: str, pg_factory
+) -> None:
     """Issue #236 categories, searched by the title's actual owner.
 
     Proves like_contains_pattern/title_matches has no defect for a leading
     number token or a word directly after an em dash — the two shapes named
     in the bug report as suspects.
     """
-    client = _client_with_title(tmp_path, album_title=ALBUM_236, song_title=SONG_236)
+    client = _client_with_title(tmp_path, pg_factory, album_title=ALBUM_236, song_title=SONG_236)
 
     resp = client.get("/api/library/search", params={"q": query})
 
@@ -131,10 +138,10 @@ def test_search_finds_owners_em_dash_and_number_title(tmp_path: Path, query: str
 
 
 @pytest.mark.parametrize("query", ["Thomas", "Für", "42"])
-def test_admin_search_finds_another_users_album(tmp_path: Path, query: str) -> None:
+def test_admin_search_finds_another_users_album(tmp_path: Path, query: str, pg_factory) -> None:
     admin = make_authenticated_user(ADMIN_ID, role=AppRole.ADMIN, username="admin")
     client = _client_with_title(
-        tmp_path, album_title=ALBUM_236, song_title=SONG_236, searcher=admin,
+        tmp_path, pg_factory, album_title=ALBUM_236, song_title=SONG_236, searcher=admin,
     )
 
     resp = client.get("/api/library/search", params={"q": query})

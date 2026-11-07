@@ -85,11 +85,15 @@ def _seed_generation_count_scenarios(session) -> None:
     )
 
 
-@pytest.fixture
-def generation_count_client(tmp_path: Path):
-    client, factory = make_test_app(tmp_path, seed_db=_seed_generation_count_scenarios)
+def _admin_client(tmp_path: Path, pg_factory, seed_db):
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=seed_db)
     seed_session(client, _ADMIN_USER)
     return client, factory
+
+
+@pytest.fixture
+def generation_count_client(tmp_path: Path, pg_factory):
+    return _admin_client(tmp_path, pg_factory, _seed_generation_count_scenarios)
 
 
 def test_the_removed_reimport_route_is_not_served(generation_count_client) -> None:
@@ -241,10 +245,8 @@ def _seed_worked_through_song(session) -> None:
 
 
 @pytest.fixture
-def worked_through_song_client(tmp_path: Path):
-    client, factory = make_test_app(tmp_path, seed_db=_seed_worked_through_song)
-    seed_session(client, _ADMIN_USER)
-    return client, factory
+def worked_through_song_client(tmp_path: Path, pg_factory):
+    return _admin_client(tmp_path, pg_factory, _seed_worked_through_song)
 
 
 def test_get_song_returns_all_versions_generations_and_scores(

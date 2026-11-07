@@ -300,8 +300,10 @@ def test_the_cover_settings_are_gone_and_their_stored_rows_stay_unread(admin_cli
 
 @pytest.mark.parametrize("role", ["admin", "user"])
 @pytest.mark.parametrize("path", ["/api/capabilities", "/api/settings/providers"])
-def test_removed_provider_routes_answer_ordinary_not_found(tmp_path, mock_arq_pool, path, role):
-    overrides = (client := make_test_app(tmp_path)[0]).app.dependency_overrides
+def test_removed_provider_routes_answer_ordinary_not_found(
+    tmp_path, mock_arq_pool, path, role, pg_factory
+):
+    overrides = (client := make_test_app(tmp_path, factory=pg_factory)[0]).app.dependency_overrides
     overrides[get_current_user] = lambda: make_authenticated_user("u", role=role)
     with client:
         unknown, removed = client.get("/api/nope"), client.get(path)
@@ -311,8 +313,10 @@ def test_removed_provider_routes_answer_ordinary_not_found(tmp_path, mock_arq_po
 
 @pytest.mark.parametrize("role", ["admin", "user"])
 @pytest.mark.parametrize("method", ["GET", "PUT"])
-def test_removed_judge_endpoint_answers_ordinary_not_found(tmp_path, mock_arq_pool, method, role):
-    overrides = (client := make_test_app(tmp_path)[0]).app.dependency_overrides
+def test_removed_judge_endpoint_answers_ordinary_not_found(
+    tmp_path, mock_arq_pool, method, role, pg_factory
+):
+    overrides = (client := make_test_app(tmp_path, factory=pg_factory)[0]).app.dependency_overrides
     overrides[get_current_user] = lambda: make_authenticated_user("u", role=role)
     with client:
         unknown, removed = [client.request(method, f"/api/settings/{n}") for n in ("nope", "judge")]
@@ -338,8 +342,8 @@ def _leftover_judge_rows(factory) -> dict[str, str | None]:
         }
 
 
-def test_startup_writes_no_judge_row_on_a_fresh_database(tmp_path, mock_arq_pool):
-    client, factory = make_test_app(tmp_path)
+def test_startup_writes_no_judge_row_on_a_fresh_database(tmp_path, mock_arq_pool, pg_factory):
+    client, factory = make_test_app(tmp_path, factory=pg_factory)
 
     with client:
         pass
@@ -348,13 +352,13 @@ def test_startup_writes_no_judge_row_on_a_fresh_database(tmp_path, mock_arq_pool
 
 
 def test_startup_and_settings_reads_leave_stored_judge_rows_unchanged(
-    tmp_path, mock_arq_pool,
+    tmp_path, mock_arq_pool, pg_factory,
 ):
     def seed_leftover_rows(session) -> None:
         for key, value in _LEFTOVER_JUDGE_ROWS.items():
             store_setting_row(session, key, value)
 
-    client, factory = make_test_app(tmp_path, seed_db=seed_leftover_rows)
+    client, factory = make_test_app(tmp_path, factory=pg_factory, seed_db=seed_leftover_rows)
     client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
         "u-admin", role="admin", username="admin",
     )

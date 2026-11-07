@@ -26,7 +26,6 @@ from support.web_app import (
 )
 
 from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
@@ -60,22 +59,20 @@ def _seed_owned(session, user_id: str) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
-    factory = init_db(tmp_path / "conv_api.db")
-    with factory() as session:
+def client(tmp_path: Path, pg_factory) -> tuple[TestClient, sessionmaker[Session]]:
+    with pg_factory() as session:
         _seed_owned(session, "u-test")
 
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    return web_client(app), factory
+    return web_client(app), pg_factory
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
-    factory = init_db(tmp_path / "conv_api2.db")
-    with factory() as session:
+def stranger_client(tmp_path: Path, pg_factory) -> tuple[TestClient, sessionmaker[Session]]:
+    with pg_factory() as session:
         _seed_owned(session, "u-owner")
         session.add(User(
             id="u-spy", username="spy", role="user",
@@ -83,10 +80,10 @@ def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
         session.commit()
 
     app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
+        make_router_ctx(tmp_path, db=pg_factory),
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    return web_client(app), factory
+    return web_client(app), pg_factory
 
 
 @pytest.fixture
@@ -262,7 +259,7 @@ def test_the_chat_job_decides_whether_a_turn_is_running(
 
 @pytest.mark.parametrize("chat_job_status", ["queued", "running"])
 def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
-    tmp_path, mock_arq_pool, chat_job_status,
+    tmp_path, mock_arq_pool, chat_job_status, pg_factory,
 ):
     """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
     from support.web_app import make_test_app, seed_session
@@ -273,7 +270,9 @@ def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
         session.add(ChatMessage(conversation_id="conv-1", role="user", content="Ja bitte"))
         session.add(Job(type="chat", user_id=musician.id, status=chat_job_status))
 
-    c, factory = make_test_app(tmp_path, seed_db=_seed_a_turn_the_restart_interrupted)
+    c, factory = make_test_app(
+        tmp_path, factory=pg_factory, seed_db=_seed_a_turn_the_restart_interrupted
+    )
     with c:
         seed_session(c, "musician")
         body = c.get("/api/conversations/conv-1").json()

@@ -8,8 +8,8 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 
 
-def test_release_is_refused_without_a_session(tmp_path) -> None:
-    app = make_router_app(make_router_ctx(tmp_path))
+def test_release_is_refused_without_a_session(tmp_path, pg_factory) -> None:
+    app = make_router_app(make_router_ctx(tmp_path, db=pg_factory))
 
     assert web_client(app, cookies={}).get("/api/release").status_code == 401
 
@@ -24,7 +24,7 @@ def test_release_is_refused_without_a_session(tmp_path) -> None:
     ids=["release-build", "commit-without-tag", "neither"],
 )
 def test_release_names_what_the_image_was_built_for(
-    tmp_path, monkeypatch, fresh_settings, release, commit, expected,
+    tmp_path, monkeypatch, fresh_settings, release, commit, expected, pg_factory,
 ) -> None:
     for name, value in (("SONGMAKER_RELEASE", release), ("SONGMAKER_COMMIT", commit)):
         if value is None:
@@ -32,7 +32,9 @@ def test_release_names_what_the_image_was_built_for(
         else:
             monkeypatch.setenv(name, value)
     get_settings.cache_clear()
-    app = make_router_app(make_router_ctx(tmp_path), user=make_authenticated_user("u-member"))
+    app = make_router_app(
+        make_router_ctx(tmp_path, db=pg_factory), user=make_authenticated_user("u-member")
+    )
 
     response = web_client(app).get("/api/release")
 

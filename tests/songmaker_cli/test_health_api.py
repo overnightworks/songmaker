@@ -31,10 +31,10 @@ from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 
 
 def test_health_and_metrics_report_background_loop_health(
-    tmp_path: Path, mock_arq_pool, monitoring_headers,
+    tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
 ) -> None:
     # defect:#1590 — cleanup loop replaces TTL reconciliation.
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
         registry = client.app.state.background_loop_registry
         for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
@@ -135,8 +135,8 @@ def _get_health(
 
 
 @pytest.fixture
-def health_client(tmp_path, mock_arq_pool):
-    client, _ = make_test_app(tmp_path, seed_db=_seed_one_worker)
+def health_client(tmp_path, mock_arq_pool, pg_factory):
+    client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_one_worker)
     with client:
         yield client
 
