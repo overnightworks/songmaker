@@ -1,8 +1,0 @@
-claim_id = "91f32d6e20b44e49b4a06760aa268378"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "80af8f42749926f679ac79ff436d70ef1b66a85f"
-branch = "claude/issue-2487-agent-runtime-v0-23-0"
-scope = ["pyproject.toml", "tests/songmaker_cli/test_conversation_api_gateway_turn.py", "tests/songmaker_cli/test_cover_through_gateway.py", "uv.lock"]
-opened_commit = "87947464e8d13738856e1ea342f24dd436925642"
-whole_reason = "One release take: the pin, the lock and the two test files that name removed members must land together or the suite breaks."
