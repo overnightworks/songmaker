@@ -956,6 +956,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
 | Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py` |
+| MCP front | The six marked routes served as tools on `/mcp` to a person's own agent, and the `agent` settings section | `agent/mcp.py`, `agent/settings.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | Tool bodies | The co-writer's tool declarations and their execution, which the hand tools call | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
@@ -1068,7 +1069,7 @@ read it through `webauth.config.web_auth_config(request)`; an application that
 never installed one fails loudly at its first auth-protected request. Redis
 remains the rate-limit backend; a request is admitted by its DB session, which is
 loaded on every authenticated request, or by a verified token on a person path
-(`/api/` and `/audio/`) when `TOKEN_CLIENTS` names the token's client. `session_cleanup_loop` periodically deletes expired DB
+(`/api/` and `/audio/`) when `TOKEN_CLIENTS` names the token's client, or by a person's own agent's resource token at `/mcp` and on the six marked routes while MCP is on. `session_cleanup_loop` periodically deletes expired DB
 sessions without Redis.
 
 Sign-in is songmaker's composition of that library, in `auth_api.py` (`install_sign_in`),
@@ -1117,12 +1118,14 @@ rules. `server.create_app` installs them with one
 `install_web_auth_middleware()` call; no middleware reads songmaker's settings.
 The pure-ASGI request order, outside to inside, is ResourceStreamDeadline →
 SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit → [BearerGate →] CsrfOrigin →
-TrustedHost → AccessLog → Router. The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client. The Host check is Starlette's
+TrustedHost → AccessLog → Router. The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
 `TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
 library's host lists are Origin allowlists only. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
 
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
+
+A person's own agent reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools, the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
 
 The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `webauth` is an installed distribution rather than a directory under `src/`, and its own boundaries are contracted in its repository; because `include_external_packages` is on, `.importlinter` still resolves it in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
 
@@ -1147,7 +1150,7 @@ flowchart TB
     entry --> workers --> routes --> runtime --> ai --> services --> contract --> typed --> persistence --> below --> base --> leaves
 ```
 
-The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list. A new module breaks the contract until it takes a row.
+The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list. A third lists the modules that import the agent runtime client at all, because the contract tool sees the installed package as one node; which submodule each imports is reviewed: only `agent/backend.py` and `agent/mcp.py` import its run and MCP machinery, only `agent/settings.py` its `config`, and the route and tool modules only its `tools`, except `conversation_api.py`, which also imports its `turn`. A new module breaks the contract until it takes a row.
 
 ## Data Model
 

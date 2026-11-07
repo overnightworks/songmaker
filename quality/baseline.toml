@@ -53,14 +53,14 @@
 "src/songmaker_cli/conversation_api.py" = 968
 "src/songmaker_cli/jobs/generation.py" = 1149
 "src/songmaker_cli/jobs/lora_training.py" = 1529
-"src/songmaker_cli/queue_streams.py" = 963
+"src/songmaker_cli/queue_streams.py" = 961
 "src/songmaker_cli/sharing_api.py" = 861
 "tests/acestep_engine/test_client.py" = 818
 "tests/acestep_worker/test_wrapper.py" = 1626
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1904
 "tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4612
+"tests/songmaker_cli/test_api.py" = 4609
 "tests/songmaker_cli/test_db.py" = 2454
 "tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_jobs.py" = 3215
@@ -143,7 +143,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"create_app" = 176
+"create_app" = 143
 
 [function_lines."tests/acestep_worker/test_wrapper_train_lora.py"]
 "_make_deps" = 76

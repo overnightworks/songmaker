@@ -401,7 +401,7 @@ export interface LibraryListenResponse {
 }
 
 export interface LibraryPoolQueue {
-	pool: 'mix' | 'picks' | 'keeps' | 'all';
+	pool: 'mix' | 'picks' | 'all';
 	takes: LibraryPoolTakeItem[];
 	skipped: QueueStreamSkipItem[];
 	skipped_complete: boolean;

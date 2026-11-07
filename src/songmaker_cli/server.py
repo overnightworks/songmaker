@@ -23,6 +23,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.middleware import install_web_auth_middleware
 
+from songmaker_cli.agent.mcp import (
+    build_protected_resource,
+    collect_route_tools,
+    mount_mcp_front,
+)
 from songmaker_cli.app_context import (
     AppContext,
     allowed_hosts,
@@ -160,118 +165,8 @@ def _oidc_sign_in_or_default(given: OidcSignIn | None, settings: Settings) -> Oi
     return build_oidc_sign_in(settings) if given is None else given
 
 
-def create_app(
-    audio_dir: Path,
-    data_dir: Path,
-    project_root: Path,
-    ctx: AppContext | None = None,
-    oidc_sign_in: OidcSignIn | None = None,
-) -> FastAPI:
-    app = FastAPI(
-        title=APP_NAME,
-        docs_url=None,
-        redoc_url=None,
-        openapi_url=None,
-        lifespan=_lifespan,
-    )
-    if ctx is None:
-        ctx = _create_default_context(audio_dir, data_dir)
-
-    app.state.ctx = ctx
-    from webauth.config import install_web_auth_config
-
-    from songmaker_cli.auth_api import install_sign_in
-    from songmaker_cli.redis_client import RedisHttpMetrics
-
-    web_auth = build_web_auth_config(ctx, get_settings())
-    install_web_auth_config(app, web_auth)
-    app.state.oidc_sign_in = _oidc_sign_in_or_default(oidc_sign_in, get_settings())
-    install_sign_in(app)
-    app.state.http_metrics = RedisHttpMetrics(ctx.redis)
-
-    # Middleware execution order (Starlette LIFO -- last added runs first):
-    #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
-    #   2. SelectiveGZipMiddleware    -- compress the finished response body
-    #   3. CORS middleware            -- add configured cross-origin policy
-    #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
-    #   5. BodySizeLimitMiddleware    -- reject oversized bodies before processing
-    #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   7. BearerGateMiddleware       -- with TOKEN_CLIENTS: a verified person-path token skips CSRF
-    #   8. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
-    #  10. AccessLogMiddleware        -- log all requests (after security checks)
-    # WARNING: reordering these lines changes security behavior.
-    # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
-    # (the true outermost layer) and outside everything else, on purpose:
-    #   - It only inspects the outgoing Accept-Encoding/Content-Type/status
-    #     pair and never reads or rejects the request, so its placement
-    #     cannot affect the auth/CSRF/rate-limit checks below -- those
-    #     already ran and could already reject the request before this
-    #     middleware's compression step ever executes.
-    #   - Being outside CORS/BodySize/RateLimit/CSRF/AccessLog/SecurityHeaders
-    #     means it compresses the fully-assembled response (every other
-    #     middleware's headers already set) exactly once, not an
-    #     intermediate state some inner middleware still touches.
-    #   - It stays inside ResourceStreamDeadlineMiddleware because that one
-    #     needs to observe/bound the complete raw ASGI exchange for the one
-    #     SSE path it governs. That observation is unaffected by GZip's
-    #     presence: `text/event-stream` is never on the compression
-    #     allowlist, so GZip forwards those messages one-for-one with no
-    #     buffering, exactly as if it were absent (see `middleware/gzip.py`
-    #     and `test_server_middleware.py`'s SSE test).
-    script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
-    settings = get_settings()
-    app.add_middleware(AccessLogMiddleware)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
-    install_web_auth_middleware(
-        app, security_headers=build_security_headers_policy(script_hashes),
-        body_size=build_body_size_policy(settings), rate_limit=build_rate_limit_policy(settings),
-        csrf_origin=build_csrf_origin_policy(),
-        bearer_gate=build_bearer_gate(settings, app.state.oidc_sign_in, ctx.db),
-    )
-
-    app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.
-        CORSMiddleware,
-        **_cors_middleware_kwargs(settings.cors_origin),
-    )
-    app.add_middleware(
-        SelectiveGZipMiddleware,
-        minimum_size=GZIP_MINIMUM_SIZE_BYTES,
-        compresslevel=GZIP_COMPRESS_LEVEL,
-    )
-    app.add_middleware(ResourceStreamDeadlineMiddleware)
-
-    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_error_handler(
-        request: Request,
-        exc: RequestValidationError,
-    ) -> JSONResponse:
-        fields = sorted({".".join(str(loc) for loc in e["loc"]) for e in exc.errors()})
-        return JSONResponse(
-            {"detail": f"Validation error on: {', '.join(fields)}"},
-            status_code=422,
-        )
-
-    from songmaker_cli.api import router as api_router
-    from songmaker_cli.health_api import router as health_router
-    from songmaker_cli.sharing_api import router as sharing_router
-
-    app.include_router(api_router)
-    app.include_router(health_router)
-    app.include_router(sharing_router)
-
-    sveltekit_dir = project_root / "frontend" / "build"
-    sveltekit_app_dir = sveltekit_dir / "_app"
-
-    if sveltekit_app_dir.exists():
-        app.mount(
-            "/_app",
-            StaticFiles(directory=str(sveltekit_app_dir)),
-            name="sveltekit-app",
-        )
-
+def _install_pwa_assets(app: FastAPI, sveltekit_dir: Path) -> frozenset[str]:
+    """Serve the favicon, service worker, manifest and icons; return their exact paths."""
     favicon_path = sveltekit_dir / "favicon.svg"
 
     @app.get("/favicon.svg", include_in_schema=False)
@@ -280,7 +175,7 @@ def create_app(
 
     sw_path = sveltekit_dir / "service-worker.js"
     manifest_path = sveltekit_dir / "manifest.webmanifest"
-    _pwa_exact_paths = (
+    exact_paths = (
         frozenset(
             {
                 "/service-worker.js",
@@ -317,6 +212,134 @@ def create_app(
 
     for icon_path in sorted(PWA_ICON_PATHS):
         register_icon_route(icon_path)
+
+    return exact_paths
+
+
+def create_app(
+    audio_dir: Path,
+    data_dir: Path,
+    project_root: Path,
+    ctx: AppContext | None = None,
+    oidc_sign_in: OidcSignIn | None = None,
+) -> FastAPI:
+    app = FastAPI(
+        title=APP_NAME,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+        lifespan=_lifespan,
+    )
+    if ctx is None:
+        ctx = _create_default_context(audio_dir, data_dir)
+
+    app.state.ctx = ctx
+    from webauth.config import install_web_auth_config
+
+    from songmaker_cli.auth_api import install_sign_in
+    from songmaker_cli.redis_client import RedisHttpMetrics
+
+    web_auth = build_web_auth_config(ctx, get_settings())
+    install_web_auth_config(app, web_auth)
+    app.state.oidc_sign_in = _oidc_sign_in_or_default(oidc_sign_in, get_settings())
+    install_sign_in(app)
+    app.state.http_metrics = RedisHttpMetrics(ctx.redis)
+
+    from songmaker_cli.api import router as api_router
+    from songmaker_cli.health_api import router as health_router
+    from songmaker_cli.sharing_api import router as sharing_router
+
+    app.include_router(api_router)
+    app.include_router(health_router)
+    app.include_router(sharing_router)
+
+    # Every route that appears in the schema is registered, so the marks are read from a
+    # complete schema; the gate needs them before the middleware is added.
+    settings = get_settings()
+    agent_tools = collect_route_tools(app)
+    mcp_resource = build_protected_resource(settings, agent_tools.marks, ctx.db)
+
+    # Middleware execution order (Starlette LIFO -- last added runs first):
+    #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
+    #   2. SelectiveGZipMiddleware    -- compress the finished response body
+    #   3. CORS middleware            -- add configured cross-origin policy
+    #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
+    #   5. BodySizeLimitMiddleware    -- reject oversized bodies before processing
+    #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
+    #   7. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified person-path or
+    #                                    resource token skips CSRF
+    #   8. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
+    #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
+    #  10. AccessLogMiddleware        -- log all requests (after security checks)
+    # WARNING: reordering these lines changes security behavior.
+    # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
+    # (the true outermost layer) and outside everything else, on purpose:
+    #   - It only inspects the outgoing Accept-Encoding/Content-Type/status
+    #     pair and never reads or rejects the request, so its placement
+    #     cannot affect the auth/CSRF/rate-limit checks below -- those
+    #     already ran and could already reject the request before this
+    #     middleware's compression step ever executes.
+    #   - Being outside CORS/BodySize/RateLimit/CSRF/AccessLog/SecurityHeaders
+    #     means it compresses the fully-assembled response (every other
+    #     middleware's headers already set) exactly once, not an
+    #     intermediate state some inner middleware still touches.
+    #   - It stays inside ResourceStreamDeadlineMiddleware because that one
+    #     needs to observe/bound the complete raw ASGI exchange for the one
+    #     SSE path it governs. That observation is unaffected by GZip's
+    #     presence: `text/event-stream` is never on the compression
+    #     allowlist, so GZip forwards those messages one-for-one with no
+    #     buffering, exactly as if it were absent (see `middleware/gzip.py`
+    #     and `test_server_middleware.py`'s SSE test).
+    script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
+    app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
+    install_web_auth_middleware(
+        app, security_headers=build_security_headers_policy(script_hashes),
+        body_size=build_body_size_policy(settings), rate_limit=build_rate_limit_policy(settings),
+        csrf_origin=build_csrf_origin_policy(),
+        bearer_gate=build_bearer_gate(settings, app.state.oidc_sign_in, ctx.db, mcp_resource),
+    )
+
+    app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.
+        CORSMiddleware,
+        **_cors_middleware_kwargs(settings.cors_origin),
+    )
+    app.add_middleware(
+        SelectiveGZipMiddleware,
+        minimum_size=GZIP_MINIMUM_SIZE_BYTES,
+        compresslevel=GZIP_COMPRESS_LEVEL,
+    )
+    app.add_middleware(ResourceStreamDeadlineMiddleware)
+
+    # Starlette builds the middleware stack at the first request, so the routes added here
+    # still sit behind the whole block above.
+    if mcp_resource is not None:
+        mount_mcp_front(app, agent_tools, mcp_resource, app.state.oidc_sign_in)
+
+    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
+        fields = sorted({".".join(str(loc) for loc in e["loc"]) for e in exc.errors()})
+        return JSONResponse(
+            {"detail": f"Validation error on: {', '.join(fields)}"},
+            status_code=422,
+        )
+
+    sveltekit_dir = project_root / "frontend" / "build"
+    sveltekit_app_dir = sveltekit_dir / "_app"
+
+    if sveltekit_app_dir.exists():
+        app.mount(
+            "/_app",
+            StaticFiles(directory=str(sveltekit_app_dir)),
+            name="sveltekit-app",
+        )
+
+    _pwa_exact_paths = _install_pwa_assets(app, sveltekit_dir)
 
     sk_index = sveltekit_dir / "index.html"
     app.state.spa_index = sk_index

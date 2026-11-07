@@ -100,6 +100,7 @@
 		title={SONG_MOVE_SHARED_TITLE}
 		message={songMoveSharedMessage(title, $songMoveConfirm.title)}
 		confirmLabel={SONG_MENU_MOVE_LABEL}
+		destructive={false}
 		onconfirm={() => void confirmSongMove()}
 		oncancel={cancelSongMove}
 	/>

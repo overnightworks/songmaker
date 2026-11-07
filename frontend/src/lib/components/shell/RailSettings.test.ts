@@ -85,6 +85,12 @@ async function clickSection(label: string): Promise<void> {
 }
 
 describe('RailSettings', () => {
+	it('gives every settings section its own glyph', () => {
+		const icons = visibleSettingsSections(true).map((section) => section.icon);
+
+		expect(new Set(icons).size).toBe(icons.length);
+	});
+
 	it('opens the clicked section', async () => {
 		await clickSection('Voices');
 
