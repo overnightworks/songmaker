@@ -1,0 +1,8 @@
+claim_id = "3e85cd8cb40d4861860fe795df410c97"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "4573985c4cefa1d75cc2a124d02141713cd9be49"
+branch = "claude/issue-2576-e-lock-paths"
+scope = ["docs/architecture.md", "docs/security.md", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/db/queries/auth.py"]
+opened_commit = "38b21baf7531b28e5ff14fdfaaf830063e781c0d"
+whole_reason = "Three production lock paths and the three document sentences that describe them leave together, so no document describes a lock the code no longer takes."
