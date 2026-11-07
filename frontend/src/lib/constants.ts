@@ -284,6 +284,19 @@ export const SONG_MENU_SAVE_LABEL = 'Save version';
 export const SONG_MENU_RENAME_LABEL = 'Rename';
 export const SONG_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const SONG_MENU_DELETE_LABEL = 'Delete song';
+export const SONG_MENU_MOVE_LABEL = 'Move';
+export const SONG_MOVE_HEADING = 'Move to';
+export const SONG_MOVE_BACK_LABEL = 'Back to song menu';
+export const SONG_MOVE_FILTER_LABEL = 'Filter albums';
+export const SONG_MOVE_FILTER_PLACEHOLDER = 'Filter';
+export const SONG_MOVE_LOADING_LABEL = 'Looking…';
+export const SONG_MOVE_NO_OTHER_ALBUM = 'No other album';
+export const SONG_MOVE_NO_MATCH = 'No album matches';
+export const SONG_MOVE_FAILED = 'Not moved';
+
+export function songMovedToastLabel(albumTitle: string): string {
+	return `Moved to ${albumTitle}`;
+}
 
 export const RECIPE_SOURCE_DURATION_DEFAULT_SECONDS = 180;
 

@@ -621,3 +621,45 @@ def test_create_album_slug_collision_at_budget_edge_appends_suffix(
     second_id = second.json()["id"]
     assert second_id == f"{first_id}-2"
     assert len(second_id) <= ALBUM_SLUG_MAX_LENGTH
+
+
+_PEOPLE_AND_THEIR_ALBUMS = (
+    ("member", "user", "member-album"),
+    ("admin-person", "admin", "admin-album"),
+    ("other", "user", "other-album"),
+)
+
+
+@pytest.fixture
+def two_people_client(tmp_path: Path):
+    def _seed(session) -> None:
+        for username, role, album_id in _PEOPLE_AND_THEIR_ALBUMS:
+            person = User(username=username, role=role)
+            session.add(person)
+            session.flush()
+            session.add(Album(id=album_id, title=album_id, artist="A", created_by=person.id))
+
+    client, _ = make_test_app(tmp_path, seed_db=_seed)
+    return client
+
+
+@pytest.mark.parametrize(
+    ("username", "own_album_id"),
+    [("member", "member-album"), ("admin-person", "admin-album")],
+    ids=["member", "admin"],
+)
+def test_owned_filter_lists_only_the_callers_albums(
+    two_people_client, username: str, own_album_id: str
+) -> None:
+    seed_session(two_people_client, username)
+    resp = two_people_client.get("/api/albums", params={"owned": "true"})
+    assert [a["id"] for a in resp.json()["items"]] == [own_album_id]
+    assert resp.json()["total"] == 1
+
+
+def test_an_admin_still_sees_every_album_without_the_owned_filter(two_people_client) -> None:
+    seed_session(two_people_client, "admin-person")
+    resp = two_people_client.get("/api/albums")
+    assert {a["id"] for a in resp.json()["items"]} == {
+        "member-album", "admin-album", "other-album",
+    }

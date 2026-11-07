@@ -4,6 +4,7 @@ import type {
 	SongCreateRequest,
 	SongItem,
 	SongListenRequest,
+	SongMoveRequest,
 	SongUpdateRequest,
 	VersionItem
 } from './types';
@@ -38,6 +39,15 @@ export async function createSong(
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(params)
+	});
+}
+
+export async function moveSong(songId: string, albumId: string): Promise<SongItem> {
+	const body: SongMoveRequest = { album_id: albumId };
+	return apiFetch<SongItem>(`/api/songs/${songId}/album`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body)
 	});
 }
 
