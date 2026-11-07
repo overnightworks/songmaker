@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Collection
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Literal
 
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 
@@ -74,6 +73,3 @@ class BackgroundLoopRegistry:
     def loop_health(self) -> dict[BackgroundLoopName, BackgroundLoopHealth]:
         """Return copies of the current health for each registered loop."""
         return {name: replace(health) for name, health in self._loops.items()}
-
-
-type CodexImageSandboxRuntimeHealth = Literal["ready", "not_set_up", "unverified"]

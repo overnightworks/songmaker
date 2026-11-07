@@ -143,7 +143,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 61
+"_lifespan" = 57
 "create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]

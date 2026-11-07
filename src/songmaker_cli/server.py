@@ -50,7 +50,6 @@ from songmaker_cli.lifecycle import (
     cleanup_expired_resource_events,
     reap_stale_jobs,
     reconcile_crashed_loras,
-    report_codex_image_sandbox_runtime,
     resource_event_cleanup_loop,
     score_backfill_loop,
     session_cleanup_loop,
@@ -112,10 +111,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
-    # It logs its result at boot; /health/details reads the live state each call
-    # records (lifecycle.codex_image_sandbox_runtime_health()) instead of the
-    # return value, since a later call can change it.
-    report_codex_image_sandbox_runtime()
 
     await init_arq_pool()
     log.info("arq pool connected")

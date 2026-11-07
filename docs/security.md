@@ -489,7 +489,7 @@ A cover suggestion runs `agents/cover.md` through the same `GatewayBackend` and 
 
 ## Agent-CLI Mounts
 
-`songmaker-web` mounts the Claude, Grok, and Codex binaries and redacted
+`songmaker-web` mounts the Claude and Grok binaries and redacted
 credential mirrors read-only. Cover jobs run only in the web process; the music
 worker mounts no agent CLI. The scoring worker mounts no agent CLI.
 
@@ -577,17 +577,6 @@ were denied.
 The `/proc/sys` rule intentionally has no `shm*` write exception: Songmaker
 does not write those kernel settings.
 
-The runtime proof checks that the web-service parent and the private Bubblewrap
-child both receive `Permission denied` when reading `/proc/interrupts`,
-`/proc/keys`, `/proc/latency_stats`, `/sys/devices/virtual/powercap`, and
-`/sys/firmware/memmap/1/type`. Those five reads discriminate: nothing but the
-AppArmor rules denies them, so dropping a rule fails the proof. The sixth check,
-the write to `/proc/sys/kernel/shmmax`, does not. That file is root-owned and
-mode 0644 while the container runs as the unprivileged `songmaker` user, so DAC
-denies the write on its own and the check would still pass with
-`deny /proc/sys{,/,/**} w` removed. It stands only as a regression guard against
-the mask section disappearing entirely, never as evidence for the write rule.
-
 An operator installs the AppArmor policy with
 `sudo scripts/apparmor/install_profile.sh` and then recreates the service with
 `docker compose up -d songmaker-web`. The script stages a copy of the profile
@@ -620,7 +609,7 @@ per-run startup probe gets its own `tmpfs` at `/newroot/`, then read-only binds
 only `/bin`, `/etc`, `/lib`, `/lib64`, `/sbin`, and `/usr`; its `dev` and `proc`
 mounts use the same minimal rules as the cover command. The allowlist also
 names only the three traced protected-home overlays (`.git`, `.agents`, and
-`.codex`) below the cover, Co-Writer, and post-rollout probe home prefixes:
+`.codex`) below the cover, Co-Writer, and probe home prefixes:
 Bubblewrap mounts `tmpfs` there with `rw,nosuid,nodev`, after preparing each
 target with `--perms 555`, and then read-only remounts it. It accepts
 Bubblewrap's optional `silent` flag only where its mount syscall uses it and
@@ -629,23 +618,21 @@ the profile only to `songmaker-web`, drops every container capability, and sets
 `no-new-privileges:true`.
 
 The three prefixes those private homes carry — the cover turn's, the
-Co-Writer turn's, and the proof's — live in `agent_providers/sandbox/paths.py`
+Co-Writer turn's, and the probe's — live in `agent_providers/sandbox/paths.py`
 and nowhere else. The provider layer creates the directories, this profile is
-the only thing that permits their mounts, and
-`tests/scripts/test_prove_codex_image_sandbox.py` reads the module and every rule form
-in the profile, including its brace lists, so a rename that reaches only one
-of them is a red test instead of a silently refused mount. A project that
-embeds `agent_providers` takes those prefixes and derives its own profile from
-them. The profile *name* is a parameter wherever it is used —
-`sudo scripts/apparmor/install_profile.sh [profile]`,
-`python scripts/prove_codex_image_sandbox.py [profile]`, and Compose's
+the only thing that permits their mounts, and `tests/test_sandbox_profile.py`
+reads the module and every rule form in the profile, including its brace
+lists, so a rename that reaches only one of them is a red test instead of a
+silently refused mount. A project that embeds `agent_providers` takes those
+prefixes and derives its own profile from them. The profile *name* is a
+parameter wherever it is used —
+`sudo scripts/apparmor/install_profile.sh [profile]` and Compose's
 `SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`.
-`tests/scripts/test_prove_codex_image_sandbox.py` holds Compose's and the proof's
-defaults and the profile file's own declaration to that one name, and
-`tests/scripts/test_apparmor_install.py` drives the installer without an argument and
-requires it to install the profile of that name. The installer refuses a name
-that is not a regular profile file beside it, a symlink included, so a typo or
-a link to another host file never reaches `apparmor_parser`.
+`tests/scripts/test_apparmor_install.py` drives the installer without an
+argument and requires it to install the profile file beside it. The installer
+refuses a name that is not a regular profile file beside it, a symlink
+included, so a typo or a link to another host file never reaches
+`apparmor_parser`.
 
 Docker's default seccomp profile keeps `clone3` at `ENOSYS` without
 `CAP_SYS_ADMIN`, so Bubblewrap and libc use their `clone` fallback.
@@ -660,69 +647,6 @@ namespace with the capabilities it needs inside that namespace.
 Unprivileged user namespaces enlarge the kernel attack surface; this is the
 deliberate #666 trade-off because the alternative is Option 2.
 
-`lifecycle.py` and `scripts/prove_codex_image_sandbox.py` pin three different
-Codex Bubblewrap forms because they answer different questions:
-
-- The **boot check** requires both Codex's startup capability probe and its
-  per-run startup probe. The capability probe's literal argv is `bwrap
-  --unshare-user --unshare-net --ro-bind / / /bin/true`. Source: the Codex
-  0.147.0 Linux binary's embedded string, confirmed by the boot check's direct
-  `subprocess.run` assertion. It asks whether Bubblewrap can create the
-  namespace and read-only root at all; the second form below proves the fresh
-  procfs setup as well. `ready` means that both commands succeeded. This
-  boot check's verdict (`ready`, `not_set_up`, or `unverified` before the
-  boot check has run) is also `GET /health/details`'s live `codex_image_sandbox_runtime`
-  field, so the operator sees sandbox readiness without reading the boot log.
-- Codex then runs this **per-run startup probe** before its sandbox command.
-  `strace -f -e trace=execve -s 400 codex sandbox -- /bin/true` on 06.09.2026
-  (Codex 0.147.0) recorded its literal argv:
-
-  ```text
-  bwrap --new-session --die-with-parent --tmpfs / --dev /dev --ro-bind /bin /bin --ro-bind /etc /etc --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind /sbin /sbin --ro-bind /usr /usr --unshare-user --unshare-pid --unshare-net --proc /proc -- /usr/bin/true
-  ```
-
-  The startup probe is an empty private root, not the read-only-root form from
-  the capability probe. The boot check and post-rollout proof run this exact
-  form before the G4 command, and their tests pin every argument, so an AppArmor
-  rule cannot be kept without the observed command that needs it.
-- The **post-rollout proof** uses the real read-only command form, with its
-  terminal command replaced by G4 assertions. Source: `strace -f -e
-  trace=execve -s 400` of `codex sandbox --sandbox-state-json … -- /bin/true`
-  in the throwaway `songmaker-songmaker-web` container with `--network none`,
-  `--cap-drop ALL`, `no-new-privileges:true`, `apparmor=songmaker-web`, and
-  `seccomp=scripts/seccomp/songmaker-web.json`. The traced argv is:
-
-  ```text
-  bwrap --new-session --die-with-parent --ro-bind / / --dev /dev --bind /tmp/songmaker-codex-sandbox-probe/codex-home /tmp/songmaker-codex-sandbox-probe/codex-home --perms 555 --tmpfs /tmp/songmaker-codex-sandbox-probe/codex-home/.git --remount-ro /tmp/songmaker-codex-sandbox-probe/codex-home/.git --perms 555 --tmpfs /tmp/songmaker-codex-sandbox-probe/codex-home/.agents --remount-ro /tmp/songmaker-codex-sandbox-probe/codex-home/.agents --perms 555 --tmpfs /tmp/songmaker-codex-sandbox-probe/codex-home/.codex --remount-ro /tmp/songmaker-codex-sandbox-probe/codex-home/.codex --unshare-user --unshare-pid --unshare-net --proc /proc --argv0 codex-linux-sandbox -- /usr/local/bin/codex --sandbox-policy-cwd /tmp/songmaker-codex-sandbox-probe/workdir --command-cwd /tmp/songmaker-codex-sandbox-probe/workdir --permission-profile {"type":"managed","file_system":{"type":"restricted","entries":[{"path":{"type":"special","value":{"kind":"root"}},"access":"read"},{"path":{"type":"path","path":"/tmp/songmaker-codex-sandbox-probe/codex-home"},"access":"write"}]},"network":"restricted"} --apply-seccomp-then-exec -- /bin/true
-  ```
-
-  The proof pins the complete Bubblewrap setup and Codex helper re-exec through
-  `--apply-seccomp-then-exec`, including the only writable `CODEX_HOME` bind
-  and Codex's three protected-home tmpfs overlays; it replaces only the traced
-  terminal `/bin/true` with G4 assertions. It must allow writing only below
-  `CODEX_HOME`, reject writes to `/app` and the rest of `/tmp`, have no
-  network, retain `NoNewPrivs: 1`, and expose an empty `CapEff`. The G4 shell
-  snippet compares `CapEff` to the literal `0000000000000000` that Python
-  embeds while building the snippet; the traced Bubblewrap argv therefore
-  gains no environment-setting argument. Its `docker-default` control runs the
-  same prepared form and must fail.
-
-The 06.09.2026 live audit of the per-run startup probe recorded exactly one
-denial: `bwrap` mounting `tmpfs` at `/newroot/` with `rw,nosuid,nodev`
-(`info="failed flags match"`). The matching profile rule permits that mount;
-the traced `/bin`, `/etc`, `/lib`, `/lib64`, `/sbin`, and `/usr` binds are the
-only additional startup-probe rules. Before the operator reloads the profile,
-the checked-in rules and `apparmor_parser -Q -K` prove only source and syntax;
-the live proof remains the next rollout step.
-
-An operator runs the rollout and proof in this exact order:
-
-```sh
-sudo scripts/apparmor/install_profile.sh
-docker compose up -d songmaker-web
-python scripts/prove_codex_image_sandbox.py
-```
-
 That the profile survives a reboot is proven by unloading it from the kernel
 and letting `apparmor.service` load it again from the installed copy; a
 missing copy fails the second `aa-status` check. Each check matches the whole
@@ -736,7 +660,7 @@ sudo aa-status | awk 'NF == 1 && $1 == "songmaker-web" { found = 1 } END { print
 sudo systemctl reload apparmor.service
 systemctl is-active --quiet apparmor.service && echo active
 sudo aa-status | awk 'NF == 1 && $1 == "songmaker-web" { found = 1 } END { print (found ? "present" : "absent"); exit !found }'   # prints present
-docker compose up -d songmaker-web && python scripts/prove_codex_image_sandbox.py
+docker compose up -d songmaker-web
 ```
 
 The installed copy does not follow later edits to the profile in the
@@ -753,14 +677,6 @@ docker compose stop songmaker-web
 sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
 sudo rm /etc/apparmor.d/songmaker-web
 ```
-
-The proof script imports `songmaker_cli.lifecycle` for the startup-probe argv
-and `agent_providers.sandbox.paths` for its probe directory, so it runs from
-the main checkout with its virtualenv, or from a worktree with
-`PYTHONPATH=<worktree>/src`. An `ImportError` there is a missing import path,
-not a sandbox failure. Both the installer and the proof take the profile name
-as an optional first argument; a stack proven under another profile passes it
-to both.
 
 In `agent_providers`, Codex has a resumable Co-Writer tool loop and a fixed image command. The
 Co-Writer begins with `codex exec --json --sandbox read-only`; later rounds use
@@ -845,8 +761,7 @@ effect only when exported in the deployment environment, not when written only
 in `.env`: the preflight reads its values from the exported environment and
 does not load `.env`. For systemd boot and auto-deploy, these non-secret paths
 therefore belong in the persistent service environment. Compose currently
-mounts `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and
-`SONGMAKER_CODEX_CLI` into `songmaker-web`.
+mounts `SONGMAKER_CLAUDE_CLI` and `SONGMAKER_GROK_CLI` into `songmaker-web`.
 
 **Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
 `songmaker-cli-credentials-mirror.service`, then runs the argumentless
@@ -929,8 +844,6 @@ These host files are received read-only:
 | `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/claude.json` | `/home/songmaker/.claude/.credentials.json` |
 | `songmaker-web` | `$SONGMAKER_GROK_CLI` (default `~/.grok/bin/grok`) | `/usr/local/bin/grok` |
 | `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/grok.json` | `/home/songmaker/.grok/auth.json` |
-| `songmaker-web` | `$SONGMAKER_CODEX_CLI` (default native Codex binary) | `/usr/local/bin/codex` |
-| `songmaker-web` | `$SONGMAKER_CLI_CREDENTIALS_DIR/codex.json` | `/home/songmaker/.codex/auth.json` |
 
 `songmaker-scoring-worker` mounts no agent CLI and no login mirror: a scoring
 run calls no provider.
@@ -940,31 +853,7 @@ run with a private `0700` working directory and their own session tree, both
 removed after success or abort; prompts and tool results reach the CLI only
 through a private prompt file. The text tool protocol does not grant Grok CLI
 tools: every start and resume keeps `--deny '*'`, and native tool-call events
-abort the turn. The scoring worker does not mount Codex.
-
-The library's image route, which no songmaker cover calls (the cover draws
-through the gateway), starts Codex with the fixed read-only image
-argv (`--sandbox read-only`, no MCP servers, and `web_search="disabled"`),
-with Code Mode enabled only for this image run. Its one variable part is the
-model its caller names, appended as `--model <slug>` when one is named.
-Each run creates a private
-`0700` root whose `codex-home/` and `work/` directories are separate `0700`
-siblings; the home contains only the redacted `auth.json` mirror (`0600`) and
-the process cwd is the resolved `work/` path. The streamed event gate admits a
-completed turn without requiring a command or an `image_gen` event. No command is admitted, including the former
-skill-read command. The measured Codex CLI 0.163.0 turn produced one PNG
-without reporting either a command or an `image_gen` event. Reported blocked
-items (including commands, file changes, MCP calls, web searches and
-collaboration) and unknown event or item types request abort and are reported
-as `ImageToolBlockedError`; the process is reaped before the route returns.
-
-The gate sees only what the CLI reports. This measurement does not establish
-whether other tools using the invisible path would be reported. The PNG is
-associated with the turn through its private `CODEX_HOME` location and
-normalization under the embedding host's `ImagePolicy`. The gate is defense in depth;
-containment rests on the Codex read-only sandbox and songmaker's AppArmor and
-seccomp profiles. Fixture replay proves event handling, not live containment.
-Every Co-Writer tool-loop round keeps Code Mode disabled.
+abort the turn.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and
