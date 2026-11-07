@@ -1,0 +1,7 @@
+claim_id = "e955bd24a62f4c3f8acd4129448ca137"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "4a2ad4eb23db68d898cbe055d90d2779d4a8a745"
+branch = "claude/issue-2423-a-co-writer-turn-whose-job-already-ended"
+scope = ["src/songmaker_cli/conversation_api.py", "tests/songmaker_cli/test_conversation_api_gateway_turn.py"]
+opened_commit = "9fb9edb65e758f45ff9a571ddd91b4bf5f4b8782"
