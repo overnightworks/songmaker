@@ -52,7 +52,7 @@ def _seed_song(factory, *, album_id: str = "a1", song_id: str = "s1") -> None:
 
 @pytest.fixture
 def seeded_generations(tmp_path: Path, pg_factory):
-    """Three generations on one song: g0 already scored, g1 and g2 are not."""
+    """Three generations on one song, oldest first: g0 already scored, g1 and g2 are not."""
     with pg_factory() as session:
         session.add(User(id="u1", username="user1", role="user"))
         session.flush()
@@ -66,6 +66,7 @@ def seeded_generations(tmp_path: Path, pg_factory):
             session.add(Generation(
                 id=f"g{i}", song_id="s1", version_id="v1",
                 generation_number=i + 1, mp3_path=f"g{i}.mp3",
+                created_at=datetime(2026, 1, 1 + i, tzinfo=timezone.utc),
             ))
         session.add(Score(
             id="sc0", generation_id="g0", scorer="batch",
