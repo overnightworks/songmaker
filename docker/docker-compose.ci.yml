@@ -64,10 +64,6 @@ services:
     # ufw, so an all-interface binding would expose a test stack to the LAN.
     ports: !override
       - "127.0.0.1:${WEB_PORT:-8080}:8080"
-    # The isolated CI stack does not load the host profile; the cover-proof
-    # path ends here explicitly, while production keeps songmaker-web.
-    security_opt: !override
-      - apparmor=docker-default
     # The runner has no edge networks: only the default one, which reaches
     # PostgreSQL and Redis.
     networks: !override

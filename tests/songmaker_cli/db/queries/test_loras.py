@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from sqlalchemy.orm import Session
 
@@ -13,7 +11,6 @@ from songmaker_cli.constants import (
     JobType,
     LoraStatus,
 )
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User
 from songmaker_cli.db.queries.loras import (
     add_user_lora_sample,
@@ -34,9 +31,8 @@ _USER_B = "u-b"
 
 
 @pytest.fixture
-def session(tmp_path: Path) -> Session:
-    factory = init_test_db(tmp_path / "loras.db")
-    s = factory()
+def session(pg_factory) -> Session:
+    s = pg_factory()
     s.add(User(id=_USER_A, username="alice", role="user"))
     s.add(User(id=_USER_B, username="bob", role="user"))
     s.commit()

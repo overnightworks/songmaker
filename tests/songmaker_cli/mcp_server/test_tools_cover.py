@@ -7,7 +7,6 @@ import pytest
 from support.cover_album_world import album_owner, seed_cover_albums
 
 from songmaker_cli.constants import JobStatus, JobType
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.auth import create_session
 from songmaker_cli.mcp_server import tools
@@ -15,9 +14,8 @@ from songmaker_cli.settings import get_settings
 
 
 @pytest.fixture
-def db_session(tmp_path):
-    factory = init_test_db(tmp_path / "cover-tool.db")
-    with factory() as session:
+def db_session(pg_factory):
+    with pg_factory() as session:
         seed_cover_albums(session)
         session.commit()
         yield session

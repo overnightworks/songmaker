@@ -7,7 +7,6 @@ import pytest
 from sqlalchemy.orm import Session, sessionmaker
 from support.coherence_verdicts import add_take, save_verdict, seed_verdict_world, stored_scores
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Score, User
 from songmaker_cli.mcp_server import tools
 
@@ -16,8 +15,8 @@ SUMMARY = "Coherent verses; the bridge loops one phrase."
 
 
 @pytest.fixture
-def factory(tmp_path):
-    return seed_verdict_world(init_test_db(tmp_path / "verdict.db"))
+def factory(pg_factory):
+    return seed_verdict_world(pg_factory)
 
 
 def test_verdict_joins_the_take_s_local_scores(factory):

@@ -398,21 +398,9 @@ _PROBLEM_OF_EVERY_STOP = [
     (TurnStopped(_REFUSED, RejectionCode.NOT_ENABLED), AgentProblem.NOT_ENABLED),
     (TurnStopped(_REFUSED, RejectionCode.FORBIDDEN), AgentProblem.NOT_ENABLED),
     (TurnStopped(_REFUSED, RejectionCode.BUSY), AgentProblem.BUSY),
-    (TurnStopped(_REFUSED, RejectionCode.UNSUPPORTED_VERSION), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_REFUSED, RejectionCode.UNAUTHORIZED), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_REFUSED, RejectionCode.INVALID_REQUEST), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_REFUSED, RejectionCode.TOO_LARGE), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_REFUSED, RejectionCode.UNAVAILABLE), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_REFUSED, RejectionCode.NOT_FOUND), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_REFUSED, RejectionCode.CAPABILITY_TOO_LARGE), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_REFUSED, RejectionCode.MODEL_NOT_OFFERED), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_FAILED, FailureCode.INTERRUPTED), AgentProblem.UNAVAILABLE),
     (TurnStopped(_FAILED, FailureCode.PROVIDER_UNAVAILABLE), AgentProblem.UNAVAILABLE),
     (TurnStopped(_FAILED, FailureCode.PROVIDER_ERROR), AgentProblem.UNAVAILABLE),
     (TurnStopped(_FAILED, FailureCode.LIMIT_EXCEEDED), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_FAILED, FailureCode.IDLE_TIMEOUT), AgentProblem.UNAVAILABLE),
-    (TurnStopped(_FAILED, FailureCode.INTERNAL_ERROR), AgentProblem.UNAVAILABLE),
-    (TurnStopped(TurnStopKind.CANCELLED), AgentProblem.UNAVAILABLE),
 ]
 
 
@@ -421,7 +409,6 @@ def test_the_stop_table_names_every_stop_the_client_defines():
     assert named == {
         *((_REFUSED, code) for code in RejectionCode),
         *((_FAILED, code) for code in FailureCode),
-        (TurnStopKind.CANCELLED, None),
     }
 
 

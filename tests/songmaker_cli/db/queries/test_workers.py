@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries.workers import (
     get_worker_identity,
     list_worker_identities,
@@ -16,9 +13,8 @@ from songmaker_cli.db.queries.workers import (
 
 
 @pytest.fixture
-def db_session(tmp_path: Path) -> Session:
-    factory = init_db(tmp_path / "workers.db")
-    session = factory()
+def db_session(pg_factory) -> Session:
+    session = pg_factory()
     yield session
     session.close()
 
