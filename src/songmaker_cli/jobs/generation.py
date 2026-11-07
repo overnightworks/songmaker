@@ -1066,13 +1066,8 @@ async def _generate_variants(
             log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return
         persisted_gen_id, error = await _generate_variant(
-            admitted_worker,
-            db_factory,
-            job_id,
-            index,
-            count,
-            ctx,
-            progress,
+            admitted_worker, db_factory, job_id,
+            index, count, ctx, progress,
         )
         if error is not None:
             progress.record_failure(error)
@@ -1103,23 +1098,28 @@ async def _generate_variant(
             on_progress=_make_generation_progress_callback(progress),
             on_heartbeat=_make_heartbeat_callback(db_factory, job_id),
         )
-        if _job_is_terminal(db_factory, job_id):
-            _discard_fetched_take(worker_result.audio_path)
-            log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
-            return None, None
-        progress.start_saving_take()
-        persisted_gen_id = await asyncio.to_thread(
-            jobs.post_process_generation,
-            worker_audio_path=worker_result.audio_path,
-            worker_seed=worker_result.seed,
-            worker_cot_caption=worker_result.cot_caption,
-            worker_cot_lyrics=worker_result.cot_lyrics,
-            worker_delivered_batch_size=worker_result.delivered_batch_size,
-            ctx=ctx,
-            generation_id=str(uuid.uuid4()),
-            db_factory=db_factory,
-            job_id=job_id,
-        )
+        handed_to_post_process = False
+        try:
+            if _job_is_terminal(db_factory, job_id):
+                log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
+                return None, None
+            progress.start_saving_take()
+            handed_to_post_process = True
+            persisted_gen_id = await asyncio.to_thread(
+                jobs.post_process_generation,
+                worker_audio_path=worker_result.audio_path,
+                worker_seed=worker_result.seed,
+                worker_cot_caption=worker_result.cot_caption,
+                worker_cot_lyrics=worker_result.cot_lyrics,
+                worker_delivered_batch_size=worker_result.delivered_batch_size,
+                ctx=ctx,
+                generation_id=str(uuid.uuid4()),
+                db_factory=db_factory,
+                job_id=job_id,
+            )
+        finally:
+            if not handed_to_post_process:
+                _discard_fetched_take(worker_result.audio_path)
         return persisted_gen_id, None
     except ReferenceDeletedDuringTake:
         raise
