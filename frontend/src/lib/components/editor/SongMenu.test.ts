@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { ApiError } from '#lib/api/fetch.ts';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
 	DIALOG_CANCEL_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -23,11 +23,11 @@ import {
 	songMoveFailedLine,
 	songMoveSharedMessage
 } from '#lib/constants.ts';
-import type { AlbumItem } from '#lib/api/types.ts';
+import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { moveSong } from '#lib/api/songs.ts';
 import { songList } from '#lib/stores/libraryData.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
-import { songMoveConfirm } from '#lib/stores/songMove.ts';
+import { closeSongMovePicker, songMoveConfirm, songMoveRun } from '#lib/stores/songMove.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
 import SongMenu from './SongMenu.svelte';
 
@@ -369,7 +369,14 @@ describe('SongMenu move picker', () => {
 		}
 
 		it('marks only the tapped row busy, disables the rest and keeps the popover open', async () => {
-			vi.mocked(moveSong).mockReturnValue(new Promise(() => undefined));
+			const pending = Promise.withResolvers<SongItem>();
+			vi.mocked(moveSong).mockReturnValue(pending.promise);
+			// A move that never ends would leave the shared run busy for the next test.
+			onTestFinished(async () => {
+				pending.reject(new Error('test over'));
+				await vi.waitFor(() => expect(get(songMoveRun).status).toBe('failed'));
+				closeSongMovePicker();
+			});
 			const target = await openPickerOver(albums, '.pk-list');
 
 			rowTitled(target, 'Berlin').click();

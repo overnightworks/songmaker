@@ -104,7 +104,8 @@ export async function openSongMovePicker(): Promise<void> {
 export function closeSongMovePicker(): void {
 	generation += 1;
 	load.set({ status: 'closed' });
-	songMoveRun.set(IDLE);
+	// A move in flight outlives the picker, so a reopened picker still shows it and starts no second one.
+	if (get(songMoveRun).status !== 'busy') songMoveRun.set(IDLE);
 }
 
 function onPhone(): boolean {

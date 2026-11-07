@@ -349,6 +349,24 @@ describe('moving the open song', () => {
 		expect(get(songMoveRun)).toEqual({ status: 'idle' });
 	});
 
+	it('keeps a move in flight busy across a close and a reopen and starts no second one', async () => {
+		const pending = Promise.withResolvers<typeof movedSong>();
+		vi.mocked(moveSong).mockReturnValue(pending.promise);
+		ownAlbums(HOME, ABEND, NEON);
+		await openSongMovePicker();
+		const moving = askToMoveOpenSongTo(ABEND);
+
+		closeSongMovePicker();
+		await openSongMovePicker();
+		await askToMoveOpenSongTo(NEON);
+
+		expect(get(songMoveRun)).toEqual({ status: 'busy', albumId: 'abend' });
+		pending.resolve(movedSong);
+		await moving;
+		expect(moveSong).toHaveBeenCalledTimes(1);
+		expect(get(songMoveRun)).toEqual({ status: 'idle' });
+	});
+
 	it('does not pull the person back when another song is open once the move resolves', async () => {
 		const other = makeSong({ id: 's2', slug: 'other', album_id: 'home', generations: [] });
 		songList.set([OPEN_SONG, other]);
