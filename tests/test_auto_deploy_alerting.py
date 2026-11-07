@@ -130,41 +130,19 @@ def test_a_missing_alert_configuration_refuses_to_deploy_and_names_the_key(
     assert "alert channel not configured" in checkout.journal
 
 
-def test_a_failing_mount_preflight_alerts_without_pulling_or_building(tmp_path: Path) -> None:
+def test_a_checkout_that_ships_a_failing_mount_preflight_still_deploys(tmp_path: Path) -> None:
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.commit_mount_preflight(
-        "#!/bin/bash\nprintf '%s\\n' 'Claude CLI mount source is not a regular file'\nexit 1\n",
+        "#!/bin/bash\nprintf '%s\\n' 'the mirror units are not installed'\nexit 1\n",
     )
-    local_head_before = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
-    ).strip()
-    checkout.move_main_forward()
-
-    exit_codes = [checkout.tick().returncode for _ in range(FAILURE_ALERT_THRESHOLD)]
-
-    assert exit_codes == [0, 0, 1]
-    assert len(checkout.alert_lines()) == 1
-    assert "reason: agent CLI mount preflight failed" in checkout.journal
-    assert "agent CLI mount preflight failed" in checkout.journal
-    assert "Claude CLI mount source is not a regular file" in checkout.journal
-    assert subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
-    ).strip() == local_head_before
-    assert "compose build" not in checkout.docker_calls
-
-
-def test_a_missing_mount_preflight_is_logged_and_the_deploy_continues(tmp_path: Path) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
 
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "mount preflight not installed, skipping" in checkout.journal
+    assert "mount preflight" not in checkout.journal
     assert "compose build" in checkout.docker_calls
 
 
