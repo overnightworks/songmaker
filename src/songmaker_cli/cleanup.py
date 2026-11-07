@@ -15,16 +15,19 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from songmaker_cli.api_helpers import cleanup_generation_files
+from songmaker_cli.api_helpers import _PURGE_LOCK_ID, _begin_exclusive, cleanup_generation_files
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
+from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
 from songmaker_cli.db.queries.generations import (
     archive_generation,
     delete_expired_generation,
     list_generations_expired_for_archive,
     list_generations_expired_for_delete,
+    lock_songs,
 )
+from songmaker_cli.db.queries.jobs import ActiveJobError
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids
 from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list_song_ids_for_albums
 from songmaker_cli.reference_audio import commit_unused_stamps
@@ -60,17 +63,58 @@ class _ExpiredPurge:
 
 
 def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
-    """Delete the expired albums, then the orphan songs, and flush; the caller commits."""
-    album_ids = [album.id for album in list_expired_albums(session, cutoff)]
-    album_song_ids = list_song_ids_for_albums(session, album_ids, include_deleted_rows=True)
-    orphan_song_ids = [song.id for song in list_expired_songs(session, cutoff, album_ids)]
-    song_ids = album_song_ids + orphan_song_ids
-    reference_candidates = linked_reference_ids(session, song_ids)
+    """Delete the expired albums, then the orphan songs, and flush; the caller commits.
+
+    Purge runs serialize on one transaction-scoped lock, taken before the listings, so two
+    runs never overlap and never wait on each other in a cycle. Every listed song is then
+    locked at once, in id order; a candidate restored since its listing is skipped and stays
+    out of the result. An album or song with a queued or running job is left for a later run
+    and stays out of the result.
+    """
+    _begin_exclusive(session, _PURGE_LOCK_ID)
+    expired_album_ids = [album.id for album in list_expired_albums(session, cutoff)]
+    orphan_song_candidates = [
+        song.id for song in list_expired_songs(session, cutoff, expired_album_ids)
+    ]
+    album_songs = {
+        album_id: list_song_ids_for_albums(session, [album_id], include_deleted_rows=True)
+        for album_id in expired_album_ids
+    }
+    lock_songs(
+        session,
+        Song.id.in_([*orphan_song_candidates, *(id for ids in album_songs.values() for id in ids)]),
+    )
+    still_expired_album_ids = {album.id for album in list_expired_albums(session, cutoff)}
+    still_expired_song_ids = {
+        song.id for song in list_expired_songs(session, cutoff, list(still_expired_album_ids))
+    }
     paths: list[str] = []
-    for album_id in album_ids:
-        paths.extend(delete_album(session, album_id))
-    for song_id in orphan_song_ids:
-        paths.extend(delete_song(session, song_id))
+    album_ids: list[str] = []
+    orphan_song_ids: list[str] = []
+    song_ids: list[str] = []
+    reference_candidates: set[str] = set()
+    for album_id, album_song_ids in album_songs.items():
+        if album_id not in still_expired_album_ids:
+            continue
+        linked = linked_reference_ids(session, album_song_ids)
+        try:
+            paths.extend(delete_album(session, album_id))
+        except ActiveJobError:
+            continue
+        album_ids.append(album_id)
+        song_ids.extend(album_song_ids)
+        reference_candidates |= linked
+    for song_id in orphan_song_candidates:
+        if song_id not in still_expired_song_ids:
+            continue
+        linked = linked_reference_ids(session, [song_id])
+        try:
+            paths.extend(delete_song(session, song_id))
+        except ActiveJobError:
+            continue
+        orphan_song_ids.append(song_id)
+        song_ids.append(song_id)
+        reference_candidates |= linked
     return _ExpiredPurge(paths, album_ids, orphan_song_ids, song_ids, reference_candidates)
 
 

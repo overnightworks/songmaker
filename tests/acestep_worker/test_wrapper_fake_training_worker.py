@@ -65,7 +65,9 @@ def _events(stream: str) -> list[tuple[str, dict[str, object]]]:
     return events
 
 
-def test_fake_worker_registers_with_the_internal_api(tmp_path: Path, mock_arq_pool) -> None:
+def test_fake_worker_registers_with_the_internal_api(
+    tmp_path: Path, mock_arq_pool, pg_factory,
+) -> None:
     settings = FakeTrainingWorkerSettings(
         redis_url="redis://unused",
         internal_token=get_settings().songmaker_internal_token.get_secret_value(),
@@ -75,7 +77,7 @@ def test_fake_worker_registers_with_the_internal_api(tmp_path: Path, mock_arq_po
     registration = build_fake_worker_deps(settings).registration
     assert registration is not None
 
-    client, _ = make_test_app(tmp_path)
+    client, _ = make_test_app(tmp_path, factory=pg_factory)
     with client:
         response = client.post(
             "/api/internal/workers/register",

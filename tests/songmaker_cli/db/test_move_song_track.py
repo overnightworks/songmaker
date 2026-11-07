@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Song, Version
 from songmaker_cli.db.queries.songs import move_song
 
 
 @pytest.fixture
-def session(tmp_path: Path) -> Session:
-    with init_test_db(tmp_path / "test.db")() as opened:
+def session(pg_factory) -> Session:
+    with pg_factory() as opened:
         opened.add(Album(id="source", title="Source", artist="Band"))
         opened.add(Album(id="target", title="Target", artist="Band"))
         opened.add(

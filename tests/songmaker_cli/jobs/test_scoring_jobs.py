@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from support.setting_rows import store_setting_row
 
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Job, Song, User, Version
 from songmaker_cli.jobs.scoring import run_scoring_job
 from songmaker_cli.scoring.models import (
@@ -23,8 +22,7 @@ from songmaker_cli.whisper_cues import WhisperCue
 # ── run_scoring_job wiring ───────────────────────────────────────────
 
 
-def _seeded_generation(tmp_path: Path, lyrics: str | None = "Hello world") -> tuple:
-    factory = init_db(tmp_path / "scoring.db")
+def _seeded_generation(tmp_path: Path, factory, lyrics: str | None = "Hello world") -> tuple:
     with factory() as session:
         session.add(User(id="u1", username="user1", role="user"))
         session.flush()
@@ -69,12 +67,14 @@ def _scoring_result_with_transcript(*, silent: bool = False) -> SongScores:
     )
 
 
-def test_scoring_run_writes_no_verdict_key_and_keeps_a_stored_pair(tmp_path: Path) -> None:
+def test_scoring_run_writes_no_verdict_key_and_keeps_a_stored_pair(
+    tmp_path: Path, pg_factory,
+) -> None:
     """Whatever judge rows are left stored, a scoring run completes and leaves
     a stored verdict pair exactly as it is."""
     from songmaker_cli.db.models import Score
 
-    factory, audio_dir = _seeded_generation(tmp_path)
+    factory, audio_dir = _seeded_generation(tmp_path, pg_factory)
     stored_pair = {"lyrical_coherence": 8, "lyrical_summary": "stored verdict"}
     with factory() as session:
         for key, value in (
@@ -104,9 +104,9 @@ def test_scoring_run_writes_no_verdict_key_and_keeps_a_stored_pair(tmp_path: Pat
 
 
 def test_scoring_run_asks_the_child_for_exactly_the_requested_scorers(
-    tmp_path: Path,
+    tmp_path: Path, pg_factory,
 ) -> None:
-    factory, audio_dir = _seeded_generation(tmp_path)
+    factory, audio_dir = _seeded_generation(tmp_path, pg_factory)
     scorer = MagicMock(score=MagicMock(return_value=_scoring_result_with_transcript()))
 
     with patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer):
@@ -123,11 +123,11 @@ def test_scoring_run_asks_the_child_for_exactly_the_requested_scorers(
     ids=["lyrics-and-transcript", "lyrics-empty-transcript", "no-lyrics"],
 )
 def test_scoring_run_for_a_take_without_a_score_row_writes_no_verdict_key(
-    tmp_path: Path, lyrics: str | None, silent: bool,
+    tmp_path: Path, pg_factory, lyrics: str | None, silent: bool,
 ) -> None:
     from songmaker_cli.db.models import Score
 
-    factory, audio_dir = _seeded_generation(tmp_path, lyrics)
+    factory, audio_dir = _seeded_generation(tmp_path, pg_factory, lyrics)
     with patch(
         "songmaker_cli.jobs.get_scorer_process",
         return_value=MagicMock(score=MagicMock(
@@ -144,10 +144,10 @@ def test_scoring_run_for_a_take_without_a_score_row_writes_no_verdict_key(
 
 
 def test_child_scorer_timeout_leaves_the_job_completed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, pg_factory, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A child scorer timing out remains isolated: the job still completes."""
-    factory, audio_dir = _seeded_generation(tmp_path)
+    factory, audio_dir = _seeded_generation(tmp_path, pg_factory)
     child_timeout = SongScores(runs=(ScorerRun(
         scorer="silence",
         outcome=ScorerOutcome.TIMED_OUT,
