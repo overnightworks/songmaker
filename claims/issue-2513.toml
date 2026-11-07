@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "b1bf7d3d44940fc0e6204eefd704411b93f55862"
 branch = "claude/issue-2513-three-small-cleanups"
-scope = ["frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/server.py", "tests/songmaker_cli/test_pwa_icons.py"]
+scope = ["frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "quality/baseline.toml", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/server.py", "tests/songmaker_cli/test_pwa_icons.py", "tests/songmaker_cli/test_server.py"]
 opened_commit = "72f4e3edd79988f0cfffc611205b914c4b4eb272"
 whole_reason = "Three one-file cleanups from one audit, too small to pay for three reviews and landings; none depends on another."
