@@ -4,6 +4,7 @@ import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import { nowPlayingSurface } from '#lib/stores/player.ts';
+import type { SharedCollectionView } from '#lib/share/sharedCollection.ts';
 import { makeGeneration } from '#lib/test-utils/factories.ts';
 import NowPlaying from './NowPlaying.svelte';
 import PlayerBar from './PlayerBar.svelte';
@@ -52,7 +53,7 @@ const loadingTake: PlaybackInfo = {
 	lyrics: null
 };
 
-const sharedView = {
+const sharedView: SharedCollectionView = {
 	kind: 'song',
 	title: 'Neon Tide',
 	artist: 'Mara Lind',
@@ -73,7 +74,7 @@ const sharedView = {
 			albumTitle: null
 		}
 	]
-} as const;
+};
 
 const SURFACES = [
 	{
@@ -100,7 +101,7 @@ const SURFACES = [
 					loading: false,
 					errorKind: null,
 					resource: 'album',
-					view: { ...sharedView, tracks: [...sharedView.tracks] },
+					view: sharedView,
 					fetchStream: null
 				}
 			})

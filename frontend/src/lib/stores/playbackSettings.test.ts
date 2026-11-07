@@ -16,16 +16,19 @@ beforeEach(() => {
 });
 
 describe('library take pool trio', () => {
+	// Spec: REQ-LIBRARY-01 -- the pools a musician can choose are one scale from Picks over + Keeps to All takes.
 	it('orders the trio Picks -> + Keeps -> All takes', () => {
 		expect(LIBRARY_TAKE_POOLS).toEqual(['picks', 'mix', 'all']);
 	});
 
+	// Spec: REQ-LIBRARY-01 -- the choices carry the labels Picks, + Keeps and All takes.
 	it('labels mix as "+ Keeps"', () => {
 		expect(LIBRARY_TAKE_POOL_LABELS.mix).toBe('+ Keeps');
 		expect(LIBRARY_TAKE_POOL_LABELS.picks).toBe('Picks');
 		expect(LIBRARY_TAKE_POOL_LABELS.all).toBe('All takes');
 	});
 
+	// Spec: REQ-LIBRARY-02 -- with nothing stored in the browser profile the pool is Picks.
 	it('defaults to Picks', async () => {
 		vi.resetModules();
 		const fresh = await import('./playbackSettings');

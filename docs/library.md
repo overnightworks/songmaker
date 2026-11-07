@@ -2,7 +2,11 @@
 
 For anyone building or reviewing library playback pools, shuffle and the player: the ruled product sentences, each under the ID its test cites.
 
-### REQ-LIBRARY-03: Mix is exactly the set union of playable Picks and playable Keeps, deduplicated by take.
+### REQ-LIBRARY-01: A musician can choose one library listening pool on one inclusivity scale: Picks, + Keeps (Picks and Keeps) or All takes.
+
+### REQ-LIBRARY-02: When no prior choice exists in the browser profile, the default library listening pool is Picks.
+
+### REQ-LIBRARY-03: + Keeps is exactly the set union of playable Picks and playable Keeps, deduplicated by take.
 
 ### REQ-LIBRARY-04: Picks is exactly the set of playable Picks.
 
