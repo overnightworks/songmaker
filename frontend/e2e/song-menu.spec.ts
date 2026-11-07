@@ -28,7 +28,7 @@ import {
 	type Shell,
 	workspace
 } from './helpers';
-import { contrastRatio, tokenColor } from './contrast';
+import { contrastRatio, expectEmulatedTheme, tokenColor } from './contrast';
 import { expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
 import { archiveOwnedAlbum } from './seed';
 
@@ -323,6 +323,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 		async ({ page }) => {
 			await page.emulateMedia({ colorScheme });
 			await onOwnSong(page, TITLES[0], 390, async () => {
+				await expectEmulatedTheme(page, colorScheme);
 				const confirm = await openDeleteConfirm(page, TITLES[0]);
 				const button = confirm.locator('.confirm-btn');
 				const { fill, ink } = await button.evaluate((node) => {

@@ -28,7 +28,7 @@ import {
 	type RenderedBox,
 	type Shell
 } from './helpers';
-import { contrastRatio, tokenColor } from './contrast';
+import { contrastRatio, expectEmulatedTheme, tokenColor } from './contrast';
 import { bottomOf, expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
 import { archiveOwnedAlbum, seedSongPhoneSong, seedTakeStripSong } from './seed';
 
@@ -375,6 +375,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 		async ({ page }) => {
 			await page.emulateMedia({ colorScheme });
 			await onOwnTakes(page, CELLS[1], async () => {
+				await expectEmulatedTheme(page, colorScheme);
 				await takeMenuTriggers(page).first().click();
 				await takeMenu(page).getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
 				const deleting = page.getByRole('dialog', { name: /^Delete take \d+\?$/ });

@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /** The computed colour of a CSS custom property, read through a probe element. */
 export async function tokenColor(page: Page, token: string): Promise<string> {
@@ -31,4 +31,16 @@ export function contrastRatio(foreground: string, background: string): number {
 		(a, b) => b - a
 	);
 	return (lighter + 0.05) / (darker + 0.05);
+}
+
+/** The page painted in the emulated device theme: no stored choice overrides it. */
+export async function expectEmulatedTheme(
+	page: Page,
+	colorScheme: 'light' | 'dark'
+): Promise<void> {
+	const painted = await page.evaluate(() => ({
+		dark: matchMedia('(prefers-color-scheme: dark)').matches,
+		chosen: document.documentElement.dataset.theme
+	}));
+	expect(painted).toEqual({ dark: colorScheme === 'dark', chosen: undefined });
 }
