@@ -326,7 +326,7 @@ def test_an_album_purge_is_deferred_whole_when_a_persist_on_one_song_holds_it_fi
     assert world.unlinked == []
 
 
-def test_two_purges_whose_candidates_differ_lock_their_songs_in_one_order(
+def test_two_purges_whose_candidates_differ_both_finish(
     pg_factory, tmp_path, monkeypatch,
 ) -> None:
     world = _World(
