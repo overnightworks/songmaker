@@ -43,7 +43,7 @@
 "frontend/src/lib/stores/libraryContext.test.ts" = 2096
 "frontend/src/lib/stores/libraryContext.ts" = 1206
 "frontend/src/lib/stores/navigation.test.ts" = 3026
-"frontend/src/lib/stores/player.test.ts" = 5286
+"frontend/src/lib/stores/player.test.ts" = 5277
 "frontend/src/lib/stores/player.ts" = 2236
 "frontend/src/lib/stores/resourceSync.test.ts" = 2039
 "frontend/src/lib/stores/resourceSync.ts" = 1063
@@ -67,11 +67,11 @@
 "tests/songmaker_cli/test_library_api.py" = 1626
 "tests/songmaker_cli/test_lora_api.py" = 1296
 "tests/songmaker_cli/test_playlist_api.py" = 1103
-"tests/songmaker_cli/test_queue_streams.py" = 2417
+"tests/songmaker_cli/test_queue_streams.py" = 2323
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1284
 "tests/songmaker_cli/test_server.py" = 1922
-"tests/songmaker_cli/test_sharing_api.py" = 2496
+"tests/songmaker_cli/test_sharing_api.py" = 2487
 "tests/test_auto_deploy_alerting.py" = 1299
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]

@@ -296,6 +296,7 @@ test('an album plays from one take into the next on one element that never stops
 // back. The queue has no current row while it is rebuilt, and has one again
 // once the new queue is in place. On the phone the queue is a sheet of Now
 // Playing, opened once the toggle has been pressed.
+// Spec: REQ-LISTENING-04 -- turning Shuffle on while a library take plays does not interrupt that take.
 test('shuffle while a library take plays keeps the position reached during the pool fetch', async ({
 	page
 }, testInfo) => {
