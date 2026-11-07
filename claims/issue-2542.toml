@@ -1,0 +1,8 @@
+claim_id = "ca86954f070d47a49457453a6742975c"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3c508729300ba87a70abf99d55d8dc66a00dcd4e"
+branch = "claude/issue-2542-d2a-value-tests-pg"
+scope = ["tests/scripts/test_seed_e2e_song_takes.py", "tests/songmaker_cli/test_lifecycle_job_reaper.py", "tests/songmaker_cli/test_reference_keep_api.py", "tests/songmaker_cli/test_reference_unused_stamp.py", "tests/songmaker_cli/test_reference_unused_stamp_loops.py", "tests/songmaker_cli/test_reference_unused_stamp_reconciliation.py", "tests/support/failing_reference_stamp.py"]
+opened_commit = "30fa33e4d68d1b0e647b6e8e078df3271801abb4"
+whole_reason = "One failing-stamp helper and its three users must change together, and the other three cases are the row's remaining value cases."
