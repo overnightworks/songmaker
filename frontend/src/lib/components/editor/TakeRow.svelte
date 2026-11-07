@@ -575,7 +575,6 @@
 		padding: 0.1rem 0.35rem;
 		border-radius: 3px;
 		letter-spacing: 0.3px;
-		background: rgba(220, 60, 60, 0.12);
 		border: 1px solid var(--score-bad);
 		color: var(--score-bad);
 		white-space: nowrap;
@@ -596,9 +595,8 @@
 	}
 
 	.expiry-badge.archived {
-		background: rgba(200, 60, 60, 0.15);
-		border: 1px solid rgba(200, 60, 60, 0.5);
-		color: #e07070;
+		border: 1px solid var(--border);
+		color: var(--text-muted);
 		text-transform: uppercase;
 	}
 

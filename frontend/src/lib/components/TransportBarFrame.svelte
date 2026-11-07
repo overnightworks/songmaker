@@ -456,9 +456,9 @@
 		background: color-mix(in srgb, var(--accent) 82%, var(--text));
 	}
 	.play-btn.errored {
-		border: 2px solid #d34;
+		border: 2px solid var(--fail);
 		background: color-mix(in srgb, var(--surface) 72%, transparent);
-		color: #d34;
+		color: var(--fail);
 	}
 	.spinner {
 		width: 24px;
@@ -647,7 +647,7 @@
 		padding-left: 8px;
 		font-size: 0.73rem;
 		line-height: 1.25;
-		color: #d34;
+		color: var(--fail);
 		overflow: hidden;
 	}
 	.waiting-notice {
@@ -697,7 +697,8 @@
 		animation: none;
 	}
 	.mobile-transport .play-btn.errored {
-		background: #d34;
+		background: var(--fail);
+		color: var(--on-fail);
 	}
 	.mobile-transport .play-btn-face {
 		transform: none !important;

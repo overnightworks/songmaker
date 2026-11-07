@@ -618,14 +618,8 @@ def last_job_failure_time(session: Session) -> datetime | None:
     return aware_timestamp(newest)
 
 
-def _duration_seconds_expr(session: Session):
-    """Duration expression in seconds.
-
-    SQLite branch exists only for test databases (production uses PostgreSQL).
-    """
-    if session.bind.dialect.name == "sqlite":
-        days = func.julianday(Job.completed_at) - func.julianday(Job.started_at)
-        return days * 86400.0
+def _duration_seconds_expr():
+    """Duration expression in seconds."""
     return func.extract("epoch", Job.completed_at - Job.started_at)
 
 
@@ -640,7 +634,7 @@ class JobDurationStats:
 
 def job_duration_stats(session: Session) -> JobDurationStats:
     """Return avg/min/max duration in seconds for completed jobs."""
-    duration_expr = _duration_seconds_expr(session)
+    duration_expr = _duration_seconds_expr()
     row = (
         session.query(
             func.avg(duration_expr),
