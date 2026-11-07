@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
@@ -123,7 +124,14 @@ def _single_album_response(session: Session, album: Album) -> AlbumResponse:
     )
 
 
-@router.get("/albums")
+@router.get(
+    "/albums",
+    description=(
+        "List the person's own albums, one page at a time, with how many songs each "
+        "holds. Filter by a search text q; offset and limit page through the result."
+    ),
+    openapi_extra=agent_tool(name="list_albums", effect=ToolEffect.READ_ONLY),
+)
 def api_list_albums(
     page: Pagination,
     q: str | None = Query(None),
@@ -172,6 +180,11 @@ def api_get_album(
 
 @router.post(
     "/albums",
+    description=(
+        "Create an album owned by the person. The title is required; the artist is "
+        "optional. Songs are added with create_song."
+    ),
+    openapi_extra=agent_tool(name="create_album", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         409: {"description": "Album ID already exists"},
         422: {"description": "Album title is required"},

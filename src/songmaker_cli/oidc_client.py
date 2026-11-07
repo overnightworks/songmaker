@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, overload
 from pydantic import SecretStr
 from webauth.admission import AdmissionConfig
 from webauth.https_client import fetch_key_set_over_https
-from webauth.middleware.bearer_gate import BearerGate, PersonPaths
+from webauth.middleware.bearer_gate import BearerGate, PersonPaths, ProtectedResource
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
 from webauth.oidc_transport import post_token_request_over_https
 from webauth.policies import AuthorizedParties, PathRules
@@ -119,16 +119,24 @@ def build_bearer_gate(
     settings: Settings,
     oidc_sign_in: OidcSignIn,
     database: sessionmaker[Session],
+    resource: ProtectedResource | None = None,
 ) -> BearerGate | None:
-    """The gate that admits a person's token on the person paths; none while no client is named."""
-    if not settings.token_client_ids:
+    """The gate that admits a token: a person's on the person paths while a client is named,
+    and the person's own agent's at ``resource``; none while neither is configured."""
+    if not settings.token_client_ids and resource is None:
         return None
-    return BearerGate(
-        relying_party=oidc_sign_in.relying_party,
-        admission=oidc_sign_in.admission,
-        person_paths=PersonPaths(
+    person_paths = (
+        PersonPaths(
             PathRules(prefixes=(API_PATH_PREFIX, MEDIA_PATH_PREFIX)),
             AuthorizedParties(settings.token_client_ids),
             DatabaseSignInTransaction(database),
-        ),
+        )
+        if settings.token_client_ids
+        else None
+    )
+    return BearerGate(
+        relying_party=oidc_sign_in.relying_party,
+        admission=oidc_sign_in.admission,
+        person_paths=person_paths,
+        resource=resource,
     )

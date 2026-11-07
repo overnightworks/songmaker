@@ -32,8 +32,7 @@ class BaseGenerationParams(BaseModel):
     """Knob set for ACE-Step generation, stored on Version.generation_params.
 
     Every field is optional. ``None`` means "use the AceStepConfig default for
-    this field". ``extra="forbid"`` rejects typos at the boundary — this is
-    the line of defence that would have caught the 2026-04-08 incident.
+    this field". ``extra="forbid"`` rejects a misspelled knob at the boundary.
     """
 
     model_config = ConfigDict(extra="forbid")
