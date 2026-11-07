@@ -17,6 +17,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Enum,
     Float,
     ForeignKey,
     Index,
@@ -27,6 +28,7 @@ from sqlalchemy import (
     false,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
+from webauth.ports import AccountKind
 
 from songmaker_cli.constants import (
     AUTO_LENGTH_SECONDS,
@@ -446,6 +448,8 @@ class User(Base):
             "theme IN (" + ", ".join(repr(choice.value) for choice in ThemeChoice) + ")",
             name="ck_users_theme",
         ),
+        CheckConstraint(f"kind IN ({', '.join(repr(kind.value) for kind in AccountKind)})",
+                        name="ck_users_kind"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -460,6 +464,10 @@ class User(Base):
         default=ThemeChoice.SYSTEM,
         server_default=ThemeChoice.SYSTEM.value,
     )
+    kind: Mapped[AccountKind] = mapped_column(
+        Enum(AccountKind, native_enum=False, create_constraint=False, length=6,
+             values_callable=lambda kinds: [kind.value for kind in kinds]),
+        nullable=False, default=AccountKind.PERSON, server_default=AccountKind.PERSON.value)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
 

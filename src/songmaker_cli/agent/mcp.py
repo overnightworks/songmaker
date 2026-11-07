@@ -50,12 +50,18 @@ def build_protected_resource(
 ) -> ProtectedResource | None:
     """The resource at ``/mcp`` while the agent client and scope are configured, else none."""
     agent = settings.agent
-    if agent is None or agent.mcp_client_id is None or agent.mcp_scope is None:
+    if (
+        agent is None
+        or agent.mcp_client_id is None
+        or agent.mcp_scope is None
+        or agent.mcp_agent_group is None
+    ):
         return None
     return ProtectedResource(
         url=f"{settings.public_base_url}{MCP_ENDPOINT_PATH}",
         scope=agent.mcp_scope,
         required_group=OIDC_MCP_GROUP,
+        agent_group=agent.mcp_agent_group,
         authorized_parties=AuthorizedParties(frozenset({agent.mcp_client_id})),
         transaction=DatabaseSignInTransaction(database),
         marked_routes=marks,

@@ -53,7 +53,7 @@
 "src/songmaker_cli/conversation_api.py" = 968
 "src/songmaker_cli/jobs/generation.py" = 1149
 "src/songmaker_cli/jobs/lora_training.py" = 1516
-"src/songmaker_cli/queue_streams.py" = 934
+"src/songmaker_cli/queue_streams.py" = 923
 "src/songmaker_cli/sharing_api.py" = 861
 "tests/acestep_engine/test_client.py" = 818
 "tests/acestep_worker/test_wrapper.py" = 1626
@@ -61,7 +61,7 @@
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1857
 "tests/songmaker_cli/test_admin_api.py" = 1036
 "tests/songmaker_cli/test_api.py" = 4609
-"tests/songmaker_cli/test_db.py" = 2451
+"tests/songmaker_cli/test_db.py" = 2449
 "tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_jobs.py" = 3215
 "tests/songmaker_cli/test_library_api.py" = 1626
@@ -265,9 +265,6 @@ _assert_no_empty_slugs_remain = [["src/songmaker_cli/db/migrations/versions/d5f8
 count_songs_by_album = [["src/songmaker_cli/db/queries/songs.py", "count_generations_by_song"]]
 get_album_by_slug = [["src/songmaker_cli/db/queries/generations.py", "get_generation_by_slug"], ["src/songmaker_cli/db/queries/playlists.py", "get_playlist_by_slug"], ["src/songmaker_cli/db/queries/songs.py", "get_song_by_slug"]]
 set_album_cover_key = [["src/songmaker_cli/db/queries/playlists.py", "set_playlist_cover_key"], ["src/songmaker_cli/db/queries/songs.py", "set_song_cover_key"]]
-
-[clones."src/songmaker_cli/db/queries/auth.py"]
-set_user_role = [["src/songmaker_cli/db/queries/playlists.py", "update_playlist"]]
 
 [clones."src/songmaker_cli/db/queries/conversations.py"]
 delete_conversation = [["src/songmaker_cli/db/queries/playlists.py", "delete_playlist"]]
