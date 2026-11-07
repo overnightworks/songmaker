@@ -73,7 +73,7 @@ class _World:
             seed_user(session, "admin", "admin", user_id=OWNER)
             session.flush()
             album_of = {song_id: (song_albums or {}).get(song_id, "album-1") for song_id in songs}
-            for album_id in sorted(set(album_of.values())):
+            for album_id in sorted({*album_of.values(), *trashed_albums}):
                 session.add(Album(
                     id=album_id, title=album_id, artist="A", created_by=OWNER,
                     deleted_at=trashed if album_id in trashed_albums else None,
@@ -162,6 +162,14 @@ class _World:
     def take_ids(self) -> list[str]:
         with self.pg_factory() as session:
             return sorted(take_id for (take_id,) in session.query(Generation.id))
+
+    def album_ids(self) -> list[str]:
+        with self.pg_factory() as session:
+            return sorted(
+                album_id for (album_id,) in session.query(Album.id).execution_options(
+                    include_deleted=True,
+                )
+            )
 
     def trash_album(self, album_id: str) -> None:
         with self.pg_factory() as session:
@@ -371,3 +379,15 @@ def test_two_purges_of_the_same_candidates_both_finish(
     assert world.song_ids() == []
     assert world.unlinked == _owned_paths(OLD_TAKE)
     assert world.files_left(OLD_TAKE) == []
+
+
+def test_two_purges_of_the_same_empty_album_both_finish(
+    pg_factory, tmp_path, monkeypatch,
+) -> None:
+    world = _World(pg_factory, tmp_path, songs=(), trashed_albums=("album-1",), scored_take=False)
+    world.record_unlinks(monkeypatch)
+
+    answers = race(pg_factory, world.purge(), world.purge(), _held_after_song_lock())
+
+    assert sorted(answers.values()) == [(0, 0), (1, 0)]
+    assert world.album_ids() == []

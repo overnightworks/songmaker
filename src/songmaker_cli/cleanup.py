@@ -15,7 +15,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from songmaker_cli.api_helpers import cleanup_generation_files
+from songmaker_cli.api_helpers import _PURGE_LOCK_ID, _begin_exclusive, cleanup_generation_files
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
 from songmaker_cli.db.models import Song
@@ -65,12 +65,13 @@ class _ExpiredPurge:
 def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
     """Delete the expired albums, then the orphan songs, and flush; the caller commits.
 
-    Every candidate song is locked first, in one id order, so two overlapping runs never
-    wait on each other in a cycle. Once the locks are held the expired albums and songs are
-    listed again: one an overlapping run already purged, or that was restored meanwhile, is
-    skipped and stays out of the result. An album or song with a queued or running job is
-    left for a later run and stays out of the result.
+    Purge runs serialize on one transaction-scoped lock, taken before the listings, so two
+    runs never overlap and never wait on each other in a cycle. Every listed song is then
+    locked at once, in id order; a candidate restored since its listing is skipped and stays
+    out of the result. An album or song with a queued or running job is left for a later run
+    and stays out of the result.
     """
+    _begin_exclusive(session, _PURGE_LOCK_ID)
     expired_album_ids = [album.id for album in list_expired_albums(session, cutoff)]
     orphan_song_candidates = [
         song.id for song in list_expired_songs(session, cutoff, expired_album_ids)
