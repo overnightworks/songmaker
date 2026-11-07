@@ -23,6 +23,7 @@ export async function fetchAlbums(
 	if (options?.q) params.set('q', options.q);
 	if (options?.sort) params.set('sort', options.sort);
 	if (options?.archived) params.set('archived', 'true');
+	if (options?.owned) params.set('owned', 'true');
 	return apiFetch<PaginatedResponse<AlbumItem>>(`/api/albums?${params}`);
 }
 

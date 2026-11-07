@@ -504,13 +504,15 @@ function applySelectedSong(
 	songId: string,
 	knownSong: SongItem | undefined,
 	historyMode: 'stack' | 'replace',
-	tab: 'keep' | 'remembered'
+	tab: 'keep' | 'remembered',
+	pinnedGenerationId: string | null = null
 ): Promise<void> {
 	storeDeselectPlaylist();
 	if (knownSong) hydrateSongIntoLibrary(knownSong);
 	const song = get(songList).find((item) => item.id === songId) ?? knownSong;
 	if (song) enterAlbumOfSong(song);
 	playerSelectSong(songId);
+	selectedGenerationId.set(pinnedGenerationId);
 	void loadSongContext(songId);
 	showSongTab(songId, tab === 'keep' ? get(detailTab) : rememberedSongTab(songId));
 	setLibrarySurface('detail');
@@ -553,6 +555,12 @@ export function selectSong(songId: string, knownSong?: SongItem): Promise<void> 
 	return guardDirtyNavigation(async () => {
 		await applySelectedSong(songId, knownSong, historyMode, 'remembered');
 	});
+}
+
+// A moved song stays open: the draft, the tab and the pinned take stay, so
+// nothing asks. Only the album it stands in, and with it the address, changes.
+export function reselectMovedSong(moved: SongItem): Promise<void> {
+	return applySelectedSong(moved.id, moved, 'replace', 'keep', get(selectedGenerationId));
 }
 
 export function selectNeighborSong(song: SongItem): Promise<void> {

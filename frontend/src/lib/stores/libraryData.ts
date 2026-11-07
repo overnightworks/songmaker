@@ -1,6 +1,7 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 import { fetchAlbums, fetchSongs } from '#lib/api/client.ts';
+import type { LibraryListOptions } from '#lib/api/library.ts';
 import type { AlbumItem, GenerationItem, SongItem } from '#lib/api/types.ts';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
@@ -267,6 +268,17 @@ function refreshAlbums(current: AlbumItem[], fresh: AlbumItem[]): AlbumItem[] {
 	];
 }
 
+// The one place that pages the album list to its end, for the rail's full
+// load and for the pickers that need every album of a kind.
+export async function fetchEveryAlbum(options?: LibraryListOptions): Promise<AlbumItem[]> {
+	const collected: AlbumItem[] = [];
+	for (;;) {
+		const page = await fetchAlbums(collected.length, LIBRARY_ALBUM_PAGE_SIZE, options);
+		collected.push(...page.items);
+		if (!page.has_more || page.items.length === 0) return collected;
+	}
+}
+
 function loadAllAlbums({ replace }: { replace: boolean }): Promise<boolean> {
 	if (allAlbumsInflight !== null) return allAlbumsInflight;
 	replaceOwed ||= replace;
@@ -274,14 +286,7 @@ function loadAllAlbums({ replace }: { replace: boolean }): Promise<boolean> {
 	allAlbumsLoad.set({ status: 'loading', error: null });
 	allAlbumsInflight = (async () => {
 		try {
-			let offset = 0;
-			const collected: AlbumItem[] = [];
-			for (;;) {
-				const page = await fetchAlbums(offset, LIBRARY_ALBUM_PAGE_SIZE);
-				collected.push(...page.items);
-				offset += page.items.length;
-				if (!page.has_more || page.items.length === 0) break;
-			}
+			const collected = await fetchEveryAlbum();
 			albumList.update((current) => combine(current, collected));
 			replaceOwed = false;
 			allAlbumsReloads.stop();

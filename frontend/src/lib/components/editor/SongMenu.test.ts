@@ -3,12 +3,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_DELETE_LABEL,
+	SONG_MENU_MOVE_LABEL,
 	SONG_MENU_RENAME_LABEL,
 	SONG_MENU_SAVE_LABEL
 } from '#lib/constants.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
+import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
+import { SONG_MOVE_BACK_LABEL, SONG_MOVE_NO_OTHER_ALBUM } from '#lib/constants.ts';
+import { songList } from '#lib/stores/libraryData.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { libraryWallOrder } from '#lib/stores/ui.ts';
 import SongMenu from './SongMenu.svelte';
+
+vi.mock('#lib/api/client.ts', () => ({
+	fetchAlbums: vi.fn(),
+	fetchSongs: vi.fn()
+}));
+
+import { fetchAlbums } from '#lib/api/client.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -55,7 +68,7 @@ describe('SongMenu', () => {
 		expect(target.querySelector('.share-btn')).toBeNull();
 	});
 
-	it('915_C3: lists Save version · Rename · Add to playlist · Delete song, each with an icon, Delete red and last', async () => {
+	it('915_C3: lists Save version · Rename · Add to playlist · Move · Delete song, each with an icon, Delete red and last', async () => {
 		const { target } = await renderMenu();
 		openSongMenu(target);
 		await tick();
@@ -64,10 +77,12 @@ describe('SongMenu', () => {
 			SONG_MENU_SAVE_LABEL,
 			SONG_MENU_RENAME_LABEL,
 			SONG_MENU_ADD_TO_PLAYLIST_LABEL,
+			SONG_MENU_MOVE_LABEL,
 			SONG_MENU_DELETE_LABEL
 		]);
 		expect(items.every((item) => item.querySelector('svg') !== null)).toBe(true);
 		expect(items.map((item) => item.classList.contains('destructive'))).toEqual([
+			false,
 			false,
 			false,
 			false,
@@ -178,4 +193,53 @@ describeBackClosesOverlay({
 			actionSawHistoryAt: () => renameSawHistoryAt
 		}
 	]
+});
+
+describe('SongMenu move picker', () => {
+	async function openPicker() {
+		libraryWallOrder.set('title');
+		songList.set([makeSong({ id: 's1', album_id: 'home' })]);
+		selectedSongId.set('s1');
+		vi.mocked(fetchAlbums).mockResolvedValue({
+			items: [makeAlbum({ id: 'home', title: 'Homeoffice' })],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const { target } = await renderMenu();
+		openSongMenu(target);
+		await tick();
+		menuRow(target, SONG_MENU_MOVE_LABEL).click();
+		await vi.waitFor(() => expect(target.querySelector('.pk-empty')).not.toBeNull());
+		return target;
+	}
+
+	it("turns the popover into the person's albums and says when there is no other one", async () => {
+		const target = await openPicker();
+
+		expect(target.querySelector('.menu-item')).toBeNull();
+		expect(target.querySelector('.pk-row.here')?.textContent).toContain('Homeoffice');
+		expect(target.querySelector('.pk-empty')?.textContent).toBe(SONG_MOVE_NO_OTHER_ALBUM);
+	});
+
+	it('goes back to the menu rows with the back button', async () => {
+		const target = await openPicker();
+
+		target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_MOVE_BACK_LABEL}"]`)?.click();
+		await tick();
+
+		expect(menuRowLabels(target)).toContain(SONG_MENU_MOVE_LABEL);
+	});
+
+	it('opens on the menu rows again after the popover closed over the picker', async () => {
+		const target = await openPicker();
+
+		target.querySelector<HTMLButtonElement>('.menu-backdrop')?.click();
+		await tick();
+		openSongMenu(target);
+		await tick();
+
+		expect(menuRowLabels(target)).toContain(SONG_MENU_MOVE_LABEL);
+	});
 });
