@@ -1,0 +1,8 @@
+claim_id = "f85473db9d4a4e6b81f321d55f0809ff"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "b8ae2acc96e84047c593bb0744d5ffcdfb07a20b"
+branch = "claude/issue-2563-move-keeps-draft"
+scope = ["frontend/e2e/song-move.spec.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/editor", "frontend/src/lib/stores", "frontend/src/routes/(library)/album"]
+opened_commit = "a55276f240b34033ad02b551daeb275857931fee"
+whole_reason = "The write that replaces the draft is not yet located, so the scope covers the editor store, its components and the album route until the trace names it."
