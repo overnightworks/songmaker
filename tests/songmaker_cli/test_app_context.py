@@ -16,7 +16,6 @@ from songmaker_cli.app_context import (
 )
 from songmaker_cli.constants import (
     REDIS_RL_IP_PREFIX,
-    ROLE_ADMIN,
 )
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.settings import get_settings
@@ -85,10 +84,6 @@ def test_the_session_lifetime_comes_from_settings(ctx: AppContext) -> None:
     lifetime = build_web_auth_config(ctx, settings).session_lifetime
 
     assert (lifetime.idle_seconds, lifetime.absolute_max_age_seconds) == (600, 1200)
-
-
-def test_the_configuration_names_songmakers_admin_role(ctx: AppContext) -> None:
-    assert build_web_auth_config(ctx, get_settings()).admin_role == ROLE_ADMIN
 
 
 def test_trusted_proxies_are_read_from_the_configured_networks(

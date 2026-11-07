@@ -226,10 +226,6 @@ LOGOUT_PATH: Final = "/auth/logout"
 SIGNED_OUT_PATH: Final = "/login"
 NO_ACCESS_PATH: Final = "/no-access"
 
-# The role name stored on every user row. `webauth` compares against whatever
-# `WebAuthConfig.admin_role` carries; this is the value songmaker injects.
-ROLE_ADMIN: Final = "admin"
-
 # How far back a job rate limit counts an account's earlier jobs.
 RATE_LIMIT_WINDOW_SECONDS: Final = 3600
 

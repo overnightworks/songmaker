@@ -49,7 +49,7 @@ server = [
     # git pins by tag: a release-asset wheel in the resolved tree makes a uv Dependabot
     # run fail as a whole. Integrity is the commit uv.lock records for the tag, which
     # `uv sync --frozen` installs; the three images carry git for it.
-    "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.30.0",
+    "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.31.0",
     # The provider layer lives in its own repository. Bare in the
     # server extra so its api/image capabilities do not leak anthropic into the
     # music worker or Pillow into the scoring worker (A8).

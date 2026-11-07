@@ -11,6 +11,7 @@ from time import monotonic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import get_cached_limiter
@@ -26,7 +27,6 @@ from songmaker_cli.constants import (
     JOB_TERMINAL_STATUSES,
     REDIS_JOB_STREAM_LEASE_GLOBAL_KEY,
     REDIS_JOB_STREAM_LEASE_USER_PREFIX,
-    ROLE_ADMIN,
     SSE_HEARTBEAT_COMMENT,
     SSE_HEARTBEAT_SECONDS,
     SSE_POLL_INTERVAL_SECONDS,
@@ -274,6 +274,6 @@ def _check_job_access(session: Session, job_id: str, user: AuthenticatedUser) ->
     job = get_job(session, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    if user.role != ROLE_ADMIN and job.user_id != user.id:
+    if user.role != AppRole.ADMIN and job.user_id != user.id:
         raise HTTPException(404, "Job not found")
     return job
