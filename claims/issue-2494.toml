@@ -1,0 +1,8 @@
+claim_id = "335cfa158dc94e1e82a8b9f79ef72302"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "eb770a70f9fdebaac84194bb813ac60781848f5d"
+branch = "claude/issue-2494-draft-survives-song-load"
+scope = ["frontend/e2e/song-move.spec.ts", "frontend/src/lib/components/editor", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts"]
+opened_commit = "e757edb7b406f7c39a5c3a5a215d1bf5565c8305"
+whole_reason = "The editor's load gate lives in its store and the components that render its fields; which component owns the gate is found by the failing test, so the directory is claimed whole."
