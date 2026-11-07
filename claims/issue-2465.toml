@@ -1,8 +1,0 @@
-claim_id = "705f6b82ba0d406a9972053a46c99e38"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "eba494785942249dfa674c4b4c00dc44cb545f69"
-branch = "claude/issue-2465-no-container-binds-agent-cli"
-scope = ["README.md", "docker-compose.yml", "docker/.env.docker.example", "docker/docker-compose.ci.yml", "docs/architecture.md", "docs/security.md", "quality/baseline.toml", "scripts/auto-deploy.sh", "tests/auto_deploy_harness.py", "tests/test_auto_deploy_alerting.py", "tests/test_packaging_boundary.py"]
-opened_commit = "5b67962c3c067a9dd31e6283ee2fac4bbe6c866c"
-whole_reason = "The binds and the deploy preflight that checks their sources leave together with the deny test that replaces it; any split leaves a preflight guarding binds that no longer exist, or binds with no guard."
