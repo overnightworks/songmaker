@@ -22,6 +22,7 @@ afterEach(async () => {
 });
 
 describe('QueueStreamFeedback', () => {
+	// Spec: REQ-LISTENING-07 -- the end-of-stream notice says that more takes were not loaded.
 	it('starts closed and groups skips with the terminal notice', async () => {
 		const target = render({
 			skippedComplete: false,
