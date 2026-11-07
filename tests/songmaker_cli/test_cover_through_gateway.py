@@ -49,7 +49,6 @@ from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli import cover_runner
 from songmaker_cli.api_models import AgentProblem
 from songmaker_cli.constants import JobStatus
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
     AlbumCoverSuggestion,
@@ -540,12 +539,13 @@ def test_the_runner_loop_survives_a_cancelled_picture(world):
 
 
 # 26: no key, session id or fingerprint on any surface the person or a log can see.
-def test_no_key_session_or_fingerprint_reaches_any_surface(tmp_path, caplog):
+def test_no_key_session_or_fingerprint_reaches_any_surface(tmp_path, caplog, extra_pg_factory):
     caplog.set_level(logging.DEBUG)
     outcomes = []
     for reply in (picture(_image_bytes("PNG")), Reply(status=429), Reply(status=400)):
+        (tmp_path / str(len(outcomes))).mkdir()
         world = build_world(
-            tmp_path / str(len(outcomes)), init_test_db(tmp_path / str(len(outcomes)) / "cover.db"),
+            tmp_path / str(len(outcomes)), extra_pg_factory(),
         )
         world.stack.replies(reply)
         job_id = world.queue()
@@ -559,8 +559,9 @@ def test_no_key_session_or_fingerprint_reaches_any_surface(tmp_path, caplog):
             world.client.get(SUGGEST).text,
         ]
         outcomes.append((key, world.stack.session_id, fingerprint, seen))
+    (tmp_path / "refused").mkdir()
     refused = build_world(
-        tmp_path / "refused", init_test_db(tmp_path / "refused" / "cover.db"), groups=NOT_A_MEMBER,
+        tmp_path / "refused", extra_pg_factory(), groups=NOT_A_MEMBER,
     )
     refusal = refused.suggest().text
     refused_key = refused.stack.config.gateway.key_file.read_text().strip()

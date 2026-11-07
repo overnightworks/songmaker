@@ -13,7 +13,6 @@ from support.cowriter_gateway import CowriterStack, attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.api_models import ChatTurnV2Request
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, AvailableModel, Song, User, Version
 
 
@@ -96,8 +95,8 @@ def client(tmp_path: Path, pg_factory) -> Musician:
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path) -> Musician:
-    factory = init_db(tmp_path / "mentions_spy.db")
+def stranger_client(tmp_path: Path, extra_pg_factory) -> Musician:
+    factory = extra_pg_factory()
     with factory() as session:
         _seed(session, "u-owner")
         session.add(User(id="u-spy", username="spy", role="user"))

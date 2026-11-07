@@ -39,7 +39,6 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 
 from songmaker_cli.agent.tools import cowriter_hand_tools
 from songmaker_cli.constants import JobStatus, JobType
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
     ChatMessage,
@@ -356,12 +355,15 @@ def test_an_event_the_turn_does_not_know_fails_the_turn_and_stores_no_answer(wor
 _FINGERPRINT = re.compile(r"fp-[0-9a-f]{64}")
 
 
-def _user_field_of_a_turn(tmp_path: Path, monkeypatch, issuer: str) -> tuple[str, bytes]:
+def _user_field_of_a_turn(
+    tmp_path: Path, monkeypatch, extra_pg_factory, issuer: str,
+) -> tuple[str, bytes]:
     from songmaker_cli.settings import get_settings
 
     monkeypatch.setenv("OIDC_ISSUER", issuer)
     get_settings.cache_clear()
-    turn_world = build_world(tmp_path, init_test_db(tmp_path / "turn.db"))
+    tmp_path.mkdir()
+    turn_world = build_world(tmp_path, extra_pg_factory())
     turn_world.stack.issuer.token_issuer = issuer.rstrip("/")
     turn_world.turn()
     request = turn_world.stack.gateway_requests[0]
@@ -369,13 +371,13 @@ def _user_field_of_a_turn(tmp_path: Path, monkeypatch, issuer: str) -> tuple[str
 
 
 def test_the_request_names_the_person_only_by_a_fingerprint_of_issuer_and_id(
-    tmp_path, monkeypatch, fresh_settings,
+    tmp_path, monkeypatch, extra_pg_factory, fresh_settings,
 ):
     bare, bare_body = _user_field_of_a_turn(
-        tmp_path / "bare", monkeypatch, "https://issuer.test/realms/test"
+        tmp_path / "bare", monkeypatch, extra_pg_factory, "https://issuer.test/realms/test"
     )
     slashed, slashed_body = _user_field_of_a_turn(
-        tmp_path / "slashed", monkeypatch, "https://issuer.test/realms/test/",
+        tmp_path / "slashed", monkeypatch, extra_pg_factory, "https://issuer.test/realms/test/",
     )
 
     assert _FINGERPRINT.fullmatch(bare)
