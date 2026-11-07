@@ -52,7 +52,8 @@ export const songMoveRun = writable<SongMoveRun>(IDLE);
 /** The run, only while its song is the open song; any other song's picker shows nothing of it. */
 export const songMoveRunHere: Readable<SongMoveRun> = derived(
 	[songMoveRun, selectedSongId],
-	([$run, $openId]): SongMoveRun => ($run.status !== 'idle' && $run.songId === $openId ? $run : IDLE)
+	([$run, $openId]): SongMoveRun =>
+		$run.status !== 'idle' && $run.songId === $openId ? $run : IDLE
 );
 
 let generation = 0;
