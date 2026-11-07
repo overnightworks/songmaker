@@ -344,7 +344,7 @@
 
 	.param-error-text {
 		margin: 0;
-		color: #d34;
+		color: var(--fail);
 		font-size: 1rem;
 	}
 

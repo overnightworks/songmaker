@@ -621,7 +621,7 @@
 	.error {
 		margin: 0;
 		padding: var(--row-padding);
-		color: var(--danger, var(--text));
+		color: var(--fail);
 		font-size: var(--label-font-size);
 	}
 </style>

@@ -19,6 +19,7 @@ from songmaker_cli.theme_types import ThemeChoice
 
 if TYPE_CHECKING:
     from pydantic import SecretStr
+    from webauth.ports import AccountKind
 
 log = logging.getLogger(__name__)
 
@@ -48,21 +49,35 @@ def set_user_theme(session: Session, user_id: str, theme: ThemeChoice) -> None:
     session.flush()
 
 
-def create_user(session: Session, user_id: str, username: str, role: str) -> User:
-    user = User(id=user_id, username=username, role=role)
+def create_user(
+    session: Session, user_id: str, username: str, role: str, kind: AccountKind,
+) -> User:
+    user = User(id=user_id, username=username, role=role, kind=kind)
     session.add(user)
     session.flush()
     session.add(ResourceEventCursor(user_id=user.id))
     session.flush()
-    log.info("Created user %s (role=%s)", user_id, role)
+    log.info("Created user %s (role=%s, kind=%s)", user_id, role, kind)
+    return user
+
+
+def _existing_user(session: Session, user_id: str) -> User:
+    user = get_user(session, user_id)
+    if not user:
+        raise ValueError(f"User not found: {user_id}")
     return user
 
 
 def set_user_role(session: Session, user_id: str, role: str) -> User:
-    user = session.query(User).filter_by(id=user_id).first()
-    if not user:
-        raise ValueError(f"User not found: {user_id}")
+    user = _existing_user(session, user_id)
     user.role = role
+    session.flush()
+    return user
+
+
+def set_user_kind(session: Session, user_id: str, kind: AccountKind) -> User:
+    user = _existing_user(session, user_id)
+    user.kind = kind
     session.flush()
     return user
 

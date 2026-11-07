@@ -563,7 +563,7 @@
 	}
 
 	.status-offline {
-		color: rgb(220, 80, 80);
+		color: var(--fail);
 	}
 
 	.worker-id {
@@ -714,8 +714,8 @@
 	}
 
 	.action-btn.danger {
-		border-color: rgb(220, 80, 80);
-		color: rgb(220, 80, 80);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	code {

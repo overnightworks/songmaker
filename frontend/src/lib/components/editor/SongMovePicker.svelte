@@ -399,8 +399,8 @@
 		flex: none;
 		padding: 4px 8px;
 		background: none;
-		border: 1px solid var(--score-bad);
-		color: var(--score-bad);
+		border: 1px solid var(--accent);
+		color: var(--accent);
 		font: inherit;
 		font-size: 0.75rem;
 		cursor: pointer;
