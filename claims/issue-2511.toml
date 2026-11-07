@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "b1bf7d3d44940fc0e6204eefd704411b93f55862"
 branch = "claude/issue-2511-take-deletion-owner"
-scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/versions.py", "tests/songmaker_cli/db/queries/test_take_deletion_owner.py", "tests/songmaker_cli/test_cleanup_generation_retention_lock_postgres.py"]
+scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/db/queries/versions.py", "tests/songmaker_cli/db/queries/test_take_deletion_owner.py", "tests/songmaker_cli/test_cleanup_generation_retention_lock_postgres.py"]
 opened_commit = "09ee605a1c40927175b62a8875a0ee4e089ca578"
 whole_reason = "The four deletes and their one owner are one ownership change; landing part of it would document a lock order only some paths follow."
