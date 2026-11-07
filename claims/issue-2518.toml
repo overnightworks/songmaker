@@ -1,8 +1,0 @@
-claim_id = "7f90ecdd3d1d4c449a261f0374fa166e"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "77ed04f801dfeec2c2c61396e4e89fb7be016c2d"
-branch = "claude/issue-2518-req-citation-check"
-scope = ["docs/testing.md", "scripts/check_requirement_citations.py", "scripts/static_checks.sh", "tests/scripts/test_check_requirement_citations.py"]
-opened_commit = "800966bf9ccbe83d9ab13c9d182145717f24b8d0"
-whole_reason = "One check, its gate line, its test and its one documentation line belong together; a check without its gate or test proves nothing."
