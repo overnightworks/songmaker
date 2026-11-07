@@ -208,24 +208,24 @@ describe('/album/<slug>/<song-slug> opened cold', () => {
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
 	});
 
-	it.each([
-		['write', 'edit'],
-		['generations', 'takes']
-	] as const)('restores a reload of an old %s history entry on %s', async (legacy, restored) => {
-		coldTabAt(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
-		replaceHistoryEntry(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
-			...libraryRootState(),
-			surface: 'detail',
-			collection: { kind: 'album', id: ALBUM_SLUG },
-			songId: 'song-1',
-			detailTab: legacy as never
-		});
+	it.each(['write', 'generations', 'chat'])(
+		'opens the addressed song on Edit when a reload history entry holds the old tab name %s',
+		async (oldTabName) => {
+			coldTabAt(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
+			replaceHistoryEntry(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: ALBUM_SLUG },
+				songId: 'song-1',
+				detailTab: oldTabName as never
+			});
 
-		const target = openAddress();
+			const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
-		expect(get(detailTab)).toBe(restored);
-	});
+			await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+			expect(get(detailTab)).toBe('edit');
+		}
+	);
 
 	it('keeps the address it was opened with', async () => {
 		const target = openAddress();
