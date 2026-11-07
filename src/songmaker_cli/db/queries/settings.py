@@ -234,6 +234,5 @@ def _clear_default(session: Session, user_id: str, model_mode: str) -> None:
         GenerationPreset.model_mode == model_mode,
         GenerationPreset.is_default.is_(True),
     )
-    if session.bind.dialect.name != "sqlite":
-        query.with_for_update().all()
+    query.with_for_update().all()
     query.update({"is_default": False})

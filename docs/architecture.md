@@ -1102,7 +1102,7 @@ business transaction. `auth_dependencies.get_current_user` owns a separate short
 transaction that commits session renewal before the endpoint runs. Manual stream
 callers commit authentication and close the connection before streaming.
 `DatabaseWriteLock` commits preceding auth work before acquiring advisory lock
-9 (SQLite: `BEGIN IMMEDIATE`); endpoints must have no business changes before
+9; endpoints must have no business changes before
 entry. Any further hold in the same transaction, nested or sequential, shares that
 lock; after a commit or rollback the next hold locks again. Exiting does not commit
 or release the database lock: the endpoint commits on success, and the request's

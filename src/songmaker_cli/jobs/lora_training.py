@@ -7,7 +7,7 @@ import logging
 import os
 import shutil
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +15,7 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.audio_paths import confined_under
@@ -37,7 +38,7 @@ from songmaker_cli.constants import (
     LoraStatus,
     ResourceType,
 )
-from songmaker_cli.db.models import aware_timestamp
+from songmaker_cli.db.models import UserLora, aware_timestamp
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.jobs import count_queued_generation_jobs, get_job
 from songmaker_cli.db.queries.loras import list_active_user_loras, update_user_lora
@@ -144,7 +145,7 @@ class CompletedLoraTrainingModeRecord(BaseModel):
 
 
 class PreviousAdapterRestoredError(RuntimeError):
-    def __init__(self, message: str, previous_model_mode: str | None) -> None:
+    def __init__(self, message: str, previous_model_mode: str) -> None:
         super().__init__(message)
         self.previous_model_mode = previous_model_mode
 
@@ -189,8 +190,8 @@ class _LoraHandoverProbe:
     task_id: str | None = None
 
 
-ProgressCallback = Callable[[float, int, int, datetime | None], Awaitable[None] | None]
-HeartbeatCallback = Callable[[], Awaitable[None] | None]
+ProgressCallback = Callable[[float, int, int, datetime | None], None]
+HeartbeatCallback = Callable[[], None]
 
 
 def _worker_training_started_at(value: object) -> datetime | None:
@@ -454,20 +455,20 @@ async def _read_lora_training_events(
         task_id,
         options=DispatchOptions(),
     ):
-        result = await _handle_lora_training_event(event_type, data, on_progress)
-        await _await_lora_callback(on_heartbeat)
+        result = _handle_lora_training_event(event_type, data, on_progress)
+        on_heartbeat()
         if result is not None:
             return result
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 
 
-async def _handle_lora_training_event(
+def _handle_lora_training_event(
     event_type: str,
     data: dict,
     on_progress: ProgressCallback,
 ) -> TrainLoraTaskResultDTO | None:
     if event_type == "progress":
-        await _report_lora_training_progress(data, on_progress)
+        _report_lora_training_progress(data, on_progress)
         return None
     if event_type == "done":
         return _read_lora_training_result(data)
@@ -476,15 +477,14 @@ async def _handle_lora_training_event(
     return None
 
 
-async def _report_lora_training_progress(
+def _report_lora_training_progress(
     data: dict,
     on_progress: ProgressCallback,
 ) -> None:
     fraction = float(data.get("progress", 0.0))
     current_epoch, train_epochs = _read_lora_training_epochs(data)
     training_started_at = _worker_training_started_at(data.get("training_started_at"))
-    await _await_lora_callback(
-        on_progress,
+    on_progress(
         fraction,
         current_epoch,
         train_epochs,
@@ -515,14 +515,6 @@ def _read_lora_training_result(data: dict) -> TrainLoraTaskResultDTO:
         return TrainLoraTaskResultDTO.model_validate(data["result"])
     except ValidationError as exc:
         raise WorkerTaskFailed(f"Worker returned invalid train_lora result: {exc}") from exc
-
-
-async def _await_lora_callback(callback, *args) -> None:
-    if callback is None:
-        return
-    result = callback(*args)
-    if asyncio.iscoroutine(result):
-        await result
 
 
 async def _race_with_renewal(awaitable, renew_task: asyncio.Task[None]):
@@ -1339,14 +1331,11 @@ def _save_lora_model_mode(
     db_factory: sessionmaker[Session],
     lora_id: str,
     completed_model_mode: str,
-) -> str | None:
-    from songmaker_cli.db.queries.loras import get_user_lora
-
+) -> str:
     with db_factory() as session:
-        lora = get_user_lora(session, lora_id, include_deleted_rows=True)
-        if lora is None:
-            raise RuntimeError(f"LoRA disappeared before adapter adoption: {lora_id}")
-        previous_model_mode = lora.model_mode
+        previous_model_mode = session.execute(
+            select(UserLora.model_mode).where(UserLora.id == lora_id),
+        ).scalar_one()
         update_user_lora(session, lora_id, model_mode=completed_model_mode)
         session.commit()
     return previous_model_mode
@@ -1355,7 +1344,7 @@ def _save_lora_model_mode(
 def _replace_lora_adapter(
     final_dir: Path,
     tmp_output: Path,
-    previous_model_mode: str | None,
+    previous_model_mode: str,
 ) -> None:
     final_dir.parent.mkdir(parents=True, exist_ok=True)
     previous_dir = final_dir.with_name(f"{final_dir.name}.previous")
@@ -1375,7 +1364,7 @@ def _move_lora_adapter(
     tmp_output: Path,
     final_dir: Path,
     previous_dir: Path,
-    previous_model_mode: str | None,
+    previous_model_mode: str,
 ) -> None:
     try:
         os.rename(tmp_output, final_dir)
@@ -1471,8 +1460,6 @@ def _keep_restored_lora_adapter(
     log.exception("LoRA training job %s kept its previous adapter: %s", job_id, exc)
     if not _cleanup_failed_lora_paths(audio_dir, user_id, lora_id):
         _log_failed_lora_cleanup(db_factory, audio_dir)
-    if exc.previous_model_mode is None:
-        raise RuntimeError("LoRA adapter restoration lost its previous model mode") from exc
     storage_rel = str(
         Path(USER_LORAS_DIRNAME) / user_id / lora_id / USER_LORA_OUTPUT_DIRNAME,
     )
