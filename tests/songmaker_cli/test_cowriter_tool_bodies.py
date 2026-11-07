@@ -21,7 +21,6 @@ from songmaker_cli.constants import (
     SongWorkKind,
 )
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
@@ -37,9 +36,8 @@ from songmaker_cli.mcp_server import auth, tools
 
 
 @pytest.fixture
-def db_session(tmp_path: Path) -> Session:
-    factory = init_test_db(tmp_path / "tool_bodies.db")
-    session = factory()
+def db_session(tmp_path: Path, pg_factory) -> Session:
+    session = pg_factory()
     yield session
     session.close()
 
@@ -572,12 +570,11 @@ def test_co_writer_song_creation_records_the_creators_own_work(
 # ── End-to-end via MCPServer.call_tool ──────────────────────────────────
 
 
-def test_every_co_writer_route_reads_the_same_get_song_rule(tmp_path: Path):
-    factory = init_test_db(tmp_path / "routes.db")
+def test_every_co_writer_route_reads_the_same_get_song_rule(tmp_path: Path, pg_factory):
     catalog_descriptions = {tool.name: tool.description for tool in COWRITER_TOOLS}
     hand_descriptions = {
         hand_tool.declaration.name: hand_tool.declaration.description
-        for hand_tool in cowriter_hand_tools(factory)
+        for hand_tool in cowriter_hand_tools(pg_factory)
     }
     assert GET_SONG_ONLY_FOR_OTHER_SONGS in catalog_descriptions["get_song"]
     assert hand_descriptions["get_song"] == catalog_descriptions["get_song"]
