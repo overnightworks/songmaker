@@ -72,6 +72,7 @@ from songmaker_cli.api_models.queue_streams import (
 from songmaker_cli.api_models.references import (
     ReferenceCountdownShownRequest,
     ReferenceListResponse,
+    ReferenceListRowResponse,
     ReferenceRecordingResponse,
     ReferenceTakeUseResponse,
     ReferenceUsageResponse,
@@ -219,6 +220,7 @@ __all__ = [
     "BulkDeleteResponse",
     "ReferenceCountdownShownRequest",
     "ReferenceListResponse",
+    "ReferenceListRowResponse",
     "ReferenceRecordingResponse",
     "ReferenceTakeUseResponse",
     "ReferenceUsageResponse",

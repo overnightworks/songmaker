@@ -30,12 +30,10 @@ class ReferenceRecordingResponse(BaseModel):
     is_kept: bool
     used_by_versions: int
     used_by_takes: int
-    deletes_at: str | None = None
 
     @classmethod
     def from_orm(
         cls, recording: ReferenceRecording, counts: ReferenceLinkCounts,
-        deletes_at: datetime | None = None,
     ) -> ReferenceRecordingResponse:
         link = ReferenceResponse.from_orm(recording)
         return cls(
@@ -48,6 +46,19 @@ class ReferenceRecordingResponse(BaseModel):
             is_kept=recording.is_kept,
             used_by_versions=counts.versions,
             used_by_takes=counts.takes,
+        )
+
+
+class ReferenceListRowResponse(ReferenceRecordingResponse):
+    deletes_at: str | None
+
+    @classmethod
+    def from_listed(
+        cls, recording: ReferenceRecording, counts: ReferenceLinkCounts,
+        deletes_at: datetime | None,
+    ) -> ReferenceListRowResponse:
+        return cls(
+            **ReferenceRecordingResponse.from_orm(recording, counts).model_dump(),
             deletes_at=None if deletes_at is None else deletes_at.isoformat(),
         )
 
@@ -106,6 +117,6 @@ class ReferenceCountdownShownRequest(BaseModel):
 
 
 class ReferenceListResponse(BaseModel):
-    references: list[ReferenceRecordingResponse]
+    references: list[ReferenceListRowResponse]
     usage: ReferenceUsageResponse
-    countdown_epoch: str | None = None
+    countdown_epoch: str | None

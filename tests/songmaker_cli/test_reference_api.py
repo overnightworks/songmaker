@@ -87,7 +87,7 @@ def test_m1_an_upload_answers_the_stored_record(
     body = response.json()
     assert set(body) == {
         "id", "filename", "size_bytes", "duration_sec", "created_at", "in_use",
-        "is_kept", "used_by_versions", "used_by_takes", "deletes_at",
+        "is_kept", "used_by_versions", "used_by_takes",
     }
     assert body["in_use"] is False
     assert body["is_kept"] is False

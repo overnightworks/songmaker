@@ -20,6 +20,7 @@ from webauth.ports import AuthenticatedUser
 from songmaker_cli.api_models import (
     ReferenceCountdownShownRequest,
     ReferenceListResponse,
+    ReferenceListRowResponse,
     ReferenceRecordingResponse,
     ReferenceUsageResponse,
     ReferenceUsesResponse,
@@ -107,10 +108,11 @@ def api_list_references(
     settings = get_settings()
     now = utcnow()
     items = [
-        ReferenceRecordingResponse.from_orm(
+        ReferenceListRowResponse.from_listed(
             recording, counts[recording.id],
             reference_deletes_at(
-                recording.unused_since, publication.published, now,
+                recording.unused_since if counts[recording.id].is_unlinked else None,
+                publication.published, now,
                 settings.final_deletion_days, DAILY_CLEANUP_HOUR_UTC,
             ),
         )

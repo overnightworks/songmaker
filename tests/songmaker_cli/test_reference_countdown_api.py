@@ -9,9 +9,15 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from support import reference_api_world
-from support.reference_api_world import REFERENCES_PATH, seed_reference, signed_in_as
+from support.reference_api_world import (
+    REFERENCES_PATH,
+    link_reference,
+    seed_reference,
+    signed_in_as,
+)
 from support.web_app import TEST_ORIGIN
 
+from songmaker_cli import reference_api
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE
 from songmaker_cli.db.engine import init_test_db
@@ -145,7 +151,8 @@ def test_unpublished_the_date_slides_with_now_and_the_epoch_is_the_rows_id(
     deletes_at = datetime.fromisoformat(item["deletes_at"])
     assert deletes_at.utcoffset() == timedelta(0)
     assert (deletes_at.hour, deletes_at.minute, deletes_at.second) == (DAILY_CLEANUP_HOUR_UTC, 0, 0)
-    assert before + timedelta(days=30) <= deletes_at < after + timedelta(days=31)
+    days = timedelta(days=get_settings().final_deletion_days)
+    assert before + days <= deletes_at < after + days + timedelta(days=1)
     assert body["countdown_epoch"] == _epoch(signed_in)
 
 
@@ -167,14 +174,35 @@ def test_a_kept_or_used_reference_has_no_date_and_no_date_means_no_epoch(
     assert {item["filename"]: item["deletes_at"] for item in body["references"]} == {
         "kept.wav": None, "used.wav": None,
     }
-    assert "countdown_epoch" not in body or body["countdown_epoch"] is None
+    assert body["countdown_epoch"] is None
+
+
+def test_a_reference_linked_between_the_stamp_read_and_the_counts_read_carries_no_date(
+    signed_in: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reference_id = seed_reference(signed_in, "owner-id", "racing.wav")
+    _set_unused_since(signed_in, reference_id, unused_since=_utc(2026, 1, 1))
+    real_counts = reference_api.reference_link_counts
+
+    def counts_after_an_attachment(session, reference_ids):
+        link_reference(signed_in, reference_id, via="version")
+        return real_counts(session, reference_ids)
+
+    monkeypatch.setattr(reference_api, "reference_link_counts", counts_after_an_attachment)
+
+    body = _listing(signed_in)
+
+    [item] = body["references"]
+    assert item["in_use"] is True
+    assert item["deletes_at"] is None
+    assert body["countdown_epoch"] is None
 
 
 def test_an_empty_list_carries_no_epoch(signed_in: TestClient) -> None:
     body = _listing(signed_in)
 
     assert body["references"] == []
-    assert body.get("countdown_epoch") is None
+    assert body["countdown_epoch"] is None
 
 
 @pytest.mark.parametrize(
