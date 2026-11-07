@@ -1,0 +1,8 @@
+claim_id = "5a31b3df41784040b2b3ca659a3c54fa"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "b8ae2acc96e84047c593bb0744d5ffcdfb07a20b"
+branch = "claude/issue-2565-b5c2-extra-databases"
+scope = ["quality/baseline.toml", "scripts/dead-symbols.allow", "tests/conftest.py", "tests/songmaker_cli/test_conversation_api_gateway_turn.py", "tests/songmaker_cli/test_conversation_api_mentions.py", "tests/songmaker_cli/test_conversation_api_takes.py", "tests/songmaker_cli/test_cover_through_gateway.py", "tests/support/postgresql.py"]
+opened_commit = "f37ca3a5fc2e2c7dc890db04b6ae43a836ea3df1"
+whole_reason = "One fixture and the four second worlds that need it, by one rewrite rule; the fixture has no caller without them."
