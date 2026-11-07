@@ -8,14 +8,13 @@ from pathlib import Path
 import pytest
 from sqlalchemy.exc import IntegrityError
 from support.postgres_lock_harness import CommitPause, StatementPause, race, wrote_to_tables
+from support.reference_rows import a_reference
 
 from acestep_engine.models import AceStepConfig
-from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import (
     Album,
     Generation,
     Job,
-    ReferenceRecording,
     Song,
     User,
     Version,
@@ -53,12 +52,8 @@ class _World:
                 deleted_at=datetime.now(timezone.utc) if trashed else None,
             ))
             session.flush()
+            a_reference(session, OWNER, name="F.wav", reference_id=REFERENCE_ID)
             session.add_all([
-                ReferenceRecording(
-                    id=REFERENCE_ID, user_id=OWNER,
-                    storage_path=f"{OWNER}/{REFERENCE_AUDIO_DIR}/F.wav",
-                    original_filename="F.wav", size_bytes=4,
-                ),
                 Job(id="job-take-a", type="generate", status="running", user_id=OWNER),
                 Job(id="job-take-b", type="generate", status="running", user_id=OWNER),
             ])

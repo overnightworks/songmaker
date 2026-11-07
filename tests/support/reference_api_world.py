@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from support.reference_rows import a_reference
 from support.web_app import make_test_app, seed_session, web_client
 
 from songmaker_cli.db.models import (
@@ -17,7 +18,7 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.db.queries.reference_recordings import create_reference_recording
+from songmaker_cli.timestamps import utcnow
 
 REFERENCES_PATH = "/api/references"
 WAV_BYTES = b"RIFF" + b"\x00" * 200
@@ -60,14 +61,10 @@ def seed_reference(
     reference_id: str | None = None, duration_sec: float | None = 12.5,
 ) -> str:
     with client.app.state.ctx.db() as session:
-        row = create_reference_recording(
-            session, user_id=user_id, storage_path=f"{user_id}/refs/{name}",
-            original_filename=name, size_bytes=1, duration_sec=duration_sec,
+        row = a_reference(
+            session, user_id, name=name, size_bytes=1, duration_sec=duration_sec,
+            created_at=created_at, reference_id=reference_id, unused_since=utcnow(),
         )
-        if created_at is not None:
-            row.created_at = created_at
-        if reference_id is not None:
-            row.id = reference_id
         session.commit()
         return row.id
 
