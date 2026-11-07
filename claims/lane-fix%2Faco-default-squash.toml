@@ -1,7 +1,0 @@
-claim_id = "9a8093d29d4545e9bf68b73be20d9a55"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "9a3a8d59b6654acb344ea05c62c4b8e1b90d1589"
-branch = "fix/aco-default-squash"
-scope = [".aco/board.toml"]
-opened_commit = "5a2109217a6b8a3cb72180e16e6d3d6d3b748811"
