@@ -1,0 +1,8 @@
+claim_id = "3c567416d45d4e2388d960b951c794bb"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "eba494785942249dfa674c4b4c00dc44cb545f69"
+branch = "claude/issue-2460-web-runs-under-docker-default-profiles"
+scope = ["Dockerfile", "README.md", "docker-compose.yml", "docker/docker-compose.ci.yml", "docs/security.md", "quality/baseline.toml", "scripts/apparmor/install_profile.sh", "scripts/apparmor/songmaker-web", "scripts/seccomp/README.md", "scripts/seccomp/moby-default.json", "scripts/seccomp/songmaker-web.json", "tests/scripts/test_apparmor_install.py", "tests/test_packaging_boundary.py", "tests/test_sandbox_profile.py"]
+opened_commit = "700d643aefe80b234efb06945df6599741c1ebc6"
+whole_reason = "The profiles, their installer, compose's references, CI's override and their tests are one confinement; split, compose would name a deleted profile or a profile nothing names."
