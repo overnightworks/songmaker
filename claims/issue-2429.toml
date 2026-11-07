@@ -1,0 +1,8 @@
+claim_id = "a09b3ca1bfb64fd98174084a88f64235"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2df53a7d51babf44dff7d42ddda6c402028f9c3d"
+branch = "claude/issue-2429-move-slice-1-a-moved-song-becomes-the-la"
+scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/db/test_move_song_track.py", "tests/songmaker_cli/test_song_move_api.py"]
+opened_commit = "0b02712e7202af3d5a0b920455fc8bde6676ba5c"
+whole_reason = "The track number and the owner check are the route's two ruled sentences; each needs the route, its query and the route table line together."
