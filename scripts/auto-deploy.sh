@@ -422,8 +422,8 @@ describe_timeout_status() {
         *) ;;
     esac
 }
-# Bounds the container-readiness wait of step 10 only; the image build in
-# step 9 stays deliberately unbounded, because a cold-cache build takes
+# Bounds the container-readiness wait of step 9 only; the image build in
+# step 8 stays deliberately unbounded, because a cold-cache build takes
 # 8-15 minutes by design. Without a bound, one service that can never
 # become healthy (issue #333's own alertmanager, if .env lacks the SMTP
 # values) makes `compose up --wait` wait forever — and since the tick holds
@@ -1487,7 +1487,7 @@ rm -f "$GUARD_REASON_FILE"
 
 # --- 5. Safe to touch? A dirty working tree stops here — the host's checkout
 # is also the operator's manual workspace. Never going backwards is checked
-# against the selected release in step 9.
+# against the selected release in step 8.
 if ! STATUS_OUTPUT="$(safe_git status --porcelain 2>&1)"; then
     log_err "cannot determine working tree status in $REPO_ROOT: $STATUS_OUTPUT"
     fail_tick "git status failed"
@@ -1533,21 +1533,7 @@ if ! ALERT_CONFIG_ERROR="$( (
     fail_tick "alert channel not configured"
 fi
 
-# --- 8. Agent-CLI mount preflight, the last check before anything is
-# changed. When the verifier from issue #350 is present, make its named
-# failure a regular deploy refusal before the checkout or an expensive image build.
-# Until that change lands, absence is explicit rather than a silent fallback:
-# this tick names the missing preflight and continues with the guards already
-# available in this checkout.
-MOUNT_PREFLIGHT_SCRIPT="$SCRIPT_DIR/check_agent_cli_mounts.sh"
-if [[ ! -e "$MOUNT_PREFLIGHT_SCRIPT" && ! -L "$MOUNT_PREFLIGHT_SCRIPT" ]]; then
-    log_info "mount preflight not installed, skipping"
-elif ! MOUNT_PREFLIGHT_ERROR="$(bash "$MOUNT_PREFLIGHT_SCRIPT" 2>&1)"; then
-    log_err "agent CLI mount preflight failed — refusing to deploy: $MOUNT_PREFLIGHT_ERROR"
-    fail_tick "agent CLI mount preflight failed"
-fi
-
-# --- 9. Select the newest fully green release (candidates from step 3). A
+# --- 8. Select the newest fully green release (candidates from step 3). A
 # newer running or failed release is skipped rather than becoming a reason to
 # hold an already-verified predecessor back. An unavailable or malformed
 # GitHub answer is still fail-closed: without its result we cannot prove that
@@ -1611,13 +1597,13 @@ fi
 
 log_info "selected newest fully green release ${RELEASE_TAG_OF[$DEPLOY_COMMIT]} ($DEPLOY_COMMIT)"
 
-# --- 10. Check out exactly the selected green release commit, detached, then
+# --- 9. Check out exactly the selected green release commit, detached, then
 # build. The tag was resolved to its commit before the check-run lookup, so a
 # newer tag pushed since cannot change what is checked out. No timeout around
 # the build (AGENTS.md) — a
 # cold-cache rebuild legitimately takes 8-15 minutes. Building does not
 # recreate any running container, so it cannot kill an in-flight job by
-# itself — the recheck in step 11 is what guards the actual recreate. Both
+# itself — the recheck in step 10 is what guards the actual recreate. Both
 # the checkout and `compose build` stream straight to this process's own
 # stdout/stderr rather than being captured — a failed build's full output
 # can easily exceed what a single logger argument can carry (see header) —
@@ -1678,7 +1664,7 @@ else
     fail_tick "compose build failed"
 fi
 
-# --- 11. Recheck immediately before the recreate — the only step that can
+# --- 10. Recheck immediately before the recreate — the only step that can
 # kill an in-flight job. This shrinks the unsafe window from the build's
 # 8-15 minutes down to the seconds between this check and `compose up`. A
 # deferral here finds the image already built on the next tick, so the

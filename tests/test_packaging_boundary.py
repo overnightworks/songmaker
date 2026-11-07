@@ -570,6 +570,85 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             assert bind_options.get("create_host_path") is False
 
 
+CONTAINER_HOME = Path("/home/songmaker")
+MIRROR_DIRECTORY_MARKERS = ("agent-cli-credentials", "SONGMAKER_CLI_CREDENTIALS_DIR")
+EVERY_COMPOSE_FILE = (
+    *sorted(REPOSITORY_ROOT.glob("docker-compose*.yml")),
+    *sorted(DOCKER_ROOT.glob("docker-compose*.yml")),
+)
+
+
+def _bind_source_and_target(service_name: str, volume: object) -> tuple[str, str] | None:
+    if isinstance(volume, dict):
+        if volume.get("type") != "bind":
+            return None
+        return str(volume.get("source", "")), posixpath.normpath(str(volume.get("target", "")))
+    assert isinstance(volume, str), f"{service_name} has an unsupported volume: {volume!r}"
+    source, target = _short_volume_source_and_target(service_name, volume)
+    if "/" not in source and not source.startswith(("~", "$", ".")):
+        return None
+    return source, target
+
+
+def _agent_login_binds(services: dict[str, object]) -> list[str]:
+    offences = []
+    for service_name, service in services.items():
+        assert isinstance(service, dict)
+        for volume in service.get("volumes", []):
+            bind = _bind_source_and_target(service_name, volume)
+            if bind is None:
+                continue
+            source, target = bind
+            under_home = any(
+                posixpath.isabs(path)
+                and Path(posixpath.normpath(path)).is_relative_to(CONTAINER_HOME)
+                for path in (source, target)
+            )
+            if under_home or any(marker in source for marker in MIRROR_DIRECTORY_MARKERS):
+                offences.append(f"{service_name} binds {source} to {target}")
+    return offences
+
+
+@pytest.mark.parametrize("compose_path", EVERY_COMPOSE_FILE, ids=_relative)
+def test_no_container_binds_an_agent_cli_or_a_login(compose_path: Path) -> None:
+    services = _compose_file(compose_path)["services"]
+
+    assert _agent_login_binds(services) == []
+
+
+def _long_bind(source: str, target: str) -> dict[str, str]:
+    return {"type": "bind", "source": source, "target": target}
+
+
+@pytest.mark.parametrize(
+    "volume",
+    [
+        pytest.param(
+            _long_bind("/srv/login.json", "/home/songmaker/.grok/auth.json"),
+            id="long-target-under-home",
+        ),
+        pytest.param(
+            _long_bind("/home/songmaker/.local/bin/claude", "/usr/bin/claude"),
+            id="long-source-under-home",
+        ),
+        pytest.param(
+            _long_bind("${DIR:-~/.x/agent-cli-credentials}/c.json", "/c.json"),
+            id="long-source-from-mirror-directory",
+        ),
+        pytest.param("/srv/a:/home/songmaker/.grok/auth.json:ro", id="short-target-under-home"),
+        pytest.param("/home/songmaker/.grok/auth.json:/auth.json", id="short-source-under-home"),
+        pytest.param(
+            "${SONGMAKER_CLI_CREDENTIALS_DIR}/claude.json:/c.json",
+            id="short-source-from-mirror-directory",
+        ),
+    ],
+)
+def test_the_agent_login_bind_check_names_the_service_and_the_bind(volume: object) -> None:
+    offences = _agent_login_binds({"songmaker-web": {"volumes": [volume]}})
+
+    assert [offence.split(" binds ")[0] for offence in offences] == ["songmaker-web"]
+
+
 WORKER_SERVICES = (
     "songmaker-music-worker",
     "songmaker-acestep-worker-0",
