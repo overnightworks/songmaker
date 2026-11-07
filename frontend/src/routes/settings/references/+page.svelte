@@ -3,8 +3,10 @@
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 	import {
 		deleteReference,
+		keepReference,
 		listReferences,
 		referenceAudioUrl,
+		unkeepReference,
 		uploadReference
 	} from '#lib/api/references.ts';
 	import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
@@ -12,7 +14,12 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import LoadFailure from '#lib/components/LoadFailure.svelte';
 	import ReferenceRow from '#lib/components/ReferenceRow.svelte';
-	import { APP_NAME, REFERENCE_AUDIO_ACCEPT } from '#lib/constants.ts';
+	import {
+		APP_NAME,
+		REFERENCE_AUDIO_ACCEPT,
+		REFERENCE_KEEP_FAILED,
+		REFERENCE_UNKEEP_FAILED
+	} from '#lib/constants.ts';
 	import { audioPlayer, transportOffersPause } from '#lib/services/audioPlayer.svelte.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 
@@ -181,6 +188,18 @@
 		await load();
 	}
 
+	async function toggleKeep(reference: ReferenceRecordingResponse) {
+		rowFault = null;
+		try {
+			await (reference.is_kept ? unkeepReference(reference.id) : keepReference(reference.id));
+		} catch (error) {
+			const failed = reference.is_kept ? REFERENCE_UNKEEP_FAILED : REFERENCE_KEEP_FAILED;
+			rowFault = { id: reference.id, words: describeFailure(error, failed) };
+			return;
+		}
+		await load();
+	}
+
 	// The global player starting ends a preview; the reverse is `toggle`.
 	$effect(() => {
 		if (transportOffersPause(audioPlayer.transport)) stop();
@@ -288,6 +307,7 @@
 					ontoggle={() => toggle(reference.id)}
 					onusestoggle={() => (openUsesId = openUsesId === reference.id ? null : reference.id)}
 					onshowuses={() => (openUsesId = reference.id)}
+					onkeeptoggle={() => void toggleKeep(reference)}
 					ondelete={() => (pendingDelete = reference)}
 				/>
 			{/each}
