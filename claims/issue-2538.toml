@@ -1,7 +1,0 @@
-claim_id = "25f201ab491448cd99856eb45eb9f94b"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3c508729300ba87a70abf99d55d8dc66a00dcd4e"
-branch = "claude/issue-2538-references-glyph"
-scope = ["frontend/src/lib/components/Icon.svelte", "frontend/src/lib/components/shell/RailSettings.test.ts", "frontend/src/lib/settingsSections.ts"]
-opened_commit = "7e59549ac81925e72b63ed412fe541a374c45a79"
