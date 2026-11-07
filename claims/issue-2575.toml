@@ -1,0 +1,7 @@
+claim_id = "19d202b8105a4ff788616bbfef2ef40e"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "6af7edc9a3ad92675a5619dce54fae7f89877617"
+branch = "claude/issue-2575-leave-gone-song"
+scope = ["frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts"]
+opened_commit = "7a1020430927acb7a73940bd3b0a7764881472d2"
