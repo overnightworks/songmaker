@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
 from songmaker_cli.db.queries.generations import save_scores
 from songmaker_cli.jobs import run_scoring_job
@@ -52,9 +51,9 @@ def _run(scorer: str, outcome: ScorerOutcome) -> ScorerRun:
 
 
 @pytest.fixture
-def scored_generation(tmp_path: Path):
+def scored_generation(tmp_path: Path, pg_factory):
     """A generation that already carries a full set of stored scores."""
-    factory = init_test_db(tmp_path / "test.db")
+    factory = pg_factory
     with factory() as session:
         session.add(User(id="u1", username="user1", role="user"))
         session.flush()
@@ -247,8 +246,8 @@ def test_run_where_every_scorer_failed_leaves_all_scores_intact(
     assert stored == STORED_SCORES
 
 
-def test_first_scoring_run_creates_the_score_row(tmp_path: Path) -> None:
-    factory = init_test_db(tmp_path / "fresh.db")
+def test_first_scoring_run_creates_the_score_row(tmp_path: Path, pg_factory) -> None:
+    factory = pg_factory
     with factory() as session:
         session.add(Album(id="a1", title="Album", artist="Band"))
         session.add(Song(id="s1", title="Song", album_id="a1", track_number=1))
