@@ -14,6 +14,7 @@ from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
+from songmaker_cli.audio_paths import confined_under
 from songmaker_cli.constants import (
     COVER_CACHE_CONTROL,
     COVER_CARD_MAX_EDGE,
@@ -325,17 +326,17 @@ def _resolve_cover_file(
     if cover_key is None or cover_key_extension(cover_key) is None:
         raise FileNotFoundError
     try:
-        path = _cover_variant_path(
+        candidate = _cover_variant_path(
             audio_dir, dirname, entity_id, cover_key, variant, invalid_id_message,
-        ).resolve()
+        )
     except CoverRejectedError as exc:
         raise FileNotFoundError from exc
+    covers_root = _covers_root(audio_dir, dirname)
+    try:
+        path = confined_under(covers_root, candidate)
     except OSError as exc:
         raise FileNotFoundError from exc
-    covers_root = _covers_root(audio_dir, dirname)
-    if not path.is_relative_to(covers_root):
-        raise FileNotFoundError
-    if not path.is_file():
+    if path is None or not path.is_file():
         raise FileNotFoundError
     return path
 
@@ -443,8 +444,8 @@ def _cover_staging_name(entity_id: str) -> str:
 
 
 def _confine_cover_path(path: Path, covers_root: Path, invalid_id_message: str) -> Path:
-    resolved = path.resolve()
-    if resolved == covers_root or not resolved.is_relative_to(covers_root):
+    resolved = confined_under(covers_root, path)
+    if resolved is None:
         raise CoverRejectedError(invalid_id_message)
     return resolved
 
@@ -473,13 +474,13 @@ def _rmtree_confined_cover_dir(
     path: Path, covers_root: Path, *, ignore_errors: bool = False,
 ) -> None:
     try:
-        resolved = path.resolve()
+        resolved = confined_under(covers_root, path)
     except OSError as exc:
         if ignore_errors:
             return
         log.warning("Cover path resolve failed for %s: %s", path, exc)
         return
-    if resolved == covers_root or not resolved.is_relative_to(covers_root):
+    if resolved is None:
         log.warning(_COVER_PATH_TRAVERSAL_LOG, path)
         return
     if not resolved.is_dir():

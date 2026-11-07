@@ -17,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
+from songmaker_cli.audio_paths import confined_under
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     GPU_HOLD_POLL_INTERVAL_SECONDS,
@@ -738,22 +739,6 @@ async def _prepare_and_submit_lora(
             await _cancel_child_task(renew_task, suppress_failure=True)
 
 
-def _validate_export_path(
-    *,
-    audio_dir: Path,
-    user_id: str,
-    reported: str,
-) -> Path:
-    """Reject paths that do not live inside the user's LoRA dir."""
-    user_root = (audio_dir / USER_LORAS_DIRNAME / user_id).resolve()
-    resolved = Path(reported).resolve()
-    if resolved == user_root or not resolved.is_relative_to(user_root):
-        raise ValueError(
-            f"Worker-reported export path escapes user dir: {reported}",
-        )
-    return resolved
-
-
 def _cleanup_failed_lora_paths(
     audio_dir: Path,
     user_id: str,
@@ -1339,20 +1324,12 @@ def _complete_lora_training(
 
 
 def _validated_lora_adapter_handoff(
-    audio_dir: Path,
-    user_id: str,
-    tmp_output: Path,
-    worker_result: TrainLoraTaskResultDTO,
+    audio_dir: Path, user_id: str, tmp_output: Path, worker_result: TrainLoraTaskResultDTO
 ) -> Path:
-    adapter_src = _validate_export_path(
-        audio_dir=audio_dir,
-        user_id=user_id,
-        reported=worker_result.adapter_dir,
-    )
-    if not adapter_src.exists():
-        raise RuntimeError(f"Worker reported adapter at {adapter_src} but path is missing")
-    if adapter_src != tmp_output.resolve():
-        raise RuntimeError(f"Worker reported unexpected training handoff path: {adapter_src}")
+    reported = worker_result.adapter_dir
+    adapter_src = confined_under(audio_dir / USER_LORAS_DIRNAME / user_id, Path(reported))
+    if adapter_src is None or adapter_src != tmp_output.resolve():
+        raise RuntimeError(f"Worker reported unexpected training handoff path: {reported}")
     if not adapter_src.is_dir():
         raise RuntimeError(f"Worker reported adapter at {adapter_src} but it is not a directory")
     return adapter_src
