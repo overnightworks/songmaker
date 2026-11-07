@@ -11,7 +11,7 @@ from songmaker_cli.api_models.songs import generation_version_lyrics
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Generation
 
-LibraryTakePool = Literal["mix", "picks", "keeps", "all"]
+LibraryTakePool = Literal["mix", "picks", "all"]
 DEFAULT_LIBRARY_TAKE_POOL: LibraryTakePool = "mix"
 
 
