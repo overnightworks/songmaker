@@ -1,0 +1,7 @@
+claim_id = "f470edc269be4914b51dd4573da5e6c4"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "4573985c4cefa1d75cc2a124d02141713cd9be49"
+branch = "claude/issue-2577-f-query-dialects"
+scope = ["src/songmaker_cli/db/queries/activity.py", "src/songmaker_cli/db/queries/settings.py", "src/songmaker_cli/db/queries/songs.py"]
+opened_commit = "e8c350b53663d29600bbeacf9f0939410c3119b3"
