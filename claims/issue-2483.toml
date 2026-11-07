@@ -1,8 +1,0 @@
-claim_id = "6662021b84d64272881bd1ad57617b2b"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "65b5dee4b87022f25e8573c951b9c9e2a33304e9"
-branch = "claude/issue-2483-db-tests-subdirs-on-postgresql"
-scope = ["quality/baseline.toml", "tests/acestep_worker/test_wrapper_fake_training_worker.py", "tests/scripts/test_generate_types.py", "tests/scripts/test_seed_e2e_song_takes.py", "tests/songmaker_cli/agent/test_backend_cowriter_agent.py", "tests/songmaker_cli/cowriter/test_tools_ownership.py", "tests/songmaker_cli/db/queries/test_activity_song_work.py", "tests/songmaker_cli/db/queries/test_conversations.py", "tests/songmaker_cli/db/queries/test_loras.py", "tests/songmaker_cli/db/queries/test_resource_events.py", "tests/songmaker_cli/db/queries/test_workers.py", "tests/songmaker_cli/db/test_move_song_track.py", "tests/songmaker_cli/db/test_soft_delete.py", "tests/songmaker_cli/jobs/test_lora_training.py", "tests/songmaker_cli/jobs/test_lora_training_worker_auth.py", "tests/songmaker_cli/jobs/test_scoring_jobs.py", "tests/songmaker_cli/jobs/test_scoring_persistence.py", "tests/songmaker_cli/mcp_server/test_tools_coherence_verdict.py", "tests/songmaker_cli/mcp_server/test_tools_cover.py", "tests/support/admin_client.py", "tests/support/cover_album_world.py", "tests/support/generation_job_world.py", "tests/support/oidc_world.py"]
-opened_commit = "529910d50c10fd9cda5fb46960f93406cb499f36"
-whole_reason = "One mechanical rewrite rule over 22 independent test files; wide, but not a coupled change, and a split would only repeat the rule."
