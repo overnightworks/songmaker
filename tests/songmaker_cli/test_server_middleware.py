@@ -297,12 +297,10 @@ def test_created_app_with_token_clients_puts_the_bearer_gate_between_rate_limit_
 
     from songmaker_cli.settings import get_settings
 
-    disabled_app = make_test_app(tmp_path, factory=pg_factory)[0].app
-    disabled = [layer.cls for layer in disabled_app.user_middleware]
+    disabled = [mw.cls for mw in make_test_app(tmp_path, factory=pg_factory)[0].app.user_middleware]
     monkeypatch.setenv("TOKEN_CLIENTS", "hal")
     get_settings.cache_clear()
-    enabled_app = make_test_app(tmp_path, factory=pg_factory)[0].app
-    enabled = [layer.cls for layer in enabled_app.user_middleware]
+    enabled = [mw.cls for mw in make_test_app(tmp_path, factory=pg_factory)[0].app.user_middleware]
 
     assert enabled == [*disabled[:6], BearerGateMiddleware, *disabled[6:]]
     assert disabled[5:7] == [IpRateLimitMiddleware, CsrfOriginMiddleware]

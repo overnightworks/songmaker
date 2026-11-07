@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,23 +44,14 @@ from songmaker_cli.worker_liveness import (
 )
 
 
-def _context_on(tmp_path: Path, factory) -> AppContext:
+@pytest.fixture
+def ctx(tmp_path: Path, pg_factory) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     return AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
+        db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
         signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
-
-
-@pytest.fixture
-def ctx(tmp_path: Path, pg_factory) -> AppContext:
-    return _context_on(tmp_path, pg_factory)
-
-
-@pytest.fixture
-def sqlite_ctx(tmp_path: Path) -> AppContext:
-    return _context_on(tmp_path, init_test_db(tmp_path / "songmaker.db"))
 
 
 def _dead_process_time(now: datetime, threshold_seconds: int) -> datetime:
@@ -236,9 +228,9 @@ class TestLifecycleReaper:
         ),
     )
     def test_alive_queued_job_ignores_the_unknown_age_guard_until_a_full_queue(
-        self, sqlite_ctx, job_type: JobType,
+        self, ctx, tmp_path: Path, job_type: JobType,
     ) -> None:
-        ctx = sqlite_ctx
+        ctx = replace(ctx, db=init_test_db(tmp_path / "songmaker.db"))
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)
         thresholds = STALE_JOB_THRESHOLDS[job_type]
         full_queue_bound = thresholds.full_queue_bound_seconds(get_settings().max_queue_depth)

@@ -70,7 +70,7 @@
 "tests/songmaker_cli/test_queue_streams.py" = 2417
 "tests/songmaker_cli/test_resource_event_api.py" = 1236
 "tests/songmaker_cli/test_scheduler.py" = 1284
-"tests/songmaker_cli/test_server.py" = 1925
+"tests/songmaker_cli/test_server.py" = 1922
 "tests/songmaker_cli/test_sharing_api.py" = 2499
 "tests/test_auto_deploy_alerting.py" = 1321
 
@@ -143,11 +143,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 57
 "create_app" = 178
-
-[function_lines."tests/acestep_worker/test_wrapper.py"]
-"_make_deps" = 57
 
 [function_lines."tests/acestep_worker/test_wrapper_train_lora.py"]
 "_make_deps" = 76
@@ -180,7 +176,7 @@
 "test_postgresql_serializes_publication_and_cancellation" = 83
 
 [function_lines."tests/songmaker_cli/test_covers_song.py"]
-"test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit" = 80
+"test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit" = 79
 
 [function_lines."tests/songmaker_cli/test_db.py"]
 "test_acestep_canonical_names_migration_renames_json_keys" = 68
@@ -210,7 +206,7 @@
 "test_postgresql_failed_reference_write_releases_admission" = 75
 
 [function_lines."tests/songmaker_cli/test_server.py"]
-"test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker" = 75
+"test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker" = 74
 "test_real_access_record_is_readable_by_rate_window_parser" = 66
 
 [function_lines."tests/songmaker_cli/test_server_middleware.py"]
