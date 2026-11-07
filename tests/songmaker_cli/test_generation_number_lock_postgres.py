@@ -184,9 +184,10 @@ def test_a_persist_for_a_song_that_is_gone_fails_and_removes_its_files(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path)
+    persist_for_missing_song = world.persist(TAKES[0], song_id="song-gone")
 
     with pytest.raises(IntegrityError):
-        world.persist(TAKES[0], song_id="song-gone")()
+        persist_for_missing_song()
 
     assert world.take_numbers() == []
     assert not world.mp3_exists(TAKES[0])
