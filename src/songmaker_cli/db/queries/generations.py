@@ -350,8 +350,8 @@ def lock_takes(
     Pick or share that commits first is seen and the criteria are checked again after
     the wait.
 
-    Cleanup, pick and bulk delete take their rows in this order, so none of them
-    waits on another in a cycle. The lock is limited to the take (`of=Generation`)
+    Pick and every take deletion, through `delete_takes`, take their rows in this order,
+    so none of them waits on another in a cycle. The lock is limited to the take (`of=Generation`)
     because the eager join to its reference recording is an outer join, which
     PostgreSQL cannot lock.
     """
