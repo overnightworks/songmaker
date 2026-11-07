@@ -192,11 +192,6 @@ class RateResponse(BaseModel):
     rating: float
 
 
-class CleanupResponse(BaseModel):
-    status: str = "ok"
-    deleted: int
-
-
 class GenerationRetentionReportResponse(BaseModel):
     archived_ids: list[str]
     deleted_ids: list[str]
@@ -237,7 +232,6 @@ __all__ = [
     "AssistantTextEvent",
     "ToolCallEvent",
     "ToolResultEvent",
-    "CleanupResponse",
     "MemoryBundleResponse",
     "MemoryScopeResponse",
     "MemoryUpdateRequest",

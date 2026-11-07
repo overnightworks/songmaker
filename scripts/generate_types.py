@@ -65,7 +65,6 @@ TS_MODEL_NAMES: dict[str, str] = {
     "AlbumResponse": "AlbumItem",
     "AuthMeResponse": "AuthUser",
     "ChatMessageResponse": "ChatMessageItem",
-    "CleanupResponse": "CleanupResult",
     "ConversationResponse": "ConversationItem",
     "CowriterSettingsResponse": "CowriterSettings",
     "GenerationResponse": "GenerationItem",

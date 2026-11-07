@@ -382,22 +382,6 @@ def test_moving_song_does_not_move_cover_files(
     assert client.get("/api/songs/alice-song/cover?variant=detail").status_code == 200
 
 
-def test_song_cleanup_of_unpicked_takes_does_not_touch_covers(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
-) -> None:
-    client, _ = alice_app
-    uploaded = client.post(
-        "/api/songs/alice-song/cover",
-        files={"file": ("cover.jpg", _jpeg_bytes(), "image/jpeg")},
-    )
-    assert uploaded.status_code == 200
-    cleaned = client.post("/api/songs/alice-song/cleanup")
-    assert cleaned.status_code == 200
-    song_dir = tmp_path / "audio" / SONG_COVER_DIRNAME / "alice-song"
-    assert song_dir.is_dir()
-    assert client.get("/api/songs/alice-song/cover?variant=detail").status_code == 200
-
-
 def test_soft_delete_song_keeps_cover_files(
     alice_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:

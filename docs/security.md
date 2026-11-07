@@ -759,20 +759,12 @@ finished oneshot is legitimately inactive.
 `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` take
 effect only when exported in the deployment environment, not when written only
 in `.env`: the preflight reads its values from the exported environment and
-does not load `.env`. For systemd boot, these non-secret paths therefore belong
-in the persistent service environment. Compose reads none of them.
+does not load `.env`. Compose reads none of them.
 
-**Boot coupling.** `songmaker.service` has both `Requires=` and `After=` on
-`songmaker-cli-credentials-mirror.service`, then runs the argumentless
-preflight as `ExecStartPre` from the main checkout. A failed or absent mirror
-means `songmaker.service` does not run its boot-time `docker compose up -d`:
-the boot catch-up stays off; a red preflight fails the unit and alerts through
-`OnFailure=`, while a missing or failed mirror aborts the start job as a
-dependency failure (journal: result 'dependency'), which is not covered by
-`OnFailure=`. Containers dockerd restarts itself under `restart: unless-stopped`
-are unaffected. That preflight also requires all three agent-CLI binaries,
-including Codex's Node path, to be resolvable; this blast radius is limited to
-the boot catch-up, not to containers dockerd restarts itself.
+**Boot coupling.** `songmaker.service` orders itself only after
+`docker.service` and runs no preflight: it starts the stack with
+`docker compose up -d` whether or not the mirror runs. The two-minute deploy
+tick runs no preflight either.
 
 The mirror installer freezes its resolved directory in the mirror service's
 `--mirror-dir` argument. An argumentless preflight reads that installed service
@@ -780,15 +772,15 @@ and requires exactly one matching value; an unreadable, missing, ambiguous, or
 different value refuses with `Spiegel-Installer erneut ausführen`. After
 changing `SONGMAKER_CLI_CREDENTIALS_DIR` in `.env`, run
 `sudo ./scripts/install-cli-credentials-mirror.sh` again from the main
-checkout before the next boot or deploy.
+checkout.
 
-Refresh the mirror with `sudo systemctl start songmaker-cli-credentials-mirror.service`, not `restart`: restarting this required unit also restarts `songmaker.service` and therefore runs `docker compose up -d` against the live stack.
+Refresh the mirror with `sudo systemctl restart songmaker-cli-credentials-mirror.service`; that does not touch `songmaker.service` or the live stack.
 
 That call has been deleted from this script once already, by an edit that
 rearranged the systemd checks around it, and nothing went red: the verifier's
-own tests kept passing while the surface the deploy tick runs stopped checking
+own tests kept passing while the surface the installer runs stopped checking
 anything at all. The shell entry point therefore has its own tests, separate
-from the Python ones. The installer and boot use this same check.
+from the Python ones. The installer is its one caller.
 
 Where the mirror lives has one answer, owned by that same module: an exported
 `SONGMAKER_CLI_CREDENTIALS_DIR` wins, then the same key in `.env`, then the
@@ -1065,8 +1057,7 @@ before retrying; never purge or silently retry these entries.
 - `.env`: Gitignored. Never committed. Single source for pydantic Settings and
   Docker Compose substitutions except the non-secret
   `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` path
-  overrides: systemd boot must receive those as persistent
-  exported environment values so the boot preflight sees them.
+  overrides: only the mount preflight reads them, from the exported environment.
 
 ## Input Validation
 
