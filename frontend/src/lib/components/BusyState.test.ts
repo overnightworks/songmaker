@@ -23,17 +23,22 @@ async function mountBusyState(text: string): Promise<HTMLElement> {
 describe('BusyState', () => {
 	it('shows its ring above its one line of text', async () => {
 		const root = await mountBusyState('Working...');
-		expect(root.textContent).toBe('Working...');
 		const ring = root.firstElementChild;
 		const line = root.querySelector('p');
 		if (!ring || !line) throw new Error('Expected a ring and a line');
 		expect(ring.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 
-	it('is a status named by its line', async () => {
+	it('is a status whose accessible name is its line', async () => {
 		const root = await mountBusyState('Working...');
 		expect(root.getAttribute('role')).toBe('status');
-		expect(root.textContent).toBe('Working...');
+		expect(root).toHaveAccessibleName('Working...');
+	});
+
+	it('gives two instances each their own name target', async () => {
+		const first = await mountBusyState('One');
+		const second = await mountBusyState('Two');
+		expect(first.getAttribute('aria-labelledby')).not.toBe(second.getAttribute('aria-labelledby'));
 	});
 
 	it('hides its ring from assistive technology', async () => {

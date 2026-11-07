@@ -1,10 +1,11 @@
 <script lang="ts">
 	let { text }: { text: string } = $props();
+	const lineId = $props.id();
 </script>
 
 <!-- Whitespace between the ring and the line would enter the text a caller reads. -->
 <!-- prettier-ignore -->
-<div class="busy" role="status"><span class="ring" aria-hidden="true"></span><p>{text}</p></div>
+<div class="busy" role="status" aria-labelledby={lineId}><span class="ring" aria-hidden="true"></span><p id={lineId}>{text}</p></div>
 
 <style>
 	.busy {
