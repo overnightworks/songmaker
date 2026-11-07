@@ -94,7 +94,7 @@ function onPhone(): boolean {
  * Moves the open song into `album` and keeps the person on it. The crumb names the new
  * album on a wide screen, where a phone has no crumb and gets a toast.
  */
-export async function moveOpenSongTo(album: AlbumItem): Promise<void> {
+async function moveOpenSongTo(album: AlbumItem): Promise<void> {
 	const song = get(selectedSong);
 	if (!song || song.album_id === album.id) return;
 	let moved: SongItem;
@@ -114,4 +114,22 @@ export async function moveOpenSongTo(album: AlbumItem): Promise<void> {
 	updateAlbumInList(album.id, (target) => ({ ...target, song_count: target.song_count + 1 }));
 	await reselectMovedSong(moved);
 	if (onPhone()) addToast(songMovedToastLabel(album.title));
+}
+
+export const songMoveConfirm = writable<AlbumItem | null>(null);
+
+/** Moves at once, except into an album with a public page, which asks first. */
+export async function askToMoveOpenSongTo(album: AlbumItem): Promise<void> {
+	if (album.is_shared) songMoveConfirm.set(album);
+	else await moveOpenSongTo(album);
+}
+
+export async function confirmSongMove(): Promise<void> {
+	const album = get(songMoveConfirm);
+	songMoveConfirm.set(null);
+	if (album) await moveOpenSongTo(album);
+}
+
+export function cancelSongMove(): void {
+	songMoveConfirm.set(null);
 }

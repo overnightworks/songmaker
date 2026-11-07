@@ -63,9 +63,12 @@ import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import {
+	askToMoveOpenSongTo,
+	cancelSongMove,
 	closeSongMovePicker,
-	moveOpenSongTo,
+	confirmSongMove,
 	openSongMovePicker,
+	songMoveConfirm,
 	songMoveFilter,
 	songMovePicker
 } from './songMove';
@@ -125,6 +128,7 @@ beforeEach(async () => {
 afterEach(() => {
 	discardDraft();
 	closeSongMovePicker();
+	cancelSongMove();
 	songMoveFilter.set('');
 	stopNavigation();
 	stopFollowingShellLayers();
@@ -201,7 +205,7 @@ describe('moving the open song', () => {
 	it('puts the song in the new album and adjusts both counts', async () => {
 		vi.mocked(moveSong).mockResolvedValue(movedSong);
 
-		await moveOpenSongTo(ABEND);
+		await askToMoveOpenSongTo(ABEND);
 
 		expect(get(songList)[0]).toMatchObject({ album_id: 'abend', album_title: 'Abendrot' });
 		const counts = Object.fromEntries(get(albumList).map((a) => [a.id, a.song_count]));
@@ -216,7 +220,7 @@ describe('moving the open song', () => {
 		selectedGenerationId.set('g1');
 		const entries = historyLength();
 
-		await moveOpenSongTo(ABEND);
+		await askToMoveOpenSongTo(ABEND);
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(editLyrics)).toBe('unsaved move draft');
@@ -228,7 +232,7 @@ describe('moving the open song', () => {
 	});
 
 	it('does nothing for the album the song already stands in', async () => {
-		await moveOpenSongTo(HOME);
+		await askToMoveOpenSongTo(HOME);
 
 		expect(moveSong).not.toHaveBeenCalled();
 		expect(get(songList)[0].album_id).toBe('home');
@@ -239,7 +243,7 @@ describe('moving the open song', () => {
 			new ApiError(404, 'Song or album not found', '/api/songs/s1/album')
 		);
 
-		await moveOpenSongTo(ABEND);
+		await askToMoveOpenSongTo(ABEND);
 
 		expect(get(songList)[0].album_id).toBe('home');
 		expect(location.pathname).toBe('/album/home/storytime');
@@ -249,8 +253,49 @@ describe('moving the open song', () => {
 	it('falls back to a plain failure word when the error carries no detail', async () => {
 		vi.mocked(moveSong).mockRejectedValue(new Error('offline'));
 
-		await moveOpenSongTo(ABEND);
+		await askToMoveOpenSongTo(ABEND);
 
 		expect(get(toasts).map((toast) => toast.message)).toEqual([SONG_MOVE_FAILED]);
+	});
+});
+
+describe('asking before a move', () => {
+	beforeEach(() => {
+		vi.mocked(moveSong).mockResolvedValue({ ...OPEN_SONG, album_id: 'neon' });
+	});
+
+	it('asks first when the target album has a public page and moves nothing yet', async () => {
+		await askToMoveOpenSongTo(NEON);
+
+		expect(get(songMoveConfirm)).toEqual(NEON);
+		expect(moveSong).not.toHaveBeenCalled();
+	});
+
+	it('moves at once into a private album without asking', async () => {
+		vi.mocked(moveSong).mockResolvedValue({ ...OPEN_SONG, album_id: 'abend' });
+
+		await askToMoveOpenSongTo(ABEND);
+
+		expect(get(songMoveConfirm)).toBeNull();
+		expect(get(songList)[0].album_id).toBe('abend');
+	});
+
+	it('moves the song into the asked album once confirmed and stops asking', async () => {
+		await askToMoveOpenSongTo(NEON);
+
+		await confirmSongMove();
+
+		expect(get(songMoveConfirm)).toBeNull();
+		expect(get(songList)[0].album_id).toBe('neon');
+	});
+
+	it('moves nothing and stops asking when cancelled', async () => {
+		await askToMoveOpenSongTo(NEON);
+
+		cancelSongMove();
+
+		expect(get(songMoveConfirm)).toBeNull();
+		expect(moveSong).not.toHaveBeenCalled();
+		expect(get(songList)[0].album_id).toBe('home');
 	});
 });

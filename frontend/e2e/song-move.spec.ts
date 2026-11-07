@@ -4,11 +4,14 @@
 
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+	DIALOG_CANCEL_LABEL,
 	SONG_MENU_LABEL,
 	SONG_MENU_MOVE_LABEL,
 	SONG_MOVE_HEADING,
 	SONG_MOVE_NO_OTHER_ALBUM,
-	songMovedToastLabel
+	SONG_MOVE_SHARED_TITLE,
+	songMovedToastLabel,
+	songMoveSharedMessage
 } from '../src/lib/constants';
 import { FlowGuard, HOME_PATH, nameStartingWith, ONLY_IN_SHELL, type Shell } from './helpers';
 import {
@@ -75,6 +78,19 @@ async function ownAlbum(person: Person, title: string): Promise<string> {
 	const { id } = (await response.json()) as Created;
 	person.albumIds.push(id);
 	return id;
+}
+
+async function shareAlbum(person: Person, albumId: string): Promise<void> {
+	const response = await person.api.post(`/api/albums/${albumId}/share`, {
+		headers: { origin: BASE_URL },
+		data: {}
+	});
+	expect(response.ok()).toBe(true);
+}
+
+async function albumIdOf(person: Person, songId: string): Promise<string> {
+	const response = await person.api.get(`/api/songs/${songId}`);
+	return ((await response.json()) as { album_id: string }).album_id;
 }
 
 async function titleOf(person: Person, albumId: string): Promise<string> {
@@ -220,6 +236,66 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				data: { album_id: memberAlbumId }
 			});
 			expect(refused.status()).toBe(404);
+		});
+
+		test('a shared album asks first: Cancel moves nothing and Move moves the song', async ({
+			page
+		}) => {
+			const { person, cookies } = await newPerson('ask');
+			const currentId = await ownAlbum(person, 'Current');
+			const sharedId = await ownAlbum(person, 'Shared');
+			await shareAlbum(person, sharedId);
+			const song = await ownSong(person, currentId);
+			await openSongAs(page, shell, cookies, currentId, song);
+			const sharedTitle = await titleOf(person, sharedId);
+			const asking = page.getByRole('dialog', { name: SONG_MOVE_SHARED_TITLE });
+
+			const menu = await openPicker(page);
+			await albumRow(menu, sharedTitle).click();
+
+			await expect(asking).toBeVisible();
+			await expect(asking).toContainText(songMoveSharedMessage(SONG_TITLE, sharedTitle));
+			await asking.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true }).click();
+			await expect(asking).toBeHidden();
+			expect(await albumIdOf(person, song.id)).toBe(currentId);
+
+			const again = await openPicker(page);
+			await albumRow(again, sharedTitle).click();
+			await asking.getByRole('button', { name: SONG_MENU_MOVE_LABEL, exact: true }).click();
+
+			await expect(page).toHaveURL(new RegExp(`/album/${sharedId}/${song.slug}$`));
+			expect(await albumIdOf(person, song.id)).toBe(sharedId);
+		});
+
+		test('a private album moves the song at once without asking', async ({ page }) => {
+			const { person, cookies } = await newPerson('private');
+			const currentId = await ownAlbum(person, 'Current');
+			const privateId = await ownAlbum(person, 'Private');
+			const song = await ownSong(person, currentId);
+			await openSongAs(page, shell, cookies, currentId, song);
+
+			const menu = await openPicker(page);
+			await albumRow(menu, await titleOf(person, privateId)).click();
+
+			await expect(page).toHaveURL(new RegExp(`/album/${privateId}/${song.slug}$`));
+			await expect(page.getByRole('dialog', { name: SONG_MOVE_SHARED_TITLE })).toHaveCount(0);
+			expect(await albumIdOf(person, song.id)).toBe(privateId);
+		});
+
+		test('a move out of a shared album moves the song at once without asking', async ({ page }) => {
+			const { person, cookies } = await newPerson('out');
+			const sharedId = await ownAlbum(person, 'Shared');
+			const privateId = await ownAlbum(person, 'Private');
+			await shareAlbum(person, sharedId);
+			const song = await ownSong(person, sharedId);
+			await openSongAs(page, shell, cookies, sharedId, song);
+
+			const menu = await openPicker(page);
+			await albumRow(menu, await titleOf(person, privateId)).click();
+
+			await expect(page).toHaveURL(new RegExp(`/album/${privateId}/${song.slug}$`));
+			await expect(page.getByRole('dialog', { name: SONG_MOVE_SHARED_TITLE })).toHaveCount(0);
+			expect(await albumIdOf(person, song.id)).toBe(privateId);
 		});
 	});
 }
