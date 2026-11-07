@@ -1,7 +1,0 @@
-claim_id = "e9e9784ead134779bc4dad03036f959f"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "04adeb650d1c8fe549bccf4b81b2f47ebef3d9ac"
-branch = "fix/backfill-order-seed"
-scope = ["tests/songmaker_cli/test_lifecycle_scoring_backfill.py"]
-opened_commit = "9e7cc9613cbccebf38ad969b2457e99046b8b387"
