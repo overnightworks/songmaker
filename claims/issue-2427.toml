@@ -1,0 +1,8 @@
+claim_id = "0bb35b022be64c3880075a0be95ba3df"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2df53a7d51babf44dff7d42ddda6c402028f9c3d"
+branch = "claude/issue-2427-the-issue-templates-the-prompts-folder-a"
+scope = [".github/ISSUE_TEMPLATE", ".gitignore", "docs/testing.md", "prompts", "pyproject.toml", "scripts/check_root_layout.py", "scripts/similar_functions.py", "tests/scripts/test_similar_functions.py", "tests/test_check_root_layout.py", "uv.lock"]
+opened_commit = "b0e995f98a0d3ba762aa40e46c8887ae512b3b09"
+whole_reason = "Three deletions the operator ruled together; each is reference cleanup only, and splitting them would triple the review rounds for no shared risk."
