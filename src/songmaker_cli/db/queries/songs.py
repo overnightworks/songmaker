@@ -292,9 +292,8 @@ def next_track_number(session: Session, album_id: str) -> int:
         .execution_options(include_deleted=True)
         .filter_by(album_id=album_id)
         .order_by(Song.track_number.desc())
+        .with_for_update()
     )
-    if session.bind.dialect.name != "sqlite":
-        track_query = track_query.with_for_update()
     max_track = track_query.first()
     return (max_track[0] + 1) if max_track else INITIAL_TRACK_NUMBER
 
