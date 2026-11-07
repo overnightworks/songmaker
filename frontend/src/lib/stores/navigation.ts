@@ -453,9 +453,9 @@ export function albumTrackNeighbors(
 // directly; it does not cover song selection elsewhere (e.g. player.ts's
 // own playback-driven selectSong).
 //
-// A dead songId (deleted between the link being shared/saved and it being
-// opened, issue #237) is a permanent, expected condition, not a transient
-// failure: it clears only the dead selection. Other failures leave the
+// A dead songId (deleted between the link being shared/saved, or an entry
+// being written, and it being opened) is a permanent, expected condition, not
+// a transient failure: it leaves only the dead song. Other failures leave the
 // selection available for retry and surface through SongDetailView.refreshTakes.
 function loadSongContext(songId: string): Promise<void> {
 	void hydrateGenerationFailure(songId);
@@ -470,7 +470,7 @@ function loadSongContext(songId: string): Promise<void> {
 		})
 		.catch(function acknowledgeOwnedFailure(err: unknown) {
 			if (isNotFound(err)) {
-				reportSongLinkNotFound(songId);
+				leaveGoneSong(songId);
 			}
 			// refreshTakes owns the shared load's error and retry; this background
 			// caller must consume its rejection without reporting it a second time.
@@ -488,11 +488,18 @@ function settleSongAddress(songId: string): void {
 	void replaceLibraryHistory();
 }
 
-// Only clears the selection if it still names the dead song: a caller may
-// have already navigated elsewhere while the fetch was in flight, and that
-// newer selection must win over this late 404.
-function reportSongLinkNotFound(songId: string): void {
-	if (get(selectedSongId) !== songId) return;
+// Leaves a song the server no longer has, but only while the person is still
+// there: the selection names it, or nothing is selected and the standing
+// library entry names it (a Back or Forward onto the entry of a song deleted
+// meanwhile, whose selection the restore already cleared). A selection of
+// another song is a newer choice that wins over this late 404.
+function leaveGoneSong(songId: string): void {
+	const selected = get(selectedSongId);
+	if (selected !== null && selected !== songId) return;
+	if (selected === null) {
+		const standing = currentLibraryHistoryState();
+		if (!isLibraryHistoryState(standing) || standing.songId !== songId) return;
+	}
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
