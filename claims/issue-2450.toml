@@ -1,0 +1,8 @@
+claim_id = "eb14b3ecad574db58715cbff2ebc90c5"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "102021f8d33fbbd404bc42a0e51620021e71263f"
+branch = "claude/issue-2450-ui-audit-entries-3-to-5-an-honest-empty"
+scope = ["frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/LibraryWorkspace.test.ts", "frontend/src/lib/components/LoadFailure.svelte", "frontend/src/lib/components/LoadFailure.test.ts", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/settings/references/+page.svelte"]
+opened_commit = "b67c236dd462589b2f392d7bf06f7bd3a1d97693"
+whole_reason = "Three small honesty fixes of one audit, bundled as its dispatch line says; each touches one or two files and they share constants.ts."
