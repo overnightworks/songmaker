@@ -3,20 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Rating, Score, Song, Version
 from songmaker_cli.db.queries.generations import bulk_delete_generations, delete_generation
 from songmaker_cli.db.queries.versions import delete_version
 
 
 @pytest.fixture
-def session(tmp_path: Path) -> Iterator[Session]:
-    with init_db(tmp_path / "test.db")() as db_session:
+def session(pg_factory) -> Iterator[Session]:
+    with pg_factory() as db_session:
         db_session.add(Album(id="album", title="A", artist="A"))
         db_session.add(Song(id="song", title="S", album_id="album", track_number=1))
         db_session.add(

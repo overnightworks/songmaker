@@ -28,7 +28,6 @@ from songmaker_cli.constants import (
     GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
     GENERATE_SUBMIT_TIMEOUT_SECONDS,
 )
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.scheduler import (
     WORKER_ERROR_GPU_OUT_OF_MEMORY,
@@ -106,8 +105,8 @@ class _InMemoryRedis:
 
 
 @pytest.fixture
-def db_factory(tmp_path: Path):
-    return init_db(tmp_path / "scheduler.db")
+def db_factory(pg_factory):
+    return pg_factory
 
 
 @pytest.fixture
