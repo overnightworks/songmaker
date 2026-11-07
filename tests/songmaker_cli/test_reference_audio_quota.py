@@ -18,10 +18,10 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
+from support.reference_rows import a_reference
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx
 
 from songmaker_cli.db.models import Album, ReferenceRecording, Song, User
-from songmaker_cli.db.queries.reference_recordings import create_reference_recording
 from songmaker_cli.reference_api import api_upload_reference
 from songmaker_cli.reference_audio import (
     ReferenceAudioQuotaExceeded,
@@ -71,14 +71,7 @@ def test_reference_quota_defaults_are_decimal_bytes_and_fifty_files():
 def _seed_rows(ctx, user_id, count, size_each=1):
     with ctx.db() as session:
         for index in range(count):
-            create_reference_recording(
-                session,
-                user_id=user_id,
-                storage_path=f"{user_id}/refs/seeded-{index}.wav",
-                original_filename=f"seeded-{index}.wav",
-                size_bytes=size_each,
-                duration_sec=None,
-            )
+            a_reference(session, user_id, name=f"seeded-{index}.wav", size_bytes=size_each)
         session.commit()
 
 

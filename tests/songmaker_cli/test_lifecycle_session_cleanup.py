@@ -8,17 +8,15 @@ from fastapi import FastAPI
 from support.web_app import TEST_SECRET
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.lifecycle import _cleanup_sessions, session_cleanup_loop
 
 
 @pytest.fixture
-def cleanup_context(tmp_path):
-    factory = init_test_db(tmp_path / "songmaker.db")
+def cleanup_context(tmp_path, pg_factory):
     return AppContext(
-        db=factory,
+        db=pg_factory,
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         signing_key=TEST_SECRET,

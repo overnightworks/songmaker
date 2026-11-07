@@ -44,7 +44,6 @@ class WorkerSettings(BaseSettings):
     audio_output_dir: str = DEFAULT_AUDIO_OUTPUT_DIR
     shared_audio_root: str = DEFAULT_SHARED_AUDIO_ROOT
     acestep_training_workspace_dirname: str = DEFAULT_TRAINING_WORKSPACE_DIRNAME
-    acestep_log_dir: str = "/opt/acestep/logs"
     acestep_inner_port: int = 8101
     control_plane_url: str | None = None
     gpu_id: int | None = None

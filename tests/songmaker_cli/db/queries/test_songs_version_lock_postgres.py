@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from support.generation_job_world import worker_up
 from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
+from support.reference_rows import a_reference
 from support.web_app import make_authenticated_user, make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
@@ -15,7 +16,6 @@ from songmaker_cli.db.models import (
     Album,
     AvailableModel,
     Job,
-    ReferenceRecording,
     Song,
     User,
     Version,
@@ -39,14 +39,11 @@ def _seeded(references: list[str]):
     def seed(session) -> None:
         session.add(User(id=OWNER, username="owner"))
         session.flush()
-        session.add_all(
-            ReferenceRecording(
-                id=REFERENCES[name], user_id=OWNER, storage_path=FILES[name],
-                original_filename=f"{name}.wav", size_bytes=4,
+        for name in FILES:
+            a_reference(
+                session, OWNER, name=f"{name}.wav", reference_id=REFERENCES[name],
+                storage_path=FILES[name],
             )
-            for name in FILES
-        )
-        session.flush()
         session.merge(AvailableModel(id="sft", is_active=True))
         session.add(Album(id="album-a", title="A", artist="A", created_by=OWNER))
         session.flush()

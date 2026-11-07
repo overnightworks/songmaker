@@ -9,7 +9,6 @@ import pytest
 
 from songmaker_cli.api_models.songs import generation_expiry
 from songmaker_cli.cleanup import run_generation_retention
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Rating, Score, Song, Version
 from songmaker_cli.db.queries.generations import (
     archive_generation,
@@ -22,9 +21,8 @@ from songmaker_cli.db.queries.generations import (
 
 
 @pytest.fixture
-def retention_factory(tmp_path: Path):
-    factory = init_db(tmp_path / "retention.db")
-    with factory() as session:
+def retention_factory(tmp_path: Path, pg_factory):
+    with pg_factory() as session:
         session.add(Album(id="a1", title="A", artist="X"))
         session.add(Song(id="s1", title="S", album_id="a1", track_number=1))
         session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="", prompt=""))
@@ -38,7 +36,7 @@ def retention_factory(tmp_path: Path):
             ],
         )
         session.commit()
-    return factory
+    return pg_factory
 
 
 def _age(factory, gen_id: str, *, created_days_ago: int = 0,

@@ -1146,25 +1146,22 @@ def test_generate_song_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_generate_song_no_lyrics(client: TestClient) -> None:
-    from songmaker_cli.db.models import Song, Version
-
+@pytest.mark.parametrize(
+    ("lyrics", "prompt"),
+    [("", ""), ("la la", ""), ("", "rock")],
+)
+def test_generate_refused_without_lyrics_or_prompt(client: TestClient, lyrics: str, prompt: str):
+    """Spec: REQ-CREATE-02 -- a version missing lyrics or a style prompt starts no generation."""
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
-        session.add(Song(
-            id="s_empty", title="Empty", album_id="rock", slug="empty",
-        ))
-        session.add(Version(
-            id="v_empty", song_id="s_empty",
-            version_number=1, lyrics="", prompt="",
-        ))
+        session.add(Song(id="s_empty", title="Empty", album_id="rock", slug="empty"))
+        session.add(Version(id="v1e", song_id="s_empty", version_number=1, lyrics=lyrics,
+                            prompt=prompt))
         session.commit()
-
-    resp = client.post(
-        "/api/songs/s_empty/generate",
-        json={"count": 1, "model": "sft"},
-    )
+    resp = client.post("/api/songs/s_empty/generate", json={"count": 1, "model": "sft"})
     assert resp.status_code == 400
+    with ctx.db() as session:
+        assert session.query(Job).filter_by(song_id="s_empty").count() == 0
 
 
 def _mock_worker(mock_pool=None):
@@ -1247,6 +1244,7 @@ def _register_worker_with_gpu_health(
 
 
 def test_generate_song_submits_job(client: TestClient) -> None:
+    """Spec: REQ-CREATE-01 -- generating for a song enqueues a generate job."""
     with _mock_worker() as mock_pool:
         resp = client.post(
             "/api/songs/s1/generate",
@@ -1927,6 +1925,7 @@ def test_endpoint_rejects_unknown_model(
 def test_endpoint_rejects_inactive_model(
     client: TestClient, url: str, base_payload: dict,
 ) -> None:
+    """Spec: REQ-MODEL-01 -- an inactive model is refused by name, never swapped for another."""
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         before = session.query(AvailableModel).filter_by(id="turbo").one()

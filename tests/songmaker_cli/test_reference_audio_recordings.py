@@ -25,9 +25,10 @@ from songmaker_cli.settings import Settings
 
 
 @pytest.fixture
-def ctx(tmp_path):
+def ctx(tmp_path, pg_factory):
     return make_router_ctx(
-        tmp_path, seed_db=lambda session: session.add(User(id="owner", username="owner")),
+        tmp_path, db=pg_factory,
+        seed_db=lambda session: session.add(User(id="owner", username="owner")),
     )
 
 

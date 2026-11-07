@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import signal
 import subprocess
-from io import BytesIO, StringIO
+from collections import deque
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -15,8 +16,6 @@ from acestep_worker.model_cache import LoadedModel
 from acestep_worker.subprocess_runner import (
     SubprocessHandle,
     SubprocessStartError,
-    _open_log_file,
-    _read_stderr_tail,
     _stream_subprocess_logs,
     build_env,
     find_uv,
@@ -144,7 +143,7 @@ def test_is_acestep_healthy_false() -> None:
 
 
 def test_wait_for_health_succeeds_immediately() -> None:
-    handle = SubprocessHandle(process=MagicMock(), stderr_path=None, port=8101)
+    handle = SubprocessHandle(process=MagicMock(), port=8101)
     sleeps: list[float] = []
     times = iter([0.0, 0.0])
     with patch("acestep_worker.subprocess_runner.is_acestep_healthy", return_value=True):
@@ -160,7 +159,7 @@ def test_wait_for_health_succeeds_immediately() -> None:
 def test_wait_for_health_timeout() -> None:
     proc = MagicMock()
     proc.poll.return_value = None
-    handle = SubprocessHandle(process=proc, stderr_path=None, port=8101)
+    handle = SubprocessHandle(process=proc, port=8101)
     times = iter([0.0, 1.0, 2.0, 100.0])
     sleeps: list[float] = []
     with patch("acestep_worker.subprocess_runner.is_acestep_healthy", return_value=False):
@@ -174,12 +173,19 @@ def test_wait_for_health_timeout() -> None:
     assert sleeps
 
 
-def test_wait_for_health_timeout_includes_log_tail(tmp_path: Path) -> None:
+def _handle_after_child_output(process: MagicMock, *lines: bytes) -> SubprocessHandle:
+    process.stdout.readline.side_effect = [*(line + b"\n" for line in lines), b""]
+    handle = SubprocessHandle(process=process, port=8101)
+    _stream_subprocess_logs(
+        mode="sft", process=process, recent_lines=handle.recent_lines, on_log_line=None,
+    )
+    return handle
+
+
+def test_wait_for_health_timeout_includes_log_tail() -> None:
     proc = MagicMock()
     proc.poll.return_value = None
-    log_path = tmp_path / "log"
-    log_path.write_text("vllm: loading shard 2/4\nstuck waiting for cuda")
-    handle = SubprocessHandle(process=proc, stderr_path=log_path, port=8101)
+    handle = _handle_after_child_output(proc, b"vllm: loading shard 2/4", b"stuck waiting for cuda")
     times = iter([0.0, 100.0])
     with patch("acestep_worker.subprocess_runner.is_acestep_healthy", return_value=False):
         with pytest.raises(SubprocessStartError) as excinfo:
@@ -195,15 +201,13 @@ def test_wait_for_health_timeout_includes_log_tail(tmp_path: Path) -> None:
     assert "stuck waiting for cuda" in msg
 
 
-def test_wait_for_health_subprocess_died(tmp_path: Path) -> None:
+def test_wait_for_health_subprocess_died_carries_last_lines() -> None:
     proc = MagicMock()
     proc.poll.return_value = 1
-    stderr = tmp_path / "stderr.log"
-    stderr.write_text("crash log")
-    handle = SubprocessHandle(process=proc, stderr_path=stderr, port=8101)
+    handle = _handle_after_child_output(proc, b"crash log")
     times = iter([0.0, 0.0])
     with patch("acestep_worker.subprocess_runner.is_acestep_healthy", return_value=False):
-        with pytest.raises(SubprocessStartError, match="exited"):
+        with pytest.raises(SubprocessStartError, match="exited: crash log"):
             wait_for_health(
                 handle,
                 timeout=10,
@@ -212,25 +216,19 @@ def test_wait_for_health_subprocess_died(tmp_path: Path) -> None:
             )
 
 
-def test_read_stderr_tail_none() -> None:
-    assert _read_stderr_tail(None) == ""
-
-
-def test_read_stderr_tail_missing(tmp_path: Path) -> None:
-    assert _read_stderr_tail(tmp_path / "ghost") == ""
-
-
-def test_read_stderr_tail_short(tmp_path: Path) -> None:
-    p = tmp_path / "log"
-    p.write_text("hi")
-    assert _read_stderr_tail(p) == "hi"
-
-
-def test_read_stderr_tail_long(tmp_path: Path) -> None:
-    p = tmp_path / "log"
-    p.write_text("x" * 1000)
-    result = _read_stderr_tail(p, max_chars=100)
-    assert len(result) == 100
+def test_failed_start_keeps_only_the_newest_lines_past_the_bound() -> None:
+    proc = MagicMock()
+    proc.poll.return_value = 1
+    handle = _handle_after_child_output(
+        proc, *(f"line {number}".encode() for number in range(200)),
+    )
+    times = iter([0.0, 0.0])
+    with patch("acestep_worker.subprocess_runner.is_acestep_healthy", return_value=False):
+        with pytest.raises(SubprocessStartError) as excinfo:
+            wait_for_health(handle, timeout=10, clock=lambda: next(times))
+    assert "line 199" in str(excinfo.value)
+    assert "line 0\n" not in str(excinfo.value)
+    assert len(handle.recent_lines) < 200
 
 
 def test_start_acestep_subprocess_no_uv(tmp_path: Path) -> None:
@@ -265,11 +263,9 @@ def test_start_acestep_subprocess_success(tmp_path: Path) -> None:
             port=8101,
             checkpoint_dir=tmp_path,
             vram_budget_gb=24.0,
-            log_dir=tmp_path / "logs",
         )
     assert handle.port == 8101
     assert handle.process is proc
-    assert handle.stderr_path is not None
     assert handle.log_thread is not None
 
 
@@ -364,22 +360,14 @@ class _CloseErrorBytesIO(BytesIO):
         raise OSError("stdout close failed")
 
 
-class _CloseErrorStringIO(StringIO):
-    def close(self) -> None:
-        super().close()
-        raise OSError("stderr close failed")
-
-
 class _DrainingLogThread:
-    def __init__(self, stderr: StringIO) -> None:
-        self.stderr = stderr
+    def __init__(self) -> None:
         self.pending = "last log line"
 
     def is_alive(self) -> bool:
         return bool(self.pending)
 
     def join(self, timeout: float) -> None:
-        self.stderr.write(self.pending)
         self.pending = ""
 
 
@@ -392,18 +380,16 @@ class _DrainingLogThread:
         ("lookup-race", 0),
     ],
 )
-@pytest.mark.parametrize("close_error", [None, "stdout", "stderr"])
+@pytest.mark.parametrize("close_error", [None, "stdout"])
 def test_stop_terminates_and_reaps_process_and_releases_resources(
     outcome: str, expected_exit: int, close_error: str | None,
 ) -> None:
     """1346-F4-stop, 1346-F5-cleanup: exit and cleanup survive races and I/O errors."""
     stdout = _CloseErrorBytesIO() if close_error == "stdout" else BytesIO()
-    stderr = _CloseErrorStringIO() if close_error == "stderr" else StringIO()
     process = _StopProcess(outcome, stdout)
-    log_thread = _DrainingLogThread(stderr)
+    log_thread = _DrainingLogThread()
     handle = SubprocessHandle(
-        process=process, stderr_path=None, port=8101,
-        stderr_file=stderr, log_thread=log_thread,
+        process=process, port=8101, log_thread=log_thread,
     )
 
     stop_acestep_subprocess(handle)
@@ -411,15 +397,13 @@ def test_stop_terminates_and_reaps_process_and_releases_resources(
     assert process.poll() == expected_exit
     assert process.reaped
     assert stdout.closed
-    assert stderr.closed
     assert not log_thread.is_alive()
     assert handle.log_thread is None
-    assert handle.stderr_file is None
 
 
 def test_make_acestep_runner_loader_unloader(tmp_path: Path) -> None:
     expected_port = inner_port_for_mode(8101, "sft")
-    fake_handle = SubprocessHandle(process=MagicMock(), stderr_path=None, port=expected_port)
+    fake_handle = SubprocessHandle(process=MagicMock(), port=expected_port)
 
     with patch(
         "acestep_worker.subprocess_runner.start_acestep_subprocess",
@@ -472,7 +456,7 @@ def test_make_acestep_runner_derives_a_distinct_port_per_mode(
 
     def fake_start(mode_arg: str, **kwargs):
         captured_ports.append(kwargs["port"])
-        return SubprocessHandle(process=MagicMock(), stderr_path=None, port=kwargs["port"])
+        return SubprocessHandle(process=MagicMock(), port=kwargs["port"])
 
     with patch(
         "acestep_worker.subprocess_runner.start_acestep_subprocess",
@@ -492,7 +476,7 @@ def test_two_different_modes_get_two_different_ports(tmp_path: Path) -> None:
 
     def fake_start(mode_arg: str, **kwargs):
         started_ports.append(kwargs["port"])
-        return SubprocessHandle(process=MagicMock(), stderr_path=None, port=kwargs["port"])
+        return SubprocessHandle(process=MagicMock(), port=kwargs["port"])
 
     with patch(
         "acestep_worker.subprocess_runner.start_acestep_subprocess",
@@ -559,7 +543,7 @@ def test_second_mode_load_is_not_fooled_by_first_modes_leftover_health(
 
 def test_make_acestep_runner_passes_on_log_line(tmp_path: Path) -> None:
     captured_kwargs: dict = {}
-    fake_handle = SubprocessHandle(process=MagicMock(), stderr_path=None, port=8101)
+    fake_handle = SubprocessHandle(process=MagicMock(), port=8101)
 
     def fake_start(mode: str, **kwargs):
         captured_kwargs.update(kwargs)
@@ -584,7 +568,7 @@ def test_make_acestep_runner_passes_on_log_line(tmp_path: Path) -> None:
 
 def test_make_acestep_runner_passes_gpu_id(tmp_path: Path) -> None:
     captured_kwargs: dict = {}
-    fake_handle = SubprocessHandle(process=MagicMock(), stderr_path=None, port=8101)
+    fake_handle = SubprocessHandle(process=MagicMock(), port=8101)
 
     def fake_start(mode: str, **kwargs):
         captured_kwargs.update(kwargs)
@@ -605,54 +589,25 @@ def test_make_acestep_runner_passes_gpu_id(tmp_path: Path) -> None:
     assert captured_kwargs["gpu_id"] == 1
 
 
-def test_open_log_file_none_when_no_log_dir() -> None:
-    path, handle = _open_log_file(None, "sft")
-    assert path is None
-    assert handle is None
-
-
-def test_open_log_file_appends_with_header(tmp_path: Path) -> None:
-    log_dir = tmp_path / "logs"
-    path, handle = _open_log_file(log_dir, "sft")
-    assert path is not None
-    assert handle is not None
-    handle.write("first attempt body\n")
-    handle.close()
-
-    path2, handle2 = _open_log_file(log_dir, "sft")
-    assert path2 == path
-    handle2.write("second attempt body\n")
-    handle2.close()
-
-    contents = path.read_text()
-    assert contents.count("=== sft attempt at ") == 2
-    assert "first attempt body" in contents
-    assert "second attempt body" in contents
-
-
-def test_stream_subprocess_logs_writes_to_file_and_callback(tmp_path: Path) -> None:
+def test_stream_subprocess_logs_keeps_recent_lines_and_calls_back() -> None:
     proc = MagicMock()
     proc.stdout.readline.side_effect = [
         b"vllm: loading shard 1/4\n",
         b"vllm: loading shard 2/4\n",
         b"",
     ]
-    log_path = tmp_path / "ace.log"
-    log_handle = log_path.open("w", encoding="utf-8")
+    recent_lines: deque[str] = deque(maxlen=50)
     captured: list[str] = []
 
     _stream_subprocess_logs(
         mode="sft",
         process=proc,
-        log_file=log_handle,
+        recent_lines=recent_lines,
         on_log_line=captured.append,
     )
-    log_handle.close()
 
     assert captured == ["vllm: loading shard 1/4", "vllm: loading shard 2/4"]
-    body = log_path.read_text()
-    assert "shard 1/4" in body
-    assert "shard 2/4" in body
+    assert list(recent_lines) == captured
 
 
 def test_stream_subprocess_logs_swallows_callback_exception(tmp_path: Path) -> None:
@@ -662,7 +617,7 @@ def test_stream_subprocess_logs_swallows_callback_exception(tmp_path: Path) -> N
     def boom(_: str) -> None:
         raise RuntimeError("nope")
 
-    _stream_subprocess_logs(mode="sft", process=proc, log_file=None, on_log_line=boom)
+    _stream_subprocess_logs(mode="sft", process=proc, recent_lines=deque(), on_log_line=boom)
 
 
 def test_stream_subprocess_logs_skips_empty_lines() -> None:
@@ -670,7 +625,7 @@ def test_stream_subprocess_logs_skips_empty_lines() -> None:
     proc.stdout.readline.side_effect = [b"\n", b"  ok\n", b""]
     captured: list[str] = []
     _stream_subprocess_logs(
-        mode="sft", process=proc, log_file=None, on_log_line=captured.append,
+        mode="sft", process=proc, recent_lines=deque(), on_log_line=captured.append,
     )
     assert captured == ["  ok"]
 
@@ -678,25 +633,13 @@ def test_stream_subprocess_logs_skips_empty_lines() -> None:
 def test_stream_subprocess_logs_no_stdout_returns() -> None:
     proc = MagicMock()
     proc.stdout = None
-    _stream_subprocess_logs(mode="sft", process=proc, log_file=None, on_log_line=None)
-
-
-def test_stream_subprocess_logs_swallows_log_file_write_error() -> None:
-    proc = MagicMock()
-    proc.stdout.readline.side_effect = [b"line\n", b""]
-    log_handle = MagicMock()
-    log_handle.write.side_effect = OSError("disk full")
-    captured: list[str] = []
-    _stream_subprocess_logs(
-        mode="sft", process=proc, log_file=log_handle, on_log_line=captured.append,
-    )
-    assert captured == ["line"]
+    _stream_subprocess_logs(mode="sft", process=proc, recent_lines=deque(), on_log_line=None)
 
 
 def test_stream_subprocess_logs_swallows_outer_exception() -> None:
     proc = MagicMock()
     proc.stdout.readline.side_effect = RuntimeError("pipe exploded")
-    _stream_subprocess_logs(mode="sft", process=proc, log_file=None, on_log_line=None)
+    _stream_subprocess_logs(mode="sft", process=proc, recent_lines=deque(), on_log_line=None)
 
 
 def test_build_env_sets_pythonunbuffered() -> None:

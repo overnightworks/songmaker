@@ -54,8 +54,8 @@ def _seed_rate_limit_data(session) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
+def client(tmp_path: Path, pg_factory) -> TestClient:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data, factory=pg_factory)
     return client
 
 
@@ -264,10 +264,10 @@ def test_queue_depth_limit(client: TestClient, monkeypatch) -> None:
 
 
 @pytest.fixture
-def ip_limited_client(tmp_path: Path, monkeypatch) -> TestClient:
+def ip_limited_client(tmp_path: Path, monkeypatch, pg_factory) -> TestClient:
     monkeypatch.setenv("IP_RATE_LIMIT", "2")
     get_settings.cache_clear()
-    client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data, factory=pg_factory)
     build_dir = tmp_path / "frontend" / "build"
     (build_dir / "favicon.svg").write_text("<svg></svg>")
     (build_dir / "service-worker.js").write_text("// sw")
@@ -437,12 +437,12 @@ def test_classify_path(rate_limit_policy, path: str, expected_budget: str) -> No
 
 
 @pytest.fixture
-def class_limited_client(tmp_path: Path, monkeypatch) -> TestClient:
+def class_limited_client(tmp_path: Path, monkeypatch, pg_factory) -> TestClient:
     monkeypatch.setenv("IP_RATE_LIMIT", "2")
     monkeypatch.setenv("MEDIA_RATE_LIMIT", "2")
     monkeypatch.setenv("STREAM_RATE_LIMIT", "2")
     get_settings.cache_clear()
-    client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data, factory=pg_factory)
     yield client
     get_settings.cache_clear()
 
@@ -532,12 +532,12 @@ def _seed_shared_album_data(session) -> None:
 
 
 @pytest.fixture
-def shared_slug_client(tmp_path: Path, monkeypatch) -> tuple[TestClient, str]:
+def shared_slug_client(tmp_path: Path, monkeypatch, pg_factory) -> tuple[TestClient, str]:
     # Setup itself spends 2 API-class calls (login + share), so the budget
     # needs headroom above that before the test's own assertions run.
     monkeypatch.setenv("IP_RATE_LIMIT", "5")
     get_settings.cache_clear()
-    client, _ = make_test_app(tmp_path, seed_db=_seed_shared_album_data)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_shared_album_data, factory=pg_factory)
     admin_audio_dir = tmp_path / "audio" / "admin_user"
     admin_audio_dir.mkdir(parents=True, exist_ok=True)
     (admin_audio_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)

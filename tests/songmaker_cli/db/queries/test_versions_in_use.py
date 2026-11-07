@@ -8,6 +8,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from support.generation_job_world import worker_up
+from support.reference_rows import a_reference
 from support.web_app import (
     make_authenticated_user,
     make_fake_redis,
@@ -24,7 +25,6 @@ from songmaker_cli.db.models import (
     AvailableModel,
     Generation,
     Job,
-    ReferenceRecording,
     Song,
     User,
     Version,
@@ -45,14 +45,8 @@ TERMINAL_STATUSES = [
 def _seed(session) -> None:
     session.add(User(id=OWNER_ID, username="owner", role="user"))
     session.flush()
-    session.add(ReferenceRecording(
-        id="reference", user_id=OWNER_ID, storage_path="owner/reference.wav",
-        original_filename="reference.wav", size_bytes=4,
-    ))
-    session.add(ReferenceRecording(
-        id="take-reference", user_id=OWNER_ID, storage_path="owner/take-reference.wav",
-        original_filename="take-reference.wav", size_bytes=4,
-    ))
+    a_reference(session, OWNER_ID, name="reference.wav", reference_id="reference")
+    a_reference(session, OWNER_ID, name="take-reference.wav", reference_id="take-reference")
     session.add(Album(id="album", title="A", artist="B", created_by=OWNER_ID))
     session.add(Song(id="song", title="S", album_id="album", track_number=1, slug="s"))
     session.add(Song(id="other-song", title="O", album_id="album", track_number=2, slug="o"))
