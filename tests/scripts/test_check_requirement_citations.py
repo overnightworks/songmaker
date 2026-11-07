@@ -71,4 +71,3 @@ def test_mention_in_page_body_defines_nothing() -> None:
     problems = checker.find_problems({PAGE: f"See {DEFINED_ID} for details.\n"}, {})
 
     assert problems == []
-
