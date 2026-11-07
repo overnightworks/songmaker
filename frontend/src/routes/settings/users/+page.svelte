@@ -627,10 +627,10 @@
 		font-size: 0.72rem;
 		font-weight: 600;
 		padding: 0.18rem 0.7rem;
-		border: 1px solid var(--score-bad);
+		border: 1px solid var(--accent);
 		border-radius: 999px;
 		background: transparent;
-		color: var(--score-bad);
+		color: var(--accent);
 		cursor: pointer;
 	}
 
@@ -761,7 +761,7 @@
 
 	.voice-status-failed {
 		background: var(--fail);
-		color: white;
+		color: var(--on-fail);
 	}
 
 	.actions {

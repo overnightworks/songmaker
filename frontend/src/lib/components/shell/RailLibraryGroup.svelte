@@ -314,15 +314,15 @@
 		max-width: 100%;
 		padding: 4px 8px;
 		background: none;
-		border: 1px solid var(--score-bad);
-		color: var(--score-bad);
+		border: 1px solid var(--accent);
+		color: var(--accent);
 		font-size: 0.75rem;
 		font-family: inherit;
 		cursor: pointer;
 	}
 
 	.rail-retry:hover {
-		background: var(--score-bad-bg);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.row {

@@ -218,7 +218,7 @@
 	}
 
 	.card.danger {
-		border-color: var(--score-bad);
+		border-color: var(--border);
 	}
 
 	.number {
@@ -227,7 +227,7 @@
 	}
 
 	.card.danger .number {
-		color: var(--score-bad);
+		color: var(--text);
 	}
 
 	.label {

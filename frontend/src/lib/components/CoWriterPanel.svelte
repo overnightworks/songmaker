@@ -1496,7 +1496,7 @@
 	}
 
 	.mention-remove:hover {
-		color: var(--score-bad);
+		color: var(--accent);
 	}
 
 	.input-area {

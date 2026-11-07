@@ -382,7 +382,7 @@
 		margin-left: 4px;
 	}
 	.error-text {
-		color: #d34;
+		color: var(--fail);
 		margin-left: 4px;
 	}
 
