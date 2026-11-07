@@ -1,0 +1,7 @@
+claim_id = "d54b910348af4be7822377cae9a08c15"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "6e0eb8b76f262a823e4aadd249f0cfc1ebef4130"
+branch = "claude/issue-2548-default-chooser-radio"
+scope = ["frontend/src/routes/settings/generation/+page.svelte", "frontend/src/routes/settings/generation/page.test.ts"]
+opened_commit = "9225e8733c3ee42f6807c812ccb95b20490b0d60"
