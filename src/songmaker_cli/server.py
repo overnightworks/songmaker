@@ -280,8 +280,6 @@ def create_app(
 
     sw_path = sveltekit_dir / "service-worker.js"
     manifest_path = sveltekit_dir / "manifest.webmanifest"
-    icon_192_path = sveltekit_dir / "icon-192.png"
-    icon_512_path = sveltekit_dir / "icon-512.png"
     _pwa_exact_paths = (
         frozenset(
             {
@@ -308,17 +306,17 @@ def create_app(
             raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
         return FileResponse(manifest_path, media_type="application/manifest+json")
 
-    @app.get("/icon-192.png", include_in_schema=False)
-    async def serve_icon_192() -> FileResponse:
-        if not icon_192_path.exists():
-            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
-        return FileResponse(icon_192_path, media_type="image/png")
+    def register_icon_route(icon_path: str) -> None:
+        icon_file = sveltekit_dir / icon_path.lstrip("/")
 
-    @app.get("/icon-512.png", include_in_schema=False)
-    async def serve_icon_512() -> FileResponse:
-        if not icon_512_path.exists():
-            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
-        return FileResponse(icon_512_path, media_type="image/png")
+        @app.get(icon_path, include_in_schema=False)
+        async def serve_icon() -> FileResponse:
+            if not icon_file.exists():
+                raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
+            return FileResponse(icon_file, media_type="image/png")
+
+    for icon_path in sorted(PWA_ICON_PATHS):
+        register_icon_route(icon_path)
 
     sk_index = sveltekit_dir / "index.html"
     app.state.spa_index = sk_index

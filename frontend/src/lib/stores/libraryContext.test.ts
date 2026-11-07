@@ -310,6 +310,14 @@ describe('library history snapshot', () => {
 		expect(isLibraryHistoryState(libraryRootState())).toBe(true);
 	});
 
+	it.each(['write', 'chat', 'generations'])(
+		'rejects an old %s tab name as a stale entry, and accepts a current one',
+		(oldTabName) => {
+			expect(isLibraryHistoryState({ ...libraryRootState(), detailTab: oldTabName })).toBe(false);
+			expect(isLibraryHistoryState({ ...libraryRootState(), detailTab: 'takes' })).toBe(true);
+		}
+	);
+
 	it('rejects a malformed collection snapshot', () => {
 		expect(
 			isLibraryHistoryState({ ...libraryRootState(), collection: { kind: 'song', id: 'x' } })
@@ -603,16 +611,6 @@ describe('applyLibraryHistory', () => {
 		await applyLibraryHistory(withoutDetailTab);
 		expect(get(detailTab)).toBe('edit');
 		expect(get(librarySurface)).toBe('browse');
-	});
-
-	it.each([
-		['write', 'edit'],
-		['chat', 'cowriter'],
-		['generations', 'takes']
-	] as const)('restores an old %s history entry on the %s tab', async (legacy, restored) => {
-		detailTab.set(restored === 'edit' ? 'takes' : 'edit');
-		await applyLibraryHistory({ ...libraryRootState(), detailTab: legacy as never });
-		expect(get(detailTab)).toBe(restored);
 	});
 
 	it('remembers the tab a restored song was shown on, and only for that song', async () => {
@@ -1204,9 +1202,7 @@ describe('openSongAddress', () => {
 
 	it.each([
 		['takes', 'takes'],
-		['cowriter', 'cowriter'],
-		['generations', 'takes'],
-		['write', 'edit']
+		['cowriter', 'cowriter']
 	] as const)(
 		'reopens a reloaded song on the tab its %s history entry was left on (%s)',
 		async (leftOn, restored) => {

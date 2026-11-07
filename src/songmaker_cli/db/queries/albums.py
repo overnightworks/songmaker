@@ -282,7 +282,7 @@ def delete_album(session: Session, album_id: str) -> list[str]:
         song_ids = [song.id for song in lock_songs(session, Song.album_id == album_id)]
         if has_active_job_for_songs(session, song_ids, album_id):
             raise ActiveJobError(album_id)
-        paths = delete_takes(session, Generation.song_id.in_(song_ids))
+        paths = delete_takes(session, Generation.song_id.in_(song_ids)).paths
 
         session.delete(album)
         session.flush()

@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import Generation, Version
-from songmaker_cli.db.queries.generations import DELETION_LOADING, lock_takes
+from songmaker_cli.db.queries.generations import delete_takes
 from songmaker_cli.db.queries.jobs import has_active_job_for_version
 from songmaker_cli.db.queries.songs import lock_song_row
 
@@ -50,12 +50,7 @@ def _release_generations(
         for generation in version.generations:
             generation.version_id = None
         return []
-    takes = lock_takes(session, Generation.version_id == version.id, options=DELETION_LOADING)
-    paths: list[str] = []
-    for generation in takes:
-        paths.extend(path for path in (generation.mp3_path, generation.wav_path) if path)
-        session.delete(generation)
-    return paths
+    return delete_takes(session, Generation.version_id == version.id).paths
 
 
 def delete_version(
