@@ -201,6 +201,12 @@
 	{/if}
 {/snippet}
 
+{#snippet takesTip()}
+	{#if touchPointer && song.generations.length > 0}
+		<InfoTip label="About takes" text={TAKES_MOBILE_HINT} />
+	{/if}
+{/snippet}
+
 {#snippet takeRows(generations: GenerationItem[])}
 	{#each generations as gen (gen.id)}
 		<TakeRow
@@ -287,6 +293,7 @@
 						{currentVersionHeadLabel(current.versionNumber ?? 0, current.generations.length)}
 					</span>
 					{@render openLink(current)}
+					{@render takesTip()}
 				</div>
 				{#if current.generations.length === 0 && !jobRunning}
 					<div class="version-empty">{TAKES_EMPTY}</div>
@@ -299,7 +306,7 @@
 			<p class="earlier-label">{EARLIER_VERSIONS_LABEL}</p>
 		{/if}
 
-		{#each groups.earlier as group (group.key)}
+		{#each groups.earlier as group, index (group.key)}
 			{@const open = isGroupOpen($takeFolds, groups, group.key)}
 			<div class="version-section">
 				<div class="version-header-row">
@@ -323,16 +330,13 @@
 						{/if}
 					</button>
 					{#if open}{@render openLink(group)}{/if}
+					{#if !groups.current && index === 0}{@render takesTip()}{/if}
 				</div>
 				{#if open}
 					<div class="version-takes">{@render takeRows(group.generations)}</div>
 				{/if}
 			</div>
 		{/each}
-
-		{#if touchPointer && song.generations.length > 0}
-			<div class="takes-info"><InfoTip label="About takes" text={TAKES_MOBILE_HINT} /></div>
-		{/if}
 
 		{#if $selectionMode}
 			<div class="selection-toolbar">
@@ -551,11 +555,6 @@
 		.destructive {
 			grid-area: 2 / 2;
 		}
-	}
-
-	.takes-info {
-		display: flex;
-		justify-content: flex-end;
 	}
 
 	.empty,

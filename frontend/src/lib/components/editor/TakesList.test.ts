@@ -1269,7 +1269,7 @@ describe('TakesList load states', () => {
 		generateState.set(RUNNING);
 		const { target } = await render({ song: song({}) });
 		expect(target.querySelector('.status-slot')).not.toBeNull();
-		expect(target.querySelector('.takes-info')).toBeNull();
+		expect(target.querySelector('[role="tooltip"]')).toBeNull();
 		vi.unstubAllGlobals();
 	});
 });
@@ -1277,12 +1277,12 @@ describe('TakesList load states', () => {
 describe('TakesList touch hint', () => {
 	it('offers the tap hint behind an info tip on a coarse pointer and not on a mouse', async () => {
 		stubCoarsePointer(true);
-		const { target: coarse } = await render();
-		expect(coarse.querySelector('[role="tooltip"]')?.textContent).toBe(TAKES_MOBILE_HINT);
-
+		const { target } = await render();
+		expect(target.querySelector('.version-head [role="tooltip"]')?.textContent).toBe(
+			TAKES_MOBILE_HINT
+		);
 		stubCoarsePointer(false);
-		const { target: fine } = await render();
-		expect(fine.querySelector('[role="tooltip"]')).toBeNull();
+		expect((await render()).target.querySelector('[role="tooltip"]')).toBeNull();
 		vi.unstubAllGlobals();
 	});
 });
