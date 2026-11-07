@@ -390,7 +390,11 @@ def empty_postgresql_url(postgresql_databases):
 
 @pytest.fixture
 def pg_factory(postgresql_url):
-    """A session factory on this worker's migrated database, closed before its reset."""
+    """A session factory on this worker's migrated database, closed before its reset.
+
+    A test that also takes ``fresh_settings`` lists ``pg_factory`` first, because
+    ``pg_factory`` reads and caches the settings.
+    """
     from sqlalchemy import create_engine
 
     from songmaker_cli.settings import get_settings
