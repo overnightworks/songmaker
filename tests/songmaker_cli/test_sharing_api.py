@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -31,7 +32,6 @@ from songmaker_cli.constants import (
     PLAYLIST_COVER_DIRNAME,
     SONG_COVER_DIRNAME,
 )
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 
 # The four share endpoints require PUBLIC_BASE_URL (#339); conftest.py sets
@@ -69,13 +69,6 @@ def _make_sharing_app(tmp_path: Path, factory) -> tuple[TestClient, Path]:
 @pytest.fixture
 def sharing_app(tmp_path: Path, pg_factory) -> TestClient:
     client, _ = _make_sharing_app(tmp_path, pg_factory)
-    seed_session(client, "admin")
-    return client
-
-
-@pytest.fixture
-def sqlite_sharing_app(tmp_path: Path) -> TestClient:
-    client, _ = _make_sharing_app(tmp_path, init_db(tmp_path / "data" / "songmaker.db"))
     seed_session(client, "admin")
     return client
 
@@ -152,7 +145,9 @@ def test_share_album_response_lists_songs_without_playable_take(tmp_path: Path, 
     }
 
 
-def test_share_warning_agrees_with_what_the_share_page_actually_plays(tmp_path, pg_factory) -> None:
+def test_share_warning_agrees_with_what_the_share_page_actually_plays(
+    tmp_path: Path, pg_factory
+) -> None:
     """The owner-facing warning list and the public share page must use the
     same playability rule -- a song can't vanish from one without showing up
     in the other (#147)."""
@@ -802,21 +797,21 @@ def test_shared_audio_lookups_run_off_the_event_loop(
     _SHARED_AUDIO_LOOKUP_CONFIGURATIONS,
 )
 def test_shared_audio_lookups_issue_one_scalar_query_keyed_on_the_take_id(
-    sqlite_sharing_app: TestClient,
+    sharing_app: TestClient,
     surface: SharedAudioSurface,
 ) -> None:
     if surface.seed is not None:
-        with sqlite_sharing_app.app.state.ctx.db() as session:
+        with sharing_app.app.state.ctx.db() as session:
             surface.seed(session)
             session.commit()
-    slug = sqlite_sharing_app.post(surface.share_path).json()["share_slug"]
-    factory = sqlite_sharing_app.app.state.ctx.db
+    slug = sharing_app.post(surface.share_path).json()["share_slug"]
+    factory = sharing_app.app.state.ctx.db
     with factory() as probe_session:
         engine = probe_session.get_bind()
 
     queries, handle = _count_queries(engine, "select")
     try:
-        unauthed = web_client(sqlite_sharing_app.app, cookies={})
+        unauthed = web_client(sharing_app.app, cookies={})
         response = unauthed.get(surface.audio_path.format(slug=slug))
     finally:
         event.remove(engine, "before_cursor_execute", handle)
@@ -825,12 +820,14 @@ def test_shared_audio_lookups_issue_one_scalar_query_keyed_on_the_take_id(
     assert len(queries) == 1, f"expected one membership lookup, got {queries}"
     statement, parameters = queries[0]
     normalized_statement = " ".join(statement.lower().split())
-    take_id_predicate = "generations.id = ?"
+    take_id_predicate = re.search(r"generations\.id = (\?|%\(\w+\)s)", normalized_statement)
     assert "from generations" in normalized_statement
-    assert take_id_predicate in normalized_statement
-    take_id_predicate_index = normalized_statement.index(take_id_predicate)
-    take_id_parameter_index = normalized_statement[:take_id_predicate_index].count("?")
-    assert parameters[take_id_parameter_index] == "g1"
+    assert take_id_predicate is not None
+    if isinstance(parameters, dict):
+        take_id_parameter = parameters[take_id_predicate.group(1)[2:-2]]
+    else:
+        take_id_parameter = parameters[normalized_statement[: take_id_predicate.start()].count("?")]
+    assert take_id_parameter == "g1"
     assert "versions" not in normalized_statement
 
 
@@ -1776,7 +1773,9 @@ def test_shared_playlist_page_manifest_exposes_at_most_four_share_bound_mosaic_c
     assert all(public.get(url).status_code == 200 for url in mosaic_urls)
 
 
-def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(tmp_path, pg_factory):
+def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(
+    tmp_path: Path, pg_factory
+) -> None:
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
     seed_session(client, "admin")
     with client.app.state.ctx.db() as session:
@@ -1840,7 +1839,7 @@ def test_shared_playlist_entries_carry_a_serving_album_cover_only_when_the_file_
     assert public.get(expected["detail"]).status_code == 200
 
 
-def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(tmp_path, pg_factory,):
+def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(tmp_path, pg_factory):
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
     seed_session(client, "admin")
     with client.app.state.ctx.db() as session:
@@ -1867,7 +1866,7 @@ def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(tmp_p
     assert foreign.status_code == 404
 
 
-def test_unshared_playlist_answers_404_and_serves_no_entry_cover_1374_rule_8(tmp_path, pg_factory,):
+def test_unshared_playlist_answers_404_and_serves_no_entry_cover_1374_rule_8(tmp_path, pg_factory):
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
     seed_session(client, "admin")
     with client.app.state.ctx.db() as session:
@@ -1999,7 +1998,7 @@ def _shared_album_slug(client: TestClient) -> str:
 
 
 @pytest.mark.parametrize("stream", [False, True], ids=["page", "stream"])
-def test_shared_rate_limit(tmp_path, monkeypatch: pytest.MonkeyPatch, stream: bool, pg_factory,):
+def test_shared_rate_limit(tmp_path, monkeypatch: pytest.MonkeyPatch, stream: bool, pg_factory):
     import songmaker_cli.constants as consts
 
     client, _ = _make_sharing_app(tmp_path, pg_factory)
