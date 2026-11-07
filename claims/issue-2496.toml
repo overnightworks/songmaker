@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "eb770a70f9fdebaac84194bb813ac60781848f5d"
 branch = "claude/issue-2496-generation-requirements-cited"
-scope = ["docs/generation.md", "frontend/e2e/seed-chip.spec.ts", "frontend/src/lib/components/NowPlayingTake.test.ts", "tests/acestep_engine/test_client.py", "tests/songmaker_cli/jobs/test_generation_fetched_take.py", "tests/songmaker_cli/jobs/test_scoring_persistence.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_config.py"]
+scope = ["docs/generation.md", "frontend/e2e/seed-chip.spec.ts", "frontend/src/lib/components/NowPlayingTake.test.ts", "quality/baseline.toml", "tests/acestep_engine/test_client.py", "tests/songmaker_cli/jobs/test_generation_fetched_take.py", "tests/songmaker_cli/jobs/test_scoring_persistence.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_config.py"]
 opened_commit = "fc86e3b22f4b0e13eb6aeaaa2a7861eda319ba24"
 whole_reason = "One citation rule over the tests that prove one documentation page; the files are independent, and a split would only repeat the rule."
