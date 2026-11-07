@@ -59,7 +59,7 @@ Security verification also runs weekly. The live checks are:
 
 | Job | What |
 |---|---|
-| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_root_layout.py` · `scripts/generate_types.py --check` · pytest against a PostgreSQL 16 service (one database per xdist worker: dialect-specific migrations, concurrency, rollback, event retention gaps) collecting coverage data, judged in Combine backend coverage |
+| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_root_layout.py` · `scripts/check_requirement_citations.py` (every `REQ-` heading in `docs/*.md` is cited by a test, and no test cites an undefined one) · `scripts/generate_types.py --check` · pytest against a PostgreSQL 16 service (one database per xdist worker: dialect-specific migrations, concurrency, rollback, event retention gaps) collecting coverage data, judged in Combine backend coverage |
 | Combine backend coverage | Combines the Backend coverage data and judges the line and branch floors (see Coverage Targets) |
 | Quality | `quality / verdict`: hygiene, Sonar findings, mandatory jobs and both coverage reports |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
