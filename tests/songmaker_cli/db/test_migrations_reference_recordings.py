@@ -1,4 +1,4 @@
-"""The migration that creates reference_recordings, on SQLite and PostgreSQL."""
+"""The migration that creates reference_recordings, on PostgreSQL."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, event, inspect, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from support.migration_chain import is_on_the_single_chain
@@ -24,19 +24,14 @@ def _alembic_config() -> Config:
 
 
 @pytest.fixture
-def database(database_empty_postgresql_url, tmp_path, isolated_logging):
+def database(empty_postgresql_url, isolated_logging):
     """Yield (config, engine) of an empty database."""
-    url = database_empty_postgresql_url or make_url(f"sqlite:///{tmp_path / 'reference.db'}")
+    url = make_url(empty_postgresql_url)
     config = _alembic_config()
     config.set_main_option(
         "sqlalchemy.url", url.render_as_string(hide_password=False).replace("%", "%%"),
     )
     engine = create_engine(url)
-    if database_empty_postgresql_url is None:
-        # Alembic's engine does not enable foreign keys; this connection does, as init_test_db does.
-        event.listen(
-            engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"),
-        )
     yield config, engine
     engine.dispose()
 
@@ -112,10 +107,6 @@ def test_the_constraints_are_enforced_by_the_database(database, migration):
         connection.execute(delete_user)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM users")).scalar() == 1
-        if engine.dialect.name == "sqlite":
-            assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
-            [foreign_key] = connection.execute(text(f"PRAGMA foreign_key_list({TABLE})")).all()
-            assert "RESTRICT" in tuple(foreign_key)
 
 
 def test_downgrade_removes_the_table_and_the_previous_head_still_works(database, migration):

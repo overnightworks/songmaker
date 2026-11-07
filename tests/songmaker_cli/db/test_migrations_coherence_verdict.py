@@ -32,9 +32,9 @@ def _alembic_config() -> Config:
 
 
 @pytest.fixture
-def database(database_empty_postgresql_url, tmp_path, isolated_logging):
+def database(empty_postgresql_url, isolated_logging):
     """Yield (config, engine) of an empty database."""
-    url = database_empty_postgresql_url or make_url(f"sqlite:///{tmp_path / 'coherence.db'}")
+    url = make_url(empty_postgresql_url)
     config = _alembic_config()
     rendered_url = url.render_as_string(hide_password=False).replace("%", "%%")
     config.set_main_option("sqlalchemy.url", rendered_url)
