@@ -1,0 +1,8 @@
+claim_id = "b24deac05bc147a5a533aaaa5ce12d0a"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "9d0a9333196fb6af20ae6fb001b0c5b48a280162"
+branch = "claude/issue-2598-8b-busy-state"
+scope = ["frontend/src/lib/components/BusyState.svelte", "frontend/src/lib/components/BusyState.test.ts", "frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "frontend/src/routes/settings/about/+page.svelte", "scripts/style-literals.txt"]
+opened_commit = "ac52eebae3ed138787ef35d4bc2df51c01040791"
+whole_reason = "The one new owner, its three callers, its test and the one test that pinned the old class move together; a component without its callers or callers without the component would leave the state split."
