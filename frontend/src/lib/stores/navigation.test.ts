@@ -1322,19 +1322,6 @@ describe('opening a song recovers its generation state', () => {
 });
 
 describe('song selection (dead song link, issue #237)', () => {
-	it('clears the selection and shows a not-found toast for a dead song, without throwing', async () => {
-		selectedSongId.set('dead');
-		fetchSong.mockRejectedValue(new ApiError(404, 'Song not found', '/api/songs/dead'));
-
-		await selectSong('dead');
-		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
-
-		expect(get(selectedSongId)).toBeNull();
-		expect(
-			get(toasts).some((t) => t.type === 'error' && t.message === SONG_LINK_NOT_FOUND_TOAST)
-		).toBe(true);
-	});
-
 	it.each([
 		[new ApiError(500, 'Song loading failed', '/api/songs/s1'), 'Song loading failed'],
 		[new TypeError('generations is not iterable'), TAKES_ERROR],
@@ -1347,24 +1334,19 @@ describe('song selection (dead song link, issue #237)', () => {
 			const target = document.createElement('div');
 			document.body.append(target);
 			const view = mount(SongDetailView, { target });
-			try {
-				await selectSong('s1');
-				await tick();
-
-				await vi.waitFor(() => {
-					const alerts = target.querySelectorAll('[role="alert"]');
-					expect(alerts).toHaveLength(1);
-					expect(alerts[0]).toHaveTextContent(message);
-					expect(alerts[0].querySelector('button')?.getAttribute('aria-label')).toBe(
-						TAKES_RETRY_LABEL
-					);
-				});
-				expect(get(toasts)).toEqual([]);
-				expect(get(selectedSongId)).toBe('s1');
-			} finally {
-				await unmount(view);
-				target.remove();
-			}
+			onTestFinished(() => unmount(view).then(() => target.remove()));
+			await selectSong('s1');
+			await tick();
+			await vi.waitFor(() => {
+				const alerts = target.querySelectorAll('[role="alert"]');
+				expect(alerts).toHaveLength(1);
+				expect(alerts[0]).toHaveTextContent(message);
+				expect(alerts[0].querySelector('button')?.getAttribute('aria-label')).toBe(
+					TAKES_RETRY_LABEL
+				);
+			});
+			expect(get(toasts)).toEqual([]);
+			expect(get(selectedSongId)).toBe('s1');
 		}
 	);
 
@@ -1377,34 +1359,56 @@ describe('song selection (dead song link, issue #237)', () => {
 		expect(get(selectedSongId)).toBe('s2');
 		expect(get(toasts)).toHaveLength(0);
 	});
+});
 
-	it('keeps a newer song selection when an earlier dead-link lookup finishes late', async () => {
-		let rejectLookup: ((reason: Error) => void) | undefined;
-		songList.set([
-			song({
-				...navigableSongDefaults(),
-				slug: 's1',
-				generation_count: 2,
-				generations: [generation()]
-			})
-		]);
-		fetchSong.mockImplementationOnce(
-			() =>
-				new Promise((_, reject) => {
-					rejectLookup = reject;
-				})
+describe('a song deleted meanwhile', () => {
+	const album = { kind: 'album' as const, id: 'a1' };
+	let reportGone = () => {};
+	beforeEach(() => {
+		const lookup = new Promise<never>((_, reject) => {
+			reportGone = () => reject(new ApiError(404, 'Song not found', '/api/songs/gone'));
+		});
+		fetchSong.mockImplementation((id: string) =>
+			id === 'gone'
+				? lookup
+				: Promise.resolve(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }))
 		);
-		selectedSongId.set('s1');
+	});
+	const backOntoGoneSong = (collection: typeof album | null) => {
+		const library = { ...libraryRootState(), collection, songId: 'gone' };
+		const entry = routerHistoryEntry({ library });
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH, entry);
+		window.dispatchEvent(new PopStateEvent('popstate', { state: entry }));
+	};
+	const opened = [
+		['its link is opened', () => selectSong('gone'), 'browse'],
+		['Back lands on it, an album open', () => backOntoGoneSong(album), 'detail'],
+		['Back lands on it, no collection open', () => backOntoGoneSong(null), 'browse']
+	] as const;
+	it.each(opened)(
+		'tells the person and leaves an address that no longer names it when %s',
+		async (_, open, surface) => {
+			onTestFinished(initNavigation());
+			void open();
+			await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('gone'));
+			reportGone();
 
-		await selectSong('s1');
-		await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('s1'));
-		selectedSongId.set('s2');
-		if (!rejectLookup) {
-			throw new Error('Expected the song lookup to expose its rejection callback');
+			await vi.waitFor(() =>
+				expect(get(toasts).map((t) => t.message)).toContain(SONG_LINK_NOT_FOUND_TOAST)
+			);
+			expect(get(selectedSongId)).toBeNull();
+			expect(get(librarySurface)).toBe(surface);
+			await vi.waitFor(() => expect(historyEntry()).toMatchObject({ songId: null }));
 		}
-		rejectLookup(new ApiError(404, 'Song not found', '/api/songs/s1'));
-		await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('s1'));
-		await Promise.resolve();
+	);
+
+	it.each(opened)('keeps a newer selection when the late 404 arrives and %s', async (_, open) => {
+		onTestFinished(initNavigation());
+		void open();
+		await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('gone'));
+		await selectSong('s2');
+		reportGone();
+		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(get(selectedSongId)).toBe('s2');
 		expect(get(toasts)).toHaveLength(0);
@@ -1810,29 +1814,25 @@ describe('a dirty draft guards song switch / leave', () => {
 		);
 
 		it('1354_37b_71_dirty: keeps the page address when Discard answers the dialog, which steps off its own entry first', async () => {
-			const stopNavigation = initNavigation();
-			try {
-				await navigateFromSheetWithADirtyDraft(navigate);
-				const dialog = dialogHistoryLayer('confirm-dialog', () => undefined);
-				dialog.hold(document.createElement('div'));
-				await expectStandingLayer('confirm-dialog');
-				const leave = get(pendingDirtyNavigation);
-				pendingDirtyNavigation.set(null);
-				const dialogEntryLeft = new Promise((landed) =>
-					window.addEventListener('popstate', landed, { once: true })
-				);
-				let leaving: void | Promise<void> = undefined;
+			onTestFinished(initNavigation());
+			await navigateFromSheetWithADirtyDraft(navigate);
+			const dialog = dialogHistoryLayer('confirm-dialog', () => undefined);
+			dialog.hold(document.createElement('div'));
+			await expectStandingLayer('confirm-dialog');
+			const leave = get(pendingDirtyNavigation);
+			pendingDirtyNavigation.set(null);
+			const dialogEntryLeft = new Promise((landed) =>
+				window.addEventListener('popstate', landed, { once: true })
+			);
+			let leaving: void | Promise<void> = undefined;
 
-				dialog.answer(() => {
-					discardDraft();
-					leaving = leave?.();
-				})();
-				await Promise.all([dialogEntryLeft, leaving]);
+			dialog.answer(() => {
+				discardDraft();
+				leaving = leave?.();
+			})();
+			await Promise.all([dialogEntryLeft, leaving]);
 
-				expect(window.location.pathname + window.location.search).toBe(href);
-			} finally {
-				stopNavigation();
-			}
+			expect(window.location.pathname + window.location.search).toBe(href);
 		});
 	});
 
