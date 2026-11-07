@@ -310,6 +310,14 @@ describe('library history snapshot', () => {
 		expect(isLibraryHistoryState(libraryRootState())).toBe(true);
 	});
 
+	it.each(['write', 'chat', 'generations'])(
+		'rejects an old %s tab name as a stale entry, and accepts a current one',
+		(oldTabName) => {
+			expect(isLibraryHistoryState({ ...libraryRootState(), detailTab: oldTabName })).toBe(false);
+			expect(isLibraryHistoryState({ ...libraryRootState(), detailTab: 'takes' })).toBe(true);
+		}
+	);
+
 	it('rejects a malformed collection snapshot', () => {
 		expect(
 			isLibraryHistoryState({ ...libraryRootState(), collection: { kind: 'song', id: 'x' } })
@@ -604,15 +612,6 @@ describe('applyLibraryHistory', () => {
 		expect(get(detailTab)).toBe('edit');
 		expect(get(librarySurface)).toBe('browse');
 	});
-
-	it.each(['write', 'chat', 'generations'])(
-		'lands an old %s history entry on the default tab',
-		async (legacy) => {
-			detailTab.set('takes');
-			await applyLibraryHistory({ ...libraryRootState(), detailTab: legacy as never });
-			expect(get(detailTab)).toBe('edit');
-		}
-	);
 
 	it('remembers the tab a restored song was shown on, and only for that song', async () => {
 		await applyLibraryHistory({
