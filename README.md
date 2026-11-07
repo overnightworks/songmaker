@@ -22,7 +22,7 @@ sudo ./scripts/install-autostart.sh               # start the stack after every 
 - [`docker/.env.docker.example`](docker/.env.docker.example) lists every setting, which ones are required, and how to generate secrets.
 - A cold-cache build takes 8-15 minutes; [AGENTS.md](AGENTS.md#setup-and-run) says why it must not be interrupted. The first start also downloads the ACE-Step model weights into a Docker volume.
 - All persistent state (database, audio files, model cache, Grafana dashboards) lives in named Docker volumes and survives `docker compose down` and rebuilds.
-- Container confinement: [docs/security.md](docs/security.md). Why Docker's restart policy alone does not survive every reboot, and what the autostart unit adds: [docs/acestep.md](docs/acestep.md#restart-policy-limits-and-boot-autostart).
+- Container confinement: [docs/security.md](docs/security.md#container-confinement). Why Docker's restart policy alone does not survive every reboot, and what the autostart unit adds: [docs/acestep.md](docs/acestep.md#restart-policy-limits-and-boot-autostart).
 
 ## Operations
 

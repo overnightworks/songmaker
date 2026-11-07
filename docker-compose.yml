@@ -59,7 +59,7 @@ services:
   songmaker-web:
     build: *web-image-build
     restart: unless-stopped
-    # uv run as PID 1 reaps none of the ffmpeg children web starts; tini does.
+    # tini as PID 1 reaps orphaned processes, which uv run as PID 1 does not.
     init: true
     logging: *service-logging
     depends_on:

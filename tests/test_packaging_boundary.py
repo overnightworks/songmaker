@@ -591,16 +591,25 @@ def test_a_confined_service_drops_every_capability_and_blocks_privilege_gain(
     assert "no-new-privileges:true" in service["security_opt"]
 
 
-def test_no_service_replaces_dockers_default_confinement() -> None:
-    replacing = {
+def _confinement_replacements(services: dict) -> dict[str, str]:
+    return {
         service_name: option
-        for service_name, service in _raw_compose_services().items()
+        for service_name, service in services.items()
         if isinstance(service, dict)
         for option in service.get("security_opt", [])
         if option.startswith(CONFINEMENT_REPLACING_OPTIONS)
     }
 
-    assert not replacing
+
+def test_no_service_replaces_dockers_default_confinement() -> None:
+    assert not _confinement_replacements(_raw_compose_services())
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_no_test_stack_service_replaces_dockers_default_confinement(
+    compose_files: tuple[str, ...],
+) -> None:
+    assert not _confinement_replacements(_rendered_test_stack_services(compose_files))
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
