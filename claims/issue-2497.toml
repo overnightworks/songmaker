@@ -1,8 +1,0 @@
-claim_id = "d365b2b114d94a30a8ea4d1d9efcde35"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "eb770a70f9fdebaac84194bb813ac60781848f5d"
-branch = "claude/issue-2497-library-requirements-cited"
-scope = ["docs/library.md", "frontend/e2e/queue-continuity.spec.ts", "frontend/src/lib/components/PlayWhileLoading.test.ts", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/PlayerBarSurface.test.ts", "frontend/src/lib/components/QueueStreamFeedback.test.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/stores/playbackSettings.test.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/playerStorage.test.ts", "quality/baseline.toml", "tests/songmaker_cli/test_library_pool_candidates.py", "tests/songmaker_cli/test_queue_streams.py", "tests/support/queue_stream_audio.py"]
-opened_commit = "1ee12b49aaaab624447fb0dc8cee0fb3f992a399"
-whole_reason = "One citation rule over the tests that prove one documentation page; the files are independent, and a split would only repeat the rule."
