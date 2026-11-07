@@ -338,7 +338,8 @@ describe('PhoneAppBar', () => {
 	});
 
 	// #1354 rule 25: ‹ is named after where it goes, and a page opened from
-	// another one carries no account circle (navigation.html, frame I3).
+	// another one carries no account circle (account_rule_2 in
+	// docs/navigation.md).
 	it.each<{
 		page: string;
 		opened: ResolvedPathname;

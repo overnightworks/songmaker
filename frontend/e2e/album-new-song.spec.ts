@@ -1,5 +1,5 @@
-// A new song is made at the end of the album's track list (#1172, #915 F3;
-// frames V1 of docs/design/album-browsing.html §(i)): a quiet + New song row
+// A new song is made at the end of the album's track list (album_rule_1
+// in docs/navigation.md): a quiet + New song row
 // turns into the inline New song in <album> card, CREATE makes the song in
 // that album and opens it, × and Back fold the card back into the row. The
 // header row is Play · Shuffle · ⋯ only. The empty album is this run's own,
