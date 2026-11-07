@@ -47,7 +47,13 @@ from songmaker_cli.api_models.queue_streams import (
 )
 from songmaker_cli.api_models.songs import generation_version_lyrics
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.audio_paths import AudioPathRejectedError, confined_under, resolve_audio_path
+from songmaker_cli.audio_paths import (
+    AudioFileNotFoundError,
+    AudioPathRejectedError,
+    canonical_audio_path,
+    confined_under,
+    resolve_audio_path,
+)
 from songmaker_cli.constants import REDIS_RL_QUEUE_STREAM_PREFIX, LimiterFailurePolicy
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
@@ -310,11 +316,11 @@ def prepare_queue_stream_admission(
         gen = source.generation
         if not gen.mp3_path:
             raise HTTPException(422, "Queue contains a generation without audio")
-        audio_path = resolve_audio_path(ctx.audio_dir, gen.mp3_path)
+        audio_path = canonical_audio_path(ctx.audio_dir, gen.mp3_path)
         try:
             stat = audio_path.stat()
-        except OSError as exc:
-            raise HTTPException(404, "Audio file not found") from exc
+        except FileNotFoundError as exc:
+            raise AudioFileNotFoundError(gen.mp3_path) from exc
         duration = probe_audio_duration(audio_path)
         total_duration += duration
         if total_duration > QUEUE_STREAM_MAX_DURATION_SECONDS:
@@ -544,8 +550,6 @@ def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
             text=True,
             timeout=FFMPEG_TIMEOUT_SECONDS,
         )
-    except FileNotFoundError as exc:
-        raise HTTPException(503, "ffmpeg is not available") from exc
     except subprocess.TimeoutExpired as exc:
         output_path.unlink(missing_ok=True)
         raise HTTPException(504, "Queue stream build timed out") from exc
@@ -729,12 +733,6 @@ def _library_skip(ctx: AppContext, generation: Generation) -> QueueStreamSkipRes
         )
     try:
         audio_path = resolve_audio_path(ctx.audio_dir, generation.mp3_path)
-        if not audio_path.exists():
-            return QueueStreamSkipResponse(
-                song_id=generation.song_id,
-                generation_id=generation.id,
-                reason="missing_file",
-            )
     except (AudioPathRejectedError, OSError):
         return QueueStreamSkipResponse(
             song_id=generation.song_id,
@@ -773,8 +771,6 @@ def shuffle_library_sources(
     start_generation_id: str | None,
     shuffle_seq: Callable[[list[QueueStreamSource]], None] | None = None,
 ) -> list[QueueStreamSource]:
-    if len(sources) <= 1:
-        return list(sources)
     seen: set[str] = set()
     unique: list[QueueStreamSource] = []
     for source in sources:
