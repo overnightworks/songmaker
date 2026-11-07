@@ -373,8 +373,7 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
     fallback removed — PID reuse on long-running containers made it
     unreliable.
     """
-    hb = aware_timestamp(job.heartbeat_at)
-    return hb < cutoff
+    return job.heartbeat_at < cutoff
 
 
 @dataclass(frozen=True)
@@ -419,8 +418,7 @@ def _queued_verdict(
 
 
 def _is_started_stale(job: Job, cutoff: datetime) -> bool:
-    started_at = aware_timestamp(job.started_at)
-    return started_at < cutoff
+    return job.started_at < cutoff
 
 
 def _before_stale_job_recovery_update(_job: Job) -> None:
@@ -615,7 +613,7 @@ def last_job_failure_time(session: Session) -> datetime | None:
     )
     if newest is None:
         return None
-    return aware_timestamp(newest)
+    return newest
 
 
 def _duration_seconds_expr():
