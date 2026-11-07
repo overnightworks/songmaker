@@ -500,8 +500,12 @@ def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> 
 AGENT_CLI_MOUNT_ROOTS = (Path("/home/songmaker"), Path("/usr/local"))
 
 
+_COLON_OUTSIDE_INTERPOLATION = re.compile(r":(?![^{]*\})")
+_INTERPOLATION = re.compile(r"\$\{[^}:]*(?::?-([^}]*))?\}")
+
+
 def _short_volume_source_and_target(service_name: str, volume: str) -> tuple[str, str]:
-    source, *rest = volume.split(":")
+    source, *rest = _COLON_OUTSIDE_INTERPOLATION.split(volume)
     assert rest, (
         f"{service_name} declares the anonymous volume {volume!r}; "
         f"mount a declared named volume instead"
@@ -600,9 +604,9 @@ def _agent_login_binds(services: dict[str, object]) -> list[str]:
                 continue
             source, target = bind
             under_home = any(
-                posixpath.isabs(path)
-                and Path(posixpath.normpath(path)).is_relative_to(CONTAINER_HOME)
-                for path in (source, target)
+                posixpath.isabs(resolved)
+                and Path(posixpath.normpath(resolved)).is_relative_to(CONTAINER_HOME)
+                for resolved in (_INTERPOLATION.sub(r"\1", path) for path in (source, target))
             )
             if under_home or any(marker in source for marker in MIRROR_DIRECTORY_MARKERS):
                 offences.append(f"{service_name} binds {source} to {target}")
@@ -641,12 +645,24 @@ def _long_bind(source: str, target: str) -> dict[str, str]:
             "${SONGMAKER_CLI_CREDENTIALS_DIR}/claude.json:/c.json",
             id="short-source-from-mirror-directory",
         ),
+        pytest.param(
+            "./${LOGIN_FILE:-login.json}:/home/songmaker/.grok/auth.json:ro",
+            id="short-interpolated-source-with-colon-default",
+        ),
+        pytest.param(
+            "./login.json:${LOGIN_TARGET:-/home/songmaker/.grok/auth.json}:ro",
+            id="short-interpolated-target-default-under-home",
+        ),
     ],
 )
 def test_the_agent_login_bind_check_names_the_service_and_the_bind(volume: object) -> None:
     offences = _agent_login_binds({"songmaker-web": {"volumes": [volume]}})
 
     assert [offence.split(" binds ")[0] for offence in offences] == ["songmaker-web"]
+    assert len(offences) == 1
+    source, target = _bind_source_and_target("songmaker-web", volume) or ("", "")
+    assert source in offences[0]
+    assert target in offences[0]
 
 
 WORKER_SERVICES = (

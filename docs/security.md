@@ -488,7 +488,7 @@ login into `~/.songmaker/agent-cli-credentials/`, kept current by
 
 Grok access tokens expire after six hours. The host-side mirror
 service, path watcher, and ten-minute timer are the sole refresh path: each
-host refresh replaces the mounted access token in place while keeping
+host refresh replaces the published access token in place while keeping
 `refresh_token` empty. The host remains the only refresh owner: the host's
 mirrored Codex document, which no container mounts, keeps `tokens.refresh_token`
 empty.
@@ -691,7 +691,7 @@ inspects it.
 `mirror_agent_cli_credentials.py --verify`, which applies those same checks to
 each published file, parses the JSON, and refuses any non-empty value under a
 renewal-token key found anywhere in it — so a login copied in by hand is
-caught rather than mounted. It also asks systemd whether the mirror service,
+caught rather than kept. It also asks systemd whether the mirror service,
 its login watch and its timer are installed and enabled, whether the two
 triggers are running, and whether the service itself has failed: files that
 look right prove nothing about currency if what rewrites them has been
@@ -726,7 +726,7 @@ from the Python ones. The installer is its one caller.
 
 Where the mirror lives has one answer, owned by that same module: an exported
 `SONGMAKER_CLI_CREDENTIALS_DIR` wins, then the same key in `.env`, then the
-default under the stack owner's home — compose's own order. The value must be
+default under the stack owner's home — the order the stack resolves its settings in. The value must be
 an absolute path or `~/…` with no whitespace, no `%` and no `$`, because
 systemd splits directive values on whitespace, expands `%` as a specifier and
 `$` as a variable in the ExecStart that carries the path; anything else is

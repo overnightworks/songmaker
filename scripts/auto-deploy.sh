@@ -422,8 +422,8 @@ describe_timeout_status() {
         *) ;;
     esac
 }
-# Bounds the container-readiness wait of step 9 only; the image build in
-# step 8 stays deliberately unbounded, because a cold-cache build takes
+# Bounds the container-readiness wait of step 10 only; the image build in
+# step 9 stays deliberately unbounded, because a cold-cache build takes
 # 8-15 minutes by design. Without a bound, one service that can never
 # become healthy (issue #333's own alertmanager, if .env lacks the SMTP
 # values) makes `compose up --wait` wait forever — and since the tick holds
