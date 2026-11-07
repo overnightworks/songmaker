@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Final
 
 from sqlalchemy import ColumnElement, exists
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 from sqlalchemy.orm.interfaces import ExecutableOption
 
@@ -135,20 +134,15 @@ def _next_generation_number_under_song_lock(session: Session, song_id: str) -> i
     ``FOR UPDATE`` and another take, yet never conflicts with the key-share locks a version
     or take insert takes on it. The number is read by a separate statement: under READ
     COMMITTED it sees every take committed while the lock was awaited. A trashed song still
-    receives its takes; a song that is gone fails like its foreign key would.
+    receives its takes; a song that is gone leaves the insert to fail on its foreign key.
     """
-    locked = (
+    (
         session.query(Song.id)
         .filter_by(id=song_id)
         .execution_options(include_deleted=True)
         .with_for_update(key_share=True)
         .first()
     )
-    if locked is None:
-        raise IntegrityError(
-            "SELECT songs.id FOR NO KEY UPDATE", {"song_id": song_id},
-            LookupError(f"Song not found: {song_id}"),
-        )
     highest = (
         session.query(Generation.generation_number)
         .filter_by(song_id=song_id)
@@ -185,6 +179,7 @@ def create_generation(
     if canonical_mp3_path is None:
         raise ValueError("Generation MP3 path must stay within the audio directory")
 
+    audio_duration_sec = _probe_audio_duration_or_none(audio_dir, canonical_mp3_path)
     gen_number = _next_generation_number_under_song_lock(session, song_id)
 
     gen = Generation(
@@ -203,7 +198,7 @@ def create_generation(
     )
     if generation_id is not None:
         gen.id = generation_id
-    gen.audio_duration_sec = _probe_audio_duration_or_none(audio_dir, canonical_mp3_path)
+    gen.audio_duration_sec = audio_duration_sec
     session.add(gen)
     session.flush()
     return gen
