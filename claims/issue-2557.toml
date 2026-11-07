@@ -1,0 +1,7 @@
+claim_id = "7871886299e948c19552d7353b2045a3"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "9c6b01f93642f438d7edf36b0f966f74205816dd"
+branch = "claude/issue-2557-d4-token-tests-pg"
+scope = ["quality/baseline.toml", "tests/songmaker_cli/test_auth_stores.py"]
+opened_commit = "4b62ff756e45a25e68214833de33b35b15f8c305"
