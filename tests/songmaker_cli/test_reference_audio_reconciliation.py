@@ -162,9 +162,10 @@ def test_an_owner_with_a_non_conforming_row_path_keeps_every_file(ctx, storage_p
 
 def test_a_failure_to_list_the_users_ends_the_run_loudly(tmp_path, empty_postgresql_url):
     engine = create_engine(empty_postgresql_url)
+    empty_database = sessionmaker(bind=engine)
     try:
         with pytest.raises(ProgrammingError):
-            reconcile_reference_remnants(sessionmaker(bind=engine), tmp_path)
+            reconcile_reference_remnants(empty_database, tmp_path)
     finally:
         engine.dispose()
 
