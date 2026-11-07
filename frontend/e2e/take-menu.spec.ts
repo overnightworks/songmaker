@@ -9,6 +9,7 @@
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
 	DIALOG_CANCEL_LABEL,
+	EDITOR_UNSAVED_TITLE,
 	HITBOX_FREQUENT_PX,
 	TAKE_COVER_LABEL,
 	TAKE_DELETE_LABEL,
@@ -27,6 +28,7 @@ import {
 	type RenderedBox,
 	type Shell
 } from './helpers';
+import { contrastRatio, tokenColor } from './contrast';
 import { bottomOf, expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
 import { archiveOwnedAlbum, seedSongPhoneSong, seedTakeStripSong } from './seed';
 
@@ -162,17 +164,6 @@ function expectTriggerAtFootOf(triggerBox: RenderedBox, scrollArea: RenderedBox)
 	);
 }
 
-async function dangerColor(page: Page): Promise<string> {
-	return page.evaluate(() => {
-		const probe = document.createElement('span');
-		probe.style.color = 'var(--score-bad)';
-		document.body.append(probe);
-		const { color } = getComputedStyle(probe);
-		probe.remove();
-		return color;
-	});
-}
-
 async function expectAlbumForm(page: Page, menu: Locator): Promise<void> {
 	const rows = menu.getByRole('button');
 	await expect(rows).toHaveCount(ROW_LABELS_IN_ORDER.length);
@@ -191,7 +182,7 @@ async function expectAlbumForm(page: Page, menu: Locator): Promise<void> {
 	const [panel] = await boundingBoxes(menu);
 	expect(panel.width).toBeCloseTo(ALBUM_FORM_MENU_WIDTH_PX, 0);
 
-	const danger = await dangerColor(page);
+	const danger = await tokenColor(page, '--score-bad');
 	await expect(rows.last()).toHaveText(TAKE_DELETE_LABEL);
 	await expect(rows.last()).toHaveCSS('color', danger);
 	await expect(rows.first()).not.toHaveCSS('color', danger);
@@ -376,3 +367,41 @@ test(
 		});
 	}
 );
+
+for (const colorScheme of ['light', 'dark'] as const) {
+	test(
+		`the take delete confirm is filled with the failure colour and a calm confirm with the accent, each with readable ink, in the ${colorScheme} theme`,
+		{ tag: ONLY_IN_SHELL.desktop },
+		async ({ page }) => {
+			await page.emulateMedia({ colorScheme });
+			await onOwnTakes(page, CELLS[1], async () => {
+				await takeMenuTriggers(page).first().click();
+				await takeMenu(page).getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+				const deleting = page.getByRole('dialog', { name: /^Delete take \d+\?$/ });
+				await expectConfirmFill(page, deleting, '--fail');
+				await deleting.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+				await expect(deleting).toBeHidden();
+
+				const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+				await lyrics.fill(`${await lyrics.inputValue()}\nan unsaved line`);
+				await lyrics.blur();
+				await page.keyboard.press('Escape');
+				await expectConfirmFill(
+					page,
+					page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE }),
+					'--accent'
+				);
+			});
+		}
+	);
+}
+
+async function expectConfirmFill(page: Page, confirm: Locator, token: string): Promise<void> {
+	await expect(confirm).toBeVisible();
+	const { fill, ink } = await confirm.locator('.confirm-btn').evaluate((node) => {
+		const { backgroundColor, color } = getComputedStyle(node);
+		return { fill: backgroundColor, ink: color };
+	});
+	expect(fill).toBe(await tokenColor(page, token));
+	expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(4.5);
+}

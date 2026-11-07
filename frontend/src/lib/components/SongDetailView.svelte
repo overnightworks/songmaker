@@ -410,9 +410,7 @@
 		const version = get(versions).find((v) => v.id === versionId);
 		if (!version) return Promise.resolve('declined');
 		if (!get(draftHasUnversionedChanges)) return Promise.resolve(loadVersionWithUndo(version));
-		return new Promise((answer) => {
-			versionAwaitingReplace = { version, answer };
-		});
+		return new Promise((answer) => (versionAwaitingReplace = { version, answer }));
 	}
 
 	function answerVersionReplace(replace: boolean): void {
@@ -806,6 +804,7 @@
 		title={EDITOR_UNSAVED_TITLE}
 		message={EDITOR_UNSAVED_MESSAGE}
 		confirmLabel={EDITOR_UNSAVED_SAVE_LABEL}
+		destructive={false}
 		onconfirm={() => void resolveDirtyNavigation('save')}
 		secondaryLabel={EDITOR_UNSAVED_DISCARD_LABEL}
 		onsecondary={() => void resolveDirtyNavigation('discard')}
@@ -818,6 +817,7 @@
 		title={VERSION_REPLACE_DRAFT_TITLE}
 		message={versionReplaceDraftMessage(versionAwaitingReplace.version.version_number)}
 		confirmLabel={VERSION_REPLACE_DRAFT_CONFIRM_LABEL}
+		destructive={false}
 		onconfirm={() => answerVersionReplace(true)}
 		oncancel={() => answerVersionReplace(false)}
 	/>

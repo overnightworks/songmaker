@@ -28,6 +28,7 @@ import {
 	type Shell,
 	workspace
 } from './helpers';
+import { contrastRatio, tokenColor } from './contrast';
 import { expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
 import { archiveOwnedAlbum } from './seed';
 
@@ -202,37 +203,6 @@ async function expectTextSizesOfAlbumMenu(
 	const songSizes = await menuTextSizes(songMenu);
 	await page.goto(`/album/${albumId}`);
 	expect(songSizes).toEqual(await menuTextSizes(await openAlbumMenu(page)));
-}
-
-async function tokenColor(page: Page, token: string): Promise<string> {
-	return page.evaluate((name) => {
-		const probe = document.createElement('span');
-		probe.style.color = `var(${name})`;
-		document.body.append(probe);
-		const { color } = getComputedStyle(probe);
-		probe.remove();
-		return color;
-	}, token);
-}
-
-function relativeLuminance(cssColor: string): number {
-	const channels = cssColor
-		.match(/[\d.]+/g)
-		?.slice(0, 3)
-		.map(Number);
-	if (channels?.length !== 3) throw new Error(`not an rgb colour: ${cssColor}`);
-	const [red, green, blue] = channels.map((channel) => {
-		const unit = channel / 255;
-		return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
-	});
-	return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-}
-
-function contrastRatio(foreground: string, background: string): number {
-	const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].sort(
-		(a, b) => b - a
-	);
-	return (lighter + 0.05) / (darker + 0.05);
 }
 
 async function expectAlbumForm(page: Page, menu: Locator, title: string): Promise<void> {

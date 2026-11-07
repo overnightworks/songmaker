@@ -8,6 +8,7 @@
 		title,
 		message,
 		confirmLabel = DIALOG_CONFIRM_LABEL,
+		destructive,
 		onconfirm,
 		secondaryLabel,
 		onsecondary,
@@ -16,6 +17,7 @@
 		title: string;
 		message: string;
 		confirmLabel?: string;
+		destructive: boolean;
 		onconfirm: () => void;
 		secondaryLabel?: string;
 		onsecondary?: () => void;
@@ -61,7 +63,9 @@
 					>{secondaryLabel}</button
 				>
 			{/if}
-			<button class="confirm-btn" onclick={historyLayer.answer(onconfirm)}>{confirmLabel}</button>
+			<button class="confirm-btn" class:destructive onclick={historyLayer.answer(onconfirm)}
+				>{confirmLabel}</button
+			>
 		</div>
 	</div>
 </div>
@@ -148,12 +152,19 @@
 	}
 
 	.confirm-btn {
-		background: var(--primary);
-		border: 1px solid var(--primary);
-		color: #fff;
+		--confirm-fill: var(--accent);
+		--confirm-ink: var(--on-accent);
+		background: var(--confirm-fill);
+		border: 1px solid var(--confirm-fill);
+		color: var(--confirm-ink);
+	}
+
+	.confirm-btn.destructive {
+		--confirm-fill: var(--fail);
+		--confirm-ink: var(--on-fail);
 	}
 
 	.confirm-btn:hover {
-		box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent);
+		box-shadow: 0 0 12px color-mix(in srgb, var(--confirm-fill) 30%, transparent);
 	}
 </style>
