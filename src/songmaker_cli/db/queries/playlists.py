@@ -15,7 +15,7 @@ from songmaker_cli.db.models import (
     PlaylistEntry,
     Song,
 )
-from songmaker_cli.db.queries.generations import ArchivedTakeError, lock_unarchived_generation
+from songmaker_cli.db.queries.generations import lock_takes, lock_unarchived_generation
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing, is_playable_take
 
 INITIAL_PLAYLIST_POSITION: Final[int] = 0
@@ -166,18 +166,21 @@ def _next_position(session: Session, playlist_id: str) -> int:
     return (max_pos[0] + 1) if max_pos else INITIAL_PLAYLIST_POSITION
 
 
-def add_generation_to_playlist(
-    session: Session, playlist_id: str, generation_id: str,
-) -> PlaylistEntry:
-    gen = lock_unarchived_generation(session, generation_id)
-    position = _next_position(session, playlist_id)
+def _append_entry(session: Session, playlist_id: str, gen: Generation) -> PlaylistEntry:
     entry = PlaylistEntry(
-        playlist_id=playlist_id, generation_id=generation_id, position=position,
+        playlist_id=playlist_id, generation_id=gen.id,
+        position=_next_position(session, playlist_id),
     )
     session.add(entry)
     gen.is_kept = True
     session.flush()
     return entry
+
+
+def add_generation_to_playlist(
+    session: Session, playlist_id: str, generation_id: str,
+) -> PlaylistEntry:
+    return _append_entry(session, playlist_id, lock_unarchived_generation(session, generation_id))
 
 
 def add_song_to_playlist(
@@ -214,38 +217,40 @@ def add_album_to_playlist(
     )
     if not album:
         raise ValueError(f"Album not found: {album_id}")
-    entries: list[PlaylistEntry] = []
-    skipped: list[PlaylistAlbumSkip] = []
-    for song in sorted(album.songs, key=lambda item: (item.track_number, item.id)):
+    skipped_by_song: dict[str, PlaylistAlbumSkip] = {}
+    chosen: dict[str, Generation] = {}
+    songs = sorted(album.songs, key=lambda item: (item.track_number, item.id))
+    for song in songs:
         playable = best_playable_generation(song)
         if playable is None:
+            reason = PLAYLIST_SKIP_NO_PLAYABLE
+        elif is_readable is not None and not is_readable(playable):
+            reason = PLAYLIST_SKIP_MISSING_AUDIO
+        else:
+            chosen[song.id] = playable
+            continue
+        skipped_by_song[song.id] = PlaylistAlbumSkip(
+            song_id=song.id, title=song.title, reason=reason,
+        )
+    locked = {
+        gen.id: gen
+        for gen in lock_takes(session, Generation.id.in_([gen.id for gen in chosen.values()]))
+    }
+    entries: list[PlaylistEntry] = []
+    skipped: list[PlaylistAlbumSkip] = []
+    for song in songs:
+        if song.id in skipped_by_song:
+            skipped.append(skipped_by_song[song.id])
+            continue
+        gen = locked.get(chosen[song.id].id)
+        if gen is None or gen.is_archived:
             skipped.append(
                 PlaylistAlbumSkip(
-                    song_id=song.id,
-                    title=song.title,
-                    reason=PLAYLIST_SKIP_NO_PLAYABLE,
+                    song_id=song.id, title=song.title, reason=PLAYLIST_SKIP_NO_PLAYABLE,
                 )
             )
             continue
-        if is_readable is not None and not is_readable(playable):
-            skipped.append(
-                PlaylistAlbumSkip(
-                    song_id=song.id,
-                    title=song.title,
-                    reason=PLAYLIST_SKIP_MISSING_AUDIO,
-                )
-            )
-            continue
-        try:
-            entries.append(add_generation_to_playlist(session, playlist_id, playable.id))
-        except ArchivedTakeError:
-            skipped.append(
-                PlaylistAlbumSkip(
-                    song_id=song.id,
-                    title=song.title,
-                    reason=PLAYLIST_SKIP_NO_PLAYABLE,
-                )
-            )
+        entries.append(_append_entry(session, playlist_id, gen))
     return PlaylistAlbumAddResult(entries=entries, skipped=skipped)
 
 
