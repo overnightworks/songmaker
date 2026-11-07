@@ -26,7 +26,7 @@
 "frontend/src/lib/components/LibraryWall.test.ts" = 1137
 "frontend/src/lib/components/LoraDetail.svelte" = 968
 "frontend/src/lib/components/NowPlaying.test.ts" = 1097
-"frontend/src/lib/components/NowPlayingFrame.svelte" = 1109
+"frontend/src/lib/components/NowPlayingFrame.svelte" = 1105
 "frontend/src/lib/components/PlayerBar.test.ts" = 1645
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
 "frontend/src/lib/components/SongDetailView.svelte" = 1021

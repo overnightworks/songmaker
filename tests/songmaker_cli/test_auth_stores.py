@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import event, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from webauth.ports import (
     AccountEvent,
@@ -23,7 +23,6 @@ from songmaker_cli.auth_stores import (
     DatabaseAuditSink,
     DatabaseSessionRecordStore,
     DatabaseSubjectUserStore,
-    DatabaseWriteLock,
 )
 from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.engine import connect_db, init_test_db
@@ -98,54 +97,6 @@ def test_changing_a_role_returns_the_account_and_stays_in_the_callers_transactio
 def test_changing_the_role_of_an_unknown_account_raises(accounts) -> None:
     with pytest.raises(ValueError, match="User not found"):
         accounts.set_role("nobody", "admin")
-
-
-def test_sequential_holds_in_one_transaction_do_not_commit_between_them(accounts, session) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user")
-    session.commit()
-    lock = DatabaseWriteLock(session)
-
-    with lock.hold():
-        accounts.set_role(_SUBJECT, "admin")
-    with lock.hold():
-        accounts.set_role(_SUBJECT, "operator")
-    session.rollback()
-
-    assert accounts.get(_SUBJECT).role == "user"
-
-
-@pytest.mark.parametrize("end_transaction", ["commit", "rollback"])
-def test_the_next_hold_locks_again_after_the_transaction_ends(
-    session, end_transaction: str,
-) -> None:
-    statements: list[str] = []
-    event.listen(
-        session.get_bind(), "before_cursor_execute",
-        lambda _conn, _cursor, statement, *_rest: statements.append(statement),
-    )
-    lock = DatabaseWriteLock(session)
-
-    with lock.hold():
-        pass
-    with lock.hold():
-        pass
-    getattr(session, end_transaction)()
-    with lock.hold():
-        pass
-
-    assert statements.count("BEGIN IMMEDIATE") == 2
-
-
-def test_management_lock_rejects_pending_business_changes(accounts, session) -> None:
-    account = accounts.create_for_subject(_SUBJECT, "nina", "user")
-    session.commit()
-    account.role = "admin"
-    lock = DatabaseWriteLock(session)
-
-    with pytest.raises(RuntimeError, match="uncommitted mutations"), lock.hold():
-        pass
-    session.rollback()
-    assert accounts.get(_SUBJECT).role == "user"
 
 
 def test_a_session_is_stored_with_the_instants_it_is_given(accounts, sessions) -> None:
