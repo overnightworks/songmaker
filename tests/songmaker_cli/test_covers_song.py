@@ -46,7 +46,6 @@ from songmaker_cli.covers import (
     write_album_cover,
     write_song_cover,
 )
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Song, User
 from songmaker_cli.db.queries.albums import soft_delete_album
 from songmaker_cli.db.queries.songs import get_song, soft_delete_song
@@ -108,15 +107,15 @@ def _seed_owners(session) -> None:
     )
 
 
-def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClient, object]:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_owners)
+def _authed_app(tmp_path: Path, factory, username: str, password: str) -> tuple[TestClient, object]:
+    client, factory = make_test_app(tmp_path, seed_db=_seed_owners, factory=factory)
     seed_session(client, username)
     return client, factory
 
 
 @pytest.fixture
-def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
-    return _authed_app(tmp_path, "alice", ALICE_PASSWORD)
+def alice_app(tmp_path: Path, pg_factory) -> tuple[TestClient, object]:
+    return _authed_app(tmp_path, pg_factory, "alice", ALICE_PASSWORD)
 
 
 @pytest.mark.parametrize(
@@ -211,8 +210,8 @@ def test_upload_rejects_too_many_pixels(alice_app: tuple[TestClient, object]) ->
     assert resp.json()["detail"] == COVER_TOO_MANY_PIXELS
 
 
-def test_foreign_song_cover_is_404(tmp_path: Path) -> None:
-    client, _ = _authed_app(tmp_path, "bob", BOB_PASSWORD)
+def test_foreign_song_cover_is_404(tmp_path: Path, pg_factory) -> None:
+    client, _ = _authed_app(tmp_path, pg_factory, "bob", BOB_PASSWORD)
     jpeg = _jpeg_bytes()
     for method, path in (
         ("GET", "/api/songs/alice-song/cover"),
@@ -404,12 +403,11 @@ def test_soft_delete_song_keeps_cover_files(
 @pytest.mark.parametrize("commit_fails", [False, True])
 def test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch,
-    commit_fails: bool,
+    commit_fails: bool, pg_factory,
 ) -> None:
-    factory = init_db(tmp_path / "covers.db")
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
-    with factory() as session:
+    with pg_factory() as session:
         owner = seed_user(session, "alice")
         session.add(Album(id="expired-album", title="Expired", artist="A", created_by=owner.id))
         session.add(Album(id="live-album", title="Live", artist="A", created_by=owner.id))
@@ -446,7 +444,7 @@ def test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit(
     past = datetime.now(timezone.utc) - timedelta(
         days=get_settings().final_deletion_days + 1,
     )
-    with factory() as session:
+    with pg_factory() as session:
         soft_delete_album(session, "expired-album")
         album = session.query(Album).execution_options(include_deleted=True).filter_by(
             id="expired-album",
@@ -465,14 +463,14 @@ def test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit(
         monkeypatch.setattr(Session, "commit", failing_commit)
         with caplog.at_level(logging.INFO, logger="songmaker_cli.cleanup"):
             with pytest.raises(RuntimeError, match="commit failed"):
-                run_cleanup_expired(factory, audio_dir)
+                run_cleanup_expired(pg_factory, audio_dir)
         assert "hard-deleted" not in caplog.text
         assert live_album_dir.is_dir()
         assert expired_album_dir.is_dir()
         return
 
     with caplog.at_level(logging.INFO, logger="songmaker_cli.cleanup"):
-        album_count, song_count = run_cleanup_expired(factory, audio_dir)
+        album_count, song_count = run_cleanup_expired(pg_factory, audio_dir)
     assert album_count == 1
     assert song_count == 1
     assert "expired-album" in caplog.text

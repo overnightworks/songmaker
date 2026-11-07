@@ -10,7 +10,6 @@ import pytest
 from support.web_app import TEST_SECRET, web_client
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import User
 from songmaker_cli.redis_client import (
     RedisHttpMetrics,
@@ -98,9 +97,8 @@ def _make_server_project(tmp_path: Path):
     return audio_dir, data_dir, project_root
 
 
-def _make_redis_ctx(tmp_path: Path, fake_redis) -> tuple[AppContext, Path, Path, Path]:
+def _make_redis_ctx(tmp_path: Path, factory, fake_redis) -> tuple[AppContext, Path, Path, Path]:
     audio_dir, data_dir, project_root = _make_server_project(tmp_path)
-    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.add(User(
             username="admin", role="admin",
@@ -114,9 +112,9 @@ def _make_redis_ctx(tmp_path: Path, fake_redis) -> tuple[AppContext, Path, Path,
 
 
 def test_health_reports_redis_ok(
-    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers,
+    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers, pg_factory,
 ) -> None:
-    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with (
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", return_value=False),
@@ -131,9 +129,9 @@ def test_health_reports_redis_ok(
 
 
 def test_health_reports_redis_error(
-    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers,
+    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers, pg_factory,
 ) -> None:
-    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with web_client(app) as client:
         with patch("songmaker_cli.redis_client.redis_health", return_value=False):
@@ -144,8 +142,10 @@ def test_health_reports_redis_error(
 
 
 
-def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
-    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+def test_ip_rate_limit_middleware_uses_redis(
+    tmp_path: Path, fake_redis, mock_arq_pool, pg_factory,
+) -> None:
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
     from support.web_app import seed_session
@@ -155,7 +155,7 @@ def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis, mock_ar
         assert resp.status_code == 200
 
 
-def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool) -> None:
+def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool, pg_factory) -> None:
     broken_redis = MagicMock()
     broken_redis.ping.return_value = True
     pipe_mock = MagicMock()
@@ -163,14 +163,13 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool) -> None:
     broken_redis.pipeline.return_value = pipe_mock
 
     audio_dir, data_dir, project_root = _make_server_project(tmp_path)
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
+    with pg_factory() as session:
         session.add(User(
             username="admin", role="admin",
         ))
         session.commit()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        db=pg_factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=broken_redis,
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
@@ -180,8 +179,10 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool) -> None:
     assert resp.headers["Retry-After"] == "5"
 
 
-def test_metrics_with_redis(tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers) -> None:
-    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+def test_metrics_with_redis(
+    tmp_path: Path, fake_redis, mock_arq_pool, monitoring_headers, pg_factory,
+) -> None:
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with web_client(app) as client:
         client.get("/health/details", headers=monitoring_headers)
@@ -193,11 +194,11 @@ def test_metrics_with_redis(tmp_path: Path, fake_redis, mock_arq_pool, monitorin
 
 
 def test_ip_rate_limit_middleware_writes_to_redis(
-    tmp_path: Path, fake_redis, mock_arq_pool,
+    tmp_path: Path, fake_redis, mock_arq_pool, pg_factory,
 ) -> None:
     from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 
-    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, pg_factory, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
     from support.web_app import seed_session

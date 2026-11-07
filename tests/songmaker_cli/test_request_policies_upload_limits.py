@@ -55,14 +55,14 @@ def _seed_owner(session) -> None:
     session.add(Album(id="a1", title="A", artist="A", created_by="owner-id"))
 
 
-def _authed_app(tmp_path: Path) -> TestClient:
-    client, _ = make_test_app(tmp_path, seed_db=_seed_owner)
+def _authed_app(tmp_path: Path, factory) -> TestClient:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_owner, factory=factory)
     seed_session(client, "owner")
     return client
 
 
-def test_create_app_accepts_2mib_reference_audio(tmp_path: Path) -> None:
-    client = _authed_app(tmp_path)
+def test_create_app_accepts_2mib_reference_audio(tmp_path: Path, pg_factory) -> None:
+    client = _authed_app(tmp_path, pg_factory)
     payload = b"RIFF" + b"\x00" * (2 * 1024 * 1024)
     resp = client.post(
         "/api/references",
@@ -73,8 +73,8 @@ def test_create_app_accepts_2mib_reference_audio(tmp_path: Path) -> None:
     assert resp.json()["size_bytes"] == len(payload)
 
 
-def test_create_app_accepts_2mib_lora_sample(tmp_path: Path) -> None:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_owner)
+def test_create_app_accepts_2mib_lora_sample(tmp_path: Path, pg_factory) -> None:
+    client, factory = make_test_app(tmp_path, seed_db=_seed_owner, factory=pg_factory)
     seed_session(client, "owner")
     with factory() as session:
         lora = create_user_lora(session, "owner-id", "Voice", "v")
@@ -89,8 +89,8 @@ def test_create_app_accepts_2mib_lora_sample(tmp_path: Path) -> None:
     assert resp.status_code == 200, resp.text
 
 
-def test_json_route_still_rejects_over_1mib(tmp_path: Path) -> None:
-    client = _authed_app(tmp_path)
+def test_json_route_still_rejects_over_1mib(tmp_path: Path, pg_factory) -> None:
+    client = _authed_app(tmp_path, pg_factory)
     resp = client.post(
         "/api/songs",
         content=b"x" * (JSON_REQUEST_BODY_MAX_BYTES + 10),

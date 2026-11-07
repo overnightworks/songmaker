@@ -13,17 +13,15 @@ from support.web_app import TEST_SECRET, make_fake_redis
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.queue_streams as queue_streams
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.health_types import BackgroundLoopRegistry
 
 
 @pytest.fixture
-def ctx(tmp_path: Path) -> AppContext:
+def ctx(tmp_path: Path, pg_factory) -> AppContext:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
-    factory = init_test_db(tmp_path / "songmaker.db")
     return AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
+        db=pg_factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
         signing_key=TEST_SECRET, redis=make_fake_redis(),
     )
 
