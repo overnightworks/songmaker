@@ -24,6 +24,14 @@ from songmaker_cli.settings import (
 )
 
 _REMOVED_COVER_KEYS = ("COVER_EXECUTOR", "COVER_JOB_BUDGET_SECONDS", "COVER_CLI_DEADLINE_SECONDS")
+_RETIRED_KEYS = (
+    "ANTHROPIC_API_KEY",
+    "XAI_API_KEY",
+    "OPENAI_API_KEY",
+    "CLAUDE_CHAT_MODEL",
+    "CODEX_CLI_MAX_CONCURRENT_PROCESSES",
+    "COVER_MAX_CONCURRENT_RUNS",
+)
 
 
 def _required_settings() -> dict[str, str]:
@@ -76,11 +84,14 @@ def test_voice_capacity_defaults_are_configured() -> None:
     assert settings.max_queued_lora_training_jobs == 2
 
 
-def test_codex_process_caps_default_to_the_single_pool_contract() -> None:
-    settings = Settings(**_required_settings())
+@pytest.mark.parametrize("key", _RETIRED_KEYS)
+def test_a_dotenv_that_still_sets_a_retired_key_builds_settings(
+    tmp_path: Path, key: str,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"{key}=1\n")
 
-    assert settings.codex_cli_max_concurrent_processes == 8
-    assert settings.cover_max_concurrent_runs == 1
+    Settings(_env_file=env_file, **_required_settings())
 
 
 def test_settings_build_with_none_of_the_removed_cover_keys(
@@ -100,16 +111,6 @@ def test_a_dotenv_with_a_removed_cover_key_raises(tmp_path: Path, key: str) -> N
 
     with pytest.raises(ValidationError):
         Settings(_env_file=env_file, **required)
-
-
-def test_rejects_a_cover_cap_above_the_codex_process_cap() -> None:
-    required = _required_settings()
-    with pytest.raises(ValidationError, match="Cover process cap"):
-        Settings(
-            **required,
-            codex_cli_max_concurrent_processes=1,
-            cover_max_concurrent_runs=2,
-        )
 
 
 @pytest.mark.parametrize(
