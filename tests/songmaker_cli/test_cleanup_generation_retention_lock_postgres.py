@@ -251,29 +251,21 @@ def test_a_manual_delete_waits_for_the_final_deletion_of_the_take_and_answers_no
     assert not world.files["x"].exists()
 
 
-def test_the_final_deletion_waits_for_a_manual_delete_of_the_take_and_leaves_it_out_of_its_report(
-    pg_factory, tmp_path,
+@pytest.mark.parametrize(
+    ("archived", "report_key"),
+    [pytest.param(True, "deleted_ids", id="final_deletion"),
+     pytest.param(False, "archived_ids", id="stage_one")],
+)
+def test_the_retention_run_waits_for_a_manual_delete_of_the_take_and_leaves_it_out_of_its_report(
+    pg_factory, tmp_path, archived: bool, report_key: str,
 ) -> None:
-    world = _World(pg_factory, tmp_path, {"x": {"archived": True, "old": True}})
+    world = _World(pg_factory, tmp_path, {"x": {"archived": archived, "old": True}})
     answers = race(
         pg_factory, world.delete("x"), world.retention(), _holding_a_generation_write(),
     )
     assert answers["first"].status_code == 200
     assert answers["second"].status_code == 200
-    assert answers["second"].json()["deleted_ids"] == []
-    assert world.state("x") is None
-
-
-def test_stage_one_waits_for_a_manual_delete_of_the_take_and_leaves_it_out_of_its_report(
-    pg_factory, tmp_path,
-) -> None:
-    world = _World(pg_factory, tmp_path, {"x": {"archived": False, "old": True}})
-    answers = race(
-        pg_factory, world.delete("x"), world.retention(), _holding_a_generation_write(),
-    )
-    assert answers["first"].status_code == 200
-    assert answers["second"].status_code == 200
-    assert answers["second"].json()["archived_ids"] == []
+    assert answers["second"].json()[report_key] == []
     assert world.state("x") is None
 
 
