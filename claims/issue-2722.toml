@@ -1,8 +1,0 @@
-claim_id = "2ad4f6694acf4f32b97ccc1bc6a59c4d"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "7c7354b7cdef176216ed38d384d1de7538f85ca0"
-branch = "claude/issue-2722-numba-scorer-segfault-in-ci"
-scope = [".github/workflows/ci.yml", "AGENTS.md", "pyproject.toml", "tests/conftest.py", "tests/songmaker_cli/test_scoring_scorers.py", "tests/songmaker_cli/test_scoring_scorers_extended.py", "uv.lock"]
-opened_commit = "d0667c57105b59c5785184aefdbacda3c63b99ba"
-whole_reason = "The cause is not known yet, and it can sit in the test harness, the pins or the CI job, so one lane holds the places a fix can land."
