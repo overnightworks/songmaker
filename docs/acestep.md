@@ -418,9 +418,9 @@ All modes use the same upstream ACE-Step task endpoint with different `task_type
 - `repaint_latent_crossfade_frames`: latent-level boundary blend width
 - `repaint_wav_crossfade_sec`: waveform-level splice crossfade
 
-When `repaint_mode` or `repaint_wav_crossfade_sec` is set, the server handles crossfading and the client-side splice (`_splice_repaint_raw`) is skipped.
+When `repaint_mode` or `repaint_wav_crossfade_sec` is set, the server handles crossfading and the client-side splice (`_splice_repaint_raw`) is skipped. The splice reads the source take's raw, unmastered WAV when one lies beside it, and its mastered WAV otherwise.
 
-**Cover** uploads its source WAV as multipart `ctx_audio` and sends `audio_cover_strength` (0.0 = free reinterpretation, 1.0 = strict structure). `thinking` is auto-disabled. ACE-Step 1.5 adds `cover_noise_strength` (0-1) for noise blending control.
+**Cover** uploads its source WAV as multipart `ctx_audio` and sends `audio_cover_strength` (0.0 = free reinterpretation, 1.0 = strict structure). `thinking` is auto-disabled. ACE-Step 1.5 adds `cover_noise_strength` (0-1) for noise blending control, sent only when set.
 
 **Audio hand-off to the ACE-Step fork.** Songmaker keeps the source and reference files as local paths until submission, then uploads them in the `/release_task` multipart body: `src_audio_path` becomes `ctx_audio`, and `reference_audio_path` becomes `ref_audio`. It never sends either local absolute path as a request field. The fork rejects such paths (`release_task_audio_paths.py:40-41`) and persists multipart uploads to its temporary directory (`release_task_request_parser.py:104-132`); the latter is therefore the supported Repaint, Cover, and reference-audio contract.
 

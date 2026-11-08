@@ -147,9 +147,9 @@
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 		cursor: pointer;
-		background: var(--primary);
-		border: 1px solid var(--primary);
-		color: #fff;
+		background: var(--accent);
+		border: 1px solid var(--accent);
+		color: var(--on-accent);
 	}
 
 	.confirm-btn:hover {

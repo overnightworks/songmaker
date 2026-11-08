@@ -629,8 +629,8 @@
 	}
 
 	.remove-btn:hover:not(:disabled) {
-		border-color: var(--fail);
-		color: var(--fail);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.remove-btn:disabled {
@@ -708,7 +708,7 @@
 	}
 
 	.file-pick {
-		color: var(--primary);
+		color: var(--accent);
 		cursor: pointer;
 		text-decoration: underline;
 	}
@@ -728,7 +728,7 @@
 		padding: 0.45rem 1rem;
 		border: none;
 		border-radius: var(--btn-radius-pill);
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
@@ -753,8 +753,8 @@
 
 	.own-takes-toggle:hover,
 	.use-take-btn:hover:not(:disabled) {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.use-take-btn:disabled {
@@ -815,7 +815,7 @@
 		display: block;
 		height: 100%;
 		border-radius: inherit;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
+		background: var(--accent);
 		transition: width 180ms ease;
 	}
 
@@ -940,7 +940,7 @@
 		padding: 0.55rem 1.3rem;
 		border: none;
 		border-radius: var(--btn-radius-pill);
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 		font-family: var(--font-display);
 		letter-spacing: 0.75px;

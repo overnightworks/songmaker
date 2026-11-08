@@ -507,8 +507,7 @@ describe('TakesList', () => {
 				generations: [generation({ ...measuredTakeDefaults(), model_mode: 'xl-sft' })]
 			})
 		});
-		const badge = target.querySelector<HTMLElement>('.model-badge');
-		expect(badge).toBeNull();
+		expect(target.querySelector('.model-badge')).toBeNull();
 	});
 
 	it('shows its own measured length, not the "auto" (0) duration it was requested with', async () => {
@@ -1269,21 +1268,21 @@ describe('TakesList load states', () => {
 		generateState.set(RUNNING);
 		const { target } = await render({ song: song({}) });
 		expect(target.querySelector('.status-slot')).not.toBeNull();
-		expect(target.textContent).not.toContain(TAKES_MOBILE_HINT);
+		expect(target.querySelector('[role="tooltip"]')).toBeNull();
 		vi.unstubAllGlobals();
 	});
 });
 
 describe('TakesList touch hint', () => {
-	it('shows the tap hint on a coarse pointer and hides it on a mouse', async () => {
-		// #141/11: a narrow desktop window is compact but still has a mouse.
+	it('offers the tap hint behind an info tip on a coarse pointer and not on a mouse', async () => {
 		stubCoarsePointer(true);
-		const { target: coarse } = await render();
-		expect(coarse.textContent).toContain(TAKES_MOBILE_HINT);
-
+		const tip = (await render()).target.querySelector('.version-head [role="tooltip"]');
+		expect(tip?.textContent).toBe(TAKES_MOBILE_HINT);
+		const unsaved = song({ version_count: 0, generations: [generation({})] });
+		const imported = (await render({ song: unsaved })).target;
+		expect(imported.querySelector('.version-header-row [role="tooltip"]')).not.toBeNull();
 		stubCoarsePointer(false);
-		const { target: fine } = await render();
-		expect(fine.textContent).not.toContain(TAKES_MOBILE_HINT);
+		expect((await render()).target.querySelector('[role="tooltip"]')).toBeNull();
 		vi.unstubAllGlobals();
 	});
 });

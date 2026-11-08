@@ -296,7 +296,7 @@
 	.glow-2 {
 		width: 250px;
 		height: 250px;
-		background: color-mix(in srgb, var(--primary) 10%, transparent);
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 		bottom: 20%;
 		right: -5%;
 	}

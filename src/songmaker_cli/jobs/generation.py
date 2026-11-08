@@ -657,10 +657,9 @@ def _create_auto_score_job(
 ) -> str | None:
     """Create the DB row for an automatic post-generation score job.
 
-    Returns ``None`` (creating nothing) when the generation row itself never
-    made it into the DB — the narrow race where the generation job was
-    cancelled while ``post_process_generation`` was writing it — since
-    scoring a generation that does not exist would only fail immediately.
+    Returns ``None`` (creating nothing) when the take's row is gone by now,
+    deleted with its song or album after the commit, since scoring a take
+    that does not exist would only fail immediately.
 
     ``user_id=None`` is the origin marker that keeps this job out of the
     manual re-score button's budget: ``count_user_jobs_in_window`` always

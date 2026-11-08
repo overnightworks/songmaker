@@ -84,7 +84,7 @@
 	}
 
 	.crumb-link:hover {
-		color: var(--primary);
+		color: var(--accent);
 		text-decoration: underline;
 	}
 

@@ -638,9 +638,9 @@
 
 	.cover-action.cover-use {
 		padding: 0 1rem;
-		border-color: var(--primary);
-		background: var(--primary);
-		color: #fff;
+		border-color: var(--accent);
+		background: var(--accent);
+		color: var(--on-accent);
 	}
 
 	.cover-action.cover-use:disabled {
