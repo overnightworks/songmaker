@@ -1,0 +1,7 @@
+claim_id = "b930e581ecc3492e8b925f948df3273e"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "adf3b9a99126e243bb5ec92bd3469485e0614d7f"
+branch = "claude/issue-2632-s9b-preset-delete-asks-first"
+scope = ["frontend/src/routes/settings/generation/+page.svelte", "frontend/src/routes/settings/generation/page.test.ts"]
+opened_commit = "181e64ded341099deeb1e05f48d188defbfc9502"
