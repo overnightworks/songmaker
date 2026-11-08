@@ -1,0 +1,8 @@
+claim_id = "b6fda48064a64cafa596f563d152147e"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "eed5bbc44f2366fab7593fb068f6711eb023e879"
+branch = "claude/issue-2769-takes-agent-runtime-v0-26-0"
+scope = ["pyproject.toml", "src/songmaker_cli/agent/mcp.py", "src/songmaker_cli/server.py", "tests/songmaker_cli/agent/test_mcp_person_front.py", "tests/songmaker_cli/test_mcp_server_agent_account.py", "tests/songmaker_cli/test_server.py", "tests/support/mcp_world.py", "tests/support/token_world.py", "uv.lock"]
+opened_commit = "f2b2a2e71337ed686a884c942e6cf4c489454620"
+whole_reason = "One library upgrade: the pin, the one lifespan line it requires and the tests that speak the old revision."
