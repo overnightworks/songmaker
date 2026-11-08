@@ -189,7 +189,7 @@ def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(
     assert owners_lists == ([], [])
 
 
-HOME_LIST_STATEMENT_BUDGET_SHARED_BLOCKS = 2000
+HOME_LIST_STATEMENT_BUDGET_SHARED_BLOCKS = 1500
 
 
 def _seed_libraries_of_many_musicians(
@@ -247,13 +247,13 @@ def _seed_libraries_of_many_musicians(
     ])
 
 
-def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory) -> None:
-    with pg_factory() as session:
+def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(extra_pg_factory) -> None:
+    own_database = extra_pg_factory()
+    with own_database() as session:
         _seed_libraries_of_many_musicians(session, musicians=5, albums=20, songs=10)
-        session.commit()
         session.execute(text("ANALYZE"))
-
-    with pg_factory() as session:
+        session.commit()
+    with own_database() as session:
         statements: list[tuple[str, dict]] = []
 
         def record(conn, cursor, statement, parameters, context, executemany) -> None:
@@ -277,8 +277,8 @@ def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory
 
     assert len(listens) == 40
     assert [worked.song.id for worked in worked_songs] == ["m0-a19-s9", "m0-a19-s8", "m0-a19-s7"]
-    blocks = max(plan["Shared Hit Blocks"] + plan["Shared Read Blocks"] for plan in plans)
-    assert blocks < HOME_LIST_STATEMENT_BUDGET_SHARED_BLOCKS
+    blocks = [plan["Shared Hit Blocks"] + plan["Shared Read Blocks"] for plan in plans]
+    assert max(blocks) < HOME_LIST_STATEMENT_BUDGET_SHARED_BLOCKS, blocks
 
 
 def test_concurrent_job_creation(pg_factory) -> None:
