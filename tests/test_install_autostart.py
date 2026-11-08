@@ -20,7 +20,7 @@ AUTOSTART_FILES = (
     "agent_cli_paths.sh",
     "alert_config.sh",
     "send_alert.sh",
-    "install-autostart.sh",
+    "install_autostart.sh",
     "main_checkout.py",
     "songmaker-alert@.service",
     "songmaker.service",
@@ -75,7 +75,7 @@ def run_autostart(tmp_path: Path):
     ) -> subprocess.CompletedProcess[str]:
         started_from = from_checkout or checkout
         return subprocess.run(
-            [str(started_from / "scripts" / "install-autostart.sh"), *arguments],
+            [str(started_from / "scripts" / "install_autostart.sh"), *arguments],
             cwd=started_from,
             env=_environment(),
             text=True,

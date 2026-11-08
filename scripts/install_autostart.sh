@@ -38,7 +38,7 @@
 # docs/acestep.md.
 #
 # Usage:
-#   ./scripts/install-autostart.sh [--force]
+#   ./scripts/install_autostart.sh [--force]
 
 set -euo pipefail
 
@@ -97,7 +97,7 @@ if [[ "$INSTALL_USER" = "root" ]]; then
     echo "CLI bind mounts the web container depends on (docker-compose.yml" >&2
     echo "expects them under the stack owner's home, not /root)." >&2
     echo "Log in as the user the stack belongs to and run:" >&2
-    echo "  sudo ./scripts/install-autostart.sh" >&2
+    echo "  sudo ./scripts/install_autostart.sh" >&2
     exit 1
 fi
 
@@ -112,16 +112,16 @@ sed_escape_replacement() {
 
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
-ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/send_alert.sh")"
+ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$ALERT_SCRIPT")"
 
 # shellcheck source=scripts/agent_cli_paths.sh
 source "$SCRIPT_DIR/agent_cli_paths.sh"
-require_main_checkout "$PROJECT_ROOT" install-autostart.sh || exit 1
+require_main_checkout "$PROJECT_ROOT" install_autostart.sh || exit 1
 
 refuse_silent_takeover "$UNIT_TARGET" WorkingDirectory \
     "$PROJECT_ROOT" "$FORCE" || exit 1
 refuse_silent_takeover "$ALERT_UNIT_TARGET" ExecStart \
-    "$PROJECT_ROOT/scripts/send_alert.sh" "$FORCE" command || exit 1
+    "$ALERT_SCRIPT" "$FORCE" command || exit 1
 
 TMP_UNIT="$(mktemp)"
 TMP_ALERT_UNIT="$(mktemp)"
@@ -139,7 +139,7 @@ sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
     -e "s#^User=.*#User=$ESCAPED_INSTALL_USER#" \
     "$ALERT_UNIT_SOURCE" > "$TMP_ALERT_UNIT"
 
-echo "Installing $ALERT_UNIT_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/send_alert.sh ..., User=$INSTALL_USER)..."
+echo "Installing $ALERT_UNIT_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$ALERT_SCRIPT ..., User=$INSTALL_USER)..."
 sudo install -m 0644 "$TMP_ALERT_UNIT" "$ALERT_UNIT_TARGET"
 
 echo "Installing $UNIT_TARGET (WorkingDirectory=$PROJECT_ROOT, User=$INSTALL_USER)..."
