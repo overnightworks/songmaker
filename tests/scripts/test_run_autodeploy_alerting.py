@@ -20,10 +20,10 @@ import time
 from pathlib import Path
 
 import pytest
-from auto_deploy_harness import (
+from support.auto_deploy_harness import (
     Checkout,
 )
-from auto_deploy_support import (
+from support.auto_deploy_support import (
     ACESTEP_SUBMODULE_PATH,
     ALERT_REPEAT_SECONDS,
     CHECK_RUN_APPEARANCE_GRACE_SECONDS,
