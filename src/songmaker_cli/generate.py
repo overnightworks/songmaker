@@ -13,10 +13,16 @@ from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.io import wavfile as scipy_wavfile
 
 from acestep_engine.models import AceStepConfig
-from audio_engine import MasteringError, encode_mp3, master_audio, read_wav_bytes, write_stereo_wav
+from audio_engine import (
+    AudioDecodeError,
+    MasteringError,
+    encode_mp3,
+    master_audio,
+    read_wav_bytes,
+    write_stereo_wav,
+)
 from songmaker_cli.errors import GenerationError
 from songmaker_cli.parser import AlbumMeta, SongMeta
 
@@ -34,8 +40,6 @@ class DecodedAudio:
 
 
 def _decode_audio(ace_result) -> DecodedAudio:
-    from audio_engine.errors import AudioDecodeError
-
     try:
         left, right, sample_rate = read_wav_bytes(ace_result.wav_bytes)
     except AudioDecodeError as exc:
@@ -81,18 +85,13 @@ def _write_output(
 
 
 def _read_source_wav(path: str) -> DecodedAudio:
-    sr, raw = scipy_wavfile.read(path)
-    from audio_engine.audio_io import _normalize_dtype
-    samples = _normalize_dtype(raw)
-    if samples is None:
-        raise GenerationError(f"Unsupported source WAV dtype: {raw.dtype}")
-    if samples.ndim == 2 and samples.shape[1] >= 2:
-        left, right = samples[:, 0], samples[:, 1]
-    else:
-        if samples.ndim == 2:
-            samples = samples[:, 0]
-        left, right = samples, samples.copy()
-    return DecodedAudio(left=left, right=right, sample_rate=sr, duration=len(left) / sr)
+    try:
+        left, right, sample_rate = read_wav_bytes(Path(path).read_bytes())
+    except AudioDecodeError as exc:
+        raise GenerationError(f"Repaint source WAV could not be decoded: {exc}") from exc
+    return DecodedAudio(
+        left=left, right=right, sample_rate=sample_rate, duration=len(left) / sample_rate,
+    )
 
 
 def _splice_repaint_raw(
