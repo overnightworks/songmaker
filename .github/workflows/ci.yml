@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  UV_PYTHON_PREFERENCE: only-managed # why: setup-uv only sets UV_PYTHON; without this uv takes the runner's own Python, whose patch differs from the images'.
+
 concurrency:
   group: ci-${{ github.ref }}
   # Keep main runs queued so each landing can become a deploy candidate (2026-09-05).
@@ -35,7 +38,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      UV_PYTHON: ${{ matrix.python-version }} # why: .python-version would otherwise win over the matrix leg.
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
     strategy:
       matrix:
@@ -117,7 +119,7 @@ jobs:
 
       - name: Require every database proof to execute
         run: |
-          python - <<'PYTHON'
+          uv run --no-sync python - <<'PYTHON'
           import collections
           import xml.etree.ElementTree as ET
 
@@ -289,7 +291,7 @@ jobs:
           BRANCH_FLOOR: "89"
         run: |
           # coverage.py's fail_under judges lines and branches combined, so each floor is checked here.
-          python3 - <<'PY'
+          uv run --no-sync python - <<'PY'
           import os
           import xml.etree.ElementTree as ET
 
