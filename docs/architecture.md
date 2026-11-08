@@ -189,8 +189,9 @@ lists all of them, each expandable one level into its own tracks (a
 takes/pick summary per row, an equalizer marking the one actually playing, a
 violet `--accent` left bar marking the selected track). The row of the album
 or playlist whose own page is on screen is the current page
-(`aria-current="page"`): a purple `--accent` bar with a stronger tint and a bold name,
-which tell it from the selected track and outrank hover, styled once in `RailGroup.svelte` for both groups (#1371). The
+(`aria-current="page"`): a violet `--accent` bar with a stronger tint and a bold
+name, which tell it from the selected track and outrank hover, styled once in
+`RailGroup.svelte` for both groups (#1371). The
 wall and Home keep the last-open collection but mark no row. That row scrolls
 into the rail's view (`revealOpenRailItem` in `rail-item-selector.ts`) each
 time it becomes shown — a navigation, Back, a reload, its group opening, a
