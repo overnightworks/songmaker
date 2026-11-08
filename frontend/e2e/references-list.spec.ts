@@ -25,7 +25,7 @@ import {
 
 const REFERENCES_PATH = '/api/references';
 const EMPTY_SENTENCE = "No references yet — upload a recording to guide a song's sound.";
-const LENGTH_AND_DAY = /^\d+:\d{2} · \d{1,2} [A-Z][a-z]{2}( \d{4})?(⏳ \d+d)?$/;
+const LENGTH_AND_DAY = /^\d+:\d{2} · \d{1,2} [A-Z][a-z]{2}( \d{4})?( ⏳ \d+d)?$/;
 const COUNTDOWN = /^⏳ \d+d$/;
 
 test.use({ storageState: { cookies: [], origins: [] } });

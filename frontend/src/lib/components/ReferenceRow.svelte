@@ -14,6 +14,7 @@
 
 	const NO_LENGTH = '—';
 	const META_SEPARATOR = ' · ';
+	const WORD_GAP = ' ';
 
 	let {
 		reference,
@@ -93,7 +94,7 @@
 	<span class="reference-text">
 		<span class="reference-name" title={reference.filename}>{reference.filename}</span>
 		<span class="reference-meta"
-			>{metaLabel()}{#if deletion}<span
+			>{metaLabel()}{#if deletion}{WORD_GAP}<span
 					class="exp"
 					class:warn={deletion.days <= EXPIRY_WARN_DAYS}
 					title={deletion.tooltip}>⏳ {deletion.days}d</span
@@ -233,7 +234,7 @@
 
 	.exp {
 		display: inline-block;
-		margin-inline-start: 6px;
+		margin-inline-start: 3px;
 		padding: 0 5px;
 		border: 1px solid var(--border);
 		border-radius: var(--btn-radius-sm);

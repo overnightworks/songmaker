@@ -185,7 +185,7 @@ describe('the countdown acknowledgement', () => {
 	});
 
 	it('posts on a later load of the same page load when the first showed no countdown', async () => {
-		mocks.listReferences.mockResolvedValueOnce(answerWith([{ id: 'a', deletes_at: null }], null));
+		mocks.listReferences.mockResolvedValueOnce(answerWith([{ id: 'a', deletes_at: null }], EPOCH));
 		const target = await renderReferencesPage();
 		await vi.waitFor(() => expect(target.querySelector('.reference-keep')).not.toBeNull());
 		await settle();
