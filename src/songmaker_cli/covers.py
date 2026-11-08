@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import shutil
 import uuid
-import warnings
 from io import BytesIO
 from pathlib import Path
 from typing import Final
@@ -55,7 +54,6 @@ COVER_VARIANTS: Final[frozenset[str]] = frozenset({
 })
 COVER_KEY_JPEG: Final[str] = "jpg"
 COVER_KEY_PNG: Final[str] = "png"
-COVER_KEYS: Final[frozenset[str]] = frozenset({COVER_KEY_JPEG, COVER_KEY_PNG})
 COVER_JPEG_EXTENSION: Final[str] = ".jpg"
 COVER_PNG_EXTENSION: Final[str] = ".png"
 COVER_JPEG_MAGIC: Final[bytes] = b"\xff\xd8\xff"
@@ -98,10 +96,7 @@ def sniff_cover_format(payload: bytes) -> str | None:
 def cover_key_extension(cover_key: str | None) -> str | None:
     if cover_key is None or "." not in cover_key:
         return None
-    ext = cover_key.rsplit(".", 1)[-1]
-    if ext not in COVER_KEYS:
-        return None
-    return ext
+    return cover_key.rsplit(".", 1)[-1]
 
 
 def new_cover_key(fmt: str) -> str:
@@ -169,28 +164,20 @@ def decode_cover_image(payload: bytes) -> tuple[Image.Image, str]:
     fmt = sniff_cover_format(payload)
     if fmt is None:
         raise CoverRejectedError(COVER_UNSUPPORTED_TYPE)
-    previous_limit = Image.MAX_IMAGE_PIXELS
-    Image.MAX_IMAGE_PIXELS = COVER_MAX_PIXELS
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(BytesIO(payload)) as raw:
-                if raw.width < 1 or raw.height < 1:
-                    raise CoverRejectedError(COVER_UNREADABLE)
-                if raw.width * raw.height > COVER_MAX_PIXELS:
-                    raise CoverRejectedError(COVER_TOO_MANY_PIXELS)
-                raw.load()
-                oriented = ImageOps.exif_transpose(raw)
-                normalized = _normalized_original(oriented, fmt)
-                return normalized.copy(), fmt
+        with Image.open(BytesIO(payload)) as raw:
+            if raw.width * raw.height > COVER_MAX_PIXELS:
+                raise CoverRejectedError(COVER_TOO_MANY_PIXELS)
+            raw.load()
+            oriented = ImageOps.exif_transpose(raw)
+            normalized = _normalized_original(oriented, fmt)
+            return normalized.copy(), fmt
     except CoverRejectedError:
         raise
-    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+    except Image.DecompressionBombError as exc:
         raise CoverRejectedError(COVER_TOO_MANY_PIXELS) from exc
     except (OSError, ValueError, SyntaxError, IndexError) as exc:
         raise CoverRejectedError(COVER_UNREADABLE) from exc
-    finally:
-        Image.MAX_IMAGE_PIXELS = previous_limit
 
 
 def write_album_cover(
@@ -363,17 +350,13 @@ def _cover_variant_path(
 ) -> Path:
     entity_dir = _cover_entity_dir(audio_dir, dirname, entity_id, invalid_id_message)
     if variant == COVER_VARIANT_ORIGINAL:
-        ext = cover_key_extension(cover_key)
-        if ext == COVER_KEY_JPEG:
-            return entity_dir / f"{COVER_VARIANT_ORIGINAL}{COVER_JPEG_EXTENSION}"
-        if ext == COVER_KEY_PNG:
-            return entity_dir / f"{COVER_VARIANT_ORIGINAL}{COVER_PNG_EXTENSION}"
-        raise FileNotFoundError
-    if variant == COVER_VARIANT_CARD:
-        return entity_dir / f"{COVER_VARIANT_CARD}{COVER_JPEG_EXTENSION}"
-    if variant == COVER_VARIANT_DETAIL:
-        return entity_dir / f"{COVER_VARIANT_DETAIL}{COVER_JPEG_EXTENSION}"
-    raise CoverRejectedError(COVER_VARIANT_UNKNOWN)
+        extension = (
+            COVER_JPEG_EXTENSION
+            if cover_key_extension(cover_key) == COVER_KEY_JPEG
+            else COVER_PNG_EXTENSION
+        )
+        return entity_dir / f"{COVER_VARIANT_ORIGINAL}{extension}"
+    return entity_dir / f"{variant}{COVER_JPEG_EXTENSION}"
 
 
 def _normalized_original(image: Image.Image, fmt: str) -> Image.Image:
@@ -426,10 +409,7 @@ def _is_unsafe_cover_id(entity_id: str) -> bool:
         return True
     if "/" in entity_id or "\\" in entity_id:
         return True
-    try:
-        return Path(entity_id).is_absolute()
-    except (ValueError, OSError):
-        return True
+    return Path(entity_id).is_absolute()
 
 
 def _covers_root(audio_dir: Path, dirname: str) -> Path:
