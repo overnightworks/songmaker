@@ -1,7 +1,0 @@
-claim_id = "7585a4dd6e0f462b85923dd82faae709"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "91f82b5f4da06dedc5d268cea6b34f9047993274"
-branch = "claude/issue-2679-source-wav-engine-reader"
-scope = ["src/songmaker_cli/generate.py", "tests/songmaker_cli/test_generate.py"]
-opened_commit = "055848cd7617073cd53751eef8f6a766d3976fb1"
