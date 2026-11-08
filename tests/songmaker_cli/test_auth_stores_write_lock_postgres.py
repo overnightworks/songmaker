@@ -18,9 +18,9 @@ from support.postgres_lock_harness import (
 )
 from support.web_app import make_test_app, seed_user, web_client
 
-from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.auth_api import backchannel_logout_host
 from songmaker_cli.auth_stores import DatabaseWriteLock
+from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.request_policies import BACKCHANNEL_LOGOUT_PATH
 
@@ -29,14 +29,14 @@ def _second_session_times_out_on_the_lock(pg_factory) -> None:
     with pg_factory() as other:
         other.execute(text("SET LOCAL lock_timeout = '200ms'"))
         with pytest.raises(OperationalError) as refused:
-            _begin_exclusive(other, _USER_MANAGEMENT_LOCK_ID)
+            lock_until_transaction_ends(other, AdvisoryLock.USER_MANAGEMENT)
     assert isinstance(refused.value.orig, LockNotAvailable)
 
 
 def _second_session_gets_the_lock(pg_factory) -> None:
     with pg_factory() as other:
         other.execute(text("SET LOCAL lock_timeout = '2s'"))
-        _begin_exclusive(other, _USER_MANAGEMENT_LOCK_ID)
+        lock_until_transaction_ends(other, AdvisoryLock.USER_MANAGEMENT)
         other.rollback()
 
 
@@ -133,7 +133,7 @@ def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_sess
         assert pause.reached.wait(WAIT_SECONDS), "The sign-in callback never reached its commit"
         logout.start()
         logout_pid = wait_until_blocked_behind(
-            pg_factory, pause.backend_pid, advisory_key=_USER_MANAGEMENT_LOCK_ID,
+            pg_factory, pause.backend_pid, advisory_key=AdvisoryLock.USER_MANAGEMENT,
         )
         assert "logout" not in answers
     finally:

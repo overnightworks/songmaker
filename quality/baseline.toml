@@ -68,7 +68,7 @@
 "tests/songmaker_cli/test_lora_api.py" = 1296
 "tests/songmaker_cli/test_playlist_api.py" = 1101
 "tests/songmaker_cli/test_queue_streams.py" = 2311
-"tests/songmaker_cli/test_resource_event_api.py" = 1236
+"tests/songmaker_cli/test_resource_event_api.py" = 1233
 "tests/songmaker_cli/test_scheduler.py" = 1283
 "tests/songmaker_cli/test_server.py" = 1922
 "tests/songmaker_cli/test_sharing_api.py" = 2487

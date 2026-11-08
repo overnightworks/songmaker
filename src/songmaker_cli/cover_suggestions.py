@@ -8,12 +8,12 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import Actor, can_access_album
 from songmaker_cli.audio_paths import AudioPathRejectedError, canonical_audio_path, confined_under
 from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, JobType
+from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import lock_session_row
@@ -26,7 +26,6 @@ ALBUM_NOT_FOUND: Final = "Album not found"
 COVER_SUGGESTIONS_ALREADY_RUNNING: Final = "Cover suggestions are already being generated"
 DAILY_COVER_SUGGESTION_LIMIT_REACHED: Final = "Daily cover suggestion limit reached"
 SESSION_ENDED: Final = "Log in again to suggest covers."
-_COVER_SUGGESTIONS_LOCK_ID: Final = 7
 
 
 class CoverSuggestionRequestError(Exception):
@@ -79,7 +78,7 @@ def request_cover_suggestions(
     if album is None or not can_access_album(album, actor, require_owner=require_owner):
         raise CoverSuggestionAlbumNotFoundError()
 
-    _lock_cover_suggestion_request(session)
+    lock_until_transaction_ends(session, AdvisoryLock.COVER_SUGGESTIONS)
     if has_active_cover_job(session, album.id):
         raise CoverSuggestionAlreadyRunningError()
 
@@ -99,15 +98,6 @@ def request_cover_suggestions(
 def utc_day_start() -> datetime:
     now = datetime.now(timezone.utc)
     return now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-
-def _lock_cover_suggestion_request(session: Session) -> None:
-    """Serialize cover-job admission until the caller commits or rolls back."""
-    session.execute(
-        text("SELECT pg_advisory_xact_lock(:id)").bindparams(
-            id=_COVER_SUGGESTIONS_LOCK_ID,
-        ),
-    )
 
 
 def suggestion_png_path(audio_dir: Path, album_id: str, suggestion_id: str) -> Path:

@@ -34,6 +34,8 @@ from songmaker_cli.constants import (
     JobType,
     LimiterFailurePolicy,
 )
+from songmaker_cli.covers import COVER_RESPONSE_HEADERS, CoverRejectedError, cover_media_type
+from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.models import (
     ALBUM_SLUG_MAX_LENGTH,
     LORA_SLUG_MAX_LENGTH,
@@ -69,14 +71,6 @@ from songmaker_cli.worker_liveness import WorkerLiveness, read_worker_liveness
 if TYPE_CHECKING:
     from redis import Redis
 
-_RATE_LIMIT_LOCK_ID = 1
-_ALBUM_ID_LOCK_ID = 2
-_SONG_SLUG_LOCK_ID = 5
-_PLAYLIST_SLUG_LOCK_ID = 6
-_LORA_CAPACITY_LOCK_ID = 8
-_USER_MANAGEMENT_LOCK_ID = 9
-_PURGE_LOCK_ID = 10
-
 SONG_NOT_FOUND_DETAIL: Final = "Song not found"
 LORA_NOT_FOUND_DETAIL: Final = "LoRA not found"
 LORA_SAMPLE_NOT_FOUND_DETAIL: Final = "LoRA sample not found"
@@ -109,13 +103,6 @@ def cover_file_response(
     version: str | None,
 ) -> FileResponse:
     """Serve an entity's stored cover, mapping resolver refusals to HTTP errors."""
-    # Deferred: covers imports Pillow, which the scoring worker image omits.
-    from songmaker_cli.covers import (
-        COVER_RESPONSE_HEADERS,
-        CoverRejectedError,
-        cover_media_type,
-    )
-
     if version is not None and version != entity.cover_key:
         raise HTTPException(404, COVER_NOT_FOUND)
     try:
@@ -129,15 +116,6 @@ def cover_file_response(
         media_type=cover_media_type(variant, entity.cover_key or ""),
         headers=COVER_RESPONSE_HEADERS,
     )
-
-
-def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:
-    """Acquire an exclusive write lock for check-then-act sequences.
-
-    An advisory lock scoped to the transaction (auto-released on
-    commit/rollback). Different lock_ids allow independent serialization.
-    """
-    session.execute(text("SELECT pg_advisory_xact_lock(:id)").bindparams(id=lock_id))
 
 
 def _transaction_has_written(session: Session) -> bool:
@@ -180,7 +158,7 @@ def lock_lora_capacity(session: Session) -> None:
     before taking the lock; callers must not have written yet.
     """
     end_read_transaction_before_lock(session, "lock_lora_capacity")
-    _begin_exclusive(session, _LORA_CAPACITY_LOCK_ID)
+    lock_until_transaction_ends(session, AdvisoryLock.LORA_CAPACITY)
 
 
 def _job_type_rate_limit(job_type: JobType) -> tuple[int, str]:
@@ -262,7 +240,7 @@ def create_job_with_rate_limit(
     worker_ids = [worker.id for worker in list_worker_identities(session)]
     worker_liveness = read_worker_liveness(redis, worker_ids)
     session.commit()
-    _begin_exclusive(session)
+    lock_until_transaction_ends(session, AdvisoryLock.RATE_LIMIT)
 
     _enforce_job_limits(session, user, job_type, worker_liveness)
     if version_id is not None:
@@ -320,7 +298,7 @@ def _acquire_unique_slug(
     persist it unconditionally.
     """
     end_read_transaction_before_lock(session, caller)
-    _begin_exclusive(session, lock_id)
+    lock_until_transaction_ends(session, lock_id)
     return _first_free_slug(base_slug, is_taken)
 
 
@@ -331,7 +309,7 @@ def unique_album_id(session: Session, title: str) -> str:
 
     base_slug = slugify(title, max_length=_ALBUM_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
-        session, "unique_album_id", _ALBUM_ID_LOCK_ID, base_slug, is_taken,
+        session, "unique_album_id", AdvisoryLock.ALBUM_ID, base_slug, is_taken,
     )
 
 
@@ -382,7 +360,7 @@ def unique_song_slug(
 
     base_slug = slugify(title, max_length=_SONG_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
-        session, "unique_song_slug", _SONG_SLUG_LOCK_ID, base_slug, is_taken,
+        session, "unique_song_slug", AdvisoryLock.SONG_SLUG, base_slug, is_taken,
     )
 
 
@@ -405,7 +383,7 @@ def unique_playlist_slug(
 
     base_slug = slugify(title, max_length=_PLAYLIST_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
-        session, "unique_playlist_slug", _PLAYLIST_SLUG_LOCK_ID, base_slug, is_taken,
+        session, "unique_playlist_slug", AdvisoryLock.PLAYLIST_SLUG, base_slug, is_taken,
     )
 
 
