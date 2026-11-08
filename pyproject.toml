@@ -76,6 +76,7 @@ dev = [
     "pytest>=7.0,<10",
     "pytest-cov>=7.0,<8",
     "pytest-xdist>=3.8,<4",
+    "packaging>=24.1",
     "ruff>=0.4,<1",
     "import-linter>=2.0,<3",
     "fakeredis[lua]>=2.0,<3",
