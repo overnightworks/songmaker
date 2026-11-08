@@ -1,8 +1,0 @@
-claim_id = "3c9bcb080e944fd8a28591278ca79380"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5ca594c40b01111db629919e232778ed53de7460"
-branch = "claude/issue-2770-tests-meet-quality-layout-rules"
-scope = ["quality/baseline.toml", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_reference_announced_deletion_postgres.py", "tests/songmaker_cli/test_reference_audio_announced_deletion_postgres.py", "tests/songmaker_cli/test_resource_event_api.py", "tests/songmaker_cli/test_resource_event_api_stream_bounds.py", "tests/support/resource_event_world.py"]
-opened_commit = "5bef00bd500917cb337c4919ddce76ffa4854db1"
-whole_reason = "One pay-down for the release: the rename and the helper move that the rule names as its fix, with the row they shrink."
