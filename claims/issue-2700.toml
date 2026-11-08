@@ -1,0 +1,8 @@
+claim_id = "fd16df08b4864e66bf73dd4ee2d131e5"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "49f43b164a92affb14cf2533c30dcd2c8f50ad63"
+branch = "claude/issue-2700-presented-take-one-decider"
+scope = ["src/songmaker_cli/conversation_api.py", "src/songmaker_cli/db/queries/playlists.py", "src/songmaker_cli/db/queries/sharing.py", "src/songmaker_cli/sharing_api.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli"]
+opened_commit = "920692d15a2904d726a666bfbb00bbf3677f094c"
+whole_reason = "One decider replaces two, and every caller re-points in the same change, or a caller imports a removed name."
