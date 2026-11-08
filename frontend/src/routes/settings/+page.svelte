@@ -1,15 +1,11 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { afterNavigate, goto } from '$app/navigation';
+	import { SETTINGS_ADMIN_ONLY_HINT, SETTINGS_NAV_LABEL } from '#lib/constants/settings.ts';
 	import { navigating } from '$app/state';
 	import { historyComesToRest, standingPageEntryId } from '#lib/history/historyController.ts';
 	import Icon from '#lib/components/Icon.svelte';
-	import {
-		APP_NAME,
-		RAIL_SETTINGS_LABEL,
-		SETTINGS_ADMIN_ONLY_HINT,
-		SETTINGS_NAV_LABEL
-	} from '#lib/constants.ts';
+	import { APP_NAME, RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
 	import { visibleSettingsSections } from '#lib/settingsSections.ts';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';

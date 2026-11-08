@@ -1,9 +1,9 @@
 import { writable, derived, get } from 'svelte/store';
+import { RATE_LIMITED_STATUS, SERVER_UNREACHABLE_STATUSES } from '#lib/constants/http.ts';
 import type { AuthUser } from '#lib/api/types.ts';
 import { ApiError, fetchMe } from '#lib/api/client.ts';
 import { NetworkError } from '#lib/api/fetch.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
-import { RATE_LIMITED_STATUS, SERVER_UNREACHABLE_STATUSES } from '#lib/constants.ts';
 import { leaveByPostingForm, reloadAfresh } from '#lib/history/historyController.ts';
 import {
 	AUTH_CHECK_NETWORK_ERROR,

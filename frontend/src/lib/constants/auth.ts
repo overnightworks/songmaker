@@ -13,3 +13,13 @@ export const AUTH_CHECK_RETRY_LABEL = 'Retry';
 // cadence the library's return probe keeps, so the app loads within about a
 // second of the server's return (#1118).
 export { RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS as AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '#lib/constants.ts';
+
+// The server's sign-in start (`GET /login/oidc?next=`) reads the address to
+// return to from this param.
+export const SIGN_IN_NEXT_PARAM = 'next';
+
+// The account circle and the menu it opens (issue #1158).
+export const ACCOUNT_MENU_LABEL = 'Account';
+export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
+// Shown when the log-out could not reach the server; the session stands.
+export const SIGN_OUT_FAILED_MESSAGE = "Couldn't log out. Check your connection and try again.";

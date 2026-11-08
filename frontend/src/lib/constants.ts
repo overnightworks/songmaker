@@ -6,10 +6,6 @@ export const APP_REPOSITORY_URL = 'https://github.com/overnightworks/songmaker';
 
 export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 
-// The server's sign-in start (`GET /login/oidc?next=`) reads the address to
-// return to from this param.
-export const SIGN_IN_NEXT_PARAM = 'next';
-
 export const DIALOG_CANCEL_LABEL = 'Cancel';
 export const DIALOG_CONFIRM_LABEL = 'Confirm';
 
@@ -21,20 +17,11 @@ export const REFERENCE_UNKEEP_LABEL = 'Unkeep';
 export const REFERENCE_KEEP_FAILED = "Couldn't keep this recording";
 export const REFERENCE_UNKEEP_FAILED = "Couldn't unkeep this recording";
 
-export const QUEUE_STREAM_EMPTY_POOL_PREFIX = 'No playable takes in pool';
-
 export const LIBRARY_QUEUE_LOADING_TITLE = 'Loading';
 export const LIBRARY_QUEUE_EMPTY_TITLE = 'Nothing to play yet';
 export const LIBRARY_QUEUE_RETRY_DETAIL = 'Press play to retry';
 export const LIBRARY_QUEUE_PLAY_DETAIL = 'Play';
 export const PLAYLIST_LOADING_LABEL = 'Loading playlist…';
-export const SHUFFLE_SCOPE_PLAYLIST = 'this playlist';
-export const SHUFFLE_SCOPE_ALBUM = 'this album';
-export const SHUFFLE_SCOPE_LIBRARY = 'all albums';
-
-export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playable';
-
-export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
 
 export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been deleted';
 
@@ -344,15 +331,6 @@ export const SONG_COVER_REMOVE_LABEL = 'Remove song cover';
 export const SONG_PREVIOUS_LABEL = 'Previous song';
 export const SONG_NEXT_LABEL = 'Next song';
 
-export const SETTINGS_NAV_LABEL = 'Settings sections';
-export const SETTINGS_ADMIN_ONLY_HINT = 'admins only';
-
-// The account circle and the menu it opens (issue #1158).
-export const ACCOUNT_MENU_LABEL = 'Account';
-export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
-// Shown when the log-out could not reach the server; the session stands.
-export const SIGN_OUT_FAILED_MESSAGE = "Couldn't log out. Check your connection and try again.";
-
 export const COLLECTION_MENU_LABEL = 'More';
 export const COLLECTION_MENU_CLOSE_LABEL = 'Close menu';
 export const COLLECTION_MENU_SHARE_LABEL = 'Share';
@@ -413,14 +391,6 @@ export const RESOURCE_EVENT_RESYNC = 'resync';
 export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
 export const RESOURCE_SYNC_ERROR = "Couldn't reach your library";
 export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";
-// The edge's own answers for a server it cannot reach (down or restarting).
-// Only these, besides a request the network never carried, read as offline:
-// a 429 or a 500 comes from a server that is there (#1099).
-export const SERVER_UNREACHABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
-export const SERVER_ERROR_STATUS_FLOOR = 500;
-// A rate limit passes, like a failing server: a request it refused can be
-// asked again, no sooner than its `Retry-After` (#1099, #1508).
-export const RATE_LIMITED_STATUS = 429;
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 // `EventSource.CLOSED`, spelled out because the jsdom test runtime has no EventSource.
 export const EVENT_SOURCE_CLOSED = 2;
@@ -433,20 +403,6 @@ export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;
 // first answer ends the probing.
 export const RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS = 1000;
 export const RESOURCE_SYNC_TRACKED_EVENT_LIMIT = 256;
-export const JOB_TYPE_GENERATE = 'generate';
-export const JOB_TYPE_SCORE = 'score';
-export const JOB_TYPE_COVER = 'cover';
-
-// Shown when the backend's IP rate limiter (`webauth.middleware.rate_limit`)
-// rejects a request with 429 — the budget classes it enforces
-// (API/Media/Stream) mean this is now rare during ordinary use, but a
-// burst can still happen, and a client that silently stalls reads as
-// broken. A few paths already surface their own 429 copy some other way
-// and are exempted from this toast — see `RATE_LIMIT_TOAST_EXEMPT_PATHS`
-// in `lib/stores/rateLimitNotice.ts` for exactly which, and why.
-export const RATE_LIMITED_TOAST_MESSAGE =
-	'Too many requests — hang on, it will continue in a moment.';
-
 // SSE reconnection backoff (issue #257): jobs.ts (one EventSource per job)
 // and resourceSync.ts (the one live-sync stream) both own their `/api/*`
 // stream connection and must not lean on the browser's flat ~3s native
@@ -496,17 +452,3 @@ export const SSE_RECONNECT_BACKOFF_FACTOR = 2;
 export const SSE_RECONNECT_MAX_DELAY_MS = 8000;
 export const SSE_RECONNECT_JITTER_RATIO = 0.2;
 export const SSE_IMMEDIATE_REOPEN_MIN_GAP_MS = 2000;
-// A job stream stops trusting its stream and reads the job over REST on this
-// many consecutive connection errors. Twenty-four retries at the delays above
-// (2 + 4 + 8 + 21 * 8s = 182s) keep the roughly three minutes the former 30s
-// ceiling gave ten attempts. Only timed retries that fail while the page is
-// online count: a reopen on returning to the app never spends one, so
-// frequent returns never shorten the three minutes (#1032), nor does a
-// failure while offline, so no number of outages drops a running take (#1141).
-export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
-// How long a finished generate job keeps its card, counted only while the page
-// is online, when the song refresh its end asked for has not run (#1039 O3):
-// offline the card stays however long the network is away; back online this is
-// long enough for the page to resync, short enough that a refresh that never
-// runs does not leave a card behind.
-export const GENERATE_TAKE_ARRIVAL_WAIT_MS = 30_000;
