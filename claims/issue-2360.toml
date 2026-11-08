@@ -1,8 +1,0 @@
-claim_id = "142278eea6ec4c8e80b3d3d475b3df45"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "ba9a9d047296edaa94593e5752f9fa3cba44bf85"
-branch = "claude/issue-2360-ci-drops-duplicate-setup-and-pip-audit"
-scope = [".github/workflows/ci.yml", ".github/workflows/security.yml", ".gitmodules", "docs/acestep.md", "docs/security.md", "docs/testing.md"]
-opened_commit = "77a1d132fa7b57619aeb6f894f7fd0e5faae0de4"
-whole_reason = "Two workflow files' duplicate setup steps and the fork's two pointers, all from one audit, none touching src."
