@@ -6,7 +6,7 @@ lib/components/AlbumDetailView.svelte 2
 lib/components/AlbumMetaEditor.svelte 4
 lib/components/Breadcrumb.svelte 1
 lib/components/ChatInput.svelte 2
-lib/components/CoWriterPanel.svelte 24
+lib/components/CoWriterPanel.svelte 23
 lib/components/CollectionHeader.svelte 3
 lib/components/CollectionHeaderFrame.svelte 3
 lib/components/CollectionMenu.svelte 3
@@ -74,9 +74,9 @@ routes/(library)/album/[slug]/+page.svelte 2
 routes/(library)/album/[slug]/[song]/+page.svelte 2
 routes/(library)/album/[slug]/[song]/take/[n]/+page.svelte 2
 routes/(library)/playlist/[slug]/+page.svelte 2
-routes/+layout.svelte 4
+routes/+layout.svelte 3
 routes/settings/+page.svelte 3
-routes/settings/about/+page.svelte 5
+routes/settings/about/+page.svelte 4
 routes/settings/generation/+page.svelte 16
 routes/settings/users/+page.svelte 22
 routes/settings/voices/+page.svelte 20

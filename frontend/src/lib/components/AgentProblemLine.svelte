@@ -95,7 +95,7 @@
 		align-items: center;
 		min-height: var(--hitbox-frequent);
 		padding: 0 0.6rem;
-		color: var(--primary);
+		color: var(--accent);
 		font-weight: 600;
 		text-decoration: underline;
 		text-underline-offset: 3px;
@@ -106,10 +106,10 @@
 		align-items: center;
 		min-height: var(--hitbox-frequent);
 		padding: 0 0.8rem;
-		border: 1px solid var(--primary);
+		border: 1px solid var(--accent);
 		border-radius: var(--btn-radius-sm);
 		background: transparent;
-		color: var(--primary);
+		color: var(--accent);
 		cursor: pointer;
 		font-family: var(--font-display);
 		font-size: var(--btn-font-size-sm);

@@ -54,7 +54,7 @@
 		white-space: nowrap;
 	}
 	.line .spark {
-		color: var(--primary);
+		color: var(--accent);
 	}
 	.line {
 		display: flex;
