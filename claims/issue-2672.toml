@@ -1,0 +1,8 @@
+claim_id = "59c41cd1928d439cade34934a4e1e494"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "4794df1ae707187c686b1c3a83079a7c4612c90f"
+branch = "claude/issue-2672-v010-f1b-deploy-pair-script-names"
+scope = ["README.md", "docker/.env.docker.example", "docs/acestep.md", "docs/architecture.md", "monitoring/scripts/start_alertmanager.sh", "scripts", "tests/auto_deploy_harness.py", "tests/auto_deploy_support.py", "tests/scripts/test_install_autodeploy.py", "tests/test_auto_deploy_alerting.py", "tests/test_auto_deploy_releases.py", "tests/test_install_autostart.py"]
+opened_commit = "d632fcb7f4b0fb13fbbdd3f52c54f29502d9f506"
+whole_reason = "A renamed script's callers, the installer's ExecStart rewrite and the unit template change in one slice, or a reinstall writes a unit that runs a missing file."
