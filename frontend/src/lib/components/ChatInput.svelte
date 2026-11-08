@@ -60,19 +60,19 @@
 	}
 
 	.chat-input:focus {
-		border-color: var(--primary);
+		border-color: var(--accent);
 		outline: none;
-		box-shadow: 0 0 0 1px var(--primary);
+		box-shadow: 0 0 0 1px var(--accent);
 	}
 
 	.send-btn {
 		flex-shrink: 0;
 		min-height: var(--hitbox-frequent);
 		padding: 0 1.5rem;
-		border: 1px solid var(--primary);
+		border: 1px solid var(--accent);
 		border-radius: var(--btn-radius-sm);
-		background: var(--primary);
-		color: var(--surface);
+		background: var(--accent);
+		color: var(--on-accent);
 		font-family: var(--font-display);
 		font-size: var(--btn-font-size);
 		letter-spacing: var(--btn-letter-spacing);

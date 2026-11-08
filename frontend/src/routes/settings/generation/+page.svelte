@@ -189,7 +189,6 @@
 
 	<section>
 		<h2 id="default-config-heading">Default for New Songs</h2>
-		<p class="hint">When you create a song, this config is applied automatically.</p>
 		<div class="default-chips" role="radiogroup" aria-labelledby="default-config-heading">
 			{#each defaultOptions as option, index (option.id ?? 'inherit')}
 				<button
@@ -307,12 +306,6 @@
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-	}
-
-	.hint {
-		color: var(--text-subtle);
-		font-size: 0.85rem;
-		margin-bottom: 1rem;
 	}
 
 	.error {

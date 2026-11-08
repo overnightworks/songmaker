@@ -1042,10 +1042,6 @@ export function stopLibraryResourceSync(): void {
 	libraryController?.stop();
 }
 
-export function waitForResourceReady(): Promise<boolean> {
-	return libraryController?.waitForReady() ?? Promise.resolve(false);
-}
-
 export function retryResourceSync(): Promise<boolean> {
 	return libraryController?.retry() ?? Promise.resolve(false);
 }

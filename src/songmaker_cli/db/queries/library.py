@@ -68,16 +68,23 @@ def title_matches(column, q: str):
     return column.ilike(like_contains_pattern(q), escape=LIKE_ESCAPE_CHAR)
 
 
-def apply_library_sort(query, model, sort: str | None):
-    if sort is None:
-        return query
-    if sort == LIBRARY_SORT_TITLE:
-        return query.order_by(func.lower(model.title).asc(), model.id.asc())
-    if sort == LIBRARY_SORT_OLDEST:
-        return query.order_by(model.created_at.asc(), model.id.asc())
-    if sort == LIBRARY_SORT_NEWEST:
-        return query.order_by(model.created_at.desc(), model.id.desc())
-    raise ValueError(f"Unknown library sort: {sort}")
+# Keyed by sort so an unknown sort raises KeyError instead of falling back to another order.
+_SORT_ASCENDING = {
+    LIBRARY_SORT_TITLE: True,
+    LIBRARY_SORT_OLDEST: True,
+    LIBRARY_SORT_NEWEST: False,
+}
+
+
+def _sort_key(model, sort: str):
+    return func.lower(model.title) if sort == LIBRARY_SORT_TITLE else model.created_at
+
+
+def apply_library_sort(query, model, sort: str):
+    key = _sort_key(model, sort)
+    if _SORT_ASCENDING[sort]:
+        return query.order_by(key.asc(), model.id.asc())
+    return query.order_by(key.desc(), model.id.desc())
 
 
 def search_library(
@@ -97,9 +104,7 @@ def search_library(
         session, owner_id=owner_id, q=q, sort=sort, after=after, limit=fetch_limit,
     )
     merged = _merge_hits(albums, songs, sort)
-    unique = _dedupe_hits(merged)
-    has_more = len(unique) > limit
-    return LibrarySearchPage(items=unique[:limit], has_more=has_more)
+    return LibrarySearchPage(items=merged[:limit], has_more=len(merged) > limit)
 
 
 def _matching_albums(
@@ -157,20 +162,13 @@ def _keyset_clause(model, sort: str, cursor: LibraryCursor | None, item_type: st
         return None
     same_type = item_type == cursor.item_type
     type_after = item_type > cursor.item_type
+    ascending = _SORT_ASCENDING[sort]
     if sort == LIBRARY_SORT_TITLE:
-        return _ascending_keyset_clause(
-            func.lower(model.title), cursor.sort_value, model.id, cursor.id, same_type, type_after,
-        )
-    timestamp = _parse_sort_datetime(cursor.sort_value)
-    if sort == LIBRARY_SORT_OLDEST:
-        return _ascending_keyset_clause(
-            model.created_at, timestamp, model.id, cursor.id, same_type, type_after,
-        )
-    if sort == LIBRARY_SORT_NEWEST:
-        return _descending_keyset_clause(
-            model.created_at, timestamp, model.id, cursor.id, same_type, type_after,
-        )
-    raise ValueError(f"Unknown library sort: {sort}")
+        value = cursor.sort_value
+    else:
+        value = _parse_sort_datetime(cursor.sort_value)
+    clause = _ascending_keyset_clause if ascending else _descending_keyset_clause
+    return clause(_sort_key(model, sort), value, model.id, cursor.id, same_type, type_after)
 
 
 def _ascending_keyset_clause(key, value, model_id, cursor_id, same_type: bool, type_after: bool):
@@ -197,32 +195,16 @@ def _hit_type(hit: Album | Song) -> str:
     return LIBRARY_ITEM_ALBUM if isinstance(hit, Album) else LIBRARY_ITEM_SONG
 
 
-def _hit_before(left: Album | Song, right: Album | Song, sort: str) -> bool:
-    left_type = _hit_type(left)
-    right_type = _hit_type(right)
-    if sort == LIBRARY_SORT_TITLE:
-        left_title = left.title.lower()
-        right_title = right.title.lower()
-        if left_title != right_title:
-            return left_title < right_title
-        if left_type != right_type:
-            return left_type < right_type
-        return left.id < right.id
-    left_ts = left.created_at
-    right_ts = right.created_at
-    if sort == LIBRARY_SORT_OLDEST:
-        if left_ts != right_ts:
-            return left_ts < right_ts
-        if left_type != right_type:
-            return left_type < right_type
-        return left.id < right.id
-    if sort != LIBRARY_SORT_NEWEST:
-        raise ValueError(f"Unknown library sort: {sort}")
-    if left_ts != right_ts:
-        return left_ts > right_ts
-    if left_type != right_type:
-        return left_type < right_type
-    return left.id > right.id
+def _hit_key(hit: Album | Song, sort: str):
+    return hit.title.lower() if sort == LIBRARY_SORT_TITLE else hit.created_at
+
+
+def _album_first(album: Album, song: Song, sort: str) -> bool:
+    album_key = _hit_key(album, sort)
+    song_key = _hit_key(song, sort)
+    if _SORT_ASCENDING[sort]:
+        return album_key <= song_key
+    return album_key >= song_key
 
 
 def _merge_hits(
@@ -232,7 +214,7 @@ def _merge_hits(
     i = 0
     j = 0
     while i < len(albums) and j < len(songs):
-        if _hit_before(albums[i], songs[j], sort):
+        if _album_first(albums[i], songs[j], sort):
             merged.append(albums[i])
             i += 1
         else:
@@ -241,15 +223,3 @@ def _merge_hits(
     merged.extend(albums[i:])
     merged.extend(songs[j:])
     return merged
-
-
-def _dedupe_hits(hits: list[Album | Song]) -> list[Album | Song]:
-    seen: set[tuple[str, str]] = set()
-    unique: list[Album | Song] = []
-    for hit in hits:
-        key = (_hit_type(hit), hit.id)
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(hit)
-    return unique

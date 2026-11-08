@@ -3,6 +3,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { fetchRelease } from '#lib/api/settings.ts';
 	import type { ReleaseInfo } from '#lib/api/types.ts';
+	import BusyState from '#lib/components/BusyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import { APP_NAME, APP_REPOSITORY_URL } from '#lib/constants.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
@@ -49,7 +50,7 @@
 {#if $loadFailure}
 	<p class="error">{$loadFailure}</p>
 {:else if release === null}
-	<p class="loading">Loading...</p>
+	<BusyState text="Loading..." />
 {:else}
 	<div class="about-list">
 		<div class="about-row">
@@ -119,11 +120,6 @@
 	.error {
 		color: var(--fail);
 		font-size: 0.85rem;
-	}
-
-	.loading {
-		color: var(--text-subtle);
-		font-size: 0.9rem;
 	}
 
 	.about-list {

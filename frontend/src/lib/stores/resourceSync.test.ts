@@ -37,8 +37,7 @@ import {
 	resourceSync,
 	retryResourceSync,
 	startLibraryResourceSync,
-	stopLibraryResourceSync,
-	waitForResourceReady
+	stopLibraryResourceSync
 } from './resourceSync';
 
 type ResourceSyncDeps = ConstructorParameters<typeof ResourceSyncController>[0];
@@ -1907,7 +1906,7 @@ describe('library resource sync wiring', () => {
 			startLibraryResourceSync(vi.fn());
 			MockEventSource.instances[0].emit('hello', { high_water_mark: '0' });
 			await flush();
-			expect(await waitForResourceReady()).toBe(true);
+			expect(get(resourceSync).ready).toBe(true);
 			selectedSongId.set(songId);
 			await flush();
 			requests.splice(0);
@@ -1926,7 +1925,6 @@ describe('library resource sync wiring', () => {
 
 		await requestSongRefresh('s1');
 		expect(MockEventSource.instances).toHaveLength(0);
-		expect(await waitForResourceReady()).toBe(false);
 		expect(await retryResourceSync()).toBe(false);
 		expect(MockEventSource.instances).toHaveLength(0);
 	});

@@ -10,6 +10,7 @@
 		SIGN_IN_PATH,
 		signInAddress
 	} from '#lib/api/fetch.ts';
+	import BusyState from '#lib/components/BusyState.svelte';
 	import AccountMenu from '#lib/components/AccountMenu.svelte';
 	import PhoneAppBar from '#lib/components/PhoneAppBar.svelte';
 	import Rail from '#lib/components/shell/Rail.svelte';
@@ -39,7 +40,7 @@
 	import {
 		backToCollection,
 		followShellLayers,
-		initNavigation,
+		followLibrarySync,
 		leaveGoneSong,
 		isLibraryWorkspacePath,
 		openLibraryWall,
@@ -56,11 +57,7 @@
 		mountRouteOfLandedAddress,
 		stampNavigatedEntry
 	} from '#lib/history/historyController.ts';
-	import {
-		startLibraryResourceSync,
-		stopLibraryResourceSync,
-		waitForResourceReady
-	} from '#lib/stores/resourceSync.ts';
+	import { startLibraryResourceSync, stopLibraryResourceSync } from '#lib/stores/resourceSync.ts';
 	import { openCollection } from '#lib/stores/collection.ts';
 	import {
 		escapeNowPlaying,
@@ -220,22 +217,15 @@
 
 	// The live-sync stream and the library's landing handler outlive a route swap
 	// between the library's three addresses, so this layout owns them rather
-	// than the `(library)` route group below it: the workspace page used to
-	// own them, and a swap tore them down and rebuilt them under the user.
-	// `initNavigation` still waits for the first snapshot — it
-	// normalises the history entry from the live stores, so running it before
-	// they are hydrated would overwrite a restorable entry with an empty one.
+	// than the `(library)` route group below it. Navigation follows the sync's
+	// ready flag: its landing handler normalises the history entry from the
+	// live stores, so it attaches only once they are hydrated.
 	$effect(() => {
 		if (!libraryRouteActive) return;
 		startLibraryResourceSync(leaveGoneSong);
-		let left = false;
-		let stopNavigation: (() => void) | undefined;
-		void waitForResourceReady().then((ready) => {
-			if (ready && !left) stopNavigation = initNavigation();
-		});
+		const stopFollowing = followLibrarySync();
 		return () => {
-			left = true;
-			stopNavigation?.();
+			stopFollowing();
 			stopLibraryResourceSync();
 		};
 	});
@@ -317,7 +307,7 @@
 		<OfflineStrip />
 	</div>
 {:else if $authLoading}
-	<div class="loading">Loading...</div>
+	<div class="auth-gate"><BusyState text="Loading..." /></div>
 {:else if authRetryable}
 	<div class="auth-retry">
 		<p>{$authCheckError}</p>
@@ -361,13 +351,9 @@
 {/if}
 
 <style>
-	.loading {
+	.auth-gate {
 		display: flex;
-		align-items: center;
-		justify-content: center;
 		height: 100dvh;
-		color: var(--text-muted);
-		font-size: 1.1rem;
 	}
 
 	.auth-retry {

@@ -144,9 +144,8 @@ def lock_lora_capacity(session: Session) -> None:
     """Start the transaction that serializes voice creation and training enqueueing.
 
     Both capacity checks share one transaction-scoped advisory lock on
-    PostgreSQL.  Like
-    ``create_job_with_rate_limit``, end the open transaction before taking
-    the lock; callers must not have written yet.
+    PostgreSQL. Like ``create_job_with_rate_limit``, end the open transaction
+    before taking the lock; callers must not have written yet.
     """
     end_read_transaction_before_lock(session, "lock_lora_capacity")
     _begin_exclusive(session, _LORA_CAPACITY_LOCK_ID)

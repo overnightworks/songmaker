@@ -32,7 +32,7 @@
 "frontend/src/lib/components/SongDetailView.svelte" = 1021
 "frontend/src/lib/components/SongDetailView.test.ts" = 2270
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
-"frontend/src/lib/components/editor/TakesList.test.ts" = 1304
+"frontend/src/lib/components/editor/TakesList.test.ts" = 1303
 "frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
@@ -45,9 +45,9 @@
 "frontend/src/lib/stores/navigation.test.ts" = 2971
 "frontend/src/lib/stores/player.test.ts" = 5277
 "frontend/src/lib/stores/player.ts" = 2236
-"frontend/src/lib/stores/resourceSync.test.ts" = 2036
-"frontend/src/lib/stores/resourceSync.ts" = 1062
-"frontend/src/routes/layout.test.ts" = 1406
+"frontend/src/lib/stores/resourceSync.test.ts" = 2034
+"frontend/src/lib/stores/resourceSync.ts" = 1058
+"frontend/src/routes/layout.test.ts" = 1404
 "frontend/src/routes/settings/users/+page.svelte" = 937
 "src/acestep_worker/wrapper.py" = 1087
 "src/songmaker_cli/conversation_api.py" = 968
@@ -60,10 +60,10 @@
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1291
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1857
 "tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4585
-"tests/songmaker_cli/test_db.py" = 2449
+"tests/songmaker_cli/test_api.py" = 4584
+"tests/songmaker_cli/test_db.py" = 2448
 "tests/songmaker_cli/test_db_postgresql.py" = 832
-"tests/songmaker_cli/test_jobs.py" = 3215
+"tests/songmaker_cli/test_jobs.py" = 3105
 "tests/songmaker_cli/test_library_api.py" = 1626
 "tests/songmaker_cli/test_lora_api.py" = 1296
 "tests/songmaker_cli/test_playlist_api.py" = 1103
