@@ -1,8 +1,0 @@
-claim_id = "46b00f5ef5ce49c482dc7eecda2f5951"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "4bd843e23fd26b38bcc36806b86c3fe9f1c9a528"
-branch = "claude/issue-2752-signed-cursor-cells-envelope-reader"
-scope = [".github/workflows/ci.yml", "quality/baseline.toml", "src/songmaker_cli/conversation_api.py", "tests/songmaker_cli/test_conversation_api_memory.py", "tests/songmaker_cli/test_conversation_api_mentions.py", "tests/songmaker_cli/test_library_cursor.py"]
-opened_commit = "b0c247fedc89ae136b81a7cce78c9a109a820fc8"
-whole_reason = "One coverage slice: the cells, the two deletions that remove what nothing reaches, and the floor they let rise."
