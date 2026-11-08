@@ -1,8 +1,0 @@
-claim_id = "b7f0d8980d8d42b889641bc10991db42"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "73ccffe0d816fb356397c0dbe658d5864a0f0c6a"
-branch = "claude/issue-2636-2571-3b-restore-keeps-the-selection"
-scope = ["docs/architecture.md", "frontend/src/lib/stores/editor.ts", "frontend/src/lib/stores/editorVersionsRecovery.test.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/navigationGoneSong.test.ts", "frontend/src/lib/stores/navigationLibrarySync.test.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "quality/baseline.toml"]
-opened_commit = "bb6046e0d308887b9c2c67fdac3148e09e5a47da"
-whole_reason = "Removing the restore's clear, narrowing the guard that existed only for it and giving the resync its one load must land together: the narrowed guard without the kept selection loses the Back cell, and the kept selection without the resync load leaves a resync onto a gone song silent."
