@@ -1,8 +1,0 @@
-claim_id = "fb0f1a1d788d4f079557f1a5234cb40e"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6012e9fd6c1ebaa5ddbd5062eabd82002bcb1128"
-branch = "claude/issue-2713-s7-shuffle-queue-job-auth-http-settings"
-scope = ["frontend/e2e", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/stores", "frontend/src/lib/utils", "frontend/src/routes", "quality/baseline.toml"]
-opened_commit = "7bc61dd54ca1461ab61f7039ccd670f3d1557428"
-whole_reason = "One pure move: the families leave the catch-all together, and every caller re-points in the same change, or the build breaks."
