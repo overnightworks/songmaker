@@ -51,7 +51,7 @@ def lm_failure_key(worker_id: str) -> str:
     return f"{LM_FAILURE_KEY_PREFIX}:{worker_id}"
 
 
-def decode_redis_text(raw: Any) -> str | None:
+def decode_redis_text(raw: bytes | str | None) -> str | None:
     if raw is None:
         return None
     if isinstance(raw, bytes):
