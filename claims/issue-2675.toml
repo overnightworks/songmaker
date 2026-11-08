@@ -1,0 +1,8 @@
+claim_id = "156bd1c6a0d84b11a193c49fa98fa098"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "ef30d6bf73040e0b62e9c14f6cb04e54ad1ad082"
+branch = "claude/issue-2675-v010-f1d-installer-script-names"
+scope = ["README.md", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "scripts", "tests/test_install_autostart.py", "tests/test_install_cli_credentials_mirror.py"]
+opened_commit = "898aa2c4718b63c9c4d628330c6d67017901bb1d"
+whole_reason = "A renamed installer's callers, its own messages and the other installers' comments change in one slice, or a message tells the operator to run a missing file."
