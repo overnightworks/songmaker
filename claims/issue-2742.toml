@@ -1,8 +1,0 @@
-claim_id = "85be627612c346549eb2298365f2df4e"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "7d155b6509d377e2286dbb8682596fe8e5b7096b"
-branch = "claude/issue-2742-recipe-reference-row-becomes-picker"
-scope = ["frontend/e2e/README.md", "frontend/e2e/reference-picker.spec.ts", "frontend/src/lib/components/editor/RecipeTabs.svelte", "frontend/src/lib/components/editor/RecipeTabs.test.ts", "frontend/src/lib/components/editor/ReferencePicker.svelte", "frontend/src/lib/components/editor/ReferencePicker.test.ts", "frontend/src/lib/constants/recipe.ts"]
-opened_commit = "60539f8bb74f4cd06d28721ab647c2860b4b81e5"
-whole_reason = "The picker is one surface: its component, the row that mounts it, its labels, and the tests that follow the upload's move."
