@@ -145,7 +145,7 @@
 		min-width: 0;
 		min-height: var(--hitbox-frequent);
 		padding: var(--btn-padding-sm);
-		border: 1px solid var(--primary);
+		border: 1px solid var(--accent);
 		border-radius: var(--btn-radius-sm);
 		font-family: var(--font-display);
 		font-size: var(--btn-font-size);
@@ -154,8 +154,8 @@
 
 	.primary-button {
 		gap: var(--row-gap);
-		background: var(--primary);
-		color: var(--surface);
+		background: var(--accent);
+		color: var(--on-accent);
 		text-transform: uppercase;
 		cursor: pointer;
 	}

@@ -720,7 +720,7 @@
 	.use-seed:hover,
 	.take-source-action:hover,
 	.rescore:hover:not(:disabled) {
-		border-color: var(--primary);
+		border-color: var(--accent);
 		color: var(--text);
 	}
 	.use-seed {

@@ -658,7 +658,7 @@
 
 	.keep-btn:hover,
 	.keep-btn.kept {
-		color: var(--keep);
+		color: var(--accent);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

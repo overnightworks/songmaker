@@ -551,9 +551,9 @@
 		cursor: pointer;
 	}
 	.surface-btn:hover {
-		border-color: var(--primary);
+		border-color: var(--accent);
 		color: var(--text);
-		background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+		background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 	}
 	.np-heading {
 		min-width: 0;
@@ -663,7 +663,7 @@
 		padding: 0 0.5rem;
 		border: none;
 		background: none;
-		color: var(--primary);
+		color: var(--accent);
 		font: inherit;
 		font-size: 0.8rem;
 		cursor: pointer;
@@ -772,8 +772,8 @@
 		cursor: pointer;
 	}
 	.go-song:hover {
-		border-color: var(--primary);
-		background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 	}
 	.np-right-col {
 		display: flex;

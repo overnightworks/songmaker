@@ -53,16 +53,15 @@ def test_a_person_added_afterwards_without_a_theme_gets_the_device_choice(refere
     assert _themes(engine) == ["system", "system", "system"]
 
 
-def test_the_database_refuses_a_value_outside_the_three_ways(reference_link_database):
+@pytest.mark.parametrize(
+    "theme", [pytest.param("auto", id="outside_the_three"), pytest.param(None, id="none")],
+)
+def test_the_database_refuses_a_theme_outside_the_three_ways_and_no_theme(
+    reference_link_database, theme: str | None,
+):
     engine = _upgraded_with_two_people(reference_link_database)
     with pytest.raises(IntegrityError):
-        _set_theme_of_u1(engine, "auto")
-
-
-def test_the_database_refuses_no_theme(reference_link_database):
-    engine = _upgraded_with_two_people(reference_link_database)
-    with pytest.raises(IntegrityError):
-        _set_theme_of_u1(engine, None)
+        _set_theme_of_u1(engine, theme)
 
 
 def test_downgrade_drops_the_column_and_its_check_and_keeps_the_people(reference_link_database):

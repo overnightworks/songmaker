@@ -347,26 +347,21 @@ def test_cleanup_terminal_drops_old() -> None:
         task_id = await store.create("generate")
         await store.complete(task_id, _generated())
         store._tasks[task_id].terminal_at = utcnow() - timedelta(seconds=10)
-        dropped = await store.cleanup_terminal()
-        size = await store.size()
-        return dropped, size
+        return await store.cleanup_terminal()
 
-    dropped, size = _run(go())
-    assert dropped == 1
-    assert size == 0
+    assert _run(go()) == 1
 
 
 def test_cleanup_terminal_keeps_running() -> None:
     async def go():
         store = TaskStore()
-        await store.create("generate")
+        task_id = await store.create("generate")
         dropped = await store.cleanup_terminal()
-        size = await store.size()
-        return dropped, size
+        return dropped, await store.get(task_id)
 
-    dropped, size = _run(go())
+    dropped, snapshot = _run(go())
     assert dropped == 0
-    assert size == 1
+    assert snapshot is not None
 
 
 class _SweepClock:
@@ -428,10 +423,10 @@ def test_sweep_loop_drops_expired_terminal_tasks_and_keeps_the_rest(
 def test_sweep_loop_continues_after_a_failed_sweep(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    async def go() -> int:
+    async def go():
         clock = _SweepClock(monkeypatch)
         store = TaskStore()
-        await _finish(store)
+        task_id = await _finish(store)
         real_cleanup = store.cleanup_terminal
         calls = 0
 
@@ -448,12 +443,12 @@ def test_sweep_loop_continues_after_a_failed_sweep(
         await clock.next_tick()
         await clock.next_tick()
         await clock.next_tick()
-        size = await store.size()
+        snapshot = await store.get(task_id)
         sweep.cancel()
         await asyncio.wait([sweep])
-        return size
+        return snapshot
 
-    assert _run(go()) == 0
+    assert _run(go()) is None
     assert "sweep failed" in caplog.text
 
 

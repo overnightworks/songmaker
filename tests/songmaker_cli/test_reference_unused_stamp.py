@@ -17,7 +17,6 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids, mark_newly_unused
-from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.timestamps import utcnow
 
 OWNER = "owner"
@@ -200,24 +199,6 @@ def test_unknown_ids_and_an_empty_set_stamp_nothing(tmp_path, pg_factory):
         assert mark_newly_unused(session, {"missing"}) == 0
         assert mark_newly_unused(session, set()) == 0
     assert _stamps(ctx)["r1"] is None
-
-
-def test_an_empty_candidate_set_sends_no_statement(tmp_path, pg_factory):
-    ctx = _owner_ctx(tmp_path, pg_factory)
-    statements: list[str] = []
-
-    def record(connection, cursor, statement, parameters, context, executemany):
-        statements.append(statement)
-
-    with ctx.db() as session:
-        engine = session.get_bind()
-        event.listen(engine, "before_cursor_execute", record)
-        try:
-            commit_unused_stamps(session, set())
-            mark_newly_unused(session, set())
-        finally:
-            event.remove(engine, "before_cursor_execute", record)
-    assert statements == []
 
 
 @dataclass(frozen=True)

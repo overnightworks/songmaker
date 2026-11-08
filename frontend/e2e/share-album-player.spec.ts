@@ -350,7 +350,7 @@ test.describe('songs', () => {
 		const { page } = visitor;
 		const violet = await page.evaluate(() => {
 			const probe = document.createElement('span');
-			probe.style.color = 'var(--primary)';
+			probe.style.color = 'var(--accent)';
 			document.body.append(probe);
 			const color = getComputedStyle(probe).color;
 			probe.remove();

@@ -50,7 +50,6 @@ from songmaker_cli.db.models import (
     PlaylistEntry,
     Song,
     UserSongWork,
-    aware_timestamp,
 )
 from songmaker_cli.db.queries.library import visible_albums
 from songmaker_cli.timestamps import utcnow
@@ -386,7 +385,7 @@ def _listen(
 
 
 def _in_utc(moment: datetime) -> datetime:
-    return aware_timestamp(moment).astimezone(timezone.utc)
+    return moment.astimezone(timezone.utc)
 
 
 def _most_recent_listen_first(listen: PlaceListen) -> tuple[float, str, str]:

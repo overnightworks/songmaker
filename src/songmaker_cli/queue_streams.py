@@ -23,6 +23,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
+from stat import S_ISREG
 from typing import Final, Literal
 
 from fastapi import HTTPException, Request
@@ -46,7 +47,13 @@ from songmaker_cli.api_models.queue_streams import (
 )
 from songmaker_cli.api_models.songs import generation_version_lyrics
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.audio_paths import AudioPathRejectedError, confined_under, resolve_audio_path
+from songmaker_cli.audio_paths import (
+    AudioFileNotFoundError,
+    AudioPathRejectedError,
+    canonical_audio_path,
+    confined_under,
+    resolve_audio_path,
+)
 from songmaker_cli.constants import REDIS_RL_QUEUE_STREAM_PREFIX, LimiterFailurePolicy
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
@@ -309,11 +316,11 @@ def prepare_queue_stream_admission(
         gen = source.generation
         if not gen.mp3_path:
             raise HTTPException(422, "Queue contains a generation without audio")
-        audio_path = resolve_audio_path(ctx.audio_dir, gen.mp3_path)
+        audio_path = canonical_audio_path(ctx.audio_dir, gen.mp3_path)
         try:
             stat = audio_path.stat()
-        except OSError as exc:
-            raise HTTPException(404, "Audio file not found") from exc
+        except FileNotFoundError as exc:
+            raise AudioFileNotFoundError(gen.mp3_path) from exc
         duration = probe_audio_duration(audio_path)
         total_duration += duration
         if total_duration > QUEUE_STREAM_MAX_DURATION_SECONDS:
@@ -396,23 +403,20 @@ def _find_reusable_snapshot(
     content_hash: str,
     stream_url: str,
 ) -> QueueStreamManifestResponse | None:
-    stream_dir = _stream_dir(ctx)
-    if not stream_dir.exists():
-        return None
     now = datetime.now(timezone.utc)
     manifests = sorted(
-        stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB),
+        _stream_dir(ctx).glob(QUEUE_STREAM_MANIFEST_GLOB),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
     for manifest_path in manifests:
         manifest = QueueStreamManifest.load(manifest_path)
-        if manifest is None:
+        if manifest is None or not _valid_snapshot_id(manifest_path.stem):
             continue
-        if manifest.content_hash != content_hash or manifest.expires_at < now:
+        if manifest.snapshot_id != manifest_path.stem or manifest.content_hash != content_hash:
             continue
         audio_path = queue_stream_audio_path(ctx, manifest.snapshot_id)
-        if not audio_path.exists():
+        if manifest.expires_at < now or not audio_path.exists():
             continue
         return QueueStreamManifestResponse(
             snapshot_id=manifest.snapshot_id,
@@ -447,8 +451,6 @@ def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStream
 
 
 def queue_stream_audio_path(ctx: AppContext, snapshot_id: str) -> Path:
-    if not _valid_snapshot_id(snapshot_id):
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
     stream_dir = _stream_dir(ctx)
     path = confined_under(stream_dir, stream_dir / f"{snapshot_id}.mp3")
     if path is None:
@@ -489,16 +491,14 @@ def _remove_expired_queue_stream_orphans(
 ) -> None:
     orphan_cutoff = now - QUEUE_STREAM_ORPHAN_MAX_AGE
     for cache_file in stream_dir.iterdir():
-        if not cache_file.is_file():
-            continue
-        snapshot_id = _snapshot_id_from_cache_file(cache_file)
-        if not snapshot_id or snapshot_id in live_snapshot_ids:
+        if _snapshot_id_from_cache_file(cache_file) in live_snapshot_ids:
             continue
         try:
-            modified_at = datetime.fromtimestamp(cache_file.stat().st_mtime, tz=timezone.utc)
+            file_stat = cache_file.stat()
         except OSError:
-            modified_at = None
-        if modified_at is not None and modified_at < orphan_cutoff:
+            continue
+        modified_at = datetime.fromtimestamp(file_stat.st_mtime, tz=timezone.utc)
+        if S_ISREG(file_stat.st_mode) and modified_at < orphan_cutoff:
             cache_file.unlink(missing_ok=True)
 
 
@@ -550,8 +550,6 @@ def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
             text=True,
             timeout=FFMPEG_TIMEOUT_SECONDS,
         )
-    except FileNotFoundError as exc:
-        raise HTTPException(503, "ffmpeg is not available") from exc
     except subprocess.TimeoutExpired as exc:
         output_path.unlink(missing_ok=True)
         raise HTTPException(504, "Queue stream build timed out") from exc
@@ -614,33 +612,28 @@ def _enforce_cache_quota(
     *,
     protected_snapshot_ids: set[str] | None = None,
 ) -> None:
+    # Only finished snapshots count: a running build's ".tmp.mp3" stays out of the total.
     # Just-built snapshots (protected_snapshot_ids) are counted but never evicted.
     eviction_protected = protected_snapshot_ids or set()
 
-    mp3_files = [path for path in stream_dir.glob("*.mp3") if path.is_file()]
     total_bytes = 0
-    sized_files: list[tuple[float, int, Path]] = []
-    for path in mp3_files:
+    sized_snapshots: list[tuple[float, int, str]] = []
+    for path in stream_dir.glob("*.mp3"):
+        if not _valid_snapshot_id(path.stem):
+            continue
         try:
-            stat = path.stat()
+            file_stat = path.stat()
         except OSError:
             continue
-        total_bytes += stat.st_size
-        sized_files.append((stat.st_mtime, stat.st_size, path))
+        total_bytes += file_stat.st_size
+        sized_snapshots.append((file_stat.st_mtime, file_stat.st_size, path.stem))
 
-    if total_bytes <= QUEUE_STREAM_MAX_CACHE_BYTES:
-        return
-
-    for _, size, path in sorted(sized_files):
+    for _, size, snapshot_id in sorted(sized_snapshots):
         if total_bytes <= QUEUE_STREAM_MAX_CACHE_BYTES:
             break
-        snapshot_id = _snapshot_id_from_cache_file(path)
         if snapshot_id in eviction_protected:
             continue
-        if snapshot_id:
-            delete_snapshot_files_from_dir(stream_dir, snapshot_id)
-        else:
-            path.unlink(missing_ok=True)
+        delete_snapshot_files_from_dir(stream_dir, snapshot_id)
         total_bytes -= size
 
 
@@ -740,12 +733,6 @@ def _library_skip(ctx: AppContext, generation: Generation) -> QueueStreamSkipRes
         )
     try:
         audio_path = resolve_audio_path(ctx.audio_dir, generation.mp3_path)
-        if not audio_path.exists():
-            return QueueStreamSkipResponse(
-                song_id=generation.song_id,
-                generation_id=generation.id,
-                reason="missing_file",
-            )
     except (AudioPathRejectedError, OSError):
         return QueueStreamSkipResponse(
             song_id=generation.song_id,
@@ -784,8 +771,6 @@ def shuffle_library_sources(
     start_generation_id: str | None,
     shuffle_seq: Callable[[list[QueueStreamSource]], None] | None = None,
 ) -> list[QueueStreamSource]:
-    if len(sources) <= 1:
-        return list(sources)
     seen: set[str] = set()
     unique: list[QueueStreamSource] = []
     for source in sources:

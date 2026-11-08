@@ -19,7 +19,6 @@ from songmaker_cli.db.models import (
     Playlist,
     Song,
     Version,
-    aware_timestamp,
 )
 from songmaker_cli.db.queries.activity import record_song_edit
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
@@ -534,7 +533,7 @@ def restore_song(session: Session, song_id: str) -> Song:
         raise ValueError(f"Song not found: {song_id}")
     if song.deleted_at is None:
         return song
-    deleted_at = aware_timestamp(song.deleted_at)
+    deleted_at = song.deleted_at
     age = datetime.now(timezone.utc) - deleted_at
     window = timedelta(days=get_settings().final_deletion_days)
     if age > window:

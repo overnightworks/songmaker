@@ -165,13 +165,13 @@
 		cursor: pointer;
 	}
 	.pool-pill:hover {
-		border-color: var(--primary);
+		border-color: var(--accent);
 		color: var(--text);
 	}
 	.pool-pill.on {
-		background: var(--primary);
-		border-color: var(--primary);
-		color: #fff;
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--on-accent);
 	}
 	.queue-feedback {
 		align-self: flex-start;
@@ -207,8 +207,8 @@
 		background: var(--surface-hover);
 	}
 	.queue-row.current {
-		background: color-mix(in srgb, var(--primary) 10%, var(--surface));
-		border-left: 3px solid var(--primary);
+		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+		border-left: 3px solid var(--accent);
 		cursor: default;
 	}
 	.queue-position {
