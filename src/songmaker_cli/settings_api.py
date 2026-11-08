@@ -35,6 +35,7 @@ from songmaker_cli.config import (
     save_generation_defaults,
 )
 from songmaker_cli.constants import (
+    VALID_BUILTIN_CONFIGS,
     AuditAction,
     ResourceType,
 )
@@ -44,7 +45,6 @@ from songmaker_cli.db.queries.rate_limits import (
     upsert_rate_limit_setting,
 )
 from songmaker_cli.db.queries.settings import (
-    VALID_BUILTIN_CONFIGS,
     create_preset,
     delete_preset,
     effective_default_config,

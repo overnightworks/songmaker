@@ -12,10 +12,9 @@ from songmaker_cli.constants import (
     COWRITER_MIN_TAIL_TOKEN_BUDGET,
     PRESET_GLOBAL_DEFAULTS_NAME,
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
+    VALID_BUILTIN_CONFIGS,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting, User
-
-VALID_BUILTIN_CONFIGS = frozenset({"sft", "turbo"})
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:

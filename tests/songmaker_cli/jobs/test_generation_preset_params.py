@@ -12,12 +12,14 @@ from support.generation_job_world import (
     run_async,
 )
 
+from songmaker_cli.config import get_builtin_defaults
 from songmaker_cli.db.models import GenerationPreset, User
 from songmaker_cli.jobs import run_generation_job
 
 DEFAULT_PRESET_STEPS = 20
 OWN_PRESET_STEPS = 30
 DEAD_PRESET_ID = "00000000-0000-0000-0000-00000000dead"
+MODEL_DEFAULT_STEPS = get_builtin_defaults()["sft"]["inference_steps"]
 
 
 def _add_preset(seeded_db, *, steps: int, is_default: bool) -> str:
@@ -70,8 +72,8 @@ def _own_preset_id(seeded_db) -> str:
     ("with_default_preset", "config", "expected_steps"),
     [
         (True, None, DEFAULT_PRESET_STEPS),
-        (False, None, 50),
-        (True, "sft", 50),
+        (False, None, MODEL_DEFAULT_STEPS),
+        (True, "sft", MODEL_DEFAULT_STEPS),
         (True, "own", OWN_PRESET_STEPS),
         (True, "dead", DEFAULT_PRESET_STEPS),
     ],
@@ -88,9 +90,11 @@ def test_the_worker_receives_the_effective_default(
 ):
     if with_default_preset:
         _add_preset(seeded_db, steps=DEFAULT_PRESET_STEPS, is_default=True)
-    stored = {"own": _own_preset_id(seeded_db) if config == "own" else None,
-              "dead": DEAD_PRESET_ID}.get(config, config)
-    _set_default_config(seeded_db, stored)
+    if config == "own":
+        config = _own_preset_id(seeded_db)
+    elif config == "dead":
+        config = DEAD_PRESET_ID
+    _set_default_config(seeded_db, config)
 
     assert _steps_sent_to_worker(seeded_db, tmp_path) == expected_steps
 
@@ -98,4 +102,4 @@ def test_the_worker_receives_the_effective_default(
 def test_a_job_for_an_unknown_person_uses_the_model_defaults(seeded_db, tmp_path):
     _add_preset(seeded_db, steps=DEFAULT_PRESET_STEPS, is_default=True)
 
-    assert _steps_sent_to_worker(seeded_db, tmp_path, user_id="nobody") == 50
+    assert _steps_sent_to_worker(seeded_db, tmp_path, user_id="nobody") == MODEL_DEFAULT_STEPS

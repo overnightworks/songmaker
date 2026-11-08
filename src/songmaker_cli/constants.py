@@ -223,6 +223,7 @@ RATE_LIMIT_WINDOW_SECONDS: Final = 3600
 
 # Global generation defaults
 PRESET_GLOBAL_DEFAULTS_NAME = "__global_defaults__"
+VALID_BUILTIN_CONFIGS: Final[frozenset[str]] = frozenset({"sft", "turbo"})
 
 # Shared tmp dir for repaint/cover source audio — must be on the audio
 # volume so the acestep-worker container can read what the music-worker
