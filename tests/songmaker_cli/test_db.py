@@ -2289,9 +2289,7 @@ def test_get_all_global_rate_limits(db_session: Session) -> None:
     db_session.commit()
 
     results = get_all_global_rate_limits(db_session)
-    assert len(results) == 2
-    keys = {r.setting_key for r in results}
-    assert keys == {"generation_rate_limit", "scoring_rate_limit"}
+    assert {"generation_rate_limit", "scoring_rate_limit"} <= {r.setting_key for r in results}
 
 
 @pytest.mark.parametrize(

@@ -130,6 +130,7 @@ WHISPER_COMPUTE_TYPE = "int8_float16"
 WHISPER_BEAM_SIZE = 5
 WHISPER_TEMPERATURE = 0.0
 
+SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE: Final = "reference_countdown_visible_since"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105  # noqa: S105 - a setting key for an LLM token budget and no secret
 
 MEMORY_SCOPE_USER = "user"
@@ -190,9 +191,6 @@ REDIS_RL_IP_PREFIX = "rl:ip"
 REDIS_RL_SHARED_PREFIX = "rl:shared"
 REDIS_RL_SHARED_STREAM_PREFIX = "rl:shared-stream"
 REDIS_RL_QUEUE_STREAM_PREFIX = "rl:queue-stream"
-REDIS_RL_RESOURCE_STREAM_PREFIX = "rl:resource-stream"
-REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX = f"{REDIS_KEY_PREFIX}:resource-stream:user"
-REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:resource-stream:global"
 REDIS_JOB_STREAM_LEASE_USER_PREFIX = f"{REDIS_KEY_PREFIX}:job-stream:user"
 REDIS_JOB_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:job-stream:global"
 SESSION_CLEANUP_INTERVAL_SECONDS = 300
@@ -281,48 +279,8 @@ REDIS_STARTUP_ERROR = (
     "Cannot connect to Redis at {url}. "
     "Redis is required — set REDIS_URL in .env or start Redis."
 )
-# Prometheus metric names
-PROM_HTTP_REQUESTS_TOTAL = "songmaker_http_requests_total"
-PROM_HTTP_REQUEST_DURATION_MS = "songmaker_http_request_duration_milliseconds_total"
-PROM_ACTIVE_SESSIONS = "songmaker_active_sessions"
-PROM_JOBS_TOTAL = "songmaker_jobs_total"
-# When the newest job failure finished, as Unix time (issue #333). A
-# timestamp rather than a failure counter, because every counter-shaped
-# answer needs history the alarm may not have: a per-type
-# songmaker_jobs_total{status="failed"} series only comes into existence
-# WITH the first failure of that type, and even an always-exported total
-# reads 1 on Prometheus' FIRST sample if the failure happened between the
-# web container becoming healthy and that first scrape. increase() finds
-# no rise across a series' first sample either way, so exactly the first
-# failure of a fresh stack went unalerted. "How long ago was the last
-# one" needs no history: one sample carries the whole answer.
-PROM_LAST_JOB_FAILURE_TIMESTAMP = "songmaker_last_job_failure_timestamp_seconds"
-# What that metric reads while nothing has ever failed: the Unix epoch,
-# which puts `time() - <metric>` decades outside every alert window
-# without the series ever having to be absent.
-PROM_NEVER_FAILED_TIMESTAMP = 0.0
-PROM_JOB_DURATION_SECONDS = "songmaker_job_duration_seconds"
-# Labeled by queue ("music"/"scoring") — the arq queue names the workers
-# actually run on. Renders as songmaker_queue_depth{queue="music"} etc.
-# (issue #333, #330 Finding 3): the previous single unlabeled value read
-# the arq client library's own default queue key, which nothing in this
-# codebase ever enqueues to, so it was always 0.
-PROM_QUEUE_DEPTH = "songmaker_queue_depth"
-PROM_ACESTEP_WORKERS_TOTAL = "songmaker_acestep_workers_total"
-PROM_ACESTEP_WORKER_LOADED_MODELS = "songmaker_acestep_worker_loaded_models"
-PROM_ACESTEP_WORKER_QUEUE_DEPTH = "songmaker_acestep_worker_queue_depth"
-# Per-worker VRAM from the acestep-worker's own heartbeat (issue #333,
-# #330 Finding 4) — replaces songmaker_gpu_vram_megabytes, which could
-# never be produced from the songmaker-web container itself (no GPU
-# runtime, no NVML there) and always read empty.
-PROM_ACESTEP_WORKER_VRAM_USED_GB = "songmaker_acestep_worker_vram_used_gigabytes"
-PROM_ACESTEP_WORKER_VRAM_TOTAL_GB = "songmaker_acestep_worker_vram_total_gigabytes"
-PROM_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
-
-# Background loop health (issue #396)
+# Background loop health
 BACKGROUND_LOOP_FAILURE_THRESHOLD: Final[int] = 3
-PROM_BACKGROUND_LOOP_CONSECUTIVE_FAILURES = "songmaker_background_loop_consecutive_failures"
-PROM_BACKGROUND_LOOP_ALIVE = "songmaker_background_loop_alive"
 
 # Rate limit setting keys (stored in rate_limit_settings table)
 SETTING_GENERATION_RATE_LIMIT = "generation_rate_limit"
@@ -401,19 +359,7 @@ LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 1300
 DOWNLOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS: Final[int] = 180
 RESOURCE_EVENT_STREAM_PATH: Final[str] = "/api/resource-events/stream"
 RESOURCE_EVENT_STREAM_CONNECTION_SECONDS: Final[int] = 60
-RESOURCE_EVENT_STREAM_POLL_SECONDS: Final[float] = 1.0
-RESOURCE_EVENT_STREAM_PAGE_SIZE: Final[int] = 100
 RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS: Final[int] = 60
-RESOURCE_EVENT_STREAM_MAX_PER_USER: Final[int] = 6
-RESOURCE_EVENT_STREAM_MAX_GLOBAL: Final[int] = 12
-RESOURCE_EVENT_STREAM_LEASE_SECONDS: Final[int] = 65
-RESOURCE_EVENT_STREAM_LIMIT_DETAIL: Final[str] = "Too many resource streams"
-RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Resource stream limiter unavailable"
-RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE: Final[str] = (
-    "Resource stream unavailable: no spare database capacity"
-)
-LAST_EVENT_ID_INVALID: Final[str] = "Last-Event-ID must be a non-negative decimal"
-POSTGRES_BIGINT_MAX: Final[int] = (1 << 63) - 1
 # Job SSE stream (#331 Finding 2). Forces the same kind of periodic
 # reconnect as the resource-event stream, for the same reason: bound the
 # worst case a single stream can stay open rather than let a queued/running
@@ -441,49 +387,14 @@ MULTIPART_ENVELOPE_MAX_BYTES = 1_048_576
 AUDIO_UPLOAD_FILE_MAX_BYTES = REFERENCE_AUDIO_MAX_BYTES
 AUDIO_UPLOAD_BODY_MAX_BYTES = AUDIO_UPLOAD_FILE_MAX_BYTES + MULTIPART_ENVELOPE_MAX_BYTES
 
-COVER_DIRNAME: Final[str] = "covers"
 ALBUM_COVER_SUGGESTIONS_DIRNAME: Final[str] = "cover-suggestions"
-SONG_COVER_DIRNAME: Final[str] = "song-covers"
-PLAYLIST_COVER_DIRNAME: Final[str] = "playlist-covers"
 COVER_MAX_BYTES: Final[int] = 8 * 1024 * 1024
-COVER_MAX_PIXELS: Final[int] = 20_000_000
-COVER_CARD_MAX_EDGE: Final[int] = 512
-COVER_DETAIL_MAX_EDGE: Final[int] = 1024
-COVER_JPEG_QUALITY: Final[int] = 85
 COVER_UPLOAD_BODY_MAX_BYTES: Final[int] = COVER_MAX_BYTES + MULTIPART_ENVELOPE_MAX_BYTES
-COVER_VARIANT_ORIGINAL: Final[str] = "original"
 COVER_VARIANT_CARD: Final[str] = "card"
 COVER_VARIANT_DETAIL: Final[str] = "detail"
-COVER_VARIANTS: Final[frozenset[str]] = frozenset({
-    COVER_VARIANT_ORIGINAL,
-    COVER_VARIANT_CARD,
-    COVER_VARIANT_DETAIL,
-})
-COVER_KEY_JPEG: Final[str] = "jpg"
-COVER_KEY_PNG: Final[str] = "png"
-COVER_KEYS: Final[frozenset[str]] = frozenset({COVER_KEY_JPEG, COVER_KEY_PNG})
-COVER_JPEG_EXTENSION: Final[str] = ".jpg"
-COVER_PNG_EXTENSION: Final[str] = ".png"
-COVER_JPEG_MAGIC: Final[bytes] = b"\xff\xd8\xff"
-COVER_PNG_MAGIC: Final[bytes] = b"\x89PNG\r\n\x1a\n"
-COVER_FORMAT_JPEG: Final[str] = "jpeg"
-COVER_FORMAT_PNG: Final[str] = "png"
-COVER_MEDIA_TYPE_JPEG: Final[str] = "image/jpeg"
-COVER_MEDIA_TYPE_PNG: Final[str] = "image/png"
 COVER_VERSION_QUERY: Final[str] = "v"
-COVER_CACHE_CONTROL: Final[str] = "no-store"
-COVER_UNSUPPORTED_TYPE: Final[str] = "Cover must be a JPEG or PNG image"
-COVER_TOO_LARGE: Final[str] = "Cover file is too large"
-COVER_TOO_MANY_PIXELS: Final[str] = "Cover image is too large"
-COVER_UNREADABLE: Final[str] = "Cover image could not be read"
 COVER_NOT_FOUND: Final[str] = "Cover not found"
 COVER_SUGGESTION_NOT_FOUND: Final[str] = "Album not found"
-COVER_VARIANT_UNKNOWN: Final[str] = "Unknown cover variant"
-COVER_INVALID_ALBUM_ID: Final[str] = "Invalid album id for cover storage"
-COVER_INVALID_SONG_ID: Final[str] = "Invalid song id for cover storage"
-COVER_INVALID_PLAYLIST_ID: Final[str] = "Invalid playlist id for cover storage"
-COVER_OLD_DIRNAME_SUFFIX: Final[str] = ".old"
-COVER_STAGING_DIRNAME_SUFFIX: Final[str] = ".staging"
 
 # User LoRA training
 USER_LORAS_DIRNAME: Final[str] = "user_loras"

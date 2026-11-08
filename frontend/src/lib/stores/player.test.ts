@@ -6,6 +6,10 @@ import {
 	makeSong,
 	makeAuthUser
 } from '#lib/test-utils/factories.ts';
+import {
+	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
+	QUEUE_TAKE_MISSING_TOAST
+} from '#lib/constants/now-playing.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
@@ -26,11 +30,7 @@ import {
 	fetchSongs
 } from '#lib/api/client.ts';
 import { toasts } from '#lib/stores/toast.ts';
-import {
-	LIBRARY_QUEUE_EMPTY_TITLE,
-	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
-	QUEUE_TAKE_MISSING_TOAST
-} from '#lib/constants.ts';
+import { LIBRARY_QUEUE_EMPTY_TITLE } from '#lib/constants.ts';
 
 vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()

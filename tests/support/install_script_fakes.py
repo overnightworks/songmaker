@@ -9,7 +9,11 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
+
+from support.repository_root import REPOSITORY_ROOT
 
 # The fakes below RECORD. They do not run anything.
 #
@@ -247,3 +251,88 @@ def linked_worktree_of(checkout: Path, tmp_path: Path) -> Path:
         cwd=checkout, check=True, env=isolated_git_environment,
     )
     return linked
+
+
+def copy_scripts(checkout: Path, names: tuple[str, ...]) -> None:
+    """Copy the named files of the repository's scripts/ into the checkout, keeping modes."""
+    scripts = checkout / "scripts"
+    scripts.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        source = REPOSITORY_ROOT / "scripts" / name
+        target = scripts / name
+        target.write_bytes(source.read_bytes())
+        target.chmod(source.stat().st_mode)
+
+
+@dataclass(frozen=True)
+class Sandbox:
+    """The directories, fakes and environment an installer runs in; nothing here runs a program."""
+
+    root: Path
+    units: Path
+    recording: Path
+    state: Path
+    fake_bin: Path
+    scratch: Path
+    fixed_environment: Mapping[str, str]
+
+    def environment(self, **overrides: str) -> dict[str, str]:
+        """Inherited names, the containment, then ``overrides``, which win."""
+        built = {
+            name: os.environ[name] for name in INHERITED_ENVIRONMENT if name in os.environ
+        }
+        built.update(
+            {
+                "PATH": f"{self.fake_bin}:{os.environ['PATH']}",
+                "TMPDIR": str(self.scratch),
+                "SANDBOX_ROOT": str(self.root),
+                "RECORDING": str(self.recording),
+                "SONGMAKER_UNIT_DIR": str(self.units),
+                "SUDO_USER": DEFAULT_SUDO_USER,
+                **self.fixed_environment,
+            },
+        )
+        built.update(overrides)
+        return built
+
+
+def build_sandbox(
+    root: Path,
+    extra_fakes: Mapping[str, str] | None = None,
+    fixed_environment: Mapping[str, str] | None = None,
+) -> Sandbox:
+    """Create bin/ (the fakes), systemd/, the recording, the state and tmp/ under root."""
+    fake_bin = root / "bin"
+    fake_bin.mkdir()
+    for name, body in {
+        "sudo": FAKE_SUDO,
+        "systemctl": FAKE_SYSTEMCTL,
+        **(extra_fakes or {}),
+    }.items():
+        make_executable(fake_bin / name, body)
+    units = root / "systemd"
+    units.mkdir()
+    recording = root / "recording"
+    recording.write_text("")
+    state = root / "systemctl-state"
+    state.write_text("")
+    scratch = root / "tmp"
+    scratch.mkdir()
+    return Sandbox(
+        root=root,
+        units=units,
+        recording=recording,
+        state=state,
+        fake_bin=fake_bin,
+        scratch=scratch,
+        fixed_environment=fixed_environment or {},
+    )
+
+
+def exec_start(unit: str) -> str:
+    """The command of a unit's first ExecStart= line."""
+    return next(
+        line.removeprefix("ExecStart=")
+        for line in unit.splitlines()
+        if line.startswith("ExecStart=")
+    )

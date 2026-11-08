@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import atexit
 import logging
 import os
+import shutil
+import tempfile
 
 # Required env vars for Settings construction at module-import time. Real values from the
 # environment win — these are only safe defaults so importing songmaker_cli.music_worker
@@ -22,6 +25,11 @@ os.environ.setdefault(
     "ALLOWED_HOSTS", "testserver,localhost,127.0.0.1,songmaker-web,songmaker.test")
 os.environ.setdefault("OIDC_ISSUER", "https://issuer.test/realms/test")
 os.environ.setdefault("OIDC_CLIENT_ID", "songmaker-test")
+# Several pytest-xdist workers populating librosa's shared on-disk numba cache at once crash in
+# compiled code (Fatal Python error: Segmentation fault); each process gets its own cache.
+_numba_cache_dir = tempfile.mkdtemp(prefix="numba-cache-")
+os.environ["NUMBA_CACHE_DIR"] = _numba_cache_dir
+atexit.register(shutil.rmtree, _numba_cache_dir, ignore_errors=True)
 
 import struct  # noqa: E402
 import wave  # noqa: E402

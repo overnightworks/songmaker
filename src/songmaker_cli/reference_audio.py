@@ -10,6 +10,7 @@ import uuid
 from collections.abc import Collection
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Final
@@ -17,9 +18,9 @@ from typing import Final
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.api_helpers import _begin_exclusive
 from songmaker_cli.audio_files import read_audio_duration
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSIONS
+from songmaker_cli.db.advisory_locks import lock_until_transaction_ends
 from songmaker_cli.db.models import User
 from songmaker_cli.db.queries.auth import list_user_ids
 from songmaker_cli.db.queries.reference_recordings import (
@@ -32,8 +33,28 @@ from songmaker_cli.db.queries.reference_recordings import (
     owner_reference_usage,
 )
 from songmaker_cli.settings import Settings
+from songmaker_cli.timestamps import aware_timestamp
 
 REFERENCE_AUDIO_NOT_OWNED_DETAIL: Final = "reference audio path is not owned"
+
+
+def reference_deletes_at(
+    unused_since: datetime | None,
+    published: datetime | None,
+    now: datetime,
+    days: int,
+    hour: int,
+) -> datetime | None:
+    """The first daily run at or after the countdown's end; None without a stamp (kept or in use).
+
+    The end is the later of the stamp and the publication (``now`` until published) plus ``days``.
+    """
+    if unused_since is None:
+        return None
+    counted = max(aware_timestamp(unused_since), published or now) + timedelta(days=days)
+    counted = counted.astimezone(timezone.utc)
+    run = counted.replace(hour=hour, minute=0, second=0, microsecond=0)
+    return run if run >= counted else run + timedelta(days=1)
 
 
 class ReferenceAudioRejected(ValueError):
@@ -112,7 +133,7 @@ def _lock_reference_owner(session: Session, user_id: str) -> None:
     """
     digest = hashlib.sha256((_REFERENCE_LOCK_NAMESPACE + user_id).encode()).digest()
     lock_id = int.from_bytes(digest[:8], "big", signed=True)
-    _begin_exclusive(session, lock_id)
+    lock_until_transaction_ends(session, lock_id)
     if session.get(User, user_id) is None:
         raise ReferenceAudioStorageError("missing owner")
 

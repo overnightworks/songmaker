@@ -9,7 +9,6 @@ nothing outside the temporary directories.
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,11 +17,10 @@ import pytest
 from support.install_script_fakes import (
     DEFAULT_SUDO_USER,
     FAKE_GETENT,
-    FAKE_SUDO,
-    FAKE_SYSTEMCTL,
-    INHERITED_ENVIRONMENT,
+    build_sandbox,
+    copy_scripts,
+    exec_start,
     linked_worktree_of,
-    make_executable,
 )
 from support.repository_root import REPOSITORY_ROOT
 
@@ -46,12 +44,7 @@ COPIED_SCRIPTS = (
 def checkout(tmp_path: Path) -> Path:
     """A git checkout that is its own main worktree, with the scripts in it."""
     root = tmp_path / "songmaker"
-    (root / "scripts").mkdir(parents=True)
-    for name in COPIED_SCRIPTS:
-        source = REPOSITORY_ROOT / "scripts" / name
-        target = root / "scripts" / name
-        target.write_bytes(source.read_bytes())
-        target.chmod(source.stat().st_mode)
+    copy_scripts(root, COPIED_SCRIPTS)
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     return root
 
@@ -93,46 +86,23 @@ def home(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def run_installer(tmp_path: Path, checkout: Path, home: Path):
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    make_executable(fake_bin / "sudo", FAKE_SUDO)
-    make_executable(fake_bin / "systemctl", FAKE_SYSTEMCTL)
-    make_executable(fake_bin / "getent", FAKE_GETENT)
-    units = tmp_path / "systemd"
-    units.mkdir()
-    recording = tmp_path / "recording"
-    recording.write_text("")
-    state = tmp_path / "systemctl-state"
-    state.write_text("")
-    scratch = tmp_path / "tmp"
-    scratch.mkdir()
     codex_resources = tmp_path / "codex-resources"
     codex_resources.mkdir()
     (codex_resources / "bwrap").symlink_to("/bin/sh")
-
-    def _environment(**overrides: str) -> dict[str, str]:
-        built = {name: os.environ[name] for name in INHERITED_ENVIRONMENT
-                 if name in os.environ}
-        built.update(overrides)
-        built.update({
-            # Last word, always: these are the containment itself.
-            "PATH": f"{fake_bin}:{os.environ['PATH']}",
-            "TMPDIR": str(scratch),
+    sandbox = build_sandbox(
+        tmp_path,
+        extra_fakes={"getent": FAKE_GETENT},
+        fixed_environment={
             "HOME": str(home),
-            "SANDBOX_ROOT": str(tmp_path),
-            "RECORDING": str(recording),
             "FAKE_OPERATOR_HOME": str(home),
             "SONGMAKER_CLAUDE_CLI": "/bin/sh",
             "SONGMAKER_GROK_CLI": "/bin/sh",
             "SONGMAKER_CODEX_CLI": "/bin/sh",
             "SONGMAKER_CODEX_CODE_MODE_HOST": "/bin/sh",
             "SONGMAKER_CODEX_RESOURCES": str(codex_resources),
-        })
-        built.setdefault("SUDO_USER", DEFAULT_SUDO_USER)
-        built.setdefault("SONGMAKER_UNIT_DIR", str(units))
-        if "SONGMAKER_UNIT_DIR" in overrides:
-            built["SONGMAKER_UNIT_DIR"] = overrides["SONGMAKER_UNIT_DIR"]
-        return built
+        },
+    )
+    _environment = sandbox.environment
 
     def _seed_mirror() -> None:
         """What systemd would do when the installer asks it to start the unit.
@@ -178,12 +148,12 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
             check=False,
         )
 
-    _run.units = units
+    _run.units = sandbox.units
     _run.home = home
     _run.checkout = checkout
     _run.sandbox = tmp_path
-    _run.recording = recording
-    _run.state = state
+    _run.recording = sandbox.recording
+    _run.state = sandbox.state
     _run.environment = _environment
     return _run
 
@@ -217,12 +187,10 @@ def test_the_unit_it_writes_names_this_checkout_and_this_home(
     run_installer()
 
     unit = (run_installer.units / "songmaker-cli-credentials-mirror.service").read_text()
-    exec_start = next(
-        line for line in unit.splitlines() if line.startswith("ExecStart=")
-    )
-    assert str(checkout / "scripts" / "mirror_agent_cli_credentials.py") in exec_start
-    assert f"--home {home}" in exec_start
-    assert f"--mirror-dir {home}/.songmaker/agent-cli-credentials" in exec_start
+    line = exec_start(unit)
+    assert str(checkout / "scripts" / "mirror_agent_cli_credentials.py") in line
+    assert f"--home {home}" in line
+    assert f"--mirror-dir {home}/.songmaker/agent-cli-credentials" in line
 
 
 def test_it_checks_the_mounts_as_the_operator_it_installed_for(

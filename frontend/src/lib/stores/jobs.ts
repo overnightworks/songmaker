@@ -1,5 +1,11 @@
 import { writable, get } from 'svelte/store';
 import {
+	GENERATE_TAKE_ARRIVAL_WAIT_MS,
+	JOB_STREAM_MAX_CONNECTION_ERRORS,
+	JOB_TYPE_COVER,
+	JOB_TYPE_GENERATE
+} from '#lib/constants/jobs.ts';
+import {
 	fetchActiveGeneration,
 	fetchJob,
 	fetchLastFailedGeneration,
@@ -7,12 +13,6 @@ import {
 } from '#lib/api/client.ts';
 import { ApiError, isNotFound } from '#lib/api/fetch.ts';
 import { openJobEventStream } from '#lib/api/jobs.ts';
-import {
-	GENERATE_TAKE_ARRIVAL_WAIT_MS,
-	JOB_STREAM_MAX_CONNECTION_ERRORS,
-	JOB_TYPE_COVER,
-	JOB_TYPE_GENERATE
-} from '#lib/constants.ts';
 import { offline } from '#lib/stores/connectivity.ts';
 import { requestSongRefresh } from '#lib/stores/resourceSync.ts';
 import {

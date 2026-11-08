@@ -1,4 +1,5 @@
 import { backLabel } from '#lib/routes/pageBack.ts';
+import { ACCOUNT_MENU_LABEL } from '#lib/constants/auth.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
@@ -12,7 +13,6 @@ import {
 	setPointer
 } from '#lib/test-utils/hitbox.ts';
 import {
-	ACCOUNT_MENU_LABEL,
 	APP_NAME,
 	HITBOX_FREQUENT_PX,
 	RAIL_SEARCH_LABEL,

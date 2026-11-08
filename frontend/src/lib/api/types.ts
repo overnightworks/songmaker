@@ -330,7 +330,6 @@ export interface GenerationParams {
 	repaint_wav_crossfade_sec?: number | null;
 	cover_noise_strength?: number | null;
 	timesteps?: string | null;
-	constrained_decoding?: boolean | null;
 	cot_caption?: string | null;
 	cot_lyrics?: string | null;
 	delivered_batch_size?: number | null;
@@ -648,9 +647,27 @@ export interface RateResult {
 	rating: number;
 }
 
+export interface ReferenceCountdownShownRequest {
+	epoch: string;
+}
+
 export interface ReferenceListResponse {
-	references: ReferenceRecordingResponse[];
+	references: ReferenceListRowResponse[];
 	usage: ReferenceUsageResponse;
+	countdown_epoch: string | null;
+}
+
+export interface ReferenceListRowResponse {
+	id: string;
+	filename: string;
+	size_bytes: number;
+	duration_sec: number | null;
+	created_at: string;
+	in_use: boolean;
+	is_kept: boolean;
+	used_by_versions: number;
+	used_by_takes: number;
+	deletes_at: string | null;
 }
 
 export interface ReferenceRecordingResponse {

@@ -1,8 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
+import { SETTINGS_NAV_LABEL } from '#lib/constants/settings.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto, replaceState } from '$app/navigation';
-import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '#lib/constants.ts';
+import { APP_NAME, RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
 import {
 	installHistoryController,
 	resetHistoryControllerForTests,
