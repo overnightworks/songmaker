@@ -29,7 +29,8 @@
 		type RecipeTab,
 		type RecipeValues
 	} from '#lib/utils/recipe-standard.ts';
-	import { RECIPE_PANEL_LABEL, REFERENCE_AUDIO_ACCEPT } from '#lib/constants.ts';
+	import { REFERENCE_AUDIO_ACCEPT } from '#lib/constants.ts';
+	import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
 	import { VOICE_PICKER_NONE_LABEL } from '#lib/constants/voice.ts';
 	import {
 		RECIPE_AUTO_LABEL,

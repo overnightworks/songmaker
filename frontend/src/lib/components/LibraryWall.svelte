@@ -43,7 +43,6 @@
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import { activityTimeLabel, songCountLabel } from '#lib/utils/format.ts';
 	import {
-		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_NARROW_MEDIA,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
 		LIBRARY_PLAYLISTS_ERROR,
@@ -59,6 +58,7 @@
 		wallHeadingLabel,
 		type LibraryWallOrder
 	} from '#lib/constants.ts';
+	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import EmptyState from './EmptyState.svelte';
 	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';

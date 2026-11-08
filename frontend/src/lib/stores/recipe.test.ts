@@ -1,4 +1,4 @@
-import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '#lib/constants.ts';
+import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '#lib/constants/recipe.ts';
 import { makeGeneration as generation } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';

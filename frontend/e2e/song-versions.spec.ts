@@ -36,8 +36,6 @@ import {
 	TOAST_UNDO_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	VERSIONS_SHEET_CLOSE_LABEL,
-	VERSIONS_SHEET_LABEL,
 	versionAlreadyTheDraftLabel,
 	versionChipLabel,
 	versionDeleteLabel,
@@ -51,6 +49,7 @@ import {
 	songEditorOpenLabel,
 	takesDraftBanner
 } from '../src/lib/constants';
+import { VERSIONS_SHEET_CLOSE_LABEL, VERSIONS_SHEET_LABEL } from '../src/lib/constants/versions';
 import {
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
