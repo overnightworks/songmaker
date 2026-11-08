@@ -1,11 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
-	SONG_NEXT_LABEL,
-	SONG_PREVIOUS_LABEL
-} from '#lib/constants.ts';
+import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants.ts';
+import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 import { shownTransportFace } from '#lib/test-utils/transport-face.ts';
 import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '#lib/constants/now-playing.ts';
 import { SHARE_NO_AUDIO_NOTICE } from '#lib/constants/share.ts';

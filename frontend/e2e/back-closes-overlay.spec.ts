@@ -9,7 +9,6 @@ import {
 import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_SHARE_LABEL,
-	collectionActionLabel,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
@@ -26,10 +25,13 @@ import {
 	TAKE_DELETE_LABEL,
 	TAKE_DELETE_TITLE_TEMPLATE,
 	TAKE_OVERFLOW_LABEL,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import {
+	collectionActionLabel,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL
+} from '../src/lib/constants/transport';
 import {
 	NOW_PLAYING_EXPAND_LABEL,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
@@ -97,13 +99,14 @@ interface OverlayRow {
 async function expandNowPlaying(page: Page, playlist: SeededPlaylist): Promise<void> {
 	const [playing] = playlist.songTitles;
 	await workspace(page).getByRole('button', { name: PLAY_PLAYLIST_LABEL, exact: true }).click();
-	await page
-		.getByRole('contentinfo')
-		.getByRole('button', { name: NOW_PLAYING_LABEL, exact: true })
-		.click();
+	await transportButton(page, { name: NOW_PLAYING_LABEL, exact: true }).click();
 	const docked = page.getByRole('complementary', { name: playing });
 	await docked.getByRole('button', { name: NOW_PLAYING_EXPAND_LABEL, exact: true }).click();
 	await expect(page.getByRole('dialog', { name: playing })).toBeVisible();
+}
+
+function transportButton(page: Page, options: { name: string; exact?: boolean }): Locator {
+	return page.getByRole('contentinfo').getByRole('button', options);
 }
 
 function firstSong(playlist: SeededPlaylist): string {
@@ -936,10 +939,7 @@ async function openAlbumFromNavigation(
 }
 
 async function goToPlayingSong(page: Page, title: string): Promise<void> {
-	await page
-		.getByRole('contentinfo')
-		.getByRole('button', { name: openNowPlayingLabel(title) })
-		.click();
+	await transportButton(page, { name: openNowPlayingLabel(title) }).click();
 	const nowPlaying = page.getByRole('dialog', { name: title });
 	await nowPlaying.getByRole('button', { name: NOW_PLAYING_GO_TO_SONG, exact: true }).click();
 }
@@ -974,10 +974,7 @@ test.describe(
 			const { playlist, pages } = await openSeededPlaylist(page, request);
 			await workspace(page).getByRole('button', { name: PLAY_PLAYLIST_LABEL, exact: true }).click();
 			// Paused, so the seeded three-second take stays the playing song.
-			await page
-				.getByRole('contentinfo')
-				.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-				.click();
+			await transportButton(page, { name: TRANSPORT_PAUSE_LABEL, exact: true }).click();
 
 			for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
 				await goToPlayingSong(page, firstSong(playlist));

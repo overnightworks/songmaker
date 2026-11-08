@@ -5,14 +5,16 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-	collectionActionLabel,
 	EDITOR_VIEW_COWRITER_LABEL,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
-	songEditorOpenLabel,
+	songEditorOpenLabel
+} from '../src/lib/constants';
+import {
+	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
-} from '../src/lib/constants';
+} from '../src/lib/constants/transport';
 import { FlowGuard, shellOf, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 

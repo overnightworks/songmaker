@@ -16,14 +16,16 @@ import {
 } from '#lib/stores/connectivity.ts';
 import {
 	HITBOX_FREQUENT_PX,
-	collectionActionLabel,
 	newSongCardLabel,
 	PLAYING_MARK_LABEL,
-	songEditorOpenLabel,
+	songEditorOpenLabel
+} from '#lib/constants.ts';
+import {
+	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_RETRY_LABEL
-} from '#lib/constants.ts';
+} from '#lib/constants/transport.ts';
 import { ALBUM_COVER_ALT_TYPE, ALBUM_NO_SONGS } from '#lib/constants/album.ts';
 import { NEW_SONG_CLOSE_LABEL, NEW_SONG_ROW_LABEL } from '#lib/constants/new-collection.ts';
 import {
@@ -208,6 +210,13 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 	return element;
 }
 
+function playAlbumCircle(target: HTMLElement): HTMLButtonElement {
+	return getByRoleButton(
+		requireElement(target, '.collection-header'),
+		collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
+	);
+}
+
 function songsPage(items: ReturnType<typeof song>[]) {
 	return { items, total: items.length, offset: 0, limit: 200, has_more: false };
 }
@@ -320,10 +329,7 @@ describe('AlbumDetailView header', () => {
 		setShuffle(true);
 		const target = await renderDetail();
 
-		getByRoleButton(
-			requireElement(target, '.collection-header'),
-			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
-		).click();
+		playAlbumCircle(target).click();
 
 		expect(playAlbum).toHaveBeenCalledWith('a-local');
 		expect(get(shuffleEnabled)).toBe(false);
@@ -466,10 +472,7 @@ describe('AlbumDetailView header', () => {
 		const running = { type: 'library' as const, index: 3 };
 		queueContext.set(running);
 		const target = await renderDetail();
-		const circle = getByRoleButton(
-			requireElement(target, '.collection-header'),
-			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
-		);
+		const circle = playAlbumCircle(target);
 
 		circle.click();
 		await tick();
@@ -487,10 +490,7 @@ describe('AlbumDetailView header', () => {
 		await loadSongsForAlbum('a-local');
 		const target = await renderDetail();
 
-		const circle = getByRoleButton(
-			requireElement(target, '.collection-header'),
-			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
-		);
+		const circle = playAlbumCircle(target);
 		expect(circle.disabled).toBe(true);
 	});
 
@@ -518,10 +518,7 @@ describe('AlbumDetailView header', () => {
 			}
 			const target = await renderDetail();
 
-			const circle = getByRoleButton(
-				requireElement(target, '.collection-header'),
-				collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
-			);
+			const circle = playAlbumCircle(target);
 			expect(circle.disabled).toBe(true);
 		}
 	);

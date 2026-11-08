@@ -4,7 +4,6 @@
 
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
-	collectionActionLabel,
 	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
 	EDITOR_GENERATE_LABEL,
@@ -15,11 +14,14 @@ import {
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import {
+	collectionActionLabel,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
+	TRANSPORT_RETRY_LABEL
+} from '../src/lib/constants/transport';
 import {
 	boundingBoxes,
 	sameOriginHeaders,
@@ -91,6 +93,10 @@ function generateButton(page: Page): Locator {
 }
 
 /** What a colour token resolves to on the page right now, as `getComputedStyle` reports it. */
+function playTakeButton(scope: Locator): Locator {
+	return scope.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) });
+}
+
 function resolvedToken(page: Page, token: string): Promise<string> {
 	return page.evaluate((name) => {
 		const probe = document.createElement('span');
@@ -323,10 +329,7 @@ test.describe(
 			const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
 
 			await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
-			await page
-				.getByRole('tabpanel')
-				.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
-				.click();
+			await playTakeButton(page.getByRole('tabpanel')).click();
 			await expect(pause).toBeVisible();
 			const [miniPlayerOnline, pauseOnline] = await boundingBoxes(miniPlayer, pause);
 
@@ -373,9 +376,7 @@ test.describe('tapping a take row Play while the network is gone', () => {
 		const retry = transport.getByRole('button', { name: TRANSPORT_RETRY_LABEL, exact: true });
 		const spinner = transport.locator('.play-btn .spinner');
 		const waitingSpinner = pause.locator('.spinner');
-		const takeRowPlay = workspace(page)
-			.locator('.take-row')
-			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) });
+		const takeRowPlay = playTakeButton(workspace(page).locator('.take-row'));
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
@@ -512,10 +513,7 @@ test.describe('pressing the album header Play while the network is gone', () => 
 			.getByRole('button', { name: songEditorOpenLabel(loadedTitle) })
 			.click();
 		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
-		await workspace(page)
-			.locator('.take-row')
-			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
-			.click();
+		await playTakeButton(workspace(page).locator('.take-row')).click();
 		await expect(barPause.locator('.spinner')).toHaveCount(0);
 		await barPause.click();
 		await expect(
