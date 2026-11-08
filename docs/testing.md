@@ -44,7 +44,7 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
 - `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state
 - Settings/worker singletons are reset by fixtures; scorer model caches live in subprocesses
-- Heavy scorer tests are excluded from CI coverage because the CI image doesn't ship the Whisper/provider model runtimes; BPM, silence, and spectral scorers remain measured (see `.github/workflows/coveragerc-ci.ini`)
+- Heavy scorer tests are excluded from CI coverage because the CI image doesn't ship the Whisper/provider model runtimes; the BPM, silence, and spectral scorers are measured because CI installs the `signal` extra (see `.github/workflows/coveragerc-ci.ini`)
 
 ### Database Tests
 

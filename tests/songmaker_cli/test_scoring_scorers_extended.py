@@ -97,6 +97,7 @@ def test_force_cpu_env_restores_existing(monkeypatch) -> None:
 
 
 def test_get_predictor_caches() -> None:
+    pytest.importorskip("audiobox_aesthetics")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
@@ -113,6 +114,7 @@ def test_get_predictor_caches() -> None:
 
 
 def test_get_predictor_cpu_uses_force_env() -> None:
+    pytest.importorskip("audiobox_aesthetics")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
@@ -127,6 +129,7 @@ def test_get_predictor_cpu_uses_force_env() -> None:
 
 
 def test_get_predictor_cuda_no_force_env() -> None:
+    pytest.importorskip("audiobox_aesthetics")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
@@ -141,6 +144,7 @@ def test_get_predictor_cuda_no_force_env() -> None:
 
 
 def test_get_predictor_default_cache() -> None:
+    pytest.importorskip("audiobox_aesthetics")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
@@ -265,6 +269,7 @@ def test_word_level_accuracy_empty() -> None:
 
 
 def test_get_whisper_model_caches() -> None:
+    pytest.importorskip("faster_whisper")
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
@@ -281,6 +286,7 @@ def test_get_whisper_model_caches() -> None:
 
 
 def test_get_whisper_model_default_cache() -> None:
+    pytest.importorskip("faster_whisper")
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
