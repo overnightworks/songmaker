@@ -288,10 +288,7 @@ def build_cover_prompt(album, songs) -> str:
         tracks.append(candidate)
         track_budget -= candidate_length + separator_length
     album_data["tracks"] = tracks
-    prompt = header + json.dumps(album_data, ensure_ascii=False, separators=(",", ":"))
-    if len(prompt) > COVER_PROMPT_MAX_CHARS:
-        raise CoverSuggestionJobError()
-    return prompt
+    return header + json.dumps(album_data, ensure_ascii=False, separators=(",", ":"))
 
 
 def _claim_next_cover_job(db_factory) -> str | None:
