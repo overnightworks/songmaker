@@ -24,11 +24,6 @@ from songmaker_cli.api_models import (
     ResourceHelloEvent,
 )
 from songmaker_cli.constants import (
-    LAST_EVENT_ID_INVALID,
-    POSTGRES_BIGINT_MAX,
-    REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY,
-    REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX,
-    RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE,
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
     RESOURCE_EVENT_STREAM_PATH,
     ResourceEventKind,
@@ -41,6 +36,7 @@ from songmaker_cli.db.queries.resource_events import (
 )
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter
+from songmaker_cli.resource_event_api import POSTGRES_BIGINT_MAX
 from songmaker_cli.settings import get_settings
 
 
@@ -172,7 +168,7 @@ def test_parse_last_event_id_rejects_non_ascii_non_negative_decimal(raw: str) ->
     with pytest.raises(HTTPException) as exc_info:
         resource_api.parse_last_event_id(raw)
     assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == LAST_EVENT_ID_INVALID
+    assert exc_info.value.detail == resource_api.LAST_EVENT_ID_INVALID
 
 
 def test_parse_last_event_id_handles_empty_leading_zero_and_bigint_max() -> None:
@@ -558,8 +554,8 @@ def test_poll_crossing_deadline_does_not_emit_a_late_heartbeat(
 @pytest.mark.parametrize(
     ("headers", "params", "detail"),
     [
-        ({"Last-Event-ID": "-1"}, {}, LAST_EVENT_ID_INVALID),
-        ({}, {"last_event_id": "-1"}, LAST_EVENT_ID_INVALID),
+        ({"Last-Event-ID": "-1"}, {}, resource_api.LAST_EVENT_ID_INVALID),
+        ({}, {"last_event_id": "-1"}, resource_api.LAST_EVENT_ID_INVALID),
         (
             {"Last-Event-ID": str(POSTGRES_BIGINT_MAX + 1)},
             {},
@@ -755,8 +751,8 @@ def test_concurrent_lease_limiter_enforces_scope_global_release_and_pruning() ->
     redis = make_fake_redis()
     limiter = RedisConcurrentLeaseLimiter(
         redis,
-        scope_prefix=REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX,
-        global_key=REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY,
+        scope_prefix=resource_api.REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX,
+        global_key=resource_api.REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY,
         max_per_scope=2,
         max_global=3,
         lease_seconds=65,
@@ -776,20 +772,21 @@ def test_concurrent_lease_limiter_enforces_scope_global_release_and_pruning() ->
     assert carol_one
     assert (
         redis.zscore(
-            f"{REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX}:alice",
+            f"{resource_api.REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX}:alice",
             alice_two,
         )
         is not None
     )
 
     limiter.release("carol", carol_one)
-    stale_key = f"{REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX}:dave"
+    stale_key = f"{resource_api.REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX}:dave"
     redis.zadd(stale_key, {"expired-token": 0})
-    redis.zadd(REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY, {"expired-global": 0})
+    redis.zadd(resource_api.REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY, {"expired-global": 0})
     dave_one = limiter.acquire("dave")
     assert dave_one
     assert redis.zscore(stale_key, "expired-token") is None
-    assert redis.zscore(REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY, "expired-global") is None
+    global_key = resource_api.REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY
+    assert redis.zscore(global_key, "expired-global") is None
 
 
 def test_disconnect_releases_lease_off_loop_and_contains_failure(
@@ -1219,7 +1216,7 @@ def test_stream_rejects_when_db_pool_has_no_spare_capacity(
     )
     response = clients["alice"].get("/api/resource-events/stream")
     assert response.status_code == 503
-    assert response.json()["detail"] == RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE
+    assert response.json()["detail"] == resource_api.RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE
 
 
 def test_stream_limiter_fails_closed(tmp_path, monkeypatch: pytest.MonkeyPatch, pg_factory) -> None:

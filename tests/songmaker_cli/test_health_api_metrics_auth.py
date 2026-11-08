@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from support.web_app import make_test_app
 
-from songmaker_cli.constants import PROM_CONTENT_TYPE
+from songmaker_cli.health_api import PROM_CONTENT_TYPE
 
 CONFIGURED_MONITORING_TOKEN = "scratch-monitoring-token"
 
