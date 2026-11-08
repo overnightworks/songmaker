@@ -1370,6 +1370,11 @@ close the stream.
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
 | GET/PUT | `/api/settings/theme` | user | The person's `light`, `dark` or `system` (follow the device) choice, new people start at `system`; any other value is rejected with 422. |
+| POST | `/api/settings/presets` | user | Create the caller's generation preset. A name the caller already uses for the same model answers 409 "A preset with that name already exists" and creates nothing; the check is per person, so another person may reuse the name. |
+| PUT | `/api/settings/presets/{id}` | user | Update the caller's own preset (name, params, default; never the model). An id that is not the caller's own, another person's or a shared preset, answers 404 "Preset not found", admins included. An update without a name, or with the preset's own name, skips the name check; a rename onto another of the caller's presets for the same model answers 409 with the create words and changes nothing. |
+| DELETE | `/api/settings/presets/{id}` | user | Delete the caller's own preset; an unknown, another person's or shared id answers 404 "Preset not found" and deletes nothing. |
+| POST | `/api/settings/presets/{id}/set-default` | user | Make the caller's own preset the default for its model and clear the previous one; another person's or a shared id answers 404 "Preset not found". |
+| PUT | `/api/settings/default-config` | user | The caller's default for new songs: `null`, a built-in (`sft`, `turbo`), one of the caller's presets or a shared preset answers 200; anything else, another person's preset included, answers 400 "Invalid config: must be null, 'sft', 'turbo', or a preset ID". |
 | GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
 | PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |

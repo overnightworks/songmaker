@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from support.signed_in_people import sign_in_people
 
-from songmaker_cli.db.models import User
+from songmaker_cli.db.models import GenerationPreset, User
 
 DEFAULT_CONFIG_URL = "/api/settings/default-config"
 PRESETS_URL = "/api/settings/presets"
@@ -15,14 +15,7 @@ DEAD_PRESET_ID = "00000000-0000-0000-0000-00000000dead"
 
 @pytest.fixture
 def people(tmp_path, pg_factory):
-    def seed(session) -> None:
-        session.add_all([User(id="u-ana", username="ana"), User(id="u-ben", username="ben")])
-
-    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=seed)
-    clients = {
-        name: web_client(make_router_app(ctx, user=make_authenticated_user(f"u-{name}")))
-        for name in ("ana", "ben")
-    }
+    clients = sign_in_people(tmp_path, pg_factory, {"ana": "user", "ben": "user"})
     return clients, pg_factory
 
 
@@ -71,3 +64,31 @@ def test_a_built_in_default_survives_a_preset_delete(people):
     ana.delete(f"{PRESETS_URL}/{_preset(ana, 'mine')}")
 
     assert ana.get(DEFAULT_CONFIG_URL).json() == {"config": "turbo"}
+
+
+def test_a_shared_preset_is_accepted_as_default(people):
+    clients, factory = people
+    with factory() as session:
+        shared = GenerationPreset(name="shared", model_mode="sft", params={}, created_by=None)
+        session.add(shared)
+        session.commit()
+        shared_id = shared.id
+
+    response = clients["ana"].put(DEFAULT_CONFIG_URL, json={"config": shared_id})
+
+    assert response.status_code == 200
+    assert clients["ana"].get(DEFAULT_CONFIG_URL).json() == {"config": shared_id}
+
+
+def test_another_persons_preset_is_refused_as_default(people):
+    clients, factory = people
+    foreign = _preset(clients["ben"], "bens")
+
+    response = clients["ana"].put(DEFAULT_CONFIG_URL, json={"config": foreign})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Invalid config: must be null, 'sft', 'turbo', or a preset ID"
+    )
+    with factory() as session:
+        assert session.get(User, "u-ana").default_generation_config is None
