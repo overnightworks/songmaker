@@ -50,7 +50,7 @@
 "frontend/src/routes/layout.test.ts" = 1404
 "frontend/src/routes/settings/users/+page.svelte" = 937
 "src/acestep_worker/wrapper.py" = 1087
-"src/songmaker_cli/conversation_api.py" = 965
+"src/songmaker_cli/conversation_api.py" = 956
 "src/songmaker_cli/jobs/generation.py" = 1136
 "src/songmaker_cli/jobs/lora_training.py" = 1512
 "src/songmaker_cli/queue_streams.py" = 919

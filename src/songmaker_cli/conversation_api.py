@@ -137,12 +137,6 @@ class TurnContextEnvelope:
     def names(self) -> list[str]:
         return [block.name for block in self.blocks]
 
-    def body_for(self, name: str) -> str | None:
-        for block in self.blocks:
-            if block.name == name:
-                return block.body
-        return None
-
 
 def _format_current_song(song) -> str:
     parts = [
@@ -203,9 +197,6 @@ def compose_turn_context(
                 )
             )
     blocks.extend(extra_blocks)
-    names = [block.name for block in blocks]
-    if len(names) != len(set(names)):
-        raise ValueError(f"duplicate turn-context block names: {names}")
     return TurnContextEnvelope(tuple(blocks))
 
 
