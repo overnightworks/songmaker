@@ -93,8 +93,7 @@ import { HITBOX_STYLE as hitboxCss } from '#lib/styles/hitbox.ts';
 const { liveStream } = vi.hoisted(() => ({
 	liveStream: {
 		start: vi.fn(),
-		stop: vi.fn(),
-		waitForReady: vi.fn(async () => true)
+		stop: vi.fn()
 	}
 }));
 
@@ -125,8 +124,7 @@ vi.mock('#lib/stores/resourceSync.ts', async (importOriginal) => {
 	return {
 		...actual,
 		startLibraryResourceSync: liveStream.start,
-		stopLibraryResourceSync: liveStream.stop,
-		waitForResourceReady: liveStream.waitForReady
+		stopLibraryResourceSync: liveStream.stop
 	};
 });
 vi.mock('#lib/api/library.ts', () => ({
