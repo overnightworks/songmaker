@@ -1,8 +1,0 @@
-claim_id = "fa9331c53f1543708d5f395b5a2d0aea"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "4911dadb03e0645b8995f59714fe3ebe2f2abc6d"
-branch = "claude/issue-2630-s9a-the-settings-pages-share-one-heading"
-scope = ["frontend/src/lib/components/LoraDetail.svelte", "frontend/src/lib/components/ReferenceRow.svelte", "frontend/src/lib/components/TakeRetentionPanel.svelte", "frontend/src/lib/components/VoicePicker.svelte", "frontend/src/routes/settings/+layout.svelte", "frontend/src/routes/settings/+page.svelte", "frontend/src/routes/settings/about/+page.svelte", "frontend/src/routes/settings/generation/+page.svelte", "frontend/src/routes/settings/references/+page.svelte", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/voices/+page.svelte", "quality/baseline.toml", "scripts/style-literals.txt"]
-opened_commit = "e277e59535dbb57dd1a9c45fb9963c1ef0a5a951"
-whole_reason = "One heading rule replaces six copies across the Settings pages, and the same pages' one-token swaps are proven by one Settings drive per width and theme, as #2527's plan states for S9; split, each half would need the same drive."
