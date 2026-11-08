@@ -32,7 +32,6 @@ import {
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
-	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
 	TOAST_UNDO_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
@@ -68,7 +67,8 @@ import {
 	foldedGroupLabel,
 	takeRowLabel,
 	takeVersion,
-	type TakeVersion
+	type TakeVersion,
+	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS
 } from '../src/lib/constants/now-playing';
 import type { GenerationItem, SongItem, VersionItem } from '../src/lib/api/types';
 import { sameOriginHeaders, nameStartingWith, shellOf, workspace } from './helpers';

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 	import {
-		NOW_PLAYING_TAKE_PREFIX,
 		TAKE_COVER_LABEL,
 		TAKE_REPAINT_LABEL,
 		TAKE_RESCORE_LABEL,
@@ -28,7 +27,8 @@
 		NOW_PLAYING_UNPICK_LABEL,
 		nowPlayingTakeMeta,
 		openVersionLabel,
-		takeVersion
+		takeVersion,
+		NOW_PLAYING_TAKE_PREFIX
 	} from '#lib/constants/now-playing.ts';
 	import {
 		appPageAddress,

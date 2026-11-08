@@ -13,7 +13,6 @@ import {
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
-	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
 	playlistEntryOverflowLabel,
@@ -35,7 +34,8 @@ import {
 	NOW_PLAYING_EXPAND_LABEL,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	nowPlayingSheetCloseLabel,
-	takeRowLabel
+	takeRowLabel,
+	NOW_PLAYING_GO_TO_SONG
 } from '../src/lib/constants/now-playing';
 import {
 	accountCircle,

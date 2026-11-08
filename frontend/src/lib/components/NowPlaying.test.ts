@@ -10,11 +10,7 @@ import { get } from 'svelte/store';
 import type { SongItem } from '#lib/api/types.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import {
-	NOW_PLAYING_CLOSE,
-	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
-	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
-	NOW_PLAYING_NO_LYRICS,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL,
@@ -27,7 +23,11 @@ import {
 	nowPlayingFromLabel,
 	nowPlayingOpenSourceLabel,
 	nowPlayingSheetCloseLabel,
-	nowPlayingTakeLabel
+	nowPlayingTakeLabel,
+	NOW_PLAYING_CLOSE,
+	NOW_PLAYING_GO_TO_SONG,
+	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
+	NOW_PLAYING_NO_LYRICS
 } from '#lib/constants/now-playing.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';

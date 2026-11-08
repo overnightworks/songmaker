@@ -51,10 +51,9 @@
 		LIBRARY_QUEUE_EMPTY_TITLE,
 		LIBRARY_QUEUE_LOADING_TITLE,
 		LIBRARY_QUEUE_PLAY_DETAIL,
-		LIBRARY_QUEUE_RETRY_DETAIL,
-		MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND,
-		MINI_PLAYER_TITLE_SCROLL_REST_MS,
-		MINI_PLAYER_TITLE_SCROLL_RETURN_MS,
+		LIBRARY_QUEUE_RETRY_DETAIL
+	} from '#lib/constants/queue.ts';
+	import {
 		MINI_PLAYER_WITHOUT_COVER_MEDIA,
 		REDUCED_MOTION_MEDIA,
 		openNowPlayingLabel
@@ -68,7 +67,13 @@
 	} from '#lib/services/mediaSession.ts';
 	import { formatTime } from '#lib/utils/format.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
-	import { nowPlayingFromLabel, nowPlayingTakeLabel } from '#lib/constants/now-playing.ts';
+	import {
+		nowPlayingFromLabel,
+		nowPlayingTakeLabel,
+		MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND,
+		MINI_PLAYER_TITLE_SCROLL_REST_MS,
+		MINI_PLAYER_TITLE_SCROLL_RETURN_MS
+	} from '#lib/constants/now-playing.ts';
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
 

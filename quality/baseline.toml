@@ -44,7 +44,7 @@
 "frontend/src/lib/stores/libraryContext.ts" = 1189
 "frontend/src/lib/stores/navigation.test.ts" = 2971
 "frontend/src/lib/stores/player.test.ts" = 5277
-"frontend/src/lib/stores/player.ts" = 2236
+"frontend/src/lib/stores/player.ts" = 2233
 "frontend/src/lib/stores/resourceSync.test.ts" = 2032
 "frontend/src/lib/stores/resourceSync.ts" = 1058
 "frontend/src/routes/layout.test.ts" = 1404

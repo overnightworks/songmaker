@@ -17,7 +17,6 @@ import {
 	EDITOR_UNSAVED_TITLE,
 	GENERATION_PHASE_LABELS,
 	HITBOX_FREQUENT_PX,
-	NOW_PLAYING_CLOSE,
 	openNowPlayingLabel,
 	PLAYLISTS_PAGE_LABEL,
 	TRANSPORT_PLAY_LABEL,
@@ -32,7 +31,8 @@ import {
 	currentVersionHeadLabel,
 	takeRowLabel,
 	takeVersion,
-	type TakeVersion
+	type TakeVersion,
+	NOW_PLAYING_CLOSE
 } from '../src/lib/constants/now-playing';
 import {
 	boundingBoxes,
