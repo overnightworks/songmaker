@@ -283,7 +283,7 @@ own, `/playlist/<slug>` (issue #286, #265's S5 and last new address of the
 chain): a sibling of `/library`, not a segment under `/album/<slug>`, since a
 playlist has no album to nest inside — its `slug` follows the album
 precedent (a globally unique column, reserved via `unique_playlist_slug` in
-`api_helpers.py` under its own advisory lock, `_PLAYLIST_SLUG_LOCK_ID`) rather
+`api_helpers.py` under its own advisory lock, `AdvisoryLock.PLAYLIST_SLUG`) rather
 than a song's per-album one. The Playlists page has an address of its own as
 well, `/playlists` (#1402): the wall of playlists alone, which the library
 shows as its `playlists` surface beside the wall's `browse`; it names no
