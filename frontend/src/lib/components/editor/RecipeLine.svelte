@@ -130,14 +130,14 @@
 	}
 
 	.recipe-line:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.dot {
 		width: 0.45rem;
 		height: 0.45rem;
 		border-radius: 50%;
-		background: var(--primary);
+		background: var(--accent);
 	}
 </style>

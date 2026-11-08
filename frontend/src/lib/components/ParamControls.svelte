@@ -313,7 +313,7 @@
 		width: 0.45rem;
 		height: 0.45rem;
 		border-radius: 50%;
-		background: var(--primary);
+		background: var(--accent);
 	}
 
 	.field-reset {
@@ -325,7 +325,7 @@
 	}
 
 	.field-reset:hover {
-		color: var(--primary);
+		color: var(--accent);
 	}
 
 	.setting.full-width {
