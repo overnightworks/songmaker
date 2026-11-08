@@ -46,21 +46,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: ${{ matrix.python-version }}
-
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+          enable-cache: true
 
       - name: Check uv.lock is in sync with pyproject.toml
         run: uv lock --check
-
-      - name: Cache uv packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.x
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-${{ matrix.python-version }}-
 
       - name: Install system dependencies
         # why: tests/support/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in, and the generation tests encode MP3s with a real ffmpeg. The runner image's package lists usually know both packages, so apt-get update is only the fallback; short timeouts and retries make a stalled mirror fail fast.
@@ -272,9 +264,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
-        with:
-          python-version-file: .python-version
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - name: Install coverage tooling
         run: uv sync --frozen --no-install-project --extra dev
