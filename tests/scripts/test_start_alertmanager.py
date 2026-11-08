@@ -1,4 +1,4 @@
-"""Behavioral tests for monitoring/alertmanager-entrypoint.sh.
+"""Behavioral tests for monitoring/scripts/start_alertmanager.sh.
 
 The entrypoint builds Alertmanager's config out of four .env values before
 it starts the daemon (issue #333), and every value crosses two escaping
@@ -23,8 +23,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-ENTRYPOINT = REPO_ROOT / "monitoring" / "alertmanager-entrypoint.sh"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ENTRYPOINT = REPO_ROOT / "monitoring" / "scripts" / "start_alertmanager.sh"
 TEMPLATE = REPO_ROOT / "monitoring" / "alertmanager.yml.template"
 
 VALID_VALUES = {
