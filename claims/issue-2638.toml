@@ -1,0 +1,7 @@
+claim_id = "8c5e0c0e0ade4cddaa175f549131d74d"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "7c7354b7cdef176216ed38d384d1de7538f85ca0"
+branch = "claude/issue-2638-default-config-follows-model"
+scope = ["docs/acestep.md", "src/songmaker_cli/jobs/generation.py", "tests/songmaker_cli/jobs/test_generation_preset_params.py"]
+opened_commit = "d58d4d7349dcba76a5efa4ae52f54eab782e2dc7"
