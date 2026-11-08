@@ -12,7 +12,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from auto_deploy_support import (
+from support.auto_deploy_support import (
     ACESTEP_SUBMODULE_PATH,
     ALERT_CONFIG_LIB,
     ALERT_REPEAT_SECONDS,

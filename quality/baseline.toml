@@ -72,7 +72,7 @@
 "tests/songmaker_cli/test_scheduler.py" = 1283
 "tests/songmaker_cli/test_server.py" = 1922
 "tests/songmaker_cli/test_sharing_api.py" = 2487
-"tests/test_auto_deploy_alerting.py" = 1299
+"tests/scripts/test_run_autodeploy_alerting.py" = 1299
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
 "main" = 65
@@ -209,13 +209,13 @@
 "test_shared_playlist_audio_authorization_matches_presented_share_selection" = 79
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 78
 
-[function_lines."tests/test_alert_script.py"]
+[function_lines."tests/scripts/test_send_alert_script.py"]
 "test_trace_channels_never_expose_config_values" = 75
 
-[function_lines."tests/test_install_autostart.py"]
+[function_lines."tests/scripts/test_install_autostart.py"]
 "run_autostart" = 60
 
-[function_lines."tests/test_install_cli_credentials_mirror.py"]
+[function_lines."tests/scripts/test_install_cli_credentials_mirror.py"]
 "run_installer" = 94
 
 [clones."scripts/archive_e2e_albums.py"]

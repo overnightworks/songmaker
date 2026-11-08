@@ -91,7 +91,7 @@ MIRROR_DIR="$(resolve_mirror_dir "$PROJECT_ROOT" "$INSTALL_HOME")" || exit 1
 
 # Where units are installed. Overridable for exactly one reason: nothing else
 # can prove this script runs, and two crashes shipped in it because nothing
-# ever did (see tests/test_install_cli_credentials_mirror.py). systemd itself
+# ever did (see tests/scripts/test_install_cli_credentials_mirror.py). systemd itself
 # only ever reads /etc/systemd/system.
 UNIT_DIR="${SONGMAKER_UNIT_DIR:-/etc/systemd/system}"
 

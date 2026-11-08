@@ -1,7 +1,7 @@
 """Which commit scripts/run_autodeploy.sh puts live: only a release tag, never a main tip.
 
 The script is driven as a real subprocess against a throwaway checkout and its
-own origin (see ``auto_deploy_harness``). A landing on main deploys nothing;
+own origin (see ``support.auto_deploy_harness``). A landing on main deploys nothing;
 a tag ``vYYYY.MM.DD.N`` on a green main commit does, checked out detached.
 """
 
@@ -12,10 +12,10 @@ import shlex
 from pathlib import Path
 
 import pytest
-from auto_deploy_harness import (
+from support.auto_deploy_harness import (
     Checkout,
 )
-from auto_deploy_support import (
+from support.auto_deploy_support import (
     DEPENDABOT_UPDATES_WORKFLOW_PATH,
     FAILURE_ALERT_THRESHOLD,
     UPDATE_CHECK_SUITE_ID,

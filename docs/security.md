@@ -601,7 +601,7 @@ before the first write, so a refusal leaves the machine exactly as it was
 rather than half-installed.
 
 The installer is driven end to end by
-`tests/test_install_cli_credentials_mirror.py` against a throwaway checkout.
+`tests/scripts/test_install_cli_credentials_mirror.py` against a throwaway checkout.
 Every invocation goes through one harness that replaces `sudo`, `systemctl`
 and `getent`, and those fakes refuse rather than comply: a candidate path is
 resolved with `readlink -m` before it is compared, so `..` and symlinked

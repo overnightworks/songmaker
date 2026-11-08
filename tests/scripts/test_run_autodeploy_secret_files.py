@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from auto_deploy_harness import Checkout
-from auto_deploy_support import FAILURE_ALERT_THRESHOLD
+from support.auto_deploy_harness import Checkout
+from support.auto_deploy_support import FAILURE_ALERT_THRESHOLD
 
 
 def test_a_release_declaring_a_missing_secret_file_is_refused_before_build_and_recreate(
