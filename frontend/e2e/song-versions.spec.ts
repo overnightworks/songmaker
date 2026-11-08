@@ -49,8 +49,9 @@ import {
 	songEditorOpenLabel,
 	takesDraftBanner
 } from '../src/lib/constants';
-import { VERSIONS_SHEET_CLOSE_LABEL, VERSIONS_SHEET_LABEL } from '../src/lib/constants/versions';
 import {
+	VERSIONS_SHEET_CLOSE_LABEL,
+	VERSIONS_SHEET_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_LOAD_UNDO_GOES,

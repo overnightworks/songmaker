@@ -46,8 +46,8 @@ import {
 } from '#lib/constants.ts';
 import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
-import { VERSIONS_SHEET_LABEL } from '#lib/constants/versions.ts';
 import {
+	VERSIONS_SHEET_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_EMPTIES_EDITOR,

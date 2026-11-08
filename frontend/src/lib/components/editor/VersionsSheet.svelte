@@ -20,8 +20,9 @@
 		versionTakesLabel,
 		versionsChipAccessibleLabel
 	} from '#lib/constants.ts';
-	import { VERSIONS_SHEET_CLOSE_LABEL, VERSIONS_SHEET_LABEL } from '#lib/constants/versions.ts';
 	import {
+		VERSIONS_SHEET_CLOSE_LABEL,
+		VERSIONS_SHEET_LABEL,
 		VERSION_CURRENT_TAG,
 		VERSION_NO_LYRICS,
 		VERSION_PICKED_LABEL
