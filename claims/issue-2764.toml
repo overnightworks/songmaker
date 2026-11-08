@@ -1,0 +1,7 @@
+claim_id = "a80e32d41822429eb736995ab8a4f22e"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "e2fdaba3da9cbb27a9078708ceafb41a082467ea"
+branch = "claude/issue-2764-home-lists-budget-measures-work"
+scope = ["tests/songmaker_cli/test_db_postgresql.py"]
+opened_commit = "72416de5834230df075eb550967206d6b493c656"
