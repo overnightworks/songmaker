@@ -195,7 +195,7 @@
 
 	.reference-keep:hover,
 	.reference-keep.kept {
-		color: var(--keep);
+		color: var(--accent);
 	}
 
 	.reference-menu {

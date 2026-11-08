@@ -251,7 +251,7 @@
 	}
 
 	.hint:hover {
-		color: var(--primary);
+		color: var(--accent);
 	}
 
 	@media (max-width: 500px) {
