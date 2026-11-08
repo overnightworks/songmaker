@@ -92,11 +92,11 @@ function generateButton(page: Page): Locator {
 	return page.getByRole('tabpanel').getByRole('button', { name: nameStartingWith(GENERATE_LABEL) });
 }
 
-/** What a colour token resolves to on the page right now, as `getComputedStyle` reports it. */
 function playTakeButton(scope: Locator): Locator {
 	return scope.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) });
 }
 
+/** What a colour token resolves to on the page right now, as `getComputedStyle` reports it. */
 function resolvedToken(page: Page, token: string): Promise<string> {
 	return page.evaluate((name) => {
 		const probe = document.createElement('span');
