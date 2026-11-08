@@ -1,0 +1,8 @@
+claim_id = "eff91a53e99040d284ee75d66b75e9e3"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "33a92269fb056b387f3de71e8de4f0a6fea9538a"
+branch = "claude/issue-2732-job-enums-get-own-leaf-module"
+scope = [".importlinter", "scripts/seed_e2e_job_states.py", "src/songmaker_cli", "tests"]
+opened_commit = "87c2fc9a0f3a850e12218056ac1a5b2671b40235"
+whole_reason = "One name has one owner, so every importer of the seven names changes its import in the commit that moves them; a partial rewrite would leave the second import path the item forbids."
