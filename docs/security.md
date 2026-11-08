@@ -753,8 +753,7 @@ only (PostgreSQL within 16); a major or minor move of an image is its own change
 for PostgreSQL 17 a data migration. The CI pins are moved by hand; `scripts/check_pinned_images_match.py` fails while
 CI's PostgreSQL service differs from compose's, so a Dependabot PostgreSQL bump
 needs the same edit in `.github/workflows/ci.yml`. Project tooling in CI and application dependencies in worker
-images are installed through `uv` with the committed `uv.lock`; Bandit and
-pip-audit run in separate tool environments so they do not change that lock.
+images are installed through `uv` with the committed `uv.lock`; Bandit runs in a separate tool environment so it does not change that lock.
 The repository itself is installed as the trusted local editable project. All
 third-party dependencies must be wheels except `nvidia-ml-py3`, whose locked,
 hash-verified release has no published wheel. The two first-party libraries
