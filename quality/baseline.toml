@@ -124,7 +124,7 @@
 "run_lora_training_job" = 60
 
 [function_lines."src/songmaker_cli/jobs/model_lifecycle.py"]
-"_run_download_attempt" = 84
+"_run_download_attempt" = 82
 "download_model_on_worker" = 76
 "load_model_on_worker" = 64
 

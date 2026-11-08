@@ -26,10 +26,12 @@ async def load_model_on_worker(
 ) -> None:
     import httpx
 
-    from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
     from songmaker_cli.db.queries.workers import get_worker_identity
-    from songmaker_cli.scheduler import WorkerTaskFailed, worker_response_cause
-    from songmaker_cli.settings import get_settings
+    from songmaker_cli.scheduler import (
+        WorkerTaskFailed,
+        worker_request_headers,
+        worker_response_cause,
+    )
 
     factory = db_factory
     _update_job(factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
@@ -49,13 +51,11 @@ async def load_model_on_worker(
         )
         return
 
-    token = get_settings().songmaker_internal_token.get_secret_value()
-    headers = {INTERNAL_TOKEN_HEADER: token}
     url = f"http://{worker.host}:{worker.port}/load_model"  # NOSONAR(S5332) Compose network only.
 
     try:
         async with httpx.AsyncClient(timeout=960) as client:
-            response = await client.post(url, json={"mode": mode}, headers=headers)
+            response = await client.post(url, json={"mode": mode}, headers=worker_request_headers())
     except httpx.HTTPError as exc:
         _update_job(
             factory,
@@ -207,15 +207,14 @@ async def _run_download_attempt(
 ) -> Exception | None:
     import httpx
 
-    from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
     from songmaker_cli.scheduler import (
         DispatchOptions,
         NoCapacityError,
         WorkerTaskFailed,
         consume_download_task_stream,
         pick_any_online_worker,
+        worker_request_headers,
     )
-    from songmaker_cli.settings import get_settings
 
     try:
         with factory() as session:
@@ -230,12 +229,11 @@ async def _run_download_attempt(
         )
         return None
     try:
-        token = get_settings().songmaker_internal_token.get_secret_value()
         async with httpx.AsyncClient(timeout=30) as client:
             submit = await client.post(
                 f"{worker.base_url}/download_model",
                 json={"mode": mode},
-                headers={INTERNAL_TOKEN_HEADER: token},
+                headers=worker_request_headers(),
             )
     except httpx.HTTPError as exc:
         _update_job(
