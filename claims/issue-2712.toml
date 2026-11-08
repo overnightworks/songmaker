@@ -1,8 +1,0 @@
-claim_id = "b06c7ca562b24f378b1c8a18f01361d7"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6012e9fd6c1ebaa5ddbd5062eabd82002bcb1128"
-branch = "claude/issue-2712-installer-tests-share-one-sandbox"
-scope = ["quality/baseline.toml", "tests/scripts/test_install_autodeploy.py", "tests/scripts/test_install_autostart.py", "tests/scripts/test_install_cli_credentials_mirror.py", "tests/support/install_script_fakes.py"]
-opened_commit = "fc7262621e22a62dd4156a8f2794e012d6229266"
-whole_reason = "One shared builder replaces three copies in the same change, or two copies keep evolving apart."
