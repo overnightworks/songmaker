@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
@@ -21,24 +21,6 @@ from songmaker_cli import acestep_state, arq_pool, redis_client, settings
 from songmaker_cli.api_models.health import HealthResponse, HealthSignals, HealthStatusResponse
 from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import (
-    PROM_ACESTEP_WORKER_LOADED_MODELS,
-    PROM_ACESTEP_WORKER_QUEUE_DEPTH,
-    PROM_ACESTEP_WORKER_VRAM_TOTAL_GB,
-    PROM_ACESTEP_WORKER_VRAM_USED_GB,
-    PROM_ACESTEP_WORKERS_TOTAL,
-    PROM_ACTIVE_SESSIONS,
-    PROM_BACKGROUND_LOOP_ALIVE,
-    PROM_BACKGROUND_LOOP_CONSECUTIVE_FAILURES,
-    PROM_CONTENT_TYPE,
-    PROM_HTTP_REQUEST_DURATION_MS,
-    PROM_HTTP_REQUESTS_TOTAL,
-    PROM_JOB_DURATION_SECONDS,
-    PROM_JOBS_TOTAL,
-    PROM_LAST_JOB_FAILURE_TIMESTAMP,
-    PROM_NEVER_FAILED_TIMESTAMP,
-    PROM_QUEUE_DEPTH,
-)
 from songmaker_cli.db.queries.auth import count_active_sessions
 from songmaker_cli.db.queries.jobs import (
     count_total_queued_jobs,
@@ -47,6 +29,46 @@ from songmaker_cli.db.queries.jobs import (
     last_job_failure_time,
 )
 from songmaker_cli.db.queries.workers import list_worker_identities
+
+PROM_HTTP_REQUESTS_TOTAL: Final[str] = "songmaker_http_requests_total"
+PROM_HTTP_REQUEST_DURATION_MS: Final[str] = "songmaker_http_request_duration_milliseconds_total"
+PROM_ACTIVE_SESSIONS: Final[str] = "songmaker_active_sessions"
+PROM_JOBS_TOTAL: Final[str] = "songmaker_jobs_total"
+# When the newest job failure finished, as Unix time. A timestamp rather
+# than a failure counter, because every counter-shaped answer needs history
+# the alarm may not have: a per-type songmaker_jobs_total{status="failed"}
+# series only comes into existence WITH the first failure of that type, and
+# even an always-exported total reads 1 on Prometheus' FIRST sample if the
+# failure happened between the web container becoming healthy and that
+# first scrape. increase() finds no rise across a series' first sample
+# either way, so exactly the first failure of a fresh stack went unalerted.
+# "How long ago was the last one" needs no history: one sample carries the
+# whole answer.
+PROM_LAST_JOB_FAILURE_TIMESTAMP: Final[str] = "songmaker_last_job_failure_timestamp_seconds"
+# What that metric reads while nothing has ever failed: the Unix epoch,
+# which puts `time() - <metric>` decades outside every alert window
+# without the series ever having to be absent.
+PROM_NEVER_FAILED_TIMESTAMP: Final[float] = 0.0
+PROM_JOB_DURATION_SECONDS: Final[str] = "songmaker_job_duration_seconds"
+# Labeled by queue ("music"/"scoring"), the arq queue names the workers
+# actually run on. Renders as songmaker_queue_depth{queue="music"} etc.
+# A single unlabeled value would read the arq client library's own default
+# queue key, which nothing in this codebase ever enqueues to, so it would
+# always be 0.
+PROM_QUEUE_DEPTH: Final[str] = "songmaker_queue_depth"
+PROM_ACESTEP_WORKERS_TOTAL: Final[str] = "songmaker_acestep_workers_total"
+PROM_ACESTEP_WORKER_LOADED_MODELS: Final[str] = "songmaker_acestep_worker_loaded_models"
+PROM_ACESTEP_WORKER_QUEUE_DEPTH: Final[str] = "songmaker_acestep_worker_queue_depth"
+# Per-worker VRAM from the acestep-worker's own heartbeat. The songmaker-web
+# container has no GPU runtime and no NVML, so it cannot produce a
+# host-level GPU figure itself.
+PROM_ACESTEP_WORKER_VRAM_USED_GB: Final[str] = "songmaker_acestep_worker_vram_used_gigabytes"
+PROM_ACESTEP_WORKER_VRAM_TOTAL_GB: Final[str] = "songmaker_acestep_worker_vram_total_gigabytes"
+PROM_CONTENT_TYPE: Final[str] = "text/plain; version=0.0.4; charset=utf-8"
+PROM_BACKGROUND_LOOP_CONSECUTIVE_FAILURES: Final[str] = (
+    "songmaker_background_loop_consecutive_failures"
+)
+PROM_BACKGROUND_LOOP_ALIVE: Final[str] = "songmaker_background_loop_alive"
 
 router = APIRouter()
 

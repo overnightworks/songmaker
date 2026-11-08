@@ -1359,7 +1359,7 @@ def _make_metrics_client(tmp_path: Path, factory, mock_arq_pool=None) -> TestCli
 def test_metrics_serves_prometheus_text(
     tmp_path: Path, mock_arq_pool, monitoring_headers, pg_factory,
 ) -> None:
-    from songmaker_cli.constants import PROM_CONTENT_TYPE
+    from songmaker_cli.health_api import PROM_CONTENT_TYPE
     client = _make_metrics_client(tmp_path, pg_factory)
     with client:
         resp = client.get("/metrics", headers=monitoring_headers)
