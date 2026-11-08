@@ -1,0 +1,8 @@
+claim_id = "b8bdb9f5e1e541d2a4cefacea7126c20"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "624ba1d2658aa3da425498cbb24777fff3c3bf7d"
+branch = "claude/issue-2773-transport-words-move-to-own-module"
+scope = ["frontend/e2e", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/services", "frontend/src/routes/share", "quality/baseline.toml"]
+opened_commit = "4d09f882985818c502f747070c96afd44e5fd959"
+whole_reason = "One pure move: the family leaves the catch-all together, and every caller re-points in the same change, or the build breaks."
