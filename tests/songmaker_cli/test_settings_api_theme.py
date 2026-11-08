@@ -4,23 +4,16 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
-
-from songmaker_cli.db.models import User
+from support.signed_in_people import sign_in_people
+from support.web_app import make_router_app, make_router_ctx, web_client
 
 THEME_URL = "/api/settings/theme"
 
 
 @pytest.fixture
 def two_people(tmp_path, pg_factory) -> tuple[TestClient, TestClient]:
-    def seed(session) -> None:
-        session.add_all([User(id="u-ana", username="ana"), User(id="u-ben", username="ben")])
-
-    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=seed)
-    return tuple(
-        web_client(make_router_app(ctx, user=make_authenticated_user(user_id)))
-        for user_id in ("u-ana", "u-ben")
-    )
+    clients = sign_in_people(tmp_path, pg_factory, {"ana": "user", "ben": "user"})
+    return clients["ana"], clients["ben"]
 
 
 @pytest.fixture

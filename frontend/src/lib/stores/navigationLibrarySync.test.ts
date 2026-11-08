@@ -15,7 +15,8 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import { RESOURCE_EVENT_STREAM_PATH } from '#lib/constants.ts';
+import { RESOURCE_EVENT_STREAM_PATH, SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
+import { toasts } from '#lib/stores/toast.ts';
 import {
 	resetResourceSyncForTests,
 	resourceSync,
@@ -64,6 +65,7 @@ class FakeEventSource {
 
 let requests: string[] = [];
 let failLibraryLists = false;
+let goneSongId: string | null = null;
 let stopFollowingShellLayers: () => void = () => undefined;
 
 function stubNetwork(): void {
@@ -79,6 +81,9 @@ function stubNetwork(): void {
 				return { ok: true, json: async () => noItems };
 			}
 			const songId = /^\/api\/songs\/([^/?]+)$/.exec(path)?.[1];
+			if (songId && songId === goneSongId) {
+				return { ok: false, status: 404, json: async () => ({ detail: 'Song not found' }) };
+			}
 			if (songId) return { ok: true, json: async () => song({ slug: songId, id: songId }) };
 			return { ok: true, json: async () => ({}) };
 		})
@@ -103,6 +108,8 @@ function pressBackOntoOtherSong(): void {
 
 const setReady = (ready: boolean) =>
 	resourceSync.update((state) => ({ ...state, ready, status: ready ? 'live' : 'connecting' }));
+const standingSongFetches = () =>
+	requests.filter((path) => path === `/api/songs/${STANDING_SONG_ID}`).length;
 const contextLoads = () => requests.filter((path) => path === CONTEXT_LOAD_PATH).length;
 const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -115,6 +122,8 @@ function follow(): () => void {
 beforeEach(() => {
 	requests = [];
 	failLibraryLists = false;
+	goneSongId = null;
+	toasts.set([]);
 	FakeEventSource.instances = [];
 	stubNetwork();
 	resetResourceSyncForTests();
@@ -209,8 +218,7 @@ describe('navigation following the library sync', () => {
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe(OTHER_SONG_ID));
 	});
 
-	it('applies a Back after a failed bootstrap and a Retry', async () => {
-		follow();
+	async function failBootstrapThenRetry(): Promise<void> {
 		failLibraryLists = true;
 		startLibraryResourceSync(vi.fn());
 		const stream = FakeEventSource.instances[0];
@@ -222,6 +230,41 @@ describe('navigation following the library sync', () => {
 		const retried = retryResourceSync();
 		FakeEventSource.instances.at(-1)?.hello();
 		expect(await retried).toBe(true);
+	}
+
+	it.each([
+		[
+			'the first ready',
+			async () => {
+				startLibraryResourceSync(vi.fn());
+				FakeEventSource.instances[0].hello();
+			},
+			2
+		],
+		['a ready after a failed bootstrap and a Retry', failBootstrapThenRetry, 3]
+	])(
+		'tells the person once that the standing song is gone at %s',
+		async (_, reachReady, fetches) => {
+			goneSongId = STANDING_SONG_ID;
+			replaceHistoryEntry(
+				LIBRARY_ROUTE_PATH,
+				routerHistoryEntry({ library: { ...libraryRootState(), songId: STANDING_SONG_ID } })
+			);
+			follow();
+
+			await reachReady();
+			await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+			await flushMicrotasks();
+
+			const messages = get(toasts).map((toast) => toast.message);
+			expect(messages.filter((message) => message === SONG_LINK_NOT_FOUND_TOAST)).toHaveLength(1);
+			expect(standingSongFetches()).toBe(fetches);
+		}
+	);
+
+	it('applies a Back after a failed bootstrap and a Retry', async () => {
+		follow();
+		await failBootstrapThenRetry();
 		await flushMicrotasks();
 		pressBackOntoOtherSong();
 
