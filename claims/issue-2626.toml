@@ -1,8 +1,0 @@
-claim_id = "7d9006e290a9414face311f059000dcd"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "da527a1f190144829705a713788ad39f23635dfc"
-branch = "claude/issue-2626-s7-the-shell-s-library-s-and-sharing-s-a"
-scope = ["docs/architecture.md", "frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/Breadcrumb.svelte", "frontend/src/lib/components/CollectionHeaderFrame.svelte", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/LoadFailure.svelte", "frontend/src/lib/components/MenuPopover.svelte", "frontend/src/lib/components/PlaylistDetailView.svelte", "frontend/src/lib/components/PlaylistPicker.svelte", "frontend/src/lib/components/ShareButton.svelte", "frontend/src/lib/components/ShareDialog.svelte", "frontend/src/lib/components/ShareLinkChip.svelte", "frontend/src/lib/components/share/SharedCollection.svelte", "frontend/src/lib/components/share/SharedFooter.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/components/shell/RailSearch.svelte", "frontend/src/lib/components/shell/RailSettings.svelte", "frontend/src/routes/(library)/album/[slug]/+page.svelte", "frontend/src/routes/(library)/playlist/[slug]/+page.svelte", "scripts/style-literals.txt"]
-opened_commit = "423d963710d74fd36aa62313aed04d0ffef0952a"
-whole_reason = "One surface family of one-token swaps proven by one shell, library and share drive per width and theme, as #2527's plan states for S5 to S9."
