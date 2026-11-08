@@ -1,8 +1,0 @@
-claim_id = "2d50e3f8997541ca9744100f939b9f25"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c82650ea6b775df2aaf252a83bbc7abb79acc645"
-branch = "claude/issue-2657-v010-c2-persistence-lock-test-names"
-scope = ["quality/baseline.toml", "scripts/test_postgresql.sh", "tests/songmaker_cli"]
-opened_commit = "7b4010dba3a67972fac66604db2e663b74f30fec"
-whole_reason = "Eleven renames of one rule under one directory, proven by one collect-only diff and one quality check."
