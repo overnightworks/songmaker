@@ -1,7 +1,0 @@
-claim_id = "b54d14443b38469b838b860871cfb06a"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "67271cc35ee3dfd1d041126acbcc090f6848a782"
-branch = "claude/issue-2610-client-ts-stops-re-exporting-sixteen-nam"
-scope = ["frontend/src/lib/api/albums.test.ts", "frontend/src/lib/api/client.test.ts", "frontend/src/lib/api/client.ts"]
-opened_commit = "95b1ff4cc61632332f3049aa7e13f6d803b34688"
