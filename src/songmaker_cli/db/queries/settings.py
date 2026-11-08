@@ -114,8 +114,7 @@ def update_preset(
     if params is not None:
         preset.params = params
     if is_default is True:
-        _clear_default(session, preset.created_by, preset.model_mode)
-        preset.is_default = True
+        set_default_preset(session, preset)
     elif is_default is False:
         preset.is_default = False
     preset.updated_at = datetime.now(timezone.utc)

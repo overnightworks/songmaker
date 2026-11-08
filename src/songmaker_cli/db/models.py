@@ -60,7 +60,9 @@ REFERENCE_RECORDINGS_ID: Final = "reference_recordings.id"
 DELETE_ORPHANS: Final = "all, delete-orphan"
 
 
-def _validate_base_generation_params(value: object) -> dict | None:
+def _validate_generation_params(
+    value: object, model: type[BaseGenerationParams],
+) -> dict | None:
     if value is None:
         return None
     if not isinstance(value, dict):
@@ -68,18 +70,7 @@ def _validate_base_generation_params(value: object) -> dict | None:
             f"generation_params must be a dict or None, got {type(value).__name__}"
         )
         raise TypeError(msg)
-    return BaseGenerationParams.model_validate(value).model_dump(exclude_none=True)
-
-
-def _validate_stored_generation_params(value: object) -> dict | None:
-    if value is None:
-        return None
-    if not isinstance(value, dict):
-        msg = (
-            f"generation_params must be a dict or None, got {type(value).__name__}"
-        )
-        raise TypeError(msg)
-    return StoredGenerationParams.model_validate(value).model_dump(exclude_none=True)
+    return model.model_validate(value).model_dump(exclude_none=True)
 
 
 def _uuid() -> str:
@@ -215,7 +206,7 @@ class Version(Base):
 
     @validates("generation_params")
     def _validate_generation_params(self, _key: str, value: object) -> dict | None:
-        return _validate_base_generation_params(value)
+        return _validate_generation_params(value, BaseGenerationParams)
 
 
 class Generation(ShareMixin, Base):
@@ -275,7 +266,7 @@ class Generation(ShareMixin, Base):
 
     @validates("generation_params")
     def _validate_generation_params(self, _key: str, value: object) -> dict | None:
-        return _validate_stored_generation_params(value)
+        return _validate_generation_params(value, StoredGenerationParams)
 
     @validates("whisper_cues")
     def _validate_whisper_cues(self, _key: str, value: object) -> list[dict] | None:
