@@ -334,12 +334,12 @@ def _load_preset_params(
         user = session.get(User, user_id)
         config = effective_default_config(session, user) if user else None
         builtins = get_builtin_defaults()
-        if config in builtins:
+        job_mode = resolve_model_mode(model_name)
+        if config in builtins and config == job_mode:
             return BaseGenerationParams.model_validate(builtins[config])
-        if config is None:
-            preset = get_default_preset(session, user_id, resolve_model_mode(model_name))
-        else:
-            preset = session.get(GenerationPreset, config)
+        preset = session.get(GenerationPreset, config) if config else None
+        if preset is None or preset.model_mode != job_mode:
+            preset = get_default_preset(session, user_id, job_mode)
         return BaseGenerationParams.model_validate(preset.params or {}) if preset else None
 
 
