@@ -1,0 +1,8 @@
+claim_id = "29f5dab1ca984f8f984b695e073a5a07"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "91f82b5f4da06dedc5d268cea6b34f9047993274"
+branch = "claude/issue-2680-mastering-defaults-one-rule"
+scope = ["src/audio_engine/__init__.py", "src/audio_engine/audio_io.py", "src/audio_engine/mastering.py", "tests/audio_engine"]
+opened_commit = "6e2d5fa4549a785ef4f9d25d804b87eee8ff7175"
+whole_reason = "The removed entry point, its export and its tests go together, or the export names a missing function."
