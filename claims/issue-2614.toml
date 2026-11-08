@@ -1,8 +1,0 @@
-claim_id = "1b6ac060768c4565a9a6e24ed8a092bf"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "2e115c471e7bffa12b35652f65271c7b5a81a070"
-branch = "claude/issue-2614-tests-that-differ-only-in-data-become-pa"
-scope = ["tests/songmaker_cli/db/test_migrations_user_theme.py", "tests/songmaker_cli/db/test_soft_delete.py", "tests/songmaker_cli/test_cleanup_generation_retention_lock_postgres.py", "tests/workflows/test_release_workflow.py"]
-opened_commit = "400f5e39b8e22eef93c999664cfc7c66019f9ee2"
-whole_reason = "Three small test-quality entries of one audit, bundled so one builder and one review clear them; no production file changes."
