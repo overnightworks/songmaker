@@ -1797,6 +1797,8 @@ Dashboard: `songmaker_acestep_workers_total{status="online"}` has its own stat p
 
 ## Backup & Restore
 
+Songmaker's scheduled backup is `hal backup`, which declares its database and audio volume; hal's `docs/backup.md` owns the schedule, the retention and the restore. The scripts below make and restore a manual copy only.
+
 `scripts/create_backup.sh` dumps PostgreSQL + copies the audio Docker volume to `BACKUP_DIR` (default `/mnt/backup/songmaker`). `scripts/restore_backup.sh` restores both. `scripts/list_backups.sh` lists snapshots. See [scripts/BACKUP.md](../scripts/BACKUP.md) for setup instructions.
 
 DB and audio must be backed up and restored together — one without the other leaves orphaned records or unreachable files.
