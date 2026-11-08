@@ -1,0 +1,8 @@
+claim_id = "c9bb860cec224e6db67dca55b8fda426"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "7c7354b7cdef176216ed38d384d1de7538f85ca0"
+branch = "claude/issue-2652-docs-name-hal-weekly-backup"
+scope = ["README.md", "docs/architecture.md", "docs/security.md", "scripts/BACKUP.md", "scripts/create_backup.sh"]
+opened_commit = "e43825f22a8d71fc6fbc39cb508e380d759bbec3"
+whole_reason = "These five texts together make the one claim about songmaker's backup, so changing fewer leaves a document still promising the daily run."
