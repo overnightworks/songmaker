@@ -7,6 +7,7 @@ import {
 	LM_NUMBER_FIELDS,
 	LM_TEXT_FIELDS
 } from '#lib/constants/acestep-param-fields.ts';
+import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
 import { RECIPE_REFERENCE_LABEL } from '#lib/constants/recipe.ts';
 import { formatTime } from '#lib/utils/format.ts';
 
@@ -20,9 +21,15 @@ const RECIPE_TAKE_GROUP_REPRODUCIBILITY_LABEL = 'Reproducibility';
 const RECIPE_TAKE_GROUP_VERSION_LABEL = 'Version';
 const RECIPE_TAKE_GROUP_OTHER_LABEL = 'Other';
 
+interface RecipeLink {
+	route: SettingsSectionRoute;
+	query: Readonly<Record<string, string>>;
+}
+
 interface RecipeEntry {
 	label: string;
 	value: string;
+	link?: RecipeLink;
 }
 
 interface RecipeGroup {
@@ -164,7 +171,11 @@ function buildVersionEntries(
 		versionEntries.push({ label: 'Language', value: song.vocal_language });
 	}
 	if (generation.reference) {
-		versionEntries.push({ label: RECIPE_REFERENCE_LABEL, value: generation.reference.filename });
+		versionEntries.push({
+			label: RECIPE_REFERENCE_LABEL,
+			value: generation.reference.filename,
+			link: { route: '/settings/references', query: { reference: generation.reference.id } }
+		});
 	}
 	return versionEntries;
 }

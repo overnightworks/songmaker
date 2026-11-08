@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from 'svelte';
+	import { page } from '$app/state';
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 	import {
 		acknowledgeCountdown,
@@ -49,6 +50,7 @@
 	const referenceReloads = reloadWhileUnreachable(() => void load());
 	const loadFailure = referenceReloads.loadFailure;
 
+	const highlightedId = $derived(page.url.searchParams.get('reference'));
 	let now = $state(new Date());
 	let listElement = $state<HTMLUListElement | null>(null);
 	let countdownAcknowledged = false;
@@ -190,6 +192,20 @@
 		await load();
 	}
 
+	// The scroll happens once per named row, not on each reload of the list, so a later
+	// reload does not pull the page back from where the musician moved on.
+	let scrolledToId: string | null = null;
+
+	$effect(() => {
+		if (highlightedId === null || references === null || scrolledToId === highlightedId) return;
+		scrolledToId = highlightedId;
+		void tick().then(() =>
+			listElement?.querySelector(`#${CSS.escape(`reference-${highlightedId}`)}`)?.scrollIntoView({
+				block: 'center'
+			})
+		);
+	});
+
 	function retry() {
 		referenceReloads.stop();
 		void load();
@@ -285,6 +301,7 @@
 					{reference}
 					{now}
 					{playing}
+					highlighted={highlightedId === reference.id}
 					fault={rowFault?.id === reference.id ? rowFault.words : null}
 					usesOpen={openUsesId === reference.id}
 					ontoggle={() => toggle(reference.id)}

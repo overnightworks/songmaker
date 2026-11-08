@@ -13,6 +13,7 @@ vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
 	rescore: vi.fn().mockResolvedValue(undefined)
 }));
 vi.mock('#lib/stores/navigation.ts', () => ({
+	followAppPageLink: vi.fn(),
 	revealPlayingSong: vi.fn().mockResolvedValue(undefined),
 	openTakeVersion: vi.fn().mockResolvedValue(undefined)
 }));
@@ -22,7 +23,7 @@ import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '#lib/constants.ts';
 import { NOW_PLAYING_RESCORE_ACTION_LABEL, openVersionLabel } from '#lib/constants/now-playing.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
 import { rate, rescore, setKeep, setPick } from '#lib/stores/takeActions.ts';
-import { openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
+import { followAppPageLink, openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
 import { nowPlayingOpen, nowPlayingSurface } from '#lib/stores/player.ts';
 import { pendingTakeUse } from '#lib/stores/recipe.ts';
 import NowPlayingTake from './NowPlayingTake.svelte';
@@ -550,6 +551,26 @@ describe('NowPlayingTake recipe section', () => {
 			})
 		});
 		expect(target.querySelector('.recipe-section')).toBeNull();
+	});
+
+	it('shows the reference as a link to its row, and every other entry as text', async () => {
+		await render({
+			generation: generation({
+				...generationDefaults,
+				model_mode: 'xl-sft',
+				reference: { id: 'r 1', filename: 'demo take.wav' }
+			})
+		});
+
+		const link = target.querySelector<HTMLAnchorElement>('.recipe-row dd a');
+		expect(link?.textContent).toContain('demo take.wav');
+		expect(link?.getAttribute('href')).toBe('/settings/references?reference=r+1');
+		expect(target.querySelectorAll('.recipe-row dd a')).toHaveLength(1);
+
+		link?.click();
+		expect(followAppPageLink).toHaveBeenCalledWith(expect.any(MouseEvent), '/settings/references', {
+			reference: 'r 1'
+		});
 	});
 
 	it('starts collapsed — the listener opens it, it does not open on them', async () => {

@@ -20,6 +20,7 @@
 		reference,
 		now,
 		playing,
+		highlighted,
 		fault,
 		usesOpen,
 		ontoggle,
@@ -31,6 +32,7 @@
 		reference: ReferenceListRowResponse;
 		now: Date;
 		playing: boolean;
+		highlighted: boolean;
 		fault: string | null;
 		usesOpen: boolean;
 		ontoggle: () => void;
@@ -64,8 +66,10 @@
 <!-- Keyboard users reach the row through its button, so the row takes no focus. -->
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 <li
+	id={`reference-${reference.id}`}
 	class="reference-row"
 	class:playing
+	class:highlighted
 	onclick={(event) => {
 		if ((event.target as Element).closest('.reference-uses')) return;
 		ontoggle();
@@ -156,6 +160,20 @@
 
 	.reference-row.playing {
 		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+	}
+
+	.reference-row.highlighted {
+		position: relative;
+		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+	}
+
+	.reference-row.highlighted::before {
+		content: '';
+		position: absolute;
+		inset-block: 0;
+		inset-inline-start: 0;
+		width: 0.1875rem;
+		background: var(--accent);
 	}
 
 	.reference-play {

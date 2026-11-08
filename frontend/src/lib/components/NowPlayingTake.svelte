@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
 	import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 	import {
 		NOW_PLAYING_TAKE_PREFIX,
@@ -30,7 +32,7 @@
 		openVersionLabel,
 		takeVersion
 	} from '#lib/constants/now-playing.ts';
-	import { openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
+	import { followAppPageLink, openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
 	import { closeNowPlaying } from '#lib/stores/player.ts';
 	import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
 	import { pendingTakeUse, type TakeUse } from '#lib/stores/recipe.ts';
@@ -238,6 +240,11 @@
 			: NOW_PLAYING_IMPORTED_TAKE_HEADING
 	);
 
+	// resolve() takes no query, so the resolved route gets it appended.
+	function recipeLinkAddress(link: { route: SettingsSectionRoute; query: Record<string, string> }) {
+		return `${resolve(link.route)}?${new URLSearchParams(link.query)}`;
+	}
+
 	const recipeGroups = $derived(buildTakeRecipe(generation, song));
 </script>
 
@@ -350,7 +357,22 @@
 								{#each group.entries as entry (entry.label)}
 									<div class="recipe-row">
 										<dt>{entry.label}</dt>
-										<dd>{entry.value}</dd>
+										<dd>
+											{#if entry.link}
+												<!-- eslint-disable svelte/no-navigation-without-resolve -- recipeLinkAddress resolves the route -->
+												<a
+													class="recipe-link"
+													href={recipeLinkAddress(entry.link)}
+													onclick={(event) =>
+														entry.link &&
+														followAppPageLink(event, entry.link.route, entry.link.query)}
+													>{entry.value}<Icon name="chevron-right" size={12} /></a
+												>
+												<!-- eslint-enable svelte/no-navigation-without-resolve -->
+											{:else}
+												{entry.value}
+											{/if}
+										</dd>
 									</div>
 								{/each}
 							</dl>
@@ -564,6 +586,15 @@
 		color: var(--text);
 		font-family: var(--font-display);
 		text-align: right;
+	}
+	.recipe-link {
+		display: inline-flex;
+		align-items: center;
+		color: var(--accent);
+		text-decoration: none;
+	}
+	.recipe-link:hover {
+		text-decoration: underline;
 	}
 	.rescore-hint {
 		align-self: flex-start;
