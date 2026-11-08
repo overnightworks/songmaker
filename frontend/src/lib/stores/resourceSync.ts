@@ -60,7 +60,7 @@ type ResourceAuthProbe = 'ok' | AuthFailureKind;
 // and waits for the musician's Retry.
 type SongRefreshFailure = 'network' | 'transient' | 'refused';
 
-interface ResourceSyncState {
+export interface ResourceSyncState {
 	status: ResourceSyncStatus;
 	error: string | null;
 	highWaterMark: string | null;

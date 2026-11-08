@@ -6,6 +6,7 @@
 	import { albumRoutePath, LIBRARY_ROUTE_ID, songRoutePath } from '#lib/routes/addresses.ts';
 	import { openTakeAddress } from '#lib/stores/libraryContext.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+	import { reloadWhenLibraryReturns, retryLibraryOr } from '#lib/stores/libraryRecovery.ts';
 	import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
 
 	type AddressState =
@@ -34,6 +35,23 @@
 	);
 	$effect(() => () => addressReloads.stop());
 
+	// A failed address also reads again once the library is ready, and its Try again
+	// retries the library first while that load failed.
+	const libraryReturns = reloadWhenLibraryReturns(
+		() => void openAddress(albumSlug, songSlug, takeNumber)
+	);
+	$effect(() => () => libraryReturns.dispose());
+	let pressing = $state(false);
+
+	async function tryAgain(): Promise<void> {
+		pressing = true;
+		try {
+			await retryLibraryOr(() => openAddress(albumSlug, songSlug, takeNumber));
+		} finally {
+			pressing = false;
+		}
+	}
+
 	const albumSlug = $derived(page.params.slug ?? '');
 	const songSlug = $derived(page.params.song ?? '');
 	const takeNumber = $derived(Number(page.params.n));
@@ -56,14 +74,17 @@
 		const request = ++openRequests;
 		addressState = 'resolving';
 		failure = null;
+		libraryReturns.loadStarted();
 		try {
 			const address = await openTakeAddress(albumId, slug, n);
 			if (request !== openRequests) return;
 			addressReloads.stop();
+			libraryReturns.loadSucceeded();
 			addressState = address === 'found' ? 'open' : address;
 		} catch (err) {
 			if (request !== openRequests) return;
 			addressReloads.afterLoadFailure(err);
+			libraryReturns.loadFailed();
 			failure = describeFailure(err, UNREACHABLE_TAKE_MESSAGE);
 			addressState = 'unreachable';
 		}
@@ -88,16 +109,12 @@
 		<p>{UNKNOWN_ALBUM_MESSAGE}</p>
 		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
 	</div>
-{:else if addressState === 'unreachable'}
+{:else if addressState === 'unreachable' && !pressing}
 	<div class="address-overlay" role="alert">
 		<p>{failure ?? UNREACHABLE_TAKE_MESSAGE}</p>
-		<button
-			class="address-action"
-			type="button"
-			onclick={() => openAddress(albumSlug, songSlug, takeNumber)}>{RETRY_LABEL}</button
-		>
+		<button class="address-action" type="button" onclick={tryAgain}>{RETRY_LABEL}</button>
 	</div>
-{:else if addressState === 'resolving'}
+{:else if addressState === 'resolving' || pressing}
 	<div class="address-overlay">{RESOLVING_LABEL}</div>
 {/if}
 
