@@ -1,8 +1,0 @@
-claim_id = "ef1433ef94464369937399cacb95b23d"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "cbd59ae44d603e494d873bb81ae3c169653070ae"
-branch = "claude/issue-2735-one-reference-preview-and-expiry-owner"
-scope = ["frontend/src/lib/components/ReferenceExpiry.svelte", "frontend/src/lib/components/ReferenceRow.svelte", "frontend/src/lib/services/referencePreview.svelte.ts", "frontend/src/routes/settings/references/+page.svelte"]
-opened_commit = "b06f12f676044035d00b8877184b30618f1db57e"
-whole_reason = "Two owners leave one page and one row, and each half is too small to be worth its own review."
