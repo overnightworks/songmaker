@@ -9,10 +9,10 @@ import { writable } from 'svelte/store';
 // controls in the phone app bar, whose dialogs mount inside that inert
 // workspace (#1531). A keyboard or screen-reader user must not reach into a
 // surface the visible page has already declared invalid (issue #276 review
-// fix). Each address page owns writing it -- true whenever its own
-// resolution isn't `open`, false once it is, and false again when the page
-// itself unmounts (leaving the group, or a genuine reload) -- so the root `/`
-// address, which never shows an overlay, never touches it.
+// fix). `createAddressLoad` owns writing it for the pages that use it -- true
+// whenever the page's resolution isn't `open`, false once it is, and false
+// again when the page itself unmounts (leaving the group, or a genuine reload)
+// -- so the root `/` address, which never shows an overlay, never touches it.
 export const libraryAddressOverlayActive = writable(false);
 
 // An `{@attach}` that mirrors the store onto the element's `inert` attribute.
