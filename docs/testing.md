@@ -230,7 +230,7 @@ request budget per shell.
   accessibility defect, not a selector problem.
 - **Locally, never point them at port 8080** — that is the operator's stack.
   Boot the CI stack on its own port and project (`WEB_PORT=18080`), run
-  `E2E_BASE_URL=http://localhost:18080 pnpm test:e2e`, then `down -v`.
+  `E2E_BASE_URL=http://localhost:18080 pnpm test:e2e`, then `down -v --remove-orphans --rmi local`.
 - Re-running against a warm stack trips the app's IP rate limit (120 requests
   per window) and the flow reports 429s. That is the guard working, not
   flakiness — reset the stack or wait out the window.
