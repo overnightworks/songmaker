@@ -1,8 +1,0 @@
-claim_id = "c0365f1c152c4165bae6968f071b8cff"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "adf3b9a99126e243bb5ec92bd3469485e0614d7f"
-branch = "claude/issue-2653-v010-f1c-backup-script-names"
-scope = ["README.md", "docs/architecture.md", "docs/security.md", "scripts/BACKUP.md", "scripts/backup-list.sh", "scripts/backup.sh", "scripts/create_backup.sh", "scripts/list_backups.sh", "scripts/restore.sh", "scripts/restore_backup.sh", "tests/scripts", "tests/test_restore_script.py"]
-opened_commit = "3d0d87561458bd96f6c09f079557a4e676ed39e6"
-whole_reason = "A renamed script's callers change in the same slice, or a caller names a missing file; the three backup scripts share one document and one test."
