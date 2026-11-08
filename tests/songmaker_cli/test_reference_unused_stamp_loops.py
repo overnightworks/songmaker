@@ -112,7 +112,8 @@ def _surviving_rows(factory, world: PurgeSite) -> dict[str, int]:
     with factory() as session:
         return {
             table: session.execute(
-                text(f"SELECT count(*) FROM {table} WHERE id = :id"), {"id": row_id},
+                text(f"SELECT count(*) FROM {table} WHERE id = :id"),  # noqa: S608 - tables from a fixed dict
+                {"id": row_id},
             ).scalar_one()
             for table, row_id in ids.items()
         }

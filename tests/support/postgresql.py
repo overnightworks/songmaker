@@ -292,7 +292,7 @@ class PostgresqlTestDatabases:
             self._lock_and_raise_on_drift(connection, baseline)
             leak = self._terminate_lingering_clients(connection)
             for table in reversed(baseline.tables_referenced_first):
-                connection.execute(text(f"DELETE FROM {table}"))
+                connection.execute(text(f"DELETE FROM {table}"))  # noqa: S608 - tables from the recorded schema
             cursor = connection.connection.driver_connection.cursor()
             for table, rows in baseline.rows_in_restore_order:
                 cursor.copy_expert(f"COPY {table} FROM STDIN", BytesIO(rows))

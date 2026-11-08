@@ -117,7 +117,7 @@ class LoraTrainingJobConfig:
 # Where the container runtime mounts secret files. acestep_worker/constants.py
 # keeps its own copy: the engine packages never import songmaker_cli.
 SECRETS_DIRECTORY: Final[Path] = Path("/run/secrets")
-DATABASE_PASSWORD_SECRET_FILE: Final[str] = "postgres_password"
+DATABASE_PASSWORD_SECRET_FILE: Final[str] = "postgres_password"  # noqa: S105 - a file name, not a secret
 
 
 def _find_env_file() -> Path | None:
