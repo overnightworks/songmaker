@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "6df29577217566b7cb29772be081df0e59dd3b40"
 branch = "claude/issue-2748-daily-cleanup-deletes-announced-refs"
-scope = ["docker/.env.docker.example", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/reference_audio.py", "src/songmaker_cli/settings.py", "tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_reference_announced_deletion_postgres.py", "tests/songmaker_cli/test_reference_audio_announced_deletion.py", "tests/support/reference_countdown.py", "tests/support/reference_take_world.py"]
+scope = ["docker/.env.docker.example", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/reference_audio.py", "src/songmaker_cli/settings.py", "tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_reference_announced_deletion_postgres.py", "tests/songmaker_cli/test_reference_api_delete_postgres.py", "tests/songmaker_cli/test_reference_audio_announced_deletion.py", "tests/support/reference_countdown.py", "tests/support/reference_take_world.py"]
 opened_commit = "810fa5d0aaf1691f475ed29316373769e1b843aa"
 whole_reason = "The deletion, its query owner and the cron that orders it are one invariant, and the documents state what it changes."
