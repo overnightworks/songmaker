@@ -1,7 +1,0 @@
-claim_id = "4be38f5608984d9fa295bb82cc3b6844"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "adf3b9a99126e243bb5ec92bd3469485e0614d7f"
-branch = "claude/issue-2655-autodeploy-lock-test-vanished-child"
-scope = ["tests/test_auto_deploy_lock.py"]
-opened_commit = "c97e0f65a1b9e2ace07b5f810fc92622b2849285"
