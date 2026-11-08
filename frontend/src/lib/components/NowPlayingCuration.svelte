@@ -116,7 +116,7 @@
 	}
 	.curate-btn:hover:not(:disabled) {
 		color: var(--text);
-		border-color: var(--primary);
+		border-color: var(--accent);
 		background: var(--surface-hover);
 	}
 	.curate-btn:disabled {
@@ -131,8 +131,6 @@
 	.curate-btn.pick {
 		width: 60px;
 		height: 60px;
-		border-color: var(--primary);
-		color: var(--primary);
 	}
 	.curate-btn.pick.on {
 		border-color: var(--accent);
