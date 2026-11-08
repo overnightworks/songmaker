@@ -145,4 +145,3 @@ def init_db(url: URL | str) -> sessionmaker[Session]:
     wait_for_database(url)
     _run_migrations(url)
     return connect_db(url)
-

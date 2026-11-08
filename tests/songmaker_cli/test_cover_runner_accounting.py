@@ -24,7 +24,6 @@ from songmaker_cli import cover_runner
 from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
-from songmaker_cli.timestamps import aware_timestamp
 
 STARTED = datetime(2026, 10, 18, tzinfo=timezone.utc)
 GENERATED_PIXEL = (20, 80, 160)
@@ -82,7 +81,7 @@ def _assert_cover_accounting(factory, audio_dir, status):
         job = session.get(Job, "cover")
         assert job.status == status
         assert job.user_id == "owner"
-        assert aware_timestamp(job.started_at) == STARTED
+        assert job.started_at == STARTED
         produced = status == JobStatus.COMPLETED
         assert count_cover_jobs_since(session, "album", STARTED) == int(produced)
         suggestions = session.query(AlbumCoverSuggestion).all()
@@ -282,7 +281,7 @@ def test_album_deletion_retains_cover_history(accounting_factory, running_cover,
         assert job.album_id is None
         assert job.user_id == "owner"
         assert job.status == status
-        assert aware_timestamp(job.started_at) == STARTED
+        assert job.started_at == STARTED
         assert session.query(AlbumCoverSuggestion).count() == 0
 
 
@@ -355,6 +354,6 @@ def test_migration_preserves_usage_across_upgrade_album_deletion_and_downgrade(
                     assert job.album_id == (None if original_album == "deleted" else "retained")
                     assert job.status == original_status
                     assert job.user_id == "owner"
-                    assert aware_timestamp(job.started_at) == STARTED
+                    assert job.started_at == STARTED
     finally:
         engine.dispose()

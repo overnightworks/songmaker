@@ -60,8 +60,8 @@
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1291
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1857
 "tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4585
-"tests/songmaker_cli/test_db.py" = 2449
+"tests/songmaker_cli/test_api.py" = 4584
+"tests/songmaker_cli/test_db.py" = 2448
 "tests/songmaker_cli/test_db_postgresql.py" = 832
 "tests/songmaker_cli/test_jobs.py" = 3215
 "tests/songmaker_cli/test_library_api.py" = 1626
