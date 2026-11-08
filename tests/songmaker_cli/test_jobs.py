@@ -2699,7 +2699,8 @@ def test_download_model_on_worker_unreachable(seeded_db) -> None:
         assert job.error_type == "worker_unreachable"
 
 
-def test_download_model_on_worker_returns_5xx(seeded_db) -> None:
+@pytest.mark.parametrize("response_format", ["text", "json", "empty", "whitespace"])
+def test_download_model_on_worker_returns_5xx(seeded_db, response_format: str) -> None:
     from unittest.mock import AsyncMock
 
     from songmaker_cli.jobs import download_model_on_worker
@@ -2708,15 +2709,13 @@ def test_download_model_on_worker_returns_5xx(seeded_db) -> None:
     redis = _FakeRedis()
     _seed_online_worker(seeded_db, redis)
 
-    fake_response = MagicMock(status_code=500, text="boom")
+    fake_response, cause = _worker_failure_response(500, response_format, "disk full")
     fake_client = AsyncMock()
     fake_client.post = AsyncMock(return_value=fake_response)
     fake_client.__aenter__ = AsyncMock(return_value=fake_client)
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
-    with (
-        patch("httpx.AsyncClient", return_value=fake_client),
-    ):
+    with patch("httpx.AsyncClient", return_value=fake_client):
         run_async(download_model_on_worker(
             {"redis": redis}, "dl4", "sft", db_factory=seeded_db,
         ))
@@ -2725,6 +2724,7 @@ def test_download_model_on_worker_returns_5xx(seeded_db) -> None:
         job = get_job(session, "dl4")
         assert job.status == "failed"
         assert job.error_type == "worker_error"
+        assert job.error == cause
 
 
 def test_download_model_on_worker_happy_path(seeded_db, internal_token: str) -> None:

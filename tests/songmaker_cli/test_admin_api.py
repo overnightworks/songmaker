@@ -626,53 +626,13 @@ def test_evict_model_unknown_mode(client: TestClient) -> None:
     assert resp.status_code == 400
 
 
-def test_evict_model_worker_unreachable(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    import httpx
-
-    _login_as_admin(client)
-    _seed_worker(client, "w1")
-
-    fake_client = AsyncMock()
-    fake_client.post = AsyncMock(side_effect=httpx.ConnectError("refused"))
-    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
-    fake_client.__aexit__ = AsyncMock(return_value=False)
-
-    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
-        resp = client.post(
-            "/api/admin/workers/w1/evict_model", json={"mode": "sft"},
-        )
-    assert resp.status_code == 502
+# ── evict_model, pin_model and unpin_model refusals ─────────────────
 
 
-def test_evict_model_worker_returns_4xx(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, MagicMock, patch
-
-    _login_as_admin(client)
-    _seed_worker(client, "w1")
-
-    fake_response = MagicMock()
-    fake_response.status_code = 500
-    fake_client = AsyncMock()
-    fake_client.post = AsyncMock(return_value=fake_response)
-    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
-    fake_client.__aexit__ = AsyncMock(return_value=False)
-
-    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
-        resp = client.post(
-            "/api/admin/workers/w1/evict_model", json={"mode": "sft"},
-        )
-    assert resp.status_code == 502
+_MODEL_ACTIONS = pytest.mark.parametrize("action", ["evict_model", "pin_model", "unpin_model"])
 
 
-# ── pin_model and unpin_model endpoints ─────────────────────────────
-
-
-_PIN_ACTIONS = pytest.mark.parametrize("action", ["pin_model", "unpin_model"])
-
-
-@_PIN_ACTIONS
+@_MODEL_ACTIONS
 def test_pin_model_on_worker_success(
     client: TestClient, internal_token: str, action: str,
 ) -> None:
@@ -699,7 +659,7 @@ def test_pin_model_on_worker_success(
     assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == internal_token
 
 
-@_PIN_ACTIONS
+@_MODEL_ACTIONS
 def test_pin_model_unknown_worker(client: TestClient, action: str) -> None:
     _login_as_admin(client)
     resp = client.post(
@@ -708,7 +668,7 @@ def test_pin_model_unknown_worker(client: TestClient, action: str) -> None:
     assert resp.status_code == 404
 
 
-@_PIN_ACTIONS
+@_MODEL_ACTIONS
 def test_pin_model_unknown_mode(client: TestClient, action: str) -> None:
     _login_as_admin(client)
     _seed_worker(client, "w1")
@@ -718,17 +678,19 @@ def test_pin_model_unknown_mode(client: TestClient, action: str) -> None:
     assert resp.status_code == 400
 
 
+@_MODEL_ACTIONS
 @pytest.mark.parametrize(
     ("status_code", "content", "expected_status", "expected_detail"),
     [
-        (409, b'{"detail": "Cannot pin sft: not loaded"}', 409, "Cannot pin sft: not loaded"),
+        (409, b'{"detail": "sft is in use"}', 409, "sft is in use"),
         (400, b"plain text refusal", 400, "plain text refusal"),
         (500, b"", 502, "Worker returned 500 with no detail"),
     ],
     ids=["json-detail", "non-json-body", "empty-body"],
 )
-def test_pin_model_worker_error_detail_reaches_the_admin(
+def test_model_command_worker_refusal_reaches_the_admin(
     client: TestClient,
+    action: str,
     status_code: int,
     content: bytes,
     expected_status: int,
@@ -749,13 +711,14 @@ def test_pin_model_worker_error_detail_reaches_the_admin(
 
     with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
         resp = client.post(
-            "/api/admin/workers/w1/pin_model", json={"mode": "sft"},
+            f"/api/admin/workers/w1/{action}", json={"mode": "sft"},
         )
     assert resp.status_code == expected_status
     assert resp.json()["detail"] == expected_detail
 
 
-def test_pin_model_worker_unreachable(client: TestClient) -> None:
+@_MODEL_ACTIONS
+def test_model_command_worker_unreachable(client: TestClient, action: str) -> None:
     from unittest.mock import AsyncMock, patch
 
     import httpx
@@ -770,7 +733,7 @@ def test_pin_model_worker_unreachable(client: TestClient) -> None:
 
     with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
         resp = client.post(
-            "/api/admin/workers/w1/pin_model", json={"mode": "sft"},
+            f"/api/admin/workers/w1/{action}", json={"mode": "sft"},
         )
     assert resp.status_code == 502
 
