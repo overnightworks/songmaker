@@ -1,0 +1,8 @@
+claim_id = "d35090d801334b8289081d5b6e2b264f"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "34a264c1f6ab489c928e26fd3d946f8f53f03942"
+branch = "claude/issue-2758-now-mini-reference-queue-constants"
+scope = ["frontend/e2e", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/stores", "frontend/src/routes/settings/references", "quality/baseline.toml"]
+opened_commit = "1b32201f3eb7983708ba256eeb207f18cd6d2911"
+whole_reason = "One pure move: the families leave the catch-all together, and every caller re-points in the same change, or the build breaks."
