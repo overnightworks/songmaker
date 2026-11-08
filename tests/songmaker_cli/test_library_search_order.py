@@ -17,7 +17,7 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_OLDEST,
     LIBRARY_SORT_TITLE,
 )
-from songmaker_cli.db.models import Album, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Song, User, Version
 from songmaker_cli.library_cursor import decode_library_cursor
 
 OWNER = "order-owner"
@@ -63,6 +63,21 @@ def _seed_differing_and_tied_times(session) -> None:
     _album(session, "a-tie-2", "Tie two mix", 3)
     _song(session, "s-mid", "Mid mix", "a-early", 2)
     _song(session, "s-tie", "Tie song mix", "a-early", 3)
+
+
+def _seed_song_with_two_versions_and_two_takes(session) -> None:
+    _album(session, "dup-album", "Dup mix", 10)
+    _song(session, "dup-song", "Dup mix", "dup-album", 20)
+    second_version = Version(
+        song_id="dup-song", version_number=2, lyrics="lyrics two", prompt="prompt two",
+    )
+    session.add(second_version)
+    session.flush()
+    for number in (1, 2):
+        session.add(Generation(
+            song_id="dup-song", version_id=second_version.id, generation_number=number,
+            mp3_path=f"dup-song/{number}.mp3",
+        ))
 
 
 def _hit_ids(items: list[dict]) -> list[str]:
@@ -142,6 +157,18 @@ ORDERS = [
         _seed_differing_and_tied_times, LIBRARY_SORT_NEWEST,
         ["a-tie-2", "a-tie-1", "s-tie", "s-mid", "a-early"],
         id="newest-merges-differing-and-tied-times",
+    ),
+    pytest.param(
+        _seed_song_with_two_versions_and_two_takes, LIBRARY_SORT_TITLE, ["dup-album", "dup-song"],
+        id="title-lists-a-song-with-two-versions-and-two-takes-once",
+    ),
+    pytest.param(
+        _seed_song_with_two_versions_and_two_takes, LIBRARY_SORT_OLDEST, ["dup-album", "dup-song"],
+        id="oldest-lists-a-song-with-two-versions-and-two-takes-once",
+    ),
+    pytest.param(
+        _seed_song_with_two_versions_and_two_takes, LIBRARY_SORT_NEWEST, ["dup-song", "dup-album"],
+        id="newest-lists-a-song-with-two-versions-and-two-takes-once",
     ),
 ]
 
