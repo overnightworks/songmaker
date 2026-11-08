@@ -2,10 +2,10 @@
 Description=Songmaker pull-based auto-deploy tick (issue #298)
 After=docker.service songmaker.service
 Requires=docker.service
-# Only a hard unit failure (non-zero exit from auto-deploy.sh itself, e.g.
+# Only a hard unit failure (non-zero exit from run_autodeploy.sh itself, e.g.
 # the shell failing to start) triggers this — not the script's own
 # consecutive-failure counter, which already alerts independently once N
-# ticks in a row are stuck (see auto-deploy.sh's record_failure). This
+# ticks in a row are stuck (see run_autodeploy.sh's record_failure). This
 # closes the other gap: the failure this counter can never see because the
 # tick died before ever reaching it (issue #333).
 OnFailure=songmaker-alert@%n.service
@@ -14,13 +14,13 @@ OnFailure=songmaker-alert@%n.service
 Type=oneshot
 # WorkingDirectory, ExecStart, and User below are placeholders (this repo's
 # canonical checkout/owner), kept concrete only so `systemd-analyze verify`
-# can check absolute paths. scripts/install-autodeploy.sh always overwrites
+# can check absolute paths. scripts/install_autodeploy.sh always overwrites
 # all three with the real project root and invoking user at install time —
 # copying this file by hand instead of running that script inherits these
 # values as-is, which is very likely wrong for a different checkout or
 # operator.
 WorkingDirectory=/home/felix-hummert/srv/songmaker
-ExecStart=/home/felix-hummert/srv/songmaker/scripts/auto-deploy.sh
+ExecStart=/home/felix-hummert/srv/songmaker/scripts/run_autodeploy.sh
 User=felix-hummert
 # No Group= override: the stack owner (User= above) is already a member of
 # the docker group, so the process inherits it as a supplementary group.
@@ -29,7 +29,7 @@ User=felix-hummert
 #
 # No StateDirectory: the consecutive-failure counter, the consecutive-
 # busy-deferral counter, and the deployed.sha marker all live inside the
-# checkout's own git ADMIN directory instead, resolved by auto-deploy.sh at
+# checkout's own git ADMIN directory instead, resolved by run_autodeploy.sh at
 # runtime via `git rev-parse --absolute-git-dir` (NOT a fixed path — see its
 # header for why a linked worktree needs this resolved rather than assumed).
 # A StateDirectory here would be a second location the unit run and a

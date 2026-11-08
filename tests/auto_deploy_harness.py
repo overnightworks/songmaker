@@ -1,4 +1,4 @@
-"""A throwaway deploy checkout for driving scripts/auto-deploy.sh as a real subprocess.
+"""A throwaway deploy checkout for driving scripts/run_autodeploy.sh as a real subprocess.
 
 The script is copied into a git checkout with its own origin and runs with
 ``logger``, ``docker``, ``gh``, ``curl`` and ``date`` replaced by fakes on PATH:

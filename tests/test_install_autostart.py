@@ -152,3 +152,18 @@ def test_installer_writes_a_unit_without_preflight_or_mirror_requirement(
     ]
     assert ordering
     assert not any("songmaker-cli-credentials-mirror" in line for line in ordering)
+
+
+def test_installer_writes_an_alert_unit_that_starts_the_send_script_of_the_checkout(
+    run_autostart,
+) -> None:
+    result = run_autostart()
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    alert_unit = (run_autostart.units / "songmaker-alert@.service").read_text()
+    exec_start = next(
+        line.removeprefix("ExecStart=")
+        for line in alert_unit.splitlines()
+        if line.startswith("ExecStart=")
+    )
+    assert exec_start.startswith(f"{run_autostart.checkout}/scripts/send_alert.sh ")

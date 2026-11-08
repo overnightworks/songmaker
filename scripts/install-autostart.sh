@@ -58,14 +58,14 @@ UNIT_DIR="${SONGMAKER_UNIT_DIR:-/etc/systemd/system}"
 UNIT_TARGET="$UNIT_DIR/songmaker.service"
 # The shared alert template unit (issue #333) — songmaker.service above
 # declares OnFailure=songmaker-alert@%n.service, so it must exist before
-# that unit is installed. install-autodeploy.sh installs the same file
+# that unit is installed. install_autodeploy.sh installs the same file
 # for songmaker-autodeploy.service; both installers are idempotent and
 # derive the same WorkingDirectory/User from their own checkout, so
 # running either (or both) converges on one identical installed unit.
 ALERT_UNIT_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"
 ALERT_UNIT_TARGET="$UNIT_DIR/songmaker-alert@.service"
 ALERT_SCRIPT="$SCRIPT_DIR/send_alert.sh"
-# Sourced by send_alert.sh (and by auto-deploy.sh) for the .env keys that
+# Sourced by send_alert.sh (and by run_autodeploy.sh) for the .env keys that
 # configure the channel — a checkout missing it has no alert channel at
 # all, which is exactly what must not be discovered during an outage.
 ALERT_CONFIG_LIB="$SCRIPT_DIR/alert_config.sh"

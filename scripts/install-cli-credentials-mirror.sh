@@ -105,7 +105,7 @@ MIRROR_SCRIPT="$SCRIPT_DIR/mirror_agent_cli_credentials.py"
 CHECK_SCRIPT="$SCRIPT_DIR/check_agent_cli_mounts.sh"
 # The shared alert template unit (issue #333) — the mirror service declares
 # OnFailure=songmaker-alert@%n.service, so it must exist before that unit is
-# installed. install-autostart.sh and install-autodeploy.sh install the same
+# installed. install-autostart.sh and install_autodeploy.sh install the same
 # file; all of them are idempotent and derive the same WorkingDirectory/User
 # from their own checkout.
 ALERT_SERVICE_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"

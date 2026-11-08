@@ -1,7 +1,7 @@
 #!/bin/bash
 # Installs the Songmaker pull-based auto-deploy systemd units (issue #298).
 #
-# scripts/songmaker-autodeploy.service runs scripts/auto-deploy.sh once;
+# scripts/songmaker-autodeploy.service runs scripts/run_autodeploy.sh once;
 # scripts/songmaker-autodeploy.timer fires it every ~2 minutes. The script
 # itself does the actual git-fetch/compare, guard checks, `docker compose
 # build`, and `docker compose up -d --wait` — see its header for the full
@@ -25,7 +25,7 @@
 # recreate containers and kill an in-flight generation — the operator has to
 # choose that moment deliberately. Starting songmaker-autodeploy.timer only
 # arms a ~2-minute schedule; the first tick it triggers goes through
-# auto-deploy.sh's own guards in order — up-to-date short-circuit (including
+# run_autodeploy.sh's own guards in order — up-to-date short-circuit (including
 # the deployed.sha check), work-clone (branch) check, dirty-tree check,
 # active-jobs check before AND after the build — before it would ever touch
 # the stack. Its very first-ever tick (no deployed.sha yet) ADOPTS the
@@ -39,13 +39,13 @@
 # enable/start, all no-ops if already applied. If a unit file's content
 # changed since the last install, `daemon-reload` picks up the new file
 # immediately; the timer re-evaluates its schedule as usual, but an
-# in-progress auto-deploy.sh run (already forked off by the previous unit
+# in-progress run_autodeploy.sh run (already forked off by the previous unit
 # generation) is not affected until its next invocation.
 #
 # Usage:
-#   ./scripts/install-autodeploy.sh
+#   ./scripts/install_autodeploy.sh
 #
-# Prerequisites: Docker Compose v2 and jq. auto-deploy.sh uses jq to read the
+# Prerequisites: Docker Compose v2 and jq. run_autodeploy.sh uses jq to read the
 # non-interpolated Compose project and build-service list before a recreate.
 
 set -euo pipefail
@@ -68,10 +68,11 @@ if [[ "$PROJECT_ROOT" == *%* || "$PROJECT_ROOT" =~ [[:space:]] ]]; then
 fi
 
 SERVICE_SOURCE="$SCRIPT_DIR/songmaker-autodeploy.service"
-SERVICE_TARGET="/etc/systemd/system/songmaker-autodeploy.service"
+UNIT_DIR="${SONGMAKER_UNIT_DIR:-/etc/systemd/system}"
+SERVICE_TARGET="$UNIT_DIR/songmaker-autodeploy.service"
 TIMER_SOURCE="$SCRIPT_DIR/songmaker-autodeploy.timer"
-TIMER_TARGET="/etc/systemd/system/songmaker-autodeploy.timer"
-DEPLOY_SCRIPT="$SCRIPT_DIR/auto-deploy.sh"
+TIMER_TARGET="$UNIT_DIR/songmaker-autodeploy.timer"
+DEPLOY_SCRIPT="$SCRIPT_DIR/run_autodeploy.sh"
 # The shared alert template unit (issue #333) — songmaker-autodeploy.service
 # above declares OnFailure=songmaker-alert@%n.service, so it must exist
 # before that unit is installed. install-autostart.sh installs the same
@@ -79,9 +80,9 @@ DEPLOY_SCRIPT="$SCRIPT_DIR/auto-deploy.sh"
 # the same WorkingDirectory/User from their own checkout, so running
 # either (or both) converges on one identical installed unit.
 ALERT_SERVICE_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"
-ALERT_SERVICE_TARGET="/etc/systemd/system/songmaker-alert@.service"
+ALERT_SERVICE_TARGET="$UNIT_DIR/songmaker-alert@.service"
 ALERT_SCRIPT="$SCRIPT_DIR/send_alert.sh"
-# Sourced by send_alert.sh (and by auto-deploy.sh) for the .env keys that
+# Sourced by send_alert.sh (and by run_autodeploy.sh) for the .env keys that
 # configure the channel — a checkout missing it has no alert channel at
 # all, which is exactly what must not be discovered during an outage.
 ALERT_CONFIG_LIB="$SCRIPT_DIR/alert_config.sh"
@@ -122,7 +123,7 @@ if [[ "$INSTALL_USER" = "root" ]]; then
     echo "would get User=root and HOME=/root — that silently breaks the .env and" >&2
     echo "docker group membership the deploy needs from the stack owner's account." >&2
     echo "Log in as the user the stack belongs to and run:" >&2
-    echo "  sudo ./scripts/install-autodeploy.sh" >&2
+    echo "  sudo ./scripts/install_autodeploy.sh" >&2
     exit 1
 fi
 
@@ -143,7 +144,7 @@ sed_escape_replacement() {
 
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
-ESCAPED_DEPLOY_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/auto-deploy.sh")"
+ESCAPED_DEPLOY_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/run_autodeploy.sh")"
 ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/send_alert.sh")"
 
 TMP_SERVICE="$(mktemp)"
@@ -166,7 +167,7 @@ sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
 echo "Installing $ALERT_SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/send_alert.sh ..., User=$INSTALL_USER)..."
 sudo install -m 0644 "$TMP_ALERT_SERVICE" "$ALERT_SERVICE_TARGET"
 
-echo "Installing $SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/auto-deploy.sh, User=$INSTALL_USER)..."
+echo "Installing $SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/run_autodeploy.sh, User=$INSTALL_USER)..."
 sudo install -m 0644 "$TMP_SERVICE" "$SERVICE_TARGET"
 
 echo "Installing $TIMER_TARGET..."
@@ -181,7 +182,7 @@ sudo systemctl enable --now songmaker-autodeploy.timer
 echo
 echo "Done. songmaker-autodeploy.timer is armed and will tick every ~2 minutes."
 echo "The first tick runs within 2 minutes and is safe to run against the live"
-echo "stack: auto-deploy.sh only redeploys when a new release tag (vYYYY.MM.DD.N)"
+echo "stack: run_autodeploy.sh only redeploys when a new release tag (vYYYY.MM.DD.N)"
 echo "is on origin/main and green, the checkout is detached and clean, and no"
 echo "jobs are active."
 echo
@@ -192,7 +193,7 @@ echo "longer when one of them waits out a slow deploy), then again once an"
 echo "hour for as long as it stays stuck."
 echo "Set ALERT_EMAIL_TO/SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD in"
 echo ".env for this to actually send — without them the stack's alertmanager"
-echo "refuses to start and auto-deploy.sh refuses to deploy, both naming the"
+echo "refuses to start and run_autodeploy.sh refuses to deploy, both naming the"
 echo "missing keys, instead of silently doing nothing."
 echo
 echo "To verify what's installed:"

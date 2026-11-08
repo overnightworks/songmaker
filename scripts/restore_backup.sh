@@ -41,7 +41,7 @@ fail() {
 }
 
 autodeploy_lock_file() {
-    # Same path auto-deploy.sh locks: its override, else the git admin directory.
+    # Same path run_autodeploy.sh locks: its override, else the git admin directory.
     echo "${SONGMAKER_AUTODEPLOY_LOCK_FILE:-$(git rev-parse --absolute-git-dir)/songmaker-autodeploy.lock}"
 }
 

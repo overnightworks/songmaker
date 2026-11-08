@@ -1,7 +1,7 @@
 #!/bin/bash
 # The one place that knows which .env keys configure the alert channel
 # (issue #333), sourced by both users of that answer: scripts/send_alert.sh,
-# which needs the values to send, and scripts/auto-deploy.sh, which only
+# which needs the values to send, and scripts/run_autodeploy.sh, which only
 # needs to know whether a deploy is even possible before it starts
 # containers whose alertmanager refuses to run without them.
 #
