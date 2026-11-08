@@ -6,7 +6,7 @@ exactly as in production and only its key set is the fake issuer's.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -21,6 +21,8 @@ from support.mcp_world import (
     MCP_CLIENT_ENVIRONMENT,
     MCP_SCOPE,
     METADATA_URL,
+    PROTOCOL_HEADER,
+    PROTOCOL_VERSION,
     RESOURCE_URL,
     McpWorld,
     build_mcp_world,
@@ -99,9 +101,10 @@ def test_m2_the_read_tools_give_the_persons_own_content_as_the_api_does(mcp: Mcp
 
 def test_m3_an_admins_agent_sees_only_the_admins_own_content(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, alice_role="admin")
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
     world.world.seed_take(TokenWorld.ALICE, "alices")
     world.world.seed_take(TokenWorld.BOB, "bobs")
     groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
@@ -151,9 +154,10 @@ def test_m18_create_album_makes_an_album_owned_and_audited_as_the_person(mcp: Mc
 
 def test_m24_an_admins_agent_cannot_write_into_or_generate_for_another_persons_content(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, alice_role="admin")
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
     world.world.seed_take(TokenWorld.BOB, "bobs")
     groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
 
@@ -393,6 +397,23 @@ def test_m11_without_a_bearer_or_with_only_a_cookie_the_answer_is_the_401_challe
         assert f'scope="{MCP_SCOPE}"' in challenge
 
 
+@pytest.mark.parametrize(
+    "revision_headers",
+    [pytest.param({}, id="absent"), pytest.param({PROTOCOL_HEADER: "2025-11-25"}, id="older")],
+)
+def test_m11_a_request_without_the_served_revision_is_refused_and_lists_the_served_one(
+    mcp: McpWorld, revision_headers: dict[str, str],
+) -> None:
+    reply = mcp.world.client.post(
+        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        headers={**mcp.agent(), **revision_headers},
+    )
+
+    assert reply.status_code == 400
+    assert reply.json()["error"]["code"] == -32022
+    assert reply.json()["error"]["data"]["supported"] == [PROTOCOL_VERSION]
+
+
 def test_m12_the_resource_metadata_names_the_derived_url_and_the_issuer(mcp: McpWorld) -> None:
     reply = mcp.world.client.get("/.well-known/oauth-protected-resource/mcp")
 
@@ -409,8 +430,9 @@ def test_m12_the_resource_metadata_names_the_derived_url_and_the_issuer(mcp: Mcp
 
 def test_m13_with_the_mcp_values_unset_mcp_and_its_metadata_answer_as_they_did(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack,
 ) -> None:
-    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, mcp_environment={})
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, mcp_environment={})
 
     posted = world.world.client.post("/mcp", headers=world.agent())
     fetched = world.world.client.get("/mcp", headers=world.agent())
@@ -544,9 +566,10 @@ def test_m16_generate_for_another_persons_song_or_a_song_without_lyrics_queues_n
 
 def test_m17_generate_past_the_persons_limit_gets_the_apis_refusal_and_no_job(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, generation_limit=1)
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, generation_limit=1)
     world.world.seed_take(TokenWorld.ALICE, "alices")
 
     with _worker_ready():
@@ -599,9 +622,10 @@ def test_m21_a_valid_cookie_beside_an_invalid_bearer_is_401_and_creates_nothing(
 
 def test_m26_with_no_token_client_the_resource_still_admits_and_person_paths_refuse_a_bearer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack,
 ) -> None:
     monkeypatch.delenv("TOKEN_CLIENTS", raising=False)
-    world = build_mcp_world(tmp_path, monkeypatch, pg_factory)
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans)
     world.world.seed_take(TokenWorld.ALICE, "alices")
 
     listed = world.call("list_songs")
@@ -638,6 +662,8 @@ def test_m25_each_marked_method_and_template_resolves_to_its_marked_endpoint(
 ) -> None:
     app = mcp.world.client.app
     resolved: list[tuple[str, str, str]] = []
+    # The lifespan has already built the stack; the next request builds it again with the recorder.
+    app.middleware_stack = None
     app.add_middleware(_EndpointRecorder, resolved=resolved)
     marks = collect_route_tools(app).marks
     operations = app.openapi()["paths"]

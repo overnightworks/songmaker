@@ -27,6 +27,7 @@ from songmaker_cli.agent.mcp import (
     build_protected_resource,
     collect_route_tools,
     mount_mcp_front,
+    running_mcp_front,
 )
 from songmaker_cli.app_context import (
     AppContext,
@@ -143,7 +144,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             ),
         )
     try:
-        yield
+        async with running_mcp_front(app):
+            yield
     finally:
         registry.begin_shutdown()
         for _name, task in loop_tasks:
@@ -313,8 +315,7 @@ def create_app(
 
     # Starlette builds the middleware stack at the first request, so the routes added here
     # still sit behind the whole block above.
-    if mcp_resource is not None:
-        mount_mcp_front(app, agent_tools, mcp_resource, app.state.oidc_sign_in)
+    app.state.mcp_front = mount_mcp_front(app, agent_tools, mcp_resource, app.state.oidc_sign_in)
 
     app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
 

@@ -140,7 +140,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"create_app" = 143
+"create_app" = 142
 
 [function_lines."tests/acestep_worker/test_wrapper_train_lora.py"]
 "_make_deps" = 76
