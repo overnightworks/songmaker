@@ -93,7 +93,7 @@
 	<span class="reference-text">
 		<span class="reference-name" title={reference.filename}>{reference.filename}</span>
 		<span class="reference-meta"
-			>{metaLabel()}{#if deletion}{META_SEPARATOR}<span
+			>{metaLabel()}{#if deletion}<span
 					class="exp"
 					class:warn={deletion.days <= EXPIRY_WARN_DAYS}
 					title={deletion.tooltip}>⏳ {deletion.days}d</span
@@ -233,6 +233,7 @@
 
 	.exp {
 		display: inline-block;
+		margin-inline-start: 6px;
 		padding: 0 5px;
 		border: 1px solid var(--border);
 		border-radius: var(--btn-radius-sm);

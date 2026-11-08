@@ -50,18 +50,22 @@
 	const referenceReloads = reloadWhileUnreachable(() => void load());
 	const loadFailure = referenceReloads.loadFailure;
 
+	let now = $state(new Date());
+	let listElement = $state<HTMLUListElement | null>(null);
 	let countdownAcknowledged = false;
 
-	// The post starts the deletion clock, so it follows a render that shows a countdown. A
-	// failed post changes nothing visible: the clock has not started, which only moves the
-	// dates later, and the next page load posts again.
-	async function acknowledgeShownCountdown(answer: ReferenceListResponse) {
-		const { countdown_epoch: epoch } = answer;
+	// The post starts the deletion clock, so it follows a render that shows a countdown, read from
+	// the list on screen: a page already left posts nothing. A failed post changes nothing
+	// visible: the clock has not started, which only moves the dates later, and the next page
+	// load posts again.
+	async function acknowledgeShownCountdown(epoch: string | null) {
 		if (countdownAcknowledged || epoch === null) return;
-		if (!answer.references.some((reference) => reference.deletes_at !== null)) return;
-		await tick();
-		if (countdownAcknowledged) return;
 		countdownAcknowledged = true;
+		await tick();
+		if (!listElement?.querySelector('.exp')) {
+			countdownAcknowledged = false;
+			return;
+		}
 		await acknowledgeCountdown(epoch).catch(() => undefined);
 	}
 
@@ -73,10 +77,11 @@
 			referenceReloads.nameLoadFailure(e, LOAD_FAILED);
 			return;
 		}
+		now = new Date();
 		references = answer.references;
 		usage = answer.usage;
 		referenceReloads.stop();
-		void acknowledgeShownCountdown(answer);
+		void acknowledgeShownCountdown(answer.countdown_epoch);
 	}
 
 	const megabytes = (bytes: number) => Math.floor(bytes / BYTES_PER_MB);
@@ -318,8 +323,7 @@
 			/>
 		{/if}
 	{:else}
-		{@const now = new Date()}
-		<ul class="reference-list">
+		<ul class="reference-list" bind:this={listElement}>
 			{#each references as reference (reference.id)}
 				{@const playing = activeId === reference.id}
 				<ReferenceRow

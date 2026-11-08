@@ -199,4 +199,61 @@ describe('the countdown acknowledgement', () => {
 		await vi.waitFor(() => expect(mocks.acknowledgeCountdown).toHaveBeenCalledWith(EPOCH));
 		expect(mocks.acknowledgeCountdown).toHaveBeenCalledTimes(1);
 	});
+
+	it('posts nothing when the page is left before the list answers', async () => {
+		let answer: (value: ReturnType<typeof answerWith>) => void = () => undefined;
+		mocks.listReferences.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+		await renderReferencesPage();
+		await unmountReferencesPage();
+
+		answer(answerWith([{ id: 'a', deletes_at: deletesInDays(10) }], EPOCH));
+		await settle();
+
+		expect(mocks.acknowledgeCountdown).not.toHaveBeenCalled();
+	});
+
+	it('posts again when the page is left and opened anew', async () => {
+		mocks.listReferences.mockResolvedValue(
+			answerWith([{ id: 'a', deletes_at: deletesInDays(10) }], EPOCH)
+		);
+		await renderReferencesPage();
+		await vi.waitFor(() => expect(mocks.acknowledgeCountdown).toHaveBeenCalledTimes(1));
+		await unmountReferencesPage();
+
+		await renderReferencesPage();
+
+		await vi.waitFor(() => expect(mocks.acknowledgeCountdown).toHaveBeenCalledTimes(2));
+	});
+
+	it('posts on the next page load after a failed post', async () => {
+		mocks.acknowledgeCountdown.mockRejectedValueOnce(
+			new ApiError(500, '', '/api/references/countdown-shown')
+		);
+		mocks.listReferences.mockResolvedValue(
+			answerWith([{ id: 'a', deletes_at: deletesInDays(10) }], EPOCH)
+		);
+		await renderReferencesPage();
+		await vi.waitFor(() => expect(mocks.acknowledgeCountdown).toHaveBeenCalledTimes(1));
+		await settle();
+		await unmountReferencesPage();
+
+		await renderReferencesPage();
+
+		await vi.waitFor(() => expect(mocks.acknowledgeCountdown).toHaveBeenCalledTimes(2));
+	});
+});
+
+describe('the countdown clock', () => {
+	it('counts from the time of the latest load', async () => {
+		mocks.listReferences.mockResolvedValue(
+			answerWith([{ id: 'a', deletes_at: deletesInDays(10) }], EPOCH)
+		);
+		const target = await renderReferencesPage();
+		await vi.waitFor(() => expect(badgeOf(target)?.textContent?.trim()).toBe('⏳ 10d'));
+		vi.setSystemTime(new Date(NOW.getTime() + 2 * 86_400_000));
+
+		(target.querySelector('.reference-keep') as HTMLButtonElement).click();
+
+		await vi.waitFor(() => expect(badgeOf(target)?.textContent?.trim()).toBe('⏳ 8d'));
+	});
 });
