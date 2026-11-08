@@ -30,7 +30,7 @@ def test_stored_refuses_the_reference_path_a_take_no_longer_carries() -> None:
         StoredGenerationParams.model_validate({"reference_audio_path": "user1/clip.wav"})
 
 
-def test_stored_refuses_the_constrained_decoding_switch_a_take_no_longer_carries() -> None:
+def test_stored_refuses_a_constrained_decoding_key() -> None:
     with pytest.raises(ValidationError, match="extra|not permitted"):
         StoredGenerationParams.model_validate({"constrained_decoding": True})
 

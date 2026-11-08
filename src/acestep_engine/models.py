@@ -49,7 +49,6 @@ class AceStepConfig:
     timesteps: str = ""
     use_cot_caption: bool = True
     use_cot_language: bool = True
-    # upstream ACE-Step hardcodes True everywhere; False causes noise on xl-sft
     lm_repetition_penalty: float = 1.0
     use_adg: bool = False
     cfg_interval_start: float = 0.0
