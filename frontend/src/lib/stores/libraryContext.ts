@@ -1047,12 +1047,9 @@ async function hydrateSelectedSong(songId: string, apply: HistoryApply): Promise
 		songList.update((list) => upsertReplace(list, song));
 		enterAlbumOfSong(song);
 		await hydrateSongAlbum(song.album_id, apply);
-	} catch (err) {
-		if (!applyStands(apply)) return;
-		if (isNotFound(err)) {
-			selectedSongId.set(null);
-			selectedGenerationId.set(null);
-		}
+	} catch {
+		// The selection stays: the load that follows a snapshot or a landing
+		// decides a 404, and the sync shows any other failure.
 	}
 }
 

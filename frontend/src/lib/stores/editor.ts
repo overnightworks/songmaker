@@ -5,6 +5,7 @@ import {
 	deleteVersion as apiDeleteVersion,
 	fetchSong
 } from '#lib/api/client.ts';
+import { isNotFound } from '#lib/api/fetch.ts';
 import { replaceSongInList } from '#lib/stores/libraryData.ts';
 import { selectedSong, selectedSongId } from '#lib/stores/player.ts';
 import { activeJobs, isActiveJobStatus } from '#lib/stores/jobs.ts';
@@ -290,6 +291,7 @@ async function loadVersions(songId: string, recover = false): Promise<void> {
 	} catch (err) {
 		if (!recover) throw err;
 		if (request !== versionLoad || get(editorState)?.songId !== songId) return;
+		if (isNotFound(err)) return;
 		const message = versionReloads.nameLoadFailure(err, VERSIONS_LOAD_FAILED);
 		if (message) addToast(message, 'error');
 	}

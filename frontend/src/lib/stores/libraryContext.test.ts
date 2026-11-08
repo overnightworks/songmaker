@@ -592,16 +592,11 @@ describe('applyLibraryHistory', () => {
 		).toEqual(['g1', 'g2']);
 	});
 
-	it('keeps the selected song after a transient fetch error but clears it on 404', async () => {
+	it.each([500, 404])('keeps the selected song after a %i on its fetch', async (status) => {
 		const { ApiError } = await import('#lib/api/fetch.ts');
-		fetchSong.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/songs/s9'));
+		fetchSong.mockRejectedValueOnce(new ApiError(status, 'failed', '/api/songs/s9'));
 		await applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's9' });
 		expect(get(selectedSongId)).toBe('s9');
-
-		fetchSong.mockRejectedValueOnce(new ApiError(404, 'gone', '/api/songs/s9'));
-		await applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's9' });
-		expect(get(selectedSongId)).toBeNull();
-		expect(get(librarySurface)).toBe('browse');
 	});
 
 	it('defaults a missing detailTab to the Edit tab without failing restore', async () => {
