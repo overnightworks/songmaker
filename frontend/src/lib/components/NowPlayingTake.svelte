@@ -2,12 +2,12 @@
 	import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 	import {
 		NOW_PLAYING_TAKE_PREFIX,
-		RECIPE_PANEL_LABEL,
 		TAKE_COVER_LABEL,
 		TAKE_REPAINT_LABEL,
 		TAKE_RESCORE_LABEL,
 		TAKE_RESCORING_LABEL
 	} from '#lib/constants.ts';
+	import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
 	import {
 		NOW_PLAYING_IMPORTED_TAKE_HEADING,
 		NOW_PLAYING_DEVIATIONS_EMPTY,

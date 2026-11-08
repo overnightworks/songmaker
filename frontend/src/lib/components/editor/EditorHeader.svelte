@@ -1,11 +1,7 @@
 <script lang="ts">
 	import type { ShareResult, SongItem } from '#lib/api/types.ts';
-	import {
-		ALBUM_COVER_ACCEPT,
-		SONG_COVER_REMOVE_LABEL,
-		SONG_NEXT_LABEL,
-		SONG_PREVIOUS_LABEL
-	} from '#lib/constants.ts';
+	import { SONG_COVER_REMOVE_LABEL, SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants.ts';
+	import { ALBUM_COVER_ACCEPT } from '#lib/constants/album.ts';
 	import Breadcrumb from '../Breadcrumb.svelte';
 	import EditableTitle from '../EditableTitle.svelte';
 	import Icon from '../Icon.svelte';

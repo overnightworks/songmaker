@@ -489,6 +489,7 @@ describe('WorkerPoolPanel model rows', () => {
 	)(
 		'defect:#1573 $action with $count models targets its model, waits for refresh, and handles refusal=$refused',
 		async ({ action, mode, label, kept, refused, count }) => {
+			const refusal = `${mode} is in use by a running song`;
 			const pool = modelsPool(count);
 			const target = await renderWorkerPool(pool);
 			let finish!: (response: Response) => void;
@@ -525,14 +526,10 @@ describe('WorkerPoolPanel model rows', () => {
 				? state.pinned?.filter((pin) => pin !== mode)
 				: [...(state.pinned ?? []), mode];
 			if (!refused) poolResponse = updated;
-			finish(
-				Response.json(refused ? { detail: 'Worker returned 409' } : {}, {
-					status: refused ? 502 : 200
-				})
-			);
+			finish(Response.json(refused ? { detail: refusal } : {}, { status: refused ? 409 : 200 }));
 			await vi.waitFor(() => {
 				if (refused) {
-					expect(target.querySelector('.panel-error')).toHaveTextContent('Worker returned 409');
+					expect(target.querySelector('.panel-error')).toHaveTextContent(refusal);
 					expect(button).toBeEnabled();
 					expect(target.querySelector(`[aria-label="${mode}"]`)).not.toBeNull();
 					if (label === 'Keep loaded') expect(button).toHaveAttribute('aria-checked', String(kept));

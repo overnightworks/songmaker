@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 ALERT_SCRIPT = REPO_ROOT / "scripts" / "send_alert.sh"
 ALERT_CONFIG_LIB = REPO_ROOT / "scripts" / "alert_config.sh"
 

@@ -80,8 +80,6 @@
 		EXPIRY_WARN_DAYS,
 		LIBRARY_NARROW_MEDIA,
 		LIBRARY_PAGE_LABEL,
-		ALBUM_ART_EMPTY_INITIALS,
-		ALBUM_COVER_ALT_TYPE,
 		SONG_COVER_ALT_TYPE,
 		SONG_COVER_REPLACE_LABEL,
 		SONG_COVER_UPLOAD_LABEL,
@@ -104,6 +102,7 @@
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
 	} from '#lib/constants.ts';
+	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import {
 		VERSION_DELETE_CONFIRM_LABEL,
 		VERSION_DELETE_DRAFT_GOES,

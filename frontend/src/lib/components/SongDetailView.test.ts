@@ -13,7 +13,6 @@ import PhoneAppBar from './PhoneAppBar.svelte';
 
 import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
 import {
-	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MAX_PX,
 	COMPACT_LAYOUT_MEDIA,
 	EDITOR_GENERATE_LABEL,
@@ -24,7 +23,6 @@ import {
 	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_VIEW_COWRITER_LABEL,
-	RECIPE_PANEL_LABEL,
 	LIBRARY_NARROW_MEDIA,
 	SONG_COVER_ALT_TYPE,
 	SONG_COVER_REMOVE_LABEL,
@@ -40,14 +38,16 @@ import {
 	TAKES_RETRY_LABEL,
 	DIALOG_CANCEL_LABEL,
 	TOAST_UNDO_LABEL,
-	VERSIONS_SHEET_LABEL,
 	versionDeleteLabel,
 	versionDeleteTitle,
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
 	versionReplaceDraftMessage
 } from '#lib/constants.ts';
+import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
+import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
 import {
+	VERSIONS_SHEET_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_EMPTIES_EDITOR,

@@ -26,14 +26,13 @@
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 	import {
-		ALBUM_ART_EMPTY_INITIALS,
-		ALBUM_COVER_ACCEPT,
 		LIBRARY_RETRY_LABEL,
 		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 		PLAYLIST_ENTRY_MOVE_UP_LABEL,
 		PLAYLIST_ENTRY_REMOVE_LABEL,
 		playlistEntryOverflowLabel
 	} from '#lib/constants.ts';
+	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ACCEPT } from '#lib/constants/album.ts';
 	import { nowPlayingTakeMeta } from '#lib/constants/now-playing.ts';
 	import { songCountLabel, titleInitials } from '#lib/utils/format.ts';
 	import CollectionHeader from './CollectionHeader.svelte';

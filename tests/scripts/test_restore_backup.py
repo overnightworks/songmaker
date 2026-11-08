@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 RESTORE_SCRIPT = REPO_ROOT / "scripts" / "restore_backup.sh"
 BACKUP_SCRIPT = REPO_ROOT / "scripts" / "create_backup.sh"
 

@@ -1,4 +1,5 @@
 import type { JobItem } from '#lib/api/types.ts';
+import { VERSIONS_SHEET_LABEL } from '#lib/constants/versions.ts';
 
 export const APP_NAME = 'Hallucinai';
 export const APP_REPOSITORY_URL = 'https://github.com/overnightworks/songmaker';
@@ -177,8 +178,6 @@ export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
 export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
 export const EDITOR_SAVE_FAILED = 'Save failed';
 const VERSION_CHIP_DRAFT_LABEL = 'draft';
-export const VERSIONS_SHEET_LABEL = 'Versions';
-export const VERSIONS_SHEET_CLOSE_LABEL = 'Close versions';
 export const TOAST_UNDO_LABEL = 'Undo';
 
 export function versionLabel(versionNumber: number): string {
@@ -269,10 +268,6 @@ export function songMovedToastLabel(albumTitle: string): string {
 	return `Moved to ${albumTitle}`;
 }
 
-export const RECIPE_SOURCE_DURATION_DEFAULT_SECONDS = 180;
-
-export const RECIPE_PANEL_LABEL = 'Recipe';
-
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const SEARCH_OPEN_LABEL = 'Search';
 export const RAIL_SEARCH_LABEL = 'Search or go to…';
@@ -320,40 +315,12 @@ export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';
 export const LIBRARY_NEW_ALBUM_LABEL = 'Album';
 export const LIBRARY_NEW_PLAYLIST_LABEL = 'Playlist';
-export const ALBUM_NO_SONGS = 'No songs yet.';
 
 export function newSongCardLabel(albumTitle: string): string {
 	return `New song in ${albumTitle}`;
 }
 // The listen endpoint's own ceiling (PAGE_MAX_LIMIT): Last played reads its places in pages this size.
 export const LIBRARY_WALL_PLAYED_PAGE_SIZE = 200;
-export const ALBUM_ART_EMPTY_INITIALS = '?';
-export const ALBUM_ART_INITIAL_COUNT = 2;
-export const ALBUM_COVER_ACCEPT = 'image/jpeg,image/png';
-export const ALBUM_COVER_ALT_TYPE = 'Album';
-export const ALBUM_COVER_UPLOAD_LABEL = 'Upload…';
-export const ALBUM_COVER_ADD_LABEL = 'Add cover';
-export const ALBUM_COVER_EDIT_LABEL = 'Edit cover';
-export const ALBUM_COVER_EDITING_LABEL = 'Cover editing';
-export const ALBUM_COVER_EDITING_CLOSE_LABEL = 'Close cover editing';
-export const ALBUM_COVER_EDITING_UPLOAD_LABEL = 'Upload';
-export const ALBUM_COVER_SUGGEST_LABEL = 'Suggest';
-export const ALBUM_COVER_SUGGEST_ANOTHER_LABEL = 'Suggest another';
-export const ALBUM_COVER_SUGGESTION_USE_LABEL = 'Use';
-export const ALBUM_COVER_EDITING_REMOVE_LABEL = 'Remove';
-export const ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL = 'Previous suggestion';
-export const ALBUM_COVER_NEXT_SUGGESTION_LABEL = 'Next suggestion';
-export const ALBUM_COVER_SUGGESTIONS_LOADING = 'Loading cover suggestion…';
-export const ALBUM_COVER_SUGGESTING_LABEL = 'Making a cover';
-export const ALBUM_COVER_SUGGESTION_FAILED_TITLE = 'Couldn’t make a cover suggestion';
-export const ALBUM_COVER_SUGGESTION_FAILED_FALLBACK = 'The cover suggestion failed. Try again.';
-// The server's own words for a spent daily limit, so the editor says it the
-// same way whether it knew before asking or was refused.
-export const ALBUM_COVER_DAILY_LIMIT_REACHED = 'Daily cover suggestion limit reached';
-export const ALBUM_COVER_SUGGESTIONS_RETRY_LABEL = 'Try again';
-// A sideways drag on the cover this far, and more sideways than up or down,
-// shows the neighbouring suggestion; anything less is a tap or a scroll.
-export const ALBUM_COVER_SWIPE_TRAVEL_PX = 40;
 
 export function albumCoverSuggestionAlt(title: string): string {
 	return `Cover suggestion for ${title}`;
@@ -400,17 +367,6 @@ export const COLLECTION_MENU_EDIT_DETAILS_LABEL = 'Edit details';
 export const COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const COLLECTION_MENU_ARCHIVE_LABEL = 'Archive';
 export const COLLECTION_MENU_CURATE_LABEL = 'Pick album takes';
-export const ALBUM_DETAILS_CLOSE_LABEL = 'Close edit details';
-export const ALBUM_DETAILS_SAVE_LABEL = 'Save';
-export const ALBUM_DETAILS_TITLE_REQUIRED = 'Title cannot be empty';
-export const ALBUM_DETAILS_SAVED = 'Details saved';
-export const ALBUM_DETAILS_SAVE_FAILED = 'Saving the details failed';
-export const ALBUM_SUBTITLE_LABEL = 'Subtitle';
-export const ALBUM_SUBTITLE_MAX_LENGTH = 400;
-export const ALBUM_YEAR_LABEL = 'Year';
-export const ALBUM_YEAR_MIN = 1900;
-export const ALBUM_YEAR_MAX = 2100;
-export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
 
 // The rail's own accessible name — the one navigation landmark that stands on
 // every private route, settings included (issue #263).

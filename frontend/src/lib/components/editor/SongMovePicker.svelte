@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import {
-		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_RETRY_LABEL,
 		SONG_MOVE_BACK_LABEL,
 		SONG_MOVE_FILTER_LABEL,
@@ -11,6 +10,7 @@
 		SONG_MOVE_NO_MATCH,
 		SONG_MOVE_NO_OTHER_ALBUM
 	} from '#lib/constants.ts';
+	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import type { AlbumItem } from '#lib/api/types.ts';
 	import {
 		closeSongMovePicker,

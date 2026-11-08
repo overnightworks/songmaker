@@ -19,13 +19,13 @@ import {
 	type Page,
 	type TestInfo
 } from '@playwright/test';
+import { albumCoverSuggestionAlt } from '../src/lib/constants';
 import {
 	ALBUM_COVER_EDITING_CLOSE_LABEL,
-	ALBUM_COVER_EDITING_UPLOAD_LABEL,
 	ALBUM_COVER_EDITING_LABEL,
-	ALBUM_COVER_SUGGESTING_LABEL,
-	albumCoverSuggestionAlt
-} from '../src/lib/constants';
+	ALBUM_COVER_EDITING_UPLOAD_LABEL,
+	ALBUM_COVER_SUGGESTING_LABEL
+} from '../src/lib/constants/album';
 import { albumCoverWaitingText } from '../src/lib/constants/album-cover-mark';
 import { sameOriginHeaders, HOME_PATH, shellOf, workspace } from './helpers';
 import { archiveOwnedAlbum, BASE_URL, STORAGE_STATE_FILE } from './seed';

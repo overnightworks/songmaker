@@ -57,3 +57,5 @@ export const RECIPE_FIELD_RESET_TITLES: Partial<Record<RecipeField, string>> = {
 	preset: 'Back to Default'
 };
 export const RECIPE_CHANGED_LABEL = 'changed';
+export const RECIPE_SOURCE_DURATION_DEFAULT_SECONDS = 180;
+export const RECIPE_PANEL_LABEL = 'Recipe';

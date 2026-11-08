@@ -13,10 +13,10 @@ import {
 	newSongCardLabel,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
-	RECIPE_PANEL_LABEL,
 	LIBRARY_SHARES_COPY_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import { RECIPE_PANEL_LABEL } from '../src/lib/constants/recipe';
 import { sameOriginHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, readSeededLibrary, runMarker } from './seed';
 
