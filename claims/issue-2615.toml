@@ -1,0 +1,7 @@
+claim_id = "d0706141df524580bef3cf4c671b05af"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2e115c471e7bffa12b35652f65271c7b5a81a070"
+branch = "claude/issue-2615-a-statement-counting-test-leaves-and-the"
+scope = ["tests/songmaker_cli/test_reference_unused_stamp.py", "tests/songmaker_cli/test_scheduler_result_fetch.py", "tests/support/generation_job_world.py"]
+opened_commit = "4f0a878002443d580ff05e65164d34fe0ee344ec"
