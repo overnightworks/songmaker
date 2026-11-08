@@ -214,7 +214,7 @@
 	{#snippet children(groupOpen: boolean)}
 		<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
 			{#if retrying}
-				<p class="rail-status">{LIBRARY_ALBUMS_LOADING}</p>
+				<p class="rail-status rail-loading">{LIBRARY_ALBUMS_LOADING}</p>
 			{:else if loadFailure !== null}
 				<div class="rail-load-error">
 					<p class="rail-status" role="alert">{loadFailure}</p>
@@ -306,8 +306,17 @@
 	.rail-status {
 		margin: 0;
 		font-size: 0.8rem;
-		color: var(--fail);
+		color: var(--text-muted);
 		overflow-wrap: anywhere;
+	}
+
+	.rail-loading {
+		margin: 4px 8px 8px;
+		padding: 8px;
+	}
+
+	.rail-load-error .rail-status {
+		color: var(--fail);
 	}
 
 	.rail-load-error {

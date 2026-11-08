@@ -83,7 +83,8 @@ describe('RailLibraryGroup Retry while the library load failed', () => {
 		requireButtonContainingText(target, LIBRARY_RETRY_LABEL).click();
 		await tick();
 
-		expect(target.textContent).toContain(LIBRARY_ALBUMS_LOADING);
+		expect(requireElement(target, '.rail-loading').textContent).toBe(LIBRARY_ALBUMS_LOADING);
+		expect(target.querySelector('.rail-load-error')).toBeNull();
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 		expect(fetchAlbums).toHaveBeenCalledTimes(loadsBefore);
 
