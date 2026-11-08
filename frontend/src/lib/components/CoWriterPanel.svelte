@@ -1192,7 +1192,7 @@
 
 	.convo-menu-btn:hover,
 	.convo-menu-btn[aria-expanded='true'] {
-		color: var(--primary);
+		color: var(--accent);
 	}
 
 	.convo-menu {
@@ -1215,8 +1215,8 @@
 
 	.convo-new {
 		background: none;
-		border: 1px solid var(--primary);
-		color: var(--primary);
+		border: 1px solid var(--accent);
+		color: var(--accent);
 		padding: 4px 8px;
 		border-radius: 4px;
 		font-size: 0.8rem;
@@ -1225,8 +1225,8 @@
 	}
 
 	.convo-new:hover {
-		background: var(--primary);
-		color: #fff;
+		background: var(--accent);
+		color: var(--on-accent);
 	}
 
 	.convo-memory {
@@ -1246,7 +1246,7 @@
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		background: var(--primary);
+		background: var(--accent);
 		flex-shrink: 0;
 	}
 
@@ -1310,7 +1310,7 @@
 	}
 
 	.conv-del:hover {
-		color: var(--fail);
+		color: var(--accent);
 	}
 
 	.history-loading {
@@ -1363,7 +1363,7 @@
 	}
 
 	.message.user {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 		align-self: flex-end;
 		border-bottom-right-radius: 2px;
@@ -1447,7 +1447,7 @@
 	.link {
 		background: none;
 		border: none;
-		color: var(--primary);
+		color: var(--accent);
 		cursor: pointer;
 		text-decoration: underline;
 		padding: 0;
@@ -1468,8 +1468,8 @@
 		align-items: center;
 		gap: 4px;
 		background: var(--surface);
-		border: 1px solid var(--primary);
-		color: var(--primary);
+		border: 1px solid var(--accent);
+		color: var(--accent);
 		padding: 1px 8px;
 		border-radius: 10px;
 		font-size: 0.7rem;

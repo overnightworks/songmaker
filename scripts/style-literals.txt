@@ -6,7 +6,7 @@ lib/components/AlbumDetailView.svelte 2
 lib/components/AlbumMetaEditor.svelte 4
 lib/components/Breadcrumb.svelte 1
 lib/components/ChatInput.svelte 2
-lib/components/CoWriterPanel.svelte 24
+lib/components/CoWriterPanel.svelte 23
 lib/components/CollectionHeader.svelte 3
 lib/components/CollectionHeaderFrame.svelte 3
 lib/components/CollectionMenu.svelte 3
