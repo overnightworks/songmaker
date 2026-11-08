@@ -42,7 +42,6 @@ from songmaker_cli.auth_dependencies import (
     require_admin,
 )
 from songmaker_cli.constants import (
-    INTERNAL_TOKEN_HEADER,
     MODEL_CONFIG_PATHS,
     AuditAction,
     JobFunction,
@@ -54,7 +53,7 @@ from songmaker_cli.db.queries.auth import (
 )
 from songmaker_cli.db.queries.loras import list_user_loras_for_admin
 from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
-from songmaker_cli.scheduler import worker_response_cause
+from songmaker_cli.scheduler import worker_request_headers, worker_response_cause
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -108,13 +107,11 @@ def _state_from_dict(
 async def _post_to_worker(
     host: str, port: int, path: str, json_body: dict | None = None,
 ) -> httpx.Response:
-    token = get_settings().songmaker_internal_token.get_secret_value()
-    headers = {INTERNAL_TOKEN_HEADER: token}
     async with httpx.AsyncClient(timeout=30) as client:
         return await client.post(
             f"http://{host}:{port}{path}",  # NOSONAR(S5332) Compose network only.
             json=json_body,
-            headers=headers,
+            headers=worker_request_headers(),
         )
 
 
