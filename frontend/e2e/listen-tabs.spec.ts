@@ -3,11 +3,13 @@
 // Takes, the tab writes no history entry and survives a reload.
 
 import { expect, test as base, type Page } from '@playwright/test';
+import { COWRITER_COMPOSER_PLACEHOLDER } from '../src/lib/constants/cowriter';
 import {
-	COWRITER_COMPOSER_PLACEHOLDER,
 	NEW_PLACE_CREATE_LABEL,
 	NEW_SONG_ROW_LABEL,
-	NEW_SONG_TITLE_LABEL,
+	NEW_SONG_TITLE_LABEL
+} from '../src/lib/constants/new-collection';
+import {
 	newSongCardLabel,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,

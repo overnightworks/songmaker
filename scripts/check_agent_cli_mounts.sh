@@ -204,7 +204,7 @@ _unit_is_installed_and_enabled() {
     local unit="$1"
     if [[ -z "$(systemctl list-unit-files --no-legend "$unit" 2>/dev/null)" ]]; then
         problem "$unit is not installed. Nothing keeps the mirrored logins" \
-            "current. Run: sudo ./scripts/install-cli-credentials-mirror.sh"
+            "current. Run: sudo ./scripts/install_cli_credentials_mirror.sh"
         return 1
     fi
     if ! systemctl is-enabled --quiet "$unit" 2>/dev/null; then

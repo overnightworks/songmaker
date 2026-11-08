@@ -123,11 +123,11 @@
 # still shows it.
 #
 # REPO_ROOT is derived from where this script itself lives (same pattern as
-# install-autostart.sh's SCRIPT_DIR/PROJECT_ROOT derivation), never hardcoded
+# install_autostart.sh's SCRIPT_DIR/PROJECT_ROOT derivation), never hardcoded
 # here — running it from a worktree operates on that worktree. The installer
 # (scripts/install_autodeploy.sh) separately substitutes the matching
 # WorkingDirectory/User/ExecStart into the systemd unit, exactly like
-# install-autostart.sh does for songmaker.service.
+# install_autostart.sh does for songmaker.service.
 #
 # LOCK_FILE and all state files (the two counters, the two escalation
 # timestamps, DEPLOYED_SHA_FILE) live at a fixed path inside the git ADMIN

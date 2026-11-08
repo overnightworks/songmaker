@@ -26,10 +26,10 @@ from support.install_script_fakes import (
 )
 from support.repository_root import REPOSITORY_ROOT
 
-INSTALLER = REPOSITORY_ROOT / "scripts" / "install-cli-credentials-mirror.sh"
+INSTALLER = REPOSITORY_ROOT / "scripts" / "install_cli_credentials_mirror.sh"
 
 COPIED_SCRIPTS = (
-    "install-cli-credentials-mirror.sh",
+    "install_cli_credentials_mirror.sh",
     "mirror_agent_cli_credentials.py",
     "dotenv_file.py",
     "main_checkout.py",

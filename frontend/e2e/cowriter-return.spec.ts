@@ -39,7 +39,9 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 import {
 	COWRITER_CONVERSATION_MENU_LABEL,
 	COWRITER_DELETE_CONVERSATION_TITLE,
-	COWRITER_TURN_PATH,
+	COWRITER_TURN_PATH
+} from '../src/lib/constants/cowriter';
+import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,

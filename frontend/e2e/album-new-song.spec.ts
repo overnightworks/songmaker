@@ -10,13 +10,15 @@ import {
 	ALBUM_NO_SONGS,
 	COLLECTION_MENU_LABEL,
 	collectionActionLabel,
-	NEW_PLACE_CREATE_LABEL,
-	NEW_SONG_CLOSE_LABEL,
-	NEW_SONG_ROW_LABEL,
-	NEW_SONG_TITLE_LABEL,
 	newSongCardLabel,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
+import {
+	NEW_PLACE_CREATE_LABEL,
+	NEW_SONG_CLOSE_LABEL,
+	NEW_SONG_ROW_LABEL,
+	NEW_SONG_TITLE_LABEL
+} from '../src/lib/constants/new-collection';
 import {
 	appBar,
 	boundingBoxes,

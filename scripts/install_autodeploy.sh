@@ -11,14 +11,14 @@
 # /etc/systemd/system/ and the systemd unit cache.
 #
 # WorkingDirectory/ExecStart/User are derived from where this script lives
-# and who runs it, exactly like scripts/install-autostart.sh (issue #256):
+# and who runs it, exactly like scripts/install_autostart.sh (issue #256):
 # running it from a worktree installs units pointing at that worktree, not
 # silently at the main checkout; User is SUDO_USER under sudo (otherwise the
 # current user), refusing outright if that resolves to root, so the units
 # run as the stack owner (whose .env, docker group membership, and Claude
 # CLI credentials the deploy needs) rather than as whoever invoked sudo.
 #
-# Unlike install-autostart.sh, this installer enables AND starts the timer
+# Unlike install_autostart.sh, this installer enables AND starts the timer
 # immediately (`systemctl enable --now`). That is safe here in a way it is
 # not for songmaker.service: starting songmaker.service directly runs
 # `docker compose up -d` unconditionally against the live stack, which can
@@ -75,7 +75,7 @@ TIMER_TARGET="$UNIT_DIR/songmaker-autodeploy.timer"
 DEPLOY_SCRIPT="$SCRIPT_DIR/run_autodeploy.sh"
 # The shared alert template unit (issue #333) — songmaker-autodeploy.service
 # above declares OnFailure=songmaker-alert@%n.service, so it must exist
-# before that unit is installed. install-autostart.sh installs the same
+# before that unit is installed. install_autostart.sh installs the same
 # file for songmaker.service; both installers are idempotent and derive
 # the same WorkingDirectory/User from their own checkout, so running
 # either (or both) converges on one identical installed unit.
@@ -144,8 +144,8 @@ sed_escape_replacement() {
 
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
-ESCAPED_DEPLOY_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/run_autodeploy.sh")"
-ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/send_alert.sh")"
+ESCAPED_DEPLOY_SCRIPT="$(sed_escape_replacement "$DEPLOY_SCRIPT")"
+ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$ALERT_SCRIPT")"
 
 TMP_SERVICE="$(mktemp)"
 TMP_ALERT_SERVICE="$(mktemp)"
@@ -164,10 +164,10 @@ sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
     -e "s#^User=.*#User=$ESCAPED_INSTALL_USER#" \
     "$ALERT_SERVICE_SOURCE" >"$TMP_ALERT_SERVICE"
 
-echo "Installing $ALERT_SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/send_alert.sh ..., User=$INSTALL_USER)..."
+echo "Installing $ALERT_SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$ALERT_SCRIPT ..., User=$INSTALL_USER)..."
 sudo install -m 0644 "$TMP_ALERT_SERVICE" "$ALERT_SERVICE_TARGET"
 
-echo "Installing $SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/run_autodeploy.sh, User=$INSTALL_USER)..."
+echo "Installing $SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$DEPLOY_SCRIPT, User=$INSTALL_USER)..."
 sudo install -m 0644 "$TMP_SERVICE" "$SERVICE_TARGET"
 
 echo "Installing $TIMER_TARGET..."
