@@ -285,7 +285,3 @@ class TaskStore:
                 await self.cleanup_terminal()
             except Exception:
                 log.exception("Terminal task sweep failed")
-
-    async def size(self) -> int:
-        async with self._lock:
-            return len(self._tasks)

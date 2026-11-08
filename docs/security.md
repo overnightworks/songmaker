@@ -278,11 +278,9 @@ fallback. Redis failure returns 503 rather than opening an unbounded poller.
 
 ### Job streams
 
-`GET /api/jobs/{id}/stream` polls a job's status once per second. It used
-to do that with blocking psycopg2 calls directly on the event loop — one
-waiting generation meant one blocking round trip per second on the loop,
-and an exhausted DB pool could stall it for up to 30 seconds. The poll now
-runs through `asyncio.to_thread()`, bounded by `asyncio.wait_for()` to the
+`GET /api/jobs/{id}/stream` polls a job's status once per second. The poll
+runs through `asyncio.to_thread()`, so no blocking psycopg2 call sits on the
+event loop and an exhausted DB pool cannot stall it, bounded by `asyncio.wait_for()` to the
 stream's remaining lifetime so a poll cannot itself outrun the deadline by
 waiting on an exhausted pool, matching the resource-event stream's
 `_read_event_page_before` pattern exactly.
@@ -440,7 +438,7 @@ being in place.
 - **Multi-turn history**: Stored in `chat_messages` and scoped to a conversation; the co-writer applies a token budget with a rolling summary for older messages (`conversation_api.py:477-503`; `cowriter/history.py:65-76,89-144`). Ownership is enforced via `check_song_access()` on every endpoint.
 - **Context built server-side**: Mentioned song/version IDs are sent by the frontend, but the backend resolves them from the DB — the client never sends raw context. Each mentioned song is ownership-checked.
 - **No co-writer turn or cover runs on a Claude CLI**, so no song content reaches one. The co-writer runs only through the gateway (next section).
-- **No per-song chat endpoint**: the legacy `POST /api/songs/{id}/chat` (`chat_api.py`) and its `/api/settings/claude-models` settings were removed (#1190); `POST /chat/turn` in `conversation_api.py` is the only co-writer entry point.
+- **No per-song chat endpoint**: `POST /api/songs/{id}/chat` and `/api/settings/claude-models` answer 404; `POST /chat/turn` in `conversation_api.py` is the only co-writer entry point.
 
 ## Co-writer turn through the gateway
 
@@ -576,11 +574,9 @@ checkout.
 
 Refresh the mirror with `sudo systemctl restart songmaker-cli-credentials-mirror.service`; that does not touch `songmaker.service` or the live stack.
 
-That call has been deleted from this script once already, by an edit that
-rearranged the systemd checks around it, and nothing went red: the verifier's
-own tests kept passing while the surface the installer runs stopped checking
-anything at all. The shell entry point therefore has its own tests, separate
-from the Python ones. The installer is its one caller.
+The verifier's own tests can pass while the surface the installer runs checks
+nothing at all, so the shell entry point has its own tests, separate from the
+Python ones. The installer is its one caller.
 
 Where the mirror lives has one answer, owned by that same module: an exported
 `SONGMAKER_CLI_CREDENTIALS_DIR` wins, then the same key in `.env`, then the
@@ -775,7 +771,7 @@ Mutating operations are logged to the `audit_log` table. Account creation, role 
 
 - **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`
-- **Read access**: none over HTTP — the `GET /api/admin/audit-log` endpoint was removed until an admin surface shows the trail (#1190); the rows stay in the database and are read there.
+- **Read access**: none over HTTP — `GET /api/admin/audit-log` answers 404 because no admin surface shows the trail; the rows stay in the database and are read there.
 
 ## Production Deployment
 

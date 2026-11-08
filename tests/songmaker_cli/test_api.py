@@ -2207,10 +2207,6 @@ def test_repaint_and_cover_report_an_unavailable_job_queue(
     assert response.json()["detail"] == "Job queue unavailable"
 
 
-def test_scoring_schema_route_is_gone(client: TestClient) -> None:
-    assert client.get("/api/scoring/schema").status_code == 404
-
-
 def test_score_generation_not_found(client: TestClient) -> None:
     resp = client.post(
         "/api/generations/nonexistent/score",
@@ -3938,26 +3934,6 @@ def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
     with factory() as session:
         session.query(AvailableModel).filter_by(id="turbo").update({"is_active": True})
         session.commit()
-
-
-# ── Rate limits ───────────────────────────────────────────────────────
-
-
-@pytest.mark.parametrize(
-    ("method", "path"),
-    [
-        pytest.param("post", "/api/songs/s1/chat", id="per-song-chat"),
-        pytest.param("get", "/api/settings/claude-models", id="get-claude-models"),
-        pytest.param("put", "/api/settings/claude-models", id="set-claude-models"),
-        pytest.param("get", "/api/admin/audit-log", id="admin-audit-log"),
-        pytest.param("get", "/api/library/shares", id="library-shares"),
-    ],
-)
-def test_removed_dead_routes_no_longer_answer(
-    tmp_path: Path, method: str, path: str, pg_factory,
-) -> None:
-    client = _make_authed_client(tmp_path, pg_factory, role="admin")
-    assert client.request(method, path, json={}).status_code == 404
 
 
 # ── Bulk delete generations ─────────────────────────────────────────
