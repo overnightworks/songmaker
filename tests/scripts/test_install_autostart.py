@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
 import pytest
 from support.install_script_fakes import (
-    FAKE_SUDO,
-    FAKE_SYSTEMCTL,
-    INHERITED_ENVIRONMENT,
+    build_sandbox,
+    copy_scripts,
+    exec_start,
     linked_worktree_of,
-    make_executable,
 )
-from support.repository_root import REPOSITORY_ROOT
 
 AUTOSTART_FILES = (
     "agent_cli_paths.sh",
@@ -30,45 +27,9 @@ AUTOSTART_FILES = (
 @pytest.fixture
 def run_autostart(tmp_path: Path):
     checkout = tmp_path / "songmaker"
-    scripts = checkout / "scripts"
-    scripts.mkdir(parents=True)
-    for name in AUTOSTART_FILES:
-        source = REPOSITORY_ROOT / "scripts" / name
-        target = scripts / name
-        target.write_bytes(source.read_bytes())
-        target.chmod(source.stat().st_mode)
+    copy_scripts(checkout, AUTOSTART_FILES)
     subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
-
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    make_executable(fake_bin / "sudo", FAKE_SUDO)
-    make_executable(fake_bin / "systemctl", FAKE_SYSTEMCTL)
-    units = tmp_path / "systemd"
-    units.mkdir()
-    recording = tmp_path / "recording"
-    recording.write_text("")
-    (tmp_path / "systemctl-state").write_text("")
-    scratch = tmp_path / "tmp"
-    scratch.mkdir()
-
-    def _environment(**overrides: str) -> dict[str, str]:
-        environment = {
-            name: os.environ[name]
-            for name in INHERITED_ENVIRONMENT
-            if name in os.environ
-        }
-        environment.update(overrides)
-        environment.update(
-            {
-                "PATH": f"{fake_bin}:{os.environ['PATH']}",
-                "TMPDIR": str(scratch),
-                "SANDBOX_ROOT": str(tmp_path),
-                "RECORDING": str(recording),
-                "SONGMAKER_UNIT_DIR": str(units),
-                "SUDO_USER": "operator",
-            },
-        )
-        return environment
+    sandbox = build_sandbox(tmp_path)
 
     def _run(
         *arguments: str, from_checkout: Path | None = None,
@@ -77,15 +38,15 @@ def run_autostart(tmp_path: Path):
         return subprocess.run(
             [str(started_from / "scripts" / "install_autostart.sh"), *arguments],
             cwd=started_from,
-            env=_environment(),
+            env=sandbox.environment(),
             text=True,
             capture_output=True,
             check=False,
         )
 
     _run.checkout = checkout
-    _run.recording = recording
-    _run.units = units
+    _run.recording = sandbox.recording
+    _run.units = sandbox.units
     _run.sandbox = tmp_path
     return _run
 
@@ -161,9 +122,6 @@ def test_installer_writes_an_alert_unit_that_starts_the_send_script_of_the_check
 
     assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     alert_unit = (run_autostart.units / "songmaker-alert@.service").read_text()
-    exec_start = next(
-        line.removeprefix("ExecStart=")
-        for line in alert_unit.splitlines()
-        if line.startswith("ExecStart=")
+    assert exec_start(alert_unit).startswith(
+        f"{run_autostart.checkout}/scripts/send_alert.sh ",
     )
-    assert exec_start.startswith(f"{run_autostart.checkout}/scripts/send_alert.sh ")
