@@ -1,7 +1,0 @@
-claim_id = "b4d76250ba6b498eb7e4a51aa75917fd"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3a918f43807ad78120feeccec785ff9e244b82ca"
-branch = "claude/issue-2754-cover-ceiling-header-check-dead-arms"
-scope = [".github/workflows/ci.yml", "src/songmaker_cli/covers.py", "tests/songmaker_cli/test_covers_album.py"]
-opened_commit = "47232ec6fd6d2408193e5ed4f191de88b418849a"
