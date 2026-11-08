@@ -1,1 +1,0 @@
-send_alert.sh

@@ -180,24 +180,6 @@ def test_send_is_bounded_by_a_positive_max_time(tmp_path: Path) -> None:
     assert int(curl_args[curl_args.index("--max-time") + 1]) > 0
 
 
-def test_alert_runs_through_the_link_at_the_installed_unit_path(tmp_path: Path) -> None:
-    sandbox_scripts = tmp_path / "scripts"
-    sandbox_scripts.mkdir()
-    for script in (ALERT_SCRIPT, ALERT_CONFIG_LIB):
-        shutil.copy2(script, sandbox_scripts / script.name)
-    (sandbox_scripts / "alert.sh").symlink_to(ALERT_SCRIPT.name)
-
-    result = _run_alert(
-        tmp_path,
-        ["subject", "body"],
-        VALID_ENV,
-        script=sandbox_scripts / "alert.sh",
-    )
-
-    assert result.returncode == 0
-    assert "sent" in result.stdout
-
-
 def test_missing_env_file_fails_loud(tmp_path: Path) -> None:
     result = subprocess.run(
         [str(ALERT_SCRIPT), "subject", "body"],
