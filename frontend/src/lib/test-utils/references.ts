@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import type {
-	ReferenceRecordingResponse,
+	ReferenceListRowResponse,
 	ReferenceTakeUseResponse,
 	ReferenceUsageResponse,
 	ReferenceVersionUseResponse
@@ -8,8 +8,8 @@ import type {
 import ReferencesPage from '../../routes/settings/references/+page.svelte';
 
 export function referenceRecording(
-	overrides: Partial<ReferenceRecordingResponse>
-): ReferenceRecordingResponse {
+	overrides: Partial<ReferenceListRowResponse>
+): ReferenceListRowResponse {
 	return {
 		id: 'reference-1',
 		filename: 'voice-memo.mp3',
@@ -20,16 +20,18 @@ export function referenceRecording(
 		is_kept: false,
 		used_by_versions: 0,
 		used_by_takes: 0,
+		deletes_at: null,
 		...overrides
 	};
 }
 
 export function listAnswer(
-	references: ReferenceRecordingResponse[],
+	references: ReferenceListRowResponse[],
 	usage: Partial<ReferenceUsageResponse> = {}
 ) {
 	return {
 		references,
+		countdown_epoch: null,
 		usage: { files: references.length, bytes: 0, file_limit: 50, byte_limit: 500_000_000, ...usage }
 	};
 }

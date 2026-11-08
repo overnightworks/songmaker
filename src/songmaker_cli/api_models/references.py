@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
@@ -45,6 +46,20 @@ class ReferenceRecordingResponse(BaseModel):
             is_kept=recording.is_kept,
             used_by_versions=counts.versions,
             used_by_takes=counts.takes,
+        )
+
+
+class ReferenceListRowResponse(ReferenceRecordingResponse):
+    deletes_at: str | None
+
+    @classmethod
+    def from_listed(
+        cls, recording: ReferenceRecording, counts: ReferenceLinkCounts,
+        deletes_at: datetime | None,
+    ) -> ReferenceListRowResponse:
+        return cls(
+            **ReferenceRecordingResponse.from_orm(recording, counts).model_dump(),
+            deletes_at=None if deletes_at is None else deletes_at.isoformat(),
         )
 
 
@@ -97,6 +112,11 @@ class ReferenceUsesResponse(BaseModel):
         )
 
 
+class ReferenceCountdownShownRequest(BaseModel):
+    epoch: str
+
+
 class ReferenceListResponse(BaseModel):
-    references: list[ReferenceRecordingResponse]
+    references: list[ReferenceListRowResponse]
     usage: ReferenceUsageResponse
+    countdown_epoch: str | None

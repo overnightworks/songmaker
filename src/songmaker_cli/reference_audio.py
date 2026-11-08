@@ -10,6 +10,7 @@ import uuid
 from collections.abc import Collection
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Final
@@ -32,8 +33,28 @@ from songmaker_cli.db.queries.reference_recordings import (
     owner_reference_usage,
 )
 from songmaker_cli.settings import Settings
+from songmaker_cli.timestamps import aware_timestamp
 
 REFERENCE_AUDIO_NOT_OWNED_DETAIL: Final = "reference audio path is not owned"
+
+
+def reference_deletes_at(
+    unused_since: datetime | None,
+    published: datetime | None,
+    now: datetime,
+    days: int,
+    hour: int,
+) -> datetime | None:
+    """The first daily run at or after the countdown's end; None without a stamp (kept or in use).
+
+    The end is the later of the stamp and the publication (``now`` until published) plus ``days``.
+    """
+    if unused_since is None:
+        return None
+    counted = max(aware_timestamp(unused_since), published or now) + timedelta(days=days)
+    counted = counted.astimezone(timezone.utc)
+    run = counted.replace(hour=hour, minute=0, second=0, microsecond=0)
+    return run if run >= counted else run + timedelta(days=1)
 
 
 class ReferenceAudioRejected(ValueError):
