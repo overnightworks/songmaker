@@ -53,9 +53,6 @@ from songmaker_cli.constants import (
     USER_LORA_SAMPLES_DIRNAME,
     USER_LORAS_DIRNAME,
     AuditAction,
-    JobFunction,
-    JobStatus,
-    JobType,
     LoraStatus,
     ResourceType,
 )
@@ -81,6 +78,7 @@ from songmaker_cli.db.queries.loras import (
     update_user_lora_sample,
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
+from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)

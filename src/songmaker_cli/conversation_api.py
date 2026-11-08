@@ -58,7 +58,6 @@ from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     CURRENT_SONG_FRESHNESS_NOTE,
-    JOB_ACTIVE_STATUSES,
     MEMORY_SCOPE_ALBUM,
     MEMORY_SCOPE_SONG,
     MEMORY_SCOPE_USER,
@@ -71,8 +70,6 @@ from songmaker_cli.constants import (
     TURN_BLOCK_NO_TAKE,
     TURN_BLOCK_SONG_MEMORY,
     TURN_BLOCK_USER_MEMORY,
-    JobStatus,
-    JobType,
 )
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
 from songmaker_cli.db.models import ChatMessage, Conversation, Generation, Song
@@ -108,6 +105,7 @@ from songmaker_cli.db.queries.settings import get_cowriter_tail_token_budget
 from songmaker_cli.db.queries.sharing import is_playable_take, presented_take
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.db.queries.versions import get_version
+from songmaker_cli.job_types import JOB_ACTIVE_STATUSES, JobStatus, JobType
 
 log = logging.getLogger(__name__)
 

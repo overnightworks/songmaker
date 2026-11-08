@@ -140,7 +140,7 @@ def test_scoring_worker_has_no_periodic_job_reaper() -> None:
 
 
 def test_scoring_worker_settings_functions() -> None:
-    from songmaker_cli.constants import JobFunction
+    from songmaker_cli.job_types import JobFunction
     from songmaker_cli.scoring_worker import ScoringWorkerSettings
     func_names = {f.name for f in ScoringWorkerSettings.functions}
     assert JobFunction.SCORE in func_names
@@ -162,7 +162,7 @@ def test_scoring_worker_functions_registered_under_job_function_names() -> None:
 
     from arq.worker import Worker
 
-    from songmaker_cli.constants import JobFunction
+    from songmaker_cli.job_types import JobFunction
     from songmaker_cli.scoring_worker import ScoringWorkerSettings
 
     async def _build_and_inspect() -> set[str]:

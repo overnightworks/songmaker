@@ -6,8 +6,9 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from songmaker_cli.constants import USER_LORAS_DIRNAME, JobType, LoraStatus
+from songmaker_cli.constants import USER_LORAS_DIRNAME, LoraStatus
 from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
+from songmaker_cli.job_types import JobType
 
 
 def seed_queued_lora(db_factory: sessionmaker[Session], tmp_path: Path) -> dict:

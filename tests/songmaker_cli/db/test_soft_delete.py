@@ -444,18 +444,27 @@ def test_api_unique_album_id_skips_soft_deleted(tmp_path: Path, pg_factory) -> N
 
 
 @pytest.mark.parametrize("final_deletion_days", [30, 7])
-@pytest.mark.parametrize("days_offset", [-1, 0, 1])
-def test_trashed_song_is_purged_exactly_at_the_final_deletion_setting(
+@pytest.mark.parametrize(
+    ("past_period_end", "is_purged"),
+    [
+        (-timedelta(days=1), False),
+        (timedelta(0), False),
+        (timedelta(microseconds=1), True),
+        (timedelta(days=1), True),
+    ],
+)
+def test_trashed_song_is_purged_only_past_the_end_of_the_final_deletion_period(
     db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fresh_settings,
-    final_deletion_days: int, days_offset: int,
+    final_deletion_days: int, past_period_end: timedelta, is_purged: bool,
 ) -> None:
     monkeypatch.setenv("FINAL_DELETION_DAYS", str(final_deletion_days))
+    now = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)
     _seed(db_session)
     soft_delete_song(db_session, "s1")
     song = get_song(db_session, "s1", include_deleted_rows=True)
-    song.deleted_at = datetime.now(timezone.utc) - timedelta(days=final_deletion_days + days_offset)
+    song.deleted_at = now - timedelta(days=final_deletion_days) - past_period_end
     db_session.commit()
 
-    _, song_count = run_cleanup_expired(lambda: db_session, tmp_path / "audio")
+    _, song_count = run_cleanup_expired(lambda: db_session, tmp_path / "audio", now=now)
 
-    assert song_count == (1 if days_offset >= 0 else 0)
+    assert song_count == (1 if is_purged else 0)

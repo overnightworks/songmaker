@@ -23,8 +23,6 @@ from songmaker_cli.constants import (
     COVER_PROMPT_MAX_CHARS,
     COVER_PROMPT_SONG_FIELD_MAX_CHARS,
     JOB_HEARTBEAT_INTERVAL_SECONDS,
-    JobStatus,
-    JobType,
 )
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
@@ -42,6 +40,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs._runtime import _touch_heartbeat, _update_job
 
 log = logging.getLogger(__name__)

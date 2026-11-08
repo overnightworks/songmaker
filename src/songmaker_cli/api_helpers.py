@@ -31,7 +31,6 @@ from songmaker_cli.constants import (
     SETTING_MAX_QUEUE_DEPTH,
     SETTING_MAX_USER_ACTIVE_JOBS,
     SETTING_SCORING_RATE_LIMIT,
-    JobType,
     LimiterFailurePolicy,
 )
 from songmaker_cli.covers import COVER_RESPONSE_HEADERS, CoverRejectedError, cover_media_type
@@ -65,6 +64,7 @@ from songmaker_cli.db.queries.versions import lock_song_and_find_version
 from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.invariants import expect_present
+from songmaker_cli.job_types import JobType
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness, read_worker_liveness
 

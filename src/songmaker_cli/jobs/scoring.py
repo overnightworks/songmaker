@@ -11,13 +11,13 @@ from typing import Final
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli import jobs
-from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.queries.generations import (
     get_generation,
     save_scores,
     set_generation_transcript,
 )
 from songmaker_cli.db.queries.jobs import lock_active_job
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig

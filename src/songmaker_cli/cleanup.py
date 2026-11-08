@@ -120,7 +120,9 @@ def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
     return _ExpiredPurge(paths, album_ids, orphan_song_ids, song_ids, reference_candidates)
 
 
-def run_cleanup_expired(db_factory, audio_dir) -> tuple[int, int]:
+def run_cleanup_expired(
+    db_factory, audio_dir, *, now: datetime | None = None,
+) -> tuple[int, int]:
     """Hard-delete expired soft-deleted albums and orphan songs.
 
     Returns (album_count, song_count). Albums are removed first, then
@@ -129,7 +131,7 @@ def run_cleanup_expired(db_factory, audio_dir) -> tuple[int, int]:
     references the deleted songs alone linked are stamped unused; a failed stamp
     changes neither the counts nor the file removals.
     """
-    cutoff = soft_delete_cutoff(datetime.now(timezone.utc))
+    cutoff = soft_delete_cutoff(now or datetime.now(timezone.utc))
     with db_factory() as session:
         purge = _purge_expired(session, cutoff)
         session.commit()
@@ -173,7 +175,7 @@ def _delete_expired_takes(
 
 
 def run_generation_retention(
-    db_factory, audio_dir, *, dry_run: bool = False,
+    db_factory, audio_dir, *, dry_run: bool = False, now: datetime | None = None,
 ) -> GenerationRetentionReport:
     """Two-stage generation retention.
 
@@ -187,10 +189,10 @@ def run_generation_retention(
     Both stages re-check at their write, so a take that became a Pick or a
     Keep after selection is left alone. The report names the takes written.
     `dry_run=True` returns the IDs that would be affected without
-    performing any writes.
+    performing any writes. `now` fixes the clock both cutoffs measure from.
     """
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     archive_cutoff = now - timedelta(days=settings.generation_retention_days)
     delete_cutoff = now - timedelta(days=settings.final_deletion_days)
     report = GenerationRetentionReport()

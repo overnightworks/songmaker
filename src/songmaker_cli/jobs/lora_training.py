@@ -32,9 +32,6 @@ from songmaker_cli.constants import (
     USER_LORA_TRAINING_TMP_DIRNAME,
     USER_LORAS_DIRNAME,
     AuditAction,
-    JobFunction,
-    JobStatus,
-    JobType,
     LoraStatus,
     ResourceType,
 )
@@ -43,6 +40,7 @@ from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.jobs import count_queued_generation_jobs, get_job
 from songmaker_cli.db.queries.loras import list_active_user_loras, update_user_lora
 from songmaker_cli.db.queries.sentinels import unset_if_none
+from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.scheduler import (
     AllWorkersHeld,
     DispatchOptions,

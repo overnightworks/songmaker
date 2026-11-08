@@ -13,12 +13,11 @@ from songmaker_cli.constants import (
     STALE_JOB_THRESHOLDS,
     USER_LORA_DATASET_DIRNAME,
     USER_LORAS_DIRNAME,
-    JobStatus,
-    JobType,
     LoraStatus,
 )
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import _run_stale_job_reaper_tick, reconcile_crashed_loras
 
 
