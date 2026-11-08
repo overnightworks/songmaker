@@ -20,12 +20,14 @@
 		deletePreset
 	} from '#lib/stores/presets.ts';
 	import { fetchGenerationDefaults } from '#lib/api/client.ts';
-	import type { VersionGenerationParams } from '#lib/api/types.ts';
+	import type { PresetItem, VersionGenerationParams } from '#lib/api/types.ts';
+	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import ParamControls from '#lib/components/ParamControls.svelte';
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 	const activeIds = $derived($activeModelIds);
 	let error = $state('');
+	let presetPendingDelete = $state<PresetItem | null>(null);
 
 	let showPresetForm = $state(false);
 	let editingPresetId = $state<string | null>(null);
@@ -172,6 +174,7 @@
 	}
 
 	async function handleDeletePreset(presetId: string): Promise<void> {
+		presetPendingDelete = null;
 		try {
 			await deletePreset(presetId);
 		} catch {
@@ -265,7 +268,7 @@
 							{preset.is_default ? 'unset default' : 'set default'}
 						</button>
 						<button class="preset-action" onclick={() => openEditPreset(preset.id)}> edit </button>
-						<button class="preset-action delete" onclick={() => handleDeletePreset(preset.id)}>
+						<button class="preset-action delete" onclick={() => (presetPendingDelete = preset)}>
 							delete
 						</button>
 					</div>
@@ -293,6 +296,16 @@
 		</section>
 	{/if}
 </div>
+
+{#if presetPendingDelete}
+	{@const doomed = presetPendingDelete}
+	<ConfirmDeleteDialog
+		title="Delete preset?"
+		items={[doomed.name]}
+		onconfirm={() => void handleDeletePreset(doomed.id)}
+		oncancel={() => (presetPendingDelete = null)}
+	/>
+{/if}
 
 <style>
 	:global(.settings-content) h1 {
