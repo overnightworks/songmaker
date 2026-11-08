@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { ApiError, NetworkError, describeFailure } from '#lib/api/fetch.ts';
+	import { RATE_LIMITED_STATUS } from '#lib/constants/http.ts';
 	import { createAlbumCoverSuggestions, selectAlbumCoverSuggestion } from '#lib/api/albums.ts';
 	import type { AlbumItem } from '#lib/api/types.ts';
 	import {
-		RATE_LIMITED_STATUS,
 		albumCoverStageLabel,
 		albumCoverSuggestionAlt,
 		albumCoverSuggestionPosition,
-		albumCoverSuggestionsLeftToday,
+		albumCoverSuggestionsLeftToday
+	} from '#lib/constants.ts';
+	import {
 		ALBUM_COVER_ADD_LABEL,
 		ALBUM_COVER_ALT_TYPE,
 		ALBUM_COVER_DAILY_LIMIT_REACHED,
@@ -17,16 +19,16 @@
 		ALBUM_COVER_EDITING_UPLOAD_LABEL,
 		ALBUM_COVER_NEXT_SUGGESTION_LABEL,
 		ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL,
-		ALBUM_COVER_SUGGEST_ANOTHER_LABEL,
-		ALBUM_COVER_SUGGEST_LABEL,
 		ALBUM_COVER_SUGGESTING_LABEL,
+		ALBUM_COVER_SUGGESTIONS_LOADING,
+		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
 		ALBUM_COVER_SUGGESTION_FAILED_FALLBACK,
 		ALBUM_COVER_SUGGESTION_FAILED_TITLE,
 		ALBUM_COVER_SUGGESTION_USE_LABEL,
-		ALBUM_COVER_SUGGESTIONS_LOADING,
-		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
+		ALBUM_COVER_SUGGEST_ANOTHER_LABEL,
+		ALBUM_COVER_SUGGEST_LABEL,
 		ALBUM_COVER_SWIPE_TRAVEL_PX
-	} from '#lib/constants.ts';
+	} from '#lib/constants/album.ts';
 	import { updateAlbumInList } from '#lib/stores/libraryData.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import { releaseCoverSuggestions } from '#lib/stores/coverRuns.ts';
@@ -638,9 +640,9 @@
 
 	.cover-action.cover-use {
 		padding: 0 1rem;
-		border-color: var(--primary);
-		background: var(--primary);
-		color: #fff;
+		border-color: var(--accent);
+		background: var(--accent);
+		color: var(--on-accent);
 	}
 
 	.cover-action.cover-use:disabled {

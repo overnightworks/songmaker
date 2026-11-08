@@ -17,15 +17,14 @@ async function offlineLook(page: Page) {
 			displayFace: document.fonts.check('700 16px Oswald'),
 			bodyFace: document.fonts.check('400 16px "Open Sans"'),
 			background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
-			primary: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
 			chosenTheme: document.documentElement.dataset.theme ?? null
 		};
 	});
 }
 
 const LOOKS = {
-	light: { background: '#f4f4f6', primary: '#d41a0a' },
-	dark: { background: '#0d0d0d', primary: '#ff3220' }
+	light: { background: '#f4f4f6' },
+	dark: { background: '#0d0d0d' }
 } as const;
 
 type Scheme = keyof typeof LOOKS;

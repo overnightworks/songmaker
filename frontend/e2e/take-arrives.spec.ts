@@ -12,8 +12,8 @@
 // through the job's own terminal refresh — the path this flow pins.
 
 import { expect, test, type Page } from '@playwright/test';
+import { JOB_TYPE_GENERATE } from '../src/lib/constants/jobs';
 import {
-	JOB_TYPE_GENERATE,
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_SYNC_ERROR,
 	songEditorOpenLabel,

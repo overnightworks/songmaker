@@ -20,12 +20,14 @@
 		deletePreset
 	} from '#lib/stores/presets.ts';
 	import { fetchGenerationDefaults } from '#lib/api/client.ts';
-	import type { VersionGenerationParams } from '#lib/api/types.ts';
+	import type { PresetItem, VersionGenerationParams } from '#lib/api/types.ts';
+	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import ParamControls from '#lib/components/ParamControls.svelte';
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 	const activeIds = $derived($activeModelIds);
 	let error = $state('');
+	let presetPendingDelete = $state<PresetItem | null>(null);
 
 	let showPresetForm = $state(false);
 	let editingPresetId = $state<string | null>(null);
@@ -172,6 +174,7 @@
 	}
 
 	async function handleDeletePreset(presetId: string): Promise<void> {
+		presetPendingDelete = null;
 		try {
 			await deletePreset(presetId);
 		} catch {
@@ -189,7 +192,6 @@
 
 	<section>
 		<h2 id="default-config-heading">Default for New Songs</h2>
-		<p class="hint">When you create a song, this config is applied automatically.</p>
 		<div class="default-chips" role="radiogroup" aria-labelledby="default-config-heading">
 			{#each defaultOptions as option, index (option.id ?? 'inherit')}
 				<button
@@ -266,7 +268,7 @@
 							{preset.is_default ? 'unset default' : 'set default'}
 						</button>
 						<button class="preset-action" onclick={() => openEditPreset(preset.id)}> edit </button>
-						<button class="preset-action delete" onclick={() => handleDeletePreset(preset.id)}>
+						<button class="preset-action delete" onclick={() => (presetPendingDelete = preset)}>
 							delete
 						</button>
 					</div>
@@ -295,16 +297,18 @@
 	{/if}
 </div>
 
+{#if presetPendingDelete}
+	{@const doomed = presetPendingDelete}
+	<ConfirmDeleteDialog
+		title="Delete preset?"
+		items={[doomed.name]}
+		onconfirm={() => void handleDeletePreset(doomed.id)}
+		oncancel={() => (presetPendingDelete = null)}
+	/>
+{/if}
+
 <style>
-	h1 {
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-		font-size: 1.5rem;
+	:global(.settings-content) h1 {
 		margin-bottom: 1.5rem;
 	}
 
@@ -315,12 +319,6 @@
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-	}
-
-	.hint {
-		color: var(--text-subtle);
-		font-size: 0.85rem;
-		margin-bottom: 1rem;
 	}
 
 	.error {
@@ -370,13 +368,13 @@
 	}
 
 	.default-chip:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.default-chip.active {
 		border-color: transparent;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 	}
 
@@ -396,7 +394,7 @@
 	}
 
 	.save-btn {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 		border: none;
 		border-radius: var(--btn-radius-pill);
@@ -433,8 +431,8 @@
 	}
 
 	.reset-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.section-header {
@@ -462,8 +460,8 @@
 	}
 
 	.add-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.panel {
@@ -564,7 +562,7 @@
 		font-size: 0.7rem;
 		padding: 1px 6px;
 		border-radius: 3px;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 		letter-spacing: 0.5px;
 	}
@@ -581,13 +579,8 @@
 	}
 
 	.preset-action:hover {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.preset-action.delete:hover {
-		border-color: var(--fail);
-		color: var(--fail);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.empty {

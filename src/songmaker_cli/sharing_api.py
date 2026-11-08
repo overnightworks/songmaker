@@ -16,6 +16,7 @@ from webauth.rate_limit import RedisRateLimitBackend
 
 import songmaker_cli.constants as _consts
 from songmaker_cli.api_helpers import (
+    cover_file_response,
     enforce_rate_limit,
     get_cached_limiter,
     raise_audio_file_http_error,
@@ -61,10 +62,7 @@ from songmaker_cli.constants import (
     LimiterFailurePolicy,
 )
 from songmaker_cli.covers import (
-    COVER_RESPONSE_HEADERS,
-    CoverRejectedError,
     album_cover_file_exists,
-    cover_media_type,
     playlist_cover_file_exists,
     resolve_cover_file,
     resolve_playlist_cover_file,
@@ -77,6 +75,7 @@ from songmaker_cli.db.queries.generations import get_generation_by_slug
 from songmaker_cli.db.queries.playlists import get_playlist_by_slug
 from songmaker_cli.db.queries.sharing import (
     is_playable_take,
+    presented_take,
     shared_album_take_stored_path,
     shared_playlist_take_stored_path,
     shared_song_take_stored_path,
@@ -84,6 +83,8 @@ from songmaker_cli.db.queries.sharing import (
 from songmaker_cli.db.queries.songs import get_song_by_slug
 from songmaker_cli.queue_streams import (
     QueueStreamManifest,
+    QueueStreamSource,
+    SnapshotScope,
     build_queue_stream_snapshot,
     ensure_sources_detachable,
     load_queue_stream_manifest,
@@ -163,19 +164,6 @@ def _check_rate_limit(
     )
 
 
-def _picked_generation(song):
-    picked = [g for g in song.generations if g.is_picked and is_playable_take(g)]
-    if picked:
-        return picked[0]
-    available = sorted(
-        (g for g in song.generations if is_playable_take(g)),
-        key=lambda g: g.generation_number,
-    )
-    if available:
-        return available[-1]
-    return None
-
-
 def _shared_audio_url(
     route: str,
     generation,
@@ -246,19 +234,7 @@ def _shared_cover_response(
     entity = resolve_entity()
     if entity is None:
         raise HTTPException(404, NOT_FOUND_DETAIL)
-    if version is not None and version != entity.cover_key:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    try:
-        path = resolve_file(audio_dir, entity.id, entity.cover_key, variant)
-    except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
-    except FileNotFoundError:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    return FileResponse(
-        path,
-        media_type=cover_media_type(variant, entity.cover_key or ""),
-        headers=COVER_RESPONSE_HEADERS,
-    )
+    return cover_file_response(resolve_file, audio_dir, entity, variant, version)
 
 
 def _audio_response(audio_path: Path, cache_control: str) -> FileResponse:
@@ -297,7 +273,7 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
         valid_tracks = {
             (song.id, gen.id)
             for song in album.songs
-            if (gen := _picked_generation(song)) is not None
+            if (gen := presented_take(song.generations)) is not None
         }
         if any((track.song_id, track.generation_id) not in valid_tracks for track in tracks):
             raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
@@ -341,7 +317,7 @@ def get_shared_album(
         raise HTTPException(404, NOT_FOUND_DETAIL)
     ctx: AppContext = request.app.state.ctx
     songs = sorted(album.songs, key=lambda s: s.track_number)
-    picked_by_song = {s.id: _picked_generation(s) for s in songs}
+    picked_by_song = {s.id: presented_take(s.generations) for s in songs}
     cover = _offered_cover(
         album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key),
         lambda: public_album_cover_urls(slug, album.cover_key),
@@ -381,6 +357,30 @@ async def get_shared_album_cover(
     )
 
 
+def _public_queue_stream(
+    ctx: AppContext,
+    db: Session,
+    sources: list[QueueStreamSource],
+    scope: SnapshotScope,
+    slug: str,
+) -> QueueStreamManifestResponse:
+    ensure_sources_detachable(sources)
+    db.close()
+
+    try:
+        snapshot = build_queue_stream_snapshot(
+            ctx,
+            sources,
+            scope=scope,
+            scope_id=slug,
+            stream_url="",
+        )
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=True)
+    snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
+    return public_queue_stream_manifest(snapshot)
+
+
 @router.post(
     "/shared/{slug}/stream",
     responses={404: {"description": "Shared album not found"}},
@@ -399,7 +399,7 @@ def get_shared_album_stream(
     sources = []
     songs = sorted(album.songs, key=lambda s: s.track_number)
     for index, song in enumerate(songs):
-        gen = _picked_generation(song)
+        gen = presented_take(song.generations)
         if not gen:
             continue
         audio_url = _shared_audio_url(f"/shared/{slug}/audio", gen)
@@ -414,21 +414,7 @@ def get_shared_album_stream(
                 audio_url=audio_url,
             )
         )
-    ensure_sources_detachable(sources)
-    db.close()
-
-    try:
-        snapshot = build_queue_stream_snapshot(
-            ctx,
-            sources,
-            scope="shared-album",
-            scope_id=slug,
-            stream_url="",
-        )
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=True)
-    snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
-    return public_queue_stream_manifest(snapshot)
+    return _public_queue_stream(ctx, db, sources, "shared-album", slug)
 
 
 @router.get(
@@ -463,7 +449,7 @@ def get_shared_song(
     song = get_song_by_slug(db, slug)
     if not song:
         raise HTTPException(404, NOT_FOUND_DETAIL)
-    gen = _picked_generation(song)
+    gen = presented_take(song.generations)
     media = share_pick_media(gen)
     cover = _offered_cover(
         song_cover_file_exists(ctx.audio_dir, song.id, song.cover_key),
@@ -808,21 +794,7 @@ def get_shared_playlist_stream(
                 audio_url=audio_url,
             )
         )
-    ensure_sources_detachable(sources)
-    db.close()
-
-    try:
-        snapshot = build_queue_stream_snapshot(
-            ctx,
-            sources,
-            scope="shared-playlist",
-            scope_id=slug,
-            stream_url="",
-        )
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=True)
-    snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
-    return public_queue_stream_manifest(snapshot)
+    return _public_queue_stream(ctx, db, sources, "shared-playlist", slug)
 
 
 @router.get(

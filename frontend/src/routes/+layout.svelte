@@ -10,6 +10,7 @@
 		SIGN_IN_PATH,
 		signInAddress
 	} from '#lib/api/fetch.ts';
+	import BusyState from '#lib/components/BusyState.svelte';
 	import AccountMenu from '#lib/components/AccountMenu.svelte';
 	import PhoneAppBar from '#lib/components/PhoneAppBar.svelte';
 	import Rail from '#lib/components/shell/Rail.svelte';
@@ -306,7 +307,7 @@
 		<OfflineStrip />
 	</div>
 {:else if $authLoading}
-	<div class="loading">Loading...</div>
+	<div class="auth-gate"><BusyState text="Loading..." /></div>
 {:else if authRetryable}
 	<div class="auth-retry">
 		<p>{$authCheckError}</p>
@@ -350,13 +351,9 @@
 {/if}
 
 <style>
-	.loading {
+	.auth-gate {
 		display: flex;
-		align-items: center;
-		justify-content: center;
 		height: 100dvh;
-		color: var(--text-muted);
-		font-size: 1.1rem;
 	}
 
 	.auth-retry {

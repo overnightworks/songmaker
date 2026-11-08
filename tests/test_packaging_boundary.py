@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 from support.compose_config import run_compose_config
 from support.repository_root import REPOSITORY_ROOT
 
@@ -28,7 +30,7 @@ SOURCE_ROOT = REPOSITORY_ROOT / "src"
 DOCKER_ROOT = REPOSITORY_ROOT / "docker"
 UV_INSTALLED_ENVIRONMENT_FLAGS = frozenset({"--no-sync", "--frozen", "--no-build"})
 IMAGE_VIRTUALENV_BIN = "/app/.venv/bin/"
-WEB_ENTRYPOINT_SCRIPT = "/app/docker-entrypoint.sh"
+WEB_ENTRYPOINT_SCRIPT = "/app/start_web_server.sh"
 E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 VOICES_E2E_OVERLAY = ("-f", "docker/docker-compose.e2e-voices.yml")
 DOCKER_DEFAULT_RESTART_POLICY = "no"
@@ -54,27 +56,17 @@ def _optional_distribution_roots() -> dict[str, frozenset[str]]:
     for distribution in _optional_extras_by_distribution():
         roots = frozenset(
             root for root, owners in installed_roots.items()
-            if distribution in {_normalized_distribution(owner) for owner in owners}
+            if distribution in {canonicalize_name(owner) for owner in owners}
         )
         if roots:
             result[distribution] = roots
     return result
 
 
-def _normalized_distribution(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
-
-
-def _requirement_distribution(requirement: str) -> str:
-    match = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", requirement)
-    assert match, f"could not parse dependency {requirement!r}"
-    return _normalized_distribution(match.group())
-
-
 def _core_distributions() -> frozenset[str]:
     pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
     return frozenset(
-        _requirement_distribution(requirement)
+        canonicalize_name(Requirement(requirement).name)
         for requirement in pyproject["project"]["dependencies"]
     )
 
@@ -82,18 +74,26 @@ def _core_distributions() -> frozenset[str]:
 def _optional_extras_by_distribution() -> dict[str, frozenset[str]]:
     """Map every genuinely optional distribution to the extras that install it.
 
-    A distribution the project also requires unconditionally is installed in
-    every container whatever its extras, so naming it in an extra says what
-    that extra needs without making it omittable.
+    A core requirement is installed everywhere, so naming it in an extra does
+    not make it omittable; `songmaker[signal]` installs that extra's members.
     """
-    pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
-    core = _core_distributions()
+    project = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())["project"]
+    project_name = canonicalize_name(project["name"])
+    declared = project["optional-dependencies"]
+
+    def installed_by(extra: str, path: frozenset[str]) -> set[str]:
+        found: set[str] = set()
+        for requirement in map(Requirement, declared[extra]):
+            name = canonicalize_name(requirement.name)
+            included_extras = requirement.extras if name == project_name else frozenset()
+            found.add(name)
+            for included in included_extras - path:
+                found |= installed_by(included, path | {included})
+        return found - {project_name}
+
     result: dict[str, set[str]] = {}
-    for extra, requirements in pyproject["project"]["optional-dependencies"].items():
-        for requirement in requirements:
-            distribution = _requirement_distribution(requirement)
-            if distribution in core:
-                continue
+    for extra in declared:
+        for distribution in installed_by(extra, frozenset({extra})) - _core_distributions():
             result.setdefault(distribution, set()).add(extra)
     return {distribution: frozenset(extras) for distribution, extras in result.items()}
 
@@ -376,22 +376,22 @@ def _dockerfile_entrypoint_starts() -> list[ContainerStart]:
 
 
 def _entrypoint_script_starts() -> list[ContainerStart]:
-    return [
+    starts = [
         ContainerStart(f"{_relative(script)}::exec", tuple(shlex.split(line)[1:]))
-        for script in sorted(DOCKER_ROOT.glob("*.sh"))
+        for script in sorted(DOCKER_ROOT.rglob("*.sh"))
         for line in script.read_text().splitlines()
         if line.strip().startswith("exec ")
     ]
+    assert starts, "found no exec line in any script under docker/"
+    return starts
 
 
 def _repo_built_container_starts() -> list[ContainerStart]:
-    starts = [
+    return [
         *_compose_entrypoint_starts(),
         *_dockerfile_entrypoint_starts(),
         *_entrypoint_script_starts(),
     ]
-    assert starts, "found no container start to check"
-    return starts
 
 
 def _import_startup_modules(

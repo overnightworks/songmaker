@@ -8,6 +8,7 @@
 
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
+	import { COLLECTION_MENU_EDIT_DETAILS_LABEL } from '#lib/constants.ts';
 	import {
 		ALBUM_DETAILS_CLOSE_LABEL,
 		ALBUM_DETAILS_SAVE_LABEL,
@@ -15,11 +16,12 @@
 		ALBUM_SUBTITLE_LABEL,
 		ALBUM_SUBTITLE_MAX_LENGTH,
 		ALBUM_YEAR_LABEL,
-		ALBUM_YEAR_MAX_LENGTH,
-		COLLECTION_MENU_EDIT_DETAILS_LABEL,
+		ALBUM_YEAR_MAX_LENGTH
+	} from '#lib/constants/album.ts';
+	import {
 		NEW_ALBUM_TITLE_LABEL,
 		NEW_PLACE_TEXT_MAX_LENGTH
-	} from '#lib/constants.ts';
+	} from '#lib/constants/new-collection.ts';
 	import { holdOpenWhile } from '#lib/stores/layers.ts';
 	import Icon from './Icon.svelte';
 

@@ -34,16 +34,13 @@ import {
 	loadPlaylistDetail,
 	selectedPlaylist
 } from '#lib/stores/playlists.ts';
-import { resourceSync } from '#lib/stores/resourceSync.ts';
+import { onLibraryReady } from '#lib/stores/libraryRecovery.ts';
 import { openCollection, setOpenCollection, type OpenCollection } from '#lib/stores/collection.ts';
 import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
 import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
 import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
-import {
-	ADMIN_WORKER_POOL_HREF,
-	API_ERROR_GENERIC_MESSAGE,
-	SONG_LINK_NOT_FOUND_TOAST
-} from '#lib/constants.ts';
+import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';
+import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
 import {
 	isPlaylistRoutePath,
 	isSongRoutePath,
@@ -489,18 +486,11 @@ function settleSongAddress(songId: string): void {
 	void replaceLibraryHistory();
 }
 
-// Leaves a song the server no longer has, but only while the person is still
-// there: the selection names it, or nothing is selected and the standing
-// library entry names it (a Back or Forward onto the entry of a song deleted
-// meanwhile, whose selection the restore already cleared). A selection of
-// another song is a newer choice that wins over this late 404.
+// Leaves a song the server no longer has, but only while the selection still
+// names it: a selection of another song, or none, is a newer choice that wins
+// over this late 404.
 export function leaveGoneSong(songId: string): void {
-	const selected = get(selectedSongId);
-	if (selected !== null && selected !== songId) return;
-	if (selected === null) {
-		const standing = currentLibraryHistoryState();
-		if (!isLibraryHistoryState(standing) || standing.songId !== songId) return;
-	}
+	if (get(selectedSongId) !== songId) return;
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
@@ -738,22 +728,13 @@ export function initNavigation(): () => void {
 // restart) restores the standing song's context again. The work runs one
 // microtask after the sync's store update, once its own bookkeeping is done.
 export function followLibrarySync(): () => void {
-	let following = true;
 	let detachLandingHandler: (() => void) | undefined;
-	let wasReady = get(resourceSync).ready;
-	const unsubscribe = resourceSync.subscribe(({ ready }) => {
-		const becameReady = ready && !wasReady;
-		wasReady = ready;
-		if (!becameReady) return;
-		queueMicrotask(() => {
-			if (!following) return;
-			if (detachLandingHandler) restoreStandingSongContext();
-			else detachLandingHandler = initNavigation();
-		});
+	const stopFollowing = onLibraryReady(() => {
+		if (detachLandingHandler) restoreStandingSongContext();
+		else detachLandingHandler = initNavigation();
 	});
 	return () => {
-		following = false;
-		unsubscribe();
+		stopFollowing();
 		detachLandingHandler?.();
 	};
 }

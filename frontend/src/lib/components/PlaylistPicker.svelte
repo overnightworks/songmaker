@@ -235,7 +235,7 @@
 	}
 
 	.picker-add:hover:not(:disabled) {
-		color: var(--primary);
+		color: var(--accent);
 	}
 
 	.picker-add:disabled {

@@ -56,7 +56,7 @@ def test_generate_skips_lora_when_path_empty(tmp_path: Path) -> None:
             return_value=AceStepResult(wav_bytes=b"\x00" * 44, seed=42),
         ),
     ):
-        client.generate(config)
+        client.generate(config, on_progress=lambda _progress: None)
 
     assert calls == []
 
@@ -87,7 +87,7 @@ def test_generate_loads_and_unloads_when_lora_set(tmp_path: Path) -> None:
             return_value=AceStepResult(wav_bytes=b"\x00" * 44, seed=42),
         ),
     ):
-        client.generate(config)
+        client.generate(config, on_progress=lambda _progress: None)
 
     assert calls == [f"load:{config.lora_path}", "unload"]
 
@@ -121,7 +121,7 @@ def test_generate_ends_before_submission_if_lora_load_failed(tmp_path: Path) -> 
             TaskSubmissionError,
             match=f"Failed to load configured LoRA adapter: {re.escape(config.lora_path)}",
         ):
-            client.generate(config)
+            client.generate(config, on_progress=lambda _progress: None)
 
     assert calls == ["load-failed"]
     submit_task.assert_not_called()

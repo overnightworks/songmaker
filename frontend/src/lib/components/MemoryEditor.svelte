@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { MemoryBundle, MemoryScopeItem } from '#lib/api/types.ts';
-	import { COWRITER_MEMORY_LABEL } from '#lib/constants.ts';
+	import { COWRITER_MEMORY_LABEL } from '#lib/constants/cowriter.ts';
 	import { refocusIfDropped } from '#lib/utils/focus-trap.ts';
 	import Icon from './Icon.svelte';
 	import {

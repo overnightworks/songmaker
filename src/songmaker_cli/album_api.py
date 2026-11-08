@@ -17,6 +17,7 @@ from songmaker_cli.agent.backend import TurnCaller, cover_admission
 from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,
+    cover_file_response,
     owner_filter,
     page_has_more,
     parse_optional_search_query,
@@ -46,7 +47,6 @@ from songmaker_cli.audio_paths import AudioPathRejectedError
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
-    COVER_NOT_FOUND,
     COVER_SUGGESTION_NOT_FOUND,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
@@ -63,14 +63,12 @@ from songmaker_cli.cover_suggestions import (
 from songmaker_cli.covers import (
     COVER_RESPONSE_HEADERS,
     CoverRejectedError,
-    cover_media_type,
     remove_album_cover_files,
     resolve_cover_file,
     write_album_cover,
 )
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries.albums import (
-    RestoreWindowExpiredError,
     album_ids_with_playable_take,
     archive_album,
     count_albums,
@@ -99,6 +97,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.sentinels import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
+from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -376,19 +375,7 @@ async def api_get_album_cover(
 ) -> FileResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    if v is not None and v != album.cover_key:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    try:
-        path = resolve_cover_file(ctx.audio_dir, album.id, album.cover_key, variant)
-    except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
-    except FileNotFoundError:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    return FileResponse(
-        path,
-        media_type=cover_media_type(variant, album.cover_key or ""),
-        headers=COVER_RESPONSE_HEADERS,
-    )
+    return cover_file_response(resolve_cover_file, ctx.audio_dir, album, variant, v)
 
 
 @router.post("/albums/{album_id}/cover")

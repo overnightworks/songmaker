@@ -10,8 +10,8 @@
 // Both shells drive every flow.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
 
-import { SETTINGS_NAV_LABEL } from '../src/lib/constants';
 import {
 	FlowGuard,
 	leftTheApp,

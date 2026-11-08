@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ALBUM_COVER_EDIT_LABEL } from '#lib/constants.ts';
+import { ALBUM_COVER_EDIT_LABEL } from '#lib/constants/album.ts';
 import { albumCoverMarkedLabel } from '#lib/constants/album-cover-mark.ts';
 import CoverActivityMark, { type CoverMark } from './CoverActivityMark.svelte';
 

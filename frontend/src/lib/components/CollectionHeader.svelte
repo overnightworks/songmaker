@@ -5,7 +5,7 @@
 	import CollectionMenu from './CollectionMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
-	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '#lib/constants.ts';
+	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '#lib/constants/album.ts';
 	import { albumCoverMarkedLabel } from '#lib/constants/album-cover-mark.ts';
 	import type { CoverMark } from './CoverActivityMark.svelte';
 	import { songCountLabel } from '#lib/utils/format.ts';

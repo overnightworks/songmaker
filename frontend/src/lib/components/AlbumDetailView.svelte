@@ -46,19 +46,21 @@
 		watchCoverActivity
 	} from '#lib/stores/coverActivity.ts';
 	import {
+		LIBRARY_ALBUMS_LOADING,
+		LIBRARY_RETRY_LABEL,
+		PLACE_LINE_SEPARATOR
+	} from '#lib/constants.ts';
+	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,
-		ALBUM_DETAILS_SAVE_FAILED,
 		ALBUM_DETAILS_SAVED,
+		ALBUM_DETAILS_SAVE_FAILED,
 		ALBUM_NO_SONGS,
 		ALBUM_YEAR_MAX,
-		ALBUM_YEAR_MIN,
-		LIBRARY_ALBUMS_LOADING,
-		LIBRARY_RETRY_LABEL,
-		NEW_SONG_ROW_LABEL,
-		PLACE_LINE_SEPARATOR
-	} from '#lib/constants.ts';
+		ALBUM_YEAR_MIN
+	} from '#lib/constants/album.ts';
+	import { NEW_SONG_ROW_LABEL } from '#lib/constants/new-collection.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { albumHasPlayableTake, albumSongsSettled, songPlayability } from '#lib/utils/playable.ts';
 	import type { SongItem } from '#lib/api/types.ts';
@@ -556,8 +558,8 @@
 	}
 
 	.retry-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	@media (max-width: 768px) {

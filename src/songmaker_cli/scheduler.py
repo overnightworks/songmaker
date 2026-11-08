@@ -234,7 +234,7 @@ async def pick_any_online_worker(
     return min(workers, key=lambda w: w.id)
 
 
-def _internal_headers() -> dict[str, str]:
+def worker_request_headers() -> dict[str, str]:
     return {
         INTERNAL_TOKEN_HEADER: get_settings().songmaker_internal_token.get_secret_value(),
     }
@@ -310,7 +310,7 @@ async def _load_model(
             resp = await client.post(
                 f"{worker.base_url}/load_model",
                 json={"mode": target_mode},
-                headers=_internal_headers(),
+                headers=worker_request_headers(),
             )
         except httpx.TransportError as exc:
             raise WorkerGenerationUnavailable(str(exc)) from exc
@@ -336,7 +336,7 @@ async def _submit_generation(
             resp = await client.post(
                 f"{worker.base_url}/generate",
                 json={"mode": target_mode, "config": config_payload},
-                headers=_internal_headers(),
+                headers=worker_request_headers(),
             )
         except httpx.TransportError as exc:
             raise WorkerGenerationUnavailable(str(exc)) from exc
@@ -400,7 +400,7 @@ async def _worker_task_events(
         client.stream(
             "GET",
             f"{worker.base_url}/tasks/{task_id}/stream",
-            headers=_internal_headers(),
+            headers=worker_request_headers(),
         ) as response,
     ):
         response.raise_for_status()
@@ -527,7 +527,7 @@ async def _stream_generation_result(
             httpx.AsyncClient(timeout=timeout, transport=options.transport) as client,
             client.stream(
                 "GET", f"{worker.base_url}/tasks/{task_id}/result",
-                headers={**_internal_headers(), "Accept-Encoding": "identity"},
+                headers={**worker_request_headers(), "Accept-Encoding": "identity"},
             ) as response,
         ):
             response.raise_for_status()
@@ -559,7 +559,7 @@ async def _release_generation_result(
             ) as client,
             client.stream(
                 "DELETE", f"{worker.base_url}/tasks/{task_id}/result",
-                headers=_internal_headers(),
+                headers=worker_request_headers(),
             ) as response,
         ):
             response.raise_for_status()

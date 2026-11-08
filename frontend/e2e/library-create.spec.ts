@@ -1,4 +1,5 @@
 import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
+import { RATE_LIMITED_TOAST_MESSAGE } from '../src/lib/constants/http';
 // + NEW on Home's head makes an album or a playlist at both widths, even from
 // an empty library (account_rule_1 in docs/navigation.md). The desktop
 // Library and Playlists heads keep it; the phone's list heads carry the order
@@ -25,6 +26,13 @@ import {
 	LIBRARY_NEW_PLAYLIST_LABEL,
 	LIBRARY_WALL_EMPTY,
 	LIBRARY_WALL_ORDER_GROUP_LABEL,
+	newSongCardLabel,
+	PLAYLISTS_WALL_EMPTY,
+	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
+	LIBRARY_PAGE_LABEL,
+	PLAYLISTS_PAGE_LABEL
+} from '../src/lib/constants';
+import {
 	NEW_ALBUM_CARD_LABEL,
 	NEW_ALBUM_CLOSE_LABEL,
 	NEW_ALBUM_FAILED,
@@ -36,14 +44,8 @@ import {
 	NEW_PLAYLIST_NAME_LABEL,
 	NEW_SONG_CLOSE_LABEL,
 	NEW_SONG_ROW_LABEL,
-	NEW_SONG_TITLE_LABEL,
-	newSongCardLabel,
-	PLAYLISTS_WALL_EMPTY,
-	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
-	LIBRARY_PAGE_LABEL,
-	PLAYLISTS_PAGE_LABEL,
-	RATE_LIMITED_TOAST_MESSAGE
-} from '../src/lib/constants';
+	NEW_SONG_TITLE_LABEL
+} from '../src/lib/constants/new-collection';
 import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
 import {
 	boundingBoxes,

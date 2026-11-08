@@ -1,13 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { describeFailure } from '#lib/api/fetch.ts';
 	import { LIBRARY_ROUTE_ID } from '#lib/routes/addresses.ts';
+	import { createAddressLoad } from '#lib/stores/addressLoad.svelte.ts';
 	import { openPlaylistAddress } from '#lib/stores/libraryContext.ts';
-	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
-	import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
-
-	type AddressState = 'resolving' | 'open' | 'unknown' | 'unreachable';
 
 	const RESOLVING_LABEL = 'Loading playlist...';
 	const UNKNOWN_PLAYLIST_HEADING = 'No such playlist';
@@ -16,64 +12,26 @@
 	const BACK_TO_LIBRARY_LABEL = 'Back to the library';
 	const RETRY_LABEL = 'Try again';
 
-	let addressState = $state<AddressState>('resolving');
-	let failure = $state<string | null>(null);
-	let openRequests = 0;
-	// An address that could not be read shows its one line with Retry, and
-	// reads again by itself once the network lets it (#1107 S9).
-	const addressReloads = reloadWhileUnreachable(() => void openAddress(slug));
-	$effect(() => () => addressReloads.stop());
-
 	const slug = $derived(page.params.slug ?? '');
 
-	$effect(() => {
-		void openAddress(slug);
+	const address = createAddressLoad<'unknown'>({
+		load: () => openPlaylistAddress(slug),
+		fallbackMessage: UNREACHABLE_PLAYLIST_MESSAGE
 	});
-
-	// The overlay above hides a stale workspace visually (`position: absolute`)
-	// but not from the accessibility tree or the tab order -- `inert` on the
-	// workspace wrapper is what actually does that, and it lives one level up
-	// in `(library)/+layout.svelte`, so this bridges the address state across
-	// with a store. Active whenever this page isn't showing the open workspace,
-	// including the (route-change-only) unmount below: leaving this page for
-	// `/` or another address must not leave the workspace inert behind it.
-	$effect(() => {
-		libraryAddressOverlayActive.set(addressState !== 'open');
-		return () => libraryAddressOverlayActive.set(false);
-	});
-
-	async function openAddress(playlistSlug: string): Promise<void> {
-		const request = ++openRequests;
-		addressState = 'resolving';
-		failure = null;
-		try {
-			const address = await openPlaylistAddress(playlistSlug);
-			if (request !== openRequests) return;
-			addressReloads.stop();
-			addressState = address === 'found' ? 'open' : 'unknown';
-		} catch (err) {
-			if (request !== openRequests) return;
-			addressReloads.afterLoadFailure(err);
-			failure = describeFailure(err, UNREACHABLE_PLAYLIST_MESSAGE);
-			addressState = 'unreachable';
-		}
-	}
 </script>
 
-{#if addressState === 'unknown'}
+{#if address.state === 'unknown'}
 	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_PLAYLIST_HEADING}</h1>
 		<p>{UNKNOWN_PLAYLIST_MESSAGE}</p>
 		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
 	</div>
-{:else if addressState === 'unreachable'}
+{:else if address.state === 'unreachable' && !address.pressing}
 	<div class="address-overlay" role="alert">
-		<p>{failure ?? UNREACHABLE_PLAYLIST_MESSAGE}</p>
-		<button class="address-action" type="button" onclick={() => openAddress(slug)}
-			>{RETRY_LABEL}</button
-		>
+		<p>{address.failure ?? UNREACHABLE_PLAYLIST_MESSAGE}</p>
+		<button class="address-action" type="button" onclick={address.tryAgain}>{RETRY_LABEL}</button>
 	</div>
-{:else if addressState === 'resolving'}
+{:else if address.state === 'resolving' || address.pressing}
 	<div class="address-overlay">{RESOLVING_LABEL}</div>
 {/if}
 
@@ -117,7 +75,7 @@
 	}
 
 	.address-action:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 </style>

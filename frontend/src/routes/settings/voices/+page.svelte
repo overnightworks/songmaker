@@ -15,7 +15,8 @@
 	import ToastContainer from '#lib/components/ToastContainer.svelte';
 	import LoraDetail from '#lib/components/LoraDetail.svelte';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
-	import { APP_NAME, VOICES_LOAD_FAILED } from '#lib/constants.ts';
+	import { APP_NAME } from '#lib/constants.ts';
+	import { VOICES_LOAD_FAILED } from '#lib/constants/voice.ts';
 	import { LORA_CREATE_FAILED, LORA_POLL_INTERVAL_MS } from '#lib/constants/lora.ts';
 	import type { UserLoraItem } from '#lib/api/types.ts';
 
@@ -234,18 +235,6 @@
 		flex-wrap: wrap;
 	}
 
-	h1 {
-		margin: 0;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-		font-size: 1.5rem;
-	}
-
 	.head-actions {
 		display: flex;
 		gap: 0.8rem;
@@ -277,8 +266,8 @@
 	}
 
 	.create-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.create-panel {
@@ -318,7 +307,7 @@
 		padding: 0.5rem 1.1rem;
 		border: none;
 		border-radius: var(--btn-radius-pill);
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 		cursor: pointer;
 		font-family: var(--font-display);
@@ -405,7 +394,7 @@
 	}
 
 	.status-badge.active {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 	}
 
@@ -460,8 +449,8 @@
 	}
 
 	.danger:hover:not(:disabled) {
-		border-color: var(--fail);
-		color: var(--fail);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.danger:disabled {

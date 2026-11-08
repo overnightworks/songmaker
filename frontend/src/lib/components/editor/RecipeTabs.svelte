@@ -29,8 +29,7 @@
 		type RecipeTab,
 		type RecipeValues
 	} from '#lib/utils/recipe-standard.ts';
-	import { RECIPE_PANEL_LABEL, REFERENCE_AUDIO_ACCEPT } from '#lib/constants.ts';
-	import { VOICE_PICKER_NONE_LABEL } from '#lib/constants/voice.ts';
+	import { REFERENCE_AUDIO_ACCEPT } from '#lib/constants.ts';
 	import {
 		RECIPE_AUTO_LABEL,
 		RECIPE_BPM_LABEL,
@@ -48,6 +47,7 @@
 		RECIPE_MODEL_LABEL,
 		RECIPE_MODEL_LOADED,
 		RECIPE_MODEL_LOADING,
+		RECIPE_PANEL_LABEL,
 		RECIPE_PRESET_CUSTOM_OPTION,
 		RECIPE_PRESET_DEFAULT_OPTION,
 		RECIPE_PRESET_LABEL,
@@ -55,18 +55,19 @@
 		RECIPE_PRESET_SAVE_ERROR,
 		RECIPE_REFERENCE_LABEL,
 		RECIPE_REFERENCE_UPLOAD,
-		RECIPE_REFERENCE_UPLOAD_ERROR,
 		RECIPE_REFERENCE_UPLOADING,
+		RECIPE_REFERENCE_UPLOAD_ERROR,
 		RECIPE_RESET_ALL_LABEL,
 		RECIPE_RESET_GLYPH,
 		RECIPE_RETRY_LABEL,
 		RECIPE_SAVED_WITH_VERSION,
 		RECIPE_SAVE_AS_PRESET_LABEL,
-		RECIPE_TAB_LABELS,
 		RECIPE_TABS_LABEL,
+		RECIPE_TAB_LABELS,
 		RECIPE_TAKES_LABEL,
 		RECIPE_TAKES_OPTIONS
 	} from '#lib/constants/recipe.ts';
+	import { VOICE_PICKER_NONE_LABEL } from '#lib/constants/voice.ts';
 	import ParamControls from '../ParamControls.svelte';
 	import VoicePicker from '../VoicePicker.svelte';
 
@@ -302,7 +303,7 @@
 {#snippet footer(tab: RecipeTab)}
 	<div class="foot">
 		{#if TABS_SAVED_WITH_VERSION.includes(tab)}
-			<span class="saved">{RECIPE_SAVED_WITH_VERSION}</span>
+			<span class="saved-badge">{RECIPE_SAVED_WITH_VERSION}</span>
 		{/if}
 		<button
 			type="button"
@@ -608,13 +609,17 @@
 		border-top: 1px solid var(--border);
 	}
 
-	.saved,
-	.hint {
+	.saved-badge {
+		padding: 0.1rem 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-pill);
 		color: var(--text-muted);
 		font-size: var(--label-font-size);
 	}
 
 	.hint {
+		color: var(--text-muted);
+		font-size: var(--label-font-size);
 		margin: 0.6rem 0 0;
 	}
 

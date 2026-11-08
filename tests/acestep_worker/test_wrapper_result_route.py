@@ -15,12 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from test_wrapper import (
-    _INTERNAL_HEADERS,
-    _make_deps,
-    _run,
-    real_generate_worker,  # noqa: F401 - the pytest fixture, used by name
-)
+from support.wrapper_deps import INTERNAL_HEADERS, make_deps, run
 
 from acestep_worker.__main__ import build_deps
 from acestep_worker.clock import utcnow
@@ -45,7 +40,7 @@ async def _finished_take(deps: WorkerDeps, root: Path) -> tuple[str, Path]:
 
 @pytest.fixture
 def world(tmp_path: Path):
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     root = tmp_path / "local-output"
 
     async def client() -> AsyncIterator[httpx.AsyncClient]:
@@ -63,10 +58,10 @@ def test_result_route_serves_the_take_to_the_internal_token(world) -> None:
     async def go():
         task_id, _ = await _finished_take(deps, root)
         async for http in client():
-            response = await http.get(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
+            response = await http.get(f"/tasks/{task_id}/result", headers=INTERNAL_HEADERS)
             assert (response.status_code, response.content) == (200, _TAKE_BYTES)
 
-    _run(go())
+    run(go())
 
 
 @pytest.mark.parametrize("headers, status", [
@@ -87,7 +82,7 @@ def test_result_route_refuses_a_missing_or_wrong_token_and_serves_no_bytes(
                 assert _TAKE_BYTES not in response.content
         assert take.read_bytes() == _TAKE_BYTES
 
-    _run(go())
+    run(go())
 
 
 def test_result_route_opens_no_file_the_store_did_not_record(world, tmp_path: Path) -> None:
@@ -104,13 +99,13 @@ def test_result_route_opens_no_file_the_store_did_not_record(world, tmp_path: Pa
         crafted = ["planted", "../secret.txt", "..%2Fsecret.txt", str(secret), "unknown-id"]
         async for http in client():
             for task_id in (*crafted, running, failed):
-                response = await http.get(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
+                response = await http.get(f"/tasks/{task_id}/result", headers=INTERNAL_HEADERS)
                 assert response.status_code == 404, task_id
                 assert b"PLANTED-BYTES" not in response.content
                 assert b"not a take" not in response.content
         assert recorded
 
-    _run(go())
+    run(go())
 
 
 def test_delete_removes_the_take_and_a_second_fetch_finds_nothing(world) -> None:
@@ -119,22 +114,22 @@ def test_delete_removes_the_take_and_a_second_fetch_finds_nothing(world) -> None
     async def go():
         task_id, take = await _finished_take(deps, root)
         async for http in client():
-            deleted = await http.delete(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
-            again = await http.get(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
-            snapshot = await http.get(f"/tasks/{task_id}", headers=_INTERNAL_HEADERS)
+            deleted = await http.delete(f"/tasks/{task_id}/result", headers=INTERNAL_HEADERS)
+            again = await http.get(f"/tasks/{task_id}/result", headers=INTERNAL_HEADERS)
+            snapshot = await http.get(f"/tasks/{task_id}", headers=INTERNAL_HEADERS)
         assert deleted.status_code == 204
         assert not take.exists()
         assert again.status_code == 404
         assert snapshot.json()["state"] == "done"
 
-    _run(go())
+    run(go())
 
 
 def test_the_expiry_sweep_removes_the_take_with_its_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def go():
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         store = TaskStore(retention_seconds=0.0)
         deps.task_store = store
         _, take = await _finished_take(deps, tmp_path / "out")
@@ -144,7 +139,7 @@ def test_the_expiry_sweep_removes_the_take_with_its_record(
         assert await store.cleanup_terminal() == 1
         assert not take.exists()
 
-    _run(go())
+    run(go())
 
 
 def _get_scope(path: str, spec_version: str = "2.0") -> dict:
@@ -154,7 +149,7 @@ def _get_scope(path: str, spec_version: str = "2.0") -> dict:
         "scheme": "http", "path": path, "raw_path": path.encode(), "query_string": b"",
         "root_path": "", "server": ("worker", 80), "client": ("music", 1),
         "headers": [(b"host", b"worker"), *(
-            (name.lower().encode(), value.encode()) for name, value in _INTERNAL_HEADERS.items()
+            (name.lower().encode(), value.encode()) for name, value in INTERNAL_HEADERS.items()
         )],
     }
 
@@ -192,7 +187,7 @@ def test_a_result_stream_survives_a_delete_or_sweep_after_it_opened(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, release: str,
 ) -> None:
     async def go():
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         deps.task_store = TaskStore(retention_seconds=0.0)
         task_id, take = await _finished_take(deps, tmp_path / "out")
         app = create_app(deps)
@@ -203,7 +198,7 @@ def test_a_result_stream_survives_a_delete_or_sweep_after_it_opened(
                     transport=httpx.ASGITransport(app=app), base_url="http://worker",
                 ) as http:
                     deleted = await http.delete(
-                        f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS,
+                        f"/tasks/{task_id}/result", headers=INTERNAL_HEADERS,
                     )
                 assert deleted.status_code == 204
             else:
@@ -218,7 +213,7 @@ def test_a_result_stream_survives_a_delete_or_sweep_after_it_opened(
         )
         assert (status, body) == (200, _TAKE_BYTES)
 
-    _run(go())
+    run(go())
 
 
 @pytest.fixture
@@ -276,14 +271,14 @@ def test_a_result_response_closes_its_take_however_delivery_ends(
     tmp_path: Path, opened_takes: list[BinaryIO], interruption: str,
 ) -> None:
     async def go():
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         task_id, take = await _finished_take(deps, tmp_path / "out")
         take.write_bytes(b"x" * (3 * 64 * 1024))
         await _get_interrupted(create_app(deps), f"/tasks/{task_id}/result", interruption)
         assert opened_takes
         assert all(handle.closed for handle in opened_takes)
 
-    _run(go())
+    run(go())
 
 
 def test_a_result_whose_size_cannot_be_read_answers_an_error_and_closes_its_take(
@@ -293,7 +288,7 @@ def test_a_result_whose_size_cannot_be_read_answers_an_error_and_closes_its_take
         raise OSError(5, "Input/output error")
 
     async def go():
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         task_id, _ = await _finished_take(deps, tmp_path / "out")
         monkeypatch.setattr(
             "acestep_worker.task_results.os", SimpleNamespace(fstat=failing_fstat),
@@ -302,12 +297,12 @@ def test_a_result_whose_size_cannot_be_read_answers_an_error_and_closes_its_take
             transport=httpx.ASGITransport(app=create_app(deps), raise_app_exceptions=False),
             base_url="http://worker",
         ) as http:
-            response = await http.get(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
+            response = await http.get(f"/tasks/{task_id}/result", headers=INTERNAL_HEADERS)
         assert response.status_code == 500
         assert opened_takes
         assert all(handle.closed for handle in opened_takes)
 
-    _run(go())
+    run(go())
 
 
 class _HoldableExecutor(ThreadPoolExecutor):
@@ -337,7 +332,7 @@ def test_a_result_response_cancelled_during_its_cleanup_still_closes_its_take(
     tmp_path: Path, opened_takes: list[BinaryIO],
 ) -> None:
     async def go():
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         task_id, _ = await _finished_take(deps, tmp_path / "out")
         executor = _HoldableExecutor()
         asyncio.get_running_loop().set_default_executor(executor)
@@ -367,7 +362,7 @@ def test_a_result_response_cancelled_during_its_cleanup_still_closes_its_take(
         assert opened_takes
         assert all(handle.closed for handle in opened_takes)
 
-    _run(go())
+    run(go())
 
 
 def test_a_result_open_cancelled_in_its_thread_closes_the_take(
@@ -388,7 +383,7 @@ def test_a_result_open_cancelled_in_its_thread_closes_the_take(
     monkeypatch.setattr(Path, "open", open_held_after_opening)
 
     async def go():
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         task_id, _ = await _finished_take(deps, tmp_path / "out")
         opening = asyncio.create_task(deps.task_store.open_result(task_id))
         assert await asyncio.to_thread(opened.wait, 10)
@@ -399,7 +394,7 @@ def test_a_result_open_cancelled_in_its_thread_closes_the_take(
         assert handles
         assert all(handle.closed for handle in handles)
 
-    _run(go())
+    run(go())
 
 
 @pytest.fixture
@@ -427,22 +422,22 @@ def test_a_delete_whose_removal_fails_answers_an_error_and_a_retry_removes_the_t
         task_id, take = await _finished_take(deps, root)
         removal_fails_once(take)
         async for http in client():
-            failed = await http.delete(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
+            failed = await http.delete(f"/tasks/{task_id}/result", headers=INTERNAL_HEADERS)
             assert failed.status_code >= 500
             assert str(root) not in failed.text
             assert take.exists()
-            retried = await http.delete(f"/tasks/{task_id}/result", headers=_INTERNAL_HEADERS)
+            retried = await http.delete(f"/tasks/{task_id}/result", headers=INTERNAL_HEADERS)
         assert retried.status_code == 204
         assert not take.exists()
 
-    _run(go())
+    run(go())
 
 
 def test_a_sweep_whose_removal_fails_keeps_the_take_for_the_next_sweep(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, removal_fails_once: Callable[[Path], None],
 ) -> None:
     async def go():
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         store = TaskStore(retention_seconds=0.0)
         deps.task_store = store
         task_id, take = await _finished_take(deps, tmp_path / "out")
@@ -456,11 +451,11 @@ def test_a_sweep_whose_removal_fails_keeps_the_take_for_the_next_sweep(
         assert await store.cleanup_terminal() == 1
         assert not take.exists()
 
-    _run(go())
+    run(go())
 
 
 def test_the_real_runner_writes_only_its_local_root_and_names_no_path(
-    real_generate_worker,  # noqa: F811 - the fixture imported above
+    real_generate_worker,
 ) -> None:
     async def go():
         async with real_generate_worker() as (client, deps, boundary, generate):
@@ -472,11 +467,11 @@ def test_the_real_runner_writes_only_its_local_root_and_names_no_path(
             assert "audio_path" not in wire
             assert str(deps.audio_output_dir) not in wire
 
-    _run(go())
+    run(go())
 
 
 def test_a_failed_result_write_names_no_worker_path(
-    real_generate_worker,  # noqa: F811 - the fixture imported above
+    real_generate_worker,
 ) -> None:
     async def go():
         async with real_generate_worker() as (client, deps, boundary, generate):
@@ -487,12 +482,12 @@ def test_a_failed_result_write_names_no_worker_path(
             assert snapshot["error"].startswith("FileExistsError:")
             assert str(deps.audio_output_dir) not in snapshot["error"]
 
-    _run(go())
+    run(go())
 
 
 def test_a_done_snapshot_names_no_worker_path(tmp_path: Path) -> None:
     async def go():
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         task_id, take = await _finished_take(deps, tmp_path / "out")
         snapshot = await deps.task_store.get(task_id)
         wire = json.dumps(snapshot.model_dump(mode="json"))
@@ -500,7 +495,7 @@ def test_a_done_snapshot_names_no_worker_path(tmp_path: Path) -> None:
         assert take.name not in wire
         assert "audio_path" not in wire
 
-    _run(go())
+    run(go())
 
 
 def _settings_with_roots(output_dir: Path, shared_root: Path) -> WorkerSettings:

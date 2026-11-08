@@ -16,6 +16,7 @@ from songmaker_cli.api_helpers import (
     check_generation_access,
     check_playlist_access,
     check_song_access,
+    cover_file_response,
     unique_playlist_slug,
 )
 from songmaker_cli.api_models import (
@@ -39,16 +40,13 @@ from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
-    COVER_NOT_FOUND,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
     AuditAction,
     ResourceType,
 )
 from songmaker_cli.covers import (
-    COVER_RESPONSE_HEADERS,
     CoverRejectedError,
-    cover_media_type,
     remove_playlist_cover_files,
     resolve_playlist_cover_file,
     write_playlist_cover,
@@ -61,7 +59,6 @@ from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
     add_song_to_playlist,
-    best_playable_generation,
     create_playlist,
     delete_playlist,
     disable_playlist_sharing,
@@ -73,6 +70,7 @@ from songmaker_cli.db.queries.playlists import (
     set_playlist_cover_key,
     update_playlist,
 )
+from songmaker_cli.db.queries.sharing import presented_take
 
 log = logging.getLogger(__name__)
 
@@ -173,20 +171,8 @@ def api_get_playlist_cover(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     playlist = check_playlist_access(session, playlist_id, user)
-    if v is not None and v != playlist.cover_key:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    try:
-        path = resolve_playlist_cover_file(
-            ctx.audio_dir, playlist.id, playlist.cover_key, variant,
-        )
-    except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
-    except FileNotFoundError:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    return FileResponse(
-        path,
-        media_type=cover_media_type(variant, playlist.cover_key or ""),
-        headers=COVER_RESPONSE_HEADERS,
+    return cover_file_response(
+        resolve_playlist_cover_file, ctx.audio_dir, playlist, variant, v,
     )
 
 
@@ -279,7 +265,7 @@ def api_add_song_to_playlist(
 ) -> StatusResponse:
     check_playlist_access(session, playlist_id, user)
     song = check_song_access(session, req.song_id, user)
-    playable = best_playable_generation(song)
+    playable = presented_take(song.generations)
     if playable is None:
         raise HTTPException(400, "Song has no playable take")
     try:

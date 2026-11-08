@@ -204,7 +204,7 @@ _unit_is_installed_and_enabled() {
     local unit="$1"
     if [[ -z "$(systemctl list-unit-files --no-legend "$unit" 2>/dev/null)" ]]; then
         problem "$unit is not installed. Nothing keeps the mirrored logins" \
-            "current. Run: sudo ./scripts/install-cli-credentials-mirror.sh"
+            "current. Run: sudo ./scripts/install_cli_credentials_mirror.sh"
         return 1
     fi
     if ! systemctl is-enabled --quiet "$unit" 2>/dev/null; then
@@ -226,7 +226,7 @@ _unit_is_active() {
 # The credential files themselves. This call was lost once already, and
 # nothing noticed: the systemd checks below still passed, so the preflight
 # reported success while missing files, wrong modes, symlinks and real refresh
-# tokens all went through. tests/test_install_cli_credentials_mirror.py drives
+# tokens all went through. tests/scripts/test_install_cli_credentials_mirror.py drives
 # THIS script for exactly that reason — the Python function having its own
 # tests is not the same as the surface the deploy tick calls being tested.
 if ! "$MIRROR_SCRIPT" --verify --mirror-dir "$CREDENTIALS_DIR" --home "$HOME_DIR"; then

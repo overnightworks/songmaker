@@ -365,13 +365,9 @@ describe('resource sync interleavings', () => {
 });
 
 describe('resource sync owner', () => {
-	it('reports an unstarted owner as not ready', async () => {
-		const { controller } = setup();
-		expect(await controller.waitForReady()).toBe(false);
-	});
-
-	it('does not refresh songs before its owner starts', async () => {
+	it('reports an unstarted owner as not ready and refreshes nothing', async () => {
 		const { controller, fetchCalls } = setup();
+		expect(await controller.waitForReady()).toBe(false);
 		await controller.requestSongRefresh('s1');
 		expect(fetchCalls).toEqual([]);
 	});
@@ -634,6 +630,29 @@ describe('resource sync owner', () => {
 		expect(get(store).highWaterMark).toBe('4');
 	});
 
+	const goneSong = [{ songId: 's1', forgottenBefore: ['s1'] }];
+	const live = { status: 'live', error: null, ready: true };
+	it.each([
+		['a live event', 404, 'generation.created', created('1', 'g1'), goneSong, live],
+		['a resync', 404, 'resync', { high_water_mark: '4' }, goneSong, live],
+		['a resync', 500, 'resync', { high_water_mark: '4' }, [], { status: 'error', ready: true }]
+	])('reloads the open song once on %s, a %i', async (_, status, type, data, gone, state) => {
+		const { controller, sources, store, left, fetchCalls } = setup({
+			fetchSong: async () => Promise.reject(new ApiError(status, 'failed', '/api/songs/s1'))
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit(type, data);
+		await flush();
+
+		expect(fetchCalls).toEqual(['s1']);
+		expect(left).toEqual(gone);
+		expect(get(store)).toMatchObject(state);
+		controller.stop();
+	});
+
 	it.each([
 		['the selected song', ['s1']],
 		['no selected song', []]
@@ -682,7 +701,6 @@ describe('resource sync owner', () => {
 
 		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR });
 		unsubscribe();
-		vi.useRealTimers();
 	});
 
 	it('uses the generic error when a deferred bootstrap refresh has no retained detail', async () => {
@@ -1250,8 +1268,7 @@ describe('resource sync owner', () => {
 		latestSource(sources).error();
 		await flush();
 		expect(get(store).status).toBe('error');
-		// The dropped connection reconnects itself after a backoff delay
-		// (issue #257) instead of relying on the browser's native retry.
+		// The dropped connection reconnects itself after a backoff delay.
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		await flush();
 		fail = false;
@@ -1328,7 +1345,6 @@ describe('resource sync owner', () => {
 		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
 		await flush();
 		expect(fetchCalls.slice(before)).toEqual(['s1']);
-		vi.useRealTimers();
 	});
 
 	it('reopens the live stream only after a backoff delay, not immediately', async () => {
@@ -1785,24 +1801,6 @@ describe('resource sync owner', () => {
 		controller.stop();
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		expect(sources).toHaveLength(beforeError);
-	});
-
-	it('drops a 404 song instead of retrying it forever', async () => {
-		const { controller, sources, store, forgotten, left } = setup({
-			fetchSong: async () => {
-				throw new ApiError(404, 'Song not found', '/api/songs/s1');
-			}
-		});
-		controller.start();
-		latestSource(sources).emit('hello', { high_water_mark: '0' });
-		await flush();
-		await controller.waitForReady();
-		latestSource(sources).emit('generation.created', created('1', 'g1'));
-		await flush();
-		expect(forgotten).toEqual(['s1']);
-		expect(left).toEqual([{ songId: 's1', forgottenBefore: ['s1'] }]);
-		expect(get(store).status).toBe('live');
-		expect(get(store).error).toBeNull();
 	});
 
 	it.each([

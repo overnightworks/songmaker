@@ -14,12 +14,11 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import { archiveOwnedAlbum, readSeededLibrary } from './seed';
 import { failCoverJob, seedRunningCoverJob } from './seed-cover';
 import { sameOriginHeaders, workspace } from './helpers';
+import { HITBOX_FREQUENT_PX, UNREACHABLE_RELOAD_DELAYS_MS } from '../src/lib/constants';
 import {
 	ALBUM_COVER_EDITING_LABEL,
-	ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
-	HITBOX_FREQUENT_PX,
-	UNREACHABLE_RELOAD_DELAYS_MS
-} from '../src/lib/constants';
+	ALBUM_COVER_SUGGESTIONS_RETRY_LABEL
+} from '../src/lib/constants/album';
 import { COVER_PROBLEM_TEXTS } from '../src/lib/utils/cover-problem';
 
 const PHONE_VIEWPORT = { width: 375, height: 844 };

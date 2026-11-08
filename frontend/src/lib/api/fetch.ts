@@ -1,10 +1,7 @@
 import type { JobItem } from './types';
-import {
-	API_ERROR_GENERIC_MESSAGE,
-	RATE_LIMITED_STATUS,
-	SERVER_ERROR_STATUS_FLOOR,
-	SIGN_IN_NEXT_PARAM
-} from '#lib/constants.ts';
+import { SIGN_IN_NEXT_PARAM } from '#lib/constants/auth.ts';
+import { RATE_LIMITED_STATUS, SERVER_ERROR_STATUS_FLOOR } from '#lib/constants/http.ts';
+import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants.ts';
 import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
 
 const API_TIMEOUT_MS = 30_000;

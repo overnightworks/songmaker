@@ -20,7 +20,7 @@ from support.generation_job_world import (
 )
 from support.worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
 
-from acestep_engine.models import AceStepConfig, TaskQueryEntry
+from acestep_engine.models import TaskQueryEntry
 from acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
 from songmaker_cli.acestep_state import read_queue_depth
@@ -52,9 +52,6 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.jobs import (
-    GenerationContext,
-    _apply_cover_overrides,
-    _apply_repaint_overrides,
     _finalize_generation_job,
     _make_generation_progress_callback,
     _update_job,
@@ -2455,113 +2452,6 @@ def test_job_duration_stats_no_completed(db_factory) -> None:
     assert stats.max is None
 
 
-# ── _apply_task_overrides ──────────────────────────────────────────
-
-
-def _override_context(tmp_path: Path, config: AceStepConfig | None = None, model_name="turbo"):
-    from songmaker_cli.parser import AlbumMeta, SongMeta
-
-    return GenerationContext(
-        song_id="s1",
-        version_id="v1",
-        meta=SongMeta(title="t", lyrics="la la", prompt="test"),
-        album_meta=AlbumMeta(title="a", artist="b"),
-        ace_config=config or AceStepConfig(prompt="test", lyrics="la la", audio_duration=0),
-        audio_dir=tmp_path,
-        user_id="u1", reference_recording_id=None,
-        model_name=model_name,
-    )
-
-
-def _repaint_params(src_wav: Path, start: float, end: float) -> RepaintTaskParams:
-    return RepaintTaskParams(
-        src_wav_path=str(src_wav),
-        src_generation_id="g0",
-        repainting_start=start,
-        repainting_end=end,
-        lyrics="la la",
-        prompt="test",
-    )
-
-
-def test_repaint_of_an_unreadable_source_take_fails_loud(tmp_path: Path) -> None:
-    src_wav = tmp_path / "src.wav"
-    src_wav.write_bytes(b"RIFF" + b"\x00" * 100)
-    ctx = _override_context(tmp_path)
-    params = _repaint_params(src_wav, 0.3, 0.8)
-    with pytest.raises(ValueError, match="Cannot measure"):
-        _apply_repaint_overrides(ctx, params)
-
-
-def test_repaint_range_is_a_fraction_of_the_source_take(tmp_path: Path, make_wav_bytes) -> None:
-    src_wav = tmp_path / "src.wav"
-    src_wav.write_bytes(make_wav_bytes(b"\x80" * 2000, sampwidth=1, sample_rate=10))
-    ctx = _override_context(tmp_path)
-
-    result = _apply_repaint_overrides(ctx, _repaint_params(src_wav, 0.3, 0.8))
-
-    assert result.ace_config.repainting_start == pytest.approx(60.0)
-    assert result.ace_config.repainting_end == pytest.approx(160.0)
-    assert result.ace_config.task_type == "repaint"
-    assert result.ace_config.thinking is True
-    assert result.ace_config.src_audio_path.startswith(str(tmp_path / ".tmp"))
-    assert Path(result.ace_config.src_audio_path).exists()
-    assert result.src_generation_id == "g0"
-
-
-def test_repaint_inherits_generation_settings(tmp_path: Path, make_wav_bytes) -> None:
-    src_wav = tmp_path / "src.wav"
-    src_wav.write_bytes(make_wav_bytes(b"\x80" * 2000, sampwidth=1, sample_rate=10))
-    config = AceStepConfig(
-        prompt="test",
-        lyrics="la la",
-        audio_duration=120,
-        guidance_scale=5.0,
-        inference_steps=50,
-        shift=2.0,
-        thinking=True,
-    )
-
-    result = _apply_repaint_overrides(
-        _override_context(tmp_path, config, "sft"), _repaint_params(src_wav, 0.1, 0.3),
-    )
-
-    assert result.ace_config.guidance_scale == 5.0
-    assert result.ace_config.inference_steps == 50
-    assert result.ace_config.shift == 2.0
-    assert result.ace_config.thinking is True
-
-
-def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
-    from songmaker_cli.parser import AlbumMeta, SongMeta
-
-    src_wav = tmp_path / "src.wav"
-    src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
-
-    config = AceStepConfig(prompt="test", lyrics="la la", audio_duration=180)
-    ctx = GenerationContext(
-        song_id="s1",
-        version_id="v1",
-        meta=SongMeta(title="t", lyrics="la la", prompt="test"),
-        album_meta=AlbumMeta(title="a", artist="b"),
-        ace_config=config,
-        audio_dir=tmp_path,
-        user_id="u1", reference_recording_id=None,
-        model_name="turbo",
-    )
-    params = CoverTaskParams(
-        src_wav_path=str(src_wav),
-        src_generation_id="g0",
-        audio_cover_strength=0.7,
-        lyrics="la la",
-        prompt="test",
-    )
-    result = _apply_cover_overrides(ctx, params)
-    assert result.ace_config.audio_cover_strength == 0.7
-    assert result.ace_config.task_type == "cover"
-    assert result.ace_config.src_audio_path.startswith(str(tmp_path / ".tmp"))
-
-
 # ── load_model_on_worker ────────────────────────────────────────────
 
 
@@ -2809,7 +2699,8 @@ def test_download_model_on_worker_unreachable(seeded_db) -> None:
         assert job.error_type == "worker_unreachable"
 
 
-def test_download_model_on_worker_returns_5xx(seeded_db) -> None:
+@pytest.mark.parametrize("response_format", ["text", "json", "empty", "whitespace"])
+def test_download_model_on_worker_returns_5xx(seeded_db, response_format: str) -> None:
     from unittest.mock import AsyncMock
 
     from songmaker_cli.jobs import download_model_on_worker
@@ -2818,15 +2709,13 @@ def test_download_model_on_worker_returns_5xx(seeded_db) -> None:
     redis = _FakeRedis()
     _seed_online_worker(seeded_db, redis)
 
-    fake_response = MagicMock(status_code=500, text="boom")
+    fake_response, cause = _worker_failure_response(500, response_format, "disk full")
     fake_client = AsyncMock()
     fake_client.post = AsyncMock(return_value=fake_response)
     fake_client.__aenter__ = AsyncMock(return_value=fake_client)
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
-    with (
-        patch("httpx.AsyncClient", return_value=fake_client),
-    ):
+    with patch("httpx.AsyncClient", return_value=fake_client):
         run_async(download_model_on_worker(
             {"redis": redis}, "dl4", "sft", db_factory=seeded_db,
         ))
@@ -2835,6 +2724,7 @@ def test_download_model_on_worker_returns_5xx(seeded_db) -> None:
         job = get_job(session, "dl4")
         assert job.status == "failed"
         assert job.error_type == "worker_error"
+        assert job.error == cause
 
 
 def test_download_model_on_worker_happy_path(seeded_db, internal_token: str) -> None:

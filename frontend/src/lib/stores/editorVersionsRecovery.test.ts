@@ -129,6 +129,18 @@ describe('versions recovery', () => {
 		expect(get(toasts)).toEqual([]);
 	});
 
+	it('1160-F40-versions stays quiet for a gone song and schedules no reload', async () => {
+		const { fetchVersions } = await import('#lib/api/client.ts');
+		vi.mocked(fetchVersions).mockClear();
+		vi.mocked(fetchVersions).mockRejectedValueOnce(new ApiError(404, 'Not Found', '/versions'));
+		loadSongData(makeSong({ id: 's1' }));
+		await Promise.resolve();
+		expect(get(toasts)).toEqual([]);
+		reportResourceStreamReachable(true);
+		await Promise.resolve();
+		expect(fetchVersions).toHaveBeenCalledTimes(1);
+	});
+
 	it('1160-F40-versions names a refusal and does not retry on reconnect', async () => {
 		const { fetchVersions } = await import('#lib/api/client.ts');
 		vi.mocked(fetchVersions).mockClear();

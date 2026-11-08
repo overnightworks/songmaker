@@ -49,9 +49,9 @@ from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerProtocolError,
     WorkerTaskFailed,
-    _internal_headers,
     _iterate_task_events,
     pick_worker,
+    worker_request_headers,
 )
 from songmaker_cli.settings import LoraTrainingJobConfig
 
@@ -395,7 +395,7 @@ async def _load_lora_training_model(
             client.post(
                 f"{worker.base_url}/load_model",
                 json={"mode": target_mode},
-                headers=_internal_headers(),
+                headers=worker_request_headers(),
             ),
             renew_task,
         )
@@ -417,7 +417,7 @@ async def _submit_lora_training(
             client.post(
                 f"{worker.base_url}/tasks/train_lora",
                 json={**request_payload, "hold_token": hold_token},
-                headers=_internal_headers(),
+                headers=worker_request_headers(),
             ),
             renew_task,
         )
@@ -560,7 +560,7 @@ async def _worker_claimed_lora_handover(
             response = await client.post(
                 f"{worker.base_url}/gpu_hold/handover",
                 json={"token": hold_token},
-                headers=_internal_headers(),
+                headers=worker_request_headers(),
             )
             response.raise_for_status()
     except httpx.HTTPError:
@@ -596,7 +596,7 @@ async def _release_lora_hold(
             release = await client.post(
                 f"{worker.base_url}/gpu_hold/release",
                 json={"token": hold_token},
-                headers=_internal_headers(),
+                headers=worker_request_headers(),
             )
             release.raise_for_status()
     except httpx.HTTPError:
@@ -614,7 +614,7 @@ async def _renew_lora_hold(worker: _WorkerHandle, hold_token: str) -> None:
             response = await client.post(
                 f"{worker.base_url}/gpu_hold/renew",
                 json={"token": hold_token},
-                headers=_internal_headers(),
+                headers=worker_request_headers(),
             )
             response.raise_for_status()
 
@@ -649,7 +649,7 @@ async def _reserve_lora_worker(
     async with httpx.AsyncClient(timeout=_LORA_SUBMIT_TIMEOUT_SECONDS) as client:
         response = await client.post(
             f"{picked.base_url}/gpu_hold/reserve",
-            headers=_internal_headers(),
+            headers=worker_request_headers(),
         )
         if response.status_code == 409:
             raise AllWorkersHeld("ACE-Step worker is busy or held")

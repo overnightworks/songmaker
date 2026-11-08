@@ -18,13 +18,9 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
-import {
-	ADMIN_TABS_LABEL,
-	COWRITER_COMPOSER_PLACEHOLDER,
-	COWRITER_SEND_LABEL,
-	EDITOR_VIEW_COWRITER_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants';
+import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
+import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '../src/lib/constants/cowriter';
+import { EDITOR_VIEW_COWRITER_LABEL, songEditorOpenLabel } from '../src/lib/constants';
 import {
 	MODELS_ADVANCED_LABEL,
 	MODELS_COLUMN_MODEL_LABEL,

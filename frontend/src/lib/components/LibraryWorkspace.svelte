@@ -22,8 +22,10 @@
 	import { openCollection } from '#lib/stores/collection.ts';
 	import { loadActiveModels } from '#lib/stores/presets.ts';
 	import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';
+	import { libraryLoadFailed } from '#lib/stores/libraryRecovery.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
 	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
+	import BusyState from './BusyState.svelte';
 	import LoadFailure from './LoadFailure.svelte';
 	import LibraryHome from './LibraryHome.svelte';
 	import LibraryWall from './LibraryWall.svelte';
@@ -50,7 +52,7 @@
 	// stream that could not come up offline is not a failure of its own: the
 	// offline strip says it, and the stream restarts once the network is back.
 	const workspaceReady = $derived(sync.ready && modelsReady);
-	const bootstrapFailed = $derived(!sync.ready && sync.status === 'error' && !$offline);
+	const bootstrapFailed = $derived(libraryLoadFailed(sync) && !$offline);
 
 	onMount(() => {
 		if (!activeModelsLoaded) void loadModels();
@@ -74,7 +76,7 @@
 		onretry={() => void retryLoad()}
 	/>
 {:else if !workspaceReady}
-	<div class="loading">Loading...</div>
+	<BusyState text="Loading..." />
 {:else}
 	<div class="library-root">
 		{#if sync.status === 'error' && sync.error}
@@ -123,7 +125,6 @@
 		overflow-x: hidden;
 	}
 
-	.loading,
 	.sync-status {
 		display: flex;
 		align-items: center;
@@ -156,7 +157,7 @@
 	}
 
 	.retry-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 </style>

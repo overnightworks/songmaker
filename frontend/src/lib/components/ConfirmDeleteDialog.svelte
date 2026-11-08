@@ -123,12 +123,12 @@
 		content: '•';
 		position: absolute;
 		left: 0;
-		color: var(--fail);
+		color: var(--text-muted);
 	}
 
 	.warning {
 		font-size: 0.8rem;
-		color: var(--fail);
+		color: var(--text);
 		margin: 0;
 		font-family: var(--font-display);
 		text-transform: uppercase;

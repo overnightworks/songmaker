@@ -15,12 +15,8 @@ import {
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 import {
-	ALBUM_COVER_ALT_TYPE,
-	ALBUM_NO_SONGS,
 	HITBOX_FREQUENT_PX,
 	collectionActionLabel,
-	NEW_SONG_CLOSE_LABEL,
-	NEW_SONG_ROW_LABEL,
 	newSongCardLabel,
 	PLAYING_MARK_LABEL,
 	songEditorOpenLabel,
@@ -28,6 +24,8 @@ import {
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '#lib/constants.ts';
+import { ALBUM_COVER_ALT_TYPE, ALBUM_NO_SONGS } from '#lib/constants/album.ts';
+import { NEW_SONG_CLOSE_LABEL, NEW_SONG_ROW_LABEL } from '#lib/constants/new-collection.ts';
 import {
 	accessibleName,
 	getByRoleButton,

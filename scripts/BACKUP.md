@@ -17,16 +17,16 @@ mkdir -p /mnt/backup/songmaker
 
 # 4. Run your first backup
 cd ~/srv/songmaker
-./scripts/backup.sh
+./scripts/create_backup.sh
 ```
 
 ## Scripts
 
 | Script | What it does |
 |--------|-------------|
-| `backup.sh` | Dumps DB + copies audio to `BACKUP_DIR` |
-| `restore.sh <path>` | Restores DB + audio from a snapshot |
-| `backup-list.sh` | Lists available backups with sizes |
+| `create_backup.sh` | Dumps DB + copies audio to `BACKUP_DIR` |
+| `restore_backup.sh <path>` | Restores DB + audio from a snapshot |
+| `list_backups.sh` | Lists available backups with sizes |
 
 ## Environment Variables
 
@@ -41,26 +41,26 @@ cd ~/srv/songmaker
 
 ```bash
 # With default path
-./scripts/backup.sh
+./scripts/create_backup.sh
 
 # With custom path
-BACKUP_DIR=/media/felix/external/songmaker ./scripts/backup.sh
+BACKUP_DIR=/media/felix/external/songmaker ./scripts/create_backup.sh
 
 # List what you have
-./scripts/backup-list.sh
+./scripts/list_backups.sh
 ```
 
 Pruning deletes every directory directly under `BACKUP_DIR` older than `RETENTION_DAYS`, not only snapshots this script made. Give `BACKUP_DIR` a directory of its own that holds nothing else. A snapshot you must keep (for example the one taken just before a cutover) belongs in a dedicated directory run with `RETENTION_DAYS=0`:
 
 ```bash
-BACKUP_DIR=/mnt/backup/songmaker-cutover RETENTION_DAYS=0 ./scripts/backup.sh
+BACKUP_DIR=/mnt/backup/songmaker-cutover RETENTION_DAYS=0 ./scripts/create_backup.sh
 ```
 
 ## Automatic Daily Backup (cron)
 
 ```bash
 # Add to cron (runs daily at 3am)
-echo '0 3 * * * cd /home/felix-hummert/srv/songmaker && BACKUP_DIR=/mnt/backup/songmaker ./scripts/backup.sh >> /var/log/songmaker-backup.log 2>&1' | sudo tee /etc/cron.d/songmaker-backup
+echo '0 3 * * * cd /home/felix-hummert/srv/songmaker && BACKUP_DIR=/mnt/backup/songmaker ./scripts/create_backup.sh >> /var/log/songmaker-backup.log 2>&1' | sudo tee /etc/cron.d/songmaker-backup
 ```
 
 Make sure your external drive auto-mounts on boot. Add to `/etc/fstab`:
@@ -75,10 +75,10 @@ The `nofail` flag means the system still boots if the drive is unplugged. The ba
 
 ```bash
 # List available backups
-./scripts/backup-list.sh
+./scripts/list_backups.sh
 
 # Restore from a specific snapshot
-./scripts/restore.sh /mnt/backup/songmaker/20260329_030000
+./scripts/restore_backup.sh /mnt/backup/songmaker/20260329_030000
 ```
 
 Before restoring, stop auto-deploy and make sure no deployment is running, or it restarts writers mid-restore:

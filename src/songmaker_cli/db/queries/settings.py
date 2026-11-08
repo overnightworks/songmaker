@@ -12,8 +12,9 @@ from songmaker_cli.constants import (
     COWRITER_MIN_TAIL_TOKEN_BUDGET,
     PRESET_GLOBAL_DEFAULTS_NAME,
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
+    VALID_BUILTIN_CONFIGS,
 )
-from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
+from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting, User
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
@@ -113,8 +114,7 @@ def update_preset(
     if params is not None:
         preset.params = params
     if is_default is True:
-        _clear_default(session, preset.created_by, preset.model_mode)
-        preset.is_default = True
+        set_default_preset(session, preset)
     elif is_default is False:
         preset.is_default = False
     preset.updated_at = datetime.now(timezone.utc)
@@ -127,8 +127,21 @@ def delete_preset(session: Session, preset_id: str, user_id: str) -> bool:
     if not preset:
         return False
     session.delete(preset)
+    session.query(User).filter(
+        User.id == user_id, User.default_generation_config == preset_id,
+    ).update({User.default_generation_config: None})
     session.flush()
     return True
+
+
+def effective_default_config(session: Session, user: User) -> str | None:
+    """The person's default for new songs while it names a built-in or an existing preset."""
+    config = user.default_generation_config
+    if config is None:
+        return None
+    if config in VALID_BUILTIN_CONFIGS or session.get(GenerationPreset, config) is not None:
+        return config
+    return None
 
 
 def get_default_preset(

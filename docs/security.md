@@ -492,7 +492,7 @@ compose bind that does. The deploy tick runs no mount preflight.
 `scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
 login into `~/.songmaker/agent-cli-credentials/`, kept current by
 `songmaker-cli-credentials-mirror.{service,path,timer}` and installed with
-`scripts/install-cli-credentials-mirror.sh`.
+`scripts/install_cli_credentials_mirror.sh`.
 
 Grok access tokens expire after six hours. The host-side mirror
 service, path watcher, and ten-minute timer are the sole refresh path: each
@@ -569,7 +569,7 @@ The mirror installer freezes its resolved directory in the mirror service's
 and requires exactly one matching value; an unreadable, missing, ambiguous, or
 different value refuses with `Spiegel-Installer erneut ausführen`. After
 changing `SONGMAKER_CLI_CREDENTIALS_DIR` in `.env`, run
-`sudo ./scripts/install-cli-credentials-mirror.sh` again from the main
+`sudo ./scripts/install_cli_credentials_mirror.sh` again from the main
 checkout.
 
 Refresh the mirror with `sudo systemctl restart songmaker-cli-credentials-mirror.service`; that does not touch `songmaker.service` or the live stack.
@@ -586,7 +586,7 @@ systemd splits directive values on whitespace, expands `%` as a specifier and
 `$` as a variable in the ExecStart that carries the path; anything else is
 refused loudly rather than mangled into a unit.
 
-**Installing.** `scripts/install-cli-credentials-mirror.sh` refuses to run
+**Installing.** `scripts/install_cli_credentials_mirror.sh` refuses to run
 from a linked worktree — these units outlive the shell that installed them,
 and the day a throwaway worktree is removed the unit stops — refuses to run as
 root, whose logins are not the operator's, and refuses to silently replace any
@@ -601,7 +601,7 @@ before the first write, so a refusal leaves the machine exactly as it was
 rather than half-installed.
 
 The installer is driven end to end by
-`tests/test_install_cli_credentials_mirror.py` against a throwaway checkout.
+`tests/scripts/test_install_cli_credentials_mirror.py` against a throwaway checkout.
 Every invocation goes through one harness that replaces `sudo`, `systemctl`
 and `getent`, and those fakes refuse rather than comply: a candidate path is
 resolved with `readlink -m` before it is compared, so `..` and symlinked
@@ -745,7 +745,7 @@ change a workflow.
 The container images in the Dockerfiles and `docker-compose.yml` (Python, Node,
 `uv`, PostgreSQL, Redis) and the CI references (the promtool image, CI's PostgreSQL
 service) are pinned by exact version and digest, as `<name>:<version>@sha256:<digest>`,
-so a rebuild cannot pull a different binary than CI tested. `scripts/backup.sh` and `scripts/restore.sh`
+so a rebuild cannot pull a different binary than CI tested. `scripts/create_backup.sh` and `scripts/restore_backup.sh`
 copy audio through the digest-pinned `postgres` image compose names (Alpine-based:
 `sh`, `cp -a`, `find`), so no helper image is pulled unpinned. The frozen monitoring
 stack is not pinned. Dependabot moves the Dockerfile and compose pins, patch releases
@@ -798,7 +798,7 @@ The two-minute auto-deploy tick first runs `docker compose config --quiet` on th
 
 Under the deploy lock, each tick first removes leftovers directly in its Git admin directory whose names match the script’s four temp prefixes (`songmaker-autodeploy.git-fetch.`, `songmaker-autodeploy.compose-stderr.`, `songmaker-autodeploy.prometheus-ps-stderr.`, `songmaker-autodeploy.gh-stderr.`) followed by exactly six ASCII letters or digits. Symlinks are unlinked without following their targets; state files and nested worktree admin directories are untouched. Each removal is logged; a failed removal refuses the tick and counts toward the third-tick alert, including when already up to date. In-tick removal remains best-effort: an interrupted tick’s leftovers are removed by the next tick that acquires the lock and can remove them. This assumes one lock per Git admin directory; overriding `SONGMAKER_AUTODEPLOY_LOCK_FILE` to share an admin directory between independently locked ticks is unsupported.
 
-When the selected release's schema differs from the running commit's (the `schema:` line of the release's annotated tag message when it has one, else the alembic head of its commit; any doubt, such as an unreadable running state or several heads, counts as differing), the tick first runs `hal backup songmaker --pre-apply` (path from `SONGMAKER_AUTODEPLOY_HAL`); a failed or missing backup is a counted refusal before any build or recreate. A deploy that changed the schema is undone by restoring the paired database and audio backup taken before it (`scripts/restore.sh`; both are needed), then deploying the previous revision. Its Compose build runs without a timeout, and its output streams directly into the service journal. After a successful recreate, the tick runs `docker image prune --force --filter until=48h`. Before recreating, it tags only running Compose services with a `build:` section as `<project>-<service>:previous`; `<project>` comes from `docker compose config --format json --no-interpolate | jq -r '.name'`, so the tag follows the actual Compose project without materializing `.env` secrets. To roll back a built service, run `project="$(docker compose config --format json --no-interpolate | jq -r '.name')"; docker tag "${project}-<service>:previous" "${project}-<service>:latest" && docker compose up -d --force-recreate <service>`. Both cleanup commands are bounded by `SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS` (600 seconds by default); an error or timeout is logged at `err` with its command and exit code, while the completed deployment remains successful and the tick does not change either counter. The builder cleanup deliberately uses `docker builder prune --all --force --filter until=48h`, preserving cache used in the last 48 hours but allowing a quiet host's next rebuild to take its normal cold-cache 8–15 minutes.
+When the selected release's schema differs from the running commit's (the `schema:` line of the release's annotated tag message when it has one, else the alembic head of its commit; any doubt, such as an unreadable running state or several heads, counts as differing), the tick first runs `hal backup songmaker --pre-apply` (path from `SONGMAKER_AUTODEPLOY_HAL`); a failed or missing backup is a counted refusal before any build or recreate. A deploy that changed the schema is undone by restoring the paired database and audio backup taken before it (`scripts/restore_backup.sh`; both are needed), then deploying the previous revision. Its Compose build runs without a timeout, and its output streams directly into the service journal. After a successful recreate, the tick runs `docker image prune --force --filter until=48h`. Before recreating, it tags only running Compose services with a `build:` section as `<project>-<service>:previous`; `<project>` comes from `docker compose config --format json --no-interpolate | jq -r '.name'`, so the tag follows the actual Compose project without materializing `.env` secrets. To roll back a built service, run `project="$(docker compose config --format json --no-interpolate | jq -r '.name')"; docker tag "${project}-<service>:previous" "${project}-<service>:latest" && docker compose up -d --force-recreate <service>`. Both cleanup commands are bounded by `SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS` (600 seconds by default); an error or timeout is logged at `err` with its command and exit code, while the completed deployment remains successful and the tick does not change either counter. The builder cleanup deliberately uses `docker builder prune --all --force --filter until=48h`, preserving cache used in the last 48 hours but allowing a quiet host's next rebuild to take its normal cold-cache 8–15 minutes.
 
 ### arq JSON queue codec
 

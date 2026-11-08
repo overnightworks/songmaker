@@ -7,7 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from test_wrapper import _make_deps
+from support.wrapper_deps import make_deps
 
 from acestep_worker.clock import utcnow
 from acestep_worker.models import GenerationTaskResult
@@ -36,7 +36,7 @@ def test_lifespan_sweeps_expired_terminal_tasks_until_shutdown(
         later = utcnow() + timedelta(seconds=1)
         monkeypatch.setattr("acestep_worker.task_store.utcnow", lambda: later)
 
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         deps.task_store = store
         async with lifespan(create_app(deps)):
             for _ in range(_MAX_YIELDS):

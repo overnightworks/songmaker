@@ -7,16 +7,18 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
-	ALBUM_NO_SONGS,
 	COLLECTION_MENU_LABEL,
 	collectionActionLabel,
-	NEW_PLACE_CREATE_LABEL,
-	NEW_SONG_CLOSE_LABEL,
-	NEW_SONG_ROW_LABEL,
-	NEW_SONG_TITLE_LABEL,
 	newSongCardLabel,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
+import { ALBUM_NO_SONGS } from '../src/lib/constants/album';
+import {
+	NEW_PLACE_CREATE_LABEL,
+	NEW_SONG_CLOSE_LABEL,
+	NEW_SONG_ROW_LABEL,
+	NEW_SONG_TITLE_LABEL
+} from '../src/lib/constants/new-collection';
 import {
 	appBar,
 	boundingBoxes,

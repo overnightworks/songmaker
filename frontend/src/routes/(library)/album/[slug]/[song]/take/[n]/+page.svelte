@@ -2,14 +2,9 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path, and the URL is already a resolved library address built by songRoutePath/albumRoutePath */
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { describeFailure } from '#lib/api/fetch.ts';
 	import { albumRoutePath, LIBRARY_ROUTE_ID, songRoutePath } from '#lib/routes/addresses.ts';
+	import { createAddressLoad } from '#lib/stores/addressLoad.svelte.ts';
 	import { openTakeAddress } from '#lib/stores/libraryContext.ts';
-	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
-	import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
-
-	type AddressState =
-		'resolving' | 'open' | 'unknown-take' | 'unknown-song' | 'unknown-album' | 'unreachable';
 
 	const RESOLVING_LABEL = 'Loading take...';
 	const UNKNOWN_ALBUM_HEADING = 'No such album';
@@ -24,80 +19,40 @@
 	const BACK_TO_SONG_LABEL = 'Back to the song';
 	const RETRY_LABEL = 'Try again';
 
-	let addressState = $state<AddressState>('resolving');
-	let failure = $state<string | null>(null);
-	let openRequests = 0;
-	// An address that could not be read shows its one line with Retry, and
-	// reads again by itself once the network lets it (#1107 S9).
-	const addressReloads = reloadWhileUnreachable(
-		() => void openAddress(albumSlug, songSlug, takeNumber)
-	);
-	$effect(() => () => addressReloads.stop());
-
 	const albumSlug = $derived(page.params.slug ?? '');
 	const songSlug = $derived(page.params.song ?? '');
 	const takeNumber = $derived(Number(page.params.n));
 
-	$effect(() => {
-		void openAddress(albumSlug, songSlug, takeNumber);
+	const address = createAddressLoad<'unknown-take' | 'unknown-song' | 'unknown-album'>({
+		load: () => openTakeAddress(albumSlug, songSlug, takeNumber),
+		fallbackMessage: UNREACHABLE_TAKE_MESSAGE
 	});
-
-	// Same inert bridge as the song address (issue #276): the overlay only
-	// hides the stale workspace visually, `inert` on the wrapper one level up
-	// in `(library)/+layout.svelte` is what removes it from the tab order and
-	// the accessibility tree, so this has to hold for every non-open state
-	// here too, including the (route-change-only) unmount below.
-	$effect(() => {
-		libraryAddressOverlayActive.set(addressState !== 'open');
-		return () => libraryAddressOverlayActive.set(false);
-	});
-
-	async function openAddress(albumId: string, slug: string, n: number): Promise<void> {
-		const request = ++openRequests;
-		addressState = 'resolving';
-		failure = null;
-		try {
-			const address = await openTakeAddress(albumId, slug, n);
-			if (request !== openRequests) return;
-			addressReloads.stop();
-			addressState = address === 'found' ? 'open' : address;
-		} catch (err) {
-			if (request !== openRequests) return;
-			addressReloads.afterLoadFailure(err);
-			failure = describeFailure(err, UNREACHABLE_TAKE_MESSAGE);
-			addressState = 'unreachable';
-		}
-	}
 </script>
 
-{#if addressState === 'unknown-take'}
+{#if address.state === 'unknown-take'}
 	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_TAKE_HEADING}</h1>
 		<p>{UNKNOWN_TAKE_MESSAGE}</p>
 		<a class="address-action" href={songRoutePath(albumSlug, songSlug)}>{BACK_TO_SONG_LABEL}</a>
 	</div>
-{:else if addressState === 'unknown-song'}
+{:else if address.state === 'unknown-song'}
 	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_SONG_HEADING}</h1>
 		<p>{UNKNOWN_SONG_MESSAGE}</p>
 		<a class="address-action" href={albumRoutePath(albumSlug)}>{BACK_TO_ALBUM_LABEL}</a>
 	</div>
-{:else if addressState === 'unknown-album'}
+{:else if address.state === 'unknown-album'}
 	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_ALBUM_HEADING}</h1>
 		<p>{UNKNOWN_ALBUM_MESSAGE}</p>
 		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
 	</div>
-{:else if addressState === 'unreachable'}
+{:else if address.state === 'unreachable' && !address.pressing}
 	<div class="address-overlay" role="alert">
-		<p>{failure ?? UNREACHABLE_TAKE_MESSAGE}</p>
-		<button
-			class="address-action"
-			type="button"
-			onclick={() => openAddress(albumSlug, songSlug, takeNumber)}>{RETRY_LABEL}</button
-		>
+		<p>{address.failure ?? UNREACHABLE_TAKE_MESSAGE}</p>
+		<button class="address-action" type="button" onclick={address.tryAgain}>{RETRY_LABEL}</button>
 	</div>
-{:else if addressState === 'resolving'}
+{:else if address.state === 'resolving' || address.pressing}
 	<div class="address-overlay">{RESOLVING_LABEL}</div>
 {/if}
 

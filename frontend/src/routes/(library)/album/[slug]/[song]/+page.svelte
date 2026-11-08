@@ -2,13 +2,9 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path, and the URL is already a resolved library address built by albumRoutePath */
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { describeFailure } from '#lib/api/fetch.ts';
 	import { albumRoutePath, LIBRARY_ROUTE_ID } from '#lib/routes/addresses.ts';
+	import { createAddressLoad } from '#lib/stores/addressLoad.svelte.ts';
 	import { openSongAddress } from '#lib/stores/libraryContext.ts';
-	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
-	import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
-
-	type AddressState = 'resolving' | 'open' | 'unknown-song' | 'unknown-album' | 'unreachable';
 
 	const RESOLVING_LABEL = 'Loading song...';
 	const UNKNOWN_ALBUM_HEADING = 'No such album';
@@ -20,76 +16,34 @@
 	const BACK_TO_ALBUM_LABEL = 'Back to the album';
 	const RETRY_LABEL = 'Try again';
 
-	let addressState = $state<AddressState>('resolving');
-	let failure = $state<string | null>(null);
-	let openRequests = 0;
-	// An address that could not be read shows its one line with Retry, and
-	// reads again by itself once the network lets it (#1107 S9).
-	const addressReloads = reloadWhileUnreachable(
-		() => void openAddress(albumSlug, songSlug, generationId)
-	);
-	$effect(() => () => addressReloads.stop());
-
 	const albumSlug = $derived(page.params.slug ?? '');
 	const songSlug = $derived(page.params.song ?? '');
 	const generationId = $derived(page.url.searchParams.get('gen'));
 
-	$effect(() => {
-		void openAddress(albumSlug, songSlug, generationId);
+	const address = createAddressLoad<'unknown-song' | 'unknown-album'>({
+		load: () => openSongAddress(albumSlug, songSlug, generationId),
+		fallbackMessage: UNREACHABLE_SONG_MESSAGE
 	});
-
-	// The overlay above hides a stale workspace visually (`position: absolute`)
-	// but not from the accessibility tree or the tab order -- `inert` on the
-	// workspace wrapper is what actually does that, and it lives one level up
-	// in `(library)/+layout.svelte`, so this bridges the address state across
-	// with a store. Active whenever this page isn't showing the open workspace,
-	// including the (route-change-only) unmount below: leaving this page for
-	// `/` or another address must not leave the workspace inert behind it.
-	$effect(() => {
-		libraryAddressOverlayActive.set(addressState !== 'open');
-		return () => libraryAddressOverlayActive.set(false);
-	});
-
-	async function openAddress(albumId: string, slug: string, genId: string | null): Promise<void> {
-		const request = ++openRequests;
-		addressState = 'resolving';
-		failure = null;
-		try {
-			const address = await openSongAddress(albumId, slug, genId);
-			if (request !== openRequests) return;
-			addressReloads.stop();
-			addressState = address === 'found' ? 'open' : address;
-		} catch (err) {
-			if (request !== openRequests) return;
-			addressReloads.afterLoadFailure(err);
-			failure = describeFailure(err, UNREACHABLE_SONG_MESSAGE);
-			addressState = 'unreachable';
-		}
-	}
 </script>
 
-{#if addressState === 'unknown-song'}
+{#if address.state === 'unknown-song'}
 	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_SONG_HEADING}</h1>
 		<p>{UNKNOWN_SONG_MESSAGE}</p>
 		<a class="address-action" href={albumRoutePath(albumSlug)}>{BACK_TO_ALBUM_LABEL}</a>
 	</div>
-{:else if addressState === 'unknown-album'}
+{:else if address.state === 'unknown-album'}
 	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_ALBUM_HEADING}</h1>
 		<p>{UNKNOWN_ALBUM_MESSAGE}</p>
 		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
 	</div>
-{:else if addressState === 'unreachable'}
+{:else if address.state === 'unreachable' && !address.pressing}
 	<div class="address-overlay" role="alert">
-		<p>{failure ?? UNREACHABLE_SONG_MESSAGE}</p>
-		<button
-			class="address-action"
-			type="button"
-			onclick={() => openAddress(albumSlug, songSlug, generationId)}>{RETRY_LABEL}</button
-		>
+		<p>{address.failure ?? UNREACHABLE_SONG_MESSAGE}</p>
+		<button class="address-action" type="button" onclick={address.tryAgain}>{RETRY_LABEL}</button>
 	</div>
-{:else if addressState === 'resolving'}
+{:else if address.state === 'resolving' || address.pressing}
 	<div class="address-overlay">{RESOLVING_LABEL}</div>
 {/if}
 

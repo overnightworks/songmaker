@@ -60,7 +60,7 @@ type ResourceAuthProbe = 'ok' | AuthFailureKind;
 // and waits for the musician's Retry.
 type SongRefreshFailure = 'network' | 'transient' | 'refused';
 
-interface ResourceSyncState {
+export interface ResourceSyncState {
 	status: ResourceSyncStatus;
 	error: string | null;
 	highWaterMark: string | null;
@@ -182,10 +182,7 @@ export class ResourceSyncController {
 	async retry(): Promise<boolean> {
 		const shownError = this.state.error;
 		this.store.update((state) => ({ ...state, error: null }));
-		// A retry after teardown (an 'unauthorized' probe result)
-		// finds the owner stopped: start() alone opens the one EventSource it
-		// needs. Routing that case into restartConnection() below as well used
-		// to open a second connection and immediately close the first.
+		// A retry after teardown (an 'unauthorized' probe result) finds the owner stopped; start() alone opens the stream.
 		if (!this.started) {
 			this.start();
 			return this.waitForReady();
@@ -284,14 +281,11 @@ export class ResourceSyncController {
 	}
 
 	/**
-	 * Reconnects after a live (post-bootstrap) drop, or after a first sync that
-	 * failed while the server could not be reached -- the offline strip says
-	 * "retrying" and offers no button, so that retry must really happen -- with
-	 * the same backoff `jobs.ts` uses for its job streams -- an unbounded flat
-	 * native EventSource retry here is what produced the operator's ERR_QUIC storm
-	 * (issue #257). `reconnectAttempt` resets on the next successful `hello`
-	 * (see `handleHello`), so a connection that recovers goes back to the
-	 * short delay on its next drop.
+	 * Reconnects after a live (post-bootstrap) drop, or after a first sync that failed while the
+	 * server could not be reached -- the offline strip says "retrying" and offers no button, so
+	 * that retry must really happen -- with the same backoff `jobs.ts` uses for its job streams.
+	 * `reconnectAttempt` resets on the next successful `hello` (see `handleHello`), so a
+	 * connection that recovers goes back to the short delay on its next drop.
 	 */
 	private scheduleReconnect(reconnect: () => void): void {
 		this.reconnectAttempt += 1;
@@ -464,11 +458,9 @@ export class ResourceSyncController {
 	}
 
 	/**
-	 * While the server cannot be reached, the stream's own backoff would keep
-	 * the offline strip up for up to ten seconds after the server is back, so
-	 * the auth probe asks once per interval instead: its first answer clears
-	 * the strip and reopens the stream at once, within the stream's reopen gap
-	 * (#1099).
+	 * While the server cannot be reached, the stream's own backoff would keep the offline strip up
+	 * for up to ten seconds after the server is back, so the auth probe asks once per interval
+	 * instead: its first answer clears the strip and reopens the stream within the reopen gap.
 	 */
 	private reportReachable(reachable: boolean): void {
 		this.serverReachable = reachable;
@@ -533,6 +525,7 @@ export class ResourceSyncController {
 
 	private async beginEpoch(watermark: string): Promise<void> {
 		const epoch = ++this.epoch;
+		const wasReady = this.state.ready;
 		this.deps.cancelSnapshot();
 		this.watermark = watermark;
 		this.buffer = this.buffer.filter((event) => this.isAfterWatermark(event.sequence));
@@ -579,10 +572,17 @@ export class ResourceSyncController {
 				ready: true
 			}));
 			this.resolveReady(true);
+			await this.reloadOpenSongOnResync(epoch, wasReady);
 		} catch (err) {
 			if (!this.isCurrentEpoch(epoch)) return;
 			this.failBootstrap(visibleErrorMessage(err));
 		}
+	}
+
+	private async reloadOpenSongOnResync(epoch: number, wasReady: boolean): Promise<void> {
+		if (!wasReady) return;
+		this.requeueSongs(this.deps.listPrioritySongIds());
+		await this.flushPending(epoch);
 	}
 
 	private queueBufferedSongs(): void {

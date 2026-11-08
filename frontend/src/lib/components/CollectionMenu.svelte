@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { ShareResult, UnplayableSongSummary } from '#lib/api/types.ts';
 	import {
-		ALBUM_COVER_UPLOAD_LABEL,
 		COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 		COLLECTION_MENU_ARCHIVE_LABEL,
 		COLLECTION_MENU_CLOSE_LABEL,
@@ -17,6 +16,7 @@
 		COLLECTION_MENU_SHARE_OFF_HINT,
 		COLLECTION_MENU_SHARE_ON_HINT
 	} from '#lib/constants.ts';
+	import { ALBUM_COVER_UPLOAD_LABEL } from '#lib/constants/album.ts';
 	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';

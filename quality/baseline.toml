@@ -18,9 +18,9 @@
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
-"frontend/src/lib/api/types.ts" = 1122
+"frontend/src/lib/api/types.ts" = 1121
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
-"frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
+"frontend/src/lib/components/AlbumDetailView.test.ts" = 1115
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1825
 "frontend/src/lib/components/LibraryWall.test.ts" = 1137
@@ -29,41 +29,41 @@
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1105
 "frontend/src/lib/components/PlayerBar.test.ts" = 1645
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
-"frontend/src/lib/components/SongDetailView.svelte" = 1021
+"frontend/src/lib/components/SongDetailView.svelte" = 1020
 "frontend/src/lib/components/SongDetailView.test.ts" = 2270
-"frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
-"frontend/src/lib/components/editor/TakesList.test.ts" = 1304
+"frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
+"frontend/src/lib/components/editor/TakesList.test.ts" = 1303
 "frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
 "frontend/src/lib/share/sharePlayback.test.ts" = 837
-"frontend/src/lib/stores/jobs.test.ts" = 906
-"frontend/src/lib/stores/libraryContext.test.ts" = 2092
-"frontend/src/lib/stores/libraryContext.ts" = 1192
+"frontend/src/lib/stores/jobs.test.ts" = 900
+"frontend/src/lib/stores/libraryContext.test.ts" = 2087
+"frontend/src/lib/stores/libraryContext.ts" = 1189
 "frontend/src/lib/stores/navigation.test.ts" = 2971
 "frontend/src/lib/stores/player.test.ts" = 5277
 "frontend/src/lib/stores/player.ts" = 2236
-"frontend/src/lib/stores/resourceSync.test.ts" = 2034
+"frontend/src/lib/stores/resourceSync.test.ts" = 2032
 "frontend/src/lib/stores/resourceSync.ts" = 1058
 "frontend/src/routes/layout.test.ts" = 1404
-"frontend/src/routes/settings/users/+page.svelte" = 946
+"frontend/src/routes/settings/users/+page.svelte" = 937
 "src/acestep_worker/wrapper.py" = 1087
-"src/songmaker_cli/conversation_api.py" = 968
-"src/songmaker_cli/jobs/generation.py" = 1149
+"src/songmaker_cli/conversation_api.py" = 967
+"src/songmaker_cli/jobs/generation.py" = 1139
 "src/songmaker_cli/jobs/lora_training.py" = 1515
 "src/songmaker_cli/queue_streams.py" = 919
-"src/songmaker_cli/sharing_api.py" = 861
+"src/songmaker_cli/sharing_api.py" = 833
 "tests/acestep_engine/test_client.py" = 818
-"tests/acestep_worker/test_wrapper.py" = 1626
+"tests/acestep_worker/test_wrapper.py" = 1519
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1291
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1857
-"tests/songmaker_cli/test_admin_api.py" = 1036
-"tests/songmaker_cli/test_api.py" = 4584
+"tests/songmaker_cli/test_admin_api.py" = 999
+"tests/songmaker_cli/test_api.py" = 4582
 "tests/songmaker_cli/test_db.py" = 2446
 "tests/songmaker_cli/test_db_postgresql.py" = 832
-"tests/songmaker_cli/test_jobs.py" = 3215
+"tests/songmaker_cli/test_jobs.py" = 3105
 "tests/songmaker_cli/test_library_api.py" = 1626
 "tests/songmaker_cli/test_lora_api.py" = 1296
 "tests/songmaker_cli/test_playlist_api.py" = 1103
@@ -72,7 +72,7 @@
 "tests/songmaker_cli/test_scheduler.py" = 1283
 "tests/songmaker_cli/test_server.py" = 1922
 "tests/songmaker_cli/test_sharing_api.py" = 2487
-"tests/test_auto_deploy_alerting.py" = 1299
+"tests/scripts/test_run_autodeploy_alerting.py" = 1299
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
 "main" = 65
@@ -124,7 +124,7 @@
 "run_lora_training_job" = 60
 
 [function_lines."src/songmaker_cli/jobs/model_lifecycle.py"]
-"_run_download_attempt" = 84
+"_run_download_attempt" = 80
 "download_model_on_worker" = 76
 "load_model_on_worker" = 64
 
@@ -209,14 +209,11 @@
 "test_shared_playlist_audio_authorization_matches_presented_share_selection" = 79
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 78
 
-[function_lines."tests/test_alert_script.py"]
+[function_lines."tests/scripts/test_send_alert_script.py"]
 "test_trace_channels_never_expose_config_values" = 75
 
-[function_lines."tests/test_install_autostart.py"]
-"run_autostart" = 60
-
-[function_lines."tests/test_install_cli_credentials_mirror.py"]
-"run_installer" = 94
+[function_lines."tests/scripts/test_install_cli_credentials_mirror.py"]
+"run_installer" = 71
 
 [clones."scripts/archive_e2e_albums.py"]
 main = [["scripts/seed_e2e_filler_albums.py", "main"]]

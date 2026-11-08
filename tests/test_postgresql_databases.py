@@ -83,7 +83,7 @@ def _contents(url: URL) -> dict[str, list[str]]:
             return {
                 table: sorted(
                     repr(tuple(row))
-                    for row in connection.execute(text(f'SELECT * FROM "{table}"'))
+                    for row in connection.execute(text(f'SELECT * FROM "{table}"'))  # noqa: S608 - the inspector's table names
                 )
                 for table in inspect(connection).get_table_names()
             }
@@ -390,7 +390,9 @@ def test_drift_fails_the_reset_and_the_database_is_recreated(another_run, drift)
             schema = inspect(connection)
             assert "stray" not in schema.get_table_names()
             assert "stray" not in {column["name"] for column in schema.get_columns("users")}
-            revision = connection.execute(text(f"SELECT version_num FROM {ALEMBIC_VERSION_TABLE}"))
+            revision = connection.execute(
+                text(f"SELECT version_num FROM {ALEMBIC_VERSION_TABLE}"),  # noqa: S608 - a constant
+            )
             assert revision.scalar_one() == migration_head()
     finally:
         engine.dispose()

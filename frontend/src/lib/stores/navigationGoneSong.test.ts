@@ -8,6 +8,7 @@ import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
 import { installHistoryController } from '#lib/history/historyController.ts';
 import { forgetSyncedSong, resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import {
+	hydrateLibraryFromHistory,
 	libraryRootState,
 	librarySurface,
 	resetLibraryContextForTests
@@ -19,6 +20,7 @@ import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { resetGenerationFailuresForTests } from '#lib/stores/jobs.ts';
 import { toasts } from '#lib/stores/toast.ts';
+import { resetResourceSyncForTests, resourceSync } from '#lib/stores/resourceSync.ts';
 import { SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
 
 const fetchSong = vi.fn();
@@ -60,13 +62,20 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 	fetchVersions: vi.fn().mockResolvedValue([])
 }));
 
-import { followShellLayers, initNavigation, leaveGoneSong, selectSong } from './navigation';
+import {
+	followLibrarySync,
+	followShellLayers,
+	initNavigation,
+	leaveGoneSong,
+	selectSong
+} from './navigation';
 
 let stopFollowingShellLayers: () => void = () => undefined;
 
 beforeEach(() => {
 	fetchSong.mockReset();
 	resetGenerationFailuresForTests();
+	resetResourceSyncForTests();
 	toasts.set([]);
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
@@ -163,12 +172,40 @@ describe('a song deleted elsewhere while open', () => {
 
 	it.each([
 		['a library entry of another song', { ...libraryRootState(), songId: 's2' }],
-		['an entry that is no library entry', {}]
-	])('stays quiet with nothing selected and %s standing', (_, page) => {
+		['an entry that is no library entry', {}],
+		['the library entry of the song itself', { ...libraryRootState(), songId: 'gone' }]
+	])('stays quiet with nothing selected, whatever entry stands: %s', (_, page) => {
 		onTestFinished(initNavigation());
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH, routerHistoryEntry({ library: page }));
 		leaveGoneSong('gone');
 
 		expect(get(toasts)).toEqual([]);
+	});
+
+	it('leaves for the collection after a snapshot and the first ready, with the entry still naming it', async () => {
+		fetchSong.mockRejectedValue(new ApiError(404, 'Song not found', '/api/songs/gone'));
+		const standing = {
+			...libraryRootState(),
+			surface: 'detail' as const,
+			collection: { kind: 'album' as const, id: 'a1' },
+			songId: 'gone'
+		};
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH, routerHistoryEntry({ library: standing }));
+		onTestFinished(followLibrarySync());
+
+		await hydrateLibraryFromHistory();
+		resourceSync.update((state) => ({ ...state, ready: true, status: 'live' }));
+
+		await vi.waitFor(() =>
+			expect(get(toasts).map((t) => t.message)).toEqual([SONG_LINK_NOT_FOUND_TOAST])
+		);
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(librarySurface)).toBe('detail');
+		await vi.waitFor(() =>
+			expect(historyEntry()).toMatchObject({
+				collection: { kind: 'album', id: 'a1' },
+				songId: null
+			})
+		);
 	});
 });

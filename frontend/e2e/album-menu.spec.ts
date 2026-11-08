@@ -6,11 +6,6 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
-	ALBUM_DETAILS_CLOSE_LABEL,
-	ALBUM_DETAILS_SAVE_LABEL,
-	ALBUM_DETAILS_SAVED,
-	ALBUM_SUBTITLE_LABEL,
-	ALBUM_YEAR_LABEL,
 	COLLECTION_MENU_EDIT_DETAILS_LABEL,
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_SHARE_LABEL,
@@ -18,9 +13,16 @@ import {
 	COLLECTION_MENU_SHARE_ON_HINT,
 	collectionActionLabel,
 	HITBOX_FREQUENT_PX,
-	NEW_ALBUM_TITLE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
+import {
+	ALBUM_DETAILS_CLOSE_LABEL,
+	ALBUM_DETAILS_SAVED,
+	ALBUM_DETAILS_SAVE_LABEL,
+	ALBUM_SUBTITLE_LABEL,
+	ALBUM_YEAR_LABEL
+} from '../src/lib/constants/album';
+import { NEW_ALBUM_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import { boundingBoxes, sameOriginHeaders, FlowGuard, shellOf, workspace } from './helpers';
 import { bottomOf, expectMenuInsideViewport, rightOf } from './menu-viewport';
 import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist } from './seed';

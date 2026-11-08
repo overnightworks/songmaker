@@ -56,6 +56,7 @@
 	import { describeFailure } from '#lib/api/fetch.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import Icon from '../Icon.svelte';
+	import InfoTip from '../InfoTip.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 	import { generateAction, isGenerateJobActive } from '#lib/stores/generateAction.ts';
@@ -200,6 +201,12 @@
 	{/if}
 {/snippet}
 
+{#snippet takesTip()}
+	{#if touchPointer && song.generations.length > 0}
+		<InfoTip label="About takes" text={TAKES_MOBILE_HINT} />
+	{/if}
+{/snippet}
+
 {#snippet takeRows(generations: GenerationItem[])}
 	{#each generations as gen (gen.id)}
 		<TakeRow
@@ -285,6 +292,7 @@
 					<span class="version-header">
 						{currentVersionHeadLabel(current.versionNumber ?? 0, current.generations.length)}
 					</span>
+					{@render takesTip()}
 					{@render openLink(current)}
 				</div>
 				{#if current.generations.length === 0 && !jobRunning}
@@ -298,7 +306,7 @@
 			<p class="earlier-label">{EARLIER_VERSIONS_LABEL}</p>
 		{/if}
 
-		{#each groups.earlier as group (group.key)}
+		{#each groups.earlier as group, index (group.key)}
 			{@const open = isGroupOpen($takeFolds, groups, group.key)}
 			<div class="version-section">
 				<div class="version-header-row">
@@ -321,6 +329,7 @@
 							>
 						{/if}
 					</button>
+					{#if !groups.current && index === 0}{@render takesTip()}{/if}
 					{#if open}{@render openLink(group)}{/if}
 				</div>
 				{#if open}
@@ -328,10 +337,6 @@
 				{/if}
 			</div>
 		{/each}
-
-		{#if touchPointer && song.generations.length > 0}
-			<p class="mobile-hint">{TAKES_MOBILE_HINT}</p>
-		{/if}
 
 		{#if $selectionMode}
 			<div class="selection-toolbar">
@@ -550,14 +555,6 @@
 		.destructive {
 			grid-area: 2 / 2;
 		}
-	}
-
-	.mobile-hint {
-		margin: 0;
-		text-align: center;
-		font-size: 0.72rem;
-		color: var(--text-subtle);
-		font-style: italic;
 	}
 
 	.empty,

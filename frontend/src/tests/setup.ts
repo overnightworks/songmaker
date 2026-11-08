@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
+import './viz-colors.ts';
 
 // jsdom performs no layout, so it ships no ResizeObserver. Components that
 // re-measure when their box changes size must still be mountable here; a test
