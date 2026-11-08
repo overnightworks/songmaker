@@ -24,7 +24,6 @@
 	import { addToast } from '#lib/stores/toast.ts';
 	import {
 		COWRITER_CONVERSATION_MENU_LABEL,
-		EDITOR_VIEW_COWRITER_LABEL,
 		COWRITER_UNAVAILABLE_TEXT,
 		COWRITER_DELETE_CONVERSATION_TITLE,
 		COWRITER_DELETE_CONVERSATION_WARNING,
@@ -35,7 +34,8 @@
 		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
-	} from '#lib/constants.ts';
+	} from '#lib/constants/cowriter.ts';
+	import { EDITOR_VIEW_COWRITER_LABEL } from '#lib/constants.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '#lib/utils/focus-trap.ts';
 	import {

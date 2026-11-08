@@ -16,10 +16,12 @@
 		ALBUM_SUBTITLE_MAX_LENGTH,
 		ALBUM_YEAR_LABEL,
 		ALBUM_YEAR_MAX_LENGTH,
-		COLLECTION_MENU_EDIT_DETAILS_LABEL,
+		COLLECTION_MENU_EDIT_DETAILS_LABEL
+	} from '#lib/constants.ts';
+	import {
 		NEW_ALBUM_TITLE_LABEL,
 		NEW_PLACE_TEXT_MAX_LENGTH
-	} from '#lib/constants.ts';
+	} from '#lib/constants/new-collection.ts';
 	import { holdOpenWhile } from '#lib/stores/layers.ts';
 	import Icon from './Icon.svelte';
 

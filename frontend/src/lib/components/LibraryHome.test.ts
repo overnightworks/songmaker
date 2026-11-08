@@ -6,9 +6,9 @@ import type { LibraryListenItem } from '#lib/api/library.ts';
 import {
 	LIBRARY_NEW_ALBUM_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
-	LIBRARY_NEW_PLAYLIST_LABEL,
-	NEW_ALBUM_CARD_LABEL
+	LIBRARY_NEW_PLAYLIST_LABEL
 } from '#lib/constants.ts';
+import { NEW_ALBUM_CARD_LABEL } from '#lib/constants/new-collection.ts';
 import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';

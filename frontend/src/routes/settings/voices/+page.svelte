@@ -15,7 +15,8 @@
 	import ToastContainer from '#lib/components/ToastContainer.svelte';
 	import LoraDetail from '#lib/components/LoraDetail.svelte';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
-	import { APP_NAME, VOICES_LOAD_FAILED } from '#lib/constants.ts';
+	import { APP_NAME } from '#lib/constants.ts';
+	import { VOICES_LOAD_FAILED } from '#lib/constants/voice.ts';
 	import { LORA_CREATE_FAILED, LORA_POLL_INTERVAL_MS } from '#lib/constants/lora.ts';
 	import type { UserLoraItem } from '#lib/api/types.ts';
 

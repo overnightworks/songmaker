@@ -13,7 +13,7 @@
 		NEW_ALBUM_REFUSED,
 		NEW_ALBUM_TITLE_LABEL,
 		NEW_PLACE_TEXT_MAX_LENGTH
-	} from '#lib/constants.ts';
+	} from '#lib/constants/new-collection.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {

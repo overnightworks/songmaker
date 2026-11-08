@@ -6,9 +6,9 @@
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 		EDITOR_GENERATE_LABEL,
-		EDITOR_OPEN_WORKER_POOL_LABEL,
-		ADMIN_WORKER_POOL_HREF
+		EDITOR_OPEN_WORKER_POOL_LABEL
 	} from '#lib/constants.ts';
+	import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';
 	import {
 		cancelGeneration,
 		generate,

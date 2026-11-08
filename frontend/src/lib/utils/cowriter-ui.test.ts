@@ -1,7 +1,7 @@
 import { makeSong as song } from '#lib/test-utils/factories.ts';
 import { describe, expect, it } from 'vitest';
 
-import { COWRITER_BUSY_WAIT_CEILING_SECONDS } from '#lib/constants.ts';
+import { COWRITER_BUSY_WAIT_CEILING_SECONDS } from '#lib/constants/cowriter.ts';
 import type {
 	ChatTurnFailureFrame,
 	ChatTurnProblemFrame,

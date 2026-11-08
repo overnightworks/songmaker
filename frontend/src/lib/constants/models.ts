@@ -18,3 +18,5 @@ const MODELS_LOADING_LABEL = 'Loading…';
 const MODELS_UNAVAILABLE_LABEL = 'Unavailable';
 export const modelsRowStatus = (loadFailure: string | null): string =>
 	loadFailure ? MODELS_UNAVAILABLE_LABEL : MODELS_LOADING_LABEL;
+
+export const MODELS_HEADING = 'Models';

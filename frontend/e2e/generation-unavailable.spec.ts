@@ -1,8 +1,7 @@
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
 import type { JobItem } from '../src/lib/api/types';
+import { ADMIN_TABS_LABEL, ADMIN_WORKER_POOL_HREF } from '../src/lib/constants/admin';
 import {
-	ADMIN_TABS_LABEL,
-	ADMIN_WORKER_POOL_HREF,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_OPEN_WORKER_POOL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,

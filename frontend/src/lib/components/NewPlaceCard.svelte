@@ -11,7 +11,7 @@
 	import { ApiError, describeFailure, isTransientApiFailure } from '#lib/api/fetch.ts';
 	import { dropTitleDraft, keepTitleDraft, titleDraft } from '#lib/stores/titleDrafts.ts';
 	import { addToast, dismissToast } from '#lib/stores/toast.ts';
-	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '#lib/constants.ts';
+	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '#lib/constants/new-collection.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {

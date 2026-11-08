@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '#lib/constants.ts';
+	import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '#lib/constants/cowriter.ts';
 
 	interface Props {
 		value: string;
