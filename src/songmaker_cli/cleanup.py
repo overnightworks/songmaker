@@ -15,9 +15,10 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from songmaker_cli.api_helpers import _PURGE_LOCK_ID, _begin_exclusive, cleanup_generation_files
+from songmaker_cli.api_helpers import cleanup_generation_files
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
+from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
 from songmaker_cli.db.queries.generations import (
@@ -72,7 +73,7 @@ def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
     out of the result. An album or song with a queued or running job is left for a later run
     and stays out of the result.
     """
-    _begin_exclusive(session, _PURGE_LOCK_ID)
+    lock_until_transaction_ends(session, AdvisoryLock.PURGE)
     expired_album_ids = [album.id for album in list_expired_albums(session, cutoff)]
     orphan_song_candidates = [
         song.id for song in list_expired_songs(session, cutoff, expired_album_ids)

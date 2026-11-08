@@ -14,12 +14,9 @@ from typing import TYPE_CHECKING
 
 from webauth.ports import AccountEventKind, SignInStores
 
-from songmaker_cli.api_helpers import (
-    _USER_MANAGEMENT_LOCK_ID,
-    _begin_exclusive,
-    end_read_transaction_before_lock,
-)
+from songmaker_cli.api_helpers import end_read_transaction_before_lock
 from songmaker_cli.constants import AuditAction, ResourceType
+from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH
 from songmaker_cli.db.queries.auth import (
     create_session,
@@ -93,7 +90,7 @@ class DatabaseWriteLock:
 
     def _lock_new_transaction(self) -> None:
         end_read_transaction_before_lock(self.session, "DatabaseWriteLock")
-        _begin_exclusive(self.session, _USER_MANAGEMENT_LOCK_ID)
+        lock_until_transaction_ends(self.session, AdvisoryLock.USER_MANAGEMENT)
         self._locked_transaction = self.session.get_transaction()
 
 
