@@ -1,0 +1,7 @@
+claim_id = "cc93f50573ff4e3ebc5f8f3b7fa85645"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "e39e6f5d7313accd7da16431232e62670525cbf4"
+branch = "claude/issue-2760-cover-runner-failure-budget-cells"
+scope = ["src/songmaker_cli/cover_runner.py", "tests/songmaker_cli/test_cover_runner.py"]
+opened_commit = "21c4a24ac4f8947a72ec3c91fd7392a15c0797a0"
