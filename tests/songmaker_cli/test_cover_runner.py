@@ -262,8 +262,9 @@ def test_a_failing_tick_is_recorded_on_the_registry_and_the_loop_goes_on(
     monkeypatch.setattr(cover_runner, "run_next_cover_job", tick_that_fails_then_succeeds)
     monkeypatch.setattr(cover_runner.asyncio, "sleep", end_after_the_second_tick)
 
+    loop = cover_runner.cover_runner_loop(app, registry)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(cover_runner.cover_runner_loop(app, registry))
+        asyncio.run(loop)
 
     assert failures_seen == [0, 1]
     health = registry.loop_health()[BackgroundLoopName.COVER_RUNNER]
