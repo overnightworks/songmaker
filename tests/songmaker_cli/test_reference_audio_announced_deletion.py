@@ -216,7 +216,7 @@ def test_kept_unstamped_and_linked_rows_stay_and_only_the_linked_one_counts_as_s
 
 
 @pytest.fixture
-def failing_delete_of_b(world, request):
+def failing_delete_of_b(world):
     """A PostgreSQL trigger that makes deleting the row ``b`` fail with a non-integrity error."""
     with world.factory() as session:
         session.execute(text(
@@ -228,10 +228,11 @@ def failing_delete_of_b(world, request):
             "FOR EACH ROW WHEN (OLD.id = 'b') EXECUTE FUNCTION fail_delete()"
         ))
         session.commit()
-    request.addfinalizer(lambda: drop_with_bounded_waits(world.factory, (
+    yield
+    drop_with_bounded_waits(world.factory, (
         "DROP TRIGGER IF EXISTS fail_delete ON reference_recordings",
         "DROP FUNCTION IF EXISTS fail_delete()",
-    )))
+    ))
 
 
 def test_one_rows_database_failure_leaves_the_other_rows_running_and_names_no_file(

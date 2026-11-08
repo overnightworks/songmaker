@@ -18,18 +18,14 @@ from support.postgres_lock_harness import (
 )
 from support.reference_countdown import publish_countdown, stored_file
 from support.reference_rows import a_reference
+from support.reference_take_world import persist_take_linking, seed_owner_song_and_running_job
 from support.web_app import make_test_app, seed_session
 
-from acestep_engine.models import AceStepConfig
 from songmaker_cli.cleanup import run_cleanup_expired, run_generation_retention
-from songmaker_cli.db.models import Album, Generation, Job, ReferenceRecording, Song, User, Version
-from songmaker_cli.jobs import _persist_generation_row
+from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, Version
 from songmaker_cli.jobs._runtime import (
     JOB_ERROR_REFERENCE_DELETED_DURING_TAKE,
-    ReferenceDeletedDuringTake,
 )
-from songmaker_cli.jobs.generation import GenerationContext
-from songmaker_cli.parser import AlbumMeta, SongMeta
 from songmaker_cli.reference_audio import (
     AnnouncedDeletionReport,
     delete_announced_references,
@@ -49,16 +45,7 @@ NOT_FOUND = {"detail": "Not Found"}
 
 
 def _seed_stamped_row(session) -> None:
-    session.add(User(id=OWNER, username="owner"))
-    session.flush()
-    session.add(Album(id="album-a", title="A", artist="A", created_by=OWNER))
-    session.flush()
-    session.add(Song(id="song-a", title="S", album_id="album-a", track_number=1, slug="s"))
-    session.flush()
-    session.add_all([
-        Version(id="version-a", song_id="song-a", version_number=1, lyrics="la", prompt="p"),
-        Job(id="job-a", type="generate", status="running", user_id=OWNER),
-    ])
+    seed_owner_song_and_running_job(session, OWNER)
     a_reference(
         session, OWNER, name=STORED_NAME, reference_id=REFERENCE_ID, unused_since=STAMPED,
     )
@@ -117,22 +104,7 @@ class _World:
         return 1
 
     def persist_take(self):
-        """The take's persistence; the message that ends the job is its answer."""
-        context = GenerationContext(
-            song_id="song-a", version_id="version-a",
-            meta=SongMeta(title="S", lyrics="la", prompt="p"),
-            album_meta=AlbumMeta(title="A", artist="A"),
-            ace_config=AceStepConfig(prompt="p", lyrics="la", audio_duration=0),
-            audio_dir=self.audio_dir, user_id=OWNER, reference_recording_id=REFERENCE_ID,
-            model_name="turbo",
-        )
-        try:
-            return _persist_generation_row(
-                db_factory=self.pg_factory, ctx=context, generation_id="take-a", seed=1,
-                cot_caption="", cot_lyrics="", delivered_batch_size=None, job_id="job-a",
-            )
-        except ReferenceDeletedDuringTake as failure:
-            return str(failure)
+        return persist_take_linking(self.pg_factory, self.audio_dir, OWNER, REFERENCE_ID)
 
     def link_with_stale_stamp(self, *, via_take: bool = False) -> None:
         """A link on the stamped row, which no flow creates; the re-check must still see it."""
