@@ -11,10 +11,7 @@
 	} from '#lib/services/audioPlayer.svelte.ts';
 	import {
 		HITBOX_FREQUENT_PX,
-		NOW_PLAYING_CLOSE,
-		NOW_PLAYING_GO_TO_SONG,
 		NOW_PLAYING_LABEL,
-		NOW_PLAYING_NO_LYRICS,
 		SONG_NEXT_LABEL,
 		SONG_PREVIOUS_LABEL
 	} from '#lib/constants.ts';
@@ -32,7 +29,10 @@
 		nowPlayingSheetCloseLabel,
 		nowPlayingTakeLabel,
 		type NowPlayingSource,
-		type NowPlayingSurfaceKind
+		type NowPlayingSurfaceKind,
+		NOW_PLAYING_CLOSE,
+		NOW_PLAYING_GO_TO_SONG,
+		NOW_PLAYING_NO_LYRICS
 	} from '#lib/constants/now-playing.ts';
 	import { formatTime } from '#lib/utils/format.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';

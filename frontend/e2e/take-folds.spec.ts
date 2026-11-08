@@ -10,7 +10,6 @@ import {
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
-	NOW_PLAYING_CLOSE,
 	openNowPlayingLabel,
 	SONG_MENU_LABEL,
 	SONG_MENU_SAVE_LABEL,
@@ -26,7 +25,8 @@ import {
 	EARLIER_VERSIONS_LABEL,
 	foldedGroupLabel,
 	selectedCountLabel,
-	TAKE_SELECT_ALL_UNKEPT_LABEL
+	TAKE_SELECT_ALL_UNKEPT_LABEL,
+	NOW_PLAYING_CLOSE
 } from '../src/lib/constants/now-playing';
 import { appBar, sameOriginHeaders, ONLY_IN_SHELL, workspace } from './helpers';
 import {

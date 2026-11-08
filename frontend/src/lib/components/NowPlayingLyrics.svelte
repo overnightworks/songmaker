@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { WhisperCue } from '#lib/api/types.ts';
-	import { NOW_PLAYING_LYRICS_FOLLOW_LABEL } from '#lib/constants.ts';
 	import {
 		NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
-		NOW_PLAYING_LYRICS_ROW_LABEL
+		NOW_PLAYING_LYRICS_ROW_LABEL,
+		NOW_PLAYING_LYRICS_FOLLOW_LABEL
 	} from '#lib/constants/now-playing.ts';
 	import { alignInWorker } from '#lib/services/lyricsAlignment.svelte.ts';
 	import { activeLyricLineIndices, type AlignedLyricLine } from '#lib/utils/lyrics-align.ts';
