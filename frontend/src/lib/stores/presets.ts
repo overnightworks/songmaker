@@ -113,6 +113,7 @@ export async function unsetDefault(presetId: string): Promise<void> {
 export async function deletePreset(presetId: string): Promise<void> {
 	await deletePresetApi(presetId);
 	presets.update((list) => list.filter((p) => p.id !== presetId));
+	defaultConfig.update((config) => (config === presetId ? null : config));
 }
 
 const generationDefaults = writable<Record<string, VersionGenerationParams>>({});

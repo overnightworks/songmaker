@@ -43,7 +43,7 @@ def test_a_case_reaching_the_database_fixture_through_a_helper_is_recorded(
 
     recorded = {
         case.attrib["name"]: [prop.attrib["name"] for prop in case.iter("property")]
-        for case in ET.parse(report).iter("testcase")
+        for case in ET.parse(report).iter("testcase")  # noqa: S314 - the test's own junit report
     }
     assert recorded == {
         "test_uses_the_database_through_a_helper": ["database_case"],

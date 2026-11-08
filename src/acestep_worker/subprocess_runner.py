@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.constants import SECRET_ENV_KEYS
@@ -115,8 +115,7 @@ def _health_url(port: int) -> str:
 
 def is_acestep_healthy(port: int, timeout: float = 5.0) -> bool:
     try:
-        req = Request(_health_url(port), method="GET")
-        with urlopen(req, timeout=timeout) as resp:  # noqa: S310 - literal http loopback URL
+        with urlopen(_health_url(port), timeout=timeout) as resp:  # noqa: S310 - literal http loopback URL
             return resp.status == 200
     except OSError:
         return False
@@ -125,8 +124,7 @@ def is_acestep_healthy(port: int, timeout: float = 5.0) -> bool:
 def _read_llm_initialized(port: int, timeout: float = 5.0) -> bool | None:
     """The child's own report of its LM; None when the body gives no verdict."""
     try:
-        req = Request(_health_url(port), method="GET")
-        with urlopen(req, timeout=timeout) as resp:  # noqa: S310 - literal http loopback URL
+        with urlopen(_health_url(port), timeout=timeout) as resp:  # noqa: S310 - literal http loopback URL
             body = json.loads(resp.read())
         flag = body["data"]["llm_initialized"]
     except (OSError, ValueError, KeyError, TypeError):

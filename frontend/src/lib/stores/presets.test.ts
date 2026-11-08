@@ -195,6 +195,26 @@ describe('preset store', () => {
 		expect(get(presets)).toEqual([]);
 	});
 
+	it('leaves the default config on inherit when the default preset is deleted', async () => {
+		presets.set([preset('chosen'), preset('other')]);
+		defaultConfig.set('chosen');
+		api.deletePresetApi.mockResolvedValue(undefined);
+
+		await deletePreset('chosen');
+
+		expect(get(defaultConfig)).toBeNull();
+	});
+
+	it('keeps the default config when another preset is deleted', async () => {
+		presets.set([preset('chosen'), preset('other')]);
+		defaultConfig.set('chosen');
+		api.deletePresetApi.mockResolvedValue(undefined);
+
+		await deletePreset('other');
+
+		expect(get(defaultConfig)).toBe('chosen');
+	});
+
 	it('keeps one default per model mode while leaving other modes untouched', async () => {
 		presets.set([
 			preset('old-default', { is_default: true }),

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthUser, PresetItem } from '#lib/api/types.ts';
 import { currentUser } from '#lib/stores/auth.ts';
+import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';
 
 import GenerationSettingsPage from './+page.svelte';
@@ -22,16 +23,19 @@ const RESPONSES: Record<string, unknown> = {
 };
 
 let mounted: ReturnType<typeof mount> | undefined;
+let stopListeningForEscape: () => void = () => undefined;
 
 interface OpenedPage {
 	target: HTMLElement;
 	requested: string[];
 	savedPresets: PresetItem[];
+	deleted: string[];
 }
 
 interface StubbedApi {
 	requested: string[];
 	savedPresets: PresetItem[];
+	deleted: string[];
 }
 
 function savedPreset(body: string): PresetItem {
@@ -54,6 +58,7 @@ function stubApi(
 ): StubbedApi {
 	const requested: string[] = [];
 	const savedPresets: PresetItem[] = [];
+	const deleted: string[] = [];
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (path: string, init?: RequestInit) => {
@@ -64,13 +69,17 @@ function stubApi(
 				savedPresets.push(preset);
 				return new Response(JSON.stringify(preset), { status: 201 });
 			}
+			if (init?.method === 'DELETE') {
+				deleted.push(path);
+				return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });
+			}
 			if (path === DEFAULT_CONFIG_PATH && init?.method === 'PUT') {
 				return new Response(String(init.body), { status: 200 });
 			}
 			return new Response(JSON.stringify(responses[path]), { status: 200 });
 		})
 	);
-	return { requested, savedPresets };
+	return { requested, savedPresets, deleted };
 }
 
 async function openPageAs(
@@ -79,16 +88,17 @@ async function openPageAs(
 	responses: Record<string, unknown> = RESPONSES
 ): Promise<OpenedPage> {
 	currentUser.set(user);
-	const { requested, savedPresets } = stubApi(failing, responses);
+	const { requested, savedPresets, deleted } = stubApi(failing, responses);
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(GenerationSettingsPage, { target });
 	await tick();
 	await vi.waitFor(() => expect(requested).toContain('/api/settings/default-config'));
-	return { target, requested, savedPresets };
+	return { target, requested, savedPresets, deleted };
 }
 
 afterEach(async () => {
+	stopListeningForEscape();
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
@@ -198,6 +208,84 @@ describe('generation settings', () => {
 			await vi.waitFor(() => expect(checked()).toEqual([]));
 			const tabbable = chips().filter((chip) => chip.getAttribute('tabindex') === '0');
 			expect(tabbable).toEqual([chips()[0]]);
+		});
+	});
+
+	describe('deleting a preset', () => {
+		const PRESET_ID = 'doomed';
+		const DELETE_PATH = `${PRESETS_PATH}/${PRESET_ID}`;
+
+		async function openWithOnePreset(): Promise<{
+			target: HTMLElement;
+			deleted: string[];
+			rowDelete: HTMLButtonElement;
+		}> {
+			const preset: PresetItem = {
+				...savedPreset(
+					JSON.stringify({ name: 'Warm', model_mode: MODEL, params: {}, is_default: false })
+				),
+				id: PRESET_ID
+			};
+			const { target, deleted } = await openPageAs(makeAuthUser(), new Set(), {
+				...RESPONSES,
+				[PRESETS_PATH]: [preset]
+			});
+			const rowDelete = await vi.waitFor(() => {
+				const button = target.querySelector<HTMLButtonElement>('.preset-action.delete');
+				if (!button) throw new Error('no delete button yet');
+				return button;
+			});
+			rowDelete.focus();
+			rowDelete.click();
+			await tick();
+			return { target, deleted, rowDelete };
+		}
+
+		const dialogButton = (label: string): HTMLButtonElement => {
+			const found = [
+				...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')
+			].find((button) => button.textContent?.trim() === label);
+			if (!found) throw new Error(`no ${label} button`);
+			return found;
+		};
+
+		it('asks first with the preset name and sends no delete', async () => {
+			const { deleted } = await openWithOnePreset();
+
+			expect(document.querySelector('[role="dialog"] h3')?.textContent).toBe('Delete preset?');
+			expect(document.querySelector('[role="dialog"] li')?.textContent).toBe('Warm');
+			expect(deleted).toEqual([]);
+		});
+
+		it.each([
+			['Cancel', () => dialogButton('Cancel').click()],
+			[
+				'Escape',
+				() =>
+					dialogButton('Cancel').dispatchEvent(
+						new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+					)
+			]
+		])('keeps the preset and returns focus to its delete button on %s', async (_how, close) => {
+			stopListeningForEscape = listenForGlobalEscape();
+			const { target, deleted, rowDelete } = await openWithOnePreset();
+
+			close();
+			await tick();
+
+			expect(document.querySelector('[role="dialog"]')).toBeNull();
+			expect(deleted).toEqual([]);
+			expect(target.querySelector('.preset-name')?.textContent).toBe('Warm');
+			expect(document.activeElement).toBe(rowDelete);
+		});
+
+		it('deletes the preset and drops its row only on Delete', async () => {
+			const { target, deleted } = await openWithOnePreset();
+
+			dialogButton('Delete').click();
+
+			await vi.waitFor(() => expect(deleted).toEqual([DELETE_PATH]));
+			await vi.waitFor(() => expect(target.querySelector('.preset-name')).toBeNull());
 		});
 	});
 });
