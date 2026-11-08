@@ -302,7 +302,7 @@
 {#snippet footer(tab: RecipeTab)}
 	<div class="foot">
 		{#if TABS_SAVED_WITH_VERSION.includes(tab)}
-			<span class="saved">{RECIPE_SAVED_WITH_VERSION}</span>
+			<span class="saved-badge">{RECIPE_SAVED_WITH_VERSION}</span>
 		{/if}
 		<button
 			type="button"
@@ -608,13 +608,17 @@
 		border-top: 1px solid var(--border);
 	}
 
-	.saved,
-	.hint {
+	.saved-badge {
+		padding: 0.1rem 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-pill);
 		color: var(--text-muted);
 		font-size: var(--label-font-size);
 	}
 
 	.hint {
+		color: var(--text-muted);
+		font-size: var(--label-font-size);
 		margin: 0.6rem 0 0;
 	}
 

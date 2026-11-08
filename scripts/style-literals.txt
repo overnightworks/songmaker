@@ -1,7 +1,7 @@
 lib/components/AccountMenu.svelte 1
 lib/components/AgentProblemLine.svelte 2
 lib/components/AiNotice.svelte 2
-lib/components/AlbumCoverEditor.svelte 7
+lib/components/AlbumCoverEditor.svelte 6
 lib/components/AlbumDetailView.svelte 2
 lib/components/AlbumMetaEditor.svelte 4
 lib/components/Breadcrumb.svelte 1
@@ -36,7 +36,7 @@ lib/components/PlaylistCover.svelte 2
 lib/components/PlaylistDetailView.svelte 4
 lib/components/PlaylistPicker.svelte 4
 lib/components/QueueStreamFeedback.svelte 4
-lib/components/ShareDialog.svelte 6
+lib/components/ShareDialog.svelte 5
 lib/components/ShareLinkChip.svelte 1
 lib/components/ShareStatus.svelte 2
 lib/components/SongDetailView.svelte 7
@@ -56,7 +56,7 @@ lib/components/editor/SongMenu.svelte 2
 lib/components/editor/TakeMenu.svelte 2
 lib/components/editor/TakeRow.svelte 18
 lib/components/editor/TakeTaskCard.svelte 7
-lib/components/editor/TakesList.svelte 8
+lib/components/editor/TakesList.svelte 7
 lib/components/editor/VersionsSheet.svelte 14
 lib/components/editor/WriteColumn.svelte 1
 lib/components/share/SharedCollection.svelte 7
@@ -74,9 +74,9 @@ routes/(library)/album/[slug]/+page.svelte 2
 routes/(library)/album/[slug]/[song]/+page.svelte 2
 routes/(library)/album/[slug]/[song]/take/[n]/+page.svelte 2
 routes/(library)/playlist/[slug]/+page.svelte 2
-routes/+layout.svelte 4
+routes/+layout.svelte 3
 routes/settings/+page.svelte 3
-routes/settings/about/+page.svelte 5
-routes/settings/generation/+page.svelte 16
+routes/settings/about/+page.svelte 4
+routes/settings/generation/+page.svelte 15
 routes/settings/users/+page.svelte 22
 routes/settings/voices/+page.svelte 20

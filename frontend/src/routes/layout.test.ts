@@ -379,7 +379,7 @@ describe('app shell', () => {
 		const target = mountLayout(LIBRARY_ROUTE_PATH);
 		await tick();
 
-		expect(target.querySelector('.loading')).not.toBeNull();
+		expect(target.querySelector('.auth-gate [role=status]')).toHaveAccessibleName('Loading...');
 		expect(target.querySelector('.player-bar')).toBeNull();
 		expect(target.querySelector('.app-shell')).toBeNull();
 	});
