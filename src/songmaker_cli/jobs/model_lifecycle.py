@@ -214,6 +214,7 @@ async def _run_download_attempt(
         consume_download_task_stream,
         pick_any_online_worker,
         worker_request_headers,
+        worker_response_cause,
     )
 
     try:
@@ -249,10 +250,7 @@ async def _run_download_attempt(
             factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(
-                WorkerTaskFailed(f"Worker returned {submit.status_code}: {submit.text[:200]}"),
-                job_id,
-            ),
+            error=_sanitize_error(WorkerTaskFailed(worker_response_cause(submit)), job_id),
             error_type="worker_error",
         )
         return None

@@ -31,7 +31,7 @@
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
 "frontend/src/lib/components/SongDetailView.svelte" = 1020
 "frontend/src/lib/components/SongDetailView.test.ts" = 2270
-"frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
+"frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1303
 "frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
@@ -59,7 +59,7 @@
 "tests/acestep_worker/test_wrapper.py" = 1519
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1291
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1857
-"tests/songmaker_cli/test_admin_api.py" = 1036
+"tests/songmaker_cli/test_admin_api.py" = 999
 "tests/songmaker_cli/test_api.py" = 4582
 "tests/songmaker_cli/test_db.py" = 2448
 "tests/songmaker_cli/test_db_postgresql.py" = 832
@@ -124,7 +124,7 @@
 "run_lora_training_job" = 60
 
 [function_lines."src/songmaker_cli/jobs/model_lifecycle.py"]
-"_run_download_attempt" = 82
+"_run_download_attempt" = 80
 "download_model_on_worker" = 76
 "load_model_on_worker" = 64
 

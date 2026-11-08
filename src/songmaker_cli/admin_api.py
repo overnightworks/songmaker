@@ -249,11 +249,31 @@ async def load_model_on_worker_endpoint(
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
 
+async def _command_worker_model(db: Session, worker_id: str, path: str, mode: str) -> None:
+    """Post a model command to a worker; its 400 or 409 refusal reaches the admin with its words."""
+    worker = get_worker_identity(db, worker_id)
+    if worker is None:
+        raise HTTPException(404, f"Worker '{worker_id}' not found")
+    if mode not in MODEL_CONFIG_PATHS:
+        raise HTTPException(400, f"Unknown model mode '{mode}'")
+
+    try:
+        response = await _post_to_worker(worker.host, worker.port, path, {"mode": mode})
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Worker unreachable: {exc}")
+    if response.status_code >= 400:
+        raise HTTPException(
+            response.status_code if response.status_code in (400, 409) else 502,
+            worker_response_cause(response),
+        )
+
+
 @router.post(
     "/workers/{worker_id}/evict_model",
     responses={
         400: {"description": "Model eviction request is invalid"},
         404: {"description": "Worker does not exist"},
+        409: {"description": "Model cannot be evicted"},
         502: {"description": "Worker rejected model eviction"},
     },
 )
@@ -263,20 +283,7 @@ async def evict_model_on_worker_endpoint(
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
-    worker = get_worker_identity(db, worker_id)
-    if worker is None:
-        raise HTTPException(404, f"Worker '{worker_id}' not found")
-    if req.mode not in MODEL_CONFIG_PATHS:
-        raise HTTPException(400, f"Unknown model mode '{req.mode}'")
-
-    try:
-        response = await _post_to_worker(
-            worker.host, worker.port, "/evict_model", {"mode": req.mode},
-        )
-    except httpx.HTTPError as exc:
-        raise HTTPException(502, f"Worker unreachable: {exc}")
-    if response.status_code >= 400:
-        raise HTTPException(502, f"Worker returned {response.status_code}")
+    await _command_worker_model(db, worker_id, "/evict_model", req.mode)
     return StatusResponse(status="ok")
 
 
@@ -295,23 +302,7 @@ async def pin_model_on_worker_endpoint(
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
-    worker = get_worker_identity(db, worker_id)
-    if worker is None:
-        raise HTTPException(404, f"Worker '{worker_id}' not found")
-    if req.mode not in MODEL_CONFIG_PATHS:
-        raise HTTPException(400, f"Unknown model mode '{req.mode}'")
-
-    try:
-        response = await _post_to_worker(
-            worker.host, worker.port, "/pin_model", {"mode": req.mode},
-        )
-    except httpx.HTTPError as exc:
-        raise HTTPException(502, f"Worker unreachable: {exc}")
-    if response.status_code >= 400:
-        raise HTTPException(
-            response.status_code if response.status_code in (400, 409) else 502,
-            worker_response_cause(response),
-        )
+    await _command_worker_model(db, worker_id, "/pin_model", req.mode)
     return StatusResponse(status="ok")
 
 
@@ -320,6 +311,7 @@ async def pin_model_on_worker_endpoint(
     responses={
         400: {"description": "Model unpin request is invalid"},
         404: {"description": "Worker does not exist"},
+        409: {"description": "Model cannot be unpinned"},
         502: {"description": "Worker rejected model unpinning"},
     },
 )
@@ -329,20 +321,7 @@ async def unpin_model_on_worker_endpoint(
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
-    worker = get_worker_identity(db, worker_id)
-    if worker is None:
-        raise HTTPException(404, f"Worker '{worker_id}' not found")
-    if req.mode not in MODEL_CONFIG_PATHS:
-        raise HTTPException(400, f"Unknown model mode '{req.mode}'")
-
-    try:
-        response = await _post_to_worker(
-            worker.host, worker.port, "/unpin_model", {"mode": req.mode},
-        )
-    except httpx.HTTPError as exc:
-        raise HTTPException(502, f"Worker unreachable: {exc}")
-    if response.status_code >= 400:
-        raise HTTPException(502, f"Worker returned {response.status_code}")
+    await _command_worker_model(db, worker_id, "/unpin_model", req.mode)
     return StatusResponse(status="ok")
 
 
