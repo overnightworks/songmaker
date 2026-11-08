@@ -14,14 +14,16 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     ARQ_MUSIC_HEALTH_KEY,
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
-    JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
-    QUEUED_JOB_STALE_THRESHOLD_SECONDS,
-    STALE_JOB_THRESHOLDS,
     LoraStatus,
 )
 from songmaker_cli.db.models import Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
+from songmaker_cli.job_timing import (
+    JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
+    QUEUED_JOB_STALE_THRESHOLD_SECONDS,
+    STALE_JOB_THRESHOLDS,
+)
 from songmaker_cli.job_types import JobStatus, JobType, WorkerLivenessSignal
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,

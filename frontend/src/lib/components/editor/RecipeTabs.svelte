@@ -1,7 +1,6 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { tick, type Snippet } from 'svelte';
-	import { uploadReference } from '#lib/api/client.ts';
 	import { describeFailure } from '#lib/api/fetch.ts';
 	import {
 		activeModels,
@@ -29,7 +28,6 @@
 		type RecipeTab,
 		type RecipeValues
 	} from '#lib/utils/recipe-standard.ts';
-	import { REFERENCE_AUDIO_ACCEPT } from '#lib/constants.ts';
 	import {
 		RECIPE_AUTO_LABEL,
 		RECIPE_BPM_LABEL,
@@ -53,10 +51,6 @@
 		RECIPE_PRESET_LABEL,
 		RECIPE_PRESET_NAME_PLACEHOLDER,
 		RECIPE_PRESET_SAVE_ERROR,
-		RECIPE_REFERENCE_LABEL,
-		RECIPE_REFERENCE_UPLOAD,
-		RECIPE_REFERENCE_UPLOADING,
-		RECIPE_REFERENCE_UPLOAD_ERROR,
 		RECIPE_RESET_ALL_LABEL,
 		RECIPE_RESET_GLYPH,
 		RECIPE_RETRY_LABEL,
@@ -70,6 +64,7 @@
 	import { VOICE_PICKER_NONE_LABEL } from '#lib/constants/voice.ts';
 	import ParamControls from '../ParamControls.svelte';
 	import VoicePicker from '../VoicePicker.svelte';
+	import ReferencePicker from './ReferencePicker.svelte';
 
 	interface Props {
 		values: RecipeValues;
@@ -85,8 +80,6 @@
 	const TABS_SAVED_WITH_VERSION: readonly RecipeTab[] = ['song', 'engine'];
 
 	let selected = $state<RecipeTab>('song');
-	let referenceUploading = $state(false);
-	let referenceError = $state<string | null>(null);
 	let savingPreset = $state(false);
 	let presetName = $state('');
 	let presetError = $state<string | null>(null);
@@ -137,23 +130,6 @@
 
 	function setNumber(field: 'bpm' | 'audioDuration', raw: string): void {
 		onchange({ ...values, [field]: raw === '' ? 0 : Number(raw) });
-	}
-
-	async function attachReference(event: Event): Promise<void> {
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		referenceUploading = true;
-		referenceError = null;
-		try {
-			const result = await uploadReference(file);
-			onchange({ ...values, reference: { id: result.id, filename: result.filename } });
-		} catch (error) {
-			referenceError = describeFailure(error, RECIPE_REFERENCE_UPLOAD_ERROR);
-		} finally {
-			referenceUploading = false;
-			input.value = '';
-		}
 	}
 
 	function choosePreset(presetId: string): void {
@@ -231,21 +207,6 @@
 		value={values.keyScale}
 		oninput={(event) => onchange({ ...values, keyScale: event.currentTarget.value })}
 	/>
-{/snippet}
-
-{#snippet referenceControl()}
-	{#if values.reference}
-		<span class="reference-name">{values.reference.filename}</span>
-	{:else}
-		<label class="upload"
-			>{referenceUploading ? RECIPE_REFERENCE_UPLOADING : RECIPE_REFERENCE_UPLOAD}<input
-				type="file"
-				accept={REFERENCE_AUDIO_ACCEPT}
-				disabled={referenceUploading}
-				onchange={attachReference}
-			/></label
-		>
-	{/if}
 {/snippet}
 
 {#snippet modelControl()}
@@ -354,8 +315,14 @@
 				<VoicePicker />
 				<span class="v">{@render mark('voice', RECIPE_FIELD_RESET_TITLES.voice ?? '')}</span>
 			</div>
-			{@render row('reference', RECIPE_REFERENCE_LABEL, referenceControl)}
-			{#if referenceError}<p class="error" role="alert">{referenceError}</p>{/if}
+			<ReferencePicker
+				reference={values.reference}
+				onchange={(reference) => onchange({ ...values, reference })}
+			>
+				{#snippet trailing()}
+					{@render mark('reference', RECIPE_FIELD_RESET_TITLES.reference ?? '')}
+				{/snippet}
+			</ReferencePicker>
 		{:else if selected === 'generate'}
 			{@render row('model', RECIPE_MODEL_LABEL, modelControl)}
 			{#if $activeModelsError}
@@ -528,18 +495,6 @@
 	.seg button[aria-pressed='true'] {
 		border-color: var(--accent);
 		color: var(--accent);
-	}
-
-	.upload input {
-		display: none;
-	}
-
-	.upload,
-	.reference-name {
-		color: var(--text);
-		font-size: var(--label-font-size);
-		overflow-wrap: anywhere;
-		cursor: pointer;
 	}
 
 	.loaded {

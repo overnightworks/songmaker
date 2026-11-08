@@ -236,6 +236,14 @@ def test_unknown_or_foreign_mention_is_404_before_provider(client, stranger_clie
     assert not stranger_client.run_started
 
 
+def test_a_version_mention_without_a_current_song_is_404_before_provider(client):
+    """Spec: REQ-COWRITER-20 -- a version is resolved against the current song, so a turn with
+    none refuses it before any run starts."""
+    resp = client.turn({"message": "x", "mentioned_version_ids": ["v1"]})
+    assert resp.status_code == 404
+    assert not client.run_started
+
+
 def test_schema_accepts_current_generation_id_field(client):
     resp = client.turn({
         "message": "look at this take",

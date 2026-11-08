@@ -11,9 +11,9 @@ from typing import Final
 from sqlalchemy import func, or_, update
 from sqlalchemy.orm import Session
 
-from songmaker_cli.constants import STALE_JOB_THRESHOLDS, JobStaleThresholds
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
+from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS, JobStaleThresholds
 from songmaker_cli.job_types import (
     JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,

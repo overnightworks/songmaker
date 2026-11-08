@@ -17,8 +17,8 @@ from songmaker_cli.constants import (
     ARQ_SCORING_HEALTH_KEY,
     REDIS_KEY_PREFIX,
     WORKER_LAST_ALIVE_TTL_SECONDS,
-    worker_restart_grace_seconds,
 )
+from songmaker_cli.job_timing import worker_restart_grace_seconds
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.timestamps import aware_timestamp, utcnow
 

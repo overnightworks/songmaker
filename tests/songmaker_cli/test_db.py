@@ -20,7 +20,7 @@ from songmaker_cli.api_models import (
     VersionResponse,
     WhisperCue,
 )
-from songmaker_cli.constants import GENERATION_ETA_MIN_PROGRESS, STALE_JOB_THRESHOLDS
+from songmaker_cli.constants import GENERATION_ETA_MIN_PROGRESS
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -86,6 +86,7 @@ from songmaker_cli.db.queries.songs import (
     update_song,
 )
 from songmaker_cli.db.queries.versions import delete_version
+from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS
 from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
 from songmaker_cli.timestamps import aware_timestamp
 from songmaker_cli.worker_liveness import WorkerLiveness
@@ -248,9 +249,7 @@ def test_save_rating_update(seeded_session: Session) -> None:
 
 
 def test_create_song(seeded_session: Session) -> None:
-    song = create_song(
-        seeded_session, "Song Two", "test", slug="song-two", lyrics="hello", bpm=140,
-    )
+    song = create_song(seeded_session, "Song Two", "test", slug="song-two", lyrics="hello", bpm=140)
     seeded_session.commit()
     assert song.track_number == 2
     assert song.latest_version.lyrics == "hello"

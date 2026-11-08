@@ -948,7 +948,7 @@ def test_no_capacity_marks_failed(seeded, db_factory) -> None:
 def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) -> None:
     from datetime import datetime, timedelta, timezone
 
-    from songmaker_cli.constants import STALE_JOB_THRESHOLDS
+    from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS
     from songmaker_cli.scheduler import AllWorkersHeld
 
     with db_factory() as session:

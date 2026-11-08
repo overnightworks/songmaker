@@ -21,7 +21,6 @@ from songmaker_cli.constants import (
     JOB_ERROR_UNEXPECTED,
     JOB_ERROR_USER_LORA_UNAVAILABLE,
     JOB_ERROR_VERSION_NOT_FOUND,
-    JOB_HEARTBEAT_INTERVAL_SECONDS,
 )
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
@@ -29,6 +28,7 @@ from songmaker_cli.db.queries.jobs import (
     update_job_heartbeat,
     update_job_status,
 )
+from songmaker_cli.job_timing import JOB_HEARTBEAT_INTERVAL_SECONDS
 from songmaker_cli.job_types import JOB_TERMINAL_STATUSES, JobStatus
 from songmaker_cli.scheduler import (
     NoCapacityError,
