@@ -108,6 +108,8 @@ function pressBackOntoOtherSong(): void {
 
 const setReady = (ready: boolean) =>
 	resourceSync.update((state) => ({ ...state, ready, status: ready ? 'live' : 'connecting' }));
+const standingSongFetches = () =>
+	requests.filter((path) => path === `/api/songs/${STANDING_SONG_ID}`).length;
 const contextLoads = () => requests.filter((path) => path === CONTEXT_LOAD_PATH).length;
 const flushMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -236,24 +238,29 @@ describe('navigation following the library sync', () => {
 			async () => {
 				startLibraryResourceSync(vi.fn());
 				FakeEventSource.instances[0].hello();
-			}
+			},
+			2
 		],
-		['a ready after a failed bootstrap and a Retry', failBootstrapThenRetry]
-	])('tells the person once that the standing song is gone at %s', async (_, reachReady) => {
-		goneSongId = STANDING_SONG_ID;
-		replaceHistoryEntry(
-			LIBRARY_ROUTE_PATH,
-			routerHistoryEntry({ library: { ...libraryRootState(), songId: STANDING_SONG_ID } })
-		);
-		follow();
+		['a ready after a failed bootstrap and a Retry', failBootstrapThenRetry, 3]
+	])(
+		'tells the person once that the standing song is gone at %s',
+		async (_, reachReady, fetches) => {
+			goneSongId = STANDING_SONG_ID;
+			replaceHistoryEntry(
+				LIBRARY_ROUTE_PATH,
+				routerHistoryEntry({ library: { ...libraryRootState(), songId: STANDING_SONG_ID } })
+			);
+			follow();
 
-		await reachReady();
-		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
-		await flushMicrotasks();
+			await reachReady();
+			await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+			await flushMicrotasks();
 
-		const messages = get(toasts).map((toast) => toast.message);
-		expect(messages.filter((message) => message === SONG_LINK_NOT_FOUND_TOAST)).toHaveLength(1);
-	});
+			const messages = get(toasts).map((toast) => toast.message);
+			expect(messages.filter((message) => message === SONG_LINK_NOT_FOUND_TOAST)).toHaveLength(1);
+			expect(standingSongFetches()).toBe(fetches);
+		}
+	);
 
 	it('applies a Back after a failed bootstrap and a Retry', async () => {
 		follow();

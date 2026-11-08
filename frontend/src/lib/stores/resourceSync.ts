@@ -182,7 +182,7 @@ export class ResourceSyncController {
 	async retry(): Promise<boolean> {
 		const shownError = this.state.error;
 		this.store.update((state) => ({ ...state, error: null }));
-		// A retry after teardown (an 'unauthorized' probe result) finds the owner stopped.
+		// A retry after teardown (an 'unauthorized' probe result) finds the owner stopped; start() alone opens the stream.
 		if (!this.started) {
 			this.start();
 			return this.waitForReady();
