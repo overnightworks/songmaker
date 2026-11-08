@@ -87,13 +87,18 @@ def test_a_take_fetched_for_a_job_cancelled_meanwhile_leaves_no_local_file(
 def test_a_take_whose_job_is_cancelled_during_its_write_leaves_no_file_and_no_row(
     seeded_db, tmp_path: Path,
 ) -> None:
+    written_paths: list[Path] = []
+    existed_when_written: list[bool] = []
+
+    def record_written(written):
+        written_paths.extend(written)
+        existed_when_written.extend(path.exists() for path in written)
+
     def cancel_then_write(**kwargs):
         with seeded_db() as session:
             update_job_status(session, "j1", JobStatusUpdate("cancelled"))
             session.commit()
-        return post_process_with_stubbed_audio(
-            on_outputs_written=lambda _written: None, **kwargs,
-        )
+        return post_process_with_stubbed_audio(on_outputs_written=record_written, **kwargs)
 
     fetched = _write_fetched_take(tmp_path)
     saved_before = _count_saved_takes(seeded_db)
@@ -104,6 +109,9 @@ def test_a_take_whose_job_is_cancelled_during_its_write_leaves_no_file_and_no_ro
         count=1, post_process_hook=cancel_then_write,
     )
 
+    assert len(written_paths) >= 3
+    assert all(existed_when_written)
+    assert not any(path.exists() for path in written_paths)
     assert _audio_files(tmp_path) == files_before
     assert _count_saved_takes(seeded_db) == saved_before
     with seeded_db() as session:
