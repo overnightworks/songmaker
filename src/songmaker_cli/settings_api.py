@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
@@ -66,7 +65,6 @@ router = APIRouter()
 
 PRESET_NAME_EXISTS_DETAIL = "A preset with that name already exists"
 PRESET_NOT_FOUND_DETAIL = "Preset not found"
-USER_NOT_FOUND_DETAIL = "User not found"
 
 
 @router.get("/settings/generation-builtins")
@@ -131,10 +129,7 @@ def api_create_preset(
         is_default=req.is_default,
     )
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.PRESET, preset.id, req.name)
-    try:
-        session.commit()
-    except IntegrityError:
-        raise HTTPException(409, PRESET_NAME_EXISTS_DETAIL)
+    session.commit()
     return PresetResponse.from_orm(preset)
 
 
@@ -159,10 +154,7 @@ def api_update_preset(
             raise HTTPException(409, PRESET_NAME_EXISTS_DETAIL)
     params_dict = gen_params_to_json(req.params) if req.params is not None else None
     update_preset(session, preset, name=req.name, params=params_dict, is_default=req.is_default)
-    try:
-        session.commit()
-    except IntegrityError:
-        raise HTTPException(409, PRESET_NAME_EXISTS_DETAIL)
+    session.commit()
     return PresetResponse.from_orm(preset)
 
 
@@ -307,7 +299,6 @@ def api_get_default_config(
     "/settings/default-config",
     responses={
         400: {"description": "Default configuration is invalid"},
-        404: {"description": "User does not exist"},
     },
 )
 def api_set_default_config(
@@ -325,9 +316,7 @@ def api_set_default_config(
                 raise HTTPException(
                     400, "Invalid config: must be null, 'sft', 'turbo', or a preset ID",
                 )
-    db_user = session.query(User).filter_by(id=user.id).first()
-    if not db_user:
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
+    db_user = session.query(User).filter_by(id=user.id).one()
     db_user.default_generation_config = req.config
     record_audit(
         session, user.id, AuditAction.UPDATE, ResourceType.DEFAULT_CONFIG,
