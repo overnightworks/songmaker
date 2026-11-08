@@ -323,33 +323,25 @@ def _load_song_meta(
 
 
 def _load_preset_params(
-    user_id: str | None,
+    user_id: str,
     model_name: str,
     db_factory: sessionmaker[Session],
 ) -> BaseGenerationParams | None:
-    if not user_id:
-        return None
     from songmaker_cli.config import get_builtin_defaults, resolve_model_mode
     from songmaker_cli.db.models import User
+    from songmaker_cli.db.queries.settings import effective_default_config
 
     with db_factory() as session:
-        user = session.query(User).filter_by(id=user_id).first()
-        if not user or not user.default_generation_config:
-            model_mode = resolve_model_mode(model_name)
-            preset = get_default_preset(session, user_id, model_mode)
-            if preset is None:
-                return None
-            return BaseGenerationParams.model_validate(preset.params or {})
-
-        config = user.default_generation_config
+        user = session.get(User, user_id)
+        config = effective_default_config(session, user) if user else None
         builtins = get_builtin_defaults()
         if config in builtins:
             return BaseGenerationParams.model_validate(builtins[config])
-
-        preset = session.query(GenerationPreset).filter_by(id=config).first()
-        if preset is None:
-            return None
-        return BaseGenerationParams.model_validate(preset.params or {})
+        if config is None:
+            preset = get_default_preset(session, user_id, resolve_model_mode(model_name))
+        else:
+            preset = session.get(GenerationPreset, config)
+        return BaseGenerationParams.model_validate(preset.params or {}) if preset else None
 
 
 def _extract_user_lora_id(base_params: object) -> str | None:
