@@ -9,12 +9,13 @@ import tempfile
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import annotated_types
 import httpx
 import pytest
 from support.generation_job_world import (
+    failing_first_job_read_after,
     make_generation_dto,
     patch_generation_dispatch,
     run_async,
@@ -321,17 +322,11 @@ def _run_generation_whose_terminal_check_fails_after_the_fetch(
         fetched = True
         return make_generation_dto(audio_path=str(fetched_take))
 
-    def terminal_check(*_args):
-        if fetched:
-            raise failure
-        return False
-
     dispatch, post_process, defaults = patch_generation_dispatch(fetch_take)
     with (
         dispatch,
         post_process,
         defaults,
-        patch("songmaker_cli.jobs.generation._job_is_terminal", side_effect=terminal_check),
     ):
         run_async(
             run_generation_job(
@@ -340,7 +335,7 @@ def _run_generation_whose_terminal_check_fails_after_the_fetch(
                 "v1",
                 1,
                 "u1",
-                db_factory=seeded_db,
+                db_factory=failing_first_job_read_after(seeded_db, lambda: fetched, failure),
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
                 redis=MagicMock(),
