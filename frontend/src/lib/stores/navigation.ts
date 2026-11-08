@@ -294,12 +294,20 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // after the push would take the address back to the song (#1143).
 type AppPageHref = SettingsSectionRoute | typeof SETTINGS_HREF | typeof ADMIN_WORKER_POOL_HREF;
 
-export function openAppPage(href: AppPageHref): Promise<void> {
+export function openAppPage(href: AppPageHref, query?: AppPageQuery): Promise<void> {
 	return guardDirtyNavigation(async () => {
 		await historyComesToRest();
 		await keepLibraryPageAsLeft();
-		await goto(resolve(href));
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address is built from a resolved route; resolve() takes no query
+		await goto(appPageAddress(href, query));
 	});
+}
+
+type AppPageQuery = Readonly<Record<string, string>>;
+
+export function appPageAddress(href: AppPageHref, query?: AppPageQuery): string {
+	const queryPart = query === undefined ? '' : `?${new URLSearchParams(query)}`;
+	return `${resolve(href)}${queryPart}`;
 }
 
 function isPlainPrimaryClick(event: MouseEvent): boolean {
@@ -315,8 +323,12 @@ export function followPlainClick(event: MouseEvent, open: () => void | Promise<v
 // An app-page `<a href>` inside the shell or the song surface: a plain click
 // goes through `openAppPage`, while a modified or non-primary click (a new
 // tab or window) keeps the browser default, because it never leaves the song.
-export function followAppPageLink(event: MouseEvent, href: AppPageHref): void {
-	followPlainClick(event, () => openAppPage(href));
+export function followAppPageLink(
+	event: MouseEvent,
+	href: AppPageHref,
+	query?: AppPageQuery
+): void {
+	followPlainClick(event, () => openAppPage(href, query));
 }
 
 // Logout drops the session and with it the draft, so it asks the same

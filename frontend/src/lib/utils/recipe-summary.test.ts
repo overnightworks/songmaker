@@ -254,7 +254,13 @@ describe('buildTakeRecipe reference', () => {
 		expect(groups).toEqual([
 			{
 				label: 'Version',
-				entries: [{ label: RECIPE_REFERENCE_LABEL, value: 'demo take.wav' }]
+				entries: [
+					{
+						label: RECIPE_REFERENCE_LABEL,
+						value: 'demo take.wav',
+						link: { route: '/settings/references', query: { reference: 'r1' } }
+					}
+				]
 			}
 		]);
 	});

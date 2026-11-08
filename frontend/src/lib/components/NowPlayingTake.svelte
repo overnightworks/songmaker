@@ -30,7 +30,12 @@
 		openVersionLabel,
 		takeVersion
 	} from '#lib/constants/now-playing.ts';
-	import { openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
+	import {
+		appPageAddress,
+		followAppPageLink,
+		openTakeVersion,
+		revealPlayingSong
+	} from '#lib/stores/navigation.ts';
 	import { closeNowPlaying } from '#lib/stores/player.ts';
 	import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
 	import { pendingTakeUse, type TakeUse } from '#lib/stores/recipe.ts';
@@ -350,7 +355,25 @@
 								{#each group.entries as entry (entry.label)}
 									<div class="recipe-row">
 										<dt>{entry.label}</dt>
-										<dd>{entry.value}</dd>
+										<dd>
+											{#if entry.link}
+												{@const link = entry.link}
+												<!-- eslint-disable svelte/no-navigation-without-resolve -- appPageAddress resolves the route -->
+												<a
+													class="recipe-link"
+													href={appPageAddress(link.route, link.query)}
+													onclick={(event) => followAppPageLink(event, link.route, link.query)}
+													><span class="recipe-link-name">{entry.value}</span><Icon
+														name="chevron-right"
+														size={12}
+														class="recipe-link-chevron"
+													/></a
+												>
+												<!-- eslint-enable svelte/no-navigation-without-resolve -->
+											{:else}
+												{entry.value}
+											{/if}
+										</dd>
 									</div>
 								{/each}
 							</dl>
@@ -564,6 +587,17 @@
 		color: var(--text);
 		font-family: var(--font-display);
 		text-align: right;
+	}
+	.recipe-link {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 2px;
+		color: var(--accent);
+		text-decoration: none;
+	}
+	.recipe-link :global(.recipe-link-chevron) {
+		flex: none;
 	}
 	.rescore-hint {
 		align-self: flex-start;
