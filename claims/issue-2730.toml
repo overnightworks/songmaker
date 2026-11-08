@@ -1,0 +1,7 @@
+claim_id = "df6e860aadda4cbe9b7ab09406c6734f"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "33a92269fb056b387f3de71e8de4f0a6fea9538a"
+branch = "claude/issue-2730-finished-run-leaves-no-docker-image"
+scope = ["docs/testing.md"]
+opened_commit = "1de1d683872621458f84d5f54d39217d2b37c16a"
