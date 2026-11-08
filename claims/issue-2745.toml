@@ -1,8 +1,0 @@
-claim_id = "51e3fb8a0979478fb7ffbeeaa65077d5"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6df29577217566b7cb29772be081df0e59dd3b40"
-branch = "claude/issue-2745-job-timing-values-get-one-owner"
-scope = [".importlinter", "docs/architecture.md", "quality/baseline.toml", "src/songmaker_cli", "tests"]
-opened_commit = "15378fecf72433a843ae6a1d80ea0539d8866462"
-whole_reason = "One name has one owner, so every importer of the moved names changes in the commit that moves them; a partial rewrite would leave the second import path the item forbids."
