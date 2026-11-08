@@ -1,0 +1,8 @@
+claim_id = "034a3268c2e446e99deed9b455ece21c"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "5e67363d64a46136eee75ba4f27d343af306aa33"
+branch = "claude/issue-2766-remove-three-old-script-links"
+scope = ["scripts/alert.sh", "scripts/auto-deploy.sh", "scripts/backup.sh", "tests/scripts/test_send_alert_script.py"]
+opened_commit = "f4e8b5f077b57489caaa45407fc225cf2a5f471f"
+whole_reason = "One removal: the three links and the one test that exists only to prove them."
