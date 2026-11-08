@@ -1,8 +1,0 @@
-claim_id = "8be0a809659d4105ad9c8a4c7d6add94"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "11957a24ecb678d4f397c51815dcd1b4ea7063f1"
-branch = "claude/issue-2640-one-retry-owner-after-failed-load"
-scope = ["docs/architecture.md", "frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/RailLibraryRetry.test.ts", "frontend/src/lib/stores/libraryRecovery.test.ts", "frontend/src/lib/stores/libraryRecovery.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/routes/(library)"]
-opened_commit = "e9c2250bd85b0fcd09c01bdeb913498c43945d7a"
-whole_reason = "The card, the rail and the four addresses move onto one retry owner together, or the controls answer one failed load differently, which is the defect."
