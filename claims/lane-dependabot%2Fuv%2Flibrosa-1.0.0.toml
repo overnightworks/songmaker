@@ -1,7 +1,0 @@
-claim_id = "4f3680937df84028b885bd834d15b49a"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "b33ddf84cce725b581ce020e8b28c44a571a2697"
-branch = "dependabot/uv/librosa-1.0.0"
-scope = ["uv.lock"]
-opened_commit = "209e0b4454655d211e2e99c23d907eaa60781e75"
