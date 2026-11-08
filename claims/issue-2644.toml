@@ -1,0 +1,8 @@
+claim_id = "43b37094bd73489fb17aecb4c4541dd4"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "53a2ac2313e0909b1eed95566aa3deeb3d2a3899"
+branch = "claude/issue-2644-v010-b-wrapper-test-imports"
+scope = ["tests/acestep_worker/conftest.py", "tests/acestep_worker/test_wrapper.py", "tests/acestep_worker/test_wrapper_result_route.py", "tests/acestep_worker/test_wrapper_task_sweep.py", "tests/support"]
+opened_commit = "412726e16fca0370ac965cef3f6bec943ffc728c"
+whole_reason = "One set of helpers leaves one test module for one shared owner; its two importers change in the same commit or the suite breaks."
