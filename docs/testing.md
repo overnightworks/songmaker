@@ -327,7 +327,15 @@ count grows, or a new file with literals, fails and prints the stored and
 current count with that file's literal locations. A file whose count fell, or
 that is gone or has none, fails as stale until `--update` writes the smaller
 baseline. `--update` never raises or adds an entry; ordinary checks never
-rewrite the file. The file fixtures in
+rewrite the file. The same check also fails on any `var(--x)` in `frontend/src`
+(`app.css` included, test files excluded) whose name no declaration defines,
+and prints each as `path:line --x`; a fallback does not excuse an undefined
+token, and there is no baseline. Declarations come from `frontend/src` (a
+`--x:` in CSS, `<style>` blocks and inline `style` attributes, `style:--x`, and
+any quoted `'--x'` string in script code, which is how `setProperty` receives its
+name, directly or through a named constant; comments define nothing) and from
+the installed appkit stylesheet under `frontend/node_modules`, which is
+required: without it the check fails and names the path. The file fixtures in
 `tests/scripts/test_check_style_literals.py` prove detection and ratchet behavior.
 
 `scripts/test_helper_ratchet.sh` holds each helper name defined in more than one
