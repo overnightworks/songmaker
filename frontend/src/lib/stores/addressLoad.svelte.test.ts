@@ -7,11 +7,14 @@ import { createAddressLoad } from './addressLoad.svelte.ts';
 
 type Answer = 'found' | 'unknown';
 
+const disposers: Array<() => void> = [];
+
 function mountOwner(load: () => Promise<Answer>) {
 	let owner!: ReturnType<typeof createAddressLoad<'unknown'>>;
 	const dispose = $effect.root(() => {
 		owner = createAddressLoad<'unknown'>({ load, fallbackMessage: 'Could not load.' });
 	});
+	disposers.push(dispose);
 	flushSync();
 	return { owner, dispose };
 }
@@ -22,6 +25,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	for (const dispose of disposers.splice(0)) dispose();
 	reportResourceStreamReachable(true);
 	resetResourceSyncForTests();
 });
@@ -36,21 +40,24 @@ it('shows the answer of the load', async () => {
 	dispose();
 });
 
-it('drops a slower answer that settles after a newer load answered', async () => {
+it.each([
+	['answer', (slow: PromiseWithResolvers<Answer>) => slow.resolve('found')],
+	['failure', (slow: PromiseWithResolvers<Answer>) => slow.reject(new Error('late'))]
+])('drops a slower %s that settles after a newer load answered', async (_name, settle) => {
 	const slow = Promise.withResolvers<Answer>();
 	const load = vi
 		.fn<() => Promise<Answer>>()
 		.mockReturnValueOnce(slow.promise)
 		.mockResolvedValueOnce('unknown');
-	const { owner, dispose } = mountOwner(load);
+	const { owner } = mountOwner(load);
 
 	void owner.tryAgain();
 	await tick();
-	slow.resolve('found');
+	settle(slow);
 	await tick();
 
 	expect(owner.state).toBe('unknown');
-	dispose();
+	expect(owner.failure).toBeNull();
 });
 
 it('names the fallback when the load fails without a reason', async () => {
