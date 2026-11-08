@@ -1,4 +1,4 @@
-"""Which commit scripts/auto-deploy.sh puts live: only a release tag, never a main tip.
+"""Which commit scripts/run_autodeploy.sh puts live: only a release tag, never a main tip.
 
 The script is driven as a real subprocess against a throwaway checkout and its
 own origin (see ``auto_deploy_harness``). A landing on main deploys nothing;

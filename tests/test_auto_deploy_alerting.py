@@ -1,7 +1,7 @@
 """When an auto-deploy tick alerts, driven as a real subprocess.
 
 The unit's ``OnFailure=songmaker-alert@%n.service`` turns a non-zero exit
-of scripts/auto-deploy.sh into an email (issue #333), so "which ticks exit
+of scripts/run_autodeploy.sh into an email (issue #333), so "which ticks exit
 non-zero" is this script's alerting contract and is pinned here against
 the real script: a copy of it runs against a throwaway git checkout with
 its own origin, with ``logger``, ``docker`` and ``date`` replaced by fakes

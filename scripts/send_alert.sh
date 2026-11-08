@@ -11,7 +11,7 @@
 #
 # Configuration comes exclusively from .env at the project root (resolved
 # from this script's own location, same SCRIPT_DIR/REPO_ROOT pattern as
-# auto-deploy.sh — running a copy from a worktree reads that worktree's
+# run_autodeploy.sh — running a copy from a worktree reads that worktree's
 # own .env), loaded and validated by scripts/alert_config.sh, which owns
 # the list of the five keys. Missing or empty configuration exits non-zero
 # with a named reason on stderr instead of silently skipping the send —

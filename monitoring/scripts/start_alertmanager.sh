@@ -17,7 +17,7 @@
 # by a test, or by an operator checking what their .env renders to —
 # rather than a second copy of the substitution being written for that
 # purpose. Same reasoning as the SONGMAKER_AUTODEPLOY_* state-path
-# overrides in scripts/auto-deploy.sh.
+# overrides in scripts/run_autodeploy.sh.
 
 set -eu
 
