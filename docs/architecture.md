@@ -672,7 +672,7 @@ take whose duration cannot be read refuses the shared stream with 422.
 The ffmpeg timeout is 336 seconds, derived from that cap, the measured-rate
 policy and its reserve. `tests/songmaker_cli/test_queue_streams.py` proves admission before
 ffmpeg and request-session release through the shared builders;
-`tests/songmaker_cli/test_queue_stream_refusals.py` proves the unreadable-duration
+`tests/songmaker_cli/test_queue_streams_refusals.py` proves the unreadable-duration
 and scan-window refusals.
 
 Built snapshots live in `queue-streams/` under the data directory as
@@ -684,7 +684,7 @@ every regular file of no live snapshot older than 24 hours (a running build's
 `.tmp.mp3` and `.concat.txt` are younger), then evicts the oldest finished
 snapshots once their audio exceeds 1 GiB; a build's own new snapshot is never
 evicted, and a running build's files never count or go.
-`tests/songmaker_cli/test_queue_stream_cache.py` proves each rule.
+`tests/songmaker_cli/test_queue_streams_cache.py` proves each rule.
 
 Escape and Back close the same thing (#1182): the topmost open layer — a
 menu, picker, sheet, dialog, full Now Playing, the album
