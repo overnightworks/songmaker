@@ -5,11 +5,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from acestep_engine.models import AceStepConfig
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
     CoverTaskParams,
     RepaintTaskParams,
     StoredGenerationParams,
+    stored_config_options,
 )
 
 
@@ -26,6 +28,18 @@ def test_base_refuses_the_reference_path_a_version_no_longer_carries() -> None:
 def test_stored_refuses_the_reference_path_a_take_no_longer_carries() -> None:
     with pytest.raises(ValidationError, match="extra|not permitted"):
         StoredGenerationParams.model_validate({"reference_audio_path": "user1/clip.wav"})
+
+
+def test_stored_refuses_a_constrained_decoding_key() -> None:
+    with pytest.raises(ValidationError, match="extra|not permitted"):
+        StoredGenerationParams.model_validate({"constrained_decoding": True})
+
+
+def test_a_new_takes_stored_params_carry_no_constrained_decoding() -> None:
+    config = AceStepConfig(prompt="p", lyrics="l")
+    options = stored_config_options(config, delivered_batch_size=None)
+    stored = StoredGenerationParams(**options).model_dump(exclude_none=True)
+    assert "constrained_decoding" not in stored
 
 
 def test_stored_extends_base_with_output_fields() -> None:

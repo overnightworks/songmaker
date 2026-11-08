@@ -57,12 +57,12 @@ from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.activity import record_song_played
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import record_audit
-from songmaker_cli.db.queries.playlists import best_playable_generation, playlist_holds_song
+from songmaker_cli.db.queries.playlists import playlist_holds_song
 from songmaker_cli.db.queries.reference_recordings import (
     linked_reference_ids,
     lock_and_mark_reference_used,
 )
-from songmaker_cli.db.queries.sharing import has_playable_pick
+from songmaker_cli.db.queries.sharing import has_playable_pick, presented_take
 from songmaker_cli.db.queries.songs import (
     EmptySongTitleError,
     UnstorableSongTitleError,
@@ -374,7 +374,7 @@ def api_record_song_listen(
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     song = check_song_access(session, song_id, user)
-    if best_playable_generation(song) is None:
+    if presented_take(song.generations) is None:
         raise HTTPException(422, "Song is not playable")
     playlist = None
     if req is not None and req.playlist_id is not None:

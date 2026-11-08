@@ -330,7 +330,6 @@ export interface GenerationParams {
 	repaint_wav_crossfade_sec?: number | null;
 	cover_noise_strength?: number | null;
 	timesteps?: string | null;
-	constrained_decoding?: boolean | null;
 	cot_caption?: string | null;
 	cot_lyrics?: string | null;
 	delivered_batch_size?: number | null;

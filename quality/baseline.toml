@@ -18,7 +18,7 @@
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
-"frontend/src/lib/api/types.ts" = 1104
+"frontend/src/lib/api/types.ts" = 1103
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1115
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -39,7 +39,7 @@
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
 "frontend/src/lib/share/sharePlayback.test.ts" = 837
-"frontend/src/lib/stores/jobs.test.ts" = 906
+"frontend/src/lib/stores/jobs.test.ts" = 900
 "frontend/src/lib/stores/libraryContext.test.ts" = 2087
 "frontend/src/lib/stores/libraryContext.ts" = 1189
 "frontend/src/lib/stores/navigation.test.ts" = 2971
@@ -50,11 +50,11 @@
 "frontend/src/routes/layout.test.ts" = 1404
 "frontend/src/routes/settings/users/+page.svelte" = 937
 "src/acestep_worker/wrapper.py" = 1087
-"src/songmaker_cli/conversation_api.py" = 968
+"src/songmaker_cli/conversation_api.py" = 967
 "src/songmaker_cli/jobs/generation.py" = 1139
 "src/songmaker_cli/jobs/lora_training.py" = 1515
 "src/songmaker_cli/queue_streams.py" = 919
-"src/songmaker_cli/sharing_api.py" = 845
+"src/songmaker_cli/sharing_api.py" = 833
 "tests/acestep_engine/test_client.py" = 818
 "tests/acestep_worker/test_wrapper.py" = 1519
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1291
@@ -212,11 +212,8 @@
 [function_lines."tests/scripts/test_send_alert_script.py"]
 "test_trace_channels_never_expose_config_values" = 75
 
-[function_lines."tests/scripts/test_install_autostart.py"]
-"run_autostart" = 60
-
 [function_lines."tests/scripts/test_install_cli_credentials_mirror.py"]
-"run_installer" = 94
+"run_installer" = 71
 
 [clones."scripts/archive_e2e_albums.py"]
 main = [["scripts/seed_e2e_filler_albums.py", "main"]]

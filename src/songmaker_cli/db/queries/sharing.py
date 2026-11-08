@@ -43,10 +43,21 @@ def disable_sharing[T: ShareMixin](session: Session, model_class: type[T], entit
 def is_playable_take(gen: Generation) -> bool:
     """A generation the public share page can actually play: non-archived,
     with a real (non-empty) mp3 file. The single owner of "is this take
-    playable" -- both `_picked_generation` (sharing_api.py) and
-    `songs_without_playable_take` below must agree with this, or a song can
+    playable" -- both `presented_take` below and
+    `songs_without_playable_take` must agree with this, or a song can
     silently vanish from /shared/{slug} without the owner being warned."""
     return bool(gen.mp3_path) and not gen.is_archived
+
+
+def presented_take(generations: Iterable[Generation]) -> Generation | None:
+    """The take a song presents: its playable pick, else its playable take with
+    the highest generation_number (unique per song, assigned in creation order).
+    `shared_pick_take_stored_path` authorizes audio with the same key in SQL."""
+    playable = [gen for gen in generations if is_playable_take(gen)]
+    for gen in playable:
+        if gen.is_picked:
+            return gen
+    return max(playable, key=lambda gen: gen.generation_number, default=None)
 
 
 def has_playable_pick(generations: Iterable[Generation]) -> bool:

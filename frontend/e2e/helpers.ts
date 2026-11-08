@@ -9,8 +9,9 @@ import {
 	type Response,
 	type TestInfo
 } from '@playwright/test';
+import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
+import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import {
-	ACCOUNT_MENU_LABEL,
 	APP_NAME,
 	OFFLINE_STRIP_MESSAGE,
 	PLAYLISTS_PAGE_LABEL,
@@ -20,7 +21,6 @@ import {
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	RESOURCE_EVENT_STREAM_PATH,
-	SETTINGS_NAV_LABEL,
 	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';

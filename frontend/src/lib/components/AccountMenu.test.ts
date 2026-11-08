@@ -1,4 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
+import { ACCOUNT_MENU_CLOSE_LABEL, ACCOUNT_MENU_LABEL } from '#lib/constants/auth.ts';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,11 +17,7 @@ vi.mock('#lib/api/settings.ts', () => ({
 
 import { goto } from '$app/navigation';
 import { updateTheme } from '#lib/api/settings.ts';
-import {
-	ACCOUNT_MENU_CLOSE_LABEL,
-	ACCOUNT_MENU_LABEL,
-	RAIL_SETTINGS_LABEL
-} from '#lib/constants.ts';
+import { RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import { currentUser, signOutFailed } from '#lib/stores/auth.ts';
 import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';

@@ -1,4 +1,5 @@
 import { backLabel } from '#lib/routes/pageBack.ts';
+import { RATE_LIMITED_TOAST_MESSAGE } from '#lib/constants/http.ts';
 import {
 	historyEntry,
 	pressBack,
@@ -29,11 +30,9 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { get } from 'svelte/store';
 
 import {
-	ACCOUNT_MENU_LABEL,
 	COMPACT_LAYOUT_MEDIA,
 	HITBOX_FREQUENT_PX,
 	OFFLINE_STRIP_MESSAGE,
-	RATE_LIMITED_TOAST_MESSAGE,
 	RAIL_SETTINGS_LABEL,
 	SEARCH_OPEN_LABEL
 } from '#lib/constants.ts';
@@ -41,7 +40,8 @@ import { SEARCH_SHEET_LABEL } from '#lib/components/PhoneAppBar.svelte';
 import { apiFetch } from '#lib/api/fetch.ts';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
-	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS
+	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
+	ACCOUNT_MENU_LABEL
 } from '#lib/constants/auth.ts';
 import {
 	checkAuth,

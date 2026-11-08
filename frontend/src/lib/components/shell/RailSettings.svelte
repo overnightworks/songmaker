@@ -1,13 +1,10 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
+	import { SETTINGS_NAV_LABEL } from '#lib/constants/settings.ts';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { followAppPageLink } from '#lib/stores/navigation.ts';
-	import {
-		RAIL_SETTINGS_LABEL,
-		RAIL_SETTINGS_OPEN_STORAGE_KEY,
-		SETTINGS_NAV_LABEL
-	} from '#lib/constants.ts';
+	import { RAIL_SETTINGS_LABEL, RAIL_SETTINGS_OPEN_STORAGE_KEY } from '#lib/constants.ts';
 	import { visibleSettingsSections } from '#lib/settingsSections.ts';
 	import RailGroup from './RailGroup.svelte';
 

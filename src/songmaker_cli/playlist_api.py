@@ -59,7 +59,6 @@ from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
     add_song_to_playlist,
-    best_playable_generation,
     create_playlist,
     delete_playlist,
     disable_playlist_sharing,
@@ -71,6 +70,7 @@ from songmaker_cli.db.queries.playlists import (
     set_playlist_cover_key,
     update_playlist,
 )
+from songmaker_cli.db.queries.sharing import presented_take
 
 log = logging.getLogger(__name__)
 
@@ -265,7 +265,7 @@ def api_add_song_to_playlist(
 ) -> StatusResponse:
     check_playlist_access(session, playlist_id, user)
     song = check_song_access(session, req.song_id, user)
-    playable = best_playable_generation(song)
+    playable = presented_take(song.generations)
     if playable is None:
         raise HTTPException(400, "Song has no playable take")
     try:

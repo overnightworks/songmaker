@@ -104,9 +104,8 @@ from songmaker_cli.db.queries.memory import (
     upsert_song_memory,
     upsert_user_memory,
 )
-from songmaker_cli.db.queries.playlists import best_playable_generation
 from songmaker_cli.db.queries.settings import get_cowriter_tail_token_budget
-from songmaker_cli.db.queries.sharing import is_playable_take
+from songmaker_cli.db.queries.sharing import is_playable_take, presented_take
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.db.queries.versions import get_version
 
@@ -381,7 +380,7 @@ def resolve_take_block(
 
     if current_song is None:
         return None
-    playable = best_playable_generation(current_song)
+    playable = presented_take(current_song.generations)
     if playable is None:
         return TurnContextBlock(TURN_BLOCK_NO_TAKE, "no playable take")
     return TurnContextBlock(TURN_BLOCK_CURRENT_TAKE, _format_take(playable))

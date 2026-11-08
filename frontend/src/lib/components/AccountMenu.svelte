@@ -3,9 +3,9 @@
 	import {
 		ACCOUNT_MENU_CLOSE_LABEL,
 		ACCOUNT_MENU_LABEL,
-		RAIL_SETTINGS_LABEL,
 		SIGN_OUT_FAILED_MESSAGE
-	} from '#lib/constants.ts';
+	} from '#lib/constants/auth.ts';
+	import { RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
 	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 	import { page } from '$app/state';
 	import { signOutFailed } from '#lib/stores/auth.ts';
