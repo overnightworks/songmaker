@@ -9,8 +9,8 @@ import signal
 import time
 from pathlib import Path
 
-from auto_deploy_harness import Checkout
-from auto_deploy_support import git, write_executable
+from support.auto_deploy_harness import Checkout
+from support.auto_deploy_support import git, write_executable
 
 DETACHED_CHILD_SECONDS = 60
 READINESS_TIMEOUT_SECONDS = 10

@@ -9,10 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from auto_deploy_harness import (
+from support.auto_deploy_harness import (
     Checkout,
 )
-from auto_deploy_support import (
+from support.auto_deploy_support import (
     CHECK_RUN_APPEARANCE_GRACE_SECONDS,
     DEPENDABOT_UPDATES_WORKFLOW_PATH,
     UPDATE_CHECK_SUITE_ID,

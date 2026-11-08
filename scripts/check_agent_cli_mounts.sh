@@ -226,7 +226,7 @@ _unit_is_active() {
 # The credential files themselves. This call was lost once already, and
 # nothing noticed: the systemd checks below still passed, so the preflight
 # reported success while missing files, wrong modes, symlinks and real refresh
-# tokens all went through. tests/test_install_cli_credentials_mirror.py drives
+# tokens all went through. tests/scripts/test_install_cli_credentials_mirror.py drives
 # THIS script for exactly that reason — the Python function having its own
 # tests is not the same as the surface the deploy tick calls being tested.
 if ! "$MIRROR_SCRIPT" --verify --mirror-dir "$CREDENTIALS_DIR" --home "$HOME_DIR"; then

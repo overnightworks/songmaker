@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "run_autodeploy.sh"
 ALERT_CONFIG_LIB = REPO_ROOT / "scripts" / "alert_config.sh"
 PROMETHEUS_RULE_PATH = Path("monitoring/rules/alert.rules.yml")
