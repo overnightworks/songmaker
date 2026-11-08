@@ -402,8 +402,7 @@
 		right: 0;
 		height: var(--transport-bar-height);
 		background: var(--card-bg);
-		border-top: 2px solid transparent;
-		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
+		border-top: 2px solid var(--accent);
 		display: flex;
 		align-items: center;
 		padding: 10px 18px calc(10px + var(--transport-safe-area-bottom));
@@ -498,8 +497,8 @@
 	}
 	.nav-btn:hover:not(:disabled) {
 		color: var(--text);
-		border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
-		background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+		border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+		background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 	}
 	.nav-btn:disabled {
 		color: var(--text-disabled);
@@ -551,8 +550,8 @@
 		white-space: nowrap;
 	}
 	.now-playing-btn:hover:not(:disabled) {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 	.now-playing-btn:disabled {
 		opacity: 0.4;
@@ -574,7 +573,7 @@
 	}
 	.mobile-progress-fill {
 		height: 100%;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
+		background: var(--accent);
 	}
 
 	@media (max-width: 900px) {
@@ -692,8 +691,6 @@
 		width: 48px;
 		height: 48px;
 		border: none;
-		background: var(--primary);
-		color: #fff;
 		animation: none;
 	}
 	.mobile-transport .play-btn.errored {
@@ -705,6 +702,7 @@
 	}
 	.mobile-transport .spinner {
 		background-image:
-			linear-gradient(transparent, transparent), conic-gradient(#fff, transparent, #fff);
+			linear-gradient(transparent, transparent),
+			conic-gradient(var(--on-accent), transparent, var(--on-accent));
 	}
 </style>

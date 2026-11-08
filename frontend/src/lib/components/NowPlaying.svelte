@@ -369,9 +369,9 @@
 		cursor: pointer;
 	}
 	.panel-toggle button.on {
-		border-color: var(--primary);
-		color: var(--primary);
-		background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+		border-color: var(--accent);
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 	}
 	.panel-content {
 		min-height: 0;
