@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "7d155b6509d377e2286dbb8682596fe8e5b7096b"
 branch = "claude/issue-2741-take-recipe-links-to-highlighted-row"
-scope = ["frontend/src/lib/components/NowPlayingTake.svelte", "frontend/src/lib/components/NowPlayingTake.test.ts", "frontend/src/lib/components/ReferenceRow.svelte", "frontend/src/lib/utils/recipe-summary.test.ts", "frontend/src/lib/utils/recipe-summary.ts", "frontend/src/routes/settings/references/+page.svelte", "frontend/src/routes/settings/references/page.test.ts"]
+scope = ["frontend/src/lib/components/NowPlayingTake.svelte", "frontend/src/lib/components/NowPlayingTake.test.ts", "frontend/src/lib/components/ReferenceRow.svelte", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/utils/recipe-summary.test.ts", "frontend/src/lib/utils/recipe-summary.ts", "frontend/src/routes/settings/references/+page.svelte", "frontend/src/routes/settings/references/page.test.ts"]
 opened_commit = "6426d980b0d32382ed7e84a1fc51c217a6d1d58d"
 whole_reason = "The link and the row it lands on are one user path; without the page half the link would lead to a list with nothing marked."
