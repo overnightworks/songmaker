@@ -21,12 +21,12 @@ from songmaker_cli.constants import (
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
-    JobType,
 )
 from songmaker_cli.health_types import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
 )
+from songmaker_cli.job_types import JobType
 from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 

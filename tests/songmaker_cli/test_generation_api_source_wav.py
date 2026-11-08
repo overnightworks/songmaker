@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 from support.generation_job_world import worker_up
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.constants import JobType
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Song, User, Version
 from songmaker_cli.db.queries.jobs import create_job
+from songmaker_cli.job_types import JobType
 from songmaker_cli.settings import get_settings
 
 OWNER_ID = "owner"

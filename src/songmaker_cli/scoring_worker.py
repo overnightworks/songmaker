@@ -12,12 +12,8 @@ import logging
 from arq import func
 
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
-from songmaker_cli.constants import (
-    ARQ_SCORING_QUEUE_NAME,
-    RECOVERY_LOCK_SCORING_KEY,
-    JobFunction,
-    JobType,
-)
+from songmaker_cli.constants import ARQ_SCORING_QUEUE_NAME, RECOVERY_LOCK_SCORING_KEY
+from songmaker_cli.job_types import JobFunction, JobType
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import get_settings

@@ -17,14 +17,12 @@ from songmaker_cli.constants import (
     JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     QUEUED_JOB_STALE_THRESHOLD_SECONDS,
     STALE_JOB_THRESHOLDS,
-    JobStatus,
-    JobType,
     LoraStatus,
-    WorkerLivenessSignal,
 )
 from songmaker_cli.db.models import Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
+from songmaker_cli.job_types import JobStatus, JobType, WorkerLivenessSignal
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,
     _run_stale_job_reaper_tick,

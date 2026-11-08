@@ -15,13 +15,13 @@ from sqlalchemy.orm.interfaces import ExecutableOption
 
 from songmaker_cli import audio_files
 from songmaker_cli.audio_paths import canonical_audio_filename, confined_under
-from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.models import Album, Generation, Rating, Score, Song
 from songmaker_cli.db.queries.sharing import (
     disable_sharing,
     enable_sharing,
     playable_take_filter,
 )
+from songmaker_cli.job_types import JobStatus
 from songmaker_cli.whisper_cues import WhisperCue
 
 log = logging.getLogger(__name__)

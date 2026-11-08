@@ -34,12 +34,12 @@ from songmaker_cli.constants import (
     AUTO_LENGTH_SECONDS,
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
-    JobStatus,
 )
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
+from songmaker_cli.job_types import JobStatus
 from songmaker_cli.theme_types import ThemeChoice
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.whisper_cues import stored_whisper_cues

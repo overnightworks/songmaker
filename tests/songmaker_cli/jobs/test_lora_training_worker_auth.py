@@ -16,11 +16,12 @@ from starlette.routing import Route
 from support.worker_http_peer import LoopbackServer
 
 from songmaker_cli.acestep_state import worker_state_key
-from songmaker_cli.constants import INTERNAL_TOKEN_HEADER, JobStatus, JobType, LoraStatus
+from songmaker_cli.constants import INTERNAL_TOKEN_HEADER, LoraStatus
 from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
 from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.db.queries.workers import register_worker
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs.lora_training import run_lora_training_job
 from songmaker_cli.settings import get_settings
 

@@ -8,13 +8,8 @@ from typing import Final, Literal
 
 from pydantic import BaseModel
 
-from songmaker_cli.constants import (
-    GENERATION_ETA_MIN_PROGRESS,
-    JOB_TERMINAL_STATUSES,
-    GenerationPhase,
-    JobStatus,
-    JobType,
-)
+from songmaker_cli.constants import GENERATION_ETA_MIN_PROGRESS
+from songmaker_cli.job_types import JOB_TERMINAL_STATUSES, GenerationPhase, JobStatus, JobType
 
 REMAINING_TIME_ESTIMATE_CALCULATING: Final = "calculating"
 RemainingTimeEstimate = int | Literal["calculating"]

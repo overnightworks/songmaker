@@ -57,9 +57,9 @@ def seeded_job(tmp_path, pg_factory):
 
 
 def _seeded_job(tmp_path, factory):
-    from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.db.queries.songs import get_song
+    from songmaker_cli.job_types import JobStatus, JobType
 
     with factory() as session:
         session.add(User(id=_OWNER_ID, username=_OWNER_ID))
@@ -80,9 +80,9 @@ def _seeded_job(tmp_path, factory):
 def test_completion_preserves_takes_and_adds_the_declared_batch_without_events(
     seeded_job, take_count,
 ):
-    from songmaker_cli.constants import JobStatus
     from songmaker_cli.db.models import ResourceEvent
     from songmaker_cli.db.queries.songs import get_song, update_song
+    from songmaker_cli.job_types import JobStatus
 
     session, audio_dir, job = seeded_job
     existing_ids = {g.id for g in session.query(Generation)}
@@ -182,8 +182,8 @@ def test_failed_second_take_rolls_back_the_batch_and_terminal_status(
 def test_queued_command_prints_a_real_owned_job_with_a_computed_position(seeded_job, capsys):
     import argparse
 
-    from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.db.queries.jobs import create_job, get_job, get_queue_position
+    from songmaker_cli.job_types import JobStatus, JobType
 
     session, _, running = seeded_job
     ahead = create_job(session, JobType.GENERATE, user_id=_OWNER_ID, song_id=running.song_id)
@@ -215,8 +215,8 @@ def test_cover_running_command_prints_an_owned_job_started_in_the_past(cover_alb
     import argparse
     from datetime import datetime, timedelta, timezone
 
-    from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.db.queries.jobs import get_job
+    from songmaker_cli.job_types import JobStatus, JobType
 
     session, _ = cover_album
     seed_e2e_job_states.cmd_set_cover_running(
@@ -234,10 +234,10 @@ def test_cover_running_command_prints_an_owned_job_started_in_the_past(cover_alb
 
 
 def test_publishing_a_cover_suggestion_completes_the_run_and_waits_for_the_album(cover_album):
-    from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.cover_suggestions import resolve_suggestion_png
     from songmaker_cli.db.queries.cover_suggestions import list_album_cover_suggestions
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.job_types import JobStatus, JobType
 
     session, audio_dir = cover_album
     job = create_job(session, JobType.COVER, user_id=_OWNER_ID, album_id=_ALBUM_ID)
@@ -261,9 +261,9 @@ def test_publishing_a_cover_suggestion_completes_the_run_and_waits_for_the_album
 def test_invalid_cover_publication_writes_neither_suggestion_nor_file(
     cover_album, status, job_type, png,
 ):
-    from songmaker_cli.constants import JobType
     from songmaker_cli.db.queries.cover_suggestions import list_album_cover_suggestions
     from songmaker_cli.db.queries.jobs import create_job
+    from songmaker_cli.job_types import JobType
 
     session, audio_dir = cover_album
     job = create_job(session, JobType.COVER, user_id=_OWNER_ID, album_id=_ALBUM_ID)

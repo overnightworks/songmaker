@@ -13,7 +13,6 @@ from support.web_app import make_test_app, seed_session, seed_user
 from acestep_engine.models import AceStepConfig
 from songmaker_cli import cleanup
 from songmaker_cli.cleanup import run_cleanup_expired
-from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -23,6 +22,7 @@ from songmaker_cli.db.models import (
     Song,
     Version,
 )
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs import _persist_generation_row
 from songmaker_cli.jobs.generation import GenerationContext
 from songmaker_cli.parser import AlbumMeta, SongMeta

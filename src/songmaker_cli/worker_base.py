@@ -12,15 +12,11 @@ import threading
 from pathlib import Path
 from typing import ClassVar
 
-from songmaker_cli.constants import (
-    ARQ_HEALTH_CHECK_INTERVAL_SECONDS,
-    JOB_TERMINAL_STATUSES,
-    RECOVERY_LOCK_TTL_SECONDS,
-    JobStatus,
-)
+from songmaker_cli.constants import ARQ_HEALTH_CHECK_INTERVAL_SECONDS, RECOVERY_LOCK_TTL_SECONDS
 from songmaker_cli.db.database_url import connection_url_from_settings
 from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries.jobs import get_job
+from songmaker_cli.job_types import JOB_TERMINAL_STATUSES, JobStatus
 from songmaker_cli.settings import Settings, get_settings
 
 log = logging.getLogger(__name__)

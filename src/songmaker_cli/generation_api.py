@@ -55,9 +55,6 @@ from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     MODEL_AVAILABLE_MODES,
     AuditAction,
-    JobFunction,
-    JobStatus,
-    JobType,
     ResourceType,
 )
 from songmaker_cli.db.models import Generation, Version
@@ -86,6 +83,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.settings import list_active_models
 from songmaker_cli.generation_params import BaseGenerationParams
+from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.jobs.generation_failure import (
     generation_failure,
     is_visible_generation_failure,

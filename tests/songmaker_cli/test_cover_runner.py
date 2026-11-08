@@ -13,14 +13,10 @@ from support.cowriter_gateway import CowriterStack, HeldGateway, attach_cowriter
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 import songmaker_cli.cover_runner as cover_runner
-from songmaker_cli.constants import (
-    COVER_PROMPT_MAX_CHARS,
-    COVER_PROMPT_SONG_FIELD_MAX_CHARS,
-    JobStatus,
-    JobType,
-)
+from songmaker_cli.constants import COVER_PROMPT_MAX_CHARS, COVER_PROMPT_SONG_FIELD_MAX_CHARS
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
+from songmaker_cli.job_types import JobStatus, JobType
 
 HANG_GUARD_SECONDS: Final = 30
 OWNER: Final = "u1"

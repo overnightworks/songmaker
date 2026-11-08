@@ -10,14 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from support.reference_rows import a_reference
 
 import songmaker_cli.music_worker as mw_mod
-from songmaker_cli.constants import (
-    AuditAction,
-    JobFunction,
-    JobStatus,
-    JobType,
-    LoraStatus,
-)
+from songmaker_cli.constants import AuditAction, LoraStatus
 from songmaker_cli.db.models import Album, AuditLog, Job, ReferenceRecording, User, UserLora
+from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.music_worker import MusicWorker
 from songmaker_cli.settings import Settings, get_settings
 

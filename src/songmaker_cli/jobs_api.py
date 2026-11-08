@@ -19,19 +19,16 @@ from songmaker_cli.api_models import JobResponse
 from songmaker_cli.app_context import AppContext, get_db_session
 from songmaker_cli.auth_dependencies import authenticate_request, get_current_user
 from songmaker_cli.constants import (
-    JOB_ACTIVE_STATUSES,
     JOB_STREAM_CONNECTION_SECONDS,
     JOB_STREAM_LEASE_SECONDS,
     JOB_STREAM_LIMIT_DETAIL,
     JOB_STREAM_LIMITER_UNAVAILABLE,
-    JOB_TERMINAL_STATUSES,
     REDIS_JOB_STREAM_LEASE_GLOBAL_KEY,
     REDIS_JOB_STREAM_LEASE_USER_PREFIX,
     SSE_HEARTBEAT_COMMENT,
     SSE_HEARTBEAT_SECONDS,
     SSE_POLL_INTERVAL_SECONDS,
     AuditAction,
-    JobStatus,
     ResourceType,
 )
 from songmaker_cli.db.models import Job
@@ -42,6 +39,7 @@ from songmaker_cli.db.queries.jobs import (
     get_queue_position,
     update_job_status,
 )
+from songmaker_cli.job_types import JOB_ACTIVE_STATUSES, JOB_TERMINAL_STATUSES, JobStatus
 from songmaker_cli.jobs.generation_failure import musician_job_response
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
 from songmaker_cli.settings import get_settings

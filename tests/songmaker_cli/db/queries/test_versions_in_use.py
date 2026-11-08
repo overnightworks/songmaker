@@ -18,7 +18,6 @@ from support.web_app import (
 )
 
 from songmaker_cli.api_helpers import create_job_with_rate_limit
-from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
@@ -31,6 +30,7 @@ from songmaker_cli.db.models import (
 from songmaker_cli.db.queries.albums import delete_album
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 from songmaker_cli.db.queries.songs import delete_song
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.mcp_server.tools import tool_rename_song, tool_update_song_lyrics
 
 OWNER_ID = "owner"
