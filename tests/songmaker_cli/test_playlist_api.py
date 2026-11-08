@@ -22,18 +22,16 @@ from support.web_app import (
 )
 
 from songmaker_cli.api_helpers import slugify
-from songmaker_cli.constants import (
+from songmaker_cli.constants import COVER_MAX_BYTES, COVER_VARIANT_CARD, COVER_VARIANT_DETAIL
+from songmaker_cli.covers import (
     COVER_JPEG_MAGIC,
-    COVER_MAX_BYTES,
     COVER_PNG_EXTENSION,
     COVER_TOO_LARGE,
     COVER_UNSUPPORTED_TYPE,
-    COVER_VARIANT_CARD,
-    COVER_VARIANT_DETAIL,
     COVER_VARIANT_ORIGINAL,
     PLAYLIST_COVER_DIRNAME,
+    write_playlist_cover,
 )
-from songmaker_cli.covers import write_playlist_cover
 from songmaker_cli.db.models import (
     Album,
     Generation,

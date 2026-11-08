@@ -13,7 +13,7 @@ from support.failing_reference_stamp import install_failing_stamp
 from support.reference_rows import a_reference
 
 from songmaker_cli.cleanup import run_cleanup_expired, run_generation_retention
-from songmaker_cli.constants import SONG_COVER_DIRNAME
+from songmaker_cli.covers import SONG_COVER_DIRNAME
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 
 OWNER = "owner"

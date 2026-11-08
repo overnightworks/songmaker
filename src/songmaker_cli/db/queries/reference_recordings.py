@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Collection
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from enum import StrEnum
 from typing import Final
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, Version
+from songmaker_cli.constants import SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE
+from songmaker_cli.db.models import (
+    Album,
+    Generation,
+    RateLimitSetting,
+    ReferenceRecording,
+    Song,
+    Version,
+)
 from songmaker_cli.timestamps import utcnow
+
+log = logging.getLogger(__name__)
 
 REFERENCE_LINK_COLUMNS: Final = (
     Version.reference_recording_id,
@@ -329,3 +342,80 @@ def owner_reference_usage(session: Session, user_id: str) -> ReferenceUsage:
         ).where(ReferenceRecording.user_id == user_id)
     ).one()
     return ReferenceUsage(files=files, bytes=int(size))
+
+
+class CountdownRowFault(StrEnum):
+    MISSING = "missing"
+    DUPLICATE = "duplicate"
+    MALFORMED = "malformed"
+
+
+class CountdownRowUnusable(RuntimeError):
+    """The publication row is missing, duplicated or holds no ISO-8601 UTC instant."""
+
+    def __init__(self, fault: CountdownRowFault, row_count: int) -> None:
+        super().__init__(f"reference countdown row {fault.value}")
+        self.fault = fault
+        self.row_count = row_count
+
+
+@dataclass(frozen=True)
+class CountdownPublication:
+    epoch: str
+    published: datetime | None
+
+
+_COUNTDOWN_ROWS = (
+    RateLimitSetting.setting_key == SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE,
+    RateLimitSetting.user_id.is_(None),
+)
+
+
+def get_countdown_publication(session: Session) -> CountdownPublication:
+    """The countdown row's epoch and the instant a page first showed it, None until then.
+
+    Fails loud on a missing or duplicated row and on a value that is not an ISO-8601 UTC
+    instant; the log carries the row count and the fault kind only (the exception message).
+    """
+    rows = session.scalars(select(RateLimitSetting).where(*_COUNTDOWN_ROWS)).all()
+    try:
+        if len(rows) != 1:
+            fault = CountdownRowFault.MISSING if not rows else CountdownRowFault.DUPLICATE
+            raise CountdownRowUnusable(fault, len(rows))
+        [row] = rows
+        return CountdownPublication(row.id, _published_instant(row.value_text))
+    except CountdownRowUnusable as unusable:
+        log.exception("Reference countdown row unusable (rows=%d)", unusable.row_count)
+        raise
+
+
+def _published_instant(value_text: str | None) -> datetime | None:
+    if value_text is None:
+        return None
+    try:
+        instant = datetime.fromisoformat(value_text)
+    except ValueError:
+        raise CountdownRowUnusable(CountdownRowFault.MALFORMED, 1) from None
+    if instant.utcoffset() != timedelta(0):
+        raise CountdownRowUnusable(CountdownRowFault.MALFORMED, 1)
+    return instant
+
+
+def acknowledge_countdown_shown(session: Session, epoch: str, shown_at: datetime) -> bool:
+    """Publish the countdown at ``shown_at`` once; True when ``epoch`` names the row.
+
+    The conditional update lets the first caller write and every later or concurrent caller
+    leave the instant alone. Flushes.
+    """
+    written = session.execute(
+        update(RateLimitSetting)
+        .where(
+            *_COUNTDOWN_ROWS, RateLimitSetting.id == epoch, RateLimitSetting.value_text.is_(None),
+        )
+        .values(value_text=shown_at.isoformat()),
+    ).rowcount
+    if written:
+        return True
+    return session.scalar(
+        select(RateLimitSetting.id).where(*_COUNTDOWN_ROWS, RateLimitSetting.id == epoch),
+    ) is not None

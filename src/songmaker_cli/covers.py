@@ -16,40 +16,9 @@ from PIL.PngImagePlugin import PngInfo
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.audio_paths import confined_under
 from songmaker_cli.constants import (
-    COVER_CACHE_CONTROL,
-    COVER_CARD_MAX_EDGE,
-    COVER_DETAIL_MAX_EDGE,
-    COVER_DIRNAME,
-    COVER_FORMAT_JPEG,
-    COVER_FORMAT_PNG,
-    COVER_INVALID_ALBUM_ID,
-    COVER_INVALID_PLAYLIST_ID,
-    COVER_INVALID_SONG_ID,
-    COVER_JPEG_EXTENSION,
-    COVER_JPEG_MAGIC,
-    COVER_JPEG_QUALITY,
-    COVER_KEY_JPEG,
-    COVER_KEY_PNG,
-    COVER_KEYS,
     COVER_MAX_BYTES,
-    COVER_MAX_PIXELS,
-    COVER_MEDIA_TYPE_JPEG,
-    COVER_MEDIA_TYPE_PNG,
-    COVER_OLD_DIRNAME_SUFFIX,
-    COVER_PNG_EXTENSION,
-    COVER_PNG_MAGIC,
-    COVER_STAGING_DIRNAME_SUFFIX,
-    COVER_TOO_LARGE,
-    COVER_TOO_MANY_PIXELS,
-    COVER_UNREADABLE,
-    COVER_UNSUPPORTED_TYPE,
     COVER_VARIANT_CARD,
     COVER_VARIANT_DETAIL,
-    COVER_VARIANT_ORIGINAL,
-    COVER_VARIANT_UNKNOWN,
-    COVER_VARIANTS,
-    PLAYLIST_COVER_DIRNAME,
-    SONG_COVER_DIRNAME,
 )
 
 # The iTXt keyword under which PNG carries an XMP packet (XMP spec, part 3).
@@ -70,6 +39,42 @@ def ai_mark_png_info() -> PngInfo:
     return metadata
 
 log = logging.getLogger(__name__)
+
+COVER_DIRNAME: Final[str] = "covers"
+SONG_COVER_DIRNAME: Final[str] = "song-covers"
+PLAYLIST_COVER_DIRNAME: Final[str] = "playlist-covers"
+COVER_MAX_PIXELS: Final[int] = 20_000_000
+COVER_CARD_MAX_EDGE: Final[int] = 512
+COVER_DETAIL_MAX_EDGE: Final[int] = 1024
+COVER_JPEG_QUALITY: Final[int] = 85
+COVER_VARIANT_ORIGINAL: Final[str] = "original"
+COVER_VARIANTS: Final[frozenset[str]] = frozenset({
+    COVER_VARIANT_ORIGINAL,
+    COVER_VARIANT_CARD,
+    COVER_VARIANT_DETAIL,
+})
+COVER_KEY_JPEG: Final[str] = "jpg"
+COVER_KEY_PNG: Final[str] = "png"
+COVER_KEYS: Final[frozenset[str]] = frozenset({COVER_KEY_JPEG, COVER_KEY_PNG})
+COVER_JPEG_EXTENSION: Final[str] = ".jpg"
+COVER_PNG_EXTENSION: Final[str] = ".png"
+COVER_JPEG_MAGIC: Final[bytes] = b"\xff\xd8\xff"
+COVER_PNG_MAGIC: Final[bytes] = b"\x89PNG\r\n\x1a\n"
+COVER_FORMAT_JPEG: Final[str] = "jpeg"
+COVER_FORMAT_PNG: Final[str] = "png"
+COVER_MEDIA_TYPE_JPEG: Final[str] = "image/jpeg"
+COVER_MEDIA_TYPE_PNG: Final[str] = "image/png"
+COVER_CACHE_CONTROL: Final[str] = "no-store"
+COVER_UNSUPPORTED_TYPE: Final[str] = "Cover must be a JPEG or PNG image"
+COVER_TOO_LARGE: Final[str] = "Cover file is too large"
+COVER_TOO_MANY_PIXELS: Final[str] = "Cover image is too large"
+COVER_UNREADABLE: Final[str] = "Cover image could not be read"
+COVER_VARIANT_UNKNOWN: Final[str] = "Unknown cover variant"
+COVER_INVALID_ALBUM_ID: Final[str] = "Invalid album id for cover storage"
+COVER_INVALID_SONG_ID: Final[str] = "Invalid song id for cover storage"
+COVER_INVALID_PLAYLIST_ID: Final[str] = "Invalid playlist id for cover storage"
+COVER_OLD_DIRNAME_SUFFIX: Final[str] = ".old"
+COVER_STAGING_DIRNAME_SUFFIX: Final[str] = ".staging"
 
 COVER_RESPONSE_HEADERS: dict[str, str] = {"Cache-Control": COVER_CACHE_CONTROL}
 _COVER_REJECTED_IDS: Final[frozenset[str]] = frozenset({".", ".."})
