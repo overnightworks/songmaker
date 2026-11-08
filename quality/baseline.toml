@@ -56,7 +56,7 @@
 "src/songmaker_cli/queue_streams.py" = 919
 "src/songmaker_cli/sharing_api.py" = 861
 "tests/acestep_engine/test_client.py" = 818
-"tests/acestep_worker/test_wrapper.py" = 1626
+"tests/acestep_worker/test_wrapper.py" = 1519
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1291
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1857
 "tests/songmaker_cli/test_admin_api.py" = 1036

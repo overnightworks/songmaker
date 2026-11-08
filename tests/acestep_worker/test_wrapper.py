@@ -11,13 +11,18 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
-import fakeredis.aioredis
 import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.routing import BaseRoute
-from support.acestep_http import acestep_http
+from support.wrapper_deps import (
+    INTERNAL_HEADERS,
+    INTERNAL_TOKEN,
+    INTERNAL_TOKEN_HEADER,
+    make_deps,
+    run,
+)
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
@@ -26,12 +31,11 @@ from acestep_worker.clock import utcnow
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import (
     DEFAULT_TTL_SECONDS,
-    HeartbeatLoop,
     gpu_hold_key,
     queue_depth_key,
     reserve_gpu_hold,
 )
-from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader, VramStats
+from acestep_worker.model_cache import LoadedModel, VramStats
 from acestep_worker.models import (
     GenerateRequest,
     GenerationTaskResult,
@@ -53,78 +57,12 @@ from acestep_worker.wrapper import (
     read_queue_depth,
 )
 
-_INTERNAL_TOKEN_HEADER = "X-Internal-Token"
-_INTERNAL_TOKEN = "test-internal-token"
-_INTERNAL_HEADERS = {_INTERNAL_TOKEN_HEADER: _INTERNAL_TOKEN}
 _OPEN_OPERATION = ("GET", "/health")
 _FRAMEWORK_PATHS = ["/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"]
 
 
-def _run(coro):
-    return asyncio.run(coro)
-
-
 def _worker_client(app: FastAPI) -> TestClient:
-    return TestClient(app, headers=_INTERNAL_HEADERS)
-
-
-def _make_deps(
-    tmp_path: Path,
-    *,
-    vram_reader: VramReader | None = None,
-    model_sizes: dict[str, float] | None = None,
-    model_loader: Callable[[str], Awaitable[LoadedModel]] | None = None,
-) -> tuple[WorkerDeps, fakeredis.aioredis.FakeRedis]:
-    redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
-    loaded_log: list[str] = []
-
-    async def loader(mode: str) -> LoadedModel:
-        loaded_log.append(mode)
-        return LoadedModel(mode=mode, handle=f"handle-{mode}", port=8101)
-
-    async def unloader(_: LoadedModel) -> None:
-        return None
-
-    cache = ModelCache(
-        vram_budget_gb=24.0,
-        model_sizes=model_sizes if model_sizes is not None else {"sft": 6.0, "xl-sft": 12.0},
-        loader=model_loader or loader,
-        unloader=unloader,
-        vram_reader=vram_reader,
-    )
-    task_store = TaskStore()
-
-    async def fake_generate_runner(
-        store: TaskStore,
-        task_id: str,
-        *,
-        mode: str,
-        config: AceStepConfig,
-        port: int,
-        audio_output_dir: Path,
-    ) -> None:
-        await store.mark_running(task_id)
-        await store.complete(task_id, GenerationTaskResult(mode=mode, seed=42))
-
-    deps = WorkerDeps(
-        worker_id="acestep-worker-0",
-        cache=cache,
-        task_store=task_store,
-        heartbeat=None,  # type: ignore[arg-type]
-        redis=redis,
-        registry_client=None,
-        registration=None,
-        checkpoint_dir=tmp_path,
-        audio_output_dir=tmp_path / "audio",
-        internal_token=_INTERNAL_TOKEN,
-        generate_runner=fake_generate_runner,
-    )
-    deps.heartbeat = HeartbeatLoop(
-        redis=redis,
-        worker_id="acestep-worker-0",
-        state_provider=lambda: build_state_payload(deps),
-    )
-    return deps, redis
+    return TestClient(app, headers=INTERNAL_HEADERS)
 
 
 def _served_operations(routes: Iterable[BaseRoute]) -> list[tuple[str, str]]:
@@ -138,7 +76,7 @@ def _served_operations(routes: Iterable[BaseRoute]) -> list[tuple[str, str]]:
     return operations
 
 
-_SERVED_OPERATIONS = _served_operations(create_app(_make_deps(Path("unused"))[0]).routes)
+_SERVED_OPERATIONS = _served_operations(create_app(make_deps(Path("unused"))[0]).routes)
 _PROTECTED_OPERATIONS = [
     operation for operation in _SERVED_OPERATIONS if operation != _OPEN_OPERATION
 ]
@@ -157,7 +95,7 @@ def headerless_client(
     tmp_path: Path,
     recorded_process_kills: list[tuple[int, int]],
 ) -> TestClient:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     return TestClient(create_app(deps))
 
 
@@ -167,13 +105,13 @@ def _call_operation(
     path: str,
     token: bytes | None,
 ) -> httpx.Response:
-    headers = [] if token is None else [(_INTERNAL_TOKEN_HEADER.encode(), token)]
+    headers = [] if token is None else [(INTERNAL_TOKEN_HEADER.encode(), token)]
     return client.request(method, re.sub(r"\{\w+\}", "ghost", path), json={}, headers=headers)
 
 
 def _complains_about_missing_token(response: httpx.Response) -> bool:
     return response.status_code == 422 and any(
-        error["loc"] == ["header", _INTERNAL_TOKEN_HEADER] for error in response.json()["detail"]
+        error["loc"] == ["header", INTERNAL_TOKEN_HEADER] for error in response.json()["detail"]
     )
 
 
@@ -218,7 +156,7 @@ def test_every_worker_operation_but_health_accepts_the_right_token(
     method: str,
     path: str,
 ) -> None:
-    response = _call_operation(headerless_client, method, path, _INTERNAL_TOKEN.encode())
+    response = _call_operation(headerless_client, method, path, INTERNAL_TOKEN.encode())
 
     assert response.status_code != 401
     assert not _complains_about_missing_token(response)
@@ -241,23 +179,23 @@ def test_format_sse_payload() -> None:
 
 
 def test_read_queue_depth_default(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
-    depth = _run(read_queue_depth(deps.redis, deps.worker_id))
+    deps, _ = make_deps(tmp_path)
+    depth = run(read_queue_depth(deps.redis, deps.worker_id))
     assert depth == 0
 
 
 def test_read_queue_depth_set(tmp_path: Path) -> None:
-    deps, redis = _make_deps(tmp_path)
+    deps, redis = make_deps(tmp_path)
 
     async def go():
         await redis.set(queue_depth_key(deps.worker_id), 5)
         return await read_queue_depth(deps.redis, deps.worker_id)
 
-    assert _run(go()) == 5
+    assert run(go()) == 5
 
 
 def test_health_endpoint(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with TestClient(app) as client:
         resp = client.get("/health")
@@ -287,7 +225,7 @@ def test_worker_api_documents_its_http_error_responses(
     method: str,
     error_statuses: set[str],
 ) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     schema = create_app(deps).openapi()
     documented_responses = schema["paths"][path][method]["responses"]
 
@@ -298,7 +236,7 @@ def test_health_returns_503_when_gpu_is_unavailable(tmp_path: Path) -> None:
     """Issue #367: a worker whose NVML call fails (GPU vanished, driver
     mismatch) must fail its own healthcheck — never stay green while
     unable to generate. Simulated, not a lucky real GPU."""
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     deps.gpu_health_checker = lambda: GpuHealth(
         GpuHealthStatus.UNAVAILABLE,
         detail="Driver/library version mismatch",
@@ -313,7 +251,7 @@ def test_health_returns_503_when_gpu_is_unavailable(tmp_path: Path) -> None:
 
 def test_health_stays_200_when_pynvml_not_installed(tmp_path: Path) -> None:
     """A CI/test host with no NVIDIA driver is not a broken worker."""
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     deps.gpu_health_checker = lambda: GpuHealth(GpuHealthStatus.NOT_INSTALLED)
     app = create_app(deps)
     with TestClient(app) as client:
@@ -327,12 +265,12 @@ def test_build_state_payload_carries_gpu_healthy_false_when_gpu_unavailable(
 ) -> None:
     from acestep_worker.wrapper import build_state_payload
 
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     deps.gpu_health_checker = lambda: GpuHealth(
         GpuHealthStatus.UNAVAILABLE,
         detail="Driver/library version mismatch",
     )
-    payload = _run(build_state_payload(deps))
+    payload = run(build_state_payload(deps))
     assert payload["gpu_healthy"] is False
     assert payload["gpu_health_detail"] == "Driver/library version mismatch"
 
@@ -342,14 +280,14 @@ def test_build_state_payload_carries_gpu_healthy_true_by_default(
 ) -> None:
     from acestep_worker.wrapper import build_state_payload
 
-    deps, _ = _make_deps(tmp_path)
-    payload = _run(build_state_payload(deps))
+    deps, _ = make_deps(tmp_path)
+    payload = run(build_state_payload(deps))
     assert payload["gpu_healthy"] is True
     assert payload["gpu_health_detail"] is None
 
 
 def test_loaded_models_initial(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         resp = client.get("/loaded_models")
@@ -365,7 +303,7 @@ def test_loaded_models_initial(tmp_path: Path) -> None:
 
 
 def test_loaded_models_reports_vram_measured_true_with_a_reader(tmp_path: Path) -> None:
-    deps, _ = _make_deps(
+    deps, _ = make_deps(
         tmp_path,
         vram_reader=lambda: VramStats(used_gb=15.3, total_gb=24.0),
     )
@@ -382,7 +320,7 @@ def test_loaded_models_with_downloaded_mode(tmp_path: Path) -> None:
     sft_dir.mkdir(parents=True)
     (sft_dir / "config.json").write_text("{}")
     (sft_dir / "model.safetensors").write_bytes(b"x")
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         resp = client.get("/loaded_models")
@@ -390,7 +328,7 @@ def test_loaded_models_with_downloaded_mode(tmp_path: Path) -> None:
 
 
 def test_load_model_success(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         resp = client.post("/load_model", json={"mode": "sft"})
@@ -401,7 +339,7 @@ def test_load_model_success(tmp_path: Path) -> None:
 
 
 def test_load_model_unknown_mode(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         resp = client.post("/load_model", json={"mode": "ghost"})
@@ -417,7 +355,7 @@ def test_load_model_last_error_matches_response(tmp_path: Path, status: int) -> 
     async def failing_loader(mode: str) -> LoadedModel:
         raise SubprocessStartError("ACE-Step did not become healthy\nloading shard 2/4")
 
-    deps, redis = _make_deps(
+    deps, redis = make_deps(
         tmp_path,
         model_sizes={"sft": 100.0 if status == 409 else 6.0},
         model_loader=failing_loader,
@@ -427,11 +365,11 @@ def test_load_model_last_error_matches_response(tmp_path: Path, status: int) -> 
         before = utcnow()
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=create_app(deps)),
-            base_url="http://worker", headers=_INTERNAL_HEADERS,
+            base_url="http://worker", headers=INTERNAL_HEADERS,
         ) as client:
             denied = await client.post(
                 "/load_model", json={"mode": "sft"},
-                headers={_INTERNAL_TOKEN_HEADER: "wrong-token"},
+                headers={INTERNAL_TOKEN_HEADER: "wrong-token"},
             )
             assert denied.status_code == 401
             assert (await build_state_payload(deps))["last_error"] is None
@@ -446,14 +384,14 @@ def test_load_model_last_error_matches_response(tmp_path: Path, status: int) -> 
         assert at.utcoffset() == timedelta(0)
         assert before <= at <= utcnow()
 
-    _run(go())
+    run(go())
 
 
 @pytest.fixture
 def last_error_worker(tmp_path: Path):
     from songmaker_cli.acestep_state import read_worker_state
 
-    deps, redis = _make_deps(tmp_path)
+    deps, redis = make_deps(tmp_path)
     successful_runner = deps.generate_runner
 
     async def publish_pair():
@@ -491,7 +429,7 @@ def last_error_worker(tmp_path: Path):
     async def worker():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=create_app(deps)),
-            base_url="http://worker", headers=_INTERNAL_HEADERS,
+            base_url="http://worker", headers=INTERNAL_HEADERS,
         ) as client:
             assert (await client.post("/load_model", json={"mode": "sft"})).status_code == 200
             yield client, publish_pair, generate_then_publish
@@ -505,7 +443,7 @@ def test_generate_last_error_matches_task_snapshot(last_error_worker) -> None:
         async with last_error_worker() as (client, _, generate_then_publish):
             await generate_then_publish(client, "ACE-Step failed\noriginal worker detail")
 
-    _run(go())
+    run(go())
 
 
 @pytest.mark.parametrize("success", ["load", "generate"])
@@ -528,16 +466,16 @@ def test_last_error_survives_success_and_is_replaced(
             later = await generate_then_publish(client, "RuntimeError: later failure")
             assert later != first
 
-            other, _ = _make_deps(tmp_path)
+            other, _ = make_deps(tmp_path)
             untouched = await build_state_payload(other)
             assert untouched["last_error"] is None
             assert untouched["last_error_at"] is None
 
-    _run(go())
+    run(go())
 
 
 def test_evict_model(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
@@ -549,7 +487,7 @@ def test_evict_model(tmp_path: Path) -> None:
 
 
 def test_generate_answers_an_unloaded_mode_the_way_the_scheduler_recognizes(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         resp = client.post(
@@ -566,7 +504,7 @@ def test_generate_acquisition_serializes_with_hold_reservation(
 ) -> None:
     from fastapi import HTTPException
 
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     generation_started = asyncio.Event()
     allow_generation_to_finish = asyncio.Event()
     spawned: list[object] = []
@@ -605,11 +543,11 @@ def test_generate_acquisition_serializes_with_hold_reservation(
             await held_generation
         await deps.redis.delete(gpu_hold_key(deps.worker_id))
 
-    _run(scenario())
+    run(scenario())
 
 
 def test_generate_rejects_a_worker_held_for_lora_training(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         assert client.post("/load_model", json={"mode": "sft"}).status_code == 200
@@ -626,7 +564,7 @@ def test_generate_rejects_a_worker_held_for_lora_training(tmp_path: Path) -> Non
 
 
 def test_generate_returns_a_task_that_starts_loading_its_model(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
@@ -661,7 +599,7 @@ def test_generate_passes_the_full_config_through_losslessly(tmp_path: Path) -> N
     """Issue #383 finding 1: an unrecognized config field must not silently
     fall back to a default — prove the honest path first: every field of a
     full, valid payload survives the HTTP boundary as a typed AceStepConfig."""
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     received: list[AceStepConfig] = []
 
     async def capturing_runner(
@@ -696,7 +634,7 @@ def test_generate_passes_the_full_config_through_losslessly(tmp_path: Path) -> N
 def test_generate_rejects_an_unrecognized_config_field(tmp_path: Path) -> None:
     """A typo'd or renamed field (audio_duraton vs audio_duration) must 422,
     not silently vanish behind AceStepConfig's default for the real field."""
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     payload = {**_full_ace_step_config_payload(), "audio_duraton": 91}
     with _worker_client(app) as client:
@@ -708,7 +646,7 @@ def test_generate_rejects_an_unrecognized_config_field(tmp_path: Path) -> None:
 def test_generate_rejects_a_missing_required_config_field(tmp_path: Path) -> None:
     """lyrics has no default on AceStepConfig — omitting it must 422, not
     construct a half-built config."""
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     payload = _full_ace_step_config_payload()
     del payload["lyrics"]
@@ -719,7 +657,7 @@ def test_generate_rejects_a_missing_required_config_field(tmp_path: Path) -> Non
 
 
 def test_download_model_returns_task_id(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
 
     async def fake_download(repo_id: str, local_dir: Path) -> None:
@@ -749,7 +687,7 @@ def test_download_model_returns_task_id(tmp_path: Path) -> None:
 
 
 def test_get_task_unknown(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         resp = client.get("/tasks/ghost")
@@ -757,7 +695,7 @@ def test_get_task_unknown(tmp_path: Path) -> None:
 
 
 def test_get_task_known(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
@@ -775,7 +713,7 @@ def test_get_task_known(tmp_path: Path) -> None:
 
 
 def test_stream_task_unknown(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         resp = client.get("/tasks/ghost/stream")
@@ -783,7 +721,7 @@ def test_stream_task_unknown(tmp_path: Path) -> None:
 
 
 def test_stream_task_yields_done(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
@@ -839,7 +777,7 @@ def test_default_generate_runner_success(tmp_path: Path, monkeypatch: pytest.Mon
         )
         return await store.get(task_id)
 
-    snap = _run(go())
+    snap = run(go())
     assert snap is not None
     assert snap.state == "done"
     assert snap.result is not None
@@ -879,7 +817,7 @@ def test_default_generate_runner_carries_delivered_batch_size(
         )
         return await store.get(task_id)
 
-    snap = _run(go())
+    snap = run(go())
     assert snap is not None
     assert snap.result is not None
     assert snap.result.delivered_batch_size == 1
@@ -919,7 +857,7 @@ def test_default_generate_runner_emits_the_engines_phase_and_fraction(
         )
         return [event async for event in events]
 
-    events = _run(go())
+    events = run(go())
 
     progress_events = [event.data for event in events if event.type == "progress"]
     assert [(data["phase"], data["progress"]) for data in progress_events] == [
@@ -928,51 +866,6 @@ def test_default_generate_runner_emits_the_engines_phase_and_fraction(
         ("rendering", 0.25),
     ]
     assert events[-1].type == "done"
-
-
-@pytest.fixture
-def real_generate_worker(tmp_path: Path):
-    """Use the public dependency seam while retaining the production runner."""
-    with acestep_http() as boundary:
-        async def loader(mode: str) -> LoadedModel:
-            return LoadedModel(mode=mode, handle="test-model", port=boundary.port)
-
-        deps, _ = _make_deps(tmp_path, model_loader=loader)
-        completed = asyncio.Event()
-
-        async def runner(store, task_id, **kwargs):
-            try:
-                await default_generate_runner(store, task_id, **kwargs)
-            finally:
-                # Observe the route's resource-release edge after the runner returns.
-                asyncio.get_running_loop().call_soon(completed.set)
-
-        deps.generate_runner = runner
-
-        async def generate(client):
-            completed.clear()
-            response = await client.post(
-                "/generate", json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
-            )
-            assert response.status_code == 200
-            await asyncio.wait_for(completed.wait(), timeout=10)
-            assert deps.cache.in_use_count("sft") == 0
-            assert not deps.gpu_hold_generation_tasks
-            snapshot = await client.get(f"/tasks/{response.json()['task_id']}")
-            assert snapshot.status_code == 200
-            return snapshot.json()
-
-        @asynccontextmanager
-        async def worker():
-            async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=create_app(deps)),
-                base_url="http://worker", headers=_INTERNAL_HEADERS,
-            ) as client:
-                loaded = await client.post("/load_model", json={"mode": "sft"})
-                assert loaded.status_code == 200
-                yield client, deps, boundary, generate
-
-        yield worker
 
 
 @pytest.mark.parametrize("scenario, expected_kind, diagnostic", [
@@ -1023,7 +916,7 @@ def test_default_generate_runner_error_kind_over_get_and_stream(
                 ]
                 assert [json.loads(item) for item in data] == [snapshot]
 
-    _run(go())
+    run(go())
 
 
 def test_gpu_memory_last_error_survives_audio_success_and_is_replaced(real_generate_worker) -> None:
@@ -1062,20 +955,20 @@ def test_gpu_memory_last_error_survives_audio_success_and_is_replaced(real_gener
                     state = await read_worker_state(deps.redis, deps.worker_id)
                     assert (state["last_error"], state["last_error_at"]) == previous
 
-    _run(go())
+    run(go())
 
 
 def test_build_state_payload(tmp_path: Path) -> None:
     """S15-04: Build state payload."""
     from acestep_worker.wrapper import build_state_payload
 
-    deps, redis = _make_deps(tmp_path)
+    deps, redis = make_deps(tmp_path)
 
     async def go():
         await redis.set(queue_depth_key(deps.worker_id), 4)
         return await build_state_payload(deps)
 
-    payload = _run(go())
+    payload = run(go())
     assert payload["last_error"] is None
     assert payload["last_error_at"] is None
     assert payload["loaded"] == []
@@ -1093,13 +986,13 @@ def test_build_state_payload_projects_the_remaining_training_hold(tmp_path: Path
     from acestep_worker.heartbeat import reserve_gpu_hold
     from acestep_worker.wrapper import build_state_payload
 
-    deps, redis = _make_deps(tmp_path)
+    deps, redis = make_deps(tmp_path)
 
     async def go():
         assert await reserve_gpu_hold(redis, deps.worker_id, "hold-token", 15)
         return await build_state_payload(deps)
 
-    payload = _run(go())
+    payload = run(go())
     assert payload["training_hold_seconds"] is not None
     assert 0 < payload["training_hold_seconds"] <= 15
 
@@ -1107,21 +1000,21 @@ def test_build_state_payload_projects_the_remaining_training_hold(tmp_path: Path
 def test_build_state_payload_after_load_uses_detail_shape(tmp_path: Path) -> None:
     from acestep_worker.wrapper import build_state_payload
 
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
 
     async def go():
         await deps.cache.load("sft")
         await deps.cache.pin("sft")
         return await build_state_payload(deps)
 
-    payload = _run(go())
+    payload = run(go())
     assert payload["loaded"] == [{"mode": "sft", "size_gb": 6.0}]
     assert payload["pinned"] == ["sft"]
     assert payload["loading_started_at"] is None
 
 
 def test_lifespan_calls_registry(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
 
     register_calls = []
 
@@ -1154,7 +1047,7 @@ def test_health_returns_503_until_registered_then_200(tmp_path: Path) -> None:
     from acestep_worker.wrapper import lifespan
 
     async def go():
-        deps, _ = _make_deps(tmp_path)
+        deps, _ = make_deps(tmp_path)
         register_started = _asyncio.Event()
         register_release = _asyncio.Event()
 
@@ -1199,13 +1092,13 @@ def test_health_returns_503_until_registered_then_200(tmp_path: Path) -> None:
                 assert resp.status_code == 200
                 assert resp.json() == {"status": "ok"}
 
-    _run(go())
+    run(go())
 
 
 def test_lifespan_cancels_pending_registration_on_shutdown(tmp_path: Path) -> None:
     import asyncio as _asyncio
 
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     cancelled = _asyncio.Event()
 
     class HangingRegistry:
@@ -1241,13 +1134,13 @@ def test_lifespan_cancels_pending_registration_on_shutdown(tmp_path: Path) -> No
         assert deps.registration_task is not None
         assert deps.registration_task.cancelled() or deps.registration_task.done()
 
-    _run(go())
+    run(go())
 
 
 def test_lifespan_swallows_registration_exception_on_shutdown(tmp_path: Path) -> None:
     import asyncio as _asyncio
 
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
 
     class FailingRegistry:
         control_plane_url = "http://control-plane.test"
@@ -1274,14 +1167,14 @@ def test_lifespan_swallows_registration_exception_on_shutdown(tmp_path: Path) ->
         async with lifespan(app):
             await _asyncio.sleep(0.01)
 
-    _run(go())
+    run(go())
 
 
 # ── D5 wrapper: pin/unpin endpoints ──────────────────────────────
 
 
 def test_pin_model_success(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
@@ -1294,7 +1187,7 @@ def test_pin_model_success(tmp_path: Path) -> None:
 
 
 def test_pin_model_not_loaded_returns_409(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         resp = client.post("/pin_model", json={"mode": "sft"})
@@ -1303,7 +1196,7 @@ def test_pin_model_not_loaded_returns_409(tmp_path: Path) -> None:
 
 
 def test_unpin_model_success(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
@@ -1315,7 +1208,7 @@ def test_unpin_model_success(tmp_path: Path) -> None:
 
 
 def test_unpin_unknown_mode_returns_200(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         resp = client.post("/unpin_model", json={"mode": "sft"})
@@ -1331,7 +1224,7 @@ def test_restart_endpoint_schedules_sigterm(
 ) -> None:
     import os as _os
 
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
 
     with _worker_client(app) as client:
@@ -1343,7 +1236,7 @@ def test_restart_endpoint_schedules_sigterm(
         for _ in range(20):
             if recorded_process_kills:
                 break
-            _run(_asyncio_sleep(0.05))
+            run(_asyncio_sleep(0.05))
 
     assert len(recorded_process_kills) == 1
     assert recorded_process_kills[0][0] == _os.getpid()
@@ -1359,7 +1252,7 @@ async def _asyncio_sleep(seconds: float) -> None:
 def test_generate_acquires_and_releases_refcount(tmp_path: Path) -> None:
     from acestep_worker.wrapper import lifespan
 
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
 
     release_event = asyncio.Event()
     saw_in_use_one = False
@@ -1393,7 +1286,7 @@ def test_generate_acquires_and_releases_refcount(tmp_path: Path) -> None:
             async with httpx.AsyncClient(
                 transport=transport,
                 base_url="http://test",
-                headers=_INTERNAL_HEADERS,
+                headers=INTERNAL_HEADERS,
             ) as client:
                 await client.post("/load_model", json={"mode": "sft"})
                 resp = await client.post(
@@ -1414,13 +1307,13 @@ def test_generate_acquires_and_releases_refcount(tmp_path: Path) -> None:
                 assert deps.cache.in_use_count("sft") == 0
         assert saw_in_use_one
 
-    _run(go())
+    run(go())
 
 
 def test_generate_releases_refcount_on_runner_exception(tmp_path: Path) -> None:
     from acestep_worker.wrapper import lifespan
 
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
 
     async def failing_runner(
         store: TaskStore,
@@ -1444,7 +1337,7 @@ def test_generate_releases_refcount_on_runner_exception(tmp_path: Path) -> None:
             async with httpx.AsyncClient(
                 transport=transport,
                 base_url="http://test",
-                headers=_INTERNAL_HEADERS,
+                headers=INTERNAL_HEADERS,
             ) as client:
                 await client.post("/load_model", json={"mode": "sft"})
                 resp = await client.post(
@@ -1458,11 +1351,11 @@ def test_generate_releases_refcount_on_runner_exception(tmp_path: Path) -> None:
                     await asyncio.sleep(0.01)
                 assert deps.cache.in_use_count("sft") == 0
 
-    _run(go())
+    run(go())
 
 
 def test_evict_endpoint_409_when_in_use(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
+    deps, _ = make_deps(tmp_path)
     app = create_app(deps)
     with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
@@ -1470,7 +1363,7 @@ def test_evict_endpoint_409_when_in_use(tmp_path: Path) -> None:
         async def hold():
             await deps.cache.acquire_for_use("sft")
 
-        _run(hold())
+        run(hold())
         resp = client.post("/evict_model", json={"mode": "sft"})
         assert resp.status_code == 409
         assert "in use" in resp.json()["detail"]
@@ -1552,7 +1445,7 @@ async def _start_training_owner(
     runner: Callable[..., Awaitable[None]],
     renewal: Callable[[WorkerDeps], Awaitable[None]],
 ) -> _TrainingOwner:
-    deps, redis = _make_deps(tmp_path)
+    deps, redis = make_deps(tmp_path)
     await deps.cache.load("sft")
     loaded = await deps.cache.acquire_for_use("sft")
     assert await reserve_gpu_hold(redis, deps.worker_id, _TRAINING_HOLD_TOKEN, DEFAULT_TTL_SECONDS)
@@ -1582,7 +1475,7 @@ def test_training_owner_cancelled_again_while_training_stops_releases_everything
         await owner.ends_cancelled_with_everything_released()
         assert training.ended.is_set()
 
-    _run(go())
+    run(go())
 
 
 @pytest.mark.parametrize("owner_cancels", [2, 3, 5])
@@ -1607,7 +1500,7 @@ def test_training_owner_cancelled_repeatedly_keeps_everything_until_training_has
         await owner.ends_cancelled_with_everything_released()
         assert training.ended.is_set()
 
-    _run(asyncio.wait_for(go(), _HANG_GUARD_SECONDS))
+    run(asyncio.wait_for(go(), _HANG_GUARD_SECONDS))
 
 
 def test_training_owner_cancelled_while_cleanup_waits_for_renewal_releases_everything(
@@ -1623,4 +1516,4 @@ def test_training_owner_cancelled_while_cleanup_waits_for_renewal_releases_every
         await owner.ends_cancelled_with_everything_released()
         assert renewal.ended.is_set()
 
-    _run(go())
+    run(go())
