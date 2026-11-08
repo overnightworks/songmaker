@@ -1,0 +1,8 @@
+claim_id = "d970b00e82c44c0b892dc040fb732e48"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "288dcab5eaa30198436ed5c086d3cae90cc28649"
+branch = "claude/issue-2633-2481-s4b-task-overrides-get-their-cells"
+scope = [".github/workflows/ci.yml", "docs/acestep.md", "quality/baseline.toml", "tests/songmaker_cli/jobs/test_generation_task_overrides.py", "tests/songmaker_cli/test_jobs.py"]
+opened_commit = "50d2f3bec1e2b91df229dd3c481915a9c7ec7729"
+whole_reason = "Moving the override cells out of a module at its ceiling and adding the new ones beside them is one change: split, the new cells would have no module to join, and the ceiling, the doc sentences and the floor follow from the same cells."
