@@ -1,0 +1,8 @@
+claim_id = "438bb95d5fbd4ccea8be95abb895972b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "91f82b5f4da06dedc5d268cea6b34f9047993274"
+branch = "claude/issue-2683-c5-admin-cowriter-new-constants"
+scope = ["frontend/e2e", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/stores", "frontend/src/lib/utils", "frontend/src/routes"]
+opened_commit = "775d789bbfd9298c5964fa3a53f88b9fd9eac875"
+whole_reason = "One pure move: the families leave the catch-all together, and every caller re-points in the same change, or the build breaks."
