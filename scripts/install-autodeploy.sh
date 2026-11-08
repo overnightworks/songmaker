@@ -80,11 +80,11 @@ DEPLOY_SCRIPT="$SCRIPT_DIR/auto-deploy.sh"
 # either (or both) converges on one identical installed unit.
 ALERT_SERVICE_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"
 ALERT_SERVICE_TARGET="/etc/systemd/system/songmaker-alert@.service"
-ALERT_SCRIPT="$SCRIPT_DIR/alert.sh"
-# Sourced by alert.sh (and by auto-deploy.sh) for the .env keys that
+ALERT_SCRIPT="$SCRIPT_DIR/send_alert.sh"
+# Sourced by send_alert.sh (and by auto-deploy.sh) for the .env keys that
 # configure the channel — a checkout missing it has no alert channel at
 # all, which is exactly what must not be discovered during an outage.
-ALERT_CONFIG_LIB="$SCRIPT_DIR/alert-config.sh"
+ALERT_CONFIG_LIB="$SCRIPT_DIR/alert_config.sh"
 
 if [[ ! -f "$SERVICE_SOURCE" ]]; then
     echo "ERROR: $SERVICE_SOURCE not found." >&2
@@ -144,7 +144,7 @@ sed_escape_replacement() {
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
 ESCAPED_DEPLOY_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/auto-deploy.sh")"
-ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/alert.sh")"
+ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/send_alert.sh")"
 
 TMP_SERVICE="$(mktemp)"
 TMP_ALERT_SERVICE="$(mktemp)"
@@ -156,14 +156,14 @@ sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
     "$SERVICE_SOURCE" >"$TMP_SERVICE"
 
 # ExecStart carries fixed arguments after the script path (the alert
-# subject/body) — only the path prefix up to alert.sh itself is
+# subject/body) — only the path prefix up to send_alert.sh itself is
 # substituted, unlike the single-argument ExecStart above.
 sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
-    -e "s#^ExecStart=.*/scripts/alert\.sh#ExecStart=$ESCAPED_ALERT_SCRIPT#" \
+    -e "s#^ExecStart=.*/scripts/send_alert\.sh#ExecStart=$ESCAPED_ALERT_SCRIPT#" \
     -e "s#^User=.*#User=$ESCAPED_INSTALL_USER#" \
     "$ALERT_SERVICE_SOURCE" >"$TMP_ALERT_SERVICE"
 
-echo "Installing $ALERT_SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/alert.sh ..., User=$INSTALL_USER)..."
+echo "Installing $ALERT_SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/send_alert.sh ..., User=$INSTALL_USER)..."
 sudo install -m 0644 "$TMP_ALERT_SERVICE" "$ALERT_SERVICE_TARGET"
 
 echo "Installing $SERVICE_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/auto-deploy.sh, User=$INSTALL_USER)..."

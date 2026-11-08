@@ -110,7 +110,7 @@ CHECK_SCRIPT="$SCRIPT_DIR/check_agent_cli_mounts.sh"
 # from their own checkout.
 ALERT_SERVICE_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"
 ALERT_SERVICE_TARGET="$UNIT_DIR/songmaker-alert@.service"
-ALERT_SCRIPT="$SCRIPT_DIR/alert.sh"
+ALERT_SCRIPT="$SCRIPT_DIR/send_alert.sh"
 
 for required in "$SERVICE_SOURCE" "$PATH_SOURCE" "$TIMER_SOURCE" "$ALERT_SERVICE_SOURCE"; do
     if [[ ! -f "$required" ]]; then
@@ -136,13 +136,13 @@ sed_escape_replacement() {
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
 ESCAPED_MIRROR_SCRIPT="$(sed_escape_replacement "$MIRROR_SCRIPT")"
-ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/alert.sh")"
+ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/send_alert.sh")"
 ESCAPED_HOME="$(sed_escape_replacement "$INSTALL_HOME")"
 ESCAPED_MIRROR_DIR="$(sed_escape_replacement "$MIRROR_DIR")"
 ESCAPED_CHECK_SCRIPT="$(sed_escape_replacement "$CHECK_SCRIPT")"
 
 MIRROR_EXEC="$MIRROR_SCRIPT --home $INSTALL_HOME --mirror-dir $MIRROR_DIR"
-ALERT_EXEC_PREFIX="$PROJECT_ROOT/scripts/alert.sh"
+ALERT_EXEC_PREFIX="$PROJECT_ROOT/scripts/send_alert.sh"
 
 # The path unit's watches are compared as a SET, not one by one. Proving that
 # the three expected lines are present says nothing about a fourth: a foreign
@@ -207,7 +207,7 @@ sed -e "s#^\(Path[A-Za-z]*=\)/home/[^/]*/#\1$ESCAPED_HOME/#" \
     "$PATH_SOURCE" >"$TMP_PATH"
 
 sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
-    -e "s#^ExecStart=.*/scripts/alert\.sh#ExecStart=$ESCAPED_ALERT_SCRIPT#" \
+    -e "s#^ExecStart=.*/scripts/send_alert\.sh#ExecStart=$ESCAPED_ALERT_SCRIPT#" \
     -e "s#^User=.*#User=$ESCAPED_INSTALL_USER#" \
     "$ALERT_SERVICE_SOURCE" >"$TMP_ALERT_SERVICE"
 

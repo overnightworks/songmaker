@@ -18,8 +18,8 @@ from support.repository_root import REPOSITORY_ROOT
 
 AUTOSTART_FILES = (
     "agent_cli_paths.sh",
-    "alert-config.sh",
-    "alert.sh",
+    "alert_config.sh",
+    "send_alert.sh",
     "install-autostart.sh",
     "main_checkout.py",
     "songmaker-alert@.service",

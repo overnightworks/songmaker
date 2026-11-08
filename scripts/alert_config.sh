@@ -1,6 +1,6 @@
 #!/bin/bash
 # The one place that knows which .env keys configure the alert channel
-# (issue #333), sourced by both users of that answer: scripts/alert.sh,
+# (issue #333), sourced by both users of that answer: scripts/send_alert.sh,
 # which needs the values to send, and scripts/auto-deploy.sh, which only
 # needs to know whether a deploy is even possible before it starts
 # containers whose alertmanager refuses to run without them.
@@ -50,7 +50,7 @@ load_alert_config() {
 # One line of a curl config file (`curl --config <file>`) carrying the SMTP
 # credentials. This exists so the password never travels in argv, where
 # `ps` and /proc expose it to every user on the host for the duration of
-# the send — see how scripts/alert.sh feeds the result to curl on a file
+# the send — see how scripts/send_alert.sh feeds the result to curl on a file
 # descriptor.
 #
 # curl's config parser treats a double-quoted value as escaped text: \\ is

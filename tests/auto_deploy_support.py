@@ -15,7 +15,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "auto-deploy.sh"
-ALERT_CONFIG_LIB = REPO_ROOT / "scripts" / "alert-config.sh"
+ALERT_CONFIG_LIB = REPO_ROOT / "scripts" / "alert_config.sh"
 PROMETHEUS_RULE_PATH = Path("monitoring/rules/alert.rules.yml")
 
 FAILURE_ALERT_THRESHOLD = 3
