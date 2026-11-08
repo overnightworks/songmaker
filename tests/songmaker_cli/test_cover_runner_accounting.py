@@ -22,8 +22,9 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 
 from songmaker_cli import cover_runner
 from songmaker_cli.constants import JobStatus, JobType
-from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, aware_timestamp
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
+from songmaker_cli.timestamps import aware_timestamp
 
 STARTED = datetime(2026, 10, 18, tzinfo=timezone.utc)
 GENERATED_PIXEL = (20, 80, 160)
