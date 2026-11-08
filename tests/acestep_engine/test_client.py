@@ -146,7 +146,7 @@ def test_poll_result_success() -> None:
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
-        result = client._poll_result("abc")
+        result = client._poll_result("abc", on_progress=lambda _progress: None)
 
     assert result is not None
     assert result.audio_path == "/v1/audio?path=test.wav"
@@ -174,7 +174,7 @@ def test_poll_result_surfaces_batch_reduction() -> None:
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
-        result = client._poll_result("abc")
+        result = client._poll_result("abc", on_progress=lambda _progress: None)
 
     assert result.requested_batch_size == 2
     assert result.delivered_batch_size == 1
@@ -221,7 +221,7 @@ def _failed_generation(
         client = AceStepClient(host="127.0.0.1", port=boundary.port)
         config = AceStepConfig(prompt="test", lyrics="")
         with pytest.raises(error_type) as excinfo:
-            client.generate(config)
+            client.generate(config, on_progress=lambda _progress: None)
     return excinfo
 
 
@@ -331,7 +331,7 @@ def test_poll_result_completed_no_audio() -> None:
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
         with pytest.raises(GenerationFailedError, match="no audio returned"):
-            client._poll_result("abc")
+            client._poll_result("abc", on_progress=lambda _progress: None)
 
 
 def test_poll_result_timeout() -> None:
@@ -356,7 +356,7 @@ def test_poll_result_timeout() -> None:
     ):
         mock_urlopen.return_value = _mock_response(response_data)
         with pytest.raises(GenerationTimeoutError, match="timed out"):
-            client._poll_result("abc")
+            client._poll_result("abc", on_progress=lambda _progress: None)
 
 
 def test_download_audio_success() -> None:
@@ -420,7 +420,7 @@ def test_generate_full_flow() -> None:
             _mock_response(poll_resp),
             _mock_response(wav_header),
         ]
-        result = client.generate(config)
+        result = client.generate(config, on_progress=lambda _progress: None)
 
     assert result.seed == 7
     assert len(result.wav_bytes) > 44
@@ -457,7 +457,7 @@ def test_generate_full_flow_surfaces_batch_reduction() -> None:
             _mock_response(poll_resp),
             _mock_response(wav_header),
         ]
-        result = client.generate(config)
+        result = client.generate(config, on_progress=lambda _progress: None)
 
     assert result.requested_batch_size == 2
     assert result.delivered_batch_size == 1
@@ -626,7 +626,7 @@ def test_poll_result_empty_data_continues() -> None:
             _mock_response(empty_resp),
             _mock_response(success_resp),
         ]
-        result = client._poll_result("abc")
+        result = client._poll_result("abc", on_progress=lambda _progress: None)
 
     assert result.audio_path == "/v1/audio?path=test.wav"
     assert result.seed == 42
@@ -715,7 +715,7 @@ def test_poll_result_keyboard_interrupt() -> None:
     ):
         mock_urlopen.side_effect = KeyboardInterrupt
         with pytest.raises(KeyboardInterrupt):
-            client._poll_result("abc")
+            client._poll_result("abc", on_progress=lambda _progress: None)
 
 
 # ── poll transient error retries ───────────────────────────────────
@@ -739,7 +739,7 @@ def test_poll_result_retries_on_transient_error() -> None:
             URLError("transient error"),
             _mock_response(success_resp),
         ]
-        result = client._poll_result("abc")
+        result = client._poll_result("abc", on_progress=lambda _progress: None)
 
     assert result.audio_path == "/v1/audio?path=test.wav"
     assert result.seed == 1

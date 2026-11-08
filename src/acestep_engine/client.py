@@ -95,7 +95,7 @@ def _completed_poll_result(entry: TaskQueryEntry, started_at: float) -> _PollRes
 def _report_poll_progress(
     entry: TaskQueryEntry,
     started_at: float,
-    on_progress: Callable[[AceStepProgress], None] | None,
+    on_progress: Callable[[AceStepProgress], None],
 ) -> None:
     elapsed = time.monotonic() - started_at
     log.info("ACE-Step: %s", entry.progress_text or f"generating ({elapsed:.0f}s)")
@@ -104,8 +104,7 @@ def _report_poll_progress(
     if progress is None:
         log.warning("ACE-Step running entry carries no progress value: %s", entry.result)
         return
-    if on_progress is not None:
-        on_progress(progress)
+    on_progress(progress)
 
 
 def _generation_failure(entry: TaskQueryEntry) -> GenerationFailedError:
@@ -309,7 +308,7 @@ class AceStepClient:
             lyrics="[verse]\\nHello world",
             bpm=72,
             audio_duration=30,
-        ))
+        ), on_progress=show_progress)
     """
 
     def __init__(self, host: str, port: int) -> None:
@@ -317,7 +316,7 @@ class AceStepClient:
 
     def generate(
         self, config: AceStepConfig,
-        on_progress: Callable[[AceStepProgress], None] | None = None,
+        on_progress: Callable[[AceStepProgress], None],
     ) -> AceStepResult:
         """Generate music via ACE-Step and return audio samples.
 
@@ -462,7 +461,7 @@ class AceStepClient:
 
     def _poll_result(
         self, task_id: str,
-        on_progress: Callable[[AceStepProgress], None] | None = None,
+        on_progress: Callable[[AceStepProgress], None],
     ) -> _PollResult:
         """Poll until the generation task completes.
 
@@ -501,7 +500,7 @@ class AceStepClient:
         self,
         payload: bytes,
         started_at: float,
-        on_progress: Callable[[AceStepProgress], None] | None,
+        on_progress: Callable[[AceStepProgress], None],
     ) -> _PollResult | None:
         response = self._query_task_result(payload)
         if not response.data:
