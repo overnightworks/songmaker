@@ -1,0 +1,8 @@
+claim_id = "b62364a230ca4d50a76e3bc4791545ac"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "ce236aed646af30563a0289b3758afc8512df2a4"
+branch = "claude/issue-2665-v010-f1a-alert-script-names"
+scope = ["docker-compose.yml", "docker/.env.docker.example", "docs/architecture.md", "monitoring/alertmanager.yml.template", "monitoring/prometheus.yml", "scripts", "src/songmaker_cli/settings.py", "tests/auto_deploy_support.py", "tests/scripts/test_create_backup_links.py", "tests/test_alert_script.py", "tests/test_auto_deploy_alerting.py", "tests/test_install_autostart.py", "tests/test_install_cli_credentials_mirror.py"]
+opened_commit = "8fc4e13e1ceea5e9594580e457ea1ddbf2b8f8a7"
+whole_reason = "A renamed script's callers, the three installers' ExecStart rewrite and the unit template change in one slice, or a reinstall writes a unit that runs a missing file."
