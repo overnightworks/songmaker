@@ -40,12 +40,12 @@
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
 "frontend/src/lib/share/sharePlayback.test.ts" = 837
 "frontend/src/lib/stores/jobs.test.ts" = 906
-"frontend/src/lib/stores/libraryContext.test.ts" = 2092
-"frontend/src/lib/stores/libraryContext.ts" = 1192
+"frontend/src/lib/stores/libraryContext.test.ts" = 2087
+"frontend/src/lib/stores/libraryContext.ts" = 1189
 "frontend/src/lib/stores/navigation.test.ts" = 2971
 "frontend/src/lib/stores/player.test.ts" = 5277
 "frontend/src/lib/stores/player.ts" = 2236
-"frontend/src/lib/stores/resourceSync.test.ts" = 2034
+"frontend/src/lib/stores/resourceSync.test.ts" = 2032
 "frontend/src/lib/stores/resourceSync.ts" = 1058
 "frontend/src/routes/layout.test.ts" = 1404
 "frontend/src/routes/settings/users/+page.svelte" = 946

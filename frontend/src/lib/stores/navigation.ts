@@ -489,18 +489,11 @@ function settleSongAddress(songId: string): void {
 	void replaceLibraryHistory();
 }
 
-// Leaves a song the server no longer has, but only while the person is still
-// there: the selection names it, or nothing is selected and the standing
-// library entry names it (a Back or Forward onto the entry of a song deleted
-// meanwhile, whose selection the restore already cleared). A selection of
-// another song is a newer choice that wins over this late 404.
+// Leaves a song the server no longer has, but only while the selection still
+// names it: a selection of another song, or none, is a newer choice that wins
+// over this late 404.
 export function leaveGoneSong(songId: string): void {
-	const selected = get(selectedSongId);
-	if (selected !== null && selected !== songId) return;
-	if (selected === null) {
-		const standing = currentLibraryHistoryState();
-		if (!isLibraryHistoryState(standing) || standing.songId !== songId) return;
-	}
+	if (get(selectedSongId) !== songId) return;
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
