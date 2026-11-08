@@ -1,8 +1,0 @@
-claim_id = "6c683ca1612f48f3a5c70b5d2bde7b76"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "91f82b5f4da06dedc5d268cea6b34f9047993274"
-branch = "claude/issue-2694-signal-extra-scorers-measured"
-scope = [".github/workflows/ci.yml", "docs/testing.md", "pyproject.toml", "tests/songmaker_cli/test_scoring_scorers_extended.py", "tests/test_packaging_boundary.py", "uv.lock"]
-opened_commit = "5eef019014e1cccba3a78f00aee9e2d0d95adbb0"
-whole_reason = "The extra, its lock and the CI install change together, or CI installs an extra the lock does not know."
