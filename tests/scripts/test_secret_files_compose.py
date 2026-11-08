@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from support.compose_config import run_compose_config
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 import secret_files  # noqa: E402 - needs scripts on sys.path first
 
