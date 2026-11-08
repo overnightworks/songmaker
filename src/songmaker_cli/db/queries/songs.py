@@ -6,7 +6,7 @@ import contextlib
 import logging
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Final
 
 from sqlalchemy import func, update
@@ -21,7 +21,6 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.activity import record_song_edit
-from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
 from songmaker_cli.db.queries.generations import (
     ArchivedTakeError,
     delete_takes,
@@ -40,9 +39,8 @@ from songmaker_cli.db.queries.sharing import (
     enable_sharing,
     playable_take_filter,
 )
-from songmaker_cli.db.soft_delete import include_deleted
+from songmaker_cli.db.soft_delete import ensure_within_restore_window, include_deleted
 from songmaker_cli.invariants import expect_present
-from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -533,14 +531,7 @@ def restore_song(session: Session, song_id: str) -> Song:
         raise ValueError(f"Song not found: {song_id}")
     if song.deleted_at is None:
         return song
-    deleted_at = song.deleted_at
-    age = datetime.now(timezone.utc) - deleted_at
-    window = timedelta(days=get_settings().final_deletion_days)
-    if age > window:
-        raise RestoreWindowExpiredError(
-            f"Song {song_id} was deleted {age.days} days ago, "
-            f"past the {window.days}-day restore window",
-        )
+    ensure_within_restore_window("Song", song_id, song.deleted_at)
     album = (
         session.query(Album)
         .execution_options(include_deleted=True)

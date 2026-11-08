@@ -26,7 +26,6 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.albums import (
-    RestoreWindowExpiredError,
     delete_album,
     enable_album_sharing,
     get_album,
@@ -49,6 +48,7 @@ from songmaker_cli.db.queries.songs import (
     restore_song,
     soft_delete_song,
 )
+from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
 from songmaker_cli.settings import get_settings
 
 RESTORE_WINDOW = timedelta(days=get_settings().final_deletion_days)
@@ -361,21 +361,34 @@ def test_api_restore_album_round_trip(tmp_path: Path, pg_factory) -> None:
     assert client.get("/api/albums").json()["total"] == 1
 
 
-def test_api_restore_album_410_after_window(tmp_path: Path, pg_factory) -> None:
+@pytest.mark.parametrize(
+    ("entity", "model", "row_id"),
+    [
+        pytest.param("albums", Album, "rock", id="album"),
+        pytest.param("songs", Song, "s1", id="song"),
+    ],
+)
+def test_api_restore_410_after_window(
+    tmp_path: Path, pg_factory, entity: str, model: type, row_id: str,
+) -> None:
     client = _make_client(tmp_path, pg_factory)
-    client.delete("/api/albums/rock")
+    client.delete(f"/api/{entity}/{row_id}")
     factory = client.app.state.ctx.db
+
+    def query(session: Session):
+        return session.query(model).execution_options(include_deleted=True).filter_by(id=row_id)
+
     with factory() as session:
-        album = (
-            session.query(Album)
-            .execution_options(include_deleted=True)
-            .filter_by(id="rock")
-            .first()
+        query(session).one().deleted_at = (
+            datetime.now(timezone.utc) - RESTORE_WINDOW - timedelta(hours=1)
         )
-        album.deleted_at = datetime.now(timezone.utc) - RESTORE_WINDOW - timedelta(hours=1)
         session.commit()
-    r = client.post("/api/albums/rock/restore")
+    r = client.post(f"/api/{entity}/{row_id}/restore")
     assert r.status_code == 410
+    assert f"{row_id} was deleted" in r.json()["detail"]
+    assert "restore window" in r.json()["detail"]
+    with factory() as session:
+        assert query(session).one().deleted_at is not None
 
 
 def test_api_restore_song_round_trip(tmp_path: Path, pg_factory) -> None:

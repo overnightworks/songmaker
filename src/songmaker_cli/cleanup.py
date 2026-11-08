@@ -30,6 +30,7 @@ from songmaker_cli.db.queries.generations import (
 from songmaker_cli.db.queries.jobs import ActiveJobError
 from songmaker_cli.db.queries.reference_recordings import linked_reference_ids
 from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list_song_ids_for_albums
+from songmaker_cli.db.soft_delete import soft_delete_cutoff
 from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.settings import get_settings
 
@@ -127,9 +128,7 @@ def run_cleanup_expired(db_factory, audio_dir) -> tuple[int, int]:
     references the deleted songs alone linked are stamped unused; a failed stamp
     changes neither the counts nor the file removals.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(
-        days=get_settings().final_deletion_days,
-    )
+    cutoff = soft_delete_cutoff(datetime.now(timezone.utc))
     with db_factory() as session:
         purge = _purge_expired(session, cutoff)
         session.commit()
