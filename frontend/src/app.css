@@ -71,6 +71,9 @@
 	--score-ok: #b07000;
 	--score-bad: var(--text-muted);
 	--success: #1e7a1e;
+	--warn-ink: #a86400;
+	--warn-bg: rgba(220, 140, 20, 0.15);
+	--warn-line: rgba(220, 140, 20, 0.5);
 	--viz-accent-r: 122;
 	--viz-accent-g: 24;
 	--viz-accent-b: 192;
@@ -143,6 +146,7 @@ html[data-transport-bar='hidden'] {
 	--score-ok-bg: #2a1f10;
 	--score-ok: #f0a030;
 	--success: #4a4;
+	--warn-ink: #f0a030;
 	--viz-accent-r: 180;
 	--viz-accent-g: 92;
 	--viz-accent-b: 245;
@@ -166,6 +170,7 @@ html[data-transport-bar='hidden'] {
 		--score-ok-bg: #2a1f10;
 		--score-ok: #f0a030;
 		--success: #4a4;
+		--warn-ink: #f0a030;
 		--viz-accent-r: 180;
 		--viz-accent-g: 92;
 		--viz-accent-b: 245;
