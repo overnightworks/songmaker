@@ -1,8 +1,0 @@
-claim_id = "abbb3c94eaa444c7a90438b20b261378"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "91f82b5f4da06dedc5d268cea6b34f9047993274"
-branch = "claude/issue-2681-four-twins-fold-into-owners"
-scope = ["src/songmaker_cli/acestep_state.py", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/settings.py", "src/songmaker_cli/lifecycle.py"]
-opened_commit = "c6d331c5b57f54d0a77f10463e4725c151f0f692"
-whole_reason = "The audit's entry names four trivial same-module folds as one unit; each alone would cost a full review and CI cycle for a few lines."
