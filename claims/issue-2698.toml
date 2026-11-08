@@ -1,0 +1,8 @@
+claim_id = "7ee88c1e32b7406193ff62b54f603cb5"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2a750e83a1325197d4b886c04133c40e7f6692bc"
+branch = "claude/issue-2698-worker-request-headers-one-builder"
+scope = ["src/songmaker_cli/admin_api.py", "src/songmaker_cli/jobs/lora_training.py", "src/songmaker_cli/jobs/model_lifecycle.py", "src/songmaker_cli/scheduler.py", "tests/songmaker_cli"]
+opened_commit = "82b6b116fc7572afc5b5ceeaec8d05c557f1b46b"
+whole_reason = "One rename of the header builder changes every caller in the same change, or a caller imports a name that no longer exists."
