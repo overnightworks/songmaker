@@ -5,9 +5,6 @@
 # Usage:
 #   ./scripts/create_backup.sh                          # uses default /mnt/backup/songmaker
 #   BACKUP_DIR=/media/usb/songmaker ./scripts/create_backup.sh
-#
-# Cron (daily at 3am):
-#   0 3 * * * cd /home/felix-hummert/srv/songmaker && ./scripts/create_backup.sh >> /var/log/songmaker-backup.log 2>&1
 
 set -euo pipefail
 

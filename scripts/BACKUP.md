@@ -1,5 +1,7 @@
 # Backup & Restore
 
+Songmaker's scheduled backup is `hal backup`, described in hal's `docs/backup.md`. The scripts here make and restore a manual copy only.
+
 Backs up PostgreSQL + audio files together. Both must be restored as a pair — one without the other leaves the system broken.
 
 ## Setup
@@ -55,21 +57,6 @@ Pruning deletes every directory directly under `BACKUP_DIR` older than `RETENTIO
 ```bash
 BACKUP_DIR=/mnt/backup/songmaker-cutover RETENTION_DAYS=0 ./scripts/create_backup.sh
 ```
-
-## Automatic Daily Backup (cron)
-
-```bash
-# Add to cron (runs daily at 3am)
-echo '0 3 * * * cd /home/felix-hummert/srv/songmaker && BACKUP_DIR=/mnt/backup/songmaker ./scripts/create_backup.sh >> /var/log/songmaker-backup.log 2>&1' | sudo tee /etc/cron.d/songmaker-backup
-```
-
-Make sure your external drive auto-mounts on boot. Add to `/etc/fstab`:
-
-```
-UUID=YOUR-DRIVE-UUID  /mnt/backup  ext4  defaults,nofail  0  2
-```
-
-The `nofail` flag means the system still boots if the drive is unplugged. The backup script will exit with an error if the directory doesn't exist.
 
 ## Restore
 
