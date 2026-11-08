@@ -1,0 +1,8 @@
+claim_id = "8ba185d725e14b9690f8e3ae30fd5cae"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "67271cc35ee3dfd1d041126acbcc090f6848a782"
+branch = "claude/issue-2603-g2c-the-library-cursor-and-the-activity"
+scope = ["src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/activity.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/db/queries/library.py", "src/songmaker_cli/timestamps.py", "tests/songmaker_cli/test_cover_runner_accounting.py", "tests/songmaker_cli/test_db.py"]
+opened_commit = "f2b504808db72bf2ad7f369f0ab6826a76d23700"
+whole_reason = "The last stored-timestamp calls, the helper's docstring and the re-export's importers move together; removing the re-export without moving its importers breaks the import graph."
