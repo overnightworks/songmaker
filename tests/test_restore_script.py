@@ -1,4 +1,4 @@
-"""Behavioral tests for scripts/restore.sh and the retention switch of scripts/backup.sh.
+"""Behavioral tests for scripts/restore_backup.sh and the retention switch of create_backup.sh.
 
 A fake ``docker`` executable is placed first on PATH; it records its arguments
 and can be told to fail on a matching command, so no real Docker is touched.
@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-RESTORE_SCRIPT = REPO_ROOT / "scripts" / "restore.sh"
-BACKUP_SCRIPT = REPO_ROOT / "scripts" / "backup.sh"
+RESTORE_SCRIPT = REPO_ROOT / "scripts" / "restore_backup.sh"
+BACKUP_SCRIPT = REPO_ROOT / "scripts" / "create_backup.sh"
 
 FAKE_DOCKER = """#!/bin/bash
 echo "$*" >> "$FAKE_LOG"

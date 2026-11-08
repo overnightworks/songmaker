@@ -46,8 +46,8 @@ RUN uv sync --frozen --no-dev --extra server --extra agent --extra image
 
 COPY --from=frontend-builder /app/frontend/build frontend/build
 
-COPY docker/docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+COPY docker/scripts/start_web_server.sh /app/start_web_server.sh
+RUN chmod +x /app/start_web_server.sh
 
 # Uid and gid 1000 own the volumes and the checkpoints bind mount, and Kubernetes' runAsNonRoot
 # can verify only a numeric USER.
@@ -69,4 +69,4 @@ USER 1000:1000
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/app/start_web_server.sh"]

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs pytest against a disposable PostgreSQL, then removes it.
 # Usage: scripts/test_postgresql.sh <test files and pytest arguments>
-#   PYTEST_XDIST_AUTO_NUM_WORKERS=4 scripts/test_postgresql.sh tests/songmaker_cli/test_lock_guard_postgres.py -q
+#   PYTEST_XDIST_AUTO_NUM_WORKERS=4 scripts/test_postgresql.sh tests/songmaker_cli/test_api_helpers_lock_guard_postgres.py -q
 #
 # The container runs Compose's PostgreSQL image pin on a free loopback port, on tmpfs,
 # without durability and without any deployment configuration or volume; every value

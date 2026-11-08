@@ -321,11 +321,11 @@ services:
       - smtp_password
     volumes:
       - ./monitoring/alertmanager.yml.template:/etc/alertmanager/alertmanager.yml.template:ro
-      - ./monitoring/alertmanager-entrypoint.sh:/etc/alertmanager/entrypoint.sh:ro
+      - ./monitoring/scripts/start_alertmanager.sh:/etc/alertmanager/entrypoint.sh:ro
       - alertmanagerdata:/alertmanager
     # The image's own ENTRYPOINT is /bin/alertmanager; entrypoint: replaces
     # it entirely so the SMTP config can be assembled first (see
-    # monitoring/alertmanager-entrypoint.sh, which then execs the real
+    # monitoring/scripts/start_alertmanager.sh, which then execs the real
     # binary). Confirmed against prom/alertmanager:latest that /bin/sh,
     # /bin/sed and /bin/amtool all exist in this image — no envsubst, sed
     # substitution instead, and amtool validates the result before the

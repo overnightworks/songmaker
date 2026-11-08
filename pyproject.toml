@@ -77,7 +77,7 @@ dev = [
     "ruff>=0.4,<1",
     "import-linter>=2.0,<3",
     "fakeredis[lua]>=2.0,<3",
-    # Reads back what monitoring/alertmanager-entrypoint.sh generates, so
+    # Reads back what monitoring/scripts/start_alertmanager.sh generates, so
     # its escaping is asserted against a real YAML parser instead of
     # against matching text (issue #333).
     "pyyaml>=6.0,<7",
