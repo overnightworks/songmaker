@@ -1,0 +1,8 @@
+claim_id = "a843d8ae00fe49f8893f8ec476300c2a"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "91f82b5f4da06dedc5d268cea6b34f9047993274"
+branch = "claude/issue-2678-restore-purge-one-window"
+scope = ["src/songmaker_cli/album_api.py", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/db/soft_delete.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli"]
+opened_commit = "cd1e4cb6207a283995160cf1ed0d4e259013b9ff"
+whole_reason = "The restore check, the purge cutoff and the error's importers change together, or restore and purge read the window from different owners."
