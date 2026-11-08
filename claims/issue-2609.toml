@@ -1,8 +1,0 @@
-claim_id = "f66763e645b84215a8e7c4c8997d1cd9"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "67271cc35ee3dfd1d041126acbcc090f6848a782"
-branch = "claude/issue-2609-retired-routes-share-one-test-table-an-u"
-scope = ["docs/architecture.md", "docs/security.md", "src/acestep_worker/task_store.py", "tests/acestep_worker/test_task_store.py", "tests/acestep_worker/test_wrapper_train_lora.py", "tests/conftest.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_conversation_api_offer_removed.py", "tests/songmaker_cli/test_cowriter_settings_api.py", "tests/songmaker_cli/test_retired_routes.py", "tests/songmaker_cli/test_song_api.py"]
-opened_commit = "e44d9d6590afd01fd2306b73dea1b172c03b27c8"
-whole_reason = "Four small deadweight entries of one audit, bundled so one builder and one review clear them; only one production file changes."
