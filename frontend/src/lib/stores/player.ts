@@ -69,20 +69,20 @@ import {
 } from '#lib/stores/playbackResume.ts';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
-	QUEUE_STREAM_EMPTY_POOL_PREFIX,
-	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
-	QUEUE_TAKE_MISSING_TOAST,
 	PLAYLIST_LOADING_LABEL,
-	LIBRARY_PAGE_LABEL,
-	SHUFFLE_SCOPE_ALBUM,
-	SHUFFLE_SCOPE_LIBRARY,
-	SHUFFLE_SCOPE_PLAYLIST
+	LIBRARY_PAGE_LABEL
 } from '#lib/constants.ts';
 import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 	type NowPlayingSurfaceKind,
-	type PlaybackSource
+	type PlaybackSource,
+	QUEUE_STREAM_EMPTY_POOL_PREFIX,
+	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
+	QUEUE_TAKE_MISSING_TOAST,
+	SHUFFLE_SCOPE_ALBUM,
+	SHUFFLE_SCOPE_LIBRARY,
+	SHUFFLE_SCOPE_PLAYLIST
 } from '#lib/constants/now-playing.ts';
 import { shuffled } from '#lib/utils/shuffle.ts';
 import { readStorage, writeStorage } from '#lib/utils/storage.ts';

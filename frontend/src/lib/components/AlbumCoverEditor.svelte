@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { ApiError, NetworkError, describeFailure } from '#lib/api/fetch.ts';
+	import { RATE_LIMITED_STATUS } from '#lib/constants/http.ts';
 	import { createAlbumCoverSuggestions, selectAlbumCoverSuggestion } from '#lib/api/albums.ts';
 	import type { AlbumItem } from '#lib/api/types.ts';
 	import {
-		RATE_LIMITED_STATUS,
 		albumCoverStageLabel,
 		albumCoverSuggestionAlt,
 		albumCoverSuggestionPosition,

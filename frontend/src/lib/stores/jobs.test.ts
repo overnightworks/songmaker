@@ -1,4 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import {
+	GENERATE_TAKE_ARRIVAL_WAIT_MS,
+	JOB_STREAM_MAX_CONNECTION_ERRORS
+} from '#lib/constants/jobs.ts';
 import { get } from 'svelte/store';
 
 const VRAM_CAUSE =
@@ -36,8 +40,6 @@ import { reportResourceStreamReachable, resetConnectivityForTests } from './conn
 import type { JobStatus } from '#lib/api/client.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {
-	GENERATE_TAKE_ARRIVAL_WAIT_MS,
-	JOB_STREAM_MAX_CONNECTION_ERRORS,
 	SSE_IMMEDIATE_REOPEN_MIN_GAP_MS,
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
@@ -708,14 +710,6 @@ describe('jobs store', () => {
 		latestSource().simulateMessage(makeJob({ type: 'score', status: 'completed' }));
 		await vi.advanceTimersByTimeAsync(0);
 		expect(mockRequestSongRefresh).not.toHaveBeenCalled();
-	});
-
-	it('removeJob closes EventSource and removes from store', () => {
-		trackJob(makeJob(), {});
-		const source = latestSource();
-		removeJob('j1');
-		expect(source.closed).toBe(true);
-		expect(get(activeJobs)).toHaveLength(0);
 	});
 
 	it('removeJob closes EventSource and removes the job from the store', () => {

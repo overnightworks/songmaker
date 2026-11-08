@@ -1,4 +1,5 @@
 import { derived, get, writable } from 'svelte/store';
+import { JOB_TYPE_SCORE } from '#lib/constants/jobs.ts';
 import { describeFailure } from '#lib/api/fetch.ts';
 import {
 	fetchSong,
@@ -10,7 +11,7 @@ import {
 	unkeepGeneration,
 	unpickGeneration
 } from '#lib/api/client.ts';
-import { JOB_TYPE_SCORE, TAKE_RESCORE_QUEUED_TOAST } from '#lib/constants.ts';
+import { TAKE_RESCORE_QUEUED_TOAST } from '#lib/constants.ts';
 import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
 import { upsertSongInList } from '#lib/stores/libraryData.ts';
 import { addToast } from '#lib/stores/toast.ts';

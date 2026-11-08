@@ -1,4 +1,5 @@
 import { scrollWallTo } from './wall-scroll';
+import { SIGN_IN_NEXT_PARAM } from '../src/lib/constants/auth';
 import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // Home at `/` and the Library at `/library` (#1506, #1354 rules 25, 31 and 40),
 // driven the way a person reaches them: a pasted address, the brand, the word
@@ -20,8 +21,7 @@ import {
 	LIBRARY_NEW_MENU_LABEL,
 	PLAYLISTS_PAGE_LABEL,
 	LIBRARY_PAGE_LABEL,
-	RAIL_SETTINGS_LABEL,
-	SIGN_IN_NEXT_PARAM
+	RAIL_SETTINGS_LABEL
 } from '../src/lib/constants';
 import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';

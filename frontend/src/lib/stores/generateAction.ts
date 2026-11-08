@@ -1,4 +1,5 @@
 import { derived, get, readable, writable } from 'svelte/store';
+import { JOB_TYPE_GENERATE } from '#lib/constants/jobs.ts';
 import { cancelJob, generateSong } from '#lib/api/client.ts';
 import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
 import {
@@ -12,8 +13,7 @@ import {
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_QUEUED_LABEL,
 	EDITOR_SELECT_MODEL_TITLE,
-	GENERATION_PHASE_LABELS,
-	JOB_TYPE_GENERATE
+	GENERATION_PHASE_LABELS
 } from '#lib/constants.ts';
 import { describeFailure } from '#lib/api/fetch.ts';
 import { formatTime } from '#lib/utils/format.ts';
