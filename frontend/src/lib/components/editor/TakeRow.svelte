@@ -563,9 +563,9 @@
 		padding: 0.1rem 0.35rem;
 		border-radius: 3px;
 		letter-spacing: 0.3px;
-		background: rgba(220, 140, 20, 0.15);
-		border: 1px solid rgba(220, 140, 20, 0.5);
-		color: #f0a030;
+		background: var(--warn-bg);
+		border: 1px solid var(--warn-line);
+		color: var(--warn-ink);
 		white-space: nowrap;
 		flex-shrink: 0;
 	}
@@ -589,9 +589,9 @@
 	}
 
 	.expiry-badge.warn {
-		background: rgba(220, 140, 20, 0.15);
-		border: 1px solid rgba(220, 140, 20, 0.5);
-		color: #f0a030;
+		background: var(--warn-bg);
+		border: 1px solid var(--warn-line);
+		color: var(--warn-ink);
 	}
 
 	.expiry-badge.archived {

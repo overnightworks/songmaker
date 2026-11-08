@@ -22,11 +22,11 @@ DEAD_PRESET_ID = "00000000-0000-0000-0000-00000000dead"
 MODEL_DEFAULT_STEPS = get_builtin_defaults()["sft"]["inference_steps"]
 
 
-def _add_preset(seeded_db, *, steps: int, is_default: bool) -> str:
+def _add_preset(seeded_db, *, steps: int, is_default: bool, model_mode: str = "sft") -> str:
     with seeded_db() as session:
         preset = GenerationPreset(
             name=f"steps {steps}",
-            model_mode="sft",
+            model_mode=model_mode,
             params={"inference_steps": steps},
             is_default=is_default,
             created_by="u1",
@@ -76,6 +76,9 @@ def _own_preset_id(seeded_db) -> str:
         (True, "sft", MODEL_DEFAULT_STEPS),
         (True, "own", OWN_PRESET_STEPS),
         (True, "dead", DEFAULT_PRESET_STEPS),
+        (True, "turbo", DEFAULT_PRESET_STEPS),
+        (False, "turbo", MODEL_DEFAULT_STEPS),
+        (True, "other_model_own", DEFAULT_PRESET_STEPS),
     ],
     ids=[
         "no config uses the default preset",
@@ -83,6 +86,9 @@ def _own_preset_id(seeded_db) -> str:
         "a built-in key uses the built-in defaults",
         "an own preset uses its params",
         "a dead preset id means inherit",
+        "a built-in key of another model falls back to the default preset",
+        "a built-in key of another model and no default preset uses the model defaults",
+        "a preset of another model falls back to the default preset",
     ],
 )
 def test_the_worker_receives_the_effective_default(
@@ -92,6 +98,10 @@ def test_the_worker_receives_the_effective_default(
         _add_preset(seeded_db, steps=DEFAULT_PRESET_STEPS, is_default=True)
     if config == "own":
         config = _own_preset_id(seeded_db)
+    elif config == "other_model_own":
+        config = _add_preset(
+            seeded_db, steps=OWN_PRESET_STEPS, is_default=False, model_mode="turbo"
+        )
     elif config == "dead":
         config = DEAD_PRESET_ID
     _set_default_config(seeded_db, config)

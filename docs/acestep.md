@@ -360,7 +360,7 @@ For the cross-cutting flow (web → music-worker → acestep-worker), see [archi
 
 The user-facing ACE-Step knobs are stored in `Version.generation_params`, can be set per-model in admin defaults, and are merged into `AceStepConfig`.
 
-Priority: song params > preset params > admin defaults > model defaults. The preset layer is the person's default for new songs while it names a built-in or an existing preset, otherwise their default preset for the job's model. Top-level song/version fields (`bpm`, `audio_duration`, `key_scale`, `vocal_language`) are applied after that merge.
+Priority: song params > preset params > admin defaults > model defaults. The preset layer is the person's default for new songs while it names a built-in or an existing preset whose model mode equals the job's, otherwise their default preset for the job's model. Top-level song/version fields (`bpm`, `audio_duration`, `key_scale`, `vocal_language`) are applied after that merge.
 
 An optional submit key is sent only when it is set or differs from the protocol default. A repaint take always sends its range (`repainting_start`, `repainting_end`) and a cover take always sends `audio_cover_strength`.
 
