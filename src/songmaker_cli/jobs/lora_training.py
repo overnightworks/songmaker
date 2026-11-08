@@ -38,7 +38,7 @@ from songmaker_cli.constants import (
     LoraStatus,
     ResourceType,
 )
-from songmaker_cli.db.models import UserLora, aware_timestamp
+from songmaker_cli.db.models import UserLora
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.jobs import count_queued_generation_jobs, get_job
 from songmaker_cli.db.queries.loras import list_active_user_loras, update_user_lora
@@ -1240,7 +1240,6 @@ def _lora_queue_wait_seconds(
         if job is None:
             return None
         queued_at = job.started_at
-    queued_at = aware_timestamp(queued_at)
     return (datetime.now(timezone.utc) - queued_at).total_seconds()
 
 

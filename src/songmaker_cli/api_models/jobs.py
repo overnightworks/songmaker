@@ -15,7 +15,6 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.timestamps import aware_timestamp
 
 REMAINING_TIME_ESTIMATE_CALCULATING: Final = "calculating"
 RemainingTimeEstimate = int | Literal["calculating"]
@@ -40,7 +39,7 @@ def _generation_remaining_time(job, *, now: datetime) -> RemainingTimeEstimate:
         return 0
     if job.progress < GENERATION_ETA_MIN_PROGRESS or job.generation_started_at is None:
         return REMAINING_TIME_ESTIMATE_CALCULATING
-    elapsed_seconds = (now - aware_timestamp(job.generation_started_at)).total_seconds()
+    elapsed_seconds = (now - job.generation_started_at).total_seconds()
     if elapsed_seconds <= 0:
         return REMAINING_TIME_ESTIMATE_CALCULATING
     return ceil(elapsed_seconds * (1 - job.progress) / job.progress)
@@ -57,7 +56,7 @@ def _training_remaining_time(job, *, now: datetime) -> RemainingTimeEstimate:
         return REMAINING_TIME_ESTIMATE_CALCULATING
     if job.training_started_at is None:
         return REMAINING_TIME_ESTIMATE_CALCULATING
-    elapsed_seconds = (now - aware_timestamp(job.training_started_at)).total_seconds()
+    elapsed_seconds = (now - job.training_started_at).total_seconds()
     if elapsed_seconds <= 0:
         return REMAINING_TIME_ESTIMATE_CALCULATING
     seconds_per_epoch = elapsed_seconds / current_epoch
