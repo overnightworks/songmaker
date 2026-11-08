@@ -1,0 +1,7 @@
+claim_id = "2c1764a1cc4648029a1a07ef3384c039"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "625a8c17c36087b40d460a720c535e8abae47a9c"
+branch = "claude/issue-2708-s2-take-playlist-address-load"
+scope = ["frontend/src/lib/stores/libraryAddressOverlay.ts", "frontend/src/routes/(library)/album/[slug]/[song]/take/[n]/+page.svelte", "frontend/src/routes/(library)/playlist/[slug]/+page.svelte"]
+opened_commit = "1cd7724698c24ebabd73026704dfdea4f6401050"
