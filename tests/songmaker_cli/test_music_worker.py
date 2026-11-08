@@ -405,6 +405,32 @@ def test_reference_unused_cron_stamps_unused_rows_and_returns_the_changed_count(
     assert stamp is not None
 
 
+def test_reference_unused_cron_reconciles_before_it_deletes_and_counts_the_deletions(
+    tmp_path, monkeypatch,
+) -> None:
+    from songmaker_cli import reference_audio
+
+    calls: list[str] = []
+
+    def reconcile(_factory):
+        calls.append("reconcile")
+        return reference_audio.ReconciledStamps(stamped=2, cleared=1)
+
+    def delete(_factory, _audio_dir, **_kwargs):
+        calls.append("delete")
+        return reference_audio.AnnouncedDeletionReport(deleted=4, skipped=5, failed=6)
+
+    monkeypatch.setattr(reference_audio, "reconcile_unused_stamps", reconcile)
+    monkeypatch.setattr(reference_audio, "delete_announced_references", delete)
+    worker = MusicWorker(_settings().model_copy(update={"audio_dir": str(tmp_path)}))
+    worker.get_db_factory = MagicMock()
+
+    changed = _run(worker.reference_unused_cron(_mock_ctx()))
+
+    assert calls == ["reconcile", "delete"]
+    assert changed == 2 + 1 + 4
+
+
 def test_music_worker_settings_functions() -> None:
     from songmaker_cli.music_worker import MusicWorkerSettings
     func_names = {f.name for f in MusicWorkerSettings.functions}
