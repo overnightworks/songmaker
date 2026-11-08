@@ -173,7 +173,7 @@ def test_stale_own_job_does_not_block_generate_at_active_job_limit(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from songmaker_cli.constants import STALE_JOB_THRESHOLDS
+    from songmaker_cli.job_timing import STALE_JOB_THRESHOLDS
     from songmaker_cli.job_types import JobType
 
     monkeypatch.setenv("MAX_USER_ACTIVE_JOBS", "1")

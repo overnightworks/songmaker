@@ -36,7 +36,6 @@ from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_QUEUE_NAME,
     GENERATION_WAITING_FOR_LORA_QUEUE_REASON,
-    GPU_HOLD_POLL_INTERVAL_SECONDS,
     JOB_ERROR_GENERATION_CANCELLED,
     JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
     JOB_ERROR_SONG_NOT_FOUND,
@@ -60,6 +59,7 @@ from songmaker_cli.generate import (
 )
 from songmaker_cli.generation_params import BaseGenerationParams, stored_config_options
 from songmaker_cli.invariants import expect_present
+from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS
 from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
 from songmaker_cli.parser import AlbumMeta, SongMeta
 from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_linked_reference_audio

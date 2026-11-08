@@ -17,7 +17,6 @@ from songmaker_cli.acestep_state import decode_redis_text
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
-    JOB_REAPER_INTERVAL_SECONDS,
     REDIS_KEY_PREFIX,
     RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
     RESOURCE_EVENT_RETENTION_DAYS,
@@ -26,6 +25,7 @@ from songmaker_cli.health_types import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
 )
+from songmaker_cli.job_timing import JOB_REAPER_INTERVAL_SECONDS
 from songmaker_cli.job_types import JobType
 from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
