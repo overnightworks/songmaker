@@ -5,6 +5,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SYMLINK_MODE = "120000"
 EXECUTABLE_MODE = "100755"
@@ -43,13 +45,29 @@ def test_every_tracked_link_under_scripts_resolves_to_a_tracked_executable():
     assert broken_links(REPO_ROOT) == []
 
 
-def test_a_dangling_link_is_reported(tmp_path):
+NOT_EXECUTABLE = "does not resolve to a tracked executable file"
+
+
+@pytest.mark.parametrize(
+    ("link_target", "reason"),
+    [
+        ("missing.sh", NOT_EXECUTABLE),
+        ("plain.sh", NOT_EXECUTABLE),
+        ("untracked.sh", NOT_EXECUTABLE),
+        ("../outside.sh", "leaves scripts/"),
+    ],
+    ids=["dangling", "tracked-not-executable", "untracked", "outside-scripts"],
+)
+def test_a_link_that_is_not_a_tracked_executable_inside_scripts_is_reported(
+    tmp_path, link_target, reason
+):
     _git(tmp_path, "init", "-q")
     scripts = tmp_path / "scripts"
     scripts.mkdir()
-    (scripts / "gone.sh").symlink_to("missing.sh")
-    _git(tmp_path, "add", "scripts")
+    (scripts / "bad.sh").symlink_to(link_target)
+    (tmp_path / "outside.sh").write_text("")
+    (scripts / "untracked.sh").write_text("")
+    (scripts / "plain.sh").write_text("")
+    _git(tmp_path, "add", "scripts/bad.sh", "scripts/plain.sh")
 
-    assert broken_links(tmp_path) == [
-        "scripts/gone.sh does not resolve to a tracked executable file"
-    ]
+    assert broken_links(tmp_path) == [f"scripts/bad.sh {reason}"]
