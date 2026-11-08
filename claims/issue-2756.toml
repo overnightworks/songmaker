@@ -1,7 +1,0 @@
-claim_id = "6fabb08437e849ff80c0b97f67b7308a"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "34a264c1f6ab489c928e26fd3d946f8f53f03942"
-branch = "claude/issue-2756-finished-references-picture-leaves"
-scope = ["docs/mockups/references.html", "frontend/e2e/reference-picker.spec.ts", "frontend/e2e/references-list.spec.ts"]
-opened_commit = "f09da2d2e07ffd72f9df867f161425e46fcff137"
