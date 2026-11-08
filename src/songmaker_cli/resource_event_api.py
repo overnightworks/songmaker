@@ -24,22 +24,10 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth_dependencies import authenticate_request
 from songmaker_cli.constants import (
-    LAST_EVENT_ID_INVALID,
-    POSTGRES_BIGINT_MAX,
-    REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY,
-    REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX,
-    REDIS_RL_RESOURCE_STREAM_PREFIX,
-    RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE,
+    REDIS_KEY_PREFIX,
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
-    RESOURCE_EVENT_STREAM_LEASE_SECONDS,
-    RESOURCE_EVENT_STREAM_LIMIT_DETAIL,
-    RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE,
-    RESOURCE_EVENT_STREAM_MAX_GLOBAL,
-    RESOURCE_EVENT_STREAM_MAX_PER_USER,
     RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS,
-    RESOURCE_EVENT_STREAM_PAGE_SIZE,
     RESOURCE_EVENT_STREAM_PATH,
-    RESOURCE_EVENT_STREAM_POLL_SECONDS,
     SSE_HEARTBEAT_COMMENT,
     SSE_HEARTBEAT_SECONDS,
     ResourceEventKind,
@@ -60,6 +48,21 @@ _SSE_HEADERS = {
     "Cache-Control": "no-cache, no-store",
     "X-Accel-Buffering": "no",
 }
+RESOURCE_EVENT_STREAM_POLL_SECONDS: Final[float] = 1.0
+RESOURCE_EVENT_STREAM_PAGE_SIZE: Final[int] = 100
+RESOURCE_EVENT_STREAM_MAX_PER_USER: Final[int] = 6
+RESOURCE_EVENT_STREAM_MAX_GLOBAL: Final[int] = 12
+RESOURCE_EVENT_STREAM_LEASE_SECONDS: Final[int] = 65
+RESOURCE_EVENT_STREAM_LIMIT_DETAIL: Final[str] = "Too many resource streams"
+RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Resource stream limiter unavailable"
+RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE: Final[str] = (
+    "Resource stream unavailable: no spare database capacity"
+)
+LAST_EVENT_ID_INVALID: Final[str] = "Last-Event-ID must be a non-negative decimal"
+POSTGRES_BIGINT_MAX: Final[int] = (1 << 63) - 1
+REDIS_RL_RESOURCE_STREAM_PREFIX: Final[str] = "rl:resource-stream"
+REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX: Final[str] = f"{REDIS_KEY_PREFIX}:resource-stream:user"
+REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY: Final[str] = f"{REDIS_KEY_PREFIX}:resource-stream:global"
 LAST_EVENT_ID_OUT_OF_RANGE: Final[str] = "Last-Event-ID is beyond the event sequence range"
 
 

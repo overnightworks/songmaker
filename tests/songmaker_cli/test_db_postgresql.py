@@ -16,10 +16,10 @@ from support.repository_root import REPOSITORY_ROOT
 from support.web_app import make_authenticated_user, seed_user
 
 import songmaker_cli.db.queries.jobs as job_queries
-from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
+from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.database_url import POSTGRESQL_PSYCOPG2_DRIVERNAME, database_url_with_password
 from songmaker_cli.db.engine import init_db, resolve_database_url
 from songmaker_cli.db.models import (
@@ -569,7 +569,7 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
                 if session.new or session.dirty or session.deleted:
                     raise RuntimeError("session unexpectedly has pending changes")
                 session.commit()
-                _begin_exclusive(session, _USER_MANAGEMENT_LOCK_ID)
+                lock_until_transaction_ends(session, AdvisoryLock.USER_MANAGEMENT)
                 expires = datetime.now(timezone.utc) + timedelta(hours=1)
                 create_session(session, user_id, expires)
                 prune_overflow_sessions(session, user_id, max_sessions)
