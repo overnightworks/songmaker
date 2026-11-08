@@ -60,9 +60,6 @@ def master_stereo(
         3. LUFS normalization (streaming-ready loudness)
         4. Soft clipper (tanh saturation)
     """
-    if len(left) == 0 or len(right) == 0:
-        return left, right
-
     length_diff = abs(len(left) - len(right))
     if length_diff > CHANNEL_LENGTH_TOLERANCE:
         raise MasteringError(
