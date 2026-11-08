@@ -1,0 +1,7 @@
+claim_id = "76109dec422e4d8c8a17a447e90b8d11"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "26fdf71325444295bee31b0ae9d2bc09cd333612"
+branch = "claude/issue-2668-s11-delete-dialog-neutral-warning"
+scope = ["frontend/src/lib/components/ConfirmDeleteDialog.svelte"]
+opened_commit = "3210542683c8abb5b46ee42e53e5ec98f2e4de52"
