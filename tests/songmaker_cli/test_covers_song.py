@@ -22,24 +22,24 @@ from support.web_app import make_test_app, seed_session, seed_user, web_client
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
+    COVER_MAX_BYTES,
+    COVER_UPLOAD_BODY_MAX_BYTES,
+    COVER_VARIANT_CARD,
+    COVER_VARIANT_DETAIL,
+    JSON_REQUEST_BODY_MAX_BYTES,
+)
+from songmaker_cli.covers import (
     COVER_INVALID_SONG_ID,
     COVER_JPEG_EXTENSION,
     COVER_KEY_PNG,
-    COVER_MAX_BYTES,
     COVER_OLD_DIRNAME_SUFFIX,
     COVER_PNG_EXTENSION,
     COVER_STAGING_DIRNAME_SUFFIX,
     COVER_TOO_MANY_PIXELS,
     COVER_UNSUPPORTED_TYPE,
-    COVER_UPLOAD_BODY_MAX_BYTES,
-    COVER_VARIANT_CARD,
-    COVER_VARIANT_DETAIL,
     COVER_VARIANT_ORIGINAL,
     COVER_VARIANT_UNKNOWN,
-    JSON_REQUEST_BODY_MAX_BYTES,
     SONG_COVER_DIRNAME,
-)
-from songmaker_cli.covers import (
     CoverRejectedError,
     remove_song_cover_files,
     resolve_song_cover_file,
@@ -200,7 +200,7 @@ def test_upload_rejects_svg_and_webp(alice_app: tuple[TestClient, object]) -> No
 
 def test_upload_rejects_too_many_pixels(alice_app: tuple[TestClient, object]) -> None:
     client, _ = alice_app
-    from songmaker_cli.constants import COVER_MAX_PIXELS
+    from songmaker_cli.covers import COVER_MAX_PIXELS
 
     resp = client.post(
         "/api/songs/alice-song/cover",
