@@ -1,8 +1,0 @@
-claim_id = "d82cff9560ec4c0faf56f9e213068a3a"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "4911dadb03e0645b8995f59714fe3ebe2f2abc6d"
-branch = "claude/issue-2628-s8-the-co-writer-s-action-colour-turns-v"
-scope = ["frontend/src/lib/components/AgentProblemLine.svelte", "frontend/src/lib/components/AiNotice.svelte", "frontend/src/lib/components/ChatInput.svelte", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/MemoryEditor.svelte", "frontend/src/lib/components/MentionDropdown.svelte", "scripts/style-literals.txt"]
-opened_commit = "9fd590e1ad8c5293f232764f3255ec42ed54338d"
-whole_reason = "One surface family of one-token swaps proven by one co-writer drive per width and theme, as #2527's plan states for S5 to S9."
