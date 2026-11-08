@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 ENTRYPOINT = REPO_ROOT / "monitoring" / "scripts" / "start_alertmanager.sh"
 TEMPLATE = REPO_ROOT / "monitoring" / "alertmanager.yml.template"
 
