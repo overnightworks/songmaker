@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { PHONE_TABS, PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
+import { NOW_PLAYING_CLOSE } from '../src/lib/constants/now-playing';
 import {
-	NOW_PLAYING_CLOSE,
 	openNowPlayingLabel,
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,

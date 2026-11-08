@@ -21,11 +21,11 @@
 	import LoadFailure from '#lib/components/LoadFailure.svelte';
 	import ReferenceRow from '#lib/components/ReferenceRow.svelte';
 	import {
-		APP_NAME,
 		REFERENCE_AUDIO_ACCEPT,
 		REFERENCE_KEEP_FAILED,
 		REFERENCE_UNKEEP_FAILED
-	} from '#lib/constants.ts';
+	} from '#lib/constants/reference.ts';
+	import { APP_NAME } from '#lib/constants.ts';
 	import { createReferencePreview } from '#lib/services/referencePreview.svelte.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 

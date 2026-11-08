@@ -10,9 +10,10 @@
 		nowPlayingCurateProgress,
 		type NowPlayingSource,
 		type PlaybackSource,
-		takeVersion
+		takeVersion,
+		NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
+		NOW_PLAYING_NO_LYRICS
 	} from '#lib/constants/now-playing.ts';
-	import { NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS, NOW_PLAYING_NO_LYRICS } from '#lib/constants.ts';
 	import { albumList, songList } from '#lib/stores/libraryData.ts';
 	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
 	import {

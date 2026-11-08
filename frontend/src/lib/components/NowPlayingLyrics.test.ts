@@ -2,10 +2,10 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { WhisperCue } from '#lib/api/types.ts';
 import type { AlignmentRequest, AlignmentResult } from '#lib/services/lyricsAlignment.svelte.ts';
-import { NOW_PLAYING_LYRICS_FOLLOW_LABEL } from '#lib/constants.ts';
 import {
 	NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
-	NOW_PLAYING_RESCORE_ACTION_LABEL
+	NOW_PLAYING_RESCORE_ACTION_LABEL,
+	NOW_PLAYING_LYRICS_FOLLOW_LABEL
 } from '#lib/constants/now-playing.ts';
 import { alignLyricsToCues } from '#lib/utils/lyrics-align.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
