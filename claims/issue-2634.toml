@@ -1,8 +1,0 @@
-claim_id = "367fea89191944599a3e3527bc00bd60"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "1bbf9dda53f9cc46a7b45c74b292988d830a323e"
-branch = "claude/issue-2634-2481-s4a2-persistence-races-get-cells"
-scope = [".github/workflows/ci.yml", "quality/baseline.toml", "src/songmaker_cli/jobs/generation.py", "tests/songmaker_cli/jobs/test_generation_fetched_take.py"]
-opened_commit = "d5e77f238b80d729dd3c5da8c7916464cb9d6056"
-whole_reason = "Two cells, one docstring and the two numbers that follow them (the floor and the shrunk size entry) are one coverage slice; split, the docstring commit would leave the size gate red."
