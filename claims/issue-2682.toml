@@ -1,8 +1,0 @@
-claim_id = "069648303d0e41988b818246b548570b"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "91f82b5f4da06dedc5d268cea6b34f9047993274"
-branch = "claude/issue-2682-s6-acestep-submit-payload-cells"
-scope = ["docs/acestep.md", "src/acestep_engine/client.py", "tests/acestep_engine/test_client.py", "tests/acestep_engine/test_client_lora.py", "tests/acestep_engine/test_client_submit_payload.py"]
-opened_commit = "ba186f1f758dcd55eb4d3bbfdbad83aa36584517"
-whole_reason = "The guard's removal and the tests that call generate without a callback change together, or the suite breaks."
