@@ -22,6 +22,7 @@ from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song,
 from songmaker_cli.db.queries.reference_recordings import ReferenceLinkCounts
 from songmaker_cli.reference_audio import (
     AnnouncedDeletionReport,
+    RemovalOutcome,
     delete_announced_references,
     reconcile_reference_remnants,
 )
@@ -101,6 +102,21 @@ def _levels(caplog, level: int) -> list[logging.LogRecord]:
     return [record for record in caplog.records if record.levelno == level]
 
 
+def _counts(record: logging.LogRecord) -> list[int]:
+    return [int(word) for word in record.getMessage().replace(",", " ").split() if word.isdigit()]
+
+
+def _summaries(caplog) -> list[list[int]]:
+    """The counts of every record that reports a finished run: deleted, skipped, failed, files."""
+    return [_counts(record) for record in caplog.records if len(_counts(record)) == 4]
+
+
+def _lines_naming(caplog, reference_id: str) -> list[logging.LogRecord]:
+    return [
+        record for record in caplog.records if reference_id in record.getMessage().split()
+    ]
+
+
 @pytest.mark.parametrize(
     ("offset", "deleted"),
     [(-timedelta(microseconds=1), 0), (timedelta(0), 1)],
@@ -139,6 +155,7 @@ def test_nothing_is_deleted_before_a_page_published_the_countdown(world, caplog)
     assert file.exists()
     assert _levels(caplog, logging.INFO)
     assert not _levels(caplog, logging.ERROR)
+    assert not _summaries(caplog)
 
 
 @pytest.mark.parametrize("break_row", [
@@ -157,6 +174,7 @@ def test_an_unusable_publication_deletes_nothing_and_logs_an_error(
     assert world.row_ids() == ["old"]
     assert file.exists()
     assert _levels(caplog, logging.ERROR)
+    assert not _summaries(caplog)
 
 
 def test_a_publication_that_turns_unusable_mid_run_ends_it_with_the_report_so_far(
@@ -180,7 +198,10 @@ def test_a_publication_that_turns_unusable_mid_run_ends_it_with_the_report_so_fa
     assert not first.exists()
     assert second.exists()
     assert _levels(caplog, logging.ERROR)
-    assert any("deleted" in record.getMessage() for record in _levels(caplog, logging.INFO))
+    assert _summaries(caplog) == [[1, 0, 0, 0]]
+    (deleted_line,) = _lines_naming(caplog, "a-first")
+    assert deleted_line.levelno == logging.INFO
+    assert RemovalOutcome.REMOVED.value in deleted_line.getMessage().split()
 
 
 def test_a_failed_listing_deletes_nothing_and_logs_an_error(world, monkeypatch, caplog) -> None:
@@ -197,6 +218,7 @@ def test_a_failed_listing_deletes_nothing_and_logs_an_error(world, monkeypatch, 
     assert world.row_ids() == ["old"]
     assert file.exists()
     assert _levels(caplog, logging.ERROR)
+    assert not _summaries(caplog)
     assert SECRET_NAME not in caplog.text
 
 
@@ -264,7 +286,10 @@ def test_a_file_that_cannot_be_unlinked_is_counted_warned_and_left_to_the_remnan
 
     assert report == AnnouncedDeletionReport(deleted=1, files_not_removed=1)
     assert world.row_ids() == []
-    assert _levels(caplog, logging.WARNING)
+    (stuck_line,) = _lines_naming(caplog, "a")
+    assert stuck_line.levelno == logging.WARNING
+    assert RemovalOutcome.FAILED.value in stuck_line.getMessage().split()
+    assert _summaries(caplog) == [[1, 0, 0, 1]]
     assert remnants.removed == 1
     assert not stuck.exists()
 
@@ -349,11 +374,7 @@ def test_the_report_counts_every_outcome_and_the_summary_names_them(world, caplo
     report = world.run()
 
     assert report == AnnouncedDeletionReport(deleted=2, skipped=1, failed=1, files_not_removed=1)
-    summaries = [
-        record.getMessage() for record in _levels(caplog, logging.INFO)
-        if "2 deleted, 1 skipped, 1 failed, 1 files not removed" in record.getMessage()
-    ]
-    assert len(summaries) == 1
+    assert _summaries(caplog) == [[2, 1, 1, 1]]
 
 
 def test_no_log_line_carries_a_filename_or_a_path(world, caplog) -> None:
@@ -372,4 +393,3 @@ def test_no_log_line_carries_a_filename_or_a_path(world, caplog) -> None:
     assert caplog.records
     for forbidden in (SECRET_NAME, "refs/", ".wav", str(world.audio_dir)):
         assert forbidden not in caplog.text
-

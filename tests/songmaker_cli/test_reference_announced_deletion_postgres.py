@@ -91,18 +91,6 @@ class _World:
             raise answers["run"]
         return answers["run"]
 
-    def attach_take(self) -> int:
-        with self.pg_factory() as session:
-            from songmaker_cli.db.queries.reference_recordings import lock_and_mark_reference_used
-
-            lock_and_mark_reference_used(session, OWNER, REFERENCE_ID)
-            session.add(Generation(
-                id="take-a", song_id="song-a", version_id="version-a", mp3_path="u1/take-a.mp3",
-                reference_recording_id=REFERENCE_ID,
-            ))
-            session.commit()
-        return 1
-
     def persist_take(self):
         return persist_take_linking(self.pg_factory, self.audio_dir, OWNER, REFERENCE_ID)
 
@@ -158,9 +146,10 @@ def _held_at_delete_commit() -> CommitPause:
 def test_an_attach_that_commits_first_makes_the_run_skip_the_row_and_keep_the_file(world) -> None:
     attach_pause = CommitPause(lambda session: wrote_to_tables(session, "generations"))
 
-    answers = race(world.pg_factory, world.attach_take, world.delete_announced, attach_pause)
+    answers = race(world.pg_factory, world.persist_take, world.delete_announced, attach_pause)
 
     assert answers["second"] == AnnouncedDeletionReport(skipped=1)
+    assert world.take_rows() == 1
     assert world.reference_rows() == 1
     assert world.stored_file.exists()
 
@@ -214,7 +203,7 @@ def _clear_the_stamp(world: _World) -> None:
 
 @pytest.mark.parametrize("change", [
     lambda world: world.keep(),
-    lambda world: world.attach_take(),
+    lambda world: world.persist_take(),
     _keep_leaving_the_stamp,
     _clear_the_stamp,
     lambda world: publish_countdown(world.pg_factory, PUBLISHED + timedelta(days=1)),
@@ -227,6 +216,22 @@ def test_a_row_that_changes_after_the_listing_is_skipped_and_keeps_its_file(
     assert report == AnnouncedDeletionReport(skipped=1)
     assert world.reference_rows() == 1
     assert world.stored_file.exists()
+
+
+def test_a_row_deleted_after_the_listing_is_skipped_and_its_file_is_left_to_the_remnant_run(
+    world,
+) -> None:
+    def delete_the_row() -> None:
+        with world.pg_factory() as session:
+            session.delete(session.get(ReferenceRecording, REFERENCE_ID))
+            session.commit()
+
+    report = world.hold_deletion_after_listing(delete_the_row)
+
+    assert report == AnnouncedDeletionReport(skipped=1)
+    assert world.reference_rows() == 0
+    assert world.stored_file.exists()
+    assert reconcile_reference_remnants(world.pg_factory, world.audio_dir).removed == 1
 
 
 def test_a_keep_and_unkeep_after_the_listing_start_a_fresh_countdown_the_run_respects(
