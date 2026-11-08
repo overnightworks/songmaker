@@ -1,16 +1,16 @@
 <script lang="ts">
 	import type { ReferenceListRowResponse } from '#lib/api/types.ts';
 	import Icon from '#lib/components/Icon.svelte';
+	import ReferenceExpiry from '#lib/components/ReferenceExpiry.svelte';
 	import ReferenceMenu from '#lib/components/ReferenceMenu.svelte';
 	import ReferenceUses from '#lib/components/ReferenceUses.svelte';
 	import {
-		EXPIRY_WARN_DAYS,
 		REFERENCE_KEEP_LABEL,
 		REFERENCE_UNKEEP_LABEL,
 		TRANSPORT_PAUSE_LABEL,
 		TRANSPORT_PLAY_LABEL
 	} from '#lib/constants.ts';
-	import { formatTime, localDayAndMonth, localDaysBetween } from '#lib/utils/format.ts';
+	import { formatTime, localDayAndMonth } from '#lib/utils/format.ts';
 
 	const NO_LENGTH = '—';
 	const META_SEPARATOR = ' · ';
@@ -49,15 +49,6 @@
 		return `${lengthLabel(reference.duration_sec)}${META_SEPARATOR}${uploaded}`;
 	}
 
-	const deletion = $derived.by(() => {
-		if (reference.deletes_at === null) return null;
-		const deletesAt = new Date(reference.deletes_at);
-		return {
-			days: Math.max(localDaysBetween(now, deletesAt), 0),
-			tooltip: `Deleted on ${localDayAndMonth(deletesAt, now)} — keep to preserve`
-		};
-	});
-
 	function usedLabel(): string {
 		const counts = [
 			[reference.used_by_takes, 'take'],
@@ -94,11 +85,10 @@
 	<span class="reference-text">
 		<span class="reference-name" title={reference.filename}>{reference.filename}</span>
 		<span class="reference-meta"
-			>{metaLabel()}{#if deletion}{WORD_GAP}<span
-					class="exp"
-					class:warn={deletion.days <= EXPIRY_WARN_DAYS}
-					title={deletion.tooltip}>⏳ {deletion.days}d</span
-				>{/if}{#if reference.in_use}{META_SEPARATOR}<button
+			>{metaLabel()}{#if reference.deletes_at !== null}{WORD_GAP}<ReferenceExpiry
+					deletesAt={reference.deletes_at}
+					{now}
+				/>{/if}{#if reference.in_use}{META_SEPARATOR}<button
 					type="button"
 					class="reference-used"
 					aria-expanded={usesOpen}
@@ -230,25 +220,6 @@
 		font-size: 12px;
 		color: var(--text-muted);
 		font-variant-numeric: tabular-nums;
-	}
-
-	.exp {
-		display: inline-block;
-		margin-inline-start: 3px;
-		padding: 0 5px;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		background: var(--bg);
-		font-size: 12px;
-		line-height: 18px;
-		color: var(--text-muted);
-		white-space: nowrap;
-	}
-
-	.exp.warn {
-		border-color: var(--warn-line);
-		background: var(--warn-bg);
-		color: var(--warn-ink);
 	}
 
 	.reference-used {
