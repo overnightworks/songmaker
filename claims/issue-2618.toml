@@ -1,8 +1,0 @@
-claim_id = "29f18fd92ff84f9a84a94c99acba2b73"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "2e115c471e7bffa12b35652f65271c7b5a81a070"
-branch = "claude/issue-2618-the-library-search-s-unreachable-sort-ar"
-scope = [".github/workflows/ci.yml", "docs/architecture.md", "src/songmaker_cli/db/queries/library.py", "tests/songmaker_cli/test_library_search_order.py"]
-opened_commit = "611c0580984b02cdfc23bf0f126801a41384680a"
-whole_reason = "The deletions, the sentences that specify what stays, their cells and the floor move together; a deletion without its proof or a kept arm without its sentence and cell would leave the ratchet's per-slice rule unmet."
