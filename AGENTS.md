@@ -44,4 +44,4 @@ CI runs the pinned quality gate; floors in [testing](docs/testing.md#static-anal
 - `vendor/acestep` is our fork; its HTTP API code is the source of truth for param names; pin and patches in [ACE-Step](docs/acestep.md).
 - Seed reproducibility needs `use_random_seed: false` (ACE-Step ignores `seed` otherwise).
 - Backup and restore need both DB and audio files.
-- A scorer-test segfault after `uv sync` is a stale numba cache: delete librosa's `*.nbc` and `*.nbi` in `.venv`.
+- Parallel pytest workers share no numba cache (`tests/conftest.py` gives each process its own `NUMBA_CACHE_DIR`); a scorer-test segfault in numba's compiled code means several processes populated one cache.
