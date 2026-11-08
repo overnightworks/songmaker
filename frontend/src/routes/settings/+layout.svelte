@@ -26,6 +26,16 @@
 		box-sizing: border-box;
 	}
 
+	.settings-content :global(h1) {
+		margin: 0;
+		font-family: var(--font-display);
+		font-size: 22px;
+		font-weight: 400;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		color: var(--text);
+	}
+
 	.settings-content--wide {
 		max-width: var(--settings-admin-content-max-width);
 	}

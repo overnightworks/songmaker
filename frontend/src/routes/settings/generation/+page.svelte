@@ -295,15 +295,7 @@
 </div>
 
 <style>
-	h1 {
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-		font-size: 1.5rem;
+	:global(.settings-content) h1 {
 		margin-bottom: 1.5rem;
 	}
 
@@ -363,13 +355,13 @@
 	}
 
 	.default-chip:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.default-chip.active {
 		border-color: transparent;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 	}
 
@@ -389,7 +381,7 @@
 	}
 
 	.save-btn {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 		border: none;
 		border-radius: var(--btn-radius-pill);
@@ -426,8 +418,8 @@
 	}
 
 	.reset-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.section-header {
@@ -455,8 +447,8 @@
 	}
 
 	.add-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.panel {
@@ -557,7 +549,7 @@
 		font-size: 0.7rem;
 		padding: 1px 6px;
 		border-radius: 3px;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 		letter-spacing: 0.5px;
 	}
@@ -574,13 +566,8 @@
 	}
 
 	.preset-action:hover {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.preset-action.delete:hover {
-		border-color: var(--fail);
-		color: var(--fail);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.empty {
