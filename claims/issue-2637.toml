@@ -1,8 +1,0 @@
-claim_id = "9c442ed2a3134417862e9443f4f0a168"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "73ccffe0d816fb356397c0dbe658d5864a0f0c6a"
-branch = "claude/issue-2637-2481-s4a1-deleted-default-preset"
-scope = [".github/workflows/ci.yml", "docs/acestep.md", "frontend/src/lib/stores/presets.test.ts", "frontend/src/lib/stores/presets.ts", "quality/baseline.toml", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/queries/settings.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/settings_api.py", "tests/songmaker_cli/jobs/test_generation_preset_params.py", "tests/songmaker_cli/test_settings_api_default_config.py"]
-opened_commit = "ca429eb63eb0eeded355d7cffc52b91b5db66235"
-whole_reason = "One fact, the person's effective default, gets one owner that the API, the job and the delete all use; split, the API and the job would disagree about a dangling default for a release."
