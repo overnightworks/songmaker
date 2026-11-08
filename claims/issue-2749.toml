@@ -1,0 +1,7 @@
+claim_id = "b09c914c3d964248852398f7b8ab825a"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "5e67363d64a46136eee75ba4f27d343af306aa33"
+branch = "claude/issue-2749-privacy-names-automatic-ref-deletion"
+scope = ["docs/architecture.md", "legal/datenschutz.html"]
+opened_commit = "ad31cdf14f28e09018923a4b0c6db0062638d0de"
