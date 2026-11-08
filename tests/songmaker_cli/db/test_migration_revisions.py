@@ -60,8 +60,9 @@ def _seed_accounts(engine: sa.Engine, *ids: str, role: str = "user") -> None:
     values = ", ".join(
         [":id", ":id", ":role", "CURRENT_TIMESTAMP", "CURRENT_TIMESTAMP", *password_era.values()],
     )
+    statement = f"INSERT INTO users ({names}) VALUES ({values})"  # noqa: S608 - columns from a fixed tuple
     for user_id in ids:
-        execute(engine, f"INSERT INTO users ({names}) VALUES ({values})", id=user_id, role=role)
+        execute(engine, statement, id=user_id, role=role)
 
 
 def _seed_album_with_song(engine: sa.Engine, song_id: str = "s1") -> None:
@@ -74,8 +75,8 @@ def _seed_album_with_song(engine: sa.Engine, song_id: str = "s1") -> None:
         engine,
         "INSERT INTO songs "
         "(id, title, album_id, vocal_language, track_number, created_at, updated_at, slug) "
-        f"VALUES ('{song_id}', 'Thunder', 'a1', '', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, "
-        "'thunder')",
+        "VALUES (:song_id, 'Thunder', 'a1', '', 1, now(), now(), 'thunder')",
+        song_id=song_id,
     )
 
 
