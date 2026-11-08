@@ -125,27 +125,26 @@ def _child_main(conn: Connection) -> None:
             ))
             continue
 
-        if isinstance(request, ScoreRequest):
-            if request.job_id:
-                import structlog
-                structlog.contextvars.bind_contextvars(
-                    job_id=request.job_id, process="scorer",
-                )
+        if request.job_id:
+            import structlog
+            structlog.contextvars.bind_contextvars(
+                job_id=request.job_id, process="scorer",
+            )
 
-            def _progress_cb(completed: int, total: int, name: str) -> None:
-                conn.send(ScoreProgressUpdate(completed=completed, total=total, scorer_name=name))
+        def _progress_cb(completed: int, total: int, name: str) -> None:
+            conn.send(ScoreProgressUpdate(completed=completed, total=total, scorer_name=name))
 
-            try:
-                scores = run_scoring_pipeline(
-                    request.mp3_path,
-                    meta=request.meta,
-                    scorers=request.scorers,
-                    config=request.config,
-                    on_progress=_progress_cb,
-                )
-                conn.send(ScoreResponse(scores=scores, error=None))
-            except Exception as exc:
-                conn.send(ScoreResponse(scores=None, error=str(exc)))
+        try:
+            scores = run_scoring_pipeline(
+                request.mp3_path,
+                meta=request.meta,
+                scorers=request.scorers,
+                config=request.config,
+                on_progress=_progress_cb,
+            )
+            conn.send(ScoreResponse(scores=scores, error=None))
+        except Exception as exc:
+            conn.send(ScoreResponse(scores=None, error=str(exc)))
 
 
 class ScorerProcess:
@@ -175,8 +174,8 @@ class ScorerProcess:
                 self._process.pid,
             )
             self._kill()
-        elif self.alive and self._conn is not None:
-            return self._conn
+        elif self.alive:
+            return expect_present(self._conn, "A live scorer child has a connection")
         self._cleanup_dead()
         parent_conn, child_conn = _ctx.Pipe()
         self._process = _ctx.Process(target=_child_main, args=(child_conn,), daemon=True)
@@ -194,7 +193,8 @@ class ScorerProcess:
         scorers: list[str] | None = None,
         config: PipelineConfig | None = None,
         job_id: str | None = None,
-        on_progress: Callable[[int, int, str], None] | None = None,
+        *,
+        on_progress: Callable[[int, int, str], None],
     ) -> SongScores:
         effective_config = config or PipelineConfig()
         return self._score_with_retry(
@@ -208,13 +208,15 @@ class ScorerProcess:
         scorers: list[str] | None,
         config: PipelineConfig,
         job_id: str | None,
-        on_progress: Callable[[int, int, str], None] | None,
+        on_progress: Callable[[int, int, str], None],
     ) -> SongScores:
         # Lock held across send + poll so concurrent score() calls (when
         # SCORING_MAX_JOBS > 1) cannot interleave Pipe writes/reads on the
         # single shared subprocess. multiprocessing.Pipe is not thread-safe.
         with self._pipe_lock:
-            for attempt in (1, 2):
+            attempt = 0
+            while True:
+                attempt += 1
                 conn = self._ensure_started()
                 request = ScoreRequest(
                     mp3_path=mp3_path, meta=meta, scorers=scorers,
@@ -230,14 +232,13 @@ class ScorerProcess:
                         raise RuntimeError("Scorer subprocess crashed twice — aborting")
                     log.warning("Scorer subprocess died mid-scoring — respawning and retrying")
                     self._cleanup_dead()
-            raise RuntimeError("unreachable")
 
     def _poll_response(
         self,
         conn: Connection,
         scorers: list[str] | None,
         config: PipelineConfig,
-        on_progress: Callable[[int, int, str], None] | None,
+        on_progress: Callable[[int, int, str], None],
     ) -> SongScores:
         deadline = time.monotonic() + config.pipeline_timeout
 
@@ -256,8 +257,7 @@ class ScorerProcess:
                 return expect_present(
                     msg.scores, "Score worker answered without scores or an error"
                 )
-            if isinstance(msg, ScoreProgressUpdate) and on_progress:
-                on_progress(msg.completed, msg.total, msg.scorer_name)
+            on_progress(msg.completed, msg.total, msg.scorer_name)
 
         scorer_desc = ", ".join(scorers) if scorers else "all"
         log.error(
