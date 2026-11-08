@@ -3,7 +3,6 @@ import type { AlbumItem, LastFailedGenerationResult } from './types';
 
 export { ApiError, type JobStatus } from './fetch';
 export {
-	fetchAlbum,
 	fetchAlbums,
 	createAlbum,
 	updateAlbum,
@@ -12,19 +11,9 @@ export {
 	deleteAlbum,
 	restoreAlbum,
 	archiveAlbum,
-	unarchiveAlbum,
-	createAlbumCoverSuggestions,
-	fetchAlbumCoverSuggestions,
-	selectAlbumCoverSuggestion,
-	discardAlbumCoverSuggestions
+	unarchiveAlbum
 } from './albums';
-export {
-	fetchLibraryPoolQueue,
-	searchLibrary,
-	type LibrarySearchHit,
-	type LibrarySearchResponse,
-	type LibrarySort
-} from './library';
+export { fetchLibraryPoolQueue } from './library';
 export {
 	fetchSongs,
 	fetchSong,
@@ -117,18 +106,7 @@ export {
 	previewGenerationRetention,
 	runGenerationRetention
 } from './admin';
-export {
-	listLoras,
-	getLora,
-	createLora,
-	softDeleteLora,
-	addLoraSample,
-	addLoraSampleFromGeneration,
-	patchLoraSample,
-	deleteLoraSample,
-	trainLora,
-	listOwnPlayableTakes
-} from './loras';
+export { addLoraSample, patchLoraSample, deleteLoraSample } from './loras';
 export type { AvailableModel, GenerationRetentionReport } from './types';
 
 export async function uploadAlbumCover(albumId: string, file: File): Promise<AlbumItem> {
