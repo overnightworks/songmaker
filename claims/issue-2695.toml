@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "3fc4bc3a0f8851ce34058793fb884c87bd54698f"
 branch = "claude/issue-2695-constrained-decoding-leaves"
-scope = ["frontend/src/lib/api/types.ts", "src/acestep_engine/client.py", "src/acestep_engine/models.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/generation_params.py", "tests/acestep_engine", "tests/songmaker_cli"]
+scope = ["frontend/src/lib/api/types.ts", "quality/baseline.toml", "src/acestep_engine/client.py", "src/acestep_engine/models.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/generation_params.py", "tests/acestep_engine", "tests/songmaker_cli"]
 opened_commit = "0ecf5dd4df1162f1409e22178e7a9de19417aa75"
 whole_reason = "The field, its writer and its stored key leave together, or a stored take or a test carries a key the code no longer knows."
