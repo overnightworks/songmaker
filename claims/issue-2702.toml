@@ -1,0 +1,8 @@
+claim_id = "7bb35d3364bf46a3a323c87c885534b6"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2a750e83a1325197d4b886c04133c40e7f6692bc"
+branch = "claude/issue-2702-v010-f2-script-tests-move"
+scope = ["docs/security.md", "quality/baseline.toml", "scripts/check_agent_cli_mounts.sh", "scripts/install_cli_credentials_mirror.sh", "tests/auto_deploy_harness.py", "tests/auto_deploy_support.py", "tests/scripts", "tests/support", "tests/test_alert_script.py", "tests/test_auto_deploy_alerting.py", "tests/test_auto_deploy_ignored_runs.py", "tests/test_auto_deploy_lock.py", "tests/test_auto_deploy_releases.py", "tests/test_auto_deploy_secret_files.py", "tests/test_install_autostart.py", "tests/test_install_cli_credentials_mirror.py", "tests/test_restore_script.py"]
+opened_commit = "36d10b75d96823679f7f2706aa6fa5bc090ebdd3"
+whole_reason = "A moved test, the harness it imports and the baseline key that names its path change together, or the suite or the size gate breaks."
