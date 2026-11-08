@@ -1,0 +1,8 @@
+claim_id = "7316862b390d4fd88dcb4b5956113578"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "c82650ea6b775df2aaf252a83bbc7abb79acc645"
+branch = "claude/issue-2658-v010-d-root-and-frontend-test-names"
+scope = ["docs/testing.md", "frontend/src/lib/components", "tests/scripts", "tests/test_compose_secret_files.py", "tests/test_database_case_record.py", "tests/workflows"]
+opened_commit = "98c5d4415e9f47e428d1dbe5e2ab846c3b8794af"
+whole_reason = "Three renames of one rule, each with its pins, proven by one collect-only diff and one quality check."
