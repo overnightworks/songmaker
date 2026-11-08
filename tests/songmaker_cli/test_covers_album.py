@@ -39,6 +39,7 @@ from songmaker_cli.covers import (
     COVER_STAGING_DIRNAME_SUFFIX,
     COVER_TOO_LARGE,
     COVER_TOO_MANY_PIXELS,
+    COVER_UNREADABLE,
     COVER_UNSUPPORTED_TYPE,
     COVER_VARIANT_ORIGINAL,
     COVER_VARIANT_UNKNOWN,
@@ -149,6 +150,36 @@ def test_decode_rejects_image_bomb() -> None:
     payload = _png_header(width, 1)
     with pytest.raises(CoverRejectedError, match=COVER_TOO_MANY_PIXELS):
         decode_cover_image(payload)
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        pytest.param(b"", COVER_UNREADABLE, id="empty-payload"),
+        pytest.param(_png_header(0, 1), COVER_UNREADABLE, id="zero-width-header"),
+        pytest.param(_png_header(1, 0), COVER_UNREADABLE, id="zero-height-header"),
+        pytest.param(
+            _png_header(COVER_MAX_PIXELS * 9, 1), COVER_TOO_MANY_PIXELS,
+            id="header-past-pillows-own-bomb-limit",
+        ),
+        pytest.param(_png_bytes()[:-30], COVER_UNREADABLE, id="truncated-png"),
+    ],
+)
+def test_decode_rejects_unreadable_or_oversized_headers(payload: bytes, message: str) -> None:
+    with pytest.raises(CoverRejectedError, match=message):
+        decode_cover_image(payload)
+
+
+@pytest.mark.parametrize(
+    ("mode", "decoded_mode"), [("P", "RGB"), ("LA", "RGBA"), ("I;16", "RGB")],
+)
+def test_decode_turns_other_png_modes_into_rgb_or_rgba(mode: str, decoded_mode: str) -> None:
+    source = BytesIO()
+    Image.new(mode, (4, 4)).save(source, format="PNG")
+    image, fmt = decode_cover_image(source.getvalue())
+    assert fmt == "png"
+    assert image.mode == decoded_mode
+    image.save(BytesIO(), format="PNG")
 
 
 def test_decode_applies_exif_orientation_and_strips_it() -> None:
