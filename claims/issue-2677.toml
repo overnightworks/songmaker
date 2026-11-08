@@ -1,0 +1,7 @@
+claim_id = "c412a32ab94f49ff8a3c6fc54f43c57b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "91f82b5f4da06dedc5d268cea6b34f9047993274"
+branch = "claude/issue-2677-public-stream-tail-one-owner"
+scope = ["quality/baseline.toml", "src/songmaker_cli/sharing_api.py"]
+opened_commit = "2cb3d129c91e606f0971c09885279657804321d5"
