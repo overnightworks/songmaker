@@ -34,11 +34,6 @@ from songmaker_cli.constants import (
     JobType,
     LimiterFailurePolicy,
 )
-from songmaker_cli.covers import (
-    COVER_RESPONSE_HEADERS,
-    CoverRejectedError,
-    cover_media_type,
-)
 from songmaker_cli.db.models import (
     ALBUM_SLUG_MAX_LENGTH,
     LORA_SLUG_MAX_LENGTH,
@@ -114,6 +109,13 @@ def cover_file_response(
     version: str | None,
 ) -> FileResponse:
     """Serve an entity's stored cover, mapping resolver refusals to HTTP errors."""
+    # Deferred: covers imports Pillow, which the scoring worker image omits.
+    from songmaker_cli.covers import (
+        COVER_RESPONSE_HEADERS,
+        CoverRejectedError,
+        cover_media_type,
+    )
+
     if version is not None and version != entity.cover_key:
         raise HTTPException(404, COVER_NOT_FOUND)
     try:
