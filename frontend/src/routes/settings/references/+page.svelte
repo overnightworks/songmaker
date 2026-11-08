@@ -6,7 +6,6 @@
 		deleteReference,
 		keepReference,
 		listReferences,
-		referenceAudioUrl,
 		unkeepReference,
 		uploadReference
 	} from '#lib/api/references.ts';
@@ -26,7 +25,7 @@
 		REFERENCE_KEEP_FAILED,
 		REFERENCE_UNKEEP_FAILED
 	} from '#lib/constants.ts';
-	import { audioPlayer, transportOffersPause } from '#lib/services/audioPlayer.svelte.ts';
+	import { createReferencePreview } from '#lib/services/referencePreview.svelte.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 
 	const LOAD_FAILED = 'Failed to load references';
@@ -147,53 +146,15 @@
 		if (file) void upload(file);
 	}
 
-	let activeId = $state<string | null>(null);
 	let rowFault = $state<{ id: string; words: string } | null>(null);
 	let pendingDelete = $state<ReferenceListRowResponse | null>(null);
-	let preview: HTMLAudioElement | null = null;
-	let previewId: string | null = null;
-
-	function previewElement(): HTMLAudioElement {
-		if (preview) return preview;
-		preview = new Audio();
-		preview.addEventListener('ended', () => (activeId = null));
-		preview.addEventListener('error', () => fail(previewId));
-		return preview;
-	}
-
-	function fail(referenceId: string | null) {
-		if (referenceId === null) return;
-		if (previewId === referenceId) previewId = null;
-		if (referenceId !== activeId) return;
-		activeId = null;
+	const preview = createReferencePreview((referenceId) => {
 		rowFault = { id: referenceId, words: PLAY_FAULT };
-	}
-
-	function stop() {
-		preview?.pause();
-		activeId = null;
-	}
-
-	// Pausing keeps the download open; a source of its own is dropped on leaving.
-	function release() {
-		stop();
-		if (!preview) return;
-		preview.removeAttribute('src');
-		preview.load();
-		previewId = null;
-	}
+	});
 
 	function toggle(referenceId: string) {
-		if (activeId === referenceId) return stop();
-		if (transportOffersPause(audioPlayer.transport)) audioPlayer.pause();
-		const element = previewElement();
-		if (previewId !== referenceId) {
-			element.src = referenceAudioUrl(referenceId);
-			previewId = referenceId;
-		}
-		rowFault = null;
-		activeId = referenceId;
-		element.play().catch(() => fail(referenceId));
+		if (preview.activeId !== referenceId) rowFault = null;
+		preview.toggle(referenceId);
 	}
 
 	let openUsesId = $state<string | null>(null);
@@ -212,7 +173,7 @@
 			}
 			return;
 		}
-		if (previewId === reference.id) release();
+		preview.releaseIfLoaded(reference.id);
 		references = references?.filter((candidate) => candidate.id !== reference.id) ?? null;
 		await load();
 	}
@@ -229,11 +190,6 @@
 		await load();
 	}
 
-	// The global player starting ends a preview; the reverse is `toggle`.
-	$effect(() => {
-		if (transportOffersPause(audioPlayer.transport)) stop();
-	});
-
 	function retry() {
 		referenceReloads.stop();
 		void load();
@@ -242,7 +198,6 @@
 	onMount(() => void load());
 	onDestroy(() => {
 		referenceReloads.dispose();
-		release();
 	});
 </script>
 
@@ -325,7 +280,7 @@
 	{:else}
 		<ul class="reference-list" bind:this={listElement}>
 			{#each references as reference (reference.id)}
-				{@const playing = activeId === reference.id}
+				{@const playing = preview.activeId === reference.id}
 				<ReferenceRow
 					{reference}
 					{now}
