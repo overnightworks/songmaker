@@ -7,10 +7,9 @@ from fastapi.testclient import TestClient
 from support.signed_in_people import sign_in_people
 
 from songmaker_cli.db.models import AvailableModel, GenerationPreset
+from songmaker_cli.settings_api import PRESET_NAME_EXISTS_DETAIL, PRESET_NOT_FOUND_DETAIL
 
 PRESETS_URL = "/api/settings/presets"
-NAME_EXISTS = "A preset with that name already exists"
-NOT_FOUND = "Preset not found"
 
 
 @pytest.fixture
@@ -55,7 +54,7 @@ def test_a_second_preset_with_the_same_name_and_model_is_refused(people):
         PRESETS_URL, json={"name": "warm", "model_mode": "sft", "params": {}},
     )
 
-    assert (response.status_code, response.json()["detail"]) == (409, NAME_EXISTS)
+    assert (response.status_code, response.json()["detail"]) == (409, PRESET_NAME_EXISTS_DETAIL)
     assert _stored_presets(factory) == before
 
 
@@ -99,7 +98,8 @@ def test_an_id_that_is_not_the_persons_own_is_not_found_on_every_preset_route(
         client.post(f"{PRESETS_URL}/{preset_id}/set-default"),
     ]
 
-    assert [(r.status_code, r.json()["detail"]) for r in responses] == [(404, NOT_FOUND)] * 3
+    refusals = [(r.status_code, r.json()["detail"]) for r in responses]
+    assert refusals == [(404, PRESET_NOT_FOUND_DETAIL)] * 3
     assert _stored_presets(factory) == before
     with factory() as session:
         assert (session.get(GenerationPreset, preset_id) is not None) == (target != "unknown")
@@ -126,7 +126,7 @@ def test_a_rename_onto_another_preset_of_the_same_model_is_refused(people):
 
     response = clients["ana"].put(f"{PRESETS_URL}/{cool['id']}", json={"name": "warm"})
 
-    assert (response.status_code, response.json()["detail"]) == (409, NAME_EXISTS)
+    assert (response.status_code, response.json()["detail"]) == (409, PRESET_NAME_EXISTS_DETAIL)
     assert _stored_presets(factory) == before
 
 
@@ -145,8 +145,9 @@ def test_an_update_cannot_change_the_model(people):
     clients, factory = people
     preset = _create(clients["ana"], "warm")
 
-    clients["ana"].put(f"{PRESETS_URL}/{preset['id']}", json={"model_mode": "turbo"})
+    response = clients["ana"].put(f"{PRESETS_URL}/{preset['id']}", json={"model_mode": "turbo"})
 
+    assert response.status_code == 200
     with factory() as session:
         assert session.get(GenerationPreset, preset["id"]).model_mode == "sft"
 
