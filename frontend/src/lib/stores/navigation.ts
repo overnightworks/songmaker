@@ -298,15 +298,15 @@ export function openAppPage(href: AppPageHref, query?: AppPageQuery): Promise<vo
 	return guardDirtyNavigation(async () => {
 		await historyComesToRest();
 		await keepLibraryPageAsLeft();
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the route is resolved; resolve() takes no query
-		await goto(`${resolve(href)}${queryString(query)}`);
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address is built from a resolved route; resolve() takes no query
+		await goto(appPageAddress(href, query));
 	});
 }
 
 type AppPageQuery = Readonly<Record<string, string>>;
 
-function queryString(query: AppPageQuery | undefined): string {
-	return query === undefined ? '' : `?${new URLSearchParams(query)}`;
+export function appPageAddress(href: AppPageHref, query?: AppPageQuery): string {
+	return `${resolve(href)}${query === undefined ? '' : `?${new URLSearchParams(query)}`}`;
 }
 
 function isPlainPrimaryClick(event: MouseEvent): boolean {

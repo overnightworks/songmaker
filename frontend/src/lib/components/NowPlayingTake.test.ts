@@ -12,7 +12,9 @@ vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
 	rate: vi.fn().mockResolvedValue(undefined),
 	rescore: vi.fn().mockResolvedValue(undefined)
 }));
-vi.mock('#lib/stores/navigation.ts', () => ({
+vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
+	appPageAddress: (await importOriginal<typeof import('#lib/stores/navigation.ts')>())
+		.appPageAddress,
 	followAppPageLink: vi.fn(),
 	revealPlayingSong: vi.fn().mockResolvedValue(undefined),
 	openTakeVersion: vi.fn().mockResolvedValue(undefined)

@@ -200,9 +200,7 @@
 		if (highlightedId === null || references === null || scrolledToId === highlightedId) return;
 		scrolledToId = highlightedId;
 		void tick().then(() =>
-			listElement?.querySelector(`#${CSS.escape(`reference-${highlightedId}`)}`)?.scrollIntoView({
-				block: 'center'
-			})
+			document.getElementById(`reference-${highlightedId}`)?.scrollIntoView({ block: 'center' })
 		);
 	});
 

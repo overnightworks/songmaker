@@ -158,13 +158,13 @@
 		cursor: default;
 	}
 
-	.reference-row.playing {
-		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+	.reference-row.playing,
+	.reference-row.highlighted {
+		background: var(--accent-wash);
 	}
 
 	.reference-row.highlighted {
 		position: relative;
-		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 	}
 
 	.reference-row.highlighted::before {
@@ -172,7 +172,7 @@
 		position: absolute;
 		inset-block: 0;
 		inset-inline-start: 0;
-		width: 0.1875rem;
+		width: 0.2rem;
 		background: var(--accent);
 	}
 

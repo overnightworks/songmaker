@@ -65,6 +65,7 @@
 	--text-dim: #999;
 	--text-light: #333;
 	--glow-accent: color-mix(in srgb, var(--accent) 4%, transparent);
+	--accent-wash: color-mix(in srgb, var(--accent) 6%, var(--surface));
 	--score-good-bg: #e0f5e0;
 	--score-good: #1e7a1e;
 	--score-ok-bg: #fef3e0;
@@ -141,6 +142,7 @@ html[data-transport-bar='hidden'] {
 	--text-dim: #444;
 	--text-light: #ccc;
 	--glow-accent: color-mix(in srgb, var(--accent) 3%, transparent);
+	--accent-wash: color-mix(in srgb, var(--accent) 9%, var(--surface));
 	--score-good-bg: #1a3a1a;
 	--score-good: #4f4;
 	--score-ok-bg: #2a1f10;
@@ -165,6 +167,7 @@ html[data-transport-bar='hidden'] {
 		--text-dim: #444;
 		--text-light: #ccc;
 		--glow-accent: color-mix(in srgb, var(--accent) 3%, transparent);
+		--accent-wash: color-mix(in srgb, var(--accent) 9%, var(--surface));
 		--score-good-bg: #1a3a1a;
 		--score-good: #4f4;
 		--score-ok-bg: #2a1f10;
