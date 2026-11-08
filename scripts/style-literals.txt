@@ -26,7 +26,7 @@ lib/components/NewPlaceMenu.svelte 2
 lib/components/NowPlayingCuration.svelte 2
 lib/components/NowPlayingFrame.svelte 23
 lib/components/NowPlayingLyrics.svelte 5
-lib/components/NowPlayingQueue.svelte 8
+lib/components/NowPlayingQueue.svelte 7
 lib/components/NowPlayingTake.svelte 19
 lib/components/OfflineStrip.svelte 1
 lib/components/ParamControls.svelte 5
@@ -43,7 +43,7 @@ lib/components/SongDetailView.svelte 7
 lib/components/SongRow.svelte 2
 lib/components/TakeRetentionPanel.svelte 10
 lib/components/ToastContainer.svelte 19
-lib/components/TransportBarFrame.svelte 5
+lib/components/TransportBarFrame.svelte 2
 lib/components/VoicePicker.svelte 9
 lib/components/WaveformRangePicker.svelte 11
 lib/components/WorkerModelsList.svelte 6

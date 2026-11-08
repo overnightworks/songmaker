@@ -87,11 +87,11 @@ def _run_on(monkeypatch: pytest.MonkeyPatch, migration, engine: sa.Engine, step)
 
 
 def test_init_db_fresh_creates_all_tables(empty_postgresql_url) -> None:
-    init_db(empty_postgresql_url)
-
-    engine = create_engine(empty_postgresql_url)
-    tables = set(inspect(engine).get_table_names())
-    engine.dispose()
+    factory = init_db(empty_postgresql_url)
+    try:
+        tables = set(inspect(factory.kw["bind"]).get_table_names())
+    finally:
+        factory.kw["bind"].dispose()
 
     expected = {
         "albums", "album_cover_suggestions", "songs", "versions", "generations", "scores",

@@ -33,7 +33,7 @@
 
 	.playing-mark span {
 		width: 2px;
-		background: var(--primary);
+		background: var(--accent);
 		animation: equalize 0.9s ease-in-out infinite;
 	}
 

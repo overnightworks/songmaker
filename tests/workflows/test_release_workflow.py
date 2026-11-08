@@ -7,10 +7,9 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-RELEASE_TEXT = (ROOT / ".github/workflows/release.yml").read_text()
-RELEASE_JOBS = yaml.safe_load(RELEASE_TEXT)["jobs"]
+RELEASE_JOBS = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())["jobs"]
 COMPOSE_SERVICES = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
-QUALITY_USES = re.compile(r"uses:\s*overnightworks/quality/\S+@(\S+)")
+QUALITY_WORKFLOWS = "overnightworks/quality/"
 
 
 def _compose_dockerfiles(services: dict[str, dict] = COMPOSE_SERVICES) -> set[str]:
@@ -34,9 +33,17 @@ def test_a_compose_build_written_as_a_string_fails_loudly():
         _compose_dockerfiles({"extra": {"build": "./extra"}})
 
 
+def _quality_pins() -> list[str]:
+    return [
+        job["uses"].partition("@")[2]
+        for job in RELEASE_JOBS.values()
+        if job.get("uses", "").startswith(QUALITY_WORKFLOWS)
+    ]
+
+
 def test_every_quality_workflow_is_pinned_to_one_commit():
-    pins = QUALITY_USES.findall(RELEASE_TEXT)
-    assert len(pins) == len(RELEASE_JOBS)
+    pins = _quality_pins()
+    assert pins
     assert len(set(pins)) == 1
     assert re.fullmatch(r"[0-9a-f]{40}", pins[0])
 

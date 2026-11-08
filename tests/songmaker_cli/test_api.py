@@ -37,7 +37,6 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.jobs.generation import _load_song_meta
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
-from songmaker_cli.timestamps import aware_timestamp
 
 _DEFAULT_USER_ID = "u-test"
 
@@ -457,7 +456,7 @@ def test_listen_song_records_the_listeners_own_listen_and_leaves_the_song_itself
         assert song.last_played_at is None
         assert song.updated_at == updated_at_before_listen
         listen = session.query(UserSongWork).one()
-        assert before <= aware_timestamp(listen.album_played_at) <= after
+        assert before <= listen.album_played_at <= after
 
 
 @pytest.mark.parametrize(
