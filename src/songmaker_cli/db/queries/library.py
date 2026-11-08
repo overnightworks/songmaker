@@ -16,7 +16,8 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_TITLE,
     LIKE_ESCAPE_CHAR,
 )
-from songmaker_cli.db.models import Album, Song, aware_timestamp
+from songmaker_cli.db.models import Album, Song
+from songmaker_cli.timestamps import aware_timestamp
 
 _SONG_LIST_OPTIONS = (
     joinedload(Song.versions),
@@ -38,7 +39,7 @@ def cursor_from_hit(hit: Album | Song, *, q: str, sort: str) -> LibraryCursor:
     if sort == LIBRARY_SORT_TITLE:
         sort_value = hit.title.lower()
     else:
-        sort_value = aware_timestamp(hit.created_at).isoformat()
+        sort_value = hit.created_at.isoformat()
     return LibraryCursor(
         q=q,
         sort=sort,
@@ -207,8 +208,8 @@ def _hit_before(left: Album | Song, right: Album | Song, sort: str) -> bool:
         if left_type != right_type:
             return left_type < right_type
         return left.id < right.id
-    left_ts = aware_timestamp(left.created_at)
-    right_ts = aware_timestamp(right.created_at)
+    left_ts = left.created_at
+    right_ts = right.created_at
     if sort == LIBRARY_SORT_OLDEST:
         if left_ts != right_ts:
             return left_ts < right_ts

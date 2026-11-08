@@ -37,7 +37,6 @@ from songmaker_cli.db.models import (
     Song,
     User,
     Version,
-    aware_timestamp,
 )
 from songmaker_cli.db.queries.albums import delete_album, get_album, list_albums
 from songmaker_cli.db.queries.auth import (
@@ -93,6 +92,7 @@ from songmaker_cli.db.queries.songs import (
     update_song,
 )
 from songmaker_cli.db.queries.versions import delete_version
+from songmaker_cli.timestamps import aware_timestamp
 from songmaker_cli.worker_liveness import WorkerLiveness
 
 

@@ -20,9 +20,10 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.db.models import Job, aware_timestamp
+from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.settings import get_settings
+from songmaker_cli.timestamps import aware_timestamp
 from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
 
 log = logging.getLogger(__name__)
