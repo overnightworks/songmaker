@@ -34,7 +34,7 @@ import {
 	loadPlaylistDetail,
 	selectedPlaylist
 } from '#lib/stores/playlists.ts';
-import { resourceSync } from '#lib/stores/resourceSync.ts';
+import { onLibraryReady } from '#lib/stores/libraryRecovery.ts';
 import { openCollection, setOpenCollection, type OpenCollection } from '#lib/stores/collection.ts';
 import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
 import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
@@ -731,22 +731,13 @@ export function initNavigation(): () => void {
 // restart) restores the standing song's context again. The work runs one
 // microtask after the sync's store update, once its own bookkeeping is done.
 export function followLibrarySync(): () => void {
-	let following = true;
 	let detachLandingHandler: (() => void) | undefined;
-	let wasReady = get(resourceSync).ready;
-	const unsubscribe = resourceSync.subscribe(({ ready }) => {
-		const becameReady = ready && !wasReady;
-		wasReady = ready;
-		if (!becameReady) return;
-		queueMicrotask(() => {
-			if (!following) return;
-			if (detachLandingHandler) restoreStandingSongContext();
-			else detachLandingHandler = initNavigation();
-		});
+	const stopFollowing = onLibraryReady(() => {
+		if (detachLandingHandler) restoreStandingSongContext();
+		else detachLandingHandler = initNavigation();
 	});
 	return () => {
-		following = false;
-		unsubscribe();
+		stopFollowing();
 		detachLandingHandler?.();
 	};
 }

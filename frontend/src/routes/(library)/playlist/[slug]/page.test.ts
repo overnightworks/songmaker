@@ -4,7 +4,7 @@ import {
 	makePlaylistDetail as playlistDetail,
 	makePlaylistEntry as playlistEntry
 } from '#lib/test-utils/factories.ts';
-import { mount, unmount } from 'svelte';
+import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -16,6 +16,7 @@ import { resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
+import { RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 
 const PLAYLIST_SLUG = 'friday-night';
@@ -313,5 +314,34 @@ describe('/playlist/<slug> naming no playlist', () => {
 		await vi.waitFor(() => expect(target.textContent).toContain('No such playlist'));
 		expect(window.location.pathname).toBe('/playlist/ghost');
 		expect(get(openCollection)).toBeNull();
+	});
+});
+
+describe('/playlist/<slug> after the library load failed', () => {
+	it('Try again retries the library, shows loading meanwhile, and the address replaces overlay and card on the ready edge', async () => {
+		const songsLoad = api.fetchSongs.getMockImplementation();
+		if (!songsLoad) throw new Error('the library list has no implementation to restore');
+		api.fetchSongs.mockRejectedValue(new ApiError(500, 'Library service is down', '/api/songs'));
+		api.fetchPlaylists.mockRejectedValue(
+			new ApiError(500, 'Playlist service is down', '/api/playlists')
+		);
+		coldTabAt('/playlist/friday-night');
+		const target = openAddress();
+		await vi.waitFor(() => expect(target.textContent).toContain('Playlist service is down'));
+		await vi.waitFor(() => expect(target.textContent).toContain(RESOURCE_SYNC_ERROR));
+
+		api.fetchSongs.mockImplementation(songsLoad);
+		api.fetchPlaylists.mockResolvedValue([
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+		]);
+		requireElement(target, 'button.address-action').click();
+		await tick();
+		expect(target.textContent).toContain('Loading playlist...');
+		expect(target.textContent).not.toContain('Playlist service is down');
+
+		await vi.waitFor(() => expect(target.textContent).toContain(ENTRY_SONG_TITLE));
+		expect(target.querySelector('.address-overlay')).toBeNull();
+		expect(target.textContent).not.toContain(RESOURCE_SYNC_ERROR);
+		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
 	});
 });

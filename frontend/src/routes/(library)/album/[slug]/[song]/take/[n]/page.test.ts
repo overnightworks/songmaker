@@ -4,7 +4,7 @@ import {
 	makeGeneration as generation,
 	makeSong as song
 } from '#lib/test-utils/factories.ts';
-import { mount, unmount } from 'svelte';
+import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -16,6 +16,7 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { detailTab, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
+import { RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 
 const ALBUM_SLUG = 'anfield';
@@ -358,6 +359,31 @@ describe('/album/<slug>/<song-slug>/take/<n> whose song cannot be reached', () =
 		requireElement(target, 'button.address-action').click();
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
+	});
+});
+
+describe('/album/<slug>/<song>/take/<n> after the library load failed', () => {
+	it('Try again retries the library, shows loading meanwhile, and the address replaces overlay and card on the ready edge', async () => {
+		const songsLoad = api.fetchSongs.getMockImplementation();
+		if (!songsLoad) throw new Error('the library list has no implementation to restore');
+		api.fetchSongs.mockRejectedValue(new ApiError(500, 'Library service is down', '/api/songs'));
+		api.fetchAlbum.mockRejectedValue(new ApiError(500, 'Album service is down', '/api/albums'));
+		coldTabAt('/album/anfield/stadion-lauf-a/take/1');
+		const target = openAddress();
+		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
+		await vi.waitFor(() => expect(target.textContent).toContain(RESOURCE_SYNC_ERROR));
+
+		api.fetchSongs.mockImplementation(songsLoad);
+		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
+		requireElement(target, 'button.address-action').click();
+		await tick();
+		expect(target.textContent).toContain('Loading take...');
+		expect(target.textContent).not.toContain('Album service is down');
+
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(target.querySelector('.address-overlay')).toBeNull();
+		expect(target.textContent).not.toContain(RESOURCE_SYNC_ERROR);
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
 	});
 });
