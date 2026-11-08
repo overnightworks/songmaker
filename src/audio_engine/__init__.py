@@ -3,7 +3,6 @@
 from audio_engine.audio_io import (
     encode_mp3,
     master_audio,
-    master_to_mp3,
     read_wav_bytes,
     write_stereo_wav,
 )
@@ -16,7 +15,6 @@ __all__ = [
     "MasteringError",
     "encode_mp3",
     "master_audio",
-    "master_to_mp3",
     "read_wav_bytes",
     "write_stereo_wav",
 ]
