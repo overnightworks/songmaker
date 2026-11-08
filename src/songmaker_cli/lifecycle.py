@@ -13,6 +13,7 @@ from arq.connections import ArqRedis
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
+from songmaker_cli.acestep_state import decode_redis_text
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
@@ -119,15 +120,6 @@ def _backfill_attempt_key(gen_id: str) -> str:
     return f"{SCORE_BACKFILL_ATTEMPTS_KEY_PREFIX}:{gen_id}"
 
 
-def _decode_redis_value(value: bytes | str | None) -> str | None:
-    """Normalize a raw Redis reply: the production ``ArqRedis`` pool returns
-    bytes (no ``decode_responses``), while a test double may already hand
-    back ``str``."""
-    if isinstance(value, bytes):
-        return value.decode()
-    return value
-
-
 async def _record_backfill_attempt(redis: ArqRedis, gen_id: str) -> None:
     """Bump ``gen_id``'s backfill attempt counter and refresh its TTL.
 
@@ -160,7 +152,7 @@ async def _exhausted_backfill_ids(redis: ArqRedis, gen_ids: list[str]) -> set[st
     return {
         gen_id
         for gen_id, raw_count in zip(gen_ids, counts, strict=True)
-        if (decoded := _decode_redis_value(raw_count)) is not None
+        if (decoded := decode_redis_text(raw_count)) is not None
         and int(decoded) >= SCORE_BACKFILL_MAX_ATTEMPTS
     }
 
@@ -180,7 +172,7 @@ async def _clear_resolved_backfill_attempts(ctx: AppContext, redis: ArqRedis) ->
     tracked_raw = await redis.smembers(SCORE_BACKFILL_TRACKED_SET_KEY)
     if not tracked_raw:
         return
-    tracked_ids = [_decode_redis_value(gen_id) for gen_id in tracked_raw]
+    tracked_ids = [decode_redis_text(gen_id) for gen_id in tracked_raw]
 
     with ctx.db() as session:
         resolved = {
