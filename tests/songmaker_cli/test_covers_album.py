@@ -21,12 +21,18 @@ from support.web_app import make_test_app, seed_session, seed_user, web_client
 
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
+    COVER_MAX_BYTES,
+    COVER_UPLOAD_BODY_MAX_BYTES,
+    COVER_VARIANT_CARD,
+    COVER_VARIANT_DETAIL,
+    JSON_REQUEST_BODY_MAX_BYTES,
+)
+from songmaker_cli.covers import (
     COVER_DIRNAME,
     COVER_INVALID_ALBUM_ID,
     COVER_JPEG_EXTENSION,
     COVER_JPEG_MAGIC,
     COVER_KEY_PNG,
-    COVER_MAX_BYTES,
     COVER_MAX_PIXELS,
     COVER_OLD_DIRNAME_SUFFIX,
     COVER_PNG_EXTENSION,
@@ -34,14 +40,8 @@ from songmaker_cli.constants import (
     COVER_TOO_LARGE,
     COVER_TOO_MANY_PIXELS,
     COVER_UNSUPPORTED_TYPE,
-    COVER_UPLOAD_BODY_MAX_BYTES,
-    COVER_VARIANT_CARD,
-    COVER_VARIANT_DETAIL,
     COVER_VARIANT_ORIGINAL,
     COVER_VARIANT_UNKNOWN,
-    JSON_REQUEST_BODY_MAX_BYTES,
-)
-from songmaker_cli.covers import (
     CoverRejectedError,
     decode_cover_image,
     remove_album_cover_files,

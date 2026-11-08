@@ -11,14 +11,12 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from support.web_app import make_test_app, seed_session, seed_user
 
-from songmaker_cli.constants import (
-    ALBUM_COVER_SUGGESTIONS_DIRNAME,
-    COVER_DIRNAME,
-)
+from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME
 from songmaker_cli.cover_suggestions import (
     remove_album_cover_suggestion_files,
     remove_cover_suggestion_files,
 )
+from songmaker_cli.covers import COVER_DIRNAME
 from songmaker_cli.db.models import Album
 
 ALBUM_ID = "alice-album"

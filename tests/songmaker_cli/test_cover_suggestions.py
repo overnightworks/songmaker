@@ -26,7 +26,6 @@ from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
-    COVER_DIRNAME,
     COVER_SUGGESTION_NOT_FOUND,
     JSON_REQUEST_BODY_MAX_BYTES,
     AuditAction,
@@ -42,6 +41,7 @@ from songmaker_cli.cover_suggestions import (
     remove_cover_suggestion_files,
     request_cover_suggestions,
 )
+from songmaker_cli.covers import COVER_DIRNAME
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, AuditLog, Job, User, UserSession
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since
