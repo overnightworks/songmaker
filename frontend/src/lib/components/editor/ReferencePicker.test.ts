@@ -107,7 +107,7 @@ describe('reference picker', () => {
 		expect(mocks.listReferences).not.toHaveBeenCalled();
 		await openPicker();
 
-		const labels = Array.from(target.querySelectorAll('.choices > li')).map((item) =>
+		const labels = Array.from(target.querySelectorAll('.picker li')).map((item) =>
 			item.textContent?.replace(/\s+/g, ' ').trim()
 		);
 		expect(labels).toEqual([
@@ -118,6 +118,65 @@ describe('reference picker', () => {
 			'Upload audio',
 			'All references'
 		]);
+	});
+
+	it('scrolls only the references, with None, Upload audio and All references outside the scrolling list', async () => {
+		await mountPicker();
+		await openPicker();
+
+		const scrolling = Array.from(target.querySelectorAll('.choices > li')).map((item) =>
+			item.textContent?.replace(/\s+/g, ' ').trim()
+		);
+		expect(scrolling).toEqual(['newest.wav 0:42', 'older.mp3 ⏳ 28d 0:31', 'oldest.flac']);
+		expect(choice('None').closest('.choices')).toBeNull();
+		expect(target.querySelector('input[type="file"]')?.closest('.choices')).toBeNull();
+		expect(target.querySelector('a[href="/settings/references"]')?.closest('.choices')).toBeNull();
+	});
+
+	it('keeps the choices one radio group', async () => {
+		await mountPicker();
+		await openPicker();
+
+		const names = new Set(
+			Array.from(target.querySelectorAll<HTMLInputElement>('input[type="radio"]')).map(
+				(radio) => radio.name
+			)
+		);
+		expect(names.size).toBe(1);
+	});
+
+	it('points the trigger at the options only while they exist', async () => {
+		await mountPicker();
+		const trigger = target.querySelector<HTMLButtonElement>('.trigger') as HTMLButtonElement;
+		expect(trigger.hasAttribute('aria-controls')).toBe(false);
+
+		await openPicker();
+		const controlled = trigger.getAttribute('aria-controls') as string;
+		expect(target.querySelector(`#${CSS.escape(controlled)}`)).not.toBeNull();
+
+		await afterAction(() => trigger.click());
+		expect(trigger.hasAttribute('aria-controls')).toBe(false);
+	});
+
+	it('keeps the newer list when an older answer arrives after it', async () => {
+		let answerOlder: (value: unknown) => void = () => {};
+		mocks.listReferences
+			.mockReset()
+			.mockReturnValueOnce(new Promise((resolve) => (answerOlder = resolve)))
+			.mockResolvedValueOnce(listAnswer([referenceRecording({ id: 'n', filename: 'newer.wav' })]));
+		await mountPicker();
+		const trigger = target.querySelector<HTMLButtonElement>('.trigger') as HTMLButtonElement;
+		await afterAction(() => trigger.click());
+		await afterAction(() => trigger.click());
+		await openPicker();
+		await vi.waitFor(() => expect(choice('newer.wav')).not.toBeNull());
+
+		answerOlder(listAnswer(servedReferences()));
+		await tick();
+
+		expect(
+			Array.from(target.querySelectorAll('.choices label.fn')).map((label) => label.textContent)
+		).toEqual(['newer.wav']);
 	});
 
 	it('marks the chosen reference and sets the draft when another row is chosen', async () => {
@@ -191,6 +250,25 @@ describe('reference picker', () => {
 		expect(mocks.listReferences).toHaveBeenCalledTimes(2);
 	});
 
+	it('clears the file input after an upload so the same file can be chosen again', async () => {
+		mocks.uploadReference.mockResolvedValue(referenceRecording({ id: 'n', filename: 'new.wav' }));
+		await mountPicker();
+		await openPicker();
+		const input = target.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
+		let value = 'C:\\fakepath\\new.wav';
+		Object.defineProperty(input, 'value', {
+			get: () => value,
+			set: (next: string) => (value = next)
+		});
+		Object.defineProperty(input, 'files', { value: [new File(['x'], 'new.wav')] });
+		input.dispatchEvent(new Event('change', { bubbles: true }));
+
+		await vi.waitFor(() => expect(onchange).toHaveBeenCalled());
+		await vi.waitFor(() => expect(input.disabled).toBe(false));
+
+		expect(input.value).toBe('');
+	});
+
 	it.each([
 		{
 			failure: 'with no network answer',
@@ -202,21 +280,28 @@ describe('reference picker', () => {
 			error: new ApiError(409, 'Reference audio storage limit reached.', '/api/references'),
 			shown: 'Reference audio storage limit reached.'
 		}
-	])('says $shown under the row when the upload fails $failure', async ({ error, shown }) => {
-		mocks.uploadReference.mockRejectedValue(error);
-		await mountPicker();
-		await openPicker();
-		const input = target.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
-		Object.defineProperty(input, 'files', { value: [new File(['x'], 'new.wav')] });
-		input.dispatchEvent(new Event('change', { bubbles: true }));
+	])(
+		'says $shown directly under Upload audio when the upload fails $failure',
+		async ({ error, shown }) => {
+			mocks.uploadReference.mockRejectedValue(error);
+			await mountPicker();
+			await openPicker();
+			const input = target.querySelector<HTMLInputElement>(
+				'input[type="file"]'
+			) as HTMLInputElement;
+			Object.defineProperty(input, 'files', { value: [new File(['x'], 'new.wav')] });
+			input.dispatchEvent(new Event('change', { bubbles: true }));
 
-		await vi.waitFor(() =>
-			expect(
-				Array.from(target.querySelectorAll('[role="alert"]')).map((el) => el.textContent?.trim())
-			).toEqual([shown])
-		);
-		expect(onchange).not.toHaveBeenCalled();
-	});
+			await vi.waitFor(() =>
+				expect(
+					Array.from(target.querySelectorAll('[role="alert"]')).map((el) => el.textContent?.trim())
+				).toEqual([shown])
+			);
+			const alert = target.querySelector('[role="alert"]') as HTMLElement;
+			expect(alert.previousElementSibling?.textContent).toContain('Upload audio');
+			expect(onchange).not.toHaveBeenCalled();
+		}
+	);
 
 	it('names the failure and offers a retry when the list cannot load, with the rest still usable', async () => {
 		mocks.listReferences.mockRejectedValueOnce(
@@ -230,7 +315,7 @@ describe('reference picker', () => {
 		await afterAction(() => choice('None').click());
 		expect(onchange).toHaveBeenCalledWith(null);
 
-		await afterAction(() => target.querySelector<HTMLButtonElement>('.load-error button')?.click());
+		await afterAction(() => target.querySelector<HTMLButtonElement>('.failure button')?.click());
 
 		await vi.waitFor(() => expect(target.querySelector('label.fn[for]')).not.toBeNull());
 		expect(choice('newest.wav')).not.toBeNull();

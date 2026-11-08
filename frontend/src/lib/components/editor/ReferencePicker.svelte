@@ -5,7 +5,6 @@
 	import { listReferences, uploadReference } from '#lib/api/references.ts';
 	import type { ReferenceListRowResponse, ReferenceResponse } from '#lib/api/types.ts';
 	import Icon from '#lib/components/Icon.svelte';
-	import LoadFailure from '#lib/components/LoadFailure.svelte';
 	import ReferenceExpiry from '#lib/components/ReferenceExpiry.svelte';
 	import {
 		REFERENCE_AUDIO_ACCEPT,
@@ -55,13 +54,18 @@
 	let playFault = $state<string | null>(null);
 	let triggerButton: HTMLButtonElement | undefined = $state();
 
+	let latestLoad = 0;
 	async function load(): Promise<void> {
+		const request = ++latestLoad;
 		loadFailure = null;
 		try {
-			references = (await listReferences()).references;
+			const answer = await listReferences();
+			if (request !== latestLoad) return;
+			references = answer.references;
 			loaded = true;
 			now = new Date();
 		} catch (error) {
+			if (request !== latestLoad) return;
 			loadFailure = describeFailure(error, RECIPE_REFERENCE_LOAD_ERROR);
 		}
 	}
@@ -111,7 +115,7 @@
 			type="button"
 			class="trigger"
 			aria-expanded={$open}
-			aria-controls="reference-picker-options"
+			aria-controls={$open ? 'reference-picker-options' : undefined}
 			aria-label={`${RECIPE_REFERENCE_LABEL}: ${reference?.filename ?? RECIPE_REFERENCE_NONE_LABEL}`}
 			onclick={() => ($open = !$open)}
 		>
@@ -123,7 +127,7 @@
 </div>
 {#if $open}
 	<div class="picker" id="reference-picker-options">
-		<ul class="choices">
+		<ul class="fixed">
 			<li class="po" class:on={reference === null}>
 				<input
 					type="radio"
@@ -134,6 +138,8 @@
 				/>
 				<label class="fn" for="reference-choice-none">{RECIPE_REFERENCE_NONE_LABEL}</label>
 			</li>
+		</ul>
+		<ul class="choices">
 			{#each references as row (row.id)}
 				{@const playing = preview.activeId === row.id}
 				<li class="po" class:on={reference?.id === row.id}>
@@ -147,10 +153,11 @@
 					<button
 						type="button"
 						class="face"
+						data-hitbox="frequent"
 						aria-label={`${playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${row.filename}`}
 						onclick={() => preview.toggle(row.id)}
 					>
-						<Icon name={playing ? 'pause' : 'play'} size={12} />
+						<span class="disc"><Icon name={playing ? 'pause' : 'play'} size={12} /></span>
 					</button>
 					<label class="fn" for={`reference-choice-${row.id}`}>{row.filename}</label>
 					{#if row.deletes_at !== null}<ReferenceExpiry deletesAt={row.deletes_at} {now} />{/if}
@@ -160,9 +167,22 @@
 			{#if !loaded && loadFailure === null}
 				<li class="quiet">{RECIPE_REFERENCE_LOADING}</li>
 			{/if}
+		</ul>
+		<ul class="fixed">
 			{#if loadFailure !== null}
-				<li class="failure">
-					<LoadFailure message={loadFailure} retryLabel={RECIPE_RETRY_LABEL} onretry={load} />
+				<li class="po failure" role="alert">
+					<Icon name="triangle-alert" size={16} />
+					<span class="fn">{loadFailure}</span>
+					<button
+						type="button"
+						class="retry"
+						data-hitbox="frequent"
+						aria-label={RECIPE_RETRY_LABEL}
+						title={RECIPE_RETRY_LABEL}
+						onclick={load}
+					>
+						<Icon name="refresh-cw" size={16} />
+					</button>
 				</li>
 			{/if}
 			<li class="po up">
@@ -177,6 +197,9 @@
 					/></label
 				>
 			</li>
+			{#if uploadError}
+				<li class="error" role="alert">{uploadError}</li>
+			{/if}
 			<li class="po more">
 				<a href={REFERENCES_PATH} onclick={(event) => followAppPageLink(event, REFERENCES_PATH)}
 					>{RECIPE_REFERENCE_ALL_LABEL}<Icon name="chevron-right" size={16} /></a
@@ -186,7 +209,6 @@
 		{#if playFault}<p class="error" role="alert">{playFault}</p>{/if}
 	</div>
 {/if}
-{#if uploadError}<p class="error" role="alert">{uploadError}</p>{/if}
 
 <style>
 	.kv {
@@ -199,7 +221,11 @@
 	}
 
 	.kv.open {
-		background: var(--surface-hover, var(--bg));
+		background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+	}
+
+	.kv.open .trigger {
+		color: var(--accent);
 	}
 
 	.k {
@@ -244,11 +270,15 @@
 		background: var(--bg);
 	}
 
-	.choices {
+	.choices,
+	.fixed {
 		margin: 0;
 		padding: 0;
 		list-style: none;
-		max-height: 18rem;
+	}
+
+	.choices {
+		max-height: calc(6 * var(--hitbox-frequent));
 		overflow-y: auto;
 	}
 
@@ -294,25 +324,47 @@
 	}
 
 	.po input[type='radio']:focus-visible,
-	.face:focus-visible,
+	.face:focus-visible .disc,
+	.retry:focus-visible,
 	.trigger:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
 
+	.face,
+	.retry {
+		border: none;
+		background: none;
+	}
+
 	.face {
+		color: var(--text);
+	}
+
+	.face:focus-visible {
+		outline: none;
+	}
+
+	.retry:focus-visible {
+		outline-offset: -2px;
+	}
+
+	.disc {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		flex: none;
 		width: 1.75rem;
 		height: 1.75rem;
-		padding: 0;
 		border: 1px solid var(--border);
 		border-radius: 50%;
-		background: none;
-		color: var(--text);
-		cursor: pointer;
+	}
+
+	.retry {
+		color: var(--accent);
+	}
+
+	.failure {
+		color: var(--fail);
 	}
 
 	.up,
@@ -353,7 +405,7 @@
 
 	.error {
 		margin: 0;
-		padding: var(--row-padding);
+		padding: 0.25rem var(--row-padding);
 		color: var(--fail);
 		font-size: var(--label-font-size);
 	}
