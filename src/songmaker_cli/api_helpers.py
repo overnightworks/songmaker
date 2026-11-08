@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Final, NoReturn, Protocol
 
 from fastapi import Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse
 from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from webauth.rate_limit import RedisRateLimitBackend
 from songmaker_cli.audio_paths import AudioFileNotFoundError
 from songmaker_cli.constants import (
     AUDIO_FILE_NOT_FOUND,
+    COVER_NOT_FOUND,
     HTTP_NOT_FOUND,
     LIBRARY_QUERY_REQUIRED,
     PAGE_DEFAULT_LIMIT,
@@ -31,6 +33,11 @@ from songmaker_cli.constants import (
     SETTING_SCORING_RATE_LIMIT,
     JobType,
     LimiterFailurePolicy,
+)
+from songmaker_cli.covers import (
+    COVER_RESPONSE_HEADERS,
+    CoverRejectedError,
+    cover_media_type,
 )
 from songmaker_cli.db.models import (
     ALBUM_SLUG_MAX_LENGTH,
@@ -97,6 +104,29 @@ def raise_audio_file_http_error(
     """Map a missing stored audio file at the caller's HTTP boundary."""
     detail = HTTP_NOT_FOUND if public else AUDIO_FILE_NOT_FOUND
     raise HTTPException(404, detail) from error
+
+
+def cover_file_response(
+    resolve_file: Callable[[Path, str, str | None, str], Path],
+    audio_dir: Path,
+    entity: Album | Song | Playlist,
+    variant: str,
+    version: str | None,
+) -> FileResponse:
+    """Serve an entity's stored cover, mapping resolver refusals to HTTP errors."""
+    if version is not None and version != entity.cover_key:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_file(audio_dir, entity.id, entity.cover_key, variant)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, entity.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
 
 
 def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:
