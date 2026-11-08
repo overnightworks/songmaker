@@ -1,8 +1,0 @@
-claim_id = "28c7c2bf94c545d1aed376f88920a1e5"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "2e115c471e7bffa12b35652f65271c7b5a81a070"
-branch = "claude/issue-2620-s6-the-player-s-and-now-playing-s-action"
-scope = ["frontend/e2e/share-album-player.spec.ts", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlayingCuration.svelte", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/NowPlayingQueue.svelte", "frontend/src/lib/components/NowPlayingTake.svelte", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayingMark.svelte", "frontend/src/lib/components/TransportBarFrame.svelte", "scripts/style-literals.txt"]
-opened_commit = "65c6d64d8aed87c53803164c0ebdf00ebdc6d981"
-whole_reason = "One surface family of one-token swaps proven by one player drive per width and theme, as #2527's plan states for S5 to S9, with the one e2e probe the swap breaks."
