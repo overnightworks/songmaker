@@ -25,8 +25,7 @@
 		recipeDiffersFromStandard,
 		type RecipeValues
 	} from '#lib/utils/recipe-standard.ts';
-	import { RECIPE_PANEL_LABEL } from '#lib/constants.ts';
-	import { RECIPE_CHANGED_LABEL } from '#lib/constants/recipe.ts';
+	import { RECIPE_CHANGED_LABEL, RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
 	import RecipeTabs from './RecipeTabs.svelte';
 
 	const values = $derived<RecipeValues>({

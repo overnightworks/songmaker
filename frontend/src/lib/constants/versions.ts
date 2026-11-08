@@ -7,3 +7,5 @@ export const VERSION_DELETE_DRAFT_GOES = 'Your unsaved draft goes too.';
 export const VERSION_DELETE_EMPTIES_EDITOR = 'Its lyrics leave the editor, which will be empty.';
 export const VERSION_DELETE_LOAD_UNDO_GOES = 'Undo for your earlier draft goes too.';
 export const VERSION_NO_LYRICS = 'No lyrics';
+export const VERSIONS_SHEET_LABEL = 'Versions';
+export const VERSIONS_SHEET_CLOSE_LABEL = 'Close versions';

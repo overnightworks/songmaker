@@ -14,8 +14,6 @@
 	import { isSungLine } from '#lib/utils/lyrics-align.ts';
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 	import {
-		VERSIONS_SHEET_CLOSE_LABEL,
-		VERSIONS_SHEET_LABEL,
 		versionChipLabel,
 		versionDeleteLabel,
 		versionLabel,
@@ -23,6 +21,8 @@
 		versionsChipAccessibleLabel
 	} from '#lib/constants.ts';
 	import {
+		VERSIONS_SHEET_CLOSE_LABEL,
+		VERSIONS_SHEET_LABEL,
 		VERSION_CURRENT_TAG,
 		VERSION_NO_LYRICS,
 		VERSION_PICKED_LABEL
