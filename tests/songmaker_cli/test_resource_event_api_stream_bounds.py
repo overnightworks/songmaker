@@ -5,7 +5,7 @@ import threading
 from pathlib import Path
 
 import pytest
-from test_resource_event_api import _authenticated_clients, _collect, _create_event, _parse_sse
+from support.resource_event_world import _authenticated_clients, _collect, _create_event, _parse_sse
 
 import songmaker_cli.resource_event_api as resource_api
 from songmaker_cli.constants import (
