@@ -19,9 +19,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-scoring = [
+signal = [
     "librosa>=0.10,<2",
     "soundfile",
+]
+scoring = [
+    "songmaker[signal]",
     "audiobox-aesthetics>=0.0.4,<1",
     "torch>=2.14,<2.15",
     "torchaudio>=2.11,<3",
@@ -30,8 +33,7 @@ scoring = [
 whisper = [
     "faster-whisper>=1.1,<2",
     "torch>=2.14,<2.15",
-    "soundfile",
-    "librosa>=0.10,<2",
+    "songmaker[signal]",
     "numba",
 ]
 server = [
@@ -74,6 +76,7 @@ dev = [
     "pytest>=7.0,<10",
     "pytest-cov>=7.0,<8",
     "pytest-xdist>=3.8,<4",
+    "packaging>=24.1",
     "ruff>=0.4,<1",
     "import-linter>=2.0,<3",
     "fakeredis[lua]>=2.0,<3",
