@@ -33,7 +33,7 @@ export interface VizColors {
 function readChannel(style: CSSStyleDeclaration, token: string): number {
 	const channel = Number.parseInt(style.getPropertyValue(token));
 	if (Number.isNaN(channel)) {
-		throw new Error(`The visualizer needs the numeric colour channel ${token}.`);
+		throw new TypeError(`The visualizer needs the numeric colour channel ${token}.`);
 	}
 	return channel;
 }
