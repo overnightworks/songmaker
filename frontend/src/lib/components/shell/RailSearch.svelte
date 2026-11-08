@@ -387,13 +387,13 @@
 	}
 
 	.rail-search-result:hover {
-		background: color-mix(in srgb, var(--primary) 4%, transparent);
+		background: color-mix(in srgb, var(--accent) 4%, transparent);
 		color: var(--text);
 	}
 
 	.rail-search-result[aria-selected='true'] {
-		border-left-color: var(--primary);
-		background: color-mix(in srgb, var(--primary) 8%, transparent);
+		border-left-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
 		color: var(--text);
 	}
 
@@ -452,7 +452,7 @@
 
 	.rail-search-result mark {
 		background: none;
-		color: var(--primary);
+		color: var(--accent);
 		font-weight: 600;
 	}
 

@@ -1,7 +1,7 @@
 lib/components/AccountMenu.svelte 1
 lib/components/AgentProblemLine.svelte 2
 lib/components/AiNotice.svelte 2
-lib/components/AlbumCoverEditor.svelte 7
+lib/components/AlbumCoverEditor.svelte 6
 lib/components/AlbumDetailView.svelte 2
 lib/components/AlbumMetaEditor.svelte 4
 lib/components/Breadcrumb.svelte 1
@@ -36,7 +36,7 @@ lib/components/PlaylistCover.svelte 2
 lib/components/PlaylistDetailView.svelte 4
 lib/components/PlaylistPicker.svelte 4
 lib/components/QueueStreamFeedback.svelte 4
-lib/components/ShareDialog.svelte 6
+lib/components/ShareDialog.svelte 5
 lib/components/ShareLinkChip.svelte 1
 lib/components/ShareStatus.svelte 2
 lib/components/SongDetailView.svelte 7

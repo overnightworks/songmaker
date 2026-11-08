@@ -433,8 +433,8 @@
 
 	.overflow-btn:hover,
 	.overflow-btn[aria-expanded='true'] {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.entry-overflow-menu {
@@ -495,8 +495,8 @@
 	}
 
 	.retry-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	@media (max-width: 768px) {

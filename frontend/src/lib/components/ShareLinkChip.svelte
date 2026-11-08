@@ -42,7 +42,7 @@
 	}
 
 	.share-link-chip:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 </style>

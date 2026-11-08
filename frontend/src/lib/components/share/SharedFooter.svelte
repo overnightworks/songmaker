@@ -31,12 +31,9 @@
 	.powered a {
 		color: var(--text-muted, #888);
 		text-decoration: none;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-		-webkit-background-clip: text;
-		background-clip: text;
 	}
 
 	.powered a:hover {
-		-webkit-text-fill-color: transparent;
+		color: var(--accent);
 	}
 </style>
