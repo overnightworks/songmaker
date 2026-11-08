@@ -455,18 +455,6 @@
 		background: var(--score-ok);
 	}
 
-	h1 {
-		margin: 0;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-		font-size: 22px;
-	}
-
 	.skeleton {
 		display: flex;
 		flex-direction: column;

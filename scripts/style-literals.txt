@@ -75,8 +75,8 @@ routes/(library)/album/[slug]/[song]/+page.svelte 2
 routes/(library)/album/[slug]/[song]/take/[n]/+page.svelte 2
 routes/(library)/playlist/[slug]/+page.svelte 2
 routes/+layout.svelte 3
-routes/settings/+page.svelte 3
-routes/settings/about/+page.svelte 4
-routes/settings/generation/+page.svelte 15
-routes/settings/users/+page.svelte 22
-routes/settings/voices/+page.svelte 20
+routes/settings/+page.svelte 2
+routes/settings/about/+page.svelte 3
+routes/settings/generation/+page.svelte 14
+routes/settings/users/+page.svelte 21
+routes/settings/voices/+page.svelte 19

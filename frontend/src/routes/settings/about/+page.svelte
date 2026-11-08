@@ -45,7 +45,7 @@
 	<title>About — {APP_NAME}</title>
 </svelte:head>
 
-<h1 class="about-title">About</h1>
+<h1>About</h1>
 
 {#if $loadFailure}
 	<p class="error">{$loadFailure}</p>
@@ -113,14 +113,8 @@
 {/if}
 
 <style>
-	.about-title {
-		margin: 0 0 0.5rem;
-		font-family: var(--font-display);
-		font-size: 1.4rem;
-		font-weight: 400;
-		letter-spacing: 1px;
-		text-transform: uppercase;
-		color: var(--text);
+	:global(.settings-content) h1 {
+		margin-bottom: 0.5rem;
 	}
 
 	.error {

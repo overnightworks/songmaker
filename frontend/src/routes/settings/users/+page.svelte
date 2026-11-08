@@ -651,15 +651,7 @@
 		font-size: 1.1rem;
 	}
 
-	h1 {
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-		font-size: 1.5rem;
+	:global(.settings-content) h1 {
 		margin-bottom: 1.5rem;
 	}
 
@@ -684,9 +676,8 @@
 	}
 
 	.tabs button.active {
-		color: var(--primary);
-		border-bottom: 2px solid transparent;
-		border-image: linear-gradient(90deg, var(--primary), var(--accent)) 1;
+		color: var(--accent);
+		border-bottom: 2px solid var(--accent);
 	}
 
 	.tab-select {
@@ -823,7 +814,7 @@
 
 	.save-btn {
 		display: inline-block;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 		border: none;
 		border-radius: var(--btn-radius-pill);
@@ -885,13 +876,13 @@
 	}
 
 	.gen-model-tab:hover:not(.active) {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.gen-model-tab.active {
 		border-color: transparent;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 	}
 
@@ -930,13 +921,13 @@
 
 	.model-toggle.active {
 		border-color: transparent;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--accent);
 		color: var(--on-accent);
 	}
 
 	.model-toggle:hover:not(.active) {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.model-status {

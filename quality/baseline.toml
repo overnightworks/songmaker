@@ -48,10 +48,10 @@
 "frontend/src/lib/stores/resourceSync.test.ts" = 2034
 "frontend/src/lib/stores/resourceSync.ts" = 1058
 "frontend/src/routes/layout.test.ts" = 1404
-"frontend/src/routes/settings/users/+page.svelte" = 946
+"frontend/src/routes/settings/users/+page.svelte" = 937
 "src/acestep_worker/wrapper.py" = 1087
 "src/songmaker_cli/conversation_api.py" = 968
-"src/songmaker_cli/jobs/generation.py" = 1140
+"src/songmaker_cli/jobs/generation.py" = 1139
 "src/songmaker_cli/jobs/lora_training.py" = 1515
 "src/songmaker_cli/queue_streams.py" = 919
 "src/songmaker_cli/sharing_api.py" = 861
