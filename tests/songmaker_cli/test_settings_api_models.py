@@ -16,12 +16,16 @@ PRESETS_URL = "/api/settings/presets"
 
 
 @pytest.fixture
-def people(tmp_path, pg_factory):
-    clients = sign_in_people(tmp_path, pg_factory, {"ana": "user", "root": "admin"})
+def clients(tmp_path, pg_factory):
+    return sign_in_people(tmp_path, pg_factory, {"ana": "user", "root": "admin"})
+
+
+@pytest.fixture
+def factory(pg_factory):
     with pg_factory() as session:
         session.get(AvailableModel, "turbo").is_active = True
         session.commit()
-    return clients, pg_factory
+    return pg_factory
 
 
 def _model_audits(factory) -> list[str]:
@@ -37,8 +41,7 @@ def _stored_activity(factory) -> dict[str, bool]:
         return {row.id: row.is_active for row in session.query(AvailableModel)}
 
 
-def test_a_member_reads_the_built_in_parameters_of_every_model(people):
-    clients, _ = people
+def test_a_member_reads_the_built_in_parameters_of_every_model(clients):
 
     response = clients["ana"].get(BUILTINS_URL)
 
@@ -46,8 +49,7 @@ def test_a_member_reads_the_built_in_parameters_of_every_model(people):
     assert response.json() == get_builtin_defaults()
 
 
-def test_the_admin_lists_every_model_with_the_inactive_ones(people):
-    clients, factory = people
+def test_the_admin_lists_every_model_with_the_inactive_ones(clients, factory):
     stored = _stored_activity(factory)
     clients["root"].put(f"{ACTIVE_MODELS_URL}/turbo", params={"active": False})
 
@@ -60,8 +62,7 @@ def test_the_admin_lists_every_model_with_the_inactive_ones(people):
 
 
 @pytest.mark.parametrize("url", [ALL_MODELS_URL, f"{ACTIVE_MODELS_URL}/turbo"])
-def test_a_member_is_refused_the_admin_model_routes(people, url):
-    clients, factory = people
+def test_a_member_is_refused_the_admin_model_routes(clients, factory, url):
     before = _stored_activity(factory)
 
     response = (
@@ -75,8 +76,7 @@ def test_a_member_is_refused_the_admin_model_routes(people, url):
 
 
 @pytest.mark.parametrize("active", [False, True])
-def test_the_admin_switches_a_model_and_the_switch_is_audited(people, active):
-    clients, factory = people
+def test_the_admin_switches_a_model_and_the_switch_is_audited(clients, factory, active):
     clients["root"].put(f"{ACTIVE_MODELS_URL}/turbo", params={"active": not active})
 
     response = clients["root"].put(f"{ACTIVE_MODELS_URL}/turbo", params={"active": active})
@@ -87,8 +87,7 @@ def test_the_admin_switches_a_model_and_the_switch_is_audited(people, active):
     assert f"turbo:active={active}" in _model_audits(factory)
 
 
-def test_a_deactivated_model_leaves_the_active_list_and_refuses_a_preset(people):
-    clients, _ = people
+def test_a_deactivated_model_leaves_the_active_list_and_refuses_a_preset(clients, factory):
     clients["root"].put(f"{ACTIVE_MODELS_URL}/turbo", params={"active": False})
 
     listed = clients["ana"].get(ACTIVE_MODELS_URL).json()
@@ -102,8 +101,7 @@ def test_a_deactivated_model_leaves_the_active_list_and_refuses_a_preset(people)
     )
 
 
-def test_an_unknown_model_id_is_not_found_and_nothing_is_audited(people):
-    clients, factory = people
+def test_an_unknown_model_id_is_not_found_and_nothing_is_audited(clients, factory):
     before = _stored_activity(factory)
 
     response = clients["root"].put(f"{ACTIVE_MODELS_URL}/nope", params={"active": False})
