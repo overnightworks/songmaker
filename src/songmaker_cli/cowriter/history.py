@@ -5,15 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from songmaker_cli.constants import COWRITER_SUMMARY_TAG
+from songmaker_cli.constants import COWRITER_MAX_SUMMARY_CHARS, COWRITER_SUMMARY_TAG
 from songmaker_cli.db.models import ChatMessage, ConversationSummary
 
 Summarizer = Callable[[str | None, Sequence[ChatMessage]], str]
 
 
 def count_tokens(text: str) -> int:
-    if not text:
-        return 0
     return max(1, (len(text) + 3) // 4)
 
 
@@ -48,8 +46,6 @@ def _message_tokens(messages: Sequence[ChatMessage]) -> int:
 def _newest_fitting_tail(
     messages: Sequence[ChatMessage], budget: int,
 ) -> list[ChatMessage]:
-    if not messages:
-        return []
     selected: list[ChatMessage] = []
     tokens = 0
     for msg in reversed(messages):
@@ -67,7 +63,7 @@ def compact_conversation(
     *,
     budget: int,
     existing: ConversationSummary | None = None,
-    summarize: Summarizer | None = None,
+    summarize: Summarizer,
 ) -> CompactedHistory:
     """Cover every historical message once: optional summary plus a token tail.
 
@@ -99,13 +95,6 @@ def compact_conversation(
         )
 
     previous = existing.summary_text if existing else None
-    if summarize is None:
-        return CompactedHistory(
-            summary_text=previous,
-            tail=tuple(tail),
-            last_summarized_message_id=already_summarized_id,
-            windowed=True,
-        )
     try:
         summary = summarize(previous, to_fold)
     except Exception:
@@ -141,8 +130,6 @@ def fold_summary(
     previous: str | None, new_messages: Sequence[ChatMessage],
 ) -> str:
     """Deterministic rolling summary used when no model summarizer is injected."""
-    from songmaker_cli.constants import COWRITER_MAX_SUMMARY_CHARS
-
     parts: list[str] = []
     if previous:
         parts.append(previous.strip())
