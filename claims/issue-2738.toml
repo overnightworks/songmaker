@@ -1,8 +1,0 @@
-claim_id = "6041299fc1ed4256a519b89e845bdae0"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "92beeba3e954c3facb6f278d6118a65df54bd761"
-branch = "claude/issue-2738-resource-stream-guards-go-and-cells"
-scope = [".github/workflows/ci.yml", "src/songmaker_cli/resource_event_api.py", "tests/songmaker_cli/test_resource_event_api.py", "tests/songmaker_cli/test_resource_event_api_stream_bounds.py"]
-opened_commit = "0e706f9930ad7d13af84aaec552d20aaa2942c72"
-whole_reason = "The cells take a sibling test file because the module's test file stands at its size ceiling; production stays one module and the floor."
