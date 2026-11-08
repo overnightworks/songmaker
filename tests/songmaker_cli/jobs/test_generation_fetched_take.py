@@ -8,19 +8,24 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from support.generation_job_world import (
     make_generation_dto,
     patch_generation_dispatch,
+    post_process_with_stubbed_audio,
     run_async,
     worker_up,
 )
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.db.models import Generation, Version
+from songmaker_cli.db.models import Generation, Job, Version
+from songmaker_cli.db.queries.generations import delete_generation
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, get_job, update_job_status
 from songmaker_cli.jobs import run_generation_job
 from songmaker_cli.scheduler import WorkerTaskFailed
 
 
-def _run_fetch_job(seeded_db, tmp_path: Path, dispatch, *, count: int) -> None:
-    dispatch_patch, post_process, defaults = patch_generation_dispatch(dispatch)
+def _run_fetch_job(
+    seeded_db, tmp_path: Path, dispatch, *, count: int, post_process_hook=None,
+) -> None:
+    hook = {} if post_process_hook is None else {"post_process": post_process_hook}
+    dispatch_patch, post_process, defaults = patch_generation_dispatch(dispatch, **hook)
     with dispatch_patch, post_process, defaults:
         run_async(run_generation_job(
             "j1", "s1", "v1", count, "u1", db_factory=seeded_db, audio_dir=tmp_path / "audio",
@@ -31,6 +36,16 @@ def _run_fetch_job(seeded_db, tmp_path: Path, dispatch, *, count: int) -> None:
 def _count_saved_takes(seeded_db) -> int:
     with seeded_db() as session:
         return session.query(Generation).filter_by(song_id="s1").count()
+
+
+def _write_fetched_take(tmp_path: Path) -> Path:
+    fetched = tmp_path / "music-take.wav"
+    fetched.write_bytes(b"RIFF")
+    return fetched
+
+
+def _audio_files(tmp_path: Path) -> set[Path]:
+    return {path for path in (tmp_path / "audio").rglob("*") if path.is_file()}
 
 
 def test_a_take_whose_fetch_failed_leaves_the_jobs_other_takes_saved(
@@ -67,6 +82,57 @@ def test_a_take_fetched_for_a_job_cancelled_meanwhile_leaves_no_local_file(
 
     assert _count_saved_takes(seeded_db) == saved_before
     assert not fetched.exists()
+
+
+def test_a_take_whose_job_is_cancelled_during_its_write_leaves_no_file_and_no_row(
+    seeded_db, tmp_path: Path,
+) -> None:
+    def cancel_then_write(**kwargs):
+        with seeded_db() as session:
+            update_job_status(session, "j1", JobStatusUpdate("cancelled"))
+            session.commit()
+        return post_process_with_stubbed_audio(
+            on_outputs_written=lambda _written: None, **kwargs,
+        )
+
+    fetched = _write_fetched_take(tmp_path)
+    saved_before = _count_saved_takes(seeded_db)
+    files_before = _audio_files(tmp_path)
+
+    _run_fetch_job(
+        seeded_db, tmp_path, AsyncMock(return_value=make_generation_dto(audio_path=str(fetched))),
+        count=1, post_process_hook=cancel_then_write,
+    )
+
+    assert _audio_files(tmp_path) == files_before
+    assert _count_saved_takes(seeded_db) == saved_before
+    with seeded_db() as session:
+        assert get_job(session, "j1").status == "cancelled"
+        assert session.query(Job).filter_by(type="score", song_id="s1").count() == 0
+
+
+def test_a_take_deleted_before_its_score_job_is_created_gets_no_score_job(
+    seeded_db, tmp_path: Path,
+) -> None:
+    def write_then_delete_take(**kwargs):
+        take_id = post_process_with_stubbed_audio(
+            on_outputs_written=lambda _written: None, **kwargs,
+        )
+        with seeded_db() as session:
+            delete_generation(session, take_id)
+            session.commit()
+        return take_id
+
+    fetched = _write_fetched_take(tmp_path)
+
+    _run_fetch_job(
+        seeded_db, tmp_path, AsyncMock(return_value=make_generation_dto(audio_path=str(fetched))),
+        count=1, post_process_hook=write_then_delete_take,
+    )
+
+    with seeded_db() as session:
+        assert get_job(session, "j1").status == "completed"
+        assert session.query(Job).filter_by(type="score", song_id="s1").count() == 0
 
 
 def test_a_fetched_take_is_saved_for_the_song_and_version_the_job_requested(
