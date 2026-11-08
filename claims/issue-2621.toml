@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "2e115c471e7bffa12b35652f65271c7b5a81a070"
 branch = "claude/issue-2621-navigation-follows-each-ready-of-the-lib"
-scope = ["docs/architecture.md", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/navigationLibrarySync.test.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "quality/baseline.toml"]
+scope = ["docs/architecture.md", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/navigationLibrarySync.test.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "quality/baseline.toml", "scripts/dead-exports.allow"]
 opened_commit = "5ed33defa189fa7c17fbc2fd5cd5cbaa43491929"
 whole_reason = "One trigger moves from the layout's one-shot promise into navigation; the follower, its one caller, the deleted function with its mocks, the document and the lowered ceilings must change together or a mock outlives its function."
