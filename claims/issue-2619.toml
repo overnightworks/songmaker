@@ -1,0 +1,8 @@
+claim_id = "0ebcbdf1853e4a3980daa9d3e6ef7adf"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2e115c471e7bffa12b35652f65271c7b5a81a070"
+branch = "claude/issue-2619-the-postgresql-test-move-closes-testing"
+scope = ["docs/architecture.md", "docs/testing.md", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/db/engine.py", "tests/scripts/test_check_pinned_images_match.py", "tests/songmaker_cli/db/test_migration_revisions.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_cover_runner_accounting.py", "tests/songmaker_cli/test_db.py"]
+opened_commit = "23d548f5706b0ce28d7376bba574e43f56bcf21a"
+whole_reason = "The closure of one move: its document, its last test leftovers and the three review follow-ups the parent assigned to this slice, each a few lines; split, each would be a lane for one line."
