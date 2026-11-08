@@ -210,8 +210,6 @@ def _optional_submit_payload(config: AceStepConfig) -> dict[str, object]:
         payload["use_cot_caption"] = False
     if not config.use_cot_language:
         payload["use_cot_language"] = False
-    if config.constrained_decoding:
-        payload["constrained_decoding"] = True
     if config.lm_repetition_penalty != 1.0:  # NOSONAR(S1244) Exact protocol values are forwarded.
         payload["lm_repetition_penalty"] = config.lm_repetition_penalty
     if config.use_adg:

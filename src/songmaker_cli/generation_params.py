@@ -85,7 +85,6 @@ class StoredGenerationParams(BaseGenerationParams):
     repaint_wav_crossfade_sec: float | None = None
     cover_noise_strength: float | None = None
     timesteps: str | None = None
-    constrained_decoding: bool | None = None
     cot_caption: str | None = None
     cot_lyrics: str | None = None
     delivered_batch_size: int | None = None
@@ -156,7 +155,6 @@ def _generation_options(config: AceStepConfig) -> dict:
             config.cfg_interval_start if config.cfg_interval_start > 0.0 else None
         ),
         "cfg_interval_end": config.cfg_interval_end if config.cfg_interval_end < 1.0 else None,
-        "constrained_decoding": True if config.constrained_decoding else None,
         "sampler_mode": config.sampler_mode if config.sampler_mode != "euler" else None,
         "velocity_norm_threshold": (
             config.velocity_norm_threshold if config.velocity_norm_threshold > 0 else None
