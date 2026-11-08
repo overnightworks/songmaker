@@ -129,7 +129,7 @@ def _unsummarized_messages(
 def fold_summary(
     previous: str | None, new_messages: Sequence[ChatMessage],
 ) -> str:
-    """Deterministic rolling summary used when no model summarizer is injected."""
+    """Deterministic rolling summary of the older messages."""
     parts: list[str] = []
     if previous:
         parts.append(previous.strip())
