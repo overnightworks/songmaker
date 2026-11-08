@@ -240,8 +240,8 @@
 
 	.row-active {
 		color: var(--text);
-		border-left-color: var(--primary);
-		background: color-mix(in srgb, var(--primary) 8%, transparent);
+		border-left-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
 	}
 
 	.playlist-songs {

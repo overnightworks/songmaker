@@ -54,8 +54,8 @@
 	}
 
 	.share-btn:hover:not(:disabled) {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.share-btn.active {

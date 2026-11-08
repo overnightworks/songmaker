@@ -50,7 +50,6 @@
 	.load-error-foot {
 		display: flex;
 		justify-content: flex-end;
-		color: var(--fail);
 	}
 
 	.retry-btn {
@@ -61,11 +60,7 @@
 		padding: 0;
 		background: none;
 		border: none;
-		color: inherit;
+		color: var(--accent);
 		cursor: pointer;
-	}
-
-	.retry-btn:hover {
-		color: var(--primary);
 	}
 </style>
