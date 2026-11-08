@@ -7,30 +7,6 @@ mandatory_jobs = [
 ]
 
 [[gate.loosened]]
-what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 1103 -> 1121'
-item = "#2493"
-date = 2026-11-07
-reason = "the operator allowed it on the card on #2493 line 1 (ruling C, 07.11.2026) for the reference list's deletion date and countdown epoch; it lands through his emergency-merge, and #2509 takes the generated file out of the size rule"
-
-[[gate.loosened]]
-what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 1108 -> 1109'
-item = "#2408"
-date = 2026-11-07
-reason = "the operator allowed a one-line raise for the reference's kept field on the card on #2408 line 1 (ruling A, 07.11.2026); it lands through his emergency-merge"
-
-[[gate.loosened]]
-what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 1126 -> 1154'
-item = "#2226"
-date = 2026-11-05
-reason = "the operator allowed it on the card on #2226 line 1 (ruling A, 05.11.2026) for the generated types a reference's uses add; it lands through his emergency-merge"
-
-[[gate.loosened]]
-what = 'size baseline raises file_lines frontend/src/lib/api/types.ts 1133 -> 1135'
-item = "#2264"
-date = 2026-11-05
-reason = "the operator allowed the generated types file to grow once for the rail's pick field (card on #2264, 05.11.2026); it lands through his emergency-merge"
-
-[[gate.loosened]]
 what = 'clone baseline adds src/songmaker_cli/album_api.py api_delete_album_cover <-> src/songmaker_cli/song_api.py api_delete_song_cover'
 item = "#2264"
 date = 2026-11-05
@@ -53,30 +29,6 @@ what = 'mandatory job "Acceptance evidence (integration)" removed'
 item = "#1734"
 date = 2026-10-22
 reason = "the operator ruled the requirement shelf machinery out on 20.10.2026"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1125 -> 1159"
-item = "#1856"
-date = 2026-10-24
-reason = "the co-writer stream frames become generated types (six interfaces, minus ChatTurnV2Result); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1145"
-item = "#1914"
-date = 2026-10-27
-reason = "the co-writer offer response becomes a generated type (CowriterOfferResponse); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1141"
-item = "#1974"
-date = 2026-10-28
-reason = "the cover settings response gains the generated allowed_providers field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1121 -> 1127"
-item = "#2009"
-date = 2026-10-29
-reason = "the health response gains the generated release field and ReleaseInfo type; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
 
 [[gate.loosened]]
 what = "size baseline raises file_lines frontend/src/lib/components/AlbumCoverEditor.test.ts 972 -> 975"
@@ -175,55 +127,94 @@ date = 2026-10-29
 reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
 
 [[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1127 -> 1137"
-item = "#2045"
-date = 2026-10-30
-reason = "versions link references by key: the generated API types gain ReferenceResponse, the upload id and the reference field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1137 -> 1139"
-item = "#2070"
-date = 2026-10-30
-reason = "the song summary and the song item gain the generated share_url field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1139 -> 1140"
-item = "#2089"
-date = 2026-10-30
-reason = "the job answer gains the generated version_id field so the editor predicts the version a save makes during a render; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1144"
-item = "#2107"
-date = 2026-10-31
-reason = "the person's theme choice gains the generated ThemeSettings interface (an inline union of the three choices); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"
-item = "#2086"
-date = 2026-11-02
-reason = "the reference upload answers the stored record: the generated API types swap ReferenceAudioResponse for ReferenceRecordingResponse; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
 what = "import contract \"The application's layers point downward and routes stay apart\" changes layers"
 item = "#2086"
 date = 2026-11-02
 reason = "reference_api joins the route layer as one more independent sibling, so no import direction opens; the gate reads any change of the layers field as a loosening"
 
 [[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1146 -> 1158"
-item = "#2152"
-date = 2026-11-03
-reason = "the reference list answers its storage usage: the generated API types gain the ReferenceListResponse and ReferenceUsageResponse interfaces; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
-what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1132 -> 1133"
-item = "#2197"
-date = 2026-11-03
-reason = "the reference list gains the generated in_use field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
-
-[[gate.loosened]]
 what = 'mandatory job "PostgreSQL contract (serial)" removed'
 item = "#2359"
 date = 2026-11-06
 reason = "the operator ruled on 06.11.2026 that the database tests run in Backend (#2280 A2)"
+
+[[size.generated]]
+path = "frontend/src/lib/api/types.ts"
+job = "Backend (Python 3.14)"
+item = "#2509"
+date = 2026-11-09
+reason = "written by scripts/generate_types.py from api_models/ and proven by its --check in that job"
+
+[[root.allow]]
+entry = "alembic.ini"
+reason = "Alembic's own configuration, which the tool finds at the root"
+
+[[root.allow]]
+entry = "docker/"
+reason = "the worker Dockerfiles and the CI and E2E compose files, built apart from the Python package"
+
+[[root.allow]]
+entry = "frontend/"
+reason = "the web client, built apart from the Python package"
+
+[[root.allow]]
+entry = "legal/"
+reason = "the privacy notice and terms of use pages the app serves"
+
+[[root.allow]]
+entry = "monitoring/"
+reason = "the alert rules, dashboards and their start scripts, deployed apart from the Python package"
+
+[[root.allow]]
+entry = "vendor/"
+reason = "the ACE-Step fork, a git submodule"
+
+[[layout.allow]]
+path = "frontend/src/lib/components/detail-back.test.ts"
+rule = "test-layout"
+reason = "proves how the detail views' back control walks the history controller across several components, which no single component owns"
+
+[[layout.allow]]
+path = "frontend/src/lib/components/frequent-hitbox.test.ts"
+rule = "test-layout"
+reason = "proves the touch target size of the controls that sit in many components, which no single component owns"
+
+[[layout.allow]]
+path = "frontend/src/lib/components/share/share-import-boundary.test.ts"
+rule = "test-layout"
+reason = "a grep gate over every source file that the share surface mounts, with no single subject"
+
+[[layout.allow]]
+path = "tests/test_compose_release_args.py"
+rule = "test-layout"
+reason = "proves docker-compose.yml, which lies outside every package"
+
+[[layout.allow]]
+path = "tests/test_compose_required_env.py"
+rule = "test-layout"
+reason = "proves docker-compose.yml, which lies outside every package"
+
+[[layout.allow]]
+path = "tests/test_packaging_boundary.py"
+rule = "test-layout"
+reason = "proves the container extras against the image entrypoints, which span every package"
+
+[[layout.allow]]
+path = "tests/test_import_boundaries.py"
+rule = "test-layout"
+reason = "the planted-breach proof of the import contracts, which span every package"
+
+[[layout.allow]]
+path = "tests/test_postgresql_databases.py"
+rule = "test-layout"
+reason = "proves the test-database owner tests/support/postgresql.py, which mirrors no production module"
+
+[[layout.allow]]
+path = "tests/test_postgresql_url_owner.py"
+rule = "test-layout"
+reason = "a structural rule over tests/conftest.py, which mirrors no production module"
+
+[[layout.allow]]
+path = "tests/monitoring/scripts/test_start_alertmanager.py"
+rule = "test-layout"
+reason = "proves monitoring/scripts/start_alertmanager.sh, which lies outside scripts/ and every package"

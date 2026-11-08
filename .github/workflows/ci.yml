@@ -100,9 +100,6 @@ jobs:
       - name: No unreferenced backend symbols
         run: uv run --no-sync --frozen --no-build python scripts/check_dead_symbols.py
 
-      - name: Repository root layout
-        run: uv run --no-sync --frozen --no-build python scripts/check_root_layout.py
-
       - name: CI and compose pin the same Postgres image
         run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py
 
@@ -356,7 +353,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    uses: overnightworks/quality/.github/workflows/gate.yml@02fbdd0fb1873b9ba91ba7735886ff6f700da1cc # v0.5.0
+    uses: overnightworks/quality/.github/workflows/gate.yml@2d2b68bf3916b34f6f2c72a540c1e3d8a947b750 # v0.10.0
     with:
       coverage-artifact: coverage
     secrets:

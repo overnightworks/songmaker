@@ -1,4 +1,4 @@
-# Measured by `quality baseline write`. Entries only ever go down.
+# Measured by `quality check --fix`. Entries only ever go down.
 
 [ccn."src/songmaker_cli/scoring/pipeline.py"]
 "run_scoring_pipeline" = 16
@@ -18,7 +18,6 @@
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 861
-"frontend/src/lib/api/types.ts" = 1121
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1115
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -58,6 +57,7 @@
 "tests/acestep_engine/test_client.py" = 818
 "tests/acestep_worker/test_wrapper.py" = 1519
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1291
+"tests/scripts/test_run_autodeploy_alerting.py" = 1299
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1857
 "tests/songmaker_cli/test_admin_api.py" = 999
 "tests/songmaker_cli/test_api.py" = 4581
@@ -72,7 +72,6 @@
 "tests/songmaker_cli/test_scheduler.py" = 1283
 "tests/songmaker_cli/test_server.py" = 1922
 "tests/songmaker_cli/test_sharing_api.py" = 2487
-"tests/scripts/test_run_autodeploy_alerting.py" = 1299
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
 "main" = 65
@@ -150,6 +149,12 @@
 "test_train_lora_releases_handover_claim_after_setup_failure" = 62
 "test_worker_renewal_failure_releases_hold_and_cache_before_background_error" = 62
 
+[function_lines."tests/scripts/test_install_cli_credentials_mirror.py"]
+"run_installer" = 71
+
+[function_lines."tests/scripts/test_send_alert_script.py"]
+"test_trace_channels_never_expose_config_values" = 75
+
 [function_lines."tests/songmaker_cli/jobs/test_lora_training.py"]
 "test_happy_path_transitions_and_persists" = 90
 "test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash" = 70
@@ -205,12 +210,6 @@
 "test_shared_audio_authorization_matches_presented_share_selection" = 61
 "test_shared_playlist_audio_authorization_matches_presented_share_selection" = 79
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 78
-
-[function_lines."tests/scripts/test_send_alert_script.py"]
-"test_trace_channels_never_expose_config_values" = 75
-
-[function_lines."tests/scripts/test_install_cli_credentials_mirror.py"]
-"run_installer" = 71
 
 [clones."scripts/archive_e2e_albums.py"]
 main = [["scripts/seed_e2e_filler_albums.py", "main"]]

@@ -734,7 +734,7 @@ capability and set `no-new-privileges:true`.
 The Release workflow builds the web, music worker, scoring worker and acestep worker images on
 GitHub-hosted runners from the commit quality's gate judged, main's green head.
 The acestep worker's build also checks out the pinned `vendor/acestep` commit,
-one level deep and without credentials.
+one level deep, with the job's token and without persisting it.
 Each job holds only its own permissions: only the tag job writes contents, and
 only the image jobs hold `packages`, `id-token` and `attestations`. Quality's
 `image.yml` signs each image's build provenance. Anyone with write access to the
