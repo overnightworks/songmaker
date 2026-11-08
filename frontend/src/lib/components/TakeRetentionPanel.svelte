@@ -266,7 +266,7 @@
 
 	.btn.danger.solid {
 		background: var(--fail);
-		color: var(--bg);
+		color: var(--on-fail);
 	}
 
 	.confirm {
