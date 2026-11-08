@@ -288,8 +288,8 @@
 	.reject {
 		align-self: flex-end;
 		background: none;
-		border: 1px solid var(--primary);
-		color: var(--primary);
+		border: 1px solid var(--accent);
+		color: var(--accent);
 		border-radius: 4px;
 		padding: 2px 10px;
 		font-size: 0.75rem;
@@ -302,7 +302,7 @@
 	}
 
 	.accept {
-		border-color: var(--primary);
+		border-color: var(--accent);
 	}
 
 	.reject {
