@@ -1,0 +1,8 @@
+claim_id = "4d5e381de023416f803d4af6007fa965"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2a750e83a1325197d4b886c04133c40e7f6692bc"
+branch = "claude/issue-2703-s6-album-recipe-versions-constants"
+scope = ["frontend/e2e", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/stores", "frontend/src/lib/utils", "quality/baseline.toml"]
+opened_commit = "ea938532e7b495c5932ed2e5a8461e20bb786caa"
+whole_reason = "One pure move: the families leave the catch-all together, and every caller re-points in the same change, or the build breaks."
