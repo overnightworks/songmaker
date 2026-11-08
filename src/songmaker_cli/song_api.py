@@ -57,7 +57,7 @@ from songmaker_cli.covers import (
 )
 from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.activity import record_song_played
-from songmaker_cli.db.queries.albums import RestoreWindowExpiredError, get_album
+from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.playlists import best_playable_generation, playlist_holds_song
 from songmaker_cli.db.queries.reference_recordings import (
@@ -85,6 +85,7 @@ from songmaker_cli.db.queries.songs import (
     update_song,
 )
 from songmaker_cli.db.queries.versions import VersionInUseError, delete_version
+from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
 from songmaker_cli.reference_audio import commit_unused_stamps
 
 
