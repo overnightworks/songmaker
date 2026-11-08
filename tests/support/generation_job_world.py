@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -122,6 +123,25 @@ def seeded_db(db_factory, tmp_path: Path):
     (tmp_path / "data").mkdir(exist_ok=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     return db_factory
+
+
+def failing_first_job_read_after(
+    db_factory, has_happened: Callable[[], bool], failure: BaseException
+):
+    """Wrap a session factory: the first session opened after ``has_happened()`` raises ``failure``.
+
+    Later sessions pass through, so the job's failure write still lands.
+    """
+    raised = False
+
+    def factory():
+        nonlocal raised
+        if has_happened() and not raised:
+            raised = True
+            raise failure
+        return db_factory()
+
+    return factory
 
 
 def patch_generation_dispatch(dto_or_side_effect, post_process=persist_via_post_process):
