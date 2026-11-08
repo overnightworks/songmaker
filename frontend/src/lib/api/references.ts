@@ -44,3 +44,11 @@ export async function keepReference(referenceId: string): Promise<void> {
 export async function unkeepReference(referenceId: string): Promise<void> {
 	await apiFetch(`/api/references/${encodeURIComponent(referenceId)}/unkeep`, { method: 'POST' });
 }
+
+export async function acknowledgeCountdown(epoch: string): Promise<void> {
+	await apiSend('/api/references/countdown-shown', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ epoch })
+	});
+}

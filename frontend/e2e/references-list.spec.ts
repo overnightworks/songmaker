@@ -25,7 +25,8 @@ import {
 
 const REFERENCES_PATH = '/api/references';
 const EMPTY_SENTENCE = "No references yet — upload a recording to guide a song's sound.";
-const LENGTH_AND_DAY = /^\d+:\d{2} · \d{1,2} [A-Z][a-z]{2}( \d{4})?$/;
+const LENGTH_AND_DAY = /^\d+:\d{2} · \d{1,2} [A-Z][a-z]{2}( \d{4})?( ⏳ \d+d)?$/;
+const COUNTDOWN = /^⏳ \d+d$/;
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -126,6 +127,7 @@ test('Settings › References shows an uploaded recording with its filename, len
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
 		await expect(row).toBeVisible();
 		await expect(row.locator('.reference-meta')).toHaveText(LENGTH_AND_DAY);
+		await expect(row.locator('.reference-meta .exp')).toHaveText(COUNTDOWN);
 		const rowBox = await row.boundingBox();
 		const viewport = page.viewportSize();
 		expect(rowBox?.width ?? Infinity).toBeLessThanOrEqual(viewport?.width ?? 0);

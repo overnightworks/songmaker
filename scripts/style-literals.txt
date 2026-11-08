@@ -54,7 +54,7 @@ lib/components/editor/GenerationStatusSlot.svelte 1
 lib/components/editor/SeedChip.svelte 1
 lib/components/editor/SongMenu.svelte 2
 lib/components/editor/TakeMenu.svelte 2
-lib/components/editor/TakeRow.svelte 18
+lib/components/editor/TakeRow.svelte 12
 lib/components/editor/TakeTaskCard.svelte 7
 lib/components/editor/TakesList.svelte 7
 lib/components/editor/VersionsSheet.svelte 14

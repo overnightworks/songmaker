@@ -8,6 +8,7 @@ vi.mock('$app/navigation', async () =>
 
 import { ApiError } from './fetch';
 import {
+	acknowledgeCountdown,
 	deleteReference,
 	keepReference,
 	listReferences,
@@ -86,6 +87,21 @@ describe('reference API', () => {
 			status: 409,
 			message: 'Reference audio is in use.'
 		});
+	});
+
+	it('posts the epoch to the countdown route and accepts the empty answer', async () => {
+		mockFetch.mockResolvedValue({
+			ok: true,
+			status: 204,
+			json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input'))
+		});
+
+		await expect(acknowledgeCountdown('epoch-1')).resolves.toBeUndefined();
+
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/references/countdown-shown');
+		expect(init.method).toBe('POST');
+		expect(JSON.parse(init.body)).toEqual({ epoch: 'epoch-1' });
 	});
 
 	describe.each([

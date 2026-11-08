@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 	import {
+		acknowledgeCountdown,
 		deleteReference,
 		keepReference,
 		listReferences,
@@ -9,7 +10,11 @@
 		unkeepReference,
 		uploadReference
 	} from '#lib/api/references.ts';
-	import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
+	import type {
+		ReferenceListResponse,
+		ReferenceListRowResponse,
+		ReferenceUsageResponse
+	} from '#lib/api/types.ts';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -40,20 +45,43 @@
 	const CONFLICT_STATUS = 409;
 	const BYTES_PER_MB = 1_000_000;
 
-	let references = $state<ReferenceRecordingResponse[] | null>(null);
+	let references = $state<ReferenceListRowResponse[] | null>(null);
 	let usage = $state<ReferenceUsageResponse | null>(null);
 	const referenceReloads = reloadWhileUnreachable(() => void load());
 	const loadFailure = referenceReloads.loadFailure;
 
+	let now = $state(new Date());
+	let listElement = $state<HTMLUListElement | null>(null);
+	let countdownAcknowledged = false;
+
+	// The post starts the deletion clock, so it follows a render that shows a countdown, read from
+	// the list on screen: a page already left posts nothing. A failed post changes nothing
+	// visible: the clock has not started, which only moves the dates later, and the next page
+	// load posts again.
+	async function acknowledgeShownCountdown(epoch: string | null) {
+		if (countdownAcknowledged || epoch === null) return;
+		countdownAcknowledged = true;
+		await tick();
+		if (!listElement?.querySelector('.exp')) {
+			countdownAcknowledged = false;
+			return;
+		}
+		await acknowledgeCountdown(epoch).catch(() => undefined);
+	}
+
 	async function load() {
+		let answer: ReferenceListResponse;
 		try {
-			const answer = await listReferences();
-			references = answer.references;
-			usage = answer.usage;
-			referenceReloads.stop();
+			answer = await listReferences();
 		} catch (e) {
 			referenceReloads.nameLoadFailure(e, LOAD_FAILED);
+			return;
 		}
+		now = new Date();
+		references = answer.references;
+		usage = answer.usage;
+		referenceReloads.stop();
+		void acknowledgeShownCountdown(answer.countdown_epoch);
 	}
 
 	const megabytes = (bytes: number) => Math.floor(bytes / BYTES_PER_MB);
@@ -121,7 +149,7 @@
 
 	let activeId = $state<string | null>(null);
 	let rowFault = $state<{ id: string; words: string } | null>(null);
-	let pendingDelete = $state<ReferenceRecordingResponse | null>(null);
+	let pendingDelete = $state<ReferenceListRowResponse | null>(null);
 	let preview: HTMLAudioElement | null = null;
 	let previewId: string | null = null;
 
@@ -170,7 +198,7 @@
 
 	let openUsesId = $state<string | null>(null);
 
-	async function confirmDelete(reference: ReferenceRecordingResponse) {
+	async function confirmDelete(reference: ReferenceListRowResponse) {
 		pendingDelete = null;
 		rowFault = null;
 		try {
@@ -189,7 +217,7 @@
 		await load();
 	}
 
-	async function toggleKeep(reference: ReferenceRecordingResponse) {
+	async function toggleKeep(reference: ReferenceListRowResponse) {
 		rowFault = null;
 		try {
 			await (reference.is_kept ? unkeepReference(reference.id) : keepReference(reference.id));
@@ -295,8 +323,7 @@
 			/>
 		{/if}
 	{:else}
-		{@const now = new Date()}
-		<ul class="reference-list">
+		<ul class="reference-list" bind:this={listElement}>
 			{#each references as reference (reference.id)}
 				{@const playing = activeId === reference.id}
 				<ReferenceRow
