@@ -1,8 +1,0 @@
-claim_id = "d4b33be3c74d4d3582ccce96f3dfdb0b"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "53a2ac2313e0909b1eed95566aa3deeb3d2a3899"
-branch = "claude/issue-2643-v010-a-code-findings"
-scope = ["src/acestep_worker/subprocess_runner.py", "src/songmaker_cli/settings.py", "tests/songmaker_cli/db/test_migration_revisions.py", "tests/songmaker_cli/test_reference_unused_stamp_loops.py", "tests/support/postgresql.py", "tests/test_database_case_record.py", "tests/test_postgresql_databases.py"]
-opened_commit = "cb8f74ebd5b960bb4d3e4dfc371c60207e51293e"
-whole_reason = "Ten rows of one rule family, each a one-line fix or marker, proven by one quality check run; split, each part would repeat the scratch-pin proof."
