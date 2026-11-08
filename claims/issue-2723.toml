@@ -1,0 +1,8 @@
+claim_id = "64b1fead424d467891e1101473a40b0b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "22470443480dcdc825bcf6a7c727ab9c2248c20a"
+branch = "claude/issue-2723-announced-countdown-in-reference-list"
+scope = ["frontend/e2e/references-list.spec.ts", "frontend/src/app.css", "frontend/src/lib/api/references.test.ts", "frontend/src/lib/api/references.ts", "frontend/src/lib/components/ReferenceRow.svelte", "frontend/src/lib/components/editor/TakeRow.svelte", "frontend/src/lib/test-utils/references.ts", "frontend/src/routes/settings/references", "scripts/style-literals.txt"]
+opened_commit = "73c146cffbb3bc0da7b7e18d1e6f19801a670900"
+whole_reason = "The row's badge, the page's post and the amber token are one announced countdown, and the end-to-end pin moves with the row it reads."
