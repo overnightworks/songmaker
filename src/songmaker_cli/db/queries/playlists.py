@@ -16,7 +16,11 @@ from songmaker_cli.db.models import (
     Song,
 )
 from songmaker_cli.db.queries.generations import lock_takes, lock_unarchived_generation
-from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing, is_playable_take
+from songmaker_cli.db.queries.sharing import (
+    disable_sharing,
+    enable_sharing,
+    presented_take,
+)
 
 INITIAL_PLAYLIST_POSITION: Final[int] = 0
 PLAYLIST_SKIP_NO_PLAYABLE: Final = "no_playable_take"
@@ -34,22 +38,6 @@ class PlaylistAlbumSkip:
 class PlaylistAlbumAddResult:
     entries: list[PlaylistEntry]
     skipped: list[PlaylistAlbumSkip]
-
-
-def best_playable_generation(song: Song) -> Generation | None:
-    live = [gen for gen in song.generations if is_playable_take(gen)]
-    if not live:
-        return None
-    for gen in live:
-        if gen.is_picked:
-            return gen
-    live.sort(
-        key=lambda gen: (
-            -(gen.created_at.timestamp()) if gen.created_at is not None else 0.0,
-            gen.id,
-        )
-    )
-    return live[0]
 
 
 def list_playlists(session: Session, user_id: str) -> list[Playlist]:
@@ -194,7 +182,7 @@ def add_song_to_playlist(
     )
     if not song:
         raise ValueError(f"Song not found: {song_id}")
-    playable = best_playable_generation(song)
+    playable = presented_take(song.generations)
     if playable is None:
         return None
     return add_generation_to_playlist(session, playlist_id, playable.id)
@@ -221,7 +209,7 @@ def add_album_to_playlist(
     chosen: dict[str, Generation] = {}
     songs = sorted(album.songs, key=lambda item: (item.track_number, item.id))
     for song in songs:
-        playable = best_playable_generation(song)
+        playable = presented_take(song.generations)
         if playable is None:
             reason = PLAYLIST_SKIP_NO_PLAYABLE
         elif is_readable is not None and not is_readable(playable):

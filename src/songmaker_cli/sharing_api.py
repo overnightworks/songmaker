@@ -75,6 +75,7 @@ from songmaker_cli.db.queries.generations import get_generation_by_slug
 from songmaker_cli.db.queries.playlists import get_playlist_by_slug
 from songmaker_cli.db.queries.sharing import (
     is_playable_take,
+    presented_take,
     shared_album_take_stored_path,
     shared_playlist_take_stored_path,
     shared_song_take_stored_path,
@@ -161,19 +162,6 @@ def _check_rate_limit(
         window_seconds=window_seconds,
         unavailable_log_message="Shared rate limiter unavailable -- allowing request",
     )
-
-
-def _picked_generation(song):
-    picked = [g for g in song.generations if g.is_picked and is_playable_take(g)]
-    if picked:
-        return picked[0]
-    available = sorted(
-        (g for g in song.generations if is_playable_take(g)),
-        key=lambda g: g.generation_number,
-    )
-    if available:
-        return available[-1]
-    return None
 
 
 def _shared_audio_url(
@@ -285,7 +273,7 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
         valid_tracks = {
             (song.id, gen.id)
             for song in album.songs
-            if (gen := _picked_generation(song)) is not None
+            if (gen := presented_take(song.generations)) is not None
         }
         if any((track.song_id, track.generation_id) not in valid_tracks for track in tracks):
             raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
@@ -329,7 +317,7 @@ def get_shared_album(
         raise HTTPException(404, NOT_FOUND_DETAIL)
     ctx: AppContext = request.app.state.ctx
     songs = sorted(album.songs, key=lambda s: s.track_number)
-    picked_by_song = {s.id: _picked_generation(s) for s in songs}
+    picked_by_song = {s.id: presented_take(s.generations) for s in songs}
     cover = _offered_cover(
         album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key),
         lambda: public_album_cover_urls(slug, album.cover_key),
@@ -411,7 +399,7 @@ def get_shared_album_stream(
     sources = []
     songs = sorted(album.songs, key=lambda s: s.track_number)
     for index, song in enumerate(songs):
-        gen = _picked_generation(song)
+        gen = presented_take(song.generations)
         if not gen:
             continue
         audio_url = _shared_audio_url(f"/shared/{slug}/audio", gen)
@@ -461,7 +449,7 @@ def get_shared_song(
     song = get_song_by_slug(db, slug)
     if not song:
         raise HTTPException(404, NOT_FOUND_DETAIL)
-    gen = _picked_generation(song)
+    gen = presented_take(song.generations)
     media = share_pick_media(gen)
     cover = _offered_cover(
         song_cover_file_exists(ctx.audio_dir, song.id, song.cover_key),
