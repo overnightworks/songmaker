@@ -3,7 +3,7 @@
 # Runs from the project root (where docker-compose.yml lives).
 #
 # Usage:
-#   ./scripts/restore.sh /mnt/backup/songmaker/20260329_030000
+#   ./scripts/restore_backup.sh /mnt/backup/songmaker/20260329_030000
 #
 # This will:
 #   0. Refuse unless auto-deploy is stopped and idle, the snapshot is complete
@@ -81,7 +81,7 @@ require_complete_snapshot() {
 }
 
 main() {
-    SNAPSHOT_DIR="$(realpath -m -- "${1:?Usage: ./scripts/restore.sh /path/to/backup/20260329_030000}")"
+    SNAPSHOT_DIR="$(realpath -m -- "${1:?Usage: ./scripts/restore_backup.sh /path/to/backup/20260329_030000}")"
 
     require_idle_autodeploy
     require_complete_snapshot

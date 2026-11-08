@@ -2,8 +2,8 @@
 # List available songmaker backups with size and file counts.
 #
 # Usage:
-#   ./scripts/backup-list.sh
-#   BACKUP_DIR=/media/usb/songmaker ./scripts/backup-list.sh
+#   ./scripts/list_backups.sh
+#   BACKUP_DIR=/media/usb/songmaker ./scripts/list_backups.sh
 
 set -euo pipefail
 

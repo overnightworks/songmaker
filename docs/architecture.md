@@ -1786,7 +1786,7 @@ Dashboard: `songmaker_acestep_workers_total{status="online"}` has its own stat p
 
 ## Backup & Restore
 
-`scripts/backup.sh` dumps PostgreSQL + copies the audio Docker volume to `BACKUP_DIR` (default `/mnt/backup/songmaker`). `scripts/restore.sh` restores both. `scripts/backup-list.sh` lists snapshots. See [scripts/BACKUP.md](../scripts/BACKUP.md) for setup instructions.
+`scripts/create_backup.sh` dumps PostgreSQL + copies the audio Docker volume to `BACKUP_DIR` (default `/mnt/backup/songmaker`). `scripts/restore_backup.sh` restores both. `scripts/list_backups.sh` lists snapshots. See [scripts/BACKUP.md](../scripts/BACKUP.md) for setup instructions.
 
 DB and audio must be backed up and restored together — one without the other leaves orphaned records or unreachable files.
 
