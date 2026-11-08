@@ -16,6 +16,7 @@ from webauth.rate_limit import RedisRateLimitBackend
 
 import songmaker_cli.constants as _consts
 from songmaker_cli.api_helpers import (
+    cover_file_response,
     enforce_rate_limit,
     get_cached_limiter,
     raise_audio_file_http_error,
@@ -61,10 +62,7 @@ from songmaker_cli.constants import (
     LimiterFailurePolicy,
 )
 from songmaker_cli.covers import (
-    COVER_RESPONSE_HEADERS,
-    CoverRejectedError,
     album_cover_file_exists,
-    cover_media_type,
     playlist_cover_file_exists,
     resolve_cover_file,
     resolve_playlist_cover_file,
@@ -248,19 +246,7 @@ def _shared_cover_response(
     entity = resolve_entity()
     if entity is None:
         raise HTTPException(404, NOT_FOUND_DETAIL)
-    if version is not None and version != entity.cover_key:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    try:
-        path = resolve_file(audio_dir, entity.id, entity.cover_key, variant)
-    except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
-    except FileNotFoundError:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    return FileResponse(
-        path,
-        media_type=cover_media_type(variant, entity.cover_key or ""),
-        headers=COVER_RESPONSE_HEADERS,
-    )
+    return cover_file_response(resolve_file, audio_dir, entity, variant, version)
 
 
 def _audio_response(audio_path: Path, cache_control: str) -> FileResponse:
