@@ -219,6 +219,26 @@ describe('reloadWhenLibraryReturns', () => {
 		expect(reload).not.toHaveBeenCalled();
 	});
 
+	it('re-runs a failure across the edge only after the failing caller returned', async () => {
+		recovery.loadStarted();
+		setSync({ ready: true });
+		await runQueuedMicrotasks();
+		recovery.loadFailed();
+		expect(reload).not.toHaveBeenCalled();
+		await runQueuedMicrotasks();
+		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
+	it('re-runs nothing for a failure across the edge disposed before its re-run', async () => {
+		recovery.loadStarted();
+		setSync({ ready: true });
+		await runQueuedMicrotasks();
+		recovery.loadFailed();
+		recovery.dispose();
+		await runQueuedMicrotasks();
+		expect(reload).not.toHaveBeenCalled();
+	});
+
 	it('re-runs nothing after dispose', async () => {
 		recovery.loadStarted();
 		recovery.loadFailed();

@@ -430,7 +430,15 @@ describe('/album/<slug>/<song-slug> after the library load failed', () => {
 	it('opens the song when its own load began before the library was ready and failed after it', async () => {
 		let failAddress!: (error: Error) => void;
 		api.fetchSongs.mockRejectedValue(new ApiError(500, LIBRARY_DOWN, '/api/songs'));
-		api.fetchAlbum.mockImplementationOnce(() => new Promise((_, reject) => (failAddress = reject)));
+		let releaseRerun!: () => void;
+		api.fetchAlbum
+			.mockImplementationOnce(() => new Promise((_, reject) => (failAddress = reject)))
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						releaseRerun = () => resolve(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
+					})
+			);
 		coldTabAt(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
 		const target = openAddress();
 		await vi.waitFor(() => expect(failAddress).toBeDefined());
@@ -438,7 +446,10 @@ describe('/album/<slug>/<song-slug> after the library load failed', () => {
 		recoverLibrary();
 		await retryResourceSync();
 		failAddress(new ApiError(500, ALBUM_DOWN, '/api/albums'));
-
+		await tick();
+		expect(target.querySelector('.address-overlay')?.textContent).toContain('Loading song...');
+		expect(target.textContent).not.toContain(ALBUM_DOWN);
+		releaseRerun();
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
 		expect(target.querySelector('.address-overlay')).toBeNull();
 	});

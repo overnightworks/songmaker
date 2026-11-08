@@ -78,7 +78,12 @@ export function reloadWhenLibraryReturns(reload: () => void): LibraryReturnReloa
 			if (disposed) return;
 			loading = false;
 			failed = true;
-			if (startedBeforeReady && get(resourceSync).ready) rerun();
+			// Queued so the caller's own failure handling returns before the re-run starts.
+			if (startedBeforeReady && get(resourceSync).ready) {
+				queueMicrotask(() => {
+					if (!disposed && failed && !loading) rerun();
+				});
+			}
 		},
 		loadSucceeded() {
 			if (disposed) return;
