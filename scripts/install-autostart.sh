@@ -64,11 +64,11 @@ UNIT_TARGET="$UNIT_DIR/songmaker.service"
 # running either (or both) converges on one identical installed unit.
 ALERT_UNIT_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"
 ALERT_UNIT_TARGET="$UNIT_DIR/songmaker-alert@.service"
-ALERT_SCRIPT="$SCRIPT_DIR/alert.sh"
-# Sourced by alert.sh (and by auto-deploy.sh) for the .env keys that
+ALERT_SCRIPT="$SCRIPT_DIR/send_alert.sh"
+# Sourced by send_alert.sh (and by auto-deploy.sh) for the .env keys that
 # configure the channel — a checkout missing it has no alert channel at
 # all, which is exactly what must not be discovered during an outage.
-ALERT_CONFIG_LIB="$SCRIPT_DIR/alert-config.sh"
+ALERT_CONFIG_LIB="$SCRIPT_DIR/alert_config.sh"
 
 if [[ ! -f "$UNIT_SOURCE" ]]; then
     echo "ERROR: $UNIT_SOURCE not found." >&2
@@ -112,7 +112,7 @@ sed_escape_replacement() {
 
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
-ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/alert.sh")"
+ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/send_alert.sh")"
 
 # shellcheck source=scripts/agent_cli_paths.sh
 source "$SCRIPT_DIR/agent_cli_paths.sh"
@@ -121,7 +121,7 @@ require_main_checkout "$PROJECT_ROOT" install-autostart.sh || exit 1
 refuse_silent_takeover "$UNIT_TARGET" WorkingDirectory \
     "$PROJECT_ROOT" "$FORCE" || exit 1
 refuse_silent_takeover "$ALERT_UNIT_TARGET" ExecStart \
-    "$PROJECT_ROOT/scripts/alert.sh" "$FORCE" command || exit 1
+    "$PROJECT_ROOT/scripts/send_alert.sh" "$FORCE" command || exit 1
 
 TMP_UNIT="$(mktemp)"
 TMP_ALERT_UNIT="$(mktemp)"
@@ -132,14 +132,14 @@ sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
     "$UNIT_SOURCE" > "$TMP_UNIT"
 
 # ExecStart carries fixed arguments after the script path (the alert
-# subject/body) — only the path prefix up to alert.sh itself is
+# subject/body) — only the path prefix up to send_alert.sh itself is
 # substituted.
 sed -e "s#^WorkingDirectory=.*#WorkingDirectory=$ESCAPED_PROJECT_ROOT#" \
-    -e "s#^ExecStart=.*/scripts/alert\.sh#ExecStart=$ESCAPED_ALERT_SCRIPT#" \
+    -e "s#^ExecStart=.*/scripts/send_alert\.sh#ExecStart=$ESCAPED_ALERT_SCRIPT#" \
     -e "s#^User=.*#User=$ESCAPED_INSTALL_USER#" \
     "$ALERT_UNIT_SOURCE" > "$TMP_ALERT_UNIT"
 
-echo "Installing $ALERT_UNIT_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/alert.sh ..., User=$INSTALL_USER)..."
+echo "Installing $ALERT_UNIT_TARGET (WorkingDirectory=$PROJECT_ROOT, ExecStart=$PROJECT_ROOT/scripts/send_alert.sh ..., User=$INSTALL_USER)..."
 sudo install -m 0644 "$TMP_ALERT_UNIT" "$ALERT_UNIT_TARGET"
 
 echo "Installing $UNIT_TARGET (WorkingDirectory=$PROJECT_ROOT, User=$INSTALL_USER)..."
