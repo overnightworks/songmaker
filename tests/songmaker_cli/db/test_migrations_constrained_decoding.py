@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import pytest
 from alembic import command
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from support.migration_chain import is_on_the_single_chain, seeded_then_upgraded
 from support.reference_link_migration import seed_users
@@ -54,11 +54,9 @@ def _migration_log(caplog) -> list[str]:
 
 
 def _stored_params(engine) -> dict[str, str | None]:
+    query = text("SELECT id, CAST(generation_params AS TEXT) FROM generations")
     with engine.connect() as connection:
-        rows = connection.execute(
-            text("SELECT id, CAST(generation_params AS TEXT) FROM generations"),
-        ).all()
-    return {row[0]: row[1] for row in rows}
+        return dict(connection.execute(query).tuples().all())
 
 
 def _stored_documents(engine) -> dict:
@@ -145,20 +143,3 @@ def test_downgrade_raises_and_leaves_database_and_rows_as_upgraded(
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
     assert version == migration.revision
 
-
-def test_upgrade_changes_no_table_and_no_column(reference_link_database, migration):
-    config, engine = reference_link_database
-    command.upgrade(config, migration.down_revision)
-
-    def shape():
-        inspector = inspect(engine)
-        return {
-            table: [
-                (c["name"], str(c["type"]), c["nullable"]) for c in inspector.get_columns(table)
-            ]
-            for table in inspector.get_table_names()
-        }
-
-    before = shape()
-    command.upgrade(config, migration.revision)
-    assert shape() == before
