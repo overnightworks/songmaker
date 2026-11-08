@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.mcp_wire import LATEST_PROTOCOL_VERSION as PROTOCOL_VERSION
+from agent_runtime_client.mcp_wire import PROTOCOL_VERSION
 from agent_runtime_client.mcp_wire import PROTOCOL_VERSION_HEADER as PROTOCOL_HEADER
+from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, NAME_BEARING_METHODS
+from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from sqlalchemy.orm import sessionmaker
 from support.token_world import TokenWorld, make_token_world
 from support.web_app import seed_user
@@ -64,9 +68,20 @@ class McpWorld:
         return {"Authorization": f"Bearer {self.agent_token(subject, **options)}"}
 
     def rpc(self, method: str, params: dict | None = None, *, headers: dict[str, str]):
-        message = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}
+        envelope = {
+            PROTOCOL_VERSION_META_KEY: PROTOCOL_VERSION,
+            CLIENT_CAPABILITIES_META_KEY: {},
+        }
+        message = {
+            "jsonrpc": "2.0", "id": 1, "method": method,
+            "params": {**(params or {}), "_meta": envelope},
+        }
+        mirrored = {MCP_METHOD_HEADER: method}
+        if method in NAME_BEARING_METHODS:
+            mirrored[MCP_NAME_HEADER] = message["params"][NAME_BEARING_METHODS[method]]
         return self.world.client.post(
-            "/mcp", json=message, headers={**headers, PROTOCOL_HEADER: str(PROTOCOL_VERSION)},
+            "/mcp", json=message,
+            headers={**headers, **mirrored, PROTOCOL_HEADER: str(PROTOCOL_VERSION)},
         )
 
     def tool_names(self, **options: object) -> set[str]:
@@ -106,6 +121,7 @@ def build_mcp_world(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     factory: sessionmaker,
+    lifespans: ExitStack,
     *,
     alice_role: str = "user",
     generation_limit: int = 30,
@@ -117,11 +133,21 @@ def build_mcp_world(
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("GENERATION_RATE_LIMIT_USER", str(generation_limit))
     mcp_world = McpWorld(make_token_world(tmp_path, factory=factory))
+    lifespans.enter_context(mcp_world.world.client)
     mcp_world.seed_people(alice_role=alice_role)
     return mcp_world
 
 
 @pytest.fixture
-def mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory) -> McpWorld:
+def lifespans(mock_arq_pool) -> Iterator[ExitStack]:
+    """Owns the app lifespans a world enters, so each ends with its test."""
+    with ExitStack() as stack:
+        yield stack
+
+
+@pytest.fixture
+def mcp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory, lifespans: ExitStack,
+) -> McpWorld:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    return build_mcp_world(tmp_path, monkeypatch, pg_factory)
+    return build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans)

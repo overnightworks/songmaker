@@ -643,7 +643,7 @@ def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path, p
     from songmaker_cli.redis_client import release_lease_in_background
     from songmaker_cli.server import _lifespan
 
-    mock_app = MagicMock()
+    mock_app = MagicMock(**{"state.mcp_front": None})
     mock_app.state.ctx = AppContext(
         db=pg_factory,
         audio_dir=tmp_path / "audio",
@@ -706,7 +706,7 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path, pg_factory) ->
     only takes effect if _lifespan starts it like the other three loops."""
     from songmaker_cli.server import _lifespan
 
-    mock_app = MagicMock()
+    mock_app = MagicMock(**{"state.mcp_front": None})
     mock_app.state.ctx = AppContext(
         db=pg_factory,
         audio_dir=tmp_path / "audio",
@@ -756,7 +756,7 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path, pg_factory) ->
 def test_lifespan_fails_on_redis_unavailable(tmp_path: Path, pg_factory) -> None:
     from songmaker_cli.server import _lifespan
 
-    mock_app = MagicMock()
+    mock_app = MagicMock(**{"state.mcp_front": None})
     mock_app.state.ctx = AppContext(
         db=pg_factory,
         audio_dir=tmp_path / "audio",

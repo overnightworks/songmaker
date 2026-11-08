@@ -5,6 +5,7 @@ The world is `support.mcp_world`: a fake realm, the real app, and header-exact r
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
@@ -49,9 +50,10 @@ def test_m29_an_agent_token_creates_an_agent_account_and_a_tool_runs_as_it(
 
 def test_m29_an_agent_is_admitted_as_user_whatever_role_a_stored_account_holds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, alice_role="admin")
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
 
     world.world.seed_take(TokenWorld.ALICE, "alices")
     world.world.seed_take(TokenWorld.BOB, "bobs")
