@@ -376,22 +376,22 @@ def _dockerfile_entrypoint_starts() -> list[ContainerStart]:
 
 
 def _entrypoint_script_starts() -> list[ContainerStart]:
-    return [
+    starts = [
         ContainerStart(f"{_relative(script)}::exec", tuple(shlex.split(line)[1:]))
-        for script in sorted(DOCKER_ROOT.glob("*.sh"))
+        for script in sorted(DOCKER_ROOT.rglob("*.sh"))
         for line in script.read_text().splitlines()
         if line.strip().startswith("exec ")
     ]
+    assert starts, "found no exec line in any script under docker/"
+    return starts
 
 
 def _repo_built_container_starts() -> list[ContainerStart]:
-    starts = [
+    return [
         *_compose_entrypoint_starts(),
         *_dockerfile_entrypoint_starts(),
         *_entrypoint_script_starts(),
     ]
-    assert starts, "found no container start to check"
-    return starts
 
 
 def _import_startup_modules(
