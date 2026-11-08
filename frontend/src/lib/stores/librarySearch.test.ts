@@ -455,12 +455,11 @@ describe('applySyncedSong', () => {
 		expect(listLoadedSongIds().sort()).toEqual(['s-search', 's1']);
 	});
 
-	it('1354_rule_20 forgetSyncedSong removes browse, search, and selection', () => {
+	it('1354_rule_20 forgetSyncedSong removes browse and search', () => {
 		songList.set([
 			song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0 }),
 			song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0, id: 's2' })
 		]);
-		selectedSongId.set('s1');
 		librarySearch.set({
 			q: 'Tide',
 			status: 'ready',
@@ -492,7 +491,6 @@ describe('applySyncedSong', () => {
 		});
 		forgetSyncedSong('s1');
 		expect(get(songList).map((item) => item.id)).toEqual(['s2']);
-		expect(get(selectedSongId)).toBeNull();
 		expect(get(librarySearch).items).toEqual([]);
 	});
 

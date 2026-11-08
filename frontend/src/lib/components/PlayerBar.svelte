@@ -375,10 +375,10 @@
 	}
 	button.track-album:hover,
 	button.track-album:focus-visible {
-		color: var(--primary);
+		color: var(--accent);
 	}
 	.loading-text {
-		color: var(--primary);
+		color: var(--text-muted);
 		margin-left: 4px;
 	}
 	.error-text {

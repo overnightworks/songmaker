@@ -510,8 +510,8 @@
 	}
 
 	.toolbar-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.toolbar-btn.destructive {
@@ -591,7 +591,7 @@
 	}
 
 	.retry-btn:hover {
-		color: var(--primary);
+		color: var(--accent);
 	}
 
 	.skeleton {

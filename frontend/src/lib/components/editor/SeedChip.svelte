@@ -43,7 +43,7 @@
 		padding: 0;
 		border: none;
 		background: none;
-		color: var(--primary);
+		color: var(--accent);
 		cursor: pointer;
 	}
 </style>

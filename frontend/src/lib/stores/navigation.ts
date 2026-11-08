@@ -34,6 +34,7 @@ import {
 	loadPlaylistDetail,
 	selectedPlaylist
 } from '#lib/stores/playlists.ts';
+import { resourceSync } from '#lib/stores/resourceSync.ts';
 import { openCollection, setOpenCollection, type OpenCollection } from '#lib/stores/collection.ts';
 import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
 import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
@@ -493,7 +494,7 @@ function settleSongAddress(songId: string): void {
 // library entry names it (a Back or Forward onto the entry of a song deleted
 // meanwhile, whose selection the restore already cleared). A selection of
 // another song is a newer choice that wins over this late 404.
-function leaveGoneSong(songId: string): void {
+export function leaveGoneSong(songId: string): void {
 	const selected = get(selectedSongId);
 	if (selected !== null && selected !== songId) return;
 	if (selected === null) {
@@ -717,15 +718,44 @@ function onLanding(landing: Landing, landedState: unknown): void {
 	);
 }
 
-// Each address page resolves its own initial Library entry. Navigation
-// restores an existing song context and owns subsequent history landings.
-export function initNavigation(): () => void {
+function restoreStandingSongContext(): void {
 	const existing = currentLibraryHistoryState();
 	if (isLibraryHistoryState(existing) && existing.songId) {
 		void loadSongContext(existing.songId);
 	}
+}
 
+// Each address page resolves its own initial Library entry. Navigation
+// restores an existing song context and owns subsequent history landings.
+export function initNavigation(): () => void {
+	restoreStandingSongContext();
 	return attachLandingHandler(onLanding);
+}
+
+// Navigation follows the sync's ready flag. The first ready of an activation
+// attaches the landing handler, which normalises the history entry from the
+// live stores and so needs them hydrated; every later ready (a Retry, a
+// restart) restores the standing song's context again. The work runs one
+// microtask after the sync's store update, once its own bookkeeping is done.
+export function followLibrarySync(): () => void {
+	let following = true;
+	let detachLandingHandler: (() => void) | undefined;
+	let wasReady = get(resourceSync).ready;
+	const unsubscribe = resourceSync.subscribe(({ ready }) => {
+		const becameReady = ready && !wasReady;
+		wasReady = ready;
+		if (!becameReady) return;
+		queueMicrotask(() => {
+			if (!following) return;
+			if (detachLandingHandler) restoreStandingSongContext();
+			else detachLandingHandler = initNavigation();
+		});
+	});
+	return () => {
+		following = false;
+		unsubscribe();
+		detachLandingHandler?.();
+	};
 }
 
 export function resetNavigationForTests(): void {

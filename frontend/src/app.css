@@ -9,6 +9,7 @@
 }
 
 :root {
+	--font-mono: monospace;
 	--phone-tabs-height: 54px;
 	--phone-tabs-room: calc(var(--phone-tabs-height) + env(safe-area-inset-bottom, 0px));
 	--transport-safe-area-bottom: env(safe-area-inset-bottom, 0px);

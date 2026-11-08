@@ -152,7 +152,7 @@ function coldTabAt(pathname: string): void {
 	resetLibrarySearchForTests();
 	resetPlaylistsForTests();
 	resetResourceSyncForTests();
-	startLibraryResourceSync();
+	startLibraryResourceSync(vi.fn());
 }
 
 beforeEach(() => {

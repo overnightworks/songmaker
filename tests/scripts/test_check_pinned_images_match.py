@@ -41,7 +41,7 @@ def _write_workflow(directory: Path, service_image: str) -> Path:
             jobs:
               backend:
                 runs-on: ubuntu-latest
-              postgresql-contract:
+              database-tests:
                 runs-on: ubuntu-latest
                 services:
                   postgres:

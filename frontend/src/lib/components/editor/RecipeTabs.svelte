@@ -416,7 +416,7 @@
 
 <style>
 	.card {
-		border: 1px solid var(--primary);
+		border: 1px solid var(--accent);
 		border-radius: var(--card-radius);
 		background: var(--surface);
 		min-width: 0;
@@ -453,15 +453,15 @@
 	}
 
 	.tablist button.active {
-		color: var(--primary);
-		border-color: var(--primary);
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
 	.dot {
 		width: 0.45rem;
 		height: 0.45rem;
 		border-radius: 50%;
-		background: var(--primary);
+		background: var(--accent);
 		flex-shrink: 0;
 	}
 
@@ -525,8 +525,8 @@
 	}
 
 	.seg button[aria-pressed='true'] {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.upload input {
@@ -563,7 +563,7 @@
 	}
 
 	.reset:hover {
-		color: var(--primary);
+		color: var(--accent);
 	}
 
 	.preset-actions,

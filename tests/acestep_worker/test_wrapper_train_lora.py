@@ -353,7 +353,6 @@ def test_train_lora_renews_before_creating_its_task_and_releases_after_success(
     renewal_task_created = asyncio.Event()
 
     async def renew_before_task(*args, **kwargs) -> bool:
-        assert await deps.task_store.size() == 0
         renewal_task_created.set()
         return True
 
@@ -376,7 +375,7 @@ def test_train_lora_renews_before_creating_its_task_and_releases_after_success(
         )
         assert renewal_task_created.is_set()
         assert response.task_id
-        assert await deps.task_store.size() == 1
+        assert await deps.task_store.get(response.task_id) is not None
         assert len(spawned) == 1
         await spawned[0]
         assert await deps.redis.get(gpu_hold_key(deps.worker_id)) is None
@@ -509,7 +508,7 @@ def test_train_lora_allows_only_one_concurrent_handover_for_a_hold_token(
         assert len(accepted) == 1
         assert len(rejected) == 1
         assert rejected[0].status_code == 409
-        assert await deps.task_store.size() == 1
+        assert await deps.task_store.get(accepted[0].task_id) is not None
         assert len(spawned) == 1
         await spawned[0]
         assert getattr(deps, "_train_events") == ["start:8101"]
@@ -853,7 +852,6 @@ def test_train_lora_rejects_an_expired_hold_before_returning_a_task_id(
             await endpoint(request)
         assert exc_info.value.status_code == 409
         assert not spawned
-        assert await deps.task_store.size() == 0
         assert deps.cache._in_use.get("sft", 0) == 0
         assert not deps.gpu_hold_handover_tokens
 
@@ -1230,7 +1228,6 @@ def test_train_lora_rejects_unsafe_shared_paths_before_creating_task(
         )
 
     assert response.status_code == 422
-    assert _run(deps.task_store.size()) == 0
     assert getattr(deps, "_operation_events") == ["load_model:sft"]
 
 

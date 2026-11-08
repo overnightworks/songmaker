@@ -967,14 +967,14 @@
 	}
 
 	.save-btn.dirty {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 8%, transparent);
 	}
 
 	.save-btn:hover:not(:disabled) {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.save-btn:disabled {

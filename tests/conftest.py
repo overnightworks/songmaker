@@ -280,36 +280,6 @@ def fake_queue_stream_build(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def session_deletion_failure():
-    """defect:#1590: fail a session DELETE after it executes, before commit."""
-    from songmaker_cli.db.models import UserSession
-
-    @contextmanager
-    def fail_deletion(factory, *, after=1, message="session deletion failed"):
-        with factory() as db:
-            engine = db.get_bind()
-        deletions = 0
-
-        def fail_after_delete(conn, cursor, statement, parameters, context, executemany):
-            nonlocal deletions
-            if (
-                context.isdelete
-                and context.compiled.statement.table.name == UserSession.__tablename__
-            ):
-                deletions += 1
-                if deletions == after:
-                    raise RuntimeError(message)
-
-        event.listen(engine, "after_cursor_execute", fail_after_delete)
-        try:
-            yield
-        finally:
-            event.remove(engine, "after_cursor_execute", fail_after_delete)
-
-    return fail_deletion
-
-
-@pytest.fixture
 def session_commit_failure():
     """defect:#1590: fail matching commits, optionally observing uncommitted state."""
     @contextmanager

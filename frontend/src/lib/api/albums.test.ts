@@ -10,6 +10,7 @@ import {
 	createAlbum,
 	createAlbumCoverSuggestions,
 	discardAlbumCoverSuggestions,
+	fetchAlbum,
 	fetchAlbums,
 	fetchAlbumCoverSuggestions,
 	selectAlbumCoverSuggestion,
@@ -22,6 +23,18 @@ function mockOk(data: unknown): void {
 
 beforeEach(() => {
 	mockFetch.mockReset();
+});
+
+describe('album API', () => {
+	it('fetchAlbum calls GET /api/albums/:id', async () => {
+		mockOk({ id: 'a1', title: 'Album' });
+		const result = await fetchAlbum('a1');
+		expect(result.id).toBe('a1');
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/albums/a1',
+			expect.objectContaining({ credentials: 'include' })
+		);
+	});
 });
 
 describe('album cover suggestions API', () => {

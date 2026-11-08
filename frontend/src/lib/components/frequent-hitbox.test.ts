@@ -94,8 +94,7 @@ vi.mock('$app/state', async () =>
 vi.mock('#lib/stores/resourceSync.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/stores/resourceSync.ts')>()),
 	startLibraryResourceSync: vi.fn(),
-	stopLibraryResourceSync: vi.fn(),
-	waitForResourceReady: vi.fn(async () => false)
+	stopLibraryResourceSync: vi.fn()
 }));
 vi.mock('#lib/stores/auth.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/stores/auth.ts')>();

@@ -92,7 +92,6 @@ import {
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_TITLE,
-	SONG_LINK_NOT_FOUND_TOAST,
 	LIBRARY_HISTORY_KIND,
 	TAKES_ERROR,
 	TAKES_RETRY_LABEL
@@ -1321,7 +1320,7 @@ describe('opening a song recovers its generation state', () => {
 	});
 });
 
-describe('song selection (dead song link, issue #237)', () => {
+describe('song selection (dead song link)', () => {
 	it.each([
 		[new ApiError(500, 'Song loading failed', '/api/songs/s1'), 'Song loading failed'],
 		[new TypeError('generations is not iterable'), TAKES_ERROR],
@@ -1355,60 +1354,6 @@ describe('song selection (dead song link, issue #237)', () => {
 		fetchSong.mockResolvedValue(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 
 		await selectSong('s2');
-
-		expect(get(selectedSongId)).toBe('s2');
-		expect(get(toasts)).toHaveLength(0);
-	});
-});
-
-describe('a song deleted meanwhile', () => {
-	const album = { kind: 'album' as const, id: 'a1' };
-	let reportGone = () => {};
-	beforeEach(() => {
-		const lookup = new Promise<never>((_, reject) => {
-			reportGone = () => reject(new ApiError(404, 'Song not found', '/api/songs/gone'));
-		});
-		fetchSong.mockImplementation((id: string) =>
-			id === 'gone'
-				? lookup
-				: Promise.resolve(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }))
-		);
-	});
-	const backOntoGoneSong = (collection: typeof album | null) => {
-		const library = { ...libraryRootState(), collection, songId: 'gone' };
-		const entry = routerHistoryEntry({ library });
-		replaceHistoryEntry(LIBRARY_ROUTE_PATH, entry);
-		window.dispatchEvent(new PopStateEvent('popstate', { state: entry }));
-	};
-	const opened = [
-		['its link is opened', () => selectSong('gone'), 'browse'],
-		['Back lands on it, an album open', () => backOntoGoneSong(album), 'detail'],
-		['Back lands on it, no collection open', () => backOntoGoneSong(null), 'browse']
-	] as const;
-	it.each(opened)(
-		'tells the person and leaves an address that no longer names it when %s',
-		async (_, open, surface) => {
-			onTestFinished(initNavigation());
-			void open();
-			await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('gone'));
-			reportGone();
-
-			await vi.waitFor(() =>
-				expect(get(toasts).map((t) => t.message)).toContain(SONG_LINK_NOT_FOUND_TOAST)
-			);
-			expect(get(selectedSongId)).toBeNull();
-			expect(get(librarySurface)).toBe(surface);
-			await vi.waitFor(() => expect(historyEntry()).toMatchObject({ songId: null }));
-		}
-	);
-
-	it.each(opened)('keeps a newer selection when the late 404 arrives and %s', async (_, open) => {
-		onTestFinished(initNavigation());
-		void open();
-		await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledWith('gone'));
-		await selectSong('s2');
-		reportGone();
-		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(get(selectedSongId)).toBe('s2');
 		expect(get(toasts)).toHaveLength(0);

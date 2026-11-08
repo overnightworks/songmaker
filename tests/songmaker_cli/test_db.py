@@ -37,7 +37,6 @@ from songmaker_cli.db.models import (
     Song,
     User,
     Version,
-    aware_timestamp,
 )
 from songmaker_cli.db.queries.albums import delete_album, get_album, list_albums
 from songmaker_cli.db.queries.auth import (
@@ -93,6 +92,7 @@ from songmaker_cli.db.queries.songs import (
     update_song,
 )
 from songmaker_cli.db.queries.versions import delete_version
+from songmaker_cli.timestamps import aware_timestamp
 from songmaker_cli.worker_liveness import WorkerLiveness
 
 
@@ -631,7 +631,7 @@ def test_job_progress_preserves_generation_start_phase_and_take_counters(
     seeded_session.expire_all()
 
     fetched = get_job(seeded_session, job.id)
-    assert aware_timestamp(fetched.generation_started_at) == generation_started_at
+    assert fetched.generation_started_at == generation_started_at
     assert fetched.phase == GenerationPhase.WRITING
     assert (fetched.take_index, fetched.take_count, fetched.progress) == (1, 2, 0.25)
 
@@ -667,7 +667,7 @@ def test_job_progress_keeps_a_training_start_the_write_does_not_know(
     seeded_session.expire_all()
 
     fetched = get_job(seeded_session, job.id)
-    assert aware_timestamp(fetched.training_started_at) == training_started_at
+    assert fetched.training_started_at == training_started_at
     assert (fetched.current_epoch, fetched.train_epochs, fetched.progress) == (2, 4, 0.5)
 
 
@@ -705,8 +705,7 @@ def test_generation_start_is_the_first_generating_phase_after_each_running_entry
         update_job_status(seeded_session, job.id, JobStatusUpdate(status, phase=phase))
         seeded_session.commit()
         seeded_session.expire_all()
-        started_at = get_job(seeded_session, job.id).generation_started_at
-        return None if started_at is None else aware_timestamp(started_at)
+        return get_job(seeded_session, job.id).generation_started_at
 
     assert generation_started_after(JobStatus.RUNNING, GenerationPhase.LOADING_MODEL) is None
     assert generation_started_after(JobStatus.RUNNING, GenerationPhase.WRITING) is not None
@@ -737,7 +736,7 @@ def test_recovery_failing_a_generating_job_clears_its_generation_start(
         seeded_session, job.id, JobStatusUpdate(JobStatus.RUNNING, phase=GenerationPhase.WRITING)
     )
     seeded_session.commit()
-    now = aware_timestamp(get_job(seeded_session, job.id).generation_started_at)
+    now = get_job(seeded_session, job.id).generation_started_at
 
     recover(seeded_session, now)
     seeded_session.commit()

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -156,66 +159,52 @@ def test_restore_album_does_not_revive_individually_deleted_songs(seeded: Sessio
     assert get_song(seeded, "s2") is not None
 
 
-def test_restore_album_410_after_window(seeded: Session) -> None:
-    soft_delete_album(seeded, "rock")
-    album = (
-        seeded.query(Album)
-        .execution_options(include_deleted=True)
-        .filter_by(id="rock")
-        .first()
-    )
-    album.deleted_at = datetime.now(timezone.utc) - RESTORE_WINDOW - timedelta(seconds=1)
+@dataclass(frozen=True)
+class _Deletable:
+    id: str
+    soft_delete: Callable[..., object]
+    get: Callable[..., object]
+    restore: Callable[..., object]
+
+
+_ALBUM = _Deletable("rock", soft_delete_album, get_album, restore_album)
+_SONG = _Deletable("s1", soft_delete_song, get_song, restore_song)
+_KINDS = [pytest.param(_ALBUM, id="album"), pytest.param(_SONG, id="song")]
+
+
+@pytest.mark.parametrize("kind", _KINDS)
+def test_restore_410_after_window(seeded: Session, kind: _Deletable) -> None:
+    kind.soft_delete(seeded, kind.id)
+    row = kind.get(seeded, kind.id, include_deleted_rows=True)
+    row.deleted_at = datetime.now(timezone.utc) - RESTORE_WINDOW - timedelta(seconds=1)
     seeded.commit()
     with pytest.raises(RestoreWindowExpiredError):
-        restore_album(seeded, "rock")
+        kind.restore(seeded, kind.id)
 
 
-def test_restore_song_410_after_window(seeded: Session) -> None:
-    soft_delete_song(seeded, "s1")
-    song = (
-        seeded.query(Song)
-        .execution_options(include_deleted=True)
-        .filter_by(id="s1")
-        .first()
-    )
-    song.deleted_at = datetime.now(timezone.utc) - RESTORE_WINDOW - timedelta(seconds=1)
-    seeded.commit()
-    with pytest.raises(RestoreWindowExpiredError):
-        restore_song(seeded, "s1")
-
-
-@pytest.mark.parametrize("age_days", [6, 8])
-def test_song_restore_window_follows_the_final_deletion_setting(
-    seeded: Session, monkeypatch: pytest.MonkeyPatch, fresh_settings, age_days: int,
+@pytest.mark.parametrize("kind", _KINDS)
+@pytest.mark.parametrize(
+    ("age_days", "attempt", "still_deleted"),
+    [
+        pytest.param(6, nullcontext, False, id="inside"),
+        pytest.param(8, lambda: pytest.raises(RestoreWindowExpiredError), True, id="expired"),
+    ],
+)
+def test_restore_window_follows_the_final_deletion_setting(
+    seeded: Session, monkeypatch: pytest.MonkeyPatch, fresh_settings, kind: _Deletable,
+    age_days: int, attempt: Callable[[], AbstractContextManager], still_deleted: bool,
 ) -> None:
     monkeypatch.setenv("FINAL_DELETION_DAYS", "7")
-    soft_delete_song(seeded, "s1")
-    song = get_song(seeded, "s1", include_deleted_rows=True)
-    song.deleted_at = datetime.now(timezone.utc) - timedelta(days=age_days)
+    kind.soft_delete(seeded, kind.id)
+    row = kind.get(seeded, kind.id, include_deleted_rows=True)
+    row.deleted_at = datetime.now(timezone.utc) - timedelta(days=age_days)
     seeded.commit()
 
-    if age_days > 7:
-        with pytest.raises(RestoreWindowExpiredError):
-            restore_song(seeded, "s1")
-    else:
-        assert restore_song(seeded, "s1").deleted_at is None
+    with attempt():
+        kind.restore(seeded, kind.id)
 
-
-@pytest.mark.parametrize("age_days", [6, 8])
-def test_album_restore_window_follows_the_final_deletion_setting(
-    seeded: Session, monkeypatch: pytest.MonkeyPatch, fresh_settings, age_days: int,
-) -> None:
-    monkeypatch.setenv("FINAL_DELETION_DAYS", "7")
-    soft_delete_album(seeded, "rock")
-    album = get_album(seeded, "rock", include_deleted_rows=True)
-    album.deleted_at = datetime.now(timezone.utc) - timedelta(days=age_days)
-    seeded.commit()
-
-    if age_days > 7:
-        with pytest.raises(RestoreWindowExpiredError):
-            restore_album(seeded, "rock")
-    else:
-        assert restore_album(seeded, "rock").deleted_at is None
+    row = kind.get(seeded, kind.id, include_deleted_rows=True)
+    assert (row.deleted_at is not None) is still_deleted
 
 
 def test_restore_song_rejects_deleted_album(seeded: Session) -> None:
