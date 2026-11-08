@@ -1,4 +1,4 @@
-"""Behavioral tests for scripts/alert.sh, driven as a real subprocess.
+"""Behavioral tests for scripts/send_alert.sh, driven as a real subprocess.
 
 No real mail is ever sent: a fake ``curl`` executable is placed first on
 PATH and stands in for the real one, so these tests pin observable
@@ -20,8 +20,8 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ALERT_SCRIPT = REPO_ROOT / "scripts" / "alert.sh"
-ALERT_CONFIG_LIB = REPO_ROOT / "scripts" / "alert-config.sh"
+ALERT_SCRIPT = REPO_ROOT / "scripts" / "send_alert.sh"
+ALERT_CONFIG_LIB = REPO_ROOT / "scripts" / "alert_config.sh"
 
 VALID_ENV = {
     "ALERT_EMAIL_TO": "operator@example.com",
@@ -55,11 +55,11 @@ def _write_env_file(path: Path, values: dict[str, str]) -> Path:
 
 
 def _install_fake_curl(bin_dir: Path, exit_code: int = 0, error_message: str = "") -> Path:
-    """Stand in for curl, recording what alert.sh handed it.
+    """Stand in for curl, recording what send_alert.sh handed it.
 
-    FAKE_CURL_FORWARD_CONFIG_TO_URL hands the --config alert.sh built to the
+    FAKE_CURL_FORWARD_CONFIG_TO_URL hands the --config send_alert.sh built to the
     real curl (FAKE_CURL_REAL_CURL) and has it fetch that URL, so the
-    credentials travel through exactly the transport alert.sh uses.
+    credentials travel through exactly the transport send_alert.sh uses.
     """
     bin_dir.mkdir(exist_ok=True)
     fake_curl = bin_dir / "curl"
@@ -127,7 +127,7 @@ def _run_alert(
 
 
 def _alert_script_whose_credentials_producer_is(tmp_path: Path, producer_body: str) -> Path:
-    """A copy of alert.sh whose curl_credentials_config runs ``producer_body``."""
+    """A copy of send_alert.sh whose curl_credentials_config runs ``producer_body``."""
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
     shutil.copy(ALERT_CONFIG_LIB, scripts_dir)
@@ -164,6 +164,40 @@ def test_sends_mail_via_curl_on_success(tmp_path: Path) -> None:
     assert "acestep-worker-0 has not reported in 10 minutes." in message
 
 
+def test_send_is_bounded_by_a_positive_max_time(tmp_path: Path) -> None:
+    args_file = tmp_path / "curl-args"
+
+    result = _run_alert(
+        tmp_path,
+        ["subject", "body"],
+        VALID_ENV,
+        extra_env={"FAKE_CURL_ARGS_FILE": str(args_file)},
+    )
+
+    assert result.returncode == 0
+    curl_args = args_file.read_text().split()
+    assert "--max-time" in curl_args
+    assert int(curl_args[curl_args.index("--max-time") + 1]) > 0
+
+
+def test_alert_runs_through_the_link_at_the_installed_unit_path(tmp_path: Path) -> None:
+    sandbox_scripts = tmp_path / "scripts"
+    sandbox_scripts.mkdir()
+    for script in (ALERT_SCRIPT, ALERT_CONFIG_LIB):
+        shutil.copy2(script, sandbox_scripts / script.name)
+    (sandbox_scripts / "alert.sh").symlink_to(ALERT_SCRIPT.name)
+
+    result = _run_alert(
+        tmp_path,
+        ["subject", "body"],
+        VALID_ENV,
+        script=sandbox_scripts / "alert.sh",
+    )
+
+    assert result.returncode == 0
+    assert "sent" in result.stdout
+
+
 def test_missing_env_file_fails_loud(tmp_path: Path) -> None:
     result = subprocess.run(
         [str(ALERT_SCRIPT), "subject", "body"],
@@ -195,19 +229,26 @@ def test_missing_config_value_fails_loud_and_named(tmp_path: Path, missing_key: 
     assert "refusing" in result.stderr
 
 
-def test_smtp_failure_reports_named_error_without_sending(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("exit_code", "error_message"),
+    [(35, "curl: (35) SSL connect error"), (28, "curl: (28) Operation timed out")],
+    ids=["tls-failure", "timeout"],
+)
+def test_smtp_failure_reports_named_error_without_sending(
+    tmp_path: Path, exit_code: int, error_message: str
+) -> None:
     result = _run_alert(
         tmp_path,
         ["subject", "body"],
         VALID_ENV,
-        fake_curl_exit_code=35,
-        fake_curl_error_message="curl: (35) SSL connect error",
+        fake_curl_exit_code=exit_code,
+        fake_curl_error_message=error_message,
     )
 
     assert result.returncode != 0
     assert "SMTP send" in result.stderr
     assert "failed" in result.stderr
-    assert "curl: (35) SSL connect error" in result.stderr
+    assert error_message in result.stderr
     assert "sent" not in result.stdout
 
 
@@ -316,16 +357,16 @@ def test_curl_reads_back_the_exact_credentials(
     password: str,
     basic_auth_server: tuple[str, dict[str, str]],
 ) -> None:
-    """The credentials alert.sh sends, parsed by the real curl.
+    """The credentials send_alert.sh sends, parsed by the real curl.
 
-    alert.sh itself runs and builds its --config; the fake curl passes that
+    send_alert.sh itself runs and builds its --config; the fake curl passes that
     exact --config on to the real curl, which fetches a loopback server. What
     arrives there must be the byte-for-byte user and password, whatever the
     password contains.
     """
     server_url, received = basic_auth_server
     real_curl = shutil.which("curl")
-    assert real_curl, "the real curl is needed to prove how it reads alert.sh's credentials"
+    assert real_curl, "the real curl is needed to prove how it reads send_alert.sh's credentials"
 
     result = _run_alert(
         tmp_path,

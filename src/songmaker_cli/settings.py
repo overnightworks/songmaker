@@ -469,7 +469,7 @@ class Settings(BaseSettings):
     cover_max_concurrent_runs: int | None = None
 
     # ── Alert channel (issue #333) ─────────────────────────────────────
-    # Read directly from .env by scripts/alert.sh (systemd OnFailure=)
+    # Read directly from .env by scripts/send_alert.sh (systemd OnFailure=)
     # and by the alertmanager container's startup command (fed by
     # monitoring/rules/alert.rules.yml) — neither goes through this app
     # process. Declared here only so extra="forbid" recognizes them
