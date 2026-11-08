@@ -1,7 +1,0 @@
-claim_id = "3ed2ced16a464d5590fdf03326208e97"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6df29577217566b7cb29772be081df0e59dd3b40"
-branch = "claude/issue-2747-cleanup-runs-take-clock-from-caller"
-scope = ["src/songmaker_cli/cleanup.py", "tests/songmaker_cli/db/test_soft_delete.py", "tests/songmaker_cli/test_cleanup_generation_retention.py"]
-opened_commit = "7018fc1c392eee8d3ecc45afe1974cea4fb76fa2"
