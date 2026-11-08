@@ -19,7 +19,7 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from songmaker_cli import audio_files
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import build_ace_config
-from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, JobStatus
+from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
 from songmaker_cli.db.models import (
     SONG_SLUG_MAX_LENGTH,
     Album,
@@ -35,6 +35,7 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
+from songmaker_cli.job_types import JobStatus
 from songmaker_cli.jobs.generation import _load_song_meta
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 
@@ -2230,7 +2231,6 @@ def test_score_generation_submits_job(client: TestClient) -> None:
 
 
 def test_chat_heartbeat_writer_updates_an_active_job(client: TestClient) -> None:
-    from songmaker_cli.constants import JobStatus
     from songmaker_cli.jobs._runtime import _write_chat_job_heartbeat
 
     factory = client.app.state.ctx.db
@@ -2307,8 +2307,8 @@ def test_get_running_generation_exposes_take_counters_and_eta(
     client: TestClient, progress: float, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from songmaker_cli.api_models import jobs as job_models
-    from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
 
     now = datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc)
 
@@ -2361,9 +2361,9 @@ def test_generation_estimate_leaves_the_model_load_out(
     timeline: list[tuple[str, float, int]],
 ) -> None:
     from songmaker_cli.api_models import jobs as job_models
-    from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
     from songmaker_cli.db.queries import jobs as job_queries
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
 
     clock = [datetime(2030, 1, 1, tzinfo=timezone.utc)]
 
@@ -2770,7 +2770,6 @@ def test_stream_completed_job_carries_training_epochs_and_zero_eta(
 ) -> None:
     import json
 
-    from songmaker_cli.constants import JobStatus
     from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
@@ -4151,7 +4150,7 @@ def test_s8_running_failure_survives_progress(client, stored_musician_job, trans
 
     import httpx
 
-    from songmaker_cli.constants import GenerationPhase
+    from songmaker_cli.job_types import GenerationPhase
     from songmaker_cli.jobs.generation import GenerationProgressTracker
     from songmaker_cli.scheduler import WorkerGpuOutOfMemory
 

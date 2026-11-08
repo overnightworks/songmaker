@@ -144,13 +144,10 @@ async def _read_event_page_before(
     through: int | None,
     deadline: float,
 ) -> ResourceEventPage | None:
-    remaining = deadline - monotonic()
-    if remaining <= 0:
-        return None
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(_read_event_page, ctx, user_id, cursor, through),
-            timeout=remaining,
+            timeout=deadline - monotonic(),
         )
     except TimeoutError:
         return None
@@ -180,7 +177,6 @@ async def _resource_event_generator(
         last_event_id,
         high_water_mark,
         oldest_retained,
-        deadline,
     )
     yield hello
     if initial_resync is not None:
@@ -203,15 +199,14 @@ async def _resource_event_generator(
         frames, wait_for_poll = result
         for frame in frames:
             yield frame
-        if wait_for_poll and not await _wait_for_next_resource_poll(deadline):
-            return
+        if wait_for_poll:
+            await _wait_for_next_resource_poll(deadline)
 
 
 def _initialize_resource_stream(
     last_event_id: int | None,
     high_water_mark: int,
     oldest_retained: int | None,
-    deadline: float,
 ) -> tuple[ResourceEventStreamState, str, str | None]:
     fresh = last_event_id is None
     cursor = high_water_mark if fresh else last_event_id
@@ -228,7 +223,7 @@ def _initialize_resource_stream(
     )
     if fresh or not has_replay_gap(cursor, high_water_mark, oldest_retained):
         return state, hello, None
-    resync = _resync_resource_stream(state, high_water_mark, deadline)
+    resync = _resync_resource_stream(state, high_water_mark)
     return state, hello, resync
 
 
@@ -253,18 +248,17 @@ def _resource_page_frames(
 ) -> tuple[tuple[str, ...], bool] | None:
     target_high = _resource_target_high(state, page)
     if _resource_page_has_gap(state, page, target_high):
-        return _resource_gap_frame(state, target_high, deadline)
+        return _resource_gap_frame(state, target_high)
     if page.events:
-        return _resource_event_frames(state, page.events, deadline)
+        return _resource_event_frames(state, page.events)
     return _resource_idle_frames(state, deadline)
 
 
 def _resource_gap_frame(
     state: ResourceEventStreamState,
     target_high: int,
-    deadline: float,
 ) -> tuple[tuple[str, ...], bool] | None:
-    resync = _resync_resource_stream(state, target_high, deadline)
+    resync = _resync_resource_stream(state, target_high)
     if resync is None:
         return None
     return (resync,), False
@@ -273,12 +267,9 @@ def _resource_gap_frame(
 def _resource_event_frames(
     state: ResourceEventStreamState,
     events: tuple[GenerationCreatedResourceEvent, ...],
-    deadline: float,
-) -> tuple[tuple[str, ...], bool] | None:
+) -> tuple[tuple[str, ...], bool]:
     frames: list[str] = []
     for event in events:
-        if monotonic() >= deadline:
-            return None
         state.cursor = int(event.sequence)
         state.last_emit = monotonic()
         frames.append(
@@ -306,9 +297,8 @@ def _resource_idle_frames(
 def _resync_resource_stream(
     state: ResourceEventStreamState,
     target_high: int,
-    deadline: float,
 ) -> str | None:
-    if state.resync_sent or monotonic() >= deadline:
+    if state.resync_sent:
         return None
     state.cursor = target_high
     state.replay_through = None
@@ -336,12 +326,8 @@ def _resource_heartbeat(state: ResourceEventStreamState, deadline: float) -> boo
     return SSE_HEARTBEAT_COMMENT
 
 
-async def _wait_for_next_resource_poll(deadline: float) -> bool:
-    remaining = deadline - monotonic()
-    if remaining <= 0:
-        return False
-    await asyncio.sleep(min(RESOURCE_EVENT_STREAM_POLL_SECONDS, remaining))
-    return True
+async def _wait_for_next_resource_poll(deadline: float) -> None:
+    await asyncio.sleep(min(RESOURCE_EVENT_STREAM_POLL_SECONDS, deadline - monotonic()))
 
 
 def _get_open_limiter(request: Request) -> RedisRateLimitBackend:

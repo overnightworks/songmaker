@@ -12,9 +12,7 @@ from songmaker_cli.constants import (
     GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
     GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS,
     GENERATE_SUBMIT_TIMEOUT_SECONDS,
-    JOB_ACTIVE_STATUSES,
     JOB_REAPER_INTERVAL_SECONDS,
-    JOB_TERMINAL_STATUSES,
     LORA_TRAINING_MODEL_MODES,
     MODEL_AVAILABLE_MODES,
     MODEL_DEFAULT_MODE,
@@ -22,12 +20,16 @@ from songmaker_cli.constants import (
     STALE_JOB_THRESHOLDS,
     WORKER_RESTART_GRACE_SECONDS,
     AuditAction,
+    ResourceType,
+    worker_restart_grace_seconds,
+)
+from songmaker_cli.job_types import (
+    JOB_ACTIVE_STATUSES,
+    JOB_TERMINAL_STATUSES,
     JobFunction,
     JobStatus,
     JobType,
-    ResourceType,
     WorkerLivenessSignal,
-    worker_restart_grace_seconds,
 )
 from songmaker_cli.settings import Settings
 

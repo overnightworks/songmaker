@@ -29,8 +29,6 @@ from songmaker_cli.constants import (
     COVER_SUGGESTION_NOT_FOUND,
     JSON_REQUEST_BODY_MAX_BYTES,
     AuditAction,
-    JobStatus,
-    JobType,
     ResourceType,
 )
 from songmaker_cli.cover_suggestions import (
@@ -45,6 +43,7 @@ from songmaker_cli.covers import COVER_DIRNAME
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, AuditLog, Job, User, UserSession
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.settings import get_settings
 
 

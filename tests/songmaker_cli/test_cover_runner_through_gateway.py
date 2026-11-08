@@ -48,7 +48,6 @@ from support.xmp_packet import read_digital_source_type
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli import cover_runner
 from songmaker_cli.api_models import AgentProblem
-from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.models import (
     Album,
     AlbumCoverSuggestion,
@@ -58,6 +57,7 @@ from songmaker_cli.db.models import (
     UserSession,
     Version,
 )
+from songmaker_cli.job_types import JobStatus
 from songmaker_cli.oidc_client import normalised_oidc_issuer
 
 USER_ID = "u-cover"

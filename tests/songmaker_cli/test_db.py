@@ -20,13 +20,7 @@ from songmaker_cli.api_models import (
     VersionResponse,
     WhisperCue,
 )
-from songmaker_cli.constants import (
-    GENERATION_ETA_MIN_PROGRESS,
-    STALE_JOB_THRESHOLDS,
-    GenerationPhase,
-    JobStatus,
-    JobType,
-)
+from songmaker_cli.constants import GENERATION_ETA_MIN_PROGRESS, STALE_JOB_THRESHOLDS
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -92,6 +86,7 @@ from songmaker_cli.db.queries.songs import (
     update_song,
 )
 from songmaker_cli.db.queries.versions import delete_version
+from songmaker_cli.job_types import GenerationPhase, JobStatus, JobType
 from songmaker_cli.timestamps import aware_timestamp
 from songmaker_cli.worker_liveness import WorkerLiveness
 
@@ -1996,8 +1991,8 @@ def test_chat_recovery_reads_its_constant_table_not_settings(
     from datetime import datetime, timedelta, timezone
 
     import songmaker_cli.settings as settings
-    from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age_and_type
+    from songmaker_cli.job_types import JobStatus, JobType
 
     job = create_job(db_session, JobType.CHAT)
     db_session.commit()

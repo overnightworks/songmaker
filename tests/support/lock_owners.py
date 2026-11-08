@@ -16,8 +16,8 @@ from songmaker_cli.api_helpers import (
     unique_song_slug,
 )
 from songmaker_cli.auth_stores import DatabaseWriteLock
-from songmaker_cli.constants import JobType
 from songmaker_cli.db.models import Album, User
+from songmaker_cli.job_types import JobType
 
 OWNER_ID = "owner"
 

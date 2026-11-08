@@ -30,10 +30,6 @@ from songmaker_cli.constants import (
     INTERNAL_TOKEN_HEADER,
     JOB_ERROR_GENERATION_FAILED,
     JOB_ERROR_GENERATION_UNAVAILABLE,
-    GenerationPhase,
-    JobFunction,
-    JobStatus,
-    JobType,
 )
 from songmaker_cli.db.models import (
     Generation,
@@ -51,6 +47,7 @@ from songmaker_cli.db.queries.jobs import (
     update_job_status,
 )
 from songmaker_cli.db.queries.workers import register_worker
+from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
 from songmaker_cli.jobs import (
     _finalize_generation_job,
     _make_generation_progress_callback,

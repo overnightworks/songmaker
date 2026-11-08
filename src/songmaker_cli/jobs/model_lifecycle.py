@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 
-from songmaker_cli.constants import JobStatus
+from songmaker_cli.job_types import JobStatus
 
 from ._runtime import _sanitize_error, _touch_heartbeat, _update_job
 

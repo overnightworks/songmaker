@@ -43,10 +43,6 @@ from songmaker_cli.constants import (
     JOB_ERROR_USER_LORA_UNAVAILABLE,
     JOB_ERROR_VERSION_NOT_FOUND,
     WORKER_SHARED_TMP_DIRNAME,
-    GenerationPhase,
-    JobFunction,
-    JobStatus,
-    JobType,
 )
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries.generations import create_generation, get_generation
@@ -64,6 +60,7 @@ from songmaker_cli.generate import (
 )
 from songmaker_cli.generation_params import BaseGenerationParams, stored_config_options
 from songmaker_cli.invariants import expect_present
+from songmaker_cli.job_types import GenerationPhase, JobFunction, JobStatus, JobType
 from songmaker_cli.parser import AlbumMeta, SongMeta
 from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_linked_reference_audio
 from songmaker_cli.scheduler import (

@@ -41,18 +41,13 @@ from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.auth_dependencies import (
     require_admin,
 )
-from songmaker_cli.constants import (
-    MODEL_CONFIG_PATHS,
-    AuditAction,
-    JobFunction,
-    JobStatus,
-    ResourceType,
-)
+from songmaker_cli.constants import MODEL_CONFIG_PATHS, AuditAction, ResourceType
 from songmaker_cli.db.queries.auth import (
     record_audit,
 )
 from songmaker_cli.db.queries.loras import list_user_loras_for_admin
 from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
+from songmaker_cli.job_types import JobFunction, JobStatus
 from songmaker_cli.scheduler import worker_request_headers, worker_response_cause
 from songmaker_cli.settings import get_settings
 

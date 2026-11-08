@@ -5,12 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.orm import Session
 
-from songmaker_cli.constants import (
-    MODEL_DEFAULT_MODE,
-    JobStatus,
-    JobType,
-    LoraStatus,
-)
+from songmaker_cli.constants import MODEL_DEFAULT_MODE, LoraStatus
 from songmaker_cli.db.models import Job, User
 from songmaker_cli.db.queries.loras import (
     add_user_lora_sample,
@@ -25,6 +20,7 @@ from songmaker_cli.db.queries.loras import (
     update_user_lora,
     update_user_lora_sample,
 )
+from songmaker_cli.job_types import JobStatus, JobType
 
 _USER_A = "u-a"
 _USER_B = "u-b"
