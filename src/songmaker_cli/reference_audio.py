@@ -15,22 +15,29 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.audio_files import read_audio_duration
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSIONS
 from songmaker_cli.db.advisory_locks import lock_until_transaction_ends
-from songmaker_cli.db.models import User
+from songmaker_cli.db.models import ReferenceRecording, User
 from songmaker_cli.db.queries.auth import list_user_ids
 from songmaker_cli.db.queries.reference_recordings import (
+    CountdownPublication,
+    CountdownRowUnusable,
+    StampedReference,
     clear_stamps_on_used_or_kept,
     create_reference_recording,
+    delete_reference_recording,
+    get_countdown_publication,
     get_owned_reference_recording,
+    list_stamped_unkept_references,
     list_unstamped_unkept_reference_ids,
     mark_newly_unused,
     owned_reference_storage_paths,
     owner_reference_usage,
+    reference_link_counts,
 )
 from songmaker_cli.settings import Settings
 from songmaker_cli.timestamps import aware_timestamp
@@ -487,5 +494,139 @@ def reconcile_reference_remnants(factory: sessionmaker[Session], audio_dir: Path
     log.info(
         "Reference audio reconciliation: %d removed, %d refused, %d owners failed",
         report.removed, report.refused, report.failed_owners,
+    )
+    return report
+
+
+@dataclass(frozen=True)
+class AnnouncedDeletionReport:
+    deleted: int = 0
+    skipped: int = 0
+    failed: int = 0
+    files_not_removed: int = 0
+
+    def __add__(self, other: AnnouncedDeletionReport) -> AnnouncedDeletionReport:
+        return AnnouncedDeletionReport(
+            self.deleted + other.deleted,
+            self.skipped + other.skipped,
+            self.failed + other.failed,
+            self.files_not_removed + other.files_not_removed,
+        )
+
+
+_SKIPPED = AnnouncedDeletionReport(skipped=1)
+_FAILED = AnnouncedDeletionReport(failed=1)
+
+
+def _log_deletion_failure(reference: StampedReference, failure: SQLAlchemyError) -> None:
+    """Log the row's ids and the error kind only: the driver's message can name the file."""
+    log.error(  # NOSONAR(S8572) The driver's message can name the file.
+        "Announced deletion of reference %s of user %s failed: %s",
+        reference.id, reference.user_id, type(failure).__name__,
+    )
+
+
+def _is_due_and_unused(
+    session: Session, reference: StampedReference, publication: CountdownPublication,
+    now: datetime, days: int, hour: int,
+) -> ReferenceRecording | None:
+    """The locked row when it is still unkept, stamped, unlinked and past its announced date.
+
+    Every fact is read again under the row lock by fresh statements; the publication must read
+    as it did when the run listed. A publication that has become unusable raises.
+    """
+    recording = get_owned_reference_recording(
+        session, reference.user_id, reference.id, lock=True,
+    )
+    if recording is None or recording.is_kept or recording.unused_since is None:
+        return None
+    if not reference_link_counts(session, [recording.id])[recording.id].is_unlinked:
+        return None
+    if get_countdown_publication(session) != publication:
+        return None
+    due = reference_deletes_at(recording.unused_since, publication.published, now, days, hour)
+    return recording if due is not None and due <= now else None
+
+
+def _delete_if_announced(
+    factory: sessionmaker[Session], audio_dir: Path, reference: StampedReference,
+    publication: CountdownPublication, now: datetime, days: int, hour: int,
+) -> AnnouncedDeletionReport:
+    """One row in one transaction: re-check under its lock, delete, commit, then unlink."""
+    try:
+        with factory() as session:
+            recording = _is_due_and_unused(session, reference, publication, now, days, hour)
+            if recording is None:
+                return _SKIPPED
+            if not is_owner_storage_path(reference.user_id, recording.storage_path):
+                log.error(
+                    "Reference %s of user %s kept: corrupt_path", reference.id, reference.user_id,
+                )
+                return _FAILED
+            try:
+                storage_path = delete_reference_recording(session, recording)
+            except IntegrityError:
+                session.rollback()
+                log.info("Reference %s of user %s kept: in_use", reference.id, reference.user_id)
+                return _SKIPPED
+            session.commit()
+    except SQLAlchemyError as failure:
+        _log_deletion_failure(reference, failure)
+        return _FAILED
+    outcome = remove_reference_file(audio_dir, reference.user_id, storage_path)
+    log.log(
+        logging.WARNING if outcome is RemovalOutcome.FAILED else logging.INFO,
+        "Reference %s of user %s deleted after its announced date: file %s",
+        reference.id, reference.user_id, outcome.value,
+    )
+    return AnnouncedDeletionReport(
+        deleted=1, files_not_removed=int(outcome is RemovalOutcome.FAILED),
+    )
+
+
+def _publication_and_candidates(
+    factory: sessionmaker[Session],
+) -> tuple[CountdownPublication, list[StampedReference]] | None:
+    """Both in one session; None, after an ERROR log, when either cannot be read."""
+    try:
+        with factory() as session:
+            return get_countdown_publication(session), list_stamped_unkept_references(session)
+    except CountdownRowUnusable:
+        return None
+    except SQLAlchemyError as failure:
+        log.error(  # NOSONAR(S8572) The driver's message can name the file.
+            "Announced deletion could not list its candidates: %s", type(failure).__name__,
+        )
+        return None
+
+
+def delete_announced_references(
+    factory: sessionmaker[Session], audio_dir: Path, *, days: int, hour: int, now: datetime,
+) -> AnnouncedDeletionReport:
+    """Delete each stamped, unkept, unlinked row whose announced date has passed, row before file.
+
+    Nothing goes without a published countdown: an unusable publication row or a failed
+    listing ends the run at ERROR, and a countdown no page has shown ends it at INFO. A row
+    that fails its own transaction is logged and counted, and the others run on. A
+    publication that turns unusable mid-run ends it with the report so far.
+    """
+    listed = _publication_and_candidates(factory)
+    if listed is None:
+        return AnnouncedDeletionReport()
+    publication, candidates = listed
+    if publication.published is None:
+        log.info("Announced reference deletion skipped: no page has shown the countdown yet")
+        return AnnouncedDeletionReport()
+    report = AnnouncedDeletionReport()
+    for reference in candidates:
+        try:
+            report += _delete_if_announced(
+                factory, audio_dir, reference, publication, now, days, hour,
+            )
+        except CountdownRowUnusable:
+            break
+    log.info(
+        "Announced reference deletion: %d deleted, %d skipped, %d failed, %d files not removed",
+        report.deleted, report.skipped, report.failed, report.files_not_removed,
     )
     return report

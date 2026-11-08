@@ -34,6 +34,7 @@ from songmaker_cli.jobs import (
 from songmaker_cli.jobs.lora_training import reconcile_crashed_loras
 from songmaker_cli.redis_client import build_arq_redis_settings
 from songmaker_cli.settings import Settings, get_settings
+from songmaker_cli.timestamps import utcnow
 from songmaker_cli.worker_base import WorkerBase
 
 log = logging.getLogger(__name__)
@@ -150,10 +151,22 @@ class MusicWorker(WorkerBase):
         return report.removed
 
     async def reference_unused_cron(self, _ctx) -> int:
-        from songmaker_cli.reference_audio import reconcile_unused_stamps
+        return await asyncio.to_thread(self._reconcile_then_delete_unused_references)
 
-        report = await asyncio.to_thread(reconcile_unused_stamps, self.get_db_factory())
-        return report.stamped + report.cleared
+    def _reconcile_then_delete_unused_references(self) -> int:
+        """Stamp and clear first, then delete what the announced dates release."""
+        from songmaker_cli.reference_audio import (
+            delete_announced_references,
+            reconcile_unused_stamps,
+        )
+
+        factory = self.get_db_factory()
+        reconciled = reconcile_unused_stamps(factory)
+        deleted = delete_announced_references(
+            factory, self.audio_dir(), days=self._settings.final_deletion_days,
+            hour=DAILY_CLEANUP_HOUR_UTC, now=utcnow(),
+        )
+        return reconciled.stamped + reconciled.cleared + deleted.deleted
 
 
 _settings = get_settings()

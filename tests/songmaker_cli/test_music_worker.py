@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from support.reference_rows import a_reference
 
 import songmaker_cli.music_worker as mw_mod
+from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import AuditAction, LoraStatus
 from songmaker_cli.db.models import Album, AuditLog, Job, ReferenceRecording, User, UserLora
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
@@ -403,6 +404,39 @@ def test_reference_unused_cron_stamps_unused_rows_and_returns_the_changed_count(
         stamp = session.get(ReferenceRecording, "r1").unused_since
     assert changed == 1
     assert stamp is not None
+
+
+def test_reference_unused_cron_reconciles_before_it_deletes_and_counts_the_deletions(
+    tmp_path, monkeypatch,
+) -> None:
+    from songmaker_cli import reference_audio
+
+    calls: list[str] = []
+    received: dict[str, object] = {}
+    now = datetime(2026, 3, 4, 5, 6, tzinfo=timezone.utc)
+
+    def reconcile(_factory):
+        calls.append("reconcile")
+        return reference_audio.ReconciledStamps(stamped=2, cleared=1)
+
+    def delete(_factory, _audio_dir, **arguments):
+        calls.append("delete")
+        received.update(arguments)
+        return reference_audio.AnnouncedDeletionReport(deleted=4, skipped=5, failed=6)
+
+    monkeypatch.setattr(reference_audio, "reconcile_unused_stamps", reconcile)
+    monkeypatch.setattr(reference_audio, "delete_announced_references", delete)
+    monkeypatch.setattr(mw_mod, "utcnow", lambda: now)
+    worker = MusicWorker(_settings().model_copy(
+        update={"audio_dir": str(tmp_path), "final_deletion_days": 17},
+    ))
+    worker.get_db_factory = MagicMock()
+
+    changed = _run(worker.reference_unused_cron(_mock_ctx()))
+
+    assert calls == ["reconcile", "delete"]
+    assert received == {"days": 17, "hour": DAILY_CLEANUP_HOUR_UTC, "now": now}
+    assert changed == 2 + 1 + 4
 
 
 def test_music_worker_settings_functions() -> None:

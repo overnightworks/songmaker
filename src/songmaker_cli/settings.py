@@ -426,8 +426,8 @@ class Settings(BaseSettings):
         )
 
     # ── Final deletion ────────────────────────────────────────────────
-    # Days until the trash is purged and until an archived take is
-    # hard-deleted (files + row).
+    # Days until the trash is purged, until an archived take is hard-deleted
+    # (files + row) and until an unused, unkept reference recording is deleted.
     final_deletion_days: int = Field(
         default=30, ge=1, alias="FINAL_DELETION_DAYS",
     )

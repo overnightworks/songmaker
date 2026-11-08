@@ -48,6 +48,12 @@ class ReferenceLinkCounts:
 
 
 @dataclass(frozen=True)
+class StampedReference:
+    id: str
+    user_id: str
+
+
+@dataclass(frozen=True)
 class VersionUse:
     song_id: str
     song_title: str
@@ -207,6 +213,24 @@ def list_unstamped_unkept_reference_ids(session: Session) -> list[str]:
         )
         .order_by(ReferenceRecording.id),
     ).scalars())
+
+
+def list_stamped_unkept_references(session: Session) -> list[StampedReference]:
+    """The rows with a stamp that the owner has not kept, in id order, as id and owner.
+
+    A listing only: each row is locked and judged again before anything is done to it.
+    """
+    return [
+        StampedReference(reference_id, user_id)
+        for reference_id, user_id in session.execute(
+            select(ReferenceRecording.id, ReferenceRecording.user_id)
+            .where(
+                ReferenceRecording.unused_since.is_not(None),
+                ReferenceRecording.is_kept.is_(False),
+            )
+            .order_by(ReferenceRecording.id),
+        )
+    ]
 
 
 def clear_stamps_on_used_or_kept(session: Session) -> int:
