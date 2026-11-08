@@ -10,7 +10,7 @@
 		NEW_PLAYLIST_HINT,
 		NEW_PLAYLIST_NAME_LABEL,
 		NEW_PLAYLIST_REFUSED
-	} from '#lib/constants.ts';
+	} from '#lib/constants/new-collection.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {

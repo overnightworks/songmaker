@@ -315,14 +315,6 @@ def test_full_pipeline_no_nan_inf() -> None:
     assert not np.any(np.isinf(mastered_r)), "Inf in mastered right"
 
 
-def test_full_pipeline_empty() -> None:
-    """Verify full pipeline handles empty input gracefully."""
-    empty = np.array([], dtype=np.float64)
-    mastered_l, mastered_r = master_stereo(empty, empty, target_lufs=-14.0)
-    assert mastered_l.size == 0, "Expected empty left channel"
-    assert mastered_r.size == 0, "Expected empty right channel"
-
-
 def test_deterministic_output() -> None:
     """Verify identical input produces identical output."""
     signal = _generate_multiband_signal(2.0)

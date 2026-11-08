@@ -39,11 +39,8 @@ import { openCollection, setOpenCollection, type OpenCollection } from '#lib/sto
 import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
 import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
 import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
-import {
-	ADMIN_WORKER_POOL_HREF,
-	API_ERROR_GENERIC_MESSAGE,
-	SONG_LINK_NOT_FOUND_TOAST
-} from '#lib/constants.ts';
+import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';
+import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
 import {
 	isPlaylistRoutePath,
 	isSongRoutePath,

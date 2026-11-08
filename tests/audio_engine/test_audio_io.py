@@ -16,7 +16,6 @@ from audio_engine.audio_io import (
     build_ffmpeg_cmd,
     encode_mp3,
     master_audio,
-    master_to_mp3,
     read_wav_bytes,
     sanitize_metadata,
     write_stereo_wav,
@@ -179,29 +178,6 @@ def test_encode_mp3_ffmpeg_failure(tmp_path: Path) -> None:
         other_signal = signal.copy()
         with pytest.raises(MasteringError, match="MP3 encoding failed"):
             encode_mp3(signal, other_signal, str(tmp_path / "test.mp3"))
-
-
-def test_master_to_mp3_empty_audio(tmp_path: Path) -> None:
-    empty = np.array([], dtype=np.float64)
-    with pytest.raises(MasteringError, match="empty"):
-        master_to_mp3(empty, empty, str(tmp_path / "test.mp3"))
-
-
-def test_master_to_mp3_ffmpeg_failure(tmp_path: Path) -> None:
-    from unittest.mock import patch
-
-    signal = np.sin(np.linspace(0, 100, 44100 * 3)).astype(np.float64) * 0.5
-
-    with (
-        patch("audio_engine.audio_io.shutil.which", return_value="/usr/bin/ffmpeg"),
-        patch(
-            "subprocess.run",
-            side_effect=subprocess.CalledProcessError(1, "ffmpeg", stderr=b"error"),
-        ),
-    ):
-        other_signal = signal.copy()
-        with pytest.raises(MasteringError, match="MP3 encoding failed"):
-            master_to_mp3(signal, other_signal, str(tmp_path / "test.mp3"))
 
 
 def test_build_ffmpeg_cmd_pipe_input() -> None:

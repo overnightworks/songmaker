@@ -70,7 +70,6 @@ from songmaker_cli.covers import (
 )
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries.albums import (
-    RestoreWindowExpiredError,
     album_ids_with_playable_take,
     archive_album,
     count_albums,
@@ -99,6 +98,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.sentinels import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
+from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)

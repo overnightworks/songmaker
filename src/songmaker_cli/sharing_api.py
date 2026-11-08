@@ -84,6 +84,8 @@ from songmaker_cli.db.queries.sharing import (
 from songmaker_cli.db.queries.songs import get_song_by_slug
 from songmaker_cli.queue_streams import (
     QueueStreamManifest,
+    QueueStreamSource,
+    SnapshotScope,
     build_queue_stream_snapshot,
     ensure_sources_detachable,
     load_queue_stream_manifest,
@@ -381,6 +383,30 @@ async def get_shared_album_cover(
     )
 
 
+def _public_queue_stream(
+    ctx: AppContext,
+    db: Session,
+    sources: list[QueueStreamSource],
+    scope: SnapshotScope,
+    slug: str,
+) -> QueueStreamManifestResponse:
+    ensure_sources_detachable(sources)
+    db.close()
+
+    try:
+        snapshot = build_queue_stream_snapshot(
+            ctx,
+            sources,
+            scope=scope,
+            scope_id=slug,
+            stream_url="",
+        )
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=True)
+    snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
+    return public_queue_stream_manifest(snapshot)
+
+
 @router.post(
     "/shared/{slug}/stream",
     responses={404: {"description": "Shared album not found"}},
@@ -414,21 +440,7 @@ def get_shared_album_stream(
                 audio_url=audio_url,
             )
         )
-    ensure_sources_detachable(sources)
-    db.close()
-
-    try:
-        snapshot = build_queue_stream_snapshot(
-            ctx,
-            sources,
-            scope="shared-album",
-            scope_id=slug,
-            stream_url="",
-        )
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=True)
-    snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
-    return public_queue_stream_manifest(snapshot)
+    return _public_queue_stream(ctx, db, sources, "shared-album", slug)
 
 
 @router.get(
@@ -808,21 +820,7 @@ def get_shared_playlist_stream(
                 audio_url=audio_url,
             )
         )
-    ensure_sources_detachable(sources)
-    db.close()
-
-    try:
-        snapshot = build_queue_stream_snapshot(
-            ctx,
-            sources,
-            scope="shared-playlist",
-            scope_id=slug,
-            stream_url="",
-        )
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=True)
-    snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
-    return public_queue_stream_manifest(snapshot)
+    return _public_queue_stream(ctx, db, sources, "shared-playlist", slug)
 
 
 @router.get(

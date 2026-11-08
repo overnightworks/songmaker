@@ -6,7 +6,7 @@ Type=oneshot
 # WorkingDirectory, ExecStart, and User below are placeholders (this
 # repo's canonical checkout/owner), kept concrete only so
 # `systemd-analyze verify` can check absolute paths.
-# scripts/install_autodeploy.sh and scripts/install-autostart.sh both
+# scripts/install_autodeploy.sh and scripts/install_autostart.sh both
 # install this template unit alongside their own, overwriting all three
 # with the real project root and invoking user at install time — copying
 # this file by hand instead inherits these values as-is, which is very

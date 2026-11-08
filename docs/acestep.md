@@ -264,8 +264,8 @@ docker compose ps -a
 **Boot autostart.** Since neither dockerd nor compose retries a `Created` container on its own, the host runs a systemd unit (`scripts/songmaker.service`) that runs `docker compose up -d` (no `--build`) once per boot, after `docker.service` is up. `docker compose up -d` starts every container regardless of the state it was left in — `running`, `exited`, or `Created` alike — which is exactly what the restart policy cannot do. Install it once with:
 
 ```bash
-sudo ./scripts/install-cli-credentials-mirror.sh
-sudo ./scripts/install-autostart.sh
+sudo ./scripts/install_cli_credentials_mirror.sh
+sudo ./scripts/install_autostart.sh
 ```
 
 Run both installers from the main checkout: the autostart installer refuses a linked worktree before it can point a persistent unit at a disposable checkout. It derives `WorkingDirectory` from that checkout and `User` from whoever runs the installer — `$SUDO_USER` under `sudo`, otherwise the current user, refusing outright if that resolves to `root` — so the unit runs as the stack owner. The boot unit starts the stack without the mirror and runs no preflight; the deploy tick still runs it, and a missing mirror file fails the web container's start at its bind. The installer also refuses to take over a unit from another checkout unless the operator explicitly supplies `--force` after inspecting the existing unit.
@@ -361,6 +361,8 @@ For the cross-cutting flow (web → music-worker → acestep-worker), see [archi
 The user-facing ACE-Step knobs are stored in `Version.generation_params`, can be set per-model in admin defaults, and are merged into `AceStepConfig`.
 
 Priority: song params > preset params > admin defaults > model defaults. The preset layer is the person's default for new songs while it names a built-in or an existing preset, otherwise their default preset for the job's model. Top-level song/version fields (`bpm`, `audio_duration`, `key_scale`, `vocal_language`) are applied after that merge.
+
+An optional submit key is sent only when it is set or differs from the protocol default. A repaint take always sends its range (`repainting_start`, `repainting_end`) and a cover take always sends `audio_cover_strength`.
 
 | Parameter | Range | Default (turbo) | Default (SFT) | Effect |
 |-----------|-------|-----------------|---------------|--------|

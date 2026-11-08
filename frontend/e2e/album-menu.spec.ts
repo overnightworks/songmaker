@@ -18,9 +18,9 @@ import {
 	COLLECTION_MENU_SHARE_ON_HINT,
 	collectionActionLabel,
 	HITBOX_FREQUENT_PX,
-	NEW_ALBUM_TITLE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
+import { NEW_ALBUM_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import { boundingBoxes, sameOriginHeaders, FlowGuard, shellOf, workspace } from './helpers';
 import { bottomOf, expectMenuInsideViewport, rightOf } from './menu-viewport';
 import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist } from './seed';

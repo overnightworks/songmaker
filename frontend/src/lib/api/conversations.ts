@@ -10,7 +10,7 @@ import type {
 	ToolCallEvent,
 	ToolResultEvent
 } from './types';
-import { COWRITER_TURN_PATH, COWRITER_TURN_TIMEOUT_MS } from '#lib/constants.ts';
+import { COWRITER_TURN_PATH, COWRITER_TURN_TIMEOUT_MS } from '#lib/constants/cowriter.ts';
 import { apiFetch, sseFetch } from './fetch';
 
 export type CoWriterStreamEvent =

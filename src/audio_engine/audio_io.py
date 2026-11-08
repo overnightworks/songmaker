@@ -15,6 +15,8 @@ from scipy.io import wavfile as scipy_wavfile
 
 from audio_engine.constants import (
     AI_MARK_ID3_DESCRIPTION,
+    DEFAULT_STEREO_WIDTH,
+    DEFAULT_TARGET_LUFS,
     FALLBACK_SAMPLE_RATE,
     INT16_MAX,
     IPTC_TRAINED_ALGORITHMIC_MEDIA,
@@ -29,8 +31,8 @@ def master_audio(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
     sample_rate: int = FALLBACK_SAMPLE_RATE,
-    target_lufs: float = -14.0,
-    stereo_width: float = 1.2,
+    target_lufs: float = DEFAULT_TARGET_LUFS,
+    stereo_width: float = DEFAULT_STEREO_WIDTH,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     if len(left) == 0 or len(right) == 0:
         raise MasteringError("Cannot master empty audio")
@@ -88,26 +90,6 @@ def encode_mp3(
         except OSError:
             pass
         raise
-
-
-def master_to_mp3(
-    left: NDArray[np.float64],
-    right: NDArray[np.float64],
-    mp3_path: str,
-    sample_rate: int = FALLBACK_SAMPLE_RATE,
-    target_lufs: float = -14.0,
-    stereo_width: float = 1.2,
-    bitrate: str = "320k",
-    metadata: dict[str, str] | None = None,
-) -> None:
-    mastered_left, mastered_right = master_audio(
-        left, right, sample_rate=sample_rate,
-        target_lufs=target_lufs, stereo_width=stereo_width,
-    )
-    encode_mp3(
-        mastered_left, mastered_right, mp3_path,
-        sample_rate=sample_rate, bitrate=bitrate, metadata=metadata,
-    )
 
 
 def _interleave_to_int16(

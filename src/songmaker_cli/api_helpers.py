@@ -650,12 +650,7 @@ def page_has_more(*, offset: int, fetched: int, total: int) -> bool:
 
 
 def parse_optional_search_query(q: str | None) -> str | None:
-    if q is None:
-        return None
-    stripped = q.strip()
-    if not stripped:
-        raise HTTPException(422, LIBRARY_QUERY_REQUIRED)
-    return stripped
+    return None if q is None else parse_required_search_query(q)
 
 
 def parse_required_search_query(q: str) -> str:

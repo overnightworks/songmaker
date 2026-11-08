@@ -10,9 +10,9 @@
 		NEW_SONG_FAILED,
 		NEW_SONG_HINT,
 		NEW_SONG_REFUSED,
-		NEW_SONG_TITLE_LABEL,
-		newSongCardLabel
-	} from '#lib/constants.ts';
+		NEW_SONG_TITLE_LABEL
+	} from '#lib/constants/new-collection.ts';
+	import { newSongCardLabel } from '#lib/constants.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {

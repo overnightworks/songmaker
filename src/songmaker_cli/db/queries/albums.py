@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -18,12 +18,7 @@ from songmaker_cli.db.queries.sharing import (
     enable_sharing,
     playable_take_filter,
 )
-from songmaker_cli.db.soft_delete import include_deleted
-from songmaker_cli.settings import get_settings
-
-
-class RestoreWindowExpiredError(Exception):
-    """Raised when restore is attempted past the soft-delete restore window."""
+from songmaker_cli.db.soft_delete import ensure_within_restore_window, include_deleted
 
 
 def list_albums(
@@ -247,13 +242,7 @@ def restore_album(session: Session, album_id: str) -> Album:
     if album.deleted_at is None:
         return album
     deleted_at = album.deleted_at
-    age = datetime.now(timezone.utc) - deleted_at
-    window = timedelta(days=get_settings().final_deletion_days)
-    if age > window:
-        raise RestoreWindowExpiredError(
-            f"Album {album_id} was deleted {age.days} days ago, "
-            f"past the {window.days}-day restore window",
-        )
+    ensure_within_restore_window("Album", album_id, deleted_at)
     album.deleted_at = None
     with include_deleted(session):
         songs = session.query(Song).filter_by(album_id=album_id).all()
