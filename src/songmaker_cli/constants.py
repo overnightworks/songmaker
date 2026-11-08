@@ -8,6 +8,7 @@ from typing import Final
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 from acestep_engine.settings import get_engine_settings
+from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 
 APP_NAME = "Hallucinai"
 
@@ -406,57 +407,6 @@ USER_LORA_SAMPLE_MAX_BYTES: Final[int] = 50 * 1024 * 1024
 USER_LORA_MAX_SAMPLES: Final[int] = 20
 USER_LORA_MIN_SAMPLES_FOR_TRAINING: Final[int] = 3
 USER_LORA_AUDIO_EXTENSIONS: Final[frozenset[str]] = frozenset({".wav", ".mp3", ".flac"})
-
-
-class JobStatus(StrEnum):
-    QUEUED = "queued"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    PARTIAL = "partial"
-    CANCELLED = "cancelled"
-
-
-JOB_ACTIVE_STATUSES = frozenset({JobStatus.QUEUED, JobStatus.RUNNING})
-JOB_TERMINAL_STATUSES = frozenset({
-    JobStatus.COMPLETED,
-    JobStatus.FAILED,
-    JobStatus.PARTIAL,
-    JobStatus.CANCELLED,
-})
-
-
-class JobType(StrEnum):
-    COVER = "cover"
-    GENERATE = "generate"
-    SCORE = "score"
-    CHAT = "chat"
-    LORA_TRAINING = "lora_training"
-    LOAD_MODEL_ON_WORKER = "load_model_on_worker"
-    DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
-
-
-class GenerationPhase(StrEnum):
-    """The stretch of one take a generate job is in."""
-
-    LOADING_MODEL = "loading_model"
-    WRITING = "writing"
-    RENDERING = "rendering"
-    SAVING_TAKE = "saving_take"
-
-
-class WorkerLivenessSignal(StrEnum):
-    MUSIC = "music"
-    SCORING = "scoring"
-    MODEL_EXECUTION = "music_and_acestep"
-
-
-class JobFunction(StrEnum):
-    GENERATE = "generate"
-    SCORE = "score"
-    LOAD_MODEL_ON_WORKER = "load_model_on_worker"
-    DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
-    LORA_TRAINING = "lora_training"
 
 
 @dataclass(frozen=True)

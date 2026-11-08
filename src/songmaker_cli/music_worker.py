@@ -19,9 +19,8 @@ from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     MODEL_DEFAULT_MODE,
     RECOVERY_LOCK_MUSIC_KEY,
-    JobFunction,
-    JobType,
 )
+from songmaker_cli.job_types import JobFunction, JobType
 from songmaker_cli.jobs import (
     download_model_on_worker as _download_model_on_worker_impl,
 )

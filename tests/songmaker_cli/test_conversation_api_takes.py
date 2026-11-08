@@ -11,7 +11,6 @@ import pytest
 from support.cowriter_gateway import CowriterStack, attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
-from songmaker_cli.constants import JobType
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
@@ -22,6 +21,7 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
+from songmaker_cli.job_types import JobType
 
 T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 

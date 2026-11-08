@@ -9,9 +9,9 @@ from songmaker_cli.constants import (
     JOB_ERROR_GENERATION_FAILED,
     JOB_ERROR_GENERATION_UNAVAILABLE,
     JOB_ERROR_GPU_OUT_OF_MEMORY,
-    JobType,
 )
 from songmaker_cli.db.models import Job
+from songmaker_cli.job_types import JobType
 from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerGenerationUnavailable,

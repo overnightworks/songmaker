@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from functools import partial
 
@@ -18,7 +19,7 @@ from support.web_app import make_authenticated_user, seed_user
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
+from songmaker_cli.constants import PAGE_MAX_LIMIT, LoraStatus, SongWorkKind
 from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.database_url import POSTGRESQL_PSYCOPG2_DRIVERNAME, database_url_with_password
 from songmaker_cli.db.engine import init_db, resolve_database_url
@@ -61,6 +62,7 @@ from songmaker_cli.db.queries.resource_events import (
     list_resource_events_after,
 )
 from songmaker_cli.db.queries.songs import record_playlist_listen
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.lora_api import api_create_lora
 from songmaker_cli.settings import get_settings
@@ -499,8 +501,6 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
 @pytest.mark.parametrize("first_operation", ["renew", "revoke"])
 def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_operation) -> None:
     """defect:#1590: either lock order ends with revocation, never resurrection."""
-    from concurrent.futures import ThreadPoolExecutor
-
     from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 
     now = datetime.now(timezone.utc)

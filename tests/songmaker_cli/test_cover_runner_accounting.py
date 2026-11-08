@@ -21,9 +21,9 @@ from support.cowriter_gateway import HeldGateway, attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli import cover_runner
-from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
+from songmaker_cli.job_types import JobStatus, JobType
 
 STARTED = datetime(2026, 10, 18, tzinfo=timezone.utc)
 GENERATED_PIXEL = (20, 80, 160)

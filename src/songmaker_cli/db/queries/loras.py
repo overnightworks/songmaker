@@ -8,13 +8,13 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.constants import (
-    JOB_TERMINAL_STATUSES,
     LORA_ACTIVE_STATUSES,
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
     LoraStatus,
 )
 from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
+from songmaker_cli.job_types import JOB_TERMINAL_STATUSES
 
 
 def create_user_lora(

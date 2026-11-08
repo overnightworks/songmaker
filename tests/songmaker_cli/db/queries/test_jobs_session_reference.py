@@ -9,7 +9,7 @@ import pytest
 from support.web_app import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS, JobStatus, JobType
+from songmaker_cli.constants import JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, UserSession
 from songmaker_cli.db.queries.auth import delete_expired_sessions, delete_session
 from songmaker_cli.db.queries.jobs import (
@@ -17,6 +17,7 @@ from songmaker_cli.db.queries.jobs import (
     recover_stale_jobs_by_type,
     update_job_status,
 )
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import reap_stale_jobs
 
 NOW = datetime(2030, 1, 1, tzinfo=timezone.utc)

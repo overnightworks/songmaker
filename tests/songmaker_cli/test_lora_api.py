@@ -16,7 +16,6 @@ from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     USER_LORA_MAX_SAMPLES,
     USER_LORA_SAMPLE_MAX_BYTES,
-    JobStatus,
     LoraStatus,
 )
 from songmaker_cli.db.models import (
@@ -31,6 +30,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora, update_user_lora
+from songmaker_cli.job_types import JobStatus
 
 USER_A = "u-alice"
 USER_B = "u-bob"

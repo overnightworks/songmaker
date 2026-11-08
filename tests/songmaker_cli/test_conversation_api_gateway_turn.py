@@ -38,7 +38,6 @@ from support.cowriter_gateway import (
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.agent.tools import cowriter_hand_tools
-from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.models import (
     Album,
     ChatMessage,
@@ -51,6 +50,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
+from songmaker_cli.job_types import JobStatus, JobType
 
 USER_ID = "u-test"
 OTHER_SONG = "s-other"

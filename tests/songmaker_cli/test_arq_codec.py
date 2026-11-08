@@ -16,8 +16,8 @@ from arq.worker import create_worker
 
 from songmaker_cli import arq_pool
 from songmaker_cli.arq_codec import deserialize_arq
-from songmaker_cli.constants import JobFunction
 from songmaker_cli.generation_params import CoverTaskParams, RepaintTaskParams
+from songmaker_cli.job_types import JobFunction
 from songmaker_cli.music_worker import MusicWorkerSettings
 from songmaker_cli.scoring_worker import ScoringWorkerSettings
 

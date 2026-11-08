@@ -6,9 +6,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from support.cover_album_world import album_owner, seed_cover_albums
 
-from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.auth import create_session
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.mcp_server import tools
 from songmaker_cli.settings import get_settings
 

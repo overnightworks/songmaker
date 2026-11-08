@@ -23,13 +23,12 @@ from songmaker_cli.constants import (
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
     USER_LORAS_DIRNAME,
-    JobStatus,
-    JobType,
     LoraStatus,
 )
 from songmaker_cli.db.models import AuditLog, Job
 from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.db.queries.loras import get_user_lora
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs.lora_training import (
     _LoraProgressThrottle,
     _worker_training_started_at,
@@ -987,7 +986,8 @@ def test_held_lora_fails_after_the_queued_drain_threshold(seeded, db_factory) ->
 
 
 def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_factory) -> None:
-    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME, JobFunction
+    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
+    from songmaker_cli.job_types import JobFunction
     from songmaker_cli.scheduler import AllWorkersHeld
 
     redis = MagicMock()
@@ -1035,7 +1035,7 @@ def test_held_lora_defers_without_running_or_materializing_a_dataset(seeded, db_
 
 
 def test_queued_generation_in_the_database_defers_lora_before_running(seeded, db_factory) -> None:
-    from songmaker_cli.constants import JobFunction
+    from songmaker_cli.job_types import JobFunction
 
     with db_factory() as session:
         session.add(
@@ -1803,9 +1803,9 @@ def test_lora_reserve_checks_queued_generations_after_selecting_the_worker(
     seeded,
     db_factory,
 ) -> None:
-    from songmaker_cli.constants import JobFunction
     from songmaker_cli.db.models import Job
     from songmaker_cli.db.queries.jobs import count_queued_generation_jobs
+    from songmaker_cli.job_types import JobFunction
     from songmaker_cli.jobs.lora_training import _reserve_lora_worker
     from songmaker_cli.scheduler import AllWorkersHeld
 

@@ -11,7 +11,6 @@ from sqlalchemy.exc import OperationalError
 from support.web_app import make_authenticated_user
 
 from songmaker_cli import cover_suggestions
-from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.cover_suggestions import (
     CoverSuggestionSessionEndedError,
     request_cover_suggestions,
@@ -26,6 +25,7 @@ from songmaker_cli.db.queries.jobs import (
     update_job_heartbeat,
     update_job_status,
 )
+from songmaker_cli.job_types import JobStatus, JobType
 
 
 def test_a_reaper_that_loses_its_race_leaves_the_competitors_row_and_session(
