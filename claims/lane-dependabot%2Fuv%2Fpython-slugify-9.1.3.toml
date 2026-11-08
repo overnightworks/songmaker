@@ -1,7 +1,0 @@
-claim_id = "74927067a226445c891556147b7a938c"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3817be56d9c87551afe0d275180687c2869087d7"
-branch = "dependabot/uv/python-slugify-9.1.3"
-scope = ["uv.lock"]
-opened_commit = "8a8bf137b0eaac8499f0c7ea342a42b6f370fc5e"
