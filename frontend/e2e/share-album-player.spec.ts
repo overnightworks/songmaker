@@ -8,14 +8,16 @@ import { mkdirSync } from 'node:fs';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
 import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
 import {
-	NOW_PLAYING_GO_TO_SONG,
 	SEEK_PLAYBACK_LABEL,
 	SONG_NEXT_LABEL,
 	SONG_PREVIOUS_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
-import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '../src/lib/constants/now-playing';
+import {
+	NOW_PLAYING_PLAY_AGAIN_LABEL,
+	NOW_PLAYING_GO_TO_SONG
+} from '../src/lib/constants/now-playing';
 import {
 	SHARE_BACK_TO_PLAYER_LABEL,
 	shareAlbumSubtitle,

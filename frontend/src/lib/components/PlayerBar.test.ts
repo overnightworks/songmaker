@@ -50,7 +50,7 @@ import {
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 import { get } from 'svelte/store';
-import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '#lib/constants.ts';
+import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '#lib/constants/queue.ts';
 import PlayerBar from './PlayerBar.svelte';
 import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
 import { browserReportsOnline } from '#lib/test-utils/network.ts';

@@ -6,7 +6,7 @@ import {
 	REFERENCE_KEEP_LABEL,
 	REFERENCE_UNKEEP_FAILED,
 	REFERENCE_UNKEEP_LABEL
-} from '#lib/constants.ts';
+} from '#lib/constants/reference.ts';
 
 const mocks = vi.hoisted(() => ({
 	listReferences: vi.fn(),

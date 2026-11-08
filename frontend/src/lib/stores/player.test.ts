@@ -30,7 +30,7 @@ import {
 	fetchSongs
 } from '#lib/api/client.ts';
 import { toasts } from '#lib/stores/toast.ts';
-import { LIBRARY_QUEUE_EMPTY_TITLE } from '#lib/constants.ts';
+import { LIBRARY_QUEUE_EMPTY_TITLE, PLAYLIST_LOADING_LABEL } from '#lib/constants/queue.ts';
 
 vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
@@ -171,7 +171,7 @@ import {
 	selectedPlaylistDetail
 } from '#lib/stores/playlists.ts';
 import { openCollection } from '#lib/stores/collection.ts';
-import { PLAYLIST_LOADING_LABEL, LIBRARY_PAGE_LABEL } from '#lib/constants.ts';
+import { LIBRARY_PAGE_LABEL } from '#lib/constants.ts';
 
 const genDefaults = {
 	mp3_path: 'a1/song_v1.mp3',

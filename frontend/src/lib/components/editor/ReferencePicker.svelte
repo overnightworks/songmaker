@@ -6,11 +6,8 @@
 	import type { ReferenceListRowResponse, ReferenceResponse } from '#lib/api/types.ts';
 	import Icon from '#lib/components/Icon.svelte';
 	import ReferenceExpiry from '#lib/components/ReferenceExpiry.svelte';
-	import {
-		REFERENCE_AUDIO_ACCEPT,
-		TRANSPORT_PAUSE_LABEL,
-		TRANSPORT_PLAY_LABEL
-	} from '#lib/constants.ts';
+	import { REFERENCE_AUDIO_ACCEPT } from '#lib/constants/reference.ts';
+	import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
 	import {
 		RECIPE_REFERENCE_ALL_LABEL,
 		RECIPE_REFERENCE_LABEL,

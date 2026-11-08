@@ -249,3 +249,16 @@ export const SHUFFLE_SCOPE_LIBRARY = 'all albums';
 export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playable';
 
 export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
+
+// A cut mini-player title scrolls once, slowly: it rests, travels to its end
+// at this pace, rests again, and glides back to its start.
+export const MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND = 30;
+export const MINI_PLAYER_TITLE_SCROLL_REST_MS = 1500;
+export const MINI_PLAYER_TITLE_SCROLL_RETURN_MS = 600;
+export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
+export const NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS = 'Imported take — no lyrics were saved with it.';
+// Brings back lyrics that follow the song once the reader scrolled away (#1382).
+export const NOW_PLAYING_LYRICS_FOLLOW_LABEL = 'Follow';
+export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
+export const NOW_PLAYING_CLOSE = 'Close';
+export const NOW_PLAYING_TAKE_PREFIX = 'Take';

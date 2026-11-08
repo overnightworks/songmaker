@@ -67,11 +67,8 @@ import {
 	type ResumeQueueSource,
 	type SavedPlayback
 } from '#lib/stores/playbackResume.ts';
-import {
-	LIBRARY_QUEUE_EMPTY_TITLE,
-	PLAYLIST_LOADING_LABEL,
-	LIBRARY_PAGE_LABEL
-} from '#lib/constants.ts';
+import { LIBRARY_QUEUE_EMPTY_TITLE, PLAYLIST_LOADING_LABEL } from '#lib/constants/queue.ts';
+import { LIBRARY_PAGE_LABEL } from '#lib/constants.ts';
 import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,

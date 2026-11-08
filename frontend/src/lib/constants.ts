@@ -11,18 +11,6 @@ export const DIALOG_CONFIRM_LABEL = 'Confirm';
 
 export const EXPIRY_WARN_DAYS = 3;
 
-export const REFERENCE_AUDIO_ACCEPT = '.mp3,.wav,.flac,.ogg';
-export const REFERENCE_KEEP_LABEL = 'Keep';
-export const REFERENCE_UNKEEP_LABEL = 'Unkeep';
-export const REFERENCE_KEEP_FAILED = "Couldn't keep this recording";
-export const REFERENCE_UNKEEP_FAILED = "Couldn't unkeep this recording";
-
-export const LIBRARY_QUEUE_LOADING_TITLE = 'Loading';
-export const LIBRARY_QUEUE_EMPTY_TITLE = 'Nothing to play yet';
-export const LIBRARY_QUEUE_RETRY_DETAIL = 'Press play to retry';
-export const LIBRARY_QUEUE_PLAY_DETAIL = 'Play';
-export const PLAYLIST_LOADING_LABEL = 'Loading playlist…';
-
 export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been deleted';
 
 // The transport's play button is named after the state its click leaves:
@@ -67,11 +55,6 @@ export const SEEK_PLAYBACK_LABEL = 'Seek playback';
 export function seekPositionLabel(position: string, length: string): string {
 	return `${position} of ${length}`;
 }
-// A cut mini-player title scrolls once, slowly: it rests, travels to its end
-// at this pace, rests again, and glides back to its start.
-export const MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND = 30;
-export const MINI_PLAYER_TITLE_SCROLL_REST_MS = 1500;
-export const MINI_PLAYER_TITLE_SCROLL_RETURN_MS = 600;
 export const REDUCED_MOTION_MEDIA = '(prefers-reduced-motion: reduce)';
 // Beside play's exact centre line a phone narrower than 360px leaves the
 // mini player's left side too little room for cover and title, so the cover
@@ -80,13 +63,6 @@ export const REDUCED_MOTION_MEDIA = '(prefers-reduced-motion: reduce)';
 // the fraction also drops the cover on a sub-pixel viewport just under 360px.
 const MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX = 359.98;
 export const MINI_PLAYER_WITHOUT_COVER_MEDIA = `(max-width: ${MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX}px)`;
-export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
-export const NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS = 'Imported take — no lyrics were saved with it.';
-// Brings back lyrics that follow the song once the reader scrolled away (#1382).
-export const NOW_PLAYING_LYRICS_FOLLOW_LABEL = 'Follow';
-export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
-export const NOW_PLAYING_CLOSE = 'Close';
-export const NOW_PLAYING_TAKE_PREFIX = 'Take';
 
 export const TAKE_REPAINT_LABEL = 'Repaint';
 export const TAKE_COVER_LABEL = 'Cover';
