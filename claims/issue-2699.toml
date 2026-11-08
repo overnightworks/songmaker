@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "00c8d740fdb2141806e89f45bc7ee0564ab78d20"
 branch = "claude/issue-2699-model-commands-pass-worker-refusal"
-scope = ["frontend/src/lib/components/WorkerPoolPanel.test.ts", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/jobs/model_lifecycle.py", "tests/songmaker_cli"]
+scope = ["frontend/src/lib/components/WorkerPoolPanel.test.ts", "quality/baseline.toml", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/jobs/model_lifecycle.py", "tests/songmaker_cli"]
 opened_commit = "6f97cd554915f53acccb5874ca8d2d93f8c655d9"
 whole_reason = "The helper, its refusal mapping and the tests that pin the old 502 change together, or a test pins behaviour the code no longer has."
