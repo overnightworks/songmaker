@@ -86,9 +86,6 @@
 [function_lines."src/songmaker_cli/config.py"]
 "build_ace_config" = 63
 
-[function_lines."src/songmaker_cli/cowriter/history.py"]
-"compact_conversation" = 60
-
 [function_lines."src/songmaker_cli/db/migrations/versions/2a5ce2401805_initial_schema_baseline.py"]
 "upgrade" = 173
 
