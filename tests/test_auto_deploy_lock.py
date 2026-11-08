@@ -20,7 +20,7 @@ LOCK_FILE_NAME = "songmaker-autodeploy.lock"
 def _process_state(pid: int) -> str | None:
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
         return None
     # The state letter follows the parenthesised command name.
     return stat.rpartition(")")[2].split()[0]
