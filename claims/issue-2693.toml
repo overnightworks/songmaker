@@ -1,0 +1,8 @@
+claim_id = "a84f8e4112f34c4dac6a236745ef0068"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "91f82b5f4da06dedc5d268cea6b34f9047993274"
+branch = "claude/issue-2693-s1-address-load-owner"
+scope = ["frontend/src/lib/stores/addressLoad.svelte.test.ts", "frontend/src/lib/stores/addressLoad.svelte.ts", "frontend/src/lib/stores/libraryAddressOverlay.ts", "frontend/src/routes/(library)/album/[slug]/+page.svelte", "frontend/src/routes/(library)/album/[slug]/[song]/+page.svelte"]
+opened_commit = "b91a4a065c1b7387fb0369f836d38940b6c1d2d4"
+whole_reason = "The owner lands with its first two callers, or it is code without a caller."
