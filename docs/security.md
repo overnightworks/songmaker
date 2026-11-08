@@ -492,7 +492,7 @@ compose bind that does. The deploy tick runs no mount preflight.
 `scripts/mirror_agent_cli_credentials.py` publishes a **redacted copy** of each
 login into `~/.songmaker/agent-cli-credentials/`, kept current by
 `songmaker-cli-credentials-mirror.{service,path,timer}` and installed with
-`scripts/install-cli-credentials-mirror.sh`.
+`scripts/install_cli_credentials_mirror.sh`.
 
 Grok access tokens expire after six hours. The host-side mirror
 service, path watcher, and ten-minute timer are the sole refresh path: each
@@ -569,7 +569,7 @@ The mirror installer freezes its resolved directory in the mirror service's
 and requires exactly one matching value; an unreadable, missing, ambiguous, or
 different value refuses with `Spiegel-Installer erneut ausführen`. After
 changing `SONGMAKER_CLI_CREDENTIALS_DIR` in `.env`, run
-`sudo ./scripts/install-cli-credentials-mirror.sh` again from the main
+`sudo ./scripts/install_cli_credentials_mirror.sh` again from the main
 checkout.
 
 Refresh the mirror with `sudo systemctl restart songmaker-cli-credentials-mirror.service`; that does not touch `songmaker.service` or the live stack.
@@ -586,7 +586,7 @@ systemd splits directive values on whitespace, expands `%` as a specifier and
 `$` as a variable in the ExecStart that carries the path; anything else is
 refused loudly rather than mangled into a unit.
 
-**Installing.** `scripts/install-cli-credentials-mirror.sh` refuses to run
+**Installing.** `scripts/install_cli_credentials_mirror.sh` refuses to run
 from a linked worktree — these units outlive the shell that installed them,
 and the day a throwaway worktree is removed the unit stops — refuses to run as
 root, whose logins are not the operator's, and refuses to silently replace any

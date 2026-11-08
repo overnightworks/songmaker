@@ -14,7 +14,7 @@ Type=oneshot
 RemainAfterExit=yes
 # WorkingDirectory and User below are placeholders (this repo's canonical
 # checkout/owner), kept concrete only so `systemd-analyze verify` can check
-# an absolute path. scripts/install-autostart.sh always overwrites both
+# an absolute path. scripts/install_autostart.sh always overwrites both
 # with the real project root and invoking user at install time — copying
 # this file by hand instead of running that script inherits these values
 # as-is, which is very likely wrong for a different checkout or operator.

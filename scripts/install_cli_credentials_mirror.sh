@@ -44,7 +44,7 @@
 # refreshes the mirror once — all no-ops if already applied.
 #
 # Usage:
-#   ./scripts/install-cli-credentials-mirror.sh [--force]
+#   ./scripts/install_cli_credentials_mirror.sh [--force]
 
 set -euo pipefail
 
@@ -70,13 +70,13 @@ if [[ "$INSTALL_USER" = "root" ]]; then
     echo "SUDO_USER is unset, so this looks like a root login rather than" >&2
     echo "sudo. The units would mirror /root's agent-CLI logins, not the" >&2
     echo "operator's. Log in as the account the stack belongs to and run:" >&2
-    echo "  sudo ./scripts/install-cli-credentials-mirror.sh" >&2
+    echo "  sudo ./scripts/install_cli_credentials_mirror.sh" >&2
     exit 1
 fi
 
 # shellcheck source=scripts/agent_cli_paths.sh
 source "$SCRIPT_DIR/agent_cli_paths.sh"
-require_main_checkout "$PROJECT_ROOT" install-cli-credentials-mirror.sh || exit 1
+require_main_checkout "$PROJECT_ROOT" install_cli_credentials_mirror.sh || exit 1
 
 INSTALL_HOME="$(getent passwd "$INSTALL_USER" | cut -d: -f6)"
 if [[ -z "$INSTALL_HOME" ]]; then
@@ -105,7 +105,7 @@ MIRROR_SCRIPT="$SCRIPT_DIR/mirror_agent_cli_credentials.py"
 CHECK_SCRIPT="$SCRIPT_DIR/check_agent_cli_mounts.sh"
 # The shared alert template unit (issue #333) — the mirror service declares
 # OnFailure=songmaker-alert@%n.service, so it must exist before that unit is
-# installed. install-autostart.sh and install_autodeploy.sh install the same
+# installed. install_autostart.sh and install_autodeploy.sh install the same
 # file; all of them are idempotent and derive the same WorkingDirectory/User
 # from their own checkout.
 ALERT_SERVICE_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"
@@ -136,13 +136,13 @@ sed_escape_replacement() {
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
 ESCAPED_INSTALL_USER="$(sed_escape_replacement "$INSTALL_USER")"
 ESCAPED_MIRROR_SCRIPT="$(sed_escape_replacement "$MIRROR_SCRIPT")"
-ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/send_alert.sh")"
+ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$ALERT_SCRIPT")"
 ESCAPED_HOME="$(sed_escape_replacement "$INSTALL_HOME")"
 ESCAPED_MIRROR_DIR="$(sed_escape_replacement "$MIRROR_DIR")"
 ESCAPED_CHECK_SCRIPT="$(sed_escape_replacement "$CHECK_SCRIPT")"
 
 MIRROR_EXEC="$MIRROR_SCRIPT --home $INSTALL_HOME --mirror-dir $MIRROR_DIR"
-ALERT_EXEC_PREFIX="$PROJECT_ROOT/scripts/send_alert.sh"
+ALERT_EXEC_PREFIX="$ALERT_SCRIPT"
 
 # The path unit's watches are compared as a SET, not one by one. Proving that
 # the three expected lines are present says nothing about a fourth: a foreign
