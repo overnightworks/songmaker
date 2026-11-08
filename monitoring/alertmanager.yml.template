@@ -4,7 +4,7 @@
 # account and recipient — the exact same five .env keys scripts/alert.sh
 # reads (ALERT_EMAIL_TO, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD):
 # one configured channel, two delivery paths — are resolved at container
-# start by monitoring/alertmanager-entrypoint.sh. The __PLACEHOLDER__
+# start by monitoring/scripts/start_alertmanager.sh. The __PLACEHOLDER__
 # tokens below never reach disk with real values in this file; they are
 # substituted into a throwaway file inside the container.
 #

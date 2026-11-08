@@ -28,7 +28,7 @@ SOURCE_ROOT = REPOSITORY_ROOT / "src"
 DOCKER_ROOT = REPOSITORY_ROOT / "docker"
 UV_INSTALLED_ENVIRONMENT_FLAGS = frozenset({"--no-sync", "--frozen", "--no-build"})
 IMAGE_VIRTUALENV_BIN = "/app/.venv/bin/"
-WEB_ENTRYPOINT_SCRIPT = "/app/docker-entrypoint.sh"
+WEB_ENTRYPOINT_SCRIPT = "/app/start_web_server.sh"
 E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 VOICES_E2E_OVERLAY = ("-f", "docker/docker-compose.e2e-voices.yml")
 DOCKER_DEFAULT_RESTART_POLICY = "no"
@@ -376,22 +376,22 @@ def _dockerfile_entrypoint_starts() -> list[ContainerStart]:
 
 
 def _entrypoint_script_starts() -> list[ContainerStart]:
-    return [
+    starts = [
         ContainerStart(f"{_relative(script)}::exec", tuple(shlex.split(line)[1:]))
-        for script in sorted(DOCKER_ROOT.glob("*.sh"))
+        for script in sorted(DOCKER_ROOT.rglob("*.sh"))
         for line in script.read_text().splitlines()
         if line.strip().startswith("exec ")
     ]
+    assert starts, "found no exec line in any script under docker/"
+    return starts
 
 
 def _repo_built_container_starts() -> list[ContainerStart]:
-    starts = [
+    return [
         *_compose_entrypoint_starts(),
         *_dockerfile_entrypoint_starts(),
         *_entrypoint_script_starts(),
     ]
-    assert starts, "found no container start to check"
-    return starts
 
 
 def _import_startup_modules(
