@@ -1,0 +1,8 @@
+claim_id = "7502c644903345fc8f3ad4c70443996b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "22470443480dcdc825bcf6a7c727ab9c2248c20a"
+branch = "claude/issue-2724-reference-tests-take-subject-names"
+scope = ["tests/songmaker_cli"]
+opened_commit = "5c381316cdab35f29c4d52ff2e1f712900b7efe7"
+whole_reason = "Ten renames of one rule under one directory, proven by one collect-only diff and one quality check."
