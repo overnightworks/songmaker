@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "53a2ac2313e0909b1eed95566aa3deeb3d2a3899"
 branch = "claude/issue-2646-v010-e-entrypoint-script-names"
-scope = ["Dockerfile", "docker", "docker-compose.yml", "docs/architecture.md", "monitoring", "pyproject.toml", "scripts", "tests/scripts", "tests/test_alertmanager_entrypoint.py", "tests/test_packaging_boundary.py"]
+scope = ["Dockerfile", "docker", "docker-compose.yml", "docs/architecture.md", "monitoring", "pyproject.toml", "scripts", "tests/monitoring", "tests/scripts", "tests/test_alertmanager_entrypoint.py", "tests/test_packaging_boundary.py"]
 opened_commit = "f8b85b36c6fc2a012dca1e78b0a86209fc4b29d4"
 whole_reason = "Two entrypoints and their callers (image, Compose, tests, docs) must rename in one commit, or the containers start a missing file."
