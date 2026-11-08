@@ -12,7 +12,6 @@ import {
 import {
 	ACCOUNT_MENU_LABEL,
 	APP_NAME,
-	COWRITER_TURN_PATH,
 	OFFLINE_STRIP_MESSAGE,
 	PLAYLISTS_PAGE_LABEL,
 	LIBRARY_PAGE_LABEL,
@@ -24,6 +23,7 @@ import {
 	SETTINGS_NAV_LABEL,
 	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
+import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
 	HOME_ROUTE_PATH,
 	LIBRARY_ROUTE_PATH,

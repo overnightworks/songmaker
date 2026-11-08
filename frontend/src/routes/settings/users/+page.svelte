@@ -26,18 +26,18 @@
 	import TakeRetentionPanel from '#lib/components/TakeRetentionPanel.svelte';
 	import ModelsCowriterRow from '#lib/components/ModelsCowriterRow.svelte';
 	import ModelsServiceRow from '#lib/components/ModelsServiceRow.svelte';
+	import { ADMIN_TABS_LABEL } from '#lib/constants/admin.ts';
 	import {
-		ADMIN_TABS_LABEL,
 		ADMIN_VOICES_EMPTY,
 		ADMIN_VOICES_HEADING,
 		VOICES_LOAD_FAILED,
 		ADMIN_VOICES_LOADING,
 		ADMIN_VOICES_NAME_LABEL,
 		ADMIN_VOICES_OWNER_LABEL,
-		ADMIN_VOICES_STATUS_LABEL,
-		MODELS_HEADING
-	} from '#lib/constants.ts';
+		ADMIN_VOICES_STATUS_LABEL
+	} from '#lib/constants/voice.ts';
 	import {
+		MODELS_HEADING,
 		MODELS_COLUMN_MODEL_LABEL,
 		MODELS_COLUMN_PROVIDER_LABEL,
 		MODELS_COLUMN_ROUTE_LABEL,

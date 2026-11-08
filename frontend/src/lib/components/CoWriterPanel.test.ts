@@ -11,7 +11,7 @@ import {
 	COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
 	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 	COWRITER_RUNNING_TURN_POLL_MS
-} from '#lib/constants.ts';
+} from '#lib/constants/cowriter.ts';
 
 import { ApiError } from '#lib/api/fetch.ts';
 

@@ -8,12 +8,8 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import {
-	ADMIN_TABS_LABEL,
-	RAIL_NAV_LABEL,
-	RAIL_SETTINGS_LABEL,
-	SETTINGS_NAV_LABEL
-} from '../src/lib/constants';
+import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
+import { RAIL_NAV_LABEL, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '../src/lib/constants';
 import {
 	accountCircle,
 	accountMenu,

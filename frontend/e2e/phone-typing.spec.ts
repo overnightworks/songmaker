@@ -18,11 +18,10 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 
 import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
-	COWRITER_TURN_PATH,
 	LIBRARY_NEW_MENU_LABEL,
 	LIBRARY_NEW_ALBUM_LABEL,
-	NEW_ALBUM_TITLE_LABEL,
 	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
@@ -34,6 +33,7 @@ import {
 	songEditorOpenLabel,
 	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
+import { NEW_ALBUM_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import {
 	appBar,
 	FlowGuard,

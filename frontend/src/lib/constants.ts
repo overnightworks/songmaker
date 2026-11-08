@@ -14,15 +14,6 @@ export const DIALOG_CONFIRM_LABEL = 'Confirm';
 
 export const EXPIRY_WARN_DAYS = 3;
 
-export const ADMIN_VOICES_TAB_LABEL = 'Voices';
-export const ADMIN_VOICES_HEADING = 'Voice operations';
-export const ADMIN_VOICES_LOADING = 'Loading voices...';
-export const ADMIN_VOICES_EMPTY = 'No voices have been created.';
-export const VOICES_LOAD_FAILED = 'Failed to load voices';
-export const ADMIN_VOICES_NAME_LABEL = 'Voice';
-export const ADMIN_VOICES_OWNER_LABEL = 'Owner';
-export const ADMIN_VOICES_STATUS_LABEL = 'Status';
-
 export const REFERENCE_AUDIO_ACCEPT = '.mp3,.wav,.flac,.ogg';
 export const REFERENCE_KEEP_LABEL = 'Keep';
 export const REFERENCE_UNKEEP_LABEL = 'Unkeep';
@@ -146,47 +137,16 @@ export const EDITOR_TAB_TAKES_LABEL = 'Takes';
 export const EDITOR_TAB_EDIT_LABEL = 'Edit';
 export const EDITOR_TABS_LABEL = 'Editor tabs';
 
-export const COWRITER_TURN_TIMEOUT_MS = 600_000;
-export const COWRITER_RUNNING_TURN_POLL_MS = 2_000;
-export const COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT = 3;
-export const COWRITER_UNAVAILABLE_TEXT = 'The co-writer is unavailable';
-export const COWRITER_BUSY_WAIT_CEILING_SECONDS = 300;
-export const COWRITER_CONVERSATION_MENU_LABEL = 'Conversation menu';
-export const COWRITER_COMPOSER_PLACEHOLDER = 'Ask for a rewrite…';
-export const COWRITER_SEND_LABEL = 'Send';
-export const COWRITER_NEW_CONVERSATION_LABEL = 'New conversation';
-export const COWRITER_MEMORY_LABEL = 'Memory';
-export const COWRITER_MEMORY_PROPOSAL_WAITING_LABEL = 'Memory proposal waiting';
-export const COWRITER_DELETE_CONVERSATION_TITLE = 'Delete conversation?';
-export const COWRITER_DELETE_CONVERSATION_WARNING = "This can't be undone.";
 export const DAY_LABEL_TODAY = 'today';
 export const DAY_LABEL_YESTERDAY = 'yesterday';
 export const PLACE_LINE_SEPARATOR = ' · ';
-export const COWRITER_NEW_CONVERSATION_LINE = 'new conversation';
-export const COWRITER_CONVERSATION_SINCE_TEMPLATE = 'conversation since {day}';
-export const COWRITER_ARCHIVED_CONVERSATION_TEMPLATE = 'archived conversation from {day}';
-export const COWRITER_CONVERSATION_ROW_TEMPLATE = 'Conversation since {day} {time}';
-export const COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE = 'Archived · {day} {time}';
-export const COWRITER_MESSAGE_COUNT_TEMPLATE = '{count} msgs';
-export const COWRITER_SINGLE_MESSAGE_COUNT = '1 msg';
-export const COWRITER_CONVERSATION_CONFIRM_TEMPLATE = '{name} · {count}';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-writer';
-
-export const MODELS_HEADING = 'Models';
-
-// The co-writer is one global conversation (REQ-COWRITER-01): a proposal
-// streamed while song X is open can target song Y. Every tool-call badge
-// that attributes a proposal to its target song shares this copy.
-export const COWRITER_TOOL_CALL_TARGET_PREFIX = 'for:';
-export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
-	'This proposal applies to a different song than the one you have open';
 
 export const EDITOR_GENERATE_LABEL = 'Generate';
 export const TAKES_EMPTY = `No takes yet · ${EDITOR_GENERATE_LABEL} makes the first`;
 export const EDITOR_GENERATE_QUEUED_TEMPLATE = `${EDITOR_QUEUED_LABEL} #{position}`;
 export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
 export const EDITOR_OPEN_WORKER_POOL_LABEL = 'Open worker pool';
-export const ADMIN_WORKER_POOL_HREF = '/settings/users?tab=acestep';
 
 export const EDITOR_GENERATE_CANCEL_LABEL = 'Cancel generation';
 // Offline a running take cannot report anything (#1039 O2): it says so and
@@ -360,33 +320,6 @@ export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';
 export const LIBRARY_NEW_ALBUM_LABEL = 'Album';
 export const LIBRARY_NEW_PLAYLIST_LABEL = 'Playlist';
-// The server's own ceiling on an album, playlist or song title (and an album's artist).
-export const NEW_PLACE_TEXT_MAX_LENGTH = 200;
-export const NEW_PLACE_CREATE_LABEL = 'Create';
-export const NEW_PLACE_OFFLINE =
-	"You're offline, so nothing was created. Try again once you're back online.";
-export const NEW_ALBUM_CARD_LABEL = 'New album';
-export const NEW_ALBUM_CLOSE_LABEL = 'Close new album';
-export const NEW_ALBUM_TITLE_LABEL = 'Title';
-export const NEW_ALBUM_ARTIST_LABEL = 'Artist';
-export const NEW_ALBUM_ARTIST_OPTIONAL = 'optional';
-export const NEW_ALBUM_HINT = 'Opens the album; add songs there.';
-// A create the server could not carry out says "Try again" (FAILED); one it refused
-// says only what it would not do (REFUSED), when it gave no reason of its own.
-export const NEW_ALBUM_FAILED = 'The album could not be created. Try again.';
-export const NEW_ALBUM_REFUSED = 'The album could not be created.';
-export const NEW_PLAYLIST_CARD_LABEL = 'New playlist';
-export const NEW_PLAYLIST_CLOSE_LABEL = 'Close new playlist';
-export const NEW_PLAYLIST_NAME_LABEL = 'Name';
-export const NEW_PLAYLIST_HINT = 'Opens the playlist; add songs from any album.';
-export const NEW_PLAYLIST_FAILED = 'The playlist could not be created. Try again.';
-export const NEW_PLAYLIST_REFUSED = 'The playlist could not be created.';
-export const NEW_SONG_ROW_LABEL = 'New song';
-export const NEW_SONG_CLOSE_LABEL = 'Close new song';
-export const NEW_SONG_TITLE_LABEL = 'Title';
-export const NEW_SONG_HINT = 'Opens the song on Write.';
-export const NEW_SONG_FAILED = 'The song could not be created. Try again.';
-export const NEW_SONG_REFUSED = 'The song could not be created.';
 export const ALBUM_NO_SONGS = 'No songs yet.';
 
 export function newSongCardLabel(albumTitle: string): string {
@@ -446,7 +379,6 @@ export const SONG_NEXT_LABEL = 'Next song';
 
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const SETTINGS_ADMIN_ONLY_HINT = 'admins only';
-export const ADMIN_TABS_LABEL = 'Admin sections';
 
 // The account circle and the menu it opens (issue #1158).
 export const ACCOUNT_MENU_LABEL = 'Account';
@@ -519,7 +451,6 @@ export const PLAYLIST_ENTRY_MOVE_DOWN_LABEL = 'Move down';
 export const PLAYLIST_ENTRY_REMOVE_LABEL = 'Remove from playlist';
 export const LIBRARY_SHARES_COPY_LABEL = 'Copy link';
 
-export const COWRITER_TURN_PATH = '/api/chat/turn';
 export const RESOURCE_EVENT_STREAM_PATH = '/api/resource-events/stream';
 export const RESOURCE_EVENT_HELLO = 'hello';
 export const RESOURCE_EVENT_RESYNC = 'resync';

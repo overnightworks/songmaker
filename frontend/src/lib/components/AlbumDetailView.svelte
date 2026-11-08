@@ -56,9 +56,9 @@
 		ALBUM_YEAR_MIN,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL,
-		NEW_SONG_ROW_LABEL,
 		PLACE_LINE_SEPARATOR
 	} from '#lib/constants.ts';
+	import { NEW_SONG_ROW_LABEL } from '#lib/constants/new-collection.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { albumHasPlayableTake, albumSongsSettled, songPlayability } from '#lib/utils/playable.ts';
 	import type { SongItem } from '#lib/api/types.ts';
