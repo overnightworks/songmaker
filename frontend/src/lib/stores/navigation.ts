@@ -306,7 +306,8 @@ export function openAppPage(href: AppPageHref, query?: AppPageQuery): Promise<vo
 type AppPageQuery = Readonly<Record<string, string>>;
 
 export function appPageAddress(href: AppPageHref, query?: AppPageQuery): string {
-	return `${resolve(href)}${query === undefined ? '' : `?${new URLSearchParams(query)}`}`;
+	const queryPart = query === undefined ? '' : `?${new URLSearchParams(query)}`;
+	return `${resolve(href)}${queryPart}`;
 }
 
 function isPlainPrimaryClick(event: MouseEvent): boolean {
