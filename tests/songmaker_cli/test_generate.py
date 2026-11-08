@@ -117,6 +117,14 @@ def test_read_source_wav_preserves_stereo_channels(
     np.testing.assert_allclose(source.right, [-0.25, 0.25])
 
 
+def test_read_source_wav_rejects_corrupt_file_naming_the_source(tmp_path: Path) -> None:
+    source_path = tmp_path / "source.wav"
+    source_path.write_bytes(b"not a wav file at all, just garbage bytes")
+
+    with pytest.raises(GenerationError, match="source WAV"):
+        _read_source_wav(str(source_path))
+
+
 def test_splice_repaint_crossfades_each_channel(
     tmp_path: Path, make_wav_bytes: Callable[..., bytes],
 ) -> None:
