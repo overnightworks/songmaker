@@ -3803,9 +3803,7 @@ def test_list_songs_limit_validation(client: TestClient) -> None:
             id="set-default-preset",
         ),
         pytest.param("/api/settings/models/{model_id}", "put", {"404"}, id="toggle-model"),
-        pytest.param(
-            "/api/settings/default-config", "put", {"400", "404"}, id="set-default-config",
-        ),
+        pytest.param("/api/settings/default-config", "put", {"400"}, id="set-default-config"),
         pytest.param("/api/settings/cowriter", "put", {"422"}, id="set-cowriter"),
         pytest.param("/api/settings/rate-limits", "put", {"400"}, id="set-rate-limits"),
     ],
