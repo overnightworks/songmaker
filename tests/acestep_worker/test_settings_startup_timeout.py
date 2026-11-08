@@ -12,7 +12,7 @@ from pathlib import Path
 from support.compose_config import run_compose_config
 
 from acestep_worker.settings import WorkerSettings
-from songmaker_cli.constants import GENERATE_LOAD_MODEL_TIMEOUT_SECONDS
+from songmaker_cli.job_timing import GENERATE_LOAD_MODEL_TIMEOUT_SECONDS
 
 ACESTEP_WORKER_SERVICE = "songmaker-acestep-worker-0"
 SCRATCH_ENVIRONMENT = {

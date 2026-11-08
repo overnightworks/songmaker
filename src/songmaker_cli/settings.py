@@ -29,11 +29,13 @@ from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
-    LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     SCORER_TIMEOUT_SECONDS,
     SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT,
     SESSION_IDLE_SECONDS_DEFAULT,
     TEXT_ACCURACY_TIMEOUT_SECONDS,
+)
+from songmaker_cli.job_timing import (
+    LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     acestep_sse_read_timeout_seconds,
     generate_job_heartbeat_stale_threshold_seconds,
 )

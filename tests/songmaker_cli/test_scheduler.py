@@ -23,12 +23,12 @@ from songmaker_cli.acestep_state import (
     read_queue_depth,
     worker_state_key,
 )
-from songmaker_cli.constants import (
+from songmaker_cli.db.queries.workers import register_worker
+from songmaker_cli.job_timing import (
     ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
     GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
     GENERATE_SUBMIT_TIMEOUT_SECONDS,
 )
-from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.scheduler import (
     WORKER_ERROR_GPU_OUT_OF_MEMORY,
     WORKER_STREAM_WENT_SILENT,

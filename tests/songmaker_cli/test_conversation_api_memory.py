@@ -112,8 +112,7 @@ def test_compose_turn_context_keeps_named_scopes_once():
     assert names.count(TURN_BLOCK_CURRENT_SONG) == 1
     wrapped = envelope.wrap_user_message("hello")
     assert "<user_memory>\nprefer German\n</user_memory>" in wrapped
-    assert "lyrics:" not in envelope.body_for(TURN_BLOCK_USER_MEMORY)
-    assert "lyrics:" not in envelope.body_for(TURN_BLOCK_SONG_MEMORY)
+    assert "lyrics:" not in wrapped
 
 
 def test_compose_omits_empty_album_notes():

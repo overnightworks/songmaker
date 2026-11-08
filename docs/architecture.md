@@ -1602,7 +1602,7 @@ heartbeat, while Compose still shows it starting. An empty ACE-Step registry is
   completion. A turn whose web process dies is failed when the web process
   starts again, before it serves a request.
 
-- `STALE_JOB_THRESHOLDS` in `constants.py` is the single policy table:
+- `STALE_JOB_THRESHOLDS` in `job_timing.py` is the single policy table:
 
   | Type | signal | restart grace | unknown queued age | alive queued bound | running heartbeat |
   | --- | --- | ---: | ---: | ---: | ---: |
