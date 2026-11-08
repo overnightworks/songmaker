@@ -22,6 +22,7 @@
 	import { openCollection } from '#lib/stores/collection.ts';
 	import { loadActiveModels } from '#lib/stores/presets.ts';
 	import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';
+	import { libraryLoadFailed } from '#lib/stores/libraryRecovery.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
 	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
 	import BusyState from './BusyState.svelte';
@@ -51,7 +52,7 @@
 	// stream that could not come up offline is not a failure of its own: the
 	// offline strip says it, and the stream restarts once the network is back.
 	const workspaceReady = $derived(sync.ready && modelsReady);
-	const bootstrapFailed = $derived(!sync.ready && sync.status === 'error' && !$offline);
+	const bootstrapFailed = $derived(libraryLoadFailed(sync) && !$offline);
 
 	onMount(() => {
 		if (!activeModelsLoaded) void loadModels();

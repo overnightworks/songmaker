@@ -311,7 +311,7 @@ it owned this; Settings, login and the share pages leave it off. The
 workspace itself gates on `resourceSync.ready` rather than on a promise
 resolved once per mount, so a mount that finds the stream already live
 (returning to the library after leaving it) shows the library on its first
-frame. Navigation follows the same flag (`followLibrarySync` in `stores/navigation.ts`): the landing handler attaches with the first ready of an activation, and every later ready (a Retry, a restart) restores the standing song's context. `libraryHistoryUrl` in `stores/libraryContext.ts` maps library state to
+frame. Navigation follows the same flag (`followLibrarySync` in `stores/navigation.ts`, on the ready edge `onLibraryReady` in `stores/libraryRecovery.ts` owns): the landing handler attaches with the first ready of an activation, and every later ready (a Retry, a restart) restores the standing song's context. `libraryRecovery.ts` is also the one owner of what a Retry does while the library load failed (`libraryLoadFailed`): the rail's Retry and an address's Try again go through `retryLibraryOr`, which retries the sync only, and a failed address re-runs itself on the ready edge (`reloadWhenLibraryReturns`), so the rail, the workspace and the address come back together. `libraryHistoryUrl` in `stores/libraryContext.ts` maps library state to
 one of the seven: an open song addresses `/album/<slug>/<song-slug>` once the
 song's slug is known from `songList`, a selected take addresses one segment
 deeper still, `/album/<slug>/<song-slug>/take/<n>`, once that take's

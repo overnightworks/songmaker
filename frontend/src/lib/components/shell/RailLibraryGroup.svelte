@@ -16,6 +16,7 @@
 		loadSongsForAlbum,
 		songList
 	} from '#lib/stores/libraryData.ts';
+	import { retryLibraryOr } from '#lib/stores/libraryRecovery.ts';
 	import { isSongCurrent, selectedSongId } from '#lib/stores/player.ts';
 	import { matchesRailQuery, normalizedRailTreeQuery } from '#lib/stores/librarySearch.ts';
 	import {
@@ -33,6 +34,7 @@
 	} from '#lib/stores/navigation.ts';
 	import {
 		ALBUM_COVER_ALT_TYPE,
+		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL,
 		RAIL_CONTEXT_NO_TAKES,
 		LIBRARY_PAGE_LABEL,
@@ -108,8 +110,15 @@
 		if ($libraryWallOrder === 'played') void ensureLastPlayedRead();
 	});
 
-	function retryLibraryLoad(): void {
-		void ensureAllAlbumsLoaded();
+	let retrying = $state(false);
+
+	async function retryLibraryLoad(): Promise<void> {
+		retrying = true;
+		try {
+			await retryLibraryOr(ensureAllAlbumsLoaded);
+		} finally {
+			retrying = false;
+		}
 	}
 
 	// A single slot, not a set (issue #323, operator ruling): with 42 albums,
@@ -204,7 +213,9 @@
 >
 	{#snippet children(groupOpen: boolean)}
 		<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
-			{#if loadFailure !== null}
+			{#if retrying}
+				<p class="rail-status">{LIBRARY_ALBUMS_LOADING}</p>
+			{:else if loadFailure !== null}
 				<div class="rail-load-error">
 					<p class="rail-status" role="alert">{loadFailure}</p>
 					<button type="button" class="rail-retry" onclick={retryLibraryLoad}>

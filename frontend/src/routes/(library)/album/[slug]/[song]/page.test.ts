@@ -1,13 +1,13 @@
 import { mountAddressRoute, replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
 import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
-import { mount, unmount } from 'svelte';
+import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { browserReportsOnline } from '#lib/test-utils/network.ts';
-import { EDITOR_LYRICS_LABEL } from '#lib/constants.ts';
+import { EDITOR_LYRICS_LABEL, RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import {
@@ -16,7 +16,11 @@ import {
 	resetLibraryContextForTests
 } from '#lib/stores/libraryContext.ts';
 import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
-import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
+import {
+	resetResourceSyncForTests,
+	retryResourceSync,
+	startLibraryResourceSync
+} from '#lib/stores/resourceSync.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 
 const ALBUM_SLUG = 'anfield';
@@ -354,5 +358,88 @@ describe('/album/<slug>/<song-slug> whose song cannot be reached', () => {
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
+	});
+});
+
+describe('/album/<slug>/<song-slug> after the library load failed', () => {
+	const LIBRARY_DOWN = 'Library service is down';
+	const ALBUM_DOWN = 'Album service is down';
+	const libraryUp = () =>
+		api.fetchSongs.mockResolvedValue(
+			page([
+				song({
+					id: 'song-1',
+					generation_count: 0,
+					slug: SONG_SLUG,
+					title: TRACK_TITLE,
+					album_id: ALBUM_SLUG,
+					album_title: ALBUM_TITLE
+				})
+			])
+		);
+
+	function failLibrary(): void {
+		api.fetchSongs.mockRejectedValue(new ApiError(500, LIBRARY_DOWN, '/api/songs'));
+		api.fetchAlbum.mockRejectedValue(new ApiError(500, ALBUM_DOWN, '/api/albums'));
+		coldTabAt(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
+	}
+
+	function recoverLibrary(): void {
+		libraryUp();
+		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
+	}
+
+	async function openFailedAddress(): Promise<HTMLElement> {
+		failLibrary();
+		const target = openAddress();
+		await vi.waitFor(() => expect(target.textContent).toContain(ALBUM_DOWN));
+		await vi.waitFor(() => expect(target.textContent).toContain(RESOURCE_SYNC_ERROR));
+		return target;
+	}
+
+	it('Try again retries the library, shows loading meanwhile, and the song replaces overlay and card on the ready edge', async () => {
+		const target = await openFailedAddress();
+		recoverLibrary();
+
+		requireElement(target, 'button.address-action').click();
+		await tick();
+		expect(target.textContent).toContain('Loading song...');
+		expect(target.textContent).not.toContain(ALBUM_DOWN);
+
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(target.querySelector('.address-overlay')).toBeNull();
+		expect(target.textContent).not.toContain(RESOURCE_SYNC_ERROR);
+		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
+	});
+
+	it('shows its failure words again when the library retry fails again, and recovers on the next press', async () => {
+		const target = await openFailedAddress();
+
+		requireElement(target, 'button.address-action').click();
+		await tick();
+		expect(target.textContent).toContain('Loading song...');
+		await vi.waitFor(() => expect(target.querySelector('button.address-action')).not.toBeNull());
+		expect(target.textContent).toContain(ALBUM_DOWN);
+		expect(target.textContent).not.toContain(TRACK_TITLE);
+
+		recoverLibrary();
+		requireElement(target, 'button.address-action').click();
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+	});
+
+	it('opens the song when its own load began before the library was ready and failed after it', async () => {
+		let failAddress!: (error: Error) => void;
+		api.fetchSongs.mockRejectedValue(new ApiError(500, LIBRARY_DOWN, '/api/songs'));
+		api.fetchAlbum.mockImplementationOnce(() => new Promise((_, reject) => (failAddress = reject)));
+		coldTabAt(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
+		const target = openAddress();
+		await vi.waitFor(() => expect(failAddress).toBeDefined());
+
+		recoverLibrary();
+		await retryResourceSync();
+		failAddress(new ApiError(500, ALBUM_DOWN, '/api/albums'));
+
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(target.querySelector('.address-overlay')).toBeNull();
 	});
 });
