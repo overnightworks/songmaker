@@ -2707,7 +2707,7 @@ def test_cancel_job_other_user_blocked(tmp_path: Path, pg_factory) -> None:
 # api_stream_resource_events. That means `app.dependency_overrides[
 # get_current_user]`, which every other endpoint's tests in this file rely
 # on, does NOT apply to it: it needs a real, signed session cookie, the
-# same way test_resource_event_api.py's _authenticated_clients builds one.
+# same way support/resource_event_world.py's _authenticated_clients builds one.
 # Tests that hit the real route (client.stream/.get on /jobs/{id}/stream)
 # call _authenticate_job_stream_client first; tests that drive
 # _job_event_generator directly never go through auth at all and don't
