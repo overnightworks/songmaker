@@ -133,7 +133,7 @@
 
 	button.active,
 	button.active .count {
-		color: var(--primary);
-		border-color: var(--primary);
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 </style>
