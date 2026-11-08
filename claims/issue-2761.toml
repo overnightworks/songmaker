@@ -3,5 +3,5 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "e39e6f5d7313accd7da16431232e62670525cbf4"
 branch = "claude/issue-2761-cowriter-history-cells-two-guards"
-scope = ["src/songmaker_cli/cowriter/history.py", "tests/songmaker_cli/cowriter/test_history.py"]
+scope = ["quality/baseline.toml", "src/songmaker_cli/cowriter/history.py", "tests/songmaker_cli/cowriter/test_history.py"]
 opened_commit = "ca43e1d5493be296f70840436cc22f9c1adf8cb9"
