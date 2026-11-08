@@ -1,8 +1,0 @@
-claim_id = "29c3b185aa2b427c9b6c53a42a79d19e"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "22470443480dcdc825bcf6a7c727ab9c2248c20a"
-branch = "claude/issue-2711-advisory-lock-moves-to-db-layer"
-scope = ["docs/architecture.md", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/auth_stores.py", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/db/advisory_locks.py", "src/songmaker_cli/reference_audio.py", "tests/songmaker_cli"]
-opened_commit = "94d8f359d1a3cf4dcfade18cb4bc9f284f9c6579"
-whole_reason = "The lock's owner and its five users move together, or an importer names a removed name."
