@@ -5,6 +5,13 @@ from __future__ import annotations
 import json
 
 from songmaker_cli.constants import (
+    LORA_TRAINING_MODEL_MODES,
+    MODEL_AVAILABLE_MODES,
+    MODEL_DEFAULT_MODE,
+    AuditAction,
+    ResourceType,
+)
+from songmaker_cli.job_timing import (
     ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
     ACESTEP_SSE_READ_TIMEOUT_SECONDS,
     GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
@@ -13,14 +20,9 @@ from songmaker_cli.constants import (
     GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS,
     GENERATE_SUBMIT_TIMEOUT_SECONDS,
     JOB_REAPER_INTERVAL_SECONDS,
-    LORA_TRAINING_MODEL_MODES,
-    MODEL_AVAILABLE_MODES,
-    MODEL_DEFAULT_MODE,
     QUEUED_JOB_STALE_THRESHOLD_SECONDS,
     STALE_JOB_THRESHOLDS,
     WORKER_RESTART_GRACE_SECONDS,
-    AuditAction,
-    ResourceType,
     worker_restart_grace_seconds,
 )
 from songmaker_cli.job_types import (

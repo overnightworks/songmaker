@@ -50,15 +50,14 @@ from songmaker_cli.acestep_state import (
     worker_is_online,
 )
 from songmaker_cli.api_models.workers import WorkerEphemeralState
-from songmaker_cli.constants import (
+from songmaker_cli.constants import INTERNAL_TOKEN_HEADER, JOB_ERROR_WORKER_STREAM_SILENT
+from songmaker_cli.db.queries.workers import list_worker_identities
+from songmaker_cli.job_timing import (
     ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
     ACESTEP_SSE_READ_TIMEOUT_SECONDS,
     GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
     GENERATE_SUBMIT_TIMEOUT_SECONDS,
-    INTERNAL_TOKEN_HEADER,
-    JOB_ERROR_WORKER_STREAM_SILENT,
 )
-from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)

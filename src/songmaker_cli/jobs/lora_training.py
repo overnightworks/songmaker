@@ -21,12 +21,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from songmaker_cli.audio_paths import confined_under
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
-    GPU_HOLD_POLL_INTERVAL_SECONDS,
     JOB_ERROR_WORKER_TRAINING_FAILED,
     LORA_TRAINING_MODEL_MODES,
     LORA_WAITING_FOR_GENERATION_QUEUE_REASON,
     MODEL_DEFAULT_MODE,
-    STALE_JOB_THRESHOLDS,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
     USER_LORA_TRAINING_TMP_DIRNAME,
@@ -40,6 +38,7 @@ from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.jobs import count_queued_generation_jobs, get_job
 from songmaker_cli.db.queries.loras import list_active_user_loras, update_user_lora
 from songmaker_cli.db.queries.sentinels import unset_if_none
+from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS, STALE_JOB_THRESHOLDS
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
 from songmaker_cli.scheduler import (
     AllWorkersHeld,

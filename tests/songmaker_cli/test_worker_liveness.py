@@ -6,7 +6,8 @@ from unittest.mock import MagicMock
 from redis.exceptions import RedisError
 
 from songmaker_cli.acestep_state import worker_state_key
-from songmaker_cli.constants import ARQ_MUSIC_HEALTH_KEY, WORKER_RESTART_GRACE_SECONDS
+from songmaker_cli.constants import ARQ_MUSIC_HEALTH_KEY
+from songmaker_cli.job_timing import WORKER_RESTART_GRACE_SECONDS
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.worker_liveness import (
     ACESTEP_LAST_ALIVE_KEY,
