@@ -296,14 +296,12 @@ surface; neither names a resource, `/library/x` is `external`, and
 `routes/(library)` route group, whose own
 `+layout.svelte` mounts `components/LibraryWorkspace.svelte` — the bootstrap
 gate and the surface switch — exactly once for as long as the browser stays
-on any of the seven (issue #276); the route files underneath are thin, each
+on any of the seven; the route files underneath are thin, each
 resolving its own address and rendering only an overlay (loading / unknown /
-unreachable) stacked over the standing workspace while it does. Before #276
-each mounted the workspace itself, so a crossing between any two swapped the
-leaf `+page.svelte` and tore the component down with it — the sync stream
-survived (`routes/+layout.svelte`, next paragraph) but the workspace, and
-everything under it (`SongDetailView` included), did not; measuring the cost
-(issue #275, then #276) is what forced the route group. The outer
+unreachable) stacked over the standing workspace while it does. A crossing
+between any two leaves the workspace and everything under it
+(`SongDetailView` included) mounted, as it does the sync stream
+(`routes/+layout.svelte`, next paragraph). The outer
 `routes/+layout.svelte` still owns the live event stream and the history
 listener, so swapping between any of the seven addresses neither rebuilds the
 workspace nor re-runs its bootstrap, and it starts the stream only for a
@@ -367,8 +365,8 @@ or the address is unknown. A cold tab on `/`, `/library` or `/playlists` looks n
 `playlists` surface into the restore state, unless the entry a reload came back
 onto already shows it, and they leave the listing to the live stream's snapshot
 (a cold tab loads it once, not once for the address and once more for the
-snapshot). An entry a tab kept from before #1506, `{browse}` at `/`
-(the wall used to stand there), reads as Home: `libraryHistoryEntry` is the one
+snapshot). An entry a tab kept with `{browse}` at `/`
+reads as Home: `libraryHistoryEntry` is the one
 reader of every entry, the current one and the one a popstate lands on alike,
 and the address the entry stands at decides what it says (`entryForAddress`),
 so the entry keeps its collection and loses only the wall's scroll, in whichever
@@ -1017,8 +1015,8 @@ Route, Model and Status. Both rows are read-only `ModelsServiceRow`s: "Set by
 the agent file" in the Provider and Model cells, Gateway as the route, and no
 status, because the page checks no agent ahead of its run; the Co-Writer row
 keeps the history tail under Advanced. The page reads no provider status. The
-rows once saved for the Cover's provider, route and model, for the Co-Writer
-and for the removed judge stay in the table unread.
+rows saved for the Cover's provider, route and model, for the Co-Writer
+and for the judge stay in the table unread.
 
 How much room the five columns have is answered by the card the table sits in
 rather than by the viewport — the same reasoning as the editor's own container
@@ -1465,8 +1463,7 @@ POST /api/generations/{id}/score
 (with the reason, e.g. a scorer module that could not be imported). Persisting replaces exactly the `output_keys` of the scorers that
 came back `ok`, so a scorer that timed out or failed leaves the value it stored
 in an earlier run untouched; a whole run of failures changes nothing. The job
-log line names every scorer's outcome. Before #161 the run replaced the entire
-score blob, so one slow scorer erased the previous result.
+log line names every scorer's outcome.
 
 **The scorer child holds no credential.** It loads third-party model weights and
 is spawned with `SECRET_ENV_KEYS` scrubbed, and no scorer calls an external

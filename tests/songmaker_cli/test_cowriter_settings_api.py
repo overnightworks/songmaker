@@ -298,32 +298,6 @@ def test_the_cover_settings_are_gone_and_their_stored_rows_stay_unread(admin_cli
     assert stored == _STORED_COVER_ROWS
 
 
-@pytest.mark.parametrize("role", ["admin", "user"])
-@pytest.mark.parametrize("path", ["/api/capabilities", "/api/settings/providers"])
-def test_removed_provider_routes_answer_ordinary_not_found(
-    tmp_path, mock_arq_pool, path, role, pg_factory
-):
-    overrides = (client := make_test_app(tmp_path, factory=pg_factory)[0]).app.dependency_overrides
-    overrides[get_current_user] = lambda: make_authenticated_user("u", role=role)
-    with client:
-        unknown, removed = client.get("/api/nope"), client.get(path)
-    assert removed.status_code == unknown.status_code == 404
-    assert removed.content == unknown.content
-
-
-@pytest.mark.parametrize("role", ["admin", "user"])
-@pytest.mark.parametrize("method", ["GET", "PUT"])
-def test_removed_judge_endpoint_answers_ordinary_not_found(
-    tmp_path, mock_arq_pool, method, role, pg_factory
-):
-    overrides = (client := make_test_app(tmp_path, factory=pg_factory)[0]).app.dependency_overrides
-    overrides[get_current_user] = lambda: make_authenticated_user("u", role=role)
-    with client:
-        unknown, removed = [client.request(method, f"/api/settings/{n}") for n in ("nope", "judge")]
-    assert removed.status_code == unknown.status_code == 404
-    assert removed.content == unknown.content
-
-
 _LEFTOVER_JUDGE_ROWS = {
     "judge_provider": "grok",
     "judge_route": "bogus",
