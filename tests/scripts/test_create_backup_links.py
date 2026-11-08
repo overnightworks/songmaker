@@ -67,6 +67,7 @@ def test_a_link_that_is_not_a_tracked_executable_inside_scripts_is_reported(
     (scripts / "bad.sh").symlink_to(link_target)
     (tmp_path / "outside.sh").write_text("")
     (scripts / "untracked.sh").write_text("")
+    (scripts / "untracked.sh").chmod(0o755)
     (scripts / "plain.sh").write_text("")
     _git(tmp_path, "add", "scripts/bad.sh", "scripts/plain.sh")
 

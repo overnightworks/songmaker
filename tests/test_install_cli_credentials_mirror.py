@@ -35,7 +35,7 @@ COPIED_SCRIPTS = (
     "main_checkout.py",
     "check_agent_cli_mounts.sh",
     "agent_cli_paths.sh",
-    "alert.sh",
+    "send_alert.sh",
     "songmaker-cli-credentials-mirror.service",
     "songmaker-cli-credentials-mirror.path",
     "songmaker-cli-credentials-mirror.timer",
@@ -459,7 +459,7 @@ FOREIGN_UNITS = {
     ),
     "alert-another-checkout": (
         "songmaker-alert@.service",
-        "[Service]\nExecStart=/somewhere/else/scripts/alert.sh \"subject\"\n",
+        "[Service]\nExecStart=/somewhere/else/scripts/send_alert.sh \"subject\"\n",
     ),
 }
 

@@ -1522,11 +1522,11 @@ fi
 # be deployed at all — `compose up --wait` would only discover that after
 # the whole build, minutes later, from an "unhealthy container" message
 # that names no cause. Refusing here instead names the missing keys on the
-# very first tick. The same helper scripts/alert.sh uses owns the list, so
+# very first tick. The same helper scripts/send_alert.sh uses owns the list, so
 # there is one answer to "what configures the alert channel".
 if ! ALERT_CONFIG_ERROR="$( (
-    # shellcheck source=scripts/alert-config.sh
-    source "$SCRIPT_DIR/alert-config.sh"
+    # shellcheck source=scripts/alert_config.sh
+    source "$SCRIPT_DIR/alert_config.sh"
     load_alert_config "$REPO_ROOT/.env"
 ) 2>&1 )"; then
     log_err "alert channel not configured — refusing to deploy a stack whose alertmanager cannot start: $ALERT_CONFIG_ERROR"
