@@ -1,8 +1,0 @@
-claim_id = "903119f3f019438fbb15ad4fc12a8d40"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "22470443480dcdc825bcf6a7c727ab9c2248c20a"
-branch = "claude/issue-2725-prom-and-resource-values-leave-constants"
-scope = ["src/songmaker_cli/constants.py", "src/songmaker_cli/health_api.py", "src/songmaker_cli/resource_event_api.py", "tests/songmaker_cli/test_health_api_metrics_auth.py", "tests/songmaker_cli/test_resource_event_api.py", "tests/songmaker_cli/test_server.py"]
-opened_commit = "6584313f9e36c77f9bc6a2e3f6039067213bb6f8"
-whole_reason = "A name and its importers move together, or an import names a removed name."
