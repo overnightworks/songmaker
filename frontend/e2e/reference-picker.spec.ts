@@ -1,6 +1,6 @@
-// The recipe's Reference track row is a picker (picture docs/mockups/references.html, R1): a
-// reference uploaded from the opened row is chosen, saved with the version and still named after
-// a reload. The flow uses an account of its own so the list holds only what it uploads.
+// The recipe's Reference track row is a picker: a reference uploaded from the opened row is
+// chosen, saved with the version and still named after a reload. The flow uses an account of
+// its own so the list holds only what it uploads.
 
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';

@@ -1,7 +1,6 @@
-// Settings › References lists a person's uploaded recordings and plays each one (picture
-// docs/mockups/references.html): filename, length and upload day, a play button, and an empty
-// state before the first upload. Every flow uses an account of its own
-// so the list starts empty and holds only what the flow uploads.
+// Settings › References lists a person's uploaded recordings and plays each one: filename,
+// length and upload day, a play button, and an empty state before the first upload. Every flow
+// uses an account of its own so the list starts empty and holds only what the flow uploads.
 
 import { readFileSync } from 'node:fs';
 import {
