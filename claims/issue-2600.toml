@@ -1,7 +1,0 @@
-claim_id = "4d09248a73064b709ef701f0fdcaffa2"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3379aedf6e81400aeec22a2d7414fbc92922c675"
-branch = "claude/issue-2600-s4-undefined-token-check"
-scope = ["docs/testing.md", "scripts/check_style_literals.py", "tests/scripts/test_check_style_literals.py"]
-opened_commit = "c5d4abce26f5eced00d68b2a11c2795594e3a9ab"
