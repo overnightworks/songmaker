@@ -7,7 +7,7 @@ import {
 	type VizColors
 } from './visualizer';
 
-const colors: VizColors = { pr: 255, pg: 50, pb: 32, ar: 180, ag: 92, ab: 245 };
+const colors: VizColors = { ar: 180, ag: 92, ab: 245 };
 const initialDevicePixelRatio = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
 
 interface DrawnPath {
@@ -95,25 +95,27 @@ afterEach(() => {
 describe('readVizColors', () => {
 	afterEach(() => {
 		for (const channel of ['r', 'g', 'b']) {
-			document.documentElement.style.removeProperty(`--viz-primary-${channel}`);
 			document.documentElement.style.removeProperty(`--viz-accent-${channel}`);
 		}
 	});
 
-	it('falls back to the dark theme colours when the tokens are unset', () => {
-		expect(readVizColors()).toEqual(colors);
-	});
-
-	it('reads the accent and primary channels from the tokens', () => {
+	it('reads the accent channels from the tokens', () => {
 		const root = document.documentElement.style;
-		root.setProperty('--viz-primary-r', '212');
-		root.setProperty('--viz-primary-g', '26');
-		root.setProperty('--viz-primary-b', '10');
 		root.setProperty('--viz-accent-r', '122');
 		root.setProperty('--viz-accent-g', '24');
 		root.setProperty('--viz-accent-b', '192');
 
-		expect(readVizColors()).toEqual({ pr: 212, pg: 26, pb: 10, ar: 122, ag: 24, ab: 192 });
+		expect(readVizColors()).toEqual({ ar: 122, ag: 24, ab: 192 });
+	});
+
+	it.each(['r', 'g', 'b'])('raises naming the token when --viz-accent-%s is missing', (channel) => {
+		const root = document.documentElement.style;
+		root.setProperty('--viz-accent-r', '122');
+		root.setProperty('--viz-accent-g', '24');
+		root.setProperty('--viz-accent-b', '192');
+		root.removeProperty(`--viz-accent-${channel}`);
+
+		expect(() => readVizColors()).toThrow(`--viz-accent-${channel}`);
 	});
 });
 

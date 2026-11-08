@@ -25,43 +25,34 @@ interface Particle {
 }
 
 export interface VizColors {
-	pr: number;
-	pg: number;
-	pb: number;
 	ar: number;
 	ag: number;
 	ab: number;
 }
 
-function lerpColor(c: VizColors, t: number): { r: number; g: number; b: number } {
-	return {
-		r: Math.round(c.pr + (c.ar - c.pr) * t),
-		g: Math.round(c.pg + (c.ag - c.pg) * t),
-		b: Math.round(c.pb + (c.ab - c.pb) * t)
-	};
+function readChannel(style: CSSStyleDeclaration, token: string): number {
+	const channel = Number.parseInt(style.getPropertyValue(token));
+	if (Number.isNaN(channel)) {
+		throw new Error(`The visualizer needs the numeric colour channel ${token}.`);
+	}
+	return channel;
 }
 
 export function readVizColors(): VizColors {
-	const s = getComputedStyle(document.documentElement);
+	const style = getComputedStyle(document.documentElement);
 	return {
-		pr: Number.parseInt(s.getPropertyValue('--viz-primary-r')) || 255,
-		pg: Number.parseInt(s.getPropertyValue('--viz-primary-g')) || 50,
-		pb: Number.parseInt(s.getPropertyValue('--viz-primary-b')) || 32,
-		ar: Number.parseInt(s.getPropertyValue('--viz-accent-r')) || 180,
-		ag: Number.parseInt(s.getPropertyValue('--viz-accent-g')) || 92,
-		ab: Number.parseInt(s.getPropertyValue('--viz-accent-b')) || 245
+		ar: readChannel(style, '--viz-accent-r'),
+		ag: readChannel(style, '--viz-accent-g'),
+		ab: readChannel(style, '--viz-accent-b')
 	};
 }
 
 export function boxShadowStyle(energy: number, c: VizColors): string {
-	const r = Math.round(c.pr - energy * (c.pr - c.ar) * 0.4);
-	const g = Math.round(c.pg + energy * (c.ag - c.pg) * 0.3);
-	const b = Math.round(c.pb + energy * (c.ab - c.pb) * 0.8);
-	return `height: calc(var(--transport-bar-height) + ${energy * 14}px); box-shadow: 0 ${-2 - energy * 8}px ${6 + energy * 18}px rgba(${r}, ${g}, ${b}, ${0.1 + energy * 0.3})`;
+	return `height: calc(var(--transport-bar-height) + ${energy * 14}px); box-shadow: 0 ${-2 - energy * 8}px ${6 + energy * 18}px rgba(${c.ar}, ${c.ag}, ${c.ab}, ${0.1 + energy * 0.3})`;
 }
 
 export function titleGlowStyle(bass: number, c: VizColors): string {
-	return `text-shadow: 0 0 ${8 + bass * 20}px rgba(${c.ar}, ${c.ag}, ${c.ab}, ${0.3 + bass * 0.5}), 0 0 ${4 + bass * 10}px rgba(${c.pr}, ${c.pg}, ${c.pb}, ${bass * 0.4})`;
+	return `text-shadow: 0 0 ${8 + bass * 20}px rgba(${c.ar}, ${c.ag}, ${c.ab}, ${0.3 + bass * 0.5}), 0 0 ${4 + bass * 10}px rgba(${c.ar}, ${c.ag}, ${c.ab}, ${bass * 0.4})`;
 }
 
 interface EnergyBands {
@@ -108,9 +99,7 @@ function drawBars(
 		const val = smoothedFreq[freqIdx];
 		const barH = val * h * 1.4;
 		const x = i * barW;
-		const t = i / barCount;
-		const { r, g, b } = lerpColor(colors, t);
-		ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.04 + val * 0.2})`;
+		ctx.fillStyle = `rgba(${colors.ar}, ${colors.ag}, ${colors.ab}, ${0.04 + val * 0.2})`;
 		ctx.fillRect(x, cy - barH / 2, barW - 0.5, barH);
 	}
 }
@@ -141,7 +130,7 @@ function drawWaveform({
 	const waveLen = waveformData.length;
 
 	ctx.beginPath();
-	ctx.strokeStyle = `rgba(${colors.pr}, ${colors.pg}, ${colors.pb}, ${0.15 + avgE * 0.35})`;
+	ctx.strokeStyle = `rgba(${colors.ar}, ${colors.ag}, ${colors.ab}, ${0.15 + avgE * 0.35})`;
 	ctx.lineWidth = 1 + avgE * 1.5;
 	for (let i = 0; i < waveLen; i++) {
 		const x = (i / waveLen) * w;
@@ -154,7 +143,7 @@ function drawWaveform({
 
 	if (avgE > 0.1) {
 		ctx.save();
-		ctx.shadowColor = `rgba(${colors.pr}, ${colors.pg}, ${colors.pb}, ${avgE * 0.6})`;
+		ctx.shadowColor = `rgba(${colors.ar}, ${colors.ag}, ${colors.ab}, ${avgE * 0.6})`;
 		ctx.shadowBlur = 6 + avgE * 14;
 		ctx.stroke();
 		ctx.restore();
@@ -205,14 +194,12 @@ function drawRings({
 }: RingDrawArgs): void {
 	const ringCount = 6;
 	for (let r2 = 0; r2 < ringCount; r2++) {
-		const ringT = r2 / ringCount;
 		const baseRadius = 10 + r2 * (Math.min(w, h) * 0.1);
 		const e = ringEnergy(r2, energy);
 		const points = 80;
 
 		ctx.beginPath();
-		const { r: rr, g: rg, b: rb } = lerpColor(colors, ringT);
-		ctx.strokeStyle = `rgba(${rr}, ${rg}, ${rb}, ${0.06 + e * 0.35})`;
+		ctx.strokeStyle = `rgba(${colors.ar}, ${colors.ag}, ${colors.ab}, ${0.06 + e * 0.35})`;
 		ctx.lineWidth = 0.8 + e * 1.5;
 
 		for (let p = 0; p <= points; p++) {
@@ -230,7 +217,7 @@ function drawRings({
 
 		if (e > 0.3) {
 			ctx.save();
-			ctx.shadowColor = `rgba(${rr}, ${rg}, ${rb}, ${(e - 0.3) * 0.5})`;
+			ctx.shadowColor = `rgba(${colors.ar}, ${colors.ag}, ${colors.ab}, ${(e - 0.3) * 0.5})`;
 			ctx.shadowBlur = 4 + e * 10;
 			ctx.stroke();
 			ctx.restore();
@@ -254,8 +241,6 @@ function spawnParticles(
 		const angle = unitRandom() * Math.PI * 2;
 		const speed = 2 + bassE * 8;
 		const dist = 10 + unitRandom() * 30;
-		const pt = unitRandom();
-		const { r, g, b } = lerpColor(colors, pt * 0.4);
 		particles.push({
 			x: w / 2 + Math.cos(angle) * dist,
 			y: cy + Math.sin(angle) * dist * 0.6,
@@ -263,9 +248,9 @@ function spawnParticles(
 			vy: Math.sin(angle) * speed * 0.6 * (0.5 + unitRandom()),
 			life: 1,
 			decay: 0.01 + unitRandom() * 0.02,
-			r,
-			g,
-			b,
+			r: colors.ar,
+			g: colors.ag,
+			b: colors.ab,
 			size: 1.5 + unitRandom() * 3
 		});
 	}
