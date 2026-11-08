@@ -1,0 +1,8 @@
+claim_id = "909b153a567f4afbba9f7d08781a40d5"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "53a2ac2313e0909b1eed95566aa3deeb3d2a3899"
+branch = "claude/issue-2645-v010-c3-route-stream-mcp-test-names"
+scope = [".github/workflows/ci.yml", "docs", "pyproject.toml", "quality/baseline.toml", "tests/songmaker_cli"]
+opened_commit = "14e56fdb32f353b232a988c52757b2b2d5034427"
+whole_reason = "Fourteen renames of one rule under one directory, proven by one collect-only diff and one quality check; the pins they share (baseline keys, docs) change together."
