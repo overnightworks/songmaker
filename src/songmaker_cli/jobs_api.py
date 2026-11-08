@@ -48,7 +48,7 @@ REDIS_JOB_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:job-stream:global"
 
 SSE_POLL_INTERVAL_SECONDS = 1
 
-# Job SSE stream (#331 Finding 2). Forces the same kind of periodic
+# Job SSE stream: forces the same kind of periodic
 # reconnect as the resource-event stream, for the same reason: bound the
 # worst case a single stream can stay open rather than let a queued/running
 # job hold it (and, before the to_thread fix, the event loop) indefinitely.
