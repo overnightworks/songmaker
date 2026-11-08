@@ -35,6 +35,7 @@ from songmaker_cli.config import (
     save_generation_defaults,
 )
 from songmaker_cli.constants import (
+    VALID_BUILTIN_CONFIGS,
     AuditAction,
     ResourceType,
 )
@@ -46,6 +47,7 @@ from songmaker_cli.db.queries.rate_limits import (
 from songmaker_cli.db.queries.settings import (
     create_preset,
     delete_preset,
+    effective_default_config,
     get_cowriter_tail_token_budget,
     get_preset,
     list_active_models,
@@ -289,9 +291,6 @@ def api_set_theme(
 # ── Default generation config ──────────────────────────────────────
 
 
-VALID_BUILTIN_CONFIGS = frozenset({"sft", "turbo"})
-
-
 @router.get("/settings/default-config")
 def api_get_default_config(
     user: AuthenticatedUser = Depends(get_current_user),
@@ -299,7 +298,9 @@ def api_get_default_config(
 ) -> DefaultConfigResponse:
     from songmaker_cli.db.models import User
     db_user = session.query(User).filter_by(id=user.id).first()
-    return DefaultConfigResponse(config=db_user.default_generation_config if db_user else None)
+    return DefaultConfigResponse(
+        config=effective_default_config(session, db_user) if db_user else None,
+    )
 
 
 @router.put(
