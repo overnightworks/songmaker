@@ -1,0 +1,8 @@
+claim_id = "af5ab28e857941668069df96de5f8405"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "a6da33ea2f433f7e4e48bfc36782fb88b6baaed8"
+branch = "claude/issue-2606-s5-the-editor-s-action-colour-turns-viol"
+scope = ["frontend/src/lib/components/ParamControls.svelte", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/editor/DetailTabs.svelte", "frontend/src/lib/components/editor/GenerateButton.svelte", "frontend/src/lib/components/editor/ListenTabs.svelte", "frontend/src/lib/components/editor/RecipeLine.svelte", "frontend/src/lib/components/editor/RecipeTabs.svelte", "frontend/src/lib/components/editor/SeedChip.svelte", "frontend/src/lib/components/editor/TakeRow.svelte", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/VersionsSheet.svelte", "frontend/src/routes/(library)/album/[slug]/[song]/+page.svelte", "frontend/src/routes/(library)/album/[slug]/[song]/take/[n]/+page.svelte"]
+opened_commit = "d9847f8fd12e62ffef89891f0cd470889deb1870"
+whole_reason = "One surface family of one-token swaps proven by one editor drive per width and theme, as #2527's plan states for S5 to S9."
