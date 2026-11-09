@@ -10,9 +10,9 @@ import {
 } from '#lib/api/resourceEvents.ts';
 import { fetchSong } from '#lib/api/songs.ts';
 import type { GenerationCreatedResourceEvent, SongItem } from '#lib/api/types.ts';
+import { EVENT_SOURCE_CLOSED } from '#lib/constants.ts';
 import {
 	RESOURCE_EVENT_GENERATION_CREATED,
-	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_HELLO,
 	RESOURCE_EVENT_RESYNC,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
@@ -21,7 +21,7 @@ import {
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
-} from '#lib/constants.ts';
+} from '#lib/constants/resource-sync.ts';
 import { leavesForFreshDocument } from '#lib/history/historyController.ts';
 import {
 	cancelLibraryHistoryApply,

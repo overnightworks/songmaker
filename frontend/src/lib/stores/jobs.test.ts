@@ -44,7 +44,7 @@ import {
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
-} from '#lib/constants.ts';
+} from '#lib/constants/sse-reconnect.ts';
 
 // Jitter only adds to the exponential delay (never subtracts, see
 // `sseReconnect.ts`), so a delay at the backoff ceiling can run up to

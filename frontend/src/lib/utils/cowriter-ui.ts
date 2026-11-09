@@ -17,7 +17,8 @@ import {
 	COWRITER_SINGLE_MESSAGE_COUNT,
 	COWRITER_UNAVAILABLE_TEXT
 } from '#lib/constants/cowriter.ts';
-import { DAY_LABEL_TODAY, EDITOR_VIEW_COWRITER_LABEL } from '#lib/constants.ts';
+import { EDITOR_VIEW_COWRITER_LABEL } from '#lib/constants.ts';
+import { DAY_LABEL_TODAY } from '#lib/constants/day-label.ts';
 import {
 	DAY_LABEL_LOCALE,
 	DAYS_NAMED_BY_WEEKDAY,
