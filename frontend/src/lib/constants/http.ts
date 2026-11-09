@@ -1,10 +1,10 @@
 // The edge's own answers for a server it cannot reach (down or restarting).
 // Only these, besides a request the network never carried, read as offline:
-// a 429 or a 500 comes from a server that is there (#1099).
+// a 429 or a 500 comes from a server that is there.
 export const SERVER_UNREACHABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
 export const SERVER_ERROR_STATUS_FLOOR = 500;
 // A rate limit passes, like a failing server: a request it refused can be
-// asked again, no sooner than its `Retry-After` (#1099, #1508).
+// asked again, no sooner than its `Retry-After`.
 export const RATE_LIMITED_STATUS = 429;
 
 // Shown when the backend's IP rate limiter (`webauth.middleware.rate_limit`)
@@ -16,3 +16,5 @@ export const RATE_LIMITED_STATUS = 429;
 // in `lib/stores/rateLimitNotice.ts` for exactly which, and why.
 export const RATE_LIMITED_TOAST_MESSAGE =
 	'Too many requests — hang on, it will continue in a moment.';
+
+export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';

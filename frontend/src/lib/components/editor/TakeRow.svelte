@@ -3,7 +3,6 @@
 	import type { SongItem, GenerationItem, UserLoraItem } from '#lib/api/types.ts';
 	import type { SourceMode } from '#lib/stores/recipe.ts';
 	import {
-		EXPIRY_WARN_DAYS,
 		TAKE_ARCHIVED_TITLE,
 		TAKE_PROVENANCE_COVER_PREFIX,
 		TAKE_PROVENANCE_REPAINT_PREFIX,
@@ -12,6 +11,7 @@
 		TAKE_UNKEEP_LABEL,
 		TAKE_RESCORING_LABEL
 	} from '#lib/constants.ts';
+	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
 	import {
 		nowPlayingTakeLabel,
 		takeBatchReductionLabel,

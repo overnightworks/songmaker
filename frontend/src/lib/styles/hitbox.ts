@@ -1,4 +1,4 @@
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '#lib/constants.ts';
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 
 export const HITBOX_STYLE = `:root {
 	--hitbox-frequent: ${HITBOX_FREQUENT_PX}px;

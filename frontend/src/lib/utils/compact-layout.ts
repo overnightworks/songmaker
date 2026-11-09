@@ -1,4 +1,4 @@
-import { COMPACT_LAYOUT_MEDIA } from '#lib/constants.ts';
+import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 
 function readCompactLayout(
 	media: Pick<MediaQueryList, 'matches'>,

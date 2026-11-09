@@ -37,3 +37,24 @@ export const ALBUM_YEAR_LABEL = 'Year';
 export const ALBUM_YEAR_MIN = 1900;
 export const ALBUM_YEAR_MAX = 2100;
 export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
+export const PLACE_LINE_SEPARATOR = ' · ';
+
+export function newSongCardLabel(albumTitle: string): string {
+	return `New song in ${albumTitle}`;
+}
+
+export function albumCoverSuggestionAlt(title: string): string {
+	return `Cover suggestion for ${title}`;
+}
+
+export function albumCoverSuggestionPosition(shown: number, count: number): string {
+	return `${shown} / ${count}`;
+}
+
+export function albumCoverStageLabel(shown: number, count: number): string {
+	return `Cover suggestion ${shown} of ${count}`;
+}
+
+export function albumCoverSuggestionsLeftToday(used: number, limit: number): string {
+	return `${Math.max(0, limit - used)} of ${limit} left today`;
+}

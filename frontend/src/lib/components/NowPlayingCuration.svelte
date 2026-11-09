@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { HITBOX_FREQUENT_PX, SONG_NEXT_LABEL } from '#lib/constants.ts';
+	import { SONG_NEXT_LABEL } from '#lib/constants.ts';
+	import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 	import {
 		NOW_PLAYING_CURATE_DONE_LABEL,
 		NOW_PLAYING_CURATE_GROUP_LABEL,

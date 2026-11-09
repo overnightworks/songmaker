@@ -19,7 +19,7 @@ import {
 	isTransientApiFailure,
 	signInAddress
 } from './fetch';
-import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants.ts';
+import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants/http.ts';
 import { hangsUntilAborted, sentUpload, uploadAnswers } from '#lib/test-utils/network.ts';
 
 afterEach(() => {

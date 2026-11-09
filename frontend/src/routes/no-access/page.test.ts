@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { SIGN_OUT_FAILED_MESSAGE } from '#lib/constants/auth.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { APP_NAME } from '#lib/constants.ts';
+import { APP_NAME } from '#lib/constants/app.ts';
 import { signOutFailed } from '#lib/stores/auth.ts';
 
 const mockLogout = vi.hoisted(() => vi.fn());

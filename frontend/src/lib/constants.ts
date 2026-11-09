@@ -1,15 +1,5 @@
-import type { JobItem } from '#lib/api/types.ts';
+import { COMPACT_LAYOUT_MAX_PX } from '#lib/constants/media.ts';
 import { VERSIONS_SHEET_LABEL } from '#lib/constants/versions.ts';
-
-export const APP_NAME = 'Hallucinai';
-export const APP_REPOSITORY_URL = 'https://github.com/overnightworks/songmaker';
-
-export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
-
-export const DIALOG_CANCEL_LABEL = 'Cancel';
-export const DIALOG_CONFIRM_LABEL = 'Confirm';
-
-export const EXPIRY_WARN_DAYS = 3;
 
 export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been deleted';
 
@@ -24,7 +14,6 @@ export function openNowPlayingLabel(songTitle: string): string {
 // Swiping the mini player up opens Now Playing once the finger has risen
 // this far, and further up than sideways; anything less is a tap or a slip.
 export const NOW_PLAYING_SWIPE_RISE_PX = 40;
-export const REDUCED_MOTION_MEDIA = '(prefers-reduced-motion: reduce)';
 // Beside play's exact centre line a phone narrower than 360px leaves the
 // mini player's left side too little room for cover and title, so the cover
 // goes and the title takes the whole side. The query stays on max-width, like
@@ -63,14 +52,12 @@ export function takesDraftBanner(
 	return `Draft — ${differs}. Generate creates v${nextVersionNumber}.`;
 }
 export const EDITOR_QUEUED_LABEL = 'Queued';
-export const MODEL_REGISTRY_LOAD_FAILED = 'Cannot reach the registry API.';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 
 export const EDITOR_TAB_TAKES_LABEL = 'Takes';
 export const EDITOR_TAB_EDIT_LABEL = 'Edit';
 export const EDITOR_TABS_LABEL = 'Editor tabs';
 
-export const PLACE_LINE_SEPARATOR = ' · ';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-writer';
 
 export const EDITOR_GENERATE_LABEL = 'Generate';
@@ -90,12 +77,6 @@ export const EDITOR_GENERATE_CANCEL_FAILED = 'Could not cancel generation';
 export const EDITOR_SAVE_LABEL = 'Save';
 export const EDITOR_SAVE_ACCESSIBLE_LABEL = 'Save changes';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
-export const GENERATION_PHASE_LABELS: Record<NonNullable<JobItem['phase']>, string> = {
-	loading_model: 'Loading model…',
-	writing: 'Writing',
-	rendering: 'Rendering',
-	saving_take: 'Saving take'
-};
 export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable one.';
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';
@@ -108,7 +89,6 @@ export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
 export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
 export const EDITOR_SAVE_FAILED = 'Save failed';
 const VERSION_CHIP_DRAFT_LABEL = 'draft';
-export const TOAST_UNDO_LABEL = 'Undo';
 
 export function versionLabel(versionNumber: number): string {
 	return `v${versionNumber}`;
@@ -199,7 +179,6 @@ export function songMovedToastLabel(albumTitle: string): string {
 }
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
-export const SEARCH_OPEN_LABEL = 'Search';
 export const LIBRARY_RETRY_LABEL = 'Retry';
 export const LIBRARY_SEARCH_DEBOUNCE_MS = 200;
 export const LIBRARY_ALBUM_PAGE_SIZE = 50;
@@ -210,14 +189,6 @@ export const LIBRARY_SONG_PAGE_SIZE = 200;
 export const UNREACHABLE_RELOAD_DELAYS_MS: readonly number[] = [2_000, 5_000, 15_000];
 export const LIBRARY_SEARCH_PAGE_SIZE = 50;
 
-export const HITBOX_FREQUENT_PX = 44;
-export const HITBOX_COMPACT_PX = 24;
-
-export const COMPACT_LAYOUT_MAX_PX = 768;
-export const COMPACT_LAYOUT_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px), (any-pointer: coarse)`;
-// A narrow desktop window is compact but still has a mouse — touch-only copy
-// ("Tap play") asks this instead of the compact query.
-export const COARSE_POINTER_MEDIA = '(any-pointer: coarse)';
 export const LIBRARY_NARROW_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px)`;
 export const LIBRARY_ALBUM_CARD_TRACK_MAX_PX = 208;
 export const LIBRARY_WALL_ORDERS = ['title', 'played'] as const;
@@ -238,28 +209,8 @@ export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';
 export const LIBRARY_NEW_ALBUM_LABEL = 'Album';
 export const LIBRARY_NEW_PLAYLIST_LABEL = 'Playlist';
-
-export function newSongCardLabel(albumTitle: string): string {
-	return `New song in ${albumTitle}`;
-}
 // The listen endpoint's own ceiling (PAGE_MAX_LIMIT): Last played reads its places in pages this size.
 export const LIBRARY_WALL_PLAYED_PAGE_SIZE = 200;
-
-export function albumCoverSuggestionAlt(title: string): string {
-	return `Cover suggestion for ${title}`;
-}
-
-export function albumCoverSuggestionPosition(shown: number, count: number): string {
-	return `${shown} / ${count}`;
-}
-
-export function albumCoverStageLabel(shown: number, count: number): string {
-	return `Cover suggestion ${shown} of ${count}`;
-}
-
-export function albumCoverSuggestionsLeftToday(used: number, limit: number): string {
-	return `${Math.max(0, limit - used)} of ${limit} left today`;
-}
 export const SONG_COVER_ALT_TYPE = 'Song';
 export const SONG_COVER_UPLOAD_LABEL = 'Upload song cover';
 export const SONG_COVER_REPLACE_LABEL = 'Replace song cover';
@@ -280,7 +231,3 @@ export const LIBRARY_ALBUMS_LOADING = 'Loading albums…';
 export const LIBRARY_PLAYLISTS_LOADING = 'Loading playlists…';
 export const LIBRARY_PLAYLISTS_ERROR = 'Failed to load playlists';
 export const LIBRARY_SHARES_COPY_LABEL = 'Copy link';
-
-export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";
-// `EventSource.CLOSED`, spelled out because the jsdom test runtime has no EventSource.
-export const EVENT_SOURCE_CLOSED = 2;

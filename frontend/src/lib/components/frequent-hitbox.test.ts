@@ -7,7 +7,8 @@ import {
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX, LIBRARY_NARROW_MEDIA } from '#lib/constants.ts';
+import { LIBRARY_NARROW_MEDIA } from '#lib/constants.ts';
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import {
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_MOVE_UP_LABEL,

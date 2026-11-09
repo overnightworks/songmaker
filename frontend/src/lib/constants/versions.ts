@@ -9,3 +9,4 @@ export const VERSION_DELETE_LOAD_UNDO_GOES = 'Undo for your earlier draft goes t
 export const VERSION_NO_LYRICS = 'No lyrics';
 export const VERSIONS_SHEET_LABEL = 'Versions';
 export const VERSIONS_SHEET_CLOSE_LABEL = 'Close versions';
+export const TOAST_UNDO_LABEL = 'Undo';

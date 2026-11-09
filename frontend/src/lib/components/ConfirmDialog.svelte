@@ -2,7 +2,7 @@
 	import { tick } from 'svelte';
 	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
 	import { focusFirstIn, handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
-	import { DIALOG_CANCEL_LABEL, DIALOG_CONFIRM_LABEL } from '#lib/constants.ts';
+	import { DIALOG_CANCEL_LABEL, DIALOG_CONFIRM_LABEL } from '#lib/constants/dialog.ts';
 
 	let {
 		title,

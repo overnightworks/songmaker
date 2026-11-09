@@ -20,3 +20,4 @@ export const modelsRowStatus = (loadFailure: string | null): string =>
 	loadFailure ? MODELS_UNAVAILABLE_LABEL : MODELS_LOADING_LABEL;
 
 export const MODELS_HEADING = 'Models';
+export const MODEL_REGISTRY_LOAD_FAILED = 'Cannot reach the registry API.';

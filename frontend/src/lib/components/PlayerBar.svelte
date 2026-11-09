@@ -53,11 +53,8 @@
 		LIBRARY_QUEUE_PLAY_DETAIL,
 		LIBRARY_QUEUE_RETRY_DETAIL
 	} from '#lib/constants/queue.ts';
-	import {
-		MINI_PLAYER_WITHOUT_COVER_MEDIA,
-		REDUCED_MOTION_MEDIA,
-		openNowPlayingLabel
-	} from '#lib/constants.ts';
+	import { MINI_PLAYER_WITHOUT_COVER_MEDIA, openNowPlayingLabel } from '#lib/constants.ts';
+	import { REDUCED_MOTION_MEDIA } from '#lib/constants/media.ts';
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import OfflineStrip from './OfflineStrip.svelte';
 	import {

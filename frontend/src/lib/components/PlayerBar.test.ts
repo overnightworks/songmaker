@@ -12,11 +12,11 @@ import {
 	NOW_PLAYING_LABEL,
 	MINI_PLAYER_WITHOUT_COVER_MEDIA,
 	NOW_PLAYING_SWIPE_RISE_PX,
-	OFFLINE_STRIP_MESSAGE,
 	openNowPlayingLabel,
-	LIBRARY_PAGE_LABEL,
-	REDUCED_MOTION_MEDIA
+	LIBRARY_PAGE_LABEL
 } from '#lib/constants.ts';
+import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
+import { REDUCED_MOTION_MEDIA } from '#lib/constants/media.ts';
 import {
 	PLAYER_WAITING_FOR_NETWORK,
 	TRANSPORT_PAUSE_LABEL,

@@ -13,3 +13,5 @@ export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;
 // first answer ends the probing.
 export const RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS = 1000;
 export const RESOURCE_SYNC_TRACKED_EVENT_LIMIT = 256;
+// `EventSource.CLOSED`, spelled out because the jsdom test runtime has no EventSource.
+export const EVENT_SOURCE_CLOSED = 2;

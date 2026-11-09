@@ -8,9 +8,7 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
-	DIALOG_CANCEL_LABEL,
 	EDITOR_UNSAVED_TITLE,
-	HITBOX_FREQUENT_PX,
 	TAKE_COVER_LABEL,
 	TAKE_DELETE_LABEL,
 	TAKE_OVERFLOW_LABEL,
@@ -18,6 +16,8 @@ import {
 	TAKE_REPAINT_LABEL,
 	TAKE_SHARE_LABEL
 } from '../src/lib/constants';
+import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
+import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import { TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import {
 	boundingBoxes,

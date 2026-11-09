@@ -19,8 +19,8 @@ import {
 	type Page,
 	type TestInfo
 } from '@playwright/test';
-import { albumCoverSuggestionAlt } from '../src/lib/constants';
 import {
+	albumCoverSuggestionAlt,
 	ALBUM_COVER_EDITING_CLOSE_LABEL,
 	ALBUM_COVER_EDITING_LABEL,
 	ALBUM_COVER_EDITING_UPLOAD_LABEL,

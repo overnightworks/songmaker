@@ -12,24 +12,24 @@
 
 [file_lines]
 "frontend/e2e/back-closes-overlay.spec.ts" = 1230
-"frontend/e2e/helpers.ts" = 829
+"frontend/e2e/helpers.ts" = 827
 "frontend/e2e/library.spec.ts" = 1294
 "frontend/e2e/offline.spec.ts" = 804
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 860
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
-"frontend/src/lib/components/AlbumDetailView.test.ts" = 1112
+"frontend/src/lib/components/AlbumDetailView.test.ts" = 1108
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1825
 "frontend/src/lib/components/LibraryWall.test.ts" = 1137
 "frontend/src/lib/components/LoraDetail.svelte" = 968
 "frontend/src/lib/components/NowPlaying.test.ts" = 1097
-"frontend/src/lib/components/NowPlayingFrame.svelte" = 1105
+"frontend/src/lib/components/NowPlayingFrame.svelte" = 1101
 "frontend/src/lib/components/PlayerBar.test.ts" = 1621
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 788
 "frontend/src/lib/components/SongDetailView.svelte" = 1020
-"frontend/src/lib/components/SongDetailView.test.ts" = 2270
+"frontend/src/lib/components/SongDetailView.test.ts" = 2269
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1303
 "frontend/src/lib/history/historyController.test.ts" = 906
@@ -46,7 +46,7 @@
 "frontend/src/lib/stores/player.ts" = 2233
 "frontend/src/lib/stores/resourceSync.test.ts" = 2031
 "frontend/src/lib/stores/resourceSync.ts" = 1058
-"frontend/src/routes/layout.test.ts" = 1404
+"frontend/src/routes/layout.test.ts" = 1401
 "frontend/src/routes/settings/users/+page.svelte" = 937
 "src/acestep_worker/wrapper.py" = 1087
 "src/songmaker_cli/conversation_api.py" = 956

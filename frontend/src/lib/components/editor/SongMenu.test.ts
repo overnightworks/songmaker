@@ -3,17 +3,11 @@ import { get } from 'svelte/store';
 import { ApiError } from '#lib/api/fetch.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
-	DIALOG_CANCEL_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_DELETE_LABEL,
 	SONG_MENU_MOVE_LABEL,
 	SONG_MENU_RENAME_LABEL,
-	SONG_MENU_SAVE_LABEL
-} from '#lib/constants.ts';
-import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
-import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
-import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
-import {
+	SONG_MENU_SAVE_LABEL,
 	SONG_MOVE_ALBUM_GONE,
 	SONG_MOVE_BACK_LABEL,
 	SONG_MOVE_FAILED_REASON,
@@ -21,8 +15,13 @@ import {
 	SONG_MOVE_NO_OTHER_ALBUM,
 	SONG_MOVE_SHARED_TITLE,
 	songMoveFailedLine,
-	songMoveSharedMessage
+	songMoveSharedMessage,
+	LIBRARY_RETRY_LABEL
 } from '#lib/constants.ts';
+import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
+import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
+import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { moveSong } from '#lib/api/songs.ts';
 import { songList } from '#lib/stores/libraryData.ts';
@@ -38,7 +37,6 @@ vi.mock('#lib/api/client.ts', () => ({
 vi.mock('#lib/api/songs.ts', () => ({ moveSong: vi.fn() }));
 
 import { fetchAlbums } from '#lib/api/client.ts';
-import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 

@@ -5,7 +5,7 @@
 // the left edge of the screen.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
-import { HITBOX_FREQUENT_PX } from '../src/lib/constants';
+import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
 	COLLECTION_MENU_EDIT_DETAILS_LABEL,
 	COLLECTION_MENU_LABEL,

@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
 import {
-	HITBOX_FREQUENT_PX,
 	TAKE_ARCHIVED_TITLE,
 	TAKE_PLAYLIST_LABEL,
 	TAKE_RESCORING_LABEL,
@@ -15,6 +14,7 @@ import {
 	TAKES_MOBILE_HINT,
 	TAKES_RETRY_LABEL
 } from '#lib/constants.ts';
+import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import {
 	clearHitboxStyles,

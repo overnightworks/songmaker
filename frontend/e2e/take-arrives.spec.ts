@@ -13,7 +13,8 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { JOB_TYPE_GENERATE } from '../src/lib/constants/jobs';
-import { OFFLINE_STRIP_MESSAGE, songEditorOpenLabel } from '../src/lib/constants';
+import { songEditorOpenLabel } from '../src/lib/constants';
+import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import type { VersionItem } from '../src/lib/api/types';

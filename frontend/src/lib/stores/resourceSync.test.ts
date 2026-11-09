@@ -16,8 +16,8 @@ import {
 	standInForDocumentLoadsForTests
 } from '#lib/history/historyController.ts';
 import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '#lib/api/types.ts';
-import { EVENT_SOURCE_CLOSED } from '#lib/constants.ts';
 import {
+	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,

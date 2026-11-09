@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { EXPIRY_WARN_DAYS } from '#lib/constants.ts';
+	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
 	import { localDayAndMonth, localDaysBetween } from '#lib/utils/format.ts';
 
 	let { deletesAt, now }: { deletesAt: string; now: Date } = $props();

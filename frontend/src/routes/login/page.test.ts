@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
-import { APP_NAME } from '#lib/constants.ts';
+import { APP_NAME } from '#lib/constants/app.ts';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import Page from './+page.svelte';
 

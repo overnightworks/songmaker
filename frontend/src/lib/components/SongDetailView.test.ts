@@ -13,8 +13,6 @@ import PhoneAppBar from './PhoneAppBar.svelte';
 
 import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
 import {
-	COMPACT_LAYOUT_MAX_PX,
-	COMPACT_LAYOUT_MEDIA,
 	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATING_LABEL,
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
@@ -36,17 +34,16 @@ import {
 	TAKES_ERROR,
 	TAKES_LOADING,
 	TAKES_RETRY_LABEL,
-	DIALOG_CANCEL_LABEL,
-	TOAST_UNDO_LABEL,
 	versionDeleteLabel,
 	versionDeleteTitle,
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
 	versionReplaceDraftMessage
 } from '#lib/constants.ts';
-import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
-import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
+import { COMPACT_LAYOUT_MAX_PX, COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
+import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import {
+	TOAST_UNDO_LABEL,
 	VERSIONS_SHEET_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
@@ -55,6 +52,8 @@ import {
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE
 } from '#lib/constants/versions.ts';
+import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
+import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '#lib/test-utils/hitbox.ts';
