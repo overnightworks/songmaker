@@ -1,0 +1,7 @@
+claim_id = "95c76f02adf240f294a684300c5d22f1"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "8b712c580910cd5af63b0d43734764af76effcfa"
+branch = "claude/issue-2917-the-privacy-part-names-that-words-said-i"
+scope = ["legal/datenschutz.html"]
+opened_commit = "6e26fe38102eb4d879bd9212c0af8171222dd1c5"
