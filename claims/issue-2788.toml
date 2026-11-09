@@ -1,0 +1,8 @@
+claim_id = "7deefc7f44d14026afd4e64b3ef5994d"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "d23a5d5a0e36548852a0cc6fd911d2c8a86f354b"
+branch = "claude/issue-2788-background-loops-health-cells"
+scope = [".github/workflows/ci.yml", "tests/songmaker_cli/test_lifecycle_background_loop_health.py", "tests/songmaker_cli/test_lifecycle_job_reaper.py", "tests/songmaker_cli/test_lifecycle_queue_stream_cleanup.py", "tests/songmaker_cli/test_lifecycle_session_cleanup.py"]
+opened_commit = "e1d2512762bd4ed7447f297dda4b5b54b653920a"
+whole_reason = "One coverage slice: the cells for the loops' health states, each in its loop's module, and the floor."
