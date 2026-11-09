@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
+import './browser-apis.ts';
 import './viz-colors.ts';
 
 // jsdom performs no layout, so it ships no ResizeObserver. Components that

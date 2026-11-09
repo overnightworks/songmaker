@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { kineticScroll } from './kineticScroll';
 
@@ -11,10 +11,17 @@ type StripAxis = 'x' | 'y';
 // of racing real timers.
 let now = 0;
 let pendingFrame: FrameRequestCallback | null = null;
+const inertScrollIntoView = Element.prototype.scrollIntoView;
+let revealedItems: { item: Element; options: ScrollIntoViewOptions }[] = [];
 
+// Records what the action asked each element to reveal.
 function stubBrowserTiming() {
 	now = 0;
 	pendingFrame = null;
+	revealedItems = [];
+	Element.prototype.scrollIntoView = function (this: Element, options?: unknown) {
+		revealedItems.push({ item: this, options: options as ScrollIntoViewOptions });
+	};
 	vi.stubGlobal(
 		'requestAnimationFrame',
 		vi.fn((cb: FrameRequestCallback) => {
@@ -132,7 +139,35 @@ function fireClick(target: EventTarget) {
 	return event;
 }
 
+function layoutItems(container: HTMLElement, items: HTMLElement[], axis: StripAxis) {
+	const box = (index: number) =>
+		axis === 'x' ? new DOMRect(index * 100, 0, 100, 100) : new DOMRect(0, index * 100, 100, 100);
+	container.getBoundingClientRect = () => box(2);
+	items.forEach((item, index) => {
+		item.getBoundingClientRect = () => box(index);
+	});
+}
+
+// A throwing event listener does not fail the dispatch; it surfaces as a page error.
+function collectPageErrors() {
+	const errors: unknown[] = [];
+	const record = (event: ErrorEvent) => {
+		event.preventDefault();
+		errors.push(event.error);
+	};
+	window.addEventListener('error', record);
+	onTestFinished(() => window.removeEventListener('error', record));
+	return errors;
+}
+
+function fireKeydown(target: EventTarget, key: string) {
+	const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+	target.dispatchEvent(event);
+	return event;
+}
+
 afterEach(() => {
+	Element.prototype.scrollIntoView = inertScrollIntoView;
 	document.body.replaceChildren();
 	vi.unstubAllGlobals();
 });
@@ -469,6 +504,176 @@ describe('kineticScroll', () => {
 
 		container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
 		expect(document.activeElement).toBe(items[1]);
+	});
+
+	it.each(['ArrowRight', 'Home', 'End'])(
+		'brings the %s target into view without smooth scrolling under reduced motion',
+		(key) => {
+			stubBrowserTiming();
+			stubReducedMotion(true);
+			const { container, items } = buildStrip('x', 3);
+			kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
+
+			items[1].focus();
+			fireKeydown(container, key);
+
+			expect(revealedItems).toHaveLength(1);
+			expect(revealedItems[0].options).toMatchObject({ behavior: 'auto' });
+		}
+	);
+
+	it.each<{ label: string; axis: StripAxis; moveT: number; inline: string; block: string }>([
+		{ label: 'a slow drag on a row', axis: 'x', moveT: 3000, inline: 'center', block: 'nearest' },
+		{
+			label: 'a slow drag on a column',
+			axis: 'y',
+			moveT: 3000,
+			inline: 'nearest',
+			block: 'center'
+		},
+		{ label: 'one timestamp on a row', axis: 'x', moveT: 1000, inline: 'center', block: 'nearest' },
+		{
+			label: 'one timestamp on a column',
+			axis: 'y',
+			moveT: 1000,
+			inline: 'nearest',
+			block: 'center'
+		}
+	])(
+		'settles on the nearest item at once when a release cannot coast ($label)',
+		({ axis, moveT, inline, block }) => {
+			stubBrowserTiming();
+			const { container, items } = buildStrip(axis);
+			layoutItems(container, items, axis);
+			container.scrollLeft = 100;
+			container.scrollTop = 100;
+			kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
+
+			firePointer(container, 'pointerdown', { pos: 200, axis, t: 1000 });
+			firePointer(container, 'pointermove', { pos: 190, axis, t: moveT });
+			firePointer(container, 'pointerup', { pos: 190, axis, t: moveT });
+
+			expect(pendingFrame).toBeNull();
+			expect(revealedItems).toEqual([
+				{ item: items[2], options: { inline, block, behavior: 'smooth' } }
+			]);
+		}
+	);
+
+	it('stops rolling at the end of the scroll range and settles on the nearest item', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x');
+		layoutItems(container, items, 'x');
+		container.scrollLeft = 100;
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
+
+		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
+		firePointer(container, 'pointermove', { pos: 190, axis: 'x', t: 1010 });
+		firePointer(container, 'pointermove', { pos: 150, axis: 'x', t: 1040 });
+		firePointer(container, 'pointerup', { pos: 150, axis: 'x', t: 1040 });
+		for (let frame = 0; frame < 200 && container.scrollLeft < 300; frame++) runFrame(16);
+		expect(container.scrollLeft).toBe(300);
+		expect(revealedItems).toEqual([]);
+
+		runFrame(16);
+
+		expect(pendingFrame).toBeNull();
+		expect(revealedItems.map(({ item }) => item)).toEqual([items[2]]);
+	});
+
+	it('stops rolling once the momentum has decayed and settles on the nearest item', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x');
+		layoutItems(container, items, 'x');
+		container.scrollLeft = 150;
+		kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
+
+		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
+		firePointer(container, 'pointermove', { pos: 190, axis: 'x', t: 1010 });
+		firePointer(container, 'pointermove', { pos: 170, axis: 'x', t: 1100 });
+		firePointer(container, 'pointerup', { pos: 170, axis: 'x', t: 1100 });
+		const scrollAtRelease = container.scrollLeft;
+		for (let frame = 0; frame < 200 && pendingFrame; frame++) runFrame(16);
+
+		expect(pendingFrame).toBeNull();
+		expect(container.scrollLeft).toBeGreaterThan(scrollAtRelease);
+		expect(container.scrollLeft).toBeLessThan(300);
+		expect(revealedItems.map(({ item }) => item)).toEqual([items[2]]);
+	});
+
+	it('does not suppress a click after a touch release with no drag in progress', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x');
+		const onOpen = vi.fn();
+		const pageErrors = collectPageErrors();
+		kineticScroll(container, { itemSelector: '.item', onOpen });
+
+		firePointer(container, 'pointerup', { pos: 200, axis: 'x', t: 1000, pointerType: 'touch' });
+		fireClick(items[1]);
+
+		expect(pageErrors).toEqual([]);
+		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[1]);
+	});
+
+	it.each(['Enter', ' '])('does not open anything on %j while focus is on a non-item', (key) => {
+		stubBrowserTiming();
+		const { container } = buildStrip('x');
+		const bystander = document.createElement('div');
+		bystander.tabIndex = 0;
+		container.append(bystander);
+		const onOpen = vi.fn();
+		kineticScroll(container, { itemSelector: '.item', onOpen });
+
+		bystander.focus();
+		const event = fireKeydown(bystander, key);
+
+		expect(onOpen).not.toHaveBeenCalled();
+		expect(event.defaultPrevented).toBe(false);
+	});
+
+	it.each([
+		{ axis: 'x', keys: ['ArrowLeft', 'ArrowRight'] },
+		{ axis: 'y', keys: ['ArrowUp', 'ArrowDown'] }
+	] as const)(
+		'moves focus to the first item on any $axis arrow key while focus is on no item',
+		({ axis, keys }) => {
+			stubBrowserTiming();
+			const { container, items } = buildStrip(axis, 3);
+			const bystander = document.createElement('div');
+			bystander.tabIndex = 0;
+			container.append(bystander);
+			kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
+
+			for (const key of keys) {
+				bystander.focus();
+				fireKeydown(bystander, key);
+
+				expect(document.activeElement).toBe(items[0]);
+			}
+		}
+	);
+
+	it('ignores keys and snaps nowhere when every item is hidden', () => {
+		stubBrowserTiming();
+		const { container, items } = buildStrip('x', 2);
+		for (const item of items) item.hidden = true;
+		const bystander = document.createElement('div');
+		bystander.tabIndex = 0;
+		container.append(bystander);
+		const onOpen = vi.fn();
+		const pageErrors = collectPageErrors();
+		kineticScroll(container, { itemSelector: '.item', onOpen });
+		bystander.focus();
+
+		for (const key of ['ArrowRight', 'Home', 'End', 'Enter']) fireKeydown(bystander, key);
+		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
+		firePointer(container, 'pointermove', { pos: 190, axis: 'x', t: 3000 });
+		firePointer(container, 'pointerup', { pos: 190, axis: 'x', t: 3000 });
+
+		expect(pageErrors).toEqual([]);
+		expect(document.activeElement).toBe(bystander);
+		expect(onOpen).not.toHaveBeenCalled();
+		expect(revealedItems).toEqual([]);
 	});
 
 	it('opens a non-native item on Enter without double-opening a real button', () => {
