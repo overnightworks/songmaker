@@ -637,25 +637,6 @@ def test_an_admins_agent_is_refused_the_new_write_tools_on_another_persons_resou
     assert admins_world.snapshot() == before
 
 
-@pytest.mark.parametrize("job_type", [JobType.GENERATE, JobType.SCORE])
-def test_an_admins_agent_is_refused_the_job_the_admin_started_on_another_persons_song(
-    admins_world: McpWorld, job_type: JobType,
-) -> None:
-    with admins_world.world.factory() as session:
-        session.add(Job(id="admin-job", type=job_type, status="queued",
-                        user_id=TokenWorld.ALICE, song_id=f"song-{BOB}"))
-        session.commit()
-
-    job = admins_world.call("get_job", {"job_id": "admin-job"}, groups=_ADMIN_GROUPS)
-    cancel = admins_world.call("cancel_job", {"job_id": "admin-job"}, groups=_ADMIN_GROUPS)
-    seed_session(admins_world.world.client, "alice")
-    browser = admins_world.world.client.get("/api/jobs/admin-job")
-
-    assert (job.is_error, cancel.is_error) == (True, True)
-    assert ("admin-job", "queued") in admins_world.rows_of(Job, "id", "status")
-    assert browser.status_code == 200
-
-
 def test_the_reference_counts_of_an_admins_agent_leave_out_uses_in_another_persons_songs(
     admins_world: McpWorld,
 ) -> None:

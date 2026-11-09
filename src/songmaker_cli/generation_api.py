@@ -555,9 +555,11 @@ async def api_score_generation(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
-    check_generation_access(session, gen_id, user)
+    take = check_generation_access(session, gen_id, user)
 
-    job = create_job_with_rate_limit(session, user, JobType.SCORE, redis=ctx.redis)
+    job = create_job_with_rate_limit(
+        session, user, JobType.SCORE, take.song_id, redis=ctx.redis,
+    )
     record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)
     session.commit()
 
