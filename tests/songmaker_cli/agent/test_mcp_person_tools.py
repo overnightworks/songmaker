@@ -12,6 +12,7 @@ from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
+from agent_runtime_client.tools import AGENT_TOOL_EXTENSION, ToolExclusion, read_decision
 from sqlalchemy.orm import sessionmaker
 from support.mcp_tool_table import (
     ALICE,
@@ -28,6 +29,7 @@ from support.mcp_world import SAME_ORIGIN, McpWorld, build_mcp_world, worker_rea
 from support.token_world import TokenWorld
 from support.web_app import seed_session
 
+from songmaker_cli.agent.mcp import Exclusion
 from songmaker_cli.constants import (
     OIDC_ADMIN_GROUP,
     OIDC_LOGIN_GROUP,
@@ -91,14 +93,14 @@ def test_a_read_tool_for_another_persons_content_is_refused_as_for_a_stranger_in
     browser = _browser(household, tool, BOB, household.agent())
     assert browser.status_code in _NOT_FOUND
     assert reply.is_error
-    assert BOB not in re.sub(r"(take|job|song|album|playlist|reference|lora)-bobs",
+    assert BOB not in re.sub(r"(take|job|song|album|playlist|reference|lora|conversation)-bobs",
                              "", reply.text)
 
 
 @pytest.mark.parametrize("tool", [
     t for t in PLAIN_READS if t.name in {
         "list_loras", "list_own_playable_takes", "list_playlists", "list_references",
-        "list_presets",
+        "list_presets", "list_conversations", "get_memory",
         "get_library_listen", "get_library_write", "search_library",
         "get_library_pool_queue",
     }
@@ -619,3 +621,19 @@ def test_a_repaint_on_a_shared_song_queues_its_job_and_keeps_the_slug_and_the_pu
     assert ("generate", "song-alices") in household.rows_of(Job, "type", "song_id")
     assert public.get(f"/shared/song/{slug}").json() == shown
     assert household.call("get_song", {"song_id": "song-alices"}).json()["share_slug"] == slug
+
+
+def test_every_operation_carries_a_decision_and_an_exclusion_names_a_reason_of_the_enum(
+    mcp: McpWorld,
+) -> None:
+    operations = [
+        operation for item in mcp.world.client.app.openapi()["paths"].values()
+        for method, operation in item.items() if method != "parameters"
+    ]
+
+    decisions = [
+        read_decision(operation[AGENT_TOOL_EXTENSION]) for operation in operations
+    ]
+    assert None not in decisions
+    reasons = {d.reason for d in decisions if isinstance(d, ToolExclusion)}
+    assert reasons <= {reason.value for reason in Exclusion}

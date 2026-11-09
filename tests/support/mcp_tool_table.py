@@ -64,6 +64,8 @@ READS_OF_ONE_RESOURCE = [
     Tool("get_take", "GET", "/api/generations/{gen_id}", _take_arguments),
     Tool("get_lora", "GET", "/api/loras/{lora_id}", lambda s, o: {"lora_id": f"lora-{s}"}),
     Tool("get_job", "GET", "/api/jobs/{job_id}", lambda s, o: {"job_id": f"job-{s}"}),
+    Tool("get_conversation", "GET", "/api/conversations/{conversation_id}",
+         lambda s, o: {"conversation_id": f"conversation-{s}"}),
     Tool("get_playlist", "GET", "/api/playlists/{playlist_id}",
          lambda s, o: {"playlist_id": f"playlist-{s}"}),
     Tool("list_reference_uses", "GET", "/api/references/{reference_id}/uses",
@@ -79,6 +81,8 @@ PLAIN_READS = [
     Tool("get_library_write", "GET", "/api/library/write"),
     Tool("search_library", "GET", "/api/library/search", lambda s, o: {"q": "Song"}),
     Tool("get_library_pool_queue", "GET", "/api/library/pool-queue"),
+    Tool("list_conversations", "GET", "/api/conversations"),
+    Tool("get_memory", "GET", "/api/memory"),
     Tool("list_loras", "GET", "/api/loras"),
     Tool("list_own_playable_takes", "GET", "/api/own-playable-takes"),
     Tool("list_playlists", "GET", "/api/playlists"),
@@ -174,6 +178,7 @@ CREATIONS = [
     Tool("set_theme", "PUT", "/api/settings/theme", lambda s, o: {"theme": "dark"}),
     Tool("set_default_config", "PUT", "/api/settings/default-config",
          lambda s, o: {"config": f"preset-{s}"}),
+    Tool("start_conversation", "POST", "/api/conversations/new"),
     Tool("write_user_memory", "PUT", "/api/memory/user", lambda s, o: {"body": "a note"}),
 ]
 

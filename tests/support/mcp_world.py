@@ -32,6 +32,10 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import (
     Album,
     Base,
+    ChatMessage,
+    Conversation,
+    CowriterSongMemory,
+    CowriterUserMemory,
     Generation,
     GenerationPreset,
     Job,
@@ -146,6 +150,8 @@ class McpWorld:
 
         The take is picked and has real audio, the song a recorded edit and listen, the LoRA
         three trainable samples; ``album-gone-<name>`` and ``song-gone-<name>`` are in the trash.
+        The person has one active conversation of one message, and notes of their own and on
+        their song.
         """
         take_id = self.world.seed_take(owner, name)
         for suffix in ("wav", "mp3"):
@@ -176,6 +182,13 @@ class McpWorld:
             session.add(Job(id=f"job-{name}", type="chat", status="queued", user_id=owner,
                             song_id=f"song-{name}"))
             a_reference(session, owner, name=f"{name}.wav", reference_id=f"reference-{name}")
+            session.add(Conversation(id=f"conversation-{name}", user_id=owner,
+                                     title=f"Chat {name}"))
+            session.flush()
+            session.add(ChatMessage(conversation_id=f"conversation-{name}", role="user",
+                                    content=f"Hello from {name}"))
+            session.add(CowriterUserMemory(user_id=owner, body=f"Notes of {name}"))
+            session.add(CowriterSongMemory(song_id=f"song-{name}", body=f"Song notes of {name}"))
             lora = UserLora(id=f"lora-{name}", user_id=owner, name=f"Lora {name}",
                             slug=f"lora-{name}", status=LoraStatus.DRAFT)
             session.add(lora)
@@ -255,3 +268,15 @@ def household(mcp: McpWorld) -> McpWorld:
     mcp.seed_household(TokenWorld.ALICE, ALICE)
     mcp.seed_household(TokenWorld.BOB, BOB)
     return mcp
+
+
+@pytest.fixture
+def admins_household(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory, lifespans: ExitStack,
+) -> McpWorld:
+    """``household`` where Alice is an admin."""
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
+    world.seed_household(TokenWorld.ALICE, ALICE)
+    world.seed_household(TokenWorld.BOB, BOB)
+    return world
