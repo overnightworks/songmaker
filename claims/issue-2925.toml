@@ -1,0 +1,7 @@
+claim_id = "dd99fa17b61a4f89887ec2750d1f06dd"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "e566cdd7e424b493e86071b46fdd3bd99c5dc525"
+branch = "claude/issue-2925-a-ci-run-on-main-is-never-cancelled-by-a"
+scope = [".github/workflows/ci.yml", ".github/workflows/e2e.yml"]
+opened_commit = "98ce334e0e72bbd38612fbb43b733eed6f5a368b"
