@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { SongItem } from '#lib/api/types.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
-import { NOW_PLAYING_LABEL } from '#lib/constants.ts';
+import { NOW_PLAYING_LABEL, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
 import {
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
@@ -51,7 +51,7 @@ import {
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { setLibraryTakePool } from '#lib/stores/playbackSettings.ts';
 import { selectedPlaylistDetail } from '#lib/stores/playlists.ts';
-import { HITBOX_FREQUENT_PX, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests

@@ -2,7 +2,6 @@
 	import type { SongItem, GenerationItem, UserLoraItem } from '#lib/api/types.ts';
 	import type { SourceMode } from '#lib/stores/recipe.ts';
 	import {
-		COARSE_POINTER_MEDIA,
 		TAKE_DELETE_TITLE_TEMPLATE,
 		TAKE_DELETE_MESSAGE,
 		TAKE_DELETE_LABEL,
@@ -13,6 +12,7 @@
 		TAKES_RETRY_LABEL,
 		takesDraftBanner
 	} from '#lib/constants.ts';
+	import { COARSE_POINTER_MEDIA } from '#lib/constants/media.ts';
 	import {
 		TAKE_SELECT_ALL_UNKEPT_LABEL,
 		bulkDeleteLabel,

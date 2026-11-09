@@ -5,7 +5,7 @@ import {
 	LIBRARY_PATH,
 	LIBRARY_URL,
 	openSettingsSection,
-	openSettingsSectionFromSearch,
+	openPageFromSearch,
 	shellOf,
 	wallBody,
 	workspace
@@ -63,7 +63,7 @@ for (const position of ['halfway', 'bottom'] as const) {
 		}
 
 		const shell = shellOf(testInfo);
-		if (shell === 'mobile') await openSettingsSectionFromSearch(page, 'Voices');
+		if (shell === 'mobile') await openPageFromSearch(page, 'Voices');
 		else await openSettingsSection(page, shell, 'Voices');
 		await expect(page).toHaveURL(/\/settings\/voices$/);
 		await expect(

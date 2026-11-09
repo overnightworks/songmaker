@@ -5,7 +5,7 @@
 	import type { ReleaseInfo } from '#lib/api/types.ts';
 	import BusyState from '#lib/components/BusyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
-	import { APP_NAME, APP_REPOSITORY_URL } from '#lib/constants.ts';
+	import { APP_NAME, APP_REPOSITORY_URL } from '#lib/constants/app.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { releaseDayLabel } from '#lib/utils/format.ts';
 

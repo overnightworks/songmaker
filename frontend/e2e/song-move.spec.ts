@@ -4,7 +4,6 @@
 
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
-	DIALOG_CANCEL_LABEL,
 	LIBRARY_RETRY_LABEL,
 	SONG_MENU_LABEL,
 	SONG_MENU_MOVE_LABEL,
@@ -16,6 +15,7 @@ import {
 	songMovedToastLabel,
 	songMoveSharedMessage
 } from '../src/lib/constants';
+import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { RAIL_NAV_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { openSearchSheet } from './phone-search';
 import { FlowGuard, HOME_PATH, nameStartingWith, ONLY_IN_SHELL, type Shell } from './helpers';

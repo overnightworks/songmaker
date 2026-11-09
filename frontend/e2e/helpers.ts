@@ -11,19 +11,17 @@ import {
 } from '@playwright/test';
 import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
 import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
+import { LIBRARY_PAGE_LABEL } from '../src/lib/constants';
+import { APP_NAME } from '../src/lib/constants/app';
+import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import {
-	APP_NAME,
-	OFFLINE_STRIP_MESSAGE,
-	LIBRARY_PAGE_LABEL,
-	SEARCH_OPEN_LABEL
-} from '../src/lib/constants';
-import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
-import {
+	SEARCH_OPEN_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL
 } from '../src/lib/constants/rail';
+import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
@@ -403,7 +401,7 @@ async function openPlace(page: Page, shell: Shell, label: string): Promise<void>
 		.getByRole('button', { name: label, exact: true });
 	if (await tab.isVisible()) await tab.click();
 	else {
-		await openSettingsSectionFromSearch(page, label);
+		await openPageFromSearch(page, label);
 		await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toBeHidden();
 	}
 }
@@ -442,16 +440,16 @@ export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
 	await accountMenu(page).getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true }).click();
 }
 
-/** A Settings section, or any place, from the phone bar's Search sheet. */
-export async function openSettingsSectionFromSearch(page: Page, section: string): Promise<void> {
+/** Any page, a Settings section included, from the phone bar's Search sheet. */
+export async function openPageFromSearch(page: Page, pageLabel: string): Promise<void> {
 	const sheet = page.getByRole('dialog', { name: 'Search', exact: true });
 	if (!(await sheet.isVisible())) {
 		await appBar(page).getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true }).click();
 	}
-	await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(section);
+	await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(pageLabel);
 	await sheet
 		.getByRole('group', { name: 'Pages', exact: true })
-		.getByRole('option', { name: nameStartingWith(section) })
+		.getByRole('option', { name: nameStartingWith(pageLabel) })
 		.click();
 }
 

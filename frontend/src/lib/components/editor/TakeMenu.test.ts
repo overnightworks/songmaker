@@ -3,8 +3,6 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-	HITBOX_COMPACT_PX,
-	HITBOX_FREQUENT_PX,
 	TAKE_COVER_LABEL,
 	TAKE_DELETE_LABEL,
 	TAKE_PLAYLIST_LABEL,
@@ -12,6 +10,7 @@ import {
 	TAKE_RESTORE_LABEL,
 	TAKE_SHARE_LABEL
 } from '#lib/constants.ts';
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';

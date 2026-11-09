@@ -6,7 +6,7 @@
 	import { addToast } from '#lib/stores/toast.ts';
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 	import type { RegistryResponse } from '#lib/api/types.ts';
-	import { MODEL_REGISTRY_LOAD_FAILED } from '#lib/constants.ts';
+	import { MODEL_REGISTRY_LOAD_FAILED } from '#lib/constants/models.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
 	import { COMPACT_STACK_CLASS, ensureCompactUiStyles } from '#lib/styles/compact-ui.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';

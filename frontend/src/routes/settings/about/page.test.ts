@@ -2,7 +2,8 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NetworkError } from '#lib/api/fetch.ts';
 import type { ReleaseInfo } from '#lib/api/types.ts';
-import { APP_NAME, APP_REPOSITORY_URL, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { APP_NAME, APP_REPOSITORY_URL } from '#lib/constants/app.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests

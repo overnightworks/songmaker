@@ -7,9 +7,7 @@
 		albumCoverStageLabel,
 		albumCoverSuggestionAlt,
 		albumCoverSuggestionPosition,
-		albumCoverSuggestionsLeftToday
-	} from '#lib/constants.ts';
-	import {
+		albumCoverSuggestionsLeftToday,
 		ALBUM_COVER_ADD_LABEL,
 		ALBUM_COVER_ALT_TYPE,
 		ALBUM_COVER_DAILY_LIMIT_REACHED,

@@ -85,8 +85,6 @@ import { setDesktopNowPlayingSurface } from '#lib/stores/playbackSettings.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { albumRoutePath, HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import {
-	API_ERROR_GENERIC_MESSAGE,
-	DIALOG_CANCEL_LABEL,
 	EDITOR_SAVE_FAILED,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
@@ -95,6 +93,8 @@ import {
 	TAKES_ERROR,
 	TAKES_RETRY_LABEL
 } from '#lib/constants.ts';
+import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants/http.ts';
+import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';
 import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
 import type { SongItem } from '#lib/api/types.ts';

@@ -1,6 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { SEARCH_OPEN_LABEL } from '../src/lib/constants';
-import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
+import { SEARCH_OPEN_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { appBar } from './helpers';
 
 export function searchSheet(page: Page): Locator {

@@ -27,12 +27,10 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
-	DIALOG_CANCEL_LABEL,
 	EDITOR_GENERATE_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
-	TOAST_UNDO_LABEL,
 	versionAlreadyTheDraftLabel,
 	versionChipLabel,
 	versionDeleteLabel,
@@ -46,8 +44,9 @@ import {
 	songEditorOpenLabel,
 	takesDraftBanner
 } from '../src/lib/constants';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
+import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import {
+	TOAST_UNDO_LABEL,
 	VERSIONS_SHEET_CLOSE_LABEL,
 	VERSIONS_SHEET_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
@@ -56,6 +55,7 @@ import {
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE
 } from '../src/lib/constants/versions';
+import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	NOW_PLAYING_IMPORTED_TAKE_HEADING,
 	NOW_PLAYING_QUEUE_TAB,

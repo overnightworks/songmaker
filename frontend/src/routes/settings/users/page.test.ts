@@ -8,7 +8,8 @@ import type { CowriterSettings } from '#lib/api/types.ts';
 import { lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
 import { ADMIN_TABS_LABEL } from '#lib/constants/admin.ts';
 import { ADMIN_VOICES_EMPTY } from '#lib/constants/voice.ts';
-import { COMPACT_LAYOUT_MEDIA, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import {
 	MODELS_ROUTE_GATEWAY_LABEL,
 	MODELS_SAVE_FAILED_FALLBACK,

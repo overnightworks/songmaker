@@ -9,7 +9,6 @@
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-	HITBOX_FREQUENT_PX,
 	LIBRARY_WALL_ORDER_GROUP_LABEL,
 	LIBRARY_WALL_ORDER_LABELS,
 	type LibraryWallOrder,
@@ -23,6 +22,7 @@ import {
 	songEditorOpenLabel,
 	wallHeadingLabel
 } from '../src/lib/constants';
+import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
 	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 	COLLECTION_MENU_LABEL

@@ -6,7 +6,6 @@ import { phoneSearchResult } from './phone-search';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { VersionItem } from '../src/lib/api/types';
 import {
-	DIALOG_CANCEL_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
@@ -15,12 +14,13 @@ import {
 	SONG_MENU_SAVE_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_TITLE,
-	GENERATION_PHASE_LABELS,
-	HITBOX_FREQUENT_PX,
 	openNowPlayingLabel,
-	songEditorOpenLabel,
-	SEARCH_OPEN_LABEL
+	songEditorOpenLabel
 } from '../src/lib/constants';
+import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
+import { GENERATION_PHASE_LABELS } from '../src/lib/constants/jobs';
+import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
+import { SEARCH_OPEN_LABEL } from '../src/lib/constants/rail';
 import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
@@ -42,7 +42,7 @@ import {
 	ONLY_IN_SHELL,
 	MOBILE_VIEWPORT,
 	openSettingsSection,
-	openSettingsSectionFromSearch,
+	openPageFromSearch,
 	playlistEntryRows,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
 	standsOnLayerEntry,
@@ -395,7 +395,7 @@ test.describe('song page at phone width', () => {
 				library.songPhoneAlbumId
 			);
 
-			await openSettingsSectionFromSearch(page, SETTINGS_SECTION);
+			await openPageFromSearch(page, SETTINGS_SECTION);
 			await expect(unsavedDraftDialog).toBeVisible();
 			await unsavedDraftDialog
 				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })

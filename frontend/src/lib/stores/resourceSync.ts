@@ -10,8 +10,8 @@ import {
 } from '#lib/api/resourceEvents.ts';
 import { fetchSong } from '#lib/api/songs.ts';
 import type { GenerationCreatedResourceEvent, SongItem } from '#lib/api/types.ts';
-import { EVENT_SOURCE_CLOSED } from '#lib/constants.ts';
 import {
+	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_GENERATION_CREATED,
 	RESOURCE_EVENT_HELLO,
 	RESOURCE_EVENT_RESYNC,

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { SignInPage } from 'overnightworks-appkit';
 	import { SIGN_IN_START_PATH } from '#lib/api/fetch.ts';
-	import { APP_NAME } from '#lib/constants.ts';
+	import { APP_NAME } from '#lib/constants/app.ts';
 	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 </script>
 
