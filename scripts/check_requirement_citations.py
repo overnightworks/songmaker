@@ -9,7 +9,7 @@ Run from the project root:
 
     python scripts/check_requirement_citations.py
 """
-# ruff: noqa: T201 - this check reports citation gaps on stderr
+# ruff: noqa: T201 - this check reports its counts on stdout and citation gaps on stderr
 
 from __future__ import annotations
 
@@ -71,10 +71,16 @@ def run(root: Path) -> int:
     test_paths = [
         path for directory, glob in TEST_GLOBS for path in sorted((root / directory).glob(glob))
     ]
-    problems = find_problems(pages, _read_all(test_paths, root))
+    test_texts = _read_all(test_paths, root)
+    problems = find_problems(pages, test_texts)
     for problem in problems:
         print(problem, file=sys.stderr)
-    return 1 if problems else 0
+    if problems:
+        return 1
+    requirement_count = len(_occurrences(pages, HEADING_PATTERN))
+    citation_count = sum(len(files) for files in _occurrences(test_texts, CITATION_PATTERN).values())
+    print(f"Checked {requirement_count} requirements and {citation_count} citations.")
+    return 0
 
 
 def main() -> int:
