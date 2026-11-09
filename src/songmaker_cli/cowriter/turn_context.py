@@ -203,7 +203,7 @@ def _mentioned_song_blocks(
 ) -> list[TurnContextBlock]:
     current_id = current_song.id if current_song is not None else None
     songs = [
-        check_song_access(session, song_id, user)
+        check_song_access(session, song_id, user, require_owner=True)
         for song_id in _unique_ids(mentioned_song_ids)
         if song_id != current_id
     ]
@@ -224,11 +224,11 @@ def _mentioned_album_block(
     if current_song is None or mentioned_album_id != current_song.album_id:
         raise HTTPException(404, "Album not found")
     album = get_album(session, mentioned_album_id)
-    check_album_access(album, user)
+    check_album_access(album, user, require_owner=True)
     tracks = list_songs(
         session,
         album_id=album.id,
-        user_id=owner_filter(user),
+        user_id=owner_filter(user, require_owner=True),
         light=True,
     )
     body = f"id: {album.id}\ntitle: {album.title}\ntracks:\n"
@@ -286,7 +286,9 @@ def resolve_take_block(
     named empty state, never a silent substitute.
     """
     if current_generation_id is not None:
-        generation = check_generation_access(session, current_generation_id, user)
+        generation = check_generation_access(
+            session, current_generation_id, user, require_owner=True,
+        )
         if current_song is None or generation.song_id != current_song.id:
             raise HTTPException(
                 422,
@@ -310,7 +312,7 @@ def load_turn_context(
     session: Session,
 ) -> TurnContextEnvelope:
     current_song = (
-        check_song_access(session, req.current_song_id, user)
+        check_song_access(session, req.current_song_id, user, require_owner=True)
         if req.current_song_id is not None
         else None
     )

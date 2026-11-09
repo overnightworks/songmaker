@@ -88,7 +88,7 @@ function serveAlbumPage(listenAnswer: () => LibraryListenItem[]): void {
 			return Response.json({ items });
 		}
 		if (pathname === `/api/albums/${album.id}/cover-suggestions`)
-			return Response.json({ job: null, suggestions: [], used_today: 0, daily_limit: 10 });
+			return Response.json({ job: null, suggestions: [] });
 		if (pathname.startsWith(`/api/albums/${album.id}`)) return Response.json(album);
 		return Response.json({ items: [], total: 0, offset: 0, limit: 200, has_more: false });
 	});

@@ -7,8 +7,10 @@ import {
 	fromSharedSong,
 	playableTracks,
 	trackPlaybackInfo,
-	type SharedTrack
+	type SharedCollectionView
 } from './sharedCollection';
+
+type SharedTrack = SharedCollectionView['tracks'][number];
 
 // The media half every share payload carries for its take. Defaults to the
 // "no pick" shape so each test spells out only the fields it is about.
