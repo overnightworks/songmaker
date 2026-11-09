@@ -1,8 +1,0 @@
-claim_id = "4f6075c8d88e47319ce37db6b7b44eb6"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "33fd0e15a9c96b44ca8209dc86b96a4586b1df3f"
-branch = "claude/issue-2813-constants-last-held-delete"
-scope = ["docs/architecture.md", "docs/security.md", "docs/testing.md", "frontend/e2e", "frontend/eslint.config.js", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/stores", "frontend/src/routes", "quality/baseline.toml"]
-opened_commit = "e71551a815f82e22d0acd5c357064b0dba9b2efe"
-whole_reason = "The catch-all's deletion and its ban need every caller re-pointed in the same change, or the build breaks."
