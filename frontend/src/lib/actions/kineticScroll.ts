@@ -261,7 +261,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		if (dragState.dragged) {
 			const samples = dragState.samples;
 			const first = samples[0];
-			const last = samples[samples.length - 1];
+			const last = samples.at(-1) as PointerSample;
 			const dt = last.t - first.t;
 			const dx = last.pos - first.pos;
 			const releaseVelocity = dt > 0 ? -dx / dt : 0;
@@ -296,7 +296,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		if (key !== 'Home' && key !== 'End') return undefined;
 		const items = visibleItems();
 		if (items.length === 0) return null;
-		return key === 'Home' ? items[0] : items[items.length - 1];
+		return key === 'Home' ? items[0] : (items.at(-1) as HTMLElement);
 	}
 
 	function navigationDirection(key: string): -1 | 0 | 1 {
