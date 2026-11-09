@@ -7,19 +7,12 @@ import {
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
 import {
-	COLLECTION_MENU_LABEL,
-	COLLECTION_MENU_SHARE_LABEL,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
-	playlistEntryOverflowLabel,
-	PLAYLISTS_PAGE_LABEL,
 	LIBRARY_PAGE_LABEL,
-	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_SEARCH_LABEL,
-	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
 	TAKE_DELETE_LABEL,
@@ -27,6 +20,12 @@ import {
 	TAKE_OVERFLOW_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import {
+	COLLECTION_MENU_LABEL,
+	COLLECTION_MENU_SHARE_LABEL
+} from '../src/lib/constants/collection-menu';
+import { playlistEntryOverflowLabel, PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
+import { RAIL_LIBRARY_NAV_LABEL, RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
@@ -569,12 +568,8 @@ test.describe('Back and Forward between the library and Settings', () => {
 		async ({ page, request }) => {
 			const guard = new FlowGuard(page);
 			const { pages } = await openSeededPlaylist(page, request);
-			const sheet = await openSearchSheet(page);
-			await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(SETTINGS_SECTION);
-			await sheet
-				.getByRole('group', { name: 'Pages' })
-				.getByRole('option', { name: nameStartingWith(SETTINGS_SECTION) })
-				.click();
+			await openSearchSheet(page);
+			await openVoicesFromSearch(page);
 			await expect(searchSheet(page)).toBeHidden();
 			await expectSettingsStands(page);
 

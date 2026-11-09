@@ -17,7 +17,7 @@ vi.mock('#lib/api/settings.ts', () => ({
 
 import { goto } from '$app/navigation';
 import { updateTheme } from '#lib/api/settings.ts';
-import { RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
+import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import { currentUser, signOutFailed } from '#lib/stores/auth.ts';
 import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';

@@ -11,9 +11,9 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1235
-"frontend/e2e/helpers.ts" = 833
-"frontend/e2e/library.spec.ts" = 1300
+"frontend/e2e/back-closes-overlay.spec.ts" = 1230
+"frontend/e2e/helpers.ts" = 829
+"frontend/e2e/library.spec.ts" = 1294
 "frontend/e2e/offline.spec.ts" = 804
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
@@ -27,7 +27,7 @@
 "frontend/src/lib/components/NowPlaying.test.ts" = 1097
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1105
 "frontend/src/lib/components/PlayerBar.test.ts" = 1621
-"frontend/src/lib/components/PlaylistDetailView.test.ts" = 792
+"frontend/src/lib/components/PlaylistDetailView.test.ts" = 788
 "frontend/src/lib/components/SongDetailView.svelte" = 1020
 "frontend/src/lib/components/SongDetailView.test.ts" = 2270
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938

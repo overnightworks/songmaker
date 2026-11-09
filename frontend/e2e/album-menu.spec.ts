@@ -5,14 +5,14 @@
 // the left edge of the screen.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { HITBOX_FREQUENT_PX } from '../src/lib/constants';
 import {
 	COLLECTION_MENU_EDIT_DETAILS_LABEL,
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_SHARE_LABEL,
 	COLLECTION_MENU_SHARE_OFF_HINT,
-	COLLECTION_MENU_SHARE_ON_HINT,
-	HITBOX_FREQUENT_PX
-} from '../src/lib/constants';
+	COLLECTION_MENU_SHARE_ON_HINT
+} from '../src/lib/constants/collection-menu';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	ALBUM_DETAILS_CLOSE_LABEL,

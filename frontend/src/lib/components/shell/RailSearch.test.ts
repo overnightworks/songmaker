@@ -2,7 +2,8 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { HITBOX_FREQUENT_PX, RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '#lib/constants.ts';
+import { HITBOX_FREQUENT_PX } from '#lib/constants.ts';
+import { RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '#lib/constants/rail.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import {
 	clearHitboxStyles,

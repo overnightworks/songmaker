@@ -33,9 +33,9 @@ import {
 	COMPACT_LAYOUT_MEDIA,
 	HITBOX_FREQUENT_PX,
 	OFFLINE_STRIP_MESSAGE,
-	RAIL_SETTINGS_LABEL,
 	SEARCH_OPEN_LABEL
 } from '#lib/constants.ts';
+import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 import { SEARCH_SHEET_LABEL } from '#lib/components/PhoneAppBar.svelte';
 import { apiFetch } from '#lib/api/fetch.ts';
 import {

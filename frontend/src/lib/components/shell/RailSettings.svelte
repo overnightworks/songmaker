@@ -4,7 +4,7 @@
 	import { SETTINGS_NAV_LABEL } from '#lib/constants/settings.ts';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { followAppPageLink } from '#lib/stores/navigation.ts';
-	import { RAIL_SETTINGS_LABEL, RAIL_SETTINGS_OPEN_STORAGE_KEY } from '#lib/constants.ts';
+	import { RAIL_SETTINGS_LABEL, RAIL_SETTINGS_OPEN_STORAGE_KEY } from '#lib/constants/rail.ts';
 	import { visibleSettingsSections } from '#lib/settingsSections.ts';
 	import RailGroup from './RailGroup.svelte';
 

@@ -200,8 +200,6 @@ export function songMovedToastLabel(albumTitle: string): string {
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const SEARCH_OPEN_LABEL = 'Search';
-export const RAIL_SEARCH_LABEL = 'Search or go to…';
-export const RAIL_SEARCH_CLEAR_LABEL = 'Clear search';
 export const LIBRARY_RETRY_LABEL = 'Retry';
 export const LIBRARY_SEARCH_DEBOUNCE_MS = 200;
 export const LIBRARY_ALBUM_PAGE_SIZE = 50;
@@ -235,11 +233,6 @@ export function wallHeadingLabel(pageLabel: string, count: number): string {
 	return `${pageLabel} · ${count}`;
 }
 export const LIBRARY_WALL_EMPTY = 'No albums yet. + New on Home makes one.';
-// The Playlists page (#1402): its head, which search names it by too, and the
-// count beside it, read as one heading ('Playlists · 3').
-export const PLAYLISTS_PAGE_LABEL = 'Playlists';
-export const PLAYLISTS_WALL_ORDER_GROUP_LABEL = 'Sort playlists';
-export const PLAYLISTS_WALL_EMPTY = 'No playlists yet. + New on Home makes one.';
 export const LIBRARY_NEW_FACE = 'New';
 export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';
@@ -274,35 +267,6 @@ export const SONG_COVER_REMOVE_LABEL = 'Remove song cover';
 export const SONG_PREVIOUS_LABEL = 'Previous song';
 export const SONG_NEXT_LABEL = 'Next song';
 
-export const COLLECTION_MENU_LABEL = 'More';
-export const COLLECTION_MENU_CLOSE_LABEL = 'Close menu';
-export const COLLECTION_MENU_SHARE_LABEL = 'Share';
-export const COLLECTION_MENU_SHARE_ON_HINT = 'on';
-export const COLLECTION_MENU_SHARE_OFF_HINT = 'off';
-export const COLLECTION_MENU_DELETE_LABEL = 'Delete';
-export const COLLECTION_MENU_COVER_LABEL = 'Cover';
-export const COLLECTION_MENU_COVER_HINT = 'upload · suggest';
-export const COLLECTION_MENU_COVER_REMOVE_LABEL = 'Remove cover';
-export const COLLECTION_MENU_RENAME_LABEL = 'Rename';
-export const COLLECTION_MENU_EDIT_DETAILS_LABEL = 'Edit details';
-export const COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
-export const COLLECTION_MENU_ARCHIVE_LABEL = 'Archive';
-export const COLLECTION_MENU_CURATE_LABEL = 'Pick album takes';
-
-// The rail's own accessible name — the one navigation landmark that stands on
-// every private route, settings included (issue #263).
-export const RAIL_NAV_LABEL = 'Primary';
-export const RAIL_SETTINGS_LABEL = 'Settings';
-export const RAIL_CONTEXT_NO_TAKES = '—';
-// Remembers whether the rail's Settings disclosure was left open, so it
-// doesn't snap shut the moment the viewer navigates back into the library.
-export const RAIL_SETTINGS_OPEN_STORAGE_KEY = 'songmaker.rail-settings-open';
-// The LIBRARY and PLAYLISTS groups' own nested navigation landmarks --
-// distinct accessible names so a flow (or a screen reader) can tell them
-// apart from the rail's outer RAIL_NAV_LABEL and from each other.
-export const RAIL_LIBRARY_NAV_LABEL = 'Library albums';
-export const RAIL_PLAYLISTS_NAV_LABEL = 'Rail playlists';
-
 // Every row's PlayingMark reads this, in the rail, the detail views and the shared page.
 export const PLAYING_MARK_LABEL = 'Playing';
 
@@ -310,22 +274,11 @@ export const PLAYING_MARK_LABEL = 'Playing';
 export function songEditorOpenLabel(songTitle: string): string {
 	return `Open ${songTitle} in the song editor`;
 }
-// Shown when ensureAllAlbumsLoaded fails outright, so a library the rail
-// could not reach at all does not look like one that is merely empty.
-export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
 
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
 export const LIBRARY_ALBUMS_LOADING = 'Loading albums…';
 export const LIBRARY_PLAYLISTS_LOADING = 'Loading playlists…';
 export const LIBRARY_PLAYLISTS_ERROR = 'Failed to load playlists';
-const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
-
-export function playlistEntryOverflowLabel(songTitle: string): string {
-	return `${PLAYLIST_ENTRY_OVERFLOW_LABEL} for ${songTitle}`;
-}
-export const PLAYLIST_ENTRY_MOVE_UP_LABEL = 'Move up';
-export const PLAYLIST_ENTRY_MOVE_DOWN_LABEL = 'Move down';
-export const PLAYLIST_ENTRY_REMOVE_LABEL = 'Remove from playlist';
 export const LIBRARY_SHARES_COPY_LABEL = 'Copy link';
 
 export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";

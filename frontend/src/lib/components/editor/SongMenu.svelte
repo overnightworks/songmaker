@@ -1,6 +1,5 @@
 <script lang="ts">
 	import {
-		COLLECTION_MENU_CLOSE_LABEL,
 		SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 		SONG_MENU_DELETE_LABEL,
 		SONG_MENU_MOVE_LABEL,
@@ -10,6 +9,7 @@
 		SONG_MOVE_SHARED_TITLE,
 		songMoveSharedMessage
 	} from '#lib/constants.ts';
+	import { COLLECTION_MENU_CLOSE_LABEL } from '#lib/constants/collection-menu.ts';
 	import { onDestroy } from 'svelte';
 	import Icon from '../Icon.svelte';
 	import {

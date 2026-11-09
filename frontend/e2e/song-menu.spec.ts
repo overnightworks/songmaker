@@ -8,7 +8,6 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
-	COLLECTION_MENU_LABEL,
 	DIALOG_CANCEL_LABEL,
 	HITBOX_FREQUENT_PX,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -19,6 +18,7 @@ import {
 	SONG_MENU_SAVE_LABEL,
 	SONG_TITLE_LABEL
 } from '../src/lib/constants';
+import { COLLECTION_MENU_LABEL } from '../src/lib/constants/collection-menu';
 import {
 	appBar,
 	boundingBoxes,

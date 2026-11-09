@@ -6,8 +6,6 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import {
 	DIALOG_CANCEL_LABEL,
 	LIBRARY_RETRY_LABEL,
-	RAIL_NAV_LABEL,
-	RAIL_SEARCH_LABEL,
 	SONG_MENU_LABEL,
 	SONG_MENU_MOVE_LABEL,
 	SONG_MOVE_ALBUM_GONE,
@@ -18,6 +16,7 @@ import {
 	songMovedToastLabel,
 	songMoveSharedMessage
 } from '../src/lib/constants';
+import { RAIL_NAV_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { openSearchSheet } from './phone-search';
 import { FlowGuard, HOME_PATH, nameStartingWith, ONLY_IN_SHELL, type Shell } from './helpers';
 import {
