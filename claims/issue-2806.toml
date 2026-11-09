@@ -1,0 +1,7 @@
+claim_id = "1eff67549ffd47b4859e596984c03f02"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "a7f8813ecd4e4eeb971e83dea948a0eb96d564b6"
+branch = "claude/issue-2806-comments-without-citations"
+scope = ["frontend/src/lib/constants/now-playing.ts", "frontend/src/lib/stores/jobs.ts", "quality/baseline.toml"]
+opened_commit = "fed0c45a09eba6a79ba8c9c4afb846a12862876c"
