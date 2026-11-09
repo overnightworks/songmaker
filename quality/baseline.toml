@@ -49,7 +49,7 @@
 "frontend/src/routes/layout.test.ts" = 1401
 "frontend/src/routes/settings/users/+page.svelte" = 937
 "src/acestep_worker/wrapper.py" = 1073
-"src/songmaker_cli/conversation_api.py" = 956
+"src/songmaker_cli/conversation_api.py" = 879
 "src/songmaker_cli/jobs/generation.py" = 1136
 "src/songmaker_cli/jobs/lora_training.py" = 1512
 "src/songmaker_cli/queue_streams.py" = 919
@@ -76,7 +76,7 @@
 "main" = 65
 
 [function_lines."src/acestep_worker/__main__.py"]
-"build_deps" = 74
+"build_deps" = 67
 
 [function_lines."src/acestep_worker/wrapper.py"]
 "_register_protected_routes" = 76
@@ -230,8 +230,6 @@ playlist_cover_urls = [["src/songmaker_cli/api_models/songs.py", "album_cover_ur
 
 [clones."src/songmaker_cli/conversation_api.py"]
 api_list_conversations = [["src/songmaker_cli/lora_api.py", "api_list_own_playable_takes"]]
-api_put_album_memory = [["src/songmaker_cli/generation_api.py", "api_get_generation"]]
-api_put_song_memory = [["src/songmaker_cli/generation_api.py", "api_get_generation"]]
 
 [clones."src/songmaker_cli/db/migrations/versions/2006299a7179_add_playlist_tables.py"]
 downgrade = [["src/songmaker_cli/db/migrations/versions/f2a3b4c5d6e7_add_user_loras.py", "downgrade"]]

@@ -241,9 +241,7 @@ class ModelCache:
                 )
                 return
             del self._in_use[mode]
-            model = self._loaded.pop(mode, None)
-            if model is None:
-                return
+            model = self._loaded.pop(mode)
             try:
                 await self._unloader(model)
             except Exception:

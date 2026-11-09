@@ -958,7 +958,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
 | Auth | Sign-in through Keycloak (webauth's start, callback, logout and back-channel routes, composed in `install_sign_in`), session dependencies bound to the database | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
-| API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `reference_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `settings_api.py`, `admin_api.py` |
+| API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `reference_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `memory_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
@@ -970,7 +970,8 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
 | Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py` |
 | MCP front | The marked routes served as tools on `/mcp` to a person's own agent or to an agent with its own account (kind `agent`, admitted as `user`), and the `agent` settings section | `agent/mcp.py`, `agent/settings.py` |
-| Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
+| Conversation | Conversation-scoped co-writer turns and history | `conversation_api.py` |
+| Memory | The co-writer's durable user, song and album notes | `memory_api.py` |
 | Tool bodies | The co-writer's tool declarations and their execution, which the hand tools call | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
 
@@ -1370,11 +1371,13 @@ close the stream.
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
 | GET | `/api/settings/generation-builtins` | user | The built-in generation parameters of every model, keyed by model. |
+| GET | `/api/settings/generation-defaults` | user | The saved default generation parameters, keyed by model; a model with none saved is absent. While none is saved for any model, a legacy defaults file in the data directory is moved into the database once and answered. |
+| PUT | `/api/settings/generation-defaults` | admin | Save the default generation parameters per model: each model in the body replaces its saved parameters and models left out stay as they are. A body that is not an object keyed by model, or that names a model the app does not offer, answers 422 and saves nothing. |
 | GET | `/api/settings/models/all` | admin | Every model, inactive ones included; a member is refused with 403. |
 | PUT | `/api/settings/models/{id}?active=<bool>` | admin | Switch the model on or off and audit `active=<bool>`; answers the model's `id` and `is_active`. A switched-off model leaves `GET /api/settings/models` and a preset naming it answers 400. An unknown id answers 404 "Model not found" and audits nothing; a member is refused with 403. |
 | PUT | `/api/settings/rate-limits` | admin | Save the global rate-limit settings. An unknown key answers 400 "Unknown setting keys: [...]", a negative value 400 "Value for <key> must be non-negative"; either saves none of the request's keys. |
 | GET/PUT | `/api/settings/theme` | user | The person's `light`, `dark` or `system` (follow the device) choice, new people start at `system`; any other value is rejected with 422. |
-| POST | `/api/settings/presets` | user | Create the caller's generation preset. A name the caller already uses for the same model answers 409 "A preset with that name already exists" and creates nothing; the check is per person, so another person may reuse the name. |
+| POST | `/api/settings/presets` | user | Create the caller's generation preset. A name the caller already uses for the same model answers 409 "A preset with that name already exists" and creates nothing; the check is per person, so another person may reuse the name. A `model_mode` the app does not offer answers 422 and creates nothing. |
 | PUT | `/api/settings/presets/{id}` | user | Update the caller's own preset (name, params, default; never the model). An id that is not the caller's own, another person's or a shared preset, answers 404 "Preset not found", admins included. An update without a name, or with the preset's own name, skips the name check; a rename onto another of the caller's presets for the same model answers 409 with the create words and changes nothing. |
 | DELETE | `/api/settings/presets/{id}` | user | Delete the caller's own preset; an unknown, another person's or shared id answers 404 "Preset not found" and deletes nothing. |
 | POST | `/api/settings/presets/{id}/set-default` | user | Make the caller's own preset the default for its model and clear the previous one; another person's or a shared id answers 404 "Preset not found". |

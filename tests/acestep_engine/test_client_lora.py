@@ -207,6 +207,19 @@ def test_training_model_initialization_rejects_wrapped_fork_error() -> None:
             client.initialize_model("sft")
 
 
+def test_training_model_initialization_rejects_a_reply_naming_another_model() -> None:
+    client = AceStepTrainingClient(host="localhost", port=8001)
+
+    with patch(
+        "acestep_engine.training_client.urlopen",
+        return_value=mock_http_response(
+            b'{"data":{"loaded_model":"acestep-v15-turbo","error":"init failed"}}',
+        ),
+    ):
+        with pytest.raises(TrainingResponseError, match="init failed"):
+            client.initialize_model("sft")
+
+
 def test_training_client_preserves_fork_safe_path_rejection() -> None:
     client = AceStepTrainingClient(host="localhost", port=8001)
 

@@ -23,6 +23,7 @@ from songmaker_cli.internal_api import router as internal_router
 from songmaker_cli.jobs_api import router as jobs_router
 from songmaker_cli.library_api import router as library_router
 from songmaker_cli.lora_api import router as lora_router
+from songmaker_cli.memory_api import router as memory_router
 from songmaker_cli.playlist_api import router as playlist_router
 from songmaker_cli.reference_api import router as reference_router
 from songmaker_cli.resource_event_api import router as resource_event_router
@@ -43,4 +44,5 @@ router.include_router(playlist_router)
 router.include_router(reference_router)
 router.include_router(resource_event_router)
 router.include_router(conversation_router)
+router.include_router(memory_router)
 router.include_router(settings_router)

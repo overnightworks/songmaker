@@ -58,13 +58,7 @@ class LibraryPoolTakeResponse(BaseModel):
     @classmethod
     def from_orm(cls, generation: Generation) -> LibraryPoolTakeResponse:
         song = generation.song
-        if song is None:
-            raise ValueError(f"Generation {generation.id} has no song")
         album = song.album
-        if album is None:
-            raise ValueError(f"Song {song.id} has no album")
-        if not generation.mp3_path:
-            raise ValueError(f"Generation {generation.id} has no audio path")
         return cls(
             generation_id=generation.id,
             song_id=song.id,
