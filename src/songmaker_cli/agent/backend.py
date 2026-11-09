@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import aclosing
 from dataclasses import dataclass
 from importlib.resources import files
@@ -133,23 +133,19 @@ def cover_admission(caller: TurnCaller) -> TurnProblem | None:
 
 async def run_cover_picture(caller: TurnCaller, album_data: str) -> bytes | TurnProblem:
     """Draw one cover from ``album_data`` for ``caller``: its bytes, or why there are none."""
-    backend = getattr(caller.app.state, "agent_backend", None)
-    if backend is None:
-        return TurnProblem(AgentProblem.UNAVAILABLE, _NO_AGENT_CONFIGURED)
-    try:
-        request = _cover_agent().request([TurnMessage(role=TurnRole.USER, text=album_data)])
-    except AgentFileError:
-        log.exception("The cover's agent file is refused")
-        return TurnProblem(AgentProblem.UNAVAILABLE, "agent file refused")
+    prepared = _prepared_turn(
+        caller.app, _cover_agent, "cover", [TurnMessage(role=TurnRole.USER, text=album_data)],
+    )
+    if isinstance(prepared, TurnProblem):
+        return prepared
+    backend, request = prepared
     async with aclosing(backend.run(request, _person_of(caller))) as events:
         try:
             async for event in events:
                 if isinstance(event, turn_events.FinalEvent) and event.files:
                     return event.files[0].content
-        except TurnStopped as stopped:
-            return _problem_of_stop(stopped)
-        except _GroupsRefusedError as refused:
-            return _problem_of_refusal(refused.refusal)
+        except (TurnStopped, _GroupsRefusedError) as failure:
+            return _problem_of_failure(failure)
     return TurnProblem(AgentProblem.UNAVAILABLE, "no picture")
 
 
@@ -157,7 +153,7 @@ async def run_cowriter_turn(
     caller: TurnCaller, messages: list[TurnMessage],
 ) -> AsyncIterator[TurnOutcome]:
     """Run one turn; the stream ends with exactly one ``TurnAnswer`` or ``TurnProblem``."""
-    prepared = _prepared_turn(caller.app, messages)
+    prepared = _prepared_turn(caller.app, _cowriter_agent, "co-writer", messages)
     if isinstance(prepared, TurnProblem):
         yield prepared
     else:
@@ -167,15 +163,18 @@ async def run_cowriter_turn(
 
 
 def _prepared_turn(
-    app: FastAPI, messages: list[TurnMessage],
+    app: FastAPI,
+    agent: Callable[[], AgentDefinition],
+    agent_name: str,
+    messages: list[TurnMessage],
 ) -> tuple[GatewayBackend, TurnRequest] | TurnProblem:
     backend = getattr(app.state, "agent_backend", None)
     if backend is None:
         return TurnProblem(AgentProblem.UNAVAILABLE, _NO_AGENT_CONFIGURED)
     try:
-        return backend, _cowriter_agent().request(messages)
+        return backend, agent().request(messages)
     except AgentFileError:
-        log.exception("The co-writer's agent file is refused")
+        log.exception("The %s's agent file is refused", agent_name)
         return TurnProblem(AgentProblem.UNAVAILABLE, "agent file refused")
 
 
@@ -187,10 +186,8 @@ async def _run(
         try:
             async for event in events:
                 yield _outcome_of(event)
-        except TurnStopped as stopped:
-            yield _problem_of_stop(stopped)
-        except _GroupsRefusedError as refused:
-            yield _problem_of_refusal(refused.refusal)
+        except (TurnStopped, _GroupsRefusedError) as failure:
+            yield _problem_of_failure(failure)
 
 
 def _person_of(caller: TurnCaller) -> TurnPerson:
@@ -231,6 +228,12 @@ def _outcome_of(event: TurnEvent) -> TurnOutcome:
     if isinstance(event, turn_events.FinalEvent):
         return TurnAnswer(event.text)
     assert_never(event)
+
+
+def _problem_of_failure(failure: TurnStopped | _GroupsRefusedError) -> TurnProblem:
+    if isinstance(failure, _GroupsRefusedError):
+        return _problem_of_refusal(failure.refusal)
+    return _problem_of_stop(failure)
 
 
 def _problem_of_stop(stopped: TurnStopped) -> TurnProblem:
