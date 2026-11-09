@@ -195,7 +195,17 @@ def _generation_version_or_error(gen: Generation, version_id: str | None) -> Ver
 # ── Generations ──────────────────────────────────────────────────────
 
 
-@router.get("/generations/{gen_id}")
+_GET_TAKE_DESCRIPTION = (
+    "Read one take of the person's own songs with its audio details, scores, rating and "
+    "flags."
+)
+
+
+@router.get(
+    "/generations/{gen_id}",
+    description=_GET_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_take", effect=ToolEffect.READ_ONLY),
+)
 def api_get_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -370,8 +380,16 @@ def api_last_failed_generation(
     return LastFailedGenerationResponse(job=musician_job_response(job))
 
 
+_REPAINT_TAKE_DESCRIPTION = (
+    "Queue a job that repaints a time span of one of the person's own takes as a new take. "
+    "Counts against the generation limit."
+)
+
+
 @router.post(
     "/generations/{gen_id}/repaint",
+    description=_REPAINT_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="repaint_take", effect=ToolEffect.SIDE_EFFECTING),
     response_model=JobResponse,
     responses={
         400: {"description": "Repaint request or source audio is invalid"},
@@ -442,8 +460,16 @@ async def api_repaint_generation(
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
+_COVER_TAKE_DESCRIPTION = (
+    "Queue a job that makes a new take as a cover of one of the person's own takes. Counts "
+    "against the generation limit."
+)
+
+
 @router.post(
     "/generations/{gen_id}/cover",
+    description=_COVER_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="cover_take", effect=ToolEffect.SIDE_EFFECTING),
     response_model=JobResponse,
     responses={
         400: {"description": "Cover request or source audio is invalid"},
@@ -508,8 +534,16 @@ async def api_cover_generation(
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
+_SCORE_TAKE_DESCRIPTION = (
+    "Queue a job that scores one of the person's own takes. Counts against the scoring "
+    "limit."
+)
+
+
 @router.post(
     "/generations/{gen_id}/score",
+    description=_SCORE_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="score_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={503: {"description": "Scoring worker or job queue is unavailable"}},
 )
 async def api_score_generation(
@@ -543,7 +577,14 @@ async def api_score_generation(
 # ── Ratings ──────────────────────────────────────────────────────────
 
 
-@router.post("/generations/{gen_id}/rate")
+_RATE_TAKE_DESCRIPTION = "Save the person's rating and notes on one of their own takes."
+
+
+@router.post(
+    "/generations/{gen_id}/rate",
+    description=_RATE_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="rate_take", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_rate_generation(
     gen_id: str, req: RateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -610,8 +651,13 @@ def api_unpick_generation(
     return _toggle_generation(gen_id, user, session, unpick_generation)
 
 
+_KEEP_TAKE_DESCRIPTION = "Protect one of the person's own takes from cleanup."
+
+
 @router.post(
     "/generations/{gen_id}/keep",
+    description=_KEEP_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="keep_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Generation does not exist"},
         409: {"description": ARCHIVED_TAKE_DETAIL},
@@ -637,8 +683,13 @@ def api_unkeep_generation(
     return _toggle_generation(gen_id, user, session, unkeep_generation)
 
 
+_UNARCHIVE_TAKE_DESCRIPTION = "Take one of the person's own archived takes out of the archive."
+
+
 @router.post(
     "/generations/{gen_id}/unarchive",
+    description=_UNARCHIVE_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="unarchive_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Generation does not exist"}},
 )
 def api_unarchive_generation(

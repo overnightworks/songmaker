@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
@@ -97,7 +98,16 @@ class OpenedFileResponse(FileResponse):
             )
 
 
-@router.get("/references")
+_LIST_REFERENCES_DESCRIPTION = (
+    "List the person's own reference recordings with their keep state and countdown."
+)
+
+
+@router.get(
+    "/references",
+    description=_LIST_REFERENCES_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_references", effect=ToolEffect.READ_ONLY),
+)
 def api_list_references(
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_db_session)],
@@ -143,8 +153,13 @@ def api_countdown_shown(
     return Response(status_code=204)
 
 
+_LIST_REFERENCE_USES_DESCRIPTION = "List where one of the person's reference recordings is used."
+
+
 @router.get(
     "/references/{reference_id}/uses",
+    description=_LIST_REFERENCE_USES_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_reference_uses", effect=ToolEffect.READ_ONLY),
     responses={404: {"description": "Reference audio not found"}},
 )
 def api_reference_uses(
@@ -239,8 +254,15 @@ def _toggle_keep(
     return StatusResponse()
 
 
+_KEEP_REFERENCE_DESCRIPTION = (
+    "Protect one of the person's own reference recordings from deletion after its countdown."
+)
+
+
 @router.post(
     "/references/{reference_id}/keep",
+    description=_KEEP_REFERENCE_DESCRIPTION,
+    openapi_extra=agent_tool(name="keep_reference", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Reference audio not found"}},
 )
 def api_keep_reference(

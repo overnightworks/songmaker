@@ -166,7 +166,17 @@ def api_list_albums(
     )
 
 
-@router.get("/albums/{album_id}")
+_GET_ALBUM_DESCRIPTION = (
+    "Read one of the person's own albums with its title, artist, song count and share link "
+    "if it is shared."
+)
+
+
+@router.get(
+    "/albums/{album_id}",
+    description=_GET_ALBUM_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_album", effect=ToolEffect.READ_ONLY),
+)
 def api_get_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -272,8 +282,15 @@ def api_delete_album(
     return StatusResponse()
 
 
+_RESTORE_ALBUM_DESCRIPTION = (
+    "Bring one of the person's own deleted albums back, within the restore window."
+)
+
+
 @router.post(
     "/albums/{album_id}/restore",
+    description=_RESTORE_ALBUM_DESCRIPTION,
+    openapi_extra=agent_tool(name="restore_album", effect=ToolEffect.SIDE_EFFECTING),
     responses={410: {"description": "Album restore window has expired"}},
 )
 def api_restore_album(
@@ -292,7 +309,17 @@ def api_restore_album(
     return _single_album_response(session, restored)
 
 
-@router.post("/albums/{album_id}/archive")
+_ARCHIVE_ALBUM_DESCRIPTION = (
+    "Hide one of the person's own albums from the default library, search and mix. Songs and "
+    "share links stay; unarchive_album undoes it."
+)
+
+
+@router.post(
+    "/albums/{album_id}/archive",
+    description=_ARCHIVE_ALBUM_DESCRIPTION,
+    openapi_extra=agent_tool(name="archive_album", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_archive_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -312,7 +339,14 @@ def api_archive_album(
     return _single_album_response(session, album)
 
 
-@router.post("/albums/{album_id}/unarchive")
+_UNARCHIVE_ALBUM_DESCRIPTION = "Show one of the person's own archived albums in the library again."
+
+
+@router.post(
+    "/albums/{album_id}/unarchive",
+    description=_UNARCHIVE_ALBUM_DESCRIPTION,
+    openapi_extra=agent_tool(name="unarchive_album", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_unarchive_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -442,7 +476,16 @@ def api_create_cover_suggestions(
     return JobResponse.from_orm(job)
 
 
-@router.get("/albums/{album_id}/cover-suggestions")
+_LIST_COVER_SUGGESTIONS_DESCRIPTION = (
+    "List the cover suggestions already made for one of the person's own albums."
+)
+
+
+@router.get(
+    "/albums/{album_id}/cover-suggestions",
+    description=_LIST_COVER_SUGGESTIONS_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_cover_suggestions", effect=ToolEffect.READ_ONLY),
+)
 def api_list_cover_suggestions(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),

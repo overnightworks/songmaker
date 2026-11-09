@@ -1,0 +1,537 @@
+"""The tools of a person's own agent that mirror the person's GET and POST actions.
+
+Each case drives the real app in-process through ``/mcp``: the tool calls the route through
+the whole middleware stack, so the ownership checks, the limits and the sessions are the
+browser's. Both people's content comes from ``McpWorld.seed_household``.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Callable
+from contextlib import ExitStack
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+from sqlalchemy.orm import sessionmaker
+from support.mcp_world import McpWorld, build_mcp_world, worker_ready
+from support.token_world import TokenWorld
+from support.web_app import TEST_ORIGIN, seed_session
+
+from songmaker_cli.constants import (
+    OIDC_ADMIN_GROUP,
+    OIDC_LOGIN_GROUP,
+    OIDC_MCP_GROUP,
+    LoraStatus,
+)
+from songmaker_cli.db.models import (
+    Album,
+    Generation,
+    GenerationPreset,
+    Job,
+    Playlist,
+    PlaylistEntry,
+    Rating,
+    ReferenceRecording,
+    Song,
+    UserLora,
+)
+
+ALICE = "alices"
+BOB = "bobs"
+_SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
+_FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
+_NOT_FOUND = {403, 404}
+
+Arguments = Callable[[str, str], dict]
+
+
+@dataclass(frozen=True)
+class Tool:
+    """A tool, the route it calls and its arguments for a resource owner and a second one.
+
+    ``subject`` names the owner of the container or the thing acted on, ``other`` the owner of
+    what is added to it; a case with one resource uses ``subject`` only.
+    """
+
+    name: str
+    method: str
+    template: str
+    arguments: Arguments = lambda subject, other: {}  # noqa: ARG005
+    crossed: bool = False
+
+    def arguments_for(self, subject: str, other: str | None = None) -> dict:
+        return self.arguments(subject, other or subject)
+
+    def request(self, subject: str) -> tuple[str, dict]:
+        """The browser's path and the arguments left for its body or query."""
+        arguments = self.arguments_for(subject)
+        path = self.template.format(**arguments)
+        left = {k: v for k, v in arguments.items() if "{" + k + "}" not in self.template}
+        return path, left
+
+    @property
+    def refused_pairs(self) -> list[tuple[str, str]]:
+        return [(BOB, BOB), (ALICE, BOB), (BOB, ALICE)] if self.crossed else [(BOB, BOB)]
+
+
+def _take_arguments(subject: str, other: str) -> dict:
+    return {"gen_id": f"take-{subject}"}
+
+
+def _cover_arguments(subject: str, other: str) -> dict:
+    return {"gen_id": f"take-{subject}", "src_generation_id": f"take-{subject}", "model": "sft"}
+
+
+def _repaint_arguments(subject: str, other: str) -> dict:
+    return {**_cover_arguments(subject, other), "repainting_start": 0.1, "repainting_end": 0.5}
+
+
+# Reads of one resource of a person: a stranger's gets the browser's refusal.
+READS_OF_ONE_RESOURCE = [
+    Tool("get_album", "GET", "/api/albums/{album_id}", lambda s, o: {"album_id": f"album-{s}"}),
+    Tool("list_cover_suggestions", "GET", "/api/albums/{album_id}/cover-suggestions",
+         lambda s, o: {"album_id": f"album-{s}"}),
+    Tool("get_take", "GET", "/api/generations/{gen_id}", _take_arguments),
+    Tool("get_job", "GET", "/api/jobs/{job_id}", lambda s, o: {"job_id": f"job-{s}"}),
+    Tool("get_playlist", "GET", "/api/playlists/{playlist_id}",
+         lambda s, o: {"playlist_id": f"playlist-{s}"}),
+    Tool("list_reference_uses", "GET", "/api/references/{reference_id}/uses",
+         lambda s, o: {"reference_id": f"reference-{s}"}),
+    Tool("get_conversation", "GET", "/api/conversations/{conversation_id}",
+         lambda s, o: {"conversation_id": f"conversation-{s}"}),
+    Tool("list_song_versions", "GET", "/api/songs/{song_id}/versions",
+         lambda s, o: {"song_id": f"song-{s}"}),
+    Tool("get_memory", "GET", "/api/memory", lambda s, o: {"song_id": f"song-{s}"}),
+]
+
+# Reads of what a person has as a list, or of what every member sees.
+PLAIN_READS = [
+    Tool("get_account", "GET", "/api/auth/me"),
+    Tool("list_conversations", "GET", "/api/conversations"),
+    Tool("get_library_listen", "GET", "/api/library/listen"),
+    Tool("get_library_write", "GET", "/api/library/write"),
+    Tool("search_library", "GET", "/api/library/search", lambda s, o: {"q": "alices"}),
+    Tool("get_library_pool_queue", "GET", "/api/library/pool-queue"),
+    Tool("list_loras", "GET", "/api/loras"),
+    Tool("list_playlists", "GET", "/api/playlists"),
+    Tool("list_references", "GET", "/api/references"),
+    Tool("get_release", "GET", "/api/release"),
+    Tool("get_cowriter_settings", "GET", "/api/settings/cowriter"),
+    Tool("get_default_config", "GET", "/api/settings/default-config"),
+    Tool("get_generation_builtins", "GET", "/api/settings/generation-builtins"),
+    Tool("get_generation_defaults", "GET", "/api/settings/generation-defaults"),
+    Tool("list_models", "GET", "/api/settings/models"),
+    Tool("list_presets", "GET", "/api/settings/presets"),
+    Tool("get_theme", "GET", "/api/settings/theme"),
+]
+
+# Writes on a resource of a person: a stranger's is refused and nothing is written.
+WRITES_ON_ONE_RESOURCE = [
+    Tool("archive_album", "POST", "/api/albums/{album_id}/archive",
+         lambda s, o: {"album_id": f"album-{s}"}),
+    Tool("unarchive_album", "POST", "/api/albums/{album_id}/unarchive",
+         lambda s, o: {"album_id": f"album-{s}"}),
+    Tool("restore_album", "POST", "/api/albums/{album_id}/restore",
+         lambda s, o: {"album_id": f"album-gone-{s}"}),
+    Tool("restore_song", "POST", "/api/songs/{song_id}/restore",
+         lambda s, o: {"song_id": f"song-gone-{s}"}),
+    Tool("keep_take", "POST", "/api/generations/{gen_id}/keep", _take_arguments),
+    Tool("unarchive_take", "POST", "/api/generations/{gen_id}/unarchive", _take_arguments),
+    Tool("rate_take", "POST", "/api/generations/{gen_id}/rate",
+         lambda s, o: {**_take_arguments(s, o), "rating": 80}),
+    Tool("score_take", "POST", "/api/generations/{gen_id}/score", _take_arguments),
+    Tool("cover_take", "POST", "/api/generations/{gen_id}/cover", _cover_arguments),
+    Tool("repaint_take", "POST", "/api/generations/{gen_id}/repaint", _repaint_arguments),
+    Tool("cancel_job", "POST", "/api/jobs/{job_id}/cancel", lambda s, o: {"job_id": f"job-{s}"}),
+    Tool("train_lora", "POST", "/api/loras/{lora_id}/train",
+         lambda s, o: {"lora_id": f"lora-{s}"}),
+    Tool("keep_reference", "POST", "/api/references/{reference_id}/keep",
+         lambda s, o: {"reference_id": f"reference-{s}"}),
+    Tool("set_default_preset", "POST", "/api/settings/presets/{preset_id}/set-default",
+         lambda s, o: {"preset_id": f"preset-{s}"}),
+    Tool("add_lora_sample_from_take", "POST", "/api/loras/{lora_id}/samples/from-generation",
+         lambda s, o: {"lora_id": f"lora-{s}", "generation_id": f"take-{o}"}, crossed=True),
+    Tool("add_album_to_playlist", "POST", "/api/playlists/{playlist_id}/entries/album",
+         lambda s, o: {"playlist_id": f"playlist-{s}", "album_id": f"album-{o}"}, crossed=True),
+    Tool("add_take_to_playlist", "POST", "/api/playlists/{playlist_id}/entries/generation",
+         lambda s, o: {"playlist_id": f"playlist-{s}", "generation_id": f"take-{o}"},
+         crossed=True),
+    Tool("add_song_to_playlist", "POST", "/api/playlists/{playlist_id}/entries/song",
+         lambda s, o: {"playlist_id": f"playlist-{s}", "song_id": f"song-{o}"}, crossed=True),
+]
+
+# Writes that make something new for the person.
+CREATIONS = [
+    Tool("create_conversation", "POST", "/api/conversations/new"),
+    Tool("create_lora", "POST", "/api/loras", lambda s, o: {"name": "Fresh voice"}),
+    Tool("create_playlist", "POST", "/api/playlists", lambda s, o: {"title": "Fresh list"}),
+    Tool("create_preset", "POST", "/api/settings/presets",
+         lambda s, o: {"name": "Fresh preset", "model_mode": "sft", "params": {}}),
+]
+
+ALL_TOOLS = [*READS_OF_ONE_RESOURCE, *PLAIN_READS, *WRITES_ON_ONE_RESOURCE, *CREATIONS]
+_IDS = [tool.name for tool in ALL_TOOLS]
+
+
+@pytest.fixture
+def household(mcp: McpWorld) -> McpWorld:
+    mcp.seed_household(TokenWorld.ALICE, ALICE)
+    mcp.seed_household(TokenWorld.BOB, BOB)
+    return mcp
+
+
+def _browser(world: McpWorld, tool: Tool, subject: str, headers: dict[str, str]):
+    path, left = tool.request(subject)
+    if tool.method == "GET":
+        return world.world.client.get(path, params=left, headers=headers)
+    return world.world.client.post(path, json=left, headers=headers)
+
+
+# -- reads of a stranger's content -------------------------------------------------------
+
+
+@pytest.mark.parametrize("tool", READS_OF_ONE_RESOURCE, ids=lambda t: t.name)
+def test_a_read_tool_answers_for_the_persons_own_content_as_the_browser_does(
+    household: McpWorld, tool: Tool,
+) -> None:
+    reply = household.call(tool.name, tool.arguments_for(ALICE))
+
+    browser = _browser(household, tool, ALICE, household.agent())
+    assert (reply.is_error, reply.json()) == (False, browser.json())
+
+
+@pytest.mark.parametrize("tool", READS_OF_ONE_RESOURCE, ids=lambda t: t.name)
+def test_a_read_tool_for_another_persons_content_is_refused_as_for_a_stranger_in_the_browser(
+    household: McpWorld, tool: Tool,
+) -> None:
+    reply = household.call(tool.name, tool.arguments_for(BOB))
+
+    browser = _browser(household, tool, BOB, household.agent())
+    assert browser.status_code in _NOT_FOUND
+    assert reply.is_error
+    assert BOB not in re.sub(r"(take|job|song|album|playlist|conversation|reference)-bobs",
+                             "", reply.text)
+
+
+@pytest.mark.parametrize("tool", [
+    t for t in PLAIN_READS if t.name in {
+        "list_conversations", "list_loras", "list_playlists", "list_references", "list_presets",
+        "get_library_listen", "get_library_write", "search_library",
+        "get_library_pool_queue",
+    }
+], ids=lambda t: t.name)
+def test_a_list_tool_holds_only_the_callers_content(household: McpWorld, tool: Tool) -> None:
+    reply = household.call(tool.name, tool.arguments_for(ALICE))
+
+    assert reply.is_error is False
+    assert BOB not in reply.text
+
+
+@pytest.mark.parametrize("tool", PLAIN_READS, ids=lambda t: t.name)
+def test_a_plain_read_tool_answers_as_the_browser_does(household: McpWorld, tool: Tool) -> None:
+    reply = household.call(tool.name, tool.arguments_for(ALICE))
+
+    browser = _browser(household, tool, ALICE, household.agent())
+    assert (reply.is_error, reply.json()) == (False, browser.json())
+
+
+# -- writes -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("tool", [*WRITES_ON_ONE_RESOURCE, *CREATIONS], ids=lambda t: t.name)
+def test_a_write_tool_on_the_persons_own_resource_succeeds(
+    household: McpWorld, tool: Tool,
+) -> None:
+    with worker_ready():
+        reply = household.call(tool.name, tool.arguments_for(ALICE))
+
+    assert reply.is_error is False, reply.text
+
+
+_REFUSED_CASES = [
+    pytest.param(tool, subject, other, id=f"{tool.name}-{subject}-{other}")
+    for tool in WRITES_ON_ONE_RESOURCE
+    for subject, other in tool.refused_pairs
+]
+
+
+@pytest.mark.parametrize(("tool", "subject", "other"), _REFUSED_CASES)
+def test_a_write_tool_that_touches_another_persons_resource_is_refused_and_writes_nothing(
+    household: McpWorld, tool: Tool, subject: str, other: str,
+) -> None:
+    before = household.snapshot()
+
+    with worker_ready() as pool:
+        reply = household.call(tool.name, tool.arguments_for(subject, other))
+
+    assert reply.is_error
+    assert household.snapshot() == before
+    pool.enqueue_job.assert_not_called()
+
+
+# (tool, arguments, model, columns, row that exists afterwards)
+_EFFECTS = [
+    ("keep_take", {"gen_id": "take-alices"}, Generation, ("id", "is_kept"),
+     ("take-alices", True)),
+    ("rate_take", {"gen_id": "take-alices", "rating": 80}, Rating, ("generation_id", "rating"),
+     ("take-alices", 80.0)),
+    ("archive_album", {"album_id": "album-alices"}, Album, ("id", "is_archived"),
+     ("album-alices", True)),
+    ("restore_album", {"album_id": "album-gone-alices"}, Album, ("id", "deleted_at"),
+     ("album-gone-alices", None)),
+    ("restore_song", {"song_id": "song-gone-alices"}, Song, ("id", "deleted_at"),
+     ("song-gone-alices", None)),
+    ("cancel_job", {"job_id": "job-alices"}, Job, ("id", "status"), ("job-alices", "cancelled")),
+    ("keep_reference", {"reference_id": "reference-alices"}, ReferenceRecording,
+     ("id", "is_kept"), ("reference-alices", True)),
+    ("set_default_preset", {"preset_id": "preset-alices"}, GenerationPreset,
+     ("id", "is_default"), ("preset-alices", True)),
+    ("add_take_to_playlist", {"playlist_id": "playlist-alices", "generation_id": "take-alices"},
+     PlaylistEntry, ("playlist_id", "generation_id"), ("playlist-alices", "take-alices")),
+    ("create_playlist", {"title": "Fresh list"}, Playlist, ("title", "created_by"),
+     ("Fresh list", TokenWorld.ALICE)),
+    ("create_preset", {"name": "Fresh", "model_mode": "sft", "params": {}}, GenerationPreset,
+     ("name", "created_by"), ("Fresh", TokenWorld.ALICE)),
+    ("create_lora", {"name": "Fresh"}, UserLora, ("name", "user_id"),
+     ("Fresh", TokenWorld.ALICE)),
+]
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "model", "columns", "row"), _EFFECTS, ids=[e[0] for e in _EFFECTS],
+)
+def test_a_write_tool_changes_the_persons_own_resource_and_not_the_strangers(
+    household: McpWorld, tool: str, arguments: dict, model: type, columns: tuple[str, ...],
+    row: tuple,
+) -> None:
+    bobs_before = [r for r in household.rows_of(model, *columns) if BOB in repr(r)]
+
+    reply = household.call(tool, arguments)
+
+    assert reply.is_error is False
+    assert row in household.rows_of(model, *columns)
+    assert [r for r in household.rows_of(model, *columns) if BOB in repr(r)] == bobs_before
+
+
+# -- limits the browser meets --------------------------------------------------------------
+
+
+@pytest.mark.parametrize("tool", [t for t in WRITES_ON_ONE_RESOURCE
+                                  if t.name in {"cover_take", "repaint_take"}],
+                         ids=lambda t: t.name)
+def test_a_generating_tool_meets_the_persons_generation_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack, tool: Tool,
+) -> None:
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, generation_limit=1)
+    world.seed_household(TokenWorld.ALICE, ALICE)
+
+    with worker_ready():
+        first = world.call(tool.name, tool.arguments_for(ALICE))
+        second = world.call(tool.name, tool.arguments_for(ALICE))
+        browser = _browser(world, tool, ALICE, world.agent())
+
+    assert first.is_error is False
+    assert (second.is_error, second.json()) == (True, browser.json())
+    assert browser.status_code == 429
+    assert world.rows_of(Job, "type").count(("generate",)) == 1
+
+
+def test_the_score_tool_meets_the_persons_scoring_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack,
+) -> None:
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
+    monkeypatch.setenv("SCORING_RATE_LIMIT_USER", "1")
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans)
+    world.seed_household(TokenWorld.ALICE, ALICE)
+    arguments = {"gen_id": "take-alices"}
+
+    with worker_ready():
+        first = world.call("score_take", arguments)
+        second = world.call("score_take", arguments)
+        browser = world.world.client.post(
+            "/api/generations/take-alices/score", json={}, headers=world.agent(),
+        )
+
+    assert first.is_error is False
+    assert (second.is_error, second.json()) == (True, browser.json())
+    assert browser.status_code == 429
+    assert world.rows_of(Job, "type").count(("score",)) == 1
+
+
+def test_the_train_tool_meets_the_training_queue_cap_and_the_loras_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack,
+) -> None:
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
+    monkeypatch.setenv("MAX_QUEUED_LORA_TRAINING_JOBS", "1")
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans)
+    world.seed_household(TokenWorld.ALICE, ALICE)
+    world.seed_household(TokenWorld.BOB, BOB)
+    with world.world.factory() as session:
+        session.add(Job(id="training-bobs", type="lora_training", status="queued",
+                        user_id=TokenWorld.BOB))
+        session.commit()
+
+    with worker_ready() as pool:
+        full = world.call("train_lora", {"lora_id": "lora-alices"})
+    with world.world.factory() as session:
+        session.query(Job).filter_by(id="training-bobs").delete()
+        session.commit()
+    with worker_ready():
+        first = world.call("train_lora", {"lora_id": "lora-alices"})
+        again = world.call("train_lora", {"lora_id": "lora-alices"})
+
+    assert full.is_error is True
+    assert "training_queue_full" in full.text
+    pool.enqueue_job.assert_not_called()
+    assert first.is_error is False
+    assert (again.is_error, "already training" in again.text) == (True, True)
+    assert world.rows_of(UserLora, "id", "status").count(
+        ("lora-alices", LoraStatus.QUEUED),
+    ) == 1
+
+
+# -- an admin's agent is a member -----------------------------------------------------------
+
+
+@pytest.fixture
+def admins_world(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
+    lifespans: ExitStack,
+) -> McpWorld:
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
+    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
+    world.seed_household(TokenWorld.ALICE, ALICE)
+    world.seed_household(TokenWorld.BOB, BOB)
+    return world
+
+
+_ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
+
+
+@pytest.mark.parametrize("tool", [
+    t for t in PLAIN_READS if t.name in {"get_library_listen", "get_library_write",
+                                          "search_library"}
+], ids=lambda t: t.name)
+def test_the_library_tools_of_an_admins_agent_return_only_the_admins_own_content(
+    admins_world: McpWorld, tool: Tool,
+) -> None:
+    reply = admins_world.call(tool.name, tool.arguments_for(ALICE), groups=_ADMIN_GROUPS)
+
+    assert reply.is_error is False
+    assert ALICE in reply.text
+    assert BOB not in reply.text
+
+
+def test_an_admins_agent_is_refused_another_persons_job_and_is_a_user_in_the_account(
+    admins_world: McpWorld,
+) -> None:
+    job = admins_world.call("get_job", {"job_id": "job-bobs"}, groups=_ADMIN_GROUPS)
+    cancel = admins_world.call("cancel_job", {"job_id": "job-bobs"}, groups=_ADMIN_GROUPS)
+    account = admins_world.call("get_account", groups=_ADMIN_GROUPS)
+
+    assert (job.is_error, cancel.is_error) == (True, True)
+    assert ("job-bobs", "queued") in admins_world.rows_of(Job, "id", "status")
+    assert (account.is_error, account.json()["role"]) == (False, "user")
+
+
+# -- cookie sessions and CSRF ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("tool", ALL_TOOLS, ids=_IDS)
+def test_a_cookie_session_with_csrf_succeeds_on_each_tool_route(
+    household: McpWorld, tool: Tool,
+) -> None:
+    seed_session(household.world.client, "alice")
+
+    with worker_ready():
+        reply = _browser(household, tool, ALICE, _SAME_ORIGIN)
+
+    assert reply.status_code == 200
+
+
+@pytest.mark.parametrize("tool", [t for t in ALL_TOOLS if t.method == "POST"],
+                         ids=lambda t: t.name)
+def test_a_cookie_post_without_csrf_is_refused_on_each_tool_route_and_writes_nothing(
+    household: McpWorld, tool: Tool,
+) -> None:
+    seed_session(household.world.client, "alice")
+    before = household.snapshot()
+
+    with worker_ready() as pool:
+        reply = _browser(household, tool, ALICE, _FORGED)
+
+    assert reply.status_code == 403
+    assert household.snapshot() == before
+    pool.enqueue_job.assert_not_called()
+
+
+# -- containers the person already shared ---------------------------------------------------
+
+
+def _share(world: McpWorld, path: str) -> str:
+    seed_session(world.world.client, "alice")
+    reply = world.world.client.post(path, headers=_SAME_ORIGIN)
+    assert reply.status_code == 200
+    return reply.json()["share_slug"]
+
+
+@pytest.mark.parametrize(("tool", "arguments"), [
+    ("add_take_to_playlist", {"playlist_id": "playlist-alices", "generation_id": "take-alices"}),
+    ("add_song_to_playlist", {"playlist_id": "playlist-alices", "song_id": "song-alices"}),
+    ("add_album_to_playlist", {"playlist_id": "playlist-alices", "album_id": "album-alices"}),
+], ids=["take", "song", "album"])
+def test_a_playlist_entry_added_by_a_tool_shows_on_the_shared_playlist_under_the_same_slug(
+    household: McpWorld, tool: str, arguments: dict,
+) -> None:
+    slug = _share(household, "/api/playlists/playlist-alices/share")
+    public = household.world.client
+    assert public.get(f"/shared/playlist/{slug}").json()["entries"] == []
+
+    reply = household.call(tool, arguments)
+
+    entries = public.get(f"/shared/playlist/{slug}").json()["entries"]
+    assert reply.is_error is False
+    assert [entry["generation_id"] for entry in entries] == ["take-alices"]
+    assert household.call("get_playlist", {"playlist_id": "playlist-alices"}).json()[
+        "share_slug"
+    ] == slug
+
+
+def test_an_unarchived_take_shows_on_the_shared_album_under_the_same_slug(
+    household: McpWorld,
+) -> None:
+    slug = _share(household, "/api/albums/album-alices/share")
+    with household.world.factory() as session:
+        session.get(Generation, "take-alices").is_archived = True
+        session.commit()
+    public = household.world.client
+    assert public.get(f"/shared/{slug}").json()["songs"][0]["generation_id"] is None
+
+    reply = household.call("unarchive_take", {"gen_id": "take-alices"})
+
+    songs = public.get(f"/shared/{slug}").json()["songs"]
+    assert reply.is_error is False
+    assert [song["generation_id"] for song in songs] == ["take-alices"]
+    assert household.call("get_album", {"album_id": "album-alices"}).json()["share_slug"] == slug
+
+
+def test_a_repaint_on_a_shared_song_queues_its_job_and_keeps_the_slug_and_the_public_view(
+    household: McpWorld,
+) -> None:
+    slug = _share(household, "/api/songs/song-alices/share")
+    public = household.world.client
+    shown = public.get(f"/shared/song/{slug}").json()
+
+    with worker_ready():
+        reply = household.call("repaint_take", _repaint_arguments(ALICE, ALICE))
+
+    assert reply.is_error is False
+    assert ("generate", "song-alices") in household.rows_of(Job, "type", "song_id")
+    assert public.get(f"/shared/song/{slug}").json() == shown
+    assert household.call("get_song", {"song_id": "song-alices"}).json()["share_slug"] == slug

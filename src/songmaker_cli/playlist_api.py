@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -79,7 +80,14 @@ router = APIRouter()
 ALBUM_NOT_FOUND_DETAIL: Final = "Album not found"
 
 
-@router.get("/playlists")
+_LIST_PLAYLISTS_DESCRIPTION = "List the person's own playlists."
+
+
+@router.get(
+    "/playlists",
+    description=_LIST_PLAYLISTS_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_playlists", effect=ToolEffect.READ_ONLY),
+)
 def api_list_playlists(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -88,7 +96,14 @@ def api_list_playlists(
     return [PlaylistResponse.from_orm(p) for p in playlists]
 
 
-@router.post("/playlists")
+_CREATE_PLAYLIST_DESCRIPTION = "Create a playlist owned by the person."
+
+
+@router.post(
+    "/playlists",
+    description=_CREATE_PLAYLIST_DESCRIPTION,
+    openapi_extra=agent_tool(name="create_playlist", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_create_playlist(
     req: PlaylistCreateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -101,8 +116,15 @@ def api_create_playlist(
     return PlaylistResponse.from_orm(playlist)
 
 
+_GET_PLAYLIST_DESCRIPTION = (
+    "Read one of the person's own playlists with its entries and share link if it is shared."
+)
+
+
 @router.get(
     "/playlists/{playlist_id}",
+    description=_GET_PLAYLIST_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_playlist", effect=ToolEffect.READ_ONLY),
     responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
 )
 def api_get_playlist(
@@ -220,8 +242,16 @@ def api_delete_playlist_cover(
 # ── Entries ────────────────────────────────────────────────────────────
 
 
+_ADD_TAKE_TO_PLAYLIST_DESCRIPTION = (
+    "Add one of the person's own takes to one of their playlists. A shared playlist shows "
+    "it."
+)
+
+
 @router.post(
     "/playlists/{playlist_id}/entries/generation",
+    description=_ADD_TAKE_TO_PLAYLIST_DESCRIPTION,
+    openapi_extra=agent_tool(name="add_take_to_playlist", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Playlist or generation not found"},
         409: {"description": ARCHIVED_TAKE_DETAIL},
@@ -248,8 +278,16 @@ def api_add_generation_to_playlist(
     return PlaylistEntryResponse.from_orm(entry_obj)
 
 
+_ADD_SONG_TO_PLAYLIST_DESCRIPTION = (
+    "Add the playable take of one of the person's own songs to one of their playlists. A "
+    "shared playlist shows it."
+)
+
+
 @router.post(
     "/playlists/{playlist_id}/entries/song",
+    description=_ADD_SONG_TO_PLAYLIST_DESCRIPTION,
+    openapi_extra=agent_tool(name="add_song_to_playlist", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         400: {"description": "Song has no playable take"},
         404: {"description": "Playlist or song not found"},
@@ -282,8 +320,16 @@ def api_add_song_to_playlist(
     return StatusResponse()
 
 
+_ADD_ALBUM_TO_PLAYLIST_DESCRIPTION = (
+    "Add the playable takes of one of the person's own albums to one of their playlists. A "
+    "shared playlist shows them."
+)
+
+
 @router.post(
     "/playlists/{playlist_id}/entries/album",
+    description=_ADD_ALBUM_TO_PLAYLIST_DESCRIPTION,
+    openapi_extra=agent_tool(name="add_album_to_playlist", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Playlist or album not found"}},
 )
 def api_add_album_to_playlist(

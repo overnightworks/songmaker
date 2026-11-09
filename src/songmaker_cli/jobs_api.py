@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 from time import monotonic
 from typing import Final
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -67,8 +68,16 @@ JOB_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Job stream limiter unavailable"
 # enforce_rate_limit -- see that function's own docstring for why.
 
 
+_GET_JOB_DESCRIPTION = (
+    "Read the state of one of the person's own jobs: status, queue position and error if it "
+    "failed."
+)
+
+
 @router.get(
     "/jobs/{job_id}",
+    description=_GET_JOB_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_job", effect=ToolEffect.READ_ONLY),
     responses={404: {"description": "Job does not exist"}},
 )
 def api_get_job(
@@ -255,8 +264,13 @@ async def _leased_job_event_generator(
         release_lease_in_background(limiter, user_id, lease_token, subject="Job stream")
 
 
+_CANCEL_JOB_DESCRIPTION = "Cancel one of the person's own jobs while it is queued or running."
+
+
 @router.post(
     "/jobs/{job_id}/cancel",
+    description=_CANCEL_JOB_DESCRIPTION,
+    openapi_extra=agent_tool(name="cancel_job", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Job does not exist"},
         409: {"description": "Job is not queued or running"},

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
@@ -67,14 +68,32 @@ PRESET_NAME_EXISTS_DETAIL = "A preset with that name already exists"
 PRESET_NOT_FOUND_DETAIL = "Preset not found"
 
 
-@router.get("/settings/generation-builtins")
+_GET_GENERATION_BUILTINS_DESCRIPTION = (
+    "Read the built-in generation parameter defaults of every model."
+)
+
+
+@router.get(
+    "/settings/generation-builtins",
+    description=_GET_GENERATION_BUILTINS_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_generation_builtins", effect=ToolEffect.READ_ONLY),
+)
 def api_get_builtins(
     _user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, dict[str, object]]:
     return get_builtin_defaults()
 
 
-@router.get("/settings/generation-defaults")
+_GET_GENERATION_DEFAULTS_DESCRIPTION = (
+    "Read the generation parameter defaults every member gets per model."
+)
+
+
+@router.get(
+    "/settings/generation-defaults",
+    description=_GET_GENERATION_DEFAULTS_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_generation_defaults", effect=ToolEffect.READ_ONLY),
+)
 def api_get_generation_defaults(
     _user: AuthenticatedUser = Depends(get_current_user),
     ctx: AppContext = Depends(get_app_context),
@@ -93,7 +112,16 @@ def api_set_generation_defaults(
     return data
 
 
-@router.get("/settings/presets")
+_LIST_PRESETS_DESCRIPTION = (
+    "List the person's own generation presets and the presets shared with every member."
+)
+
+
+@router.get(
+    "/settings/presets",
+    description=_LIST_PRESETS_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_presets", effect=ToolEffect.READ_ONLY),
+)
 def api_list_presets(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -103,8 +131,13 @@ def api_list_presets(
     return [PresetResponse.from_orm(p) for p in [*own, *shared]]
 
 
+_CREATE_PRESET_DESCRIPTION = "Save a generation preset for the person under a name and model."
+
+
 @router.post(
     "/settings/presets",
+    description=_CREATE_PRESET_DESCRIPTION,
+    openapi_extra=agent_tool(name="create_preset", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         400: {"description": "Requested model is not available"},
         409: {"description": PRESET_NAME_EXISTS_DETAIL},
@@ -174,8 +207,13 @@ def api_delete_preset(
     return StatusResponse()
 
 
+_SET_DEFAULT_PRESET_DESCRIPTION = "Make one of the person's own presets the default for its model."
+
+
 @router.post(
     "/settings/presets/{preset_id}/set-default",
+    description=_SET_DEFAULT_PRESET_DESCRIPTION,
+    openapi_extra=agent_tool(name="set_default_preset", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Preset does not exist"}},
 )
 def api_set_default_preset(
@@ -219,7 +257,14 @@ def _build_model_response(model) -> AvailableModelResponse:
     )
 
 
-@router.get("/settings/models")
+_LIST_MODELS_DESCRIPTION = "List the generation models a member may use."
+
+
+@router.get(
+    "/settings/models",
+    description=_LIST_MODELS_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_models", effect=ToolEffect.READ_ONLY),
+)
 def api_list_active_models(
     _user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -261,7 +306,14 @@ def api_toggle_model(
 # ── Theme ──────────────────────────────────────────────────────────
 
 
-@router.get("/settings/theme")
+_GET_THEME_DESCRIPTION = "Read the person's colour theme setting."
+
+
+@router.get(
+    "/settings/theme",
+    description=_GET_THEME_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_theme", effect=ToolEffect.READ_ONLY),
+)
 def api_get_theme(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -283,7 +335,14 @@ def api_set_theme(
 # ── Default generation config ──────────────────────────────────────
 
 
-@router.get("/settings/default-config")
+_GET_DEFAULT_CONFIG_DESCRIPTION = "Read the person's effective default generation config."
+
+
+@router.get(
+    "/settings/default-config",
+    description=_GET_DEFAULT_CONFIG_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_default_config", effect=ToolEffect.READ_ONLY),
+)
 def api_get_default_config(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -329,7 +388,14 @@ def api_set_default_config(
 # ── Release ──────────────────────────────────────────────────────
 
 
-@router.get("/release")
+_GET_RELEASE_DESCRIPTION = "Read which release of the app is running."
+
+
+@router.get(
+    "/release",
+    description=_GET_RELEASE_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_release", effect=ToolEffect.READ_ONLY),
+)
 def api_release(_user: AuthenticatedUser = Depends(get_current_user)) -> ReleaseInfo:
     return ReleaseInfo.from_settings(get_settings())
 
@@ -340,7 +406,14 @@ def _cowriter_response(session: Session) -> CowriterSettingsResponse:
     )
 
 
-@router.get("/settings/cowriter")
+_GET_COWRITER_SETTINGS_DESCRIPTION = "Read the co-writer settings every member sees."
+
+
+@router.get(
+    "/settings/cowriter",
+    description=_GET_COWRITER_SETTINGS_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_cowriter_settings", effect=ToolEffect.READ_ONLY),
+)
 def api_get_cowriter_settings(
     _user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),

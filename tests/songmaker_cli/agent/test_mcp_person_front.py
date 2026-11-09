@@ -6,10 +6,9 @@ exactly as in production and only its key set is the fake issuer's.
 
 from __future__ import annotations
 
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -26,6 +25,7 @@ from support.mcp_world import (
     RESOURCE_URL,
     McpWorld,
     build_mcp_world,
+    worker_ready,
 )
 from support.token_world import TokenWorld, make_token_world
 from support.web_app import TEST_ORIGIN, seed_session
@@ -42,22 +42,19 @@ from songmaker_cli.settings import Settings, get_settings
 
 MARKED_TOOLS = {
     "list_albums", "create_album", "list_songs", "create_song", "get_song", "generate_song",
-    "get_active_generation", "get_last_failed_generation",
+    "get_active_generation", "get_last_failed_generation", "get_album",
+    "list_cover_suggestions", "get_account", "list_conversations", "get_conversation",
+    "get_take", "get_job", "get_library_listen", "get_library_write", "search_library",
+    "get_library_pool_queue", "list_loras", "get_memory", "list_playlists", "get_playlist",
+    "list_references", "list_reference_uses", "get_release", "get_cowriter_settings",
+    "get_default_config", "get_generation_builtins", "get_generation_defaults", "list_models",
+    "list_presets", "get_theme", "list_song_versions", "archive_album", "restore_album",
+    "unarchive_album", "create_conversation", "cover_take", "keep_take", "rate_take",
+    "repaint_take", "score_take", "unarchive_take", "cancel_job", "create_lora",
+    "add_lora_sample_from_take", "train_lora", "create_playlist", "add_album_to_playlist",
+    "add_take_to_playlist", "add_song_to_playlist", "keep_reference", "create_preset",
+    "set_default_preset", "restore_song",
 }
-
-
-@contextmanager
-def _worker_ready():
-    pool = AsyncMock()
-    with (
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=pool),
-        patch("songmaker_cli.generation_api.is_music_worker_healthy", AsyncMock(return_value=True)),
-        patch("songmaker_cli.generation_api.is_scoring_worker_healthy",
-              AsyncMock(return_value=True)),
-        patch("songmaker_cli.generation_api._has_online_acestep_worker",
-              AsyncMock(return_value=True)),
-    ):
-        yield pool
 
 
 # -- M1: exactly the marked tools ---------------------------------------------------------
@@ -161,7 +158,7 @@ def test_m24_an_admins_agent_cannot_write_into_or_generate_for_another_persons_c
     world.world.seed_take(TokenWorld.BOB, "bobs")
     groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
 
-    with _worker_ready() as pool:
+    with worker_ready() as pool:
         into = world.call("create_song", {"title": "x", "album_id": "album-bobs"}, groups=groups)
         generated = world.call(
             "generate_song", {"song_id": "song-bobs", "model": "sft"}, groups=groups,
@@ -185,7 +182,7 @@ def test_m27_a_progress_tool_answers_for_the_persons_own_song_as_the_api_does(
     mcp: McpWorld, tool: str,
 ) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
-    with _worker_ready():
+    with worker_ready():
         mcp.call("generate_song", {"song_id": "song-alices", "model": "sft"})
 
     reply = mcp.call(tool, {"song_id": "song-alices"})
@@ -201,7 +198,7 @@ def test_m27_the_active_generation_tool_names_the_queued_job_and_none_without_on
 ) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
     idle = mcp.call("get_active_generation", {"song_id": "song-alices"})
-    with _worker_ready():
+    with worker_ready():
         queued = mcp.call("generate_song", {"song_id": "song-alices", "model": "sft"})
 
     active = mcp.call("get_active_generation", {"song_id": "song-alices"})
@@ -248,7 +245,7 @@ def test_m28_a_progress_tool_for_another_persons_song_is_not_found_and_reveals_n
 ) -> None:
     mcp.world.seed_take(TokenWorld.BOB, "bobs")
     bobs = mcp.agent(TokenWorld.BOB)
-    with _worker_ready():
+    with worker_ready():
         mcp.world.client.post(
             "/api/songs/song-bobs/generate", json={"model": "sft"}, headers=bobs,
         )
@@ -266,15 +263,22 @@ _UNMARKED_ROUTES = [
     ("POST", "/api/generations/bulk-delete", {"generation_ids": ["take-alices"]}),
     ("DELETE", "/api/generations/take-alices", None),
     ("POST", "/api/albums/album-alices/share", None),
-    ("POST", "/api/generations/take-alices/repaint", None),
+    ("POST", "/api/generations/take-alices/pick", None),
+    ("POST", "/api/generations/take-alices/unpick", None),
+    ("POST", "/api/generations/take-alices/unkeep", None),
+    ("POST", "/api/references/any/unkeep", None),
     ("DELETE", "/api/playlists/any", None),
     ("DELETE", "/api/albums/album-alices", None),
+    ("GET", "/api/admin/voices", None),
+    ("GET", "/api/loras/own-takes", None),
+    ("GET", "/api/albums/album-alices/cover", None),
 ]
 
 
 @pytest.mark.parametrize(
     ("method", "path", "body"), _UNMARKED_ROUTES,
-    ids=["bulk-delete", "take-delete", "share", "repaint", "playlist-delete", "album-delete"],
+    ids=["bulk-delete", "take-delete", "share", "pick", "unpick", "unkeep", "reference-unkeep",
+         "playlist-delete", "album-delete", "admin", "own-takes", "browser-only"],
 )
 def test_m6_the_agent_token_is_refused_on_every_unmarked_route_and_nothing_changes(
     mcp: McpWorld, method: str, path: str, body: dict | None,
@@ -495,7 +499,7 @@ def test_m14_a_cookie_session_with_csrf_still_succeeds_on_each_marked_route(
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
 
-    with _worker_ready():
+    with worker_ready():
         reply = mcp.world.client.request(method, path, json=body, headers=_SAME_ORIGIN)
 
     assert reply.status_code == 200
@@ -512,7 +516,7 @@ def test_m14_a_cookie_request_without_csrf_is_refused_on_each_state_changing_mar
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
 
-    with _worker_ready() as pool:
+    with worker_ready() as pool:
         reply = mcp.world.client.request(method, path, json=body, headers=_FORGED)
 
     assert reply.status_code == 403
@@ -526,7 +530,7 @@ def test_m14_an_unmarked_route_keeps_working_with_the_cookie(mcp: McpWorld) -> N
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
 
-    reply = mcp.world.client.get("/api/generations/take-alices", headers=_SAME_ORIGIN)
+    reply = mcp.world.client.get("/api/loras/own-takes", headers=_SAME_ORIGIN)
 
     assert reply.status_code == 200
 
@@ -537,7 +541,7 @@ def test_m14_an_unmarked_route_keeps_working_with_the_cookie(mcp: McpWorld) -> N
 def test_m15_generate_queues_a_job_for_the_person_as_the_api_queues_it(mcp: McpWorld) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
 
-    with _worker_ready() as pool:
+    with worker_ready() as pool:
         reply = mcp.call("generate_song", {"song_id": "song-alices", "model": "sft"})
 
     assert (reply.is_error, reply.json()["type"]) == (False, "generate")
@@ -553,7 +557,7 @@ def test_m16_generate_for_another_persons_song_or_a_song_without_lyrics_queues_n
     mcp.world.seed_take(TokenWorld.BOB, "bobs")
     bare = mcp.seed_song_without_lyrics(TokenWorld.ALICE)
 
-    with _worker_ready() as pool:
+    with worker_ready() as pool:
         others = mcp.call("generate_song", {"song_id": "song-bobs", "model": "sft"})
         empty = mcp.call("generate_song", {"song_id": bare, "model": "sft"})
 
@@ -572,7 +576,7 @@ def test_m17_generate_past_the_persons_limit_gets_the_apis_refusal_and_no_job(
     world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, generation_limit=1)
     world.world.seed_take(TokenWorld.ALICE, "alices")
 
-    with _worker_ready():
+    with worker_ready():
         first = world.call("generate_song", {"song_id": "song-alices", "model": "sft"})
         second = world.call("generate_song", {"song_id": "song-alices", "model": "sft"})
         api = world.world.client.post(
