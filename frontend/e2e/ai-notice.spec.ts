@@ -4,7 +4,7 @@
 // so the notice is judged at 1440 and at 390: in view, never clipped.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants';
+import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import { EDITOR_VIEW_COWRITER_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
 import {
 	collectionActionLabel,

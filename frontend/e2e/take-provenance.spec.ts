@@ -7,7 +7,6 @@
 // teardown, because a dirty page raises the browser's unload prompt.
 
 import { expect, test, type Page, type Route } from '@playwright/test';
-import { openNowPlayingLabel } from '../src/lib/constants';
 import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
@@ -16,7 +15,7 @@ import {
 } from '../src/lib/constants/song';
 import { TAKE_PROVENANCE_REPAINT_PREFIX } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
-import { foldedGroupLabel } from '../src/lib/constants/now-playing';
+import { foldedGroupLabel, openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import {
 	createAlbum,
 	FIRST_VERSION_TAKE_COUNT,

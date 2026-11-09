@@ -752,7 +752,7 @@ non-public page navigates the whole window to `/login/oidc?next=…`; the signed
 page `/login` starts nothing by itself and the public paths never redirect.
 
 Outside its `*.test.ts` files, `lib/api` imports only itself, packages,
-`#lib/constants`, `#lib/routes/` and `#lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
+`#lib/constants/`, `#lib/routes/` and `#lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
 and no `import()` or `import.meta`; `eslint.config.js` enforces it (#925 G2).
 
 Only `lib/api/fetch.ts` calls global `fetch` or sends an `XMLHttpRequest` (`apiUpload`). Only `lib/api` opens a server stream (`openJobEventStream` in `lib/api/jobs.ts`, `openResourceEventStream` in `lib/api/resourceEvents.ts`), and nothing outside `lib/api` sends a beacon; other modules reach the server through a `lib/api` function. The named exceptions are `lib/services/audioPlayer.svelte.ts` for media reads (it hands the deck its fetch function), and `service-worker.ts` for its cache. A stream failure carries no HTTP status, so it reaches neither `sessionLost` nor `rateLimited` by itself: the stores keep each stream's reconnection, `stores/resourceSync.ts` asks its auth probe what a failure means, and `stores/jobs.ts` learns of a lost session from its REST re-read once a job's retry budget is spent. Tests may stub the network boundary. `eslint.config.js` enforces this, including the `window.`, `globalThis.` and `self.` forms (#925 G3).

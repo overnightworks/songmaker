@@ -259,7 +259,7 @@ latent bug sat in their shared code path too. Fixed by reading
 `libraryBrowse`'s own final status instead, the same way the branch beside it
 already did.
 
-Selectors are roles and accessible names, imported from `src/lib/constants.ts`
+Selectors are roles and accessible names, imported from the domain modules under `src/lib/constants/`
 — never `data-testid`. A flow that cannot find an element by its accessible
 name has found an accessibility defect. One narrow structural exception is
 asserting `.settings-sidebar` is gone: the old second column has no accessible

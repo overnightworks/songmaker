@@ -16,7 +16,6 @@ import {
 	LIBRARY_WALL_ORDER_LABELS,
 	type LibraryWallOrder
 } from '../src/lib/constants/library';
-import { NOW_PLAYING_SWIPE_RISE_PX, openNowPlayingLabel } from '../src/lib/constants';
 import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
 import { TAKE_OVERFLOW_LABEL, TAKE_PLAYLIST_LABEL } from '../src/lib/constants/take';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
@@ -48,7 +47,9 @@ import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 	NOW_PLAYING_TAKE_TAB,
-	NOW_PLAYING_CLOSE
+	NOW_PLAYING_CLOSE,
+	NOW_PLAYING_SWIPE_RISE_PX,
+	openNowPlayingLabel
 } from '../src/lib/constants/now-playing';
 import {
 	accountCircle,
@@ -1029,25 +1030,21 @@ test(
 );
 
 /** Plays one of the attempt's playlist songs from that playlist, as the player reports it. */
+async function postListenOfSeededSong(page: Page, data?: { playlist_id: string }): Promise<void> {
+	const listen = await page.request.post(
+		`/api/songs/${readSeededLibrary().listenReorderSongs.desktop.id}/listen`,
+		{ headers: await sameOriginHeaders(page), data }
+	);
+	expect(listen.status()).toBe(200);
+}
+
 async function listenInPlaylist(page: Page, seeded: SeededPlaylist): Promise<void> {
 	const playlists = await page.request.get('/api/playlists');
 	expect(playlists.status()).toBe(200);
 	const listed = (await playlists.json()) as Array<{ id: string; slug: string }>;
 	const played = listed.find((candidate) => candidate.slug === seeded.slug);
 	if (!played) throw new Error(`Missing seeded playlist ${seeded.slug}`);
-	const listen = await page.request.post(
-		`/api/songs/${readSeededLibrary().listenReorderSongs.desktop.id}/listen`,
-		{ headers: await sameOriginHeaders(page), data: { playlist_id: played.id } }
-	);
-	expect(listen.status()).toBe(200);
-}
-
-async function listenInSeededAlbum(page: Page): Promise<void> {
-	const listen = await page.request.post(
-		`/api/songs/${readSeededLibrary().listenReorderSongs.desktop.id}/listen`,
-		{ headers: await sameOriginHeaders(page) }
-	);
-	expect(listen.status()).toBe(200);
+	await postListenOfSeededSong(page, { playlist_id: played.id });
 }
 
 test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phone counts and desktop listen timestamps under Last played and keeps the choice across reload, shows no Listen list, and leaves the one on Home alone', async ({
@@ -1060,7 +1057,7 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 	const firstLine = tiles.first().locator('.tile-subtitle');
 	const listenTitles = listenRegion(page).locator('.library-row .tile-title');
 	const library = readSeededLibrary();
-	await listenInSeededAlbum(page);
+	await postListenOfSeededSong(page);
 
 	await page.goto(HOME_PATH);
 	await expect(listenTitles.first()).toBeVisible();

@@ -225,7 +225,7 @@ request budget per shell.
   relying party; only the token request and the key set come from
   `tests/support/fake_oidc_issuer.py`, which signs ID tokens with a test RSA key, so
   every token is verified as in production.
-- **Selectors are roles and accessible names** from `frontend/src/lib/constants.ts`.
+- **Selectors are roles and accessible names** from the domain modules under `frontend/src/lib/constants/`.
   No `data-testid`. A row that cannot be found by its accessible name is an
   accessibility defect, not a selector problem.
 - **Locally, never point them at port 8080** — that is the operator's stack.

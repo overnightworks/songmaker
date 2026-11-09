@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';

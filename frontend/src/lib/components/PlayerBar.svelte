@@ -53,8 +53,7 @@
 		LIBRARY_QUEUE_PLAY_DETAIL,
 		LIBRARY_QUEUE_RETRY_DETAIL
 	} from '#lib/constants/queue.ts';
-	import { MINI_PLAYER_WITHOUT_COVER_MEDIA, openNowPlayingLabel } from '#lib/constants.ts';
-	import { REDUCED_MOTION_MEDIA } from '#lib/constants/media.ts';
+	import { REDUCED_MOTION_MEDIA, MINI_PLAYER_WITHOUT_COVER_MEDIA } from '#lib/constants/media.ts';
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import OfflineStrip from './OfflineStrip.svelte';
 	import {
@@ -69,7 +68,8 @@
 		nowPlayingTakeLabel,
 		MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND,
 		MINI_PLAYER_TITLE_SCROLL_REST_MS,
-		MINI_PLAYER_TITLE_SCROLL_RETURN_MS
+		MINI_PLAYER_TITLE_SCROLL_RETURN_MS,
+		openNowPlayingLabel
 	} from '#lib/constants/now-playing.ts';
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';

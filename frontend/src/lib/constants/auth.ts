@@ -1,5 +1,3 @@
-// Auth copy kept apart from lib/constants.ts (issue #117).
-
 // The route a sign-out posts to; the server answers the page that ends the identity provider's session.
 export const LOGOUT_ADDRESS = '/auth/logout';
 

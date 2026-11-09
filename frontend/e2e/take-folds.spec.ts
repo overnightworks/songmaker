@@ -6,7 +6,6 @@
 // makes v3, which folds v2.
 
 import { expect, test, type Page, type Route } from '@playwright/test';
-import { openNowPlayingLabel } from '../src/lib/constants';
 import {
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
@@ -24,7 +23,8 @@ import {
 	foldedGroupLabel,
 	selectedCountLabel,
 	TAKE_SELECT_ALL_UNKEPT_LABEL,
-	NOW_PLAYING_CLOSE
+	NOW_PLAYING_CLOSE,
+	openNowPlayingLabel
 } from '../src/lib/constants/now-playing';
 import { appBar, sameOriginHeaders, ONLY_IN_SHELL, workspace } from './helpers';
 import {

@@ -48,7 +48,7 @@
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_ALBUM_ITEM_CLASS, revealOpenRailItem } from './rail-item-selector';
 
-	// Local to this component rather than promoted to constants.ts: nothing
+	// Local to this component rather than promoted to a constants module: nothing
 	// else reads this key, matching how RailGroup's own groupId is already
 	// inlined per caller (see RailSettings.svelte) rather than centralized.
 	const LIBRARY_OPEN_STORAGE_KEY = 'songmaker.rail-library-open';
