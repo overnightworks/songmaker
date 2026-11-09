@@ -44,7 +44,10 @@ def api_rate_generation(
     session: Session = Depends(get_db_session),
 ) -> RateResponse:
     check_generation_access(session, gen_id, user)
-    save_rating(session, gen_id, req.rating, req.notes)
+    try:
+        save_rating(session, gen_id, req.rating, req.notes)
+    except ValueError:
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     session.commit()
     return RateResponse(generation_id=gen_id, rating=req.rating)
 
