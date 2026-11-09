@@ -34,28 +34,6 @@ def _auth_headers() -> dict[str, str]:
     return {INTERNAL_TOKEN_HEADER: "test-internal-token"}
 
 
-def _training_request_payload(**overrides: object) -> dict[str, object]:
-    payload = {
-        "lokr_linear_dim": 64,
-        "lokr_linear_alpha": 128,
-        "lokr_factor": -1,
-        "lokr_decompose_both": False,
-        "lokr_use_tucker": False,
-        "lokr_use_scalar": False,
-        "lokr_weight_decompose": True,
-        "learning_rate": 0.03,
-        "train_epochs": 500,
-        "train_batch_size": 1,
-        "gradient_accumulation": 4,
-        "save_every_n_epochs": 5,
-        "training_shift": 3.0,
-        "training_seed": 42,
-        "gradient_checkpointing": False,
-        "poll_interval_seconds": 5.0,
-    }
-    return {**payload, **overrides}
-
-
 def test_train_lora_rejects_missing_training_configuration(tmp_path: Path, train_lora_deps) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
@@ -76,7 +54,9 @@ def test_train_lora_rejects_missing_training_configuration(tmp_path: Path, train
     assert response.status_code == 422
 
 
-def test_train_lora_requires_loaded_mode(tmp_path: Path, train_lora_deps) -> None:
+def test_train_lora_requires_loaded_mode(
+    tmp_path: Path, train_lora_deps, train_body
+) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
     dataset_dir.mkdir()
@@ -84,7 +64,7 @@ def test_train_lora_requires_loaded_mode(tmp_path: Path, train_lora_deps) -> Non
     with TestClient(app) as client:
         resp = client.post(
             "/tasks/train_lora",
-            json=_training_request_payload(
+            json=train_body(
                 mode="sft",
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
@@ -157,7 +137,7 @@ def test_gpu_hold_endpoints_accept_only_the_current_token(tmp_path: Path, train_
 
 
 def test_worker_settings_require_a_nonempty_internal_token(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from pydantic import ValidationError
 
@@ -180,7 +160,9 @@ def test_worker_settings_require_a_nonempty_internal_token(
     assert settings.songmaker_internal_token.get_secret_value() == "token"
 
 
-def test_train_lora_501_when_runner_missing(tmp_path: Path, train_lora_deps) -> None:
+def test_train_lora_501_when_runner_missing(
+    tmp_path: Path, train_lora_deps, train_body
+) -> None:
     deps = train_lora_deps(tmp_path, with_train_runner=False)
     dataset_dir = deps.shared_audio_root / "dataset"
     dataset_dir.mkdir()
@@ -189,7 +171,7 @@ def test_train_lora_501_when_runner_missing(tmp_path: Path, train_lora_deps) -> 
     with TestClient(app) as client:
         resp = client.post(
             "/tasks/train_lora",
-            json=_training_request_payload(
+            json=train_body(
                 mode="sft",
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
@@ -200,7 +182,9 @@ def test_train_lora_501_when_runner_missing(tmp_path: Path, train_lora_deps) -> 
     assert resp.status_code == 501
 
 
-def test_train_lora_happy_path_emits_sse_events(tmp_path: Path, train_lora_deps) -> None:
+def test_train_lora_happy_path_emits_sse_events(
+    tmp_path: Path, train_lora_deps, train_body
+) -> None:
     import json
 
     deps = train_lora_deps(tmp_path)
@@ -218,7 +202,7 @@ def test_train_lora_happy_path_emits_sse_events(tmp_path: Path, train_lora_deps)
         assert hold.status_code == 200
         resp = client.post(
             "/tasks/train_lora",
-            json=_training_request_payload(
+            json=train_body(
                 mode="sft",
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "out"),
@@ -257,7 +241,7 @@ def test_train_lora_happy_path_emits_sse_events(tmp_path: Path, train_lora_deps)
 
 
 def test_train_lora_renews_before_creating_its_task_and_releases_after_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps, train_body
 ) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
@@ -283,7 +267,7 @@ def test_train_lora_renews_before_creating_its_task_and_releases_after_success(
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
                 hold_token="hold-token",
-                **_training_request_payload(),
+                **train_body(),
             )
         )
         assert renewal_task_created.is_set()
@@ -385,7 +369,7 @@ def test_handover_does_not_report_a_claim_without_a_task(tmp_path: Path, train_l
 
 
 def test_train_lora_allows_only_one_concurrent_handover_for_a_hold_token(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps, train_body
 ) -> None:
     from fastapi import HTTPException
 
@@ -407,7 +391,7 @@ def test_train_lora_allows_only_one_concurrent_handover_for_a_hold_token(
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
             hold_token="hold-token",
-            **_training_request_payload(),
+            **train_body(),
         )
         responses = await asyncio.gather(
             endpoint(request),
@@ -430,7 +414,7 @@ def test_train_lora_allows_only_one_concurrent_handover_for_a_hold_token(
 
 
 def test_train_lora_releases_handover_claim_after_setup_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps, train_body
 ) -> None:
     from fastapi import HTTPException
 
@@ -452,7 +436,7 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
             hold_token="hold-token",
-            **_training_request_payload(),
+            **train_body(),
         )
         original_create = deps.task_store.create
 
@@ -493,7 +477,7 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
 
 
 def test_train_lora_releases_handover_claim_after_connection_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps, train_body
 ) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
@@ -516,7 +500,7 @@ def test_train_lora_releases_handover_claim_after_connection_error(
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
             hold_token="hold-token",
-            **_training_request_payload(),
+            **train_body(),
         )
         with pytest.raises(ConnectionError, match="Redis unavailable"):
             await endpoint(request)
@@ -533,7 +517,7 @@ def test_train_lora_releases_handover_claim_after_connection_error(
 
 
 def test_train_lora_releases_handover_claim_when_setup_is_cancelled(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps, train_body
 ) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
@@ -560,7 +544,7 @@ def test_train_lora_releases_handover_claim_when_setup_is_cancelled(
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
             hold_token="hold-token",
-            **_training_request_payload(),
+            **train_body(),
         )
         handover = asyncio.create_task(endpoint(request))
         await renewal_started.wait()
@@ -580,7 +564,7 @@ def test_train_lora_releases_handover_claim_when_setup_is_cancelled(
 
 
 def test_train_lora_releases_the_hold_when_the_runner_fails(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps, train_body
 ) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
@@ -605,7 +589,7 @@ def test_train_lora_releases_the_hold_when_the_runner_fails(
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
                 hold_token="hold-token",
-                **_training_request_payload(),
+                **train_body(),
             )
         )
         with pytest.raises(RuntimeError, match="training failed"):
@@ -618,7 +602,7 @@ def test_train_lora_releases_the_hold_when_the_runner_fails(
 
 
 def test_train_lora_releases_the_hold_when_the_runner_is_cancelled(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps, train_body
 ) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
@@ -646,7 +630,7 @@ def test_train_lora_releases_the_hold_when_the_runner_is_cancelled(
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
                 hold_token="hold-token",
-                **_training_request_payload(),
+                **train_body(),
             )
         )
         background_task = asyncio.create_task(spawned[0])
@@ -662,7 +646,7 @@ def test_train_lora_releases_the_hold_when_the_runner_is_cancelled(
 
 
 def test_worker_renewal_failure_releases_hold_and_cache_before_background_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps, train_body
 ) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
@@ -704,7 +688,7 @@ def test_worker_renewal_failure_releases_hold_and_cache_before_background_error(
                 dataset_dir=str(dataset_dir),
                 output_dir=str(deps.shared_audio_root / "output"),
                 hold_token="hold-token",
-                **_training_request_payload(),
+                **train_body(),
             )
         )
         assert response.task_id
@@ -725,7 +709,7 @@ def test_worker_renewal_failure_releases_hold_and_cache_before_background_error(
 
 
 def test_train_lora_rejects_an_expired_hold_before_returning_a_task_id(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, train_lora_deps, train_body
 ) -> None:
     from fastapi import HTTPException
 
@@ -750,7 +734,7 @@ def test_train_lora_rejects_an_expired_hold_before_returning_a_task_id(
             dataset_dir=str(dataset_dir),
             output_dir=str(deps.shared_audio_root / "output"),
             hold_token="hold-token",
-            **_training_request_payload(),
+            **train_body(),
         )
         with pytest.raises(HTTPException) as exc_info:
             await endpoint(request)
@@ -764,7 +748,7 @@ def test_train_lora_rejects_an_expired_hold_before_returning_a_task_id(
     _run(scenario())
 
 
-def test_train_lora_pins_mode_from_eviction(tmp_path: Path, train_lora_deps) -> None:
+def test_train_lora_pins_mode_from_eviction(tmp_path: Path, train_lora_deps, train_body) -> None:
     """A training task in flight increments the cache's in-use count so
     the mode is protected from eviction."""
     deps = train_lora_deps(tmp_path)
@@ -810,7 +794,7 @@ def test_train_lora_pins_mode_from_eviction(tmp_path: Path, train_lora_deps) -> 
                     dataset_dir="/x",
                     output_dir="/y",
                     hold_token="test-token",
-                    **_training_request_payload(),
+                    **train_body(),
                 ),
                 port=loaded.port,
                 checkpoint_dir=deps.checkpoint_dir,
@@ -826,7 +810,7 @@ def test_train_lora_pins_mode_from_eviction(tmp_path: Path, train_lora_deps) -> 
     _run(scenario())
 
 
-def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
+def test_default_train_lora_runner_dispatches(tmp_path: Path, train_body) -> None:
     """Sanity test that the real default_train_lora_runner is wired to
     an AceStepTrainingClient; patch the client methods to avoid HTTP."""
     from unittest.mock import patch
@@ -855,7 +839,7 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
         dataset_dir=str(dataset_dir),
         output_dir=str(output_dir),
         hold_token="test-token",
-        **_training_request_payload(train_epochs=1, poll_interval_seconds=0.001),
+        **train_body(train_epochs=1, poll_interval_seconds=0.001),
     )
 
     preprocess_states = iter(
@@ -968,7 +952,7 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
     assert not (tmp_path / "safe-root" / "training" / task_id).exists()
 
 
-def test_default_train_lora_runner_fails_on_preprocess_error(tmp_path: Path) -> None:
+def test_default_train_lora_runner_fails_on_preprocess_error(tmp_path: Path, train_body) -> None:
     from unittest.mock import patch
 
     from acestep_engine.training_client import (
@@ -986,7 +970,7 @@ def test_default_train_lora_runner_fails_on_preprocess_error(tmp_path: Path) -> 
         dataset_dir=str(source_dir),
         output_dir=str(tmp_path / "out"),
         hold_token="test-token",
-        **_training_request_payload(train_epochs=1, poll_interval_seconds=0.001),
+        **train_body(train_epochs=1, poll_interval_seconds=0.001),
     )
     with (
         patch(
@@ -1033,7 +1017,9 @@ def test_default_train_lora_runner_fails_on_preprocess_error(tmp_path: Path) -> 
     assert not (tmp_path / "safe-root" / "training" / task_id).exists()
 
 
-def test_default_train_lora_runner_fails_on_zero_samples(tmp_path: Path) -> None:
+def test_default_train_lora_runner_fails_on_zero_samples(
+    tmp_path: Path, train_body
+) -> None:
     from unittest.mock import patch
 
     from acestep_engine.training_client import ScanDatasetResult
@@ -1047,7 +1033,7 @@ def test_default_train_lora_runner_fails_on_zero_samples(tmp_path: Path) -> None
         dataset_dir=str(source_dir),
         output_dir=str(tmp_path / "out"),
         hold_token="test-token",
-        **_training_request_payload(train_epochs=1, poll_interval_seconds=0.001),
+        **train_body(train_epochs=1, poll_interval_seconds=0.001),
     )
     with (
         patch(
@@ -1089,9 +1075,7 @@ def test_default_train_lora_runner_fails_on_zero_samples(tmp_path: Path) -> None
     ],
 )
 def test_train_lora_rejects_unsafe_shared_paths_before_creating_task(
-    tmp_path: Path,
-    invalid_path: str,
-    train_lora_deps,
+    tmp_path: Path, invalid_path: str, train_lora_deps, train_body
 ) -> None:
     deps = train_lora_deps(tmp_path)
     dataset_dir = deps.shared_audio_root / "dataset"
@@ -1123,7 +1107,7 @@ def test_train_lora_rejects_unsafe_shared_paths_before_creating_task(
     with TestClient(app) as client:
         response = client.post(
             "/tasks/train_lora",
-            json=_training_request_payload(
+            json=train_body(
                 mode="sft",
                 dataset_dir=str(dataset_path),
                 output_dir=str(output_path),
@@ -1137,7 +1121,7 @@ def test_train_lora_rejects_unsafe_shared_paths_before_creating_task(
 
 
 def test_cancellation_waits_for_staging_copy_before_workspace_cleanup(
-    tmp_path: Path,
+    tmp_path: Path, train_body
 ) -> None:
     from unittest.mock import patch
 
@@ -1151,7 +1135,7 @@ def test_cancellation_waits_for_staging_copy_before_workspace_cleanup(
         dataset_dir=str(dataset_dir),
         output_dir=str(shared_root / "training_tmp"),
         hold_token="test-token",
-        **_training_request_payload(train_epochs=1, poll_interval_seconds=0.001),
+        **train_body(train_epochs=1, poll_interval_seconds=0.001),
     )
     copy_started = threading.Event()
     copy_release = threading.Event()

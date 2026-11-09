@@ -25,6 +25,7 @@ from acestep_worker.wrapper import WorkerDeps, create_app, default_generate_runn
 def real_generate_worker(tmp_path: Path):
     """Use the public dependency seam while retaining the production runner."""
     with acestep_http() as boundary:
+
         async def loader(mode: str) -> LoadedModel:
             return LoadedModel(mode=mode, handle="test-model", port=boundary.port)
 
@@ -43,7 +44,8 @@ def real_generate_worker(tmp_path: Path):
         async def generate(client):
             completed.clear()
             response = await client.post(
-                "/generate", json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
+                "/generate",
+                json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
             )
             assert response.status_code == 200
             await asyncio.wait_for(completed.wait(), timeout=10)
@@ -57,7 +59,8 @@ def real_generate_worker(tmp_path: Path):
         async def worker():
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=create_app(deps)),
-                base_url="http://worker", headers=INTERNAL_HEADERS,
+                base_url="http://worker",
+                headers=INTERNAL_HEADERS,
             ) as client:
                 loaded = await client.post("/load_model", json={"mode": "sft"})
                 assert loaded.status_code == 200
@@ -156,3 +159,30 @@ async def _heartbeat_state(deps: WorkerDeps) -> dict[str, Any]:
 @pytest.fixture
 def train_lora_deps() -> Callable[..., WorkerDeps]:
     return _build_train_lora_deps
+
+
+def _train_body(**overrides: object) -> dict[str, object]:
+    payload = {
+        "lokr_linear_dim": 64,
+        "lokr_linear_alpha": 128,
+        "lokr_factor": -1,
+        "lokr_decompose_both": False,
+        "lokr_use_tucker": False,
+        "lokr_use_scalar": False,
+        "lokr_weight_decompose": True,
+        "learning_rate": 0.03,
+        "train_epochs": 500,
+        "train_batch_size": 1,
+        "gradient_accumulation": 4,
+        "save_every_n_epochs": 5,
+        "training_shift": 3.0,
+        "training_seed": 42,
+        "gradient_checkpointing": False,
+        "poll_interval_seconds": 5.0,
+    }
+    return {**payload, **overrides}
+
+
+@pytest.fixture
+def train_body() -> Callable[..., dict[str, object]]:
+    return _train_body

@@ -31,7 +31,9 @@ _CLIENT = "acestep_engine.training_client.AceStepTrainingClient"
 _WORKSPACE_PARENT = Path("safe-root") / "training"
 
 
-def _request(tmp_path: Path) -> TrainLoraRequest:
+def _request(
+    tmp_path: Path, train_body: Callable[..., dict[str, object]]
+) -> TrainLoraRequest:
     dataset_dir = tmp_path / "source"
     dataset_dir.mkdir(exist_ok=True)
     return TrainLoraRequest(
@@ -39,22 +41,7 @@ def _request(tmp_path: Path) -> TrainLoraRequest:
         dataset_dir=str(dataset_dir),
         output_dir=str(tmp_path / "out"),
         hold_token="test-token",
-        lokr_linear_dim=64,
-        lokr_linear_alpha=128,
-        lokr_factor=-1,
-        lokr_decompose_both=False,
-        lokr_use_tucker=False,
-        lokr_use_scalar=False,
-        lokr_weight_decompose=True,
-        learning_rate=0.03,
-        train_epochs=1,
-        train_batch_size=1,
-        gradient_accumulation=4,
-        save_every_n_epochs=5,
-        training_shift=3.0,
-        training_seed=42,
-        gradient_checkpointing=False,
-        poll_interval_seconds=0.001,
+        **train_body(train_epochs=1, poll_interval_seconds=0.001),
     )
 
 
@@ -88,7 +75,9 @@ def _training_fork(**overrides: Any) -> Iterator[None]:
         yield
 
 
-def _run_runner(tmp_path: Path, **overrides: Any) -> tuple[TaskSnapshot, Path]:
+def _run_runner(
+    tmp_path: Path, train_body: Callable[..., dict[str, object]], **overrides: Any
+) -> tuple[TaskSnapshot, Path]:
     async def scenario() -> tuple[TaskSnapshot, Path]:
         task_store = TaskStore()
         task_id = await task_store.create("train_lora", train_epochs=1)
@@ -96,7 +85,7 @@ def _run_runner(tmp_path: Path, **overrides: Any) -> tuple[TaskSnapshot, Path]:
             await default_train_lora_runner(
                 task_store,
                 task_id,
-                request=_request(tmp_path),
+                request=_request(tmp_path, train_body),
                 port=8001,
                 checkpoint_dir=tmp_path / "safe-root",
                 training_workspace_dirname="training",
@@ -125,7 +114,9 @@ def test_a_held_worker_refuses_a_second_reservation(tmp_path: Path, train_lora_d
     assert second.status_code == 409
 
 
-def test_a_preprocess_poll_without_a_total_does_not_fail_the_training(tmp_path: Path) -> None:
+def test_a_preprocess_poll_without_a_total_does_not_fail_the_training(
+    tmp_path: Path, train_body
+) -> None:
     polls = iter(
         [
             PreprocessStatus(task_id="pre", status="running"),
@@ -133,7 +124,9 @@ def test_a_preprocess_poll_without_a_total_does_not_fail_the_training(tmp_path: 
         ]
     )
 
-    snapshot, workspace = _run_runner(tmp_path, poll_preprocess=lambda task_id: next(polls))
+    snapshot, workspace = _run_runner(
+        tmp_path, train_body, poll_preprocess=lambda task_id: next(polls)
+    )
 
     assert snapshot.state == "done"
     assert not workspace.exists()
@@ -141,9 +134,11 @@ def test_a_preprocess_poll_without_a_total_does_not_fail_the_training(tmp_path: 
 
 def test_a_training_error_from_the_fork_fails_the_task_and_removes_the_workspace(
     tmp_path: Path,
+    train_body,
 ) -> None:
     snapshot, workspace = _run_runner(
         tmp_path,
+        train_body,
         poll_training=lambda: TrainingStatus(is_training=False, error="out of memory"),
     )
 
@@ -177,9 +172,12 @@ def test_a_training_error_from_the_fork_fails_the_task_and_removes_the_workspace
     ],
 )
 def test_an_export_that_breaks_the_forks_contract_fails_the_task(
-    tmp_path: Path, export: Callable[[str, str], ExportResult], expected_error: str
+    tmp_path: Path,
+    train_body,
+    export: Callable[[str, str], ExportResult],
+    expected_error: str,
 ) -> None:
-    snapshot, workspace = _run_runner(tmp_path, export_training=export)
+    snapshot, workspace = _run_runner(tmp_path, train_body, export_training=export)
 
     assert snapshot.state == "error"
     assert expected_error in (snapshot.error or "")
@@ -187,9 +185,12 @@ def test_an_export_that_breaks_the_forks_contract_fails_the_task(
     assert not workspace.exists()
 
 
-def test_a_failed_training_still_ends_when_the_child_cannot_be_stopped(tmp_path: Path) -> None:
+def test_a_failed_training_still_ends_when_the_child_cannot_be_stopped(
+    tmp_path: Path, train_body
+) -> None:
     snapshot, workspace = _run_runner(
         tmp_path,
+        train_body,
         poll_training=lambda: TrainingStatus(is_training=False, error="boom"),
         stop_training=_failing("child is gone"),
     )
@@ -199,7 +200,9 @@ def test_a_failed_training_still_ends_when_the_child_cannot_be_stopped(tmp_path:
     assert not workspace.exists()
 
 
-def test_a_cancelled_training_still_ends_when_the_child_cannot_be_stopped(tmp_path: Path) -> None:
+def test_a_cancelled_training_still_ends_when_the_child_cannot_be_stopped(
+    tmp_path: Path, train_body
+) -> None:
     training_polled = threading.Event()
 
     def keep_training() -> TrainingStatus:
@@ -214,7 +217,7 @@ def test_a_cancelled_training_still_ends_when_the_child_cannot_be_stopped(tmp_pa
                 default_train_lora_runner(
                     task_store,
                     task_id,
-                    request=_request(tmp_path),
+                    request=_request(tmp_path, train_body),
                     port=8001,
                     checkpoint_dir=tmp_path / "safe-root",
                     training_workspace_dirname="training",
@@ -241,7 +244,11 @@ def test_a_cancelled_training_still_ends_when_the_child_cannot_be_stopped(tmp_pa
     ids=["missing", "busy"],
 )
 def test_a_workspace_that_cannot_be_removed_does_not_hide_the_failed_task(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, removal_error: OSError, is_reported: bool
+    tmp_path: Path,
+    train_body,
+    caplog: pytest.LogCaptureFixture,
+    removal_error: OSError,
+    is_reported: bool,
 ) -> None:
     real_rmtree = shutil.rmtree
 
@@ -253,7 +260,9 @@ def test_a_workspace_that_cannot_be_removed_does_not_hide_the_failed_task(
 
     with patch("acestep_worker.wrapper.shutil.rmtree", side_effect=rmtree):
         snapshot, _ = _run_runner(
-            tmp_path, scan_dataset=lambda path: ScanDatasetResult(num_samples=0)
+            tmp_path,
+            train_body,
+            scan_dataset=lambda path: ScanDatasetResult(num_samples=0),
         )
 
     assert snapshot.state == "error"
