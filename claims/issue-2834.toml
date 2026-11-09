@@ -1,8 +1,0 @@
-claim_id = "0dea060ddc514beda00d096fb44b0eb3"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "4983c7a5c9d674cb12070f2fc370a89171a92dce"
-branch = "claude/issue-2834-take-judging-module"
-scope = [".importlinter", "docs/architecture.md", "scripts/dead-symbols.allow", "src/songmaker_cli/api.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/take_judging_api.py", "tests/songmaker_cli/test_api.py"]
-opened_commit = "b594d6698fe4fd775bd5505c0b41e905c1577eca"
-whole_reason = "One move: the new module, its registration and every file that pins the moved names land together, or the app or the dead-symbol check breaks."
