@@ -10,7 +10,6 @@ from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.auth import create_session
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.mcp_server import tools
-from songmaker_cli.settings import get_settings
 
 
 @pytest.fixture
@@ -41,18 +40,33 @@ def test_suggest_album_cover_queues_a_cover_job(db_session):
     assert (job.type, job.album_id) == (JobType.COVER, "alice-album")
 
 
+def test_an_eleventh_cover_suggestion_of_a_day_queues_a_job(db_session):
+    owner = album_owner(db_session)
+    for number in range(11):
+        db_session.add(Job(
+            id=f"cover-job-{number}", type=JobType.COVER, status=JobStatus.COMPLETED,
+            album_id="alice-album", user_id=owner.id,
+        ))
+    db_session.commit()
+
+    result = tools.tool_suggest_album_cover(
+        db_session, owner, album_id="alice-album", session_id=_signed_in(db_session, owner.id),
+    )
+
+    assert result.status == JobStatus.QUEUED
+    assert db_session.query(Job).filter_by(id=result.job_id).one().type == JobType.COVER
+
+
 @pytest.mark.parametrize(
-    ("album_id", "existing_status", "daily_limit", "message"),
+    ("album_id", "existing_status", "message"),
     [
-        ("missing", None, None, "Album not found"),
-        ("alice-album", JobStatus.QUEUED, None, "Cover suggestions are already being generated"),
-        ("alice-album", JobStatus.COMPLETED, "1", "Daily cover suggestion limit reached"),
+        ("missing", None, "Album not found"),
+        ("alice-album", JobStatus.QUEUED, "Cover suggestions are already being generated"),
     ],
 )
 def test_suggest_album_cover_surfaces_the_admission_owner_errors(
-    db_session, monkeypatch: pytest.MonkeyPatch, album_id, existing_status, daily_limit, message,
+    db_session, album_id, existing_status, message,
 ):
-    """1301-F3-C1-COUNT: only produced suggestions exhaust admission."""
     owner = album_owner(db_session)
     if existing_status is not None:
         db_session.add(Job(
@@ -60,18 +74,12 @@ def test_suggest_album_cover_surfaces_the_admission_owner_errors(
             album_id="alice-album", user_id=owner.id,
         ))
         db_session.commit()
-    if daily_limit is not None:
-        monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", daily_limit)
-        get_settings.cache_clear()
     session_id = _signed_in(db_session, owner.id)
 
-    try:
-        with pytest.raises(tools.MCPToolError, match=message):
-            tools.tool_suggest_album_cover(
-                db_session, owner, album_id=album_id, session_id=session_id,
-            )
-    finally:
-        get_settings.cache_clear()
+    with pytest.raises(tools.MCPToolError, match=message):
+        tools.tool_suggest_album_cover(
+            db_session, owner, album_id=album_id, session_id=session_id,
+        )
 
 
 def test_suggest_album_cover_refuses_a_caller_without_a_browser_session(db_session):
