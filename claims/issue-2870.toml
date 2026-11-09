@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "7ddef05b1a95fa54ac48e60b9b0a51082c839b23"
 branch = "claude/issue-2870-first-writer-races"
-scope = ["src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/memory.py", "src/songmaker_cli/db/queries/sharing.py", "src/songmaker_cli/take_judging_api.py", "tests/songmaker_cli/test_first_writer_races_postgres.py"]
+scope = ["src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/memory.py", "src/songmaker_cli/db/queries/sharing.py", "src/songmaker_cli/take_judging_api.py", "tests/songmaker_cli/test_first_writer_races_postgres.py", "tests/songmaker_cli/test_take_judging_api_first_writer_races_postgres.py"]
 opened_commit = "7cefa910b248818bcfeef3811dffbf40b8047334"
 whole_reason = "One class of defect, an unlocked check-then-write at the store, fixed at each owner and proven by one harness module."
