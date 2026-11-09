@@ -215,6 +215,11 @@ rule = "test-layout"
 reason = "a structural rule over tests/conftest.py, which mirrors no production module"
 
 [[layout.allow]]
+path = "tests/test_shard_selection.py"
+rule = "test-layout"
+reason = "proves the shard selection of tests/conftest.py, which lies outside every package"
+
+[[layout.allow]]
 path = "tests/monitoring/scripts/test_start_alertmanager.py"
 rule = "test-layout"
 reason = "proves monitoring/scripts/start_alertmanager.sh, which lies outside scripts/ and every package"
