@@ -423,22 +423,27 @@ def _the_admin_fills_own_containers_with_the_members_content(world: McpWorld) ->
     world.world.client.cookies.clear()
 
 
-@pytest.mark.parametrize(("tool", "arguments"), [
-    ("get_playlist", {"playlist_id": f"playlist-{ALICE}"}),
-    ("list_playlists", {}),
-    ("list_reference_uses", {"reference_id": f"reference-{ALICE}"}),
+@pytest.mark.parametrize(("tool", "arguments", "browser_path"), [
+    ("get_playlist", {"playlist_id": f"playlist-{ALICE}"}, f"/api/playlists/playlist-{ALICE}"),
+    ("list_playlists", {}, "/api/playlists"),
+    ("list_reference_uses", {"reference_id": f"reference-{ALICE}"},
+     f"/api/references/reference-{ALICE}/uses"),
 ], ids=["get_playlist", "list_playlists", "list_reference_uses"])
 def test_an_admins_agent_reads_none_of_a_members_content_in_the_admins_own_containers(
-    admins_world: McpWorld, tool: str, arguments: dict,
+    admins_world: McpWorld, tool: str, arguments: dict, browser_path: str,
 ) -> None:
     _the_admin_fills_own_containers_with_the_members_content(admins_world)
 
     reply = admins_world.call(tool, arguments, groups=_ADMIN_GROUPS)
+    seed_session(admins_world.world.client, "alice")
+    browser = admins_world.world.client.get(browser_path)
 
     assert reply.is_error is False
     assert ALICE in reply.text
     for members_content in (BOB, TokenWorld.BOB, BOBS_LYRICS):
         assert members_content not in reply.text
+    assert browser.status_code == 200
+    assert BOB in browser.text
 
 
 def test_an_admins_agent_reads_none_of_a_members_covers_in_a_played_playlist_of_the_admin(
@@ -453,28 +458,36 @@ def test_an_admins_agent_reads_none_of_a_members_covers_in_a_played_playlist_of_
         session.commit()
 
     reply = admins_world.call("get_library_listen", groups=_ADMIN_GROUPS)
+    seed_session(admins_world.world.client, "alice")
+    browser = admins_world.world.client.get("/api/library/listen")
 
     assert reply.is_error is False
     assert f"album-{ALICE}" in reply.text
     for members_content in (BOB, TokenWorld.BOB):
         assert members_content not in reply.text
+    assert browser.status_code == 200
+    mosaic = next(i for i in browser.json()["items"] if i["type"] == "playlist")["album_covers"]
+    assert any(BOB in cover["card"] for cover in mosaic)
 
 
+@pytest.mark.parametrize(
+    "job_type", [JobType.LOAD_MODEL_ON_WORKER, JobType.DOWNLOAD_MODEL_ON_WORKER],
+)
 def test_an_admins_agent_is_refused_the_admins_own_model_jobs_on_a_worker(
-    admins_world: McpWorld,
+    admins_world: McpWorld, job_type: JobType,
 ) -> None:
     with admins_world.world.factory() as session:
-        session.add(Job(id="load-model", type=JobType.LOAD_MODEL_ON_WORKER, status="queued",
+        session.add(Job(id="model-job", type=job_type, status="queued",
                         user_id=TokenWorld.ALICE))
         session.commit()
 
-    job = admins_world.call("get_job", {"job_id": "load-model"}, groups=_ADMIN_GROUPS)
-    cancel = admins_world.call("cancel_job", {"job_id": "load-model"}, groups=_ADMIN_GROUPS)
+    job = admins_world.call("get_job", {"job_id": "model-job"}, groups=_ADMIN_GROUPS)
+    cancel = admins_world.call("cancel_job", {"job_id": "model-job"}, groups=_ADMIN_GROUPS)
     seed_session(admins_world.world.client, "alice")
-    browser = admins_world.world.client.get("/api/jobs/load-model")
+    browser = admins_world.world.client.get("/api/jobs/model-job")
 
     assert (job.is_error, cancel.is_error) == (True, True)
-    assert ("load-model", "queued") in admins_world.rows_of(Job, "id", "status")
+    assert ("model-job", "queued") in admins_world.rows_of(Job, "id", "status")
     assert browser.status_code == 200
 
 
