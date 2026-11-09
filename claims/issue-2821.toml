@@ -1,0 +1,8 @@
+claim_id = "e979681216b04c34ae3712f1847de665"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "71b13335c213cd7846f6b6df8588930150551b20"
+branch = "claude/issue-2821-route-refusal-cells-admin-guard"
+scope = ["src/songmaker_cli/admin_api.py", "tests/songmaker_cli/test_admin_api_worker_refusals.py", "tests/songmaker_cli/test_generation_api_version_choice.py", "tests/songmaker_cli/test_jobs_api_stream_wall.py"]
+opened_commit = "ff00e2dfa3df19fe72799c0b8afab39806b247b7"
+whole_reason = "One coverage cut of three route modules: each cell and the deletion follow from the same trace, and each new test module exists because its sibling stands at a size row."
