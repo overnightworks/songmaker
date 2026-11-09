@@ -1,0 +1,7 @@
+claim_id = "578b07cc373e4b3494357d2d6d56c81b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "127768ca3e89251b7964a5f77c95fae6f957ccdd"
+branch = "claude/issue-2898-reference-link-list"
+scope = ["src/songmaker_cli/db/queries/reference_recordings.py", "tests/songmaker_cli/test_reference_api.py"]
+opened_commit = "cd48c96bfe26d29a364dd262d5d9511e721a4112"
