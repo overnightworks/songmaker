@@ -9,6 +9,7 @@ import pytest
 from support.worker_http_peer import WorkerScenario
 
 from acestep_worker.model_cache import LoadedModel
+from songmaker_cli.scheduler import worker_response_cause
 
 
 def _run(coro):
@@ -79,3 +80,18 @@ def test_generation_worker_peer_startup_stall_names_startup(generation_worker_pe
                 pytest.fail("startup must not complete")
 
     _run(exercise())
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "cause"),
+    [
+        (500, '{"detail": "model missing"}', "model missing"),
+        (502, "<html>Bad Gateway</html>", "<html>Bad Gateway</html>"),
+        (422, '[{"msg": "field required"}]', '[{"msg": "field required"}]'),
+        (500, '{"detail": ["not", "a", "string"]}', '{"detail": ["not", "a", "string"]}'),
+    ],
+)
+def test_worker_response_cause_is_the_string_detail_else_the_body(status, body, cause):
+    response = httpx.Response(status, text=body)
+
+    assert worker_response_cause(response) == cause

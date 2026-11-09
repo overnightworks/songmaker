@@ -1,9 +1,6 @@
 <script lang="ts">
 	import type { GenerationItem, ShareResult } from '#lib/api/types.ts';
 	import {
-		COLLECTION_MENU_CLOSE_LABEL,
-		COLLECTION_MENU_SHARE_OFF_HINT,
-		COLLECTION_MENU_SHARE_ON_HINT,
 		TAKE_COVER_LABEL,
 		TAKE_DELETE_LABEL,
 		TAKE_OVERFLOW_LABEL,
@@ -12,6 +9,11 @@
 		TAKE_RESTORE_LABEL,
 		TAKE_SHARE_LABEL
 	} from '#lib/constants.ts';
+	import {
+		COLLECTION_MENU_CLOSE_LABEL,
+		COLLECTION_MENU_SHARE_OFF_HINT,
+		COLLECTION_MENU_SHARE_ON_HINT
+	} from '#lib/constants/collection-menu.ts';
 	import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
 	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
 	import Icon from '../Icon.svelte';

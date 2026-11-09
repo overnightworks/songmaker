@@ -1,11 +1,10 @@
 import { expect, test, type Locator } from '@playwright/test';
+import { API_ERROR_GENERIC_MESSAGE, songEditorOpenLabel } from '../src/lib/constants';
 import {
-	API_ERROR_GENERIC_MESSAGE,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_CLEAR_LABEL,
-	RAIL_SEARCH_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants';
+	RAIL_SEARCH_LABEL
+} from '../src/lib/constants/rail';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_EVENT_HELLO

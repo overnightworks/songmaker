@@ -32,7 +32,8 @@
 		libraryPlaceOrder
 	} from '#lib/stores/libraryOrder.ts';
 	import { libraryWallOrder } from '#lib/stores/ui.ts';
-	import { PLAYLISTS_PAGE_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '#lib/constants.ts';
+	import { PLAYLISTS_PAGE_LABEL } from '#lib/constants/playlist.ts';
+	import { RAIL_PLAYLISTS_NAV_LABEL } from '#lib/constants/rail.ts';
 	import PlaylistCover from '../PlaylistCover.svelte';
 	import PlayingMark from '../PlayingMark.svelte';
 	import Icon from '../Icon.svelte';

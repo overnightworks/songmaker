@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '#lib/constants.ts';
+	import { RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '#lib/constants/rail.ts';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { railTreeQuery } from '#lib/stores/librarySearch.ts';
 	import {

@@ -35,10 +35,9 @@
 	import {
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL,
-		RAIL_CONTEXT_NO_TAKES,
-		LIBRARY_PAGE_LABEL,
-		RAIL_LIBRARY_NAV_LABEL
+		LIBRARY_PAGE_LABEL
 	} from '#lib/constants.ts';
+	import { RAIL_CONTEXT_NO_TAKES, RAIL_LIBRARY_NAV_LABEL } from '#lib/constants/rail.ts';
 	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import type { SongItem } from '#lib/api/types.ts';
 	import { LIBRARY_ROUTE_ID, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';

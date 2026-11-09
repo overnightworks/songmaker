@@ -248,12 +248,12 @@ def create_app(
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
     from songmaker_cli.api import router as api_router
+    from songmaker_cli.audio_api import router as audio_router
     from songmaker_cli.health_api import router as health_router
     from songmaker_cli.sharing_api import router as sharing_router
 
-    app.include_router(api_router)
-    app.include_router(health_router)
-    app.include_router(sharing_router)
+    for router in (api_router, audio_router, health_router, sharing_router):
+        app.include_router(router)
 
     # Every route that appears in the schema is registered, so the marks are read from a
     # complete schema; the gate needs them before the middleware is added.

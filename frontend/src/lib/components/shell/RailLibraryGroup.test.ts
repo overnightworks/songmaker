@@ -8,9 +8,9 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {
 	LIBRARY_RETRY_LABEL,
 	PLAYING_MARK_LABEL,
-	RAIL_LIBRARY_LOAD_ERROR,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '#lib/constants.ts';
+import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
 import { LIBRARY_ROUTE_ID, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 import { librarySurface, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';

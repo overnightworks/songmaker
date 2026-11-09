@@ -285,7 +285,7 @@ jobs:
       - name: Coverage summary and floors
         env:
           LINE_FLOOR: "93"
-          BRANCH_FLOOR: "93"
+          BRANCH_FLOOR: "94"
         run: |
           # coverage.py's fail_under judges lines and branches combined, so each floor is checked here.
           uv run --no-sync python - <<'PY'

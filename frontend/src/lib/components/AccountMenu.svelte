@@ -5,7 +5,7 @@
 		ACCOUNT_MENU_LABEL,
 		SIGN_OUT_FAILED_MESSAGE
 	} from '#lib/constants/auth.ts';
-	import { RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
+	import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 	import { page } from '$app/state';
 	import { signOutFailed } from '#lib/stores/auth.ts';

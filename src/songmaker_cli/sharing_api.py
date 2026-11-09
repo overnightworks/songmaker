@@ -1,4 +1,4 @@
-"""Sharing and audio file serving endpoints."""
+"""Public share endpoints: shared views, covers, audio and queue streams."""
 
 from __future__ import annotations
 
@@ -10,12 +10,13 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
-from webauth.ports import AuthenticatedUser
 from webauth.proxies import resolve_client_ip
 from webauth.rate_limit import RedisRateLimitBackend
 
 import songmaker_cli.constants as _consts
 from songmaker_cli.api_helpers import (
+    audio_file_response,
+    audio_response,
     cover_file_response,
     enforce_rate_limit,
     get_cached_limiter,
@@ -47,12 +48,8 @@ from songmaker_cli.audio_paths import (
     canonical_audio_path,
     require_canonical_audio_filename,
     require_existing_audio_path,
-    resolve_audio_path,
 )
-from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
-    AUDIO_FILE_NOT_FOUND,
-    AUDIO_MEDIA_TYPES,
     COVER_NOT_FOUND,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
@@ -98,11 +95,6 @@ log = logging.getLogger(__name__)
 
 NOT_FOUND_DETAIL: Final = "Not found"
 QUEUE_STREAM_NOT_FOUND_DETAIL: Final = "Queue stream not found"
-DEFAULT_AUDIO_MEDIA_TYPE: Final = "application/octet-stream"
-# A take's file is written once under its name and never changes, so a browser
-# may keep it for good; "private" forbids any shared cache (CDN, proxy) from
-# holding one.
-AUDIO_FILE_CACHE_CONTROL: Final = "private, max-age=31536000, immutable"
 # A queue-stream snapshot expires within hours and its share can be revoked, so
 # no cache may keep it past the request.
 QUEUE_STREAM_AUDIO_CACHE_CONTROL: Final = "no-store"
@@ -193,20 +185,23 @@ def _generation_id_of_shared_audio_name(filename: str) -> str | None:
     return generation_id
 
 
-def _stored_filename_of_presented_audio(
+def _presented_audio_response(
+    request: Request,
     db: Session,
+    ctx: AppContext,
     slug: str,
     filename: str,
     stored_path_of_presented_take: Callable[[Session, str, str], str | None],
-) -> str:
-    """The stored path behind a public audio name, once the share presents that take."""
+) -> FileResponse:
+    """Serve the take a public share presents under an audio name."""
+    _check_shared_rate_limit(request)
     generation_id = _generation_id_of_shared_audio_name(filename)
     stored_filename = (
         stored_path_of_presented_take(db, slug, generation_id) if generation_id else None
     )
     if stored_filename is None:
         raise HTTPException(404, HTTP_NOT_FOUND)
-    return stored_filename
+    return _shared_audio_file_response(ctx, stored_filename)
 
 
 def _shared_audio_file_response(ctx: AppContext, stored_filename: str) -> FileResponse:
@@ -215,7 +210,7 @@ def _shared_audio_file_response(ctx: AppContext, stored_filename: str) -> FileRe
         audio_path = require_existing_audio_path(audio_path)
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=True)
-    return _audio_file_response(audio_path)
+    return audio_file_response(audio_path)
 
 
 def _offered_cover[T](file_exists: bool, build_urls: Callable[[], T]) -> T | None:
@@ -235,18 +230,6 @@ def _shared_cover_response(
     if entity is None:
         raise HTTPException(404, NOT_FOUND_DETAIL)
     return cover_file_response(resolve_file, audio_dir, entity, variant, version)
-
-
-def _audio_response(audio_path: Path, cache_control: str) -> FileResponse:
-    return FileResponse(
-        audio_path,
-        media_type=AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE),
-        headers={"Cache-Control": cache_control},
-    )
-
-
-def _audio_file_response(audio_path: Path) -> FileResponse:
-    return _audio_response(audio_path, AUDIO_FILE_CACHE_CONTROL)
 
 
 def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) -> None:
@@ -280,25 +263,6 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
         return
 
     raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-
-
-@router.get(
-    "/audio/{owner_id}/{filename}",
-    responses={404: {"description": "Audio file not found"}},
-)
-async def get_audio(
-    owner_id: str, filename: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    ctx: AppContext = Depends(get_app_context),
-) -> FileResponse:
-    if user.role != "admin" and owner_id != user.id:
-        raise HTTPException(404, AUDIO_FILE_NOT_FOUND)
-
-    try:
-        audio_path = resolve_audio_path(ctx.audio_dir, f"{owner_id}/{filename}")
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=False)
-    return _audio_file_response(audio_path)
 
 
 @router.get(
@@ -428,11 +392,9 @@ def get_shared_audio(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    _check_shared_rate_limit(request)
-    stored_filename = _stored_filename_of_presented_audio(
-        db, slug, filename, shared_album_take_stored_path,
+    return _presented_audio_response(
+        request, db, ctx, slug, filename, shared_album_take_stored_path,
     )
-    return _shared_audio_file_response(ctx, stored_filename)
 
 
 @router.get(
@@ -526,11 +488,9 @@ def get_shared_song_audio(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    _check_shared_rate_limit(request)
-    stored_filename = _stored_filename_of_presented_audio(
-        db, slug, filename, shared_song_take_stored_path,
+    return _presented_audio_response(
+        request, db, ctx, slug, filename, shared_song_take_stored_path,
     )
-    return _shared_audio_file_response(ctx, stored_filename)
 
 
 def _get_presented_generation(db: Session, slug: str) -> Generation | None:
@@ -808,11 +768,9 @@ def get_shared_playlist_audio(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    _check_shared_rate_limit(request)
-    stored_filename = _stored_filename_of_presented_audio(
-        db, slug, filename, shared_playlist_take_stored_path,
+    return _presented_audio_response(
+        request, db, ctx, slug, filename, shared_playlist_take_stored_path,
     )
-    return _shared_audio_file_response(ctx, stored_filename)
 
 
 @router.get(
@@ -828,6 +786,6 @@ def get_shared_queue_stream_audio(
     _check_shared_rate_limit(request)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     _validate_shared_queue_manifest(manifest, db)
-    return _audio_response(
+    return audio_response(
         queue_stream_audio_path(ctx, snapshot_id), QUEUE_STREAM_AUDIO_CACHE_CONTROL,
     )

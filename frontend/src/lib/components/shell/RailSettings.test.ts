@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
-import { RAIL_SETTINGS_OPEN_STORAGE_KEY } from '#lib/constants.ts';
+import { RAIL_SETTINGS_OPEN_STORAGE_KEY } from '#lib/constants/rail.ts';
 import { visibleSettingsSections } from '#lib/settingsSections.ts';
 import { currentUser } from '#lib/stores/auth.ts';
 import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';

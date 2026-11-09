@@ -4,7 +4,7 @@ import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_DELETE_LABEL,
 	COLLECTION_MENU_ARCHIVE_LABEL
-} from '../src/lib/constants';
+} from '../src/lib/constants/collection-menu';
 import { HOME_LISTEN_EMPTY, HOME_LISTEN_ERROR } from '../src/lib/constants/home';
 import {
 	sameOriginHeaders,

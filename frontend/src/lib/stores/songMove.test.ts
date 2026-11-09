@@ -7,12 +7,12 @@ import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
 import { installHistoryController } from '#lib/history/historyController.ts';
 import { historyLayerState } from '#lib/stores/layers.ts';
 import {
-	RAIL_LIBRARY_LOAD_ERROR,
 	SONG_MOVE_ALBUM_GONE,
 	SONG_MOVE_FAILED_REASON,
 	SONG_MOVE_NO_CONNECTION,
 	songMoveFailedLine
 } from '#lib/constants.ts';
+import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 

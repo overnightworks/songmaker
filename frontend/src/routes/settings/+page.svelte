@@ -5,7 +5,8 @@
 	import { navigating } from '$app/state';
 	import { historyComesToRest, standingPageEntryId } from '#lib/history/historyController.ts';
 	import Icon from '#lib/components/Icon.svelte';
-	import { APP_NAME, RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
+	import { APP_NAME } from '#lib/constants.ts';
+	import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 	import { visibleSettingsSections } from '#lib/settingsSections.ts';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
