@@ -1,47 +1,40 @@
-# Songmaker
+# songmaker
 
-## Product context
+## Commands
 
-An **album** holds **songs**; **playlists** collect songs across albums. Saving rewrites a song's latest **version** until a take is queued or rendering for it, or until it has a take and lyrics, prompt, BPM, key or length change; then it makes a new version. Each attempt is a **generation**; scoring is purely informational. **Pick** is the one generation per song on the album; **keep** only protects from cleanup.
+- `bash scripts/static_checks.sh`: every static check CI runs, before reporting a tip; needs `.venv` and `frontend/node_modules`.
+- `pytest -q <files>`: targeted Python tests that need no database.
+- `scripts/test_postgresql.sh <files>`: targeted tests against a throwaway PostgreSQL container.
+- `pnpm exec vitest run <file>`: one frontend test file, from `frontend/`.
+- `python scripts/generate_types.py`: regenerates the frontend's API types from `src/songmaker_cli/api_models/` after a model change.
 
-The **co-writer** is one conversation per musician, not per song, only via `POST /chat/turn`; it runs `agents/cowriter.md` through the LiteLLM gateway, no local fallback; expansion is frozen until needed.
+## Rules
 
-## Setup and run
+- The live app runs only in Docker, started by the systemd units; `.venv` serves tests and type checking.
+- A deploy's `docker compose up --build --wait` never runs inside `timeout`: SIGTERM leaves a partial deploy.
+- PostgreSQL is the source of truth, not files.
+- One code path: the web UI is the only client of songmaker's own API, and the CLI only starts the server.
+- Functions in `src/songmaker_cli/db/queries/` `flush()` and never `commit()`; the code that owns the transaction commits. A helper that calls `end_read_transaction_before_lock()` commits first, so its caller must hold no uncommitted change.
+- Response models are built with `from_orm()`, never as hand-built dicts.
+- Every resource endpoint, GET included, checks ownership through a `check_*_access()` of `src/songmaker_cli/api_helpers.py`.
+- The middleware order in `src/songmaker_cli/server.py` is security-critical.
+- Sharing goes through `enable_sharing()` and `disable_sharing()` of `src/songmaker_cli/db/queries/sharing.py`; side effects live in the domain wrapper.
+- ACE-Step's parameter names come from the HTTP API code of `vendor/acestep`, our fork.
+- A reproducible seed needs `use_random_seed: false`; ACE-Step ignores `seed` otherwise.
+- Each pytest worker process keeps its own numba cache (`tests/conftest.py`); a scorer-test segfault in numba's compiled code means several processes filled one cache.
+- Test albums carry a recognizable title prefix and are archived, never deleted.
 
-The live app is Docker-only; `.venv` is for tests and type checking. Settings and some secrets live in the ignored `.env` of the deploy checkout `~/srv/songmaker`, the others in `~/.secrets/songmaker/`; only systemd units start the stack.
+## Owners
 
-A deploy's `docker compose up --build --wait` never runs in a `timeout` (SIGTERM leaves a partial deploy).
+- Deployment is agreed with platform's head.
+- The GPU is shared with speech-runtime; its use is agreed with speech-runtime's head.
 
-## Checks
+## Documents
 
-CI runs the pinned quality gate; floors in [testing](docs/testing.md#static-analysis-sonarcloud). Targeted runs: `pytest -q <files>`, `scripts/test_postgresql.sh <files>` for DB tests, `pnpm exec vitest run <file>`. Before reporting a tip: `bash scripts/static_checks.sh`.
-
-## Code patterns
-
-- **Query functions `flush()`, endpoints `commit()`**. Exceptions: the sign-in callback in `auth_api.py` commits admission and session together; `create_job_with_rate_limit()` and `unique_album_id()` commit before an exclusive lock, so callers hold no uncommitted mutation.
-- **Response models use `from_orm()`**, not hand-built dicts.
-- **Engine packages are independent**: `acestep_engine`, `audio_engine`, `acestep_worker` never import `songmaker_cli`; `.importlinter` owns it.
-- **Ownership checks on every resource endpoint**, GET included: `check_*_access()` in `api_helpers.py`.
-- **Middleware order in `server.py` is security-critical.**
-- **DB queries split by domain** (`db/queries/`); callers import the domain module.
-- **Sharing**: `enable_sharing()`/`disable_sharing()` from `db/queries/sharing.py`; side effects in the domain wrapper.
-- **Constants:** reused or behaviour-configuring strings go in `constants.py` or a `Final`; one-off messages stay inline.
-- **Required configuration has no silent default**: raise or 422, or use a NAMED constant; never `next(iter(d))` or insertion order. `scripts/check_no_silent_fallbacks.py` enforces it.
-
-## Key rules
-
-1. PostgreSQL is the source of truth, not files.
-2. One code path: the web UI is the API's one client of songmaker's own; a person's hal token reaches the same API as that person, and a member's own agent reaches the routes of it marked as its tools over `/mcp` as that person, never as an admin; the CLI only starts the server; no passwords, admin bootstrap or local account commands. Sign-in is Keycloak: accounts keyed by its subject, membership and admin from groups `/apps/songmaker` and `/apps/songmaker/admin` at each sign-in.
-3. `api_models/` Pydantic models are the API contract; `python scripts/generate_types.py` generates `types.ts`.
-4. Test albums get a recognizable name prefix and are archived, not deleted.
-
-## Constraints
-
-- No co-writer turn or cover runs on a Claude CLI, so no song content reaches one; agent-CLI mounts never expose an operator profile. A member's own agent over `/mcp` reaches song content, with its provider, only at that person's request ([security](docs/security.md#mcp-endpoint-for-a-persons-own-agent)).
-- The DB owns session validity (`touch()` returns a real `bool`); removing someone ends no session early ([revocation](docs/security.md#revocation)).
-- Only `songmaker-acestep-worker-N` has a GPU; nothing arbitrates VRAM.
-- Trust model (shared OS user, one worker token, single node), accepted for one user: [security](docs/security.md#ace-step-worker-pool-trust-boundary).
-- `vendor/acestep` is our fork; its HTTP API code is the source of truth for param names; pin and patches in [ACE-Step](docs/acestep.md).
-- Seed reproducibility needs `use_random_seed: false` (ACE-Step ignores `seed` otherwise).
-- Backup and restore need both DB and audio files.
-- Parallel pytest workers share no numba cache (`tests/conftest.py` gives each process its own `NUMBA_CACHE_DIR`); a scorer-test segfault in numba's compiled code means several processes populated one cache.
+- `README.md`: read when installing, starting or backing up the live app.
+- `docs/VISION.md`: read when deciding what the product does.
+- `docs/architecture.md`: read when changing structure, routes or the co-writer turn.
+- `docs/catalog.md`, `docs/generation.md`, `docs/library.md`, `docs/navigation.md`, `docs/sharing.md`, `docs/co-writer.md`: read when changing a ruled behaviour of that area.
+- `docs/security.md`: read when touching sign-in, tokens, sharing, the agent front or the trust model.
+- `docs/acestep.md`: read when touching ACE-Step, its fork's pin and patches, or the workers.
+- `docs/testing.md`: read when adding tests, or changing CI, coverage floors or the quality gate.

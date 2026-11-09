@@ -1,7 +1,7 @@
 """Pins that every owner of a secret-scrub list names the same environment keys.
 
-``acestep_worker`` must never import ``songmaker_cli`` (see AGENTS.md "Engine
-packages are independent"), so the list exists twice: as a constant in each of
+``acestep_worker`` must never import ``songmaker_cli`` (the independent-packages
+contract in ``.importlinter``), so the list exists twice: as a constant in each of
 the two packages. These tests are the only thing standing between them silently
 drifting apart. Each list is pinned against the same expected set, so agreement
 between them follows and a drifted list names its own owner.
