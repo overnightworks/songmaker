@@ -26,15 +26,6 @@ class SongMeta(BaseModel):
     def _coerce_track(cls, v: object) -> str:
         return str(v) if v is not None else ""
 
-    @field_validator("generation_params", mode="before")
-    @classmethod
-    def _coerce_generation_params(cls, v: object) -> object:
-        if v is None:
-            return BaseGenerationParams()
-        if isinstance(v, dict):
-            return BaseGenerationParams.model_validate(v)
-        return v
-
 
 class AlbumMeta(BaseModel):
     title: str

@@ -71,13 +71,8 @@ def _filter_soft_deleted(execute_state) -> None:
 
 
 def install_soft_delete_filter() -> None:
-    """Register the do_orm_execute listener on the Session class.
-
-    Idempotent — registering twice is harmless because the listener
-    function is the same object both times.
-    """
-    if not event.contains(Session, "do_orm_execute", _filter_soft_deleted):
-        event.listen(Session, "do_orm_execute", _filter_soft_deleted)
+    """Register the do_orm_execute listener on the Session class."""
+    event.listen(Session, "do_orm_execute", _filter_soft_deleted)
 
 
 @contextmanager

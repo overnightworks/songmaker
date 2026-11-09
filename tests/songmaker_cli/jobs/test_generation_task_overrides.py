@@ -11,6 +11,7 @@ import pytest
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.generate import DecodedAudio
+from songmaker_cli.generation_params import stored_config_options
 from songmaker_cli.jobs import (
     GenerationContext,
     _apply_cover_overrides,
@@ -125,6 +126,22 @@ def test_an_optional_task_parameter_reaches_ace_step_only_when_set(
         ))
 
     assert getattr(result.ace_config, field) == (set_value if is_set else base_value)
+
+
+@pytest.mark.parametrize(("strength", "is_recorded"), [(0.3, True), (0.0, False)])
+def test_a_covers_stored_options_carry_its_noise_strength_only_when_set(
+    strength: float, is_recorded: bool,
+) -> None:
+    config = AceStepConfig(
+        prompt="test", lyrics="la la", audio_duration=0, task_type="cover",
+        cover_noise_strength=strength,
+    )
+
+    options = stored_config_options(config, delivered_batch_size=None)
+
+    assert ("cover_noise_strength" in options) is is_recorded
+    if is_recorded:
+        assert options["cover_noise_strength"] == strength
 
 
 @pytest.mark.parametrize("has_raw_wav", [True, False])

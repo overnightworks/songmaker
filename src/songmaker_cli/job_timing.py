@@ -134,8 +134,6 @@ def worker_restart_grace_seconds(signal: WorkerLivenessSignal) -> int:
     grace_seconds = {
         threshold.restart_grace_seconds
         for threshold in STALE_JOB_THRESHOLDS.values()
-        if threshold.liveness_signal is signal
+        if threshold.liveness_signal is signal and threshold.restart_grace_seconds is not None
     }
-    if len(grace_seconds) != 1 or None in grace_seconds:
-        raise RuntimeError(f"No single restart grace configured for {signal}")
     return grace_seconds.pop()
