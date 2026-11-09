@@ -35,7 +35,7 @@ export interface ActiveJob {
 	awaitingTakes?: boolean;
 	/**
 	 * The job's stream failed and has not spoken since, so `job` is only what
-	 * it last said -- online as much as offline (#1161 R1).
+	 * it last said -- online as much as offline.
 	 */
 	streamStale?: boolean;
 }
@@ -72,7 +72,7 @@ export function dismissGenerationFailure(songId: string): void {
 
 // Wipes the per-song failure causes and which songs have had a live
 // resolution, so each test starts clean. A session needs no reset: it ends
-// with a fresh page load (#1340, ruling A), so the next session never sees
+// with a fresh page load, so the next session never sees
 // another user's failure.
 export function resetGenerationFailuresForTests(): void {
 	generationFailures.set({});
@@ -218,11 +218,11 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
  * song refresh its end asked for has run while the page could reach the
  * server: the job's card is what the musician sees until the take replaces
  * it, so letting the job go at once -- or when a refresh failed offline --
- * would leave a moment with neither (#1039 O3). The generate owner hides the
+ * would leave a moment with neither. The generate owner hides the
  * card as soon as the take is in the list; the wait, counted only while
  * online, bounds how long a refresh that never runs can keep it. The job says
  * it ended only when it goes, so a card still waiting for its take is the one
- * signal until then (#1106 N3).
+ * signal until then.
  */
 function keepUntilSongRefreshed(
 	jobId: string,
@@ -279,7 +279,7 @@ function backOnline(): Promise<void> {
 // A job that made takes refreshes its song too, not only the
 // `generation.created` resource event: that event can fall into a gap while
 // the resource stream reconnects (a phone's screen going off), and the take
-// would then stay missing until the next navigation (#1020). Both triggers are
+// would then stay missing until the next navigation. Both triggers are
 // idempotent: the resource-sync owner refetches the song and skips a take it
 // already has.
 function completeTrackedJob(jobId: string, job: JobStatus): void {
@@ -342,25 +342,25 @@ function isTracked(jobId: string): boolean {
  * Opens the job's SSE connection and owns its reconnection: a dropped
  * connection closes itself here rather than leaning on the browser's flat
  * native EventSource retry (that flat retry across several concurrently
- * failing job streams is what produced the operator's ERR_QUIC storm --
- * issue #257) and reopens after `nextReconnectDelayMs`, or at once when the
+ * failing job streams floods the connection with ERR_QUIC errors)
+ * and reopens after `nextReconnectDelayMs`, or at once when the
  * page gets a fresh chance to reach the server (`watchReconnectOpportunities`).
  *
  * The give-up budget counts only failures of timed retries while the page can
  * reach the server: a failure while `offline` says the connection is lost
- * never spends it, however many outages a take runs through (#1141), and a
+ * never spends it, however many outages a take runs through, and a
  * reopen the page asked for (visible again, focus, back online) never spends
  * it either, so returning to the app during an outage cannot drop a running
- * job sooner (#1032). A connection that opens gives the budget back; a
+ * job sooner. A connection that opens gives the budget back; a
  * message also puts the backoff back to its short first delay. When the
  * budget does run out online, the job is read again over REST
  * (`rereadAfterSpentBudget`) rather than dropped. `reopenGap` travels with the
  * job across every reopen, so the page's chances reopen it at most once per
- * gap however often the musician switches apps (#1099).
+ * gap however often the musician switches apps.
  *
  * The card reads stale only when a connection fails before it has said
  * anything: the server ends every healthy stream on a timer, and the reopen
- * that follows is not an outage (#1161 R1).
+ * that follows is not an outage.
  */
 function streamJob(
 	jobId: string,
