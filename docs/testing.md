@@ -119,7 +119,7 @@ boundary, and over seeded files at every path that used to be exempt.
 ### API type contract
 
 `scripts/generate_types.py --check` derives the browser contract from the
-registered `api`, `audio_api`, `health_api`, and `sharing_api` routers without starting the
+registered `api`, `audio_api`, `health_api`, `sharing_api`, and `shared_views_api` routers without starting the
 application lifecycle. It follows every route's `response_model` and body
 parameter through nested Pydantic annotations, then supplements that set with
 exported `api_models` and checks that each discovered model has a TypeScript

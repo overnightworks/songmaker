@@ -70,7 +70,7 @@
 "tests/songmaker_cli/test_resource_event_api.py" = 1155
 "tests/songmaker_cli/test_scheduler.py" = 1283
 "tests/songmaker_cli/test_server.py" = 1922
-"tests/songmaker_cli/test_sharing_api.py" = 2487
+"tests/songmaker_cli/test_sharing_api.py" = 2485
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
 "main" = 65
@@ -138,7 +138,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"create_app" = 142
+"create_app" = 136
 
 [function_lines."tests/acestep_worker/test_wrapper_train_lora.py"]
 "test_default_train_lora_runner_dispatches" = 140

@@ -850,8 +850,8 @@ for albums that are members of the shared playlist). Every `audio_url` names the
 take, `{audio route}/{generation_id}.mp3`, never its stored path, which starts
 with the creator's account id (#1426, rule 8 of #1374): the share audio routes
 read the id, require that the share presents that take, and only then open the
-stored file, so an old stored-path URL answers 404 (`sharing_api.py#_shared_audio_url_for_take`,
-`#_stored_filename_of_presented_audio`). A `SharedTrack` therefore knows its own
+stored file, so an old stored-path URL answers 404 (`shared_access.py#shared_audio_url_for_take`,
+`sharing_api.py#_presented_audio_response`). A `SharedTrack` therefore knows its own
 duration, lyrics and cues without a stream manifest.
 
 A shared song or take opens as the player (#1391): `SharedCollection.svelte`
@@ -1407,7 +1407,7 @@ close the stream.
 | DELETE | `/api/references/{id}` | user | Delete the caller's own unused reference recording: row first (with an audit record), then its file at once; 204. A foreign or unknown id answers the global 404 (an admin has no bypass); a reference a saved version or a take links answers 409 `{"detail":"Reference audio is in use."}`; a stored path that is not `<user>/refs/<one name>` answers 500 and keeps the row. A file whose unlink fails still answers 204; the daily reconciliation removes it. |
 | GET | `/shared/{slug}` | public | Read-only album JSON (no auth, rate-limited). `cover` is present only while shared and the file exists. |
 | GET | `/shared/song/{slug}` | public | Read-only song JSON (no auth, rate-limited). `cover` is present only while shared and the song file exists; `album_cover` is the parent album art, gated by this song share. |
-| GET | `/shared/gen/{slug}` | public | Read-only generation JSON (no auth, rate-limited). `album_cover` is the parent album art, gated by this generation share. A take whose song (or album) was deleted answers 404 here and on its audio and album-cover routes, like an unshared one (`sharing_api.py#_get_presented_generation`). |
+| GET | `/shared/gen/{slug}` | public | Read-only generation JSON (no auth, rate-limited). `album_cover` is the parent album art, gated by this generation share. A take whose song (or album) was deleted answers 404 here and on its audio and album-cover routes, like an unshared one (`db/queries/generations.py#get_presented_generation`). |
 | GET | `/shared/playlist/{slug}` | public | Read-only playlist JSON (no auth, rate-limited) |
 | GET | `/shared/{slug}/cover` | public | Stream the shared album cover after the same share-slug gate as album JSON |
 | GET | `/shared/song/{slug}/cover` | public | Stream the shared song's own cover after the song share-slug gate. 404 when the song has no file of its own, even if the album has one. |

@@ -100,7 +100,7 @@ function manifest(windowed: boolean): QueueStreamManifest {
 		windowed,
 		skipped: [],
 		skipped_complete: true,
-		// sharing_api.py's stream builder skips songs without a pick, so a
+		// shared_views_api.py's stream builder skips songs without a pick, so a
 		// manifest only ever carries playable tracks.
 		tracks: album.songs
 			.filter(

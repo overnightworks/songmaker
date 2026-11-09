@@ -278,12 +278,8 @@ def test_missing_shared_resources_raise_not_found(endpoint: str) -> None:
 
     from fastapi import HTTPException
 
-    from songmaker_cli.sharing_api import (
-        get_shared_album_stream,
-        get_shared_playlist_cover,
-        get_shared_playlist_stream,
-        get_shared_song_cover,
-    )
+    from songmaker_cli.shared_views_api import get_shared_album_stream, get_shared_playlist_stream
+    from songmaker_cli.sharing_api import get_shared_playlist_cover, get_shared_song_cover
 
     request = MagicMock()
     db = MagicMock()
@@ -299,11 +295,13 @@ def test_missing_shared_resources_raise_not_found(endpoint: str) -> None:
     else:
         action = partial(get_shared_playlist_stream, "missing", request, db, ctx)
     with (
-        patch("songmaker_cli.sharing_api._check_shared_rate_limit"),
-        patch("songmaker_cli.sharing_api._check_shared_stream_rate_limit"),
-        patch("songmaker_cli.sharing_api.get_album_by_slug", return_value=None),
+        patch("songmaker_cli.sharing_api.check_shared_rate_limit"),
+        patch("songmaker_cli.shared_views_api.check_shared_rate_limit"),
+        patch("songmaker_cli.shared_views_api._check_shared_stream_rate_limit"),
+        patch("songmaker_cli.shared_views_api.get_album_by_slug", return_value=None),
         patch("songmaker_cli.sharing_api.get_song_by_slug", return_value=None),
         patch("songmaker_cli.sharing_api.get_playlist_by_slug", return_value=None),
+        patch("songmaker_cli.shared_views_api.get_playlist_by_slug", return_value=None),
     ):
         with pytest.raises(HTTPException) as exc_info:
             action()
@@ -1526,17 +1524,17 @@ def test_shared_generation_audio_lookup_runs_off_the_event_loop(
 
     import httpx
 
-    from songmaker_cli import sharing_api
+    from songmaker_cli.db.queries import generations as generation_queries
 
     slug = sharing_app.post("/api/generations/g1/share").json()["share_slug"]
-    real_lookup = sharing_api.get_generation_by_slug
+    real_lookup = generation_queries.get_generation_by_slug
     observed_threads: list[int] = []
 
     def _observing_lookup(db, shared_slug: str):
         observed_threads.append(threading.get_ident())
         return real_lookup(db, shared_slug)
 
-    monkeypatch.setattr(sharing_api, "get_generation_by_slug", _observing_lookup)
+    monkeypatch.setattr(generation_queries, "get_generation_by_slug", _observing_lookup)
 
     async def _request_audio() -> tuple[int, int]:
         event_loop_thread = threading.get_ident()
@@ -1947,7 +1945,7 @@ def test_shared_rate_limit_fails_open_when_limiter_backend_errors(
             raise RuntimeError("redis down")
 
     monkeypatch.setattr(
-        "songmaker_cli.sharing_api._get_shared_limiter",
+        "songmaker_cli.shared_access.get_shared_limiter",
         lambda _request: _BrokenLimiter(),
     )
 
