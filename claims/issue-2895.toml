@@ -3,5 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "127768ca3e89251b7964a5f77c95fae6f957ccdd"
 branch = "claude/issue-2895-password-one-owner"
-scope = ["src/songmaker_cli/db/database_url.py", "src/songmaker_cli/db/migrations/env.py", "tests/songmaker_cli/db/test_database_url.py"]
+scope = ["src/songmaker_cli/db/database_url.py", "src/songmaker_cli/db/migrations/env.py", "tests/songmaker_cli/db/test_database_url.py", "tests/songmaker_cli/db/test_migrations_secret_password.py"]
 opened_commit = "36a12cccf70b9b753d3f229fe6765efcb46db8cf"
+whole_reason = "One password resolver, its one alembic caller and the two test modules that prove them; the four change together."
