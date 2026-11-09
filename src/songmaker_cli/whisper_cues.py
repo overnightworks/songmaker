@@ -79,7 +79,7 @@ def stored_whisper_cues(value: object) -> list[dict]:
     ]
 
 
-def generation_whisper_cues(value: object) -> list[WhisperCue] | None:
+def generation_whisper_cues(value: list | None) -> list[WhisperCue] | None:
     if value is None:
         return None
     return [WhisperCue.from_orm(item) for item in value]

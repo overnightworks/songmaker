@@ -176,14 +176,14 @@ def test_setting_an_own_preset_as_default_clears_the_previous_one(people):
 
 
 @pytest.mark.parametrize(
-    ("body", "expected"),
+    ("body", "stored"),
     [
         ({"params": {"inference_steps": 12}}, ({"inference_steps": 12}, True)),
         ({"is_default": False}, ({}, False)),
     ],
     ids=["new params", "default cleared"],
 )
-def test_an_update_changes_only_what_it_sends(people, body, expected):
+def test_an_update_changes_only_what_it_sends(people, body, stored):
     clients, _ = people
     preset = _create(clients["ana"], "warm", is_default=True)
 
@@ -191,7 +191,7 @@ def test_an_update_changes_only_what_it_sends(people, body, expected):
 
     assert response.status_code == 200
     (listed,) = clients["ana"].get(PRESETS_URL).json()
-    assert (listed["params"], listed["is_default"]) == expected
+    assert (listed["params"], listed["is_default"]) == stored
 
 
 def test_a_preset_for_a_model_the_app_does_not_offer_is_refused(people):
@@ -202,4 +202,4 @@ def test_a_preset_for_a_model_the_app_does_not_offer_is_refused(people):
     )
 
     assert response.status_code == 422
-    assert _stored_presets(factory) == {}
+    assert not _stored_presets(factory)
