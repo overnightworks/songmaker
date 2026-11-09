@@ -37,7 +37,7 @@
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
-"frontend/src/lib/share/sharePlayback.test.ts" = 837
+"frontend/src/lib/share/sharePlayback.test.ts" = 684
 "frontend/src/lib/stores/jobs.test.ts" = 900
 "frontend/src/lib/stores/libraryContext.test.ts" = 2087
 "frontend/src/lib/stores/libraryContext.ts" = 1189

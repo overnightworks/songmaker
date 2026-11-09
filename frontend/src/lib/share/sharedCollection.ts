@@ -143,10 +143,10 @@ export function fromSharedGeneration(payload: SharedGenerationPayload): SharedCo
 // sending them so the payload stays complete) — the share surface hides them
 // entirely rather than showing a disabled row (locked-in: a listener sees a
 // finished album).
-export function playableTracks(tracks: SharedTrack[]): SharedTrack[] {
-	return tracks.filter(
-		(track): track is SharedTrack & { audioUrl: string } => track.audioUrl !== null
-	);
+export type PlayableTrack = SharedTrack & { audioUrl: string };
+
+export function playableTracks(tracks: SharedTrack[]): PlayableTrack[] {
+	return tracks.filter((track): track is PlayableTrack => track.audioUrl !== null);
 }
 
 const SHARE_GENERATION_NUMBER = 1;

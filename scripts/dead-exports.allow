@@ -8,3 +8,4 @@ frontend/src/lib/history/historyController.ts:landedEntry # the popstate reader 
 frontend/src/lib/history/historyController.ts:stepBackTo # exported for its first-entry test; layers step back through it inside the controller (#1219), and #1006 H6 (legal) calls it directly.
 frontend/src/lib/services/audioPlayer.svelte.ts:STALL_RECOVERY_MS # the stall-check interval is exported so the stall and recovery tests advance the clock by the one value instead of hand copies (#1330); its production reader is the stall watch in the same module.
 frontend/src/lib/stores/navigation.ts:initNavigation # attaches navigation without a live sync for isolated tests; production reaches it through followLibrarySync in the same module.
+frontend/src/lib/share/sharedCollection.ts:SharedTrack # the row shape the share tests build; production reaches it through SharedCollectionView.tracks and PlayableTrack.
