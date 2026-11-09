@@ -13,6 +13,7 @@ import {
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
+import { ALBUM_COVER_THROTTLED_FALLBACK } from '#lib/constants/album.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { dropLayersFrom, stackedLayers } from '#lib/stores/layers.ts';
 import {
@@ -84,8 +85,6 @@ import AlbumDetailView from './AlbumDetailView.svelte';
 import { addToast } from '#lib/stores/toast.ts';
 
 const { render: renderDetail, cleanup } = createComponentMount(AlbumDetailView);
-
-const SPENT_TODAY = coverSuggestions({ used_today: 10 });
 
 function failureAlert(target: HTMLElement): HTMLElement | null {
 	return target.querySelector('.cover-editor [role="alert"]');
@@ -168,14 +167,14 @@ describe('AlbumCoverEditor in the album header', () => {
 		const target = await renderDetail();
 
 		await openCoverEditing(target);
-		await vi.waitFor(() => expect(countLine(target)).toBe('10 of 10 left today'));
+		await vi.waitFor(() => expect(countLine(target)).toBe(''));
 		expect(editorActions(target)).toEqual(['Upload', 'Suggest', 'Close cover editing']);
 		expect(stageLabel(target)).toBeNull();
 
 		pressEditorButton(target, 'Close cover editing');
 		await editingClosed(target);
 		await openCoverEditing(target);
-		await vi.waitFor(() => expect(countLine(target)).toBe('10 of 10 left today'));
+		await vi.waitFor(() => expect(countLine(target)).toBe(''));
 
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
@@ -186,11 +185,11 @@ describe('AlbumCoverEditor in the album header', () => {
 		createAlbumCoverSuggestions.mockResolvedValue(coverJob());
 		const target = await renderAfterPageRead();
 		fetchAlbumCoverSuggestions
-			.mockResolvedValueOnce(coverSuggestions({ used_today: 1 }))
+			.mockResolvedValueOnce(coverSuggestions())
 			.mockResolvedValueOnce(
-				coverSuggestions({ job: coverJob({ status: 'running', progress: 0.4 }), used_today: 2 })
+				coverSuggestions({ job: coverJob({ status: 'running', progress: 0.4 }) })
 			)
-			.mockResolvedValue(coverSuggestions({ ...ONE_SUGGESTION, used_today: 2 }));
+			.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
 		await openCoverEditing(target);
 
 		await pressSuggestOnceLoaded(target);
@@ -203,7 +202,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		FakeJobEventSource.sources[0].emit(coverJob({ status: 'completed', progress: 1 }));
 
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
-		expect(countLine(target)).toBe('1 / 1 · 8 of 10 left today');
+		expect(countLine(target)).toBe('1 / 1');
 		expect(editorActions(target)).toEqual([
 			'Upload',
 			'Suggest another',
@@ -217,88 +216,53 @@ describe('AlbumCoverEditor in the album header', () => {
 	});
 
 	it.each([
-		{
-			when: 'known before asking',
-			arrange: () => fetchAlbumCoverSuggestions.mockResolvedValue(SPENT_TODAY),
-			asks: 0
-		},
-		{
-			when: 'refused while asking',
-			arrange: () => {
-				fetchAlbumCoverSuggestions
-					.mockResolvedValueOnce(coverSuggestions({ used_today: 9 }))
-					.mockResolvedValue(SPENT_TODAY);
-				createAlbumCoverSuggestions.mockRejectedValue(
-					new ApiError(429, 'Daily cover suggestion limit reached', '/api/albums/a-local')
-				);
-			},
-			asks: 1
-		}
+		{ words: 'Too many requests, slow down', shown: 'Too many requests, slow down' },
+		{ words: '', shown: ALBUM_COVER_THROTTLED_FALLBACK }
 	])(
-		'with no suggestion left today ($when) says so once and counts no suggestion',
-		async ({ arrange, asks }) => {
-			const target = await renderAfterPageRead();
-			arrange();
-
-			await openCoverEditing(target);
-			if (asks) await pressSuggestOnceLoaded(target);
-			await vi.waitFor(() =>
-				expect(countLine(target)).toBe('0 of 10 left today Daily cover suggestion limit reached')
+		'a throttled ask shows $shown beside the cover, never red, and keeps Suggest open',
+		async ({ words, shown }) => {
+			createAlbumCoverSuggestions.mockRejectedValue(
+				new ApiError(429, words, '/api/albums/a-local')
 			);
-			await tick();
+			const target = await renderAfterPageRead();
+			await openCoverEditing(target);
 
-			expect(createAlbumCoverSuggestions).toHaveBeenCalledTimes(asks);
-			expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(asks + 1);
-			expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest').disabled).toBe(true);
+			await pressSuggestOnceLoaded(target);
+			await vi.waitFor(() => expect(countLine(target)).toBe(shown));
+
+			expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
 			expect(failureAlert(target)).toBeNull();
 			expect(addToast).not.toHaveBeenCalled();
+			expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest').disabled).toBe(false);
 		}
 	);
 
-	it('at the daily limit the grown Add cover place opens Upload', async () => {
-		fetchAlbumCoverSuggestions.mockResolvedValue(SPENT_TODAY);
+	it('keeps Suggest open however many suggestions the album has made', async () => {
+		const made = Array.from({ length: 11 }, (_, index) => ({
+			id: `made-${index}`,
+			url: `/made-${index}.png`
+		}));
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions({ suggestions: made }));
 		const target = await renderDetail();
-		await openCoverEditing(target);
-		await vi.waitFor(() => expect(countLine(target)).toContain('0 of 10 left today'));
-		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-		const picker = vi.spyOn(input, 'click').mockImplementation(() => undefined);
 
-		getByRoleButton(requireElement(target, '.cover-stage'), 'Add cover').click();
-
-		expect(picker).toHaveBeenCalledTimes(1);
-		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
-	});
-
-	it('a throttled ask reads like the daily limit in the server words, never red, and keeps Suggest open', async () => {
-		createAlbumCoverSuggestions.mockRejectedValue(
-			new ApiError(429, 'Too many requests, slow down', '/api/albums/a-local')
-		);
-		const target = await renderAfterPageRead();
-		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions({ used_today: 3 }));
 		await openCoverEditing(target);
 
-		await pressSuggestOnceLoaded(target);
-		await vi.waitFor(() =>
-			expect(countLine(target)).toBe('7 of 10 left today Too many requests, slow down')
-		);
-
-		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
-		expect(failureAlert(target)).toBeNull();
-		expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest').disabled).toBe(false);
+		await vi.waitFor(() => expect(countLine(target)).toBe('11 / 11'));
+		expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest another').disabled).toBe(false);
 	});
 
 	it.each([
 		{
 			before: 'no suggestion',
 			made: [],
-			counted: '9 of 10 left today',
+			counted: '',
 			shown: '/cover-detail.jpg',
 			label: null
 		},
 		{
 			before: 'two suggestions',
 			made: THREE_SUGGESTIONS.suggestions.slice(0, 2),
-			counted: '2 / 2 · 7 of 10 left today',
+			counted: '2 / 2',
 			shown: '/suggestion-two.png',
 			label: 'Cover suggestion 2 of 2'
 		}
@@ -309,8 +273,7 @@ describe('AlbumCoverEditor in the album header', () => {
 			fetchAlbumCoverSuggestions.mockResolvedValue(
 				coverSuggestions({
 					suggestions: made,
-					job: coverJob({ status: 'failed', error: 'Cover suggestion could not be generated' }),
-					used_today: made.length + 1
+					job: coverJob({ status: 'failed', error: 'Cover suggestion could not be generated' })
 				})
 			);
 			const target = await renderDetail();
@@ -336,7 +299,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		expect(accessibleName(requireElement(target, 'button.header-cover'))).toBe('Edit cover');
 		await openCoverEditing(target);
-		await vi.waitFor(() => expect(countLine(target)).toBe('10 of 10 left today'));
+		await vi.waitFor(() => expect(countLine(target)).toBe(''));
 
 		expect(shownImage(target)).toBe('/cover-detail.jpg');
 		expect(editorActions(target)).toEqual(['Upload', 'Suggest', 'Remove', 'Close cover editing']);
@@ -362,13 +325,11 @@ describe('AlbumCoverEditor in the album header', () => {
 	});
 
 	it('browses the suggestions made so far with ‹ › and a swipe on the cover', async () => {
-		fetchAlbumCoverSuggestions.mockResolvedValue(
-			coverSuggestions({ ...THREE_SUGGESTIONS, used_today: 4 })
-		);
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
 		const target = await renderDetail();
 		await openCoverEditing(target);
 
-		await vi.waitFor(() => expect(countLine(target)).toBe('3 / 3 · 6 of 10 left today'));
+		await vi.waitFor(() => expect(countLine(target)).toBe('3 / 3'));
 		expect(shownImage(target)).toBe('/suggestion-three.png');
 		expect(requireElement(target, '.cover-stage').getAttribute('aria-label')).toBe(
 			'Cover suggestion 3 of 3'
@@ -376,7 +337,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		pressEditorButton(target, 'Previous suggestion');
 		await tick();
-		expect(countLine(target)).toBe('2 / 3 · 6 of 10 left today');
+		expect(countLine(target)).toBe('2 / 3');
 		expect(shownImage(target)).toBe('/suggestion-two.png');
 
 		swipe(target, 60);
@@ -394,7 +355,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		await tick();
 		pressEditorButton(target, 'Next suggestion');
 		await tick();
-		expect(countLine(target)).toBe('3 / 3 · 6 of 10 left today');
+		expect(countLine(target)).toBe('3 / 3');
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
@@ -404,18 +365,17 @@ describe('AlbumCoverEditor in the album header', () => {
 		createAlbumCoverSuggestions.mockResolvedValue(coverJob());
 		const target = await renderAfterPageRead();
 		fetchAlbumCoverSuggestions
-			.mockResolvedValueOnce(coverSuggestions({ ...two, used_today: 2 }))
-			.mockResolvedValueOnce(
-				coverSuggestions({ ...two, job: coverJob({ status: 'running' }), used_today: 3 })
-			)
-			.mockResolvedValue(coverSuggestions({ ...THREE_SUGGESTIONS, used_today: 3 }));
+			.mockResolvedValueOnce(coverSuggestions(two))
+			.mockResolvedValueOnce(coverSuggestions({ ...two, job: coverJob({ status: 'running' }) }))
+			.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
 		await openCoverEditing(target);
-		await vi.waitFor(() => expect(countLine(target)).toBe('2 / 2 · 8 of 10 left today'));
+		await vi.waitFor(() => expect(countLine(target)).toBe('2 / 2'));
 
 		pressEditorButton(target, 'Suggest another');
 
-		await vi.waitFor(() => expect(countLine(target)).toBe('7 of 10 left today'));
-		expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull();
+		await vi.waitFor(() =>
+			expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
+		);
 		expect(stageLabel(target)).toBeNull();
 		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
 		FakeJobEventSource.sources[0].emit(coverJob({ status: 'completed', progress: 1 }));
@@ -670,15 +630,14 @@ describe('AlbumCoverEditor in the album header', () => {
 		{
 			reread: 'follows the run that still goes',
 			found: coverSuggestions({
-				job: coverJob({ status: 'running', progress: 0.3 }),
-				used_today: 3
+				job: coverJob({ status: 'running', progress: 0.3 })
 			}),
 			shows: (target: HTMLElement) =>
 				expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
 		},
 		{
 			reread: 'shows the suggestion of a run that ended meanwhile',
-			found: coverSuggestions({ ...ONE_SUGGESTION, used_today: 3 }),
+			found: coverSuggestions(ONE_SUGGESTION),
 			shows: (target: HTMLElement) => expect(shownImage(target)).toBe('/suggestion-one.png')
 		}
 	])(
@@ -689,14 +648,12 @@ describe('AlbumCoverEditor in the album header', () => {
 				new ApiError(409, 'Cover suggestions are already being generated', '/api/x')
 			);
 			const target = await renderAfterPageRead();
-			fetchAlbumCoverSuggestions
-				.mockResolvedValueOnce(coverSuggestions({ used_today: 2 }))
-				.mockResolvedValue(found);
+			fetchAlbumCoverSuggestions.mockResolvedValueOnce(coverSuggestions()).mockResolvedValue(found);
 			await openCoverEditing(target);
 
 			await pressSuggestOnceLoaded(target);
 
-			await vi.waitFor(() => expect(countLine(target)).toContain('7 of 10 left today'));
+			await reachSuggestionsLoads(2);
 			shows(target);
 			expect(failureAlert(target)).toBeNull();
 			expect(target.textContent).not.toContain('already being');
@@ -708,8 +665,7 @@ describe('AlbumCoverEditor in the album header', () => {
 			result: 'its new image',
 			found: coverSuggestions({
 				...ONE_SUGGESTION,
-				job: coverJob({ id: 'ended-run', status: 'completed', progress: 1 }),
-				used_today: 3
+				job: coverJob({ id: 'ended-run', status: 'completed', progress: 1 })
 			}),
 			shows: (target: HTMLElement) => {
 				expect(shownImage(target)).toBe('/suggestion-one.png');
@@ -717,10 +673,9 @@ describe('AlbumCoverEditor in the album header', () => {
 			}
 		},
 		{
-			result: 'its failure line, also when it spent the last suggestion of the day',
+			result: 'its failure line',
 			found: coverSuggestions({
-				job: coverJob({ id: 'ended-run', status: 'failed', error: 'The model ran out of memory' }),
-				used_today: 10
+				job: coverJob({ id: 'ended-run', status: 'failed', error: 'The model ran out of memory' })
 			}),
 			shows: (target: HTMLElement) => {
 				expect(failureAlert(target)?.textContent).toContain(
@@ -736,9 +691,7 @@ describe('AlbumCoverEditor in the album header', () => {
 				new ApiError(409, 'Cover suggestions are already being generated', '/api/x')
 			);
 			const target = await renderAfterPageRead();
-			fetchAlbumCoverSuggestions
-				.mockResolvedValueOnce(coverSuggestions({ used_today: 2 }))
-				.mockResolvedValue(found);
+			fetchAlbumCoverSuggestions.mockResolvedValueOnce(coverSuggestions()).mockResolvedValue(found);
 			await openCoverEditing(target);
 
 			await pressSuggestOnceLoaded(target);
@@ -748,36 +701,6 @@ describe('AlbumCoverEditor in the album header', () => {
 			expect(target.textContent).not.toContain('already being');
 		}
 	);
-
-	it('the daily limit is the only message for that tap, also after reopening', async () => {
-		const olderRunFailed = coverJob({
-			id: 'older-run',
-			status: 'failed',
-			error: 'An older run went wrong'
-		});
-		createAlbumCoverSuggestions.mockRejectedValue(
-			new ApiError(429, 'Daily cover suggestion limit reached', '/api/albums/a-local')
-		);
-		const target = await renderAfterPageRead();
-		fetchAlbumCoverSuggestions
-			.mockResolvedValueOnce(coverSuggestions({ job: olderRunFailed, used_today: 9 }))
-			.mockResolvedValue(coverSuggestions({ job: olderRunFailed, used_today: 10 }));
-		await openCoverEditing(target);
-
-		await pressSuggestOnceLoaded(target);
-		await vi.waitFor(() =>
-			expect(countLine(target)).toBe('0 of 10 left today Daily cover suggestion limit reached')
-		);
-		expect(failureAlert(target)).toBeNull();
-
-		pressEditorButton(target, 'Close cover editing');
-		await editingClosed(target);
-		await openCoverEditing(target);
-		await reachSuggestionsLoads(4);
-
-		expect(countLine(target)).toBe('0 of 10 left today Daily cover suggestion limit reached');
-		expect(failureAlert(target)).toBeNull();
-	});
 
 	it('hydrates a running cover job once and shows its suggestion after the streamed completion', async () => {
 		vi.stubGlobal('EventSource', FakeJobEventSource);

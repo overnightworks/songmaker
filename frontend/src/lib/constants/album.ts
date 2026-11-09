@@ -19,9 +19,9 @@ export const ALBUM_COVER_SUGGESTIONS_LOADING = 'Loading cover suggestion…';
 export const ALBUM_COVER_SUGGESTING_LABEL = 'Making a cover';
 export const ALBUM_COVER_SUGGESTION_FAILED_TITLE = 'Couldn’t make a cover suggestion';
 export const ALBUM_COVER_SUGGESTION_FAILED_FALLBACK = 'The cover suggestion failed. Try again.';
-// The server's own words for a spent daily limit, so the editor says it the
-// same way whether it knew before asking or was refused.
-export const ALBUM_COVER_DAILY_LIMIT_REACHED = 'Daily cover suggestion limit reached';
+// Nothing retries a throttled Suggest, so the fallback asks the person to.
+export const ALBUM_COVER_THROTTLED_FALLBACK =
+	'Too many requests right now. Press Suggest again in a moment.';
 export const ALBUM_COVER_SUGGESTIONS_RETRY_LABEL = 'Try again';
 // A sideways drag on the cover this far, and more sideways than up or down,
 // shows the neighbouring suggestion; anything less is a tap or a scroll.
@@ -53,8 +53,4 @@ export function albumCoverSuggestionPosition(shown: number, count: number): stri
 
 export function albumCoverStageLabel(shown: number, count: number): string {
 	return `Cover suggestion ${shown} of ${count}`;
-}
-
-export function albumCoverSuggestionsLeftToday(used: number, limit: number): string {
-	return `${Math.max(0, limit - used)} of ${limit} left today`;
 }

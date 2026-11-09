@@ -7,10 +7,9 @@
 		albumCoverStageLabel,
 		albumCoverSuggestionAlt,
 		albumCoverSuggestionPosition,
-		albumCoverSuggestionsLeftToday,
 		ALBUM_COVER_ADD_LABEL,
 		ALBUM_COVER_ALT_TYPE,
-		ALBUM_COVER_DAILY_LIMIT_REACHED,
+		ALBUM_COVER_THROTTLED_FALLBACK,
 		ALBUM_COVER_EDITING_CLOSE_LABEL,
 		ALBUM_COVER_EDITING_LABEL,
 		ALBUM_COVER_EDITING_REMOVE_LABEL,
@@ -45,8 +44,7 @@
 		readCoverActivity,
 		retryCoverActivity,
 		savingCoverAlbumIds,
-		showCoverActivityFailure,
-		updateCoverActivity
+		showCoverActivityFailure
 	} from '#lib/stores/coverActivity.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
 	import { holdOpenWhile } from '#lib/stores/layers.ts';
@@ -54,7 +52,6 @@
 		COVER_PROBLEM_TEXTS,
 		coverBusyWaitSeconds,
 		coverProblemClosesSuggest,
-		coverProblemHidesCount,
 		coverRefusalProblem,
 		coverRunProblem,
 		type CoverProblem
@@ -87,7 +84,7 @@
 	let followedRunId = $state<string | null>(null);
 	// A refusal at the click is this view's alone: the next load, sign-in or click asks again.
 	let clickProblem = $state<CoverProblem | null>(null);
-	// The request throttle's words, in the daily limit's place and tone, until the next ask.
+	// The request throttle's words, until the next ask.
 	let throttleNote = $state<string | null>(null);
 	let now = $state(Date.now());
 	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
@@ -103,22 +100,12 @@
 	const coverSuggestionsBusy = $derived($savingCoverAlbumIds.has(currentAlbumId));
 	const latestCoverJob = $derived(coverSuggestions?.job ?? null);
 	const isCoverSuggestionGenerating = $derived(standing?.running ?? false);
-	const dailySuggestionsSpent = $derived(
-		coverSuggestions !== null && coverSuggestions.used_today >= coverSuggestions.daily_limit
-	);
-	const dailyLimitNote = $derived(
-		dailySuggestionsSpent ? (activity?.limitNote ?? ALBUM_COVER_DAILY_LIMIT_REACHED) : null
-	);
-	const limitNote = $derived(dailyLimitNote ?? throttleNote);
 	const busyWaitSeconds = $derived(coverBusyWaitSeconds(latestCoverJob, now));
 	const coverProblem = $derived(
 		clickProblem ??
 			coverRunProblem(
 				latestCoverJob,
-				{
-					followed: latestCoverJob !== null && latestCoverJob.id === followedRunId,
-					atDailyLimit: dailyLimitNote !== null
-				},
+				{ followed: latestCoverJob !== null && latestCoverJob.id === followedRunId },
 				now
 			)
 	);
@@ -127,7 +114,6 @@
 		!isCoverSuggestionGenerating &&
 			!coverSuggestionsLoading &&
 			!coverSuggestionsBusy &&
-			!dailyLimitNote &&
 			!suggestClosed
 	);
 	const suggestionCount = $derived(coverSuggestions?.suggestions.length ?? 0);
@@ -152,8 +138,8 @@
 	);
 
 	// The album page keeps the cover state read; the editor shows it. Opening
-	// reads it once more, so a day that turned while the page stayed open frees
-	// the quota; a read only looks, and only Suggest makes a suggestion. Leaving
+	// reads it once more, so a state that changed while the page stayed open shows;
+	// a read only looks, and only Suggest makes a suggestion. Leaving
 	// the editor -- Back, Escape, another page or album -- stops and discards
 	// nothing, and reads the state once more for the closed cover; only ×, Use
 	// and Upload discard.
@@ -231,14 +217,12 @@
 		);
 	}
 
-	// A refusal means the count and list the editor holds are stale -- another
-	// tab or a new day may have moved them -- so both are read again. Only a
-	// count that says today's suggestions are spent makes a 429 the daily
-	// limit, with the server's words beside it. A 409 needs no word of its own:
+	// A refusal means the list the editor holds is stale -- another tab may
+	// have moved it -- so it is read again. A 409 needs no word of its own:
 	// the reread either follows the run that still goes or shows how it ended,
 	// so that run counts as followed even when it already ended.
-	// Any other 429 (the request throttle) reads like the limit in the server's
-	// words, and the next Suggest may retry.
+	// A 429 (the request throttle) shows the server's words beside the cover,
+	// and the next Suggest may retry.
 	async function rereadAfterRefusal(albumId: string, refusal: ApiError): Promise<void> {
 		await readCoverActivity(albumId);
 		if (albumId !== currentAlbumId || coverSuggestions === null) return;
@@ -246,12 +230,7 @@
 			followedRunId = latestCoverJob?.id ?? null;
 			return;
 		}
-		const note = describeFailure(refusal, ALBUM_COVER_DAILY_LIMIT_REACHED);
-		if (dailySuggestionsSpent) {
-			updateCoverActivity(albumId, (state) => ({ ...state, limitNote: note }));
-			return;
-		}
-		throttleNote = note;
+		throttleNote = describeFailure(refusal, ALBUM_COVER_THROTTLED_FALLBACK);
 	}
 
 	// The server deletes the rows and commits before it removes the files, so
@@ -386,22 +365,15 @@
 				onclick={() => retryCoverActivity(currentAlbumId)}
 				>{ALBUM_COVER_SUGGESTIONS_RETRY_LABEL}</button
 			>
-		{:else if coverSuggestions && !coverProblemHidesCount(coverProblem)}
+		{:else if coverSuggestions}
 			{#if shownSuggestionNumber}
 				<b>{albumCoverSuggestionPosition(shownSuggestionNumber, suggestionCount)}</b>
-				<span aria-hidden="true">·</span>
 			{/if}
-			<span
-				>{albumCoverSuggestionsLeftToday(
-					coverSuggestions.used_today,
-					coverSuggestions.daily_limit
-				)}</span
-			>
 		{:else if coverSuggestionsLoading}
 			<span role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</span>
 		{/if}
-		{#if limitNote}
-			<span class="cover-limit">{limitNote}</span>
+		{#if throttleNote}
+			<span class="cover-limit">{throttleNote}</span>
 		{/if}
 		{#if coverSuggestionsFailure}
 			<span class="cover-failure" role="alert">

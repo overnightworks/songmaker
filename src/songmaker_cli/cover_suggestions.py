@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Final
 
@@ -17,15 +16,13 @@ from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import lock_session_row
-from songmaker_cli.db.queries.jobs import count_cover_jobs_since, create_job, has_active_cover_job
+from songmaker_cli.db.queries.jobs import create_job, has_active_cover_job
 from songmaker_cli.job_types import JobType
-from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
 ALBUM_NOT_FOUND: Final = "Album not found"
 COVER_SUGGESTIONS_ALREADY_RUNNING: Final = "Cover suggestions are already being generated"
-DAILY_COVER_SUGGESTION_LIMIT_REACHED: Final = "Daily cover suggestion limit reached"
 SESSION_ENDED: Final = "Log in again to suggest covers."
 
 
@@ -49,13 +46,6 @@ class CoverSuggestionAlreadyRunningError(CoverSuggestionRequestError):
         super().__init__(COVER_SUGGESTIONS_ALREADY_RUNNING)
 
 
-class CoverSuggestionDailyLimitReachedError(CoverSuggestionRequestError):
-    status_code = 429
-
-    def __init__(self) -> None:
-        super().__init__(DAILY_COVER_SUGGESTION_LIMIT_REACHED)
-
-
 class CoverSuggestionSessionEndedError(CoverSuggestionRequestError):
     status_code = 401
 
@@ -73,7 +63,7 @@ def request_cover_suggestions(
 
     The caller owns the transaction boundary and any delivery side effects.
     This keeps HTTP and future co-writer surfaces from reimplementing access,
-    conflict, limit, and job-creation decisions.
+    conflict, and job-creation decisions.
     """
     album = get_album(session, album_id)
     if album is None or not can_access_album(album, actor, require_owner=require_owner):
@@ -83,22 +73,12 @@ def request_cover_suggestions(
     if has_active_cover_job(session, album.id):
         raise CoverSuggestionAlreadyRunningError()
 
-    settings = get_settings()
-    used_today = count_cover_jobs_since(session, album.id, utc_day_start())
-    if used_today >= settings.cover_suggestions_daily_limit:
-        raise CoverSuggestionDailyLimitReachedError()
-
     if session_id is not None and not lock_session_row(session, session_id):
         raise CoverSuggestionSessionEndedError()
 
     return create_job(
         session, JobType.COVER, user_id=actor.id, album_id=album.id, session_id=session_id,
     )
-
-
-def utc_day_start() -> datetime:
-    now = datetime.now(timezone.utc)
-    return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def suggestion_png_path(audio_dir: Path, album_id: str, suggestion_id: str) -> Path:
