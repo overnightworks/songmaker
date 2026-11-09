@@ -45,12 +45,9 @@
 		knownCoverSuggestions,
 		watchCoverActivity
 	} from '#lib/stores/coverActivity.ts';
+	import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
 	import {
-		LIBRARY_ALBUMS_LOADING,
-		LIBRARY_RETRY_LABEL,
-		PLACE_LINE_SEPARATOR
-	} from '#lib/constants.ts';
-	import {
+		PLACE_LINE_SEPARATOR,
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,

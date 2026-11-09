@@ -14,7 +14,7 @@
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 	import type { WorkerPoolResponse, WorkerInfoItem } from '#lib/api/types.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
-	import { DIALOG_CANCEL_LABEL } from '#lib/constants.ts';
+	import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 	import {
 		WORKER_POOL_RESTART_LABEL,
 		WORKER_POOL_RESTART_CONFIRM,

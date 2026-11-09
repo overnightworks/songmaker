@@ -2,13 +2,13 @@ import { expect, test as base, type Locator, type Page } from '@playwright/test'
 import type { JobItem } from '../src/lib/api/types';
 import { ADMIN_TABS_LABEL, ADMIN_WORKER_POOL_HREF } from '../src/lib/constants/admin';
 import {
-	DIALOG_CANCEL_LABEL,
 	EDITOR_OPEN_WORKER_POOL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_TITLE
 } from '../src/lib/constants';
+import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { sameOriginHeaders, ONLY_IN_SHELL } from './helpers';
 import {

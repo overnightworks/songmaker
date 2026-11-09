@@ -27,10 +27,9 @@ import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	SONG_TITLE_LABEL,
-	songEditorOpenLabel,
-	SEARCH_OPEN_LABEL
+	songEditorOpenLabel
 } from '../src/lib/constants';
-import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
+import { SEARCH_OPEN_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { NEW_ALBUM_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import {

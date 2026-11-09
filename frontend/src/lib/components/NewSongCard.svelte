@@ -12,7 +12,7 @@
 		NEW_SONG_REFUSED,
 		NEW_SONG_TITLE_LABEL
 	} from '#lib/constants/new-collection.ts';
-	import { newSongCardLabel } from '#lib/constants.ts';
+	import { newSongCardLabel } from '#lib/constants/album.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {

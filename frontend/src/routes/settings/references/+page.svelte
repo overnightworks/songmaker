@@ -25,7 +25,7 @@
 		REFERENCE_KEEP_FAILED,
 		REFERENCE_UNKEEP_FAILED
 	} from '#lib/constants/reference.ts';
-	import { APP_NAME } from '#lib/constants.ts';
+	import { APP_NAME } from '#lib/constants/app.ts';
 	import { createReferencePreview } from '#lib/services/referencePreview.svelte.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 

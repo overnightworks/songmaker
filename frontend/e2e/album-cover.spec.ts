@@ -14,7 +14,8 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import { archiveOwnedAlbum, readSeededLibrary } from './seed';
 import { failCoverJob, seedRunningCoverJob } from './seed-cover';
 import { sameOriginHeaders, workspace } from './helpers';
-import { HITBOX_FREQUENT_PX, UNREACHABLE_RELOAD_DELAYS_MS } from '../src/lib/constants';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '../src/lib/constants';
+import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
 	ALBUM_COVER_EDITING_LABEL,
 	ALBUM_COVER_SUGGESTIONS_RETRY_LABEL

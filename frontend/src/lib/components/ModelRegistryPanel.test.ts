@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '#lib/api/fetch.ts';
 import { lostNetwork } from '#lib/test-utils/network.ts';
-import { COMPACT_LAYOUT_MEDIA, MODEL_REGISTRY_LOAD_FAILED } from '#lib/constants.ts';
+import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
+import { MODEL_REGISTRY_LOAD_FAILED } from '#lib/constants/models.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests

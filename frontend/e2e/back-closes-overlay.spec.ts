@@ -7,7 +7,6 @@ import {
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
 import {
-	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	NOW_PLAYING_LABEL,
@@ -20,6 +19,7 @@ import {
 	TAKE_OVERFLOW_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_SHARE_LABEL
@@ -48,7 +48,7 @@ import {
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	openRailNav,
-	openSettingsSectionFromSearch,
+	openPageFromSearch,
 	playlistEntryRows,
 	shellOf,
 	standsOnLayerEntry,
@@ -352,7 +352,7 @@ async function expectSettingsStands(page: Page): Promise<void> {
 }
 
 function openVoicesFromSearch(page: Page): Promise<void> {
-	return openSettingsSectionFromSearch(page, SETTINGS_SECTION);
+	return openPageFromSearch(page, SETTINGS_SECTION);
 }
 
 async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {

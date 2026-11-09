@@ -29,13 +29,10 @@ import { createRawSnippet, flushSync, mount, tick, unmount, type Snippet } from 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import {
-	COMPACT_LAYOUT_MEDIA,
-	HITBOX_FREQUENT_PX,
-	OFFLINE_STRIP_MESSAGE,
-	SEARCH_OPEN_LABEL
-} from '#lib/constants.ts';
-import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
+import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
+import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
+import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
+import { SEARCH_OPEN_LABEL, RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 import { SEARCH_SHEET_LABEL } from '#lib/components/PhoneAppBar.svelte';
 import { apiFetch } from '#lib/api/fetch.ts';
 import {

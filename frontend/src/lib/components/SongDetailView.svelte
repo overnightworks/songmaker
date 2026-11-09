@@ -77,7 +77,6 @@
 	import { setGenerationActions, takeActionsFor } from '#lib/contexts/generation-actions.ts';
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 	import {
-		EXPIRY_WARN_DAYS,
 		LIBRARY_NARROW_MEDIA,
 		LIBRARY_PAGE_LABEL,
 		SONG_COVER_ALT_TYPE,
@@ -91,7 +90,6 @@
 		EDITOR_UNSAVED_SAVE_LABEL,
 		EDITOR_UNSAVED_DISCARD_LABEL,
 		TAKES_ERROR,
-		TOAST_UNDO_LABEL,
 		versionDeleteTitle,
 		versionDeleteReplacedBy,
 		versionDeleteLoadedDraftGoes,
@@ -102,8 +100,9 @@
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
 	} from '#lib/constants.ts';
-	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
+	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
 	import {
+		TOAST_UNDO_LABEL,
 		VERSION_DELETE_CONFIRM_LABEL,
 		VERSION_DELETE_DRAFT_GOES,
 		VERSION_DELETE_LOAD_UNDO_GOES,
@@ -111,6 +110,7 @@
 		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 		VERSION_REPLACE_DRAFT_TITLE
 	} from '#lib/constants/versions.ts';
+	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';

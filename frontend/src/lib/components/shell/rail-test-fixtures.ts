@@ -12,7 +12,7 @@ import type {
 	SongItem,
 	SongSummaryResponse
 } from '#lib/api/types.ts';
-import { REDUCED_MOTION_MEDIA } from '#lib/constants.ts';
+import { REDUCED_MOTION_MEDIA } from '#lib/constants/media.ts';
 import { makeSongSummary } from '#lib/test-utils/factories.ts';
 
 // Shared across every Rail*.test.ts in this directory. Vitest only hoists

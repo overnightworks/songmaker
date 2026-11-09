@@ -8,9 +8,9 @@ import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
-	EDITOR_SELECT_MODEL_TITLE,
-	HITBOX_FREQUENT_PX
+	EDITOR_SELECT_MODEL_TITLE
 } from '#lib/constants.ts';
+import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { seedFromTake } from '#lib/stores/recipe.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';

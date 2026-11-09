@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick, untrack, type Snippet } from 'svelte';
-	import { COMPACT_LAYOUT_MAX_PX } from '#lib/constants.ts';
+	import { COMPACT_LAYOUT_MAX_PX } from '#lib/constants/media.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { focusFirstIn, handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 

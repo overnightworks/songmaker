@@ -4,7 +4,7 @@ import Breadcrumb from './Breadcrumb.svelte';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { clearHitboxStyles, injectHitboxStyles, minSquarePx } from '#lib/test-utils/hitbox.ts';
-import { HITBOX_COMPACT_PX } from '#lib/constants.ts';
+import { HITBOX_COMPACT_PX } from '#lib/constants/hitbox.ts';
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;

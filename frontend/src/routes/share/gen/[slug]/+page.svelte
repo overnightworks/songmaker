@@ -5,7 +5,7 @@
 		sharedCollectionFailure,
 		type SharedCollectionFailure
 	} from '#lib/api/shared.ts';
-	import { APP_NAME } from '#lib/constants.ts';
+	import { APP_NAME } from '#lib/constants/app.ts';
 	import SharedCollection from '#lib/components/share/SharedCollection.svelte';
 	import {
 		fromSharedGeneration,

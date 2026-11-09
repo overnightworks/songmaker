@@ -14,19 +14,15 @@ import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
-import {
-	HITBOX_FREQUENT_PX,
-	newSongCardLabel,
-	PLAYING_MARK_LABEL,
-	songEditorOpenLabel
-} from '#lib/constants.ts';
+import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants.ts';
+import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
+import { newSongCardLabel, ALBUM_COVER_ALT_TYPE, ALBUM_NO_SONGS } from '#lib/constants/album.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '#lib/constants/transport.ts';
-import { ALBUM_COVER_ALT_TYPE, ALBUM_NO_SONGS } from '#lib/constants/album.ts';
 import { NEW_SONG_CLOSE_LABEL, NEW_SONG_ROW_LABEL } from '#lib/constants/new-collection.ts';
 import {
 	accessibleName,

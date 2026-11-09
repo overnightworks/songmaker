@@ -6,10 +6,9 @@
 // created on the wire, so making its first song leaves the seeded album alone.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
-import { newSongCardLabel } from '../src/lib/constants';
+import { newSongCardLabel, ALBUM_NO_SONGS } from '../src/lib/constants/album';
 import { COLLECTION_MENU_LABEL } from '../src/lib/constants/collection-menu';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
-import { ALBUM_NO_SONGS } from '../src/lib/constants/album';
 import {
 	NEW_PLACE_CREATE_LABEL,
 	NEW_SONG_CLOSE_LABEL,

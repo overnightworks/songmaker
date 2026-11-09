@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OFFLINE_STRIP_MESSAGE } from '#lib/constants.ts';
+import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests

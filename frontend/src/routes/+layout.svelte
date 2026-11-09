@@ -24,7 +24,7 @@
 	import type { Place } from '#lib/stores/libraryContext.ts';
 	import NowPlaying from '#lib/components/NowPlaying.svelte';
 	import PlayerBar from '#lib/components/PlayerBar.svelte';
-	import { APP_NAME } from '#lib/constants.ts';
+	import { APP_NAME } from '#lib/constants/app.ts';
 	import { AUTH_CHECK_RETRY_LABEL } from '#lib/constants/auth.ts';
 	import { HITBOX_STYLE } from '#lib/styles/hitbox.ts';
 	import OfflineStrip from '#lib/components/OfflineStrip.svelte';

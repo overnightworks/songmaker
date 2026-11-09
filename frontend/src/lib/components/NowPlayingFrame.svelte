@@ -9,12 +9,8 @@
 		transportIsBusy,
 		transportWaitingNotice
 	} from '#lib/services/audioPlayer.svelte.ts';
-	import {
-		HITBOX_FREQUENT_PX,
-		NOW_PLAYING_LABEL,
-		SONG_NEXT_LABEL,
-		SONG_PREVIOUS_LABEL
-	} from '#lib/constants.ts';
+	import { NOW_PLAYING_LABEL, SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants.ts';
+	import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 	import {
 		NOW_PLAYING_COLLAPSE_LABEL,
 		NOW_PLAYING_DOCKED_WIDTH_PX,

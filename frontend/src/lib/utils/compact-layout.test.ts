@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { COMPACT_LAYOUT_MEDIA } from '#lib/constants.ts';
+import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import { subscribeCompactLayout } from './compact-layout';
 
 type MediaListener = (event: MediaQueryListEvent) => void;
