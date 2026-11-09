@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { AccountMenu as AccountPanel, type ThemeChoice } from 'overnightworks-appkit';
+	import { AccountMenu as AccountPanel, type ThemeChoice } from 'overnightworks-design';
 	import {
 		ACCOUNT_MENU_CLOSE_LABEL,
 		ACCOUNT_MENU_LABEL,
