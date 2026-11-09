@@ -1,8 +1,0 @@
-claim_id = "32f94760f5224475814fc386cd0ef8e1"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "a7f8813ecd4e4eeb971e83dea948a0eb96d564b6"
-branch = "claude/issue-2805-constants-library"
-scope = ["frontend/e2e", "frontend/src/lib/api", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/stores", "frontend/src/routes", "quality/baseline.toml"]
-opened_commit = "b765948afac688610f739ae3d180c1a0d7839a52"
-whole_reason = "One pure move: the Library family leaves the catch-all together, and every caller re-points in the same change, or the build breaks."
