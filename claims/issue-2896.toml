@@ -1,7 +1,0 @@
-claim_id = "36414d0068c642d3a49bef6aad6a6618"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "127768ca3e89251b7964a5f77c95fae6f957ccdd"
-branch = "claude/issue-2896-backend-failure-answers"
-scope = ["src/songmaker_cli/agent/backend.py"]
-opened_commit = "a3ebb4f68516457a924cb3febf569e44227be785"
