@@ -145,15 +145,12 @@ def wait_for_health(
     handle: SubprocessHandle,
     *,
     timeout: float | None = None,
-    poll: float | None = None,
     sleeper: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> None:
     settings = get_worker_settings()
     if timeout is None:
         timeout = settings.acestep_startup_timeout_seconds
-    if poll is None:
-        poll = settings.acestep_health_poll_seconds
     deadline = clock() + timeout
     while clock() < deadline:
         if is_acestep_healthy(handle.port):
@@ -161,7 +158,7 @@ def wait_for_health(
         if handle.process.poll() is not None:
             tail = _read_stderr_tail(handle)
             raise SubprocessStartError(f"ACE-Step subprocess exited: {tail}")
-        sleeper(poll)
+        sleeper(settings.acestep_health_poll_seconds)
     tail = _read_stderr_tail(handle, max_chars=2000)
     suffix = f"\n--- last log lines ---\n{tail}" if tail else ""
     raise SubprocessStartError(
@@ -255,6 +252,7 @@ def start_acestep_subprocess(
 def stop_acestep_subprocess(handle: SubprocessHandle) -> None:
     settings = get_worker_settings()
     process = handle.process
+    assert process.stdout is not None  # noqa: S101 - the one Popen opens stdout as a pipe; this narrows the type
     try:
         if process.poll() is not None:
             return
@@ -269,11 +267,10 @@ def stop_acestep_subprocess(handle: SubprocessHandle) -> None:
         except ProcessLookupError:
             pass
     finally:
-        if process.stdout is not None:
-            try:
-                process.stdout.close()
-            except OSError:
-                pass
+        try:
+            process.stdout.close()
+        except OSError:
+            pass
         if handle.log_thread is not None and handle.log_thread.is_alive():
             handle.log_thread.join(timeout=2.0)
             handle.log_thread = None

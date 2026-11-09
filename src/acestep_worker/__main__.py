@@ -110,14 +110,8 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
 
     redis_client: Redis = Redis.from_url(settings.redis_url, decode_responses=False)
 
-    cache_box: dict[str, ModelCache] = {}
-
-    def on_log_line(line: str) -> None:
-        cache = cache_box.get("cache")
-        if cache is not None:
-            cache.set_loading_log_line(line)
-
-    log_sink: Callable[[str], None] = on_log_line
+    def log_sink(line: str) -> None:
+        cache.set_loading_log_line(line)
 
     loader, unloader = make_acestep_runner(
         checkpoint_dir=checkpoint_dir,
@@ -133,7 +127,6 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         unloader=unloader,
         vram_reader=lambda: read_gpu_vram_stats(settings.gpu_id or 0),
     )
-    cache_box["cache"] = cache
     task_store = TaskStore()
 
     deps = WorkerDeps(
