@@ -464,6 +464,7 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 			const target = await renderCollection({ tracks });
 			expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
 			expect(target.querySelector('[role="status"]')?.textContent).toBe(SHARE_NO_AUDIO_NOTICE);
+			expect(target.textContent).toContain('KI-generiert');
 			expect(target.querySelector('.now-playing, .np-lyrics, .np-queue')).toBeNull();
 			expect(audioPlayer.current).toBeNull();
 		}
