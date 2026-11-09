@@ -1,7 +1,8 @@
 """The one owner that derives the database connection URL.
 
 Constructs no ``Settings``: alembic's ``env.py`` uses it too and must not need
-the application configuration; it reads only the secret-file location constants.
+the application configuration; it reads only the secret-file location constants
+and the password its caller hands it.
 ``Settings`` cannot own the derivation because the layer contract keeps
 ``settings`` below ``db``.
 """
@@ -65,6 +66,19 @@ def password_from_secret_file(directory: Path = SECRETS_DIRECTORY) -> str | None
     return password
 
 
-def database_url_from_environment(base_url: str) -> URL:
-    """Return ``base_url`` joined with the mounted password secret, as ``env.py`` needs it."""
-    return database_url_with_password(base_url, password_from_secret_file())
+def database_url_from_environment(
+    base_url: str,
+    variable_password: str | None,
+) -> URL:
+    """Return ``base_url`` joined with the password, as ``env.py`` needs it.
+
+    ``variable_password`` (``POSTGRES_PASSWORD``, read by the caller) wins over the
+    secret file, as ``Settings.postgres_password`` does for the app. ``Settings``
+    cannot be built here: it also requires ``REDIS_URL``, ``SESSION_SECRET`` and
+    ``SONGMAKER_INTERNAL_TOKEN``, which a hand-run alembic does not have.
+    """
+    if variable_password == "":
+        raise RuntimeError("POSTGRES_PASSWORD is empty")
+    if variable_password is None:
+        variable_password = password_from_secret_file()
+    return database_url_with_password(base_url, variable_password)

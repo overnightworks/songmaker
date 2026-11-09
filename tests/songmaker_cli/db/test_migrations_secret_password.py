@@ -71,24 +71,51 @@ def _mount_secrets_at(monkeypatch: pytest.MonkeyPatch, directory: Path) -> None:
     )
 
 
-def test_env_py_joins_the_environment_url_and_the_password_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(("variable", "file", "expected"), [
+    (None, None, None),
+    ("from-variable", None, "from-variable"),
+    (None, PASSWORD_WITH_SPECIALS, PASSWORD_WITH_SPECIALS),
+    ("from-variable", "from-file", "from-variable"),
+])
+def test_env_py_takes_the_password_the_app_takes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    variable: str | None,
+    file: str | None,
+    expected: str | None,
 ) -> None:
-    (tmp_path / settings_module.DATABASE_PASSWORD_SECRET_FILE).write_text(PASSWORD_WITH_SPECIALS)
+    if file is not None:
+        (tmp_path / settings_module.DATABASE_PASSWORD_SECRET_FILE).write_text(file)
     _mount_secrets_at(monkeypatch, tmp_path)
     monkeypatch.setenv("DATABASE_URL", "postgresql://app@db/songs")
+    if variable is None:
+        monkeypatch.delenv("POSTGRES_PASSWORD", raising=False)
+    else:
+        monkeypatch.setenv("POSTGRES_PASSWORD", variable)
 
     url = make_url(_url_alembic_configures(monkeypatch))
 
-    assert url.password == PASSWORD_WITH_SPECIALS
+    assert url.password == expected
 
 
 def test_env_py_uses_the_environment_url_alone_without_a_password_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _mount_secrets_at(monkeypatch, tmp_path / "absent")
+    monkeypatch.delenv("POSTGRES_PASSWORD", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://app:today@db/songs")
 
     assert _url_alembic_configures(monkeypatch) == (
         f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://app:today@db/songs"
     )
+
+
+def test_env_py_refuses_an_empty_password_variable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mount_secrets_at(monkeypatch, tmp_path)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://app@db/songs")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "")
+
+    with pytest.raises(RuntimeError, match="POSTGRES_PASSWORD is empty"):
+        _url_alembic_configures(monkeypatch)
