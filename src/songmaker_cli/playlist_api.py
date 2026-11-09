@@ -451,10 +451,17 @@ def api_share_playlist(
     )
 
 
+_UNSHARE_PLAYLIST_DESCRIPTION = (
+    "End the share of one of the person's own playlists. "
+    "Its public link stops working for good, and sharing the playlist again makes a new link."
+)
+
+
 @router.delete(
     "/playlists/{playlist_id}/share",
+    description=_UNSHARE_PLAYLIST_DESCRIPTION,
+    openapi_extra=agent_tool(name="unshare_playlist", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
-    openapi_extra=exclude_route(Exclusion.ENDING_A_SHARE),
 )
 def api_unshare_playlist(
     playlist_id: str,

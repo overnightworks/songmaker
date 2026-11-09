@@ -51,8 +51,6 @@ class Exclusion(StrEnum):
     PUBLIC_VIEW = "serves a share to visitors without an account"
     BROWSER_ONLY = "a file, a stream, an upload or a notice that only the browser can use"
     NOT_A_PERSONS_ACTION = "the app's own or a monitor's call, not an action of the person"
-    ENDING_A_SHARE = "ending a share invalidates its public link for good"
-    DELETION_AFTER_WINDOW = "starts a deletion after a window"
     CONVERSATION_MEMORY = "an admin's conversations and notes can quote another person's song"
 
 

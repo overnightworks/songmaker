@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import GENERATION_NOT_FOUND_DETAIL, check_generation_access
 from songmaker_cli.api_models import RateRequest, RateResponse, StatusResponse
 from songmaker_cli.app_context import get_db_session
@@ -77,13 +77,21 @@ def _mark_generation(
         raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
 
 
+_PICK_TAKE_DESCRIPTION = (
+    "Pick one of the person's own takes as its song's chosen take. "
+    "The song's previous pick loses its protection from cleanup. "
+    "On a shared song or album, visitors then hear the new pick."
+)
+
+
 @router.post(
     "/generations/{gen_id}/pick",
+    description=_PICK_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="pick_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Generation does not exist"},
         409: {"description": ARCHIVED_TAKE_DETAIL},
     },
-    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_pick_generation(
     gen_id: str,
@@ -93,10 +101,17 @@ def api_pick_generation(
     return _mark_generation(gen_id, user, session, pick_generation)
 
 
+_UNPICK_TAKE_DESCRIPTION = (
+    "Remove the pick from one of the person's own takes. "
+    "An unpicked take can be archived by cleanup and deleted later."
+)
+
+
 @router.post(
     "/generations/{gen_id}/unpick",
+    description=_UNPICK_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="unpick_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Generation does not exist"}},
-    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_unpick_generation(
     gen_id: str,
@@ -126,10 +141,17 @@ def api_keep_generation(
     return _mark_generation(gen_id, user, session, keep_generation)
 
 
+_UNKEEP_TAKE_DESCRIPTION = (
+    "Stop protecting one of the person's own takes from cleanup. "
+    "An unkept take can be archived by cleanup and deleted later."
+)
+
+
 @router.post(
     "/generations/{gen_id}/unkeep",
+    description=_UNKEEP_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="unkeep_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Generation does not exist"}},
-    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_unkeep_generation(
     gen_id: str,
