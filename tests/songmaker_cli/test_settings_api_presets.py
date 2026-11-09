@@ -173,3 +173,33 @@ def test_setting_an_own_preset_as_default_clears_the_previous_one(people):
     assert response.status_code == 200
     defaults = {preset_id: row[2] for preset_id, row in _stored_presets(factory).items()}
     assert defaults == {first["id"]: False, second["id"]: True, bens["id"]: True}
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({"params": {"inference_steps": 12}}, ({"inference_steps": 12}, True)),
+        ({"is_default": False}, ({}, False)),
+    ],
+    ids=["new params", "default cleared"],
+)
+def test_an_update_changes_only_what_it_sends(people, body, expected):
+    clients, _ = people
+    preset = _create(clients["ana"], "warm", is_default=True)
+
+    response = clients["ana"].put(f"{PRESETS_URL}/{preset['id']}", json=body)
+
+    assert response.status_code == 200
+    (listed,) = clients["ana"].get(PRESETS_URL).json()
+    assert (listed["params"], listed["is_default"]) == expected
+
+
+def test_a_preset_for_a_model_the_app_does_not_offer_is_refused(people):
+    clients, factory = people
+
+    response = clients["ana"].post(
+        PRESETS_URL, json={"name": "warm", "model_mode": "nomodel", "params": {}},
+    )
+
+    assert response.status_code == 422
+    assert _stored_presets(factory) == {}

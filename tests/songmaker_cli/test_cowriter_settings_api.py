@@ -99,6 +99,16 @@ def test_c15_put_cowriter_settings_saves_the_budget_and_records_the_audit_line(a
         assert session.query(AuditLog).one().detail == "tail_token_budget=6000"
 
 
+def test_c15_a_second_put_changes_the_saved_budget(admin_client):
+    client, _ = admin_client
+    client.put("/api/settings/cowriter", json={"tail_token_budget": 6000})
+
+    response = client.put("/api/settings/cowriter", json={"tail_token_budget": 7000})
+
+    assert response.status_code == 200
+    assert client.get("/api/settings/cowriter").json()["tail_token_budget"] == 7000
+
+
 @pytest.mark.parametrize(
     "extra",
     [

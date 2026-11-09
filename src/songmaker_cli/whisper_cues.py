@@ -64,15 +64,13 @@ class WhisperCue(TimedTranscriptSpan):
         return cls.model_validate(raw)
 
 
-def stored_whisper_cues(value: object) -> list[dict] | None:
+def stored_whisper_cues(value: object) -> list[dict]:
     """Normalize cues for the JSON column.
 
     Dumped without its null fields so a cue stores only the time marks it
     actually has, and a wordless cue keeps the shape it had before word
     timestamps existed.
     """
-    if value is None:
-        return None
     if not isinstance(value, list):
         msg = f"whisper_cues must be a list or None, got {type(value).__name__}"
         raise TypeError(msg)
@@ -84,7 +82,4 @@ def stored_whisper_cues(value: object) -> list[dict] | None:
 def generation_whisper_cues(value: object) -> list[WhisperCue] | None:
     if value is None:
         return None
-    if not isinstance(value, list):
-        msg = f"whisper_cues must be a list or None, got {type(value).__name__}"
-        raise TypeError(msg)
     return [WhisperCue.from_orm(item) for item in value]
