@@ -1,0 +1,8 @@
+claim_id = "bc01419951a94bed93ed1faef941d358"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2b39415a1f857a8f37ecaefd50b8a35313bdb627"
+branch = "claude/issue-2837-cowriter-owner-conversation-tools"
+scope = ["docs/architecture.md", "docs/security.md", "src/songmaker_cli/agent/mcp.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/cowriter/turn_context.py", "src/songmaker_cli/memory_api.py", "tests/songmaker_cli/agent/test_mcp_job_reach.py", "tests/songmaker_cli/agent/test_mcp_person_conversation_tools.py", "tests/songmaker_cli/agent/test_mcp_person_front.py", "tests/songmaker_cli/agent/test_mcp_person_tools.py", "tests/songmaker_cli/cowriter/test_tools_ownership.py", "tests/support/mcp_tool_table.py", "tests/support/mcp_world.py"]
+opened_commit = "3799a195b9d257f9a612b8cdef1a93331287589c"
+whole_reason = "One ruled line: the owner rule, the four marks, the reason that goes and the pinned list land together."
