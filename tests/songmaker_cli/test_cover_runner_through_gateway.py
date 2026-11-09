@@ -153,7 +153,7 @@ def _problem_of(response) -> str:
     return response.json()["detail"]["problem"]
 
 
-# 1 and 23: a member gets one suggestion, and only that run spends the count.
+# 1 and 23: a member gets one suggestion.
 def test_a_member_gets_one_suggestion_drawn_by_the_picture_agent(world):
     job_id = world.queue()
 
@@ -226,7 +226,6 @@ def test_the_click_refuses_before_any_job_and_any_request(
     declared_suggest_refusal(status).model_validate(response.json())
     assert world.jobs() == 0
     assert world.stack.gateway_requests == []
-    assert world.completed_covers() == 0
 
 
 # 3, 4, 5, 6 and 7: the job checks again at its start, and a refusal sends nothing.
@@ -334,7 +333,7 @@ def _empty_entry() -> Reply:
         "non-canonical-base64", "empty", "not-an-image", "over-8-mib", "over-20-mp", "webp",
     ],
 )
-def test_a_picture_that_does_not_come_out_ends_unavailable_and_spends_nothing(
+def test_a_picture_that_does_not_come_out_ends_unavailable(
     world, reply, problem,
 ):
     world.stack.replies(reply)
@@ -346,7 +345,6 @@ def test_a_picture_that_does_not_come_out_ends_unavailable_and_spends_nothing(
     assert (job.status, job.error_type) == (JobStatus.FAILED, problem.value)
     assert job.retry_after_seconds is None
     assert world.suggestions() == []
-    assert world.completed_covers() == 0
     assert not list(world.audio_dir.rglob("*.png"))
 
 
@@ -362,7 +360,6 @@ def test_a_busy_gateway_ends_busy_and_keeps_the_wait_it_named(world):
     )
     served = world.client.get(f"/api/jobs/{job_id}").json()
     assert (served["error_type"], served["retry_after_seconds"]) == ("busy", 42)
-    assert world.completed_covers() == 0
 
 
 def test_an_unreachable_gateway_ends_unavailable(world, tmp_path):

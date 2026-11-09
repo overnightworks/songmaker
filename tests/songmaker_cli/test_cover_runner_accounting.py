@@ -187,7 +187,7 @@ def test_late_cancellation_preserves_publication_with_a_preloaded_job(
 def test_postgresql_serializes_publication_and_cancellation(
     accounting_factory, running_cover, winner,
 ):
-    """1301-F3-C1-ATOMIC: the first terminal transition owns image and charge."""
+    """1301-F3-C1-ATOMIC: the first terminal transition owns the image."""
     engine = accounting_factory.kw["bind"]
     publication_locked = threading.Event()
     allow_publication = threading.Event()

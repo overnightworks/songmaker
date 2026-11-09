@@ -84,7 +84,7 @@
 	let followedRunId = $state<string | null>(null);
 	// A refusal at the click is this view's alone: the next load, sign-in or click asks again.
 	let clickProblem = $state<CoverProblem | null>(null);
-	// The request throttle's words, in the daily limit's place and tone, until the next ask.
+	// The request throttle's words, until the next ask.
 	let throttleNote = $state<string | null>(null);
 	let now = $state(Date.now());
 	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
@@ -138,8 +138,8 @@
 	);
 
 	// The album page keeps the cover state read; the editor shows it. Opening
-	// reads it once more, so a day that turned while the page stayed open frees
-	// the quota; a read only looks, and only Suggest makes a suggestion. Leaving
+	// reads it once more, so a state that changed while the page stayed open shows;
+	// a read only looks, and only Suggest makes a suggestion. Leaving
 	// the editor -- Back, Escape, another page or album -- stops and discards
 	// nothing, and reads the state once more for the closed cover; only ×, Use
 	// and Upload discard.
