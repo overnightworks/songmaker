@@ -13,7 +13,7 @@ from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.backend import TurnCaller, cover_admission
-from songmaker_cli.agent.mcp import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,
@@ -224,10 +224,12 @@ def api_create_album(
 
 @router.put(
     "/albums/{album_id}",
+    description="Change an own album's title, subtitle or year; a field left out stays as it is.",
     responses={
         404: {"description": "Album not found"},
         422: {"description": "Album title is required"},
     },
+    openapi_extra=agent_tool(name="update_album", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_update_album(
     album_id: str, req: AlbumUpdateRequest,
@@ -268,7 +270,7 @@ def api_update_album(
     return _single_album_response(session, album)
 
 
-@router.delete("/albums/{album_id}")
+@router.delete("/albums/{album_id}", openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW))
 def api_delete_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -360,7 +362,7 @@ def api_unarchive_album(
     return _single_album_response(session, album)
 
 
-@router.post("/albums/{album_id}/share")
+@router.post("/albums/{album_id}/share", openapi_extra=exclude_route(Exclusion.SHARING))
 def api_share_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -382,7 +384,7 @@ def api_share_album(
     )
 
 
-@router.delete("/albums/{album_id}/share")
+@router.delete("/albums/{album_id}/share", openapi_extra=exclude_route(Exclusion.ENDING_A_SHARE))
 def api_unshare_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -398,6 +400,7 @@ def api_unshare_album(
 @router.get(
     "/albums/{album_id}/cover",
     responses={404: {"description": "Album or cover not found"}},
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 async def api_get_album_cover(
     album_id: str,
@@ -412,7 +415,7 @@ async def api_get_album_cover(
     return cover_file_response(resolve_cover_file, ctx.audio_dir, album, variant, v)
 
 
-@router.post("/albums/{album_id}/cover")
+@router.post("/albums/{album_id}/cover", openapi_extra=exclude_route(Exclusion.BROWSER_ONLY))
 async def api_upload_album_cover(
     album_id: str,
     file: UploadFile,
@@ -449,6 +452,7 @@ async def api_upload_album_cover(
             "model": CoverSuggestionUnavailableBody,
         },
     },
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 def api_create_cover_suggestions(
     album_id: str,
@@ -505,6 +509,7 @@ def api_list_cover_suggestions(
 @router.get(
     "/albums/{album_id}/cover-suggestions/{suggestion_id}",
     responses={404: {"description": "Album or cover suggestion not found"}},
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 def api_get_cover_suggestion(
     album_id: str,
@@ -531,6 +536,7 @@ def api_get_cover_suggestion(
         404: {"description": "Album or cover suggestion not found"},
         422: {"description": "Cover suggestion cannot be used"},
     },
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_select_album_cover_suggestion(
     album_id: str,
@@ -564,6 +570,7 @@ def api_select_album_cover_suggestion(
 @router.delete(
     "/albums/{album_id}/cover-suggestions",
     responses={422: {"description": "Nothing named to discard"}},
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_cover_suggestions(
     album_id: str,
@@ -585,7 +592,7 @@ def api_delete_cover_suggestions(
     return StatusResponse()
 
 
-@router.delete("/albums/{album_id}/cover")
+@router.delete("/albums/{album_id}/cover", openapi_extra=exclude_route(Exclusion.FINAL_DELETION))
 def api_delete_album_cover(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),

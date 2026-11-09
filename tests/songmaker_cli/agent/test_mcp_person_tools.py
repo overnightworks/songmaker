@@ -27,6 +27,9 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import (
     Album,
+    CowriterAlbumMemory,
+    CowriterSongMemory,
+    CowriterUserMemory,
     Generation,
     GenerationPreset,
     Job,
@@ -36,6 +39,7 @@ from songmaker_cli.db.models import (
     ReferenceRecording,
     Song,
     UserLora,
+    UserLoraSample,
     Version,
 )
 from songmaker_cli.db.queries.activity import record_song_edit, record_song_played
@@ -161,6 +165,28 @@ WRITES_ON_ONE_RESOURCE = [
          crossed=True),
     Tool("add_song_to_playlist", "POST", "/api/playlists/{playlist_id}/entries/song",
          lambda s, o: {"playlist_id": f"playlist-{s}", "song_id": f"song-{o}"}, crossed=True),
+    Tool("update_album", "PUT", "/api/albums/{album_id}",
+         lambda s, o: {"album_id": f"album-{s}", "title": "Renamed album"}),
+    Tool("update_playlist", "PUT", "/api/playlists/{playlist_id}",
+         lambda s, o: {"playlist_id": f"playlist-{s}", "title": "Renamed list"}),
+    Tool("move_playlist_entry", "PATCH", "/api/playlists/{playlist_id}/entries/{entry_id}/position",
+         lambda s, o: {"playlist_id": f"playlist-filled-{s}", "entry_id": f"entry-{s}",
+                       "new_position": 1}),
+    Tool("remove_playlist_entry", "DELETE", "/api/playlists/{playlist_id}/entries/{entry_id}",
+         lambda s, o: {"playlist_id": f"playlist-filled-{s}", "entry_id": f"entry-{s}-extra"}),
+    Tool("update_preset", "PUT", "/api/settings/presets/{preset_id}",
+         lambda s, o: {"preset_id": f"preset-{s}", "name": "Renamed preset"}),
+    Tool("rename_song", "PUT", "/api/songs/{song_id}/title",
+         lambda s, o: {"song_id": f"song-{s}", "title": "Renamed song"}),
+    Tool("move_song", "PUT", "/api/songs/{song_id}/album",
+         lambda s, o: {"song_id": f"song-{s}", "album_id": f"album-{o}"}, crossed=True),
+    Tool("update_lora_sample", "PATCH", "/api/loras/{lora_id}/samples/{sample_id}",
+         lambda s, o: {"lora_id": f"lora-{s}", "sample_id": f"sample-{s}-0",
+                       "caption": "new caption"}),
+    Tool("write_song_memory", "PUT", "/api/memory/songs/{song_id}",
+         lambda s, o: {"song_id": f"song-{s}", "body": "a note"}),
+    Tool("write_album_memory", "PUT", "/api/memory/albums/{album_id}",
+         lambda s, o: {"album_id": f"album-{s}", "body": "a note"}),
 ]
 
 # Writes that make something new for the person.
@@ -169,6 +195,10 @@ CREATIONS = [
     Tool("create_playlist", "POST", "/api/playlists", lambda s, o: {"title": "Fresh list"}),
     Tool("create_preset", "POST", "/api/settings/presets",
          lambda s, o: {"name": "Fresh preset", "model_mode": "sft", "params": {}}),
+    Tool("set_theme", "PUT", "/api/settings/theme", lambda s, o: {"theme": "dark"}),
+    Tool("set_default_config", "PUT", "/api/settings/default-config",
+         lambda s, o: {"config": f"preset-{s}"}),
+    Tool("write_user_memory", "PUT", "/api/memory/user", lambda s, o: {"body": "a note"}),
 ]
 
 ALL_TOOLS = [*READS_OF_ONE_RESOURCE, *PLAIN_READS, *WRITES_ON_ONE_RESOURCE, *CREATIONS]
@@ -186,7 +216,7 @@ def _browser(world: McpWorld, tool: Tool, subject: str, headers: dict[str, str])
     path, left = tool.request(subject)
     if tool.method == "GET":
         return world.world.client.get(path, params=left, headers=headers)
-    return world.world.client.post(path, json=left, headers=headers)
+    return world.world.client.request(tool.method, path, json=left, headers=headers)
 
 
 # -- reads of a stranger's content -------------------------------------------------------
@@ -297,6 +327,26 @@ _EFFECTS = [
      ("name", "created_by"), ("Fresh", TokenWorld.ALICE)),
     ("create_lora", {"name": "Fresh"}, UserLora, ("name", "user_id"),
      ("Fresh", TokenWorld.ALICE)),
+    ("update_album", {"album_id": "album-alices", "title": "Renamed"}, Album, ("id", "title"),
+     ("album-alices", "Renamed")),
+    ("update_playlist", {"playlist_id": "playlist-alices", "title": "Renamed"}, Playlist,
+     ("id", "title"), ("playlist-alices", "Renamed")),
+    ("move_playlist_entry", {"playlist_id": "playlist-filled-alices", "entry_id": "entry-alices",
+                             "new_position": 1}, PlaylistEntry, ("id", "position"),
+     ("entry-alices", 1)),
+    ("update_preset", {"preset_id": "preset-alices", "name": "Renamed"}, GenerationPreset,
+     ("id", "name"), ("preset-alices", "Renamed")),
+    ("rename_song", {"song_id": "song-alices", "title": "Renamed"}, Song, ("id", "title"),
+     ("song-alices", "Renamed")),
+    ("update_lora_sample", {"lora_id": "lora-alices", "sample_id": "sample-alices-0",
+                            "caption": "new caption"}, UserLoraSample, ("id", "caption"),
+     ("sample-alices-0", "new caption")),
+    ("write_song_memory", {"song_id": "song-alices", "body": "a note"}, CowriterSongMemory,
+     ("song_id", "body"), ("song-alices", "a note")),
+    ("write_album_memory", {"album_id": "album-alices", "body": "a note"}, CowriterAlbumMemory,
+     ("album_id", "body"), ("album-alices", "a note")),
+    ("write_user_memory", {"body": "a note"}, CowriterUserMemory, ("user_id", "body"),
+     (TokenWorld.ALICE, "a note")),
 ]
 
 
@@ -314,6 +364,58 @@ def test_a_write_tool_changes_the_persons_own_resource_and_not_the_strangers(
     assert reply.is_error is False
     assert row in household.rows_of(model, *columns)
     assert [r for r in household.rows_of(model, *columns) if BOB in repr(r)] == bobs_before
+
+
+def test_removing_a_playlist_entry_takes_out_the_callers_entry_and_no_other(
+    household: McpWorld,
+) -> None:
+    reply = household.call("remove_playlist_entry", {
+        "playlist_id": "playlist-filled-alices", "entry_id": "entry-alices-extra"})
+
+    assert reply.is_error is False
+    assert {row[0] for row in household.rows_of(PlaylistEntry, "id")} == {
+        "entry-alices", "entry-bobs", "entry-bobs-extra"}
+
+
+def test_moving_a_song_puts_the_callers_song_into_the_callers_other_album(
+    household: McpWorld,
+) -> None:
+    other = household.call("create_album", {"title": "Second"}).json()["id"]
+
+    reply = household.call("move_song", {"song_id": "song-alices", "album_id": other})
+
+    assert reply.is_error is False
+    assert ("song-alices", other) in household.rows_of(Song, "id", "album_id")
+    assert ("song-bobs", "album-bobs") in household.rows_of(Song, "id", "album_id")
+
+
+def test_the_theme_and_the_default_configuration_are_set_for_the_caller_only(
+    household: McpWorld,
+) -> None:
+    theme = household.call("set_theme", {"theme": "dark"})
+    config = household.call("set_default_config", {"config": "preset-alices"})
+
+    assert (theme.is_error, config.is_error) == (False, False)
+    assert household.call("get_theme").json() == {"theme": "dark"}
+    assert household.call("get_default_config").json()["config"] == "preset-alices"
+    bob = household.agent(TokenWorld.BOB)
+    assert household.world.client.get("/api/settings/theme", headers=bob).json() != {
+        "theme": "dark"}
+    assert household.world.client.get("/api/settings/default-config", headers=bob).json() == {
+        "config": None}
+
+
+def test_an_album_updated_by_title_alone_keeps_its_subtitle_and_year(household: McpWorld) -> None:
+    with household.world.factory() as session:
+        album = session.get(Album, "album-alices")
+        album.subtitle, album.year = "Kept subtitle", "1999"
+        session.commit()
+
+    reply = household.call("update_album", {"album_id": "album-alices", "title": "Only title"})
+
+    assert reply.is_error is False
+    assert ("Only title", "Kept subtitle", "1999") in household.rows_of(
+        Album, "title", "subtitle", "year")
 
 
 # -- limits the browser meets --------------------------------------------------------------
@@ -514,6 +616,60 @@ def test_an_admins_agent_is_refused_another_persons_job_and_is_a_user_in_the_acc
     assert (account.is_error, account.json()["role"]) == (False, "user")
 
 
+_NEW_TOOLS_ON_A_RESOURCE = [
+    t for t in WRITES_ON_ONE_RESOURCE if t.name in {
+        "update_album", "update_playlist", "move_playlist_entry", "remove_playlist_entry",
+        "update_preset", "rename_song", "move_song", "update_lora_sample", "write_song_memory",
+        "write_album_memory",
+    }
+]
+
+
+@pytest.mark.parametrize("tool", _NEW_TOOLS_ON_A_RESOURCE, ids=lambda t: t.name)
+def test_an_admins_agent_is_refused_the_new_write_tools_on_another_persons_resource(
+    admins_world: McpWorld, tool: Tool,
+) -> None:
+    before = admins_world.snapshot()
+
+    reply = admins_world.call(tool.name, tool.arguments_for(BOB), groups=_ADMIN_GROUPS)
+
+    assert reply.is_error
+    assert admins_world.snapshot() == before
+
+
+@pytest.mark.parametrize("job_type", [JobType.GENERATE, JobType.SCORE])
+def test_an_admins_agent_is_refused_the_job_the_admin_started_on_another_persons_song(
+    admins_world: McpWorld, job_type: JobType,
+) -> None:
+    with admins_world.world.factory() as session:
+        session.add(Job(id="admin-job", type=job_type, status="queued",
+                        user_id=TokenWorld.ALICE, song_id=f"song-{BOB}"))
+        session.commit()
+
+    job = admins_world.call("get_job", {"job_id": "admin-job"}, groups=_ADMIN_GROUPS)
+    cancel = admins_world.call("cancel_job", {"job_id": "admin-job"}, groups=_ADMIN_GROUPS)
+    seed_session(admins_world.world.client, "alice")
+    browser = admins_world.world.client.get("/api/jobs/admin-job")
+
+    assert (job.is_error, cancel.is_error) == (True, True)
+    assert ("admin-job", "queued") in admins_world.rows_of(Job, "id", "status")
+    assert browser.status_code == 200
+
+
+def test_the_reference_counts_of_an_admins_agent_leave_out_uses_in_another_persons_songs(
+    admins_world: McpWorld,
+) -> None:
+    _the_admin_fills_own_containers_with_the_members_content(admins_world)
+
+    reply = admins_world.call("list_references", groups=_ADMIN_GROUPS)
+    seed_session(admins_world.world.client, "alice")
+    browser = admins_world.world.client.get("/api/references")
+
+    own = next(r for r in reply.json()["references"] if r["id"] == f"reference-{ALICE}")
+    seen = next(r for r in browser.json()["references"] if r["id"] == f"reference-{ALICE}")
+    assert (own["used_by_versions"], seen["used_by_versions"]) == (1, 2)
+
+
 # -- cookie sessions and CSRF ---------------------------------------------------------------
 
 
@@ -529,9 +685,9 @@ def test_a_cookie_session_with_csrf_succeeds_on_each_tool_route(
     assert reply.status_code == 200
 
 
-@pytest.mark.parametrize("tool", [t for t in ALL_TOOLS if t.method == "POST"],
+@pytest.mark.parametrize("tool", [t for t in ALL_TOOLS if t.method != "GET"],
                          ids=lambda t: t.name)
-def test_a_cookie_post_without_csrf_is_refused_on_each_tool_route_and_writes_nothing(
+def test_a_cookie_write_without_csrf_is_refused_on_each_tool_route_and_writes_nothing(
     household: McpWorld, tool: Tool,
 ) -> None:
     seed_session(household.world.client, "alice")
@@ -573,6 +729,23 @@ def test_a_playlist_entry_added_by_a_tool_shows_on_the_shared_playlist_under_the
     assert reply.is_error is False
     assert [entry["generation_id"] for entry in entries] == ["take-alices"]
     assert household.call("get_playlist", {"playlist_id": "playlist-alices"}).json()[
+        "share_slug"
+    ] == slug
+
+
+def test_a_playlist_entry_removed_by_a_tool_leaves_the_shared_playlist_under_the_same_slug(
+    household: McpWorld,
+) -> None:
+    slug = _share(household, "/api/playlists/playlist-filled-alices/share")
+    public = household.world.client
+    assert len(public.get(f"/shared/playlist/{slug}").json()["entries"]) == 2
+
+    reply = household.call("remove_playlist_entry", {
+        "playlist_id": "playlist-filled-alices", "entry_id": "entry-alices-extra"})
+
+    assert reply.is_error is False
+    assert len(public.get(f"/shared/playlist/{slug}").json()["entries"]) == 1
+    assert household.call("get_playlist", {"playlist_id": "playlist-filled-alices"}).json()[
         "share_slug"
     ] == slug
 

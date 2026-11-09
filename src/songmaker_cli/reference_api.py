@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.types import Receive, Scope, Send
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.mcp import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import can_access_album
 from songmaker_cli.api_models import (
     ReferenceCountdownShownRequest,
@@ -116,7 +116,9 @@ def api_list_references(
     session: Annotated[Session, Depends(get_db_session)],
 ) -> ReferenceListResponse:
     recordings = list_owned_reference_recordings(session, user.id)
-    counts = reference_link_counts(session, [recording.id for recording in recordings])
+    counts = _link_counts_the_caller_reaches(
+        session, user, reference_link_counts(session, [recording.id for recording in recordings]),
+    )
     publication = get_countdown_publication(session)
     settings = get_settings()
     now = utcnow()
@@ -144,6 +146,7 @@ def api_list_references(
     "/references/countdown-shown",
     status_code=204,
     responses={409: {"description": "The countdown epoch is no longer current"}},
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 def api_countdown_shown(
     body: ReferenceCountdownShownRequest,
@@ -176,6 +179,30 @@ def api_reference_uses(
     return ReferenceUsesResponse.from_orm(_uses_in_albums_the_caller_reaches(session, user, uses))
 
 
+def _link_counts_the_caller_reaches(
+    session: Session, user: AuthenticatedUser, counts: dict[str, ReferenceLinkCounts],
+) -> dict[str, ReferenceLinkCounts]:
+    """The counts of the uses in albums the caller reaches; a reference nothing links keeps zero."""
+    reached = {
+        reference_id: _uses_in_albums_the_caller_reaches(
+            session, user, reference_uses(session, reference_id),
+        )
+        for reference_id, count in counts.items()
+        if not count.is_unlinked
+    }
+    return {
+        reference_id: (
+            ReferenceLinkCounts(
+                versions=len(reached[reference_id].versions),
+                takes=len(reached[reference_id].takes),
+            )
+            if reference_id in reached
+            else count
+        )
+        for reference_id, count in counts.items()
+    }
+
+
 def _uses_in_albums_the_caller_reaches(
     session: Session, user: AuthenticatedUser, uses: ReferenceUses,
 ) -> ReferenceUses:
@@ -195,6 +222,7 @@ def _uses_in_albums_the_caller_reaches(
     "/references/{reference_id}/audio",
     response_class=FileResponse,
     responses={404: {"description": "Reference audio not found or not usable"}},
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 def api_reference_audio(
     reference_id: str,
@@ -233,6 +261,7 @@ def api_reference_audio(
         409: {"description": "Reference audio is in use"},
         500: {"description": "Reference audio storage could not be checked"},
     },
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_reference(
     reference_id: str,
@@ -295,6 +324,7 @@ def api_keep_reference(
 @router.post(
     "/references/{reference_id}/unkeep",
     responses={404: {"description": "Reference audio not found"}},
+    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_unkeep_reference(
     reference_id: str,
@@ -311,6 +341,7 @@ def api_unkeep_reference(
         409: {"description": "Reference audio storage limit reached"},
         500: {"description": "Reference audio storage could not be checked"},
     },
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 async def api_upload_reference(
     file: UploadFile,

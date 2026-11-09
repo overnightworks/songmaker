@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
-from songmaker_cli.agent.mcp import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
     check_generation_access,
     check_generations_access,
@@ -221,6 +221,7 @@ def api_get_generation(
 @router.delete(
     "/generations/{gen_id}",
     responses={404: {"description": "Generation does not exist"}},
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_generation(
     gen_id: str,
@@ -244,6 +245,7 @@ def api_delete_generation(
 @router.post(
     "/generations/bulk-delete",
     responses={404: {"description": "One or more generations do not exist"}},
+    openapi_extra=exclude_route(Exclusion.BULK_DELETION),
 )
 def api_bulk_delete_generations(
     req: BulkDeleteRequest,
@@ -633,6 +635,7 @@ def _mark_generation(
         404: {"description": "Generation does not exist"},
         409: {"description": ARCHIVED_TAKE_DETAIL},
     },
+    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_pick_generation(
     gen_id: str,
@@ -645,6 +648,7 @@ def api_pick_generation(
 @router.post(
     "/generations/{gen_id}/unpick",
     responses={404: {"description": "Generation does not exist"}},
+    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_unpick_generation(
     gen_id: str,
@@ -677,6 +681,7 @@ def api_keep_generation(
 @router.post(
     "/generations/{gen_id}/unkeep",
     responses={404: {"description": "Generation does not exist"}},
+    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_unkeep_generation(
     gen_id: str,
@@ -709,6 +714,7 @@ def api_unarchive_generation(
         404: {"description": "Generation does not exist"},
         409: {"description": ARCHIVED_TAKE_DETAIL},
     },
+    openapi_extra=exclude_route(Exclusion.SHARING),
 )
 def api_share_generation(
     gen_id: str,
@@ -734,6 +740,7 @@ def api_share_generation(
 @router.delete(
     "/generations/{gen_id}/share",
     responses={404: {"description": "Generation does not exist"}},
+    openapi_extra=exclude_route(Exclusion.ENDING_A_SHARE),
 )
 def api_unshare_generation(
     gen_id: str,

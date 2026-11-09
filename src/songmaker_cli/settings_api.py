@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.mcp import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import gen_params_to_json
 from songmaker_cli.api_models import (
     GenerationDefaultsRequest,
@@ -101,7 +101,7 @@ def api_get_generation_defaults(
     return load_generation_defaults(ctx.db, ctx.data_dir)
 
 
-@router.put("/settings/generation-defaults")
+@router.put("/settings/generation-defaults", openapi_extra=exclude_route(Exclusion.ADMIN))
 def api_set_generation_defaults(
     req: GenerationDefaultsRequest,
     _admin: AuthenticatedUser = Depends(require_admin),
@@ -168,10 +168,12 @@ def api_create_preset(
 
 @router.put(
     "/settings/presets/{preset_id}",
+    description="Change the name, parameters or default flag of one of the person's presets.",
     responses={
         404: {"description": "Preset does not exist"},
         409: {"description": PRESET_NAME_EXISTS_DETAIL},
     },
+    openapi_extra=agent_tool(name="update_preset", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_update_preset(
     preset_id: str,
@@ -194,6 +196,7 @@ def api_update_preset(
 @router.delete(
     "/settings/presets/{preset_id}",
     responses={404: {"description": "Preset does not exist"}},
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_preset(
     preset_id: str,
@@ -273,7 +276,7 @@ def api_list_active_models(
     return [_build_model_response(m) for m in models]
 
 
-@router.get("/settings/models/all")
+@router.get("/settings/models/all", openapi_extra=exclude_route(Exclusion.ADMIN))
 def api_list_all_models(
     _admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
@@ -285,6 +288,7 @@ def api_list_all_models(
 @router.put(
     "/settings/models/{model_id}",
     responses={404: {"description": "Model does not exist"}},
+    openapi_extra=exclude_route(Exclusion.ADMIN),
 )
 def api_toggle_model(
     model_id: str,
@@ -321,7 +325,11 @@ def api_get_theme(
     return ThemeSettings(theme=get_user_theme(session, user.id))
 
 
-@router.put("/settings/theme")
+@router.put(
+    "/settings/theme",
+    description="Set the person's colour theme.",
+    openapi_extra=agent_tool(name="set_theme", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_set_theme(
     req: ThemeSettings,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -356,9 +364,13 @@ def api_get_default_config(
 
 @router.put(
     "/settings/default-config",
+    description=(
+        "Set the person's default generation configuration: a built-in or one of their presets."
+    ),
     responses={
         400: {"description": "Default configuration is invalid"},
     },
+    openapi_extra=agent_tool(name="set_default_config", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_set_default_config(
     req: DefaultConfigRequest,
@@ -424,6 +436,7 @@ def api_get_cowriter_settings(
 @router.put(
     "/settings/cowriter",
     responses={422: {"description": "The tail token budget is out of range or a field is unknown"}},
+    openapi_extra=exclude_route(Exclusion.ADMIN),
 )
 def api_set_cowriter_settings(
     req: CowriterSettingsRequest,
@@ -465,7 +478,7 @@ def _get_env_defaults() -> dict[str, int]:
     }
 
 
-@router.get("/settings/rate-limits")
+@router.get("/settings/rate-limits", openapi_extra=exclude_route(Exclusion.ADMIN))
 def api_get_rate_limits(
     _admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
@@ -484,6 +497,7 @@ def api_get_rate_limits(
 @router.put(
     "/settings/rate-limits",
     responses={400: {"description": "Rate-limit setting or value is invalid"}},
+    openapi_extra=exclude_route(Exclusion.ADMIN),
 )
 def api_update_rate_limits(
     req: RateLimitUpdateRequest,

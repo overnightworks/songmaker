@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session
 from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.mcp import ToolEffect, agent_tool
-from songmaker_cli.api_helpers import get_cached_limiter
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
+from songmaker_cli.api_helpers import check_song_access_including_deleted, get_cached_limiter
 from songmaker_cli.api_models import JobResponse
 from songmaker_cli.app_context import AppContext, get_db_session
 from songmaker_cli.auth_dependencies import authenticate_request, get_current_user
@@ -101,6 +101,7 @@ def api_get_job(
         429: {"description": "Too many open job streams"},
         503: {"description": "Job stream limiter is unavailable"},
     },
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 def api_stream_job(job_id: str, request: Request) -> StreamingResponse:
     # No `Depends()` at all here on purpose (#331 Findings 1/2, review
@@ -299,12 +300,29 @@ ADMIN_ONLY_JOB_TYPES: Final = frozenset({
 })
 
 
+def _reaches_job_song(session: Session, job: Job, user: AuthenticatedUser) -> bool:
+    """Whether the caller reaches the song a job works on; a job without one has no owner to ask.
+
+    An admin's job on another person's song answers a caller not admitted as admin, such as
+    the admin's own agent, as if it did not exist.
+    """
+    if job.song_id is None:
+        return True
+    try:
+        check_song_access_including_deleted(session, job.song_id, user)
+    except HTTPException:
+        return False
+    return True
+
+
 def _check_job_access(session: Session, job_id: str, user: AuthenticatedUser) -> Job:
     job = get_job(session, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     if user.role != AppRole.ADMIN and (
-        job.user_id != user.id or job.type in ADMIN_ONLY_JOB_TYPES
+        job.user_id != user.id
+        or job.type in ADMIN_ONLY_JOB_TYPES
+        or not _reaches_job_song(session, job, user)
     ):
         raise HTTPException(404, "Job not found")
     return job

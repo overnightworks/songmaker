@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_helpers import (
     audio_file_response,
     audio_response,
@@ -145,6 +146,7 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
 @router.get(
     "/shared/{slug}/cover",
     responses={404: {"description": "Shared album or cover not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 async def get_shared_album_cover(
     slug: str,
@@ -162,6 +164,7 @@ async def get_shared_album_cover(
 @router.get(
     "/shared/{slug}/audio/{filename:path}",
     responses={404: {"description": "Shared audio file not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_audio(
     slug: str,
@@ -178,6 +181,7 @@ def get_shared_audio(
 @router.get(
     "/shared/song/{slug}/album-cover",
     responses={404: {"description": "Shared song, album, or cover not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 async def get_shared_song_album_cover(
     slug: str,
@@ -197,6 +201,7 @@ async def get_shared_song_album_cover(
 @router.get(
     "/shared/song/{slug}/cover",
     responses={404: {"description": "Shared song or cover not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 async def get_shared_song_cover(
     slug: str,
@@ -215,6 +220,7 @@ async def get_shared_song_cover(
 @router.get(
     "/shared/song/{slug}/audio/{filename:path}",
     responses={404: {"description": "Shared audio file not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_song_audio(
     slug: str,
@@ -231,6 +237,7 @@ def get_shared_song_audio(
 @router.get(
     "/shared/gen/{slug}/album-cover",
     responses={404: {"description": "Shared generation, album, or cover not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 async def get_shared_generation_album_cover(
     slug: str,
@@ -250,6 +257,7 @@ async def get_shared_generation_album_cover(
 @router.get(
     "/shared/gen/{slug}/audio/{filename:path}",
     responses={404: {"description": "Shared audio file not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_gen_audio(
     slug: str,
@@ -268,6 +276,7 @@ def get_shared_gen_audio(
 @router.get(
     "/shared/playlist/{slug}/cover",
     responses={404: {"description": "Shared playlist or cover not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 async def get_shared_playlist_cover(
     slug: str,
@@ -286,6 +295,7 @@ async def get_shared_playlist_cover(
 @router.get(
     "/shared/playlist/{slug}/album-cover/{album_id}",
     responses={404: {"description": "Shared playlist, album, or cover not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 async def get_shared_playlist_album_cover(
     slug: str,
@@ -315,6 +325,7 @@ async def get_shared_playlist_album_cover(
 @router.get(
     "/shared/playlist/{slug}/audio/{filename:path}",
     responses={404: {"description": "Shared audio file not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_playlist_audio(
     slug: str,
@@ -331,6 +342,7 @@ def get_shared_playlist_audio(
 @router.get(
     "/shared/queue-streams/{snapshot_id}/audio",
     responses={404: {"description": QUEUE_STREAM_NOT_FOUND_DETAIL}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_queue_stream_audio(
     snapshot_id: str,

@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.mcp import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,
@@ -225,6 +225,7 @@ def api_create_song(
 @router.put(
     "/songs/{song_id}",
     responses={404: {"description": "Song or reference audio not found"}},
+    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_update_song(
     song_id: str, req: SongUpdateRequest,
@@ -261,10 +262,12 @@ def api_update_song(
 
 @router.put(
     "/songs/{song_id}/title",
+    description="Rename one of the person's own songs.",
     responses={
         404: {"description": SONG_NOT_FOUND_DETAIL},
         422: {"description": "Song title is required or too long"},
     },
+    openapi_extra=agent_tool(name="rename_song", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_rename_song(
     song_id: str, req: TitleUpdateRequest,
@@ -292,7 +295,9 @@ def api_rename_song(
 
 @router.put(
     "/songs/{song_id}/album",
+    description="Move one of the person's own songs into another of their own albums.",
     responses={404: {"description": "Song or album not found"}},
+    openapi_extra=agent_tool(name="move_song", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_move_song(
     song_id: str, req: SongMoveRequest,
@@ -320,6 +325,7 @@ def api_move_song(
 @router.delete(
     "/songs/{song_id}",
     responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
+    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_delete_song(
     song_id: str,
@@ -373,6 +379,7 @@ def api_restore_song(
         404: {"description": "Song not found, or playlist not found or not the caller's"},
         422: {"description": "Song has no playable take, or the playlist does not hold it"},
     },
+    openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION),
 )
 def api_record_song_listen(
     song_id: str,
@@ -400,6 +407,7 @@ def api_record_song_listen(
 @router.post(
     "/songs/{song_id}/share",
     responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
+    openapi_extra=exclude_route(Exclusion.SHARING),
 )
 def api_share_song(
     song_id: str,
@@ -423,6 +431,7 @@ def api_share_song(
 @router.get(
     "/songs/{song_id}/cover",
     responses={404: {"description": "Song or cover not found"}},
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 async def api_get_song_cover(
     song_id: str,
@@ -438,7 +447,7 @@ async def api_get_song_cover(
     )
 
 
-@router.post("/songs/{song_id}/cover")
+@router.post("/songs/{song_id}/cover", openapi_extra=exclude_route(Exclusion.BROWSER_ONLY))
 async def api_upload_song_cover(
     song_id: str,
     file: UploadFile,
@@ -458,7 +467,7 @@ async def api_upload_song_cover(
     return _song_response(song)
 
 
-@router.delete("/songs/{song_id}/cover")
+@router.delete("/songs/{song_id}/cover", openapi_extra=exclude_route(Exclusion.FINAL_DELETION))
 def api_delete_song_cover(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -476,6 +485,7 @@ def api_delete_song_cover(
 @router.delete(
     "/songs/{song_id}/share",
     responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
+    openapi_extra=exclude_route(Exclusion.ENDING_A_SHARE),
 )
 def api_unshare_song(
     song_id: str,
@@ -517,6 +527,7 @@ def api_song_versions(
         404: {"description": "Version not found"},
         409: {"description": "A queued or running job renders this version"},
     },
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_version(
     version_id: str,

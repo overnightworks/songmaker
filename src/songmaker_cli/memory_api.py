@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import check_album_access, check_song_access
 from songmaker_cli.api_models import (
     MemoryBundleResponse,
@@ -49,7 +50,7 @@ def _store_note(
     return MemoryScopeResponse.from_orm(scope, scope_id, row)
 
 
-@router.get("/memory")
+@router.get("/memory", openapi_extra=exclude_route(Exclusion.CONVERSATION_MEMORY))
 def api_get_memory(
     song_id: str | None = None,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -75,7 +76,11 @@ def api_get_memory(
     )
 
 
-@router.put("/memory/user")
+@router.put(
+    "/memory/user",
+    description="Replace the co-writer's note about the person.",
+    openapi_extra=agent_tool(name="write_user_memory", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_put_user_memory(
     req: MemoryUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -84,7 +89,11 @@ def api_put_user_memory(
     return _store_note(session, MEMORY_SCOPE_USER, user.id, upsert_user_memory, req.body)
 
 
-@router.put("/memory/songs/{song_id}")
+@router.put(
+    "/memory/songs/{song_id}",
+    description="Replace the co-writer's note about one of the person's songs.",
+    openapi_extra=agent_tool(name="write_song_memory", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_put_song_memory(
     song_id: str,
     req: MemoryUpdateRequest,
@@ -95,7 +104,11 @@ def api_put_song_memory(
     return _store_note(session, MEMORY_SCOPE_SONG, song_id, upsert_song_memory, req.body)
 
 
-@router.put("/memory/albums/{album_id}")
+@router.put(
+    "/memory/albums/{album_id}",
+    description="Replace the co-writer's note about one of the person's albums.",
+    openapi_extra=agent_tool(name="write_album_memory", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_put_album_memory(
     album_id: str,
     req: MemoryUpdateRequest,

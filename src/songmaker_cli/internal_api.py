@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
+from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_models import WorkerRegisterRequest, WorkerRegisterResponse
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
@@ -38,7 +39,7 @@ router = APIRouter(
 )
 
 
-@router.post("/workers/register")
+@router.post("/workers/register", openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION))
 def register_worker_endpoint(
     req: WorkerRegisterRequest,
     db: Annotated[Session, Depends(get_db_session)],
