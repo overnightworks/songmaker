@@ -8,8 +8,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from support.lora_api_world import (
+    USER_A,
+    USER_B,
+    client_for_user,
+    make_lora,
+    make_take,
+    sample_routes,
+)
+from support.web_app import make_authenticated_user, make_router_app, web_client
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -20,49 +27,15 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import (
     LORA_SLUG_MAX_LENGTH,
-    Album,
     Generation,
     Job,
-    Song,
-    User,
     UserLora,
     UserLoraSample,
-    Version,
 )
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora, update_user_lora
 from songmaker_cli.job_types import JobStatus
 
-USER_A = "u-alice"
-USER_B = "u-bob"
-
-
-def _seed_users(session: Session) -> None:
-    session.add(User(id=USER_A, username="alice", role="user"))
-    session.add(User(id=USER_B, username="bob", role="user"))
-
-
-@pytest.fixture
-def client_and_ctx(tmp_path: Path, pg_factory) -> tuple[TestClient, AppContext]:
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir(parents=True, exist_ok=True)
-    data_dir = tmp_path / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-    with pg_factory() as session:
-        _seed_users(session)
-        session.commit()
-
-    app = make_router_app(
-        make_router_ctx(tmp_path, db=pg_factory), user=make_authenticated_user(USER_A)
-    )
-    ctx = app.state.ctx
-    return web_client(app), ctx
-
-
-@pytest.fixture
-def client_a(client_and_ctx: tuple[TestClient, AppContext]) -> TestClient:
-    client, _ = client_and_ctx
-    return client
+pytest_plugins = ["support.lora_api_world"]
 
 
 @contextmanager
@@ -293,14 +266,14 @@ def test_admin_cannot_access_another_users_lora(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     _, ctx = client_and_ctx
-    lora_id = _make_lora(ctx, USER_A)
+    lora_id = make_lora(ctx, USER_A)
     with ctx.db() as session:
         sample = add_user_lora_sample(
             session, lora_id, "alice/sample.wav", caption="c", lyrics="l",
         )
         session.commit()
         sample_id = sample.id
-    admin = _client_for_user(ctx, "u-admin", role="admin")
+    admin = client_for_user(ctx, "u-admin", role="admin")
 
     assert admin.get(f"/api/loras/{lora_id}").status_code == 404
     assert admin.delete(f"/api/loras/{lora_id}").status_code == 404
@@ -357,75 +330,14 @@ def test_delete_lora_missing_returns_404(client_a: TestClient) -> None:
 # ── Samples ───────────────────────────────────────────────────────────
 
 
-def _make_lora(ctx: AppContext, user_id: str = USER_A) -> str:
-    with ctx.db() as session:
-        lora = create_user_lora(session, user_id, "L", "l")
-        session.commit()
-        return lora.id
-
-
-def _make_take(
-    ctx: AppContext,
-    *,
-    owner_id: str = USER_A,
-    take_id: str = "take-1",
-    caption: str = "Warm tenor over piano",
-    lyrics: str = "A line from the take",
-    audio: bytes = b"ID3 source audio",
-    is_archived: bool = False,
-    has_version: bool = True,
-) -> str:
-    album_id = f"album-{take_id}"
-    song_id = f"song-{take_id}"
-    version_id = f"version-{take_id}" if has_version else None
-    audio_path = f"{owner_id}/{take_id}.mp3"
-    with ctx.db() as session:
-        session.add(Album(
-            id=album_id,
-            title=f"Song for {take_id}",
-            artist="Test artist",
-            created_by=owner_id,
-        ))
-        session.add(Song(
-            id=song_id,
-            title=f"Take song {take_id}",
-            album_id=album_id,
-            track_number=1,
-        ))
-        if version_id:
-            session.add(Version(
-                id=version_id,
-                song_id=song_id,
-                version_number=1,
-                prompt=caption,
-                lyrics=lyrics,
-            ))
-        session.add(Generation(
-            id=take_id,
-            song_id=song_id,
-            version_id=version_id,
-            generation_number=4,
-            mp3_path=audio_path,
-            is_archived=is_archived,
-        ))
-        session.commit()
-    source = ctx.audio_dir / audio_path
-    source.parent.mkdir(parents=True, exist_ok=True)
-    source.write_bytes(audio)
-    return take_id
-
-
-def _client_for_user(ctx: AppContext, user_id: str, role: str = "user") -> TestClient:
-    app = make_router_app(ctx, user=make_authenticated_user(user_id, role=role))
-    return web_client(app)
 
 
 def test_add_sample_from_own_take_copies_audio_and_take_version(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
-    take_id = _make_take(ctx, audio=b"source take bytes")
+    lora_id = make_lora(ctx)
+    take_id = make_take(ctx, audio=b"source take bytes")
 
     response = client.post(
         f"/api/loras/{lora_id}/samples/from-generation",
@@ -444,9 +356,9 @@ def test_add_sample_from_foreign_take_returns_404(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     _, ctx = client_and_ctx
-    lora_id = _make_lora(ctx, USER_B)
-    take_id = _make_take(ctx, owner_id=USER_A)
-    client_b = _client_for_user(ctx, USER_B)
+    lora_id = make_lora(ctx, USER_B)
+    take_id = make_take(ctx, owner_id=USER_A)
+    client_b = client_for_user(ctx, USER_B)
 
     response = client_b.post(
         f"/api/loras/{lora_id}/samples/from-generation",
@@ -460,8 +372,8 @@ def test_add_sample_from_unplayable_take_is_rejected(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
-    take_id = _make_take(ctx, is_archived=True)
+    lora_id = make_lora(ctx)
+    take_id = make_take(ctx, is_archived=True)
 
     response = client.post(
         f"/api/loras/{lora_id}/samples/from-generation",
@@ -476,7 +388,7 @@ def test_add_sample_from_missing_take_returns_404(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     response = client.post(
         f"/api/loras/{lora_id}/samples/from-generation",
@@ -490,8 +402,8 @@ def test_add_sample_from_take_with_escaping_audio_path_returns_404(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
-    take_id = _make_take(ctx)
+    lora_id = make_lora(ctx)
+    take_id = make_take(ctx)
     (ctx.audio_dir.parent / "secret.mp3").write_bytes(b"secret audio")
     with ctx.db() as session:
         session.get(Generation, take_id).mp3_path = "../secret.mp3"
@@ -507,26 +419,6 @@ def test_add_sample_from_take_with_escaping_audio_path_returns_404(
     with ctx.db() as session:
         assert session.query(UserLoraSample).filter_by(user_lora_id=lora_id).count() == 0
 
-
-def _post_sample_from_take(client: TestClient, lora_id: str, take_id: str):
-    return client.post(
-        f"/api/loras/{lora_id}/samples/from-generation",
-        json={"generation_id": take_id},
-    )
-
-
-def _post_sample_upload(client: TestClient, lora_id: str, _take_id: str):
-    return client.post(
-        f"/api/loras/{lora_id}/samples",
-        data={"caption": "chill verse", "lyrics": "oh yeah"},
-        files={"audio": ("clip.wav", b"RIFFxxxxWAVE", "audio/wav")},
-    )
-
-
-sample_routes = pytest.mark.parametrize(
-    "post_sample", [_post_sample_from_take, _post_sample_upload],
-    ids=["from-generation", "upload"],
-)
 
 
 def _files_outside_data_dir(root: Path) -> set[Path]:
@@ -544,8 +436,8 @@ def test_a_crafted_lora_id_adds_no_sample_and_writes_nothing(
     client_and_ctx: tuple[TestClient, AppContext], post_sample, crafted_lora_id: str,
 ) -> None:
     client, ctx = client_and_ctx
-    _make_lora(ctx)
-    take_id = _make_take(ctx)
+    make_lora(ctx)
+    take_id = make_take(ctx)
     tmp_root = ctx.audio_dir.parent
     files_before = _files_outside_data_dir(tmp_root)
 
@@ -562,8 +454,8 @@ def test_a_sample_target_resolving_outside_the_audio_dir_is_refused(
     client_and_ctx: tuple[TestClient, AppContext], post_sample,
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
-    take_id = _make_take(ctx)
+    lora_id = make_lora(ctx)
+    take_id = make_take(ctx)
     outside = ctx.audio_dir.parent / "outside"
     outside.mkdir()
     (ctx.audio_dir / "user_loras").symlink_to(outside, target_is_directory=True)
@@ -580,8 +472,8 @@ def test_versionless_own_take_is_listed_and_copied_with_empty_metadata(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
-    take_id = _make_take(ctx, has_version=False, audio=b"reimported take")
+    lora_id = make_lora(ctx)
+    take_id = make_take(ctx, has_version=False, audio=b"reimported take")
 
     catalogue = client.get("/api/own-playable-takes")
     response = client.post(
@@ -609,8 +501,8 @@ def test_add_sample_from_generation_rejects_audio_path_payload(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
-    take_id = _make_take(ctx)
+    lora_id = make_lora(ctx)
+    take_id = make_take(ctx)
 
     response = client.post(
         f"/api/loras/{lora_id}/samples/from-generation",
@@ -626,9 +518,9 @@ def test_own_take_catalogue_only_returns_callers_playable_takes(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    own_take = _make_take(ctx, take_id="own-take")
-    _make_take(ctx, owner_id=USER_B, take_id="foreign-take")
-    _make_take(ctx, take_id="archived-take", is_archived=True)
+    own_take = make_take(ctx, take_id="own-take")
+    make_take(ctx, owner_id=USER_B, take_id="foreign-take")
+    make_take(ctx, take_id="archived-take", is_archived=True)
 
     response = client.get("/api/own-playable-takes")
 
@@ -649,9 +541,9 @@ def test_admin_cannot_browse_or_copy_another_users_takes(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     _, ctx = client_and_ctx
-    lora_id = _make_lora(ctx, USER_A)
-    take_id = _make_take(ctx)
-    admin = _client_for_user(ctx, "u-admin", role="admin")
+    lora_id = make_lora(ctx, USER_A)
+    take_id = make_take(ctx)
+    admin = client_for_user(ctx, "u-admin", role="admin")
 
     catalogue = admin.get("/api/own-playable-takes")
     response = admin.post(
@@ -668,7 +560,7 @@ def test_add_sample_happy_path(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     audio = b"RIFFxxxxWAVE" + b"\0" * 200
     resp = client.post(
@@ -688,7 +580,7 @@ def test_add_sample_rejects_wrong_extension(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     resp = client.post(
         f"/api/loras/{lora_id}/samples",
@@ -702,7 +594,7 @@ def test_add_sample_rejects_empty_filename(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     resp = client.post(
         f"/api/loras/{lora_id}/samples",
@@ -716,7 +608,7 @@ def test_add_sample_rejects_empty_file(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     resp = client.post(
         f"/api/loras/{lora_id}/samples",
@@ -730,7 +622,7 @@ def test_add_sample_rejects_empty_caption(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     resp = client.post(
         f"/api/loras/{lora_id}/samples",
@@ -744,7 +636,7 @@ def test_add_sample_rejects_empty_lyrics(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     resp = client.post(
         f"/api/loras/{lora_id}/samples",
@@ -758,7 +650,7 @@ def test_add_sample_rejects_oversize(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     big = b"\0" * (USER_LORA_SAMPLE_MAX_BYTES + 1)
     resp = client.post(
@@ -773,7 +665,7 @@ def test_add_sample_rejects_when_max_reached(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         for i in range(USER_LORA_MAX_SAMPLES):
             add_user_lora_sample(
@@ -794,7 +686,7 @@ def test_add_sample_rejected_on_active_status(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         update_user_lora(session, lora_id, status=LoraStatus.TRAINING)
         session.commit()
@@ -811,7 +703,7 @@ def test_add_sample_rejected_on_deleted_lora(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         from songmaker_cli.db.queries.loras import soft_delete_user_lora
         soft_delete_user_lora(session, lora_id)
@@ -829,7 +721,7 @@ def test_add_sample_rollback_on_write_failure(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     with (
         patch("shutil.copyfileobj", side_effect=OSError("disk full")),
@@ -857,7 +749,7 @@ def test_add_sample_missing_lora_404(client_a: TestClient) -> None:
 
 def test_add_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContext]) -> None:
     client_a, ctx = client_and_ctx
-    lora_id = _make_lora(ctx, USER_A)
+    lora_id = make_lora(ctx, USER_A)
 
     app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
     client_b = web_client(app_b)
@@ -876,7 +768,7 @@ def test_patch_sample_partial_update(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         sample = add_user_lora_sample(
             session, lora_id, "a/1.wav", caption="old", lyrics="old lyrics",
@@ -897,7 +789,7 @@ def test_patch_sample_reorders_positions(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         s1 = add_user_lora_sample(session, lora_id, "a/1.wav", caption="c", lyrics="l")
         s2 = add_user_lora_sample(session, lora_id, "a/2.wav", caption="c", lyrics="l")
@@ -924,7 +816,7 @@ def test_patch_sample_empty_caption_rejected(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         sample = add_user_lora_sample(
             session, lora_id, "a/1.wav", caption="c", lyrics="l",
@@ -943,7 +835,7 @@ def test_patch_sample_empty_lyrics_rejected(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         sample = add_user_lora_sample(
             session, lora_id, "a/1.wav", caption="c", lyrics="l",
@@ -962,7 +854,7 @@ def test_patch_sample_lora_mismatch_404(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         other = create_user_lora(session, USER_A, "Other", "other")
         sample = add_user_lora_sample(
@@ -982,7 +874,7 @@ def test_patch_sample_active_parent_rejected(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         sample = add_user_lora_sample(
             session, lora_id, "a/1.wav", caption="c", lyrics="l",
@@ -1008,7 +900,7 @@ def test_patch_sample_missing_404(client_a: TestClient) -> None:
 
 def test_patch_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContext]) -> None:
     client_a, ctx = client_and_ctx
-    lora_id = _make_lora(ctx, USER_A)
+    lora_id = make_lora(ctx, USER_A)
     with ctx.db() as session:
         sample = add_user_lora_sample(
             session, lora_id, "a/1.wav", caption="c", lyrics="l",
@@ -1032,7 +924,7 @@ def test_delete_sample_removes_row_and_file(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
 
     resp = client.post(
         f"/api/loras/{lora_id}/samples",
@@ -1058,7 +950,7 @@ def test_delete_sample_unlink_failure_is_logged(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         sample = add_user_lora_sample(
             session, lora_id, "nonexistent/path.wav", caption="c", lyrics="l",
@@ -1075,7 +967,7 @@ def test_delete_sample_active_parent_rejected(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         sample = add_user_lora_sample(
             session, lora_id, "a/1.wav", caption="c", lyrics="l",
@@ -1092,7 +984,7 @@ def test_delete_sample_mismatched_lora_404(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         other = create_user_lora(session, USER_A, "Other", "other")
         sample = add_user_lora_sample(
@@ -1112,7 +1004,7 @@ def test_delete_sample_missing_404(client_a: TestClient) -> None:
 
 def test_delete_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContext]) -> None:
     client_a, ctx = client_and_ctx
-    lora_id = _make_lora(ctx, USER_A)
+    lora_id = make_lora(ctx, USER_A)
     with ctx.db() as session:
         sample = add_user_lora_sample(
             session, lora_id, "a/1.wav", caption="c", lyrics="l",
@@ -1145,7 +1037,7 @@ def test_train_rejects_below_min_samples(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         add_user_lora_sample(
             session, lora_id, "a/1.wav", caption="c", lyrics="l",
@@ -1160,7 +1052,7 @@ def test_train_rejects_when_caption_or_lyrics_empty(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
     client, ctx = client_and_ctx
-    lora_id = _make_lora(ctx)
+    lora_id = make_lora(ctx)
     with ctx.db() as session:
         add_user_lora_sample(session, lora_id, "a/1.wav", caption="c", lyrics="l")
         add_user_lora_sample(session, lora_id, "a/2.wav", caption="c", lyrics="l")
