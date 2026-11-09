@@ -4,7 +4,7 @@
 // a laptop width shows them: the operator's phone cut the album menu off past
 // the left edge of the screen.
 
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
 	COLLECTION_MENU_EDIT_DETAILS_LABEL,

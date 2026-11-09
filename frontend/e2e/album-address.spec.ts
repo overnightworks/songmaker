@@ -14,7 +14,7 @@
 // or a take opens is pinned in the unit suite (stores/navigation.test.ts),
 // which costs the stack nothing.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './coverage-test';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';

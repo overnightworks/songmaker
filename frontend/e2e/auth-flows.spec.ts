@@ -9,7 +9,7 @@
 // on. Whatever leaves the app's origin ends on a stub (`stubIdentityProvider`).
 // Both shells drive every flow.
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './coverage-test';
 import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
 
 import {

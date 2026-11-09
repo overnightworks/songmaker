@@ -6,7 +6,7 @@
 // The retention endpoints are answered with test data: the run deletes takes
 // for good and the stack's library must stay as seeded.
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './coverage-test';
 import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
 
 import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';

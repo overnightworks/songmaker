@@ -40,6 +40,9 @@ services:
     <<: *test_stack_service
     build:
       <<: *gha_cache
+      # E2E maps the shipped bundle back to source for its coverage report.
+      args:
+        BUILD_SOURCE_MAPS: "true"
     # Every API request of one project's run -- seeds, cleanups, retries and
     # browser traffic -- comes from the runner's one address. In CI each
     # project has its own job and stack; a local run drives both projects

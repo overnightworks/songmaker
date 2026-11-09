@@ -16,7 +16,7 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // suite (libraryContext.test.ts) with controlled promises.
 
 import { phoneSearchResult } from './phone-search';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './coverage-test';
 import { LIBRARY_NEW_MENU_LABEL, LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';

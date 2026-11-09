@@ -165,6 +165,25 @@ export default ts.config(
 		rules: { 'no-restricted-syntax': ['error', ...KIT_HISTORY_LAYOUT_SYNTAX] }
 	},
 	{
+		// A spec's page records the run's browser coverage only through the fixture's test.
+		files: ['e2e/**/*.spec.ts'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					paths: [
+						{
+							name: '@playwright/test',
+							importNames: ['test', 'expect'],
+							message:
+								"Import test and expect from './coverage-test' so the spec's page is covered."
+						}
+					]
+				}
+			]
+		}
+	},
+	{
 		files: ['src/lib/api/**'],
 		ignores: ['src/lib/api/**/*.test.ts'],
 		rules: {

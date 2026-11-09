@@ -2,7 +2,7 @@
 // the person stays on it. Each cell runs at the desktop width, where the crumb
 // names the new album, and at the phone width, where a toast does.
 
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { LIBRARY_RETRY_LABEL } from '../src/lib/constants/library';
 import {
 	SONG_MENU_LABEL,

@@ -13,7 +13,7 @@
 // which costs the stack nothing. Desktop only, like album-address.spec.ts:
 // the routing is the same code on both shells.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './coverage-test';
 import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants/rail';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';

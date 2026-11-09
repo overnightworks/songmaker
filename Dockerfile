@@ -12,7 +12,9 @@ COPY frontend/patches/ ./patches/
 RUN pnpm install --frozen-lockfile
 
 COPY frontend/ ./
-RUN pnpm build
+# Only the CI Compose overlay turns this on, so E2E can map the shipped bundle back to source.
+ARG BUILD_SOURCE_MAPS=false
+RUN BUILD_SOURCE_MAPS=$BUILD_SOURCE_MAPS pnpm build
 
 # Stage 3: Python backend
 FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650472695d9a9326999 AS backend

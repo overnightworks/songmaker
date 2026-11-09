@@ -5,7 +5,7 @@
 // The seeded song: v1 holds three takes, v2 (saved over it) two; a real Save
 // makes v3, which folds v2.
 
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './coverage-test';
 import {
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,

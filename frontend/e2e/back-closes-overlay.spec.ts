@@ -1,5 +1,5 @@
 import { openSearchSheet, phoneSearchResult, searchSheet } from './phone-search';
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import {
 	mockPlaylist,
 	playlistPayload,
