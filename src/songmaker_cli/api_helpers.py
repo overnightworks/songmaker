@@ -178,14 +178,14 @@ def lock_lora_capacity(session: Session) -> None:
     lock_until_transaction_ends(session, AdvisoryLock.LORA_CAPACITY)
 
 
-def _job_type_rate_limit(job_type: JobType) -> tuple[int, str]:
-    """Return (env_limit, db_setting_key) for a job type."""
+def _job_type_rate_limit(job_type: JobType) -> tuple[int, str] | None:
+    """Return (env_limit, db_setting_key) for a job type, or None without an hourly limit."""
     settings = get_settings()
     if job_type == JobType.GENERATE:
         return settings.generation_rate_limit_user, SETTING_GENERATION_RATE_LIMIT
     if job_type == JobType.SCORE:
         return settings.scoring_rate_limit_user, SETTING_SCORING_RATE_LIMIT
-    raise ValueError(f"Unknown job type for rate limiting: {job_type}")
+    return None
 
 
 _QUEUEABLE_JOB_TYPES = frozenset({JobType.GENERATE, JobType.SCORE})
@@ -220,9 +220,10 @@ def _enforce_job_limits(
             session.rollback()
             raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 
-    if job_type == JobType.CHAT:
+    rate_limit = _job_type_rate_limit(job_type)
+    if rate_limit is None:
         return
-    env_limit, setting_key = _job_type_rate_limit(job_type)
+    env_limit, setting_key = rate_limit
     limit = resolve_rate_limit(session, user.id, setting_key, env_limit)
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:

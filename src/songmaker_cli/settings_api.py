@@ -502,9 +502,7 @@ def api_update_rate_limits(
     admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
 ) -> RateLimitsResponse:
-    from songmaker_cli.constants import RATE_LIMIT_SETTING_KEYS
-
-    invalid = set(req.settings.keys()) - RATE_LIMIT_SETTING_KEYS
+    invalid = set(req.settings.keys()) - _get_env_defaults().keys()
     if invalid:
         raise HTTPException(400, f"Unknown setting keys: {sorted(invalid)}")
     for key, value in req.settings.items():

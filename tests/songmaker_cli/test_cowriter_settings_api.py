@@ -176,7 +176,7 @@ def test_cowriter_put_requires_an_admin(admin_client):
     assert response.status_code == 403
 
 
-def test_a_turn_after_more_turns_in_the_last_hour_than_the_old_default_is_answered(
+def test_a_turn_is_answered_after_hundreds_of_turns_in_the_last_hour(
     admin_client, tmp_path,
 ):
     client, factory = admin_client
