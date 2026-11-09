@@ -26,6 +26,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.albums import (
+    archive_album,
     delete_album,
     enable_album_sharing,
     get_album,
@@ -33,7 +34,10 @@ from songmaker_cli.db.queries.albums import (
     list_albums,
     list_expired_albums,
     restore_album,
+    set_album_cover_key,
     soft_delete_album,
+    unarchive_album,
+    update_album,
 )
 from songmaker_cli.db.queries.generations import pick_generation
 from songmaker_cli.db.queries.playlists import add_song_to_playlist, create_playlist, get_playlist
@@ -92,6 +96,39 @@ def seeded(db_session: Session) -> Session:
 
 
 # ── Query-layer tests ────────────────────────────────────────────────
+
+
+_ALBUM_MUTATIONS = {
+    "update": lambda s, album_id: update_album(s, album_id, title="New"),
+    "cover": lambda s, album_id: set_album_cover_key(s, album_id, "k"),
+    "delete": soft_delete_album,
+    "restore": restore_album,
+    "archive": archive_album,
+    "unarchive": unarchive_album,
+}
+
+
+@pytest.mark.parametrize(
+    ("mutation", "trashed"),
+    [
+        pytest.param(name, trashed, id=f"{name}-{'in-trash' if trashed else 'gone'}")
+        for name in _ALBUM_MUTATIONS
+        for trashed in (True, False)
+        if not (name == "restore" and trashed)
+    ],
+)
+def test_album_mutation_of_a_missing_album_raises_not_found(
+    seeded: Session, mutation: str, trashed: bool
+) -> None:
+    if trashed:
+        soft_delete_album(seeded, "rock")
+        seeded.commit()
+        album_id = "rock"
+    else:
+        album_id = "never-existed"
+
+    with pytest.raises(ValueError, match="Album not found"):
+        _ALBUM_MUTATIONS[mutation](seeded, album_id)
 
 
 def test_soft_delete_album_hides_from_list(seeded: Session) -> None:
