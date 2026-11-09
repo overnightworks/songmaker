@@ -3,5 +3,5 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "984cc2bd626e27febf28191c33e105a52a487a7d"
 branch = "claude/issue-2854-s27-kinetic-scroll"
-scope = ["frontend/src/lib/actions/kineticScroll.test.ts", "frontend/src/lib/actions/kineticScroll.ts"]
+scope = ["frontend/src/lib/actions/kineticScroll.test.ts", "frontend/src/lib/actions/kineticScroll.ts", "frontend/src/tests/setup.ts"]
 opened_commit = "1e1875b52539d515e0c4eb1edcccb97a1a1b15ab"
