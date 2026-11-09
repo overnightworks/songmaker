@@ -1,7 +1,0 @@
-claim_id = "0ddba0dcdd004cbb9d0a4161f8d8f0d4"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d0bab439147c961f7ba4bc4f99bb72d51ad24c43"
-branch = "claude/issue-2875-share-from-orm"
-scope = ["src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/shared_views_api.py"]
-opened_commit = "ca5b879b9865933959daba6eb20ae7fbf531741f"
