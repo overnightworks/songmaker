@@ -230,3 +230,46 @@ describe('shared playlist page', () => {
 		}
 	);
 });
+
+describe('shared playlist AI mark', () => {
+	const AI_MARK = 'KI-generiert';
+
+	async function openWith(response: unknown): Promise<HTMLElement> {
+		mockFetch.mockReturnValueOnce(response);
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await tick();
+		return target;
+	}
+
+	it.each([
+		['with a playable take', sharedPlaylist],
+		[
+			'without a playable take',
+			{
+				...sharedPlaylist,
+				entries: sharedPlaylist.entries.map((entry) => ({ ...entry, audio_url: null }))
+			}
+		],
+		['without a cover', { ...sharedPlaylist, cover: null }]
+	])('shows the mark %s', async (_state, payload) => {
+		const target = await openWith(
+			Promise.resolve({ ok: true, status: 200, json: async () => payload })
+		);
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Shared playlist'));
+		expect(target.textContent).toContain(AI_MARK);
+	});
+
+	it.each([
+		['while loading', new Promise(() => {})],
+		['after an error', Promise.resolve({ ok: false, status: 500 })]
+	])('shows nothing of the item %s', async (_state, response) => {
+		const target = await openWith(response);
+
+		await vi.waitFor(() => expect(target.querySelector('h1')).not.toBeNull());
+		expect(target.textContent).not.toContain('Shared playlist');
+		expect(target.textContent).not.toContain(AI_MARK);
+	});
+});

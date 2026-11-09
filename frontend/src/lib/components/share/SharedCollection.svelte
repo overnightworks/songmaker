@@ -26,6 +26,7 @@
 	import TransportBarFrame from '#lib/components/TransportBarFrame.svelte';
 	import NowPlayingFrame from '#lib/components/NowPlayingFrame.svelte';
 	import NowPlayingQueue from '#lib/components/NowPlayingQueue.svelte';
+	import AiNotice from '#lib/components/AiNotice.svelte';
 	import ShareStatus from '#lib/components/ShareStatus.svelte';
 	import SharedFooter from './SharedFooter.svelte';
 
@@ -224,6 +225,7 @@
 		/>
 	{:else if view}
 		<h1 class="header-title">{view.title}</h1>
+		<p class="no-audio-mark"><AiNotice look="badge" /></p>
 		<p class="no-audio" role="status">{SHARE_NO_AUDIO_NOTICE}</p>
 	{/if}
 
@@ -327,6 +329,10 @@
 		text-transform: uppercase;
 		letter-spacing: 1.5px;
 		margin: 0;
+	}
+
+	.no-audio-mark {
+		margin: 0.5rem 0 0;
 	}
 
 	.no-audio {

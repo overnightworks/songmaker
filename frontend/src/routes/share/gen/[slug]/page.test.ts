@@ -176,3 +176,40 @@ describe('shared generation (take) page', () => {
 		expect(target.querySelector('h1')?.textContent).toBe('Could not load this take');
 	});
 });
+
+describe('shared generation (take) AI mark', () => {
+	const AI_MARK = 'KI-generiert';
+
+	async function openWith(response: unknown): Promise<HTMLElement> {
+		mockFetch.mockReturnValueOnce(response);
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await tick();
+		return target;
+	}
+
+	it.each([
+		['with a playable take', sharedTakePayload()],
+		['without a playable take', sharedTakePayload({ audio_url: null, generation_id: null })],
+		['without a cover', sharedTakePayload({ album_cover: null })]
+	])('shows the mark %s', async (_state, payload) => {
+		const target = await openWith(
+			Promise.resolve({ ok: true, status: 200, json: async () => payload })
+		);
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Solo Track'));
+		expect(target.textContent).toContain(AI_MARK);
+	});
+
+	it.each([
+		['while loading', new Promise(() => {})],
+		['after an error', Promise.resolve({ ok: false, status: 500 })]
+	])('shows nothing of the item %s', async (_state, response) => {
+		const target = await openWith(response);
+
+		await vi.waitFor(() => expect(target.querySelector('h1')).not.toBeNull());
+		expect(target.textContent).not.toContain('Solo Track');
+		expect(target.textContent).not.toContain(AI_MARK);
+	});
+});
