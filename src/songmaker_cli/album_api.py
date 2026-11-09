@@ -58,7 +58,6 @@ from songmaker_cli.cover_suggestions import (
     remove_cover_suggestion_files,
     request_cover_suggestions,
     resolve_suggestion_png,
-    utc_day_start,
 )
 from songmaker_cli.covers import (
     COVER_RESPONSE_HEADERS,
@@ -91,14 +90,10 @@ from songmaker_cli.db.queries.cover_suggestions import (
     get_album_cover_suggestion,
     list_album_cover_suggestions,
 )
-from songmaker_cli.db.queries.jobs import (
-    count_cover_jobs_since,
-    get_last_cover_job_for_album,
-)
+from songmaker_cli.db.queries.jobs import get_last_cover_job_for_album
 from songmaker_cli.db.queries.sentinels import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
 from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
-from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -446,7 +441,6 @@ async def api_upload_album_cover(
         },
         404: {"description": "Album not found"},
         409: {"description": "Cover suggestions are already running"},
-        429: {"description": "Daily suggestion limit reached"},
         503: {
             "description": "Cover suggestions are unavailable",
             "model": CoverSuggestionUnavailableBody,
@@ -497,12 +491,9 @@ def api_list_cover_suggestions(
 ) -> CoverSuggestionsResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    settings = get_settings()
     return CoverSuggestionsResponse.from_orm(
         job=get_last_cover_job_for_album(session, album.id),
         suggestions=list_album_cover_suggestions(session, album.id),
-        used_today=count_cover_jobs_since(session, album.id, utc_day_start()),
-        daily_limit=settings.cover_suggestions_daily_limit,
     )
 
 

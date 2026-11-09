@@ -30,7 +30,7 @@ export class FakeJobEventSource {
 export function coverSuggestions(
 	overrides: Partial<CoverSuggestionsResponse> = {}
 ): CoverSuggestionsResponse {
-	return { job: null, suggestions: [], used_today: 0, daily_limit: 10, ...overrides };
+	return { job: null, suggestions: [], ...overrides };
 }
 
 export function coverJob(overrides: Partial<JobItem> = {}): JobItem {

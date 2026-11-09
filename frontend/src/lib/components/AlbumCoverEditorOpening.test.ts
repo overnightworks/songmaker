@@ -152,7 +152,7 @@ describe('The album cover state around the editor', () => {
 		expect(countLine(target)).toBe('Loading cover suggestion…');
 
 		pageRead.resolve(coverSuggestions());
-		await vi.waitFor(() => expect(countLine(target)).toBe('10 of 10 left today'));
+		await vi.waitFor(() => expect(countLine(target)).toBe(''));
 	});
 
 	it.each(askAnswers)(
