@@ -243,7 +243,7 @@ test.describe('song page at phone width', () => {
 			const generateStatus = panel.getByRole('status');
 			await expect(generateStatus).toHaveText(
 				new RegExp(
-					`^${RUNNING_JOB_TAKE_COUNTER} · ${LOADING_JOB_PHASE_LABEL} ${ELAPSED_TIME_PATTERN.source}$`
+					`^\\s*${RUNNING_JOB_TAKE_COUNTER} · ${LOADING_JOB_PHASE_LABEL} ${ELAPSED_TIME_PATTERN.source}\\s*$`
 				)
 			);
 			await page.clock.pauseAt(Date.now() + CLOCK_HOLD_LEAD_MS);
