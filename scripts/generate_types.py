@@ -366,10 +366,11 @@ def _route_annotations(routers: Iterable[APIRouter]) -> tuple[list[Any], int]:
 
 def _route_routers() -> tuple[APIRouter, ...]:
     from songmaker_cli.api import router as api_router
+    from songmaker_cli.audio_api import router as audio_router
     from songmaker_cli.health_api import router as health_router
     from songmaker_cli.sharing_api import router as sharing_router
 
-    return api_router, health_router, sharing_router
+    return api_router, audio_router, health_router, sharing_router
 
 
 def _exported_models() -> tuple[set[type[BaseModel]], int]:

@@ -20,6 +20,7 @@ from webauth.rate_limit import RedisRateLimitBackend
 from songmaker_cli.audio_paths import AudioFileNotFoundError
 from songmaker_cli.constants import (
     AUDIO_FILE_NOT_FOUND,
+    AUDIO_MEDIA_TYPES,
     COVER_NOT_FOUND,
     HTTP_NOT_FOUND,
     LIBRARY_QUERY_REQUIRED,
@@ -75,6 +76,11 @@ SONG_NOT_FOUND_DETAIL: Final = "Song not found"
 LORA_NOT_FOUND_DETAIL: Final = "LoRA not found"
 LORA_SAMPLE_NOT_FOUND_DETAIL: Final = "LoRA sample not found"
 GENERATION_NOT_FOUND_DETAIL: Final = "Generation not found"
+DEFAULT_AUDIO_MEDIA_TYPE: Final = "application/octet-stream"
+# A take's file is written once under its name and never changes, so a browser
+# may keep it for good; "private" forbids any shared cache (CDN, proxy) from
+# holding one.
+AUDIO_FILE_CACHE_CONTROL: Final = "private, max-age=31536000, immutable"
 PLAYLIST_NOT_FOUND_DETAIL: Final = "Playlist not found"
 
 _UNBOUNDED_SLUG_LENGTH = 0
@@ -93,6 +99,18 @@ def raise_audio_file_http_error(
     """Map a missing stored audio file at the caller's HTTP boundary."""
     detail = HTTP_NOT_FOUND if public else AUDIO_FILE_NOT_FOUND
     raise HTTPException(404, detail) from error
+
+
+def audio_response(audio_path: Path, cache_control: str) -> FileResponse:
+    return FileResponse(
+        audio_path,
+        media_type=AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE),
+        headers={"Cache-Control": cache_control},
+    )
+
+
+def audio_file_response(audio_path: Path) -> FileResponse:
+    return audio_response(audio_path, AUDIO_FILE_CACHE_CONTROL)
 
 
 def cover_file_response(

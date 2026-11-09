@@ -53,7 +53,6 @@
 "src/songmaker_cli/jobs/generation.py" = 1136
 "src/songmaker_cli/jobs/lora_training.py" = 1512
 "src/songmaker_cli/queue_streams.py" = 919
-"src/songmaker_cli/sharing_api.py" = 833
 "tests/acestep_engine/test_client.py" = 818
 "tests/acestep_worker/test_wrapper.py" = 1519
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1291
@@ -219,7 +218,7 @@ main = [["scripts/seed_e2e_filler_albums.py", "main"]]
 
 [clones."src/songmaker_cli/album_api.py"]
 api_delete_album_cover = [["src/songmaker_cli/song_api.py", "api_delete_song_cover"]]
-api_get_album = [["src/songmaker_cli/sharing_api.py", "get_shared_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_playlist_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_queue_stream_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_song_audio"]]
+api_get_album = [["src/songmaker_cli/sharing_api.py", "get_shared_queue_stream_audio"]]
 api_get_album_cover = [["src/songmaker_cli/playlist_api.py", "api_get_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
 api_upload_album_cover = [["src/songmaker_cli/playlist_api.py", "api_upload_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_upload_song_cover"]]
 
