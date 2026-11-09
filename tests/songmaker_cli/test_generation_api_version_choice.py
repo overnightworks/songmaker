@@ -81,6 +81,7 @@ def test_a_version_the_song_does_not_have_is_refused_as_missing(
     response = _post_for_take(client, route, LINKED_TAKE_ID, version_id=UNKNOWN_VERSION_ID)
 
     assert response.status_code == 404
+    assert response.json()["detail"] == "Version not found"
 
 
 def test_a_repaint_of_a_take_without_a_version_is_refused_as_invalid(
@@ -89,3 +90,4 @@ def test_a_repaint_of_a_take_without_a_version_is_refused_as_invalid(
     response = _post_for_take(client, REPAINT, DETACHED_TAKE_ID)
 
     assert response.status_code == 400
+    assert response.json()["detail"] == "Generation has no linked version"

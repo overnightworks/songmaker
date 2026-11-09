@@ -52,3 +52,4 @@ def test_a_restart_the_worker_answers_with_an_error_is_refused_as_failed(
         response = admin_client.post(f"/api/admin/workers/{WORKER_ID}/restart")
 
     assert response.status_code == 502
+    assert response.json()["detail"] == "Worker returned 500"

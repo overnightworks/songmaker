@@ -172,13 +172,10 @@ async def _fetch_job_response_before(
     so the frontend's already-handled EventSource reconnect picks it back
     up.
     """
-    remaining = deadline - monotonic()
-    if remaining <= 0:
-        return None
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(_fetch_job_response, ctx, job_id),
-            timeout=remaining,
+            timeout=deadline - monotonic(),
         )
     except TimeoutError:
         return None
@@ -215,10 +212,7 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
         if response.status in JOB_TERMINAL_STATUSES:
             return
 
-        remaining = deadline - monotonic()
-        if remaining <= 0:
-            return
-        await asyncio.sleep(min(SSE_POLL_INTERVAL_SECONDS, remaining))
+        await asyncio.sleep(min(SSE_POLL_INTERVAL_SECONDS, max(deadline - monotonic(), 0)))
 
 
 def _get_job_stream_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:
