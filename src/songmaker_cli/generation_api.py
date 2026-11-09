@@ -577,7 +577,10 @@ async def api_score_generation(
 # ── Ratings ──────────────────────────────────────────────────────────
 
 
-_RATE_TAKE_DESCRIPTION = "Save the person's rating and notes on one of their own takes."
+_RATE_TAKE_DESCRIPTION = (
+    "Save the person's rating and notes on one of their own takes. "
+    "The notes sent replace the saved ones, so a rating without notes clears them."
+)
 
 
 @router.post(

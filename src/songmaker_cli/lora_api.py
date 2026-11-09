@@ -448,16 +448,8 @@ def api_delete_sample(
     return StatusResponse()
 
 
-_TRAIN_LORA_DESCRIPTION = (
-    "Queue the training of one of the person's own LoRAs. Bound by the training queue cap "
-    "and the LoRA's status."
-)
-
-
 @router.post(
     "/loras/{lora_id}/train",
-    description=_TRAIN_LORA_DESCRIPTION,
-    openapi_extra=agent_tool(name="train_lora", effect=ToolEffect.SIDE_EFFECTING),
     response_model=UserLoraResponse,
     responses={
         409: {

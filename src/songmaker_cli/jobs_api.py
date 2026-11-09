@@ -36,7 +36,12 @@ from songmaker_cli.db.queries.jobs import (
     get_queue_position,
     update_job_status,
 )
-from songmaker_cli.job_types import JOB_ACTIVE_STATUSES, JOB_TERMINAL_STATUSES, JobStatus
+from songmaker_cli.job_types import (
+    JOB_ACTIVE_STATUSES,
+    JOB_TERMINAL_STATUSES,
+    JobStatus,
+    JobType,
+)
 from songmaker_cli.jobs.generation_failure import musician_job_response
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
 from songmaker_cli.settings import get_settings
@@ -295,10 +300,17 @@ def api_cancel_job(
     return musician_job_response(job)
 
 
+ADMIN_ONLY_JOB_TYPES: Final = frozenset({
+    JobType.LOAD_MODEL_ON_WORKER, JobType.DOWNLOAD_MODEL_ON_WORKER,
+})
+
+
 def _check_job_access(session: Session, job_id: str, user: AuthenticatedUser) -> Job:
     job = get_job(session, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    if user.role != AppRole.ADMIN and job.user_id != user.id:
+    if user.role != AppRole.ADMIN and (
+        job.user_id != user.id or job.type in ADMIN_ONLY_JOB_TYPES
+    ):
         raise HTTPException(404, "Job not found")
     return job

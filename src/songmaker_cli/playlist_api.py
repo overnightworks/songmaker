@@ -13,6 +13,7 @@ from webauth.ports import AuthenticatedUser
 from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import (
     PLAYLIST_NOT_FOUND_DETAIL,
+    can_access_album,
     check_album_access,
     check_generation_access,
     check_playlist_access,
@@ -35,6 +36,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
+from songmaker_cli.api_models.playlists import AlbumReach
 from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
@@ -80,6 +82,10 @@ router = APIRouter()
 ALBUM_NOT_FOUND_DETAIL: Final = "Album not found"
 
 
+def _albums_reached_by(user: AuthenticatedUser) -> AlbumReach:
+    return lambda album: can_access_album(album, user)
+
+
 _LIST_PLAYLISTS_DESCRIPTION = "List the person's own playlists."
 
 
@@ -93,7 +99,7 @@ def api_list_playlists(
     session: Session = Depends(get_db_session),
 ) -> list[PlaylistResponse]:
     playlists = list_playlists(session, user.id)
-    return [PlaylistResponse.from_orm(p) for p in playlists]
+    return [PlaylistResponse.from_orm(p, reaches=_albums_reached_by(user)) for p in playlists]
 
 
 _CREATE_PLAYLIST_DESCRIPTION = "Create a playlist owned by the person."
@@ -113,7 +119,7 @@ def api_create_playlist(
     playlist = create_playlist(session, req.title, user.id, slug=slug)
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.PLAYLIST, playlist.id)
     session.commit()
-    return PlaylistResponse.from_orm(playlist)
+    return PlaylistResponse.from_orm(playlist, reaches=_albums_reached_by(user))
 
 
 _GET_PLAYLIST_DESCRIPTION = (
@@ -133,7 +139,7 @@ def api_get_playlist(
     session: Session = Depends(get_db_session),
 ) -> PlaylistDetailResponse:
     playlist = check_playlist_access(session, playlist_id, user)
-    return PlaylistDetailResponse.from_orm(playlist)
+    return PlaylistDetailResponse.from_orm(playlist, reaches=_albums_reached_by(user))
 
 
 @router.put(
@@ -153,7 +159,7 @@ def api_update_playlist(
     except ValueError:
         raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
     session.commit()
-    return PlaylistResponse.from_orm(playlist)
+    return PlaylistResponse.from_orm(playlist, reaches=_albums_reached_by(user))
 
 
 @router.delete(
@@ -218,7 +224,7 @@ async def api_upload_playlist_cover(
     playlist = set_playlist_cover_key(session, playlist.id, cover_key)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.PLAYLIST, playlist.id)
     session.commit()
-    return PlaylistResponse.from_orm(playlist)
+    return PlaylistResponse.from_orm(playlist, reaches=_albums_reached_by(user))
 
 
 @router.delete(
@@ -236,7 +242,7 @@ def api_delete_playlist_cover(
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.PLAYLIST, playlist.id)
     session.commit()
     remove_playlist_cover_files(ctx.audio_dir, playlist.id)
-    return PlaylistResponse.from_orm(playlist)
+    return PlaylistResponse.from_orm(playlist, reaches=_albums_reached_by(user))
 
 
 # ── Entries ────────────────────────────────────────────────────────────

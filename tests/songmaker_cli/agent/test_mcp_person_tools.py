@@ -23,7 +23,7 @@ from songmaker_cli.constants import (
     OIDC_ADMIN_GROUP,
     OIDC_LOGIN_GROUP,
     OIDC_MCP_GROUP,
-    LoraStatus,
+    SongWorkKind,
 )
 from songmaker_cli.db.models import (
     Album,
@@ -36,13 +36,17 @@ from songmaker_cli.db.models import (
     ReferenceRecording,
     Song,
     UserLora,
+    Version,
 )
+from songmaker_cli.db.queries.activity import record_song_edit, record_song_played
+from songmaker_cli.job_types import JobType
 
 ALICE = "alices"
 BOB = "bobs"
 _SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
 _FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
 _NOT_FOUND = {403, 404}
+BOBS_LYRICS = "a verse only the member wrote"
 
 Arguments = Callable[[str, str], dict]
 
@@ -108,7 +112,7 @@ PLAIN_READS = [
     Tool("get_account", "GET", "/api/auth/me"),
     Tool("get_library_listen", "GET", "/api/library/listen"),
     Tool("get_library_write", "GET", "/api/library/write"),
-    Tool("search_library", "GET", "/api/library/search", lambda s, o: {"q": "alices"}),
+    Tool("search_library", "GET", "/api/library/search", lambda s, o: {"q": "Song"}),
     Tool("get_library_pool_queue", "GET", "/api/library/pool-queue"),
     Tool("list_loras", "GET", "/api/loras"),
     Tool("list_playlists", "GET", "/api/playlists"),
@@ -141,8 +145,6 @@ WRITES_ON_ONE_RESOURCE = [
     Tool("cover_take", "POST", "/api/generations/{gen_id}/cover", _cover_arguments),
     Tool("repaint_take", "POST", "/api/generations/{gen_id}/repaint", _repaint_arguments),
     Tool("cancel_job", "POST", "/api/jobs/{job_id}/cancel", lambda s, o: {"job_id": f"job-{s}"}),
-    Tool("train_lora", "POST", "/api/loras/{lora_id}/train",
-         lambda s, o: {"lora_id": f"lora-{s}"}),
     Tool("keep_reference", "POST", "/api/references/{reference_id}/keep",
          lambda s, o: {"reference_id": f"reference-{s}"}),
     Tool("set_default_preset", "POST", "/api/settings/presets/{preset_id}/set-default",
@@ -358,39 +360,6 @@ def test_the_score_tool_meets_the_persons_scoring_limit(
     assert world.rows_of(Job, "type").count(("score",)) == 1
 
 
-def test_the_train_tool_meets_the_training_queue_cap_and_the_loras_status(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
-    lifespans: ExitStack,
-) -> None:
-    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    monkeypatch.setenv("MAX_QUEUED_LORA_TRAINING_JOBS", "1")
-    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans)
-    world.seed_household(TokenWorld.ALICE, ALICE)
-    world.seed_household(TokenWorld.BOB, BOB)
-    with world.world.factory() as session:
-        session.add(Job(id="training-bobs", type="lora_training", status="queued",
-                        user_id=TokenWorld.BOB))
-        session.commit()
-
-    with worker_ready() as pool:
-        full = world.call("train_lora", {"lora_id": "lora-alices"})
-    with world.world.factory() as session:
-        session.query(Job).filter_by(id="training-bobs").delete()
-        session.commit()
-    with worker_ready():
-        first = world.call("train_lora", {"lora_id": "lora-alices"})
-        again = world.call("train_lora", {"lora_id": "lora-alices"})
-
-    assert full.is_error is True
-    assert "training_queue_full" in full.text
-    pool.enqueue_job.assert_not_called()
-    assert first.is_error is False
-    assert (again.is_error, "already training" in again.text) == (True, True)
-    assert world.rows_of(UserLora, "id", "status").count(
-        ("lora-alices", LoraStatus.QUEUED),
-    ) == 1
-
-
 # -- an admin's agent is a member -----------------------------------------------------------
 
 
@@ -403,6 +372,12 @@ def admins_world(
     world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
     world.seed_household(TokenWorld.ALICE, ALICE)
     world.seed_household(TokenWorld.BOB, BOB)
+    with world.world.factory() as session:
+        record_song_edit(session, user_id=TokenWorld.ALICE, song_id=f"song-{BOB}",
+                         kind=SongWorkKind.CREATED)
+        record_song_played(session, user_id=TokenWorld.ALICE, song_id=f"song-{BOB}",
+                           in_playlist=False)
+        session.commit()
     return world
 
 
@@ -421,6 +396,66 @@ def test_the_library_tools_of_an_admins_agent_return_only_the_admins_own_content
     assert reply.is_error is False
     assert ALICE in reply.text
     assert BOB not in reply.text
+
+
+def _the_admin_fills_own_containers_with_the_members_content(world: McpWorld) -> None:
+    """In the browser an admin may put a member's take into their playlist and a reference of
+    theirs on the member's song."""
+    with world.world.factory() as session:
+        session.get(Version, f"version-{BOB}").lyrics = BOBS_LYRICS
+        for name in (ALICE, BOB):
+            session.get(Album, f"album-{name}").cover_key = f"cover-{name}"
+        session.commit()
+    seed_session(world.world.client, "alice")
+    for take in (f"take-{ALICE}", f"take-{BOB}"):
+        added = world.world.client.post(
+            f"/api/playlists/playlist-{ALICE}/entries/generation",
+            json={"generation_id": take}, headers=_SAME_ORIGIN,
+        )
+        assert added.status_code == 200
+    for song in (ALICE, BOB):
+        saved = world.world.client.put(
+            f"/api/songs/song-{song}", json={"reference_recording_id": f"reference-{ALICE}"},
+            headers=_SAME_ORIGIN,
+        )
+        assert saved.status_code == 200
+    world.world.client.cookies.clear()
+
+
+@pytest.mark.parametrize(("tool", "arguments"), [
+    ("get_playlist", {"playlist_id": f"playlist-{ALICE}"}),
+    ("list_playlists", {}),
+    ("list_reference_uses", {"reference_id": f"reference-{ALICE}"}),
+], ids=["get_playlist", "list_playlists", "list_reference_uses"])
+def test_an_admins_agent_reads_none_of_a_members_content_in_the_admins_own_containers(
+    admins_world: McpWorld, tool: str, arguments: dict,
+) -> None:
+    _the_admin_fills_own_containers_with_the_members_content(admins_world)
+
+    reply = admins_world.call(tool, arguments, groups=_ADMIN_GROUPS)
+
+    assert reply.is_error is False
+    assert ALICE in reply.text
+    for members_content in (BOB, TokenWorld.BOB, BOBS_LYRICS):
+        assert members_content not in reply.text
+
+
+def test_an_admins_agent_is_refused_the_admins_own_model_jobs_on_a_worker(
+    admins_world: McpWorld,
+) -> None:
+    with admins_world.world.factory() as session:
+        session.add(Job(id="load-model", type=JobType.LOAD_MODEL_ON_WORKER, status="queued",
+                        user_id=TokenWorld.ALICE))
+        session.commit()
+
+    job = admins_world.call("get_job", {"job_id": "load-model"}, groups=_ADMIN_GROUPS)
+    cancel = admins_world.call("cancel_job", {"job_id": "load-model"}, groups=_ADMIN_GROUPS)
+    seed_session(admins_world.world.client, "alice")
+    browser = admins_world.world.client.get("/api/jobs/load-model")
+
+    assert (job.is_error, cancel.is_error) == (True, True)
+    assert ("load-model", "queued") in admins_world.rows_of(Job, "id", "status")
+    assert browser.status_code == 200
 
 
 def test_an_admins_agent_is_refused_another_persons_job_and_is_a_user_in_the_account(

@@ -220,7 +220,7 @@ main = [["scripts/seed_e2e_filler_albums.py", "main"]]
 api_delete_album_cover = [["src/songmaker_cli/song_api.py", "api_delete_song_cover"]]
 api_get_album = [["src/songmaker_cli/sharing_api.py", "get_shared_queue_stream_audio"]]
 api_get_album_cover = [["src/songmaker_cli/playlist_api.py", "api_get_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
-api_upload_album_cover = [["src/songmaker_cli/playlist_api.py", "api_upload_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_upload_song_cover"]]
+api_upload_album_cover = [["src/songmaker_cli/song_api.py", "api_upload_song_cover"]]
 
 [clones."src/songmaker_cli/api_models/loras.py"]
 "UserLoraSampleResponse.from_orm" = [["src/songmaker_cli/api_models/workers.py", "WorkerIdentity.from_orm"]]
@@ -281,7 +281,6 @@ api_delete_playlist = [["src/songmaker_cli/song_api.py", "api_delete_song"], ["s
 api_get_playlist_cover = [["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
 api_share_playlist = [["src/songmaker_cli/song_api.py", "api_share_song"]]
 api_unshare_playlist = [["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]
-api_upload_playlist_cover = [["src/songmaker_cli/song_api.py", "api_upload_song_cover"]]
 
 [clones."src/songmaker_cli/queue_streams.py"]
 _get_queue_stream_limiter = [["src/songmaker_cli/resource_event_api.py", "_get_open_limiter"]]

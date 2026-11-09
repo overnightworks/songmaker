@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING
 
 from agent_runtime_client.mcp_server import McpPersonFront, RouteTools, route_tools
 from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH
-from agent_runtime_client.tools import Principal, ToolEffect, agent_tool
+from agent_runtime_client.tools import Principal
+from agent_runtime_client.tools import ToolEffect as ToolEffect
+from agent_runtime_client.tools import agent_tool as agent_tool
 from starlette.requests import HTTPConnection
 from webauth.middleware.bearer_gate import (
     MarkedRoute,
@@ -25,8 +27,6 @@ from webauth.policies import AuthorizedParties
 
 from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.constants import OIDC_MCP_GROUP
-
-__all__ = ["ToolEffect", "agent_tool"]
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

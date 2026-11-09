@@ -51,7 +51,7 @@ MARKED_TOOLS = {
     "list_presets", "get_theme", "list_song_versions", "archive_album", "restore_album",
     "unarchive_album", "cover_take", "keep_take", "rate_take",
     "repaint_take", "score_take", "unarchive_take", "cancel_job", "create_lora",
-    "add_lora_sample_from_take", "train_lora", "create_playlist", "add_album_to_playlist",
+    "add_lora_sample_from_take", "create_playlist", "add_album_to_playlist",
     "add_take_to_playlist", "add_song_to_playlist", "keep_reference", "create_preset",
     "set_default_preset", "restore_song",
 }
@@ -267,6 +267,7 @@ _UNMARKED_ROUTES = [
     ("POST", "/api/generations/take-alices/unpick", None),
     ("POST", "/api/generations/take-alices/unkeep", None),
     ("POST", "/api/references/any/unkeep", None),
+    ("POST", "/api/loras/lora-alices/train", None),
     ("DELETE", "/api/playlists/any", None),
     ("DELETE", "/api/albums/album-alices", None),
     ("GET", "/api/admin/voices", None),
@@ -278,7 +279,7 @@ _UNMARKED_ROUTES = [
 @pytest.mark.parametrize(
     ("method", "path", "body"), _UNMARKED_ROUTES,
     ids=["bulk-delete", "take-delete", "share", "pick", "unpick", "unkeep", "reference-unkeep",
-         "playlist-delete", "album-delete", "admin", "own-takes", "browser-only"],
+         "train", "playlist-delete", "album-delete", "admin", "own-takes", "browser-only"],
 )
 def test_m6_the_agent_token_is_refused_on_every_unmarked_route_and_nothing_changes(
     mcp: McpWorld, method: str, path: str, body: dict | None,

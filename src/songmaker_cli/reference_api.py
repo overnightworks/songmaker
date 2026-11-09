@@ -18,6 +18,7 @@ from starlette.types import Receive, Scope, Send
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.mcp import ToolEffect, agent_tool
+from songmaker_cli.api_helpers import can_access_album
 from songmaker_cli.api_models import (
     ReferenceCountdownShownRequest,
     ReferenceListResponse,
@@ -38,9 +39,11 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH, ReferenceRecording
+from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.reference_recordings import (
     ReferenceLinkCounts,
+    ReferenceUses,
     acknowledge_countdown_shown,
     delete_reference_recording,
     get_countdown_publication,
@@ -169,7 +172,23 @@ def api_reference_uses(
 ) -> ReferenceUsesResponse:
     if get_owned_reference_recording(session, user.id, reference_id) is None:
         raise HTTPException(404)
-    return ReferenceUsesResponse.from_orm(reference_uses(session, reference_id))
+    uses = reference_uses(session, reference_id)
+    return ReferenceUsesResponse.from_orm(_uses_in_albums_the_caller_reaches(session, user, uses))
+
+
+def _uses_in_albums_the_caller_reaches(
+    session: Session, user: AuthenticatedUser, uses: ReferenceUses,
+) -> ReferenceUses:
+    """An admin may attach their own reference to another person's song in the browser."""
+    reached_album_ids = {
+        album_id
+        for album_id in {use.album_id for use in (*uses.versions, *uses.takes)}
+        if can_access_album(get_album(session, album_id, include_deleted_rows=True), user)
+    }
+    return ReferenceUses(
+        versions=[use for use in uses.versions if use.album_id in reached_album_ids],
+        takes=[use for use in uses.takes if use.album_id in reached_album_ids],
+    )
 
 
 @router.get(
