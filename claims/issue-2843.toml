@@ -1,0 +1,8 @@
+claim_id = "226823135b114af1b370227e0d8c5c91"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "c5ae810e2279936a03a8c905867bbd1c2c4a5d73"
+branch = "claude/issue-2843-no-own-chat-limit"
+scope = ["docs/architecture.md", "docs/security.md", "frontend/src/routes/settings/users/+page.svelte", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/settings.py", "src/songmaker_cli/settings_api.py", "tests/songmaker_cli/db/test_migrations_chat_rate_limit.py", "tests/songmaker_cli/test_cowriter_settings_api.py", "tests/songmaker_cli/test_settings.py", "tests/songmaker_cli/test_settings_api_rate_limits.py"]
+opened_commit = "f15fdb9eec93bedfd6698b17c7d8ec8130e550ec"
+whole_reason = "One ruled change of one key: the key, its reader, its stored rows, its label and its docs go together, or a stored row or a label outlives its reader."
