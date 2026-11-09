@@ -6,7 +6,6 @@ import { fetchSongs } from '#lib/api/songs.ts';
 import type { LibrarySearchResponse, SongItem, SongSummaryResponse } from '#lib/api/types.ts';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
-	LIBRARY_QUERY_REQUIRED,
 	LIBRARY_SEARCH_PAGE_SIZE,
 	LIBRARY_SONG_PAGE_SIZE
 } from '#lib/constants/library.ts';
@@ -19,6 +18,11 @@ import {
 	upsertSongInList
 } from '#lib/stores/libraryData.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
+
+// A reply to a search or browse that a newer one replaced is dropped, success
+// or failure. A later page adds only hits and items not already shown, and a
+// restore stops at the first page that fails. The loaded song ids name song
+// hits and the selected song, never an album.
 
 const SEARCH_FAILED_MESSAGE = 'Search failed';
 
@@ -87,11 +91,6 @@ export async function restoreLibrarySearch(
 	loadedCount: number
 ): Promise<void> {
 	const q = rawQuery.trim();
-	if (!q) {
-		searchGeneration += 1;
-		librarySearch.set({ ...EMPTY_SEARCH });
-		return;
-	}
 	librarySort.set(sort);
 	librarySearch.set({
 		q,
@@ -134,9 +133,9 @@ export async function restoreLibraryBrowse(
 	return true;
 }
 
-export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<boolean> {
+export async function loadLibraryBrowse(options: { reset: boolean }): Promise<boolean> {
 	const generation = ++browseGeneration;
-	const reset = options?.reset ?? true;
+	const { reset } = options;
 	const sort = get(librarySort);
 	const browse = get(libraryBrowse);
 	const albumOffset = reset ? 0 : browse.albumOffset;
@@ -250,9 +249,6 @@ async function runLibrarySearch(
 	sort: LibrarySort,
 	options: { reset: boolean }
 ): Promise<void> {
-	if (!q) {
-		throw new Error(LIBRARY_QUERY_REQUIRED);
-	}
 	const generation = ++searchGeneration;
 	if (options.reset) {
 		librarySearch.update((state) => ({ ...state, q, status: 'loading', error: null }));
