@@ -1,8 +1,0 @@
-claim_id = "05731538846c4a0ea8b99dba1e528675"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c6f77b601f6a348202575fc137f27d574c2cb86d"
-branch = "claude/issue-2847-agents-md-fleet-shape"
-scope = ["AGENTS.md", "README.md", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/constants.py", "tests/songmaker_cli/test_constants_secret_scrub_parity.py"]
-opened_commit = "e9552355a4665b6f6efa99271ab550d45a459964"
-whole_reason = "One standard's adoption: the file and every pointer that would go stale land together, or the tree links to headings that no longer exist."
