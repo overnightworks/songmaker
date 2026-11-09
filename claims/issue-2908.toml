@@ -1,7 +1,0 @@
-claim_id = "0111490dc744488c94350f8a3fc2e669"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5ad73d852fb166f572371f6ef7e7db6a661622a4"
-branch = "claude/issue-2908-present-tense-docstrings"
-scope = ["src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/generate.py"]
-opened_commit = "8a003ff91ff6e8d3f893a362c6335d1eac05e1d7"
