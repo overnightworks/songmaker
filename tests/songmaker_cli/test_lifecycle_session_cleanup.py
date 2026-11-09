@@ -8,8 +8,13 @@ from fastapi import FastAPI
 from support.web_app import TEST_SECRET
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import User, UserSession
-from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
+from songmaker_cli.health_types import (
+    BackgroundLoopName,
+    BackgroundLoopRegistry,
+    BackgroundLoopStatus,
+)
 from songmaker_cli.lifecycle import _cleanup_sessions, session_cleanup_loop
 
 
@@ -114,3 +119,32 @@ def test_cleanup_loop_runs_without_redis_and_recovers_after_database_failure(
 
     with factory() as db:
         assert db.get(UserSession, "expired") is None
+
+
+def test_cleanup_loop_keeps_a_live_session_and_resets_a_failing_loop_when_nothing_expired(
+    cleanup_context, seed_cleanup_sessions,
+):
+    app = FastAPI()
+    app.state.ctx = cleanup_context
+    registry = BackgroundLoopRegistry()
+    app.state.background_loop_registry = registry
+    for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
+        registry.record_failure(BackgroundLoopName.SESSION_CLEANUP, RuntimeError("earlier"))
+    seed_cleanup_sessions(
+        expired_ids=(), live_expiry=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    ticks = 0
+
+    async def advance_tick(_seconds):
+        nonlocal ticks
+        ticks += 1
+        if ticks == 2:
+            raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(session_cleanup_loop(app, wait=advance_tick))
+
+    health = registry.loop_health()[BackgroundLoopName.SESSION_CLEANUP]
+    assert health.status is BackgroundLoopStatus.OK
+    with cleanup_context.db() as db:
+        assert db.get(UserSession, "live") is not None

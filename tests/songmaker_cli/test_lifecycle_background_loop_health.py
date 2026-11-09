@@ -7,9 +7,10 @@ import os
 import threading
 from contextlib import nullcontext
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from support.loop_ticks import run_ticks_observing_status
 from support.web_app import make_test_app
 
 import songmaker_cli.lifecycle as lifecycle
@@ -17,6 +18,7 @@ import songmaker_cli.server as server
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
 from songmaker_cli.lifecycle import (
+    BackfillResult,
     BackgroundLoopName,
 )
 
@@ -123,6 +125,75 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
     failing_auto_score.assert_awaited_once()
     assert health.consecutive_failures == 1
     assert health.last_error == "RuntimeError"
+
+
+def _run_score_backfill_ticks(
+    monkeypatch, *, lock_results: list, backfill: AsyncMock, failures_before: int = 0,
+) -> list[BackgroundLoopStatus]:
+    """Run one score-backfill tick per lock result; return the status seen before each tick
+    and after the last one."""
+    registry = BackgroundLoopRegistry()
+    for _ in range(failures_before):
+        registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("earlier"))
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            background_loop_registry=registry,
+            ctx=SimpleNamespace(redis=SimpleNamespace(set=MagicMock(side_effect=lock_results))),
+        ),
+    )
+    monkeypatch.setattr(lifecycle, "backfill_unscored_generations", backfill)
+    monkeypatch.setattr("songmaker_cli.arq_pool.get_arq_pool", lambda: object())
+    return run_ticks_observing_status(
+        monkeypatch, lifecycle.score_backfill_loop(app), registry,
+        BackgroundLoopName.SCORE_BACKFILL, len(lock_results),
+    )
+
+
+def test_score_backfill_skips_the_tick_and_reads_ok_while_another_process_holds_the_lock(
+    monkeypatch,
+) -> None:
+    backfill = AsyncMock()
+
+    statuses = _run_score_backfill_ticks(
+        monkeypatch, lock_results=[None], backfill=backfill,
+        failures_before=BACKGROUND_LOOP_FAILURE_THRESHOLD,
+    )
+
+    backfill.assert_not_awaited()
+    assert statuses == [BackgroundLoopStatus.FAILING, BackgroundLoopStatus.OK]
+
+
+def test_score_backfill_reads_failing_during_a_redis_outage_and_runs_the_next_tick(
+    monkeypatch,
+) -> None:
+    backfill = AsyncMock(return_value=BackfillResult(dispatched=0, first_error=None))
+    outage = [RuntimeError("redis unavailable")] * BACKGROUND_LOOP_FAILURE_THRESHOLD
+
+    statuses = _run_score_backfill_ticks(
+        monkeypatch, lock_results=[*outage, True], backfill=backfill,
+    )
+
+    assert statuses[BACKGROUND_LOOP_FAILURE_THRESHOLD] is BackgroundLoopStatus.FAILING
+    backfill.assert_awaited_once()
+
+
+@pytest.mark.parametrize("dispatched", [0, 2])
+def test_a_healthy_score_backfill_tick_resets_a_failing_loop(monkeypatch, dispatched) -> None:
+    failing_tick = BackfillResult(dispatched=0, first_error=RuntimeError("scorer unavailable"))
+    backfill = AsyncMock(
+        side_effect=[
+            *[failing_tick] * BACKGROUND_LOOP_FAILURE_THRESHOLD,
+            BackfillResult(dispatched=dispatched, first_error=None),
+        ],
+    )
+
+    statuses = _run_score_backfill_ticks(
+        monkeypatch, lock_results=[True] * (BACKGROUND_LOOP_FAILURE_THRESHOLD + 1),
+        backfill=backfill,
+    )
+
+    assert statuses[BACKGROUND_LOOP_FAILURE_THRESHOLD] is BackgroundLoopStatus.FAILING
+    assert statuses[-1] is BackgroundLoopStatus.OK
 
 
 def test_finished_lifecycle_loop_is_dead_outside_shutdown(

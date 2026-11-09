@@ -6,8 +6,10 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
+from support.loop_ticks import run_ticks_observing_status
 from support.web_app import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
@@ -338,6 +340,55 @@ def test_reaper_policy_failure_is_recorded_for_health(ctx, monkeypatch) -> None:
     assert health.status is BackgroundLoopStatus.FAILING
     assert health.consecutive_failures == BACKGROUND_LOOP_FAILURE_THRESHOLD
     assert health.last_error == "RuntimeError"
+
+
+def _run_reaper_ticks(
+    monkeypatch, *, lock_results: list, tick: MagicMock, failures_before: int = 0,
+) -> list[BackgroundLoopStatus]:
+    """Run one reaper tick per lock result; return the status seen before each tick
+    and after the last one."""
+    registry = BackgroundLoopRegistry()
+    for _ in range(failures_before):
+        registry.record_failure(BackgroundLoopName.STALE_JOB_REAPER, RuntimeError("earlier"))
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            ctx=SimpleNamespace(redis=SimpleNamespace(set=MagicMock(side_effect=lock_results))),
+            background_loop_registry=registry,
+        ),
+    )
+    monkeypatch.setattr("songmaker_cli.lifecycle._run_stale_job_reaper_tick", tick)
+    return run_ticks_observing_status(
+        monkeypatch, stale_job_reaper_loop(app), registry,
+        BackgroundLoopName.STALE_JOB_REAPER, len(lock_results),
+    )
+
+
+def test_reaper_skips_the_tick_and_reads_ok_while_another_process_holds_the_lock(
+    monkeypatch,
+) -> None:
+    tick = MagicMock(return_value=(0, 0))
+
+    statuses = _run_reaper_ticks(
+        monkeypatch, lock_results=[None], tick=tick,
+        failures_before=BACKGROUND_LOOP_FAILURE_THRESHOLD,
+    )
+
+    tick.assert_not_called()
+    assert statuses == [BackgroundLoopStatus.FAILING, BackgroundLoopStatus.OK]
+
+
+def test_a_good_reaper_tick_resets_a_failing_loop(monkeypatch) -> None:
+    tick = MagicMock(
+        side_effect=[*[RuntimeError("database unavailable")] * BACKGROUND_LOOP_FAILURE_THRESHOLD,
+                     (0, 0)],
+    )
+
+    statuses = _run_reaper_ticks(
+        monkeypatch, lock_results=[True] * (BACKGROUND_LOOP_FAILURE_THRESHOLD + 1), tick=tick,
+    )
+
+    assert statuses[BACKGROUND_LOOP_FAILURE_THRESHOLD] is BackgroundLoopStatus.FAILING
+    assert statuses[-1] is BackgroundLoopStatus.OK
 
 
 class TestLoraTrainingThreshold:
