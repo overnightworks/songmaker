@@ -7,7 +7,7 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import ReferenceExpiry from '#lib/components/ReferenceExpiry.svelte';
 	import { REFERENCE_AUDIO_ACCEPT } from '#lib/constants/reference.ts';
-	import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
+	import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 	import {
 		RECIPE_REFERENCE_ALL_LABEL,
 		RECIPE_REFERENCE_LABEL,

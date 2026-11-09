@@ -7,12 +7,14 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import {
 	COLLECTION_MENU_CURATE_LABEL,
 	COLLECTION_MENU_LABEL,
-	collectionActionLabel,
 	NOW_PLAYING_LABEL,
-	openNowPlayingLabel,
+	openNowPlayingLabel
+} from '../src/lib/constants';
+import {
+	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
-} from '../src/lib/constants';
+} from '../src/lib/constants/transport';
 import {
 	NOW_PLAYING_CURATE_DONE_LABEL,
 	NOW_PLAYING_CURATE_GROUP_LABEL,

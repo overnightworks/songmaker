@@ -7,9 +7,9 @@ import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
-	EDITOR_UNSAVED_TITLE,
-	TRANSPORT_PLAY_LABEL
+	EDITOR_UNSAVED_TITLE
 } from '../src/lib/constants';
+import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { sameOriginHeaders, ONLY_IN_SHELL } from './helpers';
 import {
 	archiveOwnedAlbum,

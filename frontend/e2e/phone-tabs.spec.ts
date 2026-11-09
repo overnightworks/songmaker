@@ -3,12 +3,11 @@ import { PHONE_TABS, PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tab
 import { NOW_PLAYING_CLOSE } from '../src/lib/constants/now-playing';
 import {
 	openNowPlayingLabel,
-	collectionActionLabel,
-	TRANSPORT_PLAY_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
 	FlowGuard,

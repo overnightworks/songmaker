@@ -5,7 +5,7 @@
 	import ReferenceMenu from '#lib/components/ReferenceMenu.svelte';
 	import ReferenceUses from '#lib/components/ReferenceUses.svelte';
 	import { REFERENCE_KEEP_LABEL, REFERENCE_UNKEEP_LABEL } from '#lib/constants/reference.ts';
-	import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
+	import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 	import { formatTime, localDayAndMonth } from '#lib/utils/format.ts';
 
 	const NO_LENGTH = '—';
