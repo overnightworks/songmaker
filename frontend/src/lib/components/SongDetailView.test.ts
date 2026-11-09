@@ -12,7 +12,6 @@ import { phoneAppBar } from '#lib/stores/ui.ts';
 import PhoneAppBar from './PhoneAppBar.svelte';
 
 import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
-import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants.ts';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATING_LABEL,
@@ -25,7 +24,9 @@ import {
 	SONG_COVER_ALT_TYPE,
 	SONG_COVER_REMOVE_LABEL,
 	SONG_COVER_REPLACE_LABEL,
-	SONG_COVER_UPLOAD_LABEL
+	SONG_COVER_UPLOAD_LABEL,
+	SONG_NEXT_LABEL,
+	SONG_PREVIOUS_LABEL
 } from '#lib/constants/song.ts';
 import {
 	TAKE_REPAINT_LABEL,
@@ -1466,6 +1467,13 @@ describe('song header album rail', () => {
 	});
 });
 
+function coverImages(coverPath: string, version: string) {
+	return {
+		card: `${coverPath}?variant=card&v=${version}`,
+		detail: `${coverPath}?variant=detail&v=${version}`
+	};
+}
+
 describe('SongDetailView cover hero', () => {
 	it('inherits parent album cover and does not show remove', async () => {
 		albumList.set([
@@ -1473,10 +1481,7 @@ describe('SongDetailView cover hero', () => {
 				id: 'a-local',
 				title: 'Local Album',
 				song_count: 3,
-				cover: {
-					card: '/api/albums/a-local/cover?variant=card&v=album.jpg',
-					detail: '/api/albums/a-local/cover?variant=detail&v=album.jpg'
-				}
+				cover: coverImages('/api/albums/a-local/cover', 'album.jpg')
 			})
 		]);
 		const target = await renderView();
@@ -1496,10 +1501,7 @@ describe('SongDetailView cover hero', () => {
 				song_count: 3,
 				id: 'other-album',
 				title: 'Other Album',
-				cover: {
-					card: '/api/albums/other-album/cover?variant=card&v=other.jpg',
-					detail: '/api/albums/other-album/cover?variant=detail&v=other.jpg'
-				}
+				cover: coverImages('/api/albums/other-album/cover', 'other.jpg')
 			})
 		]);
 		fetchAlbum.mockResolvedValue(
@@ -1507,10 +1509,7 @@ describe('SongDetailView cover hero', () => {
 				id: 'a-local',
 				title: 'Local Album',
 				song_count: 3,
-				cover: {
-					card: '/api/albums/a-local/cover?variant=card&v=parent.jpg',
-					detail: '/api/albums/a-local/cover?variant=detail&v=parent.jpg'
-				}
+				cover: coverImages('/api/albums/a-local/cover', 'parent.jpg')
 			})
 		);
 		const target = await renderView();
@@ -1528,10 +1527,7 @@ describe('SongDetailView cover hero', () => {
 		songList.set([
 			song({
 				...editableSongDefaults(),
-				cover: {
-					card: '/api/songs/s1/cover?variant=card&v=own.jpg',
-					detail: '/api/songs/s1/cover?variant=detail&v=own.jpg'
-				}
+				cover: coverImages('/api/songs/s1/cover', 'own.jpg')
 			})
 		]);
 		albumList.set([
@@ -1539,10 +1535,7 @@ describe('SongDetailView cover hero', () => {
 				id: 'a-local',
 				title: 'Local Album',
 				song_count: 3,
-				cover: {
-					card: '/api/albums/a-local/cover?variant=card&v=album.jpg',
-					detail: '/api/albums/a-local/cover?variant=detail&v=album.jpg'
-				}
+				cover: coverImages('/api/albums/a-local/cover', 'album.jpg')
 			})
 		]);
 		const target = await renderView();
@@ -1562,10 +1555,7 @@ describe('SongDetailView cover hero', () => {
 		uploadSongCover.mockResolvedValue(
 			song({
 				...editableSongDefaults(),
-				cover: {
-					card: '/api/songs/s1/cover?variant=card&v=new.jpg',
-					detail: '/api/songs/s1/cover?variant=detail&v=new.jpg'
-				}
+				cover: coverImages('/api/songs/s1/cover', 'new.jpg')
 			})
 		);
 		const target = await renderView();
@@ -1585,10 +1575,7 @@ describe('SongDetailView cover hero', () => {
 		songList.set([
 			song({
 				...editableSongDefaults(),
-				cover: {
-					card: '/api/songs/s1/cover?variant=card&v=own.jpg',
-					detail: '/api/songs/s1/cover?variant=detail&v=own.jpg'
-				}
+				cover: coverImages('/api/songs/s1/cover', 'own.jpg')
 			})
 		]);
 		albumList.set([
@@ -1596,10 +1583,7 @@ describe('SongDetailView cover hero', () => {
 				id: 'a-local',
 				title: 'Local Album',
 				song_count: 3,
-				cover: {
-					card: '/api/albums/a-local/cover?variant=card&v=album.jpg',
-					detail: '/api/albums/a-local/cover?variant=detail&v=album.jpg'
-				}
+				cover: coverImages('/api/albums/a-local/cover', 'album.jpg')
 			})
 		]);
 		deleteSongCover.mockResolvedValue(song({ ...editableSongDefaults(), cover: null }));

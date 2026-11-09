@@ -17,6 +17,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.types import Receive, Scope, Send
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
+from songmaker_cli.api_helpers import can_access_album
 from songmaker_cli.api_models import (
     ReferenceCountdownShownRequest,
     ReferenceListResponse,
@@ -37,9 +39,11 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH, ReferenceRecording
+from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.reference_recordings import (
     ReferenceLinkCounts,
+    ReferenceUses,
     acknowledge_countdown_shown,
     delete_reference_recording,
     get_countdown_publication,
@@ -97,7 +101,16 @@ class OpenedFileResponse(FileResponse):
             )
 
 
-@router.get("/references")
+_LIST_REFERENCES_DESCRIPTION = (
+    "List the person's own reference recordings with their keep state and countdown."
+)
+
+
+@router.get(
+    "/references",
+    description=_LIST_REFERENCES_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_references", effect=ToolEffect.READ_ONLY),
+)
 def api_list_references(
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_db_session)],
@@ -143,8 +156,13 @@ def api_countdown_shown(
     return Response(status_code=204)
 
 
+_LIST_REFERENCE_USES_DESCRIPTION = "List where one of the person's reference recordings is used."
+
+
 @router.get(
     "/references/{reference_id}/uses",
+    description=_LIST_REFERENCE_USES_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_reference_uses", effect=ToolEffect.READ_ONLY),
     responses={404: {"description": "Reference audio not found"}},
 )
 def api_reference_uses(
@@ -154,7 +172,23 @@ def api_reference_uses(
 ) -> ReferenceUsesResponse:
     if get_owned_reference_recording(session, user.id, reference_id) is None:
         raise HTTPException(404)
-    return ReferenceUsesResponse.from_orm(reference_uses(session, reference_id))
+    uses = reference_uses(session, reference_id)
+    return ReferenceUsesResponse.from_orm(_uses_in_albums_the_caller_reaches(session, user, uses))
+
+
+def _uses_in_albums_the_caller_reaches(
+    session: Session, user: AuthenticatedUser, uses: ReferenceUses,
+) -> ReferenceUses:
+    """An admin may attach their own reference to another person's song in the browser."""
+    reached_album_ids = {
+        album_id
+        for album_id in {use.album_id for use in (*uses.versions, *uses.takes)}
+        if can_access_album(get_album(session, album_id, include_deleted_rows=True), user)
+    }
+    return ReferenceUses(
+        versions=[use for use in uses.versions if use.album_id in reached_album_ids],
+        takes=[use for use in uses.takes if use.album_id in reached_album_ids],
+    )
 
 
 @router.get(
@@ -239,8 +273,15 @@ def _toggle_keep(
     return StatusResponse()
 
 
+_KEEP_REFERENCE_DESCRIPTION = (
+    "Protect one of the person's own reference recordings from deletion after its countdown."
+)
+
+
 @router.post(
     "/references/{reference_id}/keep",
+    description=_KEEP_REFERENCE_DESCRIPTION,
+    openapi_extra=agent_tool(name="keep_reference", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Reference audio not found"}},
 )
 def api_keep_reference(

@@ -60,11 +60,11 @@ def _build_app() -> FastAPI:
         return Response(content=_LARGE_IMAGE_BODY, media_type="image/jpeg")
 
     @app.get("/api/range-test")
-    def get_range() -> Response:
+    def get_range(status: int = 206) -> Response:
         return Response(
             content=("la " * 1000),
             media_type="text/plain",
-            status_code=206,
+            status_code=status,
             headers={"Content-Range": "bytes 0-99/3000"},
         )
 
@@ -126,29 +126,29 @@ def test_compressible_response_gets_vary_even_without_client_gzip_support(
         ("gzip;Q=0", False),
         ("identity;q=0", False),
         ("br, gzip;q=0.8", True),
+        ("gzip;q=abc", False),
+        ("gzip;level=1", True),
     ],
 )
 def test_accepts_gzip_negotiation(accept_encoding: str, expects_gzip: bool) -> None:
     assert _accepts_gzip(accept_encoding) is expects_gzip
 
 
-def test_audio_response_is_never_gzip_compressed(client: TestClient) -> None:
-    resp = client.get("/audio/u-test/g1.mp3", headers={"Accept-Encoding": "gzip"})
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [("/audio/u-test/g1.mp3", _LARGE_AUDIO_BODY), ("/shared/slug/cover", _LARGE_IMAGE_BODY)],
+)
+def test_media_response_is_never_compressed(client: TestClient, path: str, body: bytes) -> None:
+    resp = client.get(path, headers={"Accept-Encoding": "gzip"})
     assert resp.status_code == 200
     assert "content-encoding" not in resp.headers
-    assert resp.content == _LARGE_AUDIO_BODY
+    assert resp.content == body
 
 
-def test_cover_image_response_is_never_gzip_compressed(client: TestClient) -> None:
-    resp = client.get("/shared/slug/cover", headers={"Accept-Encoding": "gzip"})
-    assert resp.status_code == 200
-    assert "content-encoding" not in resp.headers
-    assert resp.content == _LARGE_IMAGE_BODY
-
-
-def test_partial_content_response_is_never_gzip_compressed(client: TestClient) -> None:
-    resp = client.get("/api/range-test", headers={"Accept-Encoding": "gzip"})
-    assert resp.status_code == 206
+@pytest.mark.parametrize("status_code", [206, 200])
+def test_byte_range_response_is_never_compressed(client: TestClient, status_code: int) -> None:
+    resp = client.get(f"/api/range-test?status={status_code}", headers={"Accept-Encoding": "gzip"})
+    assert resp.status_code == status_code
     assert "content-encoding" not in resp.headers
     assert resp.headers["content-range"] == "bytes 0-99/3000"
 

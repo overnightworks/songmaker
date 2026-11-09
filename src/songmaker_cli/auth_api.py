@@ -17,6 +17,7 @@ from webauth.sign_in_routes import (
     install_sign_in_routes,
 )
 
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_models import AuthMeResponse
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.auth_stores import DatabaseSignInTransaction
@@ -92,7 +93,16 @@ def install_sign_in(app: FastAPI) -> None:
     )
 
 
-@router.get("/me")
+_GET_ACCOUNT_DESCRIPTION = (
+    "Read who the person is: id, username, role and the link to the account console."
+)
+
+
+@router.get(
+    "/me",
+    description=_GET_ACCOUNT_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_account", effect=ToolEffect.READ_ONLY),
+)
 def me(
     request: Request,
     current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],

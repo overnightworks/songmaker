@@ -6,7 +6,6 @@
 // and 1440 px (the header).
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { NOW_PLAYING_LABEL } from '../src/lib/constants';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_LYRICS_LABEL,
@@ -15,7 +14,7 @@ import {
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
 import { TAKE_OVERFLOW_LABEL, TAKE_REPAINT_LABEL } from '../src/lib/constants/take';
-import { NOW_PLAYING_TAKE_TAB } from '../src/lib/constants/now-playing';
+import { NOW_PLAYING_TAKE_TAB, NOW_PLAYING_LABEL } from '../src/lib/constants/now-playing';
 import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { showTab } from './foldedSong';

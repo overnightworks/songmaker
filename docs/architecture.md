@@ -752,7 +752,7 @@ non-public page navigates the whole window to `/login/oidc?next=…`; the signed
 page `/login` starts nothing by itself and the public paths never redirect.
 
 Outside its `*.test.ts` files, `lib/api` imports only itself, packages,
-`#lib/constants`, `#lib/routes/` and `#lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
+`#lib/constants/`, `#lib/routes/` and `#lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
 and no `import()` or `import.meta`; `eslint.config.js` enforces it (#925 G2).
 
 Only `lib/api/fetch.ts` calls global `fetch` or sends an `XMLHttpRequest` (`apiUpload`). Only `lib/api` opens a server stream (`openJobEventStream` in `lib/api/jobs.ts`, `openResourceEventStream` in `lib/api/resourceEvents.ts`), and nothing outside `lib/api` sends a beacon; other modules reach the server through a `lib/api` function. The named exceptions are `lib/services/audioPlayer.svelte.ts` for media reads (it hands the deck its fetch function), and `service-worker.ts` for its cache. A stream failure carries no HTTP status, so it reaches neither `sessionLost` nor `rateLimited` by itself: the stores keep each stream's reconnection, `stores/resourceSync.ts` asks its auth probe what a failure means, and `stores/jobs.ts` learns of a lost session from its REST re-read once a job's retry budget is spent. Tests may stub the network boundary. `eslint.config.js` enforces this, including the `window.`, `globalThis.` and `self.` forms (#925 G3).
@@ -969,7 +969,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
 | Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py` |
-| MCP front | The eight marked routes served as tools on `/mcp` to a person's own agent or to an agent with its own account (kind `agent`, admitted as `user`), and the `agent` settings section | `agent/mcp.py`, `agent/settings.py` |
+| MCP front | The marked routes served as tools on `/mcp` to a person's own agent or to an agent with its own account (kind `agent`, admitted as `user`), and the `agent` settings section | `agent/mcp.py`, `agent/settings.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | Tool bodies | The co-writer's tool declarations and their execution, which the hand tools call | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
@@ -1082,7 +1082,7 @@ read it through `webauth.config.web_auth_config(request)`; an application that
 never installed one fails loudly at its first auth-protected request. Redis
 remains the rate-limit backend; a request is admitted by its DB session, which is
 loaded on every authenticated request, or by a verified token on a person path
-(`/api/` and `/audio/`) when `TOKEN_CLIENTS` names the token's client, or by a person's own agent's resource token at `/mcp` and on the eight marked routes while MCP is on. `session_cleanup_loop` periodically deletes expired DB
+(`/api/` and `/audio/`) when `TOKEN_CLIENTS` names the token's client, or by a person's own agent's resource token at `/mcp` and on the marked routes while MCP is on. `session_cleanup_loop` periodically deletes expired DB
 sessions without Redis.
 
 Sign-in is songmaker's composition of that library, in `auth_api.py` (`install_sign_in`),

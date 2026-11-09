@@ -47,14 +47,6 @@ class WorkerBase:
         self._db_factory = None
         self._db_lock = threading.Lock()
 
-    @property
-    def job_timeout(self) -> int:
-        return self._settings.arq_job_timeout
-
-    @property
-    def drain_timeout(self) -> int:
-        return self._settings.arq_drain_timeout
-
     def recovery_statuses_by_type(self) -> dict[str, frozenset[str]]:
         """Return statuses this worker may terminalize at restart boundaries."""
         return {job_type: frozenset({JobStatus.RUNNING}) for job_type in self.job_types}

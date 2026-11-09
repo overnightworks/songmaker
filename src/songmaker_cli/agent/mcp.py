@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 from agent_runtime_client.mcp_server import McpPersonFront, RouteTools, route_tools
 from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH
 from agent_runtime_client.tools import Principal
+from agent_runtime_client.tools import ToolEffect as ToolEffect
+from agent_runtime_client.tools import agent_tool as agent_tool
 from starlette.requests import HTTPConnection
 from webauth.middleware.bearer_gate import (
     MarkedRoute,
