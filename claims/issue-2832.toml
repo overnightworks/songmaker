@@ -1,0 +1,8 @@
+claim_id = "a303fae3f82646d2830ac72fa828a962"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2bb4c763fee9c5ba173cbf8fe1b4a0b683692585"
+branch = "claude/issue-2832-s23-guards-params-three-cells"
+scope = ["quality/baseline.toml", "src/acestep_worker/task_results.py", "src/songmaker_cli/api_models/library.py", "src/songmaker_cli/api_models/loras.py", "src/songmaker_cli/api_models/playlists.py", "src/songmaker_cli/cowriter/tools.py", "src/songmaker_cli/db/queries/loras.py", "src/songmaker_cli/jobs/lora_training.py", "src/songmaker_cli/server.py", "tests/acestep_worker/test_wrapper_result_route.py", "tests/songmaker_cli/db/queries/test_loras.py", "tests/songmaker_cli/test_audio_files.py", "tests/songmaker_cli/test_auth_stores.py", "tests/songmaker_cli/test_cleanup_purge_lock_postgres.py"]
+opened_commit = "b28683c2bbf220769a3622d23c7dd85cb4e80c05"
+whole_reason = "One coverage cut: each deletion and cell follows from the same trace, and the size rows follow the functions they measure."
