@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -186,3 +187,52 @@ def _train_body(**overrides: object) -> dict[str, object]:
 @pytest.fixture
 def train_body() -> Callable[..., dict[str, object]]:
     return _train_body
+
+
+@dataclass
+class TrainLoraWorker:
+    """A worker with `sft` loaded behind its real routes; `spawned` holds its background runs."""
+
+    client: httpx.AsyncClient
+    deps: WorkerDeps
+    spawned: list[Any]
+    body: Callable[..., dict[str, object]]
+
+    async def reserve_hold(self) -> str:
+        response = await self.client.post("/gpu_hold/reserve")
+        assert response.status_code == 200
+        return response.json()["token"]
+
+    async def train(self, hold_token: str, **overrides: object) -> httpx.Response:
+        body = self.body(
+            mode="sft",
+            dataset_dir=str(self.deps.shared_audio_root / "dataset"),
+            output_dir=str(self.deps.shared_audio_root / "out"),
+            hold_token=hold_token,
+        )
+        return await self.client.post("/tasks/train_lora", json={**body, **overrides})
+
+
+@pytest.fixture
+def train_lora_worker(
+    tmp_path: Path,
+    train_lora_deps: Callable[..., WorkerDeps],
+    train_body: Callable[..., dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[], Any]:
+    @asynccontextmanager
+    async def worker() -> AsyncIterator[TrainLoraWorker]:
+        deps = train_lora_deps(tmp_path)
+        (deps.shared_audio_root / "dataset").mkdir()
+        spawned: list[Any] = []
+        monkeypatch.setattr("acestep_worker.wrapper.spawn_background", spawned.append)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app(deps)),
+            base_url="http://worker",
+            headers=INTERNAL_HEADERS,
+        ) as client:
+            loaded = await client.post("/load_model", json={"mode": "sft"})
+            assert loaded.status_code == 200
+            yield TrainLoraWorker(client, deps, spawned, train_body)
+
+    return worker

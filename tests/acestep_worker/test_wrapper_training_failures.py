@@ -267,3 +267,47 @@ def test_a_workspace_that_cannot_be_removed_does_not_hide_the_failed_task(
 
     assert snapshot.state == "error"
     assert ("Failed to remove LoRA training workspace" in caplog.text) is is_reported
+
+
+def test_a_workspace_inside_the_dataset_fails_the_training_and_keeps_every_dataset_file(
+    train_lora_worker: Callable[[], Any],
+) -> None:
+    async def scenario() -> tuple[TaskSnapshot, list[Path]]:
+        async with train_lora_worker() as worker:
+            dataset = worker.deps.shared_audio_root
+            (dataset / "clip.wav").write_bytes(b"audio")
+            worker.deps.checkpoint_dir = dataset / "checkpoints"
+            worker.deps.train_lora_runner = default_train_lora_runner
+            response = await worker.train(await worker.reserve_hold(), dataset_dir=str(dataset))
+            assert response.status_code == 200
+            with _training_fork():
+                await worker.spawned[0]
+            snapshot = await worker.deps.task_store.get(response.json()["task_id"])
+            assert snapshot is not None
+            return snapshot, sorted(path for path in dataset.rglob("*") if path.is_file())
+
+    snapshot, dataset_files = asyncio.run(scenario())
+
+    assert snapshot.state == "error"
+    assert "nested in dataset" in (snapshot.error or "")
+    assert [path.name for path in dataset_files] == ["clip.wav"]
+    assert dataset_files[0].read_bytes() == b"audio"
+
+
+def test_a_dataset_that_is_a_file_is_refused_without_a_task(
+    train_lora_worker: Callable[[], Any],
+) -> None:
+    async def scenario() -> tuple[int, dict[str, Any]]:
+        async with train_lora_worker() as worker:
+            dataset_file = worker.deps.shared_audio_root / "dataset.zip"
+            dataset_file.write_bytes(b"archive")
+            token = await worker.reserve_hold()
+            response = await worker.train(token, dataset_dir=str(dataset_file))
+            handover = await worker.client.post("/gpu_hold/handover", json={"token": token})
+            assert not worker.spawned
+            return response.status_code, handover.json()
+
+    status_code, handover = asyncio.run(scenario())
+
+    assert status_code == 422
+    assert handover == {"claimed": False, "task_id": None}
