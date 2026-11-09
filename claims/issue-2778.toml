@@ -1,7 +1,0 @@
-claim_id = "f8acf5deebea4526a67a357bab439a8f"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d23a5d5a0e36548852a0cc6fd911d2c8a86f354b"
-branch = "claude/issue-2778-outer-deadline-tests-prove-armed-delay"
-scope = ["tests/songmaker_cli/test_resource_event_api.py"]
-opened_commit = "cad28db529e1301c96d640576d8e5bcd802b42d0"
