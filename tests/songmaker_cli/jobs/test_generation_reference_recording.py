@@ -411,7 +411,7 @@ def test_a_job_cancelled_before_the_deletion_is_reported_stays_cancelled(
     assert _job_outcome(seeded_db)[0] == "cancelled"
 
 
-def test_a_take_number_conflict_fails_as_before_not_with_the_deletion_line(
+def test_a_take_number_conflict_fails_the_job_as_unexpected_and_saves_no_take(
     seeded_db, tmp_path: Path,
 ) -> None:
     _write_reference(tmp_path, REFERENCE_A)

@@ -1142,7 +1142,7 @@ def _assert_plays_with_ranges(listener: TestClient, audio_url: str) -> None:
 
 
 @pytest.mark.parametrize("share", _PUBLIC_SHARES, ids=lambda share: share.name)
-def test_public_share_page_and_audio_carry_no_account_id_1374_rule_8(
+def test_public_share_page_and_audio_carry_no_account_id(
     sharing_app: TestClient, share: PublicShare,
 ) -> None:
     """Spec: REQ-SHARE-01, REQ-SHARE-02 -- the owner enables each kind; a stranger plays it."""
@@ -1161,7 +1161,7 @@ def test_public_share_page_and_audio_carry_no_account_id_1374_rule_8(
 
 @pytest.mark.parametrize("share", _STREAMING_SHARES, ids=lambda share: share.name)
 @pytest.mark.usefixtures("fake_queue_stream_build")
-def test_public_share_stream_carries_no_account_id_and_plays_1374_rule_8(
+def test_public_share_stream_carries_no_account_id_and_plays(
     sharing_app: TestClient, share: PublicShare,
 ) -> None:
     creator_identifiers = _creator_identifiers(sharing_app)
@@ -1183,7 +1183,7 @@ def test_public_share_stream_carries_no_account_id_and_plays_1374_rule_8(
     ids=["own_file", "file_of_a_presented_take"],
 )
 @pytest.mark.parametrize("share", _PUBLIC_SHARES, ids=lambda share: share.name)
-def test_public_share_audio_answers_404_for_a_take_outside_the_share_1374_rule_8(
+def test_public_share_audio_answers_404_for_a_take_outside_the_share(
     sharing_app: TestClient, share: PublicShare, outside_take_stored_path: str,
 ) -> None:
     with sharing_app.app.state.ctx.db() as session:
@@ -1198,7 +1198,7 @@ def test_public_share_audio_answers_404_for_a_take_outside_the_share_1374_rule_8
 
 
 @pytest.mark.parametrize("share", _PUBLIC_SHARES, ids=lambda share: share.name)
-def test_public_share_audio_answers_404_for_an_old_stored_path_url_1374_rule_8(
+def test_public_share_audio_answers_404_for_an_old_stored_path_url(
     sharing_app: TestClient, share: PublicShare,
 ) -> None:
     listener, slug = _open_public_share(sharing_app, share)
@@ -1209,7 +1209,7 @@ def test_public_share_audio_answers_404_for_an_old_stored_path_url_1374_rule_8(
 
 
 @pytest.mark.parametrize("share", _PUBLIC_SHARES, ids=lambda share: share.name)
-def test_public_share_audio_answers_404_once_the_link_is_unshared_1374_rule_8(
+def test_public_share_audio_answers_404_once_the_link_is_unshared(
     sharing_app: TestClient, share: PublicShare,
 ) -> None:
     listener, slug = _open_public_share(sharing_app, share)
@@ -1439,7 +1439,7 @@ def test_shared_generation_hides_a_noncanonical_stored_audio_path(
     assert unauthed.get(f"/shared/gen/{slug}/audio/g1.mp3").status_code == 404
 
 
-def test_shared_generation_of_a_wav_only_take_has_no_audio_url_and_logs_nothing_1374_rule_8(
+def test_shared_generation_of_a_wav_only_take_has_no_audio_url_and_logs_nothing(
     sharing_app: TestClient,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -1635,7 +1635,7 @@ def _add_mosaic_album(session, index: int) -> str:
 
 
 @pytest.mark.parametrize("album_state", ["shared", "unshared", "deleted"])
-def test_shared_playlist_names_each_member_album_without_expanding_cover_access_1374_rule_10(
+def test_shared_playlist_names_each_member_album_without_expanding_cover_access(
     tmp_path: Path, album_state: str, pg_factory,
 ) -> None:
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
@@ -1672,7 +1672,7 @@ def test_shared_playlist_names_each_member_album_without_expanding_cover_access_
     )
 
 
-def test_shared_playlist_song_without_album_has_empty_album_title_1374_rule_10() -> None:
+def test_shared_playlist_song_without_album_has_empty_album_title() -> None:
     entry = PlaylistEntry(
         id="entry", generation=Generation(
             id="take", generation_number=1, song=Song(title="Song", album=None),
@@ -1792,7 +1792,7 @@ def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(
     assert public.get(mosaic_cover).status_code == 404
 
 
-def test_shared_take_payload_has_no_seed_1374_rule_8(two_take_app: TestClient) -> None:
+def test_shared_take_payload_has_no_seed(two_take_app: TestClient) -> None:
     slug = _share_slug(two_take_app, "/api/generations/g1/share")
 
     payload = web_client(two_take_app.app, cookies={}).get(f"/shared/gen/{slug}").json()
@@ -1801,7 +1801,7 @@ def test_shared_take_payload_has_no_seed_1374_rule_8(two_take_app: TestClient) -
     assert payload["generation_number"] == 1
 
 
-def test_shared_playlist_entries_carry_a_serving_album_cover_only_when_the_file_exists_1374_rule_10(
+def test_shared_playlist_entries_carry_a_serving_album_cover_only_when_the_file_exists(
     tmp_path: Path, pg_factory,
 ) -> None:
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
@@ -1828,7 +1828,7 @@ def test_shared_playlist_entries_carry_a_serving_album_cover_only_when_the_file_
     assert public.get(expected["detail"]).status_code == 200
 
 
-def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(tmp_path, pg_factory):
+def test_shared_playlist_serves_no_cover_of_a_non_member_album(tmp_path, pg_factory):
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
     seed_session(client, "admin")
     with client.app.state.ctx.db() as session:
@@ -1855,7 +1855,7 @@ def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(tmp_p
     assert foreign.status_code == 404
 
 
-def test_unshared_playlist_answers_404_and_serves_no_entry_cover_1374_rule_8(tmp_path, pg_factory):
+def test_unshared_playlist_answers_404_and_serves_no_entry_cover(tmp_path, pg_factory):
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)
     seed_session(client, "admin")
     with client.app.state.ctx.db() as session:
@@ -1874,7 +1874,7 @@ def test_unshared_playlist_answers_404_and_serves_no_entry_cover_1374_rule_8(tmp
     assert public.get(cover_url).status_code == 404
 
 
-def test_reshared_playlist_does_not_revive_the_old_slugs_entry_cover_1374_rule_8(
+def test_reshared_playlist_does_not_revive_the_old_slugs_entry_cover(
     tmp_path: Path, pg_factory,
 ) -> None:
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_playlist_with_entries)

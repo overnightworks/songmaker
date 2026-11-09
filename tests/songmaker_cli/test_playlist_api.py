@@ -979,7 +979,7 @@ def test_shared_playlist_audio(tmp_path: Path, pg_factory) -> None:
     assert resp.status_code == 200
 
 
-def test_shared_playlist_stops_presenting_a_deleted_songs_take_1374_rule_9(
+def test_shared_playlist_stops_presenting_a_deleted_songs_take(
     tmp_path: Path, pg_factory,
 ) -> None:
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_sharing_data)
@@ -1021,7 +1021,7 @@ def _seed_two_song_sharing_data(session) -> None:
     ],
 )
 @pytest.mark.usefixtures("fake_queue_stream_build")
-def test_shared_playlist_stream_stops_presenting_a_deleted_songs_take_1374_rule_9(
+def test_shared_playlist_stream_stops_presenting_a_deleted_songs_take(
     tmp_path: Path,
     deleted_song_ids: list[str],
     expected_new_stream_status: int,

@@ -430,7 +430,7 @@ def test_a_listen_inside_a_playlist_lifts_the_playlist_and_leaves_the_album(
     assert items[1] == album_before
 
 
-def test_1354_47_A5_an_admins_actions_leave_the_owners_lists_byte_identical_and_move_the_admins_own(
+def test_an_admins_actions_leave_the_owners_lists_byte_identical_and_move_the_admins_own(
     library_ctx: tuple[object, object],
 ) -> None:
     """1354_rule_06: each viewer's lists reflect only their own activity."""
@@ -557,7 +557,7 @@ def test_listen_leaves_out_an_album_without_a_live_album_listen(
     assert _listen_items(client) == []
 
 
-def test_1354_47_A5_an_album_falls_back_to_its_newest_listened_live_song(tmp_path, pg_factory):
+def test_an_album_falls_back_to_its_newest_listened_live_song(tmp_path, pg_factory):
     client, factory = _make_client(tmp_path, pg_factory, USER_A)
 
     def seed(session) -> None:
@@ -653,7 +653,7 @@ _RESUMES_FROM_THE_START = {
     ],
     ids=["1354_47_A1", "1354_47_A2", "1354_47_A2-equal-position", "1354_47_A6"],
 )
-def test_1354_47_a_played_playlist_names_its_first_live_entry(
+def test_a_played_playlist_names_its_first_live_entry(
     tmp_path: Path, entries: list[str], song_number: int, entry_id: str,
     change: Callable | None, pg_factory,
 ) -> None:
@@ -667,7 +667,7 @@ def test_1354_47_a_played_playlist_names_its_first_live_entry(
 
 
 @_AN_ENTRY_STOPS_BEING_LIVE
-def test_1354_47_A3_an_entry_that_is_no_longer_live_never_raises_a_later_songs_number(
+def test_an_entry_that_is_no_longer_live_never_raises_a_later_songs_number(
     tmp_path: Path, remove_aside: Callable, pg_factory,
 ) -> None:
     """1354_rule_20: filtered entries do not contribute to live numbering."""
@@ -684,7 +684,7 @@ def test_1354_47_A3_an_entry_that_is_no_longer_live_never_raises_a_later_songs_n
 
 
 @_AN_ENTRY_STOPS_BEING_LIVE
-def test_1354_47_A4_a_playlist_without_a_live_occurrence_resumes_from_the_start(
+def test_a_playlist_without_a_live_occurrence_resumes_from_the_start(
     tmp_path: Path, remove_aside: Callable, pg_factory,
 ) -> None:
     """1354_rule_20: filtered targets expose no entry identity."""
@@ -696,7 +696,7 @@ def test_1354_47_A4_a_playlist_without_a_live_occurrence_resumes_from_the_start(
     assert {key: item[key] for key in _RESUMES_FROM_THE_START} == _RESUMES_FROM_THE_START
 
 
-def test_1354_47_A4_a_playlist_whose_last_played_song_left_it_resumes_from_the_start(
+def test_a_playlist_whose_last_played_song_left_it_resumes_from_the_start(
     tmp_path: Path, pg_factory,
 ) -> None:
     """1354_rule_20: removed targets expose no entry identity."""
@@ -1111,7 +1111,7 @@ def test_search_album_title_nachtstrom(alice: TestClient) -> None:
     assert album_hit["album"]["title"] == "Nachtstrom"
 
 
-def test_search_album_hit_says_whether_it_has_a_playable_take_1354_rule_11(
+def test_search_album_hit_says_whether_it_has_a_playable_take(
     library_ctx: tuple[object, object],
 ) -> None:
     factory, ctx = library_ctx

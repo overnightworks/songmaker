@@ -129,7 +129,7 @@ TAKE_JOB_REQUESTS = {
 
 
 @pytest.mark.parametrize("request_name", list(TAKE_JOB_REQUESTS))
-def test_m1_a_take_job_row_holds_the_version_the_endpoint_resolved(client, request_name):
+def test_a_take_job_row_holds_the_version_the_endpoint_resolved(client, request_name):
     path, body, expected_version = TAKE_JOB_REQUESTS[request_name]
     with worker_up():
         response = client.post(path, json=body)
@@ -141,7 +141,7 @@ def test_m1_a_take_job_row_holds_the_version_the_endpoint_resolved(client, reque
 @pytest.mark.parametrize("status", [JobStatus.QUEUED, JobStatus.RUNNING])
 @pytest.mark.parametrize("version_id", ["v1", "v2"], ids=["with takes", "without takes"])
 @pytest.mark.parametrize("delete_generations", [True, False])
-def test_m2_a_version_an_active_job_references_answers_409_and_changes_nothing(
+def test_a_version_an_active_job_references_answers_409_and_changes_nothing(
     client, status, version_id, delete_generations,
 ):
     job_id = _add_job(client, version_id, status)
@@ -159,7 +159,7 @@ def test_m2_a_version_an_active_job_references_answers_409_and_changes_nothing(
 
 
 @pytest.mark.parametrize("status", [JobStatus.QUEUED, JobStatus.RUNNING])
-def test_m2b_a_version_deletes_while_another_version_of_the_song_has_an_active_job(
+def test_a_version_deletes_while_another_version_of_the_song_has_an_active_job(
     client, status,
 ):
     job_id = _add_job(client, "v1", status)
@@ -172,7 +172,7 @@ def test_m2b_a_version_deletes_while_another_version_of_the_song_has_an_active_j
 
 
 @pytest.mark.parametrize("status", TERMINAL_STATUSES)
-def test_m3a_a_version_without_takes_deletes_when_its_jobs_are_terminal(client, status):
+def test_a_version_without_takes_deletes_when_its_jobs_are_terminal(client, status):
     job_id = _add_job(client, "v2", status)
 
     response = client.delete("/api/versions/v2")
@@ -182,7 +182,7 @@ def test_m3a_a_version_without_takes_deletes_when_its_jobs_are_terminal(client, 
     assert _job_version(client, job_id) is None
 
 
-def test_m3b_a_version_with_finished_takes_and_no_active_job_deletes_and_unlinks_its_takes(
+def test_a_version_with_finished_takes_and_no_active_job_deletes_and_unlinks_its_takes(
     client,
 ):
     response = client.delete("/api/versions/v1")
@@ -192,7 +192,7 @@ def test_m3b_a_version_with_finished_takes_and_no_active_job_deletes_and_unlinks
         assert {g.version_id for g in session.query(Generation)} == {None}
 
 
-def test_m6_a_job_that_names_no_version_holds_none(client):
+def test_a_job_that_names_no_version_holds_none(client):
     with _database(client) as session:
         job = create_job_with_rate_limit(
             session, OWNER, JobType.SCORE, redis=make_fake_redis(),
@@ -217,7 +217,7 @@ def test_a_job_for_a_version_that_is_gone_or_belongs_to_another_song_answers_404
         assert session.query(Job).count() == 0
 
 
-def test_m8_purging_a_song_or_an_album_succeeds_with_old_jobs_on_its_versions(client):
+def test_purging_a_song_or_an_album_succeeds_with_old_jobs_on_its_versions(client):
     job_id = _add_job(client, "v1", JobStatus.COMPLETED)
     other_id = _add_job(client, "other-version", JobStatus.FAILED)
 

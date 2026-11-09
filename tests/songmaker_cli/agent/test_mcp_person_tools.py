@@ -477,7 +477,7 @@ _NEW_TOOLS_ON_A_RESOURCE = [
 
 
 @pytest.mark.parametrize("tool", _NEW_TOOLS_ON_A_RESOURCE, ids=lambda t: t.name)
-def test_an_admins_agent_is_refused_the_new_write_tools_on_another_persons_resource(
+def test_an_admins_agent_is_refused_these_write_tools_on_another_persons_resource(
     admins_world: McpWorld, tool: Tool,
 ) -> None:
     before = admins_world.snapshot()

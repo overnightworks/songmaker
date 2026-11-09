@@ -341,7 +341,7 @@ def test_retry_that_fails_otherwise_clears_the_key_and_starts_empty(
     assert worker.deps.last_error is not None
 
 
-def test_start_fails_as_before_when_redis_is_down(worker: _Worker) -> None:
+def test_start_raises_the_redis_connection_error_when_redis_is_down(worker: _Worker) -> None:
     worker.redis_is_down(True)
 
     with pytest.raises(RedisConnectionError), worker.client():

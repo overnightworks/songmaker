@@ -120,7 +120,7 @@ def _edited(leg: str, lyrics: str, reference: str) -> tuple[str, str]:
 
 
 @pytest.mark.parametrize("leg", list(EDITOR_LEGS))
-def test_b1_a_copy_forward_waits_for_an_in_place_save_and_carries_its_params(
+def test_a_copy_forward_waits_for_an_in_place_save_and_carries_its_params(
     pg_factory, tmp_path, leg,
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["F"]])
@@ -132,7 +132,7 @@ def test_b1_a_copy_forward_waits_for_an_in_place_save_and_carries_its_params(
 
 
 @pytest.mark.parametrize("leg", list(EDITOR_LEGS))
-def test_b2_an_in_place_save_waits_for_a_copy_forward_and_applies_to_the_new_version(
+def test_an_in_place_save_waits_for_a_copy_forward_and_applies_to_the_new_version(
     pg_factory, tmp_path, leg,
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["F"]])
@@ -142,7 +142,7 @@ def test_b2_an_in_place_save_waits_for_a_copy_forward_and_applies_to_the_new_ver
     }
 
 
-def test_b3_a_copy_forward_waits_for_a_version_delete_and_carries_the_remaining_params(
+def test_a_copy_forward_waits_for_a_version_delete_and_carries_the_remaining_params(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["H"], REFERENCES["F"]])
@@ -153,7 +153,7 @@ def test_b3_a_copy_forward_waits_for_a_version_delete_and_carries_the_remaining_
     assert world.versions() == {1: ("", REFERENCES["H"]), 2: ("co-written", REFERENCES["H"])}
 
 
-def test_b4_a_version_delete_waits_for_a_copy_forward_and_leaves_the_new_version(
+def test_a_version_delete_waits_for_a_copy_forward_and_leaves_the_new_version(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["H"], REFERENCES["F"]])
@@ -166,7 +166,7 @@ def test_b4_a_version_delete_waits_for_a_copy_forward_and_leaves_the_new_version
 
 @pytest.mark.parametrize("rename_first", [True, False], ids=["rename first", "update first"])
 @pytest.mark.parametrize("leg", list(EDITOR_LEGS))
-def test_b5_a_rename_keeps_its_title_and_slug_against_an_editor_save_in_both_orders(
+def test_a_rename_keeps_its_title_and_slug_against_an_editor_save_in_both_orders(
     pg_factory, tmp_path, leg, rename_first,
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["F"]])
@@ -178,7 +178,7 @@ def test_b5_a_rename_keeps_its_title_and_slug_against_an_editor_save_in_both_ord
     assert world.versions() == {1: ("", REFERENCES["F"]) if rename_first else edited, 2: edited}
 
 
-def test_b6_a_second_delete_of_one_version_waits_and_then_answers_not_found(
+def test_a_second_delete_of_one_version_waits_and_then_answers_not_found(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["H"], REFERENCES["F"]])
@@ -189,7 +189,7 @@ def test_b6_a_second_delete_of_one_version_waits_and_then_answers_not_found(
     assert world.versions() == {1: ("", REFERENCES["H"])}
 
 
-def test_m4_an_enqueue_waits_for_a_version_delete_and_answers_404_without_a_job(
+def test_an_enqueue_waits_for_a_version_delete_and_answers_404_without_a_job(
     pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["H"], REFERENCES["F"]])
@@ -202,7 +202,7 @@ def test_m4_an_enqueue_waits_for_a_version_delete_and_answers_404_without_a_job(
     assert world.versions() == {1: ("", REFERENCES["H"])}
 
 
-def test_m5_a_version_delete_waits_for_an_enqueue_and_answers_409(pg_factory, tmp_path) -> None:
+def test_a_version_delete_waits_for_an_enqueue_and_answers_409(pg_factory, tmp_path) -> None:
     world = _World(pg_factory, tmp_path, [REFERENCES["H"], REFERENCES["F"]])
     enqueue_written = CommitPause(lambda session: wrote_to_tables(session, "jobs"))
     with worker_up():

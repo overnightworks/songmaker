@@ -89,7 +89,7 @@ def _marked_routes(mcp: McpWorld) -> set[tuple[str, str]]:
     return {(m.method, m.template) for m in collect_route_tools(mcp.world.client.app).marks}
 
 
-def test_the_new_put_patch_and_delete_routes_are_among_the_marks(mcp: McpWorld) -> None:
+def test_the_put_patch_and_delete_routes_are_among_the_marks(mcp: McpWorld) -> None:
     assert NEW_MARKED_ROUTES <= _marked_routes(mcp)
 
 
@@ -374,7 +374,7 @@ def test_an_admins_agent_asking_for_another_persons_lora_gets_not_found_and_noth
     assert "bobs" not in reply.text.replace("lora-bobs", "")
 
 
-def test_the_old_own_takes_path_is_read_as_a_lora_id_and_not_found_for_cookie_and_token(
+def test_own_takes_under_the_lora_path_is_read_as_a_lora_id_and_answers_404_for_cookie_and_token(
     mcp: McpWorld,
 ) -> None:
     mcp.seed_household(TokenWorld.ALICE, "alices")
@@ -516,7 +516,7 @@ def test_the_resource_metadata_names_the_derived_url_and_the_issuer(mcp: McpWorl
 # -- configuration -----------------------------------------------------------------
 
 
-def test_with_the_mcp_values_unset_mcp_and_its_metadata_answer_as_they_did(
+def test_with_the_mcp_values_unset_post_answers_403_and_get_and_metadata_answer_html(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
     lifespans: ExitStack,
 ) -> None:
@@ -618,7 +618,7 @@ def test_an_unmarked_route_keeps_working_with_the_cookie(mcp: McpWorld) -> None:
     assert reply.status_code == 200
 
 
-def test_the_browser_lists_its_own_takes_and_reads_its_lora_at_the_new_paths_with_the_cookie(
+def test_the_browser_lists_its_own_takes_and_reads_its_lora_with_the_cookie(
     mcp: McpWorld,
 ) -> None:
     mcp.seed_household(TokenWorld.ALICE, "alices")
@@ -698,7 +698,7 @@ def test_the_agent_token_on_a_marked_route_without_mcp_is_the_person(mcp: McpWor
     assert [item["title"] for item in reply.json()["items"]] == ["Song alices"]
 
 
-def test_a_hal_person_token_on_a_marked_route_works_as_before(mcp: McpWorld) -> None:
+def test_a_hal_person_token_on_a_marked_route_lists_the_persons_songs(mcp: McpWorld) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
 
     reply = mcp.world.client.get("/api/songs", headers=mcp.world.bearer(TokenWorld.ALICE))
