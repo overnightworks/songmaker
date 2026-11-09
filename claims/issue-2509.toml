@@ -1,8 +1,0 @@
-claim_id = "6b1fd972582d41c5a4c72f0a77ae031d"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "624ba1d2658aa3da425498cbb24777fff3c3bf7d"
-branch = "claude/issue-2509-quality-gate-moves-to-v0-10-0"
-scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", ".github/workflows/security.yml", "docs/security.md", "docs/testing.md", "pyproject.toml", "quality/baseline.toml", "quality/config.toml", "scripts/check_root_layout.py", "scripts/static_checks.sh", "src/acestep_worker/settings.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/migrations/versions", "tests/test_check_root_layout.py", "tests/workflows/test_ci_quality_gate.py"]
-opened_commit = "9d7312522a044bda31441e0d32536c35141d807a"
-whole_reason = "The pin and the config keys it introduces land together: v0.5.0 refuses [root], [layout] and [size], and v0.10.0 is red without them."
