@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from webauth.ports import AuthenticatedUser
@@ -20,9 +22,10 @@ router = APIRouter()
     responses={404: {"description": "Audio file not found"}},
 )
 async def get_audio(
-    owner_id: str, filename: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    ctx: AppContext = Depends(get_app_context),
+    owner_id: str,
+    filename: str,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    ctx: Annotated[AppContext, Depends(get_app_context)],
 ) -> FileResponse:
     if user.role != "admin" and owner_id != user.id:
         raise HTTPException(404, AUDIO_FILE_NOT_FOUND)
