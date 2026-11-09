@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import {
 	COLLECTION_MENU_COVER_REMOVE_LABEL,
-	COLLECTION_MENU_LABEL,
-	PLAYLISTS_PAGE_LABEL,
-	RAIL_PLAYLISTS_NAV_LABEL
-} from '../src/lib/constants';
+	COLLECTION_MENU_LABEL
+} from '../src/lib/constants/collection-menu';
+import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
+import { RAIL_PLAYLISTS_NAV_LABEL } from '../src/lib/constants/rail';
 import { sameOriginHeaders, openPlaylistsPage, openRailNav } from './helpers';
 import { archiveOwnedAlbum, seedTake } from './seed';
 

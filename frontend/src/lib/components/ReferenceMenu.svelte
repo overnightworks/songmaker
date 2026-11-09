@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { COLLECTION_MENU_CLOSE_LABEL } from '#lib/constants.ts';
+	import { COLLECTION_MENU_CLOSE_LABEL } from '#lib/constants/collection-menu.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 

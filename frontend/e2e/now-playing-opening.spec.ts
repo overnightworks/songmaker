@@ -4,12 +4,11 @@
 // way out say "Pick album takes" and "Done". Both shells walk the flow.
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants';
 import {
 	COLLECTION_MENU_CURATE_LABEL,
-	COLLECTION_MENU_LABEL,
-	NOW_PLAYING_LABEL,
-	openNowPlayingLabel
-} from '../src/lib/constants';
+	COLLECTION_MENU_LABEL
+} from '../src/lib/constants/collection-menu';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,

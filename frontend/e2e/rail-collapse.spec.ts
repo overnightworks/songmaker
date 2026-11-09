@@ -1,6 +1,6 @@
 import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 import { expect, test } from '@playwright/test';
-import { RAIL_NAV_LABEL } from '../src/lib/constants';
+import { RAIL_NAV_LABEL } from '../src/lib/constants/rail';
 import { HOME_PATH, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
 
 for (const { shell, name, viewport } of [

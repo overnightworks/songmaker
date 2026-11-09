@@ -15,7 +15,7 @@
 		COLLECTION_MENU_SHARE_LABEL,
 		COLLECTION_MENU_SHARE_OFF_HINT,
 		COLLECTION_MENU_SHARE_ON_HINT
-	} from '#lib/constants.ts';
+	} from '#lib/constants/collection-menu.ts';
 	import { ALBUM_COVER_UPLOAD_LABEL } from '#lib/constants/album.ts';
 	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
 	import Icon from './Icon.svelte';

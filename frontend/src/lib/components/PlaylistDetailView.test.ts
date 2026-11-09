@@ -8,12 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 
 import type { PlaylistDetailItem, PlaylistEntryItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import {
-	LIBRARY_RETRY_LABEL,
-	PLAYING_MARK_LABEL,
-	playlistEntryOverflowLabel,
-	songEditorOpenLabel
-} from '#lib/constants.ts';
+import { LIBRARY_RETRY_LABEL, PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants.ts';
+import { playlistEntryOverflowLabel } from '#lib/constants/playlist.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,

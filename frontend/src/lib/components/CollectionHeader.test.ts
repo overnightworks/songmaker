@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 
 import { get } from 'svelte/store';
-import { COLLECTION_MENU_LABEL } from '#lib/constants.ts';
+import { COLLECTION_MENU_LABEL } from '#lib/constants/collection-menu.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,

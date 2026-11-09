@@ -52,12 +52,14 @@
 		LIBRARY_WALL_ORDER_GROUP_LABEL,
 		LIBRARY_WALL_ORDER_LABELS,
 		LIBRARY_WALL_ORDERS,
-		PLAYLISTS_PAGE_LABEL,
-		PLAYLISTS_WALL_EMPTY,
-		PLAYLISTS_WALL_ORDER_GROUP_LABEL,
 		wallHeadingLabel,
 		type LibraryWallOrder
 	} from '#lib/constants.ts';
+	import {
+		PLAYLISTS_PAGE_LABEL,
+		PLAYLISTS_WALL_EMPTY,
+		PLAYLISTS_WALL_ORDER_GROUP_LABEL
+	} from '#lib/constants/playlist.ts';
 	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import EmptyState from './EmptyState.svelte';
 	import LibraryRow from './LibraryRow.svelte';

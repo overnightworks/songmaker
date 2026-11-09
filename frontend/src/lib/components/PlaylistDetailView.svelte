@@ -25,13 +25,13 @@
 	import { selectSong } from '#lib/stores/navigation.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
+	import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
 	import {
-		LIBRARY_RETRY_LABEL,
 		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 		PLAYLIST_ENTRY_MOVE_UP_LABEL,
 		PLAYLIST_ENTRY_REMOVE_LABEL,
 		playlistEntryOverflowLabel
-	} from '#lib/constants.ts';
+	} from '#lib/constants/playlist.ts';
 	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ACCEPT } from '#lib/constants/album.ts';
 	import { nowPlayingTakeMeta } from '#lib/constants/now-playing.ts';
 	import { songCountLabel, titleInitials } from '#lib/utils/format.ts';

@@ -4,13 +4,13 @@ import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import {
 	COMPACT_LAYOUT_MEDIA,
-	RAIL_LIBRARY_LOAD_ERROR,
 	SONG_MOVE_ALBUM_GONE,
 	SONG_MOVE_FAILED_REASON,
 	SONG_MOVE_NO_CONNECTION,
 	songMoveFailedLine,
 	songMovedToastLabel
 } from '#lib/constants.ts';
+import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
 import {
 	fetchEveryAlbum,
 	overlaySongList,

@@ -2,11 +2,11 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LibraryListenItem } from '#lib/api/library.ts';
 import { get } from 'svelte/store';
+import { PLAYING_MARK_LABEL } from '#lib/constants.ts';
 import {
 	COLLECTION_MENU_ARCHIVE_LABEL,
-	COLLECTION_MENU_DELETE_LABEL,
-	PLAYING_MARK_LABEL
-} from '#lib/constants.ts';
+	COLLECTION_MENU_DELETE_LABEL
+} from '#lib/constants/collection-menu.ts';
 import { HOME_LISTEN_EMPTY, HOME_LISTEN_ERROR } from '#lib/constants/home.ts';
 import { albumList, allAlbumsLoad, songList } from '#lib/stores/libraryData.ts';
 import { deletePlaylist, playlistList, playlistLoad } from '#lib/stores/playlists.ts';

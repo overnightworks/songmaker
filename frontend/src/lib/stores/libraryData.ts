@@ -3,11 +3,8 @@ import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 import { fetchAlbums, fetchSongs } from '#lib/api/client.ts';
 import type { LibraryListOptions } from '#lib/api/library.ts';
 import type { AlbumItem, GenerationItem, SongItem } from '#lib/api/types.ts';
-import {
-	LIBRARY_ALBUM_PAGE_SIZE,
-	LIBRARY_SONG_PAGE_SIZE,
-	RAIL_LIBRARY_LOAD_ERROR
-} from '#lib/constants.ts';
+import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '#lib/constants.ts';
+import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
 import { reloadWhileUnreachable } from './connectivity';
 import { forgetWritten, restoreWritten } from './libraryWrite';
 

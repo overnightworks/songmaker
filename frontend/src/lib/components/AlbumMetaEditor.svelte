@@ -8,7 +8,7 @@
 
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { COLLECTION_MENU_EDIT_DETAILS_LABEL } from '#lib/constants.ts';
+	import { COLLECTION_MENU_EDIT_DETAILS_LABEL } from '#lib/constants/collection-menu.ts';
 	import {
 		ALBUM_DETAILS_CLOSE_LABEL,
 		ALBUM_DETAILS_SAVE_LABEL,

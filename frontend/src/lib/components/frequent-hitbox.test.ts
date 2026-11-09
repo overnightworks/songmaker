@@ -7,14 +7,12 @@ import {
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX, LIBRARY_NARROW_MEDIA } from '#lib/constants.ts';
 import {
-	HITBOX_COMPACT_PX,
-	HITBOX_FREQUENT_PX,
-	LIBRARY_NARROW_MEDIA,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_MOVE_UP_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL
-} from '#lib/constants.ts';
+} from '#lib/constants/playlist.ts';
 import { resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';

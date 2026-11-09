@@ -9,30 +9,36 @@
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
-	COLLECTION_MENU_LABEL,
 	HITBOX_FREQUENT_PX,
 	LIBRARY_WALL_ORDER_GROUP_LABEL,
 	LIBRARY_WALL_ORDER_LABELS,
 	type LibraryWallOrder,
 	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
-	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
-	PLAYLIST_ENTRY_REMOVE_LABEL,
-	playlistEntryOverflowLabel,
-	PLAYLISTS_PAGE_LABEL,
-	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
 	LIBRARY_ALBUM_PAGE_SIZE,
 	LIBRARY_PAGE_LABEL,
-	RAIL_LIBRARY_NAV_LABEL,
 	PLAYING_MARK_LABEL,
-	RAIL_PLAYLISTS_NAV_LABEL,
-	RAIL_SETTINGS_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL,
 	songEditorOpenLabel,
 	wallHeadingLabel
 } from '../src/lib/constants';
+import {
+	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
+	COLLECTION_MENU_LABEL
+} from '../src/lib/constants/collection-menu';
+import {
+	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
+	PLAYLIST_ENTRY_REMOVE_LABEL,
+	playlistEntryOverflowLabel,
+	PLAYLISTS_PAGE_LABEL,
+	PLAYLISTS_WALL_ORDER_GROUP_LABEL
+} from '../src/lib/constants/playlist';
+import {
+	RAIL_LIBRARY_NAV_LABEL,
+	RAIL_PLAYLISTS_NAV_LABEL,
+	RAIL_SETTINGS_LABEL
+} from '../src/lib/constants/rail';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
@@ -139,6 +145,21 @@ async function expectHeaderReadsAtNarrowest(page: Page, albumTitle: string): Pro
 }
 
 /** Compact Now Playing stacks, so the judging panel arrives as its own sheet. */
+function playlistsHeading(page: Page, count: number): Locator {
+	return workspace(page).getByRole('heading', {
+		name: wallHeadingLabel(PLAYLISTS_PAGE_LABEL, count),
+		exact: true
+	});
+}
+
+async function openWallTile(page: Page, title: string): Promise<void> {
+	await workspace(page)
+		.locator('.library-wall .tile-grid')
+		.locator('.wall-tile-body')
+		.filter({ hasText: title })
+		.click();
+}
+
 function judgingSheet(page: Page): Locator {
 	return page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL });
 }
@@ -378,11 +399,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	await page.goto(LIBRARY_PATH);
 	await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
 
-	await surface
-		.locator('.library-wall .tile-grid')
-		.locator('.wall-tile-body')
-		.filter({ hasText: library.albumTitle })
-		.click();
+	await openWallTile(page, library.albumTitle);
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 	if (shell === 'mobile') await expectHeaderReadsAtNarrowest(page, library.albumTitle);
 
@@ -485,33 +502,27 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
 		await openPlaylistsPage(page, shell);
-		await surface
-			.locator('.library-wall .tile-grid')
-			.locator('.wall-tile-body')
-			.filter({ hasText: playlist.title })
-			.click();
+		await openWallTile(page, playlist.title);
 
 		const entryRows = playlistEntryRows(page);
+		const chooseEntryAction = async (songTitle: string, action: string) => {
+			await surface.getByRole('button', { name: playlistEntryOverflowLabel(songTitle) }).click();
+			await surface.getByRole('menuitem', { name: action }).click();
+		};
 		await expect(entryRows).toHaveText([
 			containing(firstPlaylistSong),
 			containing(secondPlaylistSong),
 			containing(library.pickedSongTitle)
 		]);
 
-		await surface
-			.getByRole('button', { name: playlistEntryOverflowLabel(firstPlaylistSong) })
-			.click();
-		await surface.getByRole('menuitem', { name: PLAYLIST_ENTRY_MOVE_DOWN_LABEL }).click();
+		await chooseEntryAction(firstPlaylistSong, PLAYLIST_ENTRY_MOVE_DOWN_LABEL);
 		await expect(entryRows).toHaveText([
 			containing(secondPlaylistSong),
 			containing(firstPlaylistSong),
 			containing(library.pickedSongTitle)
 		]);
 
-		await surface
-			.getByRole('button', { name: playlistEntryOverflowLabel(library.pickedSongTitle) })
-			.click();
-		await surface.getByRole('menuitem', { name: PLAYLIST_ENTRY_REMOVE_LABEL }).click();
+		await chooseEntryAction(library.pickedSongTitle, PLAYLIST_ENTRY_REMOVE_LABEL);
 		await expect(entryRows).toHaveText([
 			containing(secondPlaylistSong),
 			containing(firstPlaylistSong)
@@ -625,11 +636,7 @@ test(
 
 		await observePlayingAudio(page);
 		await page.goto(LIBRARY_PATH);
-		await surface
-			.locator('.library-wall .tile-grid')
-			.locator('.wall-tile-body')
-			.filter({ hasText: library.albumTitle })
-			.click();
+		await openWallTile(page, library.albumTitle);
 		await expect(albumHeading).toBeVisible();
 
 		// An album row plays its song from each edge and keeps the album page
@@ -671,11 +678,7 @@ test(
 		expect((await albumAdded).ok()).toBe(true);
 
 		await openPlaylistsPage(page, shell);
-		await surface
-			.locator('.library-wall .tile-grid')
-			.locator('.wall-tile-body')
-			.filter({ hasText: playlist.title })
-			.click();
+		await openWallTile(page, playlist.title);
 		const heldTwice = playlistEntryRows(page).filter({ hasText: playlist.songTitles[0] });
 		await expect(heldTwice).toHaveCount(2);
 		const heldTwiceTake = library.albumTracks.find(
@@ -987,13 +990,12 @@ test(
 		const libraryGroupTitle = rail.getByRole('button', {
 			name: nameStartingWith(LIBRARY_PAGE_LABEL)
 		});
-		const settingsToggle = rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true });
 		// defect:#1555: the album rows above left the rail scrolled wherever
 		// they were judged, so the pin promise sets its own starting position
 		// at the top of the Library list.
 		await libraryGroupTitle.scrollIntoViewIfNeeded();
 		await expect(libraryGroupTitle).toBeInViewport();
-		await expect(settingsToggle).toBeInViewport();
+		await expect(settingsGroupToggle).toBeInViewport();
 
 		const railBox = await rail.boundingBox();
 		if (!railBox) throw new Error('Expected the rail to render');
@@ -1007,7 +1009,7 @@ test(
 		// The pin promise itself: Settings remains reachable while the Library
 		// content has scrolled past. Its exact pixel position is an implementation
 		// detail while the disclosure's height is animating.
-		await expect(settingsToggle).toBeInViewport();
+		await expect(settingsGroupToggle).toBeInViewport();
 		await openLibraryWall(page, shell);
 		// #1354 rule 40 (D1): the Library page leaves its own group unfolded and current.
 		await expect(
@@ -1179,10 +1181,7 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	await listenInPlaylist(page, laterInAlphabet);
 	const titles = await playlistTitlesInAlphabet(page);
 	const surface = workspace(page);
-	const heading = surface.getByRole('heading', {
-		name: wallHeadingLabel(PLAYLISTS_PAGE_LABEL, titles.length),
-		exact: true
-	});
+	const heading = playlistsHeading(page, titles.length);
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
 	const choice = (order: LibraryWallOrder) =>
 		surface
@@ -1246,12 +1245,7 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	await backToPlaylists.click();
 
 	await expect(fresh).toHaveURL(/\/playlists$/);
-	await expect(
-		workspace(fresh).getByRole('heading', {
-			name: wallHeadingLabel(PLAYLISTS_PAGE_LABEL, titles.length),
-			exact: true
-		})
-	).toBeVisible();
+	await expect(playlistsHeading(fresh, titles.length)).toBeVisible();
 	expect(await fresh.evaluate(() => history.length)).toBe(tabLength);
 	await expect(appBar(fresh).getByRole('button', { name: /^Back to / })).toHaveCount(0);
 	await expect(accountCircle(fresh)).toBeVisible();

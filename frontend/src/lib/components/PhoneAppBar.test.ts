@@ -12,12 +12,8 @@ import {
 	minSquarePx,
 	setPointer
 } from '#lib/test-utils/hitbox.ts';
-import {
-	APP_NAME,
-	HITBOX_FREQUENT_PX,
-	RAIL_SEARCH_LABEL,
-	SEARCH_OPEN_LABEL
-} from '#lib/constants.ts';
+import { APP_NAME, HITBOX_FREQUENT_PX, SEARCH_OPEN_LABEL } from '#lib/constants.ts';
+import { RAIL_SEARCH_LABEL } from '#lib/constants/rail.ts';
 import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';

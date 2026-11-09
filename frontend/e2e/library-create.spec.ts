@@ -27,11 +27,13 @@ import {
 	LIBRARY_WALL_EMPTY,
 	LIBRARY_WALL_ORDER_GROUP_LABEL,
 	newSongCardLabel,
+	LIBRARY_PAGE_LABEL
+} from '../src/lib/constants';
+import {
 	PLAYLISTS_WALL_EMPTY,
 	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
-	LIBRARY_PAGE_LABEL,
 	PLAYLISTS_PAGE_LABEL
-} from '../src/lib/constants';
+} from '../src/lib/constants/playlist';
 import {
 	NEW_ALBUM_CARD_LABEL,
 	NEW_ALBUM_CLOSE_LABEL,
