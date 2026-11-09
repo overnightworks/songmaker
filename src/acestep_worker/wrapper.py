@@ -306,12 +306,7 @@ class _WorkerRoutes:
     async def generate(self, req: GenerateRequest) -> TaskCreatedResponse:
         task_id, loaded = await _reserve_generation_task(self._deps, req)
         runner = _run_generation_with_release(self._deps, req, task_id, loaded)
-        try:
-            spawn_background(runner)
-        except Exception:
-            runner.close()
-            await _release_generation_task(self._deps, req.mode, task_id)
-            raise
+        spawn_background(runner)
         return TaskCreatedResponse(task_id=task_id)
 
     async def reserve_hold(self) -> GpuHoldResponse:
@@ -353,7 +348,7 @@ class _WorkerRoutes:
         validated_request = _validated_train_lora_request(req, self._deps.shared_audio_root)
         runner = _configured_train_lora_runner(self._deps)
         resources = await _acquire_train_lora_resources(self._deps, req)
-        await _spawn_train_lora_runner(
+        _spawn_train_lora_runner(
             self._deps,
             req,
             validated_request,
@@ -396,11 +391,7 @@ async def _reserve_generation_task(deps: WorkerDeps, req: GenerateRequest) -> tu
                 status_code=409,
                 detail=MODE_NOT_LOADED_DETAIL.format(mode=req.mode),
             )
-        try:
-            task_id = await deps.task_store.create("generate", phase=NOT_STARTED.phase)
-        except Exception:
-            await deps.cache.release(req.mode)
-            raise
+        task_id = await deps.task_store.create("generate", phase=NOT_STARTED.phase)
         deps.gpu_hold_generation_tasks.add(task_id)
         return task_id, loaded
 
@@ -518,7 +509,7 @@ async def _clean_up_train_lora_setup(
             await _release_gpu_hold_handover(deps, request.hold_token)
 
 
-async def _spawn_train_lora_runner(
+def _spawn_train_lora_runner(
     deps: WorkerDeps,
     request: TrainLoraRequest,
     validated_request: TrainLoraRequest,
@@ -532,12 +523,7 @@ async def _spawn_train_lora_runner(
         runner,
         resources,
     )
-    try:
-        spawn_background(background_runner)
-    except Exception:
-        background_runner.close()
-        await _clean_up_train_lora_run(deps, request, resources)
-        raise
+    spawn_background(background_runner)
 
 
 async def _run_train_lora_with_cleanup(
