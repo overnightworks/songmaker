@@ -340,7 +340,8 @@ def run_scoring_pipeline(
     scorers: list[str] | None = None,
     config: PipelineConfig | None = None,
     registry: ScorerRegistry | None = None,
-    on_progress: Callable[[int, int, str], None] | None = None,
+    *,
+    on_progress: Callable[[int, int, str], None],
 ) -> SongScores:
     """Run all (or selected) child scorers on an MP3 and return aggregated scores.
 
@@ -389,8 +390,7 @@ def run_scoring_pipeline(
     def _on_scorer_done(name: str) -> None:
         nonlocal completed_count
         completed_count += 1
-        if on_progress:
-            on_progress(completed_count, len(runnable), name)
+        on_progress(completed_count, len(runnable), name)
 
     with ThreadPoolExecutor(max_workers=min(max(len(cpu_names), 1), os.cpu_count() or 4)) as pool:
         cpu_futures = _submit_scorers(
