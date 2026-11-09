@@ -1,8 +1,0 @@
-claim_id = "1e4a831176e143edb6361589f0b85755"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5ad73d852fb166f572371f6ef7e7db6a661622a4"
-branch = "claude/issue-2903-dead-accessors"
-scope = ["src/acestep_worker/model_cache.py", "src/songmaker_cli/scoring/models.py", "src/songmaker_cli/scoring/pipeline.py", "tests/acestep_worker/test_model_cache.py", "tests/songmaker_cli/scoring/test_pipeline.py", "tests/songmaker_cli/test_scoring_scorers.py", "tests/songmaker_cli/test_scoring_scorers_extended.py"]
-opened_commit = "b25c5700975b77bc034ce3383d22a03e1d0d14ac"
-whole_reason = "Five dead accessors and the test lines that only read them; each test file loses what its accessor's removal leaves without a subject."
