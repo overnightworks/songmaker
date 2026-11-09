@@ -14,7 +14,6 @@ import { COVER_PROBLEM_TEXTS } from '#lib/utils/cover-problem.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import {
 	FakeJobEventSource,
-	countLine,
 	coverJob,
 	coverSuggestions,
 	editingClosed,
@@ -119,7 +118,6 @@ describe('a cover suggestion that cannot run names one of the four problems', ()
 			expect(target.querySelector('.cover-editor .bad')).toEqual(
 				problem === 'sign_in_again' ? problemLine(target) : null
 			);
-			expect(countLine(target).includes('left today')).toBe(!closed);
 			expect(FakeJobEventSource.sources).toHaveLength(0);
 			expect(target.querySelector('.cover-failure')).toBeNull();
 			expect(target.textContent).not.toContain(LEAKED_ERROR);
@@ -169,16 +167,14 @@ describe('a cover suggestion that cannot run names one of the four problems', ()
 		async (problem) => {
 			fetchAlbumCoverSuggestions.mockResolvedValue(
 				coverSuggestions({
-					job: coverJob({ status: 'failed', error: LEAKED_ERROR, error_type: problem }),
-					used_today: 1
+					job: coverJob({ status: 'failed', error: LEAKED_ERROR, error_type: problem })
 				})
 			);
 			const target = await renderDetail();
 			await openCoverEditing(target);
 
-			await vi.waitFor(() => expect(countLine(target)).toContain('9 of 10 left today'));
+			await vi.waitFor(() => expect(suggestButton(target).disabled).toBe(false));
 			expect(problemLine(target)).toBeNull();
-			expect(suggestButton(target).disabled).toBe(false);
 		}
 	);
 
@@ -194,8 +190,7 @@ describe('a cover suggestion that cannot run names one of the four problems', ()
 					error_type: 'busy',
 					retry_after_seconds: 44,
 					completed_at: new Date(endedAt).toISOString()
-				}),
-				used_today: 1
+				})
 			})
 		);
 		const target = await renderDetail();
@@ -205,7 +200,6 @@ describe('a cover suggestion that cannot run names one of the four problems', ()
 		expect(problemLine(target)?.classList.contains('wait')).toBe(true);
 		expect(suggestButton(target).disabled).toBe(true);
 		expect(accessibleName(suggestButton(target))).toContain('0:42');
-		expect(countLine(target)).toContain('9 of 10 left today');
 
 		pressEditorButton(target, 'Close cover editing');
 		await editingClosed(target);

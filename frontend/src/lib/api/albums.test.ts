@@ -46,7 +46,7 @@ describe('album cover suggestions API', () => {
 			expect.objectContaining({ method: 'POST', credentials: 'include' })
 		);
 
-		mockOk({ job: null, suggestions: [], used_today: 0, daily_limit: 10 });
+		mockOk({ job: null, suggestions: [] });
 		await fetchAlbumCoverSuggestions('night-drive');
 		expect(mockFetch).toHaveBeenLastCalledWith(
 			'/api/albums/night-drive/cover-suggestions',

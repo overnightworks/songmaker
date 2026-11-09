@@ -18,8 +18,8 @@
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 860
-"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
-"frontend/src/lib/components/AlbumDetailView.test.ts" = 1108
+"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 887
+"frontend/src/lib/components/AlbumDetailView.test.ts" = 1106
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1480
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1825
 "frontend/src/lib/components/LibraryWall.test.ts" = 1137
