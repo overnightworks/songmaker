@@ -578,17 +578,6 @@ def test_text_accuracy_score_intended_lines() -> None:
     assert score.intended_lines == 3
 
 
-def test_text_accuracy_score_transcribed_lines() -> None:
-    from songmaker_cli.scoring.models import TextAccuracyScore
-
-    score = TextAccuracyScore(
-        similarity_ratio=0.8,
-        intended_line_texts=("line one",),
-        transcribed_line_texts=("line one", "extra line"),
-    )
-    assert score.transcribed_lines == 2
-
-
 def test_text_accuracy_score_empty_lines() -> None:
     from songmaker_cli.scoring.models import TextAccuracyScore
 
@@ -598,7 +587,7 @@ def test_text_accuracy_score_empty_lines() -> None:
         transcribed_line_texts=(),
     )
     assert score.intended_lines == 0
-    assert score.transcribed_lines == 0
+    assert score.transcript == ""
 
 
 def test_text_accuracy_score_detected_language() -> None:
@@ -723,19 +712,6 @@ def test_bpm_detect_multi_element_array() -> None:
 
 
 # ── scoring/models.py gaps ──────────────────────────────────────────
-
-
-def test_spectral_has_artifacts() -> None:
-    from songmaker_cli.scoring.models import SpectralQualityScore
-
-    s = SpectralQualityScore(
-        mean_flatness=0.1, max_flatness=0.5, artifact_count=3, artifact_windows=(),
-    )
-    assert s.has_artifacts is True
-    s2 = SpectralQualityScore(
-        mean_flatness=0.1, max_flatness=0.2, artifact_count=0, artifact_windows=(),
-    )
-    assert s2.has_artifacts is False
 
 
 def test_song_scores_to_dict_with_detected_language() -> None:

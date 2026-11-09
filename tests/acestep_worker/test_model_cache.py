@@ -162,15 +162,6 @@ def test_evict_all_empty() -> None:
     assert evicted == []
 
 
-def test_get_loaded_returns_handle() -> None:
-    cache, _, _ = _make_cache()
-    _run(cache.load("sft"))
-    model = cache.get_loaded("sft")
-    assert model is not None
-    assert model.mode == "sft"
-    assert cache.get_loaded("nope") is None
-
-
 def test_target_loading_set_during_load() -> None:
     target_during_load: list[str | None] = []
 

@@ -70,10 +70,6 @@ class TextAccuracyScore:
         return len(self.intended_line_texts)
 
     @property
-    def transcribed_lines(self) -> int:
-        return len(self.transcribed_line_texts)
-
-    @property
     def transcript(self) -> str:
         """What Whisper heard, as one text — the form the generation stores."""
         return "\n".join(self.transcribed_line_texts)
@@ -132,10 +128,6 @@ class SpectralQualityScore:
     artifact_count: int
     artifact_windows: tuple[tuple[float, float], ...]
 
-    @property
-    def has_artifacts(self) -> bool:
-        return self.artifact_count > 0
-
     def to_dict(self) -> dict[str, object]:
         return {"spectral_artifacts": self.artifact_count}
 
@@ -163,11 +155,6 @@ class SilenceScore:
     total_silence_seconds: float
     longest_gap_seconds: float
     gap_count: int
-
-    @property
-    def has_problems(self) -> bool:
-        """True if any gap exceeds the minimum threshold."""
-        return self.gap_count > 0
 
     def to_dict(self) -> dict[str, object]:
         return {

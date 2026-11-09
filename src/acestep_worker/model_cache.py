@@ -113,9 +113,6 @@ class ModelCache:
     def loaded_modes(self) -> list[str]:
         return list(self._loaded)
 
-    def get_loaded(self, mode: str) -> LoadedModel | None:
-        return self._loaded.get(mode)
-
     def is_pinned(self, mode: str) -> bool:
         return mode in self._pinned
 
