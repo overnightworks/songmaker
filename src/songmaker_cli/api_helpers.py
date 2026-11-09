@@ -218,19 +218,17 @@ def _enforce_job_limits(
     )
 
     hourly_limit = _HOURLY_LIMITS.get(job_type)
-    if hourly_limit is not None:
-        if count_total_queued_jobs(session) >= max_queue_depth:
-            session.rollback()
-            raise HTTPException(429, "Queue is full. Try again later.")
-        max_active = resolve_rate_limit(
-            session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, settings.max_user_active_jobs,
-        )
-        if count_user_active_jobs(session, user.id, job_type) >= max_active:
-            session.rollback()
-            raise HTTPException(429, "You already have an active job. Wait for it to finish.")
-
     if hourly_limit is None:
         return
+    if count_total_queued_jobs(session) >= max_queue_depth:
+        session.rollback()
+        raise HTTPException(429, "Queue is full. Try again later.")
+    max_active = resolve_rate_limit(
+        session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, settings.max_user_active_jobs,
+    )
+    if count_user_active_jobs(session, user.id, job_type) >= max_active:
+        session.rollback()
+        raise HTTPException(429, "You already have an active job. Wait for it to finish.")
     limit = resolve_rate_limit(
         session, user.id, hourly_limit.setting_key, hourly_limit.settings_limit(settings),
     )
