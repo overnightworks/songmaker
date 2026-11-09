@@ -503,7 +503,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 
 /**
  * Creates one album and a versioned take. The Voices browser flow then
- * discovers it through `/api/loras/own-takes`, just as a musician does,
+ * discovers it through `/api/own-playable-takes`, just as a musician does,
  * rather than injecting a LoRA sample into the database.
  */
 export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoiceTake> {

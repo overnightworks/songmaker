@@ -67,7 +67,7 @@ async function addOwnTake(voice: Locator, sourceTitle: string): Promise<void> {
 		.waitForResponse(
 			(response) =>
 				response.request().method() === 'GET' &&
-				new URL(response.url()).pathname === '/api/loras/own-takes'
+				new URL(response.url()).pathname === '/api/own-playable-takes'
 		);
 	await voice.getByRole('button', { name: 'Use a take', exact: true }).click();
 	await expect((await ownTakesResponse).ok()).toBeTruthy();
