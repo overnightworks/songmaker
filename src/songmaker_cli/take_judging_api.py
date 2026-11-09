@@ -37,6 +37,7 @@ _RATE_TAKE_DESCRIPTION = (
     "/generations/{gen_id}/rate",
     description=_RATE_TAKE_DESCRIPTION,
     openapi_extra=agent_tool(name="rate_take", effect=ToolEffect.SIDE_EFFECTING),
+    responses={404: {"description": "Generation does not exist"}},
 )
 def api_rate_generation(
     gen_id: str, req: RateRequest,
