@@ -20,6 +20,7 @@ _spec = importlib.util.spec_from_file_location("repository_conftest", {REPOSITOR
 _module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_module)
 pytest_collection_modifyitems = _module.pytest_collection_modifyitems
+pytest_configure = _module.pytest_configure
 """
 
 
@@ -98,6 +99,7 @@ def test_deselected_tests_are_reported(small_suite, monkeypatch):
     assert re.search(rf"{48 - kept} deselected", result.stdout.str())
 
 
+@pytest.mark.parametrize("worker_arguments", [(), ("-n", "2")], ids=["serial", "xdist"])
 @pytest.mark.parametrize(
     ("shard", "shards", "variable"),
     [
@@ -111,10 +113,11 @@ def test_deselected_tests_are_reported(small_suite, monkeypatch):
     ],
 )
 def test_a_malformed_setting_ends_the_run_before_any_test_runs(
-    small_suite, monkeypatch, shard, shards, variable
+    small_suite, monkeypatch, shard, shards, variable, worker_arguments
 ):
-    result = run_suite(small_suite, monkeypatch, shard, shards)
+    result = run_suite(small_suite, monkeypatch, shard, shards, *worker_arguments)
 
-    assert result.ret != 0
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    assert "INTERNALERROR" not in result.stdout.str() + result.stderr.str()
     assert passed_node_ids(result) == set()
     assert re.search(rf"ERROR: .*{variable}", result.stderr.str() + result.stdout.str())

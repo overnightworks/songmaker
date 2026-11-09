@@ -464,3 +464,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     if deselected:
         config.hook.pytest_deselected(items=deselected)
         items[:] = [item for item in items if item.nodeid in kept_node_ids]
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    # Runs on the xdist controller too, so a malformed setting ends the run before workers start.
+    select_shard_node_ids([], os.environ)
