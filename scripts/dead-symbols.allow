@@ -77,7 +77,7 @@ songmaker_cli/lora_api.py:api_delete_lora # HTTP dispatcher: router.delete('/lor
 songmaker_cli/lora_api.py:api_delete_sample # HTTP dispatcher: router.delete('/loras/{lora_id}/samples/{sample_id}', responses={404: {'description': 'Sample does not exist'}, 409: {'description': 'LoRA cannot be modified during training'}})
 songmaker_cli/lora_api.py:api_get_lora # HTTP dispatcher: router.get('/loras/{lora_id}')
 songmaker_cli/lora_api.py:api_list_loras # HTTP dispatcher: router.get('/loras')
-songmaker_cli/lora_api.py:api_list_own_playable_takes # HTTP dispatcher: router.get('/loras/own-takes')
+songmaker_cli/lora_api.py:api_list_own_playable_takes # HTTP dispatcher: router.get('/own-playable-takes')
 songmaker_cli/lora_api.py:api_patch_sample # HTTP dispatcher: router.patch('/loras/{lora_id}/samples/{sample_id}', responses={404: {'description': 'Sample does not exist'}, 409: {'description': 'LoRA cannot be modified during training'}, 422: {'description': 'Sample update is invalid'}})
 songmaker_cli/lora_api.py:api_train_lora # HTTP dispatcher: router.post('/loras/{lora_id}/train', response_model=UserLoraResponse, responses={409: {'description': 'LoRA capacity is unavailable', 'model': LoraCapacityErrorResponse}, 422: {'description': 'LoRA training request is invalid'}, 503: {'description': 'Training worker or job queue is unavailable'}})
 songmaker_cli/music_worker.py:MusicWorkerSettings # arq CLI entry point selected by docker-compose.yml music-worker command
