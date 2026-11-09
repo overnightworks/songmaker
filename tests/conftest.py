@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import hashlib
 import logging
 import os
 import shutil
@@ -33,6 +34,7 @@ atexit.register(shutil.rmtree, _numba_cache_dir, ignore_errors=True)
 
 import struct  # noqa: E402
 import wave  # noqa: E402
+from collections.abc import Mapping, Sequence  # noqa: E402
 from contextlib import contextmanager  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -419,3 +421,46 @@ def extra_pg_factory(postgresql_databases):
         if factory is not None:
             factory.kw["bind"].dispose()
         postgresql_databases.drop_database(url)
+
+
+_SHARD_VARIABLE = "TEST_SHARD"
+_SHARDS_VARIABLE = "TEST_SHARDS"
+
+
+def select_shard_node_ids(node_ids: Sequence[str], environment: Mapping[str, str]) -> list[str]:
+    """The node ids that shard ``TEST_SHARD`` of ``TEST_SHARDS`` (1-based) keeps, in order.
+
+    A test's shard is a digest of its node id, so every xdist worker and every test order
+    agree on the partition; both variables absent keeps every node id.
+    """
+    shard_text = environment.get(_SHARD_VARIABLE)
+    shards_text = environment.get(_SHARDS_VARIABLE)
+    if shard_text is None and shards_text is None:
+        return list(node_ids)
+    if shard_text is None or shards_text is None:
+        message = f"{_SHARD_VARIABLE} and {_SHARDS_VARIABLE} are set together or not at all"
+        raise pytest.UsageError(message)
+    for variable, text in ((_SHARD_VARIABLE, shard_text), (_SHARDS_VARIABLE, shards_text)):
+        if not text.isascii() or not text.isdecimal():
+            message = f"{variable} must be an integer, got {text!r}"
+            raise pytest.UsageError(message)
+    shard, shards = int(shard_text), int(shards_text)
+    if shards < 1:
+        message = f"{_SHARDS_VARIABLE} must be at least 1, got {shards}"
+        raise pytest.UsageError(message)
+    if not 1 <= shard <= shards:
+        message = f"{_SHARD_VARIABLE} must be from 1 to {shards}, got {shard}"
+        raise pytest.UsageError(message)
+    return [
+        node_id
+        for node_id in node_ids
+        if int.from_bytes(hashlib.sha256(node_id.encode()).digest(), "big") % shards == shard - 1
+    ]
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    kept_node_ids = set(select_shard_node_ids([item.nodeid for item in items], os.environ))
+    deselected = [item for item in items if item.nodeid not in kept_node_ids]
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = [item for item in items if item.nodeid in kept_node_ids]

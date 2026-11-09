@@ -4,6 +4,8 @@
 
 GitHub CI explicitly sets `-n auto` for parallel test runs and owns the full suite.
 
+A backend run with `TEST_SHARD=i` and `TEST_SHARDS=n` (1 ≤ i ≤ n) keeps the tests whose node id hashes into shard i of n and reports the rest as deselected; the partition is the same in every xdist worker and test order. Setting only one of the two, or a value outside that range, ends the run before any test runs.
+
 The auto-deploy subprocess tests fake Docker and GitHub: they prove that a
 changed `vendor/acestep` pin is fetched and checked out before Compose builds.
 
