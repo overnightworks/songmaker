@@ -144,9 +144,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 
 const NO_COVER_SUGGESTIONS: CoverSuggestionsResponse = {
 	job: null,
-	suggestions: [],
-	used_today: 0,
-	daily_limit: 10
+	suggestions: []
 };
 
 async function renderDetail(): Promise<HTMLElement> {

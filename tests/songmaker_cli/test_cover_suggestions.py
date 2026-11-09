@@ -34,7 +34,6 @@ from songmaker_cli.constants import (
 from songmaker_cli.cover_suggestions import (
     CoverSuggestionAlbumNotFoundError,
     CoverSuggestionAlreadyRunningError,
-    CoverSuggestionDailyLimitReachedError,
     remove_album_cover_suggestion_files,
     remove_cover_suggestion_files,
     request_cover_suggestions,
@@ -42,9 +41,7 @@ from songmaker_cli.cover_suggestions import (
 from songmaker_cli.covers import COVER_DIRNAME
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, AuditLog, Job, User, UserSession
 from songmaker_cli.db.queries.albums import get_album
-from songmaker_cli.db.queries.jobs import count_cover_jobs_since
 from songmaker_cli.job_types import JobStatus, JobType
-from songmaker_cli.settings import get_settings
 
 
 def _png_bytes() -> bytes:
@@ -152,10 +149,9 @@ def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_sugges
         assert session.query(Job).filter_by(album_id="alice-album").count() == 3
 
 
-def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
+def test_cover_suggestion_request_owner_rejects_an_active_job(
+    tmp_path: Path, pg_factory,
 ) -> None:
-    """1301-F3-C1-COUNT: active work blocks; completed work consumes the limit."""
     _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
     _add_cover_job(factory)
 
@@ -163,49 +159,21 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
         owner = album_owner(session)
         with pytest.raises(CoverSuggestionAlreadyRunningError):
             request_cover_suggestions(session, "alice-album", owner, session_id=None)
-        session.rollback()
-
-    with factory() as session:
-        active_job = session.query(Job).filter_by(album_id="alice-album").one()
-        active_job.status = JobStatus.COMPLETED
-        session.commit()
-
-    monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
-    get_settings.cache_clear()
-    with factory() as session:
-        owner = album_owner(session)
-        with pytest.raises(CoverSuggestionDailyLimitReachedError):
-            request_cover_suggestions(session, "alice-album", owner, session_id=None)
 
 
-@pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
-def test_unsuccessful_cover_attempts_allow_another_request(
-    tmp_path, monkeypatch, status, pg_factory,
-):
-    """1301-F3-C1-COUNT: failed and cancelled attempts leave the allowance free."""
-    _client, factory = make_test_app(tmp_path, seed_db=seed_cover_albums, factory=pg_factory)
-    _add_cover_job(factory, status=status)
-    monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
-    get_settings.cache_clear()
-    with factory() as session:
-        job = request_cover_suggestions(
-            session, "alice-album", album_owner(session), session_id=None,
-        )
-        assert job.status == JobStatus.QUEUED
-        assert job.album_id == "alice-album"
-
-
-def test_completed_cover_at_daily_limit_returns_http_429(cover_album_app, monkeypatch):
-    """1301-F3-C1-COUNT: HTTP retains the daily-limit refusal contract."""
+def test_an_eleventh_cover_suggestion_of_a_day_starts_a_job(cover_album_app) -> None:
     client, factory = cover_album_app
-    _add_cover_job(factory, status=JobStatus.COMPLETED)
-    monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
-    get_settings.cache_clear()
+    for _ in range(11):
+        _add_cover_job(factory, status=JobStatus.COMPLETED)
 
     response = client.post("/api/albums/alice-album/cover-suggestions")
 
-    assert response.status_code == 429
-    assert response.json() == {"detail": "Daily cover suggestion limit reached"}
+    assert response.status_code == 200
+    with factory() as session:
+        job = session.get(Job, response.json()["id"])
+        assert (job.type, job.status, job.album_id) == (
+            JobType.COVER, JobStatus.QUEUED, "alice-album",
+        )
 
 
 def test_create_cover_suggestions_leaves_the_job_for_the_web_runner(
@@ -276,7 +244,6 @@ def test_suggest_with_a_hal_token_is_refused_and_creates_no_job(
     declared_suggest_refusal(403).model_validate(response.json())
     with world.factory() as session:
         assert session.query(Job).count() == 0
-    assert world.client.get(suggestions, headers=bearer).json()["used_today"] == 0
 
 
 def test_create_cover_suggestions_keeps_the_pending_suggestions_and_their_files(
@@ -298,7 +265,6 @@ def test_create_cover_suggestions_keeps_the_pending_suggestions_and_their_files(
 def test_cover_suggestion_list_and_selection_use_the_existing_cover_writer(
     cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
-    """1301-F3-C1-DURABLE: removing images does not remove usage."""
     client, factory = cover_album_app
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
     latest_job_id = _add_cover_job(
@@ -316,8 +282,7 @@ def test_cover_suggestion_list_and_selection_use_the_existing_cover_writer(
     assert body["job"]["type"] == JobType.COVER
     assert body["job"]["status"] == JobStatus.FAILED
     assert body["job"]["error"] is None
-    assert body["used_today"] == 1
-    assert body["daily_limit"] == 10
+    assert set(body) == {"job", "suggestions"}
     assert body["suggestions"] == [{
         "id": suggestion_id,
         "url": f"/api/albums/alice-album/cover-suggestions/{suggestion_id}",
@@ -328,7 +293,6 @@ def test_cover_suggestion_list_and_selection_use_the_existing_cover_writer(
     )
     assert selected.status_code == 200
     assert selected.json()["cover"] is not None
-    assert client.get("/api/albums/alice-album/cover-suggestions").json()["used_today"] == 1
 
 
 def test_selected_cover_suggestion_carries_the_ai_mark_in_every_published_file(
@@ -349,7 +313,6 @@ def test_selected_cover_suggestion_carries_the_ai_mark_in_every_published_file(
 def test_discard_suggestions_keeps_the_selected_cover(
     cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
-    """1301-F3-C1-DURABLE: removing images does not remove usage."""
     client, factory = cover_album_app
     audio_dir = tmp_path / "audio"
     suggestion_id, other_id = _add_two_pending_suggestions(factory, audio_dir)
@@ -370,7 +333,6 @@ def test_discard_suggestions_keeps_the_selected_cover(
     assert cover_dir.is_dir()
     assert client.get("/api/albums/alice-album/cover-suggestions").json()["suggestions"] == []
     assert not (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album").exists()
-    assert client.get("/api/albums/alice-album/cover-suggestions").json()["used_today"] == 2
 
 
 def _suggestion_ids_left(factory) -> set[str]:
@@ -711,27 +673,9 @@ def test_active_cover_job_blocks_a_new_request_before_unavailable_response(
         assert session.query(Job).filter_by(album_id="alice-album").count() == 1
 
 
-@pytest.mark.parametrize("status", list(JobStatus))
-@pytest.mark.parametrize("offset", [-1, 0, 1])
-def test_only_completed_cover_jobs_on_this_utc_day_count(
-    tmp_path: Path, status: JobStatus, offset: int, pg_factory,
-) -> None:
-    """1301-F3-C1-COUNT: status and the start-day boundary decide usage."""
-    midnight = datetime(2026, 9, 4, tzinfo=timezone.utc)
-    with pg_factory() as session:
-        seed_cover_albums(session)
-        session.commit()
-    _add_cover_job(pg_factory, status=status, started_at=midnight + timedelta(microseconds=offset))
-    with pg_factory() as session:
-        assert count_cover_jobs_since(session, "alice-album", midnight) == int(
-            status == JobStatus.COMPLETED and offset >= 0
-        )
-
-
 def test_hard_delete_cleanup_removes_suggestions_from_expired_albums(
     cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
-    """1301-F3-C1-DURABLE: removing images does not remove usage."""
     client, factory = cover_album_app
     _add_suggestion(factory, tmp_path / "audio")
     suggestion_dir = tmp_path / "audio" / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"

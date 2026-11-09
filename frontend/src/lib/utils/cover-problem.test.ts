@@ -4,7 +4,6 @@ import type { JobItem } from '#lib/api/types.ts';
 import {
 	coverBusyWaitSeconds,
 	coverProblemClosesSuggest,
-	coverProblemHidesCount,
 	coverRefusalProblem,
 	coverRunProblem
 } from './cover-problem';
@@ -22,8 +21,8 @@ function endedRun(overrides: Partial<JobItem> = {}): JobItem {
 	};
 }
 
-const FOLLOWED = { followed: true, atDailyLimit: false };
-const FROM_BEFORE = { followed: false, atDailyLimit: false };
+const FOLLOWED = { followed: true };
+const FROM_BEFORE = { followed: false };
 
 describe('the problem a cover run ended with', () => {
 	it.each([
@@ -55,14 +54,6 @@ describe('the problem a cover run ended with', () => {
 		expect(
 			coverRunProblem(endedRun({ status, error_type: 'busy' }), FOLLOWED, ENDED_AT)
 		).toBeNull();
-	});
-
-	it('stays silent about a run from before at the daily limit, but names the followed one', () => {
-		const run = endedRun({ error_type: 'unavailable' });
-		expect(coverRunProblem(run, { followed: false, atDailyLimit: true }, ENDED_AT)).toBeNull();
-		expect(coverRunProblem(run, { followed: true, atDailyLimit: true }, ENDED_AT)).toBe(
-			'unavailable'
-		);
 	});
 });
 
@@ -106,14 +97,13 @@ describe('a refusal at the click', () => {
 	});
 });
 
-describe('what each problem does to Suggest and the count', () => {
+describe('what each problem does to Suggest', () => {
 	it.each([
-		['busy', true, false],
-		['not_enabled', true, true],
-		['sign_in_again', true, true],
-		['unavailable', false, false]
-	] as const)('%s closes Suggest: %s, hides the count: %s', (problem, closes, hides) => {
+		['busy', true],
+		['not_enabled', true],
+		['sign_in_again', true],
+		['unavailable', false]
+	] as const)('%s closes Suggest: %s', (problem, closes) => {
 		expect(coverProblemClosesSuggest(problem)).toBe(closes);
-		expect(coverProblemHidesCount(problem)).toBe(hides);
 	});
 });
