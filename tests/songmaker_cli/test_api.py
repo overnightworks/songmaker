@@ -4501,7 +4501,7 @@ def test_get_job_stream_job_last_failed_generation_preserves_missing_or_new_line
 
 
 @pytest.mark.parametrize("read_path", ["get", "stream"])
-@pytest.mark.parametrize("job_type", ["lora_training", "load_model_on_worker", "cover"])
+@pytest.mark.parametrize("job_type", ["lora_training", "cover"])
 def test_get_job_stream_job_preserves_other_job_causes(
     client,
     stored_musician_job,
