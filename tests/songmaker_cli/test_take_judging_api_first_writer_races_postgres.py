@@ -33,16 +33,19 @@ EARLIER_LINK = "earlier-link"
 class _World:
     """The real routes on PostgreSQL: one album, one song and one take of the owner."""
 
-    def __init__(self, pg_factory, tmp_path: Path, *, song_shared: bool = False) -> None:
+    def __init__(self, pg_factory, tmp_path: Path, *, shared: bool = False) -> None:
         self.pg_factory = pg_factory
 
         def seed(session) -> None:
             seed_user(session, "owner", "admin", user_id=OWNER)
             session.flush()
-            session.add(Album(id=ALBUM, title="A", artist="A", created_by=OWNER))
+            session.add(Album(
+                id=ALBUM, title="A", artist="A", created_by=OWNER,
+                is_shared=shared, share_slug=EARLIER_LINK if shared else None,
+            ))
             session.add(Song(
                 id=SONG, title=SONG, slug=SONG, album_id=ALBUM, track_number=1,
-                is_shared=song_shared, share_slug=EARLIER_LINK if song_shared else None,
+                is_shared=shared, share_slug=EARLIER_LINK if shared else None,
             ))
             session.add(Version(
                 id="version-1", song_id=SONG, version_number=1, lyrics="", prompt="",
@@ -75,9 +78,9 @@ class _World:
         with self.pg_factory() as session:
             return session.query(model).all()
 
-    def song(self) -> Song:
+    def stored(self, model, entity_id: str):
         with self.pg_factory() as session:
-            return session.get(Song, SONG)
+            return session.get(model, entity_id)
 
 
 def _holding_a_write_to(*tables: str) -> CommitPause:
@@ -142,21 +145,24 @@ def test_two_enables_of_one_song_both_name_the_stored_link(pg_factory, tmp_path)
     world = _World(pg_factory, tmp_path)
     enable = partial(world.post, f"/api/songs/{SONG}/share")
     answers = race(pg_factory, enable(), enable(), _holding_a_write_to("songs"))
-    stored = world.song().share_slug
+    stored = world.stored(Song, SONG).share_slug
     assert answers["first"].json()["share_slug"] == stored
     assert answers["second"].json()["share_slug"] == stored
 
 
+@pytest.mark.parametrize(("path", "table", "model", "entity_id"), [
+    (f"/api/songs/{SONG}/share", "songs", Song, SONG),
+    (f"/api/albums/{ALBUM}/share", "albums", Album, ALBUM),
+])
 def test_an_enable_behind_a_disable_makes_a_new_link_and_the_old_one_stays_dead(
-    pg_factory, tmp_path,
+    pg_factory, tmp_path, path, table, model, entity_id,
 ) -> None:
-    world = _World(pg_factory, tmp_path, song_shared=True)
+    world = _World(pg_factory, tmp_path, shared=True)
     answers = race(
-        pg_factory, world.delete(f"/api/songs/{SONG}/share"),
-        world.post(f"/api/songs/{SONG}/share"), _holding_a_write_to("songs"),
+        pg_factory, world.delete(path), world.post(path), _holding_a_write_to(table),
     )
-    song = world.song()
+    entity = world.stored(model, entity_id)
     assert answers["second"].status_code == 200
-    assert song.is_shared
-    assert song.share_slug != EARLIER_LINK
-    assert answers["second"].json()["share_slug"] == song.share_slug
+    assert entity.is_shared
+    assert entity.share_slug != EARLIER_LINK
+    assert answers["second"].json()["share_slug"] == entity.share_slug
