@@ -12,7 +12,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final
+from typing import IO, Final, cast
 from urllib.request import urlopen
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
@@ -252,7 +252,6 @@ def start_acestep_subprocess(
 def stop_acestep_subprocess(handle: SubprocessHandle) -> None:
     settings = get_worker_settings()
     process = handle.process
-    assert process.stdout is not None  # noqa: S101 - the one Popen opens stdout as a pipe; this narrows the type
     try:
         if process.poll() is not None:
             return
@@ -268,7 +267,7 @@ def stop_acestep_subprocess(handle: SubprocessHandle) -> None:
             pass
     finally:
         try:
-            process.stdout.close()
+            cast("IO[bytes]", process.stdout).close()
         except OSError:
             pass
         if handle.log_thread is not None and handle.log_thread.is_alive():
