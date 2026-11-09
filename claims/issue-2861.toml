@@ -1,0 +1,8 @@
+claim_id = "15f3d35742834d458b4c3fba086aa7b2"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "5ad73d852fb166f572371f6ef7e7db6a661622a4"
+branch = "claude/issue-2861-deferred-helper"
+scope = ["frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/AlbumCoverEditorLeaving.test.ts", "frontend/src/lib/components/AlbumCoverEditorOpening.test.ts", "frontend/src/lib/stores/coverActivity.test.ts", "frontend/src/lib/stores/editorSave.test.ts", "frontend/src/lib/stores/editorVersionsRecovery.test.ts", "frontend/src/lib/stores/jobs.concurrent.test.ts", "frontend/src/lib/stores/libraryContextHistory.test.ts", "frontend/src/lib/stores/librarySearch.test.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSyncRaces.test.ts", "frontend/src/lib/test-utils/album-cover-editor.ts", "frontend/src/lib/test-utils/deferred.ts", "quality/baseline.toml", "scripts/test_helper_ratchet.txt"]
+opened_commit = "122884ec454a13c743949278c42fc6bdcb544688"
+whole_reason = "One helper's move: its home and every import change together."
