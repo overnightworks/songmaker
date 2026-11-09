@@ -72,7 +72,7 @@ def stored_whisper_cues(value: object) -> list[dict]:
     timestamps existed.
     """
     if not isinstance(value, list):
-        msg = f"whisper_cues must be a list or None, got {type(value).__name__}"
+        msg = f"whisper_cues must be a list, got {type(value).__name__}"
         raise TypeError(msg)
     return [
         WhisperCue.model_validate(item).model_dump(exclude_none=True) for item in value

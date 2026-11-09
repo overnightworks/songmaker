@@ -1350,7 +1350,7 @@ def test_generation_whisper_cues_validator_rejects_non_list(
     seeded_session: Session,
 ) -> None:
     gen = get_generation(seeded_session, "g1")
-    with pytest.raises(TypeError, match="must be a list or None"):
+    with pytest.raises(TypeError, match="must be a list"):
         gen.whisper_cues = {"start": 0.0, "end": 1.0, "text": "hello"}
 
 

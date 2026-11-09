@@ -1370,7 +1370,7 @@ close the stream.
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
 | GET | `/api/settings/generation-builtins` | user | The built-in generation parameters of every model, keyed by model. |
-| GET | `/api/settings/generation-defaults` | user | The saved default generation parameters, keyed by model; a model with none saved is absent. |
+| GET | `/api/settings/generation-defaults` | user | The saved default generation parameters, keyed by model; a model with none saved is absent. While none is saved for any model, a legacy defaults file in the data directory is moved into the database once and answered. |
 | PUT | `/api/settings/generation-defaults` | admin | Save the default generation parameters per model: each model in the body replaces its saved parameters and models left out stay as they are. A body that is not an object keyed by model, or that names a model the app does not offer, answers 422 and saves nothing. |
 | GET | `/api/settings/models/all` | admin | Every model, inactive ones included; a member is refused with 403. |
 | PUT | `/api/settings/models/{id}?active=<bool>` | admin | Switch the model on or off and audit `active=<bool>`; answers the model's `id` and `is_active`. A switched-off model leaves `GET /api/settings/models` and a preset naming it answers 400. An unknown id answers 404 "Model not found" and audits nothing; a member is refused with 403. |
