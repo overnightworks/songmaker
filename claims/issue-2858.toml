@@ -1,8 +1,0 @@
-claim_id = "e9cf54fcba274bddbc2db80d85cb1f71"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "0bdbf7f70d4c59812bcd0026556ab96b3bbf4429"
-branch = "claude/issue-2858-agent-runtime-028-stream"
-scope = ["docs/architecture.md", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/utils/cowriter-stream.test.ts", "frontend/src/lib/utils/cowriter-stream.ts", "pyproject.toml", "quality/baseline.toml", "tests/songmaker_cli/test_conversation_api_gateway_turn.py", "uv.lock"]
-opened_commit = "d72c5ed4245d24d26ad47ed400a2a52216382f7b"
-whole_reason = "One bump with its one visible consequence: the pin, the bubble's round reset and its cells go together, or the bubble jumps on the new stream."
