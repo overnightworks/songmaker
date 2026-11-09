@@ -163,7 +163,7 @@ function parseRetryAfterSeconds(resp: Pick<Response, 'headers'>): number | null 
 	return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
-// The public share reads (`/shared/*`, sharing_api.py) authenticate nobody, so
+// The public share reads (`/shared/*`, sharing_api.py and shared_views_api.py) authenticate nobody, so
 // a 401 there cannot mean that a session ended; the share player opts out the
 // same way (`onAuthLost: null`).
 export const PUBLIC_SHARE_PATH_PREFIX = '/shared/';

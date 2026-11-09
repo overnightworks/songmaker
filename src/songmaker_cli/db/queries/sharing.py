@@ -60,6 +60,18 @@ def presented_take(generations: Iterable[Generation]) -> Generation | None:
     return max(playable, key=lambda gen: gen.generation_number, default=None)
 
 
+def presented_playlist_entries(playlist: Playlist) -> list[PlaylistEntry]:
+    """The playlist's entries in order, minus those whose song was deleted.
+
+    The soft-delete filter hides a deleted song, so its take loads without one.
+    """
+    return [
+        entry
+        for entry in sorted(playlist.entries, key=lambda e: e.position)
+        if entry.generation is not None and entry.generation.song is not None
+    ]
+
+
 def has_playable_pick(generations: Iterable[Generation]) -> bool:
     """Pick of already-loaded takes; the list path asks song_ids_with_pick()."""
     return any(gen.is_picked and is_playable_take(gen) for gen in generations)

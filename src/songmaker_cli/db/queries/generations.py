@@ -534,6 +534,18 @@ def get_generation_by_slug(session: Session, slug: str) -> Generation | None:
     )
 
 
+def get_presented_generation(session: Session, slug: str) -> Generation | None:
+    """The take a share link presents, or None once it no longer may.
+
+    A take whose song was deleted answers like an unshared one: the
+    soft-delete filter hides that song, so the take loads without it.
+    """
+    gen = get_generation_by_slug(session, slug)
+    if gen is None or gen.song is None:
+        return None
+    return gen
+
+
 def enable_generation_sharing(session: Session, generation_id: str) -> Generation:
     lock_unarchived_generation(session, generation_id)
     gen = enable_sharing(session, Generation, generation_id)
