@@ -705,8 +705,7 @@ async def _chat_event_generator(
                 await stream.aclose()
             except Exception as exc:
                 terminal = True
-                log.error("Co-writer chat failed (%s)", type(exc).__name__)
-                yield _fail_turn_event(session, prepared.job_id, _CHAT_REQUEST_FAILED, "chat_error")
+                yield _chat_failure_event(session, prepared.job_id, exc)
                 return
             if problem is not None:
                 terminal = True
@@ -717,7 +716,10 @@ async def _chat_event_generator(
                 final_event = _complete_chat_turn(req, session, prepared, assistant_text)
             except Exception:
                 terminal = True
-                yield _chat_completion_failure_event(session, prepared.job_id)
+                log.exception("Co-writer chat completion failed")
+                yield _fail_turn_event(
+                    session, prepared.job_id, _CHAT_COMPLETION_FAILED, "completion_error",
+                )
                 return
             terminal = True
             yield _sse_format(final_event)
@@ -749,6 +751,11 @@ def _turn_problem_event(session: Session, job_id: str, turn_problem: TurnProblem
             retry_after_seconds=turn_problem.retry_after_seconds,
         ),
     )
+
+
+def _chat_failure_event(session: Session, job_id: str, exc: Exception) -> str:
+    log.error("Co-writer chat failed (%s)", type(exc).__name__)
+    return _fail_turn_event(session, job_id, _CHAT_REQUEST_FAILED, "chat_error")
 
 
 def _fail_turn_event(session: Session, job_id: str, message: str, error_type: str) -> str:
@@ -783,11 +790,6 @@ def _complete_chat_turn(
         user_message=prepared.user_message,
         assistant_message=ChatMessageResponse.from_orm(assistant_message),
     )
-
-
-def _chat_completion_failure_event(session: Session, job_id: str) -> str:
-    log.exception("Co-writer chat completion failed")
-    return _fail_turn_event(session, job_id, _CHAT_COMPLETION_FAILED, "completion_error")
 
 
 # ── Conversation CRUD ────────────────────────────────────────────────
@@ -832,13 +834,9 @@ def api_conversation_messages(
         title=conv.title,
         archived_at=conv.archived_at.isoformat() if conv.archived_at else None,
         messages=[ChatMessageResponse.from_orm(m) for m in messages],
-        turn_running=_turn_running(session, conv, user),
+        # A turn runs only in the active conversation, and only while its chat job is active.
+        turn_running=conv.archived_at is None and _running_turn_count(session, user) > 0,
     )
-
-
-def _turn_running(session: Session, conversation: Conversation, user: AuthenticatedUser) -> bool:
-    """A turn runs only in the active conversation, and only while its chat job is active."""
-    return conversation.archived_at is None and _running_turn_count(session, user) > 0
 
 
 def _running_turn_count(session: Session, user: AuthenticatedUser) -> int:
