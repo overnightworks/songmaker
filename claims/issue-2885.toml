@@ -1,8 +1,0 @@
-claim_id = "2df1a97fea88450c869c534eaaa2ed11"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "1e92b100774aae3e0647327b42d7a08d6c37cded"
-branch = "claude/issue-2885-cover-request-session"
-scope = ["src/songmaker_cli/cover_suggestions.py", "tests/songmaker_cli/test_cover_suggestions.py"]
-opened_commit = "3c702f4f729e43990d9812be664d44fe8836cd5d"
-whole_reason = "Two small honesty cuts in one feature's request path, from one audit, with the tests that pass the removed value."
