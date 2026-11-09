@@ -103,7 +103,9 @@ for (const device of ['light', 'dark'] as const) {
 		await page.emulateMedia({ colorScheme: device });
 		await page.goto(HOME_PATH);
 
-		await expect.poll(() => looks(page)).toMatchObject({ chosen: null, copy: 'system' });
+		await expect(async () => {
+			expect(await looks(page)).toMatchObject({ chosen: null, copy: 'system' });
+		}).toPass();
 	});
 }
 

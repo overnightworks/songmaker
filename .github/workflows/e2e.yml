@@ -153,7 +153,7 @@ jobs:
         run: |
           report=$(mktemp)
           if node e2e/coverage-report.ts "$PROJECT" >"$report" 2>"$report.err"; then
-            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            tee -a "$GITHUB_STEP_SUMMARY" <"$report"
           else
             reason=$(grep -m1 -E '^[A-Za-z]*Error' "$report.err" || tail -n 1 "$report.err")
             echo "::warning::E2E coverage report for $PROJECT failed: $reason"

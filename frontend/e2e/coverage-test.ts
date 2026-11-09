@@ -31,7 +31,9 @@ export const test = base.extend({
 		if (!collecting) return;
 		const started = performance.now();
 		try {
-			await MCR(coverageOptions(project)).add(await page.coverage.stopJSCoverage());
+			const coverage = await page.coverage.stopJSCoverage();
+			// A page that loaded no script (a stubbed route, an error page) has nothing to add.
+			if (coverage.length > 0) await MCR(coverageOptions(project)).add(coverage);
 			const timeFile = collectionTimeFile(project);
 			mkdirSync(path.dirname(timeFile), { recursive: true });
 			appendFileSync(timeFile, `${Math.round(performance.now() - started)}\n`);
