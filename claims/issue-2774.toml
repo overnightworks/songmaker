@@ -1,8 +1,0 @@
-claim_id = "c042c06ba8f24a89a769a57e6f63ea0f"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "624ba1d2658aa3da425498cbb24777fff3c3bf7d"
-branch = "claude/issue-2774-scorer-loses-what-nothing-reaches"
-scope = ["README.md", "src/songmaker_cli/scoring/subprocess_runner.py", "tests/songmaker_cli/scoring/test_subprocess_runner_scoring.py", "tests/songmaker_cli/test_jobs.py", "tests/songmaker_cli/test_settings.py"]
-opened_commit = "a6dc1c81b8a7945fd0e913e8f56a5570a40b0d53"
-whole_reason = "One coverage slice: the arms nothing reaches, the cells for the rest and the one sentence those cells prove."
