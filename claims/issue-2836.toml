@@ -1,0 +1,8 @@
+claim_id = "df3d403e21ed41ba9576917421be9da7"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "c6f77b601f6a348202575fc137f27d574c2cb86d"
+branch = "claude/issue-2836-agent-ends-shares-trashes-picks"
+scope = ["docs/architecture.md", "docs/security.md", "src/songmaker_cli/agent/mcp.py", "src/songmaker_cli/album_api.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/playlist_api.py", "src/songmaker_cli/reference_api.py", "src/songmaker_cli/song_api.py", "src/songmaker_cli/take_judging_api.py", "tests/songmaker_cli/agent/test_mcp_person_front.py", "tests/songmaker_cli/agent/test_mcp_person_lifecycle_tools.py", "tests/songmaker_cli/agent/test_mcp_person_tools.py", "tests/support/mcp_tool_table.py", "tests/support/mcp_world.py"]
+opened_commit = "dab7144985d082e26c10bbdd7f27992d56289be5"
+whole_reason = "One ruling for eleven routes: the marks, the two reasons that go and the pinned tool list land together, or the pinned tool list and the refused rows contradict the code."
