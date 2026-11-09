@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { SongItem } from '#lib/api/types.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
-import { NOW_PLAYING_LABEL, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import {
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
@@ -27,7 +27,8 @@ import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
-	NOW_PLAYING_NO_LYRICS
+	NOW_PLAYING_NO_LYRICS,
+	NOW_PLAYING_LABEL
 } from '#lib/constants/now-playing.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
@@ -922,17 +923,17 @@ describe('NowPlaying curation mode (#228)', () => {
 		});
 	}
 
-	// Two songs, neither picked yet — the shape curateAlbum leaves behind, so
+	// Songs, none picked yet — the shape curateAlbum leaves behind, so
 	// the curation bar and its shortcuts have somewhere real to act.
-	function setupAlbumCuration(): PlaybackInfo[] {
-		const s1 = albumSong('s1', 'g1', 1);
-		const s2 = albumSong('s2', 'g2', 2);
-		songList.set([s1, s2]);
+	function setupAlbumCuration(songCount = 2): PlaybackInfo[] {
+		const songs = Array.from({ length: songCount }, (_, index) =>
+			albumSong(`s${index + 1}`, `g${index + 1}`, index + 1)
+		);
+		songList.set(songs);
 		albumList.set([album({ created_at: '' })]);
-		const takes = [
-			info({ generation: s1.generations[0], songId: s1.id, songTitle: s1.title }),
-			info({ generation: s2.generations[0], songId: s2.id, songTitle: s2.title })
-		];
+		const takes = songs.map((item) =>
+			info({ generation: item.generations[0], songId: item.id, songTitle: item.title })
+		);
 		queueContext.set({ type: 'album', albumId: 'a1', takes, index: 0 });
 		curationActive.set(true);
 		return takes;
@@ -1010,13 +1011,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		// album/library queue of more than one take wraps around rather than
 		// stopping at an end, so "last song" is not a real boundary here —
 		// only a single-song queue has nowhere to skip to.
-		const s1 = albumSong('s1', 'g1', 1);
-		songList.set([s1]);
-		albumList.set([album({ created_at: '' })]);
-		const takes = [info({ generation: s1.generations[0], songId: s1.id, songTitle: s1.title })];
-		queueContext.set({ type: 'album', albumId: 'a1', takes, index: 0 });
-		curationActive.set(true);
-
+		const takes = setupAlbumCuration(1);
 		await renderSurface(takes[0]);
 
 		expect(target.querySelector<HTMLButtonElement>('button[aria-label*="Skip"]')?.disabled).toBe(

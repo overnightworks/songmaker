@@ -9,7 +9,7 @@
 		transportIsBusy,
 		type TransportState
 	} from '#lib/services/audioPlayer.svelte.ts';
-	import { NOW_PLAYING_LABEL, NOW_PLAYING_SWIPE_RISE_PX } from '#lib/constants.ts';
+	import { NOW_PLAYING_LABEL, NOW_PLAYING_SWIPE_RISE_PX } from '#lib/constants/now-playing.ts';
 	import {
 		AudioVisualizer,
 		FFT_SIZE,

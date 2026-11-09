@@ -7,7 +7,6 @@ import {
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
 import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
-import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants';
 import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
@@ -37,7 +36,9 @@ import {
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	nowPlayingSheetCloseLabel,
 	takeRowLabel,
-	NOW_PLAYING_GO_TO_SONG
+	NOW_PLAYING_GO_TO_SONG,
+	NOW_PLAYING_LABEL,
+	openNowPlayingLabel
 } from '../src/lib/constants/now-playing';
 import {
 	accountCircle,
@@ -149,9 +150,7 @@ function takeSheet(page: Page): Locator {
 
 async function openTakeSheetOverNowPlaying(page: Page, playlist: SeededPlaylist): Promise<void> {
 	const takes = await openSongsTakes(page, playlist);
-	await takes
-		.getByRole('button', { name: nameStartingWith(takeRowLabel(SEEDED_TAKE_NUMBER)) })
-		.click();
+	await seededTakeRow(takes).click();
 	await expect(page.getByRole('dialog', { name: firstSong(playlist) })).toBeVisible();
 	await expect(takeSheet(page)).toBeVisible();
 }

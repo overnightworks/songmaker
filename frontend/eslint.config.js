@@ -24,14 +24,14 @@ const PATH = `${PATH_SEGMENT}(?:/${PATH_SEGMENT})*`;
 const TRANSPORT_MAY_IMPORT = [
 	String.raw`\./${PATH}`,
 	String.raw`#lib/api/${PATH}`,
-	String.raw`#lib/constants(?:\.ts|/${PATH})`,
+	String.raw`#lib/constants/${PATH}`,
 	String.raw`#lib/routes/${PATH}`,
 	String.raw`#lib/utils/recency\.ts`,
 	String.raw`(?:@[a-z0-9][\w.-]*/)?[a-z0-9][\w.-]*(?:/${PATH})?`
 ];
 const OUTSIDE_THE_TRANSPORT = `^(?!(?:${TRANSPORT_MAY_IMPORT.join('|')})$)`;
 const TRANSPORT_LAYER_MESSAGE =
-	'lib/api is the transport (#925 G2): import only from ./, #lib/api, #lib/constants, ' +
+	'lib/api is the transport (#925 G2): import only from ./, #lib/api, #lib/constants/, ' +
 	'#lib/routes/, #lib/utils/recency or a package, with no "." or ".." path segment ' +
 	'after a leading "./". Hand the app what it needs through a reaction it installs.';
 const TRANSPORT_LOADS_NOTHING_LAZILY =
@@ -82,6 +82,9 @@ const RAW_FETCH_MESSAGE =
 const RAW_HISTORY_MESSAGE =
 	'Only lib/history/historyController.ts writes or traverses history (#1006): ' +
 	'call a controller function, or add one there.';
+const CONSTANTS_CATCH_ALL_MESSAGE =
+	'There is no catch-all constants module: import from the owning domain module, ' +
+	'#lib/constants/<domain>.ts.';
 const RAW_FETCH = { name: 'fetch', message: RAW_FETCH_MESSAGE };
 const RAW_HISTORY = { name: 'history', message: RAW_HISTORY_MESSAGE };
 const RAW_EVENT_SOURCE = {
@@ -143,6 +146,10 @@ export default ts.config(
 							name: '$app/navigation',
 							importNames: ['pushState', 'replaceState'],
 							message: RAW_HISTORY_MESSAGE
+						},
+						{
+							name: '#lib/constants.ts',
+							message: CONSTANTS_CATCH_ALL_MESSAGE
 						}
 					]
 				}

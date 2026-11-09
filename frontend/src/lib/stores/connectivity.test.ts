@@ -2,7 +2,7 @@ import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '#lib/api/fetch.ts';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { browserReportsOnline, lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
 import {
 	offline,

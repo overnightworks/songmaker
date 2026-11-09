@@ -3,6 +3,18 @@ import { formatTime } from '#lib/utils/format.ts';
 
 // Now Playing copy and layout constants.
 
+export const NOW_PLAYING_LABEL = 'Now Playing';
+
+// The phone's mini player opens Now Playing from its cover and title. The
+// name starts with the visible title so a voice command naming what is on
+// screen reaches it (WCAG 2.5.3), then says what the tap opens.
+export function openNowPlayingLabel(songTitle: string): string {
+	return `${songTitle} — open ${NOW_PLAYING_LABEL}`;
+}
+
+// Swiping the mini player up opens Now Playing once the finger has risen
+// this far, and further up than sideways; anything less is a tap or a slip.
+export const NOW_PLAYING_SWIPE_RISE_PX = 40;
 export const NOW_PLAYING_QUEUE_TAB = 'Queue';
 export const NOW_PLAYING_TAKE_TAB = 'This take';
 export const NOW_PLAYING_RIGHT_PANEL_LABEL = 'Now Playing panel';
@@ -179,7 +191,7 @@ export const NOW_PLAYING_DEVIATIONS_LABEL = 'Sung vs. lyrics';
 export const NOW_PLAYING_DEVIATIONS_EMPTY = 'Sung text matches the lyrics';
 export const NOW_PLAYING_DEVIATIONS_UNAVAILABLE = 'No transcript to compare against yet';
 export const NOW_PLAYING_LYRICS_ROW_LABEL = 'Lyrics';
-// #45: a take scored before #44 landed has whisper_text but no whisper_cues,
+// A take scored before its cues were recorded has whisper_text but no whisper_cues,
 // so its lyrics stay static instead of following the audio. The lyrics panel
 // only names that state — it also renders for a public share listener, who
 // cannot re-score anything. The take panel owns the action that fixes it.
