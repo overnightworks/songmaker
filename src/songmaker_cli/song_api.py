@@ -304,9 +304,16 @@ def api_rename_song(
     return _song_response(song)
 
 
+_MOVE_SONG_DESCRIPTION = (
+    "Move one of the person's own songs into another of their own albums. "
+    "A song moved into an album the person has shared appears on that album's "
+    "public page at once."
+)
+
+
 @router.put(
     "/songs/{song_id}/album",
-    description="Move one of the person's own songs into another of their own albums.",
+    description=_MOVE_SONG_DESCRIPTION,
     responses={404: {"description": "Song or album not found"}},
     openapi_extra=agent_tool(name="move_song", effect=ToolEffect.SIDE_EFFECTING),
 )
