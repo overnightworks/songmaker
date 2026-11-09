@@ -661,11 +661,13 @@ def test_add_sample_rejects_oversize(
     assert resp.status_code == 413
 
 
+@sample_routes
 def test_add_sample_rejects_when_max_reached(
-    client_and_ctx: tuple[TestClient, AppContext],
+    client_and_ctx: tuple[TestClient, AppContext], post_sample,
 ) -> None:
     client, ctx = client_and_ctx
     lora_id = make_lora(ctx)
+    take_id = make_take(ctx)
     with ctx.db() as session:
         for i in range(USER_LORA_MAX_SAMPLES):
             add_user_lora_sample(
@@ -674,12 +676,14 @@ def test_add_sample_rejects_when_max_reached(
             )
         session.commit()
 
-    resp = client.post(
-        f"/api/loras/{lora_id}/samples",
-        data={"caption": "c", "lyrics": "l"},
-        files={"audio": ("c.wav", b"abc" * 100, "audio/wav")},
-    )
+    resp = post_sample(client, lora_id, take_id)
+
     assert resp.status_code == 409
+    with ctx.db() as session:
+        assert (
+            session.query(UserLoraSample).filter_by(user_lora_id=lora_id).count()
+            == USER_LORA_MAX_SAMPLES
+        )
 
 
 def test_add_sample_rejected_on_active_status(
