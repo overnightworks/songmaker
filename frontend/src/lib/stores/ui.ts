@@ -6,7 +6,7 @@ import { fetchTheme, updateTheme } from '#lib/api/settings.ts';
 import type { ThemeSettings } from '#lib/api/types.ts';
 import { describeFailure } from '#lib/api/fetch.ts';
 import { addToast } from '#lib/stores/toast.ts';
-import { LIBRARY_WALL_ORDERS, type LibraryWallOrder } from '#lib/constants.ts';
+import { LIBRARY_WALL_ORDERS, type LibraryWallOrder } from '#lib/constants/library.ts';
 import { isEditableElement } from '#lib/utils/escape-level-up.ts';
 import { readStorage, removeStorage, writeStorage } from '#lib/utils/storage.ts';
 

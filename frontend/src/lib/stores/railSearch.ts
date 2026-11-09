@@ -3,7 +3,7 @@ import { get, writable } from 'svelte/store';
 import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 import { searchLibrary, type LibrarySearchHit } from '#lib/api/library.ts';
 import type { AlbumCoverUrls, PlaylistItem } from '#lib/api/types.ts';
-import { LIBRARY_SEARCH_DEBOUNCE_MS, LIBRARY_PAGE_LABEL } from '#lib/constants.ts';
+import { LIBRARY_SEARCH_DEBOUNCE_MS, LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
 import { PLAYLISTS_PAGE_LABEL } from '#lib/constants/playlist.ts';
 import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 import { LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '#lib/routes/addresses.ts';

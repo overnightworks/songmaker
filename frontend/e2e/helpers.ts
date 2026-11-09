@@ -11,7 +11,7 @@ import {
 } from '@playwright/test';
 import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
 import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
-import { LIBRARY_PAGE_LABEL } from '../src/lib/constants';
+import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { APP_NAME } from '../src/lib/constants/app';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import {

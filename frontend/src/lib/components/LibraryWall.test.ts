@@ -48,7 +48,7 @@ import {
 } from '#lib/stores/player.ts';
 import { fetchSong } from '#lib/api/client.ts';
 import { NetworkError } from '#lib/api/fetch.ts';
-import { LIBRARY_NEW_MENU_LABEL, LIBRARY_WALL_PLAYED_PAGE_SIZE } from '#lib/constants.ts';
+import { LIBRARY_NEW_MENU_LABEL, LIBRARY_WALL_PLAYED_PAGE_SIZE } from '#lib/constants/library.ts';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();

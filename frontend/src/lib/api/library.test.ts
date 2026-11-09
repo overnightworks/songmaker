@@ -6,7 +6,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
-import { LIBRARY_QUERY_REQUIRED } from '#lib/constants.ts';
+import { LIBRARY_QUERY_REQUIRED } from '#lib/constants/library.ts';
 import {
 	fetchLibraryListen,
 	fetchLibraryPoolQueue,

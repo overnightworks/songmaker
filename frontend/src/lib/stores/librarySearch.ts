@@ -9,7 +9,7 @@ import {
 	LIBRARY_QUERY_REQUIRED,
 	LIBRARY_SEARCH_PAGE_SIZE,
 	LIBRARY_SONG_PAGE_SIZE
-} from '#lib/constants.ts';
+} from '#lib/constants/library.ts';
 import {
 	albumList,
 	overlaySongList,

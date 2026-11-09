@@ -17,7 +17,7 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type Page } from '@playwright/test';
-import { LIBRARY_NEW_MENU_LABEL, LIBRARY_PAGE_LABEL } from '../src/lib/constants';
+import { LIBRARY_NEW_MENU_LABEL, LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import { HOME_PAGE_LABEL } from '../src/lib/constants/home';

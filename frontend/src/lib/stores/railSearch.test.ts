@@ -7,7 +7,8 @@ vi.mock('#lib/api/library.ts', () => ({
 }));
 
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import { LIBRARY_SEARCH_DEBOUNCE_MS, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { LIBRARY_SEARCH_DEBOUNCE_MS } from '#lib/constants/library.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests

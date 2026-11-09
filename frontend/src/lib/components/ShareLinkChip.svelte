@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import { addToast } from '#lib/stores/toast.ts';
-	import { LIBRARY_SHARES_COPY_LABEL } from '#lib/constants.ts';
+	import { LIBRARY_SHARES_COPY_LABEL } from '#lib/constants/library.ts';
 	import { SHARE_LINK_COPIED_TOAST, SHARE_LINK_COPY_FAILED_TOAST } from '#lib/constants/share.ts';
 
 	interface Props {
