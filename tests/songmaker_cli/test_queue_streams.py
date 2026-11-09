@@ -334,7 +334,7 @@ def test_queue_stream_build_closes_db_session_before_ffmpeg_runs(
     multi-hour) ffmpeg cold build runs, so it never holds a pooled connection
     for the duration of the build."""
     import songmaker_cli.queue_streams as qs
-    import songmaker_cli.sharing_api as qs_api
+    import songmaker_cli.shared_views_api as qs_api
 
     captured: dict[str, object] = {}
     resolver_name = "get_album_by_slug" if kind == "album" else "get_playlist_by_slug"

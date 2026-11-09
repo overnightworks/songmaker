@@ -73,14 +73,14 @@ layers =
     main | (arq_worker)
     server | music_worker | scoring_worker
     api | worker_base
-    (admin_api) | (album_api) | (audio_api) | (auth_api) | (conversation_api) | (generation_api) | (health_api) | (internal_api) | (jobs_api) | (library_api) | (lora_api) | (memory_api) | (playlist_api) | (reference_api) | (resource_event_api) | (settings_api) | (sharing_api) | (song_api)
+    (admin_api) | (album_api) | (audio_api) | (auth_api) | (conversation_api) | (generation_api) | (health_api) | (internal_api) | (jobs_api) | (library_api) | (lora_api) | (memory_api) | (playlist_api) | (reference_api) | (resource_event_api) | (settings_api) | (shared_views_api) | (sharing_api) | (song_api)
     lifecycle
     (cover_runner)
     jobs
     agent
     cowriter
     mcp_server
-    (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (queue_streams) : (reference_audio) : (scheduler) : (app_context) : (arq_pool) : (covers) : (generate) : (logging_config) : (middleware) : (redis_client) : (request_policies) : (library_cursor)
+    (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (queue_streams) : (reference_audio) : (scheduler) : (app_context) : (arq_pool) : (covers) : (generate) : (logging_config) : (middleware) : (redis_client) : (request_policies) : (library_cursor) : (shared_access)
     api_models
     (health_types) | (scoring)
     db
