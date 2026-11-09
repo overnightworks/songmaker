@@ -10,6 +10,7 @@ from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import (
+    can_access_album,
     owner_filter,
     parse_required_search_query,
 )
@@ -79,7 +80,9 @@ def api_library_listen(
     listens = list_place_listens(
         session, viewer_id=user.id, owner_id=owner_filter(user), limit=offset + limit,
     )
-    return LibraryListenResponse.from_orm(listens[offset:])
+    return LibraryListenResponse.from_orm(
+        listens[offset:], reaches=lambda album: can_access_album(album, user),
+    )
 
 
 _GET_LIBRARY_WRITE_DESCRIPTION = (

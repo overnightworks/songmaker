@@ -39,6 +39,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.activity import record_song_edit, record_song_played
+from songmaker_cli.db.queries.songs import record_playlist_listen
 from songmaker_cli.job_types import JobType
 
 ALICE = "alices"
@@ -437,6 +438,25 @@ def test_an_admins_agent_reads_none_of_a_members_content_in_the_admins_own_conta
     assert reply.is_error is False
     assert ALICE in reply.text
     for members_content in (BOB, TokenWorld.BOB, BOBS_LYRICS):
+        assert members_content not in reply.text
+
+
+def test_an_admins_agent_reads_none_of_a_members_covers_in_a_played_playlist_of_the_admin(
+    admins_world: McpWorld,
+) -> None:
+    _the_admin_fills_own_containers_with_the_members_content(admins_world)
+    with admins_world.world.factory() as session:
+        record_playlist_listen(
+            session, session.get(Playlist, f"playlist-{ALICE}"),
+            song=session.get(Song, f"song-{ALICE}"),
+        )
+        session.commit()
+
+    reply = admins_world.call("get_library_listen", groups=_ADMIN_GROUPS)
+
+    assert reply.is_error is False
+    assert f"album-{ALICE}" in reply.text
+    for members_content in (BOB, TokenWorld.BOB):
         assert members_content not in reply.text
 
 

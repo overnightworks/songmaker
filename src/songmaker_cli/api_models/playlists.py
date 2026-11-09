@@ -102,9 +102,9 @@ def uploaded_playlist_cover(playlist: Playlist) -> AlbumCoverUrls | None:
     return playlist_cover_urls(playlist.id, playlist.cover_key) if playlist.cover_key else None
 
 
-def playlist_mosaic_covers(playlist: Playlist) -> list[AlbumCoverUrls]:
-    """The first distinct album covers of the playlist's live songs, in playlist order."""
-    return _mosaic_covers(_live_entries(playlist))
+def playlist_mosaic_covers(playlist: Playlist, *, reaches: AlbumReach) -> list[AlbumCoverUrls]:
+    """The first distinct covers of the albums the caller reaches, in playlist order."""
+    return _mosaic_covers(_reached_entries(playlist, reaches))
 
 
 def _mosaic_covers(entries: list[PlaylistEntry]) -> list[AlbumCoverUrls]:
