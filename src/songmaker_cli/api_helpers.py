@@ -71,6 +71,8 @@ from songmaker_cli.worker_liveness import WorkerLiveness, read_worker_liveness
 if TYPE_CHECKING:
     from redis import Redis
 
+    from songmaker_cli.settings import Settings
+
 SONG_NOT_FOUND_DETAIL: Final = "Song not found"
 LORA_NOT_FOUND_DETAIL: Final = "LoRA not found"
 LORA_SAMPLE_NOT_FOUND_DETAIL: Final = "LoRA sample not found"
@@ -178,17 +180,23 @@ def lock_lora_capacity(session: Session) -> None:
     lock_until_transaction_ends(session, AdvisoryLock.LORA_CAPACITY)
 
 
-def _job_type_rate_limit(job_type: JobType) -> tuple[int, str] | None:
-    """Return (env_limit, db_setting_key) for a job type, or None without an hourly limit."""
-    settings = get_settings()
-    if job_type == JobType.GENERATE:
-        return settings.generation_rate_limit_user, SETTING_GENERATION_RATE_LIMIT
-    if job_type == JobType.SCORE:
-        return settings.scoring_rate_limit_user, SETTING_SCORING_RATE_LIMIT
-    return None
+@dataclass(frozen=True)
+class _HourlyLimit:
+    """Where a limited job type's hourly limit comes from."""
+
+    settings_limit: Callable[[Settings], int]
+    setting_key: str
 
 
-_QUEUEABLE_JOB_TYPES = frozenset({JobType.GENERATE, JobType.SCORE})
+# The one table of job types with an hourly limit; these types are also queue-checked.
+_HOURLY_LIMITS: dict[JobType, _HourlyLimit] = {
+    JobType.GENERATE: _HourlyLimit(
+        lambda settings: settings.generation_rate_limit_user, SETTING_GENERATION_RATE_LIMIT,
+    ),
+    JobType.SCORE: _HourlyLimit(
+        lambda settings: settings.scoring_rate_limit_user, SETTING_SCORING_RATE_LIMIT,
+    ),
+}
 
 
 def _enforce_job_limits(
@@ -209,7 +217,8 @@ def _enforce_job_limits(
         max_queue_depth=max_queue_depth,
     )
 
-    if job_type in _QUEUEABLE_JOB_TYPES:
+    hourly_limit = _HOURLY_LIMITS.get(job_type)
+    if hourly_limit is not None:
         if count_total_queued_jobs(session) >= max_queue_depth:
             session.rollback()
             raise HTTPException(429, "Queue is full. Try again later.")
@@ -220,11 +229,11 @@ def _enforce_job_limits(
             session.rollback()
             raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 
-    rate_limit = _job_type_rate_limit(job_type)
-    if rate_limit is None:
+    if hourly_limit is None:
         return
-    env_limit, setting_key = rate_limit
-    limit = resolve_rate_limit(session, user.id, setting_key, env_limit)
+    limit = resolve_rate_limit(
+        session, user.id, hourly_limit.setting_key, hourly_limit.settings_limit(settings),
+    )
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:
         session.rollback()
