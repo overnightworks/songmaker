@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
+import './browser-apis.ts';
 import './viz-colors.ts';
 
 // jsdom performs no layout, so it ships no ResizeObserver. Components that
@@ -20,21 +21,6 @@ class InertResizeObserver implements ResizeObserver {
 if (!('ResizeObserver' in globalThis)) {
 	globalThis.ResizeObserver = InertResizeObserver;
 }
-
-// jsdom implements neither scrolling into view, pointer capture, animation listing nor
-// media queries, which every supported browser has; components call them directly,
-// so they exist here as no-ops and a test that needs the arguments installs
-// its own spy.
-Element.prototype.scrollIntoView ??= () => {};
-Element.prototype.setPointerCapture ??= () => {};
-Element.prototype.getAnimations ??= () => [];
-window.matchMedia ??= (query: string) =>
-	({
-		matches: false,
-		media: query,
-		addEventListener: () => {},
-		removeEventListener: () => {}
-	}) as unknown as MediaQueryList;
 
 // Library history is written through SvelteKit's router, which no test page
 // starts, so every test runs against the fake router unless it mocks
