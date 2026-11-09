@@ -1,4 +1,4 @@
-import { LIBRARY_PAGE_LABEL } from '#lib/constants.ts';
+import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
 import { PLAYLISTS_PAGE_LABEL } from '#lib/constants/playlist.ts';
 import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 import type { Place } from '#lib/stores/libraryContext.ts';

@@ -22,7 +22,7 @@ import { get } from 'svelte/store';
 
 import type { AlbumItem, PlaylistDetailItem } from '#lib/api/types.ts';
 import { ApiError } from '#lib/api/fetch.ts';
-import { LIBRARY_HISTORY_KIND } from '#lib/constants.ts';
+import { LIBRARY_HISTORY_KIND } from '#lib/constants/library.ts';
 import { openCollection, setOpenCollection, type OpenCollection } from '#lib/stores/collection.ts';
 import {
 	libraryBrowse,

@@ -76,9 +76,9 @@
 	} from '#lib/stores/recipe.ts';
 	import { setGenerationActions, takeActionsFor } from '#lib/contexts/generation-actions.ts';
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
+	import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
 	import {
 		LIBRARY_NARROW_MEDIA,
-		LIBRARY_PAGE_LABEL,
 		SONG_COVER_ALT_TYPE,
 		SONG_COVER_REPLACE_LABEL,
 		SONG_COVER_UPLOAD_LABEL,

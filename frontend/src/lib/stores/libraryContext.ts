@@ -25,7 +25,7 @@ import { isNotFound } from '#lib/api/fetch.ts';
 import type { LibrarySort } from '#lib/api/library.ts';
 import { fetchSong, fetchSongs } from '#lib/api/songs.ts';
 import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
-import { LIBRARY_HISTORY_KIND, LIBRARY_SONG_PAGE_SIZE } from '#lib/constants.ts';
+import { LIBRARY_HISTORY_KIND, LIBRARY_SONG_PAGE_SIZE } from '#lib/constants/library.ts';
 import { type OpenCollection, openCollection, setOpenCollection } from '#lib/stores/collection.ts';
 import {
 	libraryBrowse,

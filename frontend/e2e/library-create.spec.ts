@@ -25,9 +25,9 @@ import {
 	LIBRARY_NEW_MENU_LABEL,
 	LIBRARY_NEW_PLAYLIST_LABEL,
 	LIBRARY_WALL_EMPTY,
-	LIBRARY_WALL_ORDER_GROUP_LABEL,
-	LIBRARY_PAGE_LABEL
-} from '../src/lib/constants';
+	LIBRARY_PAGE_LABEL,
+	LIBRARY_WALL_ORDER_GROUP_LABEL
+} from '../src/lib/constants/library';
 import { newSongCardLabel } from '../src/lib/constants/album';
 import {
 	PLAYLISTS_WALL_EMPTY,

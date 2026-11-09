@@ -15,7 +15,7 @@ import {
 	deletePlaylistCover as apiDeletePlaylistCover
 } from '#lib/api/client.ts';
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '#lib/api/types.ts';
-import { LIBRARY_PLAYLISTS_ERROR } from '#lib/constants.ts';
+import { LIBRARY_PLAYLISTS_ERROR } from '#lib/constants/playlist.ts';
 import { openCollection, setOpenCollection } from '#lib/stores/collection.ts';
 import { forgetListenedPlace } from '#lib/stores/libraryOrder.ts';
 import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';

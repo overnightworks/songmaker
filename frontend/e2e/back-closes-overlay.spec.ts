@@ -6,12 +6,12 @@ import {
 	PLAYLIST_API,
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
+import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
-	LIBRARY_PAGE_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
 	TAKE_DELETE_LABEL,

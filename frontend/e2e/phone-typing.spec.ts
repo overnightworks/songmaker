@@ -19,9 +19,8 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
+import { LIBRARY_NEW_MENU_LABEL, LIBRARY_NEW_ALBUM_LABEL } from '../src/lib/constants/library';
 import {
-	LIBRARY_NEW_MENU_LABEL,
-	LIBRARY_NEW_ALBUM_LABEL,
 	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,

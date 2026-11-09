@@ -1,6 +1,6 @@
 import { derived, get, readonly, writable, type Readable } from 'svelte/store';
 import { fetchLibraryListen, type LibraryListenItem } from '#lib/api/library.ts';
-import { LIBRARY_WALL_PLAYED_PAGE_SIZE, type LibraryWallOrder } from '#lib/constants.ts';
+import { LIBRARY_WALL_PLAYED_PAGE_SIZE, type LibraryWallOrder } from '#lib/constants/library.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
 import { compareByCreatedAt } from '#lib/utils/recency.ts';
 
