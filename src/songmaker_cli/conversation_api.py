@@ -7,7 +7,6 @@ This module owns the Phase 3 conversation-scoped chat API:
 - ``GET /conversations/{id}`` — full message history of one.
 - ``POST /conversations/new`` — archive the active one and start fresh.
 - ``DELETE /conversations/{id}`` — wipe a conversation.
-- ``GET /memory`` / ``PUT /memory/...`` — durable user, song, and album notes.
 """
 
 from __future__ import annotations
@@ -48,9 +47,6 @@ from songmaker_cli.api_models import (
     ConversationListResponse,
     ConversationMessagesResponse,
     ConversationResponse,
-    MemoryBundleResponse,
-    MemoryScopeResponse,
-    MemoryUpdateRequest,
     StatusResponse,
 )
 from songmaker_cli.api_models.songs import score_values
@@ -58,9 +54,6 @@ from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     CURRENT_SONG_FRESHNESS_NOTE,
-    MEMORY_SCOPE_ALBUM,
-    MEMORY_SCOPE_SONG,
-    MEMORY_SCOPE_USER,
     TURN_BLOCK_ALBUM_NOTES,
     TURN_BLOCK_CURRENT_SONG,
     TURN_BLOCK_CURRENT_TAKE,
@@ -97,9 +90,6 @@ from songmaker_cli.db.queries.memory import (
     get_album_memory,
     get_song_memory,
     get_user_memory,
-    upsert_album_memory,
-    upsert_song_memory,
-    upsert_user_memory,
 )
 from songmaker_cli.db.queries.settings import get_cowriter_tail_token_budget
 from songmaker_cli.db.queries.sharing import is_playable_take, presented_take
@@ -887,70 +877,3 @@ def api_delete_conversation(
     delete_conversation(session, conversation_id)
     session.commit()
     return StatusResponse()
-
-
-# ── Memory ────────────────────────────────────────────────────────
-
-
-@router.get("/memory")
-def api_get_memory(
-    song_id: str | None = None,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> MemoryBundleResponse:
-    user_row = get_user_memory(session, user.id)
-    bundle = MemoryBundleResponse(
-        user=MemoryScopeResponse.from_orm(MEMORY_SCOPE_USER, user.id, user_row),
-    )
-    if song_id is None:
-        return bundle
-    song = check_song_access(session, song_id, user)
-    song_row = get_song_memory(session, song.id)
-    album_row = get_album_memory(session, song.album_id)
-    return MemoryBundleResponse(
-        user=bundle.user,
-        song=MemoryScopeResponse.from_orm(MEMORY_SCOPE_SONG, song.id, song_row),
-        album=MemoryScopeResponse.from_orm(
-            MEMORY_SCOPE_ALBUM,
-            song.album_id,
-            album_row,
-        ),
-    )
-
-
-@router.put("/memory/user")
-def api_put_user_memory(
-    req: MemoryUpdateRequest,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> MemoryScopeResponse:
-    row = upsert_user_memory(session, user.id, req.body)
-    session.commit()
-    return MemoryScopeResponse.from_orm(MEMORY_SCOPE_USER, user.id, row)
-
-
-@router.put("/memory/songs/{song_id}")
-def api_put_song_memory(
-    song_id: str,
-    req: MemoryUpdateRequest,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> MemoryScopeResponse:
-    check_song_access(session, song_id, user)
-    row = upsert_song_memory(session, song_id, req.body)
-    session.commit()
-    return MemoryScopeResponse.from_orm(MEMORY_SCOPE_SONG, song_id, row)
-
-
-@router.put("/memory/albums/{album_id}")
-def api_put_album_memory(
-    album_id: str,
-    req: MemoryUpdateRequest,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> MemoryScopeResponse:
-    album = get_album(session, album_id)
-    check_album_access(album, user)
-    row = upsert_album_memory(session, album_id, req.body)
-    session.commit()
-    return MemoryScopeResponse.from_orm(MEMORY_SCOPE_ALBUM, album_id, row)
