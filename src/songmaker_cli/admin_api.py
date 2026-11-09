@@ -77,9 +77,7 @@ def _derive_worker_status(state: WorkerEphemeralState | None) -> str:
     return "online"
 
 
-def _loaded_modes(state: WorkerEphemeralState | None) -> list[str]:
-    if state is None:
-        return []
+def _loaded_modes(state: WorkerEphemeralState) -> list[str]:
     return [detail.mode for detail in state.loaded]
 
 
