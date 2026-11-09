@@ -147,11 +147,11 @@ def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_sugges
 
     with factory() as session:
         owner = album_owner(session)
-        job = request_cover_suggestions(
-            session, "alice-album", owner, session_id=_add_live_session(session, owner.id),
-        )
+        session_id = _add_live_session(session, owner.id)
+        job = request_cover_suggestions(session, "alice-album", owner, session_id=session_id)
 
         assert job.type == JobType.COVER
+        assert job.session_id == session_id
         assert job.album_id == "alice-album"
         assert sorted(
             suggestion.id for suggestion in session.query(AlbumCoverSuggestion)
