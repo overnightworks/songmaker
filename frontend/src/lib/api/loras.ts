@@ -56,7 +56,7 @@ export async function addLoraSample(
  * Library queue: the server is the single owner of the private take policy.
  */
 export async function listOwnPlayableTakes(): Promise<OwnPlayableTakeResponse[]> {
-	const result = await apiFetch<OwnPlayableTakeListResponse>('/api/loras/own-takes');
+	const result = await apiFetch<OwnPlayableTakeListResponse>('/api/own-playable-takes');
 	return result.takes;
 }
 

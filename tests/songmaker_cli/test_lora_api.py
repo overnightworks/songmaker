@@ -583,7 +583,7 @@ def test_versionless_own_take_is_listed_and_copied_with_empty_metadata(
     lora_id = _make_lora(ctx)
     take_id = _make_take(ctx, has_version=False, audio=b"reimported take")
 
-    catalogue = client.get("/api/loras/own-takes")
+    catalogue = client.get("/api/own-playable-takes")
     response = client.post(
         f"/api/loras/{lora_id}/samples/from-generation",
         json={"generation_id": take_id},
@@ -630,7 +630,7 @@ def test_own_take_catalogue_only_returns_callers_playable_takes(
     _make_take(ctx, owner_id=USER_B, take_id="foreign-take")
     _make_take(ctx, take_id="archived-take", is_archived=True)
 
-    response = client.get("/api/loras/own-takes")
+    response = client.get("/api/own-playable-takes")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -653,7 +653,7 @@ def test_admin_cannot_browse_or_copy_another_users_takes(
     take_id = _make_take(ctx)
     admin = _client_for_user(ctx, "u-admin", role="admin")
 
-    catalogue = admin.get("/api/loras/own-takes")
+    catalogue = admin.get("/api/own-playable-takes")
     response = admin.post(
         f"/api/loras/{lora_id}/samples/from-generation",
         json={"generation_id": take_id},

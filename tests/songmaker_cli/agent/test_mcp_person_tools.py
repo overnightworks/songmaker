@@ -99,6 +99,7 @@ READS_OF_ONE_RESOURCE = [
     Tool("list_cover_suggestions", "GET", "/api/albums/{album_id}/cover-suggestions",
          lambda s, o: {"album_id": f"album-{s}"}),
     Tool("get_take", "GET", "/api/generations/{gen_id}", _take_arguments),
+    Tool("get_lora", "GET", "/api/loras/{lora_id}", lambda s, o: {"lora_id": f"lora-{s}"}),
     Tool("get_job", "GET", "/api/jobs/{job_id}", lambda s, o: {"job_id": f"job-{s}"}),
     Tool("get_playlist", "GET", "/api/playlists/{playlist_id}",
          lambda s, o: {"playlist_id": f"playlist-{s}"}),
@@ -116,6 +117,7 @@ PLAIN_READS = [
     Tool("search_library", "GET", "/api/library/search", lambda s, o: {"q": "Song"}),
     Tool("get_library_pool_queue", "GET", "/api/library/pool-queue"),
     Tool("list_loras", "GET", "/api/loras"),
+    Tool("list_own_playable_takes", "GET", "/api/own-playable-takes"),
     Tool("list_playlists", "GET", "/api/playlists"),
     Tool("list_references", "GET", "/api/references"),
     Tool("get_release", "GET", "/api/release"),
@@ -209,13 +211,14 @@ def test_a_read_tool_for_another_persons_content_is_refused_as_for_a_stranger_in
     browser = _browser(household, tool, BOB, household.agent())
     assert browser.status_code in _NOT_FOUND
     assert reply.is_error
-    assert BOB not in re.sub(r"(take|job|song|album|playlist|reference)-bobs",
+    assert BOB not in re.sub(r"(take|job|song|album|playlist|reference|lora)-bobs",
                              "", reply.text)
 
 
 @pytest.mark.parametrize("tool", [
     t for t in PLAIN_READS if t.name in {
-        "list_loras", "list_playlists", "list_references", "list_presets",
+        "list_loras", "list_own_playable_takes", "list_playlists", "list_references",
+        "list_presets",
         "get_library_listen", "get_library_write", "search_library",
         "get_library_pool_queue",
     }
@@ -387,9 +390,9 @@ _ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
 
 @pytest.mark.parametrize("tool", [
     t for t in PLAIN_READS if t.name in {"get_library_listen", "get_library_write",
-                                          "search_library"}
+                                          "search_library", "list_own_playable_takes"}
 ], ids=lambda t: t.name)
-def test_the_library_tools_of_an_admins_agent_return_only_the_admins_own_content(
+def test_the_content_reads_of_an_admins_agent_return_only_the_admins_own_content(
     admins_world: McpWorld, tool: Tool,
 ) -> None:
     reply = admins_world.call(tool.name, tool.arguments_for(ALICE), groups=_ADMIN_GROUPS)
@@ -397,6 +400,14 @@ def test_the_library_tools_of_an_admins_agent_return_only_the_admins_own_content
     assert reply.is_error is False
     assert ALICE in reply.text
     assert BOB not in reply.text
+
+
+def test_an_admins_agent_reads_its_own_lora_as_the_route_answers_it(admins_world: McpWorld) -> None:
+    reply = admins_world.call("get_lora", {"lora_id": f"lora-{ALICE}"}, groups=_ADMIN_GROUPS)
+
+    browser = admins_world.world.client.get(f"/api/loras/lora-{ALICE}",
+                                            headers=admins_world.agent(groups=_ADMIN_GROUPS))
+    assert (reply.is_error, reply.json()) == (False, browser.json())
 
 
 def _the_admin_fills_own_containers_with_the_members_content(world: McpWorld) -> None:
