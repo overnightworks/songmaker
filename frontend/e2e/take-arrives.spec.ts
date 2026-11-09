@@ -11,7 +11,7 @@
 // phone's dropped resource stream never received, so the take can only arrive
 // through the job's own terminal refresh — the path this flow pins.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './coverage-test';
 import { JOB_TYPE_GENERATE } from '../src/lib/constants/jobs';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';

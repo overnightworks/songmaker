@@ -9,7 +9,7 @@ import {
 	type APIRequestContext,
 	type BrowserContext,
 	type Page
-} from '@playwright/test';
+} from './coverage-test';
 
 import { FlowGuard, LIBRARY_PATH, openSettingsSection, shellOf, workspace } from './helpers';
 import {

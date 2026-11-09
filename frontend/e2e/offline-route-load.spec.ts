@@ -2,7 +2,7 @@
 // network instead of a server error, and opens by itself once the network is back.
 // The default blocked service worker keeps the chunk from being precached, so the import fails.
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './coverage-test';
 
 import { FlowGuard, loseNetwork, regainNetwork, shellOf, workspace } from './helpers';
 

@@ -40,6 +40,7 @@
 		"eslint-plugin-svelte": "^3.24.0",
 		"globals": "^17.14.0",
 		"jsdom": "30.0.1",
+		"monocart-coverage-reports": "3.2.1",
 		"prettier": "^3.9.10",
 		"prettier-plugin-svelte": "^4.1.1",
 		"svelte": "^5.57.3",

@@ -2,7 +2,7 @@
 // each browser keeps a copy that paints before the server answers. Every flow
 // uses an account of its own, because the choice is stored on the account.
 
-import { expect, test, type Browser, type Page, type Response } from '@playwright/test';
+import { expect, test, type Browser, type Page, type Response } from './coverage-test';
 
 import {
 	accountCircle,

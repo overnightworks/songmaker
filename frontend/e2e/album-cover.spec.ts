@@ -10,7 +10,7 @@
 // selection, and removal from the cover editor that the album ⋯ Cover row
 // opens, below.
 
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { archiveOwnedAlbum, readSeededLibrary } from './seed';
 import { failCoverJob, seedRunningCoverJob } from './seed-cover';
 import { sameOriginHeaders, workspace } from './helpers';

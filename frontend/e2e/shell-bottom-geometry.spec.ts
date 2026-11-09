@@ -1,6 +1,6 @@
 import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 import { readSeededLibrary } from './seed';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './coverage-test';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {

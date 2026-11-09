@@ -5,7 +5,7 @@
 // header row is Play · Shuffle · ⋯ only. The empty album is this run's own,
 // created on the wire, so making its first song leaves the seeded album alone.
 
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { newSongCardLabel, ALBUM_NO_SONGS } from '../src/lib/constants/album';
 import { COLLECTION_MENU_LABEL } from '../src/lib/constants/collection-menu';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';

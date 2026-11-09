@@ -4,7 +4,7 @@
 // Playwright dismisses a dialog nobody listens for, which would cancel the
 // leave.
 
-import { expect, test as base, type Dialog, type Locator, type Page } from '@playwright/test';
+import { expect, test as base, type Dialog, type Locator, type Page } from './coverage-test';
 import {
 	EDITOR_UNSAVED_TITLE,
 	SONG_MENU_LABEL,

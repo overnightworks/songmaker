@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './coverage-test';
 import {
 	COLLECTION_MENU_COVER_REMOVE_LABEL,
 	COLLECTION_MENU_LABEL

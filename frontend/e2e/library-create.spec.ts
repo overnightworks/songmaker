@@ -19,7 +19,7 @@ import {
 	type Locator,
 	type Page,
 	type Route
-} from '@playwright/test';
+} from './coverage-test';
 import {
 	LIBRARY_NEW_ALBUM_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
