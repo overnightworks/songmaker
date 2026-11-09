@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import sessionmaker
 from starlette.routing import Match
 from starlette.types import ASGIApp, Receive, Scope, Send
+from support.mcp_tool_table import ALL_TOOLS, Tool
 from support.mcp_world import (
     AGENT_ENVIRONMENT,
     MCP_CLIENT_ENVIRONMENT,
@@ -61,19 +62,6 @@ MARKED_TOOLS = {
     "delete_song", "update_song", "pick_take", "unpick_take", "unkeep_take",
     "unkeep_reference",
 }
-LIFECYCLE_TOOL_ROUTES = {
-    "unshare_album": ("DELETE", "/api/albums/{album_id}/share"),
-    "unshare_song": ("DELETE", "/api/songs/{song_id}/share"),
-    "unshare_take": ("DELETE", "/api/generations/{gen_id}/share"),
-    "unshare_playlist": ("DELETE", "/api/playlists/{playlist_id}/share"),
-    "delete_album": ("DELETE", "/api/albums/{album_id}"),
-    "delete_song": ("DELETE", "/api/songs/{song_id}"),
-    "update_song": ("PUT", "/api/songs/{song_id}"),
-    "pick_take": ("POST", "/api/generations/{gen_id}/pick"),
-    "unpick_take": ("POST", "/api/generations/{gen_id}/unpick"),
-    "unkeep_take": ("POST", "/api/generations/{gen_id}/unkeep"),
-    "unkeep_reference": ("POST", "/api/references/{reference_id}/unkeep"),
-}
 NEW_MARKED_ROUTES = {
     ("PUT", "/api/albums/{album_id}"), ("PUT", "/api/playlists/{playlist_id}"),
     ("PATCH", "/api/playlists/{playlist_id}/entries/{entry_id}/position"),
@@ -99,15 +87,14 @@ def test_m1_the_new_put_patch_and_delete_routes_are_among_the_marks(mcp: McpWorl
     assert NEW_MARKED_ROUTES <= {(mark.method, mark.template) for mark in marks}
 
 
-@pytest.mark.parametrize(("name", "route"), LIFECYCLE_TOOL_ROUTES.items(),
-                         ids=list(LIFECYCLE_TOOL_ROUTES))
-def test_m1_each_lifecycle_route_is_a_side_effecting_tool_with_a_description(
-    mcp: McpWorld, name: str, route: tuple[str, str],
+@pytest.mark.parametrize("tool", ALL_TOOLS, ids=lambda tool: tool.name)
+def test_m1_each_tool_of_the_table_is_marked_with_its_effect_and_has_a_description(
+    mcp: McpWorld, tool: Tool,
 ) -> None:
-    method, template = route
-    operation = mcp.world.client.app.openapi()["paths"][template][method.lower()]
+    operation = mcp.world.client.app.openapi()["paths"][tool.template][tool.method.lower()]
 
-    assert operation["x-agent-tool"] == {"name": name, "effect": "side_effecting"}
+    effect = "read_only" if tool.method == "GET" else "side_effecting"
+    assert operation["x-agent-tool"] == {"name": tool.name, "effect": effect}
     assert operation.get("description")
 
 
