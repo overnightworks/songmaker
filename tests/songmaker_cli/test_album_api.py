@@ -126,6 +126,24 @@ def test_list_albums_picked_count_excludes_archived_pick(picks_client) -> None:
     assert by_id["many-picks"]["picked_count"] == 3
 
 
+def _seed_unplayable_pick_scenarios(session) -> None:
+    session.add(User(username=_ADMIN_USER, role="admin"))
+    session.add(Album(id="blank-pick", title="Blank Pick", artist="A"))
+    _add_song_with_generation(
+        session, song_id="bp-blank", album_id="blank-pick", is_picked=True, mp3_path="",
+    )
+
+
+def test_picked_count_excludes_pick_without_audio(tmp_path: Path, pg_factory) -> None:
+    client, _ = make_test_app(
+        tmp_path, factory=pg_factory, seed_db=_seed_unplayable_pick_scenarios,
+    )
+    seed_session(client, _ADMIN_USER)
+    by_id = {a["id"]: a for a in client.get("/api/albums").json()["items"]}
+    assert by_id["blank-pick"]["picked_count"] == 0
+    assert client.get("/api/albums/blank-pick").json()["picked_count"] == 0
+
+
 def test_get_album_returns_picked_count(picks_client) -> None:
     client, _ = picks_client
     resp = client.get("/api/albums/one-pick")

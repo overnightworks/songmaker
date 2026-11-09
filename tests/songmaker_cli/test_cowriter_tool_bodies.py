@@ -104,6 +104,24 @@ def test_list_songs_without_album(db_session: Session):
     assert songs[0].version_count == 1
 
 
+@pytest.mark.parametrize(
+    ("mp3_path", "is_archived", "has_playable_pick"),
+    [("p/g1.mp3", False, True), ("", False, False), ("p/g1.mp3", True, False)],
+    ids=["playable", "empty-audio-path", "archived"],
+)
+def test_list_songs_reports_a_pick_only_when_it_is_playable(
+    db_session: Session, mp3_path: str, is_archived: bool, has_playable_pick: bool,
+):
+    owner_id, _, _, song_id, version_id = _seed_owned_song(db_session)
+    db_session.add(Generation(
+        id="gen1", song_id=song_id, version_id=version_id, generation_number=1,
+        mp3_path=mp3_path, seed=1, is_picked=True, is_archived=is_archived,
+    ))
+    db_session.commit()
+    songs = tools.tool_list_songs(db_session, _owner(db_session, owner_id))
+    assert songs[0].has_picked_generation is has_playable_pick
+
+
 def test_list_songs_filtered_by_album(db_session: Session):
     owner_id, _, album_id, _, _ = _seed_owned_song(db_session)
     owner = _owner(db_session, owner_id)

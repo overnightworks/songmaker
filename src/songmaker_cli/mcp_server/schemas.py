@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from songmaker_cli.api_models.songs import score_values
 from songmaker_cli.db.models import Album, Generation, Song, Version
+from songmaker_cli.db.queries.sharing import has_playable_pick
 
 
 class AlbumSummary(BaseModel):
@@ -53,7 +54,7 @@ class SongSummary(BaseModel):
             album_title=song.album.title if song.album else "",
             track_number=song.track_number,
             vocal_language=song.vocal_language,
-            has_picked_generation=any(g.is_picked for g in song.generations),
+            has_picked_generation=has_playable_pick(song.generations),
             version_count=len(song.versions),
             generation_count=len(song.generations),
         )

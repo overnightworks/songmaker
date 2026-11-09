@@ -67,7 +67,7 @@ def _album_query(
 def count_picked_songs_by_album(
     session: Session, album_ids: Sequence[str],
 ) -> dict[str, int]:
-    """Count songs with an active picked generation, grouped by album.
+    """Count songs with a playable picked generation, grouped by album.
 
     One aggregate query rather than a per-album loop over loaded
     generations — keeps album list/detail responses free of N+1 queries.
@@ -82,7 +82,7 @@ def count_picked_songs_by_album(
         .filter(
             Song.album_id.in_(album_ids),
             Generation.is_picked == True,  # noqa: E712
-            Generation.is_archived == False,  # noqa: E712
+            playable_take_filter(),
         )
         .group_by(Song.album_id)
         .all()
