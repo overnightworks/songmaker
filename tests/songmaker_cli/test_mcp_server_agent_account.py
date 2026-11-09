@@ -34,7 +34,7 @@ def _account_kinds(mcp: McpWorld) -> dict[str, AccountKind]:
     return dict(mcp.rows_of(User, "id", "kind"))
 
 
-def test_m29_an_agent_token_creates_an_agent_account_and_a_tool_runs_as_it(
+def test_an_agent_token_creates_an_agent_account_and_a_tool_runs_as_it(
     mcp: McpWorld,
 ) -> None:
     reply = mcp.call(
@@ -48,7 +48,7 @@ def test_m29_an_agent_token_creates_an_agent_account_and_a_tool_runs_as_it(
     assert (None, "create", "user", AGENT_SUBJECT) in mcp.world.audits()
 
 
-def test_m29_an_agent_is_admitted_as_user_whatever_role_a_stored_account_holds(
+def test_an_agent_is_admitted_as_user_whatever_role_a_stored_account_holds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
     lifespans: ExitStack,
 ) -> None:
@@ -68,7 +68,7 @@ def test_m29_an_agent_is_admitted_as_user_whatever_role_a_stored_account_holds(
     assert _account_kinds(world)[TokenWorld.ALICE] == AccountKind.AGENT
 
 
-def test_m29_a_stored_person_account_met_by_an_agent_token_becomes_an_agent_and_is_audited(
+def test_a_stored_person_account_met_by_an_agent_token_becomes_an_agent_and_is_audited(
     mcp: McpWorld,
 ) -> None:
     mcp.call("list_albums", {}, subject=TokenWorld.ALICE, **_agent_claims(username="alice"))
@@ -94,7 +94,7 @@ def test_m29_a_stored_person_account_met_by_an_agent_token_becomes_an_agent_and_
     ],
     ids=["no-owner", "empty-owner", "no-name", "empty-name", "name-too-long", "unprintable-name"],
 )
-def test_m29_an_agent_token_with_bad_agent_claims_is_refused_and_creates_no_account(
+def test_an_agent_token_with_bad_agent_claims_is_refused_and_creates_no_account(
     mcp: McpWorld, claims: dict[str, object],
 ) -> None:
     reply = mcp.rpc(
@@ -105,7 +105,7 @@ def test_m29_an_agent_token_with_bad_agent_claims_is_refused_and_creates_no_acco
     assert AGENT_SUBJECT not in _account_kinds(mcp)
 
 
-def test_m29_agent_claims_outside_the_agent_group_are_ignored_as_before(mcp: McpWorld) -> None:
+def test_agent_claims_outside_the_agent_group_keep_a_person_account_a_person(mcp: McpWorld) -> None:
     mcp.call("list_albums", {}, **_agent_claims(groups=(OIDC_LOGIN_GROUP, OIDC_MCP_GROUP)))
 
     assert _account_kinds(mcp)[TokenWorld.ALICE] == AccountKind.PERSON

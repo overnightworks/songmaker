@@ -82,7 +82,7 @@ def _without_fetch_metadata(signed_in: TestClient) -> TestClient:
 
 
 @pytest.mark.parametrize("kind", ["wav", "mp3"])
-def test_m1_an_upload_answers_the_stored_record(
+def test_an_upload_answers_the_stored_record(
     signed_in: TestClient, tmp_path: Path, kind: str,
 ) -> None:
     payload = _one_second_wav_bytes(tmp_path) if kind == "wav" else _repeated_mpeg_frames()
@@ -112,7 +112,7 @@ def test_m1_an_upload_answers_the_stored_record(
     ("sent", "stored"),
     [("../../etc/dir/song.wav", "song.wav"), ("Würde é.wav", "Würde é.wav")],
 )
-def test_m2_a_directory_part_in_the_client_name_is_dropped_and_a_non_ascii_name_kept(
+def test_a_directory_part_in_the_client_name_is_dropped_and_a_non_ascii_name_kept(
     signed_in: TestClient, sent: str, stored: str,
 ) -> None:
     response = post_reference(signed_in, name=sent)
@@ -129,7 +129,7 @@ def test_m2_a_directory_part_in_the_client_name_is_dropped_and_a_non_ascii_name_
         pytest.param(b"tiny", "ref.wav", id="under-100-bytes"),
     ],
 )
-def test_m3_an_invalid_upload_is_refused_and_stores_nothing(
+def test_an_invalid_upload_is_refused_and_stores_nothing(
     signed_in: TestClient, payload: bytes, name: str,
 ) -> None:
     response = post_reference(signed_in, payload, name)
@@ -139,7 +139,7 @@ def test_m3_an_invalid_upload_is_refused_and_stores_nothing(
     assert reference_files(signed_in) == []
 
 
-def test_m3_an_upload_without_a_filename_is_refused(signed_in: TestClient) -> None:
+def test_an_upload_without_a_filename_is_refused(signed_in: TestClient) -> None:
     boundary = "emptyfilename"
     body = (
         f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename=""\r\n'
@@ -158,7 +158,7 @@ def test_m3_an_upload_without_a_filename_is_refused(signed_in: TestClient) -> No
     assert reference_files(signed_in) == []
 
 
-def test_m4a_a_file_of_the_size_limit_inside_the_envelope_is_accepted(
+def test_a_file_of_the_size_limit_inside_the_envelope_is_accepted(
     signed_in: TestClient,
 ) -> None:
     response = post_reference(signed_in, b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 4))
@@ -166,7 +166,7 @@ def test_m4a_a_file_of_the_size_limit_inside_the_envelope_is_accepted(
     assert response.status_code == 200, response.text
 
 
-def test_m4b_a_file_just_over_the_size_limit_is_refused_and_stores_nothing(
+def test_a_file_just_over_the_size_limit_is_refused_and_stores_nothing(
     signed_in: TestClient,
 ) -> None:
     response = post_reference(signed_in, b"RIFF" + b"\x00" * (AUDIO_UPLOAD_FILE_MAX_BYTES - 3))
@@ -178,7 +178,7 @@ def test_m4b_a_file_just_over_the_size_limit_is_refused_and_stores_nothing(
 
 
 @pytest.mark.parametrize("with_session", [True, False])
-def test_m4c_a_body_over_the_allowance_is_refused_before_authentication(
+def test_a_body_over_the_allowance_is_refused_before_authentication(
     signed_in: TestClient, with_session: bool,
 ) -> None:
     client = _without_fetch_metadata(signed_in) if with_session else TestClient(
@@ -196,7 +196,7 @@ def test_m4c_a_body_over_the_allowance_is_refused_before_authentication(
 
 
 @pytest.mark.parametrize("fullness", ["files", "bytes"])
-def test_m5_a_full_quota_refuses_with_409_and_stores_nothing(
+def test_a_full_quota_refuses_with_409_and_stores_nothing(
     signed_in: TestClient, fullness: str,
 ) -> None:
     settings = get_settings()
@@ -214,7 +214,7 @@ def test_m5_a_full_quota_refuses_with_409_and_stores_nothing(
     assert reference_files(signed_in) == []
 
 
-def test_m6_the_former_upload_path_is_gone(signed_in: TestClient) -> None:
+def test_the_audio_upload_path_answers_404_and_stores_nothing(signed_in: TestClient) -> None:
     response = signed_in.post(
         "/api/audio/upload", files={"file": ("ref.wav", WAV_BYTES, "audio/wav")},
     )
@@ -224,7 +224,7 @@ def test_m6_the_former_upload_path_is_gone(signed_in: TestClient) -> None:
     assert reference_files(signed_in) == []
 
 
-def test_m7a_a_same_origin_cookie_upload_belongs_to_the_signed_in_person(
+def test_a_same_origin_cookie_upload_belongs_to_the_signed_in_person(
     signed_in: TestClient,
 ) -> None:
     response = post_reference(signed_in)
@@ -241,7 +241,7 @@ def test_m7a_a_same_origin_cookie_upload_belongs_to_the_signed_in_person(
         pytest.param({}, id="no-origin-proof"),
     ],
 )
-def test_m7b_a_cookie_upload_without_origin_proof_is_refused(
+def test_a_cookie_upload_without_origin_proof_is_refused(
     signed_in: TestClient, headers: dict[str, str],
 ) -> None:
     response = post_reference(_without_fetch_metadata(signed_in), headers=headers)
@@ -251,7 +251,7 @@ def test_m7b_a_cookie_upload_without_origin_proof_is_refused(
     assert reference_files(signed_in) == []
 
 
-def test_m7c_no_session_with_origin_proof_is_unauthenticated(signed_in: TestClient) -> None:
+def test_no_session_with_origin_proof_is_unauthenticated(signed_in: TestClient) -> None:
     anonymous = TestClient(
         signed_in.app, base_url=TEST_ORIGIN, raise_server_exceptions=False,
     )
@@ -262,7 +262,7 @@ def test_m7c_no_session_with_origin_proof_is_unauthenticated(signed_in: TestClie
     assert reference_files(signed_in) == []
 
 
-def test_m7d_a_persons_token_without_origin_uploads_as_that_person(
+def test_a_persons_token_without_origin_uploads_as_that_person(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)

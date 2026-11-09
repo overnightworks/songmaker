@@ -730,7 +730,7 @@ def test_the_realm_endpoints_are_derived_from_the_issuer() -> None:
 # -- M10: the cookies of the password era -----------------------------------------
 
 
-def test_a_cookie_signed_the_old_way_is_refused_even_for_a_live_session(world: World) -> None:
+def test_a_cookie_with_a_bare_session_hmac_is_refused_even_for_a_live_session(world: World) -> None:
     import hashlib
     import hmac
 
