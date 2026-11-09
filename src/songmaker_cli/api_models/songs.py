@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import TYPE_CHECKING, Final, cast
+from typing import TYPE_CHECKING, Final, TypedDict, cast
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -40,6 +40,24 @@ def generation_version_lyrics(gen: Generation) -> str | None:
     return cast("Version", gen.version).lyrics or None
 
 
+class SharePickMediaFields(TypedDict):
+    generation_id: str | None
+    audio_duration: float | None
+    lyrics: str | None
+    whisper_cues: list[WhisperCue] | None
+
+
+class AlbumDerivedFields(TypedDict):
+    artist: str
+    album_title: str
+
+
+def _album_derived_fields(album: Album | None) -> AlbumDerivedFields:
+    if album is None:
+        return {"artist": "", "album_title": ""}
+    return {"artist": album.artist, "album_title": album.title}
+
+
 @dataclass(frozen=True)
 class SharePickMedia:
     """Everything a listener needs to play one shared take: its generation,
@@ -55,8 +73,13 @@ class SharePickMedia:
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
 
-    def as_fields(self) -> dict[str, object]:
-        return {field.name: getattr(self, field.name) for field in fields(self)}
+    def as_fields(self) -> SharePickMediaFields:
+        return {
+            "generation_id": self.generation_id,
+            "audio_duration": self.audio_duration,
+            "lyrics": self.lyrics,
+            "whisper_cues": self.whisper_cues,
+        }
 
 
 _NO_SHARE_PICK_MEDIA = SharePickMedia(
@@ -295,11 +318,10 @@ class SharedSongResponse(BaseModel):
     ) -> SharedSongResponse:
         return cls(
             title=song.title,
-            artist=song.album.artist if song.album else "",
-            album_title=song.album.title if song.album else "",
             audio_url=audio_url,
             cover=cover,
             album_cover=album_cover,
+            **_album_derived_fields(song.album),
             **media.as_fields(),
         )
 
@@ -325,14 +347,12 @@ class SharedGenerationResponse(BaseModel):
         audio_url: str | None,
         album_cover: AlbumCoverUrls | None,
     ) -> SharedGenerationResponse:
-        album = gen.song.album
         return cls(
             title=gen.song.title,
-            artist=album.artist if album else "",
-            album_title=album.title if album else "",
             generation_number=gen.generation_number,
             audio_url=audio_url,
             album_cover=album_cover,
+            **_album_derived_fields(gen.song.album),
             **media.as_fields(),
         )
 
