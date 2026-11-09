@@ -23,19 +23,29 @@ def test_read_audio_duration_reads_a_real_audio_file(
 
 
 @pytest.mark.parametrize(
-    "build_contents",
+    ("file_name", "build_contents"),
     [
-        pytest.param(lambda _make_wav: b"this is not an audio file", id="unrecognized-file"),
-        pytest.param(lambda make_wav: make_wav(duration=0.0), id="zero-length-file"),
+        pytest.param(
+            "unreadable.wav", lambda _make_wav: b"this is not an audio file",
+            id="unrecognized-wav",
+        ),
+        pytest.param(
+            "unreadable.bin", lambda _make_wav: b"this is not an audio file",
+            id="unidentifiable-file",
+        ),
+        pytest.param(
+            "unreadable.wav", lambda make_wav: make_wav(duration=0.0), id="zero-length-file",
+        ),
     ],
 )
 def test_read_audio_duration_is_none_for_an_unreadable_file(
     tmp_path: Path,
     make_stereo_wav_bytes: WavFactory,
+    file_name: str,
     build_contents: Callable[[WavFactory], bytes],
 ) -> None:
     """925_M1_D2 -- an unrecognised file and a zero-length file read as None."""
-    unreadable_path = tmp_path / "unreadable.wav"
+    unreadable_path = tmp_path / file_name
     unreadable_path.write_bytes(build_contents(make_stereo_wav_bytes))
 
     assert audio_files.read_audio_duration(unreadable_path) is None

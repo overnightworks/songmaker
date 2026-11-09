@@ -131,7 +131,6 @@ def list_active_user_loras(
     *,
     reconcilable_only: bool = False,
     excluded_ids: set[str] | None = None,
-    limit: int | None = None,
 ) -> list[UserLora]:
     """Return active LoRAs, optionally locking one eligible crash-recovery row.
 
@@ -162,9 +161,7 @@ def list_active_user_loras(
     query = query.order_by(UserLora.id).with_for_update(
         of=UserLora, skip_locked=True,
     )
-    if limit is not None:
-        query = query.limit(limit)
-    return query.all()
+    return query.limit(1).all()
 
 
 def count_user_lora_samples(session: Session, lora_id: str) -> int:

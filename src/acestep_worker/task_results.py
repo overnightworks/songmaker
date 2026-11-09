@@ -70,16 +70,14 @@ def register_result_routes(router: APIRouter, task_store: TaskStore) -> None:
         return _TakeResponse(take)
 
     async def discard_result(task_id: str) -> None:
-        match await task_store.discard_result(task_id):
-            case ResultDiscard.UNKNOWN_TASK:
-                raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
-            case ResultDiscard.KEPT:
-                raise HTTPException(
-                    status_code=500,
-                    detail="The result file could not be removed; the expiry sweep retries",
-                )
-            case ResultDiscard.REMOVED:
-                return
+        outcome = await task_store.discard_result(task_id)
+        if outcome is ResultDiscard.UNKNOWN_TASK:
+            raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
+        if outcome is ResultDiscard.KEPT:
+            raise HTTPException(
+                status_code=500,
+                detail="The result file could not be removed; the expiry sweep retries",
+            )
 
     router.add_api_route(
         "/tasks/{task_id}/result",

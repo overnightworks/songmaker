@@ -411,8 +411,6 @@ def _cors_middleware_kwargs(cors_origin: str | None) -> dict:
 
 
 def run_server(
-    audio_dir: Path | None = None,
-    data_dir: Path | None = None,
     project_root: Path | None = None,
     port: int = DEFAULT_SERVER_PORT,
     open_browser: bool = False,
@@ -423,10 +421,8 @@ def run_server(
         project_root = find_project_root(Path.cwd()) or Path.cwd()
 
     settings = get_settings()
-    if audio_dir is None:
-        audio_dir = project_root / settings.audio_dir
-    if data_dir is None:
-        data_dir = project_root / settings.data_dir
+    audio_dir = project_root / settings.audio_dir
+    data_dir = project_root / settings.data_dir
 
     from songmaker_cli.logging_config import configure_logging
 

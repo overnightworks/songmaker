@@ -76,8 +76,6 @@ class LibrarySongHit(BaseModel):
 
     @classmethod
     def from_orm(cls, song: Song, *, has_pick: bool) -> LibrarySongHit:
-        if song.album is None:
-            raise ValueError(f"Song {song.id} has no album")
         # search_library() eager-loads Song.generations for every hit
         # (_SONG_LIST_OPTIONS), so this costs no extra query.
         return cls(

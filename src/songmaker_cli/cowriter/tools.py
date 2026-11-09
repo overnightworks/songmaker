@@ -212,7 +212,7 @@ COWRITER_TOOLS: tuple[CowriterTool, ...] = (
 
 _TOOLS_BY_NAME = {tool.name: tool for tool in COWRITER_TOOLS}
 
-def _serialize(result: Any) -> str:
+def _serialize(result: BaseModel | list[Any]) -> str:
     if isinstance(result, list):
         return json.dumps(
             [
@@ -221,9 +221,7 @@ def _serialize(result: Any) -> str:
             ],
             default=str,
         )
-    if isinstance(result, BaseModel):
-        return json.dumps(result.model_dump(mode="json"), default=str)
-    return json.dumps(result, default=str)
+    return json.dumps(result.model_dump(mode="json"), default=str)
 
 
 def _refusal_of(tool: CowriterTool, arguments: Mapping[str, Any]) -> str | None:

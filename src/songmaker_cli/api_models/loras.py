@@ -128,8 +128,6 @@ class OwnPlayableTakeResponse(BaseModel):
 
     @classmethod
     def from_orm(cls, generation: Generation) -> OwnPlayableTakeResponse:
-        if generation.song is None:
-            raise ValueError("Playable take must include its song")
         return cls(
             generation_id=generation.id,
             song_title=generation.song.title,

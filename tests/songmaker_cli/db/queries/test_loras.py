@@ -193,7 +193,7 @@ def test_list_active_user_loras_locks_only_reconcilable_candidates(session: Sess
     session.commit()
 
     candidates = list_active_user_loras(
-        session, reconcilable_only=True, excluded_ids={failed.id}, limit=1,
+        session, reconcilable_only=True, excluded_ids={failed.id},
     )
 
     assert [lora.id for lora in candidates] == [missing.id]
