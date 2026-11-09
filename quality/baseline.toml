@@ -82,7 +82,7 @@
 "_register_protected_routes" = 76
 
 [function_lines."src/songmaker_cli/config.py"]
-"build_ace_config" = 63
+"build_ace_config" = 59
 
 [function_lines."src/songmaker_cli/db/migrations/versions/2a5ce2401805_initial_schema_baseline.py"]
 "upgrade" = 173
@@ -124,7 +124,7 @@
 "load_model_on_worker" = 64
 
 [function_lines."src/songmaker_cli/jobs/scoring.py"]
-"run_scoring_job" = 105
+"run_scoring_job" = 103
 
 [function_lines."src/songmaker_cli/lora_api.py"]
 "api_add_sample" = 65
