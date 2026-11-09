@@ -1,0 +1,8 @@
+claim_id = "50674c96b3574a64850661830816b226"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "eee5f2974237c6e8a6e903a79df700824ea2cbd7"
+branch = "claude/issue-2801-constants-small-families"
+scope = ["frontend/e2e", "frontend/src/lib/api", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/stores", "frontend/src/lib/styles", "frontend/src/lib/utils", "frontend/src/routes", "quality/baseline.toml"]
+opened_commit = "1c00bba851a917cca506c7c89c1ec9702a585392"
+whole_reason = "One pure move: the small families leave the catch-all together, and every caller re-points in the same change, or the build breaks."
