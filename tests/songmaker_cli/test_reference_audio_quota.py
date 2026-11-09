@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import errno
+import logging
 import os
 import subprocess
 import sys
@@ -24,6 +26,7 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 from songmaker_cli.db.models import Album, ReferenceRecording, Song, User
 from songmaker_cli.reference_api import api_upload_reference
 from songmaker_cli.reference_audio import (
+    REFERENCE_AUDIO_STORAGE_DETAIL,
     ReferenceAudioQuotaExceeded,
     owner_reference_audio_root,
     store_reference_audio,
@@ -194,6 +197,31 @@ def test_upload_refusals_are_exact_and_add_nothing(quota_context, state, status,
     assert result.json() == {"detail": detail}
     assert _row_count(ctx) == 50
     assert _files(ctx) == []
+
+
+def test_a_failed_file_write_answers_the_storage_error_and_leaves_no_file_or_row(
+    quota_context, monkeypatch, caplog
+):
+    ctx = quota_context
+
+    def failing_write(descriptor, mode):
+        os.close(descriptor)
+        raise OSError(errno.ENOSPC, "no space left on private-name.wav")
+
+    monkeypatch.setattr(os, "fdopen", failing_write)
+    app = make_router_app(ctx, user=make_authenticated_user("owner"))
+    with caplog.at_level(logging.INFO, logger="songmaker_cli.reference_audio"):
+        with TestClient(app) as client:
+            result = client.post("/api/references", files={"file": ("ref.wav", b"a" * 100)})
+
+    assert result.status_code == 500
+    assert result.json() == {"detail": REFERENCE_AUDIO_STORAGE_DETAIL}
+    assert _row_count(ctx) == 0
+    assert _files(ctx) == []
+    assert "user owner" in caplog.text
+    assert "OSError" in caplog.text
+    for forbidden in ("private-name", "refs/", ".wav"):
+        assert forbidden not in caplog.text
 
 
 def _owner_with_room_for_one_more(ctx, capacity):

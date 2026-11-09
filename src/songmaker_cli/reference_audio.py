@@ -344,8 +344,6 @@ def store_reference_audio(
     original_filename: str,
 ) -> StoredReference:
     """Own the session and lock from the row count through the commit of the new row."""
-    if extension not in REFERENCE_AUDIO_EXTENSIONS:
-        raise ReferenceAudioRejected("Unsupported reference audio extension")
     with factory() as session:
         entry_kind = "owner directory"
         try:
