@@ -109,7 +109,6 @@
 	const SETTING_LABELS: Record<string, string> = {
 		generation_rate_limit: 'Generations / hour',
 		scoring_rate_limit: 'Scorings / hour',
-		chat_rate_limit: 'Chat messages / hour',
 		max_queue_depth: 'Max queue depth',
 		max_user_active_jobs: 'Max active jobs'
 	};

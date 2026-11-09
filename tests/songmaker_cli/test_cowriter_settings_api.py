@@ -24,8 +24,8 @@ from songmaker_cli.db.models import (
     Song,
     Version,
 )
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.mcp_server.tools import tool_create_song
-from songmaker_cli.settings import get_settings
 
 
 def _stream_events(response) -> list[dict]:
@@ -176,17 +176,24 @@ def test_cowriter_put_requires_an_admin(admin_client):
     assert response.status_code == 403
 
 
-def test_chat_turns_beyond_the_chat_rate_limit_are_refused(admin_client, monkeypatch, tmp_path):
+def test_a_turn_is_answered_after_hundreds_of_turns_in_the_last_hour(
+    admin_client, tmp_path,
+):
     client, factory = admin_client
-    monkeypatch.setenv("CHAT_RATE_LIMIT_USER", "2")
-    get_settings.cache_clear()
     attach_cowriter_gateway(client, factory, tmp_path, "u-test")
+    with factory() as session:
+        session.add_all(
+            Job(
+                id=f"past-{number}", type=JobType.CHAT, status=JobStatus.COMPLETED,
+                user_id="u-test",
+            )
+            for number in range(301)
+        )
+        session.commit()
 
-    statuses = [
-        client.post("/api/chat/turn", json={"message": "hi"}).status_code for _ in range(3)
-    ]
+    response = client.post("/api/chat/turn", json={"message": "hi"})
 
-    assert statuses == [200, 200, 429]
+    assert response.status_code == 200
 
 
 def test_create_song_tool_hits_canonical_function(admin_client):

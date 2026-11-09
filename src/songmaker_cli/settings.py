@@ -306,7 +306,6 @@ class Settings(BaseSettings):
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 30
     scoring_rate_limit_user: int = 100
-    chat_rate_limit_user: int = 300
     cover_suggestions_daily_limit: int = Field(default=10, ge=1)
     max_queue_depth: int = 100
     max_user_active_jobs: int = 10

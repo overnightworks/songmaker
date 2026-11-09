@@ -47,7 +47,7 @@
 "frontend/src/lib/stores/resourceSync.test.ts" = 2031
 "frontend/src/lib/stores/resourceSync.ts" = 1058
 "frontend/src/routes/layout.test.ts" = 1401
-"frontend/src/routes/settings/users/+page.svelte" = 937
+"frontend/src/routes/settings/users/+page.svelte" = 936
 "src/acestep_worker/wrapper.py" = 1073
 "src/songmaker_cli/jobs/generation.py" = 1136
 "src/songmaker_cli/jobs/lora_training.py" = 1511

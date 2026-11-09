@@ -279,17 +279,8 @@ BACKGROUND_LOOP_FAILURE_THRESHOLD: Final[int] = 3
 # Rate limit setting keys (stored in rate_limit_settings table)
 SETTING_GENERATION_RATE_LIMIT = "generation_rate_limit"
 SETTING_SCORING_RATE_LIMIT = "scoring_rate_limit"
-SETTING_CHAT_RATE_LIMIT = "chat_rate_limit"
 SETTING_MAX_QUEUE_DEPTH = "max_queue_depth"
 SETTING_MAX_USER_ACTIVE_JOBS = "max_user_active_jobs"
-
-RATE_LIMIT_SETTING_KEYS = frozenset({
-    SETTING_GENERATION_RATE_LIMIT,
-    SETTING_SCORING_RATE_LIMIT,
-    SETTING_CHAT_RATE_LIMIT,
-    SETTING_MAX_QUEUE_DEPTH,
-    SETTING_MAX_USER_ACTIVE_JOBS,
-})
 
 # Response compression
 GZIP_MINIMUM_SIZE_BYTES: Final[int] = 1024
