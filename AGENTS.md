@@ -6,17 +6,19 @@
 - `pytest -q <files>`: targeted Python tests that need no database.
 - `scripts/test_postgresql.sh <files>`: targeted tests against a throwaway PostgreSQL container.
 - `pnpm exec vitest run <file>`: one frontend test file, from `frontend/`.
-- `python scripts/generate_types.py`: regenerates the frontend's API types from `api_models/` after a model change.
+- `python scripts/generate_types.py`: regenerates the frontend's API types from `src/songmaker_cli/api_models/` after a model change.
 
 ## Rules
 
 - The live app runs only in Docker, started by the systemd units; `.venv` serves tests and type checking.
 - A deploy's `docker compose up --build --wait` never runs inside `timeout`: SIGTERM leaves a partial deploy.
-- Query functions `flush()`, endpoints `commit()`. The exceptions commit before an exclusive lock, so their callers hold no uncommitted write: `end_read_transaction_before_lock()` of `api_helpers.py` (used by `create_job_with_rate_limit()` and the slug finders such as `unique_album_id()`), and the sign-in store of `auth_stores.py`, which commits admission and session together.
+- PostgreSQL is the source of truth, not files.
+- One code path: the web UI is the only client of songmaker's own API, and the CLI only starts the server.
+- Functions in `src/songmaker_cli/db/queries/` `flush()` and never `commit()`; the code that owns the transaction commits. A helper that calls `end_read_transaction_before_lock()` commits first, so its caller must hold no uncommitted change.
 - Response models are built with `from_orm()`, never as hand-built dicts.
-- Every resource endpoint, GET included, checks ownership through a `check_*_access()` of `api_helpers.py`.
-- The middleware order in `server.py` is security-critical.
-- Sharing goes through `enable_sharing()` and `disable_sharing()` of `db/queries/sharing.py`; side effects live in the domain wrapper.
+- Every resource endpoint, GET included, checks ownership through a `check_*_access()` of `src/songmaker_cli/api_helpers.py`.
+- The middleware order in `src/songmaker_cli/server.py` is security-critical.
+- Sharing goes through `enable_sharing()` and `disable_sharing()` of `src/songmaker_cli/db/queries/sharing.py`; side effects live in the domain wrapper.
 - ACE-Step's parameter names come from the HTTP API code of `vendor/acestep`, our fork.
 - A reproducible seed needs `use_random_seed: false`; ACE-Step ignores `seed` otherwise.
 - Each pytest worker process keeps its own numba cache (`tests/conftest.py`); a scorer-test segfault in numba's compiled code means several processes filled one cache.

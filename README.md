@@ -35,7 +35,7 @@ sudo ./scripts/install_autostart.sh               # start the stack after every 
 
 ## Development
 
-Local tests, lint, type checking and the Python and frontend toolchain are in [AGENTS.md](AGENTS.md#commands); test structure and coverage gates are in [docs/testing.md](docs/testing.md). The live app never runs from the local `.venv`.
+The commands for local tests and the static checks are in [AGENTS.md](AGENTS.md#commands); the lint and type checks CI runs, test structure and coverage gates are in [docs/testing.md](docs/testing.md). The live app never runs from the local `.venv`.
 
 ## Docs
 
