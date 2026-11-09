@@ -8,30 +8,44 @@ from typing import Any
 
 import pytest
 
-from acestep_worker.heartbeat import DEFAULT_TTL_SECONDS, gpu_hold_key, reserve_gpu_hold
+from acestep_worker.heartbeat import DEFAULT_TTL_SECONDS, gpu_hold_key
 
 _LOWERED_TTL_SECONDS = 3
-_TURNS_TO_WAIT = 100
+_BOUND_SECONDS = 5
 
 
 def test_a_training_renews_its_hold_after_each_interval(
     train_lora_worker: Callable[[], Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from acestep_worker import wrapper
+
     monkeypatch.setattr("acestep_worker.wrapper.DEFAULT_INTERVAL_SECONDS", 0)
+    renew_gpu_hold = wrapper.renew_gpu_hold
+    hold_lowered = False
+    renewed_after_lowering = asyncio.Event()
+
+    async def renew_and_signal(*args: Any) -> bool:
+        started_after_lowering = hold_lowered
+        renewed = await renew_gpu_hold(*args)
+        if started_after_lowering:
+            renewed_after_lowering.set()
+        return renewed
+
+    monkeypatch.setattr("acestep_worker.wrapper.renew_gpu_hold", renew_and_signal)
 
     async def scenario() -> tuple[str, bytes | None, int]:
+        nonlocal hold_lowered
         async with train_lora_worker() as worker:
             token = await worker.reserve_hold()
             key = gpu_hold_key(worker.deps.worker_id)
             observed: list[tuple[bytes | None, int]] = []
 
             async def runner(store: Any, task_id: str, **_kwargs: Any) -> None:
+                nonlocal hold_lowered
                 redis = worker.deps.redis
                 await redis.expire(key, _LOWERED_TTL_SECONDS)
-                for _ in range(_TURNS_TO_WAIT):
-                    await asyncio.sleep(0)
-                    if await redis.ttl(key) > _LOWERED_TTL_SECONDS:
-                        break
+                hold_lowered = True
+                await asyncio.wait_for(renewed_after_lowering.wait(), _BOUND_SECONDS)
                 observed.append((await redis.get(key), await redis.ttl(key)))
                 await store.fail(task_id, "stopped")
 
@@ -47,36 +61,33 @@ def test_a_training_renews_its_hold_after_each_interval(
     assert ttl_seconds == DEFAULT_TTL_SECONDS
 
 
-def test_a_training_whose_hold_is_lost_before_handover_is_refused_and_stops_renewing(
+def test_a_training_whose_hold_is_lost_at_handover_is_refused_and_its_renewal_is_cancelled(
     train_lora_worker: Callable[[], Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from acestep_worker import wrapper
 
-    monkeypatch.setattr("acestep_worker.wrapper.DEFAULT_INTERVAL_SECONDS", 0)
-    renew_gpu_hold = wrapper.renew_gpu_hold
+    start_gpu_hold_renewal = wrapper._start_gpu_hold_renewal
+    renewals: list[asyncio.Task[None]] = []
 
-    async def renew_then_lose_the_hold(redis: Any, worker_id: str, *args: Any) -> bool:
-        renewed = await renew_gpu_hold(redis, worker_id, *args)
-        await redis.delete(gpu_hold_key(worker_id))
-        return renewed
+    async def lose_the_hold_at_handover(*_args: Any) -> bool:
+        return False
 
-    async def scenario() -> tuple[int, dict[str, Any], int]:
+    async def record_renewal(*args: Any) -> asyncio.Task[None]:
+        renewals.append(await start_gpu_hold_renewal(*args))
+        return renewals[-1]
+
+    monkeypatch.setattr("acestep_worker.wrapper.gpu_hold_matches", lose_the_hold_at_handover)
+    monkeypatch.setattr("acestep_worker.wrapper._start_gpu_hold_renewal", record_renewal)
+
+    async def scenario() -> tuple[int, bool]:
         async with train_lora_worker() as worker:
             token = await worker.reserve_hold()
-            key = gpu_hold_key(worker.deps.worker_id)
-            monkeypatch.setattr("acestep_worker.wrapper.renew_gpu_hold", renew_then_lose_the_hold)
             refused = await worker.train(token)
-            monkeypatch.setattr("acestep_worker.wrapper.renew_gpu_hold", renew_gpu_hold)
-            handover = await worker.client.post("/gpu_hold/handover", json={"token": token})
-            assert await reserve_gpu_hold(
-                worker.deps.redis, worker.deps.worker_id, token, _LOWERED_TTL_SECONDS
-            )
-            for _ in range(_TURNS_TO_WAIT):
-                await asyncio.sleep(0)
-            return refused.status_code, handover.json(), await worker.deps.redis.ttl(key)
+            (renewal,) = renewals
+            await asyncio.wait({renewal}, timeout=_BOUND_SECONDS)
+            return refused.status_code, renewal.cancelled()
 
-    status_code, handover, ttl_seconds = asyncio.run(scenario())
+    status_code, renewal_cancelled = asyncio.run(scenario())
 
     assert status_code == 409
-    assert handover == {"claimed": False, "task_id": None}
-    assert ttl_seconds <= _LOWERED_TTL_SECONDS
+    assert renewal_cancelled
