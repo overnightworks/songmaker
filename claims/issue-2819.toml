@@ -1,0 +1,8 @@
+claim_id = "e0a7709ba31742fda9af11bae4c9537e"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "71b13335c213cd7846f6b6df8588930150551b20"
+branch = "claude/issue-2819-worker-dead-guards-sweep-race-cells"
+scope = ["quality/baseline.toml", "src/acestep_engine/training_client.py", "src/acestep_worker/__main__.py", "src/acestep_worker/model_cache.py", "src/acestep_worker/subprocess_runner.py", "src/acestep_worker/task_store.py", "tests/acestep_engine/test_client_lora.py", "tests/acestep_worker/test_main.py", "tests/acestep_worker/test_model_cache.py", "tests/acestep_worker/test_subprocess_runner.py", "tests/acestep_worker/test_task_store.py"]
+opened_commit = "1935770c390606559650050829ebd4244fdc224c"
+whole_reason = "One coverage cut of the worker domain: each deletion and cell follows from the same trace, and the tests that pin a deleted arm change with it."
