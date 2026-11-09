@@ -1,0 +1,8 @@
+claim_id = "8367077013734504904be4d0101001c3"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "490bf475c649b6c0a48e74eca8c0b49e83a399fd"
+branch = "claude/issue-2823-scoring-config-arms-five-cells"
+scope = ["quality/baseline.toml", "src/songmaker_cli/config.py", "src/songmaker_cli/jobs/scoring.py", "tests/songmaker_cli/test_config.py", "tests/songmaker_cli/test_conversation_api_memory.py", "tests/songmaker_cli/test_cover_suggestions.py", "tests/songmaker_cli/test_lifecycle_session_cleanup.py", "tests/songmaker_cli/test_resource_stream_deadline.py"]
+opened_commit = "c067d359f40021c1a64c5fbdbf230c0135b16a79"
+whole_reason = "One coverage cut: each deletion and cell follows from the same trace, and the two size rows follow the functions they measure."
