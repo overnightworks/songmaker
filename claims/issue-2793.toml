@@ -1,0 +1,8 @@
+claim_id = "fa94f8c5b29c4b0182864f0891199e62"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2f2842cd6b008f43c5c18f1ebaab060a0918b1e3"
+branch = "claude/issue-2793-memory-routes-own-module"
+scope = [".importlinter", "docs/architecture.md", "quality/baseline.toml", "scripts/dead-symbols.allow", "src/songmaker_cli/api.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/memory_api.py"]
+opened_commit = "ffd81089e47d326c8615f2b2a426b69fe1c39df5"
+whole_reason = "One move of the memory routes out of the co-writer module; the router, the import contract, the dead-symbol allowlist and the baseline rows follow the moved functions or the gate turns red."
