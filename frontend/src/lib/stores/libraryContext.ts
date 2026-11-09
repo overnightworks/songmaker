@@ -6,7 +6,6 @@ import {
 	historyMoves,
 	historyStandsStill,
 	historyStateOnLoad,
-	loadHistoryPageForTests,
 	mountAddressOver,
 	navigateTo,
 	pushEntry,
@@ -347,12 +346,6 @@ export function restoreLibraryHistoryOnRouterStart(): () => void {
 		if (!isLibraryHistoryState(restored) || isLibraryHistoryState(libraryHistoryEntry())) return;
 		writeShallowLibraryHistory(restored, standingAddress().href, 'replace');
 	};
-}
-
-// A page load, as far as the library's history goes: the history controller
-// reads the entry the page loaded onto again.
-export function loadLibraryHistoryPageForTests(): void {
-	loadHistoryPageForTests();
 }
 
 // The library history entry the next write starts from: the entry history

@@ -5,7 +5,6 @@ import {
 	restoreLibraryHistoryOnRouterStart,
 	libraryHistoryEntry,
 	openLibraryAddress,
-	loadLibraryHistoryPageForTests,
 	type LibraryHistoryState
 } from '#lib/stores/libraryContext.ts';
 import {
@@ -16,6 +15,7 @@ import {
 import {
 	historyComesToRest,
 	installHistoryController,
+	loadHistoryPageForTests,
 	mountRouteOfLandedAddress,
 	ownStepBacksUnderwayForTests,
 	standingPageState,
@@ -128,7 +128,7 @@ async function traverseHistory(step: () => void): Promise<void> {
 // goes back onto it once the router reports the start -- which the returned
 // function does.
 export function reloadLibraryPageBeforeRouterStarts(): () => void {
-	loadLibraryHistoryPageForTests();
+	loadHistoryPageForTests();
 	startFakeRouter();
 	const reportStart = restoreLibraryHistoryOnRouterStart();
 	return () => {

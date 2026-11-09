@@ -18,6 +18,7 @@ import {
 } from '#lib/test-utils/document-loads.ts';
 import {
 	historyStandsStill,
+	loadHistoryPageForTests,
 	pushEntry,
 	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
@@ -55,7 +56,6 @@ import {
 	isLibraryHistoryState,
 	libraryRootState,
 	librarySurface,
-	loadLibraryHistoryPageForTests,
 	resetLibraryContextForTests,
 	openHomeAddress,
 	openLibraryAddress
@@ -947,7 +947,7 @@ describe('a reload on a library page', () => {
 			scrollAnchor: 480
 		};
 		replaceHistoryEntry('/playlist/friday-night', playlist);
-		loadLibraryHistoryPageForTests();
+		loadHistoryPageForTests();
 		startFakeRouter();
 
 		await renderLayout('/playlist/friday-night');
@@ -984,7 +984,7 @@ describe('a reload over the phone Now Playing', () => {
 			pushEntry('/playlist/friday-night', { library: playlist }, 'now-playing');
 			// The reload forgets the open layer, so its entry is left unowned on top.
 			resetNavigationForTests();
-			loadLibraryHistoryPageForTests();
+			loadHistoryPageForTests();
 			startFakeRouter();
 			const signInLoads = documentLoadsStandIn();
 			standInForDocumentLoadsForTests(signInLoads);
@@ -1120,7 +1120,7 @@ describe('‹ on the page a phone tab was entered on', () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
 		replaceHistoryEntry(address, entry);
-		loadLibraryHistoryPageForTests();
+		loadHistoryPageForTests();
 		startFakeRouter();
 	}
 
