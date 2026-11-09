@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, cast
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -37,15 +37,7 @@ if TYPE_CHECKING:
 def generation_version_lyrics(gen: Generation) -> str | None:
     if not gen.version_id:
         return None
-    version = gen.version
-    if version is None:
-        raise RuntimeError(
-            f"Generation {gen.id} references version {gen.version_id} which is not loaded"
-        )
-    lyrics = version.lyrics
-    if not lyrics:
-        return None
-    return lyrics
+    return cast("Version", gen.version).lyrics or None
 
 
 @dataclass(frozen=True)
@@ -399,13 +391,9 @@ class GenerationResponse(BaseModel):
 
 
 def _generation_scores(gen: Generation) -> dict[str, object]:
-    try:
-        scores = score_values(gen)
-        _add_user_rating(scores, gen)
-        return scores
-    except (TypeError, AttributeError, KeyError):
-        log.exception("Corrupted score data in generation %s", gen.id)
-        return {}
+    scores = score_values(gen)
+    _add_user_rating(scores, gen)
+    return scores
 
 
 def score_values(gen: Generation) -> dict[str, object]:
@@ -414,8 +402,6 @@ def score_values(gen: Generation) -> dict[str, object]:
         if not isinstance(score.value, dict):
             continue
         for key, value in score.value.items():
-            if key in scores:
-                log.warning("Duplicate score key '%s' in generation %s", key, gen.id)
             scores[key] = value
     return scores
 
