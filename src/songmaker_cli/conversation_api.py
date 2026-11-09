@@ -20,7 +20,6 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime_client.tools import ToolEffect, agent_tool
 from agent_runtime_client.turn import TurnMessage
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -817,14 +816,7 @@ def _verify_owns_conversation(
     return conv
 
 
-_LIST_CONVERSATIONS_DESCRIPTION = "List the person's recent co-writer conversations, newest first."
-
-
-@router.get(
-    "/conversations",
-    description=_LIST_CONVERSATIONS_DESCRIPTION,
-    openapi_extra=agent_tool(name="list_conversations", effect=ToolEffect.READ_ONLY),
-)
+@router.get("/conversations")
 def api_list_conversations(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -835,15 +827,8 @@ def api_list_conversations(
     )
 
 
-_GET_CONVERSATION_DESCRIPTION = (
-    "Read the messages of one of the person's own co-writer conversations."
-)
-
-
 @router.get(
     "/conversations/{conversation_id}",
-    description=_GET_CONVERSATION_DESCRIPTION,
-    openapi_extra=agent_tool(name="get_conversation", effect=ToolEffect.READ_ONLY),
     responses={404: {"description": "Conversation does not exist"}},
 )
 def api_conversation_messages(
@@ -876,16 +861,7 @@ def _running_turn_count(session: Session, user: AuthenticatedUser) -> int:
     return count_user_active_jobs(session, user.id, JobType.CHAT)
 
 
-_CREATE_CONVERSATION_DESCRIPTION = (
-    "Start a new co-writer conversation for the person; the current one is archived."
-)
-
-
-@router.post(
-    "/conversations/new",
-    description=_CREATE_CONVERSATION_DESCRIPTION,
-    openapi_extra=agent_tool(name="create_conversation", effect=ToolEffect.SIDE_EFFECTING),
-)
+@router.post("/conversations/new")
 def api_new_conversation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -916,16 +892,7 @@ def api_delete_conversation(
 # ── Memory ────────────────────────────────────────────────────────
 
 
-_GET_MEMORY_DESCRIPTION = (
-    "Read what the co-writer remembers about the person and, with song_id, about that song."
-)
-
-
-@router.get(
-    "/memory",
-    description=_GET_MEMORY_DESCRIPTION,
-    openapi_extra=agent_tool(name="get_memory", effect=ToolEffect.READ_ONLY),
-)
+@router.get("/memory")
 def api_get_memory(
     song_id: str | None = None,
     user: AuthenticatedUser = Depends(get_current_user),

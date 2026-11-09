@@ -121,3 +121,10 @@ ignore_imports =
     songmaker_cli.album_api -> agent_runtime_client
     songmaker_cli.generation_api -> agent_runtime_client
     songmaker_cli.song_api -> agent_runtime_client
+    songmaker_cli.auth_api -> agent_runtime_client
+    songmaker_cli.jobs_api -> agent_runtime_client
+    songmaker_cli.library_api -> agent_runtime_client
+    songmaker_cli.lora_api -> agent_runtime_client
+    songmaker_cli.playlist_api -> agent_runtime_client
+    songmaker_cli.reference_api -> agent_runtime_client
+    songmaker_cli.settings_api -> agent_runtime_client

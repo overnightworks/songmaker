@@ -31,7 +31,6 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import (
     Album,
     Base,
-    Conversation,
     Generation,
     GenerationPreset,
     Job,
@@ -165,8 +164,6 @@ class McpWorld:
                                  slug=f"playlist-{name}", created_by=owner))
             session.add(GenerationPreset(id=f"preset-{name}", name=f"Preset {name}",
                                          model_mode="sft", params={}, created_by=owner))
-            session.add(Conversation(id=f"conversation-{name}", user_id=owner,
-                                     title=f"Conversation {name}"))
             session.add(Job(id=f"job-{name}", type="chat", status="queued", user_id=owner,
                             song_id=f"song-{name}"))
             a_reference(session, owner, name=f"{name}.wav", reference_id=f"reference-{name}")

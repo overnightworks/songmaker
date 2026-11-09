@@ -99,17 +99,13 @@ READS_OF_ONE_RESOURCE = [
          lambda s, o: {"playlist_id": f"playlist-{s}"}),
     Tool("list_reference_uses", "GET", "/api/references/{reference_id}/uses",
          lambda s, o: {"reference_id": f"reference-{s}"}),
-    Tool("get_conversation", "GET", "/api/conversations/{conversation_id}",
-         lambda s, o: {"conversation_id": f"conversation-{s}"}),
     Tool("list_song_versions", "GET", "/api/songs/{song_id}/versions",
          lambda s, o: {"song_id": f"song-{s}"}),
-    Tool("get_memory", "GET", "/api/memory", lambda s, o: {"song_id": f"song-{s}"}),
 ]
 
 # Reads of what a person has as a list, or of what every member sees.
 PLAIN_READS = [
     Tool("get_account", "GET", "/api/auth/me"),
-    Tool("list_conversations", "GET", "/api/conversations"),
     Tool("get_library_listen", "GET", "/api/library/listen"),
     Tool("get_library_write", "GET", "/api/library/write"),
     Tool("search_library", "GET", "/api/library/search", lambda s, o: {"q": "alices"}),
@@ -164,7 +160,6 @@ WRITES_ON_ONE_RESOURCE = [
 
 # Writes that make something new for the person.
 CREATIONS = [
-    Tool("create_conversation", "POST", "/api/conversations/new"),
     Tool("create_lora", "POST", "/api/loras", lambda s, o: {"name": "Fresh voice"}),
     Tool("create_playlist", "POST", "/api/playlists", lambda s, o: {"title": "Fresh list"}),
     Tool("create_preset", "POST", "/api/settings/presets",
@@ -211,13 +206,13 @@ def test_a_read_tool_for_another_persons_content_is_refused_as_for_a_stranger_in
     browser = _browser(household, tool, BOB, household.agent())
     assert browser.status_code in _NOT_FOUND
     assert reply.is_error
-    assert BOB not in re.sub(r"(take|job|song|album|playlist|conversation|reference)-bobs",
+    assert BOB not in re.sub(r"(take|job|song|album|playlist|reference)-bobs",
                              "", reply.text)
 
 
 @pytest.mark.parametrize("tool", [
     t for t in PLAIN_READS if t.name in {
-        "list_conversations", "list_loras", "list_playlists", "list_references", "list_presets",
+        "list_loras", "list_playlists", "list_references", "list_presets",
         "get_library_listen", "get_library_write", "search_library",
         "get_library_pool_queue",
     }
