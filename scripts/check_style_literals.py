@@ -27,7 +27,7 @@ TOKEN_USE = re.compile(r"var\(\s*(?P<name>--[\w-]+)", re.IGNORECASE)
 TOKEN_DECLARATION = re.compile(
     r"(?<![\w-])(?P<declared>--[\w-]+)(?=\s*:)|(?<=style:)(?P<directive>--[\w-]+)"
     r"|[\"'`](?P<quoted>--[\w-]+)[\"'`]")
-APPKIT_STYLESHEET = Path("node_modules/overnightworks-appkit/src/appkit/static/appkit.css")
+DESIGN_STYLESHEET = Path("node_modules/overnightworks-design/src/design/static/design.css")
 RESET_VALUES = {"none", "inherit", "initial", "unset", "revert", "revert-layer"}
 FONT_KEYWORDS = {"xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large",
                  "xxx-large", "smaller", "larger", "math"}
@@ -105,12 +105,12 @@ def declared_tokens(code: str) -> set[str]:
             for match in TOKEN_DECLARATION.finditer(code)}
 
 
-def undefined_uses(source: Path, appkit: Path) -> list[str]:
-    if not appkit.is_file():
-        raise ValueError(f"Missing {appkit}; install the frontend: cd frontend && pnpm install")
+def undefined_uses(source: Path, design_stylesheet: Path) -> list[str]:
+    if not design_stylesheet.is_file():
+        raise ValueError(f"Missing {design_stylesheet}; install the frontend: cd frontend && pnpm install")
     codes = {path.relative_to(source): code_without_comments(path.read_text(), path.suffix)
              for path in frontend_sources(source)}
-    defined = declared_tokens(code_without_comments(appkit.read_text(), ".css")).union(
+    defined = declared_tokens(code_without_comments(design_stylesheet.read_text(), ".css")).union(
         *map(declared_tokens, codes.values()))
     return [f"{path}:{code.count(chr(10), 0, use.start()) + 1} {use['name']}"
             for path, code in codes.items() for use in TOKEN_USE.finditer(code)
@@ -180,9 +180,9 @@ def check_literals(source: Path, baseline: Path, *, update: bool) -> int:
     return 0
 
 
-def check(source: Path, baseline: Path, appkit: Path, *, update: bool) -> int:
+def check(source: Path, baseline: Path, design_stylesheet: Path, *, update: bool) -> int:
     literals_status = check_literals(source, baseline, update=update)
-    undefined = undefined_uses(source, appkit)
+    undefined = undefined_uses(source, design_stylesheet)
     if undefined:
         print("Undefined custom properties; define the token or use another "
               "(a token set only through a computed setProperty name is not seen):")
@@ -190,9 +190,9 @@ def check(source: Path, baseline: Path, appkit: Path, *, update: bool) -> int:
     return 1 if undefined else literals_status
 
 
-def run(source: Path, baseline: Path, appkit: Path, *, update: bool) -> int:
+def run(source: Path, baseline: Path, design_stylesheet: Path, *, update: bool) -> int:
     try:
-        return check(source, baseline, appkit, update=update)
+        return check(source, baseline, design_stylesheet, update=update)
     except (OSError, ValueError) as error:
         print(error)
         return 1
@@ -204,7 +204,7 @@ def main() -> int:
     parser.add_argument("--update", action="store_true")
     args = parser.parse_args()
     return run(repository / "frontend/src", repository / "scripts/style-literals.txt",
-               repository / "frontend" / APPKIT_STYLESHEET,
+               repository / "frontend" / DESIGN_STYLESHEET,
                update=args.update)
 
 
