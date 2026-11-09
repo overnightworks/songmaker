@@ -33,6 +33,7 @@ import {
 } from './editor';
 import { selectedSongId } from '#lib/stores/player.ts';
 import type { SongItem } from '#lib/api/types.ts';
+import { deferred } from '#lib/test-utils/album-cover-editor.ts';
 
 const savedSongFields = {
 	slug: 'test',
@@ -215,5 +216,35 @@ describe('handleSave', () => {
 
 		await expect(handleSave('s1')).rejects.toThrow('Network error');
 		expect(get(isDirty)).toBe(true);
+	});
+
+	it('a save for a song the editor does not show is refused', async () => {
+		const { updateSong } = await import('#lib/api/client.ts');
+		vi.mocked(updateSong).mockClear();
+		loadSongData(makeSong({ ...savedSongFields, id: 's1' }));
+
+		await expect(handleSave('s2')).rejects.toThrow('Cannot save a different song');
+		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	it('a save finishing after the person opened another song leaves that song editor untouched', async () => {
+		const { updateSong } = await import('#lib/api/client.ts');
+		const saving = deferred<SongItem>();
+		vi.mocked(updateSong).mockReturnValueOnce(saving.promise);
+		loadSongData(makeSong({ ...savedSongFields, id: 's1' }));
+		setDraftLyrics('sent draft');
+		const save = handleSave('s1');
+		selectedSongId.set('s2');
+		loadSongData(makeSong({ ...savedSongFields, id: 's2', lyrics: 'other song' }));
+		setDraftLyrics('typed on other song');
+
+		saving.resolve(makeSong({ ...savedSongFields, id: 's1', lyrics: 'sent draft' }));
+		await save;
+
+		expect(get(editLyrics)).toBe('typed on other song');
+		expect(get(isDirty)).toBe(true);
+		discardDraft();
+		expect(get(editLyrics)).toBe('other song');
+		selectedSongId.set('s1');
 	});
 });
