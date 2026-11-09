@@ -13,7 +13,7 @@ export class FakeAudio {
 	crossOrigin: string | null = null;
 	buffered = { length: 0, end: () => 0 };
 	preload = '';
-	private listeners = new Map<string, Set<EventListener>>();
+	private readonly listeners = new Map<string, Set<EventListener>>();
 	playMock = vi.fn(() => {
 		this.paused = false;
 		queueMicrotask(() => this.fire('play'));
@@ -28,7 +28,9 @@ export class FakeAudio {
 	removeEventListener(name: string, listener: EventListener): void {
 		this.listeners.get(name)?.delete(listener);
 	}
-	removeAttribute(): void {}
+	removeAttribute(): void {
+		// The fake element holds no attributes to clear.
+	}
 	pause(): void {
 		this.paused = true;
 		this.fire('pause');
