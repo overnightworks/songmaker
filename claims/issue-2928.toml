@@ -1,0 +1,8 @@
+claim_id = "85dd538b77e0405a95b142e41e26a815"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "341612d790f00f543ce81bfd7499e7ef87c269c5"
+branch = "claude/issue-2928-the-browser-coverage-report-merges-sever"
+scope = ["frontend/e2e/coverage-options.ts", "frontend/e2e/coverage-report.ts", "frontend/e2e/coverage-summary.test.ts", "frontend/e2e/coverage-summary.ts", "frontend/playwright.config.ts", "frontend/vitest.config.ts"]
+opened_commit = "ab435435d0669168d78dd4c79ad3a03970755ca1"
+whole_reason = "One capability: the report's two modules, the new function and its test, and the two runner configurations that decide which runner picks the test up change together."
