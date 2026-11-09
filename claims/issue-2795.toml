@@ -1,8 +1,0 @@
-claim_id = "b523225759a2491291cd0ab421014bee"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "a55d826936e86d8f55c2922da3b4a103a7051e06"
-branch = "claude/issue-2795-constants-rail-collection-playlist"
-scope = ["frontend/e2e", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/routes", "frontend/src/lib/stores", "frontend/src/routes", "quality/baseline.toml"]
-opened_commit = "3fe44a69e24a3a682b1058fbc0c365a76f47410c"
-whole_reason = "One pure move: the three families leave the catch-all together, and every caller re-points in the same change, or the build breaks."
