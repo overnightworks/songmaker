@@ -55,15 +55,15 @@ class CoverSuggestionSessionEndedError(CoverSuggestionRequestError):
 
 def request_cover_suggestions(
     session: Session, album_id: str, actor: Actor,
-    *, session_id: str | None, require_owner: bool = False,
+    *, session_id: str, require_owner: bool = False,
 ) -> Job:
     """Prepare one single-image cover job after enforcing the album's request contract.
 
     Earlier suggestions stay pending: each request adds one image beside them.
 
     The caller owns the transaction boundary and any delivery side effects.
-    This keeps HTTP and future co-writer surfaces from reimplementing access,
-    conflict, and job-creation decisions.
+    This keeps its callers from reimplementing access, conflict, and job-creation
+    decisions.
     """
     album = get_album(session, album_id)
     if album is None or not can_access_album(album, actor, require_owner=require_owner):
@@ -73,7 +73,7 @@ def request_cover_suggestions(
     if has_active_cover_job(session, album.id):
         raise CoverSuggestionAlreadyRunningError()
 
-    if session_id is not None and not lock_session_row(session, session_id):
+    if not lock_session_row(session, session_id):
         raise CoverSuggestionSessionEndedError()
 
     return create_job(
