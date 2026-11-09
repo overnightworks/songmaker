@@ -1,4 +1,4 @@
-import { mount, unmount } from 'svelte';
+import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_NAME } from '#lib/constants/app.ts';
 import { SEEK_PLAYBACK_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
@@ -166,5 +166,42 @@ describe('shared song page', () => {
 			'/login'
 		]);
 		expect(target.querySelector('.now-playing')).toBeNull();
+	});
+});
+
+describe('shared song AI mark', () => {
+	const AI_MARK = 'KI-generiert';
+
+	async function openWith(response: unknown): Promise<HTMLElement> {
+		mockFetch.mockReturnValueOnce(response);
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await tick();
+		return target;
+	}
+
+	it.each([
+		['with a playable take', sharedSongPayload()],
+		['without a playable take', sharedSongPayload({ audio_url: null, generation_id: null })],
+		['without a cover', sharedSongPayload({ cover: null, album_cover: null })]
+	])('shows the mark %s', async (_state, payload) => {
+		const target = await openWith(
+			Promise.resolve({ ok: true, status: 200, json: async () => payload })
+		);
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Solo Track'));
+		expect(target.textContent).toContain(AI_MARK);
+	});
+
+	it.each([
+		['while loading', new Promise(() => {})],
+		['after an error', Promise.resolve({ ok: false, status: 500 })]
+	])('shows nothing of the item %s', async (_state, response) => {
+		const target = await openWith(response);
+
+		await vi.waitFor(() => expect(target.querySelector('h1')).not.toBeNull());
+		expect(target.textContent).not.toContain('Solo Track');
+		expect(target.textContent).not.toContain(AI_MARK);
 	});
 });
