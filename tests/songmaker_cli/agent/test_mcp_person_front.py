@@ -89,7 +89,7 @@ def _marked_routes(mcp: McpWorld) -> set[tuple[str, str]]:
     return {(m.method, m.template) for m in collect_route_tools(mcp.world.client.app).marks}
 
 
-def test_the_new_put_patch_and_delete_routes_are_among_the_marks(mcp: McpWorld) -> None:
+def test_the_put_patch_and_delete_routes_are_among_the_marks(mcp: McpWorld) -> None:
     assert NEW_MARKED_ROUTES <= _marked_routes(mcp)
 
 
@@ -374,7 +374,7 @@ def test_an_admins_agent_asking_for_another_persons_lora_gets_not_found_and_noth
     assert "bobs" not in reply.text.replace("lora-bobs", "")
 
 
-def test_the_old_own_takes_path_is_read_as_a_lora_id_and_not_found_for_cookie_and_token(
+def test_own_takes_under_the_lora_path_is_read_as_a_lora_id_and_answers_404_for_cookie_and_token(
     mcp: McpWorld,
 ) -> None:
     mcp.seed_household(TokenWorld.ALICE, "alices")
