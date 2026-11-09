@@ -6,7 +6,7 @@
 		LIBRARY_NEW_MENU_CLOSE_LABEL,
 		LIBRARY_NEW_MENU_LABEL,
 		LIBRARY_NEW_PLAYLIST_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/library.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import NewAlbumCard from './NewAlbumCard.svelte';

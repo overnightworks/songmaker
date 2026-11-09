@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { SongItem } from '../src/lib/api/types';
-import { LIBRARY_PAGE_LABEL, songEditorOpenLabel } from '../src/lib/constants';
+import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
+import { songEditorOpenLabel } from '../src/lib/constants';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	accountCircle,

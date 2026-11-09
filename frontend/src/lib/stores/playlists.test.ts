@@ -15,7 +15,8 @@ import {
 	uploadPlaylistCover as uploadPlaylistCoverApi,
 	updatePlaylist
 } from '#lib/api/client.ts';
-import { LIBRARY_PLAYLISTS_ERROR, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { LIBRARY_PLAYLISTS_ERROR } from '#lib/constants/playlist.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import {
 	reportResourceStreamReachable,

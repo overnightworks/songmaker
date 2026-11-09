@@ -171,7 +171,7 @@ import {
 	selectedPlaylistDetail
 } from '#lib/stores/playlists.ts';
 import { openCollection } from '#lib/stores/collection.ts';
-import { LIBRARY_PAGE_LABEL } from '#lib/constants.ts';
+import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
 
 const genDefaults = {
 	mp3_path: 'a1/song_v1.mp3',

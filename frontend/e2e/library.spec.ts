@@ -9,18 +9,20 @@
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-	LIBRARY_WALL_ORDER_GROUP_LABEL,
-	LIBRARY_WALL_ORDER_LABELS,
-	type LibraryWallOrder,
-	NOW_PLAYING_SWIPE_RISE_PX,
-	openNowPlayingLabel,
 	LIBRARY_ALBUM_PAGE_SIZE,
 	LIBRARY_PAGE_LABEL,
+	wallHeadingLabel,
+	LIBRARY_WALL_ORDER_GROUP_LABEL,
+	LIBRARY_WALL_ORDER_LABELS,
+	type LibraryWallOrder
+} from '../src/lib/constants/library';
+import {
+	NOW_PLAYING_SWIPE_RISE_PX,
+	openNowPlayingLabel,
 	PLAYING_MARK_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL,
-	songEditorOpenLabel,
-	wallHeadingLabel
+	songEditorOpenLabel
 } from '../src/lib/constants';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
@@ -142,6 +144,13 @@ async function expectHeaderReadsAtNarrowest(page: Page, albumTitle: string): Pro
 	expect(songCountBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
 
 	await page.setViewportSize(MOBILE_VIEWPORT);
+}
+
+function wallOrderChoice(surface: Locator, group: string) {
+	return (order: LibraryWallOrder) =>
+		surface
+			.getByRole('group', { name: group })
+			.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
 }
 
 /** Compact Now Playing stacks, so the judging panel arrives as its own sheet. */
@@ -1051,8 +1060,7 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 }, testInfo) => {
 	const surface = workspace(page);
 	const orders = surface.getByRole('group', { name: LIBRARY_WALL_ORDER_GROUP_LABEL });
-	const choice = (order: LibraryWallOrder) =>
-		orders.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
+	const choice = wallOrderChoice(surface, LIBRARY_WALL_ORDER_GROUP_LABEL);
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
 	const firstLine = tiles.first().locator('.tile-subtitle');
 	const listenTitles = listenRegion(page).locator('.library-row .tile-title');
@@ -1108,10 +1116,8 @@ test(
 		const shell = shellOf(testInfo);
 		const surface = workspace(page);
 		const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
-		const choice = (group: string, order: LibraryWallOrder) =>
-			surface
-				.getByRole('group', { name: group })
-				.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
+		const libraryChoice = wallOrderChoice(surface, LIBRARY_WALL_ORDER_GROUP_LABEL);
+		const playlistsChoice = wallOrderChoice(surface, PLAYLISTS_WALL_ORDER_GROUP_LABEL);
 
 		async function railOrderMatchingWall(railRows: string): Promise<string[]> {
 			const rail = await openRailNav(page, shell);
@@ -1133,10 +1139,7 @@ test(
 		await listenInPlaylist(page, laterInAlphabet);
 
 		await page.goto(LIBRARY_PATH);
-		await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'title')).toHaveAttribute(
-			'aria-pressed',
-			'true'
-		);
+		await expect(libraryChoice('title')).toHaveAttribute('aria-pressed', 'true');
 		const albums = await railOrderMatchingWall('.album-label');
 		expect(albums).toEqual([...albums].sort(compareTitles));
 		await page.goto('/playlists');
@@ -1144,14 +1147,11 @@ test(
 		expect(playlists).toEqual([...playlists].sort(compareTitles));
 
 		await page.reload();
-		await choice(PLAYLISTS_WALL_ORDER_GROUP_LABEL, 'played').click();
+		await playlistsChoice('played').click();
 		await expect(tiles.first()).toContainText(laterInAlphabet.title);
 		expect((await railOrderMatchingWall('.playlist-label'))[0]).toBe(laterInAlphabet.title);
 		await page.goto(LIBRARY_PATH);
-		await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'played')).toHaveAttribute(
-			'aria-pressed',
-			'true'
-		);
+		await expect(libraryChoice('played')).toHaveAttribute('aria-pressed', 'true');
 		await railOrderMatchingWall('.album-label');
 	}
 );
@@ -1183,10 +1183,7 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	const surface = workspace(page);
 	const heading = playlistsHeading(page, titles.length);
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
-	const choice = (order: LibraryWallOrder) =>
-		surface
-			.getByRole('group', { name: PLAYLISTS_WALL_ORDER_GROUP_LABEL })
-			.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
+	const choice = wallOrderChoice(surface, PLAYLISTS_WALL_ORDER_GROUP_LABEL);
 	const phoneBack = appBar(page).getByRole('button', { name: /^Back to / });
 
 	async function expectPlaylistsStandFirst(title: string): Promise<void> {

@@ -9,10 +9,10 @@ import {
 	NEW_SONG_ROW_LABEL,
 	NEW_SONG_TITLE_LABEL
 } from '../src/lib/constants/new-collection';
+import { LIBRARY_SHARES_COPY_LABEL } from '../src/lib/constants/library';
 import {
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
-	LIBRARY_SHARES_COPY_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
 import { newSongCardLabel } from '../src/lib/constants/album';

@@ -8,12 +8,12 @@ import {
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '#lib/api/types.ts';
+import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
 import {
 	NOW_PLAYING_LABEL,
 	MINI_PLAYER_WITHOUT_COVER_MEDIA,
 	NOW_PLAYING_SWIPE_RISE_PX,
-	openNowPlayingLabel,
-	LIBRARY_PAGE_LABEL
+	openNowPlayingLabel
 } from '#lib/constants.ts';
 import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
 import { REDUCED_MOTION_MEDIA } from '#lib/constants/media.ts';

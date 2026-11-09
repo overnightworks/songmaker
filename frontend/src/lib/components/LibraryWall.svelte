@@ -43,22 +43,22 @@
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import { activityTimeLabel, songCountLabel } from '#lib/utils/format.ts';
 	import {
-		LIBRARY_NARROW_MEDIA,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
-		LIBRARY_PLAYLISTS_ERROR,
-		LIBRARY_PLAYLISTS_LOADING,
 		LIBRARY_PAGE_LABEL,
 		LIBRARY_WALL_EMPTY,
+		wallHeadingLabel,
 		LIBRARY_WALL_ORDER_GROUP_LABEL,
 		LIBRARY_WALL_ORDER_LABELS,
 		LIBRARY_WALL_ORDERS,
-		wallHeadingLabel,
 		type LibraryWallOrder
-	} from '#lib/constants.ts';
+	} from '#lib/constants/library.ts';
+	import { LIBRARY_NARROW_MEDIA } from '#lib/constants.ts';
 	import {
 		PLAYLISTS_PAGE_LABEL,
 		PLAYLISTS_WALL_EMPTY,
-		PLAYLISTS_WALL_ORDER_GROUP_LABEL
+		PLAYLISTS_WALL_ORDER_GROUP_LABEL,
+		LIBRARY_PLAYLISTS_ERROR,
+		LIBRARY_PLAYLISTS_LOADING
 	} from '#lib/constants/playlist.ts';
 	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import EmptyState from './EmptyState.svelte';

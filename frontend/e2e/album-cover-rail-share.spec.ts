@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from '@playwright/test';
-import { LIBRARY_PAGE_LABEL } from '../src/lib/constants';
+import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants/rail';
 import { archiveOwnedAlbum, BASE_URL, seedTake } from './seed';
 import {

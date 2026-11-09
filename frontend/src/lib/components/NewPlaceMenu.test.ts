@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, PlaylistItem } from '#lib/api/types.ts';
-import { LIBRARY_NEW_MENU_LABEL } from '#lib/constants.ts';
+import { LIBRARY_NEW_MENU_LABEL } from '#lib/constants/library.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { makeAlbum, makePlaylist } from '#lib/test-utils/factories.ts';
