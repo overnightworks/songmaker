@@ -14,7 +14,7 @@
 "frontend/e2e/back-closes-overlay.spec.ts" = 1235
 "frontend/e2e/helpers.ts" = 833
 "frontend/e2e/library.spec.ts" = 1300
-"frontend/e2e/offline.spec.ts" = 805
+"frontend/e2e/offline.spec.ts" = 804
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 860
@@ -45,7 +45,7 @@
 "frontend/src/lib/stores/navigation.test.ts" = 2971
 "frontend/src/lib/stores/player.test.ts" = 5277
 "frontend/src/lib/stores/player.ts" = 2233
-"frontend/src/lib/stores/resourceSync.test.ts" = 2032
+"frontend/src/lib/stores/resourceSync.test.ts" = 2031
 "frontend/src/lib/stores/resourceSync.ts" = 1058
 "frontend/src/routes/layout.test.ts" = 1404
 "frontend/src/routes/settings/users/+page.svelte" = 937

@@ -7,7 +7,8 @@ import { get } from 'svelte/store';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { browserReportsOnline } from '#lib/test-utils/network.ts';
-import { EDITOR_LYRICS_LABEL, RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
+import { EDITOR_LYRICS_LABEL } from '#lib/constants.ts';
+import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import {

@@ -20,9 +20,9 @@ import {
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
-	RESOURCE_EVENT_STREAM_PATH,
 	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
+import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
 	HOME_ROUTE_PATH,

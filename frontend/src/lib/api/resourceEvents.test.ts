@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { RESOURCE_EVENT_STREAM_PATH } from '#lib/constants.ts';
+import { RESOURCE_EVENT_STREAM_PATH } from '#lib/constants/resource-sync.ts';
 
 import {
 	compareDecimalId,

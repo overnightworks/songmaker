@@ -3,7 +3,7 @@ import type {
 	ResourceHelloEvent,
 	ResourceResyncEvent
 } from './types';
-import { RESOURCE_EVENT_STREAM_PATH } from '#lib/constants.ts';
+import { RESOURCE_EVENT_STREAM_PATH } from '#lib/constants/resource-sync.ts';
 
 // The browser only sends `Last-Event-ID` on its own native retry; the owner
 // reopens a dropped stream itself, so it hands the server that cursor as a
