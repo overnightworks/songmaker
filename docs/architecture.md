@@ -174,7 +174,7 @@ the existing dirty-draft question; a parked action resolving does not mean the
 person has agreed to leave. 🔍 on every page
 opens the one search, `RailSearch`, in a sheet. The Library and the Playlists page carry the brand
 and a 44px account circle at the right edge (the desktop: top right of the main area). Its menu
-(`AccountMenu.svelte`, songmaker's trigger around appkit's `AccountMenu` panel) holds the name (opens `/api/auth/me`'s `account_console_url` in a new tab),
+(`AccountMenu.svelte`, songmaker's trigger around the design kit's `AccountMenu` panel) holds the name (opens `/api/auth/me`'s `account_console_url` in a new tab),
 Settings, the theme choice (Follow system, Light or Dark: the choice is the person's, kept on their account and copied into the browser so a page paints in it before the server answers; with no choice the page follows the device; a pick saves at once and returns to the previous choice if the save fails), Log out and a quiet row of legal links; the song carries its title,
 share and song menu instead. Choosing
 Settings in the account menu while `/settings` is already on screen only
@@ -891,9 +891,9 @@ cover), a playable-song count, and each song’s album name beneath its queue
 title. The bar follows the current song’s album cover. On desktop the sticky
 transport remains in view, so the same observer keeps the bar hidden (#1462).
 Every share page ends in `SharedFooter.svelte`: "Powered by" and
-appkit's `LegalLinks` with `newTab`, rendering the Impressum · Datenschutz ·
+the design kit's `LegalLinks` with `newTab`, rendering the Impressum · Datenschutz ·
 Nutzungsbedingungen links that `lib/constants/legal.ts` owns (the account menu
-and the sign-in pages hand the same list to appkit's `AccountMenu` and `SignInPage`).
+and the sign-in pages hand the same list to the design kit's `AccountMenu` and `SignInPage`).
 They point to the central legal pages with songmaker's section anchor;
 `legal/` holds the app's own section of the central legal pages, and the share page opens them in a new
 tab so playback keeps running. Playback is owned by `lib/share/sharePlayback.svelte.ts`

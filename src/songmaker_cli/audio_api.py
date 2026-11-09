@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
+from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.mcp import Exclusion, exclude_route
@@ -29,7 +30,7 @@ async def get_audio(
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
     ctx: Annotated[AppContext, Depends(get_app_context)],
 ) -> FileResponse:
-    if user.role != "admin" and owner_id != user.id:
+    if user.role != AppRole.ADMIN and owner_id != user.id:
         raise HTTPException(404, AUDIO_FILE_NOT_FOUND)
 
     try:
