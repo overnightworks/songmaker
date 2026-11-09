@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 import songmaker_cli.constants as _consts
+from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_helpers import raise_audio_file_http_error
 from songmaker_cli.api_models import (
     QueueStreamManifestResponse,
@@ -93,6 +94,7 @@ def _offered_cover[T](file_exists: bool, build_urls: Callable[[], T]) -> T | Non
 @router.get(
     "/shared/{slug}",
     responses={404: {"description": "Shared album not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_album(
     slug: str,
@@ -156,6 +158,7 @@ def _public_queue_stream(
 @router.post(
     "/shared/{slug}/stream",
     responses={404: {"description": "Shared album not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_album_stream(
     slug: str,
@@ -192,6 +195,7 @@ def get_shared_album_stream(
 @router.get(
     "/shared/song/{slug}",
     responses={404: {"description": "Shared song not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_song(
     slug: str,
@@ -235,6 +239,7 @@ def get_shared_song(
 @router.get(
     "/shared/gen/{slug}",
     responses={404: {"description": "Shared generation not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_generation(
     slug: str,
@@ -273,6 +278,7 @@ def get_shared_generation(
 @router.get(
     "/shared/playlist/{slug}",
     responses={404: {"description": "Shared playlist not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_playlist(
     slug: str,
@@ -348,6 +354,7 @@ def _shared_playlist_album_covers(ctx: AppContext, entries, slug: str) -> list:
 @router.post(
     "/shared/playlist/{slug}/stream",
     responses={404: {"description": "Shared playlist not found"}},
+    openapi_extra=exclude_route(Exclusion.PUBLIC_VIEW),
 )
 def get_shared_playlist_stream(
     slug: str,

@@ -30,7 +30,7 @@ from support.mcp_world import (
 from support.token_world import TokenWorld, make_token_world
 from support.web_app import TEST_ORIGIN, seed_session
 
-from songmaker_cli.agent.mcp import collect_route_tools
+from songmaker_cli.agent.mcp import Exclusion, collect_route_tools
 from songmaker_cli.constants import (
     MODEL_AVAILABLE_MODES,
     OIDC_ADMIN_GROUP,
@@ -54,6 +54,19 @@ MARKED_TOOLS = {
     "add_lora_sample_from_take", "create_playlist", "add_album_to_playlist",
     "add_take_to_playlist", "add_song_to_playlist", "keep_reference", "create_preset",
     "set_default_preset", "restore_song", "list_own_playable_takes", "get_lora",
+    "update_album", "update_playlist", "move_playlist_entry", "remove_playlist_entry",
+    "update_preset", "set_theme", "set_default_config", "rename_song", "move_song",
+    "update_lora_sample", "write_user_memory", "write_song_memory", "write_album_memory",
+}
+NEW_MARKED_ROUTES = {
+    ("PUT", "/api/albums/{album_id}"), ("PUT", "/api/playlists/{playlist_id}"),
+    ("PATCH", "/api/playlists/{playlist_id}/entries/{entry_id}/position"),
+    ("DELETE", "/api/playlists/{playlist_id}/entries/{entry_id}"),
+    ("PUT", "/api/settings/presets/{preset_id}"), ("PUT", "/api/settings/theme"),
+    ("PUT", "/api/settings/default-config"), ("PUT", "/api/songs/{song_id}/title"),
+    ("PUT", "/api/songs/{song_id}/album"),
+    ("PATCH", "/api/loras/{lora_id}/samples/{sample_id}"), ("PUT", "/api/memory/user"),
+    ("PUT", "/api/memory/songs/{song_id}"), ("PUT", "/api/memory/albums/{album_id}"),
 }
 
 
@@ -62,6 +75,26 @@ MARKED_TOOLS = {
 
 def test_m1_a_members_agent_is_offered_exactly_the_marked_tools(mcp: McpWorld) -> None:
     assert mcp.tool_names() == MARKED_TOOLS
+
+
+def test_m1_the_new_put_patch_and_delete_routes_are_among_the_marks(mcp: McpWorld) -> None:
+    marks = collect_route_tools(mcp.world.client.app).marks
+
+    assert NEW_MARKED_ROUTES <= {(mark.method, mark.template) for mark in marks}
+
+
+def test_m1_every_operation_carries_a_decision_and_an_exclusion_names_a_reason_of_the_enum(
+    mcp: McpWorld,
+) -> None:
+    operations = [
+        operation for item in mcp.world.client.app.openapi()["paths"].values()
+        for method, operation in item.items() if method != "parameters"
+    ]
+
+    decisions = [operation.get("x-agent-tool") for operation in operations]
+    assert None not in decisions
+    reasons = {d["excluded"] for d in decisions if "excluded" in d}
+    assert reasons <= {reason.value for reason in Exclusion}
 
 
 def test_m1_the_description_of_generate_names_the_valid_models(mcp: McpWorld) -> None:
@@ -272,13 +305,20 @@ _UNMARKED_ROUTES = [
     ("DELETE", "/api/albums/album-alices", None),
     ("GET", "/api/admin/voices", None),
     ("GET", "/api/albums/album-alices/cover", None),
+    ("PUT", "/api/albums/album-alices/cover", {"suggestion_id": "any"}),
+    ("DELETE", "/api/albums/album-alices/share", None),
+    ("PUT", "/api/songs/song-alices", {"title": "Saved"}),
+    ("GET", "/api/conversations", None),
+    ("POST", "/api/songs/song-alices/listen", None),
+    ("PUT", "/api/settings/rate-limits", {"limits": []}),
 ]
 
 
 @pytest.mark.parametrize(
     ("method", "path", "body"), _UNMARKED_ROUTES,
     ids=["bulk-delete", "take-delete", "share", "pick", "unpick", "unkeep", "reference-unkeep",
-         "train", "playlist-delete", "album-delete", "admin", "browser-only"],
+         "train", "playlist-delete", "album-delete", "admin", "browser-only", "album-cover-choice",
+         "unshare", "song-save", "conversations", "listen", "admin-settings"],
 )
 def test_m6_the_agent_token_is_refused_on_every_unmarked_route_and_nothing_changes(
     mcp: McpWorld, method: str, path: str, body: dict | None,
@@ -290,6 +330,19 @@ def test_m6_the_agent_token_is_refused_on_every_unmarked_route_and_nothing_chang
     assert reply.status_code in {401, 403}
     assert mcp.rows_of(Generation, "id") == [("take-alices",)]
     assert [row[0] for row in mcp.rows_of(Album, "deleted_at")] == [None]
+
+
+def test_m6_a_public_view_answers_the_agent_token_as_it_answers_a_visitor(mcp: McpWorld) -> None:
+    mcp.world.seed_take(TokenWorld.ALICE, "alices")
+    seed_session(mcp.world.client, "alice")
+    shared = mcp.world.client.post("/api/albums/album-alices/share", headers=_SAME_ORIGIN)
+    mcp.world.client.cookies.clear()
+    path = f"/shared/{shared.json()['share_slug']}"
+
+    visitor = mcp.world.client.get(path)
+    agent = mcp.world.client.get(path, headers=mcp.agent(TokenWorld.BOB))
+
+    assert (agent.status_code, agent.json()) == (visitor.status_code, visitor.json())
 
 
 def test_m6_every_unmarked_route_of_the_list_is_a_real_route_of_the_app(mcp: McpWorld) -> None:

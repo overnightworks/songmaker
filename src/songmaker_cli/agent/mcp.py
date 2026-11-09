@@ -3,17 +3,19 @@
 A route becomes a tool only by carrying ``agent_tool`` as its ``openapi_extra``; the tool calls
 that route in-process through the whole app, so every middleware and ownership check applies
 to it exactly as to a browser. The gate admits the agent's token at ``/mcp`` and on the marked
-routes as the person behind it, capped to the role ``user``.
+routes as the person behind it, capped to the role ``user``. Every other route carries
+``exclude_route`` with the reason of its class, and an operation with neither stops the build.
 """
 
 from __future__ import annotations
 
 from contextlib import AsyncExitStack, asynccontextmanager
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from agent_runtime_client.mcp_server import McpPersonFront, RouteTools, route_tools
 from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH
-from agent_runtime_client.tools import Principal
+from agent_runtime_client.tools import Principal, not_an_agent_tool
 from agent_runtime_client.tools import ToolEffect as ToolEffect
 from agent_runtime_client.tools import agent_tool as agent_tool
 from starlette.requests import HTTPConnection
@@ -37,6 +39,26 @@ if TYPE_CHECKING:
 
     from songmaker_cli.oidc_client import OidcSignIn
     from songmaker_cli.settings import Settings
+
+
+class Exclusion(StrEnum):
+    """Why a route is no agent tool; one wording per class, read by whoever reviews the reach."""
+
+    ADMIN = "an agent's token never carries admin rights"
+    FINAL_DELETION = "removes something for good"
+    BULK_DELETION = "removes many things at once"
+    SHARING = "shares the person's content with people outside their account"
+    PUBLIC_VIEW = "serves a share to visitors without an account"
+    BROWSER_ONLY = "a file, a stream, an upload or a notice that only the browser can use"
+    NOT_A_PERSONS_ACTION = "the app's own or a monitor's call, not an action of the person"
+    ENDING_A_SHARE = "ending a share invalidates its public link for good"
+    DELETION_AFTER_WINDOW = "starts a deletion after a window"
+    CONVERSATION_MEMORY = "an admin's conversations and notes can quote another person's song"
+
+
+def exclude_route(reason: Exclusion) -> dict[str, object]:
+    """The route's ``openapi_extra`` when it is no tool, with the reason of its class."""
+    return not_an_agent_tool(reason=reason.value)
 
 
 def collect_route_tools(app: FastAPI) -> RouteTools:

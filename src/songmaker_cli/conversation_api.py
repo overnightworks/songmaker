@@ -29,6 +29,7 @@ from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.backend import TurnAnswer, TurnCaller, TurnProblem, run_cowriter_turn
+from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.agent.tools import CallingTurn, bound_to_turn
 from songmaker_cli.api_helpers import (
     check_album_access,
@@ -65,7 +66,7 @@ from songmaker_cli.constants import (
     TURN_BLOCK_USER_MEMORY,
 )
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
-from songmaker_cli.db.models import ChatMessage, Conversation, Generation, Song
+from songmaker_cli.db.models import ChatMessage, Generation, Song
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.conversations import (
     append_message,
@@ -505,6 +506,7 @@ def _sse_format(event: BaseModel) -> str:
         409: {"description": "Another co-writer turn is still running"},
         422: {"description": "Chat context or co-writer configuration is invalid"},
     },
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 async def api_chat_turn(
     req: ChatTurnV2Request, request: Request,
@@ -714,7 +716,10 @@ async def _chat_event_generator(
                 final_event = _complete_chat_turn(req, session, prepared, assistant_text)
             except Exception:
                 terminal = True
-                yield _chat_completion_failure_event(session, prepared.job_id)
+                log.exception("Co-writer chat completion failed")
+                yield _fail_turn_event(
+                    session, prepared.job_id, _CHAT_COMPLETION_FAILED, "completion_error",
+                )
                 return
             terminal = True
             yield _sse_format(final_event)
@@ -787,11 +792,6 @@ def _complete_chat_turn(
     )
 
 
-def _chat_completion_failure_event(session: Session, job_id: str) -> str:
-    log.exception("Co-writer chat completion failed")
-    return _fail_turn_event(session, job_id, _CHAT_COMPLETION_FAILED, "completion_error")
-
-
 # ── Conversation CRUD ────────────────────────────────────────────────
 
 
@@ -806,7 +806,7 @@ def _verify_owns_conversation(
     return conv
 
 
-@router.get("/conversations")
+@router.get("/conversations", openapi_extra=exclude_route(Exclusion.CONVERSATION_MEMORY))
 def api_list_conversations(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -820,6 +820,7 @@ def api_list_conversations(
 @router.get(
     "/conversations/{conversation_id}",
     responses={404: {"description": "Conversation does not exist"}},
+    openapi_extra=exclude_route(Exclusion.CONVERSATION_MEMORY),
 )
 def api_conversation_messages(
     conversation_id: str,
@@ -833,13 +834,9 @@ def api_conversation_messages(
         title=conv.title,
         archived_at=conv.archived_at.isoformat() if conv.archived_at else None,
         messages=[ChatMessageResponse.from_orm(m) for m in messages],
-        turn_running=_turn_running(session, conv, user),
+        # A turn runs only in the active conversation, and only while its chat job is active.
+        turn_running=conv.archived_at is None and _running_turn_count(session, user) > 0,
     )
-
-
-def _turn_running(session: Session, conversation: Conversation, user: AuthenticatedUser) -> bool:
-    """A turn runs only in the active conversation, and only while its chat job is active."""
-    return conversation.archived_at is None and _running_turn_count(session, user) > 0
 
 
 def _running_turn_count(session: Session, user: AuthenticatedUser) -> int:
@@ -851,7 +848,7 @@ def _running_turn_count(session: Session, user: AuthenticatedUser) -> int:
     return count_user_active_jobs(session, user.id, JobType.CHAT)
 
 
-@router.post("/conversations/new")
+@router.post("/conversations/new", openapi_extra=exclude_route(Exclusion.CONVERSATION_MEMORY))
 def api_new_conversation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -867,6 +864,7 @@ def api_new_conversation(
 @router.delete(
     "/conversations/{conversation_id}",
     responses={404: {"description": "Conversation does not exist"}},
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_conversation(
     conversation_id: str,

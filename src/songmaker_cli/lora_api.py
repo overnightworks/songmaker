@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.mcp import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
     check_lora_access,
     check_lora_sample_access,
@@ -233,6 +233,7 @@ def api_get_lora(
 @router.delete(
     "/loras/{lora_id}",
     responses={409: {"description": "LoRA cannot be deleted"}},
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_lora(
     lora_id: str,
@@ -328,6 +329,7 @@ def api_add_sample_from_generation(
         413: {"description": "Sample file is too large"},
         422: {"description": "Sample upload is invalid"},
     },
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 def api_add_sample(
     lora_id: str,
@@ -398,11 +400,13 @@ def api_add_sample(
 
 @router.patch(
     "/loras/{lora_id}/samples/{sample_id}",
+    description="Change the caption, lyrics or position of a sample of an own idle LoRA.",
     responses={
         404: {"description": "Sample does not exist"},
         409: {"description": "LoRA cannot be modified during training"},
         422: {"description": "Sample update is invalid"},
     },
+    openapi_extra=agent_tool(name="update_lora_sample", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_patch_sample(
     lora_id: str,
@@ -438,6 +442,7 @@ def api_patch_sample(
         404: {"description": "Sample does not exist"},
         409: {"description": "LoRA cannot be modified during training"},
     },
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_sample(
     lora_id: str,
@@ -475,6 +480,7 @@ def api_delete_sample(
         422: {"description": "LoRA training request is invalid"},
         503: {"description": "Training worker or job queue is unavailable"},
     },
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 async def api_train_lora(
     lora_id: str,

@@ -18,6 +18,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
 
 from songmaker_cli import acestep_state, arq_pool, redis_client, settings
+from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_models.health import HealthResponse, HealthSignals, HealthStatusResponse
 from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.app_context import AppContext
@@ -285,7 +286,11 @@ def require_monitoring_token(
         )
 
 
-@router.get("/metrics", dependencies=[Depends(require_monitoring_token)])
+@router.get(
+    "/metrics",
+    dependencies=[Depends(require_monitoring_token)],
+    openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION),
+)
 async def metrics_endpoint(request: Request) -> PlainTextResponse:
     http_metrics = request.app.state.http_metrics
 
@@ -405,11 +410,15 @@ async def _read_health_signals(request: Request) -> HealthSignals:
     )
 
 
-@router.get("/health")
+@router.get("/health", openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION))
 async def health_check(request: Request) -> HealthStatusResponse:
     return HealthStatusResponse.from_signals(await _read_health_signals(request))
 
 
-@router.get("/health/details", dependencies=[Depends(require_monitoring_token)])
+@router.get(
+    "/health/details",
+    dependencies=[Depends(require_monitoring_token)],
+    openapi_extra=exclude_route(Exclusion.NOT_A_PERSONS_ACTION),
+)
 async def health_details(request: Request) -> HealthResponse:
     return HealthResponse.from_signals(await _read_health_signals(request))

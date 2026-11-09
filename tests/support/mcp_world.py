@@ -35,6 +35,7 @@ from songmaker_cli.db.models import (
     GenerationPreset,
     Job,
     Playlist,
+    PlaylistEntry,
     Song,
     UserLora,
     UserLoraSample,
@@ -162,6 +163,12 @@ class McpWorld:
                                in_playlist=False)
             session.add(Playlist(id=f"playlist-{name}", title=f"Playlist {name}",
                                  slug=f"playlist-{name}", created_by=owner))
+            session.add(Playlist(id=f"playlist-filled-{name}", title=f"Filled {name}",
+                                 slug=f"playlist-filled-{name}", created_by=owner))
+            session.flush()
+            for position, entry_id in enumerate((f"entry-{name}", f"entry-{name}-extra")):
+                session.add(PlaylistEntry(id=entry_id, playlist_id=f"playlist-filled-{name}",
+                                          generation_id=take_id, position=position))
             session.add(GenerationPreset(id=f"preset-{name}", name=f"Preset {name}",
                                          model_mode="sft", params={}, created_by=owner))
             session.add(Job(id=f"job-{name}", type="chat", status="queued", user_id=owner,

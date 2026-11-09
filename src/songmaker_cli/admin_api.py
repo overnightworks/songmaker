@@ -19,6 +19,7 @@ from songmaker_cli.acestep_state import (
     read_worker_state,
     worker_is_online,
 )
+from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_models import (
     AdminUserLoraResponse,
     EvictModelOnWorkerRequest,
@@ -58,7 +59,7 @@ JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-@router.get("/voices")
+@router.get("/voices", openapi_extra=exclude_route(Exclusion.ADMIN))
 def list_voices_endpoint(
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
@@ -108,7 +109,7 @@ async def _post_to_worker(
         )
 
 
-@router.get("/workers")
+@router.get("/workers", openapi_extra=exclude_route(Exclusion.ADMIN))
 async def list_workers_endpoint(
     db: Session = Depends(get_db_session),
     pool: ArqRedis = Depends(get_arq_pool_dep),
@@ -130,7 +131,7 @@ async def list_workers_endpoint(
     return WorkerPoolResponse(workers=infos)
 
 
-@router.get("/registry")
+@router.get("/registry", openapi_extra=exclude_route(Exclusion.ADMIN))
 async def get_registry_endpoint(
     db: Session = Depends(get_db_session),
     pool: ArqRedis = Depends(get_arq_pool_dep),
@@ -201,6 +202,7 @@ def _registry_model(
         404: {"description": "Worker does not exist"},
         503: {"description": "Worker is unavailable"},
     },
+    openapi_extra=exclude_route(Exclusion.ADMIN),
 )
 async def load_model_on_worker_endpoint(
     worker_id: str,
@@ -269,6 +271,7 @@ async def _command_worker_model(db: Session, worker_id: str, path: str, mode: st
         409: {"description": "Model cannot be evicted"},
         502: {"description": "Worker rejected model eviction"},
     },
+    openapi_extra=exclude_route(Exclusion.ADMIN),
 )
 async def evict_model_on_worker_endpoint(
     worker_id: str,
@@ -288,6 +291,7 @@ async def evict_model_on_worker_endpoint(
         409: {"description": "Model cannot be pinned"},
         502: {"description": "Worker rejected model pinning"},
     },
+    openapi_extra=exclude_route(Exclusion.ADMIN),
 )
 async def pin_model_on_worker_endpoint(
     worker_id: str,
@@ -307,6 +311,7 @@ async def pin_model_on_worker_endpoint(
         409: {"description": "Model cannot be unpinned"},
         502: {"description": "Worker rejected model unpinning"},
     },
+    openapi_extra=exclude_route(Exclusion.ADMIN),
 )
 async def unpin_model_on_worker_endpoint(
     worker_id: str,
@@ -324,6 +329,7 @@ async def unpin_model_on_worker_endpoint(
         404: {"description": "Worker does not exist"},
         502: {"description": "Worker restart failed"},
     },
+    openapi_extra=exclude_route(Exclusion.ADMIN),
 )
 async def restart_worker_endpoint(
     worker_id: str,
@@ -356,6 +362,7 @@ async def restart_worker_endpoint(
         409: {"description": "Model is already downloaded or downloading"},
         503: {"description": "Model registry or job queue is unavailable"},
     },
+    openapi_extra=exclude_route(Exclusion.ADMIN),
 )
 async def download_model_endpoint(
     mode: str,
@@ -434,7 +441,7 @@ def _retention_report_response(
     )
 
 
-@router.get("/generation-retention/preview")
+@router.get("/generation-retention/preview", openapi_extra=exclude_route(Exclusion.ADMIN))
 async def generation_retention_preview(
     ctx: AppContext = Depends(get_app_context),
     _admin: AuthenticatedUser = Depends(require_admin),
@@ -447,7 +454,7 @@ async def generation_retention_preview(
     return _retention_report_response(report, dry_run=True)
 
 
-@router.post("/generation-retention/run")
+@router.post("/generation-retention/run", openapi_extra=exclude_route(Exclusion.ADMIN))
 async def generation_retention_run(
     ctx: AppContext = Depends(get_app_context),
     admin: AuthenticatedUser = Depends(require_admin),

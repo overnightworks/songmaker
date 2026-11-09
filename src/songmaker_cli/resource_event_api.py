@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from webauth.rate_limit import RedisRateLimitBackend
 
+from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.api_models import (
     GenerationCreatedResourceEvent,
@@ -427,6 +428,7 @@ async def _leased_resource_event_generator(
         429: {"description": "Too many open resource event streams"},
         503: {"description": "Resource event stream capacity is unavailable"},
     },
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 def api_stream_resource_events(
     request: Request,

@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.mcp import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
     PLAYLIST_NOT_FOUND_DETAIL,
     can_access_album,
@@ -144,7 +144,9 @@ def api_get_playlist(
 
 @router.put(
     "/playlists/{playlist_id}",
+    description="Rename one of the person's own playlists.",
     responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    openapi_extra=agent_tool(name="update_playlist", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_update_playlist(
     playlist_id: str,
@@ -165,6 +167,7 @@ def api_update_playlist(
 @router.delete(
     "/playlists/{playlist_id}",
     responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_playlist(
     playlist_id: str,
@@ -189,6 +192,7 @@ def api_delete_playlist(
 @router.get(
     "/playlists/{playlist_id}/cover",
     responses={404: {"description": "Playlist or cover not found"}},
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 def api_get_playlist_cover(
     playlist_id: str,
@@ -207,6 +211,7 @@ def api_get_playlist_cover(
 @router.put(
     "/playlists/{playlist_id}/cover",
     responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 async def api_upload_playlist_cover(
     playlist_id: str,
@@ -230,6 +235,7 @@ async def api_upload_playlist_cover(
 @router.delete(
     "/playlists/{playlist_id}/cover",
     responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_playlist_cover(
     playlist_id: str,
@@ -375,7 +381,11 @@ def api_add_album_to_playlist(
 
 @router.delete(
     "/playlists/{playlist_id}/entries/{entry_id}",
+    description=(
+        "Take one entry out of the person's own playlist; the song stays and can be added again."
+    ),
     responses={404: {"description": "Playlist or entry not found"}},
+    openapi_extra=agent_tool(name="remove_playlist_entry", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_remove_from_playlist(
     playlist_id: str,
@@ -394,7 +404,9 @@ def api_remove_from_playlist(
 
 @router.patch(
     "/playlists/{playlist_id}/entries/{entry_id}/position",
+    description="Move one entry of the person's own playlist to another position in its order.",
     responses={404: {"description": "Playlist or entry not found"}},
+    openapi_extra=agent_tool(name="move_playlist_entry", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_reorder_playlist_entry(
     playlist_id: str,
@@ -418,6 +430,7 @@ def api_reorder_playlist_entry(
 @router.post(
     "/playlists/{playlist_id}/share",
     responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    openapi_extra=exclude_route(Exclusion.SHARING),
 )
 def api_share_playlist(
     playlist_id: str,
@@ -441,6 +454,7 @@ def api_share_playlist(
 @router.delete(
     "/playlists/{playlist_id}/share",
     responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    openapi_extra=exclude_route(Exclusion.ENDING_A_SHARE),
 )
 def api_unshare_playlist(
     playlist_id: str,

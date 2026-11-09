@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.mcp import Exclusion, exclude_route
 from songmaker_cli.api_helpers import audio_file_response, raise_audio_file_http_error
 from songmaker_cli.app_context import AppContext, get_app_context
 from songmaker_cli.audio_paths import AudioFileNotFoundError, resolve_audio_path
@@ -20,6 +21,7 @@ router = APIRouter()
 @router.get(
     "/audio/{owner_id}/{filename}",
     responses={404: {"description": "Audio file not found"}},
+    openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 async def get_audio(
     owner_id: str,
