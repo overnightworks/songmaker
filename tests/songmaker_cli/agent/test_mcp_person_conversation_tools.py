@@ -8,15 +8,12 @@ from __future__ import annotations
 
 import pytest
 from support.mcp_tool_table import ALICE, BOB
-from support.mcp_world import McpWorld
+from support.mcp_world import ADMIN_GROUPS, McpWorld
 from support.token_world import TokenWorld
 from support.web_app import seed_session
 
-from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LOGIN_GROUP, OIDC_MCP_GROUP
+from songmaker_cli.constants import OIDC_LOGIN_GROUP, OIDC_MCP_GROUP
 from songmaker_cli.db.models import Conversation
-
-_FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
-_ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
 
 
 def _conversations(world: McpWorld) -> set[tuple[str, str, bool]]:
@@ -51,6 +48,7 @@ def test_get_conversation_of_another_person_is_not_found_and_reveals_nothing(
     reply = household.call("get_conversation", {"conversation_id": f"conversation-{BOB}"})
 
     assert reply.is_error
+    assert "not found" in reply.text.lower()
     assert BOB not in reply.text
 
 
@@ -72,13 +70,13 @@ def test_start_conversation_archives_the_callers_active_one_and_starts_a_new_one
         (TokenWorld.ALICE, f"conversation-{ALICE}", False)}
 
 
-def test_start_conversation_by_cookie_session_without_the_csrf_header_changes_nothing(
+def test_start_conversation_by_cookie_session_without_any_csrf_header_changes_nothing(
     household: McpWorld,
 ) -> None:
     seed_session(household.world.client, "alice")
     before = household.snapshot()
 
-    reply = household.world.client.post("/api/conversations/new", headers=_FORGED)
+    reply = household.world.client.post("/api/conversations/new")
 
     assert reply.status_code == 403
     assert household.snapshot() == before
@@ -99,7 +97,7 @@ def test_get_memory_with_the_callers_song_returns_that_songs_notes(household: Mc
     assert reply.json()["song"]["body"] == f"Song notes of {ALICE}"
 
 
-@pytest.mark.parametrize("groups", [(OIDC_LOGIN_GROUP, OIDC_MCP_GROUP), _ADMIN_GROUPS],
+@pytest.mark.parametrize("groups", [(OIDC_LOGIN_GROUP, OIDC_MCP_GROUP), ADMIN_GROUPS],
                          ids=["member", "admin"])
 def test_get_memory_with_another_persons_song_is_not_found_and_reveals_nothing(
     admins_household: McpWorld, groups: tuple[str, ...],
@@ -107,4 +105,5 @@ def test_get_memory_with_another_persons_song_is_not_found_and_reveals_nothing(
     reply = admins_household.call("get_memory", {"song_id": f"song-{BOB}"}, groups=groups)
 
     assert reply.is_error
+    assert "not found" in reply.text.lower()
     assert BOB not in reply.text

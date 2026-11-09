@@ -214,7 +214,10 @@ def _sse_format(event: BaseModel) -> str:
     "/chat/turn",
     responses={
         403: {"description": "The co-writer needs a browser login"},
-        404: {"description": "Mentioned album or version does not exist"},
+        404: {
+            "description": "A mentioned album, version, song or take, or the current song, "
+            "does not exist",
+        },
         409: {"description": "Another co-writer turn is still running"},
         422: {"description": "Chat context or co-writer configuration is invalid"},
     },
@@ -485,8 +488,8 @@ def _verify_owns_conversation(
 
 
 _LIST_CONVERSATIONS_DESCRIPTION = (
-    "Lists the person's recent co-writer conversations, newest first, with the title and "
-    "whether each is archived. Only the person's own conversations come back."
+    "Lists the person's recent co-writer conversations, most recently active first, with "
+    "the title and whether each is archived. Only the person's own conversations come back."
 )
 _GET_CONVERSATION_DESCRIPTION = (
     "Reads one of the person's own co-writer conversations: its title, whether it is "

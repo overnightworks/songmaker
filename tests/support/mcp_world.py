@@ -24,6 +24,7 @@ from support.wav_files import write_wav
 from support.web_app import TEST_ORIGIN, seed_user
 
 from songmaker_cli.constants import (
+    OIDC_ADMIN_GROUP,
     OIDC_LOGIN_GROUP,
     OIDC_MCP_GROUP,
     LoraStatus,
@@ -52,6 +53,8 @@ AGENTS_CLIENT = "agents"
 MCP_SCOPE = "songmaker:mcp"
 RESOURCE_URL = "https://songmaker.test/mcp"
 SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
+FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
+ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
 METADATA_URL = "https://songmaker.test/.well-known/oauth-protected-resource/mcp"
 AGENT_ENVIRONMENT = {
     "AGENT__BACKEND": "litellm",

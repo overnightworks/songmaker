@@ -18,7 +18,9 @@ from starlette.routing import Match
 from starlette.types import ASGIApp, Receive, Scope, Send
 from support.mcp_tool_table import ALL_TOOLS, Tool
 from support.mcp_world import (
+    ADMIN_GROUPS,
     AGENT_ENVIRONMENT,
+    FORGED,
     MCP_CLIENT_ENVIRONMENT,
     MCP_SCOPE,
     METADATA_URL,
@@ -36,7 +38,6 @@ from support.web_app import seed_session
 from songmaker_cli.agent.mcp import collect_route_tools
 from songmaker_cli.constants import (
     MODEL_AVAILABLE_MODES,
-    OIDC_ADMIN_GROUP,
     OIDC_LOGIN_GROUP,
     OIDC_MCP_GROUP,
 )
@@ -77,7 +78,7 @@ NEW_MARKED_ROUTES = {
 }
 
 
-# -- M1: exactly the marked tools ---------------------------------------------------------
+# -- exactly the marked tools ---------------------------------------------------------
 
 
 def test_a_members_agent_is_offered_exactly_the_marked_tools(mcp: McpWorld) -> None:
@@ -112,7 +113,7 @@ def test_the_description_of_generate_names_the_valid_models(mcp: McpWorld) -> No
     assert all(model in generate["description"] for model in MODEL_AVAILABLE_MODES)
 
 
-# -- M2, M3: only the person's own content -------------------------------------------
+# -- only the person's own content -------------------------------------------
 
 
 def test_the_read_tools_give_the_persons_own_content_as_the_api_does(mcp: McpWorld) -> None:
@@ -143,7 +144,7 @@ def test_an_admins_agent_sees_only_the_admins_own_content(
     world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
     world.world.seed_take(TokenWorld.ALICE, "alices")
     world.world.seed_take(TokenWorld.BOB, "bobs")
-    groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
+    groups = ADMIN_GROUPS
 
     songs = world.call("list_songs", groups=groups)
     albums = world.call("list_albums", groups=groups)
@@ -154,7 +155,7 @@ def test_an_admins_agent_sees_only_the_admins_own_content(
     assert others.is_error
 
 
-# -- M4, M5, M18, M24: writing as the person -------------------------------------------
+# -- writing as the person -------------------------------------------
 
 
 def test_create_song_into_the_persons_album_is_audited_as_that_person(mcp: McpWorld) -> None:
@@ -195,7 +196,7 @@ def test_an_admins_agent_cannot_write_into_or_generate_for_another_persons_conte
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
     world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
     world.world.seed_take(TokenWorld.BOB, "bobs")
-    groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
+    groups = ADMIN_GROUPS
 
     with worker_ready() as pool:
         into = world.call("create_song", {"title": "x", "album_id": "album-bobs"}, groups=groups)
@@ -296,7 +297,7 @@ def test_a_progress_tool_for_another_persons_song_is_not_found_and_reveals_nothi
     assert "generate" not in others.text
 
 
-# -- M6: what the agent's token cannot reach ------------------------------------------
+# -- what the agent's token cannot reach ------------------------------------------
 
 _UNMARKED_ROUTES = [
     ("POST", "/api/generations/bulk-delete", {"generation_ids": ["take-alices"]}),
@@ -364,7 +365,7 @@ def test_an_admins_agent_asking_for_another_persons_lora_gets_not_found_and_noth
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
     world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
     world.seed_household(TokenWorld.BOB, "bobs")
-    groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
+    groups = ADMIN_GROUPS
 
     reply = world.call("get_lora", {"lora_id": "lora-bobs"}, groups=groups)
 
@@ -386,7 +387,7 @@ def test_the_old_own_takes_path_is_read_as_a_lora_id_and_not_found_for_cookie_an
     assert "take-alices" not in cookie.text + token.text
 
 
-# -- M7, M8, M9, M10, M22, M23: which tokens count ----------------------------------
+# -- which tokens count ----------------------------------
 
 
 @pytest.mark.parametrize(
@@ -457,7 +458,7 @@ def test_the_agent_client_with_the_app_audience_is_refused_everywhere(
     assert mcp.rows_of(Generation, "id") == [("take-alices",)]
 
 
-# -- M11, M12: the endpoint's own answers -----------------------------------------------
+# -- the endpoint's own answers -----------------------------------------------
 
 
 def test_get_with_a_valid_bearer_is_405_and_an_origin_is_403(mcp: McpWorld) -> None:
@@ -512,7 +513,7 @@ def test_the_resource_metadata_names_the_derived_url_and_the_issuer(mcp: McpWorl
     }
 
 
-# -- M13: configuration -----------------------------------------------------------------
+# -- configuration -----------------------------------------------------------------
 
 
 def test_with_the_mcp_values_unset_mcp_and_its_metadata_answer_as_they_did(
@@ -558,10 +559,9 @@ def test_mcp_on_without_the_agent_group_stops_startup(
         make_token_world(tmp_path, factory=pg_factory)
 
 
-# -- M14: the browser is unchanged -------------------------------------------------------
+# -- the browser is unchanged -------------------------------------------------------
 
 
-_FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
 _MARKED_ROUTES = [
     ("GET", "/api/albums", None),
     ("POST", "/api/albums", {"title": "Browser"}),
@@ -599,7 +599,7 @@ def test_a_cookie_request_without_csrf_is_refused_on_each_state_changing_marked_
     seed_session(mcp.world.client, "alice")
 
     with worker_ready() as pool:
-        reply = mcp.world.client.request(method, path, json=body, headers=_FORGED)
+        reply = mcp.world.client.request(method, path, json=body, headers=FORGED)
 
     assert reply.status_code == 403
     assert mcp.rows_of(Album, "id") == [("album-alices",)]
@@ -632,7 +632,7 @@ def test_the_browser_lists_its_own_takes_and_reads_its_lora_at_the_new_paths_wit
     assert lora.json()["id"] == "lora-alices"
 
 
-# -- M15, M16, M17: generation ------------------------------------------------------------
+# -- generation ------------------------------------------------------------
 
 
 def test_generate_queues_a_job_for_the_person_as_the_api_queues_it(mcp: McpWorld) -> None:
@@ -686,7 +686,7 @@ def test_generate_past_the_persons_limit_gets_the_apis_refusal_and_no_job(
     assert len(world.rows_of(Job, "id")) == 1
 
 
-# -- M19, M20, M21, M26: the marked routes and the other gates --------------------------
+# -- the marked routes and the other gates --------------------------
 
 
 def test_the_agent_token_on_a_marked_route_without_mcp_is_the_person(mcp: McpWorld) -> None:
@@ -740,7 +740,7 @@ def test_with_no_token_client_the_resource_still_admits_and_person_paths_refuse_
     assert media.status_code == 401
 
 
-# -- M25: the gate's marks resolve to the marked operations -------------------------------
+# -- the gate's marks resolve to the marked operations -------------------------------
 
 
 class _EndpointRecorder:

@@ -8,13 +8,10 @@ from pathlib import Path
 import pytest
 from support.cowriter_gateway import attach_cowriter_gateway
 from support.mcp_tool_table import ALICE, BOB
-from support.mcp_world import SAME_ORIGIN, McpWorld, worker_ready
+from support.mcp_world import ADMIN_GROUPS, SAME_ORIGIN, McpWorld, worker_ready
 from support.token_world import TokenWorld
 
-from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LOGIN_GROUP, OIDC_MCP_GROUP
 from songmaker_cli.db.models import Job
-
-_ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
 
 
 def _started_in_the_browser(
@@ -41,8 +38,8 @@ def test_an_admins_agent_is_refused_the_job_the_admin_started_on_another_persons
 ) -> None:
     job_id = start(admins_household, tmp_path)
 
-    job = admins_household.call("get_job", {"job_id": job_id}, groups=_ADMIN_GROUPS)
-    cancel = admins_household.call("cancel_job", {"job_id": job_id}, groups=_ADMIN_GROUPS)
+    job = admins_household.call("get_job", {"job_id": job_id}, groups=ADMIN_GROUPS)
+    cancel = admins_household.call("cancel_job", {"job_id": job_id}, groups=ADMIN_GROUPS)
     browser = admins_household.world.client.get(f"/api/jobs/{job_id}")
 
     assert (job.is_error, cancel.is_error) == (True, True)
