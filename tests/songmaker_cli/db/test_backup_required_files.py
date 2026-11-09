@@ -144,8 +144,9 @@ def _add_loras(session, audio_dir: Path, owner_id: str, left_out) -> None:
     ready = create_user_lora(session, owner_id, "Ready", "ready")
     update_user_lora(
         session, ready.id, status="ready", storage_path=f"{root}/{ready.id}/lora",
+        tensor_path=f"{root}/{ready.id}/lora/legacy.safetensors",
     )
-    _write_file(audio_dir, f"{root}/{ready.id}/lora/adapter_config.json")
+    _write_file(audio_dir, f"{root}/{ready.id}/lora/lokr_weights.safetensors")
     sample = _write_file(audio_dir, f"{root}/{ready.id}/samples/a.wav")
     add_user_lora_sample(session, ready.id, sample)
     add_user_lora_sample(session, ready.id, "")
@@ -154,8 +155,11 @@ def _add_loras(session, audio_dir: Path, owner_id: str, left_out) -> None:
     update_user_lora(
         session, training.id, status="training", storage_path=f"{root}/{training.id}/lora",
     )
+    left_out["a LoRA's tensor_path"] = _write_file(
+        audio_dir, f"{root}/{ready.id}/lora/legacy.safetensors",
+    )
     left_out["a LoRA that is not ready"] = _write_file(
-        audio_dir, f"{root}/{training.id}/lora/adapter_config.json",
+        audio_dir, f"{root}/{training.id}/lora/lokr_weights.safetensors",
     )
 
 
@@ -172,7 +176,7 @@ def _add_cover_suggestion_file(session, audio_dir: Path, owner_id: str) -> None:
 
 
 def test_the_view_lists_exactly_the_required_files_that_are_on_disk(world: World) -> None:
-    optional_files = {path for path in world.left_out.values() if path}
+    optional_files = set(world.left_out.values())
 
     assert world.listed() == sorted(set(world.on_disk()) - optional_files)
 
@@ -191,6 +195,7 @@ def test_a_file_stays_listed_while_its_row_is_soft_deleted_or_archived(
     "a take's wav",
     "a take's raw wav",
     "a LoRA that is not ready",
+    "a LoRA's tensor_path",
     "a cover key with no dot",
 ])
 def test_a_file_the_app_works_without_is_not_listed(world: World, name: str) -> None:

@@ -18,7 +18,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 VIEW = 'backup_required_files'
-ADAPTER_SENTINEL = 'adapter_config.json'
+ADAPTER_SENTINEL = 'lokr_weights.safetensors'
 COVER_DIRECTORIES = (
     ('albums', 'covers'),
     ('songs', 'song-covers'),
