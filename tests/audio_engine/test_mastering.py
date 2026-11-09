@@ -6,10 +6,14 @@ multiband compression stability, and stereo widening correctness.
 
 from __future__ import annotations
 
+import importlib
+import sys
+
 import numpy as np
 import pytest
 from numpy.typing import NDArray
 
+import audio_engine.mastering as mastering_module
 from audio_engine.errors import MasteringError
 from audio_engine.mastering import (
     master_stereo,
@@ -425,3 +429,23 @@ def test_extract_band_highpass() -> None:
     left, right = _extract_band(signal, signal.copy(), 4000.0, nyquist * 0.96, nyquist)
     assert len(left) == len(signal)
     assert not np.all(left == 0.0)
+
+
+def test_mastering_without_numba_gives_the_compiled_output() -> None:
+    loud = 2.0 * _generate_multiband_signal(0.25)
+    signal = np.concatenate([loud, 0.1 * loud, loud])
+    compiled = master_stereo(signal, signal * 0.5, target_lufs=-14.0, sample_rate=SAMPLE_RATE)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(sys.modules, "numba", None)
+        importlib.reload(mastering_module)
+        try:
+            fallback = master_stereo(
+                signal, signal * 0.5, target_lufs=-14.0, sample_rate=SAMPLE_RATE,
+            )
+        finally:
+            patch.undo()
+            importlib.reload(mastering_module)
+
+    assert np.allclose(fallback[0], compiled[0], rtol=0, atol=1e-9)
+    assert np.allclose(fallback[1], compiled[1], rtol=0, atol=1e-9)
