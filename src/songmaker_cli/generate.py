@@ -1,8 +1,8 @@
 """Audio post-processing — decode, splice, master, encode.
 
 Used by ``songmaker_cli.jobs.post_process_generation`` after the
-acestep-worker hands back a raw WAV via the scheduler. This module
-no longer drives ACE-Step itself; the worker pool does.
+acestep-worker hands back a raw WAV via the scheduler. The worker pool
+runs ACE-Step; this module only processes the audio it returns.
 """
 
 from __future__ import annotations
