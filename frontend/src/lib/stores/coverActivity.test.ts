@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	coverJob,
 	coverSuggestions,
-	deferred,
 	FakeJobEventSource
 } from '#lib/test-utils/album-cover-editor.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 import {
 	beginCoverSave,
 	beginCoverSuggestion,

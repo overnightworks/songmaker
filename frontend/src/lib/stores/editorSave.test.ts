@@ -33,7 +33,7 @@ import {
 } from './editor';
 import { selectedSongId } from '#lib/stores/player.ts';
 import type { SongItem } from '#lib/api/types.ts';
-import { deferred } from '#lib/test-utils/album-cover-editor.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 
 const savedSongFields = {
 	slug: 'test',

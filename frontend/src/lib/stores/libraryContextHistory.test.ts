@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { ApiError } from '#lib/api/fetch.ts';
-import { deferred } from '#lib/test-utils/album-cover-editor.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 import { resetLibrarySearchForTests, searchQuery } from '#lib/stores/librarySearch.ts';
 import { albumList, allAlbumsLoad, songList } from '#lib/stores/libraryData.ts';

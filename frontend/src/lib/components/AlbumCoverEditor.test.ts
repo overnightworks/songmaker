@@ -43,9 +43,9 @@ import {
 	pressSuggestOnceLoaded,
 	pressEditorButton,
 	uploadCoverFile,
-	deferred,
 	afterPageRead
 } from '#lib/test-utils/album-cover-editor.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 
 const createAlbumCoverSuggestions = vi.fn();
 const fetchAlbumCoverSuggestions = vi.fn();

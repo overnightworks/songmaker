@@ -6,7 +6,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { deferred } from '#lib/test-utils/album-cover-editor.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {

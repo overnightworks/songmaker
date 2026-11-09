@@ -6,7 +6,7 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
 import { reportResourceStreamReachable } from '#lib/stores/connectivity.ts';
 import { toasts } from '#lib/stores/toast.ts';
-import { deferred } from '#lib/test-utils/album-cover-editor.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 import {
 	discardDraft,
 	draftLoadedFrom,
