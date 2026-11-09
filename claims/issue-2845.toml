@@ -1,8 +1,0 @@
-claim_id = "8fdec0754926430e89a5913e019d8efd"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c6f77b601f6a348202575fc137f27d574c2cb86d"
-branch = "claude/issue-2845-s25-lora-take-samples-loading-worker"
-scope = ["quality/baseline.toml", "scripts/test_helper_ratchet.txt", "src/songmaker_cli/library_api.py", "tests/conftest.py", "tests/songmaker_cli/test_health_api.py", "tests/songmaker_cli/test_lora_api.py", "tests/songmaker_cli/test_lora_api_take_samples.py", "tests/support/lora_api_world.py"]
-opened_commit = "fb438f294c0cd3b08fe0777ec8c2f8246a3af0b1"
-whole_reason = "One coverage cut: the support move makes the room the cells need, and the size row follows the module it measures."
