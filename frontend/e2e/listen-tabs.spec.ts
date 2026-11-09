@@ -2,7 +2,7 @@
 // of #1804): Takes first, the co-writer keeps its draft across a visit to
 // Takes, the tab writes no history entry and survives a reload.
 
-import { expect, test as base, type Page } from '@playwright/test';
+import { expect, test as base, type Page } from './coverage-test';
 import { COWRITER_COMPOSER_PLACEHOLDER } from '../src/lib/constants/cowriter';
 import {
 	NEW_PLACE_CREATE_LABEL,

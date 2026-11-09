@@ -4,7 +4,7 @@
 // hosts a page actually contacts, and which faces it actually loaded.
 // The shipped fonts are woff2 alone (issue #1224).
 
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from './coverage-test';
 import { ONLY_IN_SHELL } from './helpers';
 import { readSeededLibrary } from './seed';
 

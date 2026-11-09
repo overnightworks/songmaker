@@ -41,6 +41,7 @@ export const sveltekitOptions: Parameters<typeof sveltekit>[0] = {
 export default defineConfig({
 	plugins: [requireApiTargetForDevServer(), sveltekit(sveltekitOptions)],
 	build: {
+		sourcemap: process.env.BUILD_SOURCE_MAPS === 'true',
 		assetsInlineLimit: keepFontsAsFiles
 	},
 	server: {

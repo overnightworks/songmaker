@@ -5,7 +5,7 @@
 // so there `/settings` keeps redirecting into the first one. The run's
 // session is the stack's admin, so Admin is listed.
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './coverage-test';
 import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
 import { ONLY_IN_SHELL, workspace } from './helpers';
 
