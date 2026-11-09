@@ -363,12 +363,12 @@ def test_account_events_become_audit_lines_without_a_person_behind_them(
 def test_an_account_event_of_an_unknown_kind_raises_and_writes_no_audit_line(
     audit, session,
 ) -> None:
-    unknown_kind = "kind-a-newer-library-adds"
+    event = AccountEvent(
+        kind="kind-a-newer-library-adds", actor_id=None, subject_id=_SUBJECT, role="user",
+    )
 
     with pytest.raises(ValueError):
-        audit.account_event(AccountEvent(
-            kind=unknown_kind, actor_id=None, subject_id=_SUBJECT, role="user",
-        ))
+        audit.account_event(event)
 
     assert session.query(AuditLog).count() == 0
 
