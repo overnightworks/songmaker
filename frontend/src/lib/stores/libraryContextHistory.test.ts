@@ -137,7 +137,8 @@ describe('a history entry stored by an older build', () => {
 		{ field: 'searchCursor', value: 4 },
 		{ field: 'songId', value: 4 },
 		{ field: 'generationId', value: 4 },
-		{ field: 'collection', value: 'a1' }
+		{ field: 'collection', value: 'a1' },
+		{ field: 'collection', value: undefined }
 	])('is not a library entry when $field is $value', ({ field, value }) => {
 		expect(isLibraryHistoryState({ ...libraryRootState(), [field]: value })).toBe(false);
 	});

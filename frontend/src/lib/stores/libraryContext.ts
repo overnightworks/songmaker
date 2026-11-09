@@ -1170,6 +1170,7 @@ function isIdOrNull(value: unknown): value is string | null {
 
 function isCollectionSnapshot(value: unknown): value is CollectionSnapshot {
 	if (value === null) return true;
+	if (typeof value !== 'object') return false;
 	const collection = value as Record<string, unknown>;
 	return (
 		(collection.kind === 'album' || collection.kind === 'playlist') &&
