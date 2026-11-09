@@ -127,7 +127,7 @@ describe('LoRA API client', () => {
 		});
 		const takes = await listOwnPlayableTakes();
 		expect(takes[0]?.song_title).toBe('Glass River');
-		expect(mockFetch.mock.calls[0][0]).toBe('/api/loras/own-takes');
+		expect(mockFetch.mock.calls[0][0]).toBe('/api/own-playable-takes');
 	});
 
 	it('copies an own take by generation id without uploading its audio again', async () => {

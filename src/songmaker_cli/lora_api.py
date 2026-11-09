@@ -192,7 +192,16 @@ def api_list_loras(
     )
 
 
-@router.get("/loras/own-takes")
+_LIST_OWN_PLAYABLE_TAKES_DESCRIPTION = (
+    "List the person's own playable takes, the ones a LoRA sample can be copied from."
+)
+
+
+@router.get(
+    "/own-playable-takes",
+    description=_LIST_OWN_PLAYABLE_TAKES_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_own_playable_takes", effect=ToolEffect.READ_ONLY),
+)
 def api_list_own_playable_takes(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -203,7 +212,14 @@ def api_list_own_playable_takes(
     )
 
 
-@router.get("/loras/{lora_id}")
+_GET_LORA_DESCRIPTION = "Read one of the person's own LoRAs with its samples and training state."
+
+
+@router.get(
+    "/loras/{lora_id}",
+    description=_GET_LORA_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_lora", effect=ToolEffect.READ_ONLY),
+)
 def api_get_lora(
     lora_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
