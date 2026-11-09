@@ -1,7 +1,7 @@
 import { derived, get, readable, writable, type Readable } from 'svelte/store';
 
 import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 
 /**
  * The one answer to "can this page reach the server right now" (#1039).

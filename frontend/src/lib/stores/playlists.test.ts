@@ -16,7 +16,7 @@ import {
 	updatePlaylist
 } from '#lib/api/client.ts';
 import { LIBRARY_PLAYLISTS_ERROR } from '#lib/constants/playlist.ts';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import {
 	reportResourceStreamReachable,

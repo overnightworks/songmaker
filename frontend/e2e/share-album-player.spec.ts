@@ -7,7 +7,7 @@
 import { mkdirSync } from 'node:fs';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
 import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
-import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '../src/lib/constants';
+import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '../src/lib/constants/song';
 import {
 	SEEK_PLAYBACK_LABEL,
 	TRANSPORT_PAUSE_LABEL,

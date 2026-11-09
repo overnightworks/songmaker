@@ -12,7 +12,7 @@ import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { dropLayersFrom, stackedLayers } from '#lib/stores/layers.ts';
 import {

@@ -9,7 +9,6 @@
 // real track change happens inside the flow's own time.
 
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
-import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import {
 	collectionActionLabel,
@@ -22,7 +21,9 @@ import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 	NOW_PLAYING_UP_NEXT_PREFIX,
-	SHUFFLE_SCOPE_LIBRARY
+	SHUFFLE_SCOPE_LIBRARY,
+	NOW_PLAYING_LABEL,
+	openNowPlayingLabel
 } from '../src/lib/constants/now-playing';
 import {
 	FlowGuard,

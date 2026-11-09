@@ -9,7 +9,7 @@
 		transportIsBusy,
 		transportWaitingNotice
 	} from '#lib/services/audioPlayer.svelte.ts';
-	import { NOW_PLAYING_LABEL, SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants.ts';
+	import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants/song.ts';
 	import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 	import {
 		NOW_PLAYING_COLLAPSE_LABEL,
@@ -28,7 +28,8 @@
 		type NowPlayingSurfaceKind,
 		NOW_PLAYING_CLOSE,
 		NOW_PLAYING_GO_TO_SONG,
-		NOW_PLAYING_NO_LYRICS
+		NOW_PLAYING_NO_LYRICS,
+		NOW_PLAYING_LABEL
 	} from '#lib/constants/now-playing.ts';
 	import { formatTime } from '#lib/utils/format.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
@@ -186,7 +187,6 @@
 	// itself already stands back at 0:00 and would light the opening line.
 	const sungAt = $derived(ended || audioPlayer.current === null ? null : audioPlayer.currentTime);
 	const transport = $derived(audioPlayer.transport);
-	const buttonFace = $derived(transportButtonFace(transport));
 	const notice = $derived(unplayableNotice ?? transportWaitingNotice(transport));
 	const hasSideControls = $derived(Boolean(onToggleShuffle || onprev || onnext));
 
@@ -288,7 +288,7 @@
 			aria-label={transportButtonLabel(transport)}
 			aria-busy={transportIsBusy(transport)}
 		>
-			<TransportButtonIcon face={buttonFace} size={26} />
+			<TransportButtonIcon face={transportButtonFace(transport)} size={26} />
 		</button>
 	{/if}
 {/snippet}
