@@ -12,8 +12,6 @@ from support.lora_api_world import make_lora, make_take, post_sample_from_take
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.models import Generation, UserLoraSample
 
-pytest_plugins = ["support.lora_api_world"]
-
 
 @pytest.mark.parametrize("leftover", ["nothing", "a directory"])
 def test_a_take_whose_audio_is_no_longer_a_file_adds_no_sample(

@@ -35,8 +35,6 @@ from songmaker_cli.db.models import (
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora, update_user_lora
 from songmaker_cli.job_types import JobStatus
 
-pytest_plugins = ["support.lora_api_world"]
-
 
 @contextmanager
 def _mock_arq():
