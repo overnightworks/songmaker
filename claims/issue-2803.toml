@@ -1,0 +1,8 @@
+claim_id = "f864c87a883c4f8593250384630b80f1"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2d72935db5d39b934d7d9c8a0553ef103b579373"
+branch = "claude/issue-2803-reference-storage-mastering-cells"
+scope = [".github/workflows/ci.yml", "src/songmaker_cli/reference_audio.py", "tests/audio_engine/test_mastering.py", "tests/songmaker_cli/test_reference_audio.py", "tests/songmaker_cli/test_reference_audio_quota.py"]
+opened_commit = "79afeefc2450e2ae1f00fc43d7a4c1f25460dc15"
+whole_reason = "One coverage slice of two modules: the arm nothing reaches, the cells for the documented ones, and the floor they move."
