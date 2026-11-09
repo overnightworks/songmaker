@@ -48,6 +48,10 @@ function readReducedMotion(): { matches: boolean } & Pick<
  * still-rolling strip instead of opening an item, and wheel-to-scroll on
  * whichever axis the strip actually scrolls on. Touch and trackpad are left
  * to the OS — only mouse pointer events and the wheel are intercepted.
+ * Arrow keys, Home and End move focus between the visible items and bring it
+ * into view (without smooth scrolling under reduced motion); Enter or Space
+ * opens the focused item; a strip with no visible item ignores keys and snaps
+ * nowhere.
  *
  * The axis is never a caller-supplied option: a strip that lays out
  * horizontally today can be switched to a vertical list by a container
@@ -100,13 +104,11 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 	}
 	function focusAndReveal(item: HTMLElement) {
 		item.focus();
-		if (typeof item.scrollIntoView === 'function') {
-			item.scrollIntoView({
-				inline: axis === 'x' ? 'center' : 'nearest',
-				block: axis === 'y' ? 'center' : 'nearest',
-				behavior: reducedMotion.matches ? 'auto' : 'smooth'
-			});
-		}
+		item.scrollIntoView({
+			inline: axis === 'x' ? 'center' : 'nearest',
+			block: axis === 'y' ? 'center' : 'nearest',
+			behavior: reducedMotion.matches ? 'auto' : 'smooth'
+		});
 	}
 
 	let velocity = 0;
@@ -130,7 +132,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 			axis === 'x'
 				? containerRect.left + containerRect.width / 2
 				: containerRect.top + containerRect.height / 2;
-		let nearest: HTMLElement | null = null;
+		let nearest = items[0];
 		let nearestDist = Infinity;
 		for (const item of items) {
 			const r = item.getBoundingClientRect();
@@ -141,13 +143,11 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 				nearest = item;
 			}
 		}
-		if (nearest && typeof nearest.scrollIntoView === 'function') {
-			nearest.scrollIntoView({
-				inline: axis === 'x' ? 'center' : 'nearest',
-				block: axis === 'y' ? 'center' : 'nearest',
-				behavior: 'smooth'
-			});
-		}
+		nearest.scrollIntoView({
+			inline: axis === 'x' ? 'center' : 'nearest',
+			block: axis === 'y' ? 'center' : 'nearest',
+			behavior: 'smooth'
+		});
 	}
 
 	function stopMomentum(snap = false) {
@@ -243,9 +243,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		if (!dragState.dragged && Math.abs(delta) > DRAG_THRESHOLD_PX) {
 			dragState.dragged = true;
 			node.classList.add('is-dragging');
-			if (typeof node.setPointerCapture === 'function') {
-				node.setPointerCapture(dragState.pointerId);
-			}
+			node.setPointerCapture(dragState.pointerId);
 		}
 		if (dragState.dragged) {
 			setScroll(dragState.startScroll - delta);
@@ -263,8 +261,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		if (dragState.dragged) {
 			const samples = dragState.samples;
 			const first = samples[0];
-			const last = samples.at(-1);
-			if (!last) return;
+			const last = samples[samples.length - 1];
 			const dt = last.t - first.t;
 			const dx = last.pos - first.pos;
 			const releaseVelocity = dt > 0 ? -dx / dt : 0;
@@ -299,7 +296,7 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 		if (key !== 'Home' && key !== 'End') return undefined;
 		const items = visibleItems();
 		if (items.length === 0) return null;
-		return key === 'Home' ? items[0] : (items.at(-1) ?? null);
+		return key === 'Home' ? items[0] : items[items.length - 1];
 	}
 
 	function navigationDirection(key: string): -1 | 0 | 1 {
@@ -322,10 +319,8 @@ export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, i
 	function focusNextItem(direction: -1 | 1): void {
 		const items = visibleItems();
 		const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-		const nextIndex = Math.max(
-			0,
-			Math.min(items.length - 1, (currentIndex === -1 ? 0 : currentIndex) + direction)
-		);
+		const nextIndex =
+			currentIndex === -1 ? 0 : Math.max(0, Math.min(items.length - 1, currentIndex + direction));
 		const next = items[nextIndex];
 		if (next) focusAndReveal(next);
 	}
