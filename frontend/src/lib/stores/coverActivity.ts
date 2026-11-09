@@ -23,7 +23,6 @@ interface CoverActivity {
 	data: CoverSuggestionsResponse | null;
 	failure: string | null;
 	unreachable: boolean;
-	limitNote: string | null;
 	isLoading: boolean;
 	/** A Suggest POST is on its way; no read may end the wait before it answers. */
 	suggesting: boolean;
@@ -33,12 +32,11 @@ interface CoverActivity {
 	runId: string | null;
 }
 
-type CoverActivityOutcome = Pick<CoverActivity, 'failure' | 'unreachable' | 'limitNote'>;
+type CoverActivityOutcome = Pick<CoverActivity, 'failure' | 'unreachable'>;
 
 const COVER_ACTIVITY_SETTLED: CoverActivityOutcome = {
 	failure: null,
-	unreachable: false,
-	limitNote: null
+	unreachable: false
 };
 
 const NOTHING_KNOWN: CoverSuggestionDiscard = { suggestionIds: [], jobIds: [] };
@@ -213,7 +211,7 @@ export function retryCoverActivity(albumId: string): void {
 	void readCoverActivity(albumId);
 }
 
-export function updateCoverActivity(
+function updateCoverActivity(
 	albumId: string,
 	update: (state: CoverActivity) => CoverActivity
 ): void {

@@ -24,7 +24,7 @@ import songmaker_cli.cover_runner as cover_runner
 from songmaker_cli.constants import COVER_PROMPT_MAX_CHARS, COVER_PROMPT_SONG_FIELD_MAX_CHARS
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries.albums import soft_delete_album
-from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
+from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.job_types import JobStatus, JobType
 
@@ -128,7 +128,12 @@ def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_on
         suggestions = list(job.album.cover_suggestions)
         assert job.status == JobStatus.COMPLETED
         assert job.progress == 1.0
-        assert count_cover_jobs_since(session, "album", job.started_at) == 2
+        assert session.query(Job).filter(
+            Job.album_id == "album",
+            Job.type == JobType.COVER,
+            Job.status == JobStatus.COMPLETED,
+            Job.started_at >= job.started_at,
+        ).count() == 2
         assert sorted(item.job_id for item in suggestions) == ["earlier", job_id]
         assert all((audio_dir / item.png_path).is_file() for item in suggestions)
     assert len(held.requests) == 1

@@ -53,6 +53,7 @@
 		type MentionItem
 	} from '#lib/utils/mentions.ts';
 	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+	import { applyStreamEvent, type CoWriterMessage } from '#lib/utils/cowriter-stream.ts';
 	import { playerTakeIdForSong } from '#lib/utils/cowriter-take.ts';
 	import {
 		conversationConfirmLabel,
@@ -92,20 +93,7 @@
 		onturncompleted
 	}: Props = $props();
 
-	interface ToolCall {
-		name: string;
-		input: Record<string, unknown>;
-	}
-
-	interface Message {
-		persistedId?: string;
-		role: 'user' | 'assistant';
-		text: string;
-		toolCalls?: ToolCall[];
-		error?: string;
-		problem?: CowriterProblem | null;
-		waitSeconds?: number;
-	}
+	type Message = CoWriterMessage;
 
 	const INCOMPLETE_TURN_MESSAGE = 'The co-writer did not answer. Try again.';
 	const TURN_ALREADY_RUNNING_STATUS = 409;
@@ -513,7 +501,7 @@
 				mentioned_album_id: mentionedAlbumId,
 				current_generation_id: currentGenerationId
 			})) {
-				applyStreamEvent(assistantIndex, event);
+				applyStreamEventAt(assistantIndex, event);
 				if (event.type === 'error') {
 					streamError = streamFailure(event);
 					break;
@@ -612,26 +600,13 @@
 		return refusal.message;
 	}
 
-	function applyStreamEvent(assistantIndex: number, event: CoWriterStreamEvent): void {
+	function applyStreamEventAt(assistantIndex: number, event: CoWriterStreamEvent): void {
 		const current = messages[assistantIndex];
 		if (!current) return;
-		if (event.type === 'assistant_text') {
-			messages[assistantIndex] = { ...current, text: current.text + event.text };
-			return;
-		}
-		if (event.type === 'tool_call') {
-			const calls = [...(current.toolCalls ?? []), { name: event.name, input: event.input }];
-			messages[assistantIndex] = { ...current, toolCalls: calls };
-			return;
-		}
+		messages[assistantIndex] = applyStreamEvent(current, event);
 		if (event.type === 'final') {
 			const sent = messages[assistantIndex - 1];
 			messages[assistantIndex - 1] = { ...sent, persistedId: event.user_message.id };
-			messages[assistantIndex] = {
-				...current,
-				persistedId: event.assistant_message.id,
-				text: event.assistant_message.content
-			};
 		}
 	}
 

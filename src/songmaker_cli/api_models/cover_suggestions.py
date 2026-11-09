@@ -50,21 +50,10 @@ class CoverSuggestionResponse(BaseModel):
 class CoverSuggestionsResponse(BaseModel):
     job: JobResponse | None = None
     suggestions: list[CoverSuggestionResponse]
-    used_today: int
-    daily_limit: int
 
     @classmethod
-    def from_orm(
-        cls,
-        *,
-        job,
-        suggestions,
-        used_today: int,
-        daily_limit: int,
-    ) -> CoverSuggestionsResponse:
+    def from_orm(cls, *, job, suggestions) -> CoverSuggestionsResponse:
         return cls(
             job=JobResponse.from_orm(job) if job else None,
             suggestions=[CoverSuggestionResponse.from_orm(item) for item in suggestions],
-            used_today=used_today,
-            daily_limit=daily_limit,
         )

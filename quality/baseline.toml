@@ -16,11 +16,10 @@
 "frontend/e2e/library.spec.ts" = 1283
 "frontend/e2e/offline.spec.ts" = 804
 "frontend/e2e/seed.ts" = 1174
-"frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 860
-"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 964
-"frontend/src/lib/components/AlbumDetailView.test.ts" = 1108
-"frontend/src/lib/components/CoWriterPanel.svelte" = 1505
+"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 887
+"frontend/src/lib/components/AlbumDetailView.test.ts" = 1106
+"frontend/src/lib/components/CoWriterPanel.svelte" = 1480
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1825
 "frontend/src/lib/components/LibraryWall.test.ts" = 1137
 "frontend/src/lib/components/LoraDetail.svelte" = 968
@@ -37,7 +36,7 @@
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
-"frontend/src/lib/share/sharePlayback.test.ts" = 837
+"frontend/src/lib/share/sharePlayback.test.ts" = 684
 "frontend/src/lib/stores/jobs.test.ts" = 900
 "frontend/src/lib/stores/libraryContext.test.ts" = 2087
 "frontend/src/lib/stores/libraryContext.ts" = 1189

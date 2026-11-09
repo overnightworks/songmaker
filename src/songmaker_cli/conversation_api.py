@@ -29,7 +29,7 @@ from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.backend import TurnAnswer, TurnCaller, TurnProblem, run_cowriter_turn
-from songmaker_cli.agent.mcp import Exclusion, exclude_route
+from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.agent.tools import CallingTurn, bound_to_turn
 from songmaker_cli.api_helpers import (
     create_job_with_rate_limit,
@@ -214,7 +214,10 @@ def _sse_format(event: BaseModel) -> str:
     "/chat/turn",
     responses={
         403: {"description": "The co-writer needs a browser login"},
-        404: {"description": "Mentioned album or version does not exist"},
+        404: {
+            "description": "A mentioned album, version, song or take, or the current song, "
+            "does not exist",
+        },
         409: {"description": "Another co-writer turn is still running"},
         422: {"description": "Chat context or co-writer configuration is invalid"},
     },
@@ -484,7 +487,26 @@ def _verify_owns_conversation(
     return conv
 
 
-@router.get("/conversations", openapi_extra=exclude_route(Exclusion.CONVERSATION_MEMORY))
+_LIST_CONVERSATIONS_DESCRIPTION = (
+    "Lists the person's recent co-writer conversations, most recently active first, with "
+    "the title and whether each is archived. Only the person's own conversations come back."
+)
+_GET_CONVERSATION_DESCRIPTION = (
+    "Reads one of the person's own co-writer conversations: its title, whether it is "
+    "archived, whether a turn is running now and every message. Another person's "
+    "conversation id is not found."
+)
+_START_CONVERSATION_DESCRIPTION = (
+    "Starts a new co-writer conversation for the person and archives their active one. "
+    "The archived conversation stays readable; the co-writer continues in the new one."
+)
+
+
+@router.get(
+    "/conversations",
+    description=_LIST_CONVERSATIONS_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_conversations", effect=ToolEffect.READ_ONLY),
+)
 def api_list_conversations(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -497,8 +519,9 @@ def api_list_conversations(
 
 @router.get(
     "/conversations/{conversation_id}",
+    description=_GET_CONVERSATION_DESCRIPTION,
     responses={404: {"description": "Conversation does not exist"}},
-    openapi_extra=exclude_route(Exclusion.CONVERSATION_MEMORY),
+    openapi_extra=agent_tool(name="get_conversation", effect=ToolEffect.READ_ONLY),
 )
 def api_conversation_messages(
     conversation_id: str,
@@ -526,7 +549,11 @@ def _running_turn_count(session: Session, user: AuthenticatedUser) -> int:
     return count_user_active_jobs(session, user.id, JobType.CHAT)
 
 
-@router.post("/conversations/new", openapi_extra=exclude_route(Exclusion.CONVERSATION_MEMORY))
+@router.post(
+    "/conversations/new",
+    description=_START_CONVERSATION_DESCRIPTION,
+    openapi_extra=agent_tool(name="start_conversation", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_new_conversation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),

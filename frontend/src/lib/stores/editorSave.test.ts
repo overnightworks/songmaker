@@ -1,5 +1,5 @@
 import { makeSong, makeVersion } from '#lib/test-utils/factories.ts';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 vi.mock('#lib/api/client.ts', () => ({
@@ -33,6 +33,7 @@ import {
 } from './editor';
 import { selectedSongId } from '#lib/stores/player.ts';
 import type { SongItem } from '#lib/api/types.ts';
+import { deferred } from '#lib/test-utils/album-cover-editor.ts';
 
 const savedSongFields = {
 	slug: 'test',
@@ -44,6 +45,7 @@ const savedSongFields = {
 } satisfies Partial<SongItem>;
 
 beforeEach(discardDraft);
+afterEach(() => selectedSongId.set('s1'));
 
 describe('handleSave', () => {
 	const version = (number: number) =>
@@ -215,5 +217,41 @@ describe('handleSave', () => {
 
 		await expect(handleSave('s1')).rejects.toThrow('Network error');
 		expect(get(isDirty)).toBe(true);
+	});
+
+	it('a save for a song the editor does not show is refused', async () => {
+		const { updateSong } = await import('#lib/api/client.ts');
+		vi.mocked(updateSong).mockClear();
+		loadSongData(makeSong({ ...savedSongFields, id: 's1' }));
+
+		await expect(handleSave('s2')).rejects.toThrow('Cannot save a different song');
+		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	it('a save finishing after the person opened another song leaves that song editor and versions untouched', async () => {
+		const { updateSong, fetchVersions } = await import('#lib/api/client.ts');
+		const otherSongVersions = [makeVersion({ id: 'other-v1', version_number: 1 })];
+		const otherVersionsLoading = deferred<ReturnType<typeof makeVersion>[]>();
+		const saving = deferred<SongItem>();
+		vi.mocked(updateSong).mockReturnValueOnce(saving.promise);
+		loadSongData(makeSong({ ...savedSongFields, id: 's1' }));
+		vi.mocked(fetchVersions).mockClear();
+		vi.mocked(fetchVersions).mockReturnValueOnce(otherVersionsLoading.promise);
+		setDraftLyrics('sent draft');
+		const save = handleSave('s1');
+		selectedSongId.set('s2');
+		loadSongData(makeSong({ ...savedSongFields, id: 's2', lyrics: 'other song' }));
+		setDraftLyrics('typed on other song');
+
+		saving.resolve(makeSong({ ...savedSongFields, id: 's1', lyrics: 'sent draft' }));
+		await save;
+		otherVersionsLoading.resolve(otherSongVersions);
+		await vi.waitFor(() => expect(get(versions)).toEqual(otherSongVersions));
+
+		expect(vi.mocked(fetchVersions).mock.calls).toEqual([['s2']]);
+		expect(get(editLyrics)).toBe('typed on other song');
+		expect(get(isDirty)).toBe(true);
+		discardDraft();
+		expect(get(editLyrics)).toBe('other song');
 	});
 });

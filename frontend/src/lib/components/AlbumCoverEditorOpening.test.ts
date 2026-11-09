@@ -118,6 +118,18 @@ describe('The album cover state around the editor', () => {
 		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
+	it('the grown Add cover place opens the file picker and makes no suggestion', async () => {
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
+		const picker = vi.spyOn(input, 'click').mockImplementation(() => undefined);
+
+		getByRoleButton(requireElement(target, '.cover-stage'), 'Add cover').click();
+
+		expect(picker).toHaveBeenCalledTimes(1);
+		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
+	});
+
 	it('the closed cover shows no waiting mark once an Upload has deleted the suggestions', async () => {
 		let deleted = false;
 		fetchAlbumCoverSuggestions.mockImplementation(async () =>
@@ -152,7 +164,7 @@ describe('The album cover state around the editor', () => {
 		expect(countLine(target)).toBe('Loading cover suggestion…');
 
 		pageRead.resolve(coverSuggestions());
-		await vi.waitFor(() => expect(countLine(target)).toBe('10 of 10 left today'));
+		await vi.waitFor(() => expect(countLine(target)).toBe(''));
 	});
 
 	it.each(askAnswers)(

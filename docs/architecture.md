@@ -737,6 +737,7 @@ regenerate `types.ts` and run the check. The co-writer stream frames
 songmaker's own exported models; `lib/api` declares no wire shape of its own: ESLint refuses a
 hand-written interface or object type there, and a frontend-only call shape
 carries a line marker with its reason.
+The co-writer's answer arrives in pieces, and the bubble shows the round being written: the first piece after a tool call starts the text anew (`lib/utils/cowriter-stream.ts`), so the words shown at the end are the stored answer.
 
 `lib/api/` is the transport: it reports what the server answered. A 429 goes to
 the `rateLimited` reaction that `routes/+layout.svelte` installs through
@@ -977,10 +978,13 @@ starts with the creator's account id: a stream track carries `seed: null` and
 
 ### The co-writer turn
 
-`POST /api/chat/turn` (`conversation_api.py`) prepares the turn as before: the
-context envelope (`cowriter/turn_context.py`), the memory, the rolling summary plus a token-bounded tail, the
-chat job and the stored user message. The turn then runs as a task of its own
-through `agent/backend.py`:
+`POST /api/chat/turn` (`conversation_api.py`) prepares the turn: the context
+envelope (`cowriter/turn_context.py`), the memory, the rolling summary plus a
+token-bounded tail, the chat job and the stored user message. The envelope
+loads the current song, the mentioned songs, album and take only when the
+caller owns them, an admin included; another person's content answers 404 and
+starts no job. The turn then runs as a task of its own through
+`agent/backend.py`:
 
 1. It takes the `GatewayBackend` that `run_server` composed from `Settings.agent` and
    holds on `app.state.agent_backend`; an unset `agent` ends the turn
@@ -1042,8 +1046,7 @@ its request without stopping the runner. `covers.decode_cover_image` checks the
 bytes, and the runner writes the decoded picture as PNG. A run that cannot draw
 ends FAILED with the problem as `error_type`, a closed sentence as `error`, and,
 when busy, the wait the gateway named as `retry_after_seconds`; the editor words the problem
-itself and counts a busy wait down from the job's end. Only a completed run
-spends the daily count.
+itself and counts a busy wait down from the job's end.
 
 Trust, tokens and the network: [Security](security.md#cover-picture-through-the-gateway).
 
@@ -1138,7 +1141,7 @@ headers; CORS preflights remain outside the library stack.
 
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
-A person's own agent, or an agent that signs in with its own client and holds its own account (kind `agent`, webauth's agent group), reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools (every other route carries `not_an_agent_tool` with the reason of its `Exclusion`, and an undecided route stops the build), the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. The reach includes ending a share and moving an album or a song to the trash; it excludes final and bulk deletion, sharing and publishing, admin and what sends outward. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
+A person's own agent, or an agent that signs in with its own client and holds its own account (kind `agent`, webauth's agent group), reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools (every other route carries `not_an_agent_tool` with the reason of its `Exclusion`, and an undecided route stops the build), the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. The reach includes the person's own conversations and notes, starting a new conversation, ending a share and moving an album or a song to the trash; it excludes final and bulk deletion, sharing and publishing, admin and what sends outward. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
 
 The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `webauth` is an installed distribution rather than a directory under `src/`, and its own boundaries are contracted in its repository; because `include_external_packages` is on, `.importlinter` still resolves it in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
 
@@ -1350,7 +1353,7 @@ close the stream.
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay after a `Last-Event-ID` header or `last_event_id` query cursor (the header wins when both are sent), gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
 | GET/POST/PUT/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, select a private suggestion, or remove the album cover (JPEG/PNG; ownership 404) |
-| POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | POST needs a browser session (a bearer gets 403) and asks the gateway's API group first: 503 `{"detail": {"problem": "unavailable"}}` without a gateway or with the issuer down, 403 with `not_enabled` or `sign_in_again`, and no job; it then creates one `cover` job after the active-job and per-album UTC-day checks; only completed jobs that produced an image count, on the UTC day of their start. Publication and completion commit together; suggestion deletion keeps the charge, and album deletion retains the job with a null album reference. Each job makes one image and adds it to the album's pending suggestions, which stay until DELETE (the UI discards after ×, USE or Upload) or album deletion. The web container's one-at-a-time runner claims queued cover jobs; it owns startup recovery, reports interrupted running jobs as `server_restart`, and removes only their own suggestion. The music worker neither registers nor recovers covers. GET inspects the latest job state and private suggestions; DELETE deletes only the album's suggestions it names by `suggestion_id` or by the run that made them (`job_id`), refuses naming nothing with 422, and removes their files after the database commit. |
+| POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | POST needs a browser session (a bearer gets 403) and asks the gateway's API group first: 503 `{"detail": {"problem": "unavailable"}}` without a gateway or with the issuer down, 403 with `not_enabled` or `sign_in_again`, and no job; it then creates one `cover` job after the active-job check. Songmaker sets no daily limit on cover suggestions: the gateway's budgets bound cover pictures. Publication and completion commit together, and album deletion retains the job with a null album reference. Each job makes one image and adds it to the album's pending suggestions, which stay until DELETE (the UI discards after ×, USE or Upload) or album deletion. The web container's one-at-a-time runner claims queued cover jobs; it owns startup recovery, reports interrupted running jobs as `server_restart`, and removes only their own suggestion. The music worker neither registers nor recovers covers. GET inspects the latest job state and private suggestions; DELETE deletes only the album's suggestions it names by `suggestion_id` or by the run that made them (`job_id`), refuses naming nothing with 422, and removes their files after the database commit. |
 | GET | `/api/albums/{id}/cover-suggestions/{suggestion_id}` | user | Stream one private suggestion after the same album ownership check; no share route exists. |
 | GET/POST/DELETE | `/api/songs/{id}/cover` | user | Read, upload/replace, or remove the song's own cover (JPEG/PNG; ownership 404). JSON `cover` is the song file or null — never the parent album's URLs. |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
