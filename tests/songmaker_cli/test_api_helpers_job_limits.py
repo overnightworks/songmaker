@@ -19,9 +19,10 @@ def session(pg_factory):
 
 
 def test_a_job_type_with_no_windowed_rate_limit_is_refused_and_leaves_no_job(session) -> None:
+    owner = make_authenticated_user(OWNER_ID)
+    redis = make_fake_redis()
+
     with pytest.raises(ValueError, match="Unknown job type for rate limiting"):
-        create_job_with_rate_limit(
-            session, make_authenticated_user(OWNER_ID), JobType.COVER, redis=make_fake_redis(),
-        )
+        create_job_with_rate_limit(session, owner, JobType.COVER, redis=redis)
 
     assert session.query(Job).count() == 0
