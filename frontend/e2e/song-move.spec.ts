@@ -52,6 +52,10 @@ const MOVE_ROUTE = '**/api/songs/*/album';
 // fails on any refusal, and every cell on a 5xx.
 const REFUSED_MOVE_TAG = '@refused-move';
 
+// This file's tests fail on a first attempt for a cause not yet known, and a failed attempt
+// must leave its trace; this setting leaves with that cause.
+test.use({ trace: 'retain-on-failure' });
+
 let guard: FlowGuard;
 let people: Person[] = [];
 
