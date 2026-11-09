@@ -5,7 +5,7 @@
 // Both projects run it: 390 px (the chip stands in the Edit tab's Generate bar)
 // and 1440 px (the header).
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './coverage-test';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_LYRICS_LABEL,

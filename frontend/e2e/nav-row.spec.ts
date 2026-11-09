@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator } from './coverage-test';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { API_ERROR_GENERIC_MESSAGE } from '../src/lib/constants/http';
 import {

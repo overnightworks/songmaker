@@ -1,4 +1,4 @@
-import { expect, test as base, type Locator, type Page } from '@playwright/test';
+import { expect, test as base, type Locator, type Page } from './coverage-test';
 import type { JobItem } from '../src/lib/api/types';
 import { ADMIN_TABS_LABEL, ADMIN_WORKER_POOL_HREF } from '../src/lib/constants/admin';
 import {

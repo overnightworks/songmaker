@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './coverage-test';
 import { PHONE_TABS, PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 import { NOW_PLAYING_CLOSE, openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import { songEditorOpenLabel } from '../src/lib/constants/song';

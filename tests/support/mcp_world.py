@@ -17,10 +17,11 @@ from agent_runtime_client.mcp_wire import PROTOCOL_VERSION_HEADER as PROTOCOL_HE
 from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, NAME_BEARING_METHODS
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from sqlalchemy.orm import sessionmaker
+from support.mcp_tool_table import ALICE, BOB
 from support.reference_rows import a_reference
 from support.token_world import TokenWorld, make_token_world
 from support.wav_files import write_wav
-from support.web_app import seed_user
+from support.web_app import TEST_ORIGIN, seed_user
 
 from songmaker_cli.constants import (
     OIDC_LOGIN_GROUP,
@@ -46,6 +47,7 @@ from songmaker_cli.db.queries.activity import record_song_edit, record_song_play
 AGENTS_CLIENT = "agents"
 MCP_SCOPE = "songmaker:mcp"
 RESOURCE_URL = "https://songmaker.test/mcp"
+SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
 METADATA_URL = "https://songmaker.test/.well-known/oauth-protected-resource/mcp"
 AGENT_ENVIRONMENT = {
     "AGENT__BACKEND": "litellm",
@@ -246,3 +248,10 @@ def mcp(
 ) -> McpWorld:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
     return build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans)
+
+
+@pytest.fixture
+def household(mcp: McpWorld) -> McpWorld:
+    mcp.seed_household(TokenWorld.ALICE, ALICE)
+    mcp.seed_household(TokenWorld.BOB, BOB)
+    return mcp

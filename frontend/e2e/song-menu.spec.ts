@@ -6,7 +6,7 @@
 // run in the mobile project (the phone app bar carries the menu there),
 // laptop cells in the desktop one (the editor header carries it).
 
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import {
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_DELETE_LABEL,

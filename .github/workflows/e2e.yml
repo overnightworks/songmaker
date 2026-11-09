@@ -142,6 +142,35 @@ jobs:
           E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}
         run: pnpm test:e2e --project=${{ matrix.project }}
 
+      # Measurement only: a failure here writes its reason into the summary and a
+      # warning and never fails the job, so the tests alone decide the run.
+      - name: E2E coverage report (${{ matrix.project }})
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        working-directory: frontend
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          report=$(mktemp)
+          if node e2e/coverage-report.ts "$PROJECT" >"$report" 2>"$report.err"; then
+            tee -a "$GITHUB_STEP_SUMMARY" <"$report"
+          else
+            reason=$(grep -m1 -E '^[A-Za-z]*Error' "$report.err" || tail -n 1 "$report.err")
+            echo "::warning::E2E coverage report for $PROJECT failed: $reason"
+            echo "E2E coverage report for $PROJECT failed: $reason" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload E2E coverage report (${{ matrix.project }})
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
+        with:
+          name: e2e-coverage-${{ matrix.project }}
+          path: frontend/e2e/.artifacts/coverage/${{ matrix.project }}
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+
       # The E2E-only IP_RATE_LIMIT in docker/docker-compose.ci.yml is sized
       # from this peak (#1555), so every run prints it rather than leaving a
       # dated number to go stale.

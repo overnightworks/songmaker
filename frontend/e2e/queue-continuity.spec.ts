@@ -8,7 +8,7 @@
 // Both shells walk every flow. The seeded takes are three seconds long, so a
 // real track change happens inside the flow's own time.
 
-import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, request, test, type APIRequestContext, type Page } from './coverage-test';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import {
 	collectionActionLabel,

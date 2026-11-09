@@ -8,16 +8,25 @@ browser's. Both people's content comes from ``McpWorld.seed_household``.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 from contextlib import ExitStack
-from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 from sqlalchemy.orm import sessionmaker
-from support.mcp_world import McpWorld, build_mcp_world, worker_ready
+from support.mcp_tool_table import (
+    ALICE,
+    ALL_TOOLS,
+    BOB,
+    CREATIONS,
+    PLAIN_READS,
+    READS_OF_ONE_RESOURCE,
+    WRITES_ON_ONE_RESOURCE,
+    Tool,
+    repaint_arguments,
+)
+from support.mcp_world import SAME_ORIGIN, McpWorld, build_mcp_world, worker_ready
 from support.token_world import TokenWorld
-from support.web_app import TEST_ORIGIN, seed_session
+from support.web_app import seed_session
 
 from songmaker_cli.constants import (
     OIDC_ADMIN_GROUP,
@@ -46,170 +55,11 @@ from songmaker_cli.db.queries.activity import record_song_edit, record_song_play
 from songmaker_cli.db.queries.songs import record_playlist_listen
 from songmaker_cli.job_types import JobType
 
-ALICE = "alices"
-BOB = "bobs"
-_SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
 _FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
 _NOT_FOUND = {403, 404}
 BOBS_LYRICS = "a verse only the member wrote"
 
-Arguments = Callable[[str, str], dict]
-
-
-@dataclass(frozen=True)
-class Tool:
-    """A tool, the route it calls and its arguments for a resource owner and a second one.
-
-    ``subject`` names the owner of the container or the thing acted on, ``other`` the owner of
-    what is added to it; a case with one resource uses ``subject`` only.
-    """
-
-    name: str
-    method: str
-    template: str
-    arguments: Arguments = lambda subject, other: {}  # noqa: ARG005
-    crossed: bool = False
-
-    def arguments_for(self, subject: str, other: str | None = None) -> dict:
-        return self.arguments(subject, other or subject)
-
-    def request(self, subject: str) -> tuple[str, dict]:
-        """The browser's path and the arguments left for its body or query."""
-        arguments = self.arguments_for(subject)
-        path = self.template.format(**arguments)
-        left = {k: v for k, v in arguments.items() if "{" + k + "}" not in self.template}
-        return path, left
-
-    @property
-    def refused_pairs(self) -> list[tuple[str, str]]:
-        return [(BOB, BOB), (ALICE, BOB), (BOB, ALICE)] if self.crossed else [(BOB, BOB)]
-
-
-def _take_arguments(subject: str, other: str) -> dict:
-    return {"gen_id": f"take-{subject}"}
-
-
-def _cover_arguments(subject: str, other: str) -> dict:
-    return {"gen_id": f"take-{subject}", "src_generation_id": f"take-{subject}", "model": "sft"}
-
-
-def _repaint_arguments(subject: str, other: str) -> dict:
-    return {**_cover_arguments(subject, other), "repainting_start": 0.1, "repainting_end": 0.5}
-
-
-# Reads of one resource of a person: a stranger's gets the browser's refusal.
-READS_OF_ONE_RESOURCE = [
-    Tool("get_album", "GET", "/api/albums/{album_id}", lambda s, o: {"album_id": f"album-{s}"}),
-    Tool("list_cover_suggestions", "GET", "/api/albums/{album_id}/cover-suggestions",
-         lambda s, o: {"album_id": f"album-{s}"}),
-    Tool("get_take", "GET", "/api/generations/{gen_id}", _take_arguments),
-    Tool("get_lora", "GET", "/api/loras/{lora_id}", lambda s, o: {"lora_id": f"lora-{s}"}),
-    Tool("get_job", "GET", "/api/jobs/{job_id}", lambda s, o: {"job_id": f"job-{s}"}),
-    Tool("get_playlist", "GET", "/api/playlists/{playlist_id}",
-         lambda s, o: {"playlist_id": f"playlist-{s}"}),
-    Tool("list_reference_uses", "GET", "/api/references/{reference_id}/uses",
-         lambda s, o: {"reference_id": f"reference-{s}"}),
-    Tool("list_song_versions", "GET", "/api/songs/{song_id}/versions",
-         lambda s, o: {"song_id": f"song-{s}"}),
-]
-
-# Reads of what a person has as a list, or of what every member sees.
-PLAIN_READS = [
-    Tool("get_account", "GET", "/api/auth/me"),
-    Tool("get_library_listen", "GET", "/api/library/listen"),
-    Tool("get_library_write", "GET", "/api/library/write"),
-    Tool("search_library", "GET", "/api/library/search", lambda s, o: {"q": "Song"}),
-    Tool("get_library_pool_queue", "GET", "/api/library/pool-queue"),
-    Tool("list_loras", "GET", "/api/loras"),
-    Tool("list_own_playable_takes", "GET", "/api/own-playable-takes"),
-    Tool("list_playlists", "GET", "/api/playlists"),
-    Tool("list_references", "GET", "/api/references"),
-    Tool("get_release", "GET", "/api/release"),
-    Tool("get_cowriter_settings", "GET", "/api/settings/cowriter"),
-    Tool("get_default_config", "GET", "/api/settings/default-config"),
-    Tool("get_generation_builtins", "GET", "/api/settings/generation-builtins"),
-    Tool("get_generation_defaults", "GET", "/api/settings/generation-defaults"),
-    Tool("list_models", "GET", "/api/settings/models"),
-    Tool("list_presets", "GET", "/api/settings/presets"),
-    Tool("get_theme", "GET", "/api/settings/theme"),
-]
-
-# Writes on a resource of a person: a stranger's is refused and nothing is written.
-WRITES_ON_ONE_RESOURCE = [
-    Tool("archive_album", "POST", "/api/albums/{album_id}/archive",
-         lambda s, o: {"album_id": f"album-{s}"}),
-    Tool("unarchive_album", "POST", "/api/albums/{album_id}/unarchive",
-         lambda s, o: {"album_id": f"album-{s}"}),
-    Tool("restore_album", "POST", "/api/albums/{album_id}/restore",
-         lambda s, o: {"album_id": f"album-gone-{s}"}),
-    Tool("restore_song", "POST", "/api/songs/{song_id}/restore",
-         lambda s, o: {"song_id": f"song-gone-{s}"}),
-    Tool("keep_take", "POST", "/api/generations/{gen_id}/keep", _take_arguments),
-    Tool("unarchive_take", "POST", "/api/generations/{gen_id}/unarchive", _take_arguments),
-    Tool("rate_take", "POST", "/api/generations/{gen_id}/rate",
-         lambda s, o: {**_take_arguments(s, o), "rating": 80}),
-    Tool("score_take", "POST", "/api/generations/{gen_id}/score", _take_arguments),
-    Tool("cover_take", "POST", "/api/generations/{gen_id}/cover", _cover_arguments),
-    Tool("repaint_take", "POST", "/api/generations/{gen_id}/repaint", _repaint_arguments),
-    Tool("cancel_job", "POST", "/api/jobs/{job_id}/cancel", lambda s, o: {"job_id": f"job-{s}"}),
-    Tool("keep_reference", "POST", "/api/references/{reference_id}/keep",
-         lambda s, o: {"reference_id": f"reference-{s}"}),
-    Tool("set_default_preset", "POST", "/api/settings/presets/{preset_id}/set-default",
-         lambda s, o: {"preset_id": f"preset-{s}"}),
-    Tool("add_lora_sample_from_take", "POST", "/api/loras/{lora_id}/samples/from-generation",
-         lambda s, o: {"lora_id": f"lora-{s}", "generation_id": f"take-{o}"}, crossed=True),
-    Tool("add_album_to_playlist", "POST", "/api/playlists/{playlist_id}/entries/album",
-         lambda s, o: {"playlist_id": f"playlist-{s}", "album_id": f"album-{o}"}, crossed=True),
-    Tool("add_take_to_playlist", "POST", "/api/playlists/{playlist_id}/entries/generation",
-         lambda s, o: {"playlist_id": f"playlist-{s}", "generation_id": f"take-{o}"},
-         crossed=True),
-    Tool("add_song_to_playlist", "POST", "/api/playlists/{playlist_id}/entries/song",
-         lambda s, o: {"playlist_id": f"playlist-{s}", "song_id": f"song-{o}"}, crossed=True),
-    Tool("update_album", "PUT", "/api/albums/{album_id}",
-         lambda s, o: {"album_id": f"album-{s}", "title": "Renamed album"}),
-    Tool("update_playlist", "PUT", "/api/playlists/{playlist_id}",
-         lambda s, o: {"playlist_id": f"playlist-{s}", "title": "Renamed list"}),
-    Tool("move_playlist_entry", "PATCH", "/api/playlists/{playlist_id}/entries/{entry_id}/position",
-         lambda s, o: {"playlist_id": f"playlist-filled-{s}", "entry_id": f"entry-{s}",
-                       "new_position": 1}),
-    Tool("remove_playlist_entry", "DELETE", "/api/playlists/{playlist_id}/entries/{entry_id}",
-         lambda s, o: {"playlist_id": f"playlist-filled-{s}", "entry_id": f"entry-{s}-extra"}),
-    Tool("update_preset", "PUT", "/api/settings/presets/{preset_id}",
-         lambda s, o: {"preset_id": f"preset-{s}", "name": "Renamed preset"}),
-    Tool("rename_song", "PUT", "/api/songs/{song_id}/title",
-         lambda s, o: {"song_id": f"song-{s}", "title": "Renamed song"}),
-    Tool("move_song", "PUT", "/api/songs/{song_id}/album",
-         lambda s, o: {"song_id": f"song-{s}", "album_id": f"album-{o}"}, crossed=True),
-    Tool("update_lora_sample", "PATCH", "/api/loras/{lora_id}/samples/{sample_id}",
-         lambda s, o: {"lora_id": f"lora-{s}", "sample_id": f"sample-{s}-0",
-                       "caption": "new caption"}),
-    Tool("write_song_memory", "PUT", "/api/memory/songs/{song_id}",
-         lambda s, o: {"song_id": f"song-{s}", "body": "a note"}),
-    Tool("write_album_memory", "PUT", "/api/memory/albums/{album_id}",
-         lambda s, o: {"album_id": f"album-{s}", "body": "a note"}),
-]
-
-# Writes that make something new for the person.
-CREATIONS = [
-    Tool("create_lora", "POST", "/api/loras", lambda s, o: {"name": "Fresh voice"}),
-    Tool("create_playlist", "POST", "/api/playlists", lambda s, o: {"title": "Fresh list"}),
-    Tool("create_preset", "POST", "/api/settings/presets",
-         lambda s, o: {"name": "Fresh preset", "model_mode": "sft", "params": {}}),
-    Tool("set_theme", "PUT", "/api/settings/theme", lambda s, o: {"theme": "dark"}),
-    Tool("set_default_config", "PUT", "/api/settings/default-config",
-         lambda s, o: {"config": f"preset-{s}"}),
-    Tool("write_user_memory", "PUT", "/api/memory/user", lambda s, o: {"body": "a note"}),
-]
-
-ALL_TOOLS = [*READS_OF_ONE_RESOURCE, *PLAIN_READS, *WRITES_ON_ONE_RESOURCE, *CREATIONS]
 _IDS = [tool.name for tool in ALL_TOOLS]
-
-
-@pytest.fixture
-def household(mcp: McpWorld) -> McpWorld:
-    mcp.seed_household(TokenWorld.ALICE, ALICE)
-    mcp.seed_household(TokenWorld.BOB, BOB)
-    return mcp
 
 
 def _browser(world: McpWorld, tool: Tool, subject: str, headers: dict[str, str]):
@@ -345,6 +195,10 @@ _EFFECTS = [
      ("song_id", "body"), ("song-alices", "a note")),
     ("write_album_memory", {"album_id": "album-alices", "body": "a note"}, CowriterAlbumMemory,
      ("album_id", "body"), ("album-alices", "a note")),
+    ("unpick_take", {"gen_id": "take-alices"}, Generation, ("id", "is_picked"),
+     ("take-alices", False)),
+    ("update_song", {"song_id": "song-alices", "lyrics": "A new verse"}, Version,
+     ("song_id", "lyrics"), ("song-alices", "A new verse")),
     ("write_user_memory", {"body": "a note"}, CowriterUserMemory, ("user_id", "body"),
      (TokenWorld.ALICE, "a note")),
 ]
@@ -524,13 +378,13 @@ def _the_admin_fills_own_containers_with_the_members_content(world: McpWorld) ->
     for take in (f"take-{ALICE}", f"take-{BOB}"):
         added = world.world.client.post(
             f"/api/playlists/playlist-{ALICE}/entries/generation",
-            json={"generation_id": take}, headers=_SAME_ORIGIN,
+            json={"generation_id": take}, headers=SAME_ORIGIN,
         )
         assert added.status_code == 200
     for song in (ALICE, BOB):
         saved = world.world.client.put(
             f"/api/songs/song-{song}", json={"reference_recording_id": f"reference-{ALICE}"},
-            headers=_SAME_ORIGIN,
+            headers=SAME_ORIGIN,
         )
         assert saved.status_code == 200
     world.world.client.cookies.clear()
@@ -620,7 +474,9 @@ _NEW_TOOLS_ON_A_RESOURCE = [
     t for t in WRITES_ON_ONE_RESOURCE if t.name in {
         "update_album", "update_playlist", "move_playlist_entry", "remove_playlist_entry",
         "update_preset", "rename_song", "move_song", "update_lora_sample", "write_song_memory",
-        "write_album_memory",
+        "write_album_memory", "unshare_album", "unshare_song", "unshare_take",
+        "unshare_playlist", "delete_album", "delete_song", "update_song", "pick_take",
+        "unpick_take", "unkeep_take", "unkeep_reference",
     }
 ]
 
@@ -661,7 +517,7 @@ def test_a_cookie_session_with_csrf_succeeds_on_each_tool_route(
     seed_session(household.world.client, "alice")
 
     with worker_ready():
-        reply = _browser(household, tool, ALICE, _SAME_ORIGIN)
+        reply = _browser(household, tool, ALICE, SAME_ORIGIN)
 
     assert reply.status_code == 200
 
@@ -687,7 +543,7 @@ def test_a_cookie_write_without_csrf_is_refused_on_each_tool_route_and_writes_no
 
 def _share(world: McpWorld, path: str) -> str:
     seed_session(world.world.client, "alice")
-    reply = world.world.client.post(path, headers=_SAME_ORIGIN)
+    reply = world.world.client.post(path, headers=SAME_ORIGIN)
     assert reply.status_code == 200
     return reply.json()["share_slug"]
 
@@ -757,7 +613,7 @@ def test_a_repaint_on_a_shared_song_queues_its_job_and_keeps_the_slug_and_the_pu
     shown = public.get(f"/shared/song/{slug}").json()
 
     with worker_ready():
-        reply = household.call("repaint_take", _repaint_arguments(ALICE, ALICE))
+        reply = household.call("repaint_take", repaint_arguments(ALICE, ALICE))
 
     assert reply.is_error is False
     assert ("generate", "song-alices") in household.rows_of(Job, "type", "song_id")

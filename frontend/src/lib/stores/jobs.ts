@@ -22,6 +22,9 @@ import {
 } from '#lib/stores/sseReconnect.ts';
 import { addToast } from '#lib/stores/toast.ts';
 
+// Each job's update changes only that job, and cancelling one job's reconnect
+// leaves the other jobs' timers running.
+
 const SERVER_RESTART_MESSAGE = 'Server restarted — please retry';
 
 export interface ActiveJob {
@@ -466,14 +469,18 @@ function scheduleReconnect(
 	spentFailures: number,
 	reopenGap: ImmediateReopenGap
 ): void {
-	const timer = setTimeout(() => retryAfterBackoff(jobId), nextReconnectDelayMs(attempt));
-	pendingReconnects.set(jobId, { timer, attempt, spentFailures, reopenGap });
+	const pending: PendingReconnect = {
+		timer: setTimeout(() => retryAfterBackoff(jobId, pending), nextReconnectDelayMs(attempt)),
+		attempt,
+		spentFailures,
+		reopenGap
+	};
+	pendingReconnects.set(jobId, pending);
 	stopWatchingReconnectOpportunities ??= watchReconnectOpportunities(reconnectAllWaitingJobs);
 }
 
-function retryAfterBackoff(jobId: string): void {
-	const pending = takePendingReconnect(jobId);
-	if (pending === undefined) return;
+function retryAfterBackoff(jobId: string, pending: PendingReconnect): void {
+	cancelPendingReconnect(jobId);
 	const retry = {
 		attempt: pending.attempt + 1,
 		spentFailures: pending.spentFailures,
@@ -493,12 +500,6 @@ function reconnectNow(jobId: string): void {
 		};
 		streamJob(jobId, retry, pending.reopenGap);
 	});
-}
-
-function takePendingReconnect(jobId: string): PendingReconnect | undefined {
-	const pending = pendingReconnects.get(jobId);
-	cancelPendingReconnect(jobId);
-	return pending;
 }
 
 function reconnectAllWaitingJobs(): void {

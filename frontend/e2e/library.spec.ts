@@ -7,7 +7,7 @@
 // carries no take strip and the Takes tab is the one playback entry point.
 
 import { phoneSearchResult } from './phone-search';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './coverage-test';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
 	LIBRARY_PAGE_LABEL,

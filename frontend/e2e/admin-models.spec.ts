@@ -16,7 +16,7 @@
 // configures a gateway it cannot reach, so a co-writer turn ends with a named
 // problem instead of silently switching provider.
 
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 
 import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
 import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '../src/lib/constants/cowriter';

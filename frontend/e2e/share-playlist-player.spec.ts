@@ -1,4 +1,4 @@
-import { expect, test as base, type Page } from '@playwright/test';
+import { expect, test as base, type Page } from './coverage-test';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { LEGAL_SECTIONS } from '../src/lib/constants/legal';

@@ -25,7 +25,7 @@
 // worker the generate request itself is refused; the flow only needs the version
 // Generate saved before it.
 
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_UNSAVED_TITLE,
