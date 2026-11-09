@@ -146,8 +146,6 @@ def api_library_search(
     )
     next_cursor = None
     if page.has_more:
-        if not page.items:
-            raise HTTPException(422, LIBRARY_CURSOR_INVALID)
         next_cursor = encode_library_cursor(
             cursor_from_hit(page.items[-1], q=query, sort=sort),
             ctx.signing_key,

@@ -18,7 +18,6 @@ backend _seed 13
 backend _seed_owners 2
 backend _seed_sharing_data 2
 backend _seed_song 2
-backend _seed_users 2
 backend _settings 2
 backend _stream_events 5
 frontend acceptRequests 3

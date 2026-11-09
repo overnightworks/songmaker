@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from support.web_app import make_test_app
 
-from songmaker_cli.acestep_state import lm_failure_key
+from songmaker_cli.acestep_state import lm_failure_key, queue_depth_key
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.db.models import AceStepWorker
 from songmaker_cli.health_api import _format_prometheus, _PrometheusMetrics
@@ -335,6 +335,31 @@ def test_metrics_excludes_broken_gpu_worker_from_online_count(
     body = resp.text
     assert 'songmaker_acestep_workers_total{status="online"} 0' in body
     assert 'songmaker_acestep_workers_total{status="offline"} 1' in body
+
+
+@pytest.mark.parametrize(
+    ("target_loading", "loading", "online"),
+    [("some-model", 1, 0), (None, 0, 1)],
+    ids=["loading-a-model", "ready"],
+)
+def test_metrics_counts_a_worker_loading_a_model_as_loading_not_online(
+    health_client, monitoring_headers, target_loading, loading, online,
+) -> None:
+    import songmaker_cli.arq_pool as arq_mod
+
+    heartbeat = json.dumps(
+        {"loaded": [], "gpu_healthy": True, "target_loading": target_loading},
+    ).encode()
+    depth_key = queue_depth_key("acestep-worker-0")
+    arq_mod._pool.get = AsyncMock(
+        side_effect=lambda key: b"0" if key == depth_key else heartbeat,
+    )
+    arq_mod._pool.zcard = AsyncMock(return_value=0)
+
+    body = health_client.get("/metrics", headers=monitoring_headers).text
+
+    assert f'songmaker_acestep_workers_total{{status="loading"}} {loading}' in body
+    assert f'songmaker_acestep_workers_total{{status="online"}} {online}' in body
 
 
 @pytest.fixture
