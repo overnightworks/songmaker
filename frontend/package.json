@@ -50,6 +50,6 @@
 		"vitest": "^4.1.12"
 	},
 	"dependencies": {
-		"overnightworks-appkit": "https://github.com/overnightworks/appkit/releases/download/v0.16.0/overnightworks-appkit-0.16.0.tgz"
+		"overnightworks-appkit": "https://github.com/overnightworks/appkit/releases/download/v0.17.0/overnightworks-appkit-0.17.0.tgz"
 	}
 }
