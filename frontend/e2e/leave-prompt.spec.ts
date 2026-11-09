@@ -10,7 +10,7 @@ import {
 	SONG_MENU_LABEL,
 	SONG_MENU_SAVE_LABEL,
 	songEditorOpenLabel
-} from '../src/lib/constants';
+} from '../src/lib/constants/song';
 import { sameOriginHeaders, workspace } from './helpers';
 import { archiveOwnedAlbum, runMarker, seedSongPhoneSong } from './seed';
 

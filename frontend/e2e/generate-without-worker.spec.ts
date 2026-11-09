@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { EDITOR_OPEN_WORKER_POOL_LABEL, EDITOR_TAB_EDIT_LABEL } from '../src/lib/constants';
+import { EDITOR_OPEN_WORKER_POOL_LABEL, EDITOR_TAB_EDIT_LABEL } from '../src/lib/constants/song';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL } from './helpers';
 import {
 	archiveAlbumOfAddress,

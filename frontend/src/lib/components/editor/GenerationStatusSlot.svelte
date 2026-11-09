@@ -3,7 +3,7 @@
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 		EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/song.ts';
 	import {
 		cancelGeneration,
 		generateAction,

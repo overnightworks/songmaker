@@ -21,7 +21,7 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
 }));
 
 import { get } from 'svelte/store';
-import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '#lib/constants.ts';
+import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '#lib/constants/take.ts';
 import { NOW_PLAYING_RESCORE_ACTION_LABEL, openVersionLabel } from '#lib/constants/now-playing.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
 import { rate, rescore, setKeep, setPick } from '#lib/stores/takeActions.ts';

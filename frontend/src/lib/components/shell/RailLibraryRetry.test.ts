@@ -2,8 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '#lib/api/fetch.ts';
-import { LIBRARY_ALBUMS_LOADING } from '#lib/constants/library.ts';
-import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
+import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 import { resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import { albumList, resetLibraryDataForTests } from '#lib/stores/libraryData.ts';
 import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';

@@ -24,7 +24,7 @@
 	import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';
 	import { libraryLoadFailed } from '#lib/stores/libraryRecovery.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
-	import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
+	import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 	import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 	import BusyState from './BusyState.svelte';
 	import LoadFailure from './LoadFailure.svelte';

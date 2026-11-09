@@ -4,7 +4,7 @@
 
 import { expect, type Page } from '@playwright/test';
 import type { SongItem } from '../src/lib/api/types';
-import { EDITOR_TAB_TAKES_LABEL, songEditorOpenLabel } from '../src/lib/constants';
+import { EDITOR_TAB_TAKES_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
 import { sameOriginHeaders, nameStartingWith, workspace } from './helpers';
 import {
 	completeGenerationJobWithoutEvent,

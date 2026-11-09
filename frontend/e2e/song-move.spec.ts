@@ -3,8 +3,8 @@
 // names the new album, and at the phone width, where a toast does.
 
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { LIBRARY_RETRY_LABEL } from '../src/lib/constants/library';
 import {
-	LIBRARY_RETRY_LABEL,
 	SONG_MENU_LABEL,
 	SONG_MENU_MOVE_LABEL,
 	SONG_MOVE_ALBUM_GONE,
@@ -14,7 +14,7 @@ import {
 	songMoveFailedLine,
 	songMovedToastLabel,
 	songMoveSharedMessage
-} from '../src/lib/constants';
+} from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { RAIL_NAV_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { openSearchSheet } from './phone-search';

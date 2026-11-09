@@ -20,7 +20,7 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { resetCollectionForTests, setOpenCollection } from '#lib/stores/collection.ts';
 import { selectedPlaylistDetail } from '#lib/stores/playlists.ts';
-import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '#lib/constants.ts';
+import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '#lib/constants/song.ts';
 
 vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn()

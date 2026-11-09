@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
-	import { PLAYING_MARK_LABEL } from '#lib/constants.ts';
+	import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 
 	interface Props {
 		/** Whether this row holds the take the transport is on. */

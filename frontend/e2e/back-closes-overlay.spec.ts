@@ -7,18 +7,19 @@ import {
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
 import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
+import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants';
 import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
-	NOW_PLAYING_LABEL,
-	openNowPlayingLabel,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
+	songEditorOpenLabel
+} from '../src/lib/constants/song';
+import {
 	TAKE_DELETE_LABEL,
 	TAKE_DELETE_TITLE_TEMPLATE,
-	TAKE_OVERFLOW_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants';
+	TAKE_OVERFLOW_LABEL
+} from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import {
 	COLLECTION_MENU_LABEL,
@@ -139,8 +140,7 @@ async function openSongFromEntryPencil(page: Page, playlist: SeededPlaylist): Pr
 async function openSongsTakes(page: Page, playlist: SeededPlaylist): Promise<Locator> {
 	await openSongFromEntryPencil(page, playlist);
 	await expectSongStands(page, 'mobile', firstSong(playlist));
-	await page.getByRole('tab', { name: /Takes/ }).click();
-	return page.getByRole('tabpanel');
+	return songsTakes(page, 'mobile');
 }
 
 function takeSheet(page: Page): Locator {

@@ -13,7 +13,7 @@ import {
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_QUEUED_LABEL,
 	EDITOR_SELECT_MODEL_TITLE
-} from '#lib/constants.ts';
+} from '#lib/constants/song.ts';
 import { describeFailure } from '#lib/api/fetch.ts';
 import { formatTime } from '#lib/utils/format.ts';
 import { offline } from './connectivity';

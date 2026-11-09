@@ -26,24 +26,15 @@
 // Generate saved before it.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { openNowPlayingLabel } from '../src/lib/constants';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
-	versionAlreadyTheDraftLabel,
-	versionChipLabel,
-	versionDeleteLabel,
-	versionDeleteLoadedDraftGoes,
-	versionDeleteLoadedDraftReplacedBy,
-	versionDeleteTitle,
-	versionLoadedFromLabel,
-	versionLoadedToastLabel,
-	versionsChipAccessibleLabel,
-	openNowPlayingLabel,
-	songEditorOpenLabel,
-	takesDraftBanner
-} from '../src/lib/constants';
+	songEditorOpenLabel
+} from '../src/lib/constants/song';
+import { takesDraftBanner } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import {
 	TOAST_UNDO_LABEL,
@@ -53,7 +44,16 @@ import {
 	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_LOAD_UNDO_GOES,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
-	VERSION_REPLACE_DRAFT_TITLE
+	VERSION_REPLACE_DRAFT_TITLE,
+	versionAlreadyTheDraftLabel,
+	versionChipLabel,
+	versionDeleteLabel,
+	versionDeleteLoadedDraftGoes,
+	versionDeleteLoadedDraftReplacedBy,
+	versionDeleteTitle,
+	versionLoadedFromLabel,
+	versionLoadedToastLabel,
+	versionsChipAccessibleLabel
 } from '../src/lib/constants/versions';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {

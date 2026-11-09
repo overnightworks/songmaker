@@ -2,7 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { LibraryWriteItem } from '#lib/api/types.ts';
-import { songEditorOpenLabel } from '#lib/constants.ts';
+import { songEditorOpenLabel } from '#lib/constants/song.ts';
 import {
 	HOME_WRITE_EMPTY,
 	HOME_WRITE_ERROR,

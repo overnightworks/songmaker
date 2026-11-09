@@ -11,7 +11,7 @@ import {
 	TAKE_OVERFLOW_LABEL,
 	TAKES_EMPTY,
 	takesDraftBanner
-} from '#lib/constants.ts';
+} from '#lib/constants/take.ts';
 import {
 	EARLIER_VERSIONS_LABEL,
 	bulkDeleteTitle,

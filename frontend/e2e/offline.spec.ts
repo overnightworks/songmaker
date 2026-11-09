@@ -10,7 +10,7 @@ import {
 	EDITOR_GENERATE_RECONNECTING_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	songEditorOpenLabel
-} from '../src/lib/constants';
+} from '../src/lib/constants/song';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_ERROR,

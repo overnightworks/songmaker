@@ -12,6 +12,7 @@ import { phoneAppBar } from '#lib/stores/ui.ts';
 import PhoneAppBar from './PhoneAppBar.svelte';
 
 import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
+import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants.ts';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATING_LABEL,
@@ -21,26 +22,24 @@ import {
 	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_VIEW_COWRITER_LABEL,
-	LIBRARY_NARROW_MEDIA,
 	SONG_COVER_ALT_TYPE,
 	SONG_COVER_REMOVE_LABEL,
 	SONG_COVER_REPLACE_LABEL,
-	SONG_COVER_UPLOAD_LABEL,
-	SONG_NEXT_LABEL,
-	SONG_PREVIOUS_LABEL,
+	SONG_COVER_UPLOAD_LABEL
+} from '#lib/constants/song.ts';
+import {
 	TAKE_REPAINT_LABEL,
 	TAKE_COVER_LABEL,
 	TAKE_PLAYLIST_LABEL,
 	TAKES_ERROR,
 	TAKES_LOADING,
-	TAKES_RETRY_LABEL,
-	versionDeleteLabel,
-	versionDeleteTitle,
-	versionLoadedFromLabel,
-	versionLoadedToastLabel,
-	versionReplaceDraftMessage
-} from '#lib/constants.ts';
-import { COMPACT_LAYOUT_MAX_PX, COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
+	TAKES_RETRY_LABEL
+} from '#lib/constants/take.ts';
+import {
+	COMPACT_LAYOUT_MAX_PX,
+	COMPACT_LAYOUT_MEDIA,
+	LIBRARY_NARROW_MEDIA
+} from '#lib/constants/media.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import {
 	TOAST_UNDO_LABEL,
@@ -50,7 +49,12 @@ import {
 	VERSION_DELETE_EMPTIES_EDITOR,
 	VERSION_DELETE_LOAD_UNDO_GOES,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
-	VERSION_REPLACE_DRAFT_TITLE
+	VERSION_REPLACE_DRAFT_TITLE,
+	versionDeleteLabel,
+	versionDeleteTitle,
+	versionLoadedFromLabel,
+	versionLoadedToastLabel,
+	versionReplaceDraftMessage
 } from '#lib/constants/versions.ts';
 import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
@@ -313,6 +317,14 @@ function albumSongs(): SongItem[] {
 		song({ ...editableSongDefaults(), track_number: 2 }),
 		song({ ...editableSongDefaults(), id: 's-last', title: 'Last', track_number: 3 })
 	];
+}
+
+async function renderWithDirtyDraft(): Promise<HTMLElement> {
+	songList.set(albumSongs());
+	const target = await renderView();
+	setDraftLyrics('unsaved edit');
+	await tick();
+	return target;
 }
 
 beforeEach(() => {
@@ -1050,10 +1062,7 @@ describe('SongDetailView recipe line reads the draft', () => {
 
 describe('SongDetailView unsaved-draft guard', () => {
 	it('prompts before switching songs with a dirty draft; Cancel stays on the current song', async () => {
-		songList.set(albumSongs());
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
+		const target = await renderWithDirtyDraft();
 
 		selectSong('s-last', song({ ...editableSongDefaults(), id: 's-last', title: 'Last' }));
 		await tick();
@@ -1069,10 +1078,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 	});
 
 	it('Discard switches songs without saving', async () => {
-		songList.set(albumSongs());
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
+		const target = await renderWithDirtyDraft();
 
 		selectSong('s-last', song({ ...editableSongDefaults(), id: 's-last', title: 'Last' }));
 		await tick();
@@ -1087,10 +1093,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		vi.mocked(updateSong).mockResolvedValueOnce(
 			song({ ...editableSongDefaults(), lyrics: 'unsaved edit', version_count: 2 })
 		);
-		songList.set(albumSongs());
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
+		const target = await renderWithDirtyDraft();
 
 		selectSong('s-last', song({ ...editableSongDefaults(), id: 's-last', title: 'Last' }));
 		await tick();
@@ -1103,10 +1106,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 	});
 
 	it('keeps write-surface Save and the unsaved-changes confirm as distinct accessible names while the dialog is open', async () => {
-		songList.set(albumSongs());
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
+		const target = await renderWithDirtyDraft();
 
 		selectSong('s-last', song({ ...editableSongDefaults(), id: 's-last', title: 'Last' }));
 		await tick();
@@ -1208,10 +1208,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 				const { updateSong } = await import('#lib/api/client.ts');
 				vi.mocked(updateSong).mockRejectedValueOnce(new Error('save failed'));
 			}
-			songList.set(albumSongs());
-			const target = await renderView();
-			setDraftLyrics('unsaved edit');
-			await tick();
+			const target = await renderWithDirtyDraft();
 
 			const targetGen = generation({
 				...sourceRecipeDefaults(),
@@ -1245,10 +1242,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 	);
 
 	it('cross-song Repaint/Cover: Discard applies the source once the target song opens', async () => {
-		songList.set(albumSongs());
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
+		const target = await renderWithDirtyDraft();
 
 		const targetGen = generation({
 			...sourceRecipeDefaults(),

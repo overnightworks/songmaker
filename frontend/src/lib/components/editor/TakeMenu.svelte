@@ -8,7 +8,7 @@
 		TAKE_REPAINT_LABEL,
 		TAKE_RESTORE_LABEL,
 		TAKE_SHARE_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/take.ts';
 	import {
 		COLLECTION_MENU_CLOSE_LABEL,
 		COLLECTION_MENU_SHARE_OFF_HINT,

@@ -7,7 +7,7 @@
 		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 		EDITOR_GENERATE_LABEL,
 		EDITOR_OPEN_WORKER_POOL_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/song.ts';
 	import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';
 	import {
 		cancelGeneration,

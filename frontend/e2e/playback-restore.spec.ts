@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { songEditorOpenLabel } from '../src/lib/constants';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	sameOriginHeaders,

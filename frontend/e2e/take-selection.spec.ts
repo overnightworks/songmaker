@@ -9,7 +9,8 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import type { SongItem } from '../src/lib/api/types';
-import { songEditorOpenLabel, TAKE_DELETE_MESSAGE } from '../src/lib/constants';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
+import { TAKE_DELETE_MESSAGE } from '../src/lib/constants/take';
 import {
 	bulkDeleteLabel,
 	bulkDeleteTitle,

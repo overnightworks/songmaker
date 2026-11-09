@@ -21,7 +21,7 @@ import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { resetGenerationFailuresForTests } from '#lib/stores/jobs.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { resetResourceSyncForTests, resourceSync } from '#lib/stores/resourceSync.ts';
-import { SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
+import { SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants/song.ts';
 
 const fetchSong = vi.fn();
 

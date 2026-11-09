@@ -15,9 +15,9 @@ import {
 	SONG_MOVE_NO_OTHER_ALBUM,
 	SONG_MOVE_SHARED_TITLE,
 	songMoveFailedLine,
-	songMoveSharedMessage,
-	LIBRARY_RETRY_LABEL
-} from '#lib/constants.ts';
+	songMoveSharedMessage
+} from '#lib/constants/song.ts';
+import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';

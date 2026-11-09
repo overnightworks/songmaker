@@ -8,7 +8,7 @@ import {
 	SONG_MOVE_NO_CONNECTION,
 	songMoveFailedLine,
 	songMovedToastLabel
-} from '#lib/constants.ts';
+} from '#lib/constants/song.ts';
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
 import {

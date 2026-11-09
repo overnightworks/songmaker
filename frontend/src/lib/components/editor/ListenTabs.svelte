@@ -5,7 +5,7 @@
 		EDITOR_TAB_TAKES_LABEL,
 		EDITOR_TABS_LABEL,
 		EDITOR_VIEW_COWRITER_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/song.ts';
 	import TakesList from './TakesList.svelte';
 
 	interface Props {

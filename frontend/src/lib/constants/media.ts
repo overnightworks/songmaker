@@ -4,3 +4,4 @@ export const COMPACT_LAYOUT_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px), (a
 // A narrow desktop window is compact but still has a mouse — touch-only copy
 // ("Tap play") asks this instead of the compact query.
 export const COARSE_POINTER_MEDIA = '(any-pointer: coarse)';
+export const LIBRARY_NARROW_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px)`;

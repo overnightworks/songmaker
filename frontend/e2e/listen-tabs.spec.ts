@@ -14,7 +14,7 @@ import {
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	songEditorOpenLabel
-} from '../src/lib/constants';
+} from '../src/lib/constants/song';
 import { newSongCardLabel } from '../src/lib/constants/album';
 import { RECIPE_PANEL_LABEL } from '../src/lib/constants/recipe';
 import { sameOriginHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';

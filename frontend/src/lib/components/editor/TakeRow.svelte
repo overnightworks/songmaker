@@ -10,7 +10,7 @@
 		TAKE_PICK_LABEL,
 		TAKE_UNKEEP_LABEL,
 		TAKE_RESCORING_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/take.ts';
 	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
 	import {
 		nowPlayingTakeLabel,

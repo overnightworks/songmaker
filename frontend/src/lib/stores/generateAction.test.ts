@@ -10,7 +10,7 @@ import {
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_SELECT_MODEL_TITLE
-} from '#lib/constants.ts';
+} from '#lib/constants/song.ts';
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/api/client.ts')>()),

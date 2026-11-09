@@ -15,7 +15,7 @@
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
+	import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 
 	type Props = {
 		label: string;

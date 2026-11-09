@@ -19,8 +19,11 @@ import {
 	versions
 } from '#lib/stores/editor.ts';
 import { closeTopLayer, resetLayersForTests } from '#lib/stores/layers.ts';
-import { versionDeleteLabel, versionsChipAccessibleLabel } from '#lib/constants.ts';
-import { VERSIONS_SHEET_LABEL } from '#lib/constants/versions.ts';
+import {
+	VERSIONS_SHEET_LABEL,
+	versionDeleteLabel,
+	versionsChipAccessibleLabel
+} from '#lib/constants/versions.ts';
 import VersionsSheet from './VersionsSheet.svelte';
 
 const NOW = new Date(2026, 9, 2, 15, 0);

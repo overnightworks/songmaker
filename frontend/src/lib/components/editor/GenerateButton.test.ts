@@ -9,7 +9,7 @@ import {
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_SELECT_MODEL_TITLE
-} from '#lib/constants.ts';
+} from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { seedFromTake } from '#lib/stores/recipe.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';

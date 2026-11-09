@@ -46,7 +46,7 @@ import {
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	songEditorOpenLabel
-} from '../src/lib/constants';
+} from '../src/lib/constants/song';
 import { nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 

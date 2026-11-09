@@ -20,7 +20,7 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import { EDITOR_UNSAVED_DISCARD_LABEL, EDITOR_UNSAVED_TITLE } from '#lib/constants.ts';
+import { EDITOR_UNSAVED_DISCARD_LABEL, EDITOR_UNSAVED_TITLE } from '#lib/constants/song.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { activeJobs, removeJob, resetGenerationFailuresForTests } from '#lib/stores/jobs.ts';
 import { toasts } from '#lib/stores/toast.ts';

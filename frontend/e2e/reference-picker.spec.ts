@@ -4,7 +4,11 @@
 
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { SONG_MENU_LABEL, SONG_MENU_SAVE_LABEL, songEditorOpenLabel } from '../src/lib/constants';
+import {
+	SONG_MENU_LABEL,
+	SONG_MENU_SAVE_LABEL,
+	songEditorOpenLabel
+} from '../src/lib/constants/song';
 import { RECIPE_REFERENCE_LABEL } from '../src/lib/constants/recipe';
 import { FlowGuard, workspace } from './helpers';
 import {

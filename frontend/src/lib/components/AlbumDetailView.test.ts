@@ -14,7 +14,7 @@ import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
-import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants.ts';
+import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { newSongCardLabel, ALBUM_COVER_ALT_TYPE, ALBUM_NO_SONGS } from '#lib/constants/album.ts';
 import {

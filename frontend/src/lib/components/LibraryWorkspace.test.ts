@@ -8,7 +8,7 @@ import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
+import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';

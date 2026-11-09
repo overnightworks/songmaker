@@ -15,7 +15,7 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import { SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
+import { SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants/song.ts';
 import { RESOURCE_EVENT_STREAM_PATH } from '#lib/constants/resource-sync.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import {

@@ -5,6 +5,7 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { VersionItem } from '../src/lib/api/types';
+import { openNowPlayingLabel } from '../src/lib/constants';
 import {
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
@@ -14,9 +15,8 @@ import {
 	SONG_MENU_SAVE_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_TITLE,
-	openNowPlayingLabel,
 	songEditorOpenLabel
-} from '../src/lib/constants';
+} from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { GENERATION_PHASE_LABELS } from '../src/lib/constants/jobs';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';

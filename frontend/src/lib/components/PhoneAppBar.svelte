@@ -5,7 +5,7 @@
 
 <script lang="ts">
 	import { page } from '$app/state';
-	import { SONG_TITLE_LABEL } from '#lib/constants.ts';
+	import { SONG_TITLE_LABEL } from '#lib/constants/song.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
 	import { SEARCH_OPEN_LABEL } from '#lib/constants/rail.ts';
 	import { backLabel, backTargetName, pageBackShown } from '#lib/routes/pageBack.ts';

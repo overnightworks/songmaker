@@ -15,7 +15,7 @@ import {
 	SONG_MENU_RENAME_LABEL,
 	SONG_MENU_SAVE_LABEL,
 	SONG_TITLE_LABEL
-} from '../src/lib/constants';
+} from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import { COLLECTION_MENU_LABEL } from '../src/lib/constants/collection-menu';
