@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "d0bab439147c961f7ba4bc4f99bb72d51ad24c43"
 branch = "claude/issue-2877-s29a-share-playback"
-scope = ["frontend/src/lib/share/sharePlayback.svelte.ts", "frontend/src/lib/share/sharePlayback.test.ts", "frontend/src/lib/share/sharePlaybackStream.test.ts", "frontend/src/lib/share/sharedCollection.ts", "quality/baseline.toml"]
+scope = ["frontend/src/lib/share/sharePlayback-test-fixtures.ts", "frontend/src/lib/share/sharePlayback.svelte.ts", "frontend/src/lib/share/sharePlayback.test.ts", "frontend/src/lib/share/sharePlaybackStream.test.ts", "frontend/src/lib/share/sharedCollection.ts", "quality/baseline.toml", "scripts/test_helper_ratchet.txt"]
 opened_commit = "327a63d72f3f32ea5e3752e72e034fcc0fa54990"
 whole_reason = "One coverage cut from one trace: the guards and the cells of one module."
