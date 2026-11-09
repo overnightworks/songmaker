@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
+import fakeredis.aioredis
 import httpx
 import pytest
 from support.acestep_http import acestep_http
 from support.wrapper_deps import INTERNAL_HEADERS, make_deps
 
-from acestep_worker.model_cache import LoadedModel
-from acestep_worker.wrapper import create_app, default_generate_runner
+from acestep_worker.heartbeat import HeartbeatLoop
+from acestep_worker.model_cache import LoadedModel, ModelCache
+from acestep_worker.models import TrainLoraRequest, TrainLoraTaskResult
+from acestep_worker.task_store import TaskStore
+from acestep_worker.wrapper import WorkerDeps, create_app, default_generate_runner
 
 
 @pytest.fixture
@@ -58,3 +64,95 @@ def real_generate_worker(tmp_path: Path):
                 yield client, deps, boundary, generate
 
         yield worker
+
+
+def _fake_train_runner(operation_events: list[str], train_events: list[str]):
+    async def fake_train_runner(
+        store: TaskStore,
+        task_id: str,
+        *,
+        request: TrainLoraRequest,
+        port: int,
+        checkpoint_dir: Path,
+        training_workspace_dirname: str,
+    ) -> None:
+        operation_events.append(f"train_lora:{request.mode}")
+        train_events.append(f"start:{port}")
+        await store.mark_running(task_id)
+        await store.mark_training_started(task_id)
+        await store.update_progress(task_id, 0.1, current_epoch=0)
+        await store.update_progress(
+            task_id,
+            0.5,
+            current_epoch=request.train_epochs // 2,
+        )
+        await store.complete(
+            task_id,
+            TrainLoraTaskResult(
+                mode=request.mode,
+                adapter_dir=str(Path(request.output_dir) / "final"),
+                num_samples=3,
+            ),
+        )
+
+    return fake_train_runner
+
+
+def _build_train_lora_deps(tmp_path: Path, with_train_runner: bool = True) -> WorkerDeps:
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
+    operation_events: list[str] = []
+
+    async def loader(mode: str) -> LoadedModel:
+        operation_events.append(f"load_model:{mode}")
+        return LoadedModel(mode=mode, handle=f"handle-{mode}", port=8101)
+
+    async def unloader(_: LoadedModel) -> None:
+        return None
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=loader,
+        unloader=unloader,
+    )
+    task_store = TaskStore()
+
+    async def fake_generate_runner(*args, **kwargs):
+        await task_store.mark_running(kwargs.get("task_id") or args[1])
+
+    train_events: list[str] = []
+    fake_train_runner = _fake_train_runner(operation_events, train_events)
+
+    deps = WorkerDeps(
+        worker_id="w0",
+        cache=cache,
+        task_store=task_store,
+        heartbeat=None,  # type: ignore[arg-type]
+        redis=redis,
+        registry_client=None,
+        registration=None,
+        checkpoint_dir=tmp_path,
+        audio_output_dir=tmp_path / "audio",
+        internal_token="test-internal-token",
+        generate_runner=fake_generate_runner,
+        shared_audio_root=tmp_path / "shared",
+        train_lora_runner=fake_train_runner if with_train_runner else None,
+    )
+    deps.shared_audio_root.mkdir()
+    deps.heartbeat = HeartbeatLoop(
+        redis=redis,
+        worker_id="w0",
+        state_provider=lambda: _heartbeat_state(deps),
+    )
+    deps._train_events = train_events  # type: ignore[attr-defined]
+    deps._operation_events = operation_events  # type: ignore[attr-defined]
+    return deps
+
+
+async def _heartbeat_state(deps: WorkerDeps) -> dict[str, Any]:
+    return {"loaded": deps.cache.loaded_modes(), "queue_depth": 0}
+
+
+@pytest.fixture
+def train_lora_deps() -> Callable[..., WorkerDeps]:
+    return _build_train_lora_deps
