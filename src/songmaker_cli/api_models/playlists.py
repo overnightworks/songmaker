@@ -262,8 +262,6 @@ class SharedPlaylistEntryResponse(BaseModel):
         album_cover: AlbumCoverUrls | None,
     ) -> SharedPlaylistEntryResponse:
         generation = entry.generation
-        if generation is None:
-            raise ValueError("Shared playlist entries require a generation")
         song = generation.song
         album = song.album if song else None
         media = share_pick_media(generation)

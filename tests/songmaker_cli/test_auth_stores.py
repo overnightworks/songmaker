@@ -360,6 +360,19 @@ def test_account_events_become_audit_lines_without_a_person_behind_them(
     assert session.query(AuditLog).count() == 0
 
 
+def test_an_account_event_of_an_unknown_kind_raises_and_writes_no_audit_line(
+    audit, session,
+) -> None:
+    unknown_kind = "kind-a-newer-library-adds"
+
+    with pytest.raises(ValueError):
+        audit.account_event(AccountEvent(
+            kind=unknown_kind, actor_id=None, subject_id=_SUBJECT, role="user",
+        ))
+
+    assert session.query(AuditLog).count() == 0
+
+
 @dataclass(frozen=True)
 class _StoredRows:
     """Everything the auth stores can write, as the database holds it."""

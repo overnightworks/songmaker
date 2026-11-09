@@ -22,10 +22,12 @@ from songmaker_cli.db.models import (
     Song,
     Version,
 )
+from songmaker_cli.db.queries.albums import restore_album
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.jobs import _persist_generation_row
 from songmaker_cli.jobs.generation import GenerationContext
 from songmaker_cli.parser import AlbumMeta, SongMeta
+from songmaker_cli.settings import get_settings
 
 OWNER = "owner-1"
 RETENTION_RUN = "/api/admin/generation-retention/run"
@@ -61,13 +63,14 @@ class _World:
         songs: tuple[str, ...] = ("song-1",),
         song_albums: dict[str, str] | None = None,
         trashed_albums: tuple[str, ...] = (),
+        trashed_ago: timedelta = TRASHED_LONG_AGO,
         scored_take: bool = True,
         jobs: dict[str, dict[str, str]] | None = None,
     ) -> None:
         self.pg_factory = pg_factory
         self.audio_dir = tmp_path / "audio"
         self.unlinked: list[str] = []
-        trashed = datetime.now(timezone.utc) - TRASHED_LONG_AGO
+        trashed = datetime.now(timezone.utc) - trashed_ago
 
         def seed(session) -> None:
             seed_user(session, "admin", "admin", user_id=OWNER)
@@ -125,8 +128,13 @@ class _World:
 
         monkeypatch.setattr(cleanup, "cleanup_generation_files", record)
 
-    def purge(self) -> Callable[[], tuple[int, int]]:
-        return lambda: run_cleanup_expired(self.pg_factory, self.audio_dir)
+    def purge(self, now: datetime | None = None) -> Callable[[], tuple[int, int]]:
+        return lambda: run_cleanup_expired(self.pg_factory, self.audio_dir, now=now)
+
+    def restore_album(self, album_id: str) -> None:
+        with self.pg_factory() as session:
+            restore_album(session, album_id)
+            session.commit()
 
     def retention(self):
         return lambda: self.client.post(RETENTION_RUN)
@@ -346,6 +354,27 @@ def test_two_purges_whose_candidates_differ_both_finish(
 
     assert answers == {"first": (0, 0), "second": (0, 0)}
     assert world.song_ids() == ["song-a", "song-b"]
+
+
+def test_a_purge_skips_an_album_restored_while_it_waited_for_the_songs(
+    pg_factory, tmp_path, monkeypatch,
+) -> None:
+    world = _World(
+        pg_factory, tmp_path, trashed_albums=("album-1",), trashed_ago=timedelta(days=1),
+        scored_take=False,
+    )
+    world.record_unlinks(monkeypatch)
+    window = timedelta(days=get_settings().final_deletion_days)
+    after_the_window = datetime.now(timezone.utc) + window
+
+    answers = race(
+        pg_factory, lambda: world.restore_album("album-1"), world.purge(after_the_window),
+    )
+
+    assert answers["second"] == (0, 0)
+    assert world.album_ids() == ["album-1"]
+    assert world.song_ids() == ["song-1"]
+    assert world.unlinked == []
 
 
 def test_a_second_purge_finds_nothing_and_unlinks_no_file_twice(

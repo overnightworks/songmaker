@@ -974,7 +974,6 @@ def _next_reconcilable_lora(session: Session, excluded_ids: set[str]):
         session,
         reconcilable_only=True,
         excluded_ids=excluded_ids,
-        limit=1,
     )
     return candidates[0] if candidates else None
 
