@@ -1,8 +1,0 @@
-claim_id = "e7a03772b79142f9b809ef14cc5c6807"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "ad39eb1396276b23edfe4922612412e1e7298365"
-branch = "claude/issue-2827-s22a-guards-progress-floor"
-scope = [".github/workflows/ci.yml", "quality/baseline.toml", "src/songmaker_cli/db/soft_delete.py", "src/songmaker_cli/job_timing.py", "src/songmaker_cli/middleware/access_log.py", "src/songmaker_cli/parser.py", "src/songmaker_cli/scoring/pipeline.py", "tests/songmaker_cli/db/test_soft_delete.py", "tests/songmaker_cli/jobs/test_generation_task_overrides.py", "tests/songmaker_cli/scoring/test_pipeline.py", "tests/songmaker_cli/test_constants.py", "tests/songmaker_cli/test_jobs.py", "tests/songmaker_cli/test_music_worker.py", "tests/songmaker_cli/test_parser.py", "tests/songmaker_cli/test_server_middleware.py"]
-opened_commit = "640aaf9111c8b668f9c3ac304f06e451d86a1fe7"
-whole_reason = "One coverage cut: each deletion, cell and the floor raise follow from the same trace, and the size rows follow the functions they measure."
