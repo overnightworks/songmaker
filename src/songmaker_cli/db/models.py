@@ -65,11 +65,6 @@ def _validate_generation_params(
 ) -> dict | None:
     if value is None:
         return None
-    if not isinstance(value, dict):
-        msg = (
-            f"generation_params must be a dict or None, got {type(value).__name__}"
-        )
-        raise TypeError(msg)
     return model.model_validate(value).model_dump(exclude_none=True)
 
 
@@ -361,11 +356,6 @@ class GenerationPreset(Base):
 
     @validates("params")
     def _validate_params(self, _key: str, value: object) -> dict:
-        if value is None:
-            return {}
-        if not isinstance(value, dict):
-            msg = f"params must be a dict, got {type(value).__name__}"
-            raise TypeError(msg)
         return BaseGenerationParams.model_validate(value).model_dump(exclude_none=True)
 
 
