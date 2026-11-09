@@ -42,8 +42,7 @@ def _run_pipeline(mp3_path: Path, **kwargs: object) -> SongScores:
 @pytest.fixture
 def clean_registry() -> ScorerRegistry:
     """Provide an isolated scorer registry for testing."""
-    registry = ScorerRegistry()
-    return registry
+    return ScorerRegistry()
 
 
 @pytest.fixture
