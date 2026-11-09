@@ -8,13 +8,13 @@ import shutil
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.route_decisions import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import (
     check_lora_access,
     check_lora_sample_access,

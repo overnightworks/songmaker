@@ -9,7 +9,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Final
 
-from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.types import Receive, Scope, Send
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.route_decisions import ToolEffect, agent_tool
 from songmaker_cli.api_models import (
     ReferenceCountdownShownRequest,
     ReferenceListResponse,

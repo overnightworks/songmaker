@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 
-from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
@@ -14,6 +13,7 @@ from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.backend import TurnCaller, cover_admission
+from songmaker_cli.agent.route_decisions import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,

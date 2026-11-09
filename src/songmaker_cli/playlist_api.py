@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Final
 
-from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.route_decisions import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import (
     PLAYLIST_NOT_FOUND_DETAIL,
     check_album_access,

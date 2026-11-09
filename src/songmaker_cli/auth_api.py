@@ -6,7 +6,6 @@ import logging
 from typing import TYPE_CHECKING, Annotated, Final
 from urllib.parse import urlsplit
 
-from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from webauth.oidc import OidcRefusal
@@ -18,6 +17,7 @@ from webauth.sign_in_routes import (
     install_sign_in_routes,
 )
 
+from songmaker_cli.agent.route_decisions import ToolEffect, agent_tool
 from songmaker_cli.api_models import AuthMeResponse
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.auth_stores import DatabaseSignInTransaction
