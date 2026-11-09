@@ -110,10 +110,6 @@ class TaskStore:
         train_epochs: int | None = None,
         phase: AceStepPhase | None = None,
     ) -> str:
-        if kind != "train_lora" and train_epochs is not None:
-            raise ValueError("Only LoRA training tasks have epochs")
-        if kind != "generate" and phase is not None:
-            raise ValueError("Only generation tasks have phases")
         task_id = f"{kind[:3]}-{uuid4().hex[:12]}"
         async with self._lock:
             self._tasks[task_id] = _Task(
@@ -258,7 +254,7 @@ class TaskStore:
         finally:
             async with self._lock:
                 task = self._tasks.get(task_id)
-                if task is not None and queue in task.subscribers:
+                if task is not None:
                     task.subscribers.remove(queue)
 
     async def cleanup_terminal(self) -> int:

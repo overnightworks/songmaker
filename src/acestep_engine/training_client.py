@@ -221,10 +221,7 @@ class AceStepTrainingClient:
         )
 
     def initialize_model(self, mode: str) -> None:
-        try:
-            model = MODEL_CONFIG_PATHS[mode]
-        except KeyError as exc:
-            raise TrainingResponseError(f"Unknown ACE-Step mode: {mode}") from exc
+        model = MODEL_CONFIG_PATHS[mode]
         payload = _InitializeModelRequestPayload(model=model).model_dump()
         data = self._request_json("/v1/init", payload)
         if data.get("loaded_model") != model:

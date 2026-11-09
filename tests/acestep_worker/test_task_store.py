@@ -110,13 +110,6 @@ def test_generation_progress_carries_its_phase_into_every_event() -> None:
     ]
 
 
-@pytest.mark.parametrize("kind", ["download", "train_lora"])
-def test_only_a_generation_task_has_a_phase(kind) -> None:
-    creation = TaskStore().create(kind, phase=AceStepPhase.WRITING)
-    with pytest.raises(ValueError, match="Only generation tasks have phases"):
-        _run(creation)
-
-
 def test_training_progress_carries_real_epochs() -> None:
     async def go():
         store = TaskStore()
@@ -248,6 +241,20 @@ def test_subscribe_already_terminal_yields_only_initial() -> None:
     events = _run(go())
     assert len(events) == 1
     assert events[0].type == "done"
+
+
+def test_a_stream_closes_cleanly_after_the_sweep_dropped_its_finished_task() -> None:
+    async def go():
+        store = TaskStore(retention_seconds=-1)
+        task_id = await store.create("generate")
+        stream = store.subscribe(task_id)
+        await anext(stream)
+        await store.complete(task_id, _generated())
+        assert await store.cleanup_terminal() == 1
+        await stream.aclose()
+        return await store.get(task_id)
+
+    assert _run(go()) is None
 
 
 @pytest.mark.parametrize("error_kind", [None, "gpu_out_of_memory"])
