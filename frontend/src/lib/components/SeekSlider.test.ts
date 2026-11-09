@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SEEK_PLAYBACK_LABEL } from '#lib/constants.ts';
+import { SEEK_PLAYBACK_LABEL } from '#lib/constants/transport.ts';
 import { formatTime } from '#lib/utils/format.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { laidOutSeekLine, pointerOnSeekLine, shownSeekTime } from '#lib/test-utils/seek-line.ts';

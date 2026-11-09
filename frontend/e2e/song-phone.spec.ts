@@ -19,10 +19,10 @@ import {
 	HITBOX_FREQUENT_PX,
 	openNowPlayingLabel,
 	PLAYLISTS_PAGE_LABEL,
-	TRANSPORT_PLAY_LABEL,
 	songEditorOpenLabel,
 	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
+import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	NOW_PLAYING_TAKE_TAB,

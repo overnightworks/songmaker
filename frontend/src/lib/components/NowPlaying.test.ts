@@ -9,13 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { SongItem } from '#lib/api/types.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
+import { NOW_PLAYING_LABEL } from '#lib/constants.ts';
 import {
-	NOW_PLAYING_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL,
 	PLAYER_WAITING_FOR_NETWORK
-} from '#lib/constants.ts';
+} from '#lib/constants/transport.ts';
 import {
 	NOW_PLAYING_CURATE_DONE_LABEL,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,

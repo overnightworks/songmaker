@@ -5,7 +5,7 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL,
 	type TransportLabel
-} from '#lib/constants.ts';
+} from '#lib/constants/transport.ts';
 import { ContinuousDeck, TakeNotAppended, type DeckEntry } from './continuousDeck';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';

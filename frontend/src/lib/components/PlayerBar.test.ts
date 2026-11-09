@@ -14,13 +14,15 @@ import {
 	NOW_PLAYING_SWIPE_RISE_PX,
 	OFFLINE_STRIP_MESSAGE,
 	openNowPlayingLabel,
-	PLAYER_WAITING_FOR_NETWORK,
 	LIBRARY_PAGE_LABEL,
-	REDUCED_MOTION_MEDIA,
+	REDUCED_MOTION_MEDIA
+} from '#lib/constants.ts';
+import {
+	PLAYER_WAITING_FOR_NETWORK,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
-} from '#lib/constants.ts';
+} from '#lib/constants/transport.ts';
 import {
 	audioPlayer,
 	STALL_RECOVERY_MS,
@@ -259,8 +261,7 @@ describe('PlayerBar stream boundaries', () => {
 		openCollection.set(null);
 		selectedPlaylistDetail.set(null);
 		const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		expect(audioPlayer.current).toBeNull();
 		const play = target.querySelector<HTMLButtonElement>('button[aria-label="Play"]');
@@ -279,8 +280,7 @@ describe('PlayerBar stream boundaries', () => {
 			load();
 			holdAlbumStart('awaiting-network');
 			const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
-			component = mount(PlayerBar, { target });
-			await tick();
+			await mountPlayerBar();
 
 			const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
 			expect(transport?.querySelector('.spinner')).not.toBeNull();
@@ -299,8 +299,7 @@ describe('PlayerBar stream boundaries', () => {
 			useDesktopLayout();
 			load();
 			holdAlbumStart(notice);
-			component = mount(PlayerBar, { target });
-			await tick();
+			await mountPlayerBar();
 
 			expect({
 				title: target.querySelector('.track-title')?.textContent,
@@ -345,8 +344,7 @@ describe('PlayerBar stream boundaries', () => {
 	it('pausing a waiting album start leaves the album title with Play and no 0:00/0:00 (#1312)', async () => {
 		useDesktopLayout();
 		holdAlbumStart('awaiting-network');
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		playStartNotice.set('idle');
 		setPendingStartForTests(null);
@@ -362,8 +360,7 @@ describe('PlayerBar stream boundaries', () => {
 	describe('during the restore wait (#1312)', () => {
 		async function mountRestoredTake(): Promise<HTMLButtonElement> {
 			audioPlayer.load(barTake(), { autoplay: false, startAt: RESTORED_POSITION });
-			component = mount(PlayerBar, { target });
-			await tick();
+			await mountPlayerBar();
 			return playButton();
 		}
 
@@ -387,8 +384,7 @@ describe('PlayerBar stream boundaries', () => {
 		it('reads Pause with its spinner for a Play pressed before the saved take arrived (#1330)', async () => {
 			playStartNotice.set('restoring');
 			const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
-			component = mount(PlayerBar, { target });
-			await tick();
+			await mountPlayerBar();
 			const whileItArrives = buttonFacts(playButton());
 
 			await clickAndSettle();
@@ -406,8 +402,7 @@ describe('PlayerBar stream boundaries', () => {
 				{ ...take, generation: { ...take.generation, audio_duration_sec: 180 } },
 				{ autoplay: false, startAt: 73 }
 			);
-			component = mount(PlayerBar, { target });
-			await tick();
+			await mountPlayerBar();
 
 			expect(
 				[...target.querySelectorAll('.timeline .time')].map((time) => time.textContent)
@@ -498,8 +493,7 @@ describe('PlayerBar stream boundaries', () => {
 		async ({ notice, reads }) => {
 			const lockScreen = installLockScreen();
 			holdAlbumStart(notice);
-			component = mount(PlayerBar, { target });
-			await tick();
+			await mountPlayerBar();
 
 			expect(lockScreen.playbackState).toBe(reads);
 		}
@@ -511,8 +505,7 @@ describe('PlayerBar stream boundaries', () => {
 		selectedPlaylistDetail.set(null);
 		albumList.set([albumItem({ share_slug: null, cover: null })]);
 		vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 		expect(target.querySelector('.track-title')?.textContent).toBe('Nachtstrom');
 		expect(target.textContent).toContain('Nachtstrom');
 	});
@@ -522,8 +515,7 @@ describe('PlayerBar stream boundaries', () => {
 		selectedSongId.set(null);
 		selectedPlaylistDetail.set(playlistItem(playablePlaylistDefaults()));
 		vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 		expect(target.querySelector('.track-title')?.textContent).toBe('Night Drive');
 		expect(target.textContent).toContain('Night Drive');
 	});
@@ -534,8 +526,7 @@ describe('PlayerBar stream boundaries', () => {
 		selectedPlaylistDetail.set(
 			playlistItem({ ...playablePlaylistDefaults(), entry_count: 0, entries: [] })
 		);
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		target.querySelector<HTMLButtonElement>('button[aria-label="Play"]')?.click();
 		await vi.waitFor(() => expect(target.textContent).toContain(LIBRARY_QUEUE_EMPTY_TITLE));
@@ -551,8 +542,7 @@ describe('PlayerBar stream boundaries', () => {
 	it('uses English loading and empty copy instead of German leftovers', async () => {
 		queueContext.set({ type: 'library' });
 		playStartNotice.set('building');
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 		expect(target.textContent).toContain(LIBRARY_QUEUE_LOADING_TITLE);
 		expect(target.textContent).not.toContain('Queue wird gebaut');
 		playStartNotice.set('empty');
@@ -563,8 +553,7 @@ describe('PlayerBar stream boundaries', () => {
 
 	it('reacts at window boundaries even when adjacent entries use the same generation', async () => {
 		audioPlayer.loadStream(manifest([track(0), track(1)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		const previous = target.querySelector<HTMLButtonElement>('button[aria-label="Previous"]');
 		const next = target.querySelector<HTMLButtonElement>('button[aria-label="Next"]');
@@ -587,8 +576,7 @@ describe('PlayerBar stream boundaries', () => {
 
 	it('keeps Play enabled and queues one loading tap until canplay', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 		const play = target.querySelector<HTMLButtonElement>('.play-btn');
 		if (!play) throw new Error('Expected player Play button');
 		const playSpy = vi.spyOn(audio, 'play');
@@ -650,8 +638,7 @@ describe('1354_rule_41 desktop album navigation', () => {
 			});
 			vi.stubGlobal('fetch', async () => Response.json({ detail: 'Unavailable' }, { status }));
 			loadTake();
-			component = mount(PlayerBar, { target });
-			await tick();
+			await mountPlayerBar();
 			await vi.waitFor(() =>
 				expect(get(toasts).some((toast) => toast.type === 'error')).toBe(true)
 			);
@@ -664,8 +651,7 @@ describe('1354_rule_41 desktop album navigation', () => {
 	it('keeps the phone track text free of a nested album action', async () => {
 		songList.set([makeSong()]);
 		loadTake();
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		expect(target.querySelector('.track-album')).toBeNull();
 		expect(target.querySelector('.track-title')?.textContent).toBe('Opening Move');
@@ -695,8 +681,7 @@ describe('PlayerBar take identifier', () => {
 			},
 			{ autoplay: false }
 		);
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		expect(target.querySelector('.track-detail')?.textContent).toContain(expected);
 		expect(target.querySelector('.track-detail')?.textContent).not.toContain('Artist');
@@ -716,8 +701,7 @@ describe('PlayerBar shuffle', () => {
 		useDesktopLayout();
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		albumList.set([albumItem({ share_slug: null, cover: null })]);
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		expect(shuffleButton().getAttribute('aria-pressed')).toBe('false');
 		expect(shuffleButton().getAttribute('aria-label')).toBe('Shuffle this album');
@@ -737,6 +721,11 @@ function playButton(): HTMLButtonElement {
 	return button;
 }
 
+async function mountPlayerBar(): Promise<void> {
+	component = mount(PlayerBar, { target });
+	await tick();
+}
+
 async function clickAndSettle(button: HTMLButtonElement = playButton()): Promise<void> {
 	button.click();
 	await tick();
@@ -747,8 +736,7 @@ async function clickAndSettle(button: HTMLButtonElement = playButton()): Promise
 describe('PlayerBar transport labels', () => {
 	it('names the transport button after the state its click leaves', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
 
 		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
@@ -780,8 +768,7 @@ describe('PlayerBar Now Playing', () => {
 	it('opens Now Playing, and puts the docked panel away again on a second press', async () => {
 		nowPlayingDockable.set(true);
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 		// A panel in the page is a disclosure, not a dialog trigger.
 		expect(nowPlayingButton().getAttribute('aria-expanded')).toBe('false');
 
@@ -798,8 +785,7 @@ describe('PlayerBar Now Playing', () => {
 
 	it('names the full surface a dialog, which the bar only ever opens', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		expect(nowPlayingButton().getAttribute('aria-haspopup')).toBe('dialog');
 		nowPlayingButton().click();
@@ -811,8 +797,7 @@ describe('PlayerBar Now Playing', () => {
 	// "One player, never two": the full surface carries the only transport.
 	it('hides the transport bar under the full surface and brings it back on close', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 
 		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
@@ -829,8 +814,7 @@ describe('PlayerBar Now Playing', () => {
 	it('keeps the transport bar while Now Playing is docked', async () => {
 		nowPlayingDockable.set(true);
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
 		await tick();
@@ -869,8 +853,7 @@ describe('PlayerBar Now Playing', () => {
 			vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
 		);
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
 		target.querySelector<HTMLButtonElement>('.play-btn')?.click();
@@ -900,8 +883,7 @@ describe('PlayerBar Now Playing', () => {
 
 	it('returns focus to the transport bar trigger the bar remounts with', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 
 		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
 		await tick();
@@ -930,8 +912,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 	}
 
 	async function mountBar(): Promise<void> {
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 	}
 
 	it.each([
@@ -1300,8 +1281,7 @@ describe('PlayerBar failure line', () => {
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		albumList.set([albumItem({ share_slug: null, cover: null, title: 'Nightdrive' })]);
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 	}
 
 	async function failPlayback(): Promise<string> {
@@ -1431,8 +1411,7 @@ describe('PlayerBar offline strip (#1080)', () => {
 describe('PlayerBar while typing on the phone', () => {
 	it('steps aside for the keyboard and comes back on leaving the field, with playback untouched', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
 		target.querySelector<HTMLButtonElement>('.play-btn')?.click();
 		await tick();
@@ -1473,8 +1452,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
 		arrange();
 		loadTake();
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 		await audio.play();
 		audio.fire('playing');
 		audio.fire('waiting');
@@ -1498,15 +1476,13 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 	): Promise<void> {
 		arrange();
 		holdAlbumStart(notice);
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 	}
 
 	async function tapATakeRowOffline(): Promise<void> {
 		reportResourceStreamReachable(false);
 		audioPlayer.load(barTake());
-		component = mount(PlayerBar, { target });
-		await tick();
+		await mountPlayerBar();
 	}
 
 	function transportFacts(lockScreen: Pick<MediaSession, 'playbackState'>) {

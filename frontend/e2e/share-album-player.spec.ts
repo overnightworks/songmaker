@@ -7,13 +7,12 @@
 import { mkdirSync } from 'node:fs';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
 import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
+import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '../src/lib/constants';
 import {
 	SEEK_PLAYBACK_LABEL,
-	SONG_NEXT_LABEL,
-	SONG_PREVIOUS_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
-} from '../src/lib/constants';
+} from '../src/lib/constants/transport';
 import {
 	NOW_PLAYING_PLAY_AGAIN_LABEL,
 	NOW_PLAYING_GO_TO_SONG
