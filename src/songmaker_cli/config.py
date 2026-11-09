@@ -178,16 +178,10 @@ def _coerce_to_params(
         return None
     if isinstance(value, BaseGenerationParams):
         return value
-    if isinstance(value, dict):
-        try:
-            return BaseGenerationParams.model_validate(value)
-        except PydanticValidationError as exc:
-            raise ValidationError(str(exc)) from exc
-    msg = (
-        f"generation params must be BaseGenerationParams or dict, "
-        f"got {type(value).__name__}"
-    )
-    raise ValidationError(msg)
+    try:
+        return BaseGenerationParams.model_validate(value)
+    except PydanticValidationError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 def _merge_layers(
@@ -258,8 +252,7 @@ def build_ace_config(
 
     if meta.bpm:
         fields["bpm"] = meta.bpm
-    if meta.audio_duration is not None:
-        fields["audio_duration"] = meta.audio_duration
+    fields["audio_duration"] = meta.audio_duration
     if meta.key_scale:
         fields["key_scale"] = meta.key_scale
     if meta.vocal_language:
@@ -268,7 +261,4 @@ def build_ace_config(
     if seed is not None and seed >= 0:
         fields["seed"] = seed
 
-    try:
-        return AceStepConfig(**fields)
-    except TypeError as exc:
-        raise ValidationError(str(exc)) from exc
+    return AceStepConfig(**fields)

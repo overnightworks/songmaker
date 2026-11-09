@@ -1,6 +1,7 @@
 """defect:#1590: database expiry owns periodic session cleanup."""
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -16,6 +17,7 @@ from songmaker_cli.health_types import (
     BackgroundLoopStatus,
 )
 from songmaker_cli.lifecycle import _cleanup_sessions, session_cleanup_loop
+from songmaker_cli.lifecycle import log as lifecycle_logger
 
 
 @pytest.fixture
@@ -149,3 +151,36 @@ def test_cleanup_loop_keeps_a_live_session_and_resets_a_failing_loop_when_nothin
     assert health.status is BackgroundLoopStatus.OK
     with cleanup_context.db() as db:
         assert db.get(UserSession, "live") is not None
+
+
+def test_cleanup_loop_reads_failing_after_the_threshold_of_failed_ticks(cleanup_context, caplog):
+    app = FastAPI()
+    app.state.ctx = cleanup_context
+    registry = BackgroundLoopRegistry()
+    app.state.background_loop_registry = registry
+
+    def unavailable_database():
+        raise RuntimeError("database unavailable")
+
+    cleanup_context.db = unavailable_database
+    ticks = 0
+
+    async def advance_tick(_seconds):
+        nonlocal ticks
+        ticks += 1
+        if ticks == BACKGROUND_LOOP_FAILURE_THRESHOLD + 1:
+            raise asyncio.CancelledError
+
+    cleanup_loop = session_cleanup_loop(app, wait=advance_tick)
+    with caplog.at_level(logging.WARNING, logger=lifecycle_logger.name):
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(cleanup_loop)
+
+    health = registry.loop_health()[BackgroundLoopName.SESSION_CLEANUP]
+    assert health.consecutive_failures == BACKGROUND_LOOP_FAILURE_THRESHOLD
+    assert health.status is BackgroundLoopStatus.FAILING
+    failure_records = [record for record in caplog.records if record.name == lifecycle_logger.name]
+    assert [record.levelno for record in failure_records] == (
+        [logging.WARNING] * (BACKGROUND_LOOP_FAILURE_THRESHOLD - 1) + [logging.ERROR]
+    )
+    assert all(record.exc_info for record in failure_records)

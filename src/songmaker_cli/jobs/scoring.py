@@ -33,7 +33,7 @@ SCORING_JOB_TERMINAL_LOG: Final = "Scoring job %s stopping because job is termin
 @dataclass(frozen=True)
 class ScoringInput:
     mp3_path_rel: str
-    meta: SongMeta | None
+    meta: SongMeta
 
 
 def run_scoring_job(
@@ -84,8 +84,6 @@ def run_scoring_job(
             return
 
         scorer = jobs.get_scorer_process()
-        if not scorer.alive:
-            log.info("Scorer subprocess not running — spawning before scoring")
 
         settings = get_settings()
         config = PipelineConfig(
@@ -165,13 +163,11 @@ def _load_scoring_input(
         return ScoringInput(mp3_path_rel=gen.mp3_path, meta=meta)
 
 
-def _score_meta(song, version) -> SongMeta | None:
-    if not song and not version:
-        return None
-    meta_kwargs = {"title": song.title if song else ""}
+def _score_meta(song, version) -> SongMeta:
+    meta_kwargs = {"title": song.title}
     if version:
         meta_kwargs.update(prompt=version.prompt, lyrics=version.lyrics, bpm=version.bpm)
-    if song and song.vocal_language:
+    if song.vocal_language:
         meta_kwargs["vocal_language"] = song.vocal_language
     return SongMeta(**meta_kwargs)
 
