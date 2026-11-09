@@ -851,7 +851,7 @@ take, `{audio route}/{generation_id}.mp3`, never its stored path, which starts
 with the creator's account id (#1426, rule 8 of #1374): the share audio routes
 read the id, require that the share presents that take, and only then open the
 stored file, so an old stored-path URL answers 404 (`shared_access.py#shared_audio_url_for_take`,
-`#_stored_filename_of_presented_audio`). A `SharedTrack` therefore knows its own
+`sharing_api.py#_presented_audio_response`). A `SharedTrack` therefore knows its own
 duration, lyrics and cues without a stream manifest.
 
 A shared song or take opens as the player (#1391): `SharedCollection.svelte`
