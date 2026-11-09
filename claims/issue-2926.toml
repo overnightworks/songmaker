@@ -1,0 +1,7 @@
+claim_id = "a1d533dde1d1466f91fcdcdafb3fbde3"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "e566cdd7e424b493e86071b46fdd3bd99c5dc525"
+branch = "claude/issue-2926-a-backend-test-run-can-select-one-shard"
+scope = ["docs/testing.md", "tests/conftest.py", "tests/test_shard_selection.py"]
+opened_commit = "f71c9e18ec14778095d51b6873fc379f5a8876c9"
