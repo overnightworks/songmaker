@@ -368,9 +368,10 @@ def _route_routers() -> tuple[APIRouter, ...]:
     from songmaker_cli.api import router as api_router
     from songmaker_cli.audio_api import router as audio_router
     from songmaker_cli.health_api import router as health_router
+    from songmaker_cli.shared_views_api import router as shared_views_router
     from songmaker_cli.sharing_api import router as sharing_router
 
-    return api_router, audio_router, health_router, sharing_router
+    return api_router, audio_router, health_router, sharing_router, shared_views_router
 
 
 def _exported_models() -> tuple[set[type[BaseModel]], int]:

@@ -247,13 +247,7 @@ def create_app(
     install_sign_in(app)
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
-    from songmaker_cli.api import router as api_router
-    from songmaker_cli.audio_api import router as audio_router
-    from songmaker_cli.health_api import router as health_router
-    from songmaker_cli.sharing_api import router as sharing_router
-
-    for router in (api_router, audio_router, health_router, sharing_router):
-        app.include_router(router)
+    _include_routers(app)
 
     # Every route that appears in the schema is registered, so the marks are read from a
     # complete schema; the gate needs them before the middleware is added.
@@ -360,6 +354,19 @@ def create_app(
         return JSONResponse({"detail": detail}, status_code=404)
 
     return app
+
+
+def _include_routers(app: FastAPI) -> None:
+    from songmaker_cli.api import router as api_router
+    from songmaker_cli.audio_api import router as audio_router
+    from songmaker_cli.health_api import router as health_router
+    from songmaker_cli.shared_views_api import router as shared_views_router
+    from songmaker_cli.sharing_api import router as sharing_router
+
+    # The file routes register before the views so that `/shared/song/cover` and its
+    # siblings reach the album-cover route, as no slug can equal those words.
+    for router in (api_router, audio_router, health_router, sharing_router, shared_views_router):
+        app.include_router(router)
 
 
 def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
