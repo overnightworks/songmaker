@@ -117,15 +117,10 @@ def get_shared_album(
     for s in songs:
         gen = picked_by_song[s.id]
         media = share_pick_media(gen)
-        song_items.append(SharedSongItem(
-            id=s.id,
-            title=s.title,
-            track_number=s.track_number,
+        song_items.append(SharedSongItem.from_orm(
+            s,
+            media=media,
             audio_url=_shared_audio_url(f"/shared/{slug}/audio", gen),
-            generation_id=media.generation_id,
-            audio_duration=media.audio_duration,
-            lyrics=media.lyrics,
-            whisper_cues=media.whisper_cues,
         ))
     response = SharedAlbumResponse.from_orm(album, songs=song_items, cover=cover)
     return JSONResponse(response.model_dump())
@@ -221,17 +216,12 @@ def get_shared_song(
             f"/shared/song/{slug}/album-cover", song_album.cover_key
         ),
     )
-    response = SharedSongResponse(
-        title=song.title,
-        artist=song.album.artist if song.album else "",
-        album_title=song.album.title if song.album else "",
+    response = SharedSongResponse.from_orm(
+        song,
+        media=media,
         audio_url=_shared_audio_url(f"/shared/song/{slug}/audio", gen),
         cover=cover,
         album_cover=album_cover,
-        generation_id=media.generation_id,
-        audio_duration=media.audio_duration,
-        lyrics=media.lyrics,
-        whisper_cues=media.whisper_cues,
     )
     return JSONResponse(response.model_dump())
 
@@ -260,16 +250,10 @@ def get_shared_generation(
             f"/shared/gen/{slug}/album-cover", album.cover_key
         ),
     )
-    response = SharedGenerationResponse(
-        title=gen.song.title,
-        artist=album.artist if album else "",
-        album_title=album.title if album else "",
-        generation_number=gen.generation_number,
+    response = SharedGenerationResponse.from_orm(
+        gen,
+        media=media,
         audio_url=shared_audio_url_for_take(f"/shared/gen/{slug}/audio", gen),
-        generation_id=media.generation_id,
-        audio_duration=media.audio_duration,
-        lyrics=media.lyrics,
-        whisper_cues=media.whisper_cues,
         album_cover=album_cover,
     )
     return JSONResponse(response.model_dump())

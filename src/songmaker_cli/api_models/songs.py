@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final, cast
@@ -54,6 +54,9 @@ class SharePickMedia:
     audio_duration: float | None
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
+
+    def as_fields(self) -> dict[str, object]:
+        return {field.name: getattr(self, field.name) for field in fields(self)}
 
 
 _NO_SHARE_PICK_MEDIA = SharePickMedia(
@@ -228,6 +231,18 @@ class SharedSongItem(BaseModel):
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
 
+    @classmethod
+    def from_orm(
+        cls, song: Song, *, media: SharePickMedia, audio_url: str | None
+    ) -> SharedSongItem:
+        return cls(
+            id=song.id,
+            title=song.title,
+            track_number=song.track_number,
+            audio_url=audio_url,
+            **media.as_fields(),
+        )
+
 
 class SharedAlbumResponse(BaseModel):
     title: str
@@ -268,6 +283,26 @@ class SharedSongResponse(BaseModel):
     cover: AlbumCoverUrls | None = None
     album_cover: AlbumCoverUrls | None = None
 
+    @classmethod
+    def from_orm(
+        cls,
+        song: Song,
+        *,
+        media: SharePickMedia,
+        audio_url: str | None,
+        cover: AlbumCoverUrls | None,
+        album_cover: AlbumCoverUrls | None,
+    ) -> SharedSongResponse:
+        return cls(
+            title=song.title,
+            artist=song.album.artist if song.album else "",
+            album_title=song.album.title if song.album else "",
+            audio_url=audio_url,
+            cover=cover,
+            album_cover=album_cover,
+            **media.as_fields(),
+        )
+
 
 class SharedGenerationResponse(BaseModel):
     title: str
@@ -280,6 +315,26 @@ class SharedGenerationResponse(BaseModel):
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
     album_cover: AlbumCoverUrls | None = None
+
+    @classmethod
+    def from_orm(
+        cls,
+        gen: Generation,
+        *,
+        media: SharePickMedia,
+        audio_url: str | None,
+        album_cover: AlbumCoverUrls | None,
+    ) -> SharedGenerationResponse:
+        album = gen.song.album
+        return cls(
+            title=gen.song.title,
+            artist=album.artist if album else "",
+            album_title=album.title if album else "",
+            generation_number=gen.generation_number,
+            audio_url=audio_url,
+            album_cover=album_cover,
+            **media.as_fields(),
+        )
 
 
 def generation_expiry(gen: Generation) -> datetime | None:
