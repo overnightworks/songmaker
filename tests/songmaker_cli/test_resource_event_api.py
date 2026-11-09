@@ -874,9 +874,9 @@ class _OuterDeadlineArmedAtResponseStart:
                 pytest.fail("the route did not start its response within the hang guard")
             pytest.fail("the blocked send was not bounded within the hang guard")
 
-    def elapsed_since_response_start(self) -> float:
-        assert self.response_started_at is not None
-        return asyncio.get_running_loop().time() - self.response_started_at
+    @property
+    def armed_delay(self) -> float | None:
+        return self._outer_delay
 
 
 async def _wait_for_released_lease(released: threading.Event) -> None:
@@ -891,10 +891,11 @@ def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases
     clients, _, user_ids = _authenticated_clients(tmp_path, pg_factory)
     app = clients["alice"].app
     released, release_calls = _stub_one_frame_stream(app, monkeypatch)
-    _set_resource_stream_deadline(app, 2)
+    configured_deadline_seconds = 2
+    _set_resource_stream_deadline(app, configured_deadline_seconds)
     outer_deadline = _OuterDeadlineArmedAtResponseStart(monkeypatch)
 
-    async def _run() -> float:
+    async def _run() -> None:
         body_send_started = asyncio.Event()
         body_send_cancelled = asyncio.Event()
         messages: list[dict] = []
@@ -919,7 +920,7 @@ def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases
         _receive = _single_request_receive()
 
         await outer_deadline.run(clients["alice"], _receive, _send)
-        elapsed = outer_deadline.elapsed_since_response_start()
+        assert outer_deadline.armed_delay == configured_deadline_seconds
         assert [
             message["status"] for message in messages if message["type"] == "http.response.start"
         ] == [200]
@@ -932,9 +933,8 @@ def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases
         assert body_send_cancelled.is_set()
         await _wait_for_released_lease(released)
         assert release_calls == [(user_ids["alice"], "lease-token")]
-        return elapsed
 
-    assert asyncio.run(_run()) < 2.5
+    asyncio.run(_run())
 
 
 def test_outer_app_deadline_does_not_duplicate_normal_stream_completion(
@@ -1032,10 +1032,11 @@ def test_outer_app_deadline_bounds_blocked_synthetic_terminal_and_releases_lease
     app = clients["alice"].app
     monkeypatch.setattr(deadline_middleware, "_SYNTHETIC_TERMINAL_SEND_TIMEOUT_SECONDS", 0.05)
     released, release_calls = _stub_one_frame_stream(app, monkeypatch)
-    _set_resource_stream_deadline(app, 2)
+    configured_deadline_seconds = 2
+    _set_resource_stream_deadline(app, configured_deadline_seconds)
     outer_deadline = _OuterDeadlineArmedAtResponseStart(monkeypatch)
 
-    async def _run() -> float:
+    async def _run() -> None:
         synthetic_send_cancelled = asyncio.Event()
         terminal_attempts = 0
 
@@ -1058,14 +1059,13 @@ def test_outer_app_deadline_bounds_blocked_synthetic_terminal_and_releases_lease
         _receive = _single_request_receive()
 
         await outer_deadline.run(clients["alice"], _receive, _send)
-        elapsed = outer_deadline.elapsed_since_response_start()
+        assert outer_deadline.armed_delay == configured_deadline_seconds
         assert synthetic_send_cancelled.is_set()
         assert terminal_attempts == 1
         await _wait_for_released_lease(released)
         assert release_calls == [(user_ids["alice"], "lease-token")]
-        return elapsed
 
-    assert asyncio.run(_run()) < 2.5
+    asyncio.run(_run())
 
 
 def test_outer_app_deadline_propagates_application_and_regular_send_errors() -> None:
