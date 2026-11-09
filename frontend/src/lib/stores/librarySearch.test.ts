@@ -6,6 +6,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+import { deferred } from '#lib/test-utils/album-cover-editor.ts';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {
@@ -523,5 +524,140 @@ describe('applySyncedSong', () => {
 		songList.set([]);
 		selectedSongId.set('s-watch');
 		expect(seen).toHaveLength(afterStop);
+	});
+});
+
+const albumHit = (id: string) => ({ type: 'album' as const, album: album({ id }) });
+const songHit = (id: string) => ({
+	type: 'song' as const,
+	song: searchSong({ id }),
+	album_id: 'a1',
+	album_title: 'Anfield'
+});
+const searchPage = (
+	items: ReturnType<typeof albumHit | typeof songHit>[],
+	nextCursor?: string
+) => ({
+	items,
+	next_cursor: nextCursor ?? null,
+	has_more: nextCursor !== undefined
+});
+const browsePage = <T>(items: T[], hasMore: boolean) => ({
+	items,
+	total: items.length,
+	offset: 0,
+	limit: 50,
+	has_more: hasMore
+});
+
+describe('a search or browse that a newer one replaced', () => {
+	const outcomes = [
+		{ outcome: 'a reply', settle: 'resolve' },
+		{ outcome: 'a failure', settle: 'reject' }
+	] as const;
+
+	it.each(outcomes)('drops $outcome of a superseded search', async ({ settle }) => {
+		const first = deferred<ReturnType<typeof searchPage>>();
+		searchLibrary
+			.mockImplementationOnce(() => first.promise)
+			.mockResolvedValueOnce(searchPage([songHit('s-new')]));
+
+		const superseded = restoreLibrarySearch('Old', 'newest', 1);
+		await restoreLibrarySearch('New', 'newest', 1);
+		if (settle === 'resolve') first.resolve(searchPage([songHit('s-old')]));
+		else first.reject(new Error('stale failure'));
+		await superseded;
+
+		expect(get(librarySearch)).toMatchObject({ q: 'New', status: 'ready', error: null });
+		expect(get(librarySearch).items.map((hit) => hit.type === 'song' && hit.song.id)).toEqual([
+			's-new'
+		]);
+	});
+
+	it('drops the failure of a superseded browse', async () => {
+		const firstAlbums = deferred<ReturnType<typeof browsePage>>();
+		fetchAlbums
+			.mockImplementationOnce(() => firstAlbums.promise)
+			.mockResolvedValueOnce(browsePage([album({ id: 'new-album' })], false));
+		fetchSongs.mockResolvedValue(browsePage([], false));
+
+		const superseded = loadLibraryBrowse({ reset: true });
+		await loadLibraryBrowse({ reset: true });
+		firstAlbums.reject(new Error('stale failure'));
+
+		expect(await superseded).toBe(false);
+		expect(get(libraryBrowse)).toMatchObject({ status: 'ready', error: null });
+		expect(get(albumList).map((item) => item.id)).toEqual(['new-album']);
+	});
+});
+
+describe('restoring a browse scrolled far down', () => {
+	it('keeps paging songs after the albums are done', async () => {
+		fetchAlbums.mockResolvedValue(browsePage([album({ id: 'a-1' })], false));
+		fetchSongs
+			.mockResolvedValueOnce(browsePage([song({ id: 's-1' })], true))
+			.mockResolvedValueOnce(browsePage([song({ id: 's-2' })], false));
+
+		expect(await restoreLibraryBrowse('newest', 1, 2)).toBe(true);
+
+		expect(get(libraryBrowse)).toMatchObject({ status: 'ready', songOffset: 2 });
+		expect(get(songList).map((item) => item.id)).toEqual(['s-1', 's-2']);
+	});
+
+	it('stops at the first later page that fails', async () => {
+		fetchAlbums
+			.mockResolvedValueOnce(browsePage([album({ id: 'a-1' })], true))
+			.mockRejectedValueOnce(new Error('page two failed'));
+		fetchSongs.mockResolvedValue(browsePage([], false));
+
+		expect(await restoreLibraryBrowse('newest', 5, 0)).toBe(false);
+
+		expect(fetchAlbums).toHaveBeenCalledTimes(2);
+		expect(get(libraryBrowse)).toMatchObject({ status: 'error', error: 'Search failed' });
+	});
+});
+
+describe('the loaded song ids', () => {
+	it('name song hits and the browsed songs, never an album, when no song is selected', () => {
+		songList.set([song({ id: 's-browsed' })]);
+		librarySearch.set({
+			q: 'Anfield',
+			status: 'ready',
+			error: null,
+			items: [albumHit('a-hit'), songHit('s-hit')],
+			hasMore: false,
+			nextCursor: null
+		});
+
+		expect(listLoadedSongIds().sort()).toEqual(['s-browsed', 's-hit']);
+	});
+});
+
+describe('a later page that repeats what is already shown', () => {
+	it('adds only the search hits not shown yet, album hits included', async () => {
+		searchLibrary
+			.mockResolvedValueOnce(searchPage([albumHit('a-1'), songHit('s-1')], 'cursor-1'))
+			.mockResolvedValueOnce(searchPage([albumHit('a-1'), songHit('s-1'), songHit('s-2')]));
+
+		await restoreLibrarySearch('Anfield', 'newest', 3);
+
+		expect(
+			get(librarySearch).items.map((hit) => (hit.type === 'album' ? hit.album.id : hit.song.id))
+		).toEqual(['a-1', 's-1', 's-2']);
+	});
+
+	it('adds only the browse items not shown yet', async () => {
+		fetchAlbums
+			.mockResolvedValueOnce(browsePage([album({ id: 'a-1' })], true))
+			.mockResolvedValueOnce(browsePage([album({ id: 'a-1' }), album({ id: 'a-2' })], false));
+		fetchSongs
+			.mockResolvedValueOnce(browsePage([song({ id: 's-1' })], true))
+			.mockResolvedValueOnce(browsePage([song({ id: 's-1' }), song({ id: 's-2' })], false));
+		await loadLibraryBrowse({ reset: true });
+
+		await loadLibraryBrowse({ reset: false });
+
+		expect(get(albumList).map((item) => item.id)).toEqual(['a-1', 'a-2']);
+		expect(get(songList).map((item) => item.id)).toEqual(['s-1', 's-2']);
 	});
 });
