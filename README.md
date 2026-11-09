@@ -22,7 +22,7 @@ sudo ./scripts/install_autostart.sh               # start the stack after every 
 ```
 
 - [`docker/.env.docker.example`](docker/.env.docker.example) lists every setting, which ones are required, and how to generate secrets.
-- A cold-cache build takes 8-15 minutes; [AGENTS.md](AGENTS.md#setup-and-run) says why it must not be interrupted. The first start also downloads the ACE-Step model weights into a Docker volume.
+- A cold-cache build takes 8-15 minutes; [AGENTS.md](AGENTS.md#rules) says why it must not be interrupted. The first start also downloads the ACE-Step model weights into a Docker volume.
 - All persistent state (database, audio files, model cache, Grafana dashboards) lives in named Docker volumes and survives `docker compose down` and rebuilds.
 - Container confinement: [docs/security.md](docs/security.md#container-confinement). Why Docker's restart policy alone does not survive every reboot, and what the autostart unit adds: [docs/acestep.md](docs/acestep.md#restart-policy-limits-and-boot-autostart).
 
@@ -35,11 +35,11 @@ sudo ./scripts/install_autostart.sh               # start the stack after every 
 
 ## Development
 
-Local tests, lint, type checking and the Python and frontend toolchain are in [AGENTS.md](AGENTS.md#checks); test structure and coverage gates are in [docs/testing.md](docs/testing.md). The live app never runs from the local `.venv`.
+Local tests, lint, type checking and the Python and frontend toolchain are in [AGENTS.md](AGENTS.md#commands); test structure and coverage gates are in [docs/testing.md](docs/testing.md). The live app never runs from the local `.venv`.
 
 ## Docs
 
-- [AGENTS.md](AGENTS.md): project conventions, code patterns, and known constraints. Read this first if you are contributing.
+- [AGENTS.md](AGENTS.md): commands, rules and owners. Read this first if you are contributing.
 - [docs/VISION.md](docs/VISION.md): what Songmaker does, who uses it today, and what it deliberately is not
 - Ruled product sentences, one page per surface: [catalog](docs/catalog.md), [library](docs/library.md), [generation](docs/generation.md), [co-writer](docs/co-writer.md), [sharing](docs/sharing.md)
 - [docs/architecture.md](docs/architecture.md): system design, data model, API endpoints, worker pool, monitoring

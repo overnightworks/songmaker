@@ -425,8 +425,8 @@ class LimiterFailurePolicy(StrEnum):
 # Env var names stripped from the environment of every child process this
 # package spawns (the scoring subprocess, in scoring/subprocess_runner.py). The
 # acestep_worker package keeps an identical tuple of the same name in
-# acestep_worker/constants.py (it cannot import this module, see AGENTS.md
-# "Engine packages are independent"); the parity test pins them equal.
+# acestep_worker/constants.py (it cannot import this module, see the
+# independent-packages contract in .importlinter); the parity test pins them equal.
 #
 # A login is scrubbed as a pair. The name half is no secret on its own, but
 # handing a child process one half of a credential is pointless generosity —
