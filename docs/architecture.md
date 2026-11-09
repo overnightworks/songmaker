@@ -978,10 +978,13 @@ starts with the creator's account id: a stream track carries `seed: null` and
 
 ### The co-writer turn
 
-`POST /api/chat/turn` (`conversation_api.py`) prepares the turn as before: the
-context envelope (`cowriter/turn_context.py`), the memory, the rolling summary plus a token-bounded tail, the
-chat job and the stored user message. The turn then runs as a task of its own
-through `agent/backend.py`:
+`POST /api/chat/turn` (`conversation_api.py`) prepares the turn: the context
+envelope (`cowriter/turn_context.py`), the memory, the rolling summary plus a
+token-bounded tail, the chat job and the stored user message. The envelope
+loads the current song, the mentioned songs, album and take only when the
+caller owns them, an admin included; another person's content answers 404 and
+starts no job. The turn then runs as a task of its own through
+`agent/backend.py`:
 
 1. It takes the `GatewayBackend` that `run_server` composed from `Settings.agent` and
    holds on `app.state.agent_backend`; an unset `agent` ends the turn
@@ -1138,7 +1141,7 @@ headers; CORS preflights remain outside the library stack.
 
 The gateway turn's tools are hand tools (`agent/tools.py`), one per `COWRITER_TOOLS` entry; each acts only for the turn's principal. No co-writer turn or cover runs on a Claude CLI, so no song content reaches one. Trust and the named gaps: [Co-writer turn through the gateway](security.md#co-writer-turn-through-the-gateway).
 
-A person's own agent, or an agent that signs in with its own client and holds its own account (kind `agent`, webauth's agent group), reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools (every other route carries `not_an_agent_tool` with the reason of its `Exclusion`, and an undecided route stops the build), the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. The reach includes ending a share and moving an album or a song to the trash; it excludes final and bulk deletion, sharing and publishing, admin and what sends outward. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
+A person's own agent, or an agent that signs in with its own client and holds its own account (kind `agent`, webauth's agent group), reaches songmaker over MCP: `server.create_app` registers every route, `agent/mcp.py` reads the `agent_tool` marks from `app.openapi()` and turns them into tools (every other route carries `not_an_agent_tool` with the reason of its `Exclusion`, and an undecided route stops the build), the middleware block is installed with webauth's `ProtectedResource` in the bearer gate, and only then, while MCP is on, `/mcp` and the resource metadata route are added. Each tool call is an in-process request through the whole stack, so a marked route is checked exactly as for a browser. The reach includes the person's own conversations and notes, starting a new conversation, ending a share and moving an album or a song to the trash; it excludes final and bulk deletion, sharing and publishing, admin and what sends outward. Trust and recipients: [MCP endpoint for a person's own agent](security.md#mcp-endpoint-for-a-persons-own-agent).
 
 The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `webauth` is an installed distribution rather than a directory under `src/`, and its own boundaries are contracted in its repository; because `include_external_packages` is on, `.importlinter` still resolves it in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
 
