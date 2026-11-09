@@ -45,7 +45,7 @@
 "frontend/src/lib/stores/player.test.ts" = 5277
 "frontend/src/lib/stores/player.ts" = 2233
 "frontend/src/lib/stores/resourceSync.test.ts" = 2031
-"frontend/src/lib/stores/resourceSync.ts" = 1058
+"frontend/src/lib/stores/resourceSync.ts" = 1054
 "frontend/src/routes/layout.test.ts" = 1401
 "frontend/src/routes/settings/users/+page.svelte" = 936
 "src/acestep_worker/wrapper.py" = 1073

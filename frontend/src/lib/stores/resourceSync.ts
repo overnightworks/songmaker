@@ -120,6 +120,7 @@ export class ResourceSyncController {
 	private readonly failedSongs = new Map<string, SongRefreshFailure>();
 	private readonly songFetchNotBefore = new Map<string, number>();
 	private readonly queuedGenerationIds = new Set<string>();
+	// A reconnect replays events, and a generation already seen is not fetched again.
 	private readonly seenGenerationIds = new Set<string>();
 	private readonly songRevisions = new Map<string, number>();
 	private flushing: Promise<void> | null = null;
@@ -292,7 +293,6 @@ export class ResourceSyncController {
 		const delay = nextReconnectDelayMs(this.reconnectAttempt);
 		this.reconnectTimer = setTimeout(() => {
 			this.reconnectTimer = null;
-			if (!this.started) return;
 			reconnect();
 		}, delay);
 	}
@@ -355,7 +355,6 @@ export class ResourceSyncController {
 	};
 
 	private async handleHello(event: MessageEvent): Promise<void> {
-		if (!this.started) return;
 		let hello;
 		try {
 			hello = parseResourceHello(event.data);
@@ -377,7 +376,6 @@ export class ResourceSyncController {
 	}
 
 	private async handleResync(event: MessageEvent): Promise<void> {
-		if (!this.started) return;
 		let resync;
 		try {
 			resync = parseResourceResync(event.data);
@@ -393,7 +391,6 @@ export class ResourceSyncController {
 	}
 
 	private async handleGenerationCreated(event: MessageEvent): Promise<void> {
-		if (!this.started) return;
 		let created: GenerationCreatedResourceEvent;
 		try {
 			created = parseGenerationCreated(event.data);
@@ -419,7 +416,6 @@ export class ResourceSyncController {
 	 * whatever the probe answers -- the server may just be coming back.
 	 */
 	private async handleStreamError(): Promise<void> {
-		if (!this.started) return;
 		const failedToOpen = !this.streamGreeted;
 		this.streamGreeted = false;
 		const probeId = ++this.probeGeneration;
@@ -680,7 +676,7 @@ export class ResourceSyncController {
 	}
 
 	private async fetchAndApply(songId: string, epoch: number): Promise<void> {
-		const revision = this.songRevisions.get(songId) ?? 0;
+		const revision = this.songRevisions.get(songId);
 		try {
 			const song = await this.deps.fetchSong(songId);
 			if (!this.isCurrentEpoch(epoch)) return;
@@ -810,8 +806,8 @@ export class ResourceSyncController {
 		this.seenGenerationIds.delete(generationId);
 		this.seenGenerationIds.add(generationId);
 		if (this.seenGenerationIds.size <= RESOURCE_SYNC_TRACKED_EVENT_LIMIT) return;
-		const oldest = this.seenGenerationIds.values().next().value;
-		if (oldest !== undefined) this.seenGenerationIds.delete(oldest);
+		const [oldest] = this.seenGenerationIds;
+		this.seenGenerationIds.delete(oldest);
 	}
 
 	private isAfterWatermark(sequence: string): boolean {
@@ -819,6 +815,7 @@ export class ResourceSyncController {
 		return compareDecimalId(sequence, this.watermark) > 0;
 	}
 
+	/** A result from an abandoned sync or an older revision of a song changes nothing. */
 	private isCurrentEpoch(epoch: number): boolean {
 		return this.started && epoch === this.epoch;
 	}
@@ -935,7 +932,6 @@ export class ResourceSyncController {
 	}
 
 	private bindLoadedWatch(): void {
-		if (this.loadedWatchUnsub) return;
 		this.loadedWatchUnsub = this.deps.watchLoadedSongs(this.onLoadedSongsChanged);
 	}
 
