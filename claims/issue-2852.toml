@@ -1,0 +1,8 @@
+claim_id = "7c98575f58f741a7b9ddd76ff0c8f1a7"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "984cc2bd626e27febf28191c33e105a52a487a7d"
+branch = "claude/issue-2852-s26-library-search-jobs-stores"
+scope = ["frontend/src/lib/stores/jobs.concurrent.test.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/librarySearch.test.ts", "frontend/src/lib/stores/librarySearch.ts"]
+opened_commit = "eefee042e943bc812a408392eb854b21179f778a"
+whole_reason = "One coverage cut: the deletions, the stated rules and their cells follow from the same trace of two stores."
