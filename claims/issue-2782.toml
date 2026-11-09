@@ -1,8 +1,0 @@
-claim_id = "0edfbc40a51341c1bb63af0f8bd45a66"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d23a5d5a0e36548852a0cc6fd911d2c8a86f354b"
-branch = "claude/issue-2782-constants-day-resource-sse-modules"
-scope = ["frontend/e2e", "frontend/src/lib/api", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/stores", "frontend/src/lib/utils", "frontend/src/routes", "quality/baseline.toml"]
-opened_commit = "1f09fd27293d993ef816943864da59b554e27979"
-whole_reason = "One pure move: the three families leave the catch-all together, and every caller re-points in the same change, or the build breaks."
