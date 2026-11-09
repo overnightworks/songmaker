@@ -1,0 +1,7 @@
+claim_id = "d020deeaddbd4bde88df161eefe74726"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "5ad73d852fb166f572371f6ef7e7db6a661622a4"
+branch = "claude/issue-2907-history-loader-direct"
+scope = ["frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/test-utils/library-history.ts", "frontend/src/routes/layout.test.ts"]
+opened_commit = "20f44e98b85758a9454261aaf100b06ccd4ec054"
