@@ -1,7 +1,0 @@
-claim_id = "65ab00100f3d4820b365749758615696"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "7ddef05b1a95fa54ac48e60b9b0a51082c839b23"
-branch = "claude/issue-2869-citations-ci"
-scope = [".github/workflows/ci.yml", "scripts/check_requirement_citations.py", "tests/scripts/test_check_requirement_citations.py"]
-opened_commit = "29deeb8cc26afaa6ee02d30c85ad068e50a5ed40"
