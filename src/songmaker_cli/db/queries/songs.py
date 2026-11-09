@@ -496,8 +496,6 @@ def delete_song(session: Session, song_id: str) -> list[str]:
     """
     with include_deleted(session):
         songs = lock_songs(session, Song.id == song_id)
-        if not songs:
-            raise ValueError(f"Song not found: {song_id}")
         if has_active_job_for_songs(session, [song_id]):
             raise ActiveJobError(song_id)
         paths = delete_takes(session, Generation.song_id == song_id).paths
