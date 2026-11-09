@@ -1111,7 +1111,7 @@ def test_search_album_title_nachtstrom(alice: TestClient) -> None:
     assert album_hit["album"]["title"] == "Nachtstrom"
 
 
-def test_search_album_hit_says_whether_it_has_a_playable_take_1354_rule_11(
+def test_search_album_hit_says_whether_it_has_a_playable_take(
     library_ctx: tuple[object, object],
 ) -> None:
     factory, ctx = library_ctx

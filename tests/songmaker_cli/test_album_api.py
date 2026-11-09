@@ -299,7 +299,7 @@ def playable_take_client(tmp_path: Path, pg_factory):
     return client
 
 
-def test_list_albums_reports_has_playable_take_per_album_1354_rule_11(
+def test_list_albums_reports_has_playable_take_per_album(
     playable_take_client,
 ) -> None:
     resp = playable_take_client.get("/api/albums")
@@ -309,7 +309,7 @@ def test_list_albums_reports_has_playable_take_per_album_1354_rule_11(
 
 
 @pytest.mark.parametrize(("album_id", "expected"), _PLAYABLE_TAKE_EXPECTATIONS.items())
-def test_get_album_agrees_with_list_on_has_playable_take_1354_rule_11(
+def test_get_album_agrees_with_list_on_has_playable_take(
     playable_take_client, album_id: str, expected: bool,
 ) -> None:
     resp = playable_take_client.get(f"/api/albums/{album_id}")
@@ -317,7 +317,7 @@ def test_get_album_agrees_with_list_on_has_playable_take_1354_rule_11(
     assert resp.json()["has_playable_take"] is expected
 
 
-def test_created_album_has_no_playable_take_1354_rule_11(playable_take_client) -> None:
+def test_created_album_has_no_playable_take(playable_take_client) -> None:
     client = playable_take_client
     resp = client.post("/api/albums", json={"title": "Fresh"})
     assert resp.status_code == 200
