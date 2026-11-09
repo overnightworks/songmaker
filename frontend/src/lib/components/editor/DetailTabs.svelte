@@ -6,7 +6,7 @@
 		EDITOR_TAB_TAKES_LABEL,
 		EDITOR_TABS_LABEL,
 		EDITOR_VIEW_COWRITER_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/song.ts';
 	import { generateAction, isGenerateBusy } from '#lib/stores/generateAction.ts';
 	import { typingOnPhone } from '#lib/stores/ui.ts';
 

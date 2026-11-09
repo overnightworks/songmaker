@@ -89,10 +89,9 @@ import {
 	EDITOR_SAVE_FAILED,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
-	EDITOR_UNSAVED_TITLE,
-	TAKES_ERROR,
-	TAKES_RETRY_LABEL
-} from '#lib/constants.ts';
+	EDITOR_UNSAVED_TITLE
+} from '#lib/constants/song.ts';
+import { TAKES_ERROR, TAKES_RETRY_LABEL } from '#lib/constants/take.ts';
 import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants/http.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';

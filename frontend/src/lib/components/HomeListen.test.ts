@@ -2,7 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LibraryListenItem } from '#lib/api/library.ts';
 import { get } from 'svelte/store';
-import { PLAYING_MARK_LABEL } from '#lib/constants.ts';
+import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import {
 	COLLECTION_MENU_ARCHIVE_LABEL,
 	COLLECTION_MENU_DELETE_LABEL

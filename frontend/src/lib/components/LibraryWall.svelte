@@ -52,7 +52,7 @@
 		LIBRARY_WALL_ORDERS,
 		type LibraryWallOrder
 	} from '#lib/constants/library.ts';
-	import { LIBRARY_NARROW_MEDIA } from '#lib/constants.ts';
+	import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
 	import {
 		PLAYLISTS_PAGE_LABEL,
 		PLAYLISTS_WALL_EMPTY,

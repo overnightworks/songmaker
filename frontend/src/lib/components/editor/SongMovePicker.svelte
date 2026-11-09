@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
+	import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 	import {
-		LIBRARY_RETRY_LABEL,
 		SONG_MOVE_BACK_LABEL,
 		SONG_MOVE_FILTER_LABEL,
 		SONG_MOVE_FILTER_PLACEHOLDER,
@@ -9,7 +9,7 @@
 		SONG_MOVE_LOADING_LABEL,
 		SONG_MOVE_NO_MATCH,
 		SONG_MOVE_NO_OTHER_ALBUM
-	} from '#lib/constants.ts';
+	} from '#lib/constants/song.ts';
 	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import type { AlbumItem } from '#lib/api/types.ts';
 	import {

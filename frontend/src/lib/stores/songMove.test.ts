@@ -11,7 +11,7 @@ import {
 	SONG_MOVE_FAILED_REASON,
 	SONG_MOVE_NO_CONNECTION,
 	songMoveFailedLine
-} from '#lib/constants.ts';
+} from '#lib/constants/song.ts';
 import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';

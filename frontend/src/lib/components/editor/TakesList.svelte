@@ -11,7 +11,7 @@
 		TAKES_MOBILE_HINT,
 		TAKES_RETRY_LABEL,
 		takesDraftBanner
-	} from '#lib/constants.ts';
+	} from '#lib/constants/take.ts';
 	import { COARSE_POINTER_MEDIA } from '#lib/constants/media.ts';
 	import {
 		TAKE_SELECT_ALL_UNKEPT_LABEL,

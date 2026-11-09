@@ -4,7 +4,7 @@ import { SvelteMap } from 'svelte/reactivity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
-import { TAKE_DELETE_LABEL, TAKE_DELETE_MESSAGE } from '#lib/constants.ts';
+import { TAKE_DELETE_LABEL, TAKE_DELETE_MESSAGE } from '#lib/constants/take.ts';
 import { bulkDeleteTitle } from '#lib/constants/now-playing.ts';
 import { ApiError } from '#lib/api/fetch.ts';
 import { clearSelection, selectedIds, toggleSelection } from '#lib/stores/selection.ts';

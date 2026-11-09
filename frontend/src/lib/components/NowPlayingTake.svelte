@@ -5,7 +5,7 @@
 		TAKE_REPAINT_LABEL,
 		TAKE_RESCORE_LABEL,
 		TAKE_RESCORING_LABEL
-	} from '#lib/constants.ts';
+	} from '#lib/constants/take.ts';
 	import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
 	import {
 		NOW_PLAYING_IMPORTED_TAKE_HEADING,

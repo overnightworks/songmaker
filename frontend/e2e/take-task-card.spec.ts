@@ -9,11 +9,13 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_TAB_TAKES_LABEL,
+	EDITOR_TAB_TAKES_LABEL
+} from '../src/lib/constants/song';
+import {
 	TAKE_COVER_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_REPAINT_LABEL
-} from '../src/lib/constants';
+} from '../src/lib/constants/take';
 import { TAKE_TASK_CLOSE_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, shellOf } from './helpers';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';

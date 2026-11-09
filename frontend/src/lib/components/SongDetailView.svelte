@@ -77,8 +77,8 @@
 	import { setGenerationActions, takeActionsFor } from '#lib/contexts/generation-actions.ts';
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 	import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
+	import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
 	import {
-		LIBRARY_NARROW_MEDIA,
 		SONG_COVER_ALT_TYPE,
 		SONG_COVER_REPLACE_LABEL,
 		SONG_COVER_UPLOAD_LABEL,
@@ -88,8 +88,18 @@
 		EDITOR_UNSAVED_TITLE,
 		EDITOR_UNSAVED_MESSAGE,
 		EDITOR_UNSAVED_SAVE_LABEL,
-		EDITOR_UNSAVED_DISCARD_LABEL,
-		TAKES_ERROR,
+		EDITOR_UNSAVED_DISCARD_LABEL
+	} from '#lib/constants/song.ts';
+	import { TAKES_ERROR } from '#lib/constants/take.ts';
+	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
+	import {
+		TOAST_UNDO_LABEL,
+		VERSION_DELETE_CONFIRM_LABEL,
+		VERSION_DELETE_DRAFT_GOES,
+		VERSION_DELETE_LOAD_UNDO_GOES,
+		VERSION_DELETE_EMPTIES_EDITOR,
+		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
+		VERSION_REPLACE_DRAFT_TITLE,
 		versionDeleteTitle,
 		versionDeleteReplacedBy,
 		versionDeleteLoadedDraftGoes,
@@ -99,16 +109,6 @@
 		versionLabel,
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
-	} from '#lib/constants.ts';
-	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
-	import {
-		TOAST_UNDO_LABEL,
-		VERSION_DELETE_CONFIRM_LABEL,
-		VERSION_DELETE_DRAFT_GOES,
-		VERSION_DELETE_LOAD_UNDO_GOES,
-		VERSION_DELETE_EMPTIES_EDITOR,
-		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
-		VERSION_REPLACE_DRAFT_TITLE
 	} from '#lib/constants/versions.ts';
 	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import { titleInitials } from '#lib/utils/format.ts';

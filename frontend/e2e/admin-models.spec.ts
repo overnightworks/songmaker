@@ -20,7 +20,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 
 import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
 import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '../src/lib/constants/cowriter';
-import { EDITOR_VIEW_COWRITER_LABEL, songEditorOpenLabel } from '../src/lib/constants';
+import { EDITOR_VIEW_COWRITER_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
 import {
 	MODELS_ADVANCED_LABEL,
 	MODELS_COLUMN_MODEL_LABEL,

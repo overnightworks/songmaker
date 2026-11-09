@@ -15,7 +15,7 @@
 // which costs the stack nothing.
 
 import { expect, test, type Page } from '@playwright/test';
-import { songEditorOpenLabel } from '../src/lib/constants';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';

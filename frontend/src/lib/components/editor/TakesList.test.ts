@@ -13,7 +13,7 @@ import {
 	TAKES_LOADING,
 	TAKES_MOBILE_HINT,
 	TAKES_RETRY_LABEL
-} from '#lib/constants.ts';
+} from '#lib/constants/take.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import {

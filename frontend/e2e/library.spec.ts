@@ -16,14 +16,9 @@ import {
 	LIBRARY_WALL_ORDER_LABELS,
 	type LibraryWallOrder
 } from '../src/lib/constants/library';
-import {
-	NOW_PLAYING_SWIPE_RISE_PX,
-	openNowPlayingLabel,
-	PLAYING_MARK_LABEL,
-	TAKE_OVERFLOW_LABEL,
-	TAKE_PLAYLIST_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants';
+import { NOW_PLAYING_SWIPE_RISE_PX, openNowPlayingLabel } from '../src/lib/constants';
+import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
+import { TAKE_OVERFLOW_LABEL, TAKE_PLAYLIST_LABEL } from '../src/lib/constants/take';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
 	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,

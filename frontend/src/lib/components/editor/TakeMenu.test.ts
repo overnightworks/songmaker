@@ -9,7 +9,7 @@ import {
 	TAKE_REPAINT_LABEL,
 	TAKE_RESTORE_LABEL,
 	TAKE_SHARE_LABEL
-} from '#lib/constants.ts';
+} from '#lib/constants/take.ts';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';

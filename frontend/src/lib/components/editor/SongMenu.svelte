@@ -8,7 +8,7 @@
 		SONG_MENU_LABEL,
 		SONG_MOVE_SHARED_TITLE,
 		songMoveSharedMessage
-	} from '#lib/constants.ts';
+	} from '#lib/constants/song.ts';
 	import { COLLECTION_MENU_CLOSE_LABEL } from '#lib/constants/collection-menu.ts';
 	import { onDestroy } from 'svelte';
 	import Icon from '../Icon.svelte';

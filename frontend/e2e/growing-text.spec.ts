@@ -8,7 +8,7 @@
 // request to that spec's API budget (SONG_PHONE_FLOW_API_REQUEST_BUDGET).
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { songEditorOpenLabel } from '../src/lib/constants';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { FlowGuard, workspace } from './helpers';
 import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
 

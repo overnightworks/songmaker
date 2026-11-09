@@ -11,7 +11,7 @@
 	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
 	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 	import { LIBRARY_PLAYLISTS_ERROR, LIBRARY_PLAYLISTS_LOADING } from '#lib/constants/playlist.ts';
-	import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
+	import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 
 	interface Props {
 		onselect: (playlistId: string) => void;

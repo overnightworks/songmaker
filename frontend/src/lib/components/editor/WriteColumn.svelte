@@ -8,11 +8,8 @@
 	} from '#lib/stores/editor.ts';
 	import { getGenerationActions } from '#lib/contexts/generation-actions.ts';
 	import type { SongItem } from '#lib/api/types.ts';
-	import {
-		EDITOR_LYRICS_LABEL,
-		EDITOR_STYLE_PROMPT_LABEL,
-		versionLoadedFromLabel
-	} from '#lib/constants.ts';
+	import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '#lib/constants/song.ts';
+	import { versionLoadedFromLabel } from '#lib/constants/versions.ts';
 	import Icon from '../Icon.svelte';
 	import GrowingTextarea from './GrowingTextarea.svelte';
 	import RecipeLine from './RecipeLine.svelte';

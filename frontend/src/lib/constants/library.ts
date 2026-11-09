@@ -28,3 +28,4 @@ export const LIBRARY_WALL_PLAYED_PAGE_SIZE = 200;
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
 export const LIBRARY_ALBUMS_LOADING = 'Loading albums…';
 export const LIBRARY_SHARES_COPY_LABEL = 'Copy link';
+export const LIBRARY_RETRY_LABEL = 'Retry';

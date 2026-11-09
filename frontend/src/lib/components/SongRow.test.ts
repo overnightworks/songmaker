@@ -1,7 +1,7 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants.ts';
+import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { accessibleName } from '#lib/test-utils/accessible-name.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';

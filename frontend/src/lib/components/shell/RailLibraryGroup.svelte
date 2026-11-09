@@ -32,8 +32,11 @@
 		openRailSearchTarget,
 		selectSong
 	} from '#lib/stores/navigation.ts';
-	import { LIBRARY_ALBUMS_LOADING, LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
-	import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
+	import {
+		LIBRARY_ALBUMS_LOADING,
+		LIBRARY_PAGE_LABEL,
+		LIBRARY_RETRY_LABEL
+	} from '#lib/constants/library.ts';
 	import { RAIL_CONTEXT_NO_TAKES, RAIL_LIBRARY_NAV_LABEL } from '#lib/constants/rail.ts';
 	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import type { SongItem } from '#lib/api/types.ts';

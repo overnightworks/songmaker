@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { GenerationItem } from '#lib/api/types.ts';
-	import { TAKE_COVER_LABEL, TAKE_REPAINT_LABEL } from '#lib/constants.ts';
+	import { TAKE_COVER_LABEL, TAKE_REPAINT_LABEL } from '#lib/constants/take.ts';
 	import {
 		TAKE_TASK_CLOSE_LABEL,
 		TAKE_TASK_CLOSE_TITLE,

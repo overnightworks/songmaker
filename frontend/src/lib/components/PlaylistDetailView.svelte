@@ -25,7 +25,7 @@
 	import { selectSong } from '#lib/stores/navigation.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
-	import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
+	import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 	import {
 		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 		PLAYLIST_ENTRY_MOVE_UP_LABEL,

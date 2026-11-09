@@ -8,7 +8,7 @@ import {
 	minSquarePx,
 	setPointer
 } from '#lib/test-utils/hitbox.ts';
-import { EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL } from '#lib/constants.ts';
+import { EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL } from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { failed, queued, running } from '#lib/test-utils/generate-states.ts';

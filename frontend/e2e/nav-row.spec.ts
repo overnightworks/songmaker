@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { songEditorOpenLabel } from '../src/lib/constants';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { API_ERROR_GENERIC_MESSAGE } from '../src/lib/constants/http';
 import {
 	RAIL_NAV_LABEL,

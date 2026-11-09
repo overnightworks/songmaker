@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { songEditorOpenLabel } from '#lib/constants.ts';
+	import { songEditorOpenLabel } from '#lib/constants/song.ts';
 	import {
 		HOME_WRITE_LABEL,
 		HOME_WRITE_EMPTY,

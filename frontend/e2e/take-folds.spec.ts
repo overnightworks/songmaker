@@ -6,18 +6,16 @@
 // makes v3, which folds v2.
 
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { openNowPlayingLabel } from '../src/lib/constants';
 import {
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
-	openNowPlayingLabel,
 	SONG_MENU_LABEL,
 	SONG_MENU_SAVE_LABEL,
-	songEditorOpenLabel,
-	TAKE_DELETE_LABEL,
-	TAKE_OVERFLOW_LABEL,
-	TAKES_EMPTY
-} from '../src/lib/constants';
+	songEditorOpenLabel
+} from '../src/lib/constants/song';
+import { TAKE_DELETE_LABEL, TAKE_OVERFLOW_LABEL, TAKES_EMPTY } from '../src/lib/constants/take';
 import {
 	bulkDeleteLabel,
 	bulkDeleteTitle,

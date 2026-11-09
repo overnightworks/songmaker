@@ -2,7 +2,11 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import type { LibraryWriteResponse, PaginatedResponse, SongItem } from '../src/lib/api/types';
 import { LIBRARY_NEW_MENU_LABEL } from '../src/lib/constants/library';
-import { SONG_MENU_LABEL, SONG_MENU_DELETE_LABEL, songEditorOpenLabel } from '../src/lib/constants';
+import {
+	SONG_MENU_LABEL,
+	SONG_MENU_DELETE_LABEL,
+	songEditorOpenLabel
+} from '../src/lib/constants/song';
 import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_ARCHIVE_LABEL

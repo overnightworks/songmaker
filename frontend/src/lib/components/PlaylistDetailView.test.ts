@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 
 import type { PlaylistDetailItem, PlaylistEntryItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import { LIBRARY_RETRY_LABEL, PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants.ts';
+import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
+import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
 import { playlistEntryOverflowLabel } from '#lib/constants/playlist.ts';
 import {
 	collectionActionLabel,
@@ -146,7 +147,7 @@ describe('PlaylistDetailView header', () => {
 			card: '/api/playlists/p1/cover?variant=card&v=custom.png',
 			detail: '/api/playlists/p1/cover?variant=detail&v=custom.png'
 		};
-		vi.mocked(uploadPlaylistCover).mockResolvedValue({
+		const playlistWithCover = {
 			id: 'p1',
 			title: 'Night Drive',
 			slug: 'night-drive',
@@ -156,18 +157,9 @@ describe('PlaylistDetailView header', () => {
 			cover: customCover,
 			album_covers: [],
 			created_at: '2026-01-01T00:00:00+00:00'
-		});
-		vi.mocked(deletePlaylistCover).mockResolvedValue({
-			id: 'p1',
-			title: 'Night Drive',
-			slug: 'night-drive',
-			entry_count: 1,
-			is_shared: false,
-			share_slug: null,
-			cover: null,
-			album_covers: [],
-			created_at: '2026-01-01T00:00:00+00:00'
-		});
+		};
+		vi.mocked(uploadPlaylistCover).mockResolvedValue(playlistWithCover);
+		vi.mocked(deletePlaylistCover).mockResolvedValue({ ...playlistWithCover, cover: null });
 		const target = await mountPlaylistView();
 
 		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
