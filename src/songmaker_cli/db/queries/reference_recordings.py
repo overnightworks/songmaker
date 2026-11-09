@@ -297,12 +297,10 @@ def linked_reference_ids(session: Session, song_ids: Collection[str]) -> set[str
     if not song_ids:
         return set()
     linked: set[str] = set()
-    for model in (Version, Generation):
+    for link in REFERENCE_LINK_COLUMNS:
         linked.update(
             session.scalars(
-                select(model.reference_recording_id).where(
-                    model.song_id.in_(song_ids), model.reference_recording_id.is_not(None),
-                ),
+                select(link).where(link.class_.song_id.in_(song_ids), link.is_not(None)),
             ),
         )
     return linked
