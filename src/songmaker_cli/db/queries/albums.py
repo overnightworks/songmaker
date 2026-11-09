@@ -221,8 +221,7 @@ def soft_delete_album(session: Session, album_id: str) -> datetime:
     now = datetime.now(timezone.utc)
     album.deleted_at = now
     for song in album.songs:
-        if song.deleted_at is None:
-            song.deleted_at = now
+        song.deleted_at = now
     session.flush()
     return now
 
@@ -247,10 +246,7 @@ def restore_album(session: Session, album_id: str) -> Album:
     with include_deleted(session):
         songs = session.query(Song).filter_by(album_id=album_id).all()
         for song in songs:
-            song_ts = song.deleted_at
-            if song_ts is None:
-                continue
-            if song_ts == deleted_at:
+            if song.deleted_at == deleted_at:
                 song.deleted_at = None
     session.flush()
     return album

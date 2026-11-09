@@ -9,13 +9,17 @@ import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATE_RECONNECTING_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
-	RESOURCE_EVENT_STREAM_PATH,
-	RESOURCE_SYNC_ERROR,
-	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
-	SSE_RECONNECT_JITTER_RATIO,
-	SSE_RECONNECT_MAX_DELAY_MS,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import {
+	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_SYNC_ERROR,
+	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS
+} from '../src/lib/constants/resource-sync';
+import {
+	SSE_RECONNECT_JITTER_RATIO,
+	SSE_RECONNECT_MAX_DELAY_MS
+} from '../src/lib/constants/sse-reconnect';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
@@ -242,10 +246,7 @@ test.describe('losing the network on the phone', { tag: ONLY_IN_SHELL.mobile }, 
 		const generate = generateButton(page);
 		const miniPlayer = page.getByRole('contentinfo');
 
-		await page.goto(`/album/${library.songPhoneAlbumId}`);
-		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
-			.click();
+		await openSong(page, library.songPhoneAlbumId, songTitle);
 		await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 		await expect(generate).toHaveAccessibleName(GENERATE_LABEL);
 		await expect(offlineStrip(page)).toHaveCount(0);
@@ -378,10 +379,7 @@ test.describe('tapping a take row Play while the network is gone', () => {
 		const waitingSpinner = pause.locator('.spinner');
 		const takeRowPlay = playTakeButton(workspace(page).locator('.take-row'));
 
-		await page.goto(`/album/${library.songPhoneAlbumId}`);
-		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
-			.click();
+		await openSong(page, library.songPhoneAlbumId, songTitle);
 		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
 		await expect(takeRowPlay).toBeVisible();
@@ -508,10 +506,7 @@ test.describe('pressing the album header Play while the network is gone', () => 
 		const waitingOnTheLockScreen = { title: firstTrack.songTitle, state: 'playing' };
 		await watchTheLockScreen(page);
 
-		await page.goto(`/album/${library.songPhoneAlbumId}`);
-		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(loadedTitle) })
-			.click();
+		await openSong(page, library.songPhoneAlbumId, loadedTitle);
 		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
 		await playTakeButton(workspace(page).locator('.take-row')).click();
 		await expect(barPause.locator('.spinner')).toHaveCount(0);
@@ -561,11 +556,15 @@ async function seedOfflineRunningSong(suffix: string, progress: number) {
 	return { library, songTitle, songId, jobId, takeCounter };
 }
 
-async function openOfflineTakes(page: Page, albumId: string, songTitle: string): Promise<void> {
+async function openSong(page: Page, albumId: string, songTitle: string): Promise<void> {
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
 		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 		.click();
+}
+
+async function openOfflineTakes(page: Page, albumId: string, songTitle: string): Promise<void> {
+	await openSong(page, albumId, songTitle);
 	await page.getByRole('tab', { name: /Takes/ }).click();
 	// Wait for the song route before cutting the network during its module load.
 	await expect(page).toHaveURL(new RegExp(`/album/${albumId}/[^/]+$`));

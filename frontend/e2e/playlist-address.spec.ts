@@ -14,12 +14,8 @@
 // the routing is the same code on both shells.
 
 import { expect, test, type Page } from '@playwright/test';
-import {
-	LIBRARY_PAGE_LABEL,
-	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_NAV_LABEL,
-	RESOURCE_SYNC_ERROR
-} from '../src/lib/constants';
+import { LIBRARY_PAGE_LABEL, RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
+import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { FlowGuard, ONLY_IN_SHELL, containing, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
 

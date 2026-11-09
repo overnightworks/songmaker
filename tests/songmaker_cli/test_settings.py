@@ -20,6 +20,7 @@ from songmaker_cli.settings import (
     UNKNOWN_COMMIT,
     UNRELEASED_TAG,
     Settings,
+    _find_env_file,
     get_settings,
 )
 
@@ -492,3 +493,33 @@ def test_without_a_secrets_directory_the_database_url_keeps_its_own_password(
     assert connection_url_from_settings(settings).render_as_string(hide_password=False) == (
         f"{POSTGRESQL_PSYCOPG2_DRIVERNAME}://app:today@db:5432/songs"
     )
+
+
+@pytest.mark.parametrize(
+    ("files", "start", "found"),
+    [
+        pytest.param((".env",), "", ".env", id="dotenv-in-working-directory"),
+        pytest.param((".env",), "a/b", ".env", id="dotenv-in-a-parent"),
+        pytest.param((".env", "a/pyproject.toml"), "a/b", None, id="project-root-first"),
+        pytest.param((), None, None, id="walk-reaches-the-filesystem-root"),
+    ],
+)
+def test_a_process_finds_the_dotenv_by_walking_up_to_its_project_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    files: tuple[str, ...],
+    start: str | None,
+    found: str | None,
+) -> None:
+    monkeypatch.delenv("SONGMAKER_SKIP_ENV_FILE", raising=False)
+    for name in files:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).touch()
+    if start is None:
+        # A directory that does not exist, so no stray .env on this machine can answer.
+        monkeypatch.setattr(Path, "cwd", classmethod(lambda _cls: Path("/songmaker-missing/start")))
+    else:
+        (tmp_path / start).mkdir(parents=True, exist_ok=True)
+        monkeypatch.chdir(tmp_path / start)
+
+    assert _find_env_file() == (tmp_path / found if found else None)

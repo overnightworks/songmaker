@@ -10,6 +10,8 @@ Songmaker is Docker-only; there is no native local-dev path. The stack runs the 
 
 Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation), and a Hugging Face token (for downloading model weights).
 
+A process started from a checkout reads the first `.env` it finds walking up from its working directory and stops at the first `pyproject.toml`.
+
 Install and first start, in the deploy checkout `~/srv/songmaker` (a clone at a release tag; a work clone has no `.env` and cannot start the live stack):
 
 ```bash

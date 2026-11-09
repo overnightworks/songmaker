@@ -281,7 +281,7 @@ def api_rename_song(
     )
     try:
         song = rename_song(
-            session, song_id, title, slug=slug, force_new_version=True, edited_by=user.id,
+            session, song_id, title, slug=slug, edited_by=user.id,
         )
     except ValueError:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)

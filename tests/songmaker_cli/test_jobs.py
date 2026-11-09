@@ -1992,8 +1992,8 @@ def test_a_cancelled_job_still_keeps_its_tainted_child_out_of_the_next_request(
         audio_dir / "user1" / "g1.mp3",
         scorers=[],
         config=PipelineConfig(device="cpu"),
+        on_progress=lambda *_: None,
     )
-
     assert live_scorer_process._process.pid != pid_before
 
 

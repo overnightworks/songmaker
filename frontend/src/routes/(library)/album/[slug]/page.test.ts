@@ -12,7 +12,7 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
-import { RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
+import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 
 const ALBUM_SLUG = 'anfield';

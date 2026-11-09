@@ -16,19 +16,21 @@ import {
 	standInForDocumentLoadsForTests
 } from '#lib/history/historyController.ts';
 import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '#lib/api/types.ts';
+import { EVENT_SOURCE_CLOSED } from '#lib/constants.ts';
 import {
-	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
-	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
+	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
+} from '#lib/constants/resource-sync.ts';
+import {
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
-} from '#lib/constants.ts';
+} from '#lib/constants/sse-reconnect.ts';
 import { offline } from '#lib/stores/connectivity.ts';
 import {
 	ResourceSyncController,
@@ -59,6 +61,7 @@ const DISCONNECTED_SYNC: ResourceSyncState = {
 // safe amount to advance fake timers by when a test just needs "long enough
 // for any pending reconnect, at any attempt count, to have fired".
 const SAFE_RECONNECT_ADVANCE_MS = SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO);
+const FIRST_RECONNECT_ADVANCE_MS = SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO);
 const EVENT_SOURCE_CONNECTING = 0;
 
 class MockEventSource implements ResourceEventSource {
@@ -1770,9 +1773,7 @@ describe('resource sync owner', () => {
 
 		latestSource(sources).error();
 		await flush();
-		await vi.advanceTimersByTimeAsync(
-			SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)
-		);
+		await vi.advanceTimersByTimeAsync(FIRST_RECONNECT_ADVANCE_MS);
 		expect(sources).toHaveLength(2);
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		expect(sources).toHaveLength(3);
@@ -1781,9 +1782,7 @@ describe('resource sync owner', () => {
 		await flush();
 		latestSource(sources).error();
 		await flush();
-		await vi.advanceTimersByTimeAsync(
-			SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)
-		);
+		await vi.advanceTimersByTimeAsync(FIRST_RECONNECT_ADVANCE_MS);
 		expect(sources).toHaveLength(4);
 	});
 
