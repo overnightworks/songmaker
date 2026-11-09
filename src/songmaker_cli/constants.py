@@ -9,7 +9,7 @@ from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 
 APP_NAME = "Hallucinai"
 
-INTERNAL_TOKEN_HEADER = "X-Internal-Token"  # nosec B105  # noqa: S105 - the name of an HTTP header and no secret
+INTERNAL_TOKEN_HEADER = "X-Internal-Token"  # noqa: S105 - the name of an HTTP header and no secret
 
 JOB_ERROR_AUDIO_DOWNLOAD_FAILED: Final[str] = "Failed to download generated audio"
 JOB_ERROR_SERVER_UNREACHABLE: Final[str] = "ACE-Step server not reachable"
@@ -129,7 +129,7 @@ WHISPER_BEAM_SIZE = 5
 WHISPER_TEMPERATURE = 0.0
 
 SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE: Final = "reference_countdown_visible_since"
-SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105  # noqa: S105 - a setting key for an LLM token budget and no secret
+SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # noqa: S105 - a setting key for an LLM token budget and no secret
 
 MEMORY_SCOPE_USER = "user"
 MEMORY_SCOPE_SONG = "song"
