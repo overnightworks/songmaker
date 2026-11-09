@@ -1,0 +1,8 @@
+claim_id = "96de026ed3ac4f528b0da5f2b5983dc1"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2f2842cd6b008f43c5c18f1ebaab060a0918b1e3"
+branch = "claude/issue-2792-own-playable-takes-path"
+scope = ["docs/security.md", "frontend/e2e/seed.ts", "frontend/e2e/voices.spec.ts", "frontend/src/lib/api/loras.test.ts", "frontend/src/lib/api/loras.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/lora_api.py", "tests/songmaker_cli/agent/test_mcp_person_front.py", "tests/songmaker_cli/test_lora_api.py"]
+opened_commit = "851b6f6d41f2ba13268afec55fe50c76016bcefb"
+whole_reason = "One path rename with its callers and the two marks it frees; splitting it leaves a renamed route no tool reaches or a mark the generator refuses."
