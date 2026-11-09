@@ -133,7 +133,7 @@ def test_only_the_check_suites_of_ignored_runs_leave_the_deploy_guard(
     ("event", "path"),
     [
         ("workflow_dispatch", CI_WORKFLOW_PATH),
-        ("workflow_dispatch", ".github/workflows/e2e.yml"),
+        ("schedule", ".github/workflows/code-scanning.yml"),
         ("push", CI_WORKFLOW_PATH),
         ("workflow_dispatch", ".github/workflows/release-notes.yml"),
         ("workflow_dispatch", ".github/workflows/release.yml.bak"),
@@ -141,7 +141,7 @@ def test_only_the_check_suites_of_ignored_runs_leave_the_deploy_guard(
     ],
     ids=[
         "dispatched-ci",
-        "dispatched-e2e",
+        "scheduled-code-scanning",
         "pushed-ci",
         "release-lookalike",
         "release-suffixed",

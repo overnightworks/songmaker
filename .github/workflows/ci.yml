@@ -351,8 +351,14 @@ jobs:
           overwrite: true
           retention-days: 7
 
+  e2e:
+    name: E2E
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+
   quality:
-    needs: [backend, alert-rules, backend-coverage, frontend, coverage]
+    needs: [backend, alert-rules, backend-coverage, frontend, coverage, e2e]
     if: ${{ !cancelled() }}
     permissions:
       contents: read
