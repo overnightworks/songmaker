@@ -18,7 +18,7 @@ import {
 	type Locator,
 	type Page,
 	type TestInfo
-} from '@playwright/test';
+} from './coverage-test';
 import {
 	albumCoverSuggestionAlt,
 	ALBUM_COVER_EDITING_CLOSE_LABEL,

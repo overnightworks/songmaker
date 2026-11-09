@@ -1,5 +1,5 @@
 import type { SongItem, PaginatedResponse } from '../src/lib/api/types';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './coverage-test';
 import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_DELETE_LABEL,

@@ -6,7 +6,7 @@
 // in the mobile project (the Takes tab carries the rows there), laptop cells
 // in the desktop one (the takes column beside the lyrics).
 
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { EDITOR_UNSAVED_TITLE } from '../src/lib/constants/song';
 import {
 	TAKE_COVER_LABEL,

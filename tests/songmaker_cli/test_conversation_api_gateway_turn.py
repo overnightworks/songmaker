@@ -134,6 +134,32 @@ def test_a_turn_with_a_tool_round_streams_its_frames_and_stores_the_answer(world
         assert session.query(Job).filter_by(type="chat").one().status == "completed"
 
 
+def test_a_streamed_turn_sends_each_piece_in_its_round_and_stores_only_the_final_round(world):
+    world.stack.replies(
+        tool_round(tool_call("call-1", "get_song", {"song_id": "s1"}), content="Let me look."),
+        completion("It has ", "one ", "verse."),
+    )
+
+    events = world.turn("what does s1 hold")
+
+    assert _types(events) == [
+        "assistant_text",
+        "tool_call",
+        "tool_result",
+        "assistant_text",
+        "assistant_text",
+        "assistant_text",
+        "final",
+    ]
+    assert [e["text"] for e in events if e["type"] == "assistant_text"] == [
+        "Let me look.",
+        "It has ",
+        "one ",
+        "verse.",
+    ]
+    assert _frame(events, "final")["assistant_message"]["content"] == "It has one verse."
+
+
 def test_a_tool_acts_only_for_the_turns_person_and_the_turn_goes_on(world):
     world.stack.replies(
         tool_round(tool_call("call-1", "get_song", {"song_id": OTHER_SONG})),

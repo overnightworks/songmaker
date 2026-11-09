@@ -2,7 +2,7 @@
 // each browser keeps a copy that paints before the server answers. Every flow
 // uses an account of its own, because the choice is stored on the account.
 
-import { expect, test, type Browser, type Page, type Response } from '@playwright/test';
+import { expect, test, type Browser, type Page, type Response } from './coverage-test';
 
 import {
 	accountCircle,
@@ -103,7 +103,9 @@ for (const device of ['light', 'dark'] as const) {
 		await page.emulateMedia({ colorScheme: device });
 		await page.goto(HOME_PATH);
 
-		await expect.poll(() => looks(page)).toMatchObject({ chosen: null, copy: 'system' });
+		await expect(async () => {
+			expect(await looks(page)).toMatchObject({ chosen: null, copy: 'system' });
+		}).toPass();
 	});
 }
 

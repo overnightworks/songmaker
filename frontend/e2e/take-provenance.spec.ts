@@ -6,7 +6,7 @@
 // and scrolling stay real. A cell that leaves a dirty draft reverts it before
 // teardown, because a dirty page raises the browser's unload prompt.
 
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './coverage-test';
 import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,

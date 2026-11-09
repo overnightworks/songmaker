@@ -3,7 +3,7 @@
 // its own so the list holds only what it uploads.
 
 import { readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './coverage-test';
 import {
 	SONG_MENU_LABEL,
 	SONG_MENU_SAVE_LABEL,

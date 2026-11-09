@@ -5,7 +5,7 @@
 // With a card open the Recipe has no Repaint row and the header Generate stays
 // plain (#1923, S4 and S8). Both projects run it: 390 px (Takes tab) and 1440 px.
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './coverage-test';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
