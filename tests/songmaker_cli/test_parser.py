@@ -9,23 +9,12 @@ from songmaker_cli.parser import AlbumMeta, SongMeta
 def test_song_meta_defaults() -> None:
     meta = SongMeta()
     assert meta.title == "Untitled"
-    assert meta.album == "unknown"
     assert meta.track == ""
     assert meta.bpm == 0
     assert meta.audio_duration == 0
     assert meta.key_scale == ""
     assert meta.vocal_language == ""
     assert meta.generation_params == BaseGenerationParams()
-
-
-def test_song_meta_track_coercion() -> None:
-    meta = SongMeta(track=7)
-    assert meta.track == "7"
-
-
-def test_song_meta_track_none_coercion() -> None:
-    meta = SongMeta(track=None)
-    assert meta.track == ""
 
 
 def test_song_meta_with_generation_params() -> None:

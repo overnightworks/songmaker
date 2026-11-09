@@ -43,7 +43,7 @@ def test_write_output(tmp_path: Path) -> None:
 
     mp3_path = tmp_path / "song_v1.mp3"
     wav_path = tmp_path / "song_v1.wav"
-    meta = SongMeta(title="Song", prompt="rock", lyrics="hello", album="test")
+    meta = SongMeta(title="Song", prompt="rock", lyrics="hello")
     album_meta = AlbumMeta(title="Album", artist="Artist")
 
     _write_output(audio, 42, mp3_path, wav_path, meta, album_meta)
@@ -62,7 +62,7 @@ def test_write_output_mastering_error(tmp_path: Path) -> None:
 
     mp3_path = tmp_path / "song_v1.mp3"
     wav_path = tmp_path / "song_v1.wav"
-    meta = SongMeta(title="Song", prompt="rock", lyrics="hello", album="test")
+    meta = SongMeta(title="Song", prompt="rock", lyrics="hello")
     album_meta = AlbumMeta(title="Album", artist="Artist")
 
     with pytest.raises(GenerationError, match="empty"):
@@ -76,7 +76,7 @@ def test_write_output_encode_error(tmp_path: Path) -> None:
 
     mp3_path = tmp_path / "song_v1.mp3"
     wav_path = tmp_path / "song_v1.wav"
-    meta = SongMeta(title="Song", prompt="rock", lyrics="hello", album="test")
+    meta = SongMeta(title="Song", prompt="rock", lyrics="hello")
     album_meta = AlbumMeta(title="Album", artist="Artist")
 
     with patch("shutil.which", return_value=None):

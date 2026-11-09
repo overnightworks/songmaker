@@ -59,7 +59,6 @@ def _repaint_config(start: float, end: float) -> AceStepConfig:
 def _song_meta() -> SongMeta:
     return SongMeta(
         title="Song",
-        album="Album",
         prompt="rock",
         lyrics="hello",
         generation_params=BaseGenerationParams(),

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from songmaker_cli.constants import DEFAULT_ARTIST
 from songmaker_cli.generation_params import BaseGenerationParams
@@ -10,9 +10,7 @@ from songmaker_cli.generation_params import BaseGenerationParams
 
 class SongMeta(BaseModel):
     title: str = "Untitled"
-    album: str = "unknown"
     track: str = Field(default="")
-    genre: str = ""
     prompt: str = ""
     lyrics: str = ""
     bpm: int = 0
@@ -20,11 +18,6 @@ class SongMeta(BaseModel):
     key_scale: str = ""
     vocal_language: str = ""
     generation_params: BaseGenerationParams = Field(default_factory=BaseGenerationParams)
-
-    @field_validator("track", mode="before")
-    @classmethod
-    def _coerce_track(cls, v: object) -> str:
-        return str(v) if v is not None else ""
 
 
 class AlbumMeta(BaseModel):

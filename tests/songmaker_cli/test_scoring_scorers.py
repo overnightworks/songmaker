@@ -66,7 +66,7 @@ def _click_track(bpm: float, duration: float, sr: int = SR) -> np.ndarray:
 
 def _make_song_meta(bpm: int = 120) -> SongMeta:
     return SongMeta(
-        title="Test", album="test", prompt="test", lyrics="hello",
+        title="Test", prompt="test", lyrics="hello",
         bpm=bpm,
     )
 
