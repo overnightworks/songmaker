@@ -1,0 +1,7 @@
+claim_id = "f30ca95da3194eedaf868b9aa85f79ce"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "5ad73d852fb166f572371f6ef7e7db6a661622a4"
+branch = "claude/issue-2909-playable-pick-rule"
+scope = ["src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/mcp_server/schemas.py"]
+opened_commit = "fc349d27e16a8877fce33dcc8ba48faf922812e1"
