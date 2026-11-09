@@ -392,7 +392,7 @@ _ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
     t for t in PLAIN_READS if t.name in {"get_library_listen", "get_library_write",
                                           "search_library", "list_own_playable_takes"}
 ], ids=lambda t: t.name)
-def test_the_library_tools_of_an_admins_agent_return_only_the_admins_own_content(
+def test_the_content_reads_of_an_admins_agent_return_only_the_admins_own_content(
     admins_world: McpWorld, tool: Tool,
 ) -> None:
     reply = admins_world.call(tool.name, tool.arguments_for(ALICE), groups=_ADMIN_GROUPS)
