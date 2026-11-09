@@ -1,9 +1,7 @@
 import type { GenerationParams } from '#lib/api/types.ts';
 import { formatTime } from '#lib/utils/format.ts';
 
-// Now Playing copy and layout constants (issue #101). Kept separate from
-// lib/constants.ts, which #100 owns for the same landing window — see the
-// epic's file-split rule.
+// Now Playing copy and layout constants, kept apart from lib/constants.ts.
 
 export const NOW_PLAYING_QUEUE_TAB = 'Queue';
 export const NOW_PLAYING_TAKE_TAB = 'This take';
@@ -101,7 +99,7 @@ interface TakeMetaParts {
 	generationNumber: number;
 	durationSec: number | null;
 	// Omitted by rows that don't carry per-take model info (e.g. a playlist
-	// entry) — those rows read exactly as before (#212).
+	// entry) — those rows read exactly as before.
 	modelMode?: string | null;
 }
 
@@ -114,7 +112,7 @@ function takeModelModeLabel(modelMode: string | null | undefined): string | null
 }
 
 // ACE-Step's VRAM guard can quietly cut a requested batch size down before
-// generation runs — issue #211's "2 asked, 1 delivered" case. The backend
+// generation runs ("2 asked, 1 delivered"). The backend
 // only ever persists delivered_batch_size when it actually diverges from
 // batch_size, so presence alone would already be a safe signal — this still
 // checks both explicitly rather than trusting that invariant from the UI.
@@ -130,7 +128,7 @@ export function takeBatchReductionLabel(
 // A row's full description of a take — "Artist · v1 · take 1 · 3:15" — built
 // here rather than in markup: a separator written at the start of an `{#if}`
 // loses its leading space to the compiler, which is how the playlist row came
-// to read "take 1· 3:15" (#163/5). One owner, one spacing rule, whatever a
+// to read "take 1· 3:15". One owner, one spacing rule, whatever a
 // given row happens to know.
 export function nowPlayingTakeMeta(parts: TakeMetaParts): string {
 	const written = [parts.artist, nowPlayingTakeLabel(parts.versionNumber, parts.generationNumber)];
@@ -199,7 +197,7 @@ export const NOW_PLAYING_RATING_SAVE = 'Save rating';
 export const NOW_PLAYING_RATING_SAVING = 'Saving…';
 export const NOW_PLAYING_DEVIATION_ADDED_TITLE = 'Not in lyrics';
 
-// Curation mode (issue #228): walking an album's per-song candidate takes
+// Curation mode: walking an album's per-song candidate takes
 // one after another, right from the cover column's transport row so it never
 // hides behind the mobile sheet tap the queue/take tabs otherwise need.
 export const NOW_PLAYING_CURATE_GROUP_LABEL = 'Pick album takes';
@@ -226,7 +224,7 @@ export type NowPlayingSurfaceKind = (typeof NOW_PLAYING_SURFACE_KINDS)[number];
 export const NOW_PLAYING_DOCKED_WIDTH_PX = 400;
 export const NOW_PLAYING_EXPAND_LABEL = 'Expand';
 export const NOW_PLAYING_COLLAPSE_LABEL = 'Collapse';
-// Play's face once the playback ran out with nothing after it (#1391).
+// Play's face once the playback ran out with nothing after it.
 export const NOW_PLAYING_PLAY_AGAIN_LABEL = 'Play again';
 
 // Queue-stream skip/progress feedback (QueueStreamFeedback). One owner for
@@ -257,7 +255,7 @@ export const MINI_PLAYER_TITLE_SCROLL_REST_MS = 1500;
 export const MINI_PLAYER_TITLE_SCROLL_RETURN_MS = 600;
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
 export const NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS = 'Imported take — no lyrics were saved with it.';
-// Brings back lyrics that follow the song once the reader scrolled away (#1382).
+// Brings back lyrics that follow the song once the reader scrolled away.
 export const NOW_PLAYING_LYRICS_FOLLOW_LABEL = 'Follow';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
