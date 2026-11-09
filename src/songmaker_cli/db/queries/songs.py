@@ -269,14 +269,12 @@ def set_song_cover_key(session: Session, song_id: str, cover_key: str | None) ->
     return song
 
 
-def list_song_ids_for_albums(
-    session: Session, album_ids: list[str], *, include_deleted_rows: bool = False,
-) -> list[str]:
-    if not album_ids:
-        return []
-    query = session.query(Song.id).filter(Song.album_id.in_(album_ids))
-    if include_deleted_rows:
-        query = query.execution_options(include_deleted=True)
+def list_song_ids_for_albums(session: Session, album_ids: list[str]) -> list[str]:
+    query = (
+        session.query(Song.id)
+        .filter(Song.album_id.in_(album_ids))
+        .execution_options(include_deleted=True)
+    )
     return [song_id for (song_id,) in query.all()]
 
 
@@ -572,7 +570,6 @@ def rename_song(
     title: str,
     slug: str,
     *,
-    force_new_version: bool = False,
     edited_by: str | None = None,
 ) -> Song:
     """Rename a song, moving its slug along in the same flush.
@@ -580,10 +577,9 @@ def rename_song(
     ``slug`` (already reserved via unique_song_slug()) changes together
     with the title so both change atomically in one flush — setting it in
     a later, separate flush would briefly leave the row on its old slug,
-    next to whatever sibling has just claimed it. Co-writer and editor title
-    writes pass ``force_new_version`` to route their snapshot through
-    ``update_song`` too. A new title counts as ``edited_by``'s own work on
-    the song; the same title again does not.
+    next to whatever sibling has just claimed it. The rename leaves its own
+    immutable version through ``update_song``. A new title counts as
+    ``edited_by``'s own work on the song; the same title again does not.
     """
     song = lock_song_row(session, song_id)
     if edited_by is not None and title != song.title:
@@ -592,10 +588,7 @@ def rename_song(
         )
     song.title = title
     song.slug = slug
-    if force_new_version:
-        update_song(session, song_id, force_new_version=True)
-    else:
-        session.flush()
+    update_song(session, song_id, force_new_version=True)
     return song
 
 

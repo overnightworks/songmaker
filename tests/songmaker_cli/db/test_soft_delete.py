@@ -50,6 +50,7 @@ from songmaker_cli.db.queries.songs import (
     list_expired_songs,
     move_song,
     restore_song,
+    set_song_cover_key,
     soft_delete_song,
 )
 from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
@@ -249,6 +250,48 @@ def test_restore_song_rejects_deleted_album(seeded: Session) -> None:
     seeded.commit()
     with pytest.raises(ValueError, match="parent album is deleted"):
         restore_song(seeded, "s1")
+
+
+@pytest.mark.parametrize(
+    ("query", "make_unavailable"),
+    [
+        pytest.param(
+            lambda session: set_song_cover_key(session, "s1", "cover.png"),
+            lambda session: soft_delete_song(session, "s1"),
+            id="cover-of-trashed-song",
+        ),
+        pytest.param(
+            lambda session: set_song_cover_key(session, "s1", "cover.png"),
+            lambda session: delete_song(session, "s1"),
+            id="cover-of-purged-song",
+        ),
+        pytest.param(
+            lambda session: soft_delete_song(session, "s1"),
+            lambda session: soft_delete_song(session, "s1"),
+            id="second-delete-of-trashed-song",
+        ),
+        pytest.param(
+            lambda session: soft_delete_song(session, "s1"),
+            lambda session: delete_song(session, "s1"),
+            id="delete-of-purged-song",
+        ),
+        pytest.param(
+            lambda session: restore_song(session, "s1"),
+            lambda session: delete_song(session, "s1"),
+            id="restore-of-purged-song",
+        ),
+    ],
+)
+def test_song_query_refuses_a_song_that_vanished_after_the_access_check(
+    seeded: Session,
+    query: Callable[[Session], object],
+    make_unavailable: Callable[[Session], object],
+) -> None:
+    make_unavailable(seeded)
+    seeded.commit()
+
+    with pytest.raises(ValueError, match="Song not found: s1"):
+        query(seeded)
 
 
 def test_restore_album_idempotent_on_live(seeded: Session) -> None:

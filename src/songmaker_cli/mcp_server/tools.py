@@ -311,8 +311,7 @@ def tool_rename_song(
         raise _to_tool_error(exc) from exc
     slug = unique_song_slug(session, song.album_id, title, exclude_song_id=song_id)
     db_rename_song(
-        session, song_id=song_id, title=title, slug=slug, force_new_version=True,
-        edited_by=user.id,
+        session, song_id=song_id, title=title, slug=slug, edited_by=user.id,
     )
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     refreshed = _reload_song(session, song_id)

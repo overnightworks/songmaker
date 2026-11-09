@@ -79,7 +79,7 @@ def _purge_expired(session, cutoff: datetime) -> _ExpiredPurge:
         song.id for song in list_expired_songs(session, cutoff, expired_album_ids)
     ]
     album_songs = {
-        album_id: list_song_ids_for_albums(session, [album_id], include_deleted_rows=True)
+        album_id: list_song_ids_for_albums(session, [album_id])
         for album_id in expired_album_ids
     }
     lock_songs(
