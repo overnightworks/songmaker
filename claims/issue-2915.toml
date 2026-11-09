@@ -1,8 +1,0 @@
-claim_id = "cdd8ac85485844eb89d9136c237fa0c2"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "9b0c17da91726b40555884e492ced74386459f7a"
-branch = "claude/issue-2915-each-of-the-four-share-pages-shows-the-a"
-scope = ["frontend/src/lib/components/share/SharedCollection.svelte", "frontend/src/lib/components/share/SharedCollection.test.ts", "frontend/src/lib/components/share/share-import-boundary.test.ts", "frontend/src/routes/share/[slug]/page.test.ts", "frontend/src/routes/share/gen/[slug]/page.test.ts", "frontend/src/routes/share/playlist/[slug]/page.test.ts", "frontend/src/routes/share/song/[slug]/page.test.ts"]
-opened_commit = "26a838119c771c05b0047f4bfe5ddd024b88c700"
-whole_reason = "One page state gains the mark: the component, its test, the import boundary and the four page tests that prove every state change together."
