@@ -1,7 +1,0 @@
-claim_id = "92b7060148cf435c997459d297db0a94"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c6f77b601f6a348202575fc137f27d574c2cb86d"
-branch = "claude/issue-2840-privacy-server-log-period"
-scope = ["legal/datenschutz.html"]
-opened_commit = "40dbe84dc0df370c4e8eab70fdbf14198687d77d"
