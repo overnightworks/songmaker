@@ -681,14 +681,11 @@ def test_scorer_process_times_out_without_a_signal_when_the_child_is_already_gon
         lambda _pid, signal_number: signals.append(signal_number),
     )
 
+    mp3 = Path("song.mp3")
+    config = PipelineConfig(device="cpu", pipeline_timeout=1)
     with patch.object(sp, "_ensure_started", return_value=conn):
         with pytest.raises(TimeoutError, match="1s"):
-            sp.score(
-                Path("song.mp3"),
-                scorers=["silence"],
-                config=PipelineConfig(device="cpu", pipeline_timeout=1),
-                on_progress=_ignore_progress,
-            )
+            sp.score(mp3, scorers=["silence"], config=config, on_progress=_ignore_progress)
 
     assert signals == []
     assert conn.closed is True
