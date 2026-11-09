@@ -141,8 +141,9 @@ def test_cleanup_loop_keeps_a_live_session_and_resets_a_failing_loop_when_nothin
         if ticks == 2:
             raise asyncio.CancelledError
 
+    cleanup_loop = session_cleanup_loop(app, wait=advance_tick)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(session_cleanup_loop(app, wait=advance_tick))
+        asyncio.run(cleanup_loop)
 
     health = registry.loop_health()[BackgroundLoopName.SESSION_CLEANUP]
     assert health.status is BackgroundLoopStatus.OK
