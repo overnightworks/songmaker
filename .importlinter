@@ -116,6 +116,5 @@ ignore_imports =
     songmaker_cli.agent.mcp -> agent_runtime_client
     songmaker_cli.agent.settings -> agent_runtime_client
     songmaker_cli.agent.tools -> agent_runtime_client
-    songmaker_cli.agent.route_decisions -> agent_runtime_client
     songmaker_cli.cowriter.tools -> agent_runtime_client
     songmaker_cli.conversation_api -> agent_runtime_client

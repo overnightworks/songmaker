@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.route_decisions import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.api_models import JobResponse
 from songmaker_cli.app_context import AppContext, get_db_session

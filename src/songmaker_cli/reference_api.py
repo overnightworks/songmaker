@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.types import Receive, Scope, Send
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.route_decisions import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_models import (
     ReferenceCountdownShownRequest,
     ReferenceListResponse,

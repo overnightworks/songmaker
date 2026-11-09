@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
-from songmaker_cli.agent.route_decisions import ToolEffect, agent_tool
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import (
     check_generation_access,
     check_generations_access,
