@@ -1,0 +1,7 @@
+claim_id = "6a2ac7ea77494e0fb219d08db7155f4b"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "c226c227cb5e5b37c4c5ef68b3bfd0c62383be72"
+branch = "claude/issue-2913-the-move-song-tool-and-the-security-docu"
+scope = ["docs/security.md", "src/songmaker_cli/song_api.py"]
+opened_commit = "fd7e544decd2d553e20da3f10aa05ea41a859e4d"
