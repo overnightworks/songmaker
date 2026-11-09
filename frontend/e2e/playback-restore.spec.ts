@@ -73,17 +73,22 @@ const TRACK_CHANGE_TIMEOUT_MS = 15_000;
 
 interface DeckWindow {
 	audioDecks: Set<HTMLMediaElement>;
+	audioDeckStarts: Map<HTMLMediaElement, number>;
 }
 
 // The player's decks are detached Audio objects no locator reaches, so the
 // page collects each one as it is given a source: a take's own URL on the two
 // decks, a media source on the continuous deck, which never calls load().
 // Headless Chromium does not advance them far enough to emit `playing`; the
-// real play() call raises it, as the other playback flows do.
+// real play() call raises it, as the other playback flows do. Each deck's
+// first play() call records where it was asked to start, which a read after
+// the take has played on cannot give.
 async function followTheAudioDecks(page: Page): Promise<void> {
 	await page.addInitScript(() => {
 		const decks = new Set<HTMLMediaElement>();
 		(window as unknown as DeckWindow).audioDecks = decks;
+		const starts = new Map<HTMLMediaElement, number>();
+		(window as unknown as DeckWindow).audioDeckStarts = starts;
 		const source = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
 		if (!source?.set) throw new Error('HTMLMediaElement has no src setter');
 		const setSource = source.set;
@@ -96,6 +101,7 @@ async function followTheAudioDecks(page: Page): Promise<void> {
 		});
 		const nativePlay = HTMLMediaElement.prototype.play;
 		HTMLMediaElement.prototype.play = function () {
+			if (!starts.has(this)) starts.set(this, this.currentTime);
 			const result = nativePlay.call(this);
 			queueMicrotask(() => this.dispatchEvent(new Event('playing')));
 			return result;
@@ -120,6 +126,17 @@ async function loadedDeckPositions(page: Page): Promise<number[]> {
 			.filter((deck) => deck.currentSrc !== '')
 			.map((deck) => deck.currentTime)
 	);
+}
+
+// Where each loaded deck stood when it was first told to play: the player
+// seeks to the saved position before it plays.
+async function loadedDeckStartPositions(page: Page): Promise<number[]> {
+	return page.evaluate(() => {
+		const { audioDecks, audioDeckStarts } = window as unknown as DeckWindow;
+		return [...audioDecks]
+			.filter((deck) => deck.currentSrc !== '')
+			.flatMap((deck) => audioDeckStarts.get(deck) ?? []);
+	});
 }
 
 // The record is the one per-user key the app keeps for what was playing.
@@ -412,7 +429,7 @@ test.describe('a slow network holds the restored take back', () => {
 			releaseTheTake();
 
 			await expect(pause).toHaveAttribute('aria-busy', 'false');
-			expect(await loadedDeckPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
+			expect(await loadedDeckStartPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
 			await pause.click();
 		});
 
@@ -447,7 +464,7 @@ test.describe('a slow network holds the restore back before its take is known', 
 
 			await expect(transport).toContainText(songTitle);
 			await expect(pause).toHaveAttribute('aria-busy', 'false');
-			expect(await loadedDeckPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
+			expect(await loadedDeckStartPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
 			await pause.click();
 		});
 

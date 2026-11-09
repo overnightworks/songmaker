@@ -73,6 +73,15 @@ def _add_cover_job(
         return job.id
 
 
+def _add_live_session(session, user_id: str) -> str:
+    asking = UserSession(
+        user_id=user_id, expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    session.add(asking)
+    session.flush()
+    return asking.id
+
+
 def _add_suggestion(
     factory,
     audio_dir: Path,
@@ -114,9 +123,9 @@ def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(
     with factory() as session:
         alice = make_authenticated_user("alice")
         with pytest.raises(CoverSuggestionAlbumNotFoundError):
-            request_cover_suggestions(session, "missing", alice, session_id=None)
+            request_cover_suggestions(session, "missing", alice, session_id="any-session")
         with pytest.raises(CoverSuggestionAlbumNotFoundError):
-            request_cover_suggestions(session, "bob-album", alice, session_id=None)
+            request_cover_suggestions(session, "bob-album", alice, session_id="any-session")
 
 
 def _add_two_pending_suggestions(factory, audio_dir: Path) -> list[str]:
@@ -137,11 +146,12 @@ def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_sugges
     pending_ids = _add_two_pending_suggestions(factory, tmp_path / "audio")
 
     with factory() as session:
-        job = request_cover_suggestions(
-            session, "alice-album", album_owner(session), session_id=None,
-        )
+        owner = album_owner(session)
+        session_id = _add_live_session(session, owner.id)
+        job = request_cover_suggestions(session, "alice-album", owner, session_id=session_id)
 
         assert job.type == JobType.COVER
+        assert job.session_id == session_id
         assert job.album_id == "alice-album"
         assert sorted(
             suggestion.id for suggestion in session.query(AlbumCoverSuggestion)
@@ -158,7 +168,7 @@ def test_cover_suggestion_request_owner_rejects_an_active_job(
     with factory() as session:
         owner = album_owner(session)
         with pytest.raises(CoverSuggestionAlreadyRunningError):
-            request_cover_suggestions(session, "alice-album", owner, session_id=None)
+            request_cover_suggestions(session, "alice-album", owner, session_id="any-session")
 
 
 def test_an_eleventh_cover_suggestion_of_a_day_starts_a_job(cover_album_app) -> None:
