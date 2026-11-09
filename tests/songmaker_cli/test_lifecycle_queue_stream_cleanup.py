@@ -13,7 +13,12 @@ from support.web_app import TEST_SECRET, make_fake_redis
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.queue_streams as queue_streams
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.health_types import BackgroundLoopRegistry
+from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
+from songmaker_cli.health_types import (
+    BackgroundLoopName,
+    BackgroundLoopRegistry,
+    BackgroundLoopStatus,
+)
 
 
 @pytest.fixture
@@ -98,3 +103,19 @@ def test_periodic_loop_survives_a_failing_queue_stream_cleanup(ctx, monkeypatch)
     )
 
     assert len(resource_event_calls) == lifecycle._QUEUE_STREAM_CLEANUP_EVERY_N_TICKS + 1
+
+
+def test_periodic_loop_reads_failing_while_the_resource_event_sweep_keeps_raising(
+    ctx, monkeypatch,
+) -> None:
+    def _broken_sweep(_ctx: AppContext) -> None:
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(lifecycle, "cleanup_expired_resource_events", _broken_sweep)
+    registry = BackgroundLoopRegistry()
+    app = SimpleNamespace(state=SimpleNamespace(ctx=ctx, background_loop_registry=registry))
+
+    _run_loop_for_n_ticks(monkeypatch, app, n=BACKGROUND_LOOP_FAILURE_THRESHOLD)
+
+    health = registry.loop_health()[BackgroundLoopName.RESOURCE_EVENT_CLEANUP]
+    assert health.status is BackgroundLoopStatus.FAILING
