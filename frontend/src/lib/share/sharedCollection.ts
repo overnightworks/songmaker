@@ -25,7 +25,7 @@ export type {
 	SharedSongPayload
 };
 
-export interface SharedTrack {
+interface SharedTrack {
 	key: string;
 	title: string;
 	subtitle: string | null;

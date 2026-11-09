@@ -317,9 +317,8 @@ export class SharePlayback {
 		return this.collection?.kind === 'album' ? track.song_id : track.entry_id;
 	}
 
-	private streamTrackFor(track: PlayableTrack): QueueStreamTrackItem | null {
-		if (!this.manifest) return null;
-		return this.manifest.tracks.find((t) => this.streamKeyOf(t) === track.key) ?? null;
+	private streamTrackFor(track: PlayableTrack): QueueStreamTrackItem | undefined {
+		return this.manifest?.tracks.find((t) => this.streamKeyOf(t) === track.key);
 	}
 
 	private resyncActiveIndex(current: PlaybackInfo | null): void {

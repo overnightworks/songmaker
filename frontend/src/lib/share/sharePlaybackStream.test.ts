@@ -86,14 +86,17 @@ describe('a share with no playable track', () => {
 		['a seek', (playback: SharePlayback) => playback.seek(30)]
 	])('does nothing on %s', (_name, act) => {
 		const playback = new SharePlayback();
+		const loadUrl = vi.spyOn(audioPlayer, 'loadUrl');
+		const loadStream = vi.spyOn(audioPlayer, 'loadStream');
 		playback.start(nothingPlayableView(), null);
 
 		act(playback);
 
-		expect({ current: audioPlayer.current, loaded: fakeAudio.src }).toEqual({
-			current: null,
-			loaded: ''
-		});
+		expect({
+			current: audioPlayer.current,
+			loaded: fakeAudio.src,
+			asked: loadUrl.mock.calls.length + loadStream.mock.calls.length
+		}).toEqual({ current: null, loaded: '', asked: 0 });
 		playback.stop();
 	});
 });
