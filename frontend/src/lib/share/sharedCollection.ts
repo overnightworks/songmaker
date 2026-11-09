@@ -139,7 +139,7 @@ export function fromSharedGeneration(payload: SharedGenerationPayload): SharedCo
 	};
 }
 
-// Songs/entries without a pick carry `audio_url: null` (sharing_api.py keeps
+// Songs/entries without a pick carry `audio_url: null` (shared_views_api.py keeps
 // sending them so the payload stays complete) — the share surface hides them
 // entirely rather than showing a disabled row (locked-in: a listener sees a
 // finished album).

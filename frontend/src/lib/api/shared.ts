@@ -17,7 +17,7 @@ interface SharedPayloads {
 	take: SharedGenerationPayload;
 }
 
-// Where each kind sits under /shared/ (sharing_api.py); an album sits at its root.
+// Where each kind sits under /shared/ (shared_views_api.py and sharing_api.py); an album sits at its root.
 const KIND_SEGMENT: Record<SharedCollectionKind, string> = {
 	album: '',
 	playlist: 'playlist/',
