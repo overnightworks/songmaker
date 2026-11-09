@@ -655,13 +655,7 @@ async function resolvePlaylistBySlug(slug: string): Promise<PlaylistItem | null>
 	if (known) return known;
 	const items = await fetchPlaylists();
 	const found = items.find((item) => item.slug === slug) ?? null;
-	if (found) {
-		playlistList.update((list) =>
-			list.some((item) => item.id === found.id)
-				? list.map((item) => (item.id === found.id ? found : item))
-				: [...list, found]
-		);
-	}
+	if (found) playlistList.update((list) => upsertReplace(list, found));
 	return found;
 }
 
@@ -924,6 +918,8 @@ function startHistoryApply(): HistoryApply {
 	return runningApply;
 }
 
+// A newer history move wins: an older apply still waiting on the network
+// stops there and changes nothing.
 function applyStands(apply: HistoryApply): boolean {
 	if (runningApply !== apply) return false;
 	return apply.entry === null || standingPageEntryId() === apply.entry;
@@ -1059,9 +1055,9 @@ async function hydrateSongAlbum(albumId: string, apply: HistoryApply): Promise<v
 		const album = await fetchAlbum(albumId);
 		if (!applyStands(apply)) return;
 		albumList.update((list) => upsertReplace(list, album));
-	} catch (err) {
-		if (!applyStands(apply)) return;
-		if (isNotFound(err)) return;
+	} catch {
+		// The selection stays, as in hydrateSelectedSong: a 404 is decided by the
+		// load that follows, any other failure by the sync.
 	}
 }
 
