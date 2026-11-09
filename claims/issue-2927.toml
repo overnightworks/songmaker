@@ -1,0 +1,7 @@
+claim_id = "4e588eedede54c488cbbf2adcc272fde"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "e566cdd7e424b493e86071b46fdd3bd99c5dc525"
+branch = "claude/issue-2927-the-tap-to-move-test-s-failing-first-att"
+scope = ["frontend/e2e/song-move.spec.ts"]
+opened_commit = "4d02559e90226c216609550e90dfe399a2a74e82"
