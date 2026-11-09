@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import check_album_access, check_song_access
 from songmaker_cli.api_models import (
     MemoryBundleResponse,
@@ -50,7 +50,19 @@ def _store_note(
     return MemoryScopeResponse.from_orm(scope, scope_id, row)
 
 
-@router.get("/memory", openapi_extra=exclude_route(Exclusion.CONVERSATION_MEMORY))
+_GET_MEMORY_DESCRIPTION = (
+    "Reads the co-writer's notes about the person: their own notes, and with a song id "
+    "also the notes of that song and of its album. Notes are what the co-writer remembers "
+    "between turns. A song's notes come back only for the person's own song; another "
+    "person's song is not found."
+)
+
+
+@router.get(
+    "/memory",
+    description=_GET_MEMORY_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_memory", effect=ToolEffect.READ_ONLY),
+)
 def api_get_memory(
     song_id: str | None = None,
     user: AuthenticatedUser = Depends(get_current_user),

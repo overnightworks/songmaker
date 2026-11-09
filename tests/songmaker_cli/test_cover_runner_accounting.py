@@ -22,7 +22,7 @@ from support.web_app import make_authenticated_user, make_router_app, make_route
 
 from songmaker_cli import cover_runner
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
-from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
+from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 from songmaker_cli.job_types import JobStatus, JobType
 
 STARTED = datetime(2026, 10, 18, tzinfo=timezone.utc)
@@ -76,6 +76,12 @@ def running_cover(accounting_factory, tmp_path):
     return RunningCover(client.app, ctx.audio_dir, gateway)
 
 
+def _completed_cover_jobs(session) -> int:
+    return session.query(Job).filter_by(
+        album_id="album", type=JobType.COVER, status=JobStatus.COMPLETED,
+    ).count()
+
+
 def _assert_cover_accounting(factory, audio_dir, status):
     with factory() as session:
         job = session.get(Job, "cover")
@@ -83,7 +89,7 @@ def _assert_cover_accounting(factory, audio_dir, status):
         assert job.user_id == "owner"
         assert job.started_at == STARTED
         produced = status == JobStatus.COMPLETED
-        assert count_cover_jobs_since(session, "album", STARTED) == int(produced)
+        assert _completed_cover_jobs(session) == int(produced)
         suggestions = session.query(AlbumCoverSuggestion).all()
         assert len(suggestions) == int(produced)
         assert len(list(audio_dir.rglob("*.png"))) == int(produced)
@@ -174,14 +180,14 @@ def test_late_cancellation_preserves_publication_with_a_preloaded_job(
         job = verification.get(Job, "cover")
         assert job.status == JobStatus.COMPLETED
         assert job.completed_at is not None
-        assert count_cover_jobs_since(verification, "album", STARTED) == 1
+        assert _completed_cover_jobs(verification) == 1
 
 
 @pytest.mark.parametrize("winner", ["publication", "cancellation"])
 def test_postgresql_serializes_publication_and_cancellation(
     accounting_factory, running_cover, winner,
 ):
-    """1301-F3-C1-ATOMIC: the first terminal transition owns image and charge."""
+    """1301-F3-C1-ATOMIC: the first terminal transition owns the image."""
     engine = accounting_factory.kw["bind"]
     publication_locked = threading.Event()
     allow_publication = threading.Event()
