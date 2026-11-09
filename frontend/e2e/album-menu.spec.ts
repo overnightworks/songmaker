@@ -11,10 +11,9 @@ import {
 	COLLECTION_MENU_SHARE_LABEL,
 	COLLECTION_MENU_SHARE_OFF_HINT,
 	COLLECTION_MENU_SHARE_ON_HINT,
-	collectionActionLabel,
-	HITBOX_FREQUENT_PX,
-	TRANSPORT_PLAY_LABEL
+	HITBOX_FREQUENT_PX
 } from '../src/lib/constants';
+import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	ALBUM_DETAILS_CLOSE_LABEL,
 	ALBUM_DETAILS_SAVED,

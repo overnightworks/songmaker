@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WhisperCue } from '#lib/api/types.ts';
-import { TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
+import { TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 

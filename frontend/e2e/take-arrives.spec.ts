@@ -16,9 +16,9 @@ import { JOB_TYPE_GENERATE } from '../src/lib/constants/jobs';
 import {
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_SYNC_ERROR,
-	songEditorOpenLabel,
-	TRANSPORT_PLAY_LABEL
+	songEditorOpenLabel
 } from '../src/lib/constants';
+import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import type { VersionItem } from '../src/lib/api/types';
 import {
 	currentVersionHeadLabel,

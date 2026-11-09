@@ -9,7 +9,6 @@
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-	collectionActionLabel,
 	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 	COLLECTION_MENU_LABEL,
 	HITBOX_FREQUENT_PX,
@@ -31,11 +30,14 @@ import {
 	RAIL_SETTINGS_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
 	songEditorOpenLabel,
 	wallHeadingLabel
 } from '../src/lib/constants';
+import {
+	collectionActionLabel,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL
+} from '../src/lib/constants/transport';
 import { compareTitles } from '../src/lib/utils/recency';
 import {
 	nowPlayingFromLabel,
@@ -256,6 +258,10 @@ async function expectSettingsRailRoundTrip(
 	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
 }
 
+function pauseButton(transport: Locator): Locator {
+	return transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+}
+
 /**
  * The phone's mini player (#1003, frame C2): one short row reading previous ·
  * play · next, play on the bar's exact centre line, and no shuffle of its own.
@@ -264,7 +270,7 @@ async function expectSettingsRailRoundTrip(
  * right side from next to the right edge.
  */
 async function expectCompactTransport(transport: Locator, playingSongTitle: string): Promise<void> {
-	const play = transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+	const play = pauseButton(transport);
 	const previous = transport.getByRole('button', { name: 'Previous', exact: true });
 	const next = transport.getByRole('button', { name: 'Next', exact: true });
 	const titleTarget = transport.getByRole('button', {
@@ -408,9 +414,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 		)
 	).toBeVisible();
 	// The pick is audible, not merely selected: the button offers to pause it.
-	await expect(
-		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-	).toBeVisible();
+	await expect(pauseButton(transport)).toBeVisible();
 	if (shell === 'mobile') {
 		await expectCompactTransport(transport, library.pickedSongTitle);
 		await expectMiniPlayerOpensNowPlaying(page, transport, library.pickedSongTitle);
@@ -437,9 +441,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 			exact: true
 		})
 		.click();
-	await expect(
-		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-	).toBeVisible();
+	await expect(pauseButton(transport)).toBeVisible();
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
 
 	await openPickedSong.click();
@@ -523,9 +525,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 		const playedCardBox = await playedCard.boundingBox();
 		if (!playedCardBox) throw new Error('Expected a visible playlist row');
 		await playedCard.click({ position: { x: 4, y: playedCardBox.height - 4 } });
-		await expect(
-			transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-		).toBeVisible();
+		await expect(pauseButton(transport)).toBeVisible();
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toHaveCount(0);
 		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
 		await expect(entryRows).toHaveText([
@@ -684,9 +684,7 @@ test(
 		if (!heldTwiceTake) throw new Error('Expected the first playlist song to be in the album');
 
 		// A playlist row plays from either edge, and only the copy that plays is marked.
-		const pause = page
-			.getByRole('contentinfo')
-			.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+		const pause = pauseButton(page.getByRole('contentinfo'));
 		for (const [edge, played, other] of [
 			['top', 1, 0],
 			['bottom', 0, 1]
@@ -785,9 +783,7 @@ test('1354_37b_64: an album with nothing to play dims its circle and leaves the 
 	await expect(albumCircle).toBeDisabled();
 	await albumCircle.click({ force: true });
 
-	await expect(
-		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-	).toBeVisible();
+	await expect(pauseButton(transport)).toBeVisible();
 	if (shell === 'mobile') {
 		await expect(transport.getByText(nowPlayingFromLabel(library.albumTitle))).toBeVisible();
 	} else {

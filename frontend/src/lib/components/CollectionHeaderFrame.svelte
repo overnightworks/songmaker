@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { collectionActionLabel, type CollectionPlayKind } from '#lib/constants.ts';
+	import { collectionActionLabel, type CollectionPlayKind } from '#lib/constants/transport.ts';
 	import CoverActivityMark, { type CoverMark } from './CoverActivityMark.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import {

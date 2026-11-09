@@ -9,14 +9,16 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import type { PlaylistDetailItem, PlaylistEntryItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {
-	collectionActionLabel,
 	LIBRARY_RETRY_LABEL,
 	PLAYING_MARK_LABEL,
 	playlistEntryOverflowLabel,
-	songEditorOpenLabel,
+	songEditorOpenLabel
+} from '#lib/constants.ts';
+import {
+	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_PAUSE_LABEL
-} from '#lib/constants.ts';
+} from '#lib/constants/transport.ts';
 import { setOpenCollection } from '#lib/stores/collection.ts';
 import {
 	closeNowPlaying,
@@ -170,10 +172,7 @@ describe('PlaylistDetailView header', () => {
 			album_covers: [],
 			created_at: '2026-01-01T00:00:00+00:00'
 		});
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
 		await tick();
@@ -219,10 +218,7 @@ describe('PlaylistDetailView header', () => {
 	])('toasts $toast when $action fails', async ({ menuItem, picksFile, failure, toast }) => {
 		vi.mocked(addToast).mockReset();
 		vi.mocked(uploadPlaylistCover).mockRejectedValue(failure);
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
 		await tick();
@@ -260,10 +256,7 @@ describe('PlaylistDetailView header', () => {
 	});
 
 	it('1859_R1: lists Share playlist, Upload…, Rename and Delete playlist in the menu, with no Save offline', async () => {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
 		await tick();
 		const menu = requireElement<HTMLElement>(document.body, '.menu-panel');
@@ -289,10 +282,7 @@ describe('PlaylistDetailView row take traits', () => {
 				]
 			})
 		);
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
 		expect(row.querySelector('.picked-star')).not.toBeNull();
@@ -317,10 +307,7 @@ describe('PlaylistDetailView row take traits', () => {
 				]
 			})
 		);
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
 		expect(row.querySelector('.picked-star')).toBeNull();
@@ -343,10 +330,7 @@ describe('PlaylistDetailView row take traits', () => {
 				]
 			})
 		);
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
 		const meta = row.querySelector('.song-row-detail')?.textContent ?? '';
@@ -393,6 +377,10 @@ async function renderPlaylist(entries: PlaylistEntryItem[]): Promise<HTMLElement
 	openPlaylistDetail(
 		detail({ ...populatedPlaylistDefaults(), entry_count: entries.length, entries })
 	);
+	return mountPlaylistView();
+}
+
+async function mountPlaylistView(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted.push(mount(PlaylistDetailView, { target }));
@@ -584,10 +572,7 @@ describe('PlaylistDetailView row actions', () => {
 				]
 			})
 		);
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		expect(target.querySelector('.move-btn')).toBeNull();
 		expect(target.querySelector('.remove-btn')).toBeNull();
@@ -611,10 +596,7 @@ describe('PlaylistDetailView row actions', () => {
 				entries: [entry({ song_title: 'Tide', album_title: 'Night Drive', mp3_path: 'tide.mp3' })]
 			})
 		);
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
 		expect(Array.from(row.querySelectorAll('button')).map((button) => button.className)).toEqual([
@@ -655,10 +637,7 @@ describe('PlaylistDetailView row actions', () => {
 				]
 			})
 		);
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		expect(target.querySelector('.move-btn')).toBeNull();
 		expect(target.querySelector('.remove-btn')).toBeNull();
@@ -691,10 +670,7 @@ function addPlaylistToList(item: { id: string; title: string; entry_count: numbe
 
 describe('PlaylistDetailView load failure (#139)', () => {
 	it('shows an inline error with Retry and never the previous playlist rows on a rate-limited reopen', async () => {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 		expect(target.querySelector('.entry-row')).not.toBeNull();
 
 		addPlaylistToList({ id: 'p2', title: 'Party Mix', entry_count: 3 });
@@ -720,10 +696,7 @@ describe('PlaylistDetailView load failure (#139)', () => {
 		);
 		await loadPlaylistDetail('p2');
 
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 		requireElement<HTMLButtonElement>(target, '.retry-btn');
 
 		vi.mocked(fetchPlaylist).mockResolvedValueOnce(
@@ -763,10 +736,7 @@ describe('PlaylistDetailView with an empty playlistList (#139)', () => {
 		);
 		playlistDetailLoad.set({ status: 'ready', error: null });
 
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		expect(requireElement(target, '.collection-header').textContent).toContain('Shared Mix');
 		expect(target.querySelector('.entry-row')).not.toBeNull();
@@ -778,10 +748,7 @@ describe('PlaylistDetailView with an empty playlistList (#139)', () => {
 		selectedPlaylistDetail.set(null);
 		playlistDetailLoad.set({ status: 'loading', error: null });
 
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		expect(requireElement(target, '[role="status"]').textContent).toBe('Loading playlist…');
 	});
@@ -792,10 +759,7 @@ describe('PlaylistDetailView with an empty playlistList (#139)', () => {
 		selectedPlaylistDetail.set(null);
 		playlistDetailLoad.set({ status: 'unreachable', error: null });
 
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+		const target = await mountPlaylistView();
 
 		expect(target.querySelector('[role="status"], [role="alert"], .retry-btn')).toBeNull();
 	});

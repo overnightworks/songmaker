@@ -9,15 +9,13 @@
 // real track change happens inside the flow's own time.
 
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
+import { NOW_PLAYING_LABEL, openNowPlayingLabel, songEditorOpenLabel } from '../src/lib/constants';
 import {
 	collectionActionLabel,
-	NOW_PLAYING_LABEL,
-	openNowPlayingLabel,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants';
+	TRANSPORT_RETRY_LABEL
+} from '../src/lib/constants/transport';
 import {
 	NOW_PLAYING_QUEUE_TAB,
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,

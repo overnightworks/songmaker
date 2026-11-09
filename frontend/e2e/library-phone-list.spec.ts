@@ -3,11 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import {
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants';
+import { songEditorOpenLabel } from '../src/lib/constants';
+import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	sameOriginHeaders,
 	expectLibraryWallLoaded,
