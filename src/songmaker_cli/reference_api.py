@@ -321,10 +321,17 @@ def api_keep_reference(
     return _toggle_keep(reference_id, user, session, keep_reference)
 
 
+_UNKEEP_REFERENCE_DESCRIPTION = (
+    "Stop protecting one of the person's own reference recordings from cleanup. "
+    "If no song uses it, it is deleted after its countdown."
+)
+
+
 @router.post(
     "/references/{reference_id}/unkeep",
+    description=_UNKEEP_REFERENCE_DESCRIPTION,
+    openapi_extra=agent_tool(name="unkeep_reference", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Reference audio not found"}},
-    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_unkeep_reference(
     reference_id: str,

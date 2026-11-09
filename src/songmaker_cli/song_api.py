@@ -222,10 +222,19 @@ def api_create_song(
     return _song_response(song)
 
 
+_UPDATE_SONG_DESCRIPTION = (
+    "Save lyrics, style prompt, tempo, key, length or reference of one of the person's own songs. "
+    "Fields left out stay as they are. A song with a take makes a new version when the lyrics, "
+    "prompt, tempo, key or length change, and a save that changes or clears the reference "
+    "starts the old reference's deletion countdown."
+)
+
+
 @router.put(
     "/songs/{song_id}",
+    description=_UPDATE_SONG_DESCRIPTION,
+    openapi_extra=agent_tool(name="update_song", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Song or reference audio not found"}},
-    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_update_song(
     song_id: str, req: SongUpdateRequest,
@@ -322,10 +331,17 @@ def api_move_song(
     return _song_response(song)
 
 
+_DELETE_SONG_DESCRIPTION = (
+    "Move one of the person's own songs to the trash. "
+    "It can be restored within the restore window; after it the song is gone."
+)
+
+
 @router.delete(
     "/songs/{song_id}",
+    description=_DELETE_SONG_DESCRIPTION,
+    openapi_extra=agent_tool(name="delete_song", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
-    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
 )
 def api_delete_song(
     song_id: str,
@@ -482,10 +498,17 @@ def api_delete_song_cover(
     return _song_response(song)
 
 
+_UNSHARE_SONG_DESCRIPTION = (
+    "End the share of one of the person's own songs. "
+    "Its public link stops working for good, and sharing the song again makes a new link."
+)
+
+
 @router.delete(
     "/songs/{song_id}/share",
+    description=_UNSHARE_SONG_DESCRIPTION,
+    openapi_extra=agent_tool(name="unshare_song", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
-    openapi_extra=exclude_route(Exclusion.ENDING_A_SHARE),
 )
 def api_unshare_song(
     song_id: str,

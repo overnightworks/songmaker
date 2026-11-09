@@ -57,6 +57,22 @@ MARKED_TOOLS = {
     "update_album", "update_playlist", "move_playlist_entry", "remove_playlist_entry",
     "update_preset", "set_theme", "set_default_config", "rename_song", "move_song",
     "update_lora_sample", "write_user_memory", "write_song_memory", "write_album_memory",
+    "unshare_album", "unshare_song", "unshare_take", "unshare_playlist", "delete_album",
+    "delete_song", "update_song", "pick_take", "unpick_take", "unkeep_take",
+    "unkeep_reference",
+}
+LIFECYCLE_TOOL_ROUTES = {
+    "unshare_album": ("DELETE", "/api/albums/{album_id}/share"),
+    "unshare_song": ("DELETE", "/api/songs/{song_id}/share"),
+    "unshare_take": ("DELETE", "/api/generations/{gen_id}/share"),
+    "unshare_playlist": ("DELETE", "/api/playlists/{playlist_id}/share"),
+    "delete_album": ("DELETE", "/api/albums/{album_id}"),
+    "delete_song": ("DELETE", "/api/songs/{song_id}"),
+    "update_song": ("PUT", "/api/songs/{song_id}"),
+    "pick_take": ("POST", "/api/generations/{gen_id}/pick"),
+    "unpick_take": ("POST", "/api/generations/{gen_id}/unpick"),
+    "unkeep_take": ("POST", "/api/generations/{gen_id}/unkeep"),
+    "unkeep_reference": ("POST", "/api/references/{reference_id}/unkeep"),
 }
 NEW_MARKED_ROUTES = {
     ("PUT", "/api/albums/{album_id}"), ("PUT", "/api/playlists/{playlist_id}"),
@@ -81,6 +97,18 @@ def test_m1_the_new_put_patch_and_delete_routes_are_among_the_marks(mcp: McpWorl
     marks = collect_route_tools(mcp.world.client.app).marks
 
     assert NEW_MARKED_ROUTES <= {(mark.method, mark.template) for mark in marks}
+
+
+@pytest.mark.parametrize(("name", "route"), LIFECYCLE_TOOL_ROUTES.items(),
+                         ids=list(LIFECYCLE_TOOL_ROUTES))
+def test_m1_each_lifecycle_route_is_a_side_effecting_tool_with_a_description(
+    mcp: McpWorld, name: str, route: tuple[str, str],
+) -> None:
+    method, template = route
+    operation = mcp.world.client.app.openapi()["paths"][template][method.lower()]
+
+    assert operation["x-agent-tool"] == {"name": name, "effect": "side_effecting"}
+    assert operation.get("description")
 
 
 def test_m1_every_operation_carries_a_decision_and_an_exclusion_names_a_reason_of_the_enum(
@@ -296,18 +324,11 @@ _UNMARKED_ROUTES = [
     ("POST", "/api/generations/bulk-delete", {"generation_ids": ["take-alices"]}),
     ("DELETE", "/api/generations/take-alices", None),
     ("POST", "/api/albums/album-alices/share", None),
-    ("POST", "/api/generations/take-alices/pick", None),
-    ("POST", "/api/generations/take-alices/unpick", None),
-    ("POST", "/api/generations/take-alices/unkeep", None),
-    ("POST", "/api/references/any/unkeep", None),
     ("POST", "/api/loras/lora-alices/train", None),
     ("DELETE", "/api/playlists/any", None),
-    ("DELETE", "/api/albums/album-alices", None),
     ("GET", "/api/admin/voices", None),
     ("GET", "/api/albums/album-alices/cover", None),
     ("PUT", "/api/albums/album-alices/cover", {"suggestion_id": "any"}),
-    ("DELETE", "/api/albums/album-alices/share", None),
-    ("PUT", "/api/songs/song-alices", {"title": "Saved"}),
     ("GET", "/api/conversations", None),
     ("POST", "/api/songs/song-alices/listen", None),
     ("PUT", "/api/settings/rate-limits", {"limits": []}),
@@ -316,9 +337,8 @@ _UNMARKED_ROUTES = [
 
 @pytest.mark.parametrize(
     ("method", "path", "body"), _UNMARKED_ROUTES,
-    ids=["bulk-delete", "take-delete", "share", "pick", "unpick", "unkeep", "reference-unkeep",
-         "train", "playlist-delete", "album-delete", "admin", "browser-only", "album-cover-choice",
-         "unshare", "song-save", "conversations", "listen", "admin-settings"],
+    ids=["bulk-delete", "take-delete", "share", "train", "playlist-delete", "admin",
+         "browser-only", "album-cover-choice", "conversations", "listen", "admin-settings"],
 )
 def test_m6_the_agent_token_is_refused_on_every_unmarked_route_and_nothing_changes(
     mcp: McpWorld, method: str, path: str, body: dict | None,

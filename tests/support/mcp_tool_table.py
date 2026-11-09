@@ -146,6 +146,23 @@ WRITES_ON_ONE_RESOURCE = [
          lambda s, o: {"song_id": f"song-{s}", "body": "a note"}),
     Tool("write_album_memory", "PUT", "/api/memory/albums/{album_id}",
          lambda s, o: {"album_id": f"album-{s}", "body": "a note"}),
+    Tool("unshare_album", "DELETE", "/api/albums/{album_id}/share",
+         lambda s, o: {"album_id": f"album-{s}"}),
+    Tool("unshare_song", "DELETE", "/api/songs/{song_id}/share",
+         lambda s, o: {"song_id": f"song-{s}"}),
+    Tool("unshare_take", "DELETE", "/api/generations/{gen_id}/share", _take_arguments),
+    Tool("unshare_playlist", "DELETE", "/api/playlists/{playlist_id}/share",
+         lambda s, o: {"playlist_id": f"playlist-{s}"}),
+    Tool("delete_album", "DELETE", "/api/albums/{album_id}",
+         lambda s, o: {"album_id": f"album-{s}"}),
+    Tool("delete_song", "DELETE", "/api/songs/{song_id}", lambda s, o: {"song_id": f"song-{s}"}),
+    Tool("update_song", "PUT", "/api/songs/{song_id}",
+         lambda s, o: {"song_id": f"song-{s}", "lyrics": "A new verse"}),
+    Tool("pick_take", "POST", "/api/generations/{gen_id}/pick", _take_arguments),
+    Tool("unpick_take", "POST", "/api/generations/{gen_id}/unpick", _take_arguments),
+    Tool("unkeep_take", "POST", "/api/generations/{gen_id}/unkeep", _take_arguments),
+    Tool("unkeep_reference", "POST", "/api/references/{reference_id}/unkeep",
+         lambda s, o: {"reference_id": f"reference-{s}"}),
 ]
 
 # Writes that make something new for the person.

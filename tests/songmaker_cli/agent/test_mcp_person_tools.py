@@ -24,9 +24,9 @@ from support.mcp_tool_table import (
     Tool,
     repaint_arguments,
 )
-from support.mcp_world import McpWorld, build_mcp_world, worker_ready
+from support.mcp_world import SAME_ORIGIN, McpWorld, build_mcp_world, worker_ready
 from support.token_world import TokenWorld
-from support.web_app import TEST_ORIGIN, seed_session
+from support.web_app import seed_session
 
 from songmaker_cli.constants import (
     OIDC_ADMIN_GROUP,
@@ -55,19 +55,11 @@ from songmaker_cli.db.queries.activity import record_song_edit, record_song_play
 from songmaker_cli.db.queries.songs import record_playlist_listen
 from songmaker_cli.job_types import JobType
 
-_SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
 _FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
 _NOT_FOUND = {403, 404}
 BOBS_LYRICS = "a verse only the member wrote"
 
 _IDS = [tool.name for tool in ALL_TOOLS]
-
-
-@pytest.fixture
-def household(mcp: McpWorld) -> McpWorld:
-    mcp.seed_household(TokenWorld.ALICE, ALICE)
-    mcp.seed_household(TokenWorld.BOB, BOB)
-    return mcp
 
 
 def _browser(world: McpWorld, tool: Tool, subject: str, headers: dict[str, str]):
@@ -203,6 +195,10 @@ _EFFECTS = [
      ("song_id", "body"), ("song-alices", "a note")),
     ("write_album_memory", {"album_id": "album-alices", "body": "a note"}, CowriterAlbumMemory,
      ("album_id", "body"), ("album-alices", "a note")),
+    ("unpick_take", {"gen_id": "take-alices"}, Generation, ("id", "is_picked"),
+     ("take-alices", False)),
+    ("update_song", {"song_id": "song-alices", "lyrics": "A new verse"}, Version,
+     ("song_id", "lyrics"), ("song-alices", "A new verse")),
     ("write_user_memory", {"body": "a note"}, CowriterUserMemory, ("user_id", "body"),
      (TokenWorld.ALICE, "a note")),
 ]
@@ -382,13 +378,13 @@ def _the_admin_fills_own_containers_with_the_members_content(world: McpWorld) ->
     for take in (f"take-{ALICE}", f"take-{BOB}"):
         added = world.world.client.post(
             f"/api/playlists/playlist-{ALICE}/entries/generation",
-            json={"generation_id": take}, headers=_SAME_ORIGIN,
+            json={"generation_id": take}, headers=SAME_ORIGIN,
         )
         assert added.status_code == 200
     for song in (ALICE, BOB):
         saved = world.world.client.put(
             f"/api/songs/song-{song}", json={"reference_recording_id": f"reference-{ALICE}"},
-            headers=_SAME_ORIGIN,
+            headers=SAME_ORIGIN,
         )
         assert saved.status_code == 200
     world.world.client.cookies.clear()
@@ -478,7 +474,9 @@ _NEW_TOOLS_ON_A_RESOURCE = [
     t for t in WRITES_ON_ONE_RESOURCE if t.name in {
         "update_album", "update_playlist", "move_playlist_entry", "remove_playlist_entry",
         "update_preset", "rename_song", "move_song", "update_lora_sample", "write_song_memory",
-        "write_album_memory",
+        "write_album_memory", "unshare_album", "unshare_song", "unshare_take",
+        "unshare_playlist", "delete_album", "delete_song", "update_song", "pick_take",
+        "unpick_take", "unkeep_take", "unkeep_reference",
     }
 ]
 
@@ -519,7 +517,7 @@ def test_a_cookie_session_with_csrf_succeeds_on_each_tool_route(
     seed_session(household.world.client, "alice")
 
     with worker_ready():
-        reply = _browser(household, tool, ALICE, _SAME_ORIGIN)
+        reply = _browser(household, tool, ALICE, SAME_ORIGIN)
 
     assert reply.status_code == 200
 
@@ -545,7 +543,7 @@ def test_a_cookie_write_without_csrf_is_refused_on_each_tool_route_and_writes_no
 
 def _share(world: McpWorld, path: str) -> str:
     seed_session(world.world.client, "alice")
-    reply = world.world.client.post(path, headers=_SAME_ORIGIN)
+    reply = world.world.client.post(path, headers=SAME_ORIGIN)
     assert reply.status_code == 200
     return reply.json()["share_slug"]
 

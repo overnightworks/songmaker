@@ -598,10 +598,17 @@ def api_share_generation(
     )
 
 
+_UNSHARE_TAKE_DESCRIPTION = (
+    "End the share of one of the person's own takes. "
+    "Its public link stops working for good, and sharing the take again makes a new link."
+)
+
+
 @router.delete(
     "/generations/{gen_id}/share",
+    description=_UNSHARE_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="unshare_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={404: {"description": "Generation does not exist"}},
-    openapi_extra=exclude_route(Exclusion.ENDING_A_SHARE),
 )
 def api_unshare_generation(
     gen_id: str,

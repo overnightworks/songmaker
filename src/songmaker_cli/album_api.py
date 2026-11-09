@@ -270,7 +270,17 @@ def api_update_album(
     return _single_album_response(session, album)
 
 
-@router.delete("/albums/{album_id}", openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW))
+_DELETE_ALBUM_DESCRIPTION = (
+    "Move one of the person's own albums and its songs to the trash. "
+    "The album can be restored within the restore window; after it the album is gone."
+)
+
+
+@router.delete(
+    "/albums/{album_id}",
+    description=_DELETE_ALBUM_DESCRIPTION,
+    openapi_extra=agent_tool(name="delete_album", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_delete_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -384,7 +394,17 @@ def api_share_album(
     )
 
 
-@router.delete("/albums/{album_id}/share", openapi_extra=exclude_route(Exclusion.ENDING_A_SHARE))
+_UNSHARE_ALBUM_DESCRIPTION = (
+    "End the share of one of the person's own albums. "
+    "Its public link stops working for good, and sharing the album again makes a new link."
+)
+
+
+@router.delete(
+    "/albums/{album_id}/share",
+    description=_UNSHARE_ALBUM_DESCRIPTION,
+    openapi_extra=agent_tool(name="unshare_album", effect=ToolEffect.SIDE_EFFECTING),
+)
 def api_unshare_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
