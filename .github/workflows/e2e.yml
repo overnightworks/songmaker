@@ -11,9 +11,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-${{ github.ref }}
-  # Keep main runs queued so each landing can become a deploy candidate (2026-09-05).
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # A pull request's runs share a group by its number and a newer run cancels the older.
+  # Every other run, a push to main included, has a group of its own (its run id), so no other run can cancel it.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   COMPOSE_FILES: -f docker-compose.yml -f docker/docker-compose.ci.yml
