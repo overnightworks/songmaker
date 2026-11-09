@@ -1,7 +1,0 @@
-claim_id = "0b5b59b22e6f47b3a8a5d743dae819a0"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "43a219f9017075a5cdaad7402dbe830cc85942dc"
-branch = "claude/issue-2865-s28a-library-context"
-scope = ["frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/libraryContextHistory.test.ts", "quality/baseline.toml"]
-opened_commit = "1f5b99ae65b4270e29716faaf14fba0482b2d4d0"
