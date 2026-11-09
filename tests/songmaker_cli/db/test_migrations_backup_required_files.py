@@ -46,7 +46,8 @@ class World:
 
     def listed(self) -> list[str]:
         with self.factory() as session:
-            return list(session.execute(text(f"SELECT path FROM {VIEW} ORDER BY path")).scalars())
+            query = text("SELECT path FROM backup_required_files ORDER BY path")
+            return list(session.execute(query).scalars())
 
     def on_disk(self) -> list[str]:
         return sorted(

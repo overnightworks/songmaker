@@ -17,39 +17,52 @@ down_revision: str | Sequence[str] | None = 'c9fba1723c68'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-VIEW = 'backup_required_files'
-ADAPTER_SENTINEL = 'lokr_weights.safetensors'
-COVER_DIRECTORIES = (
-    ('albums', 'covers'),
-    ('songs', 'song-covers'),
-    ('playlists', 'playlist-covers'),
-)
+CREATE_VIEW = r"""CREATE VIEW backup_required_files (path) AS
+SELECT mp3_path FROM generations WHERE mp3_path <> ''
+UNION
+SELECT storage_path FROM reference_recordings
+UNION
+SELECT audio_path FROM user_lora_samples WHERE audio_path <> ''
+UNION
+SELECT png_path FROM album_cover_suggestions
+UNION
 
-
-def _cover_files(table: str, directory: str) -> str:
-    return f"""
-    SELECT '{directory}/' || owner.id || '/' || variant.name
-    FROM {table} AS owner
+    SELECT 'covers/' || owner.id || '/' || variant.name
+    FROM albums AS owner
     CROSS JOIN LATERAL (VALUES
         ('card.jpg'),
         ('detail.jpg'),
-        (CASE WHEN owner.cover_key ~ '\\.jpg$' THEN 'original.jpg' ELSE 'original.png' END)
+        (CASE WHEN owner.cover_key ~ '\.jpg$' THEN 'original.jpg' ELSE 'original.png' END)
     ) AS variant (name)
-    WHERE owner.cover_key ~ '\\.'"""
+    WHERE owner.cover_key ~ '\.'
+UNION
+
+    SELECT 'song-covers/' || owner.id || '/' || variant.name
+    FROM songs AS owner
+    CROSS JOIN LATERAL (VALUES
+        ('card.jpg'),
+        ('detail.jpg'),
+        (CASE WHEN owner.cover_key ~ '\.jpg$' THEN 'original.jpg' ELSE 'original.png' END)
+    ) AS variant (name)
+    WHERE owner.cover_key ~ '\.'
+UNION
+
+    SELECT 'playlist-covers/' || owner.id || '/' || variant.name
+    FROM playlists AS owner
+    CROSS JOIN LATERAL (VALUES
+        ('card.jpg'),
+        ('detail.jpg'),
+        (CASE WHEN owner.cover_key ~ '\.jpg$' THEN 'original.jpg' ELSE 'original.png' END)
+    ) AS variant (name)
+    WHERE owner.cover_key ~ '\.'
+UNION
+SELECT storage_path || '/lokr_weights.safetensors' FROM user_loras
+WHERE status = 'ready' AND storage_path IS NOT NULL"""
 
 
 def upgrade() -> None:
-    selects = [
-        "SELECT mp3_path FROM generations WHERE mp3_path <> ''",
-        "SELECT storage_path FROM reference_recordings",
-        "SELECT audio_path FROM user_lora_samples WHERE audio_path <> ''",
-        "SELECT png_path FROM album_cover_suggestions",
-        *(_cover_files(table, directory) for table, directory in COVER_DIRECTORIES),
-        f"SELECT storage_path || '/{ADAPTER_SENTINEL}' FROM user_loras "
-        "WHERE status = 'ready' AND storage_path IS NOT NULL",
-    ]
-    op.execute(f"CREATE VIEW {VIEW} (path) AS " + "\nUNION\n".join(selects))
+    op.execute(CREATE_VIEW)
 
 
 def downgrade() -> None:
-    op.execute(f"DROP VIEW {VIEW}")
+    op.execute("DROP VIEW backup_required_files")
