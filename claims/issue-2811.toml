@@ -1,8 +1,0 @@
-claim_id = "91141c743a6e446190b297031ffef1fb"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5f352b475a28ff89333df78c9ab6b87aa71ee237"
-branch = "claude/issue-2811-constants-take-song-editor"
-scope = ["frontend/e2e", "frontend/src/lib/api", "frontend/src/lib/components", "frontend/src/lib/constants", "frontend/src/lib/constants.ts", "frontend/src/lib/stores", "frontend/src/lib/utils", "frontend/src/routes", "quality/baseline.toml"]
-opened_commit = "501b62f712452835f4ce12912223204eae925dc8"
-whole_reason = "One pure move: the song and editor families share their callers, so they leave the catch-all together, and every caller re-points in the same change, or the build breaks."
