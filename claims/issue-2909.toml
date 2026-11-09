@@ -3,5 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "5ad73d852fb166f572371f6ef7e7db6a661622a4"
 branch = "claude/issue-2909-playable-pick-rule"
-scope = ["src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/mcp_server/schemas.py"]
+scope = ["src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/mcp_server/schemas.py", "tests/songmaker_cli/test_album_api.py", "tests/songmaker_cli/test_cowriter_tool_bodies.py"]
 opened_commit = "fc349d27e16a8877fce33dcc8ba48faf922812e1"
+whole_reason = "Two deciders of one rule and the test module of each one's caller; they change together."
