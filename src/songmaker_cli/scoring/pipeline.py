@@ -178,11 +178,6 @@ class ScorerRegistry:
             except ImportError:
                 log.debug("Scorer module %s unavailable (missing dependency)", mod_name)
 
-    def reset_for_testing(self) -> None:
-        """Clear all scorers for test isolation."""
-        self._scorers.clear()
-        self._loaded = False
-
 
 default_registry = ScorerRegistry(autoload=True)
 register = default_registry.register

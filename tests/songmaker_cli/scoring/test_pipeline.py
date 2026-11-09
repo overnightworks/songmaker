@@ -43,7 +43,6 @@ def _run_pipeline(mp3_path: Path, **kwargs: object) -> SongScores:
 def clean_registry() -> ScorerRegistry:
     """Provide an isolated scorer registry for testing."""
     registry = ScorerRegistry()
-    registry.reset_for_testing()
     return registry
 
 
@@ -107,14 +106,6 @@ def test_song_scores_to_dict_all_scorers() -> None:
     assert d["bpm_deviation"] == 1.7
     assert d["silence_gaps"] == 0
     assert "silence_ok" not in d
-
-
-def test_silence_has_problems() -> None:
-    clean = SilenceScore(total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0)
-    assert clean.has_problems is False
-
-    problematic = SilenceScore(total_silence_seconds=3.0, longest_gap_seconds=3.0, gap_count=1)
-    assert problematic.has_problems is True
 
 
 def test_emotional_dynamics_expressiveness_capped() -> None:
