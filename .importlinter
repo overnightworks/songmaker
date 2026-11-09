@@ -88,7 +88,7 @@ layers =
     settings
     job_timing
     constants
-    (acestep_capabilities) | (acestep_state) | (arq_codec) | (audio_files) | (audio_paths) | (cover_job_errors) | (env_override) | (errors) | (generation_params) | (invariants) | (job_types) | (theme_types) | (timestamps) | (whisper_cues)
+    (acestep_capabilities) | (acestep_state) | (arq_codec) | (audio_files) | (audio_paths) | (env_override) | (errors) | (generation_params) | (invariants) | (job_types) | (theme_types) | (timestamps) | (whisper_cues)
 ignore_imports =
     songmaker_cli.settings -> songmaker_cli.agent.settings
 

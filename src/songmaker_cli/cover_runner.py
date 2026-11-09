@@ -23,7 +23,6 @@ from songmaker_cli.constants import (
     COVER_PROMPT_MAX_CHARS,
     COVER_PROMPT_SONG_FIELD_MAX_CHARS,
 )
-from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
 from songmaker_cli.covers import CoverRejectedError, ai_mark_png_info, decode_cover_image
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
@@ -63,6 +62,10 @@ _RUN_FAILED: Final = TurnProblem(AgentProblem.UNAVAILABLE, "cover run failed")
 # serves every app in the process.
 _running_pictures_lock = Lock()
 _running_pictures: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Task]] = {}
+
+
+class CoverSuggestionJobError(Exception):
+    """The persisted cover job cannot safely produce a suggestion group."""
 
 
 @dataclass(frozen=True)
