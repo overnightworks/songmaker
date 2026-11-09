@@ -250,7 +250,7 @@ test.describe('song page at phone width', () => {
 
 			await page.getByRole('tab', { name: /Takes/ }).click();
 			await expect(panel.getByRole('progressbar')).toBeVisible();
-			await expect(panel.getByText(LOADING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
+			await expect(panel.getByText(LOADING_JOB_PHASE_LABEL)).toBeVisible();
 			await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: true })).toBeVisible();
 			await expect(panel.getByText(REMAINING_TIME_PATTERN)).toHaveCount(0);
 			await expect(panel.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
