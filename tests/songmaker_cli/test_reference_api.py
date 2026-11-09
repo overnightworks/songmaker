@@ -11,6 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import InstrumentedAttribute
 from support import reference_api_world
 from support.reference_api_world import (
     AUDIO_BYTES,
@@ -41,10 +43,15 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import (
     Base,
+    Generation,
     ReferenceRecording,
+    Song,
+    Version,
 )
 from songmaker_cli.db.queries.reference_recordings import (
     REFERENCE_LINK_COLUMNS,
+    linked_reference_ids,
+    reference_uses,
 )
 from songmaker_cli.settings import get_settings
 
@@ -585,6 +592,32 @@ def test_l9_the_in_use_query_checks_every_foreign_key_that_points_at_a_reference
     }
 
     assert checked == referencing
+
+
+LINK_ARRANGEMENTS = {
+    Version.reference_recording_id: ("version", "versions"),
+    Generation.reference_recording_id: ("take", "takes"),
+}
+
+
+@pytest.mark.parametrize(
+    "column", REFERENCE_LINK_COLUMNS, ids=lambda column: column.class_.__tablename__,
+)
+def test_a_reference_linked_through_each_link_column_is_found_as_a_use(
+    signed_in: TestClient, column: InstrumentedAttribute,
+) -> None:
+    assert column in LINK_ARRANGEMENTS, f"{column} has no arrangement"
+    via, uses_field = LINK_ARRANGEMENTS[column]
+    reference_id = seed_reference(signed_in, "owner-id", "linked.wav")
+    link_reference(signed_in, reference_id, via=via)
+
+    with signed_in.app.state.ctx.db() as session:
+        uses = getattr(reference_uses(session, reference_id), uses_field)
+        song_id = session.scalars(select(Song.id)).one()
+        linked = linked_reference_ids(session, [song_id])
+
+    assert len(uses) == 1
+    assert linked == {reference_id}
 
 
 @pytest.mark.parametrize("control", ["\x00", "\x01", "\x09", "\x1b", "\x1f"])
