@@ -207,8 +207,6 @@ export interface CoverSuggestionSelectionRequest {
 export interface CoverSuggestionsResponse {
 	job?: JobItem | null;
 	suggestions: CoverSuggestionResponse[];
-	used_today: number;
-	daily_limit: number;
 }
 
 export interface CoverTaskParams {

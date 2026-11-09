@@ -69,12 +69,9 @@ test('Add cover asks for nothing until Suggest, whose refused click says log in 
 	const editing = surface.getByRole('group', { name: 'Cover editing' });
 	await surface.getByRole('button', { name: 'Add cover' }).click();
 	await expect(editing.getByRole('button', { name: 'Suggest', exact: true })).toBeEnabled();
-	await expect(editing.getByText(/left today$/)).toBeVisible();
-	const leftBeforeMistap = await editing.getByText(/left today$/).textContent();
 	await editing.getByRole('button', { name: 'Close cover editing' }).click();
 	await expect(editing).toHaveCount(0);
 	await surface.getByRole('button', { name: 'Add cover' }).click();
-	await expect(editing.getByText(/left today$/)).toHaveText(leftBeforeMistap ?? '');
 	expect(suggestionAsks).toBe(0);
 	const latestJobBefore = await latestCoverJobId(page, library.albumId);
 
@@ -90,7 +87,6 @@ test('Add cover asks for nothing until Suggest, whose refused click says log in 
 	await expect(line).toContainText(COVER_PROBLEM_TEXTS.sign_in_again);
 	await expect(line.getByRole('link', { name: 'Log in' })).toBeVisible();
 	await expect(suggestButton(editing)).toBeDisabled();
-	await expect(editing.getByText(/left today$/)).toHaveCount(0);
 	await expect(editing.getByRole('button', { name: 'Upload', exact: true })).toBeEnabled();
 	expect(await latestCoverJobId(page, library.albumId)).toBe(latestJobBefore);
 	expect(suggestionAsks).toBe(1);
@@ -130,17 +126,15 @@ test('a run that ends busy, not enabled or unavailable shows its own line in its
 			looks[problem] = await lookOf(line);
 			await expect(suggestButton(editing)).toBeEnabled({ enabled: problem === 'unavailable' });
 			if (problem === 'busy') await expect(suggestButton(editing)).toContainText(/[45]:\d\d/);
-			await expect(editing.getByText(/left today$/)).toHaveCount(problem === 'not_enabled' ? 0 : 1);
 			await expect(page.getByText(STORED_ERROR_CANARY)).toHaveCount(0);
 			await attachShot(page, testInfo, `cover-${problem}`);
 
 			// A reload is a new view: busy keeps its wait, a refusal of the person asks again.
 			await page.reload();
 			await workspace(page).getByRole('button', { name: 'Add cover' }).click();
-			await expect(editing.getByText(/left today$/)).toBeVisible();
 			if (problem === 'not_enabled') {
-				await expect(problemLine(editing)).toHaveCount(0);
 				await expect(suggestButton(editing)).toBeEnabled();
+				await expect(problemLine(editing)).toHaveCount(0);
 			} else {
 				await expect(problemLine(editing)).toContainText(COVER_PROBLEM_TEXTS[problem]);
 				await expect(suggestButton(editing)).toBeEnabled({ enabled: problem === 'unavailable' });
@@ -219,7 +213,6 @@ test.describe('cover suggestions retry', () => {
 		);
 		await retry.click();
 		expect((await loaded).ok()).toBeTruthy();
-		await expect(editing.getByText(/left today$/)).toBeVisible();
 		await expect(retry).toHaveCount(0);
 		await testInfo.attach('cover-retry-loaded', {
 			body: await page.screenshot(),

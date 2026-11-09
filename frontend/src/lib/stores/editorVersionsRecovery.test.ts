@@ -6,6 +6,7 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
 import { reportResourceStreamReachable } from '#lib/stores/connectivity.ts';
 import { toasts } from '#lib/stores/toast.ts';
+import { deferred } from '#lib/test-utils/album-cover-editor.ts';
 import {
 	discardDraft,
 	draftLoadedFrom,
@@ -17,8 +18,12 @@ import {
 	editPrompt,
 	isDirty,
 	loadSongData,
+	handleDeleteVersion,
 	loadVersionAsDraft,
+	offerSetAsideVersionLoadUndoAgain,
+	retireVersionLoadUndo,
 	setDraftLyrics,
+	versionLoadUndoOutstanding,
 	versions
 } from './editor';
 
@@ -38,6 +43,7 @@ describe('versions recovery', () => {
 	beforeEach(() => {
 		vi.spyOn(api, 'fetchVersions').mockResolvedValue([]);
 		discardDraft();
+		retireVersionLoadUndo();
 		selectedSongId.set('s1');
 		toasts.set([]);
 		versions.set([]);
@@ -152,5 +158,48 @@ describe('versions recovery', () => {
 		await Promise.resolve();
 		expect(get(versions)).toEqual([]);
 		expect(fetchVersions).toHaveBeenCalledTimes(1);
+	});
+
+	describe('after a version delete', () => {
+		beforeEach(() => {
+			vi.spyOn(api, 'deleteVersion').mockResolvedValue(undefined);
+			vi.spyOn(api, 'fetchSong').mockResolvedValue(makeSong({ id: 's1', lyrics: 'left over' }));
+		});
+
+		it('a failed Versions refetch after a delete rejects handleDeleteVersion', async () => {
+			loadSongData(makeSong({ id: 's1' }));
+			await Promise.resolve();
+			vi.mocked(api.fetchVersions).mockRejectedValueOnce(new Error('refetch failed'));
+
+			await expect(handleDeleteVersion('s1', 'v1', false)).rejects.toThrow('refetch failed');
+		});
+
+		it('deleting a version after leaving the song leaves the new song editor untouched', async () => {
+			loadSongData(makeSong({ id: 's1' }));
+			await Promise.resolve();
+			const refetch = deferred<ReturnType<typeof makeVersion>[]>();
+			vi.mocked(api.fetchVersions).mockReturnValueOnce(refetch.promise);
+			const deleting = handleDeleteVersion('s1', 'v1', false);
+			await vi.waitFor(() => expect(api.fetchVersions).toHaveBeenCalledTimes(2));
+			const otherSongVersions = [makeVersion({ id: 's2-version' })];
+			vi.mocked(api.fetchVersions).mockResolvedValueOnce(otherSongVersions);
+			selectedSongId.set('s2');
+			loadSongData(makeSong({ id: 's2', lyrics: 'other song' }));
+			await Promise.resolve();
+
+			refetch.resolve([makeVersion({ id: 's1-version' })]);
+			await deleting;
+
+			expect(get(editLyrics)).toBe('other song');
+			expect(get(versions)).toEqual(otherSongVersions);
+		});
+	});
+
+	it('closing Versions with nothing loaded offers no undo', () => {
+		loadSongData(makeSong({ id: 's1' }));
+
+		offerSetAsideVersionLoadUndoAgain();
+
+		expect(get(versionLoadUndoOutstanding)).toBe(false);
 	});
 });

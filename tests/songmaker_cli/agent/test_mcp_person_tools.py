@@ -12,6 +12,7 @@ from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
+from agent_runtime_client.tools import AGENT_TOOL_EXTENSION, ToolExclusion, read_decision
 from sqlalchemy.orm import sessionmaker
 from support.mcp_tool_table import (
     ALICE,
@@ -24,16 +25,19 @@ from support.mcp_tool_table import (
     Tool,
     repaint_arguments,
 )
-from support.mcp_world import SAME_ORIGIN, McpWorld, build_mcp_world, worker_ready
+from support.mcp_world import (
+    ADMIN_GROUPS,
+    FORGED,
+    SAME_ORIGIN,
+    McpWorld,
+    build_mcp_world,
+    worker_ready,
+)
 from support.token_world import TokenWorld
 from support.web_app import seed_session
 
-from songmaker_cli.constants import (
-    OIDC_ADMIN_GROUP,
-    OIDC_LOGIN_GROUP,
-    OIDC_MCP_GROUP,
-    SongWorkKind,
-)
+from songmaker_cli.agent.mcp import Exclusion
+from songmaker_cli.constants import SongWorkKind
 from songmaker_cli.db.models import (
     Album,
     CowriterAlbumMemory,
@@ -55,7 +59,6 @@ from songmaker_cli.db.queries.activity import record_song_edit, record_song_play
 from songmaker_cli.db.queries.songs import record_playlist_listen
 from songmaker_cli.job_types import JobType
 
-_FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
 _NOT_FOUND = {403, 404}
 BOBS_LYRICS = "a verse only the member wrote"
 
@@ -91,14 +94,14 @@ def test_a_read_tool_for_another_persons_content_is_refused_as_for_a_stranger_in
     browser = _browser(household, tool, BOB, household.agent())
     assert browser.status_code in _NOT_FOUND
     assert reply.is_error
-    assert BOB not in re.sub(r"(take|job|song|album|playlist|reference|lora)-bobs",
+    assert BOB not in re.sub(r"(take|job|song|album|playlist|reference|lora|conversation)-bobs",
                              "", reply.text)
 
 
 @pytest.mark.parametrize("tool", [
     t for t in PLAIN_READS if t.name in {
         "list_loras", "list_own_playable_takes", "list_playlists", "list_references",
-        "list_presets",
+        "list_presets", "list_conversations", "get_memory",
         "get_library_listen", "get_library_write", "search_library",
         "get_library_pool_queue",
     }
@@ -324,14 +327,8 @@ def test_the_score_tool_meets_the_persons_scoring_limit(
 
 
 @pytest.fixture
-def admins_world(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
-    lifespans: ExitStack,
-) -> McpWorld:
-    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
-    world.seed_household(TokenWorld.ALICE, ALICE)
-    world.seed_household(TokenWorld.BOB, BOB)
+def admins_world(admins_household: McpWorld) -> McpWorld:
+    world = admins_household
     with world.world.factory() as session:
         record_song_edit(session, user_id=TokenWorld.ALICE, song_id=f"song-{BOB}",
                          kind=SongWorkKind.CREATED)
@@ -341,8 +338,6 @@ def admins_world(
     return world
 
 
-_ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
-
 
 @pytest.mark.parametrize("tool", [
     t for t in PLAIN_READS if t.name in {"get_library_listen", "get_library_write",
@@ -351,7 +346,7 @@ _ADMIN_GROUPS = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
 def test_the_content_reads_of_an_admins_agent_return_only_the_admins_own_content(
     admins_world: McpWorld, tool: Tool,
 ) -> None:
-    reply = admins_world.call(tool.name, tool.arguments_for(ALICE), groups=_ADMIN_GROUPS)
+    reply = admins_world.call(tool.name, tool.arguments_for(ALICE), groups=ADMIN_GROUPS)
 
     assert reply.is_error is False
     assert ALICE in reply.text
@@ -359,10 +354,10 @@ def test_the_content_reads_of_an_admins_agent_return_only_the_admins_own_content
 
 
 def test_an_admins_agent_reads_its_own_lora_as_the_route_answers_it(admins_world: McpWorld) -> None:
-    reply = admins_world.call("get_lora", {"lora_id": f"lora-{ALICE}"}, groups=_ADMIN_GROUPS)
+    reply = admins_world.call("get_lora", {"lora_id": f"lora-{ALICE}"}, groups=ADMIN_GROUPS)
 
     browser = admins_world.world.client.get(f"/api/loras/lora-{ALICE}",
-                                            headers=admins_world.agent(groups=_ADMIN_GROUPS))
+                                            headers=admins_world.agent(groups=ADMIN_GROUPS))
     assert (reply.is_error, reply.json()) == (False, browser.json())
 
 
@@ -401,7 +396,7 @@ def test_an_admins_agent_reads_none_of_a_members_content_in_the_admins_own_conta
 ) -> None:
     _the_admin_fills_own_containers_with_the_members_content(admins_world)
 
-    reply = admins_world.call(tool, arguments, groups=_ADMIN_GROUPS)
+    reply = admins_world.call(tool, arguments, groups=ADMIN_GROUPS)
     seed_session(admins_world.world.client, "alice")
     browser = admins_world.world.client.get(browser_path)
 
@@ -424,7 +419,7 @@ def test_an_admins_agent_reads_none_of_a_members_covers_in_a_played_playlist_of_
         )
         session.commit()
 
-    reply = admins_world.call("get_library_listen", groups=_ADMIN_GROUPS)
+    reply = admins_world.call("get_library_listen", groups=ADMIN_GROUPS)
     seed_session(admins_world.world.client, "alice")
     browser = admins_world.world.client.get("/api/library/listen")
 
@@ -448,8 +443,8 @@ def test_an_admins_agent_is_refused_the_admins_own_model_jobs_on_a_worker(
                         user_id=TokenWorld.ALICE))
         session.commit()
 
-    job = admins_world.call("get_job", {"job_id": "model-job"}, groups=_ADMIN_GROUPS)
-    cancel = admins_world.call("cancel_job", {"job_id": "model-job"}, groups=_ADMIN_GROUPS)
+    job = admins_world.call("get_job", {"job_id": "model-job"}, groups=ADMIN_GROUPS)
+    cancel = admins_world.call("cancel_job", {"job_id": "model-job"}, groups=ADMIN_GROUPS)
     seed_session(admins_world.world.client, "alice")
     browser = admins_world.world.client.get("/api/jobs/model-job")
 
@@ -461,9 +456,9 @@ def test_an_admins_agent_is_refused_the_admins_own_model_jobs_on_a_worker(
 def test_an_admins_agent_is_refused_another_persons_job_and_is_a_user_in_the_account(
     admins_world: McpWorld,
 ) -> None:
-    job = admins_world.call("get_job", {"job_id": "job-bobs"}, groups=_ADMIN_GROUPS)
-    cancel = admins_world.call("cancel_job", {"job_id": "job-bobs"}, groups=_ADMIN_GROUPS)
-    account = admins_world.call("get_account", groups=_ADMIN_GROUPS)
+    job = admins_world.call("get_job", {"job_id": "job-bobs"}, groups=ADMIN_GROUPS)
+    cancel = admins_world.call("cancel_job", {"job_id": "job-bobs"}, groups=ADMIN_GROUPS)
+    account = admins_world.call("get_account", groups=ADMIN_GROUPS)
 
     assert (job.is_error, cancel.is_error) == (True, True)
     assert ("job-bobs", "queued") in admins_world.rows_of(Job, "id", "status")
@@ -487,7 +482,7 @@ def test_an_admins_agent_is_refused_the_new_write_tools_on_another_persons_resou
 ) -> None:
     before = admins_world.snapshot()
 
-    reply = admins_world.call(tool.name, tool.arguments_for(BOB), groups=_ADMIN_GROUPS)
+    reply = admins_world.call(tool.name, tool.arguments_for(BOB), groups=ADMIN_GROUPS)
 
     assert reply.is_error
     assert admins_world.snapshot() == before
@@ -498,7 +493,7 @@ def test_the_reference_counts_of_an_admins_agent_leave_out_uses_in_another_perso
 ) -> None:
     _the_admin_fills_own_containers_with_the_members_content(admins_world)
 
-    reply = admins_world.call("list_references", groups=_ADMIN_GROUPS)
+    reply = admins_world.call("list_references", groups=ADMIN_GROUPS)
     seed_session(admins_world.world.client, "alice")
     browser = admins_world.world.client.get("/api/references")
 
@@ -531,7 +526,7 @@ def test_a_cookie_write_without_csrf_is_refused_on_each_tool_route_and_writes_no
     before = household.snapshot()
 
     with worker_ready() as pool:
-        reply = _browser(household, tool, ALICE, _FORGED)
+        reply = _browser(household, tool, ALICE, FORGED)
 
     assert reply.status_code == 403
     assert household.snapshot() == before
@@ -619,3 +614,19 @@ def test_a_repaint_on_a_shared_song_queues_its_job_and_keeps_the_slug_and_the_pu
     assert ("generate", "song-alices") in household.rows_of(Job, "type", "song_id")
     assert public.get(f"/shared/song/{slug}").json() == shown
     assert household.call("get_song", {"song_id": "song-alices"}).json()["share_slug"] == slug
+
+
+def test_every_operation_carries_a_decision_and_an_exclusion_names_a_reason_of_the_enum(
+    mcp: McpWorld,
+) -> None:
+    operations = [
+        operation for item in mcp.world.client.app.openapi()["paths"].values()
+        for method, operation in item.items() if method != "parameters"
+    ]
+
+    decisions = [
+        read_decision(operation[AGENT_TOOL_EXTENSION]) for operation in operations
+    ]
+    assert None not in decisions
+    reasons = {d.reason for d in decisions if isinstance(d, ToolExclusion)}
+    assert reasons <= {reason.value for reason in Exclusion}

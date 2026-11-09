@@ -1,112 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import type { QueueStreamManifest, SharedAlbumSongPayload, WhisperCue } from '#lib/api/types.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
+import type { QueueStreamManifest } from '#lib/api/types.ts';
 import { audioPlayer, type AudioPlayerCallbacks } from '#lib/services/audioPlayer.svelte.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
-import {
-	fromSharedAlbum,
-	fromSharedSong,
-	trackPlaybackInfo,
-	type SharedCollectionView
-} from './sharedCollection';
+import { playableTracks, trackPlaybackInfo, type SharedCollectionView } from './sharedCollection';
 import { SharePlayback } from './sharePlayback.svelte';
-
-class FakeAudio {
-	src = '';
-	currentTime = 0;
-	duration = 100;
-	paused = true;
-	ended = false;
-	error: MediaError | null = null;
-	crossOrigin: string | null = null;
-	buffered = { length: 0, end: () => 0 };
-	preload = '';
-	private listeners = new Map<string, Set<EventListener>>();
-	playMock = vi.fn(() => {
-		this.paused = false;
-		queueMicrotask(() => this.fire('play'));
-		return Promise.resolve();
-	});
-
-	addEventListener(name: string, listener: EventListener): void {
-		const set = this.listeners.get(name) ?? new Set();
-		set.add(listener);
-		this.listeners.set(name, set);
-	}
-	removeEventListener(name: string, listener: EventListener): void {
-		this.listeners.get(name)?.delete(listener);
-	}
-	removeAttribute(): void {}
-	pause(): void {
-		this.paused = true;
-		this.fire('pause');
-	}
-	play(): Promise<void> {
-		return this.playMock();
-	}
-	load(): void {
-		this.fire('loadstart');
-	}
-	fire(name: string, init?: Partial<Event>): void {
-		const event = { type: name, ...init } as Event;
-		const ls = this.listeners.get(name);
-		if (!ls) return;
-		for (const l of ls) l(event);
-	}
-}
-
-const CUES: WhisperCue[] = [{ start: 0, end: 3, text: 'verse one' }];
-
-function albumSong(
-	id: string,
-	title: string,
-	trackNumber: number,
-	audioUrl: string | null,
-	audioDuration: number | null
-): SharedAlbumSongPayload {
-	return {
-		id,
-		title,
-		track_number: trackNumber,
-		audio_url: audioUrl,
-		generation_id: audioUrl ? `gen-${id}` : null,
-		audio_duration: audioDuration,
-		lyrics: audioUrl ? 'verse one' : null,
-		whisper_cues: audioUrl ? CUES : null
-	};
-}
-
-function albumView(slug = 'slug'): SharedCollectionView {
-	return fromSharedAlbum({
-		title: 'Album',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		songs: [
-			albumSong('s1', 'First', 1, `/shared/${slug}/audio/s1.mp3`, 128),
-			albumSong('s2', 'Second', 2, `/shared/${slug}/audio/s2.mp3`, 96),
-			albumSong('s3', 'Third (unpicked)', 3, null, null)
-		]
-	});
-}
-
-function songView(): SharedCollectionView {
-	return fromSharedSong({
-		title: 'Solo',
-		artist: 'Artist',
-		album_title: 'Album',
-		audio_url: '/shared/song/solo/audio/solo.mp3',
-		generation_id: 'g-solo',
-		audio_duration: 120,
-		lyrics: null,
-		whisper_cues: null,
-		cover: null,
-		album_cover: null
-	});
-}
+import {
+	albumView,
+	CUES,
+	installFakeAudio,
+	NO_CALLBACKS,
+	songView,
+	streamManifest,
+	type FakeAudio
+} from './sharePlayback-test-fixtures';
 
 // A take of the listener's own library, playing in the signed-in app when
 // they followed a share link.
@@ -121,78 +31,15 @@ function appTake(): PlaybackInfo {
 	};
 }
 
-const NO_CALLBACKS: AudioPlayerCallbacks = {
-	onEnded: null,
-	onPlaybackStarted: null,
-	onAuthLost: null,
-	onStreamRebuild: null,
-	onCurrentChange: null,
-	networkFailureIsAnnounced: () => false
-};
-
-function streamManifest(windowed: boolean): QueueStreamManifest {
-	return {
-		snapshot_id: 'snap',
-		stream_url: '/shared-stream.mp3',
-		expires_at: '2099-01-01T00:00:00Z',
-		total_duration: 20,
-		windowed,
-		skipped: [],
-		skipped_complete: true,
-		tracks: [
-			{
-				key: 's1',
-				index: 0,
-				entry_id: null,
-				generation_id: 'g1',
-				song_id: 's1',
-				song_title: 'First',
-				artist: 'Artist',
-				album_title: 'Album',
-				// public_queue_stream_manifest() redacts lyrics on a share stream.
-				lyrics: null,
-				generation_number: 1,
-				mp3_path: 's1.mp3',
-				audio_url: '/shared/slug/audio/s1.mp3',
-				seed: null,
-				model_mode: 'sft',
-				duration: 10,
-				start_offset: 0,
-				end_offset: 10
-			},
-			{
-				key: 's2',
-				index: 1,
-				entry_id: null,
-				generation_id: 'g2',
-				song_id: 's2',
-				song_title: 'Second',
-				artist: 'Artist',
-				album_title: 'Album',
-				lyrics: null,
-				generation_number: 1,
-				mp3_path: 's2.mp3',
-				audio_url: '/shared/slug/audio/s2.mp3',
-				seed: null,
-				model_mode: 'sft',
-				duration: 10,
-				start_offset: 10,
-				end_offset: 20
-			}
-		]
-	};
+// A share view's tracks as the page hands them to playback: the playable ones.
+function tracksOf(view: SharedCollectionView) {
+	return playableTracks(view.tracks);
 }
 
 let fakeAudio: FakeAudio;
 
 beforeEach(() => {
-	fakeAudio = new FakeAudio();
-	vi.stubGlobal(
-		'Audio',
-		vi.fn(function () {
-			return fakeAudio;
-		})
-	);
+	fakeAudio = installFakeAudio();
 	vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
 	audioPlayer.destroy();
 	audioPlayer.swapCallbacks(NO_CALLBACKS);
@@ -299,7 +146,7 @@ describe('toggle() and classic playback', () => {
 		const view = albumView();
 		playback.start(view, null);
 
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 
 		expect(audioPlayer.current?.songId).toBe('s1');
 		expect(fakeAudio.src).toBe('/shared/slug/audio/s1.mp3');
@@ -313,7 +160,7 @@ describe('toggle() and classic playback', () => {
 		playback.start(view, null);
 
 		expect(playback.currentCues).toBeNull();
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 
 		expect(playback.currentCues).toEqual(CUES);
 		playback.stop();
@@ -324,12 +171,12 @@ describe('toggle() and classic playback', () => {
 		const view = albumView();
 		playback.start(view, null);
 
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		fakeAudio.fire('canplay');
 		fakeAudio.fire('play');
 		fakeAudio.playMock.mockClear();
 
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 
 		expect(fakeAudio.paused).toBe(true);
 		expect(fakeAudio.playMock).not.toHaveBeenCalled();
@@ -352,7 +199,7 @@ describe('toggle() and classic playback', () => {
 		const view = albumView();
 		playback.start(view, null);
 
-		playback.toggle(view.tracks[1]);
+		playback.toggle(tracksOf(view)[1]);
 		fakeAudio.fire('canplay');
 		const atLast = { canNext: playback.canNext, canPrev: playback.canPrev };
 		playback.next();
@@ -375,7 +222,7 @@ describe('the end of a share', () => {
 	function playToTheEnd(view: SharedCollectionView, trackIndex = 0): SharePlayback {
 		const playback = new SharePlayback();
 		playback.start(view, null);
-		playback.toggle(view.tracks[trackIndex]);
+		playback.toggle(tracksOf(view)[trackIndex]);
 		fakeAudio.fire('canplay');
 		fakeAudio.fire('playing');
 		fakeAudio.fire('ended');
@@ -397,7 +244,7 @@ describe('the end of a share', () => {
 		const view = albumView();
 		const playback = new SharePlayback();
 		playback.start(view, null);
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		playback.setShuffle(true);
 		const last = playback.queue.items.at(-1);
 		playback.jump(playback.queue.items.length - 1);
@@ -416,9 +263,9 @@ describe('the end of a share', () => {
 		const playback = new SharePlayback();
 		playback.start(view, null);
 
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		const upNextAtFirst = playback.queue.upNext?.key;
-		playback.toggle(view.tracks[1]);
+		playback.toggle(tracksOf(view)[1]);
 
 		expect(upNextAtFirst).toBe('s2');
 		expect(playback.queue.upNext).toBeNull();
@@ -469,7 +316,7 @@ describe('a failed take offline', () => {
 		const playback = new SharePlayback();
 		const view = albumView();
 		playback.start(view, null);
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		reportResourceStreamReachable(false);
 
 		fakeAudio.fire('error');
@@ -488,7 +335,7 @@ describe('stream playback', () => {
 		const view = albumView();
 		playback.start(view, fetchStream);
 
-		playback.toggle(view.tracks[1]);
+		playback.toggle(tracksOf(view)[1]);
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 
 		expect(fakeAudio.src).toBe('/shared-stream.mp3');
@@ -538,7 +385,7 @@ describe('stream playback', () => {
 		const view = albumView();
 		playback.start(view, fetchStream);
 
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		await vi.waitFor(() => expect(audioPlayer.current?.songId).toBe('s1'));
 
 		expect(audioPlayer.mode).toBe('classic');
@@ -552,7 +399,7 @@ describe('stream playback', () => {
 		const view = albumView();
 		playback.start(view, fetchStream);
 
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		playback.jump(1);
 		await vi.waitFor(() => expect(playback.currentTrack?.key).toBe('s2'));
@@ -571,7 +418,7 @@ describe('stream playback', () => {
 		const view = albumView();
 		playback.start(view, fetchStream);
 
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
 		fakeAudio.currentTime = 4;
@@ -618,7 +465,7 @@ describe('a track still waiting on its stream when the share gives the player ba
 		const playback = new SharePlayback();
 		const view = albumView();
 		playback.start(view, held.fetchStream);
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		await vi.waitFor(() => expect(held.fetchStream).toHaveBeenCalled());
 
 		playback.stop();
@@ -679,7 +526,7 @@ describe('a track still waiting on its stream when the share gives the player ba
 			const playback = new SharePlayback();
 			const shareA = albumView('share-a');
 			playback.start(shareA, held.fetchStream);
-			playback.toggle(shareA.tracks[0]);
+			playback.toggle(tracksOf(shareA)[0]);
 			await vi.waitFor(() => expect(held.fetchStream).toHaveBeenCalled());
 			playback.stop();
 			const fetchStreamB = startShareB(playback);
@@ -700,7 +547,7 @@ describe('a track still waiting on its stream when the share gives the player ba
 		const playback = new SharePlayback();
 		const shareA = albumView('share-a');
 		playback.start(shareA, fetchStreamA);
-		playback.toggle(shareA.tracks[0]);
+		playback.toggle(tracksOf(shareA)[0]);
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
 		fakeAudio.currentTime = 4;
@@ -726,7 +573,7 @@ describe('shuffle', () => {
 		const view = albumView();
 		playback.start(view, fetchStream);
 
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 
 		playback.setShuffle(true);
@@ -745,7 +592,7 @@ describe('shuffle', () => {
 		const view = albumView();
 		playback.start(view, fetchStream);
 
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 
 		playback.setShuffle(true);
@@ -766,7 +613,7 @@ describe('stop()', () => {
 		const playback = new SharePlayback();
 		const view = albumView();
 		playback.start(view, null);
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 
 		playback.stop();
 
@@ -802,7 +649,7 @@ describe('the lock screen', () => {
 		const view = albumView();
 		playback.start(view, null);
 
-		playback.toggle(view.tracks[1]);
+		playback.toggle(tracksOf(view)[1]);
 		playback.stop();
 
 		expect(titles.at(-2)).toBe('Second');
@@ -826,7 +673,7 @@ describe('the lock screen', () => {
 		const playback = new SharePlayback();
 		const view = albumView();
 		playback.start(view, null);
-		playback.toggle(view.tracks[0]);
+		playback.toggle(tracksOf(view)[0]);
 		audioPlayer.swapCallbacks(NO_CALLBACKS);
 		const written = titles.length;
 

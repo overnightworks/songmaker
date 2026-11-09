@@ -81,8 +81,7 @@ function serverRunsUntilCancelled(extra: Partial<CoverSuggestionsResponse> = {})
 	fetchAlbumCoverSuggestions.mockImplementation(async () =>
 		coverSuggestions({
 			...extra,
-			job: coverJob({ status: cancelJob.mock.calls.length > 0 ? 'cancelled' : 'running' }),
-			used_today: 1
+			job: coverJob({ status: cancelJob.mock.calls.length > 0 ? 'cancelled' : 'running' })
 		})
 	);
 }
@@ -268,7 +267,7 @@ describe('Leaving the album cover editor', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
 		);
-		expect(countLine(target)).toBe('9 of 10 left today');
+		expect(countLine(target)).toBe('');
 	});
 
 	it.each([
