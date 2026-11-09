@@ -56,7 +56,7 @@ test('the sign-in start sends the browser to the issuer with a pending login tha
 	expect(pendingLogin?.value, 'the start leaves a pending-login cookie').toMatch(/samesite=lax/i);
 });
 
-// The words appkit's SignInPage shows; the kit exports none.
+// The words the design kit's SignInPage shows; the kit exports none.
 const SIGNED_OUT_HEADING = 'You are logged out.';
 const LOG_IN_LABEL = 'Log in';
 const LOG_OUT_LABEL = 'Log out';

@@ -2,7 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { APP_NAME } from '#lib/constants/app.ts';
 	import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
-	import { LegalLinks } from 'overnightworks-appkit';
+	import { LegalLinks } from 'overnightworks-design';
 	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 </script>
 
