@@ -1,0 +1,7 @@
+claim_id = "4237584df6054437860ec8902e789d6f"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "d0bab439147c961f7ba4bc4f99bb72d51ad24c43"
+branch = "claude/issue-2883-song-phone-clock"
+scope = ["frontend/e2e/song-phone.spec.ts"]
+opened_commit = "66b4877a348e7d2b228691f2c4f3f2a4344b5113"
