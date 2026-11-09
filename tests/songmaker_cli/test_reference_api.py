@@ -11,6 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import InstrumentedAttribute
 from support import reference_api_world
 from support.reference_api_world import (
     AUDIO_BYTES,
@@ -43,6 +45,7 @@ from songmaker_cli.db.models import (
     Base,
     Generation,
     ReferenceRecording,
+    Song,
     Version,
 )
 from songmaker_cli.db.queries.reference_recordings import (
@@ -601,7 +604,7 @@ LINK_ARRANGEMENTS = {
     "column", REFERENCE_LINK_COLUMNS, ids=lambda column: column.class_.__tablename__,
 )
 def test_a_reference_linked_through_each_link_column_is_found_as_a_use(
-    signed_in: TestClient, column,
+    signed_in: TestClient, column: InstrumentedAttribute,
 ) -> None:
     assert column in LINK_ARRANGEMENTS, f"{column} has no arrangement"
     via, uses_field = LINK_ARRANGEMENTS[column]
@@ -610,7 +613,8 @@ def test_a_reference_linked_through_each_link_column_is_found_as_a_use(
 
     with signed_in.app.state.ctx.db() as session:
         uses = getattr(reference_uses(session, reference_id), uses_field)
-        linked = linked_reference_ids(session, ["song-link"])
+        song_id = session.scalars(select(Song.id)).one()
+        linked = linked_reference_ids(session, [song_id])
 
     assert len(uses) == 1
     assert linked == {reference_id}
