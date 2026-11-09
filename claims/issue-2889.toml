@@ -1,7 +1,0 @@
-claim_id = "38d600b8910e4d31a2d532e23b6e16c4"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "24bf51c480a703f00bdcf403006e28e521a65029"
-branch = "claude/issue-2889-trust-model-docs"
-scope = ["docs/security.md"]
-opened_commit = "d2e08043234ba5ff4f372bb571542a3d2be30dba"
