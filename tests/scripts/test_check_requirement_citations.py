@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -16,6 +17,7 @@ OTHER_PAGE = Path("docs/sharing.md")
 TEST_FILE = Path("tests/test_library.py")
 # Built at run time so this file cites no requirement itself.
 DEFINED_ID = "-".join(("REQ", "LIB", "01"))
+OTHER_DEFINED_ID = "-".join(("REQ", "LIB", "02"))
 UNDEFINED_ID = "-".join(("REQ", "LIB", "99"))
 
 
@@ -71,3 +73,21 @@ def test_mention_in_page_body_defines_nothing() -> None:
     problems = checker.find_problems({PAGE: f"See {DEFINED_ID} for details.\n"}, {})
 
     assert problems == []
+
+
+def test_run_reports_requirement_and_citation_counts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/library.md").write_text(
+        _heading(DEFINED_ID) + _heading(OTHER_DEFINED_ID), encoding="utf-8"
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_library.py").write_text(
+        f"{DEFINED_ID}\n{DEFINED_ID}\n{OTHER_DEFINED_ID}\n", encoding="utf-8"
+    )
+
+    exit_code = checker.run(tmp_path)
+
+    requirement_count, citation_count = map(int, re.findall(r"\d+", capsys.readouterr().out))
+    assert (exit_code, requirement_count, citation_count) == (0, 2, 3)

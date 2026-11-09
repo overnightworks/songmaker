@@ -103,6 +103,9 @@ jobs:
       - name: CI and compose pin the same Postgres image
         run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py
 
+      - name: Every requirement is cited by a test
+        run: uv run --no-sync --frozen --no-build python scripts/check_requirement_citations.py
+
       - name: Check TypeScript types in sync
         run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
 
