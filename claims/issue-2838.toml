@@ -1,8 +1,0 @@
-claim_id = "03f87fd809e2477e85bc647e059b16f6"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6103f67baa2c1ac31caed89cebc649b181ee8593"
-branch = "claude/issue-2838-s24-training-estimate-purge-guard"
-scope = [".github/workflows/ci.yml", "src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/db/queries/songs.py", "tests/songmaker_cli/test_api_models_jobs.py"]
-opened_commit = "cf664e6cf494559ddf73ed7962ad6bd750672c04"
-whole_reason = "One coverage cut: the deletion, the cells and the floor follow from the same trace."
