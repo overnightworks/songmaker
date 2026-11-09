@@ -15,8 +15,7 @@ def test_a_timeout_error_the_stream_app_raised_itself_propagates():
     middleware = ResourceStreamDeadlineMiddleware(failing_app, deadline_seconds=60)
     scope = {"type": "http", "path": RESOURCE_EVENT_STREAM_PATH}
 
-    async def drive():
-        await middleware(scope, None, None)
+    exchange = middleware(scope, None, None)
 
     with pytest.raises(TimeoutError, match="upstream gave up"):
-        asyncio.run(drive())
+        asyncio.run(exchange)
