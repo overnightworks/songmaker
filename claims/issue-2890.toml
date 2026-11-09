@@ -1,0 +1,8 @@
+claim_id = "0d75ad37072349baa63fad814b97769f"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "24bf51c480a703f00bdcf403006e28e521a65029"
+branch = "claude/issue-2890-backup-required-files"
+scope = ["docs/architecture.md", "src/songmaker_cli/db/migrations/versions", "tests/songmaker_cli/db/test_backup_required_files.py"]
+opened_commit = "dc39b0fecb94d11ef6530d5176f3bd6e9f7b2b08"
+whole_reason = "One view, created by its one migration and proven by its one test module; the migration directory is named because the revision id is generated at the build."
