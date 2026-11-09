@@ -43,6 +43,7 @@ describe('versions recovery', () => {
 	beforeEach(() => {
 		vi.spyOn(api, 'fetchVersions').mockResolvedValue([]);
 		discardDraft();
+		retireVersionLoadUndo();
 		selectedSongId.set('s1');
 		toasts.set([]);
 		versions.set([]);
@@ -196,7 +197,6 @@ describe('versions recovery', () => {
 
 	it('closing Versions with nothing loaded offers no undo', () => {
 		loadSongData(makeSong({ id: 's1' }));
-		retireVersionLoadUndo();
 
 		offerSetAsideVersionLoadUndoAgain();
 
