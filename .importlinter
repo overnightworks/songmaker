@@ -118,6 +118,3 @@ ignore_imports =
     songmaker_cli.agent.tools -> agent_runtime_client
     songmaker_cli.cowriter.tools -> agent_runtime_client
     songmaker_cli.conversation_api -> agent_runtime_client
-    songmaker_cli.album_api -> agent_runtime_client
-    songmaker_cli.generation_api -> agent_runtime_client
-    songmaker_cli.song_api -> agent_runtime_client

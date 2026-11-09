@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Final
 
-from agent_runtime_client.tools import ToolEffect, agent_tool
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,
@@ -336,8 +336,15 @@ def api_delete_song(
     return StatusResponse()
 
 
+_RESTORE_SONG_DESCRIPTION = (
+    "Bring one of the person's own deleted songs back, within the restore window."
+)
+
+
 @router.post(
     "/songs/{song_id}/restore",
+    description=_RESTORE_SONG_DESCRIPTION,
+    openapi_extra=agent_tool(name="restore_song", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": SONG_NOT_FOUND_DETAIL},
         410: {"description": "Song restore window has expired"},
@@ -485,7 +492,16 @@ def api_unshare_song(
     return StatusResponse()
 
 
-@router.get("/songs/{song_id}/versions")
+_LIST_SONG_VERSIONS_DESCRIPTION = (
+    "List the versions of one of the person's own songs with lyrics and style prompt."
+)
+
+
+@router.get(
+    "/songs/{song_id}/versions",
+    description=_LIST_SONG_VERSIONS_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_song_versions", effect=ToolEffect.READ_ONLY),
+)
 def api_song_versions(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),

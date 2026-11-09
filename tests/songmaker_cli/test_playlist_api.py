@@ -221,7 +221,7 @@ def test_list_playlists_collects_distinct_album_covers_in_entry_order_without_n_
         response = next(item for item in playlists if item.id == playlist.id)
         from songmaker_cli.api_models.playlists import PlaylistResponse
 
-        playlist_response = PlaylistResponse.from_orm(response)
+        playlist_response = PlaylistResponse.from_orm(response, reaches=lambda _: True)
     finally:
         event.remove(engine, "before_cursor_execute", handle)
 
@@ -250,7 +250,7 @@ def test_playlist_response_reports_own_cover_beside_album_cover_mosaic(
     assert loaded is not None
     from songmaker_cli.api_models.playlists import PlaylistResponse
 
-    response = PlaylistResponse.from_orm(loaded)
+    response = PlaylistResponse.from_orm(loaded, reaches=lambda _: True)
     assert response.cover is not None
     assert response.cover.card == "/api/playlists/{}/cover?variant=card&v=playlist.png".format(
         playlist.id,
@@ -289,7 +289,7 @@ def test_playlist_response_omits_coverless_albums_and_limits_covers_to_four(
     assert loaded is not None
     from songmaker_cli.api_models.playlists import PlaylistResponse
 
-    album_covers = PlaylistResponse.from_orm(loaded).album_covers
+    album_covers = PlaylistResponse.from_orm(loaded, reaches=lambda _: True).album_covers
     assert [cover.card for cover in album_covers] == [
         "/api/albums/cover-album-0/cover?variant=card&v=cover-0.png",
         "/api/albums/cover-album-2/cover?variant=card&v=cover-2.png",
@@ -1096,6 +1096,6 @@ def test_playlist_response_logs_warning_when_entries_is_none(
         created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
     with caplog.at_level("WARNING", logger="songmaker_cli.api_models.playlists"):
-        resp = PlaylistResponse.from_orm(fake_playlist)
+        resp = PlaylistResponse.from_orm(fake_playlist, reaches=lambda _: True)
     assert resp.entry_count == 0
     assert any("entries=None" in r.message for r in caplog.records)

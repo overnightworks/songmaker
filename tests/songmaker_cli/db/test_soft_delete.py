@@ -392,7 +392,7 @@ def test_playlist_entries_filtered_when_song_soft_deleted(seeded: Session) -> No
 
     from songmaker_cli.api_models.playlists import PlaylistDetailResponse
     loaded = get_playlist(seeded, pl.id)
-    resp = PlaylistDetailResponse.from_orm(loaded)
+    resp = PlaylistDetailResponse.from_orm(loaded, reaches=lambda _: True)
     assert resp.entry_count == 1
     assert len(resp.entries) == 1
     assert resp.entries[0].song_title == "Song2"

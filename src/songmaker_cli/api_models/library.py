@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from songmaker_cli.api_models.playlists import playlist_mosaic_covers, uploaded_playlist_cover
+from songmaker_cli.api_models.playlists import (
+    AlbumReach,
+    playlist_mosaic_covers,
+    uploaded_playlist_cover,
+)
 from songmaker_cli.api_models.songs import (
     AlbumCoverUrls,
     AlbumResponse,
@@ -148,7 +152,7 @@ class LibraryListenItem(BaseModel):
     played_at: str
 
     @classmethod
-    def from_orm(cls, listen: PlaceListen) -> LibraryListenItem:
+    def from_orm(cls, listen: PlaceListen, *, reaches: AlbumReach) -> LibraryListenItem:
         from songmaker_cli.db.models import Album as AlbumModel
 
         place = listen.place
@@ -157,7 +161,7 @@ class LibraryListenItem(BaseModel):
             album_covers: list[AlbumCoverUrls] = []
         else:
             cover = uploaded_playlist_cover(place)
-            album_covers = playlist_mosaic_covers(place)
+            album_covers = playlist_mosaic_covers(place, reaches=reaches)
         song = listen.song
         return cls(
             type=listen.place_type,
@@ -177,8 +181,12 @@ class LibraryListenResponse(BaseModel):
     items: list[LibraryListenItem]
 
     @classmethod
-    def from_orm(cls, listens: list[PlaceListen]) -> LibraryListenResponse:
-        return cls(items=[LibraryListenItem.from_orm(listen) for listen in listens])
+    def from_orm(
+        cls, listens: list[PlaceListen], *, reaches: AlbumReach,
+    ) -> LibraryListenResponse:
+        return cls(
+            items=[LibraryListenItem.from_orm(listen, reaches=reaches) for listen in listens],
+        )
 
 
 class LibraryWriteItem(BaseModel):

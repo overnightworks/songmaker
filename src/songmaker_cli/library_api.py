@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import (
+    can_access_album,
     owner_filter,
     parse_required_search_query,
 )
@@ -59,7 +61,16 @@ LISTEN_MAX_OFFSET: Final[int] = 100_000
 WRITE_SONGS: Final[int] = 3
 
 
-@router.get("/library/listen")
+_GET_LIBRARY_LISTEN_DESCRIPTION = (
+    "Read the person's own library as places to listen to, paged with offset and limit."
+)
+
+
+@router.get(
+    "/library/listen",
+    description=_GET_LIBRARY_LISTEN_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_library_listen", effect=ToolEffect.READ_ONLY),
+)
 def api_library_listen(
     offset: int = Query(0, ge=0, le=LISTEN_MAX_OFFSET),
     limit: int = Query(LISTEN_DEFAULT_PLACES, ge=1, le=PAGE_MAX_LIMIT),
@@ -69,10 +80,21 @@ def api_library_listen(
     listens = list_place_listens(
         session, viewer_id=user.id, owner_id=owner_filter(user), limit=offset + limit,
     )
-    return LibraryListenResponse.from_orm(listens[offset:])
+    return LibraryListenResponse.from_orm(
+        listens[offset:], reaches=lambda album: can_access_album(album, user),
+    )
 
 
-@router.get("/library/write")
+_GET_LIBRARY_WRITE_DESCRIPTION = (
+    "Read the songs the person worked on most recently, to pick up writing again."
+)
+
+
+@router.get(
+    "/library/write",
+    description=_GET_LIBRARY_WRITE_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_library_write", effect=ToolEffect.READ_ONLY),
+)
 def api_library_write(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
@@ -83,8 +105,15 @@ def api_library_write(
     return LibraryWriteResponse.from_orm(worked_songs)
 
 
+_SEARCH_LIBRARY_DESCRIPTION = (
+    "Search the person's own library by a text q and sort; page on with the returned cursor."
+)
+
+
 @router.get(
     "/library/search",
+    description=_SEARCH_LIBRARY_DESCRIPTION,
+    openapi_extra=agent_tool(name="search_library", effect=ToolEffect.READ_ONLY),
     responses={422: {"description": "Search cursor is invalid or does not match the query"}},
 )
 def api_library_search(
@@ -139,7 +168,17 @@ def api_library_search(
     )
 
 
-@router.get("/library/pool-queue")
+_GET_LIBRARY_POOL_QUEUE_DESCRIPTION = (
+    "Read a queue of the person's takes from a pool, optionally shuffled or starting at one "
+    "take. Changes nothing."
+)
+
+
+@router.get(
+    "/library/pool-queue",
+    description=_GET_LIBRARY_POOL_QUEUE_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_library_pool_queue", effect=ToolEffect.READ_ONLY),
+)
 def api_library_pool_queue(
     request: Request,
     pool: LibraryTakePool = Query(DEFAULT_LIBRARY_TAKE_POOL),

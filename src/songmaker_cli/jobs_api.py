@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from webauth.admission import AppRole
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.api_models import JobResponse
 from songmaker_cli.app_context import AppContext, get_db_session
@@ -35,7 +36,12 @@ from songmaker_cli.db.queries.jobs import (
     get_queue_position,
     update_job_status,
 )
-from songmaker_cli.job_types import JOB_ACTIVE_STATUSES, JOB_TERMINAL_STATUSES, JobStatus
+from songmaker_cli.job_types import (
+    JOB_ACTIVE_STATUSES,
+    JOB_TERMINAL_STATUSES,
+    JobStatus,
+    JobType,
+)
 from songmaker_cli.jobs.generation_failure import musician_job_response
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
 from songmaker_cli.settings import get_settings
@@ -67,8 +73,16 @@ JOB_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Job stream limiter unavailable"
 # enforce_rate_limit -- see that function's own docstring for why.
 
 
+_GET_JOB_DESCRIPTION = (
+    "Read the state of one of the person's own jobs: status, queue position and error if it "
+    "failed."
+)
+
+
 @router.get(
     "/jobs/{job_id}",
+    description=_GET_JOB_DESCRIPTION,
+    openapi_extra=agent_tool(name="get_job", effect=ToolEffect.READ_ONLY),
     responses={404: {"description": "Job does not exist"}},
 )
 def api_get_job(
@@ -255,8 +269,13 @@ async def _leased_job_event_generator(
         release_lease_in_background(limiter, user_id, lease_token, subject="Job stream")
 
 
+_CANCEL_JOB_DESCRIPTION = "Cancel one of the person's own jobs while it is queued or running."
+
+
 @router.post(
     "/jobs/{job_id}/cancel",
+    description=_CANCEL_JOB_DESCRIPTION,
+    openapi_extra=agent_tool(name="cancel_job", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Job does not exist"},
         409: {"description": "Job is not queued or running"},
@@ -281,10 +300,17 @@ def api_cancel_job(
     return musician_job_response(job)
 
 
+ADMIN_ONLY_JOB_TYPES: Final = frozenset({
+    JobType.LOAD_MODEL_ON_WORKER, JobType.DOWNLOAD_MODEL_ON_WORKER,
+})
+
+
 def _check_job_access(session: Session, job_id: str, user: AuthenticatedUser) -> Job:
     job = get_job(session, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    if user.role != AppRole.ADMIN and job.user_id != user.id:
+    if user.role != AppRole.ADMIN and (
+        job.user_id != user.id or job.type in ADMIN_ONLY_JOB_TYPES
+    ):
         raise HTTPException(404, "Job not found")
     return job

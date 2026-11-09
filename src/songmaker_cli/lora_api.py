@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_helpers import (
     check_lora_access,
     check_lora_sample_access,
@@ -119,8 +120,15 @@ def _reject_if_active_or_deleted(lora) -> None:
         raise HTTPException(409, f"LoRA is {lora.status} — cannot modify during training")
 
 
+_CREATE_LORA_DESCRIPTION = (
+    "Create a LoRA owned by the person, to be filled with samples and trained."
+)
+
+
 @router.post(
     "/loras",
+    description=_CREATE_LORA_DESCRIPTION,
+    openapi_extra=agent_tool(name="create_lora", effect=ToolEffect.SIDE_EFFECTING),
     response_model=UserLoraResponse,
     responses={
         409: {
@@ -160,7 +168,17 @@ def api_create_lora(
     return UserLoraResponse.from_orm(lora)
 
 
-@router.get("/loras")
+_LIST_LORAS_DESCRIPTION = (
+    "List the person's own LoRAs with their status and samples; include_deleted also lists "
+    "removed ones."
+)
+
+
+@router.get(
+    "/loras",
+    description=_LIST_LORAS_DESCRIPTION,
+    openapi_extra=agent_tool(name="list_loras", effect=ToolEffect.READ_ONLY),
+)
 def api_list_loras(
     include_deleted: bool = False,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -217,8 +235,15 @@ def api_delete_lora(
     return StatusResponse()
 
 
+_ADD_LORA_SAMPLE_FROM_TAKE_DESCRIPTION = (
+    "Add one of the person's own takes as a training sample to one of their LoRAs."
+)
+
+
 @router.post(
     "/loras/{lora_id}/samples/from-generation",
+    description=_ADD_LORA_SAMPLE_FROM_TAKE_DESCRIPTION,
+    openapi_extra=agent_tool(name="add_lora_sample_from_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Generation does not exist"},
         409: {"description": "LoRA cannot accept another sample"},
