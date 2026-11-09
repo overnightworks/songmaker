@@ -1,8 +1,0 @@
-claim_id = "883597ca6413490e9df92e771172c1b7"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d23a5d5a0e36548852a0cc6fd911d2c8a86f354b"
-branch = "claude/issue-2780-song-queries-lose-impossible-not-found"
-scope = [".github/workflows/ci.yml", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/mcp_server/tools.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/db/test_soft_delete.py"]
-opened_commit = "83eaaa38ad2c0057f8e660829d9e208c0852d058"
-whole_reason = "One family of guards: the song queries' impossible not-found arms, the handlers only they fed, and the callers of the two parameters that go."
