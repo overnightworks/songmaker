@@ -1,6 +1,7 @@
 """Pydantic models for API requests and responses.
 
-Split by domain, re-exported here for backwards compatibility.
+Split by domain; the package re-exports the domain modules' models so callers import them
+from ``songmaker_cli.api_models``.
 
 The value objects shared with persistence (generation params, Whisper cues)
 are re-exported here because ``scripts/generate_types.py`` reads this module's
