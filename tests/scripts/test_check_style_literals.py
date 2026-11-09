@@ -15,19 +15,19 @@ def gate(tmp_path, capsys):
     source = tmp_path / "frontend/src"
     source.mkdir(parents=True)
     baseline_path = tmp_path / "style-literals.txt"
-    appkit_path = tmp_path / "node_modules/appkit.css"
+    design_path = tmp_path / "node_modules/design.css"
 
-    def run(files, *, baseline="", update=False, appkit=":root { --appkit-gap: 4px; }"):
+    def run(files, *, baseline="", update=False, design_stylesheet=":root { --design-gap: 4px; }"):
         for relative, content in files.items():
             path = source / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
         if baseline is not None:
             baseline_path.write_text(baseline)
-        if appkit is not None:
-            appkit_path.parent.mkdir(parents=True, exist_ok=True)
-            appkit_path.write_text(appkit)
-        status = CHECKER["run"](source, baseline_path, appkit_path, update=update)
+        if design_stylesheet is not None:
+            design_path.parent.mkdir(parents=True, exist_ok=True)
+            design_path.write_text(design_stylesheet)
+        status = CHECKER["run"](source, baseline_path, design_path, update=update)
         output = capsys.readouterr().out
         return status, output, baseline_path.read_text() if baseline_path.exists() else None
 
@@ -83,7 +83,7 @@ def test_vocabulary_font_scale_passes(gate, pixels, unit):
 )
 def test_tokens_resets_and_non_color_hashes_pass(gate, text):
     tokens = ":root { --text: 0; --radius: 0; --font-12: 0; --shadow: 0; --a: 0; --b: 0; }"
-    assert gate({"styles.css": text}, appkit=tokens)[0] == 0
+    assert gate({"styles.css": text}, design_stylesheet=tokens)[0] == 0
 
 
 @pytest.mark.parametrize(
@@ -277,11 +277,11 @@ def test_gate_takes_no_path_from_the_command_line(monkeypatch):
          "a.css": "p { margin: var(--gap); }"},
         {"card.ts": "const GAP_VAR = '--gap';\nnode.style.setProperty(GAP_VAR, '1px');",
          "a.css": "p { margin: var(--gap); }"},
-        {"a.css": "p { margin: var(--appkit-gap); }"},
-        {"a.css": "p { margin: var( --appkit-gap , 0); }"},
+        {"a.css": "p { margin: var(--design-gap); }"},
+        {"a.css": "p { margin: var( --design-gap , 0); }"},
     ],
     ids=["app.css", "component css", "inline style", "style directive", "setProperty single",
-         "setProperty double", "named constant", "appkit", "appkit spaced"],
+         "setProperty double", "named constant", "design token", "design token spaced"],
 )
 def test_use_of_a_declared_token_passes(gate, files):
     status, output, _ = gate(files)
@@ -316,8 +316,8 @@ def test_declaration_in_a_test_file_does_not_define_a_token(gate):
     assert "card.css:1 --ghost" in output
 
 
-def test_missing_appkit_stylesheet_fails_naming_its_path(gate, tmp_path):
-    status, output, _ = gate({"card.css": ""}, appkit=None)
+def test_missing_design_stylesheet_fails_naming_its_path(gate, tmp_path):
+    status, output, _ = gate({"card.css": ""}, design_stylesheet=None)
     assert status == 1
-    assert f"Missing {tmp_path / 'node_modules/appkit.css'}" in output
+    assert f"Missing {tmp_path / 'node_modules/design.css'}" in output
     assert "pnpm install" in output
