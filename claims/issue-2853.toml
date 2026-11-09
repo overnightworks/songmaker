@@ -1,8 +1,0 @@
-claim_id = "de48f4b493c24700a7df55dc6d037bc0"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "984cc2bd626e27febf28191c33e105a52a487a7d"
-branch = "claude/issue-2853-e2e-coverage-pilot"
-scope = [".github/workflows/e2e.yml", "Dockerfile", "docker/docker-compose.ci.yml", "docs/testing.md", "frontend/e2e", "frontend/eslint.config.js", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/vite.config.ts"]
-opened_commit = "446fd2b82a84514276c67e7a6bc1c41148ceef0c"
-whole_reason = "One measurement boundary: the build argument, the fixture every spec imports, the report step and its documentation have no caller without each other."
