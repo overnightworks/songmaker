@@ -7,10 +7,7 @@ import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '#lib/constants/now-playing.ts';
 import { SHARE_NO_AUDIO_NOTICE } from '#lib/constants/share.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
-import {
-	trackPlaybackInfo,
-	type SharedCollectionView
-} from '#lib/share/sharedCollection.ts';
+import { trackPlaybackInfo, type SharedCollectionView } from '#lib/share/sharedCollection.ts';
 
 type SharedTrack = SharedCollectionView['tracks'][number];
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
