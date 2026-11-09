@@ -1,0 +1,8 @@
+claim_id = "875fe4f235f042f1ad22799528d97e58"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "cd3ca765f8432a3dfa1a05b46ee946f85fb1e918"
+branch = "claude/issue-2797-song-models-lose-unreached-arms"
+scope = [".github/workflows/ci.yml", "src/songmaker_cli/api_models/songs.py", "tests/songmaker_cli/test_api_models_songs_validation.py", "tests/songmaker_cli/test_scheduler_worker_http_peer.py"]
+opened_commit = "81fb6e60505a90b15a66ba04539669e9e92e93bb"
+whole_reason = "One coverage slice of two modules: the arms nothing reaches, the cells for the documented ones, and the floor they move."
