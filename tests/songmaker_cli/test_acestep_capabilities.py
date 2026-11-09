@@ -10,7 +10,6 @@ from songmaker_cli.acestep_capabilities import (
     AceStepProfile,
     ParamSupport,
 )
-from songmaker_cli.config import get_model_capabilities
 from songmaker_cli.constants import MODEL_AVAILABLE_MODES
 
 
@@ -86,22 +85,6 @@ def test_lm_params_supported_on_all_variants() -> None:
             assert getattr(profile, field).supported, (
                 f"{mode}.{field} should be supported"
             )
-
-
-def test_get_model_capabilities_adapter_shape() -> None:
-    caps = get_model_capabilities()
-    assert set(caps.keys()) == MODEL_AVAILABLE_MODES
-    for mode_caps in caps.values():
-        assert set(mode_caps.keys()) == {"max_inference_steps", "hidden_params"}
-        assert isinstance(mode_caps["max_inference_steps"], int)
-        assert isinstance(mode_caps["hidden_params"], list)
-
-
-def test_get_model_capabilities_matches_profiles() -> None:
-    caps = get_model_capabilities()
-    for mode, profile in ACESTEP_PROFILES.items():
-        assert caps[mode]["max_inference_steps"] == profile.max_inference_steps()
-        assert caps[mode]["hidden_params"] == profile.hidden_param_names()
 
 
 def test_turbo_overrides_have_distinct_notes() -> None:

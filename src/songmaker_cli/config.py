@@ -11,7 +11,6 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
-from songmaker_cli.acestep_capabilities import ACESTEP_PROFILES
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
 from songmaker_cli.db.queries.settings import get_global_defaults, save_global_defaults
 from songmaker_cli.errors import ValidationError
@@ -121,22 +120,6 @@ _BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {
 
 def get_builtin_defaults() -> dict[str, dict[str, object]]:
     return _BUILTIN_DEFAULTS
-
-
-def get_model_capabilities() -> dict[str, dict[str, object]]:
-    """Derive the legacy capability shape from ACESTEP_PROFILES.
-
-    The wire format kept here matches what settings_api.py and the frontend
-    consume today (max_inference_steps + hidden_params). If we want richer
-    UI later, expose AceStepProfile directly via a new endpoint.
-    """
-    return {
-        mode: {
-            "max_inference_steps": profile.max_inference_steps(),
-            "hidden_params": profile.hidden_param_names(),
-        }
-        for mode, profile in ACESTEP_PROFILES.items()
-    }
 
 
 _MODEL_NAME_TO_MODE: dict[str, str] = {

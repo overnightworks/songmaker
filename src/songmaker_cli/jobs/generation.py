@@ -292,7 +292,6 @@ def _load_song_meta(
 
         meta = SongMeta(
             title=song.title,
-            album=album_name,
             track=str(song.track_number),
             prompt=version.prompt,
             lyrics=version.lyrics,

@@ -71,7 +71,6 @@ def _write_output(
         "artist": album_meta.artist,
         "album": album_meta.title,
         "track": meta.track,
-        "genre": meta.genre,
         "lyrics": meta.lyrics,
         "comment": f"seed={seed}",
     }

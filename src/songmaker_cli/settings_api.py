@@ -236,24 +236,24 @@ def api_set_default_preset(
 
 
 def _build_model_response(model) -> AvailableModelResponse:
+    from songmaker_cli.acestep_capabilities import ACESTEP_PROFILES
     from songmaker_cli.api_models.settings import ModelCapabilities
-    from songmaker_cli.config import get_builtin_defaults, get_model_capabilities
+    from songmaker_cli.config import get_builtin_defaults
 
     builtin_defaults = get_builtin_defaults()
-    capabilities_table = get_model_capabilities()
-    if model.id not in builtin_defaults or model.id not in capabilities_table:
+    if model.id not in builtin_defaults or model.id not in ACESTEP_PROFILES:
         msg = (
             f"Model '{model.id}' is registered in the database but missing "
-            f"from get_builtin_defaults()/get_model_capabilities(). "
+            f"from get_builtin_defaults()/ACESTEP_PROFILES. "
             f"Add it to _BUILTIN_DEFAULTS and ACESTEP_PROFILES, or remove the "
             f"row from available_models."
         )
         raise RuntimeError(msg)
-    caps = capabilities_table[model.id]
+    profile = ACESTEP_PROFILES[model.id]
     capabilities = ModelCapabilities(
         defaults=builtin_defaults[model.id],
-        max_inference_steps=caps["max_inference_steps"],
-        hidden_params=caps["hidden_params"],
+        max_inference_steps=profile.max_inference_steps(),
+        hidden_params=profile.hidden_param_names(),
     )
     return AvailableModelResponse(
         id=model.id, is_active=model.is_active, capabilities=capabilities,

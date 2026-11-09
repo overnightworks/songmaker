@@ -48,7 +48,7 @@
 "frontend/src/routes/layout.test.ts" = 1401
 "frontend/src/routes/settings/users/+page.svelte" = 936
 "src/acestep_worker/wrapper.py" = 1073
-"src/songmaker_cli/jobs/generation.py" = 1136
+"src/songmaker_cli/jobs/generation.py" = 1135
 "src/songmaker_cli/jobs/lora_training.py" = 1511
 "src/songmaker_cli/queue_streams.py" = 919
 "tests/acestep_engine/test_client.py" = 818
