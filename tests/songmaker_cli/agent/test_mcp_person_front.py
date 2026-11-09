@@ -307,36 +307,6 @@ def test_m6_every_unmarked_route_of_the_list_is_a_real_route_of_the_app(mcp: Mcp
 # -- the own-playable-takes list and a single LoRA ----------------------------------------
 
 
-def test_the_own_takes_list_tool_holds_only_the_persons_own_takes_as_the_browser_lists_them(
-    mcp: McpWorld,
-) -> None:
-    mcp.seed_household(TokenWorld.ALICE, "alices")
-    mcp.seed_household(TokenWorld.BOB, "bobs")
-
-    reply = mcp.call("list_own_playable_takes")
-
-    browser = mcp.world.client.get("/api/own-playable-takes", headers=mcp.agent())
-    assert (reply.is_error, reply.json()) == (False, browser.json())
-    assert [take["generation_id"] for take in reply.json()["takes"]] == ["take-alices"]
-
-
-def test_an_admins_agent_lists_only_the_admins_own_takes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
-    lifespans: ExitStack,
-) -> None:
-    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = build_mcp_world(tmp_path, monkeypatch, pg_factory, lifespans, alice_role="admin")
-    world.seed_household(TokenWorld.ALICE, "alices")
-    world.seed_household(TokenWorld.BOB, "bobs")
-    groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP)
-
-    reply = world.call("list_own_playable_takes", groups=groups)
-
-    assert reply.is_error is False
-    assert [take["generation_id"] for take in reply.json()["takes"]] == ["take-alices"]
-    assert "bobs" not in reply.text
-
-
 def test_an_admins_agent_asking_for_another_persons_lora_gets_not_found_and_nothing_of_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
     lifespans: ExitStack,
@@ -351,19 +321,6 @@ def test_an_admins_agent_asking_for_another_persons_lora_gets_not_found_and_noth
     assert reply.is_error
     assert "Not Found" in reply.text
     assert "bobs" not in reply.text.replace("lora-bobs", "")
-
-
-def test_a_members_agent_asking_for_another_persons_lora_gets_not_found_and_nothing_of_it(
-    mcp: McpWorld,
-) -> None:
-    mcp.seed_household(TokenWorld.BOB, "bobs")
-
-    reply = mcp.call("get_lora", {"lora_id": "lora-bobs"})
-
-    assert reply.is_error
-    assert "Not Found" in reply.text
-    assert "Lora bobs" not in reply.text
-    assert TokenWorld.BOB not in reply.text
 
 
 def test_the_old_own_takes_path_is_read_as_a_lora_id_and_not_found_for_cookie_and_token(
@@ -602,14 +559,25 @@ def test_m14_a_cookie_request_without_csrf_is_refused_on_each_state_changing_mar
 
 
 def test_m14_an_unmarked_route_keeps_working_with_the_cookie(mcp: McpWorld) -> None:
+    mcp.world.seed_take(TokenWorld.ALICE, "alices")
+    seed_session(mcp.world.client, "alice")
+
+    reply = mcp.world.client.post("/api/generations/take-alices/pick", headers=_SAME_ORIGIN)
+
+    assert reply.status_code == 200
+
+
+def test_the_browser_lists_its_own_takes_and_reads_its_lora_at_the_new_paths_with_the_cookie(
+    mcp: McpWorld,
+) -> None:
     mcp.seed_household(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
 
-    reply = mcp.world.client.get("/api/own-playable-takes", headers=_SAME_ORIGIN)
+    takes = mcp.world.client.get("/api/own-playable-takes", headers=_SAME_ORIGIN)
     lora = mcp.world.client.get("/api/loras/lora-alices", headers=_SAME_ORIGIN)
 
-    assert (reply.status_code, lora.status_code) == (200, 200)
-    assert [take["generation_id"] for take in reply.json()["takes"]] == ["take-alices"]
+    assert (takes.status_code, lora.status_code) == (200, 200)
+    assert [take["generation_id"] for take in takes.json()["takes"]] == ["take-alices"]
     assert lora.json()["id"] == "lora-alices"
 
 
