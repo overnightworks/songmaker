@@ -11,6 +11,7 @@ function taggedOnlyIn(shell: Shell): RegExp {
 
 export default defineConfig({
 	testDir: './e2e',
+	testIgnore: '**/*.test.ts',
 	globalSetup: './e2e/global-setup.ts',
 	// One stack, one IP rate-limit window, one seeded library: running the two
 	// shells back to back keeps the run's request cost additive and measurable
