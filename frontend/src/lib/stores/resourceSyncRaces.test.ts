@@ -1,5 +1,5 @@
 import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
-import { deferred } from '#lib/test-utils/album-cover-editor.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writable } from 'svelte/store';
 

@@ -21,7 +21,6 @@ import {
 	coverJob,
 	coverSuggestions,
 	coveredAlbum,
-	deferred,
 	editingClosed,
 	openCoverEditing,
 	pressEditorButton,
@@ -29,6 +28,7 @@ import {
 	shownImage,
 	uploadCoverFile
 } from '#lib/test-utils/album-cover-editor.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 import { createComponentMount, requireElement } from './shell/rail-test-fixtures';
 
 const fetchAlbumCoverSuggestions = vi.fn();

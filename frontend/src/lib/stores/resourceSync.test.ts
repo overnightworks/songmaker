@@ -1,5 +1,6 @@
 import { documentLoadsStandIn } from '#lib/test-utils/document-loads.ts';
 import { makeGeneration as gen, makeSong as song } from '#lib/test-utils/factories.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
@@ -122,16 +123,6 @@ function created(
 		generation_id: generationId,
 		created_at: '2026-01-01T00:00:00+00:00'
 	};
-}
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
 }
 
 async function flush(): Promise<void> {

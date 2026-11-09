@@ -32,7 +32,7 @@ import { reportResourceStreamReachable, resetConnectivityForTests } from './conn
 import { toasts } from './toast';
 import type { JobStatus } from '#lib/api/client.ts';
 import { ApiError } from '#lib/api/fetch.ts';
-import { deferred } from '#lib/test-utils/album-cover-editor.ts';
+import { deferred } from '#lib/test-utils/deferred.ts';
 
 const SAFE_RECONNECT_ADVANCE_MS = SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO);
 
