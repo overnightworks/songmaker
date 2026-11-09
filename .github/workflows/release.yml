@@ -14,7 +14,6 @@ concurrency:
 
 permissions: {}
 
-# The three quality workflows are pinned to one commit of quality's main, because no quality tag carries them yet.
 jobs:
   gate:
     permissions:

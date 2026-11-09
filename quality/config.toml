@@ -159,7 +159,7 @@ reason = "the web client, built apart from the Python package"
 
 [[root.allow]]
 entry = "legal/"
-reason = "the privacy notice and terms of use pages the app serves"
+reason = "the app's own section of the central privacy notice and terms of use, which the central legal pages read from git"
 
 [[root.allow]]
 entry = "monitoring/"
