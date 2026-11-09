@@ -400,6 +400,7 @@ export class ResourceSyncController {
 		}
 		this.advanceSequence(created.sequence);
 		this.rememberEventId(event);
+		// A replayed event returns here, so it is neither buffered nor flushed.
 		if (this.seenGenerationIds.has(created.generation_id)) return;
 		if (!this.canFlush()) {
 			if (this.isAfterWatermark(created.sequence)) this.buffer.push(created);
@@ -623,7 +624,6 @@ export class ResourceSyncController {
 		const leftover: GenerationCreatedResourceEvent[] = [];
 		const loaded = new Set(this.deps.listLoadedSongIds());
 		for (const event of this.deferred) {
-			if (this.seenGenerationIds.has(event.generation_id)) continue;
 			if (!loaded.has(event.resource_id)) {
 				leftover.push(event);
 				continue;
@@ -646,7 +646,7 @@ export class ResourceSyncController {
 		if (!force && !this.canFlush()) return;
 		if (this.flushing !== null) {
 			await this.flushing;
-			if (!this.isCurrentEpoch(epoch) || this.pendingSongIds.size === 0) return;
+			if (!this.isCurrentEpoch(epoch)) return;
 		}
 		const run = this.drainPending(epoch);
 		this.flushing = run;
