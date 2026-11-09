@@ -1,7 +1,0 @@
-claim_id = "52a5f6d60d5b48a0b9392c719c807dec"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "7ddef05b1a95fa54ac48e60b9b0a51082c839b23"
-branch = "claude/issue-2871-agents-rules"
-scope = ["AGENTS.md", "src/songmaker_cli/audio_api.py"]
-opened_commit = "4b15ce2db5314bd78871188110b39675533fab05"
