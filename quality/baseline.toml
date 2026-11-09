@@ -11,9 +11,9 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1230
+"frontend/e2e/back-closes-overlay.spec.ts" = 1229
 "frontend/e2e/helpers.ts" = 827
-"frontend/e2e/library.spec.ts" = 1286
+"frontend/e2e/library.spec.ts" = 1283
 "frontend/e2e/offline.spec.ts" = 804
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-phone.spec.ts" = 860
@@ -24,12 +24,12 @@
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1825
 "frontend/src/lib/components/LibraryWall.test.ts" = 1137
 "frontend/src/lib/components/LoraDetail.svelte" = 968
-"frontend/src/lib/components/NowPlaying.test.ts" = 1097
+"frontend/src/lib/components/NowPlaying.test.ts" = 1092
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1101
 "frontend/src/lib/components/PlayerBar.test.ts" = 1621
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 780
 "frontend/src/lib/components/SongDetailView.svelte" = 1020
-"frontend/src/lib/components/SongDetailView.test.ts" = 2263
+"frontend/src/lib/components/SongDetailView.test.ts" = 2247
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1303
 "frontend/src/lib/history/historyController.test.ts" = 906

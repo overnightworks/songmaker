@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { AlbumItem, PaginatedResponse, SongItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
 import {
 	reportResourceStreamReachable,

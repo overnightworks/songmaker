@@ -4,7 +4,6 @@
 // way out say "Pick album takes" and "Done". Both shells walk the flow.
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
-import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants';
 import {
 	COLLECTION_MENU_CURATE_LABEL,
 	COLLECTION_MENU_LABEL
@@ -18,7 +17,9 @@ import {
 	NOW_PLAYING_CURATE_DONE_LABEL,
 	NOW_PLAYING_CURATE_GROUP_LABEL,
 	NOW_PLAYING_QUEUE_TAB,
-	NOW_PLAYING_TAKE_TAB
+	NOW_PLAYING_TAKE_TAB,
+	NOW_PLAYING_LABEL,
+	openNowPlayingLabel
 } from '../src/lib/constants/now-playing';
 import { FlowGuard, ONLY_IN_SHELL, openAlbumFromRail, shellOf, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';

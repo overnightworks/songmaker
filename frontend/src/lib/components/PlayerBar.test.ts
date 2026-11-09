@@ -9,14 +9,8 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '#lib/api/types.ts';
 import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
-import {
-	NOW_PLAYING_LABEL,
-	MINI_PLAYER_WITHOUT_COVER_MEDIA,
-	NOW_PLAYING_SWIPE_RISE_PX,
-	openNowPlayingLabel
-} from '#lib/constants.ts';
 import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
-import { REDUCED_MOTION_MEDIA } from '#lib/constants/media.ts';
+import { REDUCED_MOTION_MEDIA, MINI_PLAYER_WITHOUT_COVER_MEDIA } from '#lib/constants/media.ts';
 import {
 	PLAYER_WAITING_FOR_NETWORK,
 	TRANSPORT_PAUSE_LABEL,
@@ -56,7 +50,13 @@ import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '#lib/con
 import PlayerBar from './PlayerBar.svelte';
 import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
 import { browserReportsOnline } from '#lib/test-utils/network.ts';
-import { nowPlayingFromLabel, nowPlayingTakeLabel } from '#lib/constants/now-playing.ts';
+import {
+	nowPlayingFromLabel,
+	nowPlayingTakeLabel,
+	NOW_PLAYING_LABEL,
+	NOW_PLAYING_SWIPE_RISE_PX,
+	openNowPlayingLabel
+} from '#lib/constants/now-playing.ts';
 
 function playablePlaylistDefaults(): Partial<PlaylistDetailItem> {
 	return {

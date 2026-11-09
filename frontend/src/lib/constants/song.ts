@@ -14,7 +14,7 @@ export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
 export const EDITOR_OPEN_WORKER_POOL_LABEL = 'Open worker pool';
 
 export const EDITOR_GENERATE_CANCEL_LABEL = 'Cancel generation';
-// Offline a running take cannot report anything (#1039 O2): it says so and
+// Offline a running take cannot report anything: it says so and
 // keeps the last progress it saw, instead of a percent and time that stand still.
 export const EDITOR_GENERATE_RECONNECTING_LABEL = 'Reconnecting…';
 export const EDITOR_GENERATE_LAST_SEEN_TEMPLATE = 'last seen at {percent}%';
@@ -36,6 +36,8 @@ export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
 export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
 export const EDITOR_SAVE_FAILED = 'Save failed';
 
+export const SONG_PREVIOUS_LABEL = 'Previous song';
+export const SONG_NEXT_LABEL = 'Next song';
 export const SONG_SHARE_LABEL = 'Share song';
 export const SONG_TITLE_LABEL = 'Song title';
 export const SONG_MENU_LABEL = 'Song menu';

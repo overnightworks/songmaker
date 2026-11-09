@@ -26,7 +26,6 @@
 // Generate saved before it.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
-import { openNowPlayingLabel } from '../src/lib/constants';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_UNSAVED_TITLE,
@@ -67,7 +66,8 @@ import {
 	takeRowLabel,
 	takeVersion,
 	type TakeVersion,
-	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS
+	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
+	openNowPlayingLabel
 } from '../src/lib/constants/now-playing';
 import type { GenerationItem, SongItem, VersionItem } from '../src/lib/api/types';
 import { sameOriginHeaders, nameStartingWith, shellOf, workspace } from './helpers';
