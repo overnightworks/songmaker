@@ -21,7 +21,6 @@ backend _seed_song 2
 backend _settings 2
 backend _stream_events 5
 frontend acceptRequests 3
-frontend albumSong 2
 frontend baseProps 2
 frontend callbacks 2
 frontend coldTabAt 5

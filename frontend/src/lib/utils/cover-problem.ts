@@ -36,15 +36,14 @@ export function coverBusyWaitSeconds(job: JobItem | null, now: number): number {
 
 /**
  * What the latest run's end says on this load. Any failure that is not one of
- * the four reads unavailable; at the daily limit a run from before this visit
- * stays silent beside the limit (#1202).
+ * the four reads unavailable.
  */
 export function coverRunProblem(
 	job: JobItem | null,
-	seen: { followed: boolean; atDailyLimit: boolean },
+	seen: { followed: boolean },
 	now: number
 ): CoverProblem | null {
-	if (job?.status !== 'failed' || (seen.atDailyLimit && !seen.followed)) return null;
+	if (job?.status !== 'failed') return null;
 	const problem = asCoverProblem(job.error_type) ?? 'unavailable';
 	if (problem === 'busy') return coverBusyWaitSeconds(job, now) > 0 ? problem : null;
 	if (PERSONAL_PROBLEMS.has(problem) && !seen.followed) return null;
@@ -53,9 +52,4 @@ export function coverRunProblem(
 
 export function coverProblemClosesSuggest(problem: CoverProblem | null): boolean {
 	return problem !== null && problem !== 'unavailable';
-}
-
-/** Without access there is nothing to spend, so the daily count goes. */
-export function coverProblemHidesCount(problem: CoverProblem | null): boolean {
-	return problem !== null && PERSONAL_PROBLEMS.has(problem);
 }

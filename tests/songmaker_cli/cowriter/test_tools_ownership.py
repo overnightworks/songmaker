@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from agent_runtime_client.backend.fake_gateway import completion, tool_call, tool_round
+from agent_runtime_client.backend.fake_gateway import completion
 from agent_runtime_client.tools import Principal
 from support.cowriter_gateway import attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
@@ -198,38 +198,64 @@ def test_unfiltered_song_listing_still_filters_by_owner(
     assert [song["id"] for song in payload] == ["song-actor"]
 
 
-def test_admin_foreign_context_loads_but_tool_access_is_denied(ownership_factory, tmp_path):
-    """1301-F2-BOUNDARY: user-selected foreign context retains HTTP admin access."""
+def _turn_client(ownership_factory, tmp_path, role):
     with ownership_factory() as session:
-        session.get(User, "actor").role = "admin"
+        session.get(User, "actor").role = role
+        session.add(Song(
+            id="song-actor-second", title="Second track", album_id="album-actor",
+            track_number=2, slug="second",
+        ))
+        session.add(Version(
+            id="version-actor-second", song_id="song-actor-second", version_number=1,
+            lyrics="second words", prompt="folk",
+        ))
         session.commit()
-    user = make_authenticated_user("actor", role="admin")
+    user = make_authenticated_user("actor", role=role)
     app = make_router_app(make_router_ctx(tmp_path, db=ownership_factory), user=user)
     client = web_client(app)
     stack = attach_cowriter_gateway(client, ownership_factory, tmp_path, "actor")
-    stack.replies(
-        tool_round(tool_call("call-1", "get_song", {"song_id": "song-foreign"})),
-        completion("Cannot edit this song"),
-    )
+    stack.replies(completion("Done"))
+    return client, stack
 
-    response = client.post(
-        "/api/chat/turn",
-        json={"message": "edit this", "current_song_id": "song-foreign"},
-    )
+
+@pytest.mark.parametrize("role", ["user", "admin"])
+def test_a_turn_with_the_persons_own_song_mentions_and_take_carries_their_context(
+    ownership_factory, tmp_path, role,
+):
+    client, stack = _turn_client(ownership_factory, tmp_path, role)
+
+    response = client.post("/api/chat/turn", json={
+        "message": "go on",
+        "current_song_id": "song-actor",
+        "mentioned_song_ids": ["song-actor-second"],
+        "mentioned_album_id": "album-actor",
+        "current_generation_id": "generation-actor",
+    })
 
     assert response.status_code == 200
     context = stack.last_turn.messages[-1]["text"]
-    assert "<current_song>" in context
-    assert "Track foreign" in context
-    assert "original" in context
-    frames = [
-        json.loads(line[len("data: "):])
-        for line in response.iter_lines()
-        if line.startswith("data: ")
-    ]
-    result = next(frame for frame in frames if frame["type"] == "tool_result")
-    assert result["is_error"] is True
-    assert result["content"] == "Song not found"
+    assert "Track actor" in context
+    assert "Second track" in context
+    assert "sung words" in context
+    assert "<mentioned_album>" in context
+
+
+@pytest.mark.parametrize("turn", [
+    {"current_song_id": "song-foreign"},
+    {"current_song_id": "song-actor", "mentioned_song_ids": ["song-foreign"]},
+    {"current_song_id": "song-actor", "current_generation_id": "generation-foreign"},
+], ids=["current-song", "mentioned-song", "take"])
+def test_an_admins_turn_with_another_persons_content_answers_404_and_creates_no_job(
+    ownership_factory, tmp_path, turn,
+):
+    client, stack = _turn_client(ownership_factory, tmp_path, "admin")
+
+    response = client.post("/api/chat/turn", json={"message": "edit this", **turn})
+
+    assert response.status_code == 404
+    with ownership_factory() as session:
+        assert session.query(Job).count() == 0
+    assert stack.gateway_requests == []
 
 
 @pytest.mark.parametrize("role", ["user", "admin"])
