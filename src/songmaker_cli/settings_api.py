@@ -462,7 +462,6 @@ def api_set_cowriter_settings(
 def _get_env_defaults() -> dict[str, int]:
     """Snapshot of the per-user rate-limit defaults from Settings."""
     from songmaker_cli.constants import (
-        SETTING_CHAT_RATE_LIMIT,
         SETTING_GENERATION_RATE_LIMIT,
         SETTING_MAX_QUEUE_DEPTH,
         SETTING_MAX_USER_ACTIVE_JOBS,
@@ -472,7 +471,6 @@ def _get_env_defaults() -> dict[str, int]:
     return {
         SETTING_GENERATION_RATE_LIMIT: settings.generation_rate_limit_user,
         SETTING_SCORING_RATE_LIMIT: settings.scoring_rate_limit_user,
-        SETTING_CHAT_RATE_LIMIT: settings.chat_rate_limit_user,
         SETTING_MAX_QUEUE_DEPTH: settings.max_queue_depth,
         SETTING_MAX_USER_ACTIVE_JOBS: settings.max_user_active_jobs,
     }

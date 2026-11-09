@@ -176,11 +176,12 @@ For a cookie no token is involved: the session cookie is `SameSite=Strict` and t
 |-------------|-------------------|----------|
 | Generation   | 30 / hour         | Per user |
 | Scoring      | 100 / hour        | Per user |
-| Chat         | 300 / hour        | Per user |
 | Queue depth  | 100 total         | Global   |
 | Active jobs  | 10 concurrent     | Per user |
 
 Every account has the same limits; the operator sets them globally or per user in settings.
+
+Songmaker sets no limit of its own on how often the co-writer answers. The gateway's per-person and per-app budgets bound the turns; only one turn per person runs at a time (409).
 
 Rate limit checks and job creation are atomic (a transaction-scoped PostgreSQL advisory lock) to prevent TOCTOU races where concurrent requests bypass limits.
 
@@ -256,7 +257,7 @@ Static `_app/` build assets and the static PWA root assets (`/manifest.webmanife
 
 When the request arrives from a peer inside a `TRUSTED_PROXIES` network, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), as every per-IP budget does — see "Proxy trust". Without it every visitor behind the same proxy shares one budget. If Redis is unavailable, the rate limiter fails closed (returns 503 with `Retry-After: 5`) rather than allowing all requests through.
 
-Configure via env vars: `GENERATION_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_USER`, `MAX_QUEUE_DEPTH`, `MAX_USER_ACTIVE_JOBS`, `IP_RATE_LIMIT`, `MEDIA_RATE_LIMIT`, `STREAM_RATE_LIMIT`, `RESOURCE_EVENT_STREAM_OPEN_LIMIT`.
+Configure via env vars: `GENERATION_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_USER`, `MAX_QUEUE_DEPTH`, `MAX_USER_ACTIVE_JOBS`, `IP_RATE_LIMIT`, `MEDIA_RATE_LIMIT`, `STREAM_RATE_LIMIT`, `RESOURCE_EVENT_STREAM_OPEN_LIMIT`.
 
 ### Resource-event streams
 

@@ -177,7 +177,6 @@ def test_default_settings_values() -> None:
     assert settings.session_absolute_max_age_seconds == 60 * 60 * 24 * 30
     assert settings.generation_rate_limit_user == 30
     assert settings.scoring_rate_limit_user == 100
-    assert settings.chat_rate_limit_user == 300
     assert settings.max_queue_depth == 100
     assert settings.max_user_active_jobs == 10
     assert settings.max_concurrent_sessions_per_user == 10
