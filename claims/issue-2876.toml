@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "d0bab439147c961f7ba4bc4f99bb72d51ad24c43"
 branch = "claude/issue-2876-dead-model-fields"
-scope = ["quality/baseline.toml", "src/songmaker_cli/config.py", "src/songmaker_cli/generate.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/parser.py", "src/songmaker_cli/settings_api.py", "tests/songmaker_cli/test_acestep_capabilities.py", "tests/songmaker_cli/test_generate.py", "tests/songmaker_cli/test_generate_cli_helpers.py", "tests/songmaker_cli/test_parser.py"]
+scope = ["quality/baseline.toml", "src/songmaker_cli/config.py", "src/songmaker_cli/generate.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/parser.py", "src/songmaker_cli/settings_api.py", "tests/songmaker_cli/test_acestep_capabilities.py", "tests/songmaker_cli/test_generate.py", "tests/songmaker_cli/test_generate_cli_helpers.py", "tests/songmaker_cli/test_parser.py", "tests/songmaker_cli/test_scoring_scorers.py"]
 opened_commit = "7671424f89db6aec21a4f034962a23adf29ba4cb"
 whole_reason = "Deletion of what only tests reach in one data path, a song's metadata and a model's capabilities, with the tests that pinned it."
