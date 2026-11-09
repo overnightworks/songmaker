@@ -737,6 +737,7 @@ regenerate `types.ts` and run the check. The co-writer stream frames
 songmaker's own exported models; `lib/api` declares no wire shape of its own: ESLint refuses a
 hand-written interface or object type there, and a frontend-only call shape
 carries a line marker with its reason.
+The co-writer's answer arrives in pieces, and the bubble shows the round being written: the first piece after a tool call starts the text anew (`lib/utils/cowriter-stream.ts`), so the words shown at the end are the stored answer.
 
 `lib/api/` is the transport: it reports what the server answered. A 429 goes to
 the `rateLimited` reaction that `routes/+layout.svelte` installs through
