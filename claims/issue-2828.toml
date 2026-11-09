@@ -1,0 +1,7 @@
+claim_id = "0d08e712d6f44b348e65c47ee6a0c9a0"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "ad39eb1396276b23edfe4922612412e1e7298365"
+branch = "claude/issue-2828-s22b-wrapper-hold-cells"
+scope = ["tests/acestep_worker/conftest.py", "tests/acestep_worker/test_wrapper_training_failures.py", "tests/acestep_worker/test_wrapper_training_hold.py"]
+opened_commit = "89b49b085e1acfa4ecfdb2be22d2866f34d3d2fc"
