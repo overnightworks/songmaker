@@ -1,8 +1,0 @@
-claim_id = "5d6a810e68454827b5b1b475fe96f238"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d0bab439147c961f7ba4bc4f99bb72d51ad24c43"
-branch = "claude/issue-2878-s29b-editor"
-scope = ["frontend/src/lib/stores/editor.ts", "frontend/src/lib/stores/editorSave.test.ts", "frontend/src/lib/stores/editorSongData.test.ts", "frontend/src/lib/stores/editorVersionsRecovery.test.ts"]
-opened_commit = "8a37210800cbd4edfe48cd82c424f6bcd9a23d24"
-whole_reason = "One coverage cut from one trace: the guards and the cells of one module."
