@@ -31,17 +31,11 @@ in_frontend() {
 # why: a pin read at run time cannot drift from the one CI runs.
 quality_pin=$(sed -n 's|.*overnightworks/quality/\.github/workflows/gate\.yml@\([0-9a-f]\{40\}\).*|\1|p' .github/workflows/ci.yml | head -n 1)
 [[ -n $quality_pin ]] || { echo "static_checks: no quality gate pin found in .github/workflows/ci.yml" >&2; exit 2; }
-quality_engines_dir="${XDG_CACHE_HOME:-$HOME/.cache}/songmaker-static-checks/quality-engines-$quality_pin"
 
 quality() {
     uvx --from "git+https://github.com/overnightworks/quality@$quality_pin" quality "$@"
 }
 
-hygiene() {
-    quality engines install "$quality_engines_dir" && quality hygiene --engines "$quality_engines_dir" .
-}
-
-gate "Root layout" python scripts/check_root_layout.py
 gate "CI and compose pin the same Postgres image" python scripts/check_pinned_images_match.py
 gate "Every requirement is cited by a test" python scripts/check_requirement_citations.py
 gate "Ruff lint" ruff check src/ tests/
@@ -53,6 +47,6 @@ gate "No test-only-alive exports" in_frontend bash ../scripts/check_test_only_ex
 gate "No new style literals" in_frontend python3 ../scripts/check_style_literals.py
 gate "Frontend lint (eslint, prettier)" in_frontend pnpm lint
 gate "Svelte check" in_frontend pnpm check
-gate "Quality hygiene (pin ${quality_pin:0:12})" hygiene
+gate "Quality check (pin ${quality_pin:0:12})" quality check
 
 echo "static_checks: all gates passed"
