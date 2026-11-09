@@ -1,0 +1,7 @@
+claim_id = "35e557c4d0454ed589cea3bafecd6aaf"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "43a219f9017075a5cdaad7402dbe830cc85942dc"
+branch = "claude/issue-2866-s28b-resource-sync"
+scope = ["frontend/src/lib/stores/resourceSync.ts", "frontend/src/lib/stores/resourceSyncRaces.test.ts", "quality/baseline.toml"]
+opened_commit = "09840a2d3e045e1f44c33061fa185cdc45f5da9a"
