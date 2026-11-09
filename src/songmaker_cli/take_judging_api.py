@@ -79,7 +79,8 @@ def _mark_generation(
 
 _PICK_TAKE_DESCRIPTION = (
     "Pick one of the person's own takes as its song's chosen take. "
-    "The song's previous pick loses its protection from cleanup."
+    "The song's previous pick loses its protection from cleanup. "
+    "On a shared song or album, visitors then hear the new pick."
 )
 
 

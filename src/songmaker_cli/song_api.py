@@ -224,9 +224,10 @@ def api_create_song(
 
 _UPDATE_SONG_DESCRIPTION = (
     "Save lyrics, style prompt, tempo, key, length or reference of one of the person's own songs. "
-    "Fields left out stay as they are. A song with a take makes a new version when the lyrics, "
-    "prompt, tempo, key or length change, and a save that changes or clears the reference "
-    "starts the old reference's deletion countdown."
+    "Fields left out stay as they are. A new version comes when the lyrics, prompt, tempo, key "
+    "or length change and the song's latest version has a take. A save that changes or clears "
+    "the reference starts the old reference's deletion countdown when it is not kept and no "
+    "other version or take uses it."
 )
 
 

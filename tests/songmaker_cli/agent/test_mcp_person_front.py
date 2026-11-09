@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from agent_runtime_client.tools import AGENT_TOOL_EXTENSION, ToolEffect, ToolMark, read_decision
 from pydantic import ValidationError
 from sqlalchemy.orm import sessionmaker
 from starlette.routing import Match
@@ -24,12 +25,13 @@ from support.mcp_world import (
     PROTOCOL_HEADER,
     PROTOCOL_VERSION,
     RESOURCE_URL,
+    SAME_ORIGIN,
     McpWorld,
     build_mcp_world,
     worker_ready,
 )
 from support.token_world import TokenWorld, make_token_world
-from support.web_app import TEST_ORIGIN, seed_session
+from support.web_app import seed_session
 
 from songmaker_cli.agent.mcp import Exclusion, collect_route_tools
 from songmaker_cli.constants import (
@@ -81,10 +83,12 @@ def test_m1_a_members_agent_is_offered_exactly_the_marked_tools(mcp: McpWorld) -
     assert mcp.tool_names() == MARKED_TOOLS
 
 
-def test_m1_the_new_put_patch_and_delete_routes_are_among_the_marks(mcp: McpWorld) -> None:
-    marks = collect_route_tools(mcp.world.client.app).marks
+def _marked_routes(mcp: McpWorld) -> set[tuple[str, str]]:
+    return {(m.method, m.template) for m in collect_route_tools(mcp.world.client.app).marks}
 
-    assert NEW_MARKED_ROUTES <= {(mark.method, mark.template) for mark in marks}
+
+def test_m1_the_new_put_patch_and_delete_routes_are_among_the_marks(mcp: McpWorld) -> None:
+    assert NEW_MARKED_ROUTES <= _marked_routes(mcp)
 
 
 @pytest.mark.parametrize("tool", ALL_TOOLS, ids=lambda tool: tool.name)
@@ -93,8 +97,8 @@ def test_m1_each_tool_of_the_table_is_marked_with_its_effect_and_has_a_descripti
 ) -> None:
     operation = mcp.world.client.app.openapi()["paths"][tool.template][tool.method.lower()]
 
-    effect = "read_only" if tool.method == "GET" else "side_effecting"
-    assert operation["x-agent-tool"] == {"name": tool.name, "effect": effect}
+    effect = ToolEffect.READ_ONLY if tool.method == "GET" else ToolEffect.SIDE_EFFECTING
+    assert read_decision(operation[AGENT_TOOL_EXTENSION]) == ToolMark(tool.name, effect)
     assert operation.get("description")
 
 
@@ -342,7 +346,7 @@ def test_m6_the_agent_token_is_refused_on_every_unmarked_route_and_nothing_chang
 def test_m6_a_public_view_answers_the_agent_token_as_it_answers_a_visitor(mcp: McpWorld) -> None:
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
-    shared = mcp.world.client.post("/api/albums/album-alices/share", headers=_SAME_ORIGIN)
+    shared = mcp.world.client.post("/api/albums/album-alices/share", headers=SAME_ORIGIN)
     mcp.world.client.cookies.clear()
     path = f"/shared/{shared.json()['share_slug']}"
 
@@ -389,7 +393,7 @@ def test_the_old_own_takes_path_is_read_as_a_lora_id_and_not_found_for_cookie_an
     mcp.seed_household(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
 
-    cookie = mcp.world.client.get("/api/loras/own-takes", headers=_SAME_ORIGIN)
+    cookie = mcp.world.client.get("/api/loras/own-takes", headers=SAME_ORIGIN)
     token = mcp.world.client.get("/api/loras/own-takes", headers=mcp.agent())
 
     assert (cookie.status_code, token.status_code) == (404, 404)
@@ -452,18 +456,19 @@ def test_m22_a_token_naming_two_audiences_is_refused(mcp: McpWorld) -> None:
 
 
 @pytest.mark.parametrize(
-    ("method", "path"), [("GET", "/api/songs"), ("DELETE", "/api/albums/album-alices")],
-    ids=["marked-route", "unmarked-route"],
-)
+    ("method", "template", "path", "is_tool"),
+    [("GET", "/api/songs", "/api/songs", True),
+     ("DELETE", "/api/generations/{gen_id}", "/api/generations/take-alices", False)],
+    ids=["marked-route", "unmarked-route"])
 def test_m23_the_agent_client_with_the_app_audience_is_refused_everywhere(
-    mcp: McpWorld, method: str, path: str,
+    mcp: McpWorld, method: str, template: str, path: str, is_tool: bool,
 ) -> None:
+    assert ((method, template) in _marked_routes(mcp)) == is_tool
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
-
     reply = mcp.world.client.request(method, path, headers=mcp.agent(aud="songmaker-test"))
 
     assert reply.status_code in {401, 403}
-    assert mcp.rows_of(Album, "deleted_at") == [(None,)]
+    assert mcp.rows_of(Generation, "id") == [("take-alices",)]
 
 
 # -- M11, M12: the endpoint's own answers -----------------------------------------------
@@ -570,7 +575,6 @@ def test_m13_mcp_on_without_the_agent_group_stops_startup(
 # -- M14: the browser is unchanged -------------------------------------------------------
 
 
-_SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin", "Origin": TEST_ORIGIN}
 _FORGED = {"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.test"}
 _MARKED_ROUTES = [
     ("GET", "/api/albums", None),
@@ -592,7 +596,7 @@ def test_m14_a_cookie_session_with_csrf_still_succeeds_on_each_marked_route(
     seed_session(mcp.world.client, "alice")
 
     with worker_ready():
-        reply = mcp.world.client.request(method, path, json=body, headers=_SAME_ORIGIN)
+        reply = mcp.world.client.request(method, path, json=body, headers=SAME_ORIGIN)
 
     assert reply.status_code == 200
 
@@ -619,10 +623,11 @@ def test_m14_a_cookie_request_without_csrf_is_refused_on_each_state_changing_mar
 
 
 def test_m14_an_unmarked_route_keeps_working_with_the_cookie(mcp: McpWorld) -> None:
+    assert ("POST", "/api/albums/{album_id}/share") not in _marked_routes(mcp)
     mcp.world.seed_take(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
 
-    reply = mcp.world.client.post("/api/generations/take-alices/pick", headers=_SAME_ORIGIN)
+    reply = mcp.world.client.post("/api/albums/album-alices/share", headers=SAME_ORIGIN)
 
     assert reply.status_code == 200
 
@@ -633,8 +638,8 @@ def test_the_browser_lists_its_own_takes_and_reads_its_lora_at_the_new_paths_wit
     mcp.seed_household(TokenWorld.ALICE, "alices")
     seed_session(mcp.world.client, "alice")
 
-    takes = mcp.world.client.get("/api/own-playable-takes", headers=_SAME_ORIGIN)
-    lora = mcp.world.client.get("/api/loras/lora-alices", headers=_SAME_ORIGIN)
+    takes = mcp.world.client.get("/api/own-playable-takes", headers=SAME_ORIGIN)
+    lora = mcp.world.client.get("/api/loras/lora-alices", headers=SAME_ORIGIN)
 
     assert (takes.status_code, lora.status_code) == (200, 200)
     assert [take["generation_id"] for take in takes.json()["takes"]] == ["take-alices"]
