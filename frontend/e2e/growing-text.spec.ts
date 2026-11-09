@@ -7,7 +7,7 @@
 // song-phone.spec.ts owns, once per shell: every song seeded there adds a
 // request to that spec's API budget (SONG_PHONE_FLOW_API_REQUEST_BUDGET).
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './coverage-test';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { FlowGuard, workspace } from './helpers';
 import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';

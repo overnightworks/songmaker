@@ -2,7 +2,7 @@
 // plus server, take-play (#1161) and album-start (#1288) recovery in both shells.
 // loseNetwork also closes open streams; setOffline alone leaves them running.
 
-import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import {
 	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,

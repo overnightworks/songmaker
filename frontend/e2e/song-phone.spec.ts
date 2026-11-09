@@ -3,7 +3,7 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // CI seeds jobs without a worker.
 
 import { phoneSearchResult } from './phone-search';
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import type { VersionItem } from '../src/lib/api/types';
 import {
 	EDITOR_GENERATE_TAKE_TEMPLATE,

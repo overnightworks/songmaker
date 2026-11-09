@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './coverage-test';
 import { EDITOR_LYRICS_LABEL } from '../src/lib/constants/song';
 import { RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants/rail';
 import { NOW_PLAYING_UNPICK_LABEL } from '../src/lib/constants/now-playing';

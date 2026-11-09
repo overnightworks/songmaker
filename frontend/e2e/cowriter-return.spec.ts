@@ -35,7 +35,7 @@
 // one first, the rest newest first, however the server orders a re-read list
 // (#1090).
 
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './coverage-test';
 import {
 	COWRITER_CONVERSATION_MENU_LABEL,
 	COWRITER_DELETE_CONVERSATION_TITLE,

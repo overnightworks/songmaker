@@ -2,7 +2,7 @@
 // anchor (#1785). The hrefs are read, never followed: the central pages are
 // served by another repository.
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './coverage-test';
 import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
 import { FlowGuard } from './helpers';
 import { MOCK_STREAM_REFUSAL, openMockSharedAlbum } from './share-album-fixtures';

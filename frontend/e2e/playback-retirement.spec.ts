@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './coverage-test';
 import type { SongItem } from '../src/lib/api/types';
 import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { songEditorOpenLabel } from '../src/lib/constants/song';

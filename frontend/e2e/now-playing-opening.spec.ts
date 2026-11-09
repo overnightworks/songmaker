@@ -3,7 +3,7 @@
 // This take, several on Queue, and the album ⋯ row, the walk's card and its
 // way out say "Pick album takes" and "Done". Both shells walk the flow.
 
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from './coverage-test';
 import {
 	COLLECTION_MENU_CURATE_LABEL,
 	COLLECTION_MENU_LABEL

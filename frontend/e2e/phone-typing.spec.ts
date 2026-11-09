@@ -17,7 +17,7 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // song-phone.spec.ts already owns for phone-only songs.
 
 import { openSearchSheet } from './phone-search';
-import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import { LIBRARY_NEW_MENU_LABEL, LIBRARY_NEW_ALBUM_LABEL } from '../src/lib/constants/library';
 import {
