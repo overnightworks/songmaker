@@ -3,8 +3,8 @@ export const JOB_TYPE_SCORE = 'score';
 export const JOB_TYPE_COVER = 'cover';
 
 // A job stream stops trusting its stream and reads the job over REST on this
-// many consecutive connection errors. Twenty-four retries at the delays above
-// (2 + 4 + 8 + 21 * 8s = 182s) keep the roughly three minutes the former 30s
+// many consecutive connection errors. Twenty-four retries at the delays in
+// `constants/sse-reconnect.ts` (2 + 4 + 8 + 21 * 8s = 182s) keep the roughly three minutes the former 30s
 // ceiling gave ten attempts. Only timed retries that fail while the page is
 // online count: a reopen on returning to the app never spends one, so
 // frequent returns never shorten the three minutes (#1032), nor does a

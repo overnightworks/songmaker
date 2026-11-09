@@ -1,4 +1,4 @@
-import { DAY_LABEL_TODAY, DAY_LABEL_YESTERDAY } from '#lib/constants.ts';
+import { DAY_LABEL_TODAY, DAY_LABEL_YESTERDAY } from '#lib/constants/day-label.ts';
 import { ALBUM_ART_EMPTY_INITIALS, ALBUM_ART_INITIAL_COUNT } from '#lib/constants/album.ts';
 
 const DAY_MS = 86_400_000;

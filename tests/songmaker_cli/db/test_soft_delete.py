@@ -26,6 +26,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.albums import (
+    archive_album,
     delete_album,
     enable_album_sharing,
     get_album,
@@ -33,7 +34,10 @@ from songmaker_cli.db.queries.albums import (
     list_albums,
     list_expired_albums,
     restore_album,
+    set_album_cover_key,
     soft_delete_album,
+    unarchive_album,
+    update_album,
 )
 from songmaker_cli.db.queries.generations import pick_generation
 from songmaker_cli.db.queries.playlists import add_song_to_playlist, create_playlist, get_playlist
@@ -46,6 +50,7 @@ from songmaker_cli.db.queries.songs import (
     list_expired_songs,
     move_song,
     restore_song,
+    set_song_cover_key,
     soft_delete_song,
 )
 from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
@@ -92,6 +97,39 @@ def seeded(db_session: Session) -> Session:
 
 
 # ── Query-layer tests ────────────────────────────────────────────────
+
+
+_ALBUM_MUTATIONS = {
+    "update": lambda s, album_id: update_album(s, album_id, title="New"),
+    "cover": lambda s, album_id: set_album_cover_key(s, album_id, "k"),
+    "delete": soft_delete_album,
+    "restore": restore_album,
+    "archive": archive_album,
+    "unarchive": unarchive_album,
+}
+
+
+@pytest.mark.parametrize(
+    ("mutation", "trashed"),
+    [
+        pytest.param(name, trashed, id=f"{name}-{'in-trash' if trashed else 'gone'}")
+        for name in _ALBUM_MUTATIONS
+        for trashed in (True, False)
+        if not (name == "restore" and trashed)
+    ],
+)
+def test_album_mutation_of_a_missing_album_raises_not_found(
+    seeded: Session, mutation: str, trashed: bool
+) -> None:
+    if trashed:
+        soft_delete_album(seeded, "rock")
+        seeded.commit()
+        album_id = "rock"
+    else:
+        album_id = "never-existed"
+
+    with pytest.raises(ValueError, match="Album not found"):
+        _ALBUM_MUTATIONS[mutation](seeded, album_id)
 
 
 def test_soft_delete_album_hides_from_list(seeded: Session) -> None:
@@ -212,6 +250,48 @@ def test_restore_song_rejects_deleted_album(seeded: Session) -> None:
     seeded.commit()
     with pytest.raises(ValueError, match="parent album is deleted"):
         restore_song(seeded, "s1")
+
+
+@pytest.mark.parametrize(
+    ("query", "make_unavailable"),
+    [
+        pytest.param(
+            lambda session: set_song_cover_key(session, "s1", "cover.png"),
+            lambda session: soft_delete_song(session, "s1"),
+            id="cover-of-trashed-song",
+        ),
+        pytest.param(
+            lambda session: set_song_cover_key(session, "s1", "cover.png"),
+            lambda session: delete_song(session, "s1"),
+            id="cover-of-purged-song",
+        ),
+        pytest.param(
+            lambda session: soft_delete_song(session, "s1"),
+            lambda session: soft_delete_song(session, "s1"),
+            id="second-delete-of-trashed-song",
+        ),
+        pytest.param(
+            lambda session: soft_delete_song(session, "s1"),
+            lambda session: delete_song(session, "s1"),
+            id="delete-of-purged-song",
+        ),
+        pytest.param(
+            lambda session: restore_song(session, "s1"),
+            lambda session: delete_song(session, "s1"),
+            id="restore-of-purged-song",
+        ),
+    ],
+)
+def test_song_query_refuses_a_song_that_vanished_after_the_access_check(
+    seeded: Session,
+    query: Callable[[Session], object],
+    make_unavailable: Callable[[Session], object],
+) -> None:
+    make_unavailable(seeded)
+    seeded.commit()
+
+    with pytest.raises(ValueError, match="Song not found: s1"):
+        query(seeded)
 
 
 def test_restore_album_idempotent_on_live(seeded: Session) -> None:

@@ -1,13 +1,15 @@
 import { expect, test, type Locator } from '@playwright/test';
 import {
 	API_ERROR_GENERIC_MESSAGE,
-	RESOURCE_EVENT_STREAM_PATH,
-	RESOURCE_EVENT_HELLO,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_CLEAR_LABEL,
 	RAIL_SEARCH_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import {
+	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_EVENT_HELLO
+} from '../src/lib/constants/resource-sync';
 import {
 	FlowGuard,
 	ONLY_IN_SHELL,
