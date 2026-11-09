@@ -19,10 +19,26 @@ from songmaker_cli.db.models import (
 )
 
 
-def enable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
-    entity = session.query(model_class).filter_by(id=entity_id).first()
+def _lock_entity[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
+    """Lock the row and reload it, so a share toggle that commits first is seen.
+
+    The lock is limited to the row (`of=model_class`) because a take's eager join to its
+    reference recording is an outer join, which PostgreSQL cannot lock.
+    """
+    entity = (
+        session.query(model_class)
+        .filter_by(id=entity_id)
+        .with_for_update(of=model_class)
+        .populate_existing()
+        .first()
+    )
     if not entity:
         raise ValueError(f"{model_class.__name__} not found: {entity_id}")
+    return entity
+
+
+def enable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
+    entity = _lock_entity(session, model_class, entity_id)
     if not entity.share_slug:
         entity.share_slug = str(uuid.uuid4())
     entity.is_shared = True
@@ -31,9 +47,7 @@ def enable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity
 
 
 def disable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
-    entity = session.query(model_class).filter_by(id=entity_id).first()
-    if not entity:
-        raise ValueError(f"{model_class.__name__} not found: {entity_id}")
+    entity = _lock_entity(session, model_class, entity_id)
     entity.share_slug = None
     entity.is_shared = False
     session.flush()

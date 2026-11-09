@@ -37,6 +37,7 @@ _RATE_TAKE_DESCRIPTION = (
     "/generations/{gen_id}/rate",
     description=_RATE_TAKE_DESCRIPTION,
     openapi_extra=agent_tool(name="rate_take", effect=ToolEffect.SIDE_EFFECTING),
+    responses={404: {"description": "Generation does not exist"}},
 )
 def api_rate_generation(
     gen_id: str, req: RateRequest,
@@ -44,7 +45,10 @@ def api_rate_generation(
     session: Session = Depends(get_db_session),
 ) -> RateResponse:
     check_generation_access(session, gen_id, user)
-    save_rating(session, gen_id, req.rating, req.notes)
+    try:
+        save_rating(session, gen_id, req.rating, req.notes)
+    except ValueError:
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     session.commit()
     return RateResponse(generation_id=gen_id, rating=req.rating)
 

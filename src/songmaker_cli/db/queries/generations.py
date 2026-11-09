@@ -265,6 +265,7 @@ def set_generation_transcript(
 def save_rating(
     session: Session, generation_id: str, rating_value: float, notes: str = "",
 ) -> Rating:
+    _lock_generation(session, generation_id)
     existing = session.query(Rating).filter_by(generation_id=generation_id).first()
     if existing:
         existing.rating = rating_value
@@ -367,7 +368,7 @@ def lock_takes(
 
 
 def unpick_generation(session: Session, generation_id: str) -> None:
-    gen = _require_generation(session, generation_id)
+    gen = _lock_generation(session, generation_id)
     gen.is_picked = False
     session.flush()
 
@@ -379,7 +380,7 @@ def keep_generation(session: Session, generation_id: str) -> None:
 
 
 def unkeep_generation(session: Session, generation_id: str) -> None:
-    gen = _require_generation(session, generation_id)
+    gen = _lock_generation(session, generation_id)
     gen.is_kept = False
     session.flush()
 
@@ -415,7 +416,7 @@ def archive_generation(session: Session, generation_id: str) -> Generation | Non
 
 
 def unarchive_generation(session: Session, generation_id: str) -> Generation:
-    gen = _require_generation(session, generation_id)
+    gen = _lock_generation(session, generation_id)
     gen.is_archived = False
     gen.archived_at = None
     session.flush()
