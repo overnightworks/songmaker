@@ -69,7 +69,6 @@ def password_from_secret_file(directory: Path = SECRETS_DIRECTORY) -> str | None
 def database_url_from_environment(
     base_url: str,
     variable_password: str | None,
-    secrets_directory: Path = SECRETS_DIRECTORY,
 ) -> URL:
     """Return ``base_url`` joined with the password, as ``env.py`` needs it.
 
@@ -81,5 +80,5 @@ def database_url_from_environment(
     if variable_password == "":
         raise RuntimeError("POSTGRES_PASSWORD is empty")
     if variable_password is None:
-        variable_password = password_from_secret_file(secrets_directory)
+        variable_password = password_from_secret_file()
     return database_url_with_password(base_url, variable_password)
