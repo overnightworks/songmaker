@@ -99,6 +99,9 @@ def service(client, tmp_path: Path) -> CowriterStack:
 def test_compose_turn_context_keeps_named_scopes_once():
     song = Song(id="s1", title="Thunder", album_id="alb1")
     song.album = Album(id="alb1", title="Rock", artist="B")
+    song.versions = [
+        Version(id="v1", song_id="s1", version_number=1, lyrics="verse of thunder"),
+    ]
     envelope = compose_turn_context(
         current_song=song,
         user_memory_body="prefer German",
@@ -112,7 +115,8 @@ def test_compose_turn_context_keeps_named_scopes_once():
     assert names.count(TURN_BLOCK_CURRENT_SONG) == 1
     wrapped = envelope.wrap_user_message("hello")
     assert "<user_memory>\nprefer German\n</user_memory>" in wrapped
-    assert "lyrics:" not in wrapped
+    assert wrapped.count("lyrics:") == 1
+    assert wrapped.count("verse of thunder") == 1
 
 
 def test_compose_omits_empty_album_notes():
@@ -139,6 +143,22 @@ def test_put_and_get_memory_roundtrip(client):
     assert bundle["user"]["body"] == "prefer German"
     assert bundle["song"]["body"] == "locked chorus"
     assert bundle["album"]["body"] == "night city"
+
+
+@pytest.mark.parametrize(
+    ("scope", "scope_id", "bundle_key"),
+    [("songs", "s1", "song"), ("albums", "alb1", "album")],
+)
+def test_a_second_memory_note_replaces_the_first(client, scope, scope_id, bundle_key):
+    """Spec: REQ-COWRITER-14 -- a note write replaces the scope's stored body."""
+    c, _ = client
+    assert c.put(f"/api/memory/{scope}/{scope_id}", json={"body": "first"}).status_code == 200
+
+    second = c.put(f"/api/memory/{scope}/{scope_id}", json={"body": "second"})
+
+    assert second.status_code == 200
+    bundle = c.get("/api/memory", params={"song_id": "s1"}).json()
+    assert bundle[bundle_key]["body"] == "second"
 
 
 def test_a_bundle_without_album_notes_carries_no_album_body(client):

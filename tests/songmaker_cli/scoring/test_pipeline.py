@@ -34,6 +34,11 @@ from songmaker_cli.scoring.pipeline import (
 _FAKE_AUDIO = AudioData(audio=np.zeros(22050, dtype=np.float32), sr=22050)
 
 
+def _run_pipeline(mp3_path: Path, **kwargs: object) -> SongScores:
+    """Run the pipeline with a progress callback, which it requires."""
+    return run_scoring_pipeline(mp3_path, on_progress=lambda *_update: None, **kwargs)
+
+
 @pytest.fixture
 def clean_registry() -> ScorerRegistry:
     """Provide an isolated scorer registry for testing."""
@@ -209,7 +214,7 @@ def test_run_pipeline(mock_load: object, clean_registry: ScorerRegistry, fake_mp
             total_silence_seconds=0.5, longest_gap_seconds=0.3, gap_count=1,
         )
 
-    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    scores = _run_pipeline(fake_mp3, registry=clean_registry)
     assert scores.silence is not None
     assert scores.silence.gap_count == 1
     assert scores.text_accuracy is None
@@ -235,9 +240,42 @@ def test_pipeline_handles_scorer_failure(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
         )
 
-    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    scores = _run_pipeline(fake_mp3, registry=clean_registry)
     assert scores.silence is not None
     assert scores.text_accuracy is None
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_pipeline_reports_progress_per_finished_scorer(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    @clean_registry.register("silence")
+    def scorer_a(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None,
+    ) -> SilenceScore:
+        return SilenceScore(
+            total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
+        )
+
+    @clean_registry.register("bpm_accuracy")
+    def scorer_b(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None,
+    ) -> BpmAccuracyScore:
+        return BpmAccuracyScore(
+            detected_bpm=120, requested_bpm=120,
+            deviation_percent=0.0, octave_corrected=False,
+        )
+
+    updates: list[tuple[int, int, str]] = []
+    run_scoring_pipeline(
+        fake_mp3, registry=clean_registry,
+        on_progress=lambda completed, total, name: updates.append((completed, total, name)),
+    )
+
+    assert [(completed, total) for completed, total, _name in updates] == [(1, 2), (2, 2)]
+    assert {name for _completed, _total, name in updates} == {"silence", "bpm_accuracy"}
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
@@ -263,7 +301,7 @@ def test_pipeline_filters_by_name(
             deviation_percent=0.0, octave_corrected=False,
         )
 
-    scores = run_scoring_pipeline(fake_mp3, scorers=["silence"], registry=clean_registry)
+    scores = _run_pipeline(fake_mp3, scorers=["silence"], registry=clean_registry)
     assert scores.silence is not None
     assert scores.bpm_accuracy is None
 
@@ -276,7 +314,7 @@ def test_pipeline_warns_on_unknown_scorer(
     import logging
 
     with caplog.at_level(logging.WARNING):
-        run_scoring_pipeline(fake_mp3, scorers=["nonexistent"], registry=clean_registry)
+        _run_pipeline(fake_mp3, scorers=["nonexistent"], registry=clean_registry)
     assert "Unknown scorer" in caplog.text
 
 
@@ -292,7 +330,7 @@ def test_pipeline_rejects_a_missing_audio_file(
     missing = tmp_path / "nonexistent.mp3"
 
     with pytest.raises(FileNotFoundError, match=re.escape(str(missing))):
-        run_scoring_pipeline(missing, scorers=["silence"], registry=clean_registry)
+        _run_pipeline(missing, scorers=["silence"], registry=clean_registry)
 
 
 # ── Type validation tests ─────────────────────────────────────────
@@ -314,7 +352,7 @@ def test_pipeline_rejects_wrong_return_type(
         return "not a SilenceScore"  # type: ignore[return-value]
 
     with caplog.at_level(logging.WARNING):
-        scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+        scores = _run_pipeline(fake_mp3, registry=clean_registry)
 
     assert scores.silence is None
     assert "expected SilenceScore" in caplog.text
@@ -401,7 +439,7 @@ def test_cpu_scorers_run_concurrently(
             detected_bpm=120, requested_bpm=120, deviation_percent=0, octave_corrected=False,
         )
 
-    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    scores = _run_pipeline(fake_mp3, registry=clean_registry)
 
     assert _outcomes(scores) == {
         "silence": ScorerOutcome.OK,
@@ -450,7 +488,7 @@ def test_gpu_scorers_run_sequentially_with_cpu_overlap(
 
     text_accuracy_spec_on_gpu = replace(SCORERS["text_accuracy"], device=DEVICE_GPU)
     with patch.dict(SCORERS, {"text_accuracy": text_accuracy_spec_on_gpu}):
-        scores = run_scoring_pipeline(
+        scores = _run_pipeline(
             fake_mp3,
             scorers=["audiobox", "text_accuracy", "silence"],
             registry=clean_registry,
@@ -484,7 +522,7 @@ def test_gpu_scorer_failure_does_not_block_cpu(
     ) -> SilenceScore:
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
-    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    scores = _run_pipeline(fake_mp3, registry=clean_registry)
     assert scores.silence is not None
     assert scores.audiobox is None
 
@@ -502,7 +540,7 @@ def test_pipeline_reports_a_known_but_unregistered_scorer_as_skipped(
     ) -> SilenceScore:
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
-    scores = run_scoring_pipeline(
+    scores = _run_pipeline(
         fake_mp3, scorers=["silence", "text_accuracy"], registry=clean_registry,
     )
     assert scores.silence is not None
@@ -546,7 +584,7 @@ def test_timed_out_scorer_reports_timeout_and_no_value(
             detected_bpm=120, requested_bpm=120, deviation_percent=0, octave_corrected=False,
         )
 
-    scores = run_scoring_pipeline(
+    scores = _run_pipeline(
         fake_mp3, registry=clean_registry,
         config=PipelineConfig(scorer_timeout=SCORER_BUDGET_SECONDS, pipeline_timeout=30),
     )
@@ -567,7 +605,7 @@ def test_failed_scorer_reports_failure_with_reason(
     ) -> SilenceScore:
         raise RuntimeError("boom")
 
-    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    scores = _run_pipeline(fake_mp3, registry=clean_registry)
 
     run = scores.runs[0]
     assert run.outcome is ScorerOutcome.FAILED
@@ -587,7 +625,7 @@ def test_wrong_return_type_counts_as_failure(
     ) -> object:
         return "not a SilenceScore"
 
-    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    scores = _run_pipeline(fake_mp3, registry=clean_registry)
 
     assert scores.silence is None
     assert scores.runs[0].outcome is ScorerOutcome.FAILED

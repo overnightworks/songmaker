@@ -606,6 +606,59 @@ def test_a_suggestion_resolving_outside_the_audio_root_answers_like_a_missing_su
     assert response.json() == {"detail": COVER_SUGGESTION_NOT_FOUND}
 
 
+@pytest.mark.parametrize("damage", ["skewed_stored_path", "missing_file"])
+@pytest.mark.parametrize(
+    ("method", "path_for", "kwargs_for"),
+    [
+        ("get", lambda sid: f"/api/albums/alice-album/cover-suggestions/{sid}", lambda sid: {}),
+        (
+            "put",
+            lambda sid: "/api/albums/alice-album/cover",
+            lambda sid: {"json": {"suggestion_id": sid}},
+        ),
+    ],
+)
+def test_a_suggestion_whose_row_and_file_disagree_answers_like_a_missing_one(
+    cover_album_app: tuple[TestClient, object],
+    tmp_path: Path,
+    damage: str,
+    method: str,
+    path_for,
+    kwargs_for,
+) -> None:
+    client, factory = cover_album_app
+    audio_dir = tmp_path / "audio"
+    if damage == "skewed_stored_path":
+        skewed_path = f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/alice-album/skewed.png"
+        suggestion_id = _add_suggestion(factory, audio_dir, stored_path=skewed_path)
+        (audio_dir / skewed_path).parent.mkdir(parents=True, exist_ok=True)
+        (audio_dir / skewed_path).write_bytes(_png_bytes())
+    else:
+        suggestion_id = _add_suggestion(factory, audio_dir)
+        _suggestion_file(audio_dir, suggestion_id).unlink()
+
+    response = getattr(client, method)(path_for(suggestion_id), **kwargs_for(suggestion_id))
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not Found"}
+
+
+def test_discarding_a_suggestion_whose_file_is_already_gone_removes_its_row(
+    cover_album_app: tuple[TestClient, object], tmp_path: Path,
+) -> None:
+    client, factory = cover_album_app
+    audio_dir = tmp_path / "audio"
+    suggestion_id = _add_suggestion(factory, audio_dir)
+    _suggestion_file(audio_dir, suggestion_id).unlink()
+
+    response = client.delete(
+        "/api/albums/alice-album/cover-suggestions", params={"suggestion_id": suggestion_id},
+    )
+
+    assert response.status_code == 200
+    assert _suggestion_ids_left(factory) == set()
+
+
 def test_discarding_suggestions_with_a_path_outside_the_audio_root_leaves_that_file(
     cover_album_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:

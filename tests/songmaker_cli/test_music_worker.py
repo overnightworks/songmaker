@@ -57,6 +57,18 @@ def test_generate_skips_completed_job() -> None:
     mock_run.assert_not_called()
 
 
+def test_train_lora_skips_a_job_that_is_already_terminal() -> None:
+    worker = _make_worker()
+    worker.check_job_still_valid = MagicMock(return_value=False)
+
+    with patch(
+        "songmaker_cli.music_worker.run_lora_training_job", new_callable=AsyncMock,
+    ) as mock_run:
+        _run(worker.train_lora(_mock_ctx(), "j1", "lora1", "u1"))
+
+    mock_run.assert_not_called()
+
+
 def test_generate_runs_queued_job() -> None:
     worker = _make_worker()
     ctx = _mock_ctx()

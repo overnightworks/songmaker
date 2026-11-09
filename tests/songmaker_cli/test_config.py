@@ -15,6 +15,7 @@ from songmaker_cli.config import (
     resolve_model_mode,
     save_generation_defaults,
 )
+from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import SongMeta
 
 
@@ -302,3 +303,10 @@ def test_resolve_model_mode_unknown_raises() -> None:
 def test_resolve_model_mode_none_raises() -> None:
     with pytest.raises((ValueError, TypeError)):
         resolve_model_mode(None)  # type: ignore[arg-type]
+
+
+def test_build_ace_config_rejects_a_stored_default_with_an_unknown_field() -> None:
+    meta = SongMeta(prompt="test", lyrics="test")
+
+    with pytest.raises(ValidationError):
+        build_ace_config(meta, model_name="sft", global_defaults={"sft": {"infrence_steps": 50}})
