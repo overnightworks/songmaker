@@ -3634,7 +3634,7 @@ def test_pick_generation_value_error(client: TestClient) -> None:
     from unittest.mock import patch
 
     err = ValueError("Generation not found")
-    with patch("songmaker_cli.generation_api.pick_generation", side_effect=err):
+    with patch("songmaker_cli.take_judging_api.pick_generation", side_effect=err):
         resp = client.post("/api/generations/g1/pick")
 
     assert resp.status_code == 404
@@ -3644,7 +3644,7 @@ def test_unpick_generation_value_error(client: TestClient) -> None:
     from unittest.mock import patch
 
     err = ValueError("Generation not found")
-    with patch("songmaker_cli.generation_api.unpick_generation", side_effect=err):
+    with patch("songmaker_cli.take_judging_api.unpick_generation", side_effect=err):
         resp = client.post("/api/generations/g1/unpick")
 
     assert resp.status_code == 404
@@ -3654,7 +3654,7 @@ def test_keep_generation_value_error(client: TestClient) -> None:
     from unittest.mock import patch
 
     err = ValueError("Generation not found")
-    with patch("songmaker_cli.generation_api.keep_generation", side_effect=err):
+    with patch("songmaker_cli.take_judging_api.keep_generation", side_effect=err):
         resp = client.post("/api/generations/g1/keep")
 
     assert resp.status_code == 404
@@ -3664,7 +3664,7 @@ def test_unkeep_generation_value_error(client: TestClient) -> None:
     from unittest.mock import patch
 
     err = ValueError("Generation not found")
-    with patch("songmaker_cli.generation_api.unkeep_generation", side_effect=err):
+    with patch("songmaker_cli.take_judging_api.unkeep_generation", side_effect=err):
         resp = client.post("/api/generations/g1/unkeep")
 
     assert resp.status_code == 404

@@ -3,7 +3,8 @@
 Sub-modules:
     album_api       — album CRUD + cleanup
     song_api        — song + version CRUD
-    generation_api  — generation, scoring, rating, pick endpoints
+    generation_api  — generation, repaint, cover, scoring, share endpoints
+    take_judging_api — a take's rating, pick, keep, unarchive endpoints
     jobs_api        — job status, streaming, cancellation endpoints
     settings_api    — generation presets, builtins, global defaults
 
@@ -29,6 +30,7 @@ from songmaker_cli.reference_api import router as reference_router
 from songmaker_cli.resource_event_api import router as resource_event_router
 from songmaker_cli.settings_api import router as settings_router
 from songmaker_cli.song_api import router as song_router
+from songmaker_cli.take_judging_api import router as take_judging_router
 
 router = APIRouter(prefix="/api")
 router.include_router(auth_router)
@@ -37,6 +39,7 @@ router.include_router(album_router)
 router.include_router(song_router)
 router.include_router(library_router)
 router.include_router(generation_router)
+router.include_router(take_judging_router)
 router.include_router(jobs_router)
 router.include_router(internal_router)
 router.include_router(lora_router)
