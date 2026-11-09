@@ -270,10 +270,8 @@ export function discardDraft(): void {
 }
 
 let versionLoad = 0;
-const versionReloads = reloadWhileUnreachable(() => {
-	const state = get(editorState);
-	if (state) void loadVersions(state.songId, true);
-});
+let reloadingSongId = '';
+const versionReloads = reloadWhileUnreachable(() => void loadVersions(reloadingSongId, true));
 selectedSongId.subscribe(() => {
 	versionLoad += 1;
 	versionReloads.stop();
@@ -292,6 +290,7 @@ async function loadVersions(songId: string, recover = false): Promise<void> {
 		if (!recover) throw err;
 		if (request !== versionLoad || get(editorState)?.songId !== songId) return;
 		if (isNotFound(err)) return;
+		reloadingSongId = songId;
 		const message = versionReloads.nameLoadFailure(err, VERSIONS_LOAD_FAILED);
 		if (message) addToast(message, 'error');
 	}
@@ -467,7 +466,9 @@ export const draftVersionNumber = derived(
  * Persists the draft as a new version. Fails loud: a rejected `updateSong`
  * call propagates to the caller instead of being swallowed, so a caller that
  * depends on the save succeeding (e.g. Generate, which must never run
- * against a stale version) aborts rather than proceeding silently.
+ * against a stale version) aborts rather than proceeding silently. A save for
+ * a song the editor does not show is refused, and one that finishes after the
+ * person opened another song leaves that song's editor untouched.
  */
 export async function handleSave(songId: string): Promise<SongItem> {
 	const state = get(editorState);
