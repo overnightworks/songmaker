@@ -1,0 +1,7 @@
+claim_id = "4ce82828f5ee401f953519f6822bc35b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "d6dd96de5b4b97ca0c503e1f14b17f190037f72e"
+branch = "dependabot/github_actions/actions-9f025cc370"
+scope = [".github/workflows/ci.yml", ".github/workflows/e2e.yml"]
+opened_commit = "d5e1ad3c06bb7a737755af0345ab5f95c386834e"
