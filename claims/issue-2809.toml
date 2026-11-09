@@ -1,0 +1,8 @@
+claim_id = "0419fd51014849ad8fbee62311aafb12"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "3cfd680673859c04d6ba6f3a4fe8cd343f2c41df"
+branch = "claude/issue-2809-wrapper-training-failure-cells"
+scope = ["quality/baseline.toml", "src/acestep_worker/wrapper.py", "src/songmaker_cli/worker_base.py", "tests/acestep_worker/conftest.py", "tests/acestep_worker/test_wrapper_train_lora.py", "tests/acestep_worker/test_wrapper_training_failures.py", "tests/songmaker_cli/test_server_middleware.py"]
+opened_commit = "9488f11600d6aab0343d5eac18d5b8ed92ffc9cd"
+whole_reason = "One coverage slice of three modules: the arms nothing reaches, the cells for the documented ones, and the shared test arrangement they need."
