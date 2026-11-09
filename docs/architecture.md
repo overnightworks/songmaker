@@ -970,7 +970,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
 | Co-writer | The turn through the gateway: its agent file, the `GatewayBackend` composed at startup and the hand tools it serves (`agent/`) | `agents/cowriter.md`, `agent/backend.py`, `agent/tools.py` |
 | MCP front | The marked routes served as tools on `/mcp` to a person's own agent or to an agent with its own account (kind `agent`, admitted as `user`), and the `agent` settings section | `agent/mcp.py`, `agent/settings.py` |
-| Conversation | Conversation-scoped co-writer turns and history | `conversation_api.py` |
+| Conversation | Conversation-scoped co-writer turns and history; the turn context (current song, mentions, take, notes) | `conversation_api.py`, `cowriter/turn_context.py` |
 | Memory | The co-writer's durable user, song and album notes | `memory_api.py` |
 | Tool bodies | The co-writer's tool declarations and their execution, which the hand tools call | `mcp_server/`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
@@ -978,7 +978,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 ### The co-writer turn
 
 `POST /api/chat/turn` (`conversation_api.py`) prepares the turn as before: the
-context envelope, the memory, the rolling summary plus a token-bounded tail, the
+context envelope (`cowriter/turn_context.py`), the memory, the rolling summary plus a token-bounded tail, the
 chat job and the stored user message. The turn then runs as a task of its own
 through `agent/backend.py`:
 
