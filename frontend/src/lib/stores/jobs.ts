@@ -342,7 +342,7 @@ function isTracked(jobId: string): boolean {
  * Opens the job's SSE connection and owns its reconnection: a dropped
  * connection closes itself here rather than leaning on the browser's flat
  * native EventSource retry (that flat retry across several concurrently
- * failing job streams is what produced the operator's ERR_QUIC storm)
+ * failing job streams floods the connection with ERR_QUIC errors)
  * and reopens after `nextReconnectDelayMs`, or at once when the
  * page gets a fresh chance to reach the server (`watchReconnectOpportunities`).
  *

@@ -1,7 +1,7 @@
 import type { GenerationParams } from '#lib/api/types.ts';
 import { formatTime } from '#lib/utils/format.ts';
 
-// Now Playing copy and layout constants, kept apart from lib/constants.ts.
+// Now Playing copy and layout constants.
 
 export const NOW_PLAYING_QUEUE_TAB = 'Queue';
 export const NOW_PLAYING_TAKE_TAB = 'This take';
@@ -99,7 +99,7 @@ interface TakeMetaParts {
 	generationNumber: number;
 	durationSec: number | null;
 	// Omitted by rows that don't carry per-take model info (e.g. a playlist
-	// entry) — those rows read exactly as before.
+	// entry); those rows show no model label.
 	modelMode?: string | null;
 }
 
@@ -127,9 +127,8 @@ export function takeBatchReductionLabel(
 
 // A row's full description of a take — "Artist · v1 · take 1 · 3:15" — built
 // here rather than in markup: a separator written at the start of an `{#if}`
-// loses its leading space to the compiler, which is how the playlist row came
-// to read "take 1· 3:15". One owner, one spacing rule, whatever a
-// given row happens to know.
+// loses its leading space to the compiler and reads "take 1· 3:15". One owner,
+// one spacing rule, whatever a given row happens to know.
 export function nowPlayingTakeMeta(parts: TakeMetaParts): string {
 	const written = [parts.artist, nowPlayingTakeLabel(parts.versionNumber, parts.generationNumber)];
 	if (parts.durationSec !== null && parts.durationSec > 0) {
