@@ -1,7 +1,0 @@
-claim_id = "232a7288e0444a57bfa15084a5cc87fc"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "127768ca3e89251b7964a5f77c95fae6f957ccdd"
-branch = "claude/issue-2897-limited-job-table"
-scope = ["src/songmaker_cli/api_helpers.py"]
-opened_commit = "d6f413a8e99e30f8f0520861b3867c24615266af"
