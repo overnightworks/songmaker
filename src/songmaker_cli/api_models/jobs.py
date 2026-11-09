@@ -45,8 +45,6 @@ def _training_remaining_time(job, *, now: datetime) -> RemainingTimeEstimate:
     train_epochs = job.train_epochs
     if current_epoch is None or train_epochs is None:
         return REMAINING_TIME_ESTIMATE_CALCULATING
-    if train_epochs == current_epoch:
-        return 0
     if current_epoch <= 0 or train_epochs < current_epoch:
         return REMAINING_TIME_ESTIMATE_CALCULATING
     if job.training_started_at is None:

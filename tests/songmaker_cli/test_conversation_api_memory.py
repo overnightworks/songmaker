@@ -18,7 +18,7 @@ from songmaker_cli.constants import (
     TURN_BLOCK_SONG_MEMORY,
     TURN_BLOCK_USER_MEMORY,
 )
-from songmaker_cli.conversation_api import compose_turn_context
+from songmaker_cli.cowriter.turn_context import compose_turn_context
 from songmaker_cli.db.models import (
     Album,
     AvailableModel,
