@@ -66,7 +66,7 @@ from songmaker_cli.constants import (
     TURN_BLOCK_USER_MEMORY,
 )
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
-from songmaker_cli.db.models import ChatMessage, Conversation, Generation, Song
+from songmaker_cli.db.models import ChatMessage, Generation, Song
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.conversations import (
     append_message,
