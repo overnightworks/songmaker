@@ -9,6 +9,7 @@ from sqlalchemy.engine import make_url
 
 from songmaker_cli.db.database_url import (
     POSTGRESQL_PSYCOPG2_DRIVERNAME,
+    database_url_from_environment,
     database_url_with_password,
     password_from_secret_file,
 )
@@ -91,3 +92,25 @@ def test_an_empty_secret_file_is_refused_naming_the_path(tmp_path: Path, content
         password_from_secret_file(tmp_path)
 
     assert str(secret_file) in str(raised.value)
+
+
+@pytest.mark.parametrize(("variable", "file", "expected"), [
+    (None, None, None),
+    ("from-variable", None, "from-variable"),
+    (None, "from-file", "from-file"),
+    ("from-variable", "from-file", "from-variable"),
+])
+def test_a_hand_run_alembic_takes_the_password_the_app_takes(
+    tmp_path: Path, variable: str | None, file: str | None, expected: str | None,
+) -> None:
+    if file is not None:
+        (tmp_path / DATABASE_PASSWORD_SECRET_FILE).write_text(file)
+
+    url = database_url_from_environment("postgresql://app@db/songs", variable, tmp_path)
+
+    assert url.password == expected
+
+
+def test_an_empty_password_variable_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="POSTGRES_PASSWORD is empty"):
+        database_url_from_environment("postgresql://app@db/songs", "", tmp_path)
