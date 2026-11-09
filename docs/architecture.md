@@ -958,7 +958,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
 | Auth | Sign-in through Keycloak (webauth's start, callback, logout and back-channel routes, composed in `install_sign_in`), session dependencies bound to the database | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
-| API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `reference_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `memory_api.py`, `settings_api.py`, `admin_api.py` |
+| API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `take_judging_api.py`, `playlist_api.py`, `reference_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `memory_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |

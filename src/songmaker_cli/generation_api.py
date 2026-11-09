@@ -1,11 +1,10 @@
-"""Generation, scoring, rating, and pick API endpoints."""
+"""Generation lifecycle API endpoints: generate, repaint, cover, score, share, delete."""
 
 from __future__ import annotations
 
 import logging
 import shutil
 import subprocess
-from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
@@ -17,6 +16,7 @@ from webauth.ports import AuthenticatedUser
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
 from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
+    GENERATION_NOT_FOUND_DETAIL,
     check_generation_access,
     check_generations_access,
     check_lora_ready_for_generation,
@@ -34,8 +34,6 @@ from songmaker_cli.api_models import (
     GenerationUnavailableResponse,
     JobResponse,
     LastFailedGenerationResponse,
-    RateRequest,
-    RateResponse,
     RepaintRequest,
     RepaintTaskParams,
     ScoreRequest,
@@ -66,13 +64,7 @@ from songmaker_cli.db.queries.generations import (
     delete_generation,
     disable_generation_sharing,
     enable_generation_sharing,
-    keep_generation,
     measure_generation_audio_duration,
-    pick_generation,
-    save_rating,
-    unarchive_generation,
-    unkeep_generation,
-    unpick_generation,
 )
 from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
@@ -96,7 +88,6 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-GENERATION_NOT_FOUND_DETAIL: Final = "Generation not found"
 WORKER_NOT_RUNNING_DETAIL: Final = "Worker not running"
 JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
 _GENERATE_DESCRIPTION: Final = (
@@ -576,138 +567,6 @@ async def api_score_generation(
         raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
-
-
-# ── Ratings ──────────────────────────────────────────────────────────
-
-
-_RATE_TAKE_DESCRIPTION = (
-    "Save the person's rating and notes on one of their own takes. "
-    "The notes sent replace the saved ones, so a rating without notes clears them."
-)
-
-
-@router.post(
-    "/generations/{gen_id}/rate",
-    description=_RATE_TAKE_DESCRIPTION,
-    openapi_extra=agent_tool(name="rate_take", effect=ToolEffect.SIDE_EFFECTING),
-)
-def api_rate_generation(
-    gen_id: str, req: RateRequest,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> RateResponse:
-    check_generation_access(session, gen_id, user)
-    save_rating(session, gen_id, req.rating, req.notes)
-    session.commit()
-    return RateResponse(generation_id=gen_id, rating=req.rating)
-
-
-
-# ── Pick ─────────────────────────────────────────────────────────────
-
-
-def _toggle_generation(
-    gen_id: str, user: AuthenticatedUser, session: Session,
-    action: Callable[[Session, str], None],
-) -> StatusResponse:
-    check_generation_access(session, gen_id, user)
-    try:
-        action(session, gen_id)
-    except ValueError:
-        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
-    session.commit()
-    return StatusResponse()
-
-
-def _mark_generation(
-    gen_id: str, user: AuthenticatedUser, session: Session,
-    action: Callable[[Session, str], None],
-) -> StatusResponse:
-    """Toggle a mark that an archived take refuses with 409."""
-    try:
-        return _toggle_generation(gen_id, user, session, action)
-    except ArchivedTakeError:
-        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
-
-
-@router.post(
-    "/generations/{gen_id}/pick",
-    responses={
-        404: {"description": "Generation does not exist"},
-        409: {"description": ARCHIVED_TAKE_DETAIL},
-    },
-    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
-)
-def api_pick_generation(
-    gen_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> StatusResponse:
-    return _mark_generation(gen_id, user, session, pick_generation)
-
-
-@router.post(
-    "/generations/{gen_id}/unpick",
-    responses={404: {"description": "Generation does not exist"}},
-    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
-)
-def api_unpick_generation(
-    gen_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> StatusResponse:
-    return _toggle_generation(gen_id, user, session, unpick_generation)
-
-
-_KEEP_TAKE_DESCRIPTION = "Protect one of the person's own takes from cleanup."
-
-
-@router.post(
-    "/generations/{gen_id}/keep",
-    description=_KEEP_TAKE_DESCRIPTION,
-    openapi_extra=agent_tool(name="keep_take", effect=ToolEffect.SIDE_EFFECTING),
-    responses={
-        404: {"description": "Generation does not exist"},
-        409: {"description": ARCHIVED_TAKE_DETAIL},
-    },
-)
-def api_keep_generation(
-    gen_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> StatusResponse:
-    return _mark_generation(gen_id, user, session, keep_generation)
-
-
-@router.post(
-    "/generations/{gen_id}/unkeep",
-    responses={404: {"description": "Generation does not exist"}},
-    openapi_extra=exclude_route(Exclusion.DELETION_AFTER_WINDOW),
-)
-def api_unkeep_generation(
-    gen_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> StatusResponse:
-    return _toggle_generation(gen_id, user, session, unkeep_generation)
-
-
-_UNARCHIVE_TAKE_DESCRIPTION = "Take one of the person's own archived takes out of the archive."
-
-
-@router.post(
-    "/generations/{gen_id}/unarchive",
-    description=_UNARCHIVE_TAKE_DESCRIPTION,
-    openapi_extra=agent_tool(name="unarchive_take", effect=ToolEffect.SIDE_EFFECTING),
-    responses={404: {"description": "Generation does not exist"}},
-)
-def api_unarchive_generation(
-    gen_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> StatusResponse:
-    return _toggle_generation(gen_id, user, session, unarchive_generation)
 
 
 @router.post(
