@@ -1,8 +1,0 @@
-claim_id = "e8ee535f6e60494ab4cbd21888f5e0b7"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "b9e9cb5fbc0edd51e07d4eb2c187bfda368ce7e1"
-branch = "claude/issue-2887-design-v0-18"
-scope = ["docs/architecture.md", "docs/testing.md", "frontend/e2e/auth-flows.spec.ts", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/app.css", "frontend/src/lib/components/AccountMenu.svelte", "frontend/src/lib/components/share/SharedFooter.svelte", "frontend/src/routes/auth/callback/+page.svelte", "frontend/src/routes/login/+page.svelte", "frontend/src/routes/no-access/+page.svelte", "scripts/check_style_literals.py", "tests/scripts/test_check_style_literals.py"]
-opened_commit = "1db54091da086dc8b88261134930a7c85b12b66d"
-whole_reason = "One package name across its pin, lockfile, imports and stylesheet import, which cannot build half renamed."
