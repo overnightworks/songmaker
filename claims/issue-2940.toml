@@ -1,7 +1,0 @@
-claim_id = "2e098a51c3524a91be2e6ad9c9bfdc8c"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "9e7b56cd5e4825b3299f9fb6e0965f67096d2536"
-branch = "claude/issue-2940-the-shared-playlist-s-replay-test-seeks"
-scope = ["frontend/e2e/share-playlist-player.spec.ts"]
-opened_commit = "eb0ea1eab52340363dc135a4049643b876a4a15d"
