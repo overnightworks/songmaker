@@ -12,18 +12,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.backend import TurnStopKind, TurnStopped
-from agent_runtime_client.backend.fake_gateway import (
+from agents.backend import TurnStopKind, TurnStopped
+from agents.backend.fake_gateway import (
     FakeGateway,
     Reply,
     completion,
     tool_call,
     tool_round,
 )
-from agent_runtime_client.backend.gateway import GatewayBackend
-from agent_runtime_client.config import AgentConfig, ChatGateway
-from agent_runtime_client.turn import FailureCode
-from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
+from agents.backend.gateway import GatewayBackend
+from agents.config import AgentConfig, ChatGateway
+from agents.turn import FailureCode
+from agents.turn_events import AssistantTextEvent, FinalEvent
 from fastapi.testclient import TestClient
 from support.cowriter_gateway import (
     API_GROUP,
@@ -344,7 +344,7 @@ def test_an_unset_agent_ends_the_turn_unavailable_without_a_request(world):
 
 
 def test_a_refused_agent_file_ends_the_turn_unavailable_and_is_logged(world, monkeypatch, caplog):
-    from agent_runtime_client.agents import AgentFileError
+    from agents.agent_file import AgentFileError
 
     from songmaker_cli.agent import backend
 
@@ -578,7 +578,7 @@ def test_no_tool_a_turn_runs_starts_audio_or_changes_pick_or_keep(world):
 def test_a_turn_read_to_its_end_holds_exactly_one_terminal_outcome_last(world, answers):
     import asyncio
 
-    from agent_runtime_client.turn import TurnMessage
+    from agents.turn import TurnMessage
 
     from songmaker_cli.agent.backend import TurnAnswer, TurnCaller, TurnProblem, run_cowriter_turn
 

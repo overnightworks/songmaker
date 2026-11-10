@@ -13,11 +13,11 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from agent_runtime_client.mcp_server import McpPersonFront, RouteTools, route_tools
-from agent_runtime_client.mcp_wire import MCP_ENDPOINT_PATH
-from agent_runtime_client.tools import Principal, not_an_agent_tool
-from agent_runtime_client.tools import ToolEffect as ToolEffect
-from agent_runtime_client.tools import agent_tool as agent_tool
+from agents.mcp_server import McpPersonFront, RouteTools, route_tools
+from agents.mcp_wire import MCP_ENDPOINT_PATH
+from agents.tools import Principal, not_an_agent_tool
+from agents.tools import ToolEffect as ToolEffect
+from agents.tools import agent_tool as agent_tool
 from starlette.requests import HTTPConnection
 from webauth.middleware.bearer_gate import (
     MarkedRoute,

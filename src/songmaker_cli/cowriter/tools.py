@@ -17,7 +17,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from agent_runtime_client.tools import ToolOutcome
+from agents.tools import ToolOutcome
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser

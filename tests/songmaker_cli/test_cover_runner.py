@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from typing import Final
 
 import pytest
-from agent_runtime_client.backend.fake_gateway import picture
+from agents.backend.fake_gateway import picture
 from PIL import Image
 from support.cowriter_gateway import (
     CowriterStack,

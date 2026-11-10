@@ -13,7 +13,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime_client.tools import (
+from agents.tools import (
     HandTool,
     JsonObject,
     Principal,

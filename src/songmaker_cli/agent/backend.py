@@ -19,18 +19,17 @@ from dataclasses import dataclass
 from importlib.resources import files
 from typing import TYPE_CHECKING, Final, assert_never
 
-from agent_runtime_client import turn_events
-from agent_runtime_client.agents import AgentDefinition, AgentFileError, TurnRequest, load_agent
-from agent_runtime_client.backend import (
+from agents import turn_events
+from agents.agent_file import AgentDefinition, AgentFileError, TurnRequest, load_agent
+from agents.backend import (
     GroupSource,
     TurnEvent,
     TurnPerson,
-    TurnStopKind,
     TurnStopped,
 )
-from agent_runtime_client.backend.gateway import GatewayBackend
-from agent_runtime_client.tools import Principal
-from agent_runtime_client.turn import RejectionCode, TurnMessage, TurnRole
+from agents.backend.gateway import GatewayBackend
+from agents.tools import Principal
+from agents.turn import StopOutcome, TurnMessage, TurnRole
 from webauth.config import installed_web_auth_config
 from webauth.oidc_login import AccessTokenRefusal, AccessTokenRefusalReason, current_groups
 
@@ -53,7 +52,6 @@ log = logging.getLogger(__name__)
 
 _AGENT_FILE: Final = "cowriter.md"
 _COVER_AGENT_FILE: Final = "cover.md"
-_NOT_ENABLED_CODES: Final = frozenset({RejectionCode.NOT_ENABLED, RejectionCode.FORBIDDEN})
 _NO_AGENT_CONFIGURED: Final = "no agent configured"
 
 
@@ -238,11 +236,17 @@ def _problem_of_failure(failure: TurnStopped | _GroupsRefusedError) -> TurnProbl
 
 def _problem_of_stop(stopped: TurnStopped) -> TurnProblem:
     detail = f"{stopped} {stopped.detail}" if stopped.detail else str(stopped)
-    if stopped.kind is TurnStopKind.REFUSED and stopped.code in _NOT_ENABLED_CODES:
-        return TurnProblem(AgentProblem.NOT_ENABLED, detail)
-    if stopped.kind is TurnStopKind.REFUSED and stopped.code is RejectionCode.BUSY:
-        return TurnProblem(AgentProblem.BUSY, detail, stopped.retry_after_s)
-    return TurnProblem(AgentProblem.UNAVAILABLE, detail)
+    match stopped.outcome:
+        case StopOutcome.NOT_ENABLED:
+            return TurnProblem(AgentProblem.NOT_ENABLED, detail)
+        case StopOutcome.BUSY:
+            return TurnProblem(AgentProblem.BUSY, detail, stopped.retry_after_s)
+        case StopOutcome.BUDGET_SPENT:
+            return TurnProblem(AgentProblem.UNAVAILABLE, detail)
+        case StopOutcome.UNAVAILABLE:
+            return TurnProblem(AgentProblem.UNAVAILABLE, detail)
+        case _:
+            assert_never(stopped.outcome)
 
 
 def _problem_of_refusal(refusal: AccessTokenRefusal) -> TurnProblem:

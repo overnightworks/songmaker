@@ -18,11 +18,11 @@
 #   settings, job timing, constants, leaves), and the routes never import each other.
 #   exhaustive: a module without a row breaks the contract. The one ignored import is
 #   settings reading the `agent` section's model from `agent.settings`, a leaf that
-#   imports no in-tree module (it holds the section the settings embed, as the
-#   agent-runtime client's `AgentConfig` does for every app).
+#   imports no in-tree module (it holds the section the settings embed, as
+#   the agents library's `AgentConfig` does for every app).
 # scoring-is-self-contained: the scorers reach neither persistence nor the HTTP
 #   framework.
-# agent-runtime-client-importers: the installed agent runtime client is one opaque node, so
+# agents-importers: the installed agents library is one opaque node, so
 #   this contract lists the modules that import it at all and a new importer shows as a
 #   diff here. Which of its submodules each may import is reviewed: only agent/backend.py
 #   and agent/mcp.py import its run and MCP machinery, agent/settings.py alone its
@@ -103,18 +103,18 @@ forbidden_modules =
     fastapi
     starlette
 
-[importlinter:contract:agent-runtime-client-importers]
-name = Only the agent, tool and route modules import the agent runtime client
+[importlinter:contract:agents-importers]
+name = Only the agent, tool and route modules import the agents library
 type = forbidden
 source_modules =
     songmaker_cli
 forbidden_modules =
-    agent_runtime_client
+    agents
 allow_indirect_imports = True
 ignore_imports =
-    songmaker_cli.agent.backend -> agent_runtime_client
-    songmaker_cli.agent.mcp -> agent_runtime_client
-    songmaker_cli.agent.settings -> agent_runtime_client
-    songmaker_cli.agent.tools -> agent_runtime_client
-    songmaker_cli.cowriter.tools -> agent_runtime_client
-    songmaker_cli.conversation_api -> agent_runtime_client
+    songmaker_cli.agent.backend -> agents
+    songmaker_cli.agent.mcp -> agents
+    songmaker_cli.agent.settings -> agents
+    songmaker_cli.agent.tools -> agents
+    songmaker_cli.cowriter.tools -> agents
+    songmaker_cli.conversation_api -> agents

@@ -8,6 +8,12 @@ mandatory_jobs = [
 ]
 
 [[gate.loosened]]
+what = 'import contract "Only the agent, tool and route modules import the agent runtime client" removed'
+item = "#2932"
+date = 2026-11-10
+reason = "the library is named agents since its release v0.29.0, so the contract carries the new module name and a new name; the same six modules and no other may import the library, as before"
+
+[[gate.loosened]]
 what = 'clone baseline adds src/songmaker_cli/album_api.py api_delete_album_cover <-> src/songmaker_cli/song_api.py api_delete_song_cover'
 item = "#2264"
 date = 2026-11-05

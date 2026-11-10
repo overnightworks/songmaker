@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from agent_runtime_client.backend.fake_gateway import completion, tool_call, tool_round
+from agents.backend.fake_gateway import completion, tool_call, tool_round
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from support.cowriter_gateway import (

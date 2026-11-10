@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
-from agent_runtime_client.mcp_wire import PROTOCOL_VERSION
-from agent_runtime_client.mcp_wire import PROTOCOL_VERSION_HEADER as PROTOCOL_HEADER
+from agents.mcp_wire import PROTOCOL_VERSION
+from agents.mcp_wire import PROTOCOL_VERSION_HEADER as PROTOCOL_HEADER
 from mcp.shared.inbound import MCP_METHOD_HEADER, MCP_NAME_HEADER, NAME_BEARING_METHODS
 from mcp_types import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
 from sqlalchemy.orm import sessionmaker

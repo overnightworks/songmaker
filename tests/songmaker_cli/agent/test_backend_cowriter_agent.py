@@ -7,9 +7,9 @@ import json
 from importlib.resources import files
 
 import pytest
-from agent_runtime_client.agents import load_agent
-from agent_runtime_client.backend.gateway import GatewayBackend
-from agent_runtime_client.tools import Principal
+from agents.agent_file import load_agent
+from agents.backend.gateway import GatewayBackend
+from agents.tools import Principal
 from fastapi import FastAPI
 from support.admin_client import build_admin_client
 from support.cowriter_gateway import agent_config, attach_cowriter_gateway, closed_port_origin
