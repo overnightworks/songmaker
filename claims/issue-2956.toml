@@ -3,6 +3,6 @@ agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
 role = "builder"
 base = "d09b51bc92ed9cd3e95509c88ae8efbb9626b705"
 branch = "claude/issue-2956-take-webauth-0-35-0"
-scope = [".github/workflows/e2e.yml", "docker/docker-compose.ci.yml", "docs/architecture.md", "docs/security.md", "pyproject.toml", "scripts/e2e_rate_window.py", "src/songmaker_cli/request_policies.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "tests/scripts/test_e2e_rate_window.py", "tests/songmaker_cli/test_auth_api_backchannel_logout.py", "tests/songmaker_cli/test_request_policies_rate_limit.py", "tests/songmaker_cli/test_server_middleware.py", "uv.lock"]
+scope = [".github/workflows/e2e.yml", "docker/docker-compose.ci.yml", "docs/architecture.md", "docs/security.md", "frontend/e2e/README.md", "pyproject.toml", "scripts/e2e_rate_window.py", "src/songmaker_cli/request_policies.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "tests/scripts/test_e2e_rate_window.py", "tests/songmaker_cli/test_auth_api_backchannel_logout.py", "tests/songmaker_cli/test_request_policies_rate_limit.py", "tests/songmaker_cli/test_server_middleware.py", "uv.lock"]
 opened_commit = "461146bbbd4ce215d9e7e5f7fab7e8e446b11082"
 whole_reason = "The pin breaks the call and the four references at once; the setting, the tests that pin what moved and the documents are true only with it."
