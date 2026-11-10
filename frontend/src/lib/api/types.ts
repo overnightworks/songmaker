@@ -144,7 +144,7 @@ export interface ChatTurnFinalFrame {
 export interface ChatTurnProblemFrame {
 	type: 'error';
 	status: number;
-	problem: 'unavailable' | 'busy' | 'not_enabled' | 'sign_in_again';
+	problem: 'unavailable' | 'busy' | 'budget_spent' | 'not_enabled' | 'sign_in_again';
 	retry_after_seconds?: number | null;
 }
 
@@ -192,7 +192,7 @@ export interface CoverRequest {
 }
 
 export interface CoverSuggestionRefusal {
-	problem: 'unavailable' | 'busy' | 'not_enabled' | 'sign_in_again';
+	problem: 'unavailable' | 'busy' | 'budget_spent' | 'not_enabled' | 'sign_in_again';
 }
 
 export interface CoverSuggestionResponse {

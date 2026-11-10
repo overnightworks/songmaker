@@ -27,6 +27,7 @@ const FROM_BEFORE = { followed: false };
 describe('the problem a cover run ended with', () => {
 	it.each([
 		['unavailable', 'unavailable'],
+		['budget_spent', 'budget_spent'],
 		['timeout', 'unavailable'],
 		[null, 'unavailable']
 	] as const)('reads a run that failed with %s as %s', (errorType, problem) => {
@@ -81,7 +82,7 @@ describe('the busy wait', () => {
 });
 
 describe('a refusal at the click', () => {
-	it.each(['unavailable', 'busy', 'not_enabled', 'sign_in_again'] as const)(
+	it.each(['unavailable', 'busy', 'budget_spent', 'not_enabled', 'sign_in_again'] as const)(
 		'reads the problem %s from the refusal body',
 		(problem) => {
 			expect(coverRefusalProblem({ problem })).toBe(problem);
@@ -102,7 +103,8 @@ describe('what each problem does to Suggest', () => {
 		['busy', true],
 		['not_enabled', true],
 		['sign_in_again', true],
-		['unavailable', false]
+		['unavailable', false],
+		['budget_spent', false]
 	] as const)('%s closes Suggest: %s', (problem, closes) => {
 		expect(coverProblemClosesSuggest(problem)).toBe(closes);
 	});

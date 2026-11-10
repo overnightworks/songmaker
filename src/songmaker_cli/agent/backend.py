@@ -242,7 +242,7 @@ def _problem_of_stop(stopped: TurnStopped) -> TurnProblem:
         case StopOutcome.BUSY:
             return TurnProblem(AgentProblem.BUSY, detail, stopped.retry_after_s)
         case StopOutcome.BUDGET_SPENT:
-            return TurnProblem(AgentProblem.UNAVAILABLE, detail)
+            return TurnProblem(AgentProblem.BUDGET_SPENT, detail)
         case StopOutcome.UNAVAILABLE:
             return TurnProblem(AgentProblem.UNAVAILABLE, detail)
         case _:

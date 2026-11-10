@@ -1,10 +1,11 @@
 import type { CoverSuggestionRefusal, JobItem } from '#lib/api/types.ts';
 
-/** The one of the agent's four problems a cover suggestion ended with or was refused for. */
+/** The one of the agent's problems a cover suggestion ended with or was refused for. */
 export type CoverProblem = CoverSuggestionRefusal['problem'];
 
 export const COVER_PROBLEM_TEXTS: Record<CoverProblem, string> = {
 	busy: 'Cover suggestions are busy. Try again when Suggest opens.',
+	budget_spent: 'The budget for cover suggestions is used up. Try again later.',
 	not_enabled: 'Cover suggestions are not enabled for your account. Ask an admin to enable them.',
 	unavailable: 'Cover suggestions are unavailable right now. Try again later.',
 	sign_in_again: 'Log in again to get cover suggestions'
@@ -36,7 +37,7 @@ export function coverBusyWaitSeconds(job: JobItem | null, now: number): number {
 
 /**
  * What the latest run's end says on this load. Any failure that is not one of
- * the four reads unavailable.
+ * the agent's problems reads unavailable.
  */
 export function coverRunProblem(
 	job: JobItem | null,
@@ -51,5 +52,5 @@ export function coverRunProblem(
 }
 
 export function coverProblemClosesSuggest(problem: CoverProblem | null): boolean {
-	return problem !== null && problem !== 'unavailable';
+	return problem !== null && problem !== 'unavailable' && problem !== 'budget_spent';
 }

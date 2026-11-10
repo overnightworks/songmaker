@@ -69,6 +69,11 @@ ERROR_FRAMES = [
         ' "retry_after_seconds": 30}\n\n',
     ),
     (
+        ChatTurnProblemFrame(status=429, problem=AgentProblem.BUDGET_SPENT),
+        'data: {"type": "error", "status": 429, "problem": "budget_spent",'
+        ' "retry_after_seconds": null}\n\n',
+    ),
+    (
         ChatTurnProblemFrame(status=403, problem=AgentProblem.NOT_ENABLED),
         'data: {"type": "error", "status": 403, "problem": "not_enabled",'
         ' "retry_after_seconds": null}\n\n',

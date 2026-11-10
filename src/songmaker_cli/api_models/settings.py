@@ -230,6 +230,7 @@ class AgentProblem(StrEnum):
 
     UNAVAILABLE = "unavailable"
     BUSY = "busy"
+    BUDGET_SPENT = "budget_spent"
     NOT_ENABLED = "not_enabled"
     SIGN_IN_AGAIN = "sign_in_again"
 
