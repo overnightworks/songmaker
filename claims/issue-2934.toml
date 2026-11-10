@@ -1,8 +1,0 @@
-claim_id = "dec975e2c69b4369ac7d76a2cd3432f4"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "341612d790f00f543ce81bfd7499e7ef87c269c5"
-branch = "claude/issue-2934-the-browser-suite-counts-in-the-verdict"
-scope = [".github/workflows/ci.yml", ".github/workflows/e2e.yml", "docs/testing.md", "frontend/e2e/README.md", "quality/config.toml", "tests/scripts/test_run_autodeploy_ignored_runs.py", "tests/test_packaging_boundary.py", "tests/workflows/test_ci_quality_gate.py"]
-opened_commit = "ddf52310f6bad5515401b6e12e41390be4342b1b"
-whole_reason = "One move: the workflow, its caller, the gate's name for it, and the two tests and two documents that describe how the suite is triggered change together."
