@@ -203,9 +203,10 @@ jobs:
         if: always()
         run: docker compose $COMPOSE_FILES down -v
 
-  # The one job the gate's mandatory list names for the browser suite: it stays
-  # one name however the matrix above is cut, and it runs when a leg fails,
-  # is cancelled or is skipped, which the gate would otherwise read as no result.
+  # The browser suite's one job, named in the gate's mandatory list: it stays one
+  # name however the matrix above is cut. It runs when a leg fails, is cancelled
+  # or is skipped, so it reports the legs' real result; a skipped check run would
+  # be left unjudged by the deploy's reading of a main commit's checks.
   browser-suite:
     name: Browser suite
     needs: smoke
