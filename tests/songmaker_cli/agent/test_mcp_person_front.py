@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.tools import AGENT_TOOL_EXTENSION, ToolEffect, ToolMark, read_decision
+from agents.tools import AGENT_TOOL_EXTENSION, ToolEffect, ToolMark, read_decision
 from pydantic import ValidationError
 from sqlalchemy.orm import sessionmaker
 from starlette.routing import Match

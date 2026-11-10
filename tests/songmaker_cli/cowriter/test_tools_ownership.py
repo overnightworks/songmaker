@@ -6,8 +6,8 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from agent_runtime_client.backend.fake_gateway import completion
-from agent_runtime_client.tools import Principal
+from agents.backend.fake_gateway import completion
+from agents.tools import Principal
 from support.cowriter_gateway import attach_cowriter_gateway
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 

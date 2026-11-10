@@ -18,17 +18,17 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.agents import load_agent
-from agent_runtime_client.backend import TurnStopKind, TurnStopped
-from agent_runtime_client.backend.fake_gateway import (
+from agents.agent_file import load_agent
+from agents.backend import TurnStopKind, TurnStopped
+from agents.backend.fake_gateway import (
     Reply,
     completion,
     picture,
     tool_call,
     tool_round,
 )
-from agent_runtime_client.backend.gateway import GatewayBackend
-from agent_runtime_client.turn import FailureCode, Principal, RejectionCode, person_fingerprint
+from agents.backend.gateway import GatewayBackend
+from agents.turn import FailureCode, Principal, RejectionCode, person_fingerprint
 from fastapi.testclient import TestClient
 from PIL import Image
 from support.cover_album_world import declared_suggest_refusal
@@ -394,6 +394,7 @@ _PROBLEM_OF_EVERY_STOP = [
     (TurnStopped(_REFUSED, RejectionCode.NOT_ENABLED), AgentProblem.NOT_ENABLED),
     (TurnStopped(_REFUSED, RejectionCode.FORBIDDEN), AgentProblem.NOT_ENABLED),
     (TurnStopped(_REFUSED, RejectionCode.BUSY), AgentProblem.BUSY),
+    (TurnStopped(_REFUSED, RejectionCode.BUDGET_SPENT), AgentProblem.UNAVAILABLE),
     (TurnStopped(_FAILED, FailureCode.PROVIDER_UNAVAILABLE), AgentProblem.UNAVAILABLE),
     (TurnStopped(_FAILED, FailureCode.PROVIDER_ERROR), AgentProblem.UNAVAILABLE),
     (TurnStopped(_FAILED, FailureCode.LIMIT_EXCEEDED), AgentProblem.UNAVAILABLE),

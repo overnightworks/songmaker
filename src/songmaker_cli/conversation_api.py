@@ -19,7 +19,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime_client.turn import TurnMessage
+from agents.turn import TurnMessage
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
