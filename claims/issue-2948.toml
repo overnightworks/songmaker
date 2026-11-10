@@ -1,7 +1,0 @@
-claim_id = "1098de07032c45c0a916e00bb3bb0730"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "ead8d397fb4434670400c1a81fc29e631d6f4684"
-branch = "claude/issue-2948-the-browser-jobs-install-their-browser-w"
-scope = [".github/workflows/e2e.yml", "docker/docker-compose.ci.yml"]
-opened_commit = "8334e69178091d943fa35166a8cfc31c0a5d8deb"
