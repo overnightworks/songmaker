@@ -1,0 +1,8 @@
+claim_id = "b8c7c2365fb54aaa96a27975f5831e7e"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "9e7b56cd5e4825b3299f9fb6e0965f67096d2536"
+branch = "claude/issue-2943-the-backend-shards-reports-are-compared"
+scope = ["scripts/check_backend_shard_identity.py", "tests/conftest.py", "tests/scripts/test_check_backend_shard_identity.py", "tests/support/node_id_record.py", "tests/workflows/test_ci_node_id_record.py"]
+opened_commit = "13f9ed7d83abfa72aac829410b8ad93b0afd808b"
+whole_reason = "One capability: the node-id record, the comparison that reads it and their two tests change together, and only together can the comparison be proven against reports pytest wrote."
