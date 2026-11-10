@@ -221,6 +221,11 @@ class Settings(BaseSettings):
         raw = value.strip()
         if raw and not _PUBLIC_BASE_URL_NETLOC.fullmatch(raw):
             raise ValueError(f"BACKCHANNEL_LOGOUT_HOST={raw!r} is not a plain host[:port]")
+        if raw.startswith("["):
+            raise ValueError(
+                f"BACKCHANNEL_LOGOUT_HOST={raw!r} is a bracketed IPv6 address, "
+                "which cannot pass the allowed-hosts check",
+            )
         return raw.lower()
 
     @property

@@ -209,25 +209,17 @@ def test_a_wrong_host_gets_an_empty_404_and_ends_nothing(world: World, host: str
 
 
 @pytest.fixture
-def world_that_lists_the_host_in_capitals(
-    tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytest.MonkeyPatch,
-) -> World:
+def host_listed_in_capitals(monkeypatch: pytest.MonkeyPatch) -> None:
     """TrustedHost matches case-sensitively, so a capitalised Host reaches the route only
-    where the deployment lists it capitalised."""
+    where the deployment lists it capitalised. Request it before `world`, which builds the app."""
     capitals = _configured_host().upper().split(":")[0]
     monkeypatch.setenv("ALLOWED_HOSTS", f"{get_settings().allowed_hosts},{capitals}")
     get_settings.cache_clear()
-    issuer = a_fake_issuer()
-    client, factory = make_test_app(
-        tmp_path, factory=pg_factory, oidc_sign_in=issuer.relying_party_for_app(),
-    )
-    return World(client, factory, issuer)
 
 
 def test_the_configured_host_matches_in_any_letter_case(
-    world_that_lists_the_host_in_capitals: World,
+    host_listed_in_capitals: None, world: World,
 ) -> None:
-    world = world_that_lists_the_host_in_capitals
     _sign_in_twice(world)
 
     response = _backchannel(
@@ -271,18 +263,27 @@ def test_an_unset_value_closes_the_route_for_every_host(
 @pytest.mark.parametrize(
     "value",
     [
-        pytest.param("unlisted.test:8080", id="host-part-not-in-allowed-hosts"),
         pytest.param("https://backchannel.test:8080", id="scheme"),
         pytest.param("backchannel.test:8080/auth", id="path"),
         pytest.param("*.test:8080", id="wildcard"),
         pytest.param("backchannel.test:8080,songmaker.test:8080", id="list"),
         pytest.param("user@backchannel.test:8080", id="credentials"),
+        pytest.param("[::1]:8080", id="bracketed-ipv6-address"),
     ],
 )
-def test_a_value_that_is_malformed_or_not_in_allowed_hosts_stops_the_web_app(
-    tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytest.MonkeyPatch, value: str,
+def test_a_malformed_value_fails_the_settings(
+    fresh_settings, monkeypatch: pytest.MonkeyPatch, value: str,
 ) -> None:
     monkeypatch.setenv("BACKCHANNEL_LOGOUT_HOST", value)
+
+    with pytest.raises(ValueError, match="BACKCHANNEL_LOGOUT_HOST"):
+        get_settings()
+
+
+def test_a_value_whose_host_part_is_not_in_allowed_hosts_stops_the_web_app(
+    tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BACKCHANNEL_LOGOUT_HOST", "unlisted.test:8080")
 
     with pytest.raises(ValueError, match="BACKCHANNEL_LOGOUT_HOST"):
         make_test_app(
