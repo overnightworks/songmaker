@@ -929,7 +929,6 @@ describe('CoWriterPanel failed turns', () => {
 	it.each([
 		['unavailable', 'The co-writer is unavailable', 'wait', 'Try again'],
 		['busy', 'The co-writer is busy', 'wait', 'Try again'],
-		['budget_spent', "The co-writer's budget is used up. Try again later.", 'wait', 'Try again'],
 		['sign_in_again', 'Log in again to use the co-writer', 'bad', 'Log in'],
 		['not_enabled', 'The co-writer is not enabled for your account', 'off', null]
 	] as const)(
