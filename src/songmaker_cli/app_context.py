@@ -16,6 +16,8 @@ from webauth.rate_limit import RedisRateLimitBackend
 from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from redis import Redis
 
     from songmaker_cli.settings import Settings
@@ -69,7 +71,7 @@ def get_app_context(request: Request) -> AppContext:
     return request.app.state.ctx
 
 
-def get_db_session(request: Request) -> Session:  # type: ignore[misc]
+def get_db_session(request: Request) -> Iterator[Session]:
     """FastAPI dependency: yield a SQLAlchemy session from AppContext."""
     ctx: AppContext = request.app.state.ctx
     session = ctx.db()
