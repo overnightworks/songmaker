@@ -1,7 +1,0 @@
-claim_id = "7afab3af7e754eb2a4c9763265b7e95c"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "ac0e6851c2ffe308b16be241fe5c4c40772decff"
-branch = "claude/issue-2955-the-database-session-dependency-is-annot"
-scope = ["src/songmaker_cli/app_context.py"]
-opened_commit = "0e4781282e96f82c61a6e5ebddf431dcb402ccdf"
