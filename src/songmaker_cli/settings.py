@@ -226,6 +226,12 @@ class Settings(BaseSettings):
                 f"BACKCHANNEL_LOGOUT_HOST={raw!r} is a bracketed IPv6 address, "
                 "which cannot pass the allowed-hosts check",
             )
+        port = raw.partition(":")[2]
+        if port and (port.startswith("0") or int(port) > 65535):
+            raise ValueError(
+                f"BACKCHANNEL_LOGOUT_HOST={raw!r} has a port no Host header carries "
+                "(1 to 65535, no leading zero)",
+            )
         return raw.lower()
 
     @property

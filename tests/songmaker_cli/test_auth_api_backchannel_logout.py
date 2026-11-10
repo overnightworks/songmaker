@@ -269,6 +269,9 @@ def test_an_unset_value_closes_the_route_for_every_host(
         pytest.param("backchannel.test:8080,songmaker.test:8080", id="list"),
         pytest.param("user@backchannel.test:8080", id="credentials"),
         pytest.param("[::1]:8080", id="bracketed-ipv6-address"),
+        pytest.param("backchannel.test:0", id="port-zero"),
+        pytest.param("backchannel.test:99999", id="port-above-65535"),
+        pytest.param("backchannel.test:08080", id="port-with-leading-zero"),
     ],
 )
 def test_a_malformed_value_fails_the_settings(

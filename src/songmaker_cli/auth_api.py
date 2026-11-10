@@ -55,9 +55,11 @@ def _require_backchannel_host_listed(settings: Settings) -> None:
     """A Host that TrustedHost refuses (it matches the part before the colon) would lose every
     logout without a sign."""
     configured = settings.backchannel_logout_host
-    if configured and configured.split(":")[0] not in allowed_hosts(settings):
+    host = configured.split(":")[0]
+    if configured and host not in allowed_hosts(settings):
         raise ValueError(
-            f"BACKCHANNEL_LOGOUT_HOST={configured!r} names a host that ALLOWED_HOSTS does not list",
+            f"BACKCHANNEL_LOGOUT_HOST={configured!r} names a host that ALLOWED_HOSTS does not "
+            f"list; it must list {host!r} in lower case",
         )
 
 
