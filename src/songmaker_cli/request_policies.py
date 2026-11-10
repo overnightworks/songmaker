@@ -8,6 +8,7 @@ middleware in `server.create_app`.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from typing import TYPE_CHECKING, Final
 
@@ -134,8 +135,9 @@ STYLE_SOURCES_ADDED: Final = {CspDirective.STYLE_SRC: ("'unsafe-inline'",)}
 
 
 def build_rate_limit_policy(settings: Settings) -> RateLimitPolicy:
-    """The three per-IP budgets and the paths that spend from each."""
-    return RateLimitPolicy(
+    """The three per-IP budgets and the paths that spend from each, and webauth's sign-in budget,
+    raised only when the settings ask for it."""
+    policy = RateLimitPolicy(
         default=RateLimitBudget(
             API_BUDGET_NAME, settings.ip_rate_limit, IP_RATE_LIMIT_WINDOW_SECONDS,
         ),
@@ -159,6 +161,12 @@ def build_rate_limit_policy(settings: Settings) -> RateLimitPolicy:
             exact=RATE_LIMIT_EXEMPT_PATHS,
             prefixes=(STATIC_ASSET_PREFIX,),
         ),
+    )
+    if settings.sign_in_rate_limit is None:
+        return policy
+    return dataclasses.replace(
+        policy,
+        sign_in=dataclasses.replace(policy.sign_in, max_requests=settings.sign_in_rate_limit),
     )
 
 

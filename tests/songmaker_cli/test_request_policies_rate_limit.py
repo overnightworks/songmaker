@@ -502,6 +502,32 @@ def test_the_installed_sign_in_budget_is_webauths_default(sign_in_client: TestCl
     assert _sign_in_budget(sign_in_client) == RateLimitPolicy().sign_in
 
 
+def test_the_sign_in_setting_raises_the_limit_and_keeps_webauths_window(
+    tmp_path: Path, pg_factory, fresh_settings, monkeypatch,
+) -> None:
+    default = RateLimitPolicy().sign_in
+    monkeypatch.setenv("SIGN_IN_RATE_LIMIT", str(default.max_requests + 1))
+    client, _ = make_test_app(
+        tmp_path, factory=pg_factory, oidc_sign_in=a_fake_issuer().relying_party_for_app(),
+    )
+
+    for _ in range(default.max_requests + 1):
+        assert _start(client) != 429
+    assert _start(client) == 429
+    raised = _sign_in_budget(client)
+    assert (raised.name, raised.window_seconds) == (default.name, default.window_seconds)
+
+
+@pytest.mark.parametrize("limit", ["0", "-1"])
+def test_a_non_positive_sign_in_setting_fails_the_start(
+    tmp_path: Path, pg_factory, fresh_settings, monkeypatch, limit: str,
+) -> None:
+    monkeypatch.setenv("SIGN_IN_RATE_LIMIT", limit)
+
+    with pytest.raises(ValueError, match="max_requests"):
+        make_test_app(tmp_path, factory=pg_factory)
+
+
 # ── Path classification ─────────────────────────────────────────────
 
 

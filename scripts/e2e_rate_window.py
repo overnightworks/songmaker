@@ -1,10 +1,10 @@
 """Report the busiest API and sign-in rate-limit windows of one E2E run from the access log.
 
-The E2E stack's ``IP_RATE_LIMIT`` override is sized from the API peak, and the
-sign-in peak shows whether webauth's sign-in budget still fits the suite, so the
-CI workflow prints both after every Playwright run instead of trusting a dated
-measurement. Each budget is measured over its own window. Run inside the web
-container, where the rate-limit policy that classifies each path is importable:
+The E2E stack's ``IP_RATE_LIMIT`` override is sized from the API peak and its
+``SIGN_IN_RATE_LIMIT`` from the sign-in peak, so the CI workflow prints both after
+every Playwright run instead of trusting a dated measurement. Each budget is
+measured over its own window. Run inside the web container, where the rate-limit
+policy that classifies each path is importable:
 
     docker compose logs --no-color --no-log-prefix songmaker-web \\
         | docker compose exec -T songmaker-web /app/.venv/bin/python \\
