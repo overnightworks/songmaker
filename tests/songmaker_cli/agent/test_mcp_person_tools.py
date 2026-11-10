@@ -12,7 +12,7 @@ from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.tools import AGENT_TOOL_EXTENSION, ToolExclusion, read_decision
+from agents.tools import AGENT_TOOL_EXTENSION, ToolExclusion, read_decision
 from sqlalchemy.orm import sessionmaker
 from support.mcp_tool_table import (
     ALICE,

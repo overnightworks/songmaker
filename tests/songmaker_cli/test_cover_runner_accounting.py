@@ -11,7 +11,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.backend.fake_gateway import picture
+from agents.backend.fake_gateway import picture
 from alembic import command
 from alembic.config import Config
 from PIL import Image

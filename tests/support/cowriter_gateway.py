@@ -20,12 +20,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx2
-from agent_runtime_client.agents import TurnRequest
-from agent_runtime_client.backend import AgentBackend, TurnEvent, TurnPerson, TurnStopped
-from agent_runtime_client.backend.fake_gateway import FakeGateway, Reply, completion
-from agent_runtime_client.backend.gateway import GatewayBackend
-from agent_runtime_client.config import BackendKind, ChatGateway
-from agent_runtime_client.turn_events import AssistantTextEvent, FinalEvent
+from agents.agent_file import TurnRequest
+from agents.backend import AgentBackend, TurnEvent, TurnPerson, TurnStopped
+from agents.backend.fake_gateway import FakeGateway, Reply, completion
+from agents.backend.gateway import GatewayBackend
+from agents.config import BackendKind, ChatGateway
+from agents.turn_events import AssistantTextEvent, FinalEvent
 from support.fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
 from support.web_app import issued_cookies
 

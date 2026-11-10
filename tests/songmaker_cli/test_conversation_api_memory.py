@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from agent_runtime_client.backend.fake_gateway import completion
+from agents.backend.fake_gateway import completion
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from support.cowriter_gateway import CowriterStack, attach_cowriter_gateway

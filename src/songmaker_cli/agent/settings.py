@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from agent_runtime_client.config import AgentConfig
+from agents.config import AgentConfig
 from pydantic import Field, model_validator
 
 
