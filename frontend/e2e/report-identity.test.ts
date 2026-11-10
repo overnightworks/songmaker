@@ -141,7 +141,11 @@ describe('compareReportIdentity', () => {
 		cause: RegExp;
 	};
 	const refusals: Case[] = [
-		{ title: 'no report at all', damage: (input) => (input.reports = []), cause: /no report/i },
+		{
+			title: 'no report at all',
+			damage: (input) => (input.reports = []),
+			cause: /^no report was given$/m
+		},
 		{
 			title: 'a report with errors',
 			damage: ({ reports }) => (reports[0].errors = [{ message: 'worker crashed' }]),

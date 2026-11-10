@@ -115,8 +115,8 @@ export const RAIL_FLOW_API_REQUEST_BUDGET = 38;
  * The count grows with the seeded album, not with this flow: playing a take
  * queues the album, and gathering that queue fetches every sibling song's
  * takes (`GET /api/songs/{id}` once each, `collectAlbumEntries` in
- * `stores/player.ts`). Other specs seed their songs into the same album
- * first, so in the full CI run that is 19 extra requests. Measured 02.10.2026
+ * `stores/player.ts`). Other specs seed their songs into the same album first:
+ * 19 extra requests in a run of the whole project, at most that in a CI shard. Measured 02.10.2026
  * on one build with 19 sibling songs: 64 for this cold address open and 64,
  * request for request, for the former album-page-then-song-row open; alone
  * against a fresh album, 45 for both. Repeated green runs measured 64 to 66
