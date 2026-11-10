@@ -291,10 +291,9 @@ def create_app(
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
     install_web_auth_middleware(
-        app, sign_in_paths=SIGN_IN_PATHS,
+        app, sign_in_paths=SIGN_IN_PATHS, csrf_origin=build_csrf_origin_policy(),
         security_headers=build_security_headers_policy(script_hashes),
         body_size=build_body_size_policy(settings), rate_limit=build_rate_limit_policy(settings),
-        csrf_origin=build_csrf_origin_policy(),
         bearer_gate=build_bearer_gate(settings, app.state.oidc_sign_in, ctx.db, mcp_resource),
     )
 
