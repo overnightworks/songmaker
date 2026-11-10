@@ -206,6 +206,7 @@ def _test_stacks() -> dict[str, tuple[str, ...]]:
     return {
         "e2e-workflow": workflow_files,
         "voices-e2e": (*workflow_files, *VOICES_E2E_OVERLAY),
+        "e2e-cache-writer": (*workflow_files, "-f", "docker/docker-compose.ci-cache.yml"),
     }
 
 

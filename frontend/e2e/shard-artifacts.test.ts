@@ -21,8 +21,8 @@ function choose(...names: string[]) {
 describe('the newest attempt per shard', () => {
 	it('is the highest attempt present, compared as a number', () => {
 		const { chosen, problems } = choose(
-			'report-alpha-1-1',
 			'report-alpha-1-2',
+			'report-alpha-1-1',
 			'report-alpha-2-9',
 			'report-alpha-2-10',
 			'report-alpha-3-1',

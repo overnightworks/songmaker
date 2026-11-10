@@ -139,7 +139,7 @@ COMPOSE_CACHE_OVERLAY = ROOT / "docker/docker-compose.ci-cache.yml"
 E2E_FILE = ROOT / ".github/workflows/e2e.yml"
 E2E = yaml.safe_load(E2E_FILE.read_text())
 E2E_JOBS = E2E["jobs"]
-AGGREGATOR_ID, AGGREGATOR = aggregator_of(E2E_JOBS)
+_, AGGREGATOR = aggregator_of(E2E_JOBS)
 LEG_IDS = sorted(as_list(AGGREGATOR["needs"]))
 LEGS = [E2E_JOBS[leg_id] for leg_id in LEG_IDS]
 AGGREGATOR_STEPS = AGGREGATOR["steps"]
@@ -361,4 +361,5 @@ def test_one_job_writes_the_build_cache_and_only_on_main():
     ]
     assert len(overlay_mentions) == 1
     assert "github.ref == 'refs/heads/main'" in overlay_mentions[0]
-    assert "matrix.shard == 1" in overlay_mentions[0]
+    for axis in LEGS[0]["strategy"]["matrix"]:
+        assert f"matrix.{axis} ==" in overlay_mentions[0]

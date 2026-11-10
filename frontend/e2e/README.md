@@ -4,7 +4,7 @@ Playwright drives the real stack — `docker/docker-compose.ci.yml` (Postgres, R
 migrations, web, music worker) — through the click paths an operator walks by hand. Unit
 tests keep missing those; `.github/workflows/e2e.yml` runs these as the `E2E` job of `ci.yml`, on every PR and every push to main.
 
-CI cuts each Playwright project into four shards by file (`--shard=<n>/4`, the total being
+CI cuts each Playwright project into four shards by file (`--shard=<n>/<SHARD_TOTAL>`, the total being
 `SHARD_TOTAL` in the workflow). Each shard is a job with its own runner, stack, seeded
 sessions and rate-limit window, so a stack serves about a quarter of a project's files, and
 the specs are not re-sorted: a shard keeps the order of its files. The `Browser suite` job
