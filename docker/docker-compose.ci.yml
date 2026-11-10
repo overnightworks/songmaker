@@ -47,7 +47,7 @@ services:
     # browser traffic -- comes from the runner's one address. In CI each
     # shard of a project has its own job and stack; a local run drives both
     # projects, whole, through one stack, so this limit is sized for that run.
-    # The E2E workflow's "Busiest API rate-limit window" step prints the
+    # The E2E workflow's "Busiest API and sign-in rate-limit windows" step prints the
     # measured peak on every run; keep this at least 3x above it, with room
     # for one retry inside the window (#1555). Production remains at its
     # 120/600 limits.

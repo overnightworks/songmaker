@@ -174,7 +174,7 @@ jobs:
       # IP_RATE_LIMIT and SIGN_IN_RATE_LIMIT in docker/docker-compose.ci.yml are
       # sized, so neither is a dated number gone stale. Each budget is measured
       # over its own window, and each leg's stack has windows of its own.
-      - name: Busiest API rate-limit window
+      - name: Busiest API and sign-in rate-limit windows
         if: ${{ !cancelled() && steps.boot.outcome == 'success' }}
         run: |
           set -euo pipefail
