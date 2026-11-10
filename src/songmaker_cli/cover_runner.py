@@ -50,6 +50,7 @@ COVER_RUNNER_POLL_INTERVAL_SECONDS = 1.0
 _PROBLEM_SENTENCES: Final[dict[AgentProblem, str]] = {
     AgentProblem.UNAVAILABLE: "Cover suggestions are unavailable right now. Try again later.",
     AgentProblem.BUSY: "Cover suggestions are busy. Try again when Suggest opens.",
+    AgentProblem.BUDGET_SPENT: "The budget for cover suggestions is used up. Try again later.",
     AgentProblem.NOT_ENABLED: (
         "Cover suggestions are not enabled for your account. Ask an admin to enable them."
     ),

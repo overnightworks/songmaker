@@ -212,8 +212,6 @@ def _arrange_reply(world: World, arrangement: str) -> None:
     match arrangement:
         case "gateway-error":
             world.stack.replies(Reply(status=500))
-        case "budget-refusal":
-            world.stack.replies(Reply(status=400, body=b'{"error": {"message": "Budget"}}'))
         case "no-words-after-a-tool-round":
             world.stack.replies(
                 tool_round(tool_call("call-1", "get_song", {"song_id": "s1"})),
@@ -233,8 +231,8 @@ def _arrange_reply(world: World, arrangement: str) -> None:
 @pytest.mark.parametrize(
     "arrangement",
     [
-        "gateway-error", "budget-refusal", "no-words-after-a-tool-round", "refused-connection",
-        "missing-key-file", "tool-calls-crossed", "deadline-passed",
+        "gateway-error", "no-words-after-a-tool-round", "refused-connection", "missing-key-file",
+        "tool-calls-crossed", "deadline-passed",
     ],
 )
 def test_a_turn_the_gateway_cannot_finish_ends_unavailable_and_stores_no_answer(
@@ -285,6 +283,20 @@ def test_a_busy_gateway_reads_busy_with_the_wait_it_named(world):
 
     assert (problem["status"], problem["problem"], problem["retry_after_seconds"]) == (
         429, "busy", 7,
+    )
+    assert world.stored_roles() == ["user"]
+
+
+def test_a_spent_budget_reads_budget_spent_as_a_refusal_with_no_wait(world):
+    world.stack.replies(
+        Reply(status=422, body=b'{"error": {"type": "budget_exceeded", "code": "422"}}'),
+    )
+
+    events = world.turn()
+
+    problem = _frame(events, "error")
+    assert (problem["status"], problem["problem"], problem["retry_after_seconds"]) == (
+        429, "budget_spent", None,
     )
     assert world.stored_roles() == ["user"]
 

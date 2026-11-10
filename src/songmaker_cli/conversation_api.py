@@ -197,6 +197,7 @@ async def _run_chat_turn(
 _PROBLEM_STATUS: Final = {
     AgentProblem.UNAVAILABLE: 503,
     AgentProblem.BUSY: 429,
+    AgentProblem.BUDGET_SPENT: 429,
     AgentProblem.NOT_ENABLED: 403,
     AgentProblem.SIGN_IN_AGAIN: 401,
 }

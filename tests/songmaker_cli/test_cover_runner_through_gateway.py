@@ -291,7 +291,7 @@ def test_a_job_refused_at_its_start_ends_before_any_request(world, change, probl
     assert world.suggestions() == []
 
 
-# 13-17 and 23: what the gateway answers ends the job as one of the four problems.
+# 13-17 and 23: what the gateway answers ends the job as one of the agent's problems.
 _OVER_COVER_PIXELS = (5000, 4001)
 
 
@@ -315,10 +315,6 @@ def _empty_entry() -> Reply:
 @pytest.mark.parametrize(
     ("reply", "problem"),
     [
-        (
-            Reply(status=422, body=b'{"error":{"type":"budget_exceeded","code":"422"}}'),
-            AgentProblem.UNAVAILABLE,
-        ),
         (Reply(status=400, body=b'{"error":"moderation_blocked"}'), AgentProblem.UNAVAILABLE),
         (Reply(status=403, body=b'{"error":"model not allowed"}'), AgentProblem.UNAVAILABLE),
         (Reply(status=500), AgentProblem.UNAVAILABLE),
@@ -332,7 +328,7 @@ def _empty_entry() -> Reply:
         (picture(_image_bytes("WEBP")), AgentProblem.UNAVAILABLE),
     ],
     ids=[
-        "budget-422", "moderation-400", "model-403", "gateway-500", "two-entries", "url",
+        "moderation-400", "model-403", "gateway-500", "two-entries", "url",
         "non-canonical-base64", "empty", "not-an-image", "over-8-mib", "over-20-mp", "webp",
     ],
 )
@@ -391,13 +387,27 @@ def test_a_missing_key_file_ends_unavailable_without_a_request(world):
     assert world.picture_requests() == []
 
 
-# 16 and the one classifier: every stop the client defines maps to one of the four problems.
+def test_a_spent_budget_at_the_gateway_ends_the_job_budget_spent_with_no_wait(world):
+    world.stack.replies(
+        Reply(status=422, body=b'{"error":{"type":"budget_exceeded","code":"422"}}'),
+    )
+    job_id = world.queue()
+
+    world.run_next()
+
+    job = world.job(job_id)
+    assert (job.status, job.error_type) == (JobStatus.FAILED, AgentProblem.BUDGET_SPENT.value)
+    assert job.retry_after_seconds is None
+    assert world.suggestions() == []
+
+
+# 16 and the one classifier: every stop the client defines maps to one of the agent's problems.
 _REFUSED, _FAILED = TurnStopKind.REFUSED, TurnStopKind.FAILED
 _PROBLEM_OF_EVERY_STOP = [
     (TurnStopped(_REFUSED, RejectionCode.NOT_ENABLED), AgentProblem.NOT_ENABLED),
     (TurnStopped(_REFUSED, RejectionCode.FORBIDDEN), AgentProblem.NOT_ENABLED),
     (TurnStopped(_REFUSED, RejectionCode.BUSY), AgentProblem.BUSY),
-    (TurnStopped(_REFUSED, RejectionCode.BUDGET_SPENT), AgentProblem.UNAVAILABLE),
+    (TurnStopped(_REFUSED, RejectionCode.BUDGET_SPENT), AgentProblem.BUDGET_SPENT),
     (TurnStopped(_FAILED, FailureCode.PROVIDER_UNAVAILABLE), AgentProblem.UNAVAILABLE),
     (TurnStopped(_FAILED, FailureCode.PROVIDER_ERROR), AgentProblem.UNAVAILABLE),
     (TurnStopped(_FAILED, FailureCode.LIMIT_EXCEEDED), AgentProblem.UNAVAILABLE),
@@ -413,7 +423,7 @@ def test_the_stop_table_names_every_stop_the_client_defines():
 
 
 @pytest.mark.parametrize(("stopped", "problem"), _PROBLEM_OF_EVERY_STOP, ids=str)
-def test_every_stop_of_a_picture_run_is_one_of_the_four_problems(world, stopped, problem):
+def test_every_stop_of_a_picture_run_is_one_of_the_agents_problems(world, stopped, problem):
     world.stack.behaves(stops(stopped))
     job_id = world.queue()
 
