@@ -87,42 +87,53 @@ def _named(heading: str, node_ids: Iterable[str]) -> str:
     return "\n".join(lines)
 
 
+def _report_problems(reports: Sequence[ShardReport | UnreadableReport]) -> list[str]:
+    problems = []
+    for report in reports:
+        if isinstance(report, UnreadableReport):
+            problems.append(f"cannot read report {report.name}: {report.reason}")
+        elif not report.node_ids and not report.records_without_node_id:
+            problems.append(f"report {report.name} has no record")
+        elif report.records_without_node_id:
+            problems.append(
+                f"report {report.name} has {report.records_without_node_id} "
+                "records without a node id"
+            )
+    return problems
+
+
+def _collection_problems(collected: Sequence[str]) -> list[str]:
+    if not collected:
+        return ["the collected listing holds no node id"]
+    listed_twice = [node_id for node_id, count in Counter(collected).items() if count > 1]
+    if listed_twice:
+        return [_named("node ids listed twice in the collected listing", listed_twice)]
+    return []
+
+
 def find_problems(
     collected: Sequence[str],
     reports: Sequence[ShardReport | UnreadableReport],
     expected_reports: int,
 ) -> list[str]:
     """Every way the reports fail to hold each collected node id exactly once."""
-    problems = []
-    if not collected:
-        problems.append("the collected listing holds no node id")
-    listed_twice = [node_id for node_id, count in Counter(collected).items() if count > 1]
-    if listed_twice:
-        problems.append(_named("node ids listed twice in the collected listing", listed_twice))
+    problems = _collection_problems(collected)
     if len(reports) != expected_reports:
         problems.append(f"expected {expected_reports} reports, got {len(reports)}")
-    reported: Counter[str] = Counter()
-    for report in reports:
-        if isinstance(report, UnreadableReport):
-            problems.append(f"cannot read report {report.name}: {report.reason}")
-            continue
-        if not report.node_ids and not report.records_without_node_id:
-            problems.append(f"report {report.name} has no record")
-        if report.records_without_node_id:
-            problems.append(
-                f"report {report.name} has {report.records_without_node_id} "
-                "records without a node id"
-            )
-        reported.update(report.node_ids)
-    repeated = [node_id for node_id, count in reported.items() if count > 1]
-    if repeated:
-        problems.append(_named("node ids reported more than once", repeated))
-    uncollected = reported.keys() - set(collected)
-    if uncollected:
-        problems.append(_named("node ids reported but not collected", uncollected))
-    missing = set(collected) - reported.keys()
-    if missing:
-        problems.append(_named("collected node ids in no report", missing))
+    problems += _report_problems(reports)
+    reported = Counter(
+        node_id
+        for report in reports
+        if isinstance(report, ShardReport)
+        for node_id in report.node_ids
+    )
+    for heading, node_ids in (
+        ("node ids reported more than once", [i for i, n in reported.items() if n > 1]),
+        ("node ids reported but not collected", reported.keys() - set(collected)),
+        ("collected node ids in no report", set(collected) - reported.keys()),
+    ):
+        if node_ids:
+            problems.append(_named(heading, node_ids))
     return problems
 
 
