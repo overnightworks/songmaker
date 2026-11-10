@@ -21,7 +21,7 @@ env:
 jobs:
   smoke:
     name: Boot stack + library flows (${{ matrix.project }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Each project runs 15-22 min on its own runner; this ceiling guards against a hang, not a slow suite.
     timeout-minutes: 40
     strategy:
@@ -120,12 +120,13 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
-      # why: the apt mirror once served at a few dozen kB/s and the install took
-      # 12.4 min; past 15 min the step is a hang, and it must not eat the job's ceiling.
+      # why: no system packages are installed: the pinned runner image carries Chromium's
+      # libraries, and the package mirror can hang. The browser download takes seconds,
+      # so past 15 min the step is a hang and must not eat the job's ceiling.
       - name: Install Playwright Chromium
         working-directory: frontend
         timeout-minutes: 15
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
 
       - name: Library flows (${{ matrix.project }})
         working-directory: frontend
