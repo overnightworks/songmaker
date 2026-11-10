@@ -332,9 +332,17 @@ test('1374_rule_5 P6: shuffle preserves the song across stream classic stream', 
 	await currentCover(page, realCover(realPlaylist, 1));
 });
 
-async function finishAndReplay(page: Page, order = [1, 2, 3]) {
+// The play button shows a spinner (aria-busy) while a selected take loads and
+// swaps to Pause once it plays; a seek made before that is lost when the jump
+// lands.
+async function seekToEndOfPlayingTake(page: Page) {
+	await expect(control(page, 'Pause')).toHaveAttribute('aria-busy', 'false');
 	const maximum = Number(await slider(page).getAttribute('max'));
 	await slider(page).fill((maximum - 0.4).toFixed(1));
+}
+
+async function finishAndReplay(page: Page, order = [1, 2, 3]) {
+	await seekToEndOfPlayingTake(page);
 	await expect(page.locator('.play-again')).toBeVisible({ timeout: 15000 });
 	const step = Number(await slider(page).getAttribute('step'));
 	await expect
@@ -380,8 +388,7 @@ test('1374_rule_7 P7: classic replay starts the first entry with shuffle off and
 	});
 	expect(order[0]).toBe(2);
 	for (const position of order.slice(1)) {
-		const maximum = Number(await slider(page).getAttribute('max'));
-		await slider(page).fill((maximum - 0.4).toFixed(1));
+		await seekToEndOfPlayingTake(page);
 		await expect(row(page, position)).toHaveAttribute('aria-current', 'true');
 	}
 	await finishAndReplay(page, order);
