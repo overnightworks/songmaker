@@ -279,14 +279,18 @@ jobs:
         working-directory: frontend
         env:
           PROJECT: desktop
-        run: node e2e/shard-artifacts.ts e2e-json-report "$PROJECT" "$SHARD_TOTAL" "$RUNNER_TEMP/reports/$PROJECT" > "$RUNNER_TEMP/chosen-$PROJECT.txt"
+        run: |
+          node e2e/shard-artifacts.ts e2e-json-report "$PROJECT" "$SHARD_TOTAL" "$RUNNER_TEMP/reports/$PROJECT" > "$RUNNER_TEMP/chosen-$PROJECT.txt"
+          cat "$RUNNER_TEMP/chosen-$PROJECT.txt"
 
       - name: Choose the newest report of each mobile shard
         if: ${{ !cancelled() }}
         working-directory: frontend
         env:
           PROJECT: mobile
-        run: node e2e/shard-artifacts.ts e2e-json-report "$PROJECT" "$SHARD_TOTAL" "$RUNNER_TEMP/reports/$PROJECT" > "$RUNNER_TEMP/chosen-$PROJECT.txt"
+        run: |
+          node e2e/shard-artifacts.ts e2e-json-report "$PROJECT" "$SHARD_TOTAL" "$RUNNER_TEMP/reports/$PROJECT" > "$RUNNER_TEMP/chosen-$PROJECT.txt"
+          cat "$RUNNER_TEMP/chosen-$PROJECT.txt"
 
       # The reports' ids hash the project and the working directory, so the listing
       # is made from frontend/ with the legs' environment and without a filter. No
