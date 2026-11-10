@@ -1,0 +1,8 @@
+claim_id = "e337f7f3851b4b09a91ece6760aee8ce"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "2068e4ae6d9d826bfa0f417cbbda5be7c323b739"
+branch = "claude/issue-2932-take-agents-0-29-0-the-agents-name-and-a"
+scope = [".importlinter", "docker/music-worker.Dockerfile", "docs/security.md", "pyproject.toml", "src", "tests", "uv.lock"]
+opened_commit = "28d1251a23ec114ee2886975f51a32caa4d3d708"
+whole_reason = "The pins, the import rename they force and the outcome match that replaces the code match are one bump; split, either the lock, the imports or the type check fail."
