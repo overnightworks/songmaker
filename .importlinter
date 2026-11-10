@@ -18,7 +18,7 @@
 #   settings, job timing, constants, leaves), and the routes never import each other.
 #   exhaustive: a module without a row breaks the contract. The one ignored import is
 #   settings reading the `agent` section's model from `agent.settings`, a leaf that
-#   imports no in-tree module (it holds the section the settings embed, as the
+#   imports no in-tree module (it holds the section the settings embed, as
 #   the agents library's `AgentConfig` does for every app).
 # scoring-is-self-contained: the scorers reach neither persistence nor the HTTP
 #   framework.
