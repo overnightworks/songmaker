@@ -12,14 +12,16 @@ const COVERAGE_DIR = path.join(
 );
 const APP_SOURCE = /(?:^|\/)(src\/.*)$/;
 
-export function coverageStoreDir(project: string): string {
-	return path.join(COVERAGE_DIR, project);
+// A root is a directory laid out like the coverage directory, so a shard's
+// store and its time file travel together.
+export function coverageStoreDir(project: string, root: string = COVERAGE_DIR): string {
+	return path.join(root, project);
 }
 
 // One line per test: the milliseconds its coverage took to stop and store.
 // Beside the store, because generating a report cleans the store's directory.
-export function collectionTimeFile(project: string): string {
-	return path.join(COVERAGE_DIR, `${project}.collection-ms`);
+export function collectionTimeFile(project: string, root: string = COVERAGE_DIR): string {
+	return path.join(root, `${project}.collection-ms`);
 }
 
 // The build's source maps name each source relative to the bundle, which
@@ -29,10 +31,21 @@ function repositoryPath(sourcePath: string): string {
 	return match ? `frontend/${match[1]}` : sourcePath;
 }
 
-export function coverageOptions(project: string): CoverageReportOptions {
+// Extra roots hold stores of the same project to merge into the report; the
+// own store is read by the collector itself and is never also an input.
+export function coverageOptions(
+	project: string,
+	extraRoots: readonly string[] = [],
+	root: string = COVERAGE_DIR
+): CoverageReportOptions {
 	return {
 		name: `E2E coverage (${project})`,
-		outputDir: coverageStoreDir(project),
+		outputDir: coverageStoreDir(project, root),
+		...(extraRoots.length > 0 && {
+			inputDir: extraRoots.map((extraRoot) =>
+				path.join(coverageStoreDir(project, extraRoot), '.cache')
+			)
+		}),
 		reports: ['lcovonly', 'html'],
 		logging: 'error',
 		entryFilter: (entry) => new URL(entry.url).pathname.startsWith('/_app/'),
