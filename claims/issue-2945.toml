@@ -1,8 +1,0 @@
-claim_id = "01e6f8194b94413b8ac9a1f912cbab75"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "a012e6ef46a08a52079f95a5eab36be19798bc0a"
-branch = "claude/issue-2945-a-person-whose-agent-budget-is-spent-rea"
-scope = ["docs/architecture.md", "docs/navigation.md", "docs/security.md", "frontend/e2e/album-cover.spec.ts", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/seed-cover.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/components/AlbumCoverEditorProblems.test.ts", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/utils/cover-problem.test.ts", "frontend/src/lib/utils/cover-problem.ts", "frontend/src/lib/utils/cowriter-ui.test.ts", "frontend/src/lib/utils/cowriter-ui.ts", "src/songmaker_cli/agent/backend.py", "src/songmaker_cli/api_models/settings.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/cover_runner.py", "tests/songmaker_cli/test_conversation_api_gateway_turn.py", "tests/songmaker_cli/test_conversation_api_stream_frames.py", "tests/songmaker_cli/test_cover_runner_through_gateway.py"]
-opened_commit = "e577651522151204d2963b84d930843060e74527"
-whole_reason = "The problem's name is one contract across the API, the generated types and both surfaces; a part of it does not pass the type check."
