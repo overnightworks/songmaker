@@ -4,6 +4,7 @@ mandatory_jobs = [
     "Alert rules (promtool)",
     "Combine backend coverage",
     "Frontend",
+    "E2E / Browser suite",
 ]
 
 [[gate.loosened]]

@@ -74,8 +74,7 @@ A test that takes `pg_factory` and `fresh_settings` lists `pg_factory` first, be
 - **CI Playwright**: measured and reported per project, never judged and never merged with Vitest's figures. The CI stack's web image is built with source maps (a build argument only `docker/docker-compose.ci.yml` sets; a default build writes none), and `e2e/coverage-test.ts` records each test page's Chromium JavaScript coverage. After the tests, `e2e/coverage-report.ts` turns a project's recordings into an LCOV file and an HTML report with `frontend/src/...` paths, uploaded as the `e2e-coverage-<project>` artifact beside the figures and collection time in the run summary. A failed report shows as a warning and fails nothing. Pages from a spec's own `browser.newContext`, and popups, run unrecorded, so the report under-counts what those flows reach. The arms differ from Vitest's (a browser converter maps the minified bundle back to source, Vitest reads the dev-mode code), so the two reports are read side by side. A sweep reads the E2E report of the commit its slice builds on: an arm whose location that report shows reached gets no unit cell and is named "reached end to end".
 - **Not measured**: `scripts/`, because the backend `--cov` flags name only `songmaker_cli`, `audio_engine`, `acestep_engine` and `acestep_worker`, so `scripts/` stays outside the coverage reports (Sonar scopes it but excludes it from coverage).
 
-GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml` and `code-scanning.yml`) run on push/PR to `main`.
-Code scanning also runs weekly. The live checks are:
+GitHub workflows (`.github/workflows/ci.yml` and `code-scanning.yml`) run on push/PR to `main`; `ci.yml` also runs on dispatch, and code scanning weekly. `e2e.yml` has no trigger of its own: `ci.yml` calls it as the `E2E` job, so the browser suite runs with every `ci.yml` run, under its concurrency group. The live checks are:
 
 | Job | What |
 |---|---|
@@ -83,7 +82,7 @@ Code scanning also runs weekly. The live checks are:
 | Combine backend coverage | Combines the Backend coverage data and judges the line and branch floors (see Coverage Targets) |
 | Quality | `quality / verdict`: `quality check`, Sonar findings, mandatory jobs and both coverage reports |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
-| E2E | Boots the CI stack (`docker/docker-compose.ci.yml`: Postgres, Redis, web and the music worker; web migrates at start, and the boot is two `up --wait` steps, the stores first, so a worker image that cannot start fails the boot), curl-smokes it, then drives the library flows in Chromium against it, one job per Playwright project (`desktop`, `mobile`), each with its own runner and stack |
+| E2E | Boots the CI stack (`docker/docker-compose.ci.yml`: Postgres, Redis, web and the music worker; web migrates at start, and the boot is two `up --wait` steps, the stores first, so a worker image that cannot start fails the boot), curl-smokes it, then drives the library flows in Chromium against it, one job per Playwright project (`desktop`, `mobile`), each with its own runner and stack. `E2E / Browser suite` waits for both, runs even when one leg fails, is cancelled or is skipped, and is red unless both succeeded; it is a mandatory job of the gate |
 | Security | runs inside `quality / verdict`: quality's `python-security` rule (ruff's `S` rules; known false positives carry a `# noqa: S…` with its reason) · Python lockfiles are covered by quality's advisory rule (the frontend has only devDependencies, so no production audit applies, and its `pnpm-lock.yaml` is not audited until quality's advisory rule reads it) |
 
 ### No-silent-fallbacks check

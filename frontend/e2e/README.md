@@ -2,7 +2,7 @@
 
 Playwright drives the real stack — `docker/docker-compose.ci.yml` (Postgres, Redis,
 migrations, web, music worker) — through the click paths an operator walks by hand. Unit
-tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
+tests keep missing those; `.github/workflows/e2e.yml` runs these as the `E2E` job of `ci.yml`, on every PR and every push to main; its `Browser suite` job is a mandatory job of the quality gate.
 
 ## What runs
 
