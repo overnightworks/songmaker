@@ -315,7 +315,10 @@ def _empty_entry() -> Reply:
 @pytest.mark.parametrize(
     ("reply", "problem"),
     [
-        (Reply(status=422, body=b'{"error":{"type":"budget_exceeded","code":"422"}}'), AgentProblem.UNAVAILABLE),
+        (
+            Reply(status=422, body=b'{"error":{"type":"budget_exceeded","code":"422"}}'),
+            AgentProblem.UNAVAILABLE,
+        ),
         (Reply(status=400, body=b'{"error":"moderation_blocked"}'), AgentProblem.UNAVAILABLE),
         (Reply(status=403, body=b'{"error":"model not allowed"}'), AgentProblem.UNAVAILABLE),
         (Reply(status=500), AgentProblem.UNAVAILABLE),
