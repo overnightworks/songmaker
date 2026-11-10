@@ -1,5 +1,5 @@
 # CI override for docker-compose.yml — boots the web-facing services and the
-# music worker (no GPU, no monitoring) so the stack fits an ubuntu-latest runner.
+# music worker (no GPU, no monitoring) so the stack fits an ubuntu-24.04 runner.
 # `profiles: [gpu]` keeps the ACE-Step worker, the scoring worker (torch and a
 # baked Whisper checkpoint) and the monitoring services out of both
 # `docker compose config` and `up` without needing to delete them here.
