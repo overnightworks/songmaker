@@ -79,7 +79,7 @@ def test_failing():
 class Scenario:
     """What the script is given: the listing text, the reports' texts and the count it expects."""
 
-    listing: str
+    listing: str | None
     reports: tuple[str, ...]
     expected_reports: int = SHARDS
 
@@ -170,17 +170,17 @@ def first_node_id(report: str) -> str:
 REFUSALS: dict[str, Callable[[Scenario], tuple[Scenario, str, str | None]]] = {
     "fewer reports than expected": lambda real: (
         Scenario(real.listing, real.reports[:1]),
-        "expected 2 reports, got 1",
+        f"report of shard 2 is missing ({report_file_name(2)})",
         None,
     ),
     "more reports than expected": lambda real: (
         Scenario(real.listing, real.reports + real.reports[:1]),
-        "expected 2 reports, got 3",
+        f"report file {report_file_name(3)} is beyond the 2 expected",
         None,
     ),
     "a report that is no XML": lambda real: (
         Scenario(real.listing, with_report(real, 0, real.reports[0][:200])),
-        "cannot read report",
+        f"cannot read report {report_file_name(1)}",
         None,
     ),
     "a report without a record": lambda real: (
@@ -219,6 +219,11 @@ REFUSALS: dict[str, Callable[[Scenario], tuple[Scenario, str, str | None]]] = {
         "in no report",
         first_node_id(real.reports[0]),
     ),
+    "a missing listing": lambda real: (
+        Scenario(None, real.reports),
+        "cannot read the collected listing",
+        None,
+    ),
     "an empty listing": lambda real: (
         Scenario("", real.reports),
         "holds no node id",
@@ -234,20 +239,29 @@ REFUSALS: dict[str, Callable[[Scenario], tuple[Scenario, str, str | None]]] = {
 
 @pytest.fixture(autouse=True)
 def _in_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The script reads only inside the directory it runs in: the one holding the test's files."""
+    """The script reads only from the directory it runs in: the one holding the test's files."""
     monkeypatch.chdir(tmp_path)
+
+
+def report_file_name(shard: int) -> str:
+    return f"{checker.REPORT_FILE_PREFIX}{shard}{checker.REPORT_FILE_SUFFIX}"
+
+
+def lay_out(tmp_path: Path, scenario: Scenario) -> None:
+    """Write the scenario's files where the script reads them: reports 1 to n, in order."""
+    reports_directory = tmp_path / checker.REPORTS_DIRECTORY
+    reports_directory.mkdir()
+    if scenario.listing is not None:
+        (reports_directory / checker.LISTING_FILE_NAME).write_text(scenario.listing)
+    for shard, report in enumerate(scenario.reports, start=1):
+        (reports_directory / report_file_name(shard)).write_text(report)
 
 
 def run_script(
     tmp_path: Path, scenario: Scenario, capsys: pytest.CaptureFixture[str]
 ) -> tuple[int, str]:
-    listing = tmp_path / "collected.txt"
-    listing.write_text(scenario.listing)
-    paths = []
-    for index, report in enumerate(scenario.reports):
-        paths.append(tmp_path / f"report-{index}.xml")
-        paths[-1].write_text(report)
-    status = checker.main([str(listing), str(scenario.expected_reports), *map(str, paths)])
+    lay_out(tmp_path, scenario)
+    status = checker.main([str(scenario.expected_reports)])
     return status, capsys.readouterr().err
 
 
@@ -279,26 +293,11 @@ def test_a_damaged_input_fails_and_names_its_cause(pytest_output, tmp_path, caps
     assert node_id is None or node_id in problems
 
 
-def test_a_missing_report_file_fails_and_names_it(pytest_output, tmp_path, capsys):
-    status, _ = run_script(tmp_path, pytest_output, capsys)
-    assert status == 0
-
-    missing = tmp_path / "missing.xml"
-    status = checker.main(
-        [str(tmp_path / "collected.txt"), "2", str(tmp_path / "report-0.xml"), str(missing)]
-    )
+def test_without_a_reports_directory_it_fails_and_names_the_listing_it_looked_for(capsys):
+    status = checker.main(["1"])
 
     assert status != 0
-    assert str(missing) in capsys.readouterr().err
-
-
-def test_a_missing_listing_fails_and_names_it(pytest_output, tmp_path, capsys):
-    missing = tmp_path / "missing.txt"
-
-    status = checker.main([str(missing), "1"])
-
-    assert status != 0
-    assert str(missing) in capsys.readouterr().err
+    assert checker.REPORTS_DIRECTORY in capsys.readouterr().err
 
 
 def test_the_ids_it_names_are_bounded(pytest_output, tmp_path, capsys):
@@ -314,20 +313,10 @@ def test_the_ids_it_names_are_bounded(pytest_output, tmp_path, capsys):
 @pytest.mark.parametrize("refusal", ["fewer reports than expected", None])
 def test_the_command_exits_with_the_verdict(pytest_output, tmp_path, refusal):
     scenario = pytest_output if refusal is None else REFUSALS[refusal](pytest_output)[0]
-    (tmp_path / "collected.txt").write_text(scenario.listing)
-    paths = []
-    for index, report in enumerate(scenario.reports):
-        paths.append(tmp_path / f"report-{index}.xml")
-        paths[-1].write_text(report)
+    lay_out(tmp_path, scenario)
 
     result = subprocess.run(  # noqa: S603 - the interpreter running this test
-        [
-            sys.executable,
-            str(SCRIPT),
-            str(tmp_path / "collected.txt"),
-            str(scenario.expected_reports),
-            *map(str, paths),
-        ],
+        [sys.executable, str(SCRIPT), str(scenario.expected_reports)],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -337,46 +326,13 @@ def test_the_command_exits_with_the_verdict(pytest_output, tmp_path, refusal):
     assert (result.returncode == 0) == (refusal is None)
 
 
-@pytest.mark.parametrize("outside", ["listing", "report"])
-def test_a_path_outside_the_working_directory_is_a_usage_error_and_reads_nothing(
-    pytest_output, tmp_path, monkeypatch, capsys, outside
-):
-    work = tmp_path / "work"
-    work.mkdir()
-    run_script(tmp_path, pytest_output, capsys)
-    monkeypatch.chdir(work)
-    listing, report = tmp_path / "collected.txt", tmp_path / "report-0.xml"
-    inside = work / "inside.txt"
-    inside.write_text(pytest_output.listing)
-    (work / "inside.xml").write_text(pytest_output.reports[0])
-    refused = listing if outside == "listing" else report
-    arguments = {
-        "listing": [str(listing if outside == "listing" else inside), "1"],
-        "report": [str(inside), "1", str(report if outside == "report" else "inside.xml")],
-    }[outside]
-
+@pytest.mark.parametrize("count", ["0", "-1", "two"])
+def test_an_expected_count_below_one_is_a_usage_error(capsys, count):
     with pytest.raises(SystemExit) as exit_:
-        checker.main(arguments)
-
-    captured = capsys.readouterr()
-    assert exit_.value.code == ARGPARSE_USAGE_ERROR
-    assert str(refused) in captured.err
-    assert captured.out == ""
-
-
-def test_a_symlink_out_of_the_working_directory_is_refused(
-    pytest_output, tmp_path, monkeypatch, capsys
-):
-    work = tmp_path / "work"
-    work.mkdir()
-    (work / "collected.txt").symlink_to(tmp_path / "elsewhere.txt")
-    monkeypatch.chdir(work)
-
-    with pytest.raises(SystemExit) as exit_:
-        checker.main(["collected.txt", "1"])
+        checker.main([count])
 
     assert exit_.value.code == ARGPARSE_USAGE_ERROR
-    assert "collected.txt" in capsys.readouterr().err
+    assert capsys.readouterr().out == ""
 
 
 def test_the_script_reads_the_property_the_records_are_written_under():

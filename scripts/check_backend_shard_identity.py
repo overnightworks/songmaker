@@ -5,9 +5,10 @@ shards' reports hold are compared by identity with the listing of `pytest --coll
 A skipped, expected-to-fail or failed case is reported like any other; whether the cases passed
 stays with each shard's own result.
 
-Run from the project root, with the expected number of reports and the reports' paths:
+Run from the project root with the expected number of reports. No path is given: the script reads
+reports/backend-collected.txt and reports/backend-junit-<i>.xml for i from 1 to that number.
 
-    python scripts/check_backend_shard_identity.py collected.txt 4 reports/shard-*.xml
+    python scripts/check_backend_shard_identity.py 4
 """
 # ruff: noqa: T201 - this check reports the shards' differences on stderr
 
@@ -25,6 +26,10 @@ from pathlib import Path
 # Defined here so the script runs with a bare Python, outside the test environment.
 NODE_ID_PROPERTY = "node_id"
 MAX_NAMED_IDS = 10
+REPORTS_DIRECTORY = "reports"
+LISTING_FILE_NAME = "backend-collected.txt"
+REPORT_FILE_PREFIX = "backend-junit-"
+REPORT_FILE_SUFFIX = ".xml"
 NODE_ID_SEPARATOR = "::"
 JUNIT_ROOT_TAGS = frozenset({"testsuites", "testsuite"})
 
@@ -110,16 +115,9 @@ def _collection_problems(collected: Sequence[str]) -> list[str]:
     return []
 
 
-def find_problems(
-    collected: Sequence[str],
-    reports: Sequence[ShardReport | UnreadableReport],
-    expected_reports: int,
-) -> list[str]:
+def find_problems(collected: Sequence[str], reports: Sequence[ShardReport | UnreadableReport]) -> list[str]:
     """Every way the reports fail to hold each collected node id exactly once."""
-    problems = _collection_problems(collected)
-    if len(reports) != expected_reports:
-        problems.append(f"expected {expected_reports} reports, got {len(reports)}")
-    problems += _report_problems(reports)
+    problems = _collection_problems(collected) + _report_problems(reports)
     reported = Counter(
         node_id
         for report in reports
@@ -136,20 +134,46 @@ def find_problems(
     return problems
 
 
-def _read_report(path: Path) -> ShardReport | UnreadableReport:
+def _shard_label(file_name: str) -> str | None:
+    """The text between the report name's prefix and suffix, or None for another file."""
+    if file_name.startswith(REPORT_FILE_PREFIX) and file_name.endswith(REPORT_FILE_SUFFIX):
+        return file_name[len(REPORT_FILE_PREFIX) : -len(REPORT_FILE_SUFFIX)]
+    return None
+
+
+def _expected_labels(expected_reports: int) -> list[str]:
+    return [str(shard) for shard in range(1, expected_reports + 1)]
+
+
+def expected_report_names(file_names: Iterable[str], expected_reports: int) -> list[str]:
+    """The files of the directory that are the expected shards' reports, in shard order."""
+    expected = _expected_labels(expected_reports)
+    by_label = {_shard_label(name): name for name in file_names}
+    return [by_label[label] for label in expected if label in by_label]
+
+
+def layout_problems(file_names: Iterable[str], expected_reports: int) -> list[str]:
+    """A shard without a report file, and a report file of the pattern beyond the expected ones."""
+    expected = _expected_labels(expected_reports)
+    labels = {_shard_label(name) for name in file_names}
+    missing = [
+        f"report of shard {label} is missing ({REPORT_FILE_PREFIX}{label}{REPORT_FILE_SUFFIX})"
+        for label in expected
+        if label not in labels
+    ]
+    beyond = [
+        f"report file {name} is beyond the {expected_reports} expected"
+        for name in sorted(file_names)
+        if (label := _shard_label(name)) is not None and label not in expected
+    ]
+    return missing + beyond
+
+
+def _read_report(directory: Path, file_name: str) -> ShardReport | UnreadableReport:
     try:
-        return parse_report(str(path), path.read_text(encoding="utf-8"))
+        return parse_report(file_name, (directory / file_name).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as error:
-        return UnreadableReport(str(path), str(error))
-
-
-def _path_inside_working_directory(text: str) -> Path:
-    """The resolved path of an argument; one outside the working directory is a usage error."""
-    resolved = Path(text).resolve()
-    if not resolved.is_relative_to(Path.cwd().resolve()):
-        message = f"{text} is not inside the working directory"
-        raise argparse.ArgumentTypeError(message)
-    return resolved
+        return UnreadableReport(file_name, str(error))
 
 
 def _expected_reports(text: str) -> int:
@@ -160,23 +184,29 @@ def _expected_reports(text: str) -> int:
     return count
 
 
+def _check(directory: Path, expected_reports: int) -> list[str]:
+    """Every problem of the listing and the reports in the directory."""
+    listing = directory / LISTING_FILE_NAME
+    try:
+        collected = parse_listing(listing.read_text(encoding="utf-8"))
+        file_names = [entry.name for entry in directory.iterdir()]
+    except (OSError, ValueError) as error:
+        return [f"cannot read the collected listing {listing}: {error}"]
+    reports = [
+        _read_report(directory, name) for name in expected_report_names(file_names, expected_reports)
+    ]
+    return layout_problems(file_names, expected_reports) + find_problems(collected, reports)
+
+
 def main(arguments: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(prog=Path(__file__).name, description=__doc__.splitlines()[0])
-    parser.add_argument("listing", type=_path_inside_working_directory, help="the output of pytest --collect-only -q")
-    parser.add_argument("expected_reports", type=_expected_reports)
-    parser.add_argument("reports", nargs="*", type=_path_inside_working_directory, help="the shards' junit reports")
+    parser.add_argument("expected_reports", type=_expected_reports, help="the number of shards")
     options = parser.parse_args(arguments)
-    try:
-        collected = parse_listing(options.listing.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        print(f"cannot read the collected listing {options.listing}: {error}", file=sys.stderr)
-        return 1
-    reports = [_read_report(path) for path in options.reports]
-    problems = find_problems(collected, reports, options.expected_reports)
+    problems = _check(Path(REPORTS_DIRECTORY), options.expected_reports)
     for problem in problems:
         print(problem, file=sys.stderr)
     if not problems:
-        print(f"{len(collected)} collected tests, each in one of {len(reports)} reports")
+        print(f"every collected test is in one of {options.expected_reports} reports")
     return 1 if problems else 0
 
 
