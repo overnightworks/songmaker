@@ -466,26 +466,22 @@ def test_a_spent_api_budget_leaves_the_sign_in_paths_open(sign_in_client: TestCl
     assert _start(sign_in_client) != 429
 
 
-def _post_as_the_realm(client: TestClient) -> None:
-    client.post(
-        BACKCHANNEL_LOGOUT_PATH, data={"logout_token": "garbage"},
-        headers={"host": "songmaker.test:8080"},
-    )
-
-
-def _send_a_preflight(client: TestClient) -> None:
-    client.options(
-        SIGN_IN_PATHS.start,
-        headers={"origin": "http://localhost", "access-control-request-method": "GET"},
-    )
-
-
-@pytest.mark.parametrize("request_that_spends_nothing", [_post_as_the_realm, _send_a_preflight])
+@pytest.mark.parametrize(("method", "path", "headers"), [
+    pytest.param(
+        "POST", BACKCHANNEL_LOGOUT_PATH, {"host": "songmaker.test:8080"},
+        id="back-channel logout",
+    ),
+    pytest.param(
+        "OPTIONS", SIGN_IN_PATHS.start,
+        {"origin": "http://localhost", "access-control-request-method": "GET"},
+        id="preflight",
+    ),
+])
 def test_the_back_channel_and_a_preflight_spend_nothing_of_the_sign_in_budget(
-    sign_in_client: TestClient, request_that_spends_nothing,
+    sign_in_client: TestClient, method: str, path: str, headers: dict[str, str],
 ) -> None:
     for _ in range(_sign_in_budget(sign_in_client).max_requests):
-        request_that_spends_nothing(sign_in_client)
+        sign_in_client.request(method, path, headers=headers)
 
     assert _start(sign_in_client) != 429
     assert sign_in_client.get("/api/auth/check").status_code != 429
