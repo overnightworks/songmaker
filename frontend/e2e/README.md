@@ -2,7 +2,17 @@
 
 Playwright drives the real stack — `docker/docker-compose.ci.yml` (Postgres, Redis,
 migrations, web, music worker) — through the click paths an operator walks by hand. Unit
-tests keep missing those; `.github/workflows/e2e.yml` runs these as the `E2E` job of `ci.yml`, on every PR and every push to main; its `Browser suite` job is a mandatory job of the quality gate.
+tests keep missing those; `.github/workflows/e2e.yml` runs these as the `E2E` job of `ci.yml`, on every PR and every push to main.
+
+CI cuts each Playwright project into four shards by file (`--shard=<n>/4`, the total being
+`SHARD_TOTAL` in the workflow). Each shard is a job with its own runner, stack, seeded
+sessions and rate-limit window, so a stack serves about a quarter of a project's files, and
+the specs are not re-sorted: a shard keeps the order of its files. The `Browser suite` job
+waits for all eight, lists each project's tests itself and checks that the newest attempt of
+every shard reported exactly those tests, each once (`report-identity.ts`;
+`shard-artifacts.ts` picks the attempts, because a re-run of failed jobs uploads again under
+a higher attempt while the green shards keep their first). It merges the shards' raw coverage
+stores into one report per project, which is measurement only and never fails the job.
 
 ## What runs
 
@@ -75,7 +85,7 @@ compact shell differs:
 | Transport     | One 64px row, with a play control at least the frequent-hitbox size                                                                                              |
 | Album header  | Still a readable title over its song count when the shell narrows to 320                                                                                         |
 
-`fullyParallel: false` with one worker: in CI each project has its own job,
+`fullyParallel: false` with one worker: in CI each shard of a project has its own job,
 stack and IP rate-limit window; a local run drives both shells one after the
 other in one stack behind one window, so their cost stays additive instead of a
 burst.
@@ -193,7 +203,9 @@ cells that drive a refused move. A path ending in `/` covers the ids
 beneath it. Everywhere else, and for any 5xx, the guard is unchanged, and every
 flow, including each extra tab it opens, still asserts it clean.
 
-Summed together, the per-flow `FlowGuard` totals above (436 `/api` requests on
+A local run drives a whole project through one stack, and a CI stack serves one shard of
+it, so a CI stack's counts are a share of the project's. Summed together over a whole project,
+the per-flow `FlowGuard` totals above (436 `/api` requests on
 **desktop** and 178 on **mobile**, read off one green run -- CI run
 34058495442, 2026-09-07, with `auth-flows.spec.ts`; of that, 86 and 80 are its
 own -- rather than carried forward, which is how the
@@ -212,7 +224,7 @@ the same window. What the rate limiter actually counts is measured from
 one IP and to the API class by the same rate-limit policy the server uses
 (`scripts/e2e_rate_window.py`). The E2E workflow's "Busiest API rate-limit
 window" step prints that busiest 60-second window after every Playwright run
-(in CI once per project job, locally once for both), counting setup, cleanup, retries and browser traffic, so the figure cannot go
+(in CI once per shard job, locally once for both projects), counting setup, cleanup, retries and browser traffic, so the figure cannot go
 stale. The CI stack's `IP_RATE_LIMIT: "8000"` override
 (`docker/docker-compose.ci.yml`) is kept at least three times above that
 peak, with room for one CI retry landing inside the same window (#1555). A
@@ -325,5 +337,5 @@ is all: no trace is recorded unless you pass `--trace on`. CI runs with
 retry's own `…-retry1` folder; the failed first attempt's folder keeps its
 screenshot and `error-context.md` whether the retry passes or not. CI uploads
 the HTML report (`playwright-report/`) with `test-results/`, and the compose
-logs, when the job fails or any test was retried; a run where every test passes
+logs, when a shard's job fails or any of its tests was retried; a run where every test passes
 first time records no trace and uploads neither.

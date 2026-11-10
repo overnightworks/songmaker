@@ -8,6 +8,9 @@ permissions:
 
 env:
   COMPOSE_FILES: -f docker-compose.yml -f docker/docker-compose.ci.yml
+  # The number of shards each project's tests are cut into: the legs' matrix lists
+  # one leg per shard, and the aggregator requires all of them.
+  SHARD_TOTAL: 4
   WEB_PORT: 8080
   # The admin account the seeding helper creates (frontend/e2e/support/seed_sessions.py).
   E2E_ADMIN_USERNAME: e2e-ci-admin
@@ -19,15 +22,17 @@ env:
   GRAFANA_PASSWORD: e2e-ci-grafana-password
 
 jobs:
+  # One leg is one shard of one project, on a runner and a stack of its own.
   smoke:
-    name: Boot stack + library flows (${{ matrix.project }})
+    name: Boot stack + library flows (${{ matrix.project }}, shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
-    # Each project runs 15-22 min on its own runner; this ceiling guards against a hang, not a slow suite.
-    timeout-minutes: 40
+    # A shard runs well inside this ceiling, which guards against a hang.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         project: [desktop, mobile]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -62,6 +67,10 @@ jobs:
       - name: Boot stack
         id: boot
         env:
+          # The one job that writes the web image's build cache is the desktop leg of
+          # shard 1 on main: a cache entry written for a pull request is readable
+          # only by that pull request's runs and counts against the shared quota.
+          COMPOSE_FILES: ${{ matrix.project == 'desktop' && matrix.shard == 1 && github.ref == 'refs/heads/main' && format('{0} -f docker/docker-compose.ci-cache.yml', env.COMPOSE_FILES) || env.COMPOSE_FILES }}
           # Share links (album/song/generation/playlist) need a configured
           # public address (#339) — this stack has no proxy in front of it,
           # so the address it's really reachable at is the same host:port
@@ -128,44 +137,42 @@ jobs:
         timeout-minutes: 15
         run: pnpm exec playwright install chromium
 
-      - name: Library flows (${{ matrix.project }})
+      - name: Library flows (${{ matrix.project }}, shard ${{ matrix.shard }}/${{ env.SHARD_TOTAL }})
         working-directory: frontend
         env:
           E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}
-        run: pnpm test:e2e --project=${{ matrix.project }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/frontend/e2e/.artifacts/json-report/report.json
+        run: pnpm test:e2e --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }}
 
-      # Measurement only: a failure here writes its reason into the summary and a
-      # warning and never fails the job, so the tests alone decide the run.
-      - name: E2E coverage report (${{ matrix.project }})
+      # The aggregator proves from these reports that the shards together ran every
+      # listed test; a leg whose report is missing fails here and so fails the job.
+      - name: Upload the JSON report
         if: ${{ !cancelled() }}
-        continue-on-error: true
-        working-directory: frontend
-        env:
-          PROJECT: ${{ matrix.project }}
-        run: |
-          report=$(mktemp)
-          if node e2e/coverage-report.ts "$PROJECT" >"$report" 2>"$report.err"; then
-            tee -a "$GITHUB_STEP_SUMMARY" <"$report"
-          else
-            reason=$(grep -m1 -E '^[A-Za-z]*Error' "$report.err" || tail -n 1 "$report.err")
-            echo "::warning::E2E coverage report for $PROJECT failed: $reason"
-            echo "E2E coverage report for $PROJECT failed: $reason" >> "$GITHUB_STEP_SUMMARY"
-          fi
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
+        with:
+          name: e2e-json-report-${{ matrix.project }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: frontend/e2e/.artifacts/json-report/report.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 14
 
-      - name: Upload E2E coverage report (${{ matrix.project }})
+      # The aggregator merges the stores into one report per project. Coverage is
+      # measurement only, so a failed upload never decides the leg.
+      - name: Upload the raw coverage store
         if: ${{ !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
-          name: e2e-coverage-${{ matrix.project }}
-          path: frontend/e2e/.artifacts/coverage/${{ matrix.project }}
+          name: e2e-coverage-store-${{ matrix.project }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: frontend/e2e/.artifacts/coverage
           include-hidden-files: true
-          if-no-files-found: ignore
+          if-no-files-found: warn
+          overwrite: false
           retention-days: 14
 
       # The E2E-only IP_RATE_LIMIT in docker/docker-compose.ci.yml is sized
       # from this peak (#1555), so every run prints it rather than leaving a
-      # dated number to go stale.
+      # dated number to go stale. Each leg's stack has a window of its own.
       - name: Busiest API rate-limit window
         if: ${{ !cancelled() && steps.boot.outcome == 'success' }}
         run: |
@@ -182,10 +189,11 @@ jobs:
         if: failure() || hashFiles('frontend/test-results/**/trace.zip') != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
-          name: e2e-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.project }}
+          name: e2e-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.project }}-${{ matrix.shard }}
           path: |
             frontend/playwright-report
             frontend/test-results
+          overwrite: false
           retention-days: 14
 
       - name: Dump compose logs
@@ -196,24 +204,28 @@ jobs:
         if: failure() || hashFiles('frontend/test-results/**/trace.zip') != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
-          name: e2e-compose-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.project }}
+          name: e2e-compose-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.project }}-${{ matrix.shard }}
           path: compose-logs.txt
+          overwrite: false
           retention-days: 14
 
       - name: Tear down stack
         if: always()
         run: docker compose $COMPOSE_FILES down -v
 
-  # The browser suite's one job, named in the gate's mandatory list: it stays one
-  # name however the matrix above is cut. It runs when a leg fails, is cancelled
-  # or is skipped, so it reports the legs' real result; a skipped check run would
-  # be left unjudged by the deploy's reading of a main commit's checks.
+  # The browser suite's one job: it stays one name however the matrix above is cut.
+  # It runs when a leg fails, is cancelled or is skipped, so it reports the legs'
+  # real result; a skipped check run would be left unjudged by the deploy's
+  # reading of a main commit's checks. Its first step fails on the legs' result.
+  # Every later step runs after a failed one, so the comparison names the tests a
+  # failed leg left out; only coverage, which is measurement, never fails the job.
   browser-suite:
     name: Browser suite
     needs: smoke
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The coverage steps' limits sum to less than this, so coverage cannot use it up.
+    timeout-minutes: 10
     steps:
       - name: Fail unless every browser leg succeeded
         env:
@@ -221,3 +233,179 @@ jobs:
         run: |
           echo "smoke: $SMOKE_RESULT"
           test "$SMOKE_RESULT" = success
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        if: ${{ !cancelled() }}
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.x
+        if: ${{ !cancelled() }}
+        with:
+          package_json_file: frontend/package.json
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.x
+        if: ${{ !cancelled() }}
+        with:
+          node-version-file: frontend/.node-version
+          check-latest: true
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the desktop JSON reports
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: e2e-json-report-desktop-*
+          path: ${{ runner.temp }}/reports/desktop
+
+      - name: Download the mobile JSON reports
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: e2e-json-report-mobile-*
+          path: ${{ runner.temp }}/reports/mobile
+
+      # A re-run of failed jobs uploads again under a higher attempt while the green
+      # shards keep their first one, so each shard's newest attempt is the one read.
+      # A shard without a report fails this step; the comparison still runs on the rest.
+      - name: Choose the newest report of each desktop shard
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        env:
+          PROJECT: desktop
+        run: node e2e/shard-artifacts.ts e2e-json-report "$PROJECT" "$SHARD_TOTAL" "$RUNNER_TEMP/reports/$PROJECT" > "$RUNNER_TEMP/chosen-$PROJECT.txt"
+
+      - name: Choose the newest report of each mobile shard
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        env:
+          PROJECT: mobile
+        run: node e2e/shard-artifacts.ts e2e-json-report "$PROJECT" "$SHARD_TOTAL" "$RUNNER_TEMP/reports/$PROJECT" > "$RUNNER_TEMP/chosen-$PROJECT.txt"
+
+      # The reports' ids hash the project and the working directory, so the listing
+      # is made from frontend/ with the legs' environment and without a filter. No
+      # browser is needed to list.
+      - name: List the desktop tests
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        env:
+          CI: "true"
+          E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}
+          PROJECT: desktop
+        run: pnpm exec playwright test --list --reporter=json --project="$PROJECT" > "$RUNNER_TEMP/listing-$PROJECT.json"
+
+      - name: List the mobile tests
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        env:
+          CI: "true"
+          E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}
+          PROJECT: mobile
+        run: pnpm exec playwright test --list --reporter=json --project="$PROJECT" > "$RUNNER_TEMP/listing-$PROJECT.json"
+
+      - name: Compare the desktop shards with the listed tests
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        env:
+          PROJECT: desktop
+        run: |
+          mapfile -t reports < <(sed 's|$|/report.json|' "$RUNNER_TEMP/chosen-$PROJECT.txt")
+          node e2e/report-identity.ts "$PROJECT" "$RUNNER_TEMP/listing-$PROJECT.json" "${reports[@]}"
+
+      - name: Compare the mobile shards with the listed tests
+        if: ${{ !cancelled() }}
+        working-directory: frontend
+        env:
+          PROJECT: mobile
+        run: |
+          mapfile -t reports < <(sed 's|$|/report.json|' "$RUNNER_TEMP/chosen-$PROJECT.txt")
+          node e2e/report-identity.ts "$PROJECT" "$RUNNER_TEMP/listing-$PROJECT.json" "${reports[@]}"
+
+      # Coverage is measurement only: each step below continues on error and has a
+      # limit of its own, and the step after them says in the summary what failed.
+      - name: Download the raw coverage stores
+        id: coverage-download
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: e2e-coverage-store-*
+          path: ${{ runner.temp }}/stores
+
+      # A shard's store is the one of the attempt whose report was compared.
+      - name: Merge the desktop coverage
+        id: coverage-desktop
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 2
+        working-directory: frontend
+        env:
+          PROJECT: desktop
+        run: |
+          set -o pipefail
+          mapfile -t roots < <(sed "s|.*/e2e-json-report-|$RUNNER_TEMP/stores/e2e-coverage-store-|" "$RUNNER_TEMP/chosen-$PROJECT.txt")
+          node e2e/coverage-report.ts "$PROJECT" "${roots[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Merge the mobile coverage
+        id: coverage-mobile
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 2
+        working-directory: frontend
+        env:
+          PROJECT: mobile
+        run: |
+          set -o pipefail
+          mapfile -t roots < <(sed "s|.*/e2e-json-report-|$RUNNER_TEMP/stores/e2e-coverage-store-|" "$RUNNER_TEMP/chosen-$PROJECT.txt")
+          node e2e/coverage-report.ts "$PROJECT" "${roots[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the desktop coverage report
+        id: coverage-upload-desktop
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
+        with:
+          name: e2e-coverage-desktop-${{ github.run_attempt }}
+          path: frontend/e2e/.artifacts/coverage/desktop
+          include-hidden-files: true
+          if-no-files-found: warn
+          overwrite: false
+          retention-days: 14
+
+      - name: Upload the mobile coverage report
+        id: coverage-upload-mobile
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
+        with:
+          name: e2e-coverage-mobile-${{ github.run_attempt }}
+          path: frontend/e2e/.artifacts/coverage/mobile
+          include-hidden-files: true
+          if-no-files-found: warn
+          overwrite: false
+          retention-days: 14
+
+      - name: Say which coverage step did not finish
+        if: ${{ !cancelled() }}
+        env:
+          COVERAGE_OUTCOMES: download=${{ steps.coverage-download.outcome }} desktop=${{ steps.coverage-desktop.outcome }} mobile=${{ steps.coverage-mobile.outcome }} upload-desktop=${{ steps.coverage-upload-desktop.outcome }} upload-mobile=${{ steps.coverage-upload-mobile.outcome }}
+        run: |
+          for outcome in $COVERAGE_OUTCOMES; do
+            if [ "${outcome#*=}" != success ]; then
+              unfinished="${unfinished:-} ${outcome%%=*}"
+            fi
+          done
+          if [ -n "${unfinished:-}" ]; then
+            message="E2E coverage did not finish, which never fails the run:$unfinished"
+            echo "::warning::$message"
+            echo "$message" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -3,11 +3,11 @@
 # `profiles: [gpu]` keeps the ACE-Step worker, the scoring worker (torch and a
 # baked Whisper checkpoint) and the monitoring services out of both
 # `docker compose config` and `up` without needing to delete them here.
+# Every job reads the web image's build cache; the one that writes it adds
+# docker-compose.ci-cache.yml.
 x-gha-cache: &gha_cache
   cache_from:
     - type=gha
-  cache_to:
-    - type=gha,mode=max
 
 # A test stack nobody tore down must stay down after a reboot, while the live
 # stack keeps `unless-stopped`; every service below merges this (#1355).
@@ -43,10 +43,10 @@ services:
       # E2E maps the shipped bundle back to source for its coverage report.
       args:
         BUILD_SOURCE_MAPS: "true"
-    # Every API request of one project's run -- seeds, cleanups, retries and
+    # Every API request of one shard's run -- seeds, cleanups, retries and
     # browser traffic -- comes from the runner's one address. In CI each
-    # project has its own job and stack; a local run drives both projects
-    # through one stack.
+    # shard of a project has its own job and stack; a local run drives both
+    # projects, whole, through one stack, so this limit is sized for that run.
     # The E2E workflow's "Busiest API rate-limit window" step prints the
     # measured peak on every run; keep this at least 3x above it, with room
     # for one retry inside the window (#1555). Production remains at its
@@ -55,7 +55,7 @@ services:
       IP_RATE_LIMIT: "8000"
       # The 2026-09-05 CI run opened 30 streams successfully; the 31st returned 429.
       RESOURCE_EVENT_STREAM_OPEN_LIMIT: "200"
-      # Every stream open of one project's run (resource events and job
+      # Every stream open of one stack's run (resource events and job
       # streams) comes from the runner's one address: CI run 36716007334
       # (2026-09-30) opened 45 in one minute and the next job stream open
       # returned 429. Production remains at 45.

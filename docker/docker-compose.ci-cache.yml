@@ -1,0 +1,7 @@
+# Adds the write of the web image's build cache to docker-compose.ci.yml, which
+# only reads it: one job per run names this file, so the cache has one writer.
+services:
+  songmaker-web:
+    build:
+      cache_to:
+        - type=gha,mode=max
