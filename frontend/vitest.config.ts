@@ -26,7 +26,7 @@ export default defineConfig({
 				extends: true,
 				test: {
 					name: 'e2e-report',
-					include: ['e2e/coverage-summary.test.ts'],
+					include: ['e2e/coverage-summary.test.ts', 'e2e/report-identity.test.ts'],
 					environment: 'node'
 				}
 			}

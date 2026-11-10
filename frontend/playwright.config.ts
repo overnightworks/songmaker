@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, type ReporterDescription } from '@playwright/test';
 import { DESKTOP_VIEWPORT, MOBILE_VIEWPORT, ONLY_IN_SHELL, type Shell } from './e2e/helpers';
 import { BASE_URL, STORAGE_STATE_FILE } from './e2e/seed';
 
@@ -7,6 +7,15 @@ import { BASE_URL, STORAGE_STATE_FILE } from './e2e/seed';
 // title or a longer tag that merely contains it never decides the shell.
 function taggedOnlyIn(shell: Shell): RegExp {
 	return new RegExp(`(?:^|\\s)${ONLY_IN_SHELL[shell]}(?:\\s|$)`);
+}
+
+// The JSON report feeds the shards' identity comparison; it is written only
+// where `PLAYWRIGHT_JSON_OUTPUT_FILE` names its file.
+function reporters(): ReporterDescription[] {
+	const reporter: ReporterDescription[] = process.env.CI
+		? [['list'], ['html', { open: 'never' }]]
+		: [['list']];
+	return process.env.PLAYWRIGHT_JSON_OUTPUT_FILE ? [...reporter, ['json']] : reporter;
 }
 
 export default defineConfig({
@@ -20,7 +29,7 @@ export default defineConfig({
 	workers: 1,
 	forbidOnly: Boolean(process.env.CI),
 	retries: process.env.CI ? 1 : 0,
-	reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
+	reporter: reporters(),
 	use: {
 		baseURL: BASE_URL,
 		storageState: STORAGE_STATE_FILE,
