@@ -64,6 +64,15 @@ describe('co-writer copy', () => {
 			{ problem: 'unavailable', text: 'The co-writer is unavailable', waitSeconds: 0 }
 		],
 		[
+			'a spent budget, with no wait',
+			{ type: 'error', status: 429, problem: 'budget_spent', retry_after_seconds: null },
+			{
+				problem: 'budget_spent',
+				text: "The co-writer's budget is used up. Try again later.",
+				waitSeconds: 0
+			}
+		],
+		[
 			'the endpoint’s own failure message, with no named problem',
 			{ type: 'error', status: 500, message: 'Chat request failed' },
 			{ problem: null, text: 'Chat request failed', waitSeconds: 0 }

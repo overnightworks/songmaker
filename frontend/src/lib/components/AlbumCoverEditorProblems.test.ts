@@ -1,4 +1,4 @@
-// When a cover suggestion cannot run, the editor names one of the agent's four
+// When a cover suggestion cannot run, the editor names one of the agent's
 // problems in its own words and tone, never the job's stored error: at the
 // click, for the run this page followed, and for a stored run on the next load.
 
@@ -67,10 +67,11 @@ afterEach(async () => {
 	resetLibraryDataForTests();
 });
 
-describe('a cover suggestion that cannot run names one of the four problems', () => {
+describe('a cover suggestion that cannot run names one of the agent’s problems', () => {
 	const BUSY_TEXT = COVER_PROBLEM_TEXTS.busy;
 	const NOT_ENABLED_TEXT = COVER_PROBLEM_TEXTS.not_enabled;
 	const UNAVAILABLE_TEXT = COVER_PROBLEM_TEXTS.unavailable;
+	const BUDGET_SPENT_TEXT = COVER_PROBLEM_TEXTS.budget_spent;
 	const SIGN_IN_TEXT = COVER_PROBLEM_TEXTS.sign_in_again;
 	const LEAKED_ERROR = 'gateway said 500 for key sk-canary';
 
@@ -140,6 +141,7 @@ describe('a cover suggestion that cannot run names one of the four problems', ()
 
 	it.each([
 		{ problem: 'unavailable', text: UNAVAILABLE_TEXT, tone: 'wait' },
+		{ problem: 'budget_spent', text: BUDGET_SPENT_TEXT, tone: 'wait' },
 		{ problem: 'not_enabled', text: NOT_ENABLED_TEXT, tone: 'off' },
 		{ problem: 'sign_in_again', text: SIGN_IN_TEXT, tone: 'bad' }
 	])(

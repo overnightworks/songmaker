@@ -26,6 +26,8 @@ const PHONE_VIEWPORT = { width: 375, height: 844 };
 // What a cover job's row may hold and no page may show (#2055 matrix cell 26).
 const STORED_ERROR_CANARY = 'gateway detail sk-e2e-canary for session e2e-canary';
 const BUSY_WAIT_SECONDS = 300;
+// The problems that leave Suggest open: a retry is the person's own action.
+const OPEN_PROBLEMS: ReadonlySet<string> = new Set(['unavailable', 'budget_spent']);
 
 interface ProblemLook {
 	borderColor: string;
@@ -99,13 +101,13 @@ test('Add cover asks for nothing until Suggest, whose refused click says log in 
 	await expect(surface.getByRole('button', { name: 'Add cover' })).toBeVisible();
 });
 
-test('a run that ends busy, not enabled or unavailable shows its own line in its own look, and only busy and a followed refusal close Suggest', async ({
+test('a run that ends busy, budget spent, not enabled or unavailable shows its own line in its own look, and only busy and a followed refusal close Suggest', async ({
 	page,
 	isMobile
 }, testInfo) => {
 	if (isMobile) await page.setViewportSize(PHONE_VIEWPORT);
 	const looks: Record<string, ProblemLook> = {};
-	for (const problem of ['busy', 'not_enabled', 'unavailable'] as const) {
+	for (const problem of ['busy', 'budget_spent', 'not_enabled', 'unavailable'] as const) {
 		const album = await createFreshAlbum(page, `${problem} ${isMobile ? 'phone' : 'desktop'}`);
 		try {
 			const jobId = await seedRunningCoverJob(album.id);
@@ -124,7 +126,7 @@ test('a run that ends busy, not enabled or unavailable shows its own line in its
 			const line = problemLine(editing);
 			await expect(line).toContainText(COVER_PROBLEM_TEXTS[problem]);
 			looks[problem] = await lookOf(line);
-			await expect(suggestButton(editing)).toBeEnabled({ enabled: problem === 'unavailable' });
+			await expect(suggestButton(editing)).toBeEnabled({ enabled: OPEN_PROBLEMS.has(problem) });
 			if (problem === 'busy') await expect(suggestButton(editing)).toContainText(/[45]:\d\d/);
 			await expect(page.getByText(STORED_ERROR_CANARY)).toHaveCount(0);
 			await attachShot(page, testInfo, `cover-${problem}`);
@@ -137,7 +139,7 @@ test('a run that ends busy, not enabled or unavailable shows its own line in its
 				await expect(problemLine(editing)).toHaveCount(0);
 			} else {
 				await expect(problemLine(editing)).toContainText(COVER_PROBLEM_TEXTS[problem]);
-				await expect(suggestButton(editing)).toBeEnabled({ enabled: problem === 'unavailable' });
+				await expect(suggestButton(editing)).toBeEnabled({ enabled: OPEN_PROBLEMS.has(problem) });
 			}
 			await expect(page.getByText(STORED_ERROR_CANARY)).toHaveCount(0);
 		} finally {
@@ -145,8 +147,10 @@ test('a run that ends busy, not enabled or unavailable shows its own line in its
 		}
 	}
 
-	// Busy and unavailable wait in amber; not enabled is grey and dashed (picture l).
+	// Busy, budget spent and unavailable wait in amber; not enabled is grey and dashed (picture l).
 	expect(looks.busy.borderColor).toBe(looks.unavailable.borderColor);
+	expect(looks.budget_spent.borderColor).toBe(looks.busy.borderColor);
+	expect(looks.budget_spent.borderStyle).toBe('solid');
 	expect(looks.busy.borderStyle).toBe('solid');
 	expect(looks.not_enabled.borderStyle).toBe('dashed');
 	expect(looks.not_enabled.borderColor).not.toBe(looks.busy.borderColor);
