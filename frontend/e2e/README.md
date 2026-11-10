@@ -222,12 +222,15 @@ library, each attempt's playlist), and a retry re-running a whole flow inside
 the same window. What the rate limiter actually counts is measured from
 `docker compose logs songmaker-web`'s access log, filtered to the runner's
 one IP and to the API class by the same rate-limit policy the server uses
-(`scripts/e2e_rate_window.py`). The E2E workflow's "Busiest API rate-limit
-window" step prints that busiest 60-second window after every Playwright run
+(`scripts/e2e_rate_window.py`). The E2E workflow's "Busiest API and sign-in rate-limit
+windows" step prints that busiest 60-second API window after every Playwright run
 (in CI once per shard job, locally once for both projects), counting setup, cleanup, retries and browser traffic, so the figure cannot go
 stale. The CI stack's `IP_RATE_LIMIT: "8000"` override
 (`docker/docker-compose.ci.yml`) is kept at least three times above that
-peak, with room for one CI retry landing inside the same window (#1555). A
+peak, with room for one CI retry landing inside the same window (#1555). The
+same step prints the busiest sign-in window, measured over its own 600-second
+window, and `SIGN_IN_RATE_LIMIT` in `docker/docker-compose.ci.yml` is kept at
+least three times above the summed sign-in peak of both projects. A
 request the limiter refused never reaches the access log, so on a run that
 hit 429 the printed peak is only a lower bound. Re-running the suite
 repeatedly against the same stack inside that window is cumulative, not reset

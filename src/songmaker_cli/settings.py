@@ -349,6 +349,10 @@ class Settings(BaseSettings):
     # per-user budget in a way production traffic across many real users
     # never is.
     resource_event_stream_open_limit: int = 12
+    # Raises webauth's sign-in budget (start, callback, logout) to this many requests in its
+    # own window; unset keeps webauth's. Only the throwaway browser stack, which signs in
+    # many times from one address, sets it. webauth refuses a non-positive value at start.
+    sign_in_rate_limit: int | None = None
     # Concurrency lease for GET /api/jobs/{id}/stream (#331 Finding 2, and
     # review rounds 2026-09-01/02 on Finding 1 below). The endpoint takes no
     # request-scoped `Depends()` at all -- not `get_db_session`, and not

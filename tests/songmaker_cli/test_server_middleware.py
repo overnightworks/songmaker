@@ -563,7 +563,7 @@ def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
     tmp_path: Path, pg_factory, fresh_settings, monkeypatch,
 ):
     """defect:#1590 -- the rate limiter runs before CSRF and remains inside headers."""
-    monkeypatch.setenv("IP_RATE_LIMIT", "1")
+    monkeypatch.setenv("SIGN_IN_RATE_LIMIT", "1")
     client, _ = make_test_app(tmp_path, factory=pg_factory)
 
     async def drive():

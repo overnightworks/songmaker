@@ -1072,7 +1072,7 @@ decision, `ports.py` names the stores, rate backend and audit sink the host
 supplies, `policies.py` the four request policies it supplies, `oidc.py` and
 `oidc_login.py` the OpenID Connect relying party and the transaction-free parts
 of signing in and out, `sign_in_routes.py` the start, callback, logout and back-channel routes with
-the `SignInPaths` that derive their policies, `rate_limit.py` the sliding-window counter, `middleware/` the
+the `SignInPaths` that name them, `rate_limit.py` the sliding-window counter, `middleware/` the
 rate-limit, CSRF, body-size and security-header middlewares, and
 `dependencies.py` the `current_user_dependency` factory. The sign-in transaction and the pages a refusal shows stay in the application.
 
@@ -1131,7 +1131,11 @@ are; which of songmaker's paths each applies to is a product decision built in
 origin-exempt routes, the upload routes that may exceed the
 JSON body cap, and the CSP line with its inline-script hashes and cacheability
 rules. `server.create_app` installs them with one
-`install_web_auth_middleware()` call; no middleware reads songmaker's settings.
+`install_web_auth_middleware()` call, which also takes `SIGN_IN_PATHS` and
+derives the sign-in routes' rules itself, ahead of songmaker's: `no-store`, the
+sign-in budget on start, callback and logout, and the back-channel path's
+exemption from the rate limit and the origin check with its 32 KiB body cap.
+No middleware reads songmaker's settings.
 The pure-ASGI request order, outside to inside, is ResourceStreamDeadline →
 SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit → [BearerGate →] CsrfOrigin →
 TrustedHost → AccessLog → Router. The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client or MCP is on. The Host check is Starlette's
