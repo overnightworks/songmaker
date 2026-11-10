@@ -1,0 +1,8 @@
+claim_id = "d28a0a2bc5b642df8a2ccd1941b70048"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "394a6430d0fca7677c1a403d239aabe933036b27"
+branch = "claude/issue-2942-the-back-channel-logout-answers-the-one"
+scope = ["docs/security.md", "docs/testing.md", "src/songmaker_cli/auth_api.py", "src/songmaker_cli/request_policies.py", "src/songmaker_cli/settings.py", "tests/conftest.py", "tests/songmaker_cli/test_auth_api_backchannel_logout.py", "tests/songmaker_cli/test_auth_stores_write_lock_postgres.py"]
+opened_commit = "7c06275b4c2d326b0bd0cdff818c522ff48af51b"
+whole_reason = "The setting, the guard that reads it, the tests that pin the Host and the paragraph that describes it are true only together."
