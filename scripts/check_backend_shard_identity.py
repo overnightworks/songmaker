@@ -21,10 +21,9 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPOSITORY_ROOT / "tests"))
-from support.node_id_record import NODE_ID_PROPERTY  # noqa: E402
-
+# The name tests/support/node_id_record.py gives the property; a test requires the two equal.
+# Defined here so the script runs with a bare Python, outside the test environment.
+NODE_ID_PROPERTY = "node_id"
 MAX_NAMED_IDS = 10
 NODE_ID_SEPARATOR = "::"
 JUNIT_ROOT_TAGS = frozenset({"testsuites", "testsuite"})
@@ -144,6 +143,15 @@ def _read_report(path: Path) -> ShardReport | UnreadableReport:
         return UnreadableReport(str(path), str(error))
 
 
+def _path_inside_working_directory(text: str) -> Path:
+    """The resolved path of an argument; one outside the working directory is a usage error."""
+    resolved = Path(text).resolve()
+    if not resolved.is_relative_to(Path.cwd().resolve()):
+        message = f"{text} is not inside the working directory"
+        raise argparse.ArgumentTypeError(message)
+    return resolved
+
+
 def _expected_reports(text: str) -> int:
     count = int(text)
     if count < 1:
@@ -154,9 +162,9 @@ def _expected_reports(text: str) -> int:
 
 def main(arguments: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(prog=Path(__file__).name, description=__doc__.splitlines()[0])
-    parser.add_argument("listing", type=Path, help="the output of pytest --collect-only -q")
+    parser.add_argument("listing", type=_path_inside_working_directory, help="the output of pytest --collect-only -q")
     parser.add_argument("expected_reports", type=_expected_reports)
-    parser.add_argument("reports", nargs="*", type=Path, help="the shards' junit reports")
+    parser.add_argument("reports", nargs="*", type=_path_inside_working_directory, help="the shards' junit reports")
     options = parser.parse_args(arguments)
     try:
         collected = parse_listing(options.listing.read_text(encoding="utf-8"))

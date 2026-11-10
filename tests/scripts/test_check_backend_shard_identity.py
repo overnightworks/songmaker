@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from support.node_id_record import NODE_ID_PROPERTY
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPOSITORY_ROOT / "scripts" / "check_backend_shard_identity.py"
@@ -22,6 +23,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "scripts"))
 import check_backend_shard_identity as checker  # noqa: E402
 
 SHARDS = 2
+ARGPARSE_USAGE_ERROR = 2
 
 SUITE_CONFTEST = f"""
 import importlib.util
@@ -230,6 +232,12 @@ REFUSALS: dict[str, Callable[[Scenario], tuple[Scenario, str, str | None]]] = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _in_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The script reads only inside the directory it runs in: the one holding the test's files."""
+    monkeypatch.chdir(tmp_path)
+
+
 def run_script(
     tmp_path: Path, scenario: Scenario, capsys: pytest.CaptureFixture[str]
 ) -> tuple[int, str]:
@@ -320,9 +328,56 @@ def test_the_command_exits_with_the_verdict(pytest_output, tmp_path, refusal):
             str(scenario.expected_reports),
             *map(str, paths),
         ],
+        cwd=tmp_path,
         capture_output=True,
         text=True,
         check=False,
     )
 
     assert (result.returncode == 0) == (refusal is None)
+
+
+@pytest.mark.parametrize("outside", ["listing", "report"])
+def test_a_path_outside_the_working_directory_is_a_usage_error_and_reads_nothing(
+    pytest_output, tmp_path, monkeypatch, capsys, outside
+):
+    work = tmp_path / "work"
+    work.mkdir()
+    run_script(tmp_path, pytest_output, capsys)
+    monkeypatch.chdir(work)
+    listing, report = tmp_path / "collected.txt", tmp_path / "report-0.xml"
+    inside = work / "inside.txt"
+    inside.write_text(pytest_output.listing)
+    (work / "inside.xml").write_text(pytest_output.reports[0])
+    refused = listing if outside == "listing" else report
+    arguments = {
+        "listing": [str(listing if outside == "listing" else inside), "1"],
+        "report": [str(inside), "1", str(report if outside == "report" else "inside.xml")],
+    }[outside]
+
+    with pytest.raises(SystemExit) as exit_:
+        checker.main(arguments)
+
+    captured = capsys.readouterr()
+    assert exit_.value.code == ARGPARSE_USAGE_ERROR
+    assert str(refused) in captured.err
+    assert captured.out == ""
+
+
+def test_a_symlink_out_of_the_working_directory_is_refused(
+    pytest_output, tmp_path, monkeypatch, capsys
+):
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "collected.txt").symlink_to(tmp_path / "elsewhere.txt")
+    monkeypatch.chdir(work)
+
+    with pytest.raises(SystemExit) as exit_:
+        checker.main(["collected.txt", "1"])
+
+    assert exit_.value.code == ARGPARSE_USAGE_ERROR
+    assert "collected.txt" in capsys.readouterr().err
+
+
+def test_the_script_reads_the_property_the_records_are_written_under():
+    assert checker.NODE_ID_PROPERTY == NODE_ID_PROPERTY
