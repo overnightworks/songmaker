@@ -215,14 +215,16 @@ test.describe('song page at phone width', () => {
 				.getByRole('button', { name: `${TRANSPORT_PLAY_LABEL} ${SECOND_TAKE_LABEL}`, exact: true })
 				.click();
 			// The phone bar says where the music comes from (#1058, frame C2); the
-			// player names the take on Now Playing, opened from the bar's title.
+			// player names the take on Now Playing, opened from the bar's title: on
+			// its cover line, exactly, since the take panel's heading, which renders
+			// once the song has loaded, starts with the same label.
 			await page
 				.getByRole('contentinfo')
 				.getByRole('button', { name: openNowPlayingLabel(songTitle), exact: true })
 				.click();
 			const nowPlaying = page.getByRole('dialog', { name: songTitle });
 			await expect(nowPlaying.getByRole('button', { name: PLAYS_FROM_AN_ALBUM })).toBeVisible();
-			await expect(nowPlaying.getByText(new RegExp(`^${SECOND_TAKE_LABEL}\\b`))).toBeVisible();
+			await expect(nowPlaying.getByText(SECOND_TAKE_LABEL, { exact: true })).toBeVisible();
 			await nowPlaying.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
 			await expect(nowPlaying).toBeHidden();
 
