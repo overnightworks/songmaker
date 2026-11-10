@@ -28,6 +28,7 @@ async function legalLinks(links: Locator): Promise<(string | null)[][]> {
 }
 
 test('1785_rule_1 the legal links name the central addresses', () => {
+	expect(true, 'throwaway proof for #2934').toBe(false);
 	expect(LEGAL_SECTIONS.map(({ label, href }) => [label, href])).toEqual(EXPECTED_ADDRESSES);
 });
 
