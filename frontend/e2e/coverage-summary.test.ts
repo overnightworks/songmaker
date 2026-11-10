@@ -163,4 +163,14 @@ describe('summarizeCoverage', () => {
 
 		expect(figures.collectionSeconds).toBeCloseTo(0.25);
 	});
+
+	it('throws naming an extra root that has a time file but no store', async () => {
+		const ownRoot = rootNamed('own');
+		const typoRoot = rootNamed('typo');
+		await writeStore(ownRoot, ['alpha']);
+		writeTimes(ownRoot, [1]);
+		writeTimes(typoRoot, [1]);
+
+		await expect(summarizeCoverage(PROJECT, [typoRoot], ownRoot)).rejects.toThrow(typoRoot);
+	});
 });

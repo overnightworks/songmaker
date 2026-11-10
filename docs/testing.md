@@ -386,7 +386,7 @@ middleware and lifecycle tests continue to use `make_test_app`.
 
 ### Frontend
 
-- **jsdom** environment for all tests
+- **jsdom** environment for the `src/` tests; the report test in `frontend/e2e` runs in node
 - **Mock fetch** globally for API client tests
 - **Mock stores** for component isolation
 - **`vi.useFakeTimers()`** for job polling tests

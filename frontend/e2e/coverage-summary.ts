@@ -26,7 +26,16 @@ export async function summarizeCoverage(
 	extraRoots: readonly string[] = [],
 	ownRoot?: string
 ): Promise<CoverageSummary> {
-	const results = await MCR(coverageOptions(project, extraRoots, ownRoot)).generate();
+	const options = coverageOptions(project, extraRoots, ownRoot);
+	// The collector skips an input directory that is missing, so a shard could
+	// drop out of the report without showing it.
+	const storeDirs = [options.inputDir ?? []].flat();
+	for (const [index, extraRoot] of extraRoots.entries()) {
+		if (!existsSync(storeDirs[index])) {
+			throw new Error(`Coverage root ${extraRoot} has no store for project ${project}`);
+		}
+	}
+	const results = await MCR(options).generate();
 	if (!results) {
 		throw new Error(`No coverage was collected for project ${project}`);
 	}
