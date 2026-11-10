@@ -1,0 +1,8 @@
+claim_id = "2971563430824ed8a1b48855b0f9b5ec"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "7717ba15c453785bc8ec9e4a958650f597da9547"
+branch = "claude/issue-2949-the-browser-suite-runs-in-four-shards-pe"
+scope = [".github/workflows/e2e.yml", "docker/docker-compose.ci-cache.yml", "docker/docker-compose.ci.yml", "docs/testing.md", "frontend/e2e/README.md", "frontend/e2e/helpers.ts", "frontend/e2e/report-identity.test.ts", "frontend/e2e/shard-artifacts.test.ts", "frontend/e2e/shard-artifacts.ts", "frontend/vitest.config.ts", "tests/workflows/test_ci_quality_gate.py"]
+opened_commit = "3ad4230f2181951fc17da90e1fe8f4a4e193b1bb"
+whole_reason = "One change of the workflow's shape: the legs, what they hand in, the aggregator that reads it, the helper that picks the attempts, the cache's one writer and the tests and documents that pin that shape are true only together."
