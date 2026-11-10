@@ -21,8 +21,14 @@ def as_list(value):
     return [value] if isinstance(value, str) else value
 
 
+SELF_REPOSITORY_PREFIX = "$/"
+
+
 def called_workflow_aggregator_name(job):
-    called_jobs = yaml.safe_load((ROOT / job["uses"]).read_text())["jobs"]
+    uses = job["uses"]
+    assert uses.startswith(SELF_REPOSITORY_PREFIX), f"unresolvable call: {uses}"
+    called_file = ROOT / uses.removeprefix(SELF_REPOSITORY_PREFIX)
+    called_jobs = yaml.safe_load(called_file.read_text())["jobs"]
     aggregators = [
         called["name"]
         for job_id, called in called_jobs.items()

@@ -355,7 +355,7 @@ jobs:
     name: E2E
     permissions:
       contents: read
-    uses: ./.github/workflows/e2e.yml
+    uses: $/.github/workflows/e2e.yml
 
   quality:
     needs: [backend, alert-rules, backend-coverage, frontend, coverage, e2e]
