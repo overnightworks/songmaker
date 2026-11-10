@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Annotated, Final
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -19,14 +18,17 @@ from webauth.sign_in_routes import (
 
 from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_models import AuthMeResponse
+from songmaker_cli.app_context import allowed_hosts
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.constants import NO_ACCESS_PATH
 from songmaker_cli.request_policies import SIGN_IN_PATHS
-from songmaker_cli.settings import DEFAULT_SERVER_PORT, get_settings
+from songmaker_cli.settings import get_settings
 
 if TYPE_CHECKING:
     from webauth.oidc import OidcRelyingParty
+
+    from songmaker_cli.settings import Settings
 
 log = logging.getLogger(__name__)
 
@@ -39,18 +41,24 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # A handler answers it; it is never an error to name.
 class BackchannelHostMismatch(Exception):  # noqa: N818
-    """The back-channel call carries a Host other than the private network's."""
-
-
-def backchannel_logout_host() -> str:
-    """The Host the realm's call carries: the public host on the container port."""
-    return f"{urlsplit(get_settings().public_base_url).hostname}:{DEFAULT_SERVER_PORT}"
+    """The back-channel call carries a Host other than the configured one."""
 
 
 def _require_backchannel_host(request: Request) -> None:
-    """Keycloak's back-channel logout; only the private network's Host reaches it."""
-    if request.headers.get("host") != backchannel_logout_host():
+    """Keycloak's back-channel logout; only the configured Host reaches it, none if unset."""
+    configured = get_settings().backchannel_logout_host
+    if not configured or request.headers.get("host", "").lower() != configured:
         raise BackchannelHostMismatch
+
+
+def _require_backchannel_host_listed(settings: Settings) -> None:
+    """A Host that TrustedHost refuses (it matches the part before the colon) would lose every
+    logout without a sign."""
+    configured = settings.backchannel_logout_host
+    if configured and configured.split(":")[0] not in allowed_hosts(settings):
+        raise ValueError(
+            f"BACKCHANNEL_LOGOUT_HOST={configured!r} names a host that ALLOWED_HOSTS does not list",
+        )
 
 
 def _answer_backchannel_host_mismatch(_request: Request, _exc: Exception) -> Response:
@@ -76,6 +84,7 @@ def _refuse_sign_in(request: Request, refusal: SignInRefusal) -> Response:
 def install_sign_in(app: FastAPI) -> None:
     """Register webauth's start, callback, logout and back-channel routes on the app."""
     settings = get_settings()
+    _require_backchannel_host_listed(settings)
     app.add_exception_handler(BackchannelHostMismatch, _answer_backchannel_host_mismatch)
     install_sign_in_routes(
         app,
