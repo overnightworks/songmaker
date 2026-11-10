@@ -170,9 +170,11 @@ jobs:
           overwrite: false
           retention-days: 14
 
-      # The E2E-only IP_RATE_LIMIT in docker/docker-compose.ci.yml is sized
-      # from this peak (#1555), so every run prints it rather than leaving a
-      # dated number to go stale. Each leg's stack has a window of its own.
+      # Prints the busiest API window, from which the E2E-only IP_RATE_LIMIT in
+      # docker/docker-compose.ci.yml is sized, and the busiest sign-in window,
+      # which shows whether webauth's sign-in budget still fits the suite, so
+      # neither is a dated number gone stale. Each budget is measured over its
+      # own window, and each leg's stack has windows of its own.
       - name: Busiest API rate-limit window
         if: ${{ !cancelled() && steps.boot.outcome == 'success' }}
         run: |

@@ -25,6 +25,7 @@ from webauth.middleware import (
     IpRateLimitMiddleware,
     SecurityHeadersMiddleware,
 )
+from webauth.policies import RateLimitPolicy
 
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, LOGOUT_PATH
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
@@ -559,18 +560,27 @@ def test_installed_stack_adds_security_headers_to_refusals(security_exchange, ou
         assert body == b"Internal Server Error"
 
 
-def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
-    tmp_path: Path, pg_factory, fresh_settings, monkeypatch,
-):
-    """defect:#1590 -- the rate limiter runs before CSRF and remains inside headers."""
-    monkeypatch.setenv("IP_RATE_LIMIT", "1")
+def _installed_rate_limit_policy(app: FastAPI) -> RateLimitPolicy:
+    return next(
+        layer.kwargs["policy"] for layer in app.user_middleware
+        if layer.cls is IpRateLimitMiddleware
+    )
+
+
+def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(tmp_path: Path, pg_factory):
+    """defect:#1590 -- the rate limiter runs before CSRF and remains inside headers.
+
+    Logout spends the sign-in budget, so every foreign-origin logout it allows is a
+    403 from the origin check, and the first one beyond it is the limiter's 429.
+    """
     client, _ = make_test_app(tmp_path, factory=pg_factory)
+    allowed = _installed_rate_limit_policy(client.app).sign_in.max_requests
 
     async def drive():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=client.app), base_url="http://localhost",
         ) as http:
-            for expected in (403, 429):
+            for expected in (*[403] * allowed, 429):
                 foreign = {"Origin": "https://foreign.example"}
                 response = await http.post(LOGOUT_PATH, headers=foreign)
                 assert response.status_code == expected

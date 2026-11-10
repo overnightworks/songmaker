@@ -65,6 +65,7 @@ from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
 from songmaker_cli.request_policies import (
+    SIGN_IN_PATHS,
     SPA_SHELL_HEADERS,
     build_body_size_policy,
     build_csrf_origin_policy,
@@ -290,7 +291,8 @@ def create_app(
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
     install_web_auth_middleware(
-        app, security_headers=build_security_headers_policy(script_hashes),
+        app, sign_in_paths=SIGN_IN_PATHS,
+        security_headers=build_security_headers_policy(script_hashes),
         body_size=build_body_size_policy(settings), rate_limit=build_rate_limit_policy(settings),
         csrf_origin=build_csrf_origin_policy(),
         bearer_gate=build_bearer_gate(settings, app.state.oidc_sign_in, ctx.db, mcp_resource),

@@ -1192,8 +1192,8 @@ mcp-server = [
 
 [[package]]
 name = "overnightworks-webauth"
-version = "0.34.0"
-source = { git = "https://github.com/overnightworks/webauth?rev=v0.34.0#88bf39b23d08d414fbdcd740b0e48ca31bfbfd1a" }
+version = "0.35.0"
+source = { git = "https://github.com/overnightworks/webauth?rev=v0.35.0#0ca48c090830d7d23995845cd46a9002029bcbc5" }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
@@ -1982,7 +1982,7 @@ requires-dist = [
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
     { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.29.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.29.0" },
-    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.34.0" },
+    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.35.0" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },

@@ -93,9 +93,7 @@ BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 
 # Static PWA root assets are fetched by the browser and the service worker
 # outside of user-driven navigation, so they must not compete with `/api/*`
-# calls for any class's budget. The set holds static assets only; the realm's
-# back-channel call, which a throttled caller must not be able to starve, is exempted in
-# `build_rate_limit_policy` from `SIGN_IN_PATHS`.
+# calls for any class's budget. The set holds static assets only.
 #
 # `/health` is deliberately NOT here: it is the most expensive anonymous
 # endpoint (a DB check and two DB queries, plus Redis reads that grow with
@@ -110,7 +108,8 @@ RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
     "/service-worker.js",
 }) | PWA_ICON_PATHS
 
-# The four sign-in routes; webauth derives their CSRF, rate-limit, body-size and cache rules.
+# The four sign-in routes; the webauth installer derives their CSRF, rate-limit, body-size and
+# cache rules ahead of songmaker's own.
 SIGN_IN_PATHS: Final = SignInPaths(
     start=OIDC_START_PATH,
     callback=OIDC_CALLBACK_PATH,
@@ -157,7 +156,7 @@ def build_rate_limit_policy(settings: Settings) -> RateLimitPolicy:
             ),
         ),
         exempt=PathRules(
-            exact=RATE_LIMIT_EXEMPT_PATHS | SIGN_IN_PATHS.backchannel.exact,
+            exact=RATE_LIMIT_EXEMPT_PATHS,
             prefixes=(STATIC_ASSET_PREFIX,),
         ),
     )
@@ -166,14 +165,10 @@ def build_rate_limit_policy(settings: Settings) -> RateLimitPolicy:
 def build_csrf_origin_policy() -> CsrfPolicy:
     """Every state-changing request is checked for the same origin; it is the only CSRF guard.
 
-    The realm's back-channel call and the workers on `/api/internal/*` have no
-    session and no browser: the Logout Token and the internal token are their proof.
+    The workers on `/api/internal/*` have no session and no browser: the internal
+    token is their proof.
     """
-    return CsrfPolicy(
-        exempt=PathRules(
-            exact=SIGN_IN_PATHS.backchannel.exact, prefixes=(INTERNAL_API_PREFIX,),
-        ),
-    )
+    return CsrfPolicy(exempt=PathRules(prefixes=(INTERNAL_API_PREFIX,)))
 
 
 def build_body_size_policy(settings: Settings) -> BodySizePolicy:
@@ -181,7 +176,6 @@ def build_body_size_policy(settings: Settings) -> BodySizePolicy:
     return BodySizePolicy(
         default_max_bytes=settings.max_request_body_bytes,
         rules=(
-            SIGN_IN_PATHS.backchannel_body_size_rule,
             BodySizeRule(
                 paths=PathRules(exact=frozenset({REFERENCE_UPLOAD_PATH})),
                 max_bytes=settings.max_upload_body_bytes,
@@ -225,6 +219,5 @@ def build_security_headers_policy(script_hashes: Sequence[str]) -> SecurityHeade
                 paths=PathRules(prefixes=(API_PATH_PREFIX,)),
                 value=API_CACHE_CONTROL,
             ),
-            SIGN_IN_PATHS.cache_control_rule,
         ),
     )

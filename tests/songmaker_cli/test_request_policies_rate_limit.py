@@ -10,14 +10,19 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from support.fake_oidc_issuer import a_fake_issuer
 from support.web_app import make_test_app, seed_user, web_client
 from webauth.config import install_web_auth_config, installed_web_auth_config
+from webauth.middleware import IpRateLimitMiddleware
+from webauth.policies import RateLimitBudget, RateLimitPolicy
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
 from songmaker_cli.request_policies import (
     API_BUDGET_NAME,
+    BACKCHANNEL_LOGOUT_PATH,
     MEDIA_BUDGET_NAME,
+    SIGN_IN_PATHS,
     STREAM_BUDGET_NAME,
     build_rate_limit_policy,
 )
@@ -376,6 +381,129 @@ def test_ipv4_mapped_and_plain_forms_share_one_budget(
     _check_from(ip_limited_client, "::ffff:203.0.113.1")
 
     assert _check_from(ip_limited_client, "203.0.113.1") == 429
+
+
+# ── The sign-in budget ──────────────────────────────────────────────
+
+_SIGN_IN_REQUESTS = (
+    ("GET", SIGN_IN_PATHS.start),
+    ("HEAD", SIGN_IN_PATHS.start),
+    ("GET", SIGN_IN_PATHS.callback),
+    ("POST", SIGN_IN_PATHS.logout),
+)
+_FORWARDED_CLIENT = "203.0.113.1"
+_OTHER_FORWARDED_CLIENT = "203.0.113.2"
+
+
+@pytest.fixture
+def sign_in_client(tmp_path: Path, pg_factory, fresh_settings, monkeypatch) -> TestClient:
+    monkeypatch.setenv("IP_RATE_LIMIT", "1")
+    client, _ = make_test_app(
+        tmp_path, factory=pg_factory, oidc_sign_in=a_fake_issuer().relying_party_for_app(),
+    )
+    return client
+
+
+def _sign_in_budget(client: TestClient) -> RateLimitBudget:
+    policy = next(
+        layer.kwargs["policy"] for layer in client.app.user_middleware
+        if layer.cls is IpRateLimitMiddleware
+    )
+    return policy.sign_in
+
+
+def _start(client: TestClient, **headers: str) -> int:
+    return client.get(SIGN_IN_PATHS.start, headers=headers, follow_redirects=False).status_code
+
+
+def _spend_sign_in_budget(client: TestClient, **headers: str) -> None:
+    for _ in range(_sign_in_budget(client).max_requests):
+        assert _start(client, **headers) != 429
+
+
+def test_start_callback_and_logout_spend_one_sign_in_budget(sign_in_client: TestClient) -> None:
+    for index in range(_sign_in_budget(sign_in_client).max_requests):
+        method, path = _SIGN_IN_REQUESTS[index % len(_SIGN_IN_REQUESTS)]
+        assert sign_in_client.request(method, path, follow_redirects=False).status_code != 429
+
+    answers = [
+        sign_in_client.request(method, path, follow_redirects=False).status_code
+        for method, path in _SIGN_IN_REQUESTS
+    ]
+
+    assert answers == [429] * len(_SIGN_IN_REQUESTS)
+
+
+def test_a_spent_sign_in_budget_answers_429_with_its_retry_time_and_the_headers(
+    sign_in_client: TestClient,
+) -> None:
+    _spend_sign_in_budget(sign_in_client)
+
+    response = sign_in_client.get(SIGN_IN_PATHS.start, follow_redirects=False)
+
+    assert response.status_code == 429
+    assert 0 < int(response.headers["retry-after"]) <= _sign_in_budget(
+        sign_in_client,
+    ).window_seconds
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "content-security-policy" in response.headers
+
+
+def test_a_spent_sign_in_budget_leaves_the_api_budget_untouched(
+    sign_in_client: TestClient,
+) -> None:
+    _spend_sign_in_budget(sign_in_client)
+
+    assert sign_in_client.get("/api/auth/check").status_code != 429
+
+
+def test_a_spent_api_budget_leaves_the_sign_in_paths_open(sign_in_client: TestClient) -> None:
+    for _ in range(2):
+        sign_in_client.get("/api/auth/check")
+    assert sign_in_client.get("/api/auth/check").status_code == 429
+
+    assert _start(sign_in_client) != 429
+
+
+def _post_as_the_realm(client: TestClient) -> None:
+    client.post(
+        BACKCHANNEL_LOGOUT_PATH, data={"logout_token": "garbage"},
+        headers={"host": "songmaker.test:8080"},
+    )
+
+
+def _send_a_preflight(client: TestClient) -> None:
+    client.options(
+        SIGN_IN_PATHS.start,
+        headers={"origin": "http://localhost", "access-control-request-method": "GET"},
+    )
+
+
+@pytest.mark.parametrize("request_that_spends_nothing", [_post_as_the_realm, _send_a_preflight])
+def test_the_back_channel_and_a_preflight_spend_nothing_of_the_sign_in_budget(
+    sign_in_client: TestClient, request_that_spends_nothing,
+) -> None:
+    for _ in range(_sign_in_budget(sign_in_client).max_requests):
+        request_that_spends_nothing(sign_in_client)
+
+    assert _start(sign_in_client) != 429
+    assert sign_in_client.get("/api/auth/check").status_code != 429
+
+
+def test_a_second_forwarded_client_keeps_its_own_sign_in_budget(
+    sign_in_client: TestClient,
+) -> None:
+    _trust_proxy_network(sign_in_client)
+    proxy = web_client(sign_in_client.app, client=(_TRUSTED_PEER, 55000))
+    _spend_sign_in_budget(proxy, **{"x-forwarded-for": _FORWARDED_CLIENT})
+
+    assert _start(proxy, **{"x-forwarded-for": _FORWARDED_CLIENT}) == 429
+    assert _start(proxy, **{"x-forwarded-for": _OTHER_FORWARDED_CLIENT}) != 429
+
+
+def test_the_installed_sign_in_budget_is_webauths_default(sign_in_client: TestClient) -> None:
+    assert _sign_in_budget(sign_in_client) == RateLimitPolicy().sign_in
 
 
 # ── Path classification ─────────────────────────────────────────────

@@ -9,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from songmaker_cli.request_policies import build_rate_limit_policy
+from songmaker_cli.request_policies import (
+    BACKCHANNEL_LOGOUT_PATH,
+    SIGN_IN_PATHS,
+    build_rate_limit_policy,
+)
 from songmaker_cli.settings import Settings
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
@@ -75,7 +79,7 @@ def test_the_busiest_window_counts_only_requests_inside_one_budget_window(
     """defect:#1555 -- a burst is judged inside the limiter's 60 s, not across the run."""
     lines = [access_line("/api/albums", second) for second in seconds]
 
-    peak = rate_window.busiest_api_window(lines, policy)
+    peak = rate_window.busiest_window(lines, policy, policy.default)
 
     assert peak == rate_window.WindowPeak(
         RUNNER_IP, request_count, RUN_START + timedelta(seconds=starts_at),
@@ -90,7 +94,7 @@ def test_each_client_address_has_its_own_window(policy) -> None:
         access_line("/api/albums", 2, ip="10.0.0.2"),
     ]
 
-    peak = rate_window.busiest_api_window(lines, policy)
+    peak = rate_window.busiest_window(lines, policy, policy.default)
 
     assert (peak.client_ip, peak.request_count) == ("10.0.0.2", 2)
 
@@ -105,17 +109,54 @@ def test_each_client_address_has_its_own_window(policy) -> None:
         ("/_app/immutable/entry.js", False),
         ("/audio/take.mp3", False),
         ("/api/jobs/job-1/stream", False),
+        (SIGN_IN_PATHS.start, False),
+        (SIGN_IN_PATHS.callback, False),
+        (SIGN_IN_PATHS.logout, False),
     ],
 )
 def test_the_rate_limit_policy_decides_which_requests_spend_the_api_budget(
     policy, path: str, spends_api_budget: bool,
 ) -> None:
     """defect:#1555 -- exempt, media and stream paths stay out; documents count."""
-    peak = rate_window.busiest_api_window([access_line(path, 0)], policy)
+    peak = rate_window.busiest_window([access_line(path, 0)], policy, policy.default)
 
     assert (peak is not None) is spends_api_budget
 
 
 def test_a_log_without_api_requests_has_no_peak(policy) -> None:
     """defect:#1555 -- a missing measurement is reported, never read as zero."""
-    assert rate_window.busiest_api_window(["Running migrations..."], policy) is None
+    assert rate_window.busiest_window(["Running migrations..."], policy, policy.default) is None
+
+
+@pytest.mark.parametrize(
+    ("path", "spends_sign_in_budget"),
+    [
+        (SIGN_IN_PATHS.start, True),
+        (SIGN_IN_PATHS.callback, True),
+        (SIGN_IN_PATHS.logout, True),
+        (BACKCHANNEL_LOGOUT_PATH, False),
+        ("/api/albums", False),
+    ],
+)
+def test_start_callback_and_logout_spend_the_sign_in_budget(
+    policy, path: str, spends_sign_in_budget: bool,
+) -> None:
+    peak = rate_window.busiest_window([access_line(path, 0)], policy, policy.sign_in)
+
+    assert (peak is not None) is spends_sign_in_budget
+
+
+@pytest.mark.parametrize(
+    ("path", "budget_of"),
+    [
+        pytest.param("/api/albums", lambda policy: policy.default, id="api"),
+        pytest.param(SIGN_IN_PATHS.start, lambda policy: policy.sign_in, id="sign-in"),
+    ],
+)
+def test_each_budget_is_measured_over_its_own_window(policy, path: str, budget_of) -> None:
+    budget = budget_of(policy)
+    lines = [access_line(path, 0), access_line(path, budget.window_seconds - 1)]
+    beyond = [access_line(path, 0), access_line(path, budget.window_seconds)]
+
+    assert rate_window.busiest_window(lines, policy, budget).request_count == 2
+    assert rate_window.busiest_window(beyond, policy, budget).request_count == 1

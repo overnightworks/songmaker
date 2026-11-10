@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 from httpx import Response
 from sqlalchemy.orm import Session
-from support.fake_oidc_issuer import Person
+from support.fake_oidc_issuer import Person, a_fake_issuer
 from support.oidc_world import World
-from support.web_app import web_client
+from support.web_app import make_test_app, web_client
 
 from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.db.models import AuditLog, UserSession
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from fastapi import FastAPI
 
 MEMBER = "/apps/songmaker"
 SUBJECT = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
@@ -26,12 +33,18 @@ def _member(subject: str) -> Person:
     return Person(subject, "felix", (MEMBER,))
 
 
-def _backchannel(world: World, token: str | None, **headers: str) -> Response:
+def _post_as_the_realm(
+    app: FastAPI, path: str, data: dict[str, str] | None = None, **headers: str,
+) -> Response:
     sent = {"host": BACKCHANNEL_HOST, **FORM, **headers}
-    data = None if token is None else {"logout_token": token}
     # The library answers a failing transaction with 400 and then re-raises it.
-    realm = web_client(world.client.app, raise_server_exceptions=False, cookies={})
-    return realm.post(BACKCHANNEL_PATH, data=data, headers=sent)
+    realm = web_client(app, raise_server_exceptions=False, cookies={})
+    return realm.post(path, data=data, headers=sent)
+
+
+def _backchannel(world: World, token: str | None, **headers: str) -> Response:
+    data = None if token is None else {"logout_token": token}
+    return _post_as_the_realm(world.client.app, BACKCHANNEL_PATH, data, **headers)
 
 
 def _sign_in_twice(world: World, subject: str = SUBJECT) -> None:
@@ -249,15 +262,31 @@ def test_the_exemptions_are_exact_to_the_back_channel_path(world: World, path: s
     assert response.status_code == 403
 
 
-def test_the_rate_limit_exemption_is_exact() -> None:
+@pytest.fixture
+def limits_at_one(tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytest.MonkeyPatch):
+    for limit in ("IP_RATE_LIMIT", "MEDIA_RATE_LIMIT", "STREAM_RATE_LIMIT"):
+        monkeypatch.setenv(limit, "1")
+    client, _ = make_test_app(
+        tmp_path, factory=pg_factory, oidc_sign_in=a_fake_issuer().relying_party_for_app(),
+    )
+    return client.app
+
+
+def test_the_back_channel_path_is_never_rate_limited(limits_at_one: FastAPI) -> None:
     """K7, K8."""
-    from songmaker_cli.request_policies import build_rate_limit_policy
-    from songmaker_cli.settings import get_settings
+    answers = [
+        _post_as_the_realm(limits_at_one, BACKCHANNEL_PATH).status_code for _ in range(3)
+    ]
 
-    exempt = build_rate_limit_policy(get_settings()).exempt
+    assert 429 not in answers
 
-    assert exempt.matches(BACKCHANNEL_PATH)
-    assert not exempt.matches(BACKCHANNEL_PATH + "x")
+
+@pytest.mark.parametrize("path", [BACKCHANNEL_PATH + "x", BACKCHANNEL_PATH + "/"])
+def test_the_rate_limit_exemption_is_exact(limits_at_one: FastAPI, path: str) -> None:
+    """K7, K8."""
+    _post_as_the_realm(limits_at_one, path)
+
+    assert _post_as_the_realm(limits_at_one, path).status_code == 429
 
 
 def test_a_logout_completed_after_the_callback_commit_ends_the_new_session(world: World) -> None:
