@@ -1005,7 +1005,7 @@ starts no job. The turn then runs as a task of its own through
 5. It yields `assistant_text`, `tool_call` and `tool_result` frames in
    songmaker's own models, the answer of the final event that
    `_complete_chat_turn` stores, or one typed problem that ends the turn with an
-   error frame: `unavailable`, `busy`, `not_enabled` or `sign_in_again`. A
+   error frame: `unavailable`, `busy`, `budget_spent`, `not_enabled` or `sign_in_again`. A
    finished turn without words ends unavailable, and the turn never falls back
    to a local provider.
 
@@ -1037,7 +1037,7 @@ that card (`--models-columns`) and read by the header row and the rows. Below
 A Suggest click asks `agent/backend.py::cover_admission` before it makes a job:
 no gateway configured or an unreachable issuer answers 503, outside the API group or a session whose
 grant is refused answers 403, each with `{"detail": {"problem": …}}`, one of
-the turn's four problems (`AgentProblem`). The web process's one-at-a-time
+the turn's five problems (`AgentProblem`). The web process's one-at-a-time
 runner (`cover_runner.py`) then loads the asking user and the session the job
 references, and `run_cover_picture` draws one picture through the picture
 agent file on the same `GatewayBackend` the turn uses, checking the group again

@@ -51,7 +51,7 @@ The rules of how a person moves through Songmaker, each under the ID its test ci
 - **album_rule_2** The header actions are Play · Shuffle · ⋯ only, on their own row.
 - **album_rule_3** ⋯ opens the one popover form at both widths, clamped 8 px inside the screen, 7 rows: Edit details · Cover · Pick album takes · Add to playlist · Share · Archive · Delete (red, last). Rename folds into Edit details, the three cover rows into one Cover row.
 - **album_rule_4** The cover is edited in place: no standing cover card. A tap on the cover (the “Add cover” placeholder when there is none) grows it where it stands; suggestions come one image at a time, ‹ › or a swipe browse those made so far, “n / m”, one row Upload · Suggest another · USE · ×.
-- **album_rule_5** Suggest runs through the agent service. When a suggestion cannot run, the editor names one of four problems, busy, not enabled, unavailable or log in again.
+- **album_rule_5** Suggest runs through the agent service. When a suggestion cannot run, the editor names one of five problems, busy, not enabled, unavailable, log in again or a spent budget.
 - **album_rule_6** A suggestion keeps running when you leave: Back, Escape, another page or another album stop nothing and discard nothing; only ×, USE and Upload stop a running suggestion and discard the unused ones.
 - **album_rule_7** Delete and Archive keep their confirmation and rights; nothing here changes who may do what.
 - **album_rule_8** The grown cover keeps its place and shows a turning ring and the time since the server started the run, Making a cover · 0:42; no percentage, because the image call has none. The time comes from the job’s start, so it is right after coming back and on a second device.

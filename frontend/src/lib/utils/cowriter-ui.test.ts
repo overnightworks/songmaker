@@ -14,6 +14,7 @@ import {
 	conversationMessageCountLabel,
 	conversationRowLabel,
 	cowriterThinkingLabel,
+	COWRITER_PROBLEM_LOOKS,
 	cowriterToolCallTarget,
 	cowriterTurnError,
 	type CowriterTurnError
@@ -64,6 +65,15 @@ describe('co-writer copy', () => {
 			{ problem: 'unavailable', text: 'The co-writer is unavailable', waitSeconds: 0 }
 		],
 		[
+			'a spent budget, with no wait',
+			{ type: 'error', status: 429, problem: 'budget_spent', retry_after_seconds: null },
+			{
+				problem: 'budget_spent',
+				text: "The co-writer's budget is used up. Try again later.",
+				waitSeconds: 0
+			}
+		],
+		[
 			'the endpoint’s own failure message, with no named problem',
 			{ type: 'error', status: 500, message: 'Chat request failed' },
 			{ problem: null, text: 'Chat request failed', waitSeconds: 0 }
@@ -77,6 +87,15 @@ describe('co-writer copy', () => {
 
 	it('defect:#1856: names no failure for a frame that carries an empty message', () => {
 		expect(cowriterTurnError({ type: 'error', status: 500, message: '' })).toBeNull();
+	});
+});
+
+describe('the look of a problem', () => {
+	it('draws a spent budget as a refusal to wait out, not as the outage', () => {
+		expect(COWRITER_PROBLEM_LOOKS.budget_spent).toEqual(COWRITER_PROBLEM_LOOKS.busy);
+		expect(COWRITER_PROBLEM_LOOKS.budget_spent.icon).not.toBe(
+			COWRITER_PROBLEM_LOOKS.unavailable.icon
+		);
 	});
 });
 

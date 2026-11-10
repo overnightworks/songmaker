@@ -64,6 +64,13 @@ const RETRY_FAILURE_FRAME = {
 	retry_after_seconds: null
 };
 const RETRY_FAILURE = 'The co-writer is unavailable';
+const BUDGET_SPENT_FRAME = {
+	type: 'error',
+	status: 429,
+	problem: 'budget_spent',
+	retry_after_seconds: null
+};
+const BUDGET_SPENT_FAILURE = "The co-writer's budget is used up. Try again later.";
 
 type TurnState = 'idle' | 'running' | 'answered';
 type ChatMessage = ReturnType<typeof chatMessage>;
@@ -249,6 +256,24 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await expect.poll(() => retried).toBe(true);
 		await expect(page.getByText(RETRY_FAILURE)).toBeVisible();
 		await expect(page.getByText(SENT)).toHaveCount(1);
+		await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(1);
+	});
+
+	test('a turn the budget refuses names the budget, never an outage, and offers Try again', async ({
+		page
+	}) => {
+		await answerConversation(page, () => ({ messages: [], turnRunning: false }));
+		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) =>
+			route.fulfill({ contentType: 'text/event-stream', body: turnStream(BUDGET_SPENT_FRAME) })
+		);
+
+		await openCowriterOnPickedSong(page);
+		const composer = page.getByPlaceholder(/Ask for a rewrite/);
+		await composer.fill(SENT);
+		await composer.press('Enter');
+
+		await expect(page.getByText(BUDGET_SPENT_FAILURE)).toBeVisible();
+		await expect(page.getByText(RETRY_FAILURE)).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(1);
 	});
 

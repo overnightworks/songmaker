@@ -81,6 +81,7 @@ export interface CowriterTurnError {
 const COWRITER_PROBLEM_TEXTS: Record<CowriterProblem, string> = {
 	unavailable: COWRITER_UNAVAILABLE_TEXT,
 	busy: 'The co-writer is busy',
+	budget_spent: "The co-writer's budget is used up. Try again later.",
 	not_enabled: 'The co-writer is not enabled for your account',
 	sign_in_again: 'Log in again to use the co-writer'
 };
@@ -103,6 +104,7 @@ export function cowriterTurnError(
 export const COWRITER_PROBLEM_LOOKS: Record<CowriterProblem, { tone: string; icon: string }> = {
 	sign_in_again: { tone: 'bad', icon: 'triangle-alert' },
 	busy: { tone: 'wait', icon: 'clock' },
+	budget_spent: { tone: 'wait', icon: 'clock' },
 	not_enabled: { tone: 'off', icon: 'ban' },
 	unavailable: { tone: 'wait', icon: 'circle-alert' }
 };
