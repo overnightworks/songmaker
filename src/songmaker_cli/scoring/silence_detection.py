@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# librosa attaches its submodules lazily; a first import inside a scorer thread can
+# deadlock with another scorer thread's, so the main thread loads them here.
 import librosa
+import librosa.effects
 import numpy as np
 
 from songmaker_cli.constants import SILENCE_MIN_GAP_SECONDS, SILENCE_TOP_DB, SILENCE_TRIM_SECONDS
