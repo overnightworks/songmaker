@@ -86,9 +86,9 @@ jobs:
       REPOSITORY: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      # No ref: the gate refuses any dispatch but main's head, so the workflow's own commit is the gated one.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
-          ref: ${{ needs.gate.outputs.commit }}
           persist-credentials: false
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:

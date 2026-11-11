@@ -59,3 +59,12 @@ def test_the_layers_job_reads_the_released_images_and_neither_writes_nor_gates_t
     assert set(layers["strategy"]["matrix"]["image"]) == released
     assert set(layers["permissions"].items()) <= {("contents", "read"), ("packages", "read")}
     assert "layers" not in RELEASE_JOBS["tag"]["needs"]
+
+
+def test_the_layers_job_runs_only_the_workflows_own_commit():
+    checkouts = [
+        step for step in RELEASE_JOBS["layers"]["steps"] if step.get("uses", "").startswith("actions/checkout@")
+    ]
+
+    assert len(checkouts) == 1
+    assert "ref" not in checkouts[0].get("with", {})
