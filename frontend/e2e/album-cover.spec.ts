@@ -26,13 +26,13 @@ const PHONE_VIEWPORT = { width: 375, height: 844 };
 // What a cover job's row may hold and no page may show (#2055 matrix cell 26).
 const STORED_ERROR_CANARY = 'gateway detail sk-e2e-canary for session e2e-canary';
 const BUSY_WAIT_SECONDS = 300;
-// The problems that leave Suggest open: a retry is the person's own action.
 const PROBLEM_KEYS = {
 	busy: 'coverProblem.busy',
 	budget_spent: 'coverProblem.budgetSpent',
 	not_enabled: 'coverProblem.notEnabled',
 	unavailable: 'coverProblem.unavailable'
 } as const satisfies Record<string, Key>;
+// The problems that leave Suggest open: a retry is the person's own action.
 const OPEN_PROBLEMS: ReadonlySet<string> = new Set(['unavailable', 'budget_spent']);
 
 interface ProblemLook {
