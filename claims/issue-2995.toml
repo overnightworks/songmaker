@@ -1,0 +1,7 @@
+claim_id = "6c08b502c1134975aa6b1985da469f45"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "f20d8ee17c829ed695536315e5d2dc886f326235"
+branch = "claude/issue-2995-the-backend-s-test-jobs-have-a-limit-of"
+scope = [".github/workflows/ci.yml", "tests/workflows/test_ci_quality_gate.py", "tests/workflows/test_ci_system_packages.py"]
+opened_commit = "3dfcccb98eab97ca470a8330af7783e7f31eb23c"
