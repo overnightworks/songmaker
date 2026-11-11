@@ -3,6 +3,6 @@ agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
 role = "builder"
 base = "bb98a1eaa0c4aecb34a459f3ebaebceef6b0e108"
 branch = "claude/issue-2971-the-backend-tests-run-in-three-shards-be"
-scope = [".github/workflows/ci.yml", ".github/workflows/coveragerc-ci.ini", "docs/testing.md", "frontend/e2e/shard-artifacts.ts", "quality/config.toml", "scripts/check_backend_shard_identity.py", "scripts/check_pinned_images_match.py", "scripts/static_checks.sh", "tests/acestep_engine/test_client_contract.py", "tests/support/auto_deploy_support.py", "tests/workflows/test_ci_quality_gate.py"]
+scope = [".github/workflows/ci.yml", ".github/workflows/coveragerc-ci.ini", "docs/testing.md", "frontend/e2e/shard-artifacts.ts", "quality/config.toml", "scripts/check_backend_shard_identity.py", "scripts/check_pinned_images_match.py", "scripts/static_checks.sh", "tests/acestep_engine/test_client_contract.py", "tests/support/auto_deploy_support.py", "tests/test_postgresql_databases.py", "tests/workflows/test_ci_quality_gate.py"]
 opened_commit = "cc7e1f426af3c8ed0086f61048f2789c378f002d"
 whole_reason = "One change of the backend job's shape: the shards, the static job, the aggregator that keeps the mandatory name, the combine that reads each shard's data, and the tests and documents that pin that shape are true only together, since any part alone leaves a mandatory job missing or red."
