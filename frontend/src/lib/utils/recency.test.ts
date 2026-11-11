@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareByCreatedAt } from './recency';
+import { compareByCreatedAt, compareTitles, titleComparatorFor } from './recency';
 
 describe('compareByCreatedAt', () => {
 	const older = { id: 'a', title: 'Beta', created_at: '2026-01-01T00:00:00.000Z' };
@@ -65,5 +65,18 @@ describe('compareByCreatedAt', () => {
 				compareByCreatedAt(a, b, 'newest')
 			)
 		).toEqual([older, { id: 'bad', title: 'Bad', created_at: 'nope' }, missing]);
+	});
+});
+
+describe('title order follows the page language', () => {
+	const titles = ['Zebra', 'Ärger'];
+
+	it.each([
+		{ language: 'de', expected: ['Ärger', 'Zebra'] },
+		{ language: 'sv', expected: ['Zebra', 'Ärger'] }
+	])('puts $expected in order under $language', ({ language, expected }) => {
+		document.documentElement.lang = language;
+		expect(titles.toSorted(compareTitles)).toEqual(expected);
+		expect(titles.toSorted(titleComparatorFor(language))).toEqual(expected);
 	});
 });

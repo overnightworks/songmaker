@@ -1,9 +1,9 @@
 import { DAY_LABEL_TODAY, DAY_LABEL_YESTERDAY } from '#lib/constants/day-label.ts';
 import { ALBUM_ART_EMPTY_INITIALS, ALBUM_ART_INITIAL_COUNT } from '#lib/constants/album.ts';
+import { pageLanguage } from './page-language.ts';
 
 const DAY_MS = 86_400_000;
 export const DAYS_NAMED_BY_WEEKDAY = 7;
-export const DAY_LABEL_LOCALE = 'en-US';
 
 export function formatTime(seconds: number): string {
 	const m = Math.floor(seconds / 60);
@@ -52,7 +52,7 @@ export function localDaysBetween(earlier: Date, later: Date): number {
 
 /** The 24-hour local clock every day label adds: "09:12". */
 export function localClockTime(moment: Date): string {
-	return moment.toLocaleTimeString(DAY_LABEL_LOCALE, {
+	return moment.toLocaleTimeString(pageLanguage(), {
 		hour: '2-digit',
 		minute: '2-digit',
 		hourCycle: 'h23'
@@ -61,13 +61,13 @@ export function localClockTime(moment: Date): string {
 
 /** The short local weekday every day label names: "Thu". */
 export function localWeekday(moment: Date): string {
-	return moment.toLocaleDateString(DAY_LABEL_LOCALE, { weekday: 'short' });
+	return moment.toLocaleDateString(pageLanguage(), { weekday: 'short' });
 }
 
 // Day before month ("21 Sep") is composed by hand: the one locale that orders
 // it so, en-GB, abbreviates September as "Sept".
 function dayAndMonth(moment: Date): string {
-	return `${moment.getDate()} ${moment.toLocaleDateString(DAY_LABEL_LOCALE, { month: 'short' })}`;
+	return `${moment.getDate()} ${moment.toLocaleDateString(pageLanguage(), { month: 'short' })}`;
 }
 
 export function localDayAndMonth(moment: Date, now: Date): string {
