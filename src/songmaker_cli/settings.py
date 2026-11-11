@@ -52,7 +52,7 @@ from songmaker_cli.job_timing import (
 # `generation_result_max_bytes` (environment GENERATION_RESULT_MAX_BYTES) admits it.
 GENERATION_RESULT_MAX_BYTES: Final[int] = 256 * 1024 * 1024
 
-# The web server's port: the CLI and server default, and the port of the back-channel Host.
+# The web server's port: the CLI and server default.
 DEFAULT_SERVER_PORT: Final = 8080
 
 # What `/health/details` reports for an image built without the release build arguments.
@@ -214,6 +214,26 @@ class Settings(BaseSettings):
             )
         return f"{parsed.scheme}://{parsed.netloc}"
 
+    @field_validator("backchannel_logout_host")
+    @classmethod
+    def backchannel_logout_host_is_a_bare_host(cls, value: str) -> str:
+        """Empty closes the route; otherwise a plain `host[:port]`, stored in lower case."""
+        raw = value.strip()
+        if raw and not _PUBLIC_BASE_URL_NETLOC.fullmatch(raw):
+            raise ValueError(f"BACKCHANNEL_LOGOUT_HOST={raw!r} is not a plain host[:port]")
+        if raw.startswith("["):
+            raise ValueError(
+                f"BACKCHANNEL_LOGOUT_HOST={raw!r} is a bracketed IPv6 address, "
+                "which cannot pass the allowed-hosts check",
+            )
+        port = raw.partition(":")[2]
+        if port and (port.startswith("0") or int(port) > 65535):
+            raise ValueError(
+                f"BACKCHANNEL_LOGOUT_HOST={raw!r} has a port no Host header carries "
+                "(1 to 65535, no leading zero)",
+            )
+        return raw.lower()
+
     @property
     def token_client_ids(self) -> frozenset[str]:
         """The admitted `azp` values, trimmed; matched exactly and case-sensitively."""
@@ -253,6 +273,9 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     request_timeout_seconds: int = Field(default=30, alias="REQUEST_TIMEOUT")
     allowed_hosts: str = ""
+    # The one Host the realm's back-channel logout carries, `host` or `host:port`. Its host
+    # part must be in `allowed_hosts`; empty closes the route.
+    backchannel_logout_host: str = ""
     cors_origin: str | None = None
     # Comma list of the `azp` values of the OAuth clients whose access tokens
     # reach the person paths as the person behind them. Empty admits no token.

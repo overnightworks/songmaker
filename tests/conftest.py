@@ -215,6 +215,19 @@ def fresh_settings():
 
 
 @pytest.fixture
+def back_channel_logout_host(monkeypatch: pytest.MonkeyPatch):
+    """Name the one Host the back-channel logout answers, and list its host part."""
+    from songmaker_cli.settings import get_settings
+
+    host = "backchannel.test:8080"
+    monkeypatch.setenv("ALLOWED_HOSTS", f"{os.environ['ALLOWED_HOSTS']},backchannel.test")
+    monkeypatch.setenv("BACKCHANNEL_LOGOUT_HOST", host)
+    get_settings.cache_clear()
+    yield host
+    get_settings.cache_clear()
+
+
+@pytest.fixture
 def fake_redis():
     """Provide a fresh fakeredis instance for tests that need Redis."""
     return make_fake_redis()
