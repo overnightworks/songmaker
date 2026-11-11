@@ -1,0 +1,8 @@
+claim_id = "021fc50bfd544b1da6e3c454446cc0c4"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "10bdd8097caf11418dcb39dc0096960ef5ce17f4"
+branch = "claude/issue-3002-home-s-listen-list-reads-its-words-from"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/e2e/home-listen.spec.ts", "frontend/e2e/home-write.spec.ts", "frontend/e2e/library-phone-list.spec.ts", "frontend/e2e/library.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/HomeListen.svelte", "frontend/src/lib/components/HomeListen.test.ts", "frontend/src/lib/components/LibraryHome.test.ts", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/LibraryWorkspace.test.ts", "frontend/src/lib/constants/home.ts", "frontend/src/lib/words/en.ts", "frontend/src/routes/(library)/page.test.ts"]
+opened_commit = "d4c345044159e94c4ac7d058db67cbf533e2da4a"
+whole_reason = "One surface moves whole (the epic's invariant 5): its component and constants, the catalog with its generated module, and every test that finds or drives this list."
