@@ -105,6 +105,22 @@ describe('localWeekday', () => {
 	});
 });
 
+describe('a day label follows the page language', () => {
+	beforeAll(() => vi.stubEnv('TZ', 'Europe/Berlin'));
+	afterAll(() => vi.unstubAllEnvs());
+
+	it.each([
+		['weekday', localWeekday],
+		['month', (moment: Date) => localDayAndMonth(moment, moment)]
+	])('the same moment has a different %s under two page languages', (_part, label) => {
+		const moment = new Date('2026-03-26T22:30:00Z');
+		document.documentElement.lang = 'en';
+		const english = label(moment);
+		document.documentElement.lang = 'de';
+		expect(label(moment)).not.toBe(english);
+	});
+});
+
 describe('localDayAndMonth', () => {
 	beforeAll(() => vi.stubEnv('TZ', 'Europe/Berlin'));
 	afterAll(() => vi.unstubAllEnvs());

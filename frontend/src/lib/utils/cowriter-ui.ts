@@ -19,8 +19,8 @@ import {
 } from '#lib/constants/cowriter.ts';
 import { EDITOR_VIEW_COWRITER_LABEL } from '#lib/constants/song.ts';
 import { DAY_LABEL_TODAY } from '#lib/constants/day-label.ts';
+import { pageLanguage } from './page-language.ts';
 import {
-	DAY_LABEL_LOCALE,
 	DAYS_NAMED_BY_WEEKDAY,
 	localClockTime,
 	localWeekday,
@@ -109,7 +109,7 @@ export const COWRITER_PROBLEM_LOOKS: Record<CowriterProblem, { tone: string; ico
 	unavailable: { tone: 'wait', icon: 'circle-alert' }
 };
 
-/** The one English day form every conversation label uses: "today", "Tue", "Sep 12", "Sep 12, 2025". */
+/** The one day form every conversation label uses, in the page's language: "today", "Tue", "Sep 12", "Sep 12, 2025". */
 function conversationDayLabel(createdAt: string, now: Date): string {
 	const started = new Date(createdAt);
 	const daysAgo = localDaysBetween(started, now);
@@ -118,7 +118,7 @@ function conversationDayLabel(createdAt: string, now: Date): string {
 		return localWeekday(started);
 	}
 	const sameYear = started.getFullYear() === now.getFullYear();
-	return started.toLocaleDateString(DAY_LABEL_LOCALE, {
+	return started.toLocaleDateString(pageLanguage(), {
 		day: 'numeric',
 		month: 'short',
 		year: sameYear ? undefined : 'numeric'

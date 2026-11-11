@@ -36,6 +36,7 @@ import {
 	albumSongsLoad,
 	albumSongsLoadFailure,
 	allAlbumsLoad,
+	addAlbumToList,
 	allAlbumsLoadFailure,
 	cancelAlbumSongLoads,
 	ensureAllAlbumsLoaded,
@@ -419,6 +420,15 @@ describe('song list mutations', () => {
 		]);
 		removeGenerationFromSong('s', removed);
 		expect(get(songList)[0].has_pick).toBe(hasPickAfter);
+	});
+});
+
+describe('addAlbumToList', () => {
+	it('an added album takes its place in A to Z order', () => {
+		albumList.set([makeAlbum({ id: 'a1', title: 'Demo 2' })]);
+		addAlbumToList(makeAlbum({ id: 'a2', title: 'Demo 10' }));
+		addAlbumToList(makeAlbum({ id: 'a3', title: 'demo 1' }));
+		expect(get(albumList).map((album) => album.title)).toEqual(['demo 1', 'Demo 2', 'Demo 10']);
 	});
 });
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
+	import { pageLanguage } from '#lib/utils/page-language.ts';
 
 	type MentionItem =
 		{ type: 'album' } | { type: 'version'; item: VersionItem } | { type: 'song'; item: SongItem };
@@ -30,7 +31,9 @@
 			{:else if result.type === 'version'}
 				<span class="mention-title">@v{result.item.version_number}</span>
 				<span class="mention-album">
-					{result.item.created_at ? new Date(result.item.created_at).toLocaleDateString() : ''}
+					{result.item.created_at
+						? new Date(result.item.created_at).toLocaleDateString(pageLanguage())
+						: ''}
 					{result.item.prompt ? `· ${result.item.prompt.slice(0, 40)}` : ''}
 				</span>
 			{:else}

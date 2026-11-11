@@ -234,7 +234,8 @@ remembered on this device (`libraryWallOrder` in `stores/ui.ts`; a stored
 order it does not know, such as an earlier Recent or Added, opens in A–Z).
 A–Z compares titles ignoring case and accents and
 reads numbers by value, so "Demo 2" precedes "Demo 10" (one
-`Intl.Collator` in `utils/recency.ts`); Last played is the rank
+`Intl.Collator` per language in `utils/recency.ts`, comparing in the page's
+language, which `utils/page-language.ts` reads from `<html lang>`); Last played is the rank
 `/api/library/listen` gives each place, read in pages of 200 until a short
 page, so every place the viewer listened in is ranked by that one listen fact
 and there is no second rule (a place the viewer never listened in has no rank
