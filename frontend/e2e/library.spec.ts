@@ -40,7 +40,7 @@ import {
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants/transport';
-import { titleComparatorFor } from '../src/lib/utils/recency';
+import { pageTitleOrder, titledInPageOrder } from './support/page-title-order';
 import {
 	nowPlayingFromLabel,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
@@ -1127,9 +1127,7 @@ test(
 		const second = await seedPlaylist(request, readSeededLibrary());
 		await page.goto(LIBRARY_PATH);
 		const compareTitles = await pageTitleOrder(page);
-		const [, laterInAlphabet] = [playlist, second].toSorted((a, b) =>
-			compareTitles(a.title, b.title)
-		);
+		const [, laterInAlphabet] = await titledInPageOrder(page, [playlist, second]);
 		await listenInPlaylist(page, laterInAlphabet);
 
 		await page.goto(LIBRARY_PATH);
@@ -1149,13 +1147,6 @@ test(
 		await railOrderMatchingWall('.album-label');
 	}
 );
-
-/** The A–Z comparator in the language the loaded page carries: Playwright's Node process has no document to ask. */
-async function pageTitleOrder(page: Page): Promise<(a: string, b: string) => number> {
-	const language = await page.locator('html').getAttribute('lang');
-	expect(language, 'the page names its language in <html lang>').toBeTruthy();
-	return titleComparatorFor(language ?? '');
-}
 
 /** Every playlist the server holds, by title in A–Z: the flows before this one seed their own. */
 async function playlistTitlesInAlphabet(page: Page): Promise<string[]> {
@@ -1177,10 +1168,7 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	const library = readSeededLibrary();
 	const second = await seedPlaylist(request, library);
 	await page.goto(LIBRARY_PATH);
-	const compareTitles = await pageTitleOrder(page);
-	const [, laterInAlphabet] = [playlist, second].toSorted((a, b) =>
-		compareTitles(a.title, b.title)
-	);
+	const [, laterInAlphabet] = await titledInPageOrder(page, [playlist, second]);
 	await listenInPlaylist(page, laterInAlphabet);
 	const titles = await playlistTitlesInAlphabet(page);
 	const surface = workspace(page);
