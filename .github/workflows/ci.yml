@@ -70,6 +70,9 @@ jobs:
       - name: Check TypeScript types in sync
         run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
 
+      - name: Catalogs and their modules are current
+        run: uv run --no-sync --frozen --no-build design-catalogs --check
+
   # One shard of the backend tests, on a runner and a PostgreSQL service of its own.
   backend-shard:
     name: Backend tests (shard ${{ matrix.shard }})

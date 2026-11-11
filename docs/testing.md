@@ -78,7 +78,7 @@ GitHub workflows (`.github/workflows/ci.yml` and `code-scanning.yml`) run on pus
 
 | Job | What |
 |---|---|
-| Backend static checks | `uv lock --check` · `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_requirement_citations.py` (every `REQ-` heading in `docs/*.md` is cited by a test, and no test cites an undefined one) · `scripts/generate_types.py --check`; on `main` it alone writes the uv cache, since an entry written for a pull request is readable only by that pull request and counts against the shared quota |
+| Backend static checks | `uv lock --check` · `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_requirement_citations.py` (every `REQ-` heading in `docs/*.md` is cited by a test, and no test cites an undefined one) · `scripts/generate_types.py --check` · `design-catalogs --check` (every catalog is valid and `frontend/src/lib/words/` is what the generator writes from `frontend/src/lib/catalogs/`, with no stray file); on `main` it alone writes the uv cache, since an entry written for a pull request is readable only by that pull request and counts against the shared quota |
 | Backend tests (shard n) | pytest against a PostgreSQL 16 service (one database per xdist worker: dialect-specific migrations, concurrency, rollback, event retention gaps), on the tests of its shard, collecting coverage data judged in Combine backend coverage; each uploads its junit report and coverage data under a name of its shard and attempt. Each installs ffmpeg and redis-server from the package files of a cache that only shard 1 of a run on `main` writes, and reads the mirror only for files the cache lacks |
 | Backend (Python 3.14) | The mandatory aggregator: runs when a shard or the static checks fail, are cancelled or are skipped, and is red unless all succeeded; it also collects the tests and is red unless the newest report of every shard holds exactly the collected node ids, each once, then runs the database proof and the summary over every shard's report |
 | Combine backend coverage | Combines the coverage data of each shard's newest attempt and judges the line and branch floors (see Coverage Targets) |
@@ -392,6 +392,7 @@ middleware and lifecycle tests continue to use `make_test_app`.
 - **Mock stores** for component isolation
 - **`vi.useFakeTimers()`** for job polling tests
 - **Svelte store tests** use `get()` to read reactive values
+- **A moved surface's text** comes from `#lib/words/en.ts` by key (`words['coverProblem.busy']`), never as a literal and never by reading a catalog; no test helper reads one
 - **jsdom ships no `Worker`**, so `alignInWorker` runs the same pure alignment synchronously there.
   A test that needs to see the state *before* the answer arrives (`NowPlayingLyrics.test.ts`) stubs
   `Worker` with a fake that runs the real pure function and delivers it when the test says so. Every

@@ -152,6 +152,13 @@ item = "#2509"
 date = 2026-11-09
 reason = "written by scripts/generate_types.py from api_models/ and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
 
+[[size.generated]]
+path = "frontend/src/lib/words/en.ts"
+job = "Backend (Python 3.14)"
+item = "#2987"
+date = 2026-11-11
+reason = "written by design-catalogs from frontend/src/lib/catalogs/en.po and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
+
 [[root.allow]]
 entry = "alembic.ini"
 reason = "Alembic's own configuration, which the tool finds at the root"

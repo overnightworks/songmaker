@@ -7,6 +7,7 @@
 - `scripts/test_postgresql.sh <files>`: targeted tests against a throwaway PostgreSQL container.
 - `pnpm exec vitest run <file>`: one frontend test file, from `frontend/`.
 - `python scripts/generate_types.py`: regenerates the frontend's API types from `src/songmaker_cli/api_models/` after a model change.
+- `design-catalogs`: regenerates `frontend/src/lib/words/` from `frontend/src/lib/catalogs/` after a catalog change; `--check` runs in the static checks.
 
 ## Rules
 
@@ -22,6 +23,7 @@
 - ACE-Step's parameter names come from the HTTP API code of `vendor/acestep`, our fork.
 - A reproducible seed needs `use_random_seed: false`; ACE-Step ignores `seed` otherwise.
 - Each pytest worker process keeps its own numba cache (`tests/conftest.py`); a scorer-test segfault in numba's compiled code means several processes filled one cache.
+- An interface text of a surface that reads `frontend/src/lib/utils/page-words.ts` is a key in `frontend/src/lib/catalogs/en.po`; any other new interface text goes into its surface's `frontend/src/lib/constants/` file, never as a literal in markup.
 - Test albums carry a recognizable title prefix and are archived, never deleted.
 
 ## Owners
@@ -37,4 +39,5 @@
 - `docs/catalog.md`, `docs/generation.md`, `docs/library.md`, `docs/navigation.md`, `docs/sharing.md`, `docs/co-writer.md`: read when changing a ruled behaviour of that area.
 - `docs/security.md`: read when touching sign-in, tokens, sharing, the agent front or the trust model.
 - `docs/acestep.md`: read when touching ACE-Step, its fork's pin and patches, or the workers.
+- design's `docs/languages.md`: read when adding or moving an interface text.
 - `docs/testing.md`: read when adding tests, or changing CI, coverage floors or the quality gate.
