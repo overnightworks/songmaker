@@ -11,6 +11,7 @@ from support.fake_oidc_issuer import Person, a_fake_issuer
 from support.oidc_world import World
 from support.web_app import make_test_app, web_client
 
+from songmaker_cli.app_context import allowed_hosts
 from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.db.models import AuditLog, UserSession
 from songmaker_cli.settings import get_settings
@@ -19,8 +20,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from fastapi import FastAPI
-
-pytestmark = pytest.mark.usefixtures("back_channel_logout_host")
 
 MEMBER = "/apps/songmaker"
 SUBJECT = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
@@ -31,8 +30,10 @@ FORM = {"content-type": "application/x-www-form-urlencoded"}
 BACKCHANNEL_MAX_BODY_BYTES = 32 * 1024
 
 
-def _configured_host() -> str:
-    return get_settings().backchannel_logout_host
+# Every Host TrustedHost admits, bare and with the port the realm and Compose post to.
+ADMITTED_HOSTS = [
+    f"{host}{port}" for host in allowed_hosts(get_settings()) for port in ("", ":8080")
+]
 
 
 def _member(subject: str) -> Person:
@@ -42,7 +43,7 @@ def _member(subject: str) -> Person:
 def _post_as_the_realm(
     app: FastAPI, path: str, data: dict[str, str] | None = None, **headers: str,
 ) -> Response:
-    sent = {"host": _configured_host(), **FORM, **headers}
+    sent = {**FORM, **headers}
     # The library answers a failing transaction with 400 and then re-raises it.
     realm = web_client(app, raise_server_exceptions=False, cookies={})
     return realm.post(path, data=data, headers=sent)
@@ -60,11 +61,12 @@ def _sign_in_twice(world: World, subject: str = SUBJECT) -> None:
     other_browser.sign_in(_member(subject))
 
 
-def test_a_valid_logout_token_ends_every_session_of_its_subject(world: World) -> None:
+@pytest.mark.parametrize("host", ADMITTED_HOSTS)
+def test_a_valid_logout_token_ends_every_session_of_its_subject(world: World, host: str) -> None:
     _sign_in_twice(world)
     _sign_in_twice(world, OTHER_SUBJECT)
 
-    response = _backchannel(world, world.issuer.logout_token(SUBJECT))
+    response = _backchannel(world, world.issuer.logout_token(SUBJECT), host=host)
 
     assert response.status_code == 200
     with world.factory() as session:
@@ -166,6 +168,7 @@ def _forged(world: World) -> str:
         pytest.param(lambda w: w.issuer.logout_token(None, sid="a-session"), id="sid-only"),
         pytest.param(lambda w: w.issuer.logout_token(SUBJECT, nonce="n"), id="nonce"),
         pytest.param(lambda w: w.issuer.logout_token(SUBJECT, events={}), id="no-event"),
+        pytest.param(lambda _world: "not-a-jwt", id="malformed"),
     ],
 )
 def test_a_refused_logout_token_answers_400_and_ends_nothing(world: World, make_token) -> None:
@@ -173,7 +176,7 @@ def test_a_refused_logout_token_answers_400_and_ends_nothing(world: World, make_
 
     response = _backchannel(world, make_token(world))
 
-    assert response.status_code == 400
+    assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2
 
 
@@ -188,109 +191,12 @@ def test_a_refused_logout_token_answers_400_and_ends_nothing(world: World, make_
 def test_a_body_that_is_not_one_logout_token_form_answers_400(
     world: World, headers: dict[str, str], body: bytes,
 ) -> None:
-    response = world.client.post(
-        BACKCHANNEL_PATH, content=body, headers={"host": _configured_host(), **headers},
-    )
-
-    assert response.status_code == 400
-
-
-@pytest.mark.parametrize(
-    "host",
-    ["songmaker.test", "songmaker.test:8080", "songmaker-web:8080", "localhost:8080", "testserver"],
-)
-def test_a_wrong_host_gets_an_empty_404_and_ends_nothing(world: World, host: str) -> None:
     _sign_in_twice(world)
 
-    response = _backchannel(world, world.issuer.logout_token(SUBJECT), host=host)
+    response = world.client.post(BACKCHANNEL_PATH, content=body, headers=headers)
 
-    assert (response.status_code, response.content) == (404, b"")
+    assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2
-
-
-@pytest.fixture
-def host_listed_in_capitals(monkeypatch: pytest.MonkeyPatch) -> None:
-    """TrustedHost matches case-sensitively, so a capitalised Host reaches the route only
-    where the deployment lists it capitalised. Request it before `world`, which builds the app."""
-    capitals = _configured_host().upper().split(":")[0]
-    monkeypatch.setenv("ALLOWED_HOSTS", f"{get_settings().allowed_hosts},{capitals}")
-    get_settings.cache_clear()
-
-
-def test_the_configured_host_matches_in_any_letter_case(
-    host_listed_in_capitals: None, world: World,
-) -> None:
-    _sign_in_twice(world)
-
-    response = _backchannel(
-        world, world.issuer.logout_token(SUBJECT), host=_configured_host().upper(),
-    )
-
-    assert response.status_code == 200
-    assert world.session_count() == 0
-
-
-def test_a_mixed_case_value_is_stored_in_lower_case(
-    world: World, monkeypatch: pytest.MonkeyPatch, fresh_settings,
-) -> None:
-    _sign_in_twice(world)
-    monkeypatch.setenv("BACKCHANNEL_LOGOUT_HOST", _configured_host().upper())
-    get_settings.cache_clear()
-
-    response = _backchannel(world, world.issuer.logout_token(SUBJECT), host=_configured_host())
-
-    assert response.status_code == 200
-    assert world.session_count() == 0
-
-
-def test_an_unset_value_closes_the_route_for_every_host(
-    world: World, monkeypatch: pytest.MonkeyPatch, fresh_settings,
-) -> None:
-    _sign_in_twice(world)
-    configured = _configured_host()
-    monkeypatch.setenv("BACKCHANNEL_LOGOUT_HOST", "")
-    get_settings.cache_clear()
-
-    answers = [
-        _backchannel(world, world.issuer.logout_token(SUBJECT), host=host)
-        for host in (configured, "songmaker.test:8080")
-    ]
-
-    assert [(answer.status_code, answer.content) for answer in answers] == [(404, b"")] * 2
-    assert world.session_count() == 2
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        pytest.param("https://backchannel.test:8080", id="scheme"),
-        pytest.param("backchannel.test:8080/auth", id="path"),
-        pytest.param("*.test:8080", id="wildcard"),
-        pytest.param("backchannel.test:8080,songmaker.test:8080", id="list"),
-        pytest.param("user@backchannel.test:8080", id="credentials"),
-        pytest.param("[::1]:8080", id="bracketed-ipv6-address"),
-        pytest.param("backchannel.test:0", id="port-zero"),
-        pytest.param("backchannel.test:99999", id="port-above-65535"),
-        pytest.param("backchannel.test:08080", id="port-with-leading-zero"),
-    ],
-)
-def test_a_malformed_value_fails_the_settings(
-    fresh_settings, monkeypatch: pytest.MonkeyPatch, value: str,
-) -> None:
-    monkeypatch.setenv("BACKCHANNEL_LOGOUT_HOST", value)
-
-    with pytest.raises(ValueError, match="BACKCHANNEL_LOGOUT_HOST"):
-        get_settings()
-
-
-def test_a_value_whose_host_part_is_not_in_allowed_hosts_stops_the_web_app(
-    tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("BACKCHANNEL_LOGOUT_HOST", "unlisted.test:8080")
-    relying_party = a_fake_issuer().relying_party_for_app()
-
-    with pytest.raises(ValueError, match="BACKCHANNEL_LOGOUT_HOST"):
-        make_test_app(tmp_path, factory=pg_factory, oidc_sign_in=relying_party)
 
 
 def test_an_unlisted_host_gets_the_trusted_host_400_and_ends_nothing(world: World) -> None:
@@ -306,7 +212,7 @@ def test_a_body_over_32_kib_gets_413(world: World) -> None:
     response = world.client.post(
         BACKCHANNEL_PATH,
         content=b"logout_token=" + b"a" * BACKCHANNEL_MAX_BODY_BYTES,
-        headers={"host": _configured_host(), **FORM},
+        headers=FORM,
     )
 
     assert response.status_code == 413
@@ -319,13 +225,10 @@ def test_every_answer_of_the_back_channel_carries_no_store(world: World) -> None
     answers = [
         _backchannel(world, world.issuer.logout_token(SUBJECT)),
         _backchannel(world, "garbage"),
-        _backchannel(world, world.issuer.logout_token(SUBJECT), host="localhost:8080"),
-        world.client.post(
-            BACKCHANNEL_PATH, content=big, headers={"host": _configured_host(), **FORM},
-        ),
+        world.client.post(BACKCHANNEL_PATH, content=big, headers=FORM),
     ]
 
-    assert [answer.status_code for answer in answers] == [200, 400, 404, 413]
+    assert [answer.status_code for answer in answers] == [200, 400, 413]
     assert {answer.headers["cache-control"] for answer in answers} == {"no-store"}
 
 
@@ -348,7 +251,7 @@ def test_the_exemptions_are_exact_to_the_back_channel_path(world: World, path: s
     response = world.client.post(
         path,
         data={"logout_token": world.issuer.logout_token(SUBJECT)},
-        headers={"host": _configured_host(), "origin": "https://evil.example", **FORM},
+        headers={"origin": "https://evil.example", **FORM},
     )
 
     assert response.status_code == 403
