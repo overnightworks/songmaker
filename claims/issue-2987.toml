@@ -1,8 +1,0 @@
-claim_id = "30bea4510d744199b1af278a966f61e7"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "528322945b133e95f666cc1af50fe8abdbecd99a"
-branch = "claude/issue-2987-the-cover-problem-line-reads-its-words-f"
-scope = [".github/workflows/ci.yml", "AGENTS.md", "docs/architecture.md", "docs/security.md", "docs/testing.md", "frontend/.prettierignore", "frontend/e2e/album-cover.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/AlbumCoverEditorProblems.test.ts", "frontend/src/lib/utils/cover-problem.test.ts", "frontend/src/lib/utils/cover-problem.ts", "frontend/src/lib/utils/page-words.ts", "frontend/src/lib/words/en.ts", "pyproject.toml", "quality/config.toml", "scripts/static_checks.sh", "uv.lock"]
-opened_commit = "8b32f6f8862b3521f50ee0b32ae57d70bb7475ea"
-whole_reason = "The generator, its check and the first surface are true only together: without the surface the generated module has no reader, and without the check the module the surface reads is unguarded."
