@@ -91,12 +91,14 @@ def create_session(
     expires_at: datetime,
     refresh_token: SecretStr | None = None,
     id_token: SecretStr | None = None,
+    account_language: str | None = None,
 ) -> UserSession:
     user_session = UserSession(
         user_id=user_id,
         expires_at=expires_at,
         stored_refresh_token=None if refresh_token is None else refresh_token.get_secret_value(),
         stored_id_token=None if id_token is None else id_token.get_secret_value(),
+        account_language=account_language,
     )
     session.add(user_session)
     session.flush()

@@ -58,7 +58,7 @@ def ownership_factory(pg_factory):
         now = datetime.now(timezone.utc)
         DatabaseSessionRecordStore(session).create(
             "actor", now=now, expires_at=now + timedelta(hours=1),
-            refresh_token=None, id_token=None,
+            refresh_token=None, id_token=None, account_language=None,
         )
         session.commit()
     return factory

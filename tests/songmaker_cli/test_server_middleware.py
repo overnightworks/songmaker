@@ -25,11 +25,13 @@ from webauth.middleware import (
     IpRateLimitMiddleware,
     SecurityHeadersMiddleware,
 )
+from webauth.middleware._path_refusal import PathRefusalMiddleware
 
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, LOGOUT_PATH
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware, _accepts_gzip
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
+from songmaker_cli.settings import get_settings
 
 _LARGE_JSON_PAYLOAD = {"lyrics": "la " * 1000}
 _TINY_JSON_PAYLOAD = {"status": "ok"}
@@ -284,6 +286,7 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
         SelectiveGZipMiddleware,
         CORSMiddleware,
         SecurityHeadersMiddleware,
+        PathRefusalMiddleware,
         BodySizeLimitMiddleware,
         IpRateLimitMiddleware,
         CsrfOriginMiddleware,
@@ -298,15 +301,13 @@ def test_created_app_with_token_clients_puts_the_bearer_gate_between_rate_limit_
     """The enabled stack is the disabled one plus webauth's bearer layer, nothing moved."""
     from webauth.middleware.bearer_gate import BearerGateMiddleware
 
-    from songmaker_cli.settings import get_settings
-
     disabled = _middleware_classes(make_test_app(tmp_path, factory=pg_factory)[0])
     monkeypatch.setenv("TOKEN_CLIENTS", "hal")
     get_settings.cache_clear()
     enabled = _middleware_classes(make_test_app(tmp_path, factory=pg_factory)[0])
 
-    assert enabled == [*disabled[:6], BearerGateMiddleware, *disabled[6:]]
-    assert disabled[5:7] == [IpRateLimitMiddleware, CsrfOriginMiddleware]
+    assert enabled == [*disabled[:7], BearerGateMiddleware, *disabled[7:]]
+    assert disabled[6:8] == [IpRateLimitMiddleware, CsrfOriginMiddleware]
 
 
 @pytest.mark.parametrize(("outcome", "started"), [
@@ -519,11 +520,9 @@ def security_exchange(tmp_path: Path, pg_factory):
     return app, exchange
 
 
-@pytest.mark.parametrize("outcome", ["declared", "streamed", "error", "origin", "token"])
+@pytest.mark.parametrize("outcome", ["declared", "streamed", "error", "origin", "token", "path"])
 def test_installed_stack_adds_security_headers_to_refusals(security_exchange, outcome):
-    """defect:#1590 -- 413, unhandled 500 and both CSRF 403 paths keep policy headers."""
-    from songmaker_cli.settings import get_settings
-
+    """defect:#1590 -- 413, 400, unhandled 500 and both CSRF 403 paths keep policy headers."""
     app, exchange = security_exchange
     arguments = {}
     expected = 403
@@ -541,6 +540,9 @@ def test_installed_stack_adds_security_headers_to_refusals(security_exchange, ou
             "expected_error": RuntimeError,
         }
         expected = 500
+    elif outcome == "path":
+        arguments = {"path": "/api/security-proof\n"}
+        expected = 400
     elif outcome == "origin":
         arguments = {
             "path": "/api/security-proof", "headers": [(b"origin", b"https://foreign.example")],
@@ -603,8 +605,6 @@ def test_host_origin_parser_applies_exact_port_and_ipv6_rules(
 ):
     """defect:#1590 -- host configuration feeds the library's parsed origin checks."""
     from songmaker_cli.app_context import allowed_hosts
-    from songmaker_cli.settings import get_settings
-
     app, exchange = security_exchange
     monkeypatch.setenv("ALLOWED_HOSTS", allowed)
     get_settings.cache_clear()
@@ -760,8 +760,6 @@ def test_cors_preflight_remains_outside_security_stack(security_exchange):
 def test_body_limit_bounds_start_and_never_restarts_a_stream(failure):
     """defect:#1590 -- stalled starts time out; an oversized late body aborts the stream."""
     from songmaker_cli.request_policies import build_body_size_policy
-    from songmaker_cli.settings import get_settings
-
     policy = build_body_size_policy(get_settings())
     assert policy.start_send_seconds == 10.0
     policy = replace(policy, default_max_bytes=1, start_send_seconds=0.01)
