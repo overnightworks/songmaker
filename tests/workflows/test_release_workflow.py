@@ -62,9 +62,8 @@ def test_the_layers_job_reads_the_released_images_and_neither_writes_nor_gates_t
 
 
 def test_the_layers_job_runs_only_the_workflows_own_commit():
-    checkouts = [
-        step for step in RELEASE_JOBS["layers"]["steps"] if step.get("uses", "").startswith("actions/checkout@")
-    ]
+    steps = RELEASE_JOBS["layers"]["steps"]
+    checkouts = [step for step in steps if step.get("uses", "").startswith("actions/checkout@")]
 
     assert len(checkouts) == 1
     assert "ref" not in checkouts[0].get("with", {})
