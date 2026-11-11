@@ -1174,8 +1174,8 @@ wheels = [
 
 [[package]]
 name = "overnightworks-agents"
-version = "0.29.0"
-source = { git = "https://github.com/overnightworks/agents?rev=v0.29.0#92f614646f4217546d290cd744d3231dd3904579" }
+version = "0.31.0"
+source = { git = "https://github.com/overnightworks/agents?rev=v0.31.0#3e0183a82a5f92f52ce3dfb8c192fd3bda4fbe83" }
 dependencies = [
     { name = "pydantic" },
     { name = "ruamel-yaml" },
@@ -1980,8 +1980,8 @@ requires-dist = [
     { name = "numba", marker = "extra == 'whisper'" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
-    { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.29.0" },
-    { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.29.0" },
+    { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.31.0" },
+    { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.31.0" },
     { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.35.0" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },

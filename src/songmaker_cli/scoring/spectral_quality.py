@@ -11,8 +11,13 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+# librosa and scipy attach their submodules lazily (librosa reaches scipy.signal on
+# first use); a first import inside a scorer thread can deadlock with another
+# scorer thread's, so the main thread loads them here.
 import librosa
+import librosa.feature.spectral
 import numpy as np
+import scipy.signal  # noqa: F401 - librosa reaches it through the lazy scipy attribute
 
 from songmaker_cli.constants import (
     SPECTRAL_ABSOLUTE_THRESHOLD,
