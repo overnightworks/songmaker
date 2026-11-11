@@ -30,6 +30,10 @@ For anyone building or reviewing public shares and administration: the ruled pro
 
 ### REQ-SHARE-25: A musician who is not an administrator cannot reach another musician's private albums, songs, takes, or playlists except through a currently active public share.
 
+### REQ-SHARE-26: An agent with its own account can enable a public share of its own song.
+
+### REQ-SHARE-27: A person's own agent cannot enable a public share.
+
 ### REQ-ADMIN-01: A user has exactly one role: administrator or user.
 
 ### REQ-ADMIN-05: A user cannot create another user.

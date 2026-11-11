@@ -10,24 +10,18 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy.orm import sessionmaker
-from support.mcp_world import AGENT_GROUP, McpWorld, build_mcp_world
+from support.mcp_world import (
+    AGENT_GROUP,
+    AGENT_SUBJECT,
+    McpWorld,
+    agent_claims,
+    build_mcp_world,
+)
 from support.token_world import TokenWorld
 from webauth.ports import AccountKind
 
 from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LOGIN_GROUP, OIDC_MCP_GROUP
 from songmaker_cli.db.models import AuditLog, User
-
-AGENT_SUBJECT = "7c2e9d41-aaaa-4bbb-8ccc-00000000a9e1"
-
-
-def _agent_claims(**overrides: object) -> dict[str, object]:
-    return {
-        "groups": (OIDC_LOGIN_GROUP, OIDC_MCP_GROUP, AGENT_GROUP),
-        "username": "service-account-hal",
-        "agent_owner": TokenWorld.ALICE,
-        "agent_name": "Hal",
-        **overrides,
-    }
 
 
 def _account_kinds(mcp: McpWorld) -> dict[str, AccountKind]:
@@ -38,7 +32,7 @@ def test_an_agent_token_creates_an_agent_account_and_a_tool_runs_as_it(
     mcp: McpWorld,
 ) -> None:
     reply = mcp.call(
-        "create_album", {"title": "Agent Album"}, subject=AGENT_SUBJECT, **_agent_claims(),
+        "create_album", {"title": "Agent Album"}, subject=AGENT_SUBJECT, **agent_claims(),
     )
 
     created = reply.json()
@@ -59,9 +53,9 @@ def test_an_agent_is_admitted_as_user_whatever_role_a_stored_account_holds(
     world.world.seed_take(TokenWorld.BOB, "bobs")
     groups = (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP, OIDC_MCP_GROUP, AGENT_GROUP)
 
-    songs = world.call("list_songs", **_agent_claims(username="alice", groups=groups))
+    songs = world.call("list_songs", **agent_claims(username="alice", groups=groups))
     others = world.call("get_song", {"song_id": "song-bobs"},
-                        **_agent_claims(username="alice", groups=groups))
+                        **agent_claims(username="alice", groups=groups))
 
     assert [item["title"] for item in songs.json()["items"]] == ["Song alices"]
     assert others.is_error
@@ -71,7 +65,7 @@ def test_an_agent_is_admitted_as_user_whatever_role_a_stored_account_holds(
 def test_a_stored_person_account_met_by_an_agent_token_becomes_an_agent_and_is_audited(
     mcp: McpWorld,
 ) -> None:
-    mcp.call("list_albums", {}, subject=TokenWorld.ALICE, **_agent_claims(username="alice"))
+    mcp.call("list_albums", {}, subject=TokenWorld.ALICE, **agent_claims(username="alice"))
 
     details = [
         detail
@@ -94,18 +88,18 @@ def test_a_stored_person_account_met_by_an_agent_token_becomes_an_agent_and_is_a
     ],
     ids=["no-owner", "empty-owner", "no-name", "empty-name", "name-too-long", "unprintable-name"],
 )
-def test_an_agent_token_with_bad_agent_claims_is_refused_and_creates_no_account(
+def test_an_agent_token_with_badagent_claims_is_refused_and_creates_no_account(
     mcp: McpWorld, claims: dict[str, object],
 ) -> None:
     reply = mcp.rpc(
-        "tools/list", headers=mcp.agent(AGENT_SUBJECT, **_agent_claims(**claims)),
+        "tools/list", headers=mcp.agent(AGENT_SUBJECT, **agent_claims(**claims)),
     )
 
     assert reply.status_code == 401
     assert AGENT_SUBJECT not in _account_kinds(mcp)
 
 
-def test_agent_claims_outside_the_agent_group_keep_a_person_account_a_person(mcp: McpWorld) -> None:
-    mcp.call("list_albums", {}, **_agent_claims(groups=(OIDC_LOGIN_GROUP, OIDC_MCP_GROUP)))
+def testagent_claims_outside_the_agent_group_keep_a_person_account_a_person(mcp: McpWorld) -> None:
+    mcp.call("list_albums", {}, **agent_claims(groups=(OIDC_LOGIN_GROUP, OIDC_MCP_GROUP)))
 
     assert _account_kinds(mcp)[TokenWorld.ALICE] == AccountKind.PERSON

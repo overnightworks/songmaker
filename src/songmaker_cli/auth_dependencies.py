@@ -6,14 +6,21 @@ before the endpoint runs. Stream callers own their explicit transaction.
 
 from __future__ import annotations
 
+from typing import Final
+
 import structlog
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from webauth.dependencies import current_user_dependency
+from webauth.middleware import is_resource_admission
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import get_app_context, get_db_session
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore
+
+PERSONS_AGENT_SHARE_REFUSED_DETAIL: Final = (
+    "A person's own agent cannot share; the person shares it in the app."
+)
 
 
 def _session_record_store(db: Session = Depends(get_db_session)) -> DatabaseSessionRecordStore:
@@ -41,6 +48,16 @@ def require_admin(
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> AuthenticatedUser:
     return _auth_dependencies.admin_user(request, user)
+
+
+def require_sharing_caller(
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> AuthenticatedUser:
+    """Refuse a person's own agent a public share; a session, a hal token and an agent pass."""
+    if is_resource_admission(request) and user.agent is None:
+        raise HTTPException(403, PERSONS_AGENT_SHARE_REFUSED_DETAIL)
+    return user
 
 
 def authenticate_request(request: Request, db: Session) -> AuthenticatedUser:

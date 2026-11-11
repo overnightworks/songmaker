@@ -156,7 +156,7 @@ songmaker_cli/song_api.py:api_move_song # HTTP dispatcher: router.put('/songs/{s
 songmaker_cli/song_api.py:api_record_song_listen # HTTP dispatcher: router.post('/songs/{song_id}/listen', responses={422: {'description': 'Song has no playable take'}})
 songmaker_cli/song_api.py:api_rename_song # HTTP dispatcher: router.put('/songs/{song_id}/title', responses={404: {'description': SONG_NOT_FOUND_DETAIL}, 422: {'description': 'Song title is required'}})
 songmaker_cli/song_api.py:api_restore_song # HTTP dispatcher: router.post('/songs/{song_id}/restore', responses={404: {'description': SONG_NOT_FOUND_DETAIL}, 410: {'description': 'Song restore window has expired'}})
-songmaker_cli/song_api.py:api_share_song # HTTP dispatcher: router.post('/songs/{song_id}/share', responses={404: {'description': SONG_NOT_FOUND_DETAIL}})
+songmaker_cli/song_api.py:api_share_song # HTTP dispatcher: router.post('/songs/{song_id}/share', responses={403: {'description': PERSONS_AGENT_SHARE_REFUSED_DETAIL}, 404: {'description': SONG_NOT_FOUND_DETAIL}})
 songmaker_cli/song_api.py:api_song_versions # HTTP dispatcher: router.get('/songs/{song_id}/versions')
 songmaker_cli/song_api.py:api_unshare_song # HTTP dispatcher: router.delete('/songs/{song_id}/share', responses={404: {'description': SONG_NOT_FOUND_DETAIL}})
 songmaker_cli/song_api.py:api_update_song # HTTP dispatcher: router.put('/songs/{song_id}', responses={404: {'description': 'Song or reference audio not found'}})

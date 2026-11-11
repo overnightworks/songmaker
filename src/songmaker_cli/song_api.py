@@ -39,7 +39,11 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.songs import ShareKind, SongListenRequest, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.auth_dependencies import get_current_user
+from songmaker_cli.auth_dependencies import (
+    PERSONS_AGENT_SHARE_REFUSED_DETAIL,
+    get_current_user,
+    require_sharing_caller,
+)
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
     COVER_VARIANT_DETAIL,
@@ -431,12 +435,20 @@ def api_record_song_listen(
 
 @router.post(
     "/songs/{song_id}/share",
-    responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
-    openapi_extra=exclude_route(Exclusion.SHARING),
+    description=(
+        "Share one of the caller's own songs. Anyone with the returned link plays it, reads "
+        "its lyrics and sees its cover without signing in, until unshare_song ends the share. "
+        "A person's own agent is refused; only an agent with its own account may share."
+    ),
+    responses={
+        403: {"description": PERSONS_AGENT_SHARE_REFUSED_DETAIL},
+        404: {"description": SONG_NOT_FOUND_DETAIL},
+    },
+    openapi_extra=agent_tool(name="share_song", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_share_song(
     song_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(require_sharing_caller),
     session: Session = Depends(get_db_session),
 ) -> ShareResponse:
     check_song_access(session, song_id, user)
