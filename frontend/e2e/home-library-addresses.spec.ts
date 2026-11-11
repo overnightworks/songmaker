@@ -21,6 +21,7 @@ import { LIBRARY_NEW_MENU_LABEL, LIBRARY_PAGE_LABEL } from '../src/lib/constants
 import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
+import { words } from '../src/lib/words/en';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
 	routerHistoryEntry,
@@ -54,7 +55,7 @@ import {
 } from './helpers';
 import { readSeededLibrary, type SeededLibrary } from './seed';
 
-const LISTEN_REGION = { name: 'Listen' };
+const LISTEN_REGION = { name: words['homeListen.label'] };
 const SETTINGS_SECTION = 'Voices';
 const SETTINGS_SECTION_URL = /\/settings\/voices$/;
 const SETTINGS_LIST_URL = /\/settings$/;

@@ -11,7 +11,6 @@ import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_ARCHIVE_LABEL
 } from '../src/lib/constants/collection-menu';
-import { HOME_LISTEN_EMPTY } from '../src/lib/constants/home';
 import { words } from '../src/lib/words/en';
 import { songRoutePath } from '../src/lib/routes/addresses';
 import {
@@ -27,6 +26,7 @@ import {
 	stubIdentityProvider,
 	workspace,
 	listenRegion,
+	nameStartingWith,
 	type Shell
 } from './helpers';
 import { LOG_OUT_NAME } from './account-menu-words';
@@ -120,13 +120,13 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		account = await seedAccount(`e2e-write-${testInfo.project.name}-${runMarker()}`);
 		accountApi = await signedInApi(account);
 		await signInWriter(page, account);
-		await expect(listenRegion(page).getByText(HOME_LISTEN_EMPTY)).toBeVisible();
+		await expect(listenRegion(page).getByText(words['homeListen.empty'])).toBeVisible();
 		await expect(writeRegion(page).getByText(words['homeWrite.empty'])).toBeVisible();
 		expect(
 			await workspace(page)
 				.locator('section[aria-label]')
 				.evaluateAll((regions) => regions.map((region) => region.getAttribute('aria-label')))
-		).toEqual(['Listen', words['homeWrite.label']]);
+		).toEqual([words['homeListen.label'], words['homeWrite.label']]);
 		await expect(
 			workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true })
 		).toBeVisible();
@@ -190,7 +190,9 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 				await openHome(page, 'desktop');
 			}
 			await expect(listenRegion(page).getByRole('button', { name: /^Play / })).toBeVisible();
-			await expect(listenRegion(page).locator('.tile-subtitle')).toContainText('stopped at song 1');
+			await expect(listenRegion(page).locator('.tile-subtitle')).toContainText(
+				words['homeListen.albumStopped']({ number: '1' })
+			);
 		}
 		await loseNetwork(page, context);
 		await openLibraryWall(page, shellOf(testInfo));
@@ -257,7 +259,9 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await expectWrittenOrder(page, await writtenAnswer(page));
 
 		await listenRegion(page)
-			.getByRole('button', { name: /^Open album / })
+			.getByRole('button', {
+				name: nameStartingWith(words['homeListen.openAlbum']({ title: '' }))
+			})
 			.click();
 		await workspace(page).getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
 		await page.getByRole('button', { name: COLLECTION_MENU_ARCHIVE_LABEL, exact: true }).click();

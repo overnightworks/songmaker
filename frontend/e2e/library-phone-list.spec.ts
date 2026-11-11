@@ -5,6 +5,7 @@ import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
+import { words } from '../src/lib/words/en';
 import {
 	sameOriginHeaders,
 	expectLibraryWallLoaded,
@@ -764,7 +765,7 @@ test("1354_rule_8 1354_rule_14: a place played leads Home's Listen and the Libra
 	await openHome(page, shell);
 	await expect(listenRegion(page).locator('.wall-tile-body').first()).toHaveAttribute(
 		'aria-label',
-		`Open album ${newest.title}`
+		words['homeListen.openAlbum']({ title: newest.title })
 	);
 
 	const paintMark = (await paintedOrders(page)).wall.length;
