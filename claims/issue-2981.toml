@@ -1,8 +1,0 @@
-claim_id = "94053c1347884c7b8f517f93ceb8f4b6"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "33ae6665cc51778987010177102019fe1ce9d265"
-branch = "claude/issue-2981-dates-times-and-title-order-follow-the-p"
-scope = ["docs/architecture.md", "frontend/e2e/library.spec.ts", "frontend/e2e/support/page-title-order.ts", "frontend/src/lib/components/MentionDropdown.svelte", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/utils/cowriter-ui.ts", "frontend/src/lib/utils/format.test.ts", "frontend/src/lib/utils/format.ts", "frontend/src/lib/utils/page-language.test.ts", "frontend/src/lib/utils/page-language.ts", "frontend/src/lib/utils/recency.test.ts", "frontend/src/lib/utils/recency.ts", "frontend/src/tests/setup.ts", "scripts/dead-exports.allow"]
-opened_commit = "1e18498de5f1376bae791da121d4c5ae0bc9c99f"
-whole_reason = "The owner and every site that names a locale are true only together: a half leaves two owners of the page's language, and the e2e order checks break once compareTitles reads the page."
