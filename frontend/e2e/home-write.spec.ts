@@ -11,12 +11,8 @@ import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_ARCHIVE_LABEL
 } from '../src/lib/constants/collection-menu';
-import {
-	HOME_LISTEN_EMPTY,
-	HOME_WRITE_EMPTY,
-	HOME_WRITE_ERROR,
-	homeWriteOpenLabel
-} from '../src/lib/constants/home';
+import { HOME_LISTEN_EMPTY } from '../src/lib/constants/home';
+import { words } from '../src/lib/words/en';
 import { songRoutePath } from '../src/lib/routes/addresses';
 import {
 	appBar,
@@ -44,7 +40,8 @@ import {
 	type SeededAccount
 } from './seed';
 
-const writeRegion = (page: Page) => page.getByRole('region', { name: 'Write', exact: true });
+const writeRegion = (page: Page) =>
+	page.getByRole('region', { name: words['homeWrite.label'], exact: true });
 const writeBodies = (page: Page) => writeRegion(page).locator('.wall-tile-body');
 const writeEndpoint = '**/api/library/write';
 async function signInWriter(page: Page, account: SeededAccount): Promise<void> {
@@ -74,7 +71,7 @@ async function expectWrittenOrder(page: Page, answer: LibraryWriteResponse): Pro
 		answer.items.map((item) => new RegExp(item.song_title))
 	);
 	expect(await ariaLabels(writeBodies(page))).toEqual(
-		answer.items.map((item) => homeWriteOpenLabel(item.song_title))
+		answer.items.map((item) => words['homeWrite.openSong']({ title: item.song_title }))
 	);
 	expect(await ariaLabels(writeRegion(page).locator('.row-editor'))).toEqual(
 		answer.items.map((item) => songEditorOpenLabel(item.song_title))
@@ -124,12 +121,12 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		accountApi = await signedInApi(account);
 		await signInWriter(page, account);
 		await expect(listenRegion(page).getByText(HOME_LISTEN_EMPTY)).toBeVisible();
-		await expect(writeRegion(page).getByText(HOME_WRITE_EMPTY)).toBeVisible();
+		await expect(writeRegion(page).getByText(words['homeWrite.empty'])).toBeVisible();
 		expect(
 			await workspace(page)
 				.locator('section[aria-label]')
 				.evaluateAll((regions) => regions.map((region) => region.getAttribute('aria-label')))
-		).toEqual(['Listen', 'Write']);
+		).toEqual(['Listen', words['homeWrite.label']]);
 		await expect(
 			workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true })
 		).toBeVisible();
@@ -219,8 +216,8 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await foregroundWriter(page);
 		await expectWrittenOrder(page, answer);
 		await page.reload();
-		await expect(writeRegion(page).getByText(HOME_WRITE_ERROR)).toBeVisible();
-		await expect(writeRegion(page).getByText(HOME_WRITE_EMPTY)).toHaveCount(0);
+		await expect(writeRegion(page).getByText(words['homeWrite.error'])).toBeVisible();
+		await expect(writeRegion(page).getByText(words['homeWrite.empty'])).toHaveCount(0);
 		await page.screenshot({ path: testInfo.outputPath('write-error.png') });
 		await page.unroute(writeEndpoint);
 		await writeRegion(page).getByRole('button', { name: 'Retry', exact: true }).click();
@@ -265,7 +262,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await workspace(page).getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
 		await page.getByRole('button', { name: COLLECTION_MENU_ARCHIVE_LABEL, exact: true }).click();
 		await openHome(page, shellOf(testInfo));
-		await expect(writeRegion(page).getByText(HOME_WRITE_EMPTY)).toBeVisible();
+		await expect(writeRegion(page).getByText(words['homeWrite.empty'])).toBeVisible();
 		await page.getByRole('button', { name: 'Undo', exact: true }).click();
 		await expect(writeBodies(page)).toHaveCount(3);
 		await expectWrittenOrder(page, await writtenAnswer(page));
@@ -327,7 +324,7 @@ for (const pending of [false, true]) {
 			release?.();
 			await page.unrouteAll({ behavior: 'wait' });
 			await signInWriter(page, accounts[1]);
-			await expect(writeRegion(page).getByText(HOME_WRITE_EMPTY)).toBeVisible();
+			await expect(writeRegion(page).getByText(words['homeWrite.empty'])).toBeVisible();
 			for (const direction of ['back', 'forward'] as const) {
 				if (direction === 'back') await page.goBack();
 				else await page.goForward();
@@ -335,7 +332,7 @@ for (const pending of [false, true]) {
 				await expect(page.getByText('E2E Write private A', { exact: true })).toHaveCount(0);
 			}
 			await page.goto(HOME_PATH);
-			await expect(writeRegion(page).getByText(HOME_WRITE_EMPTY)).toBeVisible();
+			await expect(writeRegion(page).getByText(words['homeWrite.empty'])).toBeVisible();
 		} finally {
 			release?.();
 			await page.unrouteAll({ behavior: 'ignoreErrors' });

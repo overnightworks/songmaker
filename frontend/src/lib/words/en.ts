@@ -16,6 +16,18 @@ export type Words = {
     readonly "cowriterProblem.noAnswer": string;
     readonly "problemLine.logIn": string;
     readonly "problemLine.tryAgain": string;
+    readonly "homeWrite.label": string;
+    readonly "homeWrite.empty": string;
+    readonly "homeWrite.loading": string;
+    readonly "homeWrite.error": string;
+    readonly "homeWrite.openSong": (gaps: { readonly title: string }) => string;
+    readonly "homeWrite.workCreated": (gaps: { readonly time: string }) => string;
+    readonly "homeWrite.workLyrics": (gaps: { readonly time: string }) => string;
+    readonly "homeWrite.workStyle": (gaps: { readonly time: string }) => string;
+    readonly "homeWrite.workRenamed": (gaps: { readonly time: string }) => string;
+    readonly "homeWrite.workTake": (gaps: { readonly time: string }) => string;
+    readonly "homeWrite.workCowriter": (gaps: { readonly time: string }) => string;
+    readonly "homeWrite.workEdited": (gaps: { readonly time: string }) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -32,5 +44,17 @@ export const words: Words = {
     "cowriterProblem.noAnswer": "The co-writer did not answer. Try again.",
     "problemLine.logIn": "Log in",
     "problemLine.tryAgain": "Try again",
+    "homeWrite.label": "Write",
+    "homeWrite.empty": "Songs you work on will appear here.",
+    "homeWrite.loading": "Loading Write…",
+    "homeWrite.error": "Could not load Write.",
+    "homeWrite.openSong": (gaps: { readonly title: string }) => "Open song " + gaps.title,
+    "homeWrite.workCreated": (gaps: { readonly time: string }) => "new song · " + gaps.time,
+    "homeWrite.workLyrics": (gaps: { readonly time: string }) => "lyrics edited · " + gaps.time,
+    "homeWrite.workStyle": (gaps: { readonly time: string }) => "style edited · " + gaps.time,
+    "homeWrite.workRenamed": (gaps: { readonly time: string }) => "renamed · " + gaps.time,
+    "homeWrite.workTake": (gaps: { readonly time: string }) => "new take · " + gaps.time,
+    "homeWrite.workCowriter": (gaps: { readonly time: string }) => "co-writer · " + gaps.time,
+    "homeWrite.workEdited": (gaps: { readonly time: string }) => "edited · " + gaps.time,
 };
 export type Key = keyof Words;

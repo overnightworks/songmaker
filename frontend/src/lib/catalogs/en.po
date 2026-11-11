@@ -54,3 +54,51 @@ msgstr ""
 msgctxt "problemLine.tryAgain"
 msgid "Try again"
 msgstr ""
+
+msgctxt "homeWrite.label"
+msgid "Write"
+msgstr ""
+
+msgctxt "homeWrite.empty"
+msgid "Songs you work on will appear here."
+msgstr ""
+
+msgctxt "homeWrite.loading"
+msgid "Loading Write…"
+msgstr ""
+
+msgctxt "homeWrite.error"
+msgid "Could not load Write."
+msgstr ""
+
+msgctxt "homeWrite.openSong"
+msgid "Open song {title}"
+msgstr ""
+
+msgctxt "homeWrite.workCreated"
+msgid "new song · {time}"
+msgstr ""
+
+msgctxt "homeWrite.workLyrics"
+msgid "lyrics edited · {time}"
+msgstr ""
+
+msgctxt "homeWrite.workStyle"
+msgid "style edited · {time}"
+msgstr ""
+
+msgctxt "homeWrite.workRenamed"
+msgid "renamed · {time}"
+msgstr ""
+
+msgctxt "homeWrite.workTake"
+msgid "new take · {time}"
+msgstr ""
+
+msgctxt "homeWrite.workCowriter"
+msgid "co-writer · {time}"
+msgstr ""
+
+msgctxt "homeWrite.workEdited"
+msgid "edited · {time}"
+msgstr ""
