@@ -100,8 +100,8 @@ def test_a_read_tool_for_another_persons_content_is_refused_as_for_a_stranger_in
 
 @pytest.mark.parametrize("tool", [
     t for t in PLAIN_READS if t.name in {
-        "list_loras", "list_own_playable_takes", "list_playlists", "list_references",
-        "list_presets", "list_conversations", "get_memory",
+        "list_albums", "list_songs", "list_loras", "list_own_playable_takes", "list_playlists",
+        "list_references", "list_presets", "list_conversations", "get_memory",
         "get_library_listen", "get_library_write", "search_library",
         "get_library_pool_queue",
     }
