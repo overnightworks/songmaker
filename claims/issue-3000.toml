@@ -1,0 +1,8 @@
+claim_id = "86cff4c80ae84455af9f9e7f8cc4fa44"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "340be1804313d5a6dd5a7ff0f6a68ddfb47dec14"
+branch = "claude/issue-3000-home-s-write-list-reads-its-words-from-t"
+scope = ["frontend/e2e/home-write.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/HomeWrite.svelte", "frontend/src/lib/components/HomeWrite.test.ts", "frontend/src/lib/constants/home.ts", "frontend/src/lib/utils/page-words.test.ts", "frontend/src/lib/utils/page-words.ts", "frontend/src/lib/words/en.ts"]
+opened_commit = "645066c63703f5e7ab9be5232cc5d4d7d0d7d13e"
+whole_reason = "One surface moves whole (the epic's invariant 5): its component and constants, the reader's gaps it is the first to need, the catalog with its generated module, and its tests."
