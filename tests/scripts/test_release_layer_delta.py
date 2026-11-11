@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import stat
 import sys
@@ -193,7 +194,6 @@ def _registry_entry(document: dict) -> dict:
 @pytest.fixture
 def registry(tmp_path, monkeypatch):
     """A stand-in `docker` on PATH serving the entries the test puts in the returned dict."""
-    entries: dict[str, dict] = {}
     registry_file = tmp_path / "registry.json"
     binary_directory = tmp_path / "bin"
     binary_directory.mkdir()
@@ -208,20 +208,19 @@ def registry(tmp_path, monkeypatch):
             self[f"{_tag_reference(version).rpartition(':')[0]}@{digest}"] = _registry_entry(
                 _image_manifest(layers)
             )
-            registry_file.write_text(json.dumps(self))
+            self.save()
 
         def save(self) -> None:
             registry_file.write_text(json.dumps(self))
 
-    registry_dict = Registry(entries)
     registry_file.write_text("{}")
-    return registry_dict
+    return Registry()
 
 
 def _run_release_layer_command(
     monkeypatch, capsys, refs: str = TAG_REFS, version: str = NEW_VERSION
 ):
-    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(refs))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(refs))
     argv = ["--repository", REPOSITORY, "--image", IMAGE, "--version", version]
     exit_code = delta.main(argv)
     captured = capsys.readouterr()

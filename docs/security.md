@@ -745,9 +745,9 @@ one level deep, with the job's token and without persisting it.
 Each job holds only its own permissions: only the tag job writes contents, only
 the image jobs write packages and hold `id-token` and `attestations`, and the
 layers job only reads packages to print what changed against the previous
-release. Quality's `image.yml` signs each image's build provenance. Anyone with write access to the
-repository can dispatch the workflow; the gate bounds what that releases to main's
-green head, and the workflow passes no secret.
+release. Quality's `image.yml` signs each image's build provenance. Anyone with
+write access to the repository can dispatch the workflow; the gate bounds what
+that releases to main's green head, and the workflow passes no secret.
 
 Every third-party GitHub Action is pinned to the full commit SHA of its reviewed
 release tag (with the release series recorded beside it), so a moved tag cannot
