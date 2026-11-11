@@ -17,10 +17,19 @@ from pathlib import Path
 import coverage
 import pytest
 import yaml
+from support.workflow_shape import (
+    CI_JOBS,
+    CI_WORKFLOW,
+    E2E_JOBS,
+    E2E_WORKFLOW,
+    backend_step,
+    expression,
+    step_text,
+    steps_using,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
-JOBS = WORKFLOW["jobs"]
+JOBS = CI_JOBS
 REPORTS = ("reports/coverage.xml", "reports/frontend-coverage/lcov.info")
 
 
@@ -143,8 +152,6 @@ def test_backend_runs_the_database_tests_against_its_own_postgres_service():
 COMPOSE_BASE = ROOT / "docker/docker-compose.ci.yml"
 COMPOSE_CACHE_OVERLAY = ROOT / "docker/docker-compose.ci-cache.yml"
 E2E_FILE = ROOT / ".github/workflows/e2e.yml"
-E2E = yaml.safe_load(E2E_FILE.read_text())
-E2E_JOBS = E2E["jobs"]
 NOT_SUCCESS = ("failure", "cancelled", "skipped")
 CONTINUES_AFTER_A_FAILED_STEP = ("!cancelled()", "always()")
 LEG_RESULT = re.compile(r"\$\{\{\s*needs\.([\w-]+)\.result\s*\}\}")
@@ -156,24 +163,7 @@ HELPER_ARGUMENTS = re.compile(r"shard-artifacts\.ts (\S+) (\S+)")
 UPLOAD_ACTION = "actions/upload-artifact@"
 DOWNLOAD_ACTION = "actions/download-artifact@"
 SETUP_UV_ACTION = "astral-sh/setup-uv@"
-CACHE_RESTORE_ACTION = "actions/cache/restore@"
-CACHE_SAVE_ACTION = "actions/cache/save@"
-SYSTEM_PACKAGES_STEP = "Install system dependencies"
-ARCHIVES_OPTION = re.compile(r'Dir::Cache::Archives="([^"]+)"')
 FIRST_ATTEMPT_CONTEXTS = {"github.run_attempt": "1", "github.run_id": "7"}
-
-
-def expression(value):
-    match = re.fullmatch(r"\$\{\{\s*(.*?)\s*\}\}", str(value).strip())
-    return match.group(1) if match else str(value)
-
-
-def steps_using(steps, action):
-    return [step for step in steps if step.get("uses", "").startswith(action)]
-
-
-def step_text(step):
-    return "\n".join([step.get("run", ""), *(f"{k}={v}" for k, v in step.get("env", {}).items())])
 
 
 def is_coverage_step(step):
@@ -273,7 +263,7 @@ class Suite:
 
 BROWSER = Suite(
     name="browser",
-    workflow=E2E,
+    workflow=E2E_WORKFLOW,
     jobs=E2E_JOBS,
     aggregator_id=aggregator_of(E2E_JOBS)[0],
     consumer_ids=(aggregator_of(E2E_JOBS)[0],),
@@ -282,7 +272,7 @@ BROWSER = Suite(
 BACKEND_JOB_IDS = ("backend-static", "backend-shard", "backend", "backend-coverage")
 BACKEND = Suite(
     name="backend",
-    workflow=WORKFLOW,
+    workflow=CI_WORKFLOW,
     jobs={job_id: JOBS[job_id] for job_id in BACKEND_JOB_IDS},
     aggregator_id="backend",
     consumer_ids=("backend", "backend-coverage"),
@@ -496,11 +486,6 @@ SUCCEEDING_UV = "#!/bin/sh\nexit 0\n"
 FAILING_UV = "#!/bin/sh\nexit 1\n"
 
 
-def backend_step(job_id, name):
-    (step,) = [step for step in JOBS[job_id]["steps"] if step.get("name") == name]
-    return step
-
-
 def run_backend_step(step, workdir, *, uv=PASS_THROUGH_UV, environment=None):
     """Runs a step's script in a directory of its own, with `uv run` replaced by a stand-in."""
     stand_ins = workdir / "stand-ins"
@@ -610,7 +595,7 @@ def test_the_collection_runs_without_a_shard_selection_and_without_a_pipe():
     step = backend_step("backend", COLLECT_STEP)
     assert "--collect-only" in step["run"]
     assert "|" not in step["run"]
-    scopes = (WORKFLOW["env"], JOBS["backend"].get("env", {}), step.get("env", {}))
+    scopes = (CI_WORKFLOW["env"], JOBS["backend"].get("env", {}), step.get("env", {}))
     assert not [name for scope in scopes for name in scope if name.startswith("TEST_SHARD")]
 
 
@@ -621,11 +606,11 @@ def test_every_backend_step_that_reads_the_shard_count_reads_the_one_workflow_va
         BACKEND_SHARD_TOTAL
         in backend_step("backend-coverage", "Choose the newest coverage data of each shard")["run"]
     )
-    assert BACKEND_SHARD_TOTAL in WORKFLOW["env"]
+    assert BACKEND_SHARD_TOTAL in CI_WORKFLOW["env"]
 
 
 def test_the_aggregator_keeps_the_mandatory_name_of_the_pythons_it_runs():
-    assert JOBS["backend"]["name"] == f"Backend (Python {WORKFLOW['env']['BACKEND_PYTHON']})"
+    assert JOBS["backend"]["name"] == f"Backend (Python {CI_WORKFLOW['env']['BACKEND_PYTHON']})"
     assert "strategy" not in JOBS["backend"]
     assert JOBS["backend-coverage"]["needs"] == ["backend"]
 
@@ -765,54 +750,3 @@ def test_a_module_that_needs_the_vendored_engine_is_collected_without_it():
     )
     assert result.returncode == 0, result.stdout
     assert [line for line in result.stdout.splitlines() if "::" in line]
-
-
-def system_package_steps():
-    steps = JOBS["backend-shard"]["steps"]
-    (resolve,) = [step for step in steps if step.get("id") == "system-packages"]
-    (restore,) = steps_using(steps, CACHE_RESTORE_ACTION)
-    (save,) = steps_using(steps, CACHE_SAVE_ACTION)
-    return resolve, restore, backend_step("backend-shard", SYSTEM_PACKAGES_STEP), save
-
-
-def test_the_system_package_files_are_restored_into_the_directory_apt_installs_from():
-    resolve, restore, install, save = system_package_steps()
-    restored_directory = restore["with"]["path"].replace("${{ runner.temp }}", "$RUNNER_TEMP")
-    assert set(ARCHIVES_OPTION.findall(install["run"])) == {restored_directory.rsplit("/", 1)[0]}
-    assert save["with"]["path"] == restore["with"]["path"]
-    assert save["with"]["key"] == restore["with"]["key"]
-    outputs = f"steps.{resolve['id']}.outputs"
-    assert {expression(restore["with"]["key"]), expression(restore["with"]["restore-keys"])} == {
-        f"{outputs}.key",
-        f"{outputs}.prefix",
-    }
-
-
-def test_the_system_packages_have_one_owner_in_the_job_environment():
-    shard = JOBS["backend-shard"]
-    resolve, _, install, _ = system_package_steps()
-    for variable in ("SYSTEM_PACKAGES", "APT_OPTIONS"):
-        assert all(f"${variable}" in step["run"] for step in (resolve, install)), variable
-        assert variable in shard["env"]
-    named = {word for step in shard["steps"] for word in step_text(step).split()}
-    assert not set(shard["env"]["SYSTEM_PACKAGES"].split()) & named
-
-
-def test_exactly_one_system_package_cache_writer_and_only_on_main_shard_one_after_a_miss():
-    saves = [
-        step
-        for jobs in (JOBS, E2E_JOBS)
-        for job in jobs.values()
-        for step in steps_using(job.get("steps", []), CACHE_SAVE_ACTION)
-    ]
-    _, restore, _, save = system_package_steps()
-    assert saves == [save]
-    condition = expression(save["if"])
-    assert "github.ref == 'refs/heads/main'" in condition
-    assert len(re.findall(r"matrix\.shard == \S+", condition)) == 1
-    assert f"steps.{restore['id']}.outputs.cache-hit != 'true'" in condition
-
-
-def test_a_slow_restore_gives_up_before_its_step_does():
-    _, restore, _, _ = system_package_steps()
-    assert int(restore["env"]["SEGMENT_DOWNLOAD_TIMEOUT_MINS"]) < restore["timeout-minutes"]
