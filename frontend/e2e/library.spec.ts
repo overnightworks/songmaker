@@ -40,7 +40,7 @@ import {
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants/transport';
-import { compareTitles } from '../src/lib/utils/recency';
+import { pageTitleOrder, titledInPageOrder } from './support/page-title-order';
 import {
 	nowPlayingFromLabel,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
@@ -1077,7 +1077,7 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 	expect(tileLabels.every((label) => label.startsWith('Open album '))).toBe(true);
 	await expect(listenTitles).toHaveCount(0);
 	const alphabetical = await tiles.locator('.tile-title').allTextContents();
-	expect(alphabetical).toEqual([...alphabetical].sort(compareTitles));
+	expect(alphabetical).toEqual([...alphabetical].sort(await pageTitleOrder(page)));
 	const playedBox = await choice('played').boundingBox();
 	expect(playedBox?.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 
@@ -1125,9 +1125,9 @@ test(
 		// Of two playlists, a listen in the one A–Z puts second brings it to the
 		// front under Last played: the rail can only show that by leaving A–Z.
 		const second = await seedPlaylist(request, readSeededLibrary());
-		const [, laterInAlphabet] = [playlist, second].toSorted((a, b) =>
-			compareTitles(a.title, b.title)
-		);
+		await page.goto(LIBRARY_PATH);
+		const compareTitles = await pageTitleOrder(page);
+		const [, laterInAlphabet] = await titledInPageOrder(page, [playlist, second]);
 		await listenInPlaylist(page, laterInAlphabet);
 
 		await page.goto(LIBRARY_PATH);
@@ -1153,7 +1153,7 @@ async function playlistTitlesInAlphabet(page: Page): Promise<string[]> {
 	const response = await page.request.get('/api/playlists');
 	expect(response.status()).toBe(200);
 	const listed = (await response.json()) as Array<{ title: string }>;
-	return listed.map((listedPlaylist) => listedPlaylist.title).toSorted(compareTitles);
+	return listed.map((listedPlaylist) => listedPlaylist.title).toSorted(await pageTitleOrder(page));
 }
 
 // #1402: Playlists gets its own page, at its own address and from search,
@@ -1167,9 +1167,8 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	const shell = shellOf(testInfo);
 	const library = readSeededLibrary();
 	const second = await seedPlaylist(request, library);
-	const [, laterInAlphabet] = [playlist, second].toSorted((a, b) =>
-		compareTitles(a.title, b.title)
-	);
+	await page.goto(LIBRARY_PATH);
+	const [, laterInAlphabet] = await titledInPageOrder(page, [playlist, second]);
 	await listenInPlaylist(page, laterInAlphabet);
 	const titles = await playlistTitlesInAlphabet(page);
 	const surface = workspace(page);

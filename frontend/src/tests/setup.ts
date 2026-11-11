@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { beforeEach, vi } from 'vitest';
 import './browser-apis.ts';
 import './viz-colors.ts';
 
@@ -28,3 +28,9 @@ if (!('ResizeObserver' in globalThis)) {
 vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
+
+// The page's language is the source language at the start of every test, so
+// a test that changes `<html lang>` cannot leak it into the next one.
+beforeEach(() => {
+	document.documentElement.lang = 'en';
+});

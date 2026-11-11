@@ -1,15 +1,23 @@
+import { pageLanguage } from './page-language.ts';
+
 export type CreatedSort = 'newest' | 'oldest' | 'title';
 
 export const CREATED_SORTS: readonly CreatedSort[] = ['newest', 'oldest', 'title'];
 
-const TITLE_COLLATION_LOCALE = 'en';
-const titleCollator = new Intl.Collator(TITLE_COLLATION_LOCALE, {
-	sensitivity: 'base',
-	numeric: true
-});
+const titleCollators = new Map<string, Intl.Collator>();
+
+/** The comparator that orders titles, ignoring case and accents and numbers by value, in one language. */
+export function titleComparatorFor(language: string): (a: string, b: string) => number {
+	let collator = titleCollators.get(language);
+	if (collator === undefined) {
+		collator = new Intl.Collator(language, { sensitivity: 'base', numeric: true });
+		titleCollators.set(language, collator);
+	}
+	return collator.compare;
+}
 
 export function compareTitles(a: string, b: string): number {
-	return titleCollator.compare(a, b);
+	return titleComparatorFor(pageLanguage())(a, b);
 }
 
 function parseCreatedAt(iso: string | null | undefined): Date | null {

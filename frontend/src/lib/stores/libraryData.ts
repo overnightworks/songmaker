@@ -5,6 +5,7 @@ import type { LibraryListOptions } from '#lib/api/library.ts';
 import type { AlbumItem, GenerationItem, SongItem } from '#lib/api/types.ts';
 import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '#lib/constants/library.ts';
 import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
+import { compareTitles } from '#lib/utils/recency.ts';
 import { reloadWhileUnreachable } from './connectivity';
 import { forgetWritten, restoreWritten } from './libraryWrite';
 
@@ -186,7 +187,7 @@ export function addAlbumToList(album: AlbumItem): void {
 	void restoreWritten('album', [album.id]);
 	albumList.update((list) => {
 		if (list.some((a) => a.id === album.id)) return list;
-		return [...list, album].sort((a, b) => a.title.localeCompare(b.title));
+		return [...list, album].sort((a, b) => compareTitles(a.title, b.title));
 	});
 }
 
