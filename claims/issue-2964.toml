@@ -3,6 +3,6 @@ agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
 role = "builder"
 base = "394a6430d0fca7677c1a403d239aabe933036b27"
 branch = "claude/issue-2964-the-first-scoring-job-of-a-fresh-worker"
-scope = ["src/songmaker_cli/scoring/bpm_accuracy.py", "src/songmaker_cli/scoring/emotional_dynamics.py", "src/songmaker_cli/scoring/silence_detection.py", "src/songmaker_cli/scoring/spectral_quality.py", "tests/songmaker_cli/scoring/test_scorer_imports_fresh_interpreter.py"]
+scope = ["src/songmaker_cli/scoring/bpm_accuracy.py", "src/songmaker_cli/scoring/emotional_dynamics.py", "src/songmaker_cli/scoring/silence_detection.py", "src/songmaker_cli/scoring/spectral_quality.py", "tests/songmaker_cli/scoring/test_pipeline_scorer_imports_fresh_interpreter.py", "tests/songmaker_cli/scoring/test_scorer_imports_fresh_interpreter.py"]
 opened_commit = "98405136afacdcb80a8e3a6e1e1086d3e8245cd7"
 whole_reason = "The four scorers share one defect and one proof; a part of them leaves the race open."
