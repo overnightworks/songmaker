@@ -279,8 +279,7 @@ def create_app(
     #     middleware's compression step ever executes.
     #   - Being outside CORS/BodySize/RateLimit/CSRF/AccessLog/SecurityHeaders
     #     means it compresses the fully-assembled response (every other
-    #     middleware's headers already set) exactly once, not an
-    #     intermediate state some inner middleware still touches.
+    #     middleware's headers set) exactly once, not an intermediate state.
     #   - It stays inside ResourceStreamDeadlineMiddleware because that one
     #     needs to observe/bound the complete raw ASGI exchange for the one
     #     SSE path it governs. That observation is unaffected by GZip's
