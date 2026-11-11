@@ -14,12 +14,13 @@ import {
 	COWRITER_NEW_CONVERSATION_LABEL,
 	COWRITER_MESSAGE_COUNT_TEMPLATE,
 	COWRITER_NEW_CONVERSATION_LINE,
-	COWRITER_SINGLE_MESSAGE_COUNT,
-	COWRITER_UNAVAILABLE_TEXT
+	COWRITER_SINGLE_MESSAGE_COUNT
 } from '#lib/constants/cowriter.ts';
 import { EDITOR_VIEW_COWRITER_LABEL } from '#lib/constants/song.ts';
 import { DAY_LABEL_TODAY } from '#lib/constants/day-label.ts';
 import { pageLanguage } from './page-language.ts';
+import { pageText } from '#lib/utils/page-words.ts';
+import type { Key } from '#lib/words/en.ts';
 import {
 	DAYS_NAMED_BY_WEEKDAY,
 	localClockTime,
@@ -78,13 +79,23 @@ export interface CowriterTurnError {
 	waitSeconds: number;
 }
 
-const COWRITER_PROBLEM_TEXTS: Record<CowriterProblem, string> = {
-	unavailable: COWRITER_UNAVAILABLE_TEXT,
-	busy: 'The co-writer is busy',
-	budget_spent: "The co-writer's budget is used up. Try again later.",
-	not_enabled: 'The co-writer is not enabled for your account',
-	sign_in_again: 'Log in again to use the co-writer'
+const COWRITER_PROBLEM_KEYS: Record<CowriterProblem, Key> = {
+	unavailable: 'cowriterProblem.unavailable',
+	busy: 'cowriterProblem.busy',
+	budget_spent: 'cowriterProblem.budgetSpent',
+	not_enabled: 'cowriterProblem.notEnabled',
+	sign_in_again: 'cowriterProblem.signInAgain'
 };
+
+/** The sentence of a problem, read when it is shown so a later language load changes nothing here. */
+export function cowriterProblemText(problem: CowriterProblem): string {
+	return pageText(COWRITER_PROBLEM_KEYS[problem]);
+}
+
+/** The sentence of a turn that ended with no answer and no named problem. */
+export function cowriterNoAnswerText(): string {
+	return pageText('cowriterProblem.noAnswer');
+}
 
 export function cowriterTurnError(
 	frame: ChatTurnProblemFrame | ChatTurnFailureFrame
@@ -95,7 +106,7 @@ export function cowriterTurnError(
 	const requestedWait = frame.problem === 'busy' ? (frame.retry_after_seconds ?? 0) : 0;
 	return {
 		problem: frame.problem,
-		text: COWRITER_PROBLEM_TEXTS[frame.problem],
+		text: cowriterProblemText(frame.problem),
 		waitSeconds: Math.min(requestedWait, COWRITER_BUSY_WAIT_CEILING_SECONDS)
 	};
 }

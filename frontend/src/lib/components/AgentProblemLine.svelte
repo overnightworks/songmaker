@@ -3,6 +3,7 @@
 	import { signInAddress } from '#lib/api/fetch.ts';
 	import { COWRITER_PROBLEM_LOOKS, type CowriterProblem } from '#lib/utils/cowriter-ui.ts';
 	import { formatTime } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -34,10 +35,10 @@
 	{#if look}<Icon name={look.icon} size={18} />{/if}
 	<span class="text">{text}</span>
 	{#if problem === 'sign_in_again'}
-		<a class="signin" href={signInHref} data-sveltekit-reload>Log in</a>
+		<a class="signin" href={signInHref} data-sveltekit-reload>{pageText('problemLine.logIn')}</a>
 	{:else if onretry && problem !== 'not_enabled'}
 		<button type="button" class="retry-turn" disabled={remaining > 0} onclick={onretry}>
-			Try again{#if remaining > 0}
+			{pageText('problemLine.tryAgain')}{#if remaining > 0}
 				<span class="wait-time">&nbsp;{formatTime(remaining)}</span>{/if}
 		</button>
 	{/if}

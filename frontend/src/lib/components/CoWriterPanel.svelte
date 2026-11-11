@@ -24,7 +24,6 @@
 	import { addToast } from '#lib/stores/toast.ts';
 	import {
 		COWRITER_CONVERSATION_MENU_LABEL,
-		COWRITER_UNAVAILABLE_TEXT,
 		COWRITER_DELETE_CONVERSATION_TITLE,
 		COWRITER_DELETE_CONVERSATION_WARNING,
 		COWRITER_MEMORY_LABEL,
@@ -61,6 +60,8 @@
 		conversationMenuOrder,
 		conversationMessageCountLabel,
 		conversationRowLabel,
+		cowriterNoAnswerText,
+		cowriterProblemText,
 		cowriterThinkingLabel,
 		cowriterTurnError,
 		cowriterToolCallTarget,
@@ -95,7 +96,6 @@
 
 	type Message = CoWriterMessage;
 
-	const INCOMPLETE_TURN_MESSAGE = 'The co-writer did not answer. Try again.';
 	const TURN_ALREADY_RUNNING_STATUS = 409;
 	const LATEST_MESSAGE_SLACK_PX = 32;
 
@@ -269,7 +269,7 @@
 	): Promise<void> {
 		const conversation = await readActiveConversation().catch(() => null);
 		if (!conversation || !reachedServer(conversation, sentMessage, lastKnownPersistedId)) {
-			markTurnFailed(assistantIndex, INCOMPLETE_TURN_MESSAGE);
+			markTurnFailed(assistantIndex, cowriterNoAnswerText());
 			return;
 		}
 		const conversationChanged = activeConversationId !== conversation.conversation_id;
@@ -379,7 +379,7 @@
 	function markUnansweredLastMessage(): void {
 		const last = messages.at(-1);
 		if (last?.role !== 'user') return;
-		messages = [...messages.slice(0, -1), { ...last, error: INCOMPLETE_TURN_MESSAGE }];
+		messages = [...messages.slice(0, -1), { ...last, error: cowriterNoAnswerText() }];
 	}
 
 	function markTurnFailed(
@@ -591,12 +591,12 @@
 		frame: Extract<CoWriterStreamEvent, { type: 'error' }>
 	): CowriterTurnError {
 		return (
-			cowriterTurnError(frame) ?? { problem: null, text: INCOMPLETE_TURN_MESSAGE, waitSeconds: 0 }
+			cowriterTurnError(frame) ?? { problem: null, text: cowriterNoAnswerText(), waitSeconds: 0 }
 		);
 	}
 
 	function refusalMessage(refusal: ApiError): string {
-		if (refusal.status === 503) return refusal.detail || COWRITER_UNAVAILABLE_TEXT;
+		if (refusal.status === 503) return refusal.detail || cowriterProblemText('unavailable');
 		return refusal.message;
 	}
 

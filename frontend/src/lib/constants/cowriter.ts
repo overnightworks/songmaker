@@ -1,7 +1,6 @@
 export const COWRITER_TURN_TIMEOUT_MS = 600_000;
 export const COWRITER_RUNNING_TURN_POLL_MS = 2_000;
 export const COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT = 3;
-export const COWRITER_UNAVAILABLE_TEXT = 'The co-writer is unavailable';
 export const COWRITER_BUSY_WAIT_CEILING_SECONDS = 300;
 export const COWRITER_CONVERSATION_MENU_LABEL = 'Conversation menu';
 export const COWRITER_COMPOSER_PLACEHOLDER = 'Ask for a rewrite…';

@@ -49,6 +49,7 @@ import {
 } from '../src/lib/constants/song';
 import { nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
+import { words } from '../src/lib/words/en';
 
 const CONVERSATION_ID = 'e2e-cowriter-return';
 const SENT = 'Ja bitte, schreib den Refrain neu';
@@ -63,14 +64,15 @@ const RETRY_FAILURE_FRAME = {
 	problem: 'unavailable',
 	retry_after_seconds: null
 };
-const RETRY_FAILURE = 'The co-writer is unavailable';
+const RETRY_FAILURE = words['cowriterProblem.unavailable'];
 const BUDGET_SPENT_FRAME = {
 	type: 'error',
 	status: 429,
 	problem: 'budget_spent',
 	retry_after_seconds: null
 };
-const BUDGET_SPENT_FAILURE = "The co-writer's budget is used up. Try again later.";
+const BUDGET_SPENT_FAILURE = words['cowriterProblem.budgetSpent'];
+const TRY_AGAIN = words['problemLine.tryAgain'];
 
 type TurnState = 'idle' | 'running' | 'answered';
 type ChatMessage = ReturnType<typeof chatMessage>;
@@ -251,12 +253,12 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 
 		await openCowriterOnPickedSong(page);
 		await expect(page.getByText(SENT)).toHaveCount(1);
-		await page.getByRole('button', { name: 'Try again' }).click();
+		await page.getByRole('button', { name: TRY_AGAIN }).click();
 
 		await expect.poll(() => retried).toBe(true);
 		await expect(page.getByText(RETRY_FAILURE)).toBeVisible();
 		await expect(page.getByText(SENT)).toHaveCount(1);
-		await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(1);
+		await expect(page.getByRole('button', { name: TRY_AGAIN })).toHaveCount(1);
 	});
 
 	test('a turn the budget refuses names the budget, never an outage, and offers Try again', async ({
@@ -274,7 +276,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 
 		await expect(page.getByText(BUDGET_SPENT_FAILURE)).toBeVisible();
 		await expect(page.getByText(RETRY_FAILURE)).toHaveCount(0);
-		await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(1);
+		await expect(page.getByRole('button', { name: TRY_AGAIN })).toHaveCount(1);
 	});
 
 	test('a failed message followed by a newer failed one no longer offers Try again', async ({
@@ -292,7 +294,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 
 		await openCowriterOnPickedSong(page);
 		const composer = page.getByPlaceholder(/Ask for a rewrite/);
-		const tryAgain = page.getByRole('button', { name: 'Try again' });
+		const tryAgain = page.getByRole('button', { name: TRY_AGAIN });
 		await composer.fill(older);
 		await composer.press('Enter');
 		await expect(tryAgain).toHaveCount(1);
@@ -301,8 +303,8 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 
 		const errorRowBelow = (text: string) =>
 			page.locator('.message', { hasText: text }).locator('xpath=following-sibling::*[1]');
-		await expect(errorRowBelow(newer).getByRole('button', { name: 'Try again' })).toHaveCount(1);
-		await expect(errorRowBelow(older).getByRole('button', { name: 'Try again' })).toHaveCount(0);
+		await expect(errorRowBelow(newer).getByRole('button', { name: TRY_AGAIN })).toHaveCount(1);
+		await expect(errorRowBelow(older).getByRole('button', { name: TRY_AGAIN })).toHaveCount(0);
 		await expect(tryAgain).toHaveCount(1);
 	});
 
@@ -336,7 +338,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 
 		await openCowriterOnPickedSong(page);
 		const composer = page.getByPlaceholder(/Ask for a rewrite/);
-		const tryAgain = page.getByRole('button', { name: 'Try again' });
+		const tryAgain = page.getByRole('button', { name: TRY_AGAIN });
 		await composer.fill(failed);
 		await composer.press('Enter');
 		await expect(tryAgain).toHaveCount(1);
