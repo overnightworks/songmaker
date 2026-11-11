@@ -107,7 +107,7 @@ def _note_flushed_sign_in(session, _flush_context) -> None:
 
 
 def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_session(
-    back_channel_logout_host, pg_factory, tmp_path,
+    pg_factory, tmp_path,
 ) -> None:
     """Cell 7: both real routes on PostgreSQL; the callback holds the lock through its commit."""
     subject = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
@@ -121,7 +121,6 @@ def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_sess
     callback = in_thread(answers, "callback", lambda: world.callback(person, started))
     logout = in_thread(answers, "logout", lambda: realm.post(
         BACKCHANNEL_LOGOUT_PATH, data={"logout_token": world.issuer.logout_token(subject)},
-        headers={"host": back_channel_logout_host},
     ))
     pause = CommitPause(lambda session: bool(session.info.get(_FLUSHED_SIGN_IN)))
     logout_pid = None

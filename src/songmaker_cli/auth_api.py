@@ -18,7 +18,6 @@ from webauth.sign_in_routes import (
 
 from songmaker_cli.agent.mcp import ToolEffect, agent_tool
 from songmaker_cli.api_models import AuthMeResponse
-from songmaker_cli.app_context import allowed_hosts
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.constants import NO_ACCESS_PATH
@@ -28,8 +27,6 @@ from songmaker_cli.settings import get_settings
 if TYPE_CHECKING:
     from webauth.oidc import OidcRelyingParty
 
-    from songmaker_cli.settings import Settings
-
 log = logging.getLogger(__name__)
 
 SIGN_IN_FAILED_STATUS: int = 403
@@ -37,34 +34,6 @@ SIGN_IN_FAILED_STATUS: int = 403
 LOGOUT_BUTTON_LABEL: Final[str] = "Log out"
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-# A handler answers it; it is never an error to name.
-class BackchannelHostMismatch(Exception):  # noqa: N818
-    """The back-channel call carries a Host other than the configured one."""
-
-
-def _require_backchannel_host(request: Request) -> None:
-    """Keycloak's back-channel logout; only the configured Host reaches it, none if unset."""
-    configured = get_settings().backchannel_logout_host
-    if not configured or request.headers.get("host", "").lower() != configured:
-        raise BackchannelHostMismatch
-
-
-def _require_backchannel_host_listed(settings: Settings) -> None:
-    """A Host that TrustedHost refuses (it matches the part before the colon) would lose every
-    logout without a sign."""
-    configured = settings.backchannel_logout_host
-    host = configured.split(":")[0]
-    if configured and host not in allowed_hosts(settings):
-        raise ValueError(
-            f"BACKCHANNEL_LOGOUT_HOST={configured!r} names a host that ALLOWED_HOSTS does not "
-            f"list; it must list {host!r} in lower case",
-        )
-
-
-def _answer_backchannel_host_mismatch(_request: Request, _exc: Exception) -> Response:
-    return Response(status_code=404)
 
 
 def _relying_party(request: Request) -> OidcRelyingParty:
@@ -86,8 +55,6 @@ def _refuse_sign_in(request: Request, refusal: SignInRefusal) -> Response:
 def install_sign_in(app: FastAPI) -> None:
     """Register webauth's start, callback, logout and back-channel routes on the app."""
     settings = get_settings()
-    _require_backchannel_host_listed(settings)
-    app.add_exception_handler(BackchannelHostMismatch, _answer_backchannel_host_mismatch)
     install_sign_in_routes(
         app,
         paths=SIGN_IN_PATHS,
@@ -100,7 +67,6 @@ def install_sign_in(app: FastAPI) -> None:
         logout_page_text=lambda _request: LogoutPageText(
             language="en", button_label=LOGOUT_BUTTON_LABEL
         ),
-        backchannel_dependencies=[Depends(_require_backchannel_host)],
     )
 
 

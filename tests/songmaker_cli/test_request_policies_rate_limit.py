@@ -478,12 +478,11 @@ def test_a_spent_api_budget_leaves_the_sign_in_paths_open(sign_in_client: TestCl
     ),
 ])
 def test_the_back_channel_and_a_preflight_spend_nothing_of_the_sign_in_budget(
-    back_channel_logout_host: str, sign_in_client: TestClient, method: str, path: str,
+    sign_in_client: TestClient, method: str, path: str,
     headers: dict[str, str] | None,
 ) -> None:
-    request_headers = headers if headers is not None else {"host": back_channel_logout_host}
     for _ in range(_sign_in_budget(sign_in_client).max_requests):
-        sign_in_client.request(method, path, headers=request_headers)
+        sign_in_client.request(method, path, headers=headers)
 
     assert _start(sign_in_client) != 429
     assert sign_in_client.get("/api/auth/check").status_code != 429
