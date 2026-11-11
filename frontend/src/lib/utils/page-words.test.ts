@@ -19,4 +19,5 @@ it('refuses, at type check, values for a plain key and a missing or misnamed gap
 	void (() => pageText('homeWrite.openSong'));
 	// @ts-expect-error the values name exactly the entry's gaps
 	void (() => pageText('homeWrite.openSong', { time: 'today' }));
+	expect(() => pageText('homeWrite.label')).not.toThrow();
 });
