@@ -26,7 +26,7 @@ import librosa
 import librosa.core.pitch
 import librosa.onset
 import numpy as np
-import scipy.signal
+import scipy.signal  # noqa: F401 - librosa reaches it through the lazy scipy attribute
 
 from songmaker_cli.constants import (
     DYNAMICS_ONSET_CV_CEILING,

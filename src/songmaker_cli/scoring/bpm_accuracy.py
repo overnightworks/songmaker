@@ -11,7 +11,7 @@ from pathlib import Path
 import librosa
 import librosa.feature.rhythm
 import numpy as np
-import scipy.signal
+import scipy.signal  # noqa: F401 - librosa reaches it through the lazy scipy attribute
 
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import BpmAccuracyScore
