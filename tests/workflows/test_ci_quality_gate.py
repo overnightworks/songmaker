@@ -446,6 +446,11 @@ def test_every_limit_is_a_literal_and_no_step_outlasts_its_job(suite):
     assert suite.aggregator["timeout-minutes"] <= 15
 
 
+def test_no_backend_job_waits_longer_than_fifteen_minutes():
+    for job in BACKEND.jobs.values():
+        assert job["timeout-minutes"] <= 15
+
+
 class ComposeLoader(yaml.SafeLoader):
     """Reads a compose file whose merge tags (`!reset`, `!override`) do not matter here."""
 

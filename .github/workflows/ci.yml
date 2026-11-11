@@ -77,7 +77,7 @@ jobs:
   backend-shard:
     name: Backend tests (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
-    timeout-minutes: 25 # why: a hung job must not hold the queued main runs for six hours; the worst apt step seen (902 s) and the tests of a shard fit inside it.
+    timeout-minutes: 15 # why: a hung test or a hung mirror must fail the run, not hold the queued runs.
     services:
       postgres:
         image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
@@ -142,7 +142,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/apt-archives/partial"
           sudo apt-get install -y $APT_OPTIONS -o Dir::Cache::Archives="$RUNNER_TEMP/apt-archives" -o APT::Keep-Downloaded-Packages=true $SYSTEM_PACKAGES
           sudo apt-get autoclean -o Dir::Cache::Archives="$RUNNER_TEMP/apt-archives"
-        timeout-minutes: 20 # why: a hung apt mirror must fail, not hold the queued main runs behind it for hours.
+        timeout-minutes: 8 # why: a hung apt mirror must fail the run, not hold the queued runs behind it.
 
       - name: Save the system package files
         if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 1 && steps.apt-cache.outputs.cache-hit != 'true' }}
