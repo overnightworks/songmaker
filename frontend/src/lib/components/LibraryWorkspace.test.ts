@@ -18,6 +18,7 @@ import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { resetResourceSyncForTests, resourceSync } from '#lib/stores/resourceSync.ts';
 import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
+import { words } from '#lib/words/en.ts';
 
 const retryResourceSync = vi.hoisted(() => vi.fn(async () => true));
 
@@ -189,7 +190,7 @@ describe('the library workspace', () => {
 			[...target.querySelectorAll('section[aria-label]')].map((region) =>
 				region.getAttribute('aria-label')
 			)
-		).toEqual(['Listen', 'Write']);
+		).toEqual(['Listen', words['homeWrite.label']]);
 		expect(target.querySelector('.library-wall')).toBeNull();
 		expect(target.textContent).not.toContain(ALBUM_TITLE);
 	});
