@@ -1,0 +1,8 @@
+claim_id = "37afe497bc5f49098197dee20b415ec4"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "c1d0d148de960c30fe41cf055985783b6fd21b15"
+branch = "claude/issue-2992-songmaker-takes-webauth-0-37-0-the-sessi"
+scope = ["docs/architecture.md", "docs/security.md", "pyproject.toml", "src/songmaker_cli/auth_api.py", "src/songmaker_cli/auth_stores.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/auth.py", "tests/songmaker_cli/cowriter/test_tools_ownership.py", "tests/songmaker_cli/db/test_migrations_revisions.py", "tests/songmaker_cli/test_auth_stores.py", "tests/songmaker_cli/test_server_middleware.py", "tests/support/cowriter_gateway.py", "tests/support/web_app.py", "uv.lock"]
+opened_commit = "0fad612f3bc5deb68afaba30aa3610f5065b36c8"
+whole_reason = "The store's create, the column behind it and the install call change together with the pin, or every sign-in fails."
