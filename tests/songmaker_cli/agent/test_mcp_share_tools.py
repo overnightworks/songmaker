@@ -17,7 +17,6 @@ from songmaker_cli.db.models import Generation
 
 AGENTS = "agents"
 OTHER_AGENT_SUBJECT = "7c2e9d41-aaaa-4bbb-8ccc-00000000a9e2"
-MISSING_SONG_OWNER = "nobody"
 SHARE_SONG = "/api/songs/{song_id}/share"
 
 
@@ -119,15 +118,17 @@ def test_an_agent_account_gets_no_share_of_a_song_that_is_not_its_own_and_nothin
 
 
 @pytest.mark.parametrize("tool", SHARE_TOOLS, ids=lambda tool: tool.name)
-@pytest.mark.parametrize("subject", [ALICE, BOB, MISSING_SONG_OWNER],
-                         ids=["own-song", "foreign-song", "missing-song"])
+@pytest.mark.parametrize(("subject", "seeded"), [
+    pytest.param(ALICE, True, id="own-song"),
+    pytest.param(BOB, True, id="foreign-song"),
+    pytest.param("nobody", False, id="missing-song"),
+])
 def test_a_persons_own_agent_is_refused_a_share_on_both_paths_and_nothing_is_written(
-    persons_world: McpWorld, tool: Tool, subject: str,
+    persons_world: McpWorld, tool: Tool, subject: str, seeded: bool,
 ) -> None:
     """Spec: REQ-SHARE-27 -- a person's own agent, an admin's included, cannot share."""
-    seeded = (f"take-{subject}", True, False) in persons_world.rows_of(
-        Generation, "id", "is_picked", "is_kept")
-    assert seeded is (subject != MISSING_SONG_OWNER)
+    assert ((f"take-{subject}", True, False) in persons_world.rows_of(
+        Generation, "id", "is_picked", "is_kept")) is seeded
     before = persons_world.snapshot()
 
     through_mcp = persons_world.call(tool.name, tool.arguments_for(subject))
