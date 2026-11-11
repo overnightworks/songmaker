@@ -2,6 +2,7 @@
 
 import re
 
+import pytest
 from support.workflow_shape import (
     CI_JOBS,
     E2E_JOBS,
@@ -46,12 +47,15 @@ def test_the_restore_key_and_prefix_are_the_outputs_of_the_resolve_step():
     }
 
 
-def test_the_system_packages_have_one_owner_in_the_job_environment():
-    shard = CI_JOBS["backend-shard"]
+@pytest.mark.parametrize("variable", ["SYSTEM_PACKAGES", "APT_OPTIONS"])
+def test_the_resolve_and_install_steps_read_the_variable_from_the_job_environment(variable):
     resolve, _, install, _ = system_package_steps()
-    for variable in ("SYSTEM_PACKAGES", "APT_OPTIONS"):
-        assert all(f"${variable}" in step["run"] for step in (resolve, install)), variable
-        assert variable in shard["env"]
+    assert all(f"${variable}" in step["run"] for step in (resolve, install))
+    assert variable in CI_JOBS["backend-shard"]["env"]
+
+
+def test_no_step_spells_out_a_system_package_name():
+    shard = CI_JOBS["backend-shard"]
     named = {word for step in shard["steps"] for word in step_text(step).split()}
     assert not set(shard["env"]["SYSTEM_PACKAGES"].split()) & named
 
