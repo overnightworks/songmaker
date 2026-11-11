@@ -1,0 +1,8 @@
+claim_id = "02eec01be7a14db492e176a8155f9773"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "33ae6665cc51778987010177102019fe1ce9d265"
+branch = "claude/issue-2979-the-release-prints-which-image-layers-ch"
+scope = [".github/workflows/release.yml", "docs/security.md", "scripts/release_layer_delta.py", "tests/scripts/test_release_layer_delta.py", "tests/workflows/test_release_workflow.py"]
+opened_commit = "7a8e3c1e447ae7320ce60f23c6cf65b5d4887c54"
+whole_reason = "The job is useless without its script, the script has no caller without the job, the workflow test pins the job's permissions and images, and the security sentence becomes false the moment the job lands."
