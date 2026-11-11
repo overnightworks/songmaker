@@ -19,7 +19,7 @@ from songmaker_cli.app_context import get_app_context, get_db_session
 from songmaker_cli.auth_stores import DatabaseSessionRecordStore
 
 PERSONS_AGENT_SHARE_REFUSED_DETAIL: Final = (
-    "A person's own agent cannot share; the person shares it in the app."
+    "A person's own agent cannot share; the person shares in the app."
 )
 
 

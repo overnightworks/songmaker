@@ -7,7 +7,7 @@ The real app on PostgreSQL through ``/mcp`` and by direct bearer, against the fa
 from __future__ import annotations
 
 import pytest
-from support.mcp_tool_table import ALICE, BOB, SHARES, Tool
+from support.mcp_tool_table import ALICE, ALL_TOOLS, BOB, Tool
 from support.mcp_world import AGENT_SUBJECT, McpWorld, agent_claims
 from support.token_world import TokenWorld
 
@@ -25,7 +25,7 @@ def _is_share_route(method: str, template: str) -> bool:
     return method == "POST" and template.endswith("/share")
 
 
-SHARE_TOOLS = [tool for tool in SHARES if _is_share_route(tool.method, tool.template)]
+SHARE_TOOLS = [tool for tool in ALL_TOOLS if _is_share_route(tool.method, tool.template)]
 
 
 @pytest.fixture
@@ -58,30 +58,26 @@ def _public_song(world: McpWorld, slug: str):
 # -- an agent with its own account shares its own song ----------------------------------------
 
 
-def test_an_agent_account_shares_its_own_song_through_mcp_and_the_link_serves_the_public_page(
-    agents_world: McpWorld,
+@pytest.mark.parametrize("through_mcp", [True, False], ids=["through-mcp", "direct-bearer"])
+def test_an_agent_account_shares_its_own_song_and_the_link_serves_the_public_page(
+    agents_world: McpWorld, through_mcp: bool,
 ) -> None:
-    """Spec: REQ-SHARE-26 -- an agent account's share through /mcp is served to a visitor."""
-    reply = agents_world.call(
-        "share_song", {"song_id": f"song-{AGENTS}"}, subject=AGENT_SUBJECT, **agent_claims(),
-    )
+    """Spec: REQ-SHARE-26 -- an agent account's share, on either path, is served to a visitor."""
+    options = {"subject": AGENT_SUBJECT, **agent_claims()}
+    song_id = f"song-{AGENTS}"
 
+    if through_mcp:
+        reply = agents_world.call("share_song", {"song_id": song_id}, **options)
+        succeeded = reply.is_error is False
+    else:
+        reply = _share_direct(agents_world, song_id, **options)
+        succeeded = reply.status_code == 200
     shared = reply.json()
-    assert reply.is_error is False
+
+    assert succeeded
     assert shared["share_url"].endswith(shared["share_slug"])
     assert _public_song(agents_world, shared["share_slug"]).status_code == 200
-    assert (AGENT_SUBJECT, "share", "song", f"song-{AGENTS}") in agents_world.world.audits()
-
-
-def test_an_agent_account_shares_its_own_song_by_direct_bearer(agents_world: McpWorld) -> None:
-    """Spec: REQ-SHARE-26 -- an agent account's share by direct bearer is served to a visitor."""
-    reply = _share_direct(
-        agents_world, f"song-{AGENTS}", subject=AGENT_SUBJECT, **agent_claims(),
-    )
-
-    assert reply.status_code == 200
-    assert _public_song(agents_world, reply.json()["share_slug"]).status_code == 200
-    assert (AGENT_SUBJECT, "share", "song", f"song-{AGENTS}") in agents_world.world.audits()
+    assert (AGENT_SUBJECT, "share", "song", song_id) in agents_world.world.audits()
 
 
 def test_an_agent_account_ends_its_share_with_unshare_song_and_the_link_stops(
