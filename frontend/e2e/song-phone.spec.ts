@@ -22,6 +22,7 @@ import { formatTime } from '../src/lib/utils/format';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import { SEARCH_OPEN_LABEL } from '../src/lib/constants/rail';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
+import { words } from '../src/lib/words/en';
 import {
 	nowPlayingOpenSourceLabel,
 	nowPlayingTakeLabel,
@@ -492,7 +493,7 @@ test.describe('song page at phone width', () => {
 					if (origin === 'Home') {
 						await page.goto('/');
 						await page
-							.getByRole('region', { name: 'Write', exact: true })
+							.getByRole('region', { name: words['homeWrite.label'], exact: true })
 							.getByRole('button', { name: songEditorOpenLabel(title), exact: true })
 							.click();
 						await expect(songHeading).toBeVisible();

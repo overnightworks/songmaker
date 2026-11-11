@@ -16,6 +16,7 @@ import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name
 import { resetLibraryOrderForTests } from '#lib/stores/libraryOrder.ts';
 import { albumList, allAlbumsLoad } from '#lib/stores/libraryData.ts';
 import { makeAlbum } from '#lib/test-utils/factories.ts';
+import { words } from '#lib/words/en.ts';
 import LibraryHome from './LibraryHome.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -69,7 +70,7 @@ describe('1354_rule_14 LibraryHome', () => {
 			[...target.querySelectorAll('section[aria-label]')].map((region) =>
 				region.getAttribute('aria-label')
 			)
-		).toEqual(['Listen', 'Write']);
+		).toEqual(['Listen', words['homeWrite.label']]);
 		expect(target.querySelector('.wall-tile-body')?.getAttribute('aria-label')).toBe(
 			'Open album Open Windows'
 		);

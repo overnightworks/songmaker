@@ -4,12 +4,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { LibraryWriteItem } from '#lib/api/types.ts';
 import { songEditorOpenLabel } from '#lib/constants/song.ts';
 import {
-	HOME_WRITE_EMPTY,
-	HOME_WRITE_ERROR,
-	HOME_WRITE_LOADING,
-	homeWriteOpenLabel
-} from '#lib/constants/home.ts';
-import {
 	ensureLibraryWriteRead,
 	outdateLibraryWrite,
 	resetLibraryWriteForTests
@@ -22,6 +16,7 @@ import { selectedSongId } from '#lib/stores/player.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { makeSong } from '#lib/test-utils/factories.ts';
 import { songList, resetLibraryDataForTests } from '#lib/stores/libraryData.ts';
+import { words } from '#lib/words/en.ts';
 import HomeWrite from './HomeWrite.svelte';
 
 const writeFetch = vi.fn<typeof globalThis.fetch>();
@@ -73,19 +68,19 @@ afterEach(async () => {
 });
 
 it.each([
-	['created', 'new song'],
-	['lyrics', 'lyrics edited'],
-	['style', 'style edited'],
-	['renamed', 'renamed'],
-	['take', 'new take'],
-	['cowriter', 'co-writer'],
-	['edited', 'edited']
-] as const)('1354_rule_14 shows album context and %s work as %s', async (work, label) => {
+	['created', 'homeWrite.workCreated'],
+	['lyrics', 'homeWrite.workLyrics'],
+	['style', 'homeWrite.workStyle'],
+	['renamed', 'homeWrite.workRenamed'],
+	['take', 'homeWrite.workTake'],
+	['cowriter', 'homeWrite.workCowriter'],
+	['edited', 'homeWrite.workEdited']
+] as const)('1354_rule_14 shows album context and %s work as %s', async (work, key) => {
 	writeFetch.mockResolvedValue(Response.json({ items: [writtenSong({ work })] }));
 	await showWrite();
 	await settleWrite();
 	expect(document.querySelector('.tile-subtitle')).toHaveTextContent(
-		`Cold Harbour · ${label} · today`
+		`Cold Harbour · ${words[key]({ time: 'today' })}`
 	);
 });
 
@@ -139,11 +134,11 @@ it('1354_rule_14 preserves server order and reuses a fresh answer on remount', a
 it('1354_rule_18 distinguishes initial loading from a successful empty answer', async () => {
 	const resolve = holdWriteAnswer();
 	await showWrite();
-	expect(document.querySelector('[role="status"]')).toHaveTextContent(HOME_WRITE_LOADING);
-	expect(document.body).not.toHaveTextContent(HOME_WRITE_EMPTY);
+	expect(document.querySelector('[role="status"]')).toHaveTextContent(words['homeWrite.loading']);
+	expect(document.body).not.toHaveTextContent(words['homeWrite.empty']);
 	resolve([]);
 	await settleWrite();
-	expect(document.body).toHaveTextContent(HOME_WRITE_EMPTY);
+	expect(document.body).toHaveTextContent(words['homeWrite.empty']);
 	expect(document.querySelector('[role="status"]')).toBeNull();
 });
 
@@ -151,8 +146,8 @@ it('1354_rule_19 offers a pending-safe Retry for an initial failure', async () =
 	writeFetch.mockRejectedValueOnce(new TypeError('offline'));
 	await showWrite();
 	await settleWrite();
-	expect(document.querySelector('[role="alert"]')).toHaveTextContent(HOME_WRITE_ERROR);
-	expect(document.body).not.toHaveTextContent(HOME_WRITE_EMPTY);
+	expect(document.querySelector('[role="alert"]')).toHaveTextContent(words['homeWrite.error']);
+	expect(document.body).not.toHaveTextContent(words['homeWrite.empty']);
 	const resolve = holdWriteAnswer();
 	const retry = document.querySelector('button');
 	if (!retry) throw new Error('Retry is missing');
@@ -175,14 +170,14 @@ it.each([false, true])(
 		outdateLibraryWrite();
 		const read = ensureLibraryWriteRead();
 		await tick();
-		expect(document.body).toHaveTextContent(empty ? HOME_WRITE_EMPTY : 'Quiet Fire');
+		expect(document.body).toHaveTextContent(empty ? words['homeWrite.empty'] : 'Quiet Fire');
 		resolve(empty ? [] : [writtenSong()]);
 		await read;
 		writeFetch.mockRejectedValueOnce(new TypeError('offline'));
 		outdateLibraryWrite();
 		await settleWrite();
-		expect(document.body).toHaveTextContent(empty ? HOME_WRITE_EMPTY : 'Quiet Fire');
-		expect(document.body).not.toHaveTextContent(HOME_WRITE_ERROR);
+		expect(document.body).toHaveTextContent(empty ? words['homeWrite.empty'] : 'Quiet Fire');
+		expect(document.body).not.toHaveTextContent(words['homeWrite.error']);
 	}
 );
 
@@ -222,7 +217,7 @@ it.each(['foreground', 'reconnect'] as const)(
 );
 
 it.each([
-	{ selector: '.wall-tile-body', name: homeWriteOpenLabel('Quiet Fire') },
+	{ selector: '.wall-tile-body', name: words['homeWrite.openSong']({ title: 'Quiet Fire' }) },
 	{ selector: '.row-editor', name: songEditorOpenLabel('Quiet Fire') }
 ])(
 	'1354_rule_16 defect:#1575 $selector, named apart as $name, selects the song without changing playback',

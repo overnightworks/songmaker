@@ -2,14 +2,6 @@
 	import { onMount } from 'svelte';
 	import { songEditorOpenLabel } from '#lib/constants/song.ts';
 	import {
-		HOME_WRITE_LABEL,
-		HOME_WRITE_EMPTY,
-		HOME_WRITE_LOADING,
-		HOME_WRITE_ERROR,
-		HOME_WRITE_WORK_LABELS,
-		homeWriteOpenLabel
-	} from '#lib/constants/home.ts';
-	import {
 		libraryWriteItems,
 		libraryWriteState,
 		libraryWriteLoading,
@@ -19,8 +11,21 @@
 	import { whenBackOnline } from '#lib/stores/connectivity.ts';
 	import { selectSong } from '#lib/stores/navigation.ts';
 	import { activityTimeLabel } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
+	import type { LibraryWriteItem } from '#lib/api/types.ts';
+	import type { Key } from '#lib/words/en.ts';
 	import LibraryRow from './LibraryRow.svelte';
 	import HomeListSection, { homeListPhase } from './HomeListSection.svelte';
+
+	const WORK_KEYS = {
+		created: 'homeWrite.workCreated',
+		lyrics: 'homeWrite.workLyrics',
+		style: 'homeWrite.workStyle',
+		renamed: 'homeWrite.workRenamed',
+		take: 'homeWrite.workTake',
+		cowriter: 'homeWrite.workCowriter',
+		edited: 'homeWrite.workEdited'
+	} as const satisfies Record<LibraryWriteItem['work'], Key>;
 
 	const phase = $derived(homeListPhase($libraryWriteState, $libraryWriteItems.length));
 
@@ -42,10 +47,10 @@
 <svelte:document onvisibilitychange={foreground} />
 
 <HomeListSection
-	label={HOME_WRITE_LABEL}
-	loadingText={HOME_WRITE_LOADING}
-	errorText={HOME_WRITE_ERROR}
-	emptyText={HOME_WRITE_EMPTY}
+	label={pageText('homeWrite.label')}
+	loadingText={pageText('homeWrite.loading')}
+	errorText={pageText('homeWrite.error')}
+	emptyText={pageText('homeWrite.empty')}
 	{phase}
 	busy={$libraryWriteLoading}
 	onretry={() => void ensureLibraryWriteRead()}
@@ -56,10 +61,13 @@
 				title={item.song_title}
 				initialsSource={item.album_title}
 				subtitleYielding={item.album_title}
-				subtitle={`${HOME_WRITE_WORK_LABELS[item.work]} · ${activityTimeLabel(item.worked_at, new Date())}`}
+				subtitle={pageText(WORK_KEYS[item.work], {
+					time: activityTimeLabel(item.worked_at, new Date())
+				})}
 				coverAlt={item.song_title}
 				coverUrl={item.cover?.card ?? item.album_cover?.card ?? null}
-				openLabel={homeWriteOpenLabel(item.song_title)}
+				// The row body and its pencil both open the editor; distinct names keep them apart for a screen reader.
+				openLabel={pageText('homeWrite.openSong', { title: item.song_title })}
 				onopen={() => void selectSong(item.song_id)}
 				edit={{
 					label: songEditorOpenLabel(item.song_title),
