@@ -88,7 +88,7 @@ def test_a_stored_person_account_met_by_an_agent_token_becomes_an_agent_and_is_a
     ],
     ids=["no-owner", "empty-owner", "no-name", "empty-name", "name-too-long", "unprintable-name"],
 )
-def test_an_agent_token_with_badagent_claims_is_refused_and_creates_no_account(
+def test_an_agent_token_with_bad_agent_claims_is_refused_and_creates_no_account(
     mcp: McpWorld, claims: dict[str, object],
 ) -> None:
     reply = mcp.rpc(
@@ -99,7 +99,7 @@ def test_an_agent_token_with_badagent_claims_is_refused_and_creates_no_account(
     assert AGENT_SUBJECT not in _account_kinds(mcp)
 
 
-def testagent_claims_outside_the_agent_group_keep_a_person_account_a_person(mcp: McpWorld) -> None:
+def test_agent_claims_outside_the_agent_group_keep_a_person_account_a_person(mcp: McpWorld) -> None:
     mcp.call("list_albums", {}, **agent_claims(groups=(OIDC_LOGIN_GROUP, OIDC_MCP_GROUP)))
 
     assert _account_kinds(mcp)[TokenWorld.ALICE] == AccountKind.PERSON
