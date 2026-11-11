@@ -64,7 +64,7 @@ MARKED_TOOLS = {
     "unshare_album", "unshare_song", "unshare_take", "unshare_playlist", "delete_album",
     "delete_song", "update_song", "pick_take", "unpick_take", "unkeep_take",
     "unkeep_reference", "list_conversations", "get_conversation", "start_conversation",
-    "get_memory",
+    "get_memory", "share_song",
 }
 NEW_MARKED_ROUTES = {
     ("PUT", "/api/albums/{album_id}"), ("PUT", "/api/playlists/{playlist_id}"),

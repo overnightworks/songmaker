@@ -1,7 +1,8 @@
 """The table of a person's agent tools: each tool, the route it calls and its arguments.
 
 ``test_mcp_person_tools`` and ``test_mcp_person_lifecycle_tools`` drive every row through the
-real app; ``mcp_world`` seeds the two people the rows name.
+real app; ``mcp_world`` seeds the two people the rows name. The rows of ``SHARES`` are the ones
+a person's own agent is refused: ``test_mcp_share_tools`` drives those.
 """
 
 from __future__ import annotations
@@ -182,4 +183,11 @@ CREATIONS = [
     Tool("write_user_memory", "PUT", "/api/memory/user", lambda s, o: {"body": "a note"}),
 ]
 
-ALL_TOOLS = [*READS_OF_ONE_RESOURCE, *PLAIN_READS, *WRITES_ON_ONE_RESOURCE, *CREATIONS]
+# Public shares: an agent with its own account may make them, a person's own agent is refused.
+SHARES = [
+    Tool("share_song", "POST", "/api/songs/{song_id}/share", lambda s, o: {"song_id": f"song-{s}"}),
+]
+
+ALL_TOOLS = [
+    *READS_OF_ONE_RESOURCE, *PLAIN_READS, *WRITES_ON_ONE_RESOURCE, *CREATIONS, *SHARES,
+]

@@ -65,6 +65,18 @@ AGENT_ENVIRONMENT = {
 AGENT_GROUP = "/agents"
 MCP_CLIENT_ENVIRONMENT = {"AGENT__MCP_CLIENT_ID": AGENTS_CLIENT, "AGENT__MCP_SCOPE": MCP_SCOPE}
 MCP_ENVIRONMENT = {**MCP_CLIENT_ENVIRONMENT, "AGENT__MCP_AGENT_GROUP": AGENT_GROUP}
+AGENT_SUBJECT = "7c2e9d41-aaaa-4bbb-8ccc-00000000a9e1"
+
+
+def agent_claims(**overrides: object) -> dict[str, object]:
+    """The claims of an agent with its own account: a token in the agent group, owned by Alice."""
+    return {
+        "groups": (OIDC_LOGIN_GROUP, OIDC_MCP_GROUP, AGENT_GROUP),
+        "username": "service-account-hal",
+        "agent_owner": TokenWorld.ALICE,
+        "agent_name": "Hal",
+        **overrides,
+    }
 
 
 @dataclass(frozen=True)
