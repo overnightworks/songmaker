@@ -1,8 +1,0 @@
-claim_id = "cd2793a628d34f3fa5efcc507b6cb231"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "c7999862ad1bef7e245b0cef74b070f5ccca1ae9"
-branch = "claude/issue-2998-the-co-writer-s-problem-line-reads-its-w"
-scope = ["frontend/e2e/admin-models.spec.ts", "frontend/e2e/album-cover.spec.ts", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/AgentProblemLine.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/AlbumCoverEditorProblems.test.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/constants/cowriter.ts", "frontend/src/lib/utils/cowriter-ui.test.ts", "frontend/src/lib/utils/cowriter-ui.ts", "frontend/src/lib/words/en.ts"]
-opened_commit = "84ca1a3902107f5f70c7c33342393423ae18ecfb"
-whole_reason = "One surface moves whole (the epic's invariant 5): its four production files, the catalog with its generated module, and the tests that find its texts."
