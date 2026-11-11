@@ -67,3 +67,35 @@ jobs:
     with:
       version: ${{ inputs.version }}
       commit: ${{ needs.gate.outputs.commit }}
+
+  layers:
+    name: layers (${{ matrix.image }})
+    needs: [gate, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [web, music-worker, scoring-worker, acestep-worker]
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE: ${{ matrix.image }}
+      VERSION: ${{ inputs.version }}
+      REPOSITORY: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # No ref: the gate refuses any dispatch but main's head, so the workflow's own commit is the gated one.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - shell: bash # pipefail: a failed tag list must not read as no earlier release
+        run: |
+          gh api --paginate "repos/$REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref' \
+            | python3 scripts/release_layer_delta.py --repository "$REPOSITORY" --image "$IMAGE" --version "$VERSION"
