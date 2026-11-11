@@ -63,6 +63,7 @@ def install_sign_in(app: FastAPI) -> None:
         transaction=DatabaseSignInTransaction(app.state.ctx.db),
         refused=_refuse_sign_in,
         keeps_id_token=True,
+        ui_language=lambda _request: None,
         max_sessions=settings.max_concurrent_sessions_per_user,
         logout_page_text=lambda _request: LogoutPageText(
             language="en", button_label=LOGOUT_BUTTON_LABEL

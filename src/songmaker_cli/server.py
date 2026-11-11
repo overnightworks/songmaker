@@ -261,13 +261,14 @@ def create_app(
     #   2. SelectiveGZipMiddleware    -- compress the finished response body
     #   3. CORS middleware            -- add configured cross-origin policy
     #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
-    #   5. BodySizeLimitMiddleware    -- reject oversized bodies before processing
-    #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   7. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified person-path or
+    #   5. PathRefusalMiddleware      -- refuse a route path with a control character
+    #   6. BodySizeLimitMiddleware    -- reject oversized bodies before processing
+    #   7. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
+    #   8. BearerGateMiddleware       -- with TOKEN_CLIENTS or MCP: a verified person-path or
     #                                    resource token skips CSRF
-    #   8. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
-    #  10. AccessLogMiddleware        -- log all requests (after security checks)
+    #   9. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
+    #  10. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
+    #  11. AccessLogMiddleware        -- log all requests (after security checks)
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
     # (the true outermost layer) and outside everything else, on purpose:
@@ -278,8 +279,7 @@ def create_app(
     #     middleware's compression step ever executes.
     #   - Being outside CORS/BodySize/RateLimit/CSRF/AccessLog/SecurityHeaders
     #     means it compresses the fully-assembled response (every other
-    #     middleware's headers already set) exactly once, not an
-    #     intermediate state some inner middleware still touches.
+    #     middleware's headers set) exactly once, not an intermediate state.
     #   - It stays inside ResourceStreamDeadlineMiddleware because that one
     #     needs to observe/bound the complete raw ASGI exchange for the one
     #     SSE path it governs. That observation is unaffected by GZip's

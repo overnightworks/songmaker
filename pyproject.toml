@@ -51,7 +51,7 @@ server = [
     # git pins by tag: a release-asset wheel in the resolved tree makes a uv Dependabot
     # run fail as a whole. Integrity is the commit uv.lock records for the tag, which
     # `uv sync --frozen` installs; the three images carry git for it.
-    "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.35.0",
+    "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.37.0",
     # Bare: Settings imports the client's AgentConfig in every process, and both worker images
     # install this extra. Its HTTP backend sits in the agent extra, which only the web image installs.
     "overnightworks-agents @ git+https://github.com/overnightworks/agents@v0.31.0",

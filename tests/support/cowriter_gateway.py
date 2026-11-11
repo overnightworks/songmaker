@@ -267,7 +267,7 @@ def open_session(app, factory, user_id: str, refresh_token: str | None = A_REFRE
             now=now,
             expires_at=now + timedelta(seconds=config.session_lifetime.idle_seconds),
             refresh_token=None if refresh_token is None else SecretStr(refresh_token),
-            id_token=None,
+            id_token=None, account_language=None,
         )
         session.commit()
         return record.id

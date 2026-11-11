@@ -206,7 +206,8 @@ def seed_session(client, username: str) -> None:
         user_id = session.query(User).filter_by(username=username).one().id
         idle = timedelta(seconds=config.session_lifetime.idle_seconds)
         record = DatabaseSessionRecordStore(session).create(
-            user_id, now=now, expires_at=now + idle, refresh_token=None, id_token=None,
+            user_id, now=now, expires_at=now + idle,
+            refresh_token=None, id_token=None, account_language=None,
         )
         session.commit()
         session_id = record.id

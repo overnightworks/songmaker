@@ -1211,8 +1211,8 @@ catalogs = [
 
 [[package]]
 name = "overnightworks-webauth"
-version = "0.35.0"
-source = { git = "https://github.com/overnightworks/webauth?rev=v0.35.0#0ca48c090830d7d23995845cd46a9002029bcbc5" }
+version = "0.37.0"
+source = { git = "https://github.com/overnightworks/webauth?rev=v0.37.0#b6e49099653b176feb51fe6b0444bc8a30e3e874" }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
@@ -2003,7 +2003,7 @@ requires-dist = [
     { name = "overnightworks-agents", marker = "extra == 'server'", git = "https://github.com/overnightworks/agents?rev=v0.31.0" },
     { name = "overnightworks-agents", extras = ["backend", "mcp-server"], marker = "extra == 'agent'", git = "https://github.com/overnightworks/agents?rev=v0.31.0" },
     { name = "overnightworks-design", extras = ["catalogs"], marker = "extra == 'dev'", git = "https://github.com/overnightworks/design?rev=v0.23.0" },
-    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.35.0" },
+    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth?rev=v0.37.0" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.1" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=13,<14" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },

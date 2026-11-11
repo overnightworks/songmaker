@@ -28,7 +28,7 @@ from sqlalchemy import (
     false,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
-from webauth.ports import AccountKind
+from webauth.ports import MAX_ACCOUNT_LANGUAGE_CHARS, AccountKind
 
 from songmaker_cli.constants import (
     AUTO_LENGTH_SECONDS,
@@ -524,6 +524,9 @@ class UserSession(Base):
     expires_at: Mapped[datetime] = mapped_column(TZDateTime)
     stored_refresh_token: Mapped[str | None] = mapped_column("refresh_token", Text, nullable=True)
     stored_id_token: Mapped[str | None] = mapped_column("id_token", Text, nullable=True)
+    account_language: Mapped[str | None] = mapped_column(
+        String(MAX_ACCOUNT_LANGUAGE_CHARS), nullable=True,
+    )
 
     user: Mapped[User] = relationship(back_populates="sessions")
 

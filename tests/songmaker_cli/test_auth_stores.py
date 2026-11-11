@@ -136,7 +136,8 @@ def test_a_session_is_stored_with_the_instants_it_is_given(accounts, sessions) -
     expires = created + timedelta(days=7)
 
     record = sessions.create(
-        _SUBJECT, now=created, expires_at=expires, refresh_token=None, id_token=None,
+        _SUBJECT, now=created, expires_at=expires,
+        refresh_token=None, id_token=None, account_language=None,
     )
     loaded = sessions.load(record.id)
 
@@ -148,7 +149,8 @@ def test_a_session_is_stored_with_the_instants_it_is_given(accounts, sessions) -
 def test_a_session_without_a_refresh_token_answers_none(accounts, sessions) -> None:
     accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
-        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
+        _SUBJECT, now=_later(0), expires_at=_later(),
+        refresh_token=None, id_token=None, account_language=None,
     )
 
     assert sessions.load(record.id).refresh_token is None
@@ -160,7 +162,7 @@ def test_a_stored_refresh_token_is_returned_secret_and_kept_out_of_the_repr(
     accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=SecretStr("rt-one"),
-        id_token=None,
+        id_token=None, account_language=None,
     )
     session.commit()
     session.expire_all()
@@ -182,7 +184,7 @@ def test_a_failed_session_insert_raises_without_the_refresh_token_in_the_traceba
         with pytest.raises(IntegrityError) as failure:
             sessions.create(
                 "no-such-account", now=opened_at, expires_at=expires_at,
-                refresh_token=refresh_token, id_token=None,
+                refresh_token=refresh_token, id_token=None, account_language=None,
             )
 
     formatted = "".join(traceback.format_exception(failure.value))
@@ -193,7 +195,7 @@ def test_replacing_a_refresh_token_updates_only_an_existing_session(accounts, se
     accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=SecretStr("rt-one"),
-        id_token=None,
+        id_token=None, account_language=None,
     )
 
     assert sessions.replace_refresh_token(record.id, refresh_token=SecretStr("rt-two")) is True
@@ -209,7 +211,8 @@ def test_a_session_without_an_id_token_answers_none(accounts, sessions) -> None:
     """K1 (#1890): a row written without an ID token answers None."""
     accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
-        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
+        _SUBJECT, now=_later(0), expires_at=_later(),
+        refresh_token=None, id_token=None, account_language=None,
     )
 
     assert sessions.load(record.id).id_token is None
@@ -224,7 +227,7 @@ def test_a_stored_id_token_is_returned_whole_secret_and_kept_out_of_the_repr(
     fake_token = "fake-id-token-" + "x" * (length - 14)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
-        id_token=SecretStr(fake_token),
+        id_token=SecretStr(fake_token), account_language=None,
     )
     session.commit()
     session.expire_all()
@@ -235,12 +238,27 @@ def test_a_stored_id_token_is_returned_whole_secret_and_kept_out_of_the_repr(
     assert "fake-id-token" not in repr(loaded.id_token)
 
 
+@pytest.mark.parametrize("account_language", ["de-AT", None])
+def test_a_session_returns_the_account_language_it_was_created_with(
+    accounts, sessions, session, account_language: str | None,
+) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
+    record = sessions.create(
+        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
+        id_token=None, account_language=account_language,
+    )
+    session.commit()
+    session.expire_all()
+
+    assert sessions.load(record.id).account_language == account_language
+
+
 def test_renewal_and_refresh_rotation_leave_the_id_token_unchanged(accounts, sessions) -> None:
     """K1 (#1890): the ID token ends with its row, so renewal and rotation never touch it."""
     accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(1), refresh_token=SecretStr("rt-one"),
-        id_token=SecretStr("fake-id-token"),
+        id_token=SecretStr("fake-id-token"), account_language=None,
     )
 
     sessions.touch(record.id, expires_at=_later(5))
@@ -262,7 +280,7 @@ def test_a_failed_session_insert_raises_without_the_id_token_in_the_traceback(
         with pytest.raises(IntegrityError) as failure:
             sessions.create(
                 "no-such-account", now=creation_time, expires_at=expires_at, refresh_token=None,
-                id_token=id_token,
+                id_token=id_token, account_language=None,
             )
 
     assert "fake-id-token-in-a-failed-insert" not in "".join(
@@ -277,7 +295,8 @@ def test_an_unknown_session_is_absent(sessions) -> None:
 def test_touching_a_session_writes_the_given_expiry(accounts, sessions) -> None:
     accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
-        _SUBJECT, now=_later(0), expires_at=_later(1), refresh_token=None, id_token=None,
+        _SUBJECT, now=_later(0), expires_at=_later(1),
+        refresh_token=None, id_token=None, account_language=None,
     )
     renewed = _later(5)
 
@@ -293,7 +312,8 @@ def test_touch_does_not_recreate_an_absent_session(accounts, sessions, removal: 
     session_id = "missing"
     if removal != "missing":
         session_id = sessions.create(
-            _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
+            _SUBJECT, now=_later(0), expires_at=_later(),
+            refresh_token=None, id_token=None, account_language=None,
         ).id
         if removal == "deleted":
             sessions.delete(session_id)
@@ -312,7 +332,8 @@ def test_deleting_a_users_sessions_removes_all_of_them(accounts, sessions, sessi
     accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     for _ in range(2):
         sessions.create(
-            _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
+            _SUBJECT, now=_later(0), expires_at=_later(),
+            refresh_token=None, id_token=None, account_language=None,
         )
 
     assert sessions.delete_for_user(_SUBJECT) == 2
@@ -326,7 +347,7 @@ def test_pruning_keeps_only_the_newest_sessions(accounts, sessions, keep_newest:
     created = [
         sessions.create(
             _SUBJECT, now=base + timedelta(seconds=index), expires_at=_later(),
-            refresh_token=None, id_token=None,
+            refresh_token=None, id_token=None, account_language=None,
         ).id
         for index in range(3)
     ]
@@ -417,7 +438,8 @@ def test_a_kind_change_becomes_an_update_line_naming_both_kinds(audit, session) 
         ),
         pytest.param(
             lambda s: DatabaseSessionRecordStore(s).create(
-                _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
+                _SUBJECT, now=_later(0), expires_at=_later(),
+                refresh_token=None, id_token=None, account_language=None,
             ),
             id="creating a session",
         ),
@@ -444,7 +466,8 @@ def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
         _SUBJECT, "nina", "user", AccountKind.PERSON,
     )
     DatabaseSessionRecordStore(session).create(
-        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None, id_token=None,
+        _SUBJECT, now=_later(0), expires_at=_later(),
+        refresh_token=None, id_token=None, account_language=None,
     )
     session.commit()
     before = _StoredRows.of(session)
