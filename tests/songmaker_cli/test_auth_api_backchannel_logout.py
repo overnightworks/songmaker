@@ -287,11 +287,10 @@ def test_a_value_whose_host_part_is_not_in_allowed_hosts_stops_the_web_app(
     tmp_path: Path, pg_factory, fresh_settings, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("BACKCHANNEL_LOGOUT_HOST", "unlisted.test:8080")
+    relying_party = a_fake_issuer().relying_party_for_app()
 
     with pytest.raises(ValueError, match="BACKCHANNEL_LOGOUT_HOST"):
-        make_test_app(
-            tmp_path, factory=pg_factory, oidc_sign_in=a_fake_issuer().relying_party_for_app(),
-        )
+        make_test_app(tmp_path, factory=pg_factory, oidc_sign_in=relying_party)
 
 
 def test_an_unlisted_host_gets_the_trusted_host_400_and_ends_nothing(world: World) -> None:
