@@ -28,7 +28,7 @@ def _image_manifest(layers: list[tuple[str, int]]) -> dict:
     }
 
 
-def _index(*platforms: tuple[str, str, str]) -> dict:
+def _oci_index(*platforms: tuple[str, str, str]) -> dict:
     return {
         "schemaVersion": 2,
         "mediaType": "application/vnd.oci.image.index.v1+json",
@@ -41,7 +41,7 @@ def _index(*platforms: tuple[str, str, str]) -> dict:
 
 AMD64_DIGEST = "sha256:" + "1" * 64
 ATTESTATION_DIGEST = "sha256:" + "2" * 64
-RECORDED_INDEX = _index(
+RECORDED_INDEX = _oci_index(
     (ATTESTATION_DIGEST, "unknown", "unknown"),
     (AMD64_DIGEST, "linux", "amd64"),
 )
@@ -109,9 +109,9 @@ def test_a_plain_image_manifest_is_used_as_is():
 @pytest.mark.parametrize(
     "index",
     [
-        pytest.param(_index((ATTESTATION_DIGEST, "unknown", "unknown")), id="none"),
+        pytest.param(_oci_index((ATTESTATION_DIGEST, "unknown", "unknown")), id="none"),
         pytest.param(
-            _index((AMD64_DIGEST, "linux", "amd64"), (ATTESTATION_DIGEST, "linux", "amd64")),
+            _oci_index((AMD64_DIGEST, "linux", "amd64"), (ATTESTATION_DIGEST, "linux", "amd64")),
             id="two",
         ),
     ],
@@ -181,7 +181,7 @@ sys.exit(1)
 """
 
 
-def _reference(version: str) -> str:
+def _tag_reference(version: str) -> str:
     return f"ghcr.io/{REPOSITORY.lower()}/{IMAGE}:{version}"
 
 
@@ -203,8 +203,8 @@ def registry(tmp_path, monkeypatch):
 
     class Registry(dict):
         def publish(self, version: str, layers: list[tuple[str, int]], digest: str) -> None:
-            self[_reference(version)] = _registry_entry(_index((digest, "linux", "amd64")))
-            self[f"{_reference(version).rpartition(':')[0]}@{digest}"] = _registry_entry(
+            self[_tag_reference(version)] = _registry_entry(_oci_index((digest, "linux", "amd64")))
+            self[f"{_tag_reference(version).rpartition(':')[0]}@{digest}"] = _registry_entry(
                 _image_manifest(layers)
             )
             registry_file.write_text(json.dumps(self))
@@ -217,7 +217,9 @@ def registry(tmp_path, monkeypatch):
     return registry_dict
 
 
-def _run(monkeypatch, capsys, refs: str = TAG_REFS, version: str = NEW_VERSION):
+def _run_release_layer_command(
+    monkeypatch, capsys, refs: str = TAG_REFS, version: str = NEW_VERSION
+):
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(refs))
     argv = ["--repository", REPOSITORY, "--image", IMAGE, "--version", version]
     exit_code = delta.main(argv)
@@ -229,7 +231,7 @@ def test_the_command_prints_the_table_against_the_previous_release(registry, mon
     registry.publish(NEW_VERSION, [*BASE_LAYERS, NEW_TOP_LAYER], "sha256:" + "3" * 64)
     registry.publish(PREVIOUS_VERSION, [*BASE_LAYERS, OLD_TOP_LAYER], "sha256:" + "4" * 64)
 
-    exit_code, out, err = _run(monkeypatch, capsys)
+    exit_code, out, err = _run_release_layer_command(monkeypatch, capsys)
 
     assert (exit_code, err) == (0, "")
     assert out.splitlines()[0] == f"{IMAGE} {NEW_VERSION} against {PREVIOUS_VERSION}"
@@ -239,7 +241,9 @@ def test_the_command_prints_the_table_against_the_previous_release(registry, mon
 def test_the_command_without_an_earlier_tag_marks_every_layer_new(registry, monkeypatch, capsys):
     registry.publish(NEW_VERSION, BASE_LAYERS, "sha256:" + "3" * 64)
 
-    exit_code, out, _err = _run(monkeypatch, capsys, refs="refs/tags/v2030.01.01.1\n")
+    exit_code, out, _err = _run_release_layer_command(
+        monkeypatch, capsys, refs="refs/tags/v2030.01.01.1\n"
+    )
 
     assert exit_code == 0
     assert out.splitlines()[0] == f"{IMAGE} {NEW_VERSION} against no earlier release"
@@ -252,7 +256,7 @@ def test_the_command_says_so_when_the_previous_release_has_no_such_image(
 ):
     registry.publish(NEW_VERSION, BASE_LAYERS, "sha256:" + "3" * 64)
 
-    exit_code, out, _err = _run(monkeypatch, capsys)
+    exit_code, out, _err = _run_release_layer_command(monkeypatch, capsys)
 
     assert exit_code == 0
     assert (
@@ -264,7 +268,7 @@ def test_the_command_says_so_when_the_previous_release_has_no_such_image(
 def test_the_command_fails_naming_the_image_when_the_new_tag_cannot_be_read(
     registry, monkeypatch, capsys
 ):
-    exit_code, out, err = _run(monkeypatch, capsys)
+    exit_code, out, err = _run_release_layer_command(monkeypatch, capsys)
 
     assert (exit_code, out) == (1, "")
     assert IMAGE in err
@@ -272,11 +276,11 @@ def test_the_command_fails_naming_the_image_when_the_new_tag_cannot_be_read(
 
 
 def test_the_command_relays_a_registry_failure_other_than_not_found(registry, monkeypatch, capsys):
-    registry[_reference(NEW_VERSION)] = {"stdout": "", "exit": 1}
+    registry[_tag_reference(NEW_VERSION)] = {"stdout": "", "exit": 1}
     registry.save()
     registry_stderr_marker = "not found"
 
-    exit_code, _out, err = _run(monkeypatch, capsys)
+    exit_code, _out, err = _run_release_layer_command(monkeypatch, capsys)
 
     # the stand-in prints nothing on stderr for a listed entry, so the failure is the exit status
     assert exit_code == 1
@@ -285,10 +289,10 @@ def test_the_command_relays_a_registry_failure_other_than_not_found(registry, mo
 
 
 def test_the_command_fails_on_malformed_json(registry, monkeypatch, capsys):
-    registry[_reference(NEW_VERSION)] = {"stdout": "<html>"}
+    registry[_tag_reference(NEW_VERSION)] = {"stdout": "<html>"}
     registry.save()
 
-    exit_code, _out, err = _run(monkeypatch, capsys)
+    exit_code, _out, err = _run_release_layer_command(monkeypatch, capsys)
 
     assert exit_code == 1
     assert f"{IMAGE}:" in err
@@ -296,6 +300,6 @@ def test_the_command_fails_on_malformed_json(registry, monkeypatch, capsys):
 
 def test_a_malformed_version_is_a_usage_error(monkeypatch, capsys):
     with pytest.raises(SystemExit) as raised:
-        _run(monkeypatch, capsys, version="v1")
+        _run_release_layer_command(monkeypatch, capsys, version="v1")
 
     assert raised.value.code == 2

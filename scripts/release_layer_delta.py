@@ -146,8 +146,8 @@ def image_reference(repository: str, image: str) -> str:
 
 def read_registry_manifest(reference: str) -> ManifestDocument:
     """The JSON document the registry stores under ``reference`` (a tag or a digest)."""
-    result = subprocess.run(
-        ["docker", "buildx", "imagetools", "inspect", "--raw", reference],
+    result = subprocess.run(  # noqa: S603 - the reference comes from the workflow's own inputs
+        ["docker", "buildx", "imagetools", "inspect", "--raw", reference],  # noqa: S607 - the runner's docker is the registry client
         capture_output=True,
         text=True,
         check=False,
