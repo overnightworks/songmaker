@@ -1,4 +1,4 @@
-// Chooses, for each shard of one Playwright project, the newest attempt among
+// Chooses, for each shard of one project or suite, the newest attempt among
 // the artifact directories a job downloaded: a re-run of failed jobs uploads
 // again under a higher attempt while the green shards keep their first one.
 // Usage: node e2e/shard-artifacts.ts <artifact-prefix> <project> <total> <directory>

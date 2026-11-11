@@ -42,10 +42,16 @@ with warnings.catch_warnings():
             GenerateMusicRequest,
         )
     except ImportError as exc:
-        pytest.skip(
-            f"vendored acestep package not importable: {exc}",
-            allow_module_level=True,
-        )
+        GenerateMusicRequest = None  # type: ignore[assignment,misc]
+        _VENDORED_IMPORT_ERROR = str(exc)
+    else:
+        _VENDORED_IMPORT_ERROR = ""
+
+# Per test, not for the module, so every test is collected and reported as skipped by its node id.
+pytestmark = pytest.mark.skipif(
+    GenerateMusicRequest is None,
+    reason=f"vendored acestep package not importable: {_VENDORED_IMPORT_ERROR}",
+)
 
 try:
     from acestep.api.http.release_task_request_parser import (  # type: ignore[import-not-found]

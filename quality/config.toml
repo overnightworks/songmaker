@@ -150,7 +150,7 @@ path = "frontend/src/lib/api/types.ts"
 job = "Backend (Python 3.14)"
 item = "#2509"
 date = 2026-11-09
-reason = "written by scripts/generate_types.py from api_models/ and proven by its --check in that job"
+reason = "written by scripts/generate_types.py from api_models/ and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
 
 [[root.allow]]
 entry = "alembic.ini"
