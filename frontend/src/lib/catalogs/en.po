@@ -102,3 +102,59 @@ msgstr ""
 msgctxt "homeWrite.workEdited"
 msgid "edited · {time}"
 msgstr ""
+
+msgctxt "homeListen.label"
+msgid "Listen"
+msgstr ""
+
+msgctxt "homeListen.empty"
+msgid "Albums and playlists you play will appear here."
+msgstr ""
+
+msgctxt "homeListen.loading"
+msgid "Loading Listen…"
+msgstr ""
+
+msgctxt "homeListen.error"
+msgid "Could not load Listen."
+msgstr ""
+
+msgctxt "homeListen.openAlbum"
+msgid "Open album {title}"
+msgstr ""
+
+msgctxt "homeListen.openPlaylist"
+msgid "Open playlist {title}"
+msgstr ""
+
+msgctxt "homeListen.albumCover"
+msgid "album cover for {title}"
+msgstr ""
+
+msgctxt "homeListen.playlistCover"
+msgid "playlist cover for {title}"
+msgstr ""
+
+msgctxt "homeListen.albumPlaying"
+msgid "Album · playing · song {number} of {total}"
+msgstr ""
+
+msgctxt "homeListen.playlistPlaying"
+msgid "Playlist · playing · song {number} of {total}"
+msgstr ""
+
+msgctxt "homeListen.albumStopped"
+msgid "Album · stopped at song {number}"
+msgstr ""
+
+msgctxt "homeListen.playlistStopped"
+msgid "Playlist · stopped at song {number}"
+msgstr ""
+
+msgctxt "homeListen.albumPlayed"
+msgid "Album · played {time}"
+msgstr ""
+
+msgctxt "homeListen.playlistPlayed"
+msgid "Playlist · played {time}"
+msgstr ""

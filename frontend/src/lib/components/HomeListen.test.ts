@@ -7,7 +7,6 @@ import {
 	COLLECTION_MENU_ARCHIVE_LABEL,
 	COLLECTION_MENU_DELETE_LABEL
 } from '#lib/constants/collection-menu.ts';
-import { HOME_LISTEN_EMPTY, HOME_LISTEN_ERROR } from '#lib/constants/home.ts';
 import { albumList, allAlbumsLoad, songList } from '#lib/stores/libraryData.ts';
 import { deletePlaylist, playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import {
@@ -20,6 +19,7 @@ import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { makeAlbum, makePlaylist, makeSong, makeGeneration } from '#lib/test-utils/factories.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { words } from '#lib/words/en.ts';
 import { openCollectionMenu, requireButtonContainingText } from './shell/rail-test-fixtures';
 import AlbumDetailView from './AlbumDetailView.svelte';
 import HomeListen from './HomeListen.svelte';
@@ -133,9 +133,9 @@ describe('1354_rule_14 Listen', () => {
 		await ensureLastPlayedRead();
 		await showListen();
 		expect(rowNames()).toEqual([
-			'Open album Place 0',
-			'Open playlist Place 1',
-			'Open album Place 2'
+			words['homeListen.openAlbum']({ title: 'Place 0' }),
+			words['homeListen.openPlaylist']({ title: 'Place 1' }),
+			words['homeListen.openAlbum']({ title: 'Place 2' })
 		]);
 		expect(
 			fetchListen.mock.calls.map(([url]) => new URL(url, 'http://localhost').pathname)
@@ -146,7 +146,7 @@ describe('1354_rule_14 Listen', () => {
 	it('1354_rule_18 names what fills an empty Listen', async () => {
 		fetchListen.mockImplementation(async () => Response.json({ items: [] }));
 		await showListen();
-		expect(target.textContent).toContain(HOME_LISTEN_EMPTY);
+		expect(target.textContent).toContain(words['homeListen.empty']);
 		expect(rowNames()).toEqual([]);
 	});
 
@@ -157,13 +157,13 @@ describe('1354_rule_14 Listen', () => {
 		await unmount(component);
 		await showListen();
 		expect(rowNames()).toHaveLength(3);
-		expect(target.textContent).not.toContain(HOME_LISTEN_ERROR);
+		expect(target.textContent).not.toContain(words['homeListen.error']);
 	});
 
 	it('1354_rule_19 offers Retry when never loaded and Retry fills the rows', async () => {
 		fetchListen.mockRejectedValueOnce(new TypeError('offline'));
 		await showListen();
-		expect(target.textContent).toContain(HOME_LISTEN_ERROR);
+		expect(target.textContent).toContain(words['homeListen.error']);
 		getByRoleButton(target, 'Retry').click();
 		await vi.waitFor(() => expect(rowNames()).toHaveLength(3));
 		expect(target.querySelector('[role="alert"]')).toBeNull();
@@ -181,20 +181,22 @@ describe('1354_rule_14 Listen', () => {
 			else albumList.set(homeAlbums.slice(1));
 			await tick();
 			expect(rowNames()).not.toContain(
-				action === 'delete playlist' ? 'Open playlist Place 1' : 'Open album Place 0'
+				action === 'delete playlist'
+					? words['homeListen.openPlaylist']({ title: 'Place 1' })
+					: words['homeListen.openAlbum']({ title: 'Place 0' })
 			);
 			if (action === 'delete album') {
 				albumList.set(homeAlbums);
 				await tick();
-				expect(rowNames()[0]).toBe('Open album Place 0');
+				expect(rowNames()[0]).toBe(words['homeListen.openAlbum']({ title: 'Place 0' }));
 			}
 		}
 	);
 
 	const deleteAlbumHere = () => removeOnAlbumPage(COLLECTION_MENU_DELETE_LABEL);
 	const deletePlaylistHere = () => deletePlaylist('place-1');
-	const album = 'Open album Place 0';
-	const playlist = 'Open playlist Place 1';
+	const album = words['homeListen.openAlbum']({ title: 'Place 0' });
+	const playlist = words['homeListen.openPlaylist']({ title: 'Place 1' });
 	const reloads = [
 		[
 			'album',
@@ -319,9 +321,9 @@ describe('1354_rule_14 Listen', () => {
 		document.dispatchEvent(new Event('visibilitychange'));
 		await vi.waitFor(() =>
 			expect(rowNames()).toEqual([
-				'Open playlist Place 3',
-				'Open album Place 2',
-				'Open playlist Place 1'
+				words['homeListen.openPlaylist']({ title: 'Place 3' }),
+				words['homeListen.openAlbum']({ title: 'Place 2' }),
+				words['homeListen.openPlaylist']({ title: 'Place 1' })
 			])
 		);
 		expect(fetchListen).toHaveBeenCalledTimes(2);
@@ -359,7 +361,10 @@ describe('1354_rule_14 Listen', () => {
 			).not.toBeNull();
 			expect(target.querySelectorAll(`[aria-label="${PLAYING_MARK_LABEL}"]`)).toHaveLength(1);
 			expect(target.textContent).toContain(
-				`${type === 'album' ? 'Album' : 'Playlist'} · playing · song 2 of 4`
+				words[type === 'album' ? 'homeListen.albumPlaying' : 'homeListen.playlistPlaying']({
+					number: '2',
+					total: '4'
+				})
 			);
 		}
 	);

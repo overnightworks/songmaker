@@ -17,6 +17,7 @@ import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { toasts } from '#lib/stores/toast.ts';
+import { words } from '#lib/words/en.ts';
 
 const SONG_ID = 'song-uuid-1';
 const GENERATION_ID = 'gen-uuid-1';
@@ -86,7 +87,7 @@ const ROUTE_PAGES: RoutePage[] = [
 		harness: LibraryAddressHarness,
 		surface: 'browse',
 		shown: '.library-wall',
-		hidden: ['.library-home', '[aria-label="Listen"]']
+		hidden: ['.library-home', `[aria-label="${words['homeListen.label']}"]`]
 	}
 ];
 

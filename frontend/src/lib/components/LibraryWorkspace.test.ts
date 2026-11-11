@@ -190,7 +190,7 @@ describe('the library workspace', () => {
 			[...target.querySelectorAll('section[aria-label]')].map((region) =>
 				region.getAttribute('aria-label')
 			)
-		).toEqual(['Listen', words['homeWrite.label']]);
+		).toEqual([words['homeListen.label'], words['homeWrite.label']]);
 		expect(target.querySelector('.library-wall')).toBeNull();
 		expect(target.textContent).not.toContain(ALBUM_TITLE);
 	});
@@ -203,7 +203,7 @@ describe('the library workspace', () => {
 		await tick();
 
 		expect(target.querySelector('.library-wall h1')?.textContent).toContain('Library');
-		expect(target.querySelector('[aria-label="Listen"]')).toBeNull();
+		expect(target.querySelector(`[aria-label="${words['homeListen.label']}"]`)).toBeNull();
 	});
 
 	it('keeps showing the library when the stream errors after it was live', async () => {
