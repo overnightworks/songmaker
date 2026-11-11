@@ -49,9 +49,9 @@
 	import { offline } from '#lib/stores/connectivity.ts';
 	import { holdOpenWhile } from '#lib/stores/layers.ts';
 	import {
-		COVER_PROBLEM_TEXTS,
 		coverBusyWaitSeconds,
 		coverProblemClosesSuggest,
+		coverProblemText,
 		coverRefusalProblem,
 		coverRunProblem,
 		type CoverProblem
@@ -384,7 +384,7 @@
 	</p>
 	{#if coverProblem}
 		<div class="cover-problem">
-			<AgentProblemLine text={COVER_PROBLEM_TEXTS[coverProblem]} problem={coverProblem} />
+			<AgentProblemLine text={coverProblemText(coverProblem)} problem={coverProblem} />
 		</div>
 	{/if}
 

@@ -10,7 +10,7 @@ import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
 import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
 import { selectedAlbumId } from '#lib/stores/player.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
-import { COVER_PROBLEM_TEXTS } from '#lib/utils/cover-problem.ts';
+import { words } from '#lib/words/en.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import {
 	FakeJobEventSource,
@@ -68,11 +68,11 @@ afterEach(async () => {
 });
 
 describe('a cover suggestion that cannot run names one of the agent’s problems', () => {
-	const BUSY_TEXT = COVER_PROBLEM_TEXTS.busy;
-	const NOT_ENABLED_TEXT = COVER_PROBLEM_TEXTS.not_enabled;
-	const UNAVAILABLE_TEXT = COVER_PROBLEM_TEXTS.unavailable;
-	const BUDGET_SPENT_TEXT = COVER_PROBLEM_TEXTS.budget_spent;
-	const SIGN_IN_TEXT = COVER_PROBLEM_TEXTS.sign_in_again;
+	const BUSY_TEXT = words['coverProblem.busy'];
+	const NOT_ENABLED_TEXT = words['coverProblem.notEnabled'];
+	const UNAVAILABLE_TEXT = words['coverProblem.unavailable'];
+	const BUDGET_SPENT_TEXT = words['coverProblem.budgetSpent'];
+	const SIGN_IN_TEXT = words['coverProblem.signInAgain'];
 	const LEAKED_ERROR = 'gateway said 500 for key sk-canary';
 
 	function suggestButton(target: HTMLElement): HTMLButtonElement {

@@ -20,13 +20,19 @@ import {
 	ALBUM_COVER_EDITING_LABEL,
 	ALBUM_COVER_SUGGESTIONS_RETRY_LABEL
 } from '../src/lib/constants/album';
-import { COVER_PROBLEM_TEXTS } from '../src/lib/utils/cover-problem';
+import { words, type Key } from '../src/lib/words/en';
 
 const PHONE_VIEWPORT = { width: 375, height: 844 };
 // What a cover job's row may hold and no page may show (#2055 matrix cell 26).
 const STORED_ERROR_CANARY = 'gateway detail sk-e2e-canary for session e2e-canary';
 const BUSY_WAIT_SECONDS = 300;
 // The problems that leave Suggest open: a retry is the person's own action.
+const PROBLEM_KEYS = {
+	busy: 'coverProblem.busy',
+	budget_spent: 'coverProblem.budgetSpent',
+	not_enabled: 'coverProblem.notEnabled',
+	unavailable: 'coverProblem.unavailable'
+} as const satisfies Record<string, Key>;
 const OPEN_PROBLEMS: ReadonlySet<string> = new Set(['unavailable', 'budget_spent']);
 
 interface ProblemLook {
@@ -86,7 +92,7 @@ test('Add cover asks for nothing until Suggest, whose refused click says log in 
 	expect(await response.json()).toEqual({ detail: { problem: 'sign_in_again' } });
 
 	const line = problemLine(editing);
-	await expect(line).toContainText(COVER_PROBLEM_TEXTS.sign_in_again);
+	await expect(line).toContainText(words['coverProblem.signInAgain']);
 	await expect(line.getByRole('link', { name: 'Log in' })).toBeVisible();
 	await expect(suggestButton(editing)).toBeDisabled();
 	await expect(editing.getByRole('button', { name: 'Upload', exact: true })).toBeEnabled();
@@ -124,7 +130,7 @@ test('a run that ends busy, budget spent, not enabled or unavailable shows its o
 			);
 
 			const line = problemLine(editing);
-			await expect(line).toContainText(COVER_PROBLEM_TEXTS[problem]);
+			await expect(line).toContainText(words[PROBLEM_KEYS[problem]]);
 			looks[problem] = await lookOf(line);
 			await expect(suggestButton(editing)).toBeEnabled({ enabled: OPEN_PROBLEMS.has(problem) });
 			if (problem === 'busy') await expect(suggestButton(editing)).toContainText(/[45]:\d\d/);
@@ -138,7 +144,7 @@ test('a run that ends busy, budget spent, not enabled or unavailable shows its o
 				await expect(suggestButton(editing)).toBeEnabled();
 				await expect(problemLine(editing)).toHaveCount(0);
 			} else {
-				await expect(problemLine(editing)).toContainText(COVER_PROBLEM_TEXTS[problem]);
+				await expect(problemLine(editing)).toContainText(words[PROBLEM_KEYS[problem]]);
 				await expect(suggestButton(editing)).toBeEnabled({ enabled: OPEN_PROBLEMS.has(problem) });
 			}
 			await expect(page.getByText(STORED_ERROR_CANARY)).toHaveCount(0);

@@ -14,6 +14,7 @@ import {
 } from '#lib/stores/connectivity.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { ALBUM_COVER_THROTTLED_FALLBACK } from '#lib/constants/album.ts';
+import { words } from '#lib/words/en.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { dropLayersFrom, stackedLayers } from '#lib/stores/layers.ts';
 import {
@@ -280,9 +281,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 			await openCoverEditing(target);
 			await vi.waitFor(() =>
-				expect(failureAlert(target)?.textContent).toContain(
-					'Cover suggestions are unavailable right now. Try again later.'
-				)
+				expect(failureAlert(target)?.textContent).toContain(words['coverProblem.unavailable'])
 			);
 			expect(target.textContent).not.toContain('Cover suggestion could not be generated');
 
@@ -617,7 +616,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		await vi.waitFor(() =>
 			expect(target.querySelector('[role="alert"]')?.textContent).toContain(
-				'Cover suggestions are unavailable right now. Try again later.'
+				words['coverProblem.unavailable']
 			)
 		);
 		expect(target.textContent).not.toContain('Cover suggestion could not be generated');
@@ -678,9 +677,7 @@ describe('AlbumCoverEditor in the album header', () => {
 				job: coverJob({ id: 'ended-run', status: 'failed', error: 'The model ran out of memory' })
 			}),
 			shows: (target: HTMLElement) => {
-				expect(failureAlert(target)?.textContent).toContain(
-					'Cover suggestions are unavailable right now. Try again later.'
-				);
+				expect(failureAlert(target)?.textContent).toContain(words['coverProblem.unavailable']);
 				expect(target.textContent).not.toContain('The model ran out of memory');
 			}
 		}
