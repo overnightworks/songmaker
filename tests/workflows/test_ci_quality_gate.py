@@ -767,20 +767,11 @@ def test_a_module_that_needs_the_vendored_engine_is_collected_without_it():
     assert [line for line in result.stdout.splitlines() if "::" in line]
 
 
-def cache_steps(action):
-    return [
-        (job, step)
-        for jobs in (JOBS, E2E_JOBS)
-        for job in jobs.values()
-        for step in steps_using(job.get("steps", []), action)
-    ]
-
-
 def system_package_steps():
-    shard = JOBS["backend-shard"]
-    (restore,) = steps_using(shard["steps"], CACHE_RESTORE_ACTION)
-    (save,) = steps_using(shard["steps"], CACHE_SAVE_ACTION)
-    (resolve,) = [step for step in shard["steps"] if step.get("id") == "system-packages"]
+    steps = JOBS["backend-shard"]["steps"]
+    (resolve,) = [step for step in steps if step.get("id") == "system-packages"]
+    (restore,) = steps_using(steps, CACHE_RESTORE_ACTION)
+    (save,) = steps_using(steps, CACHE_SAVE_ACTION)
     return resolve, restore, backend_step("backend-shard", SYSTEM_PACKAGES_STEP), save
 
 
@@ -789,7 +780,7 @@ def test_the_system_package_files_are_restored_into_the_directory_apt_installs_f
     restored_directory = restore["with"]["path"].replace("${{ runner.temp }}", "$RUNNER_TEMP")
     assert set(ARCHIVES_OPTION.findall(install["run"])) == {restored_directory.rsplit("/", 1)[0]}
     assert save["with"]["path"] == restore["with"]["path"]
-    assert restore["with"]["key"] == save["with"]["key"]
+    assert save["with"]["key"] == restore["with"]["key"]
     outputs = f"steps.{resolve['id']}.outputs"
     assert {expression(restore["with"]["key"]), expression(restore["with"]["restore-keys"])} == {
         f"{outputs}.key",
@@ -801,15 +792,21 @@ def test_the_system_packages_have_one_owner_in_the_job_environment():
     shard = JOBS["backend-shard"]
     resolve, _, install, _ = system_package_steps()
     for variable in ("SYSTEM_PACKAGES", "APT_OPTIONS"):
-        assert variable in shard["env"]
         assert all(f"${variable}" in step["run"] for step in (resolve, install)), variable
-    for step in shard["steps"]:
-        assert not set(shard["env"]["SYSTEM_PACKAGES"].split()) & set(step_text(step).split())
+        assert variable in shard["env"]
+    named = {word for step in shard["steps"] for word in step_text(step).split()}
+    assert not set(shard["env"]["SYSTEM_PACKAGES"].split()) & named
 
 
 def test_exactly_one_system_package_cache_writer_and_only_on_main_shard_one_after_a_miss():
-    ((job, save),) = cache_steps(CACHE_SAVE_ACTION)
-    (restore,) = steps_using(job["steps"], CACHE_RESTORE_ACTION)
+    saves = [
+        step
+        for jobs in (JOBS, E2E_JOBS)
+        for job in jobs.values()
+        for step in steps_using(job.get("steps", []), CACHE_SAVE_ACTION)
+    ]
+    _, restore, _, save = system_package_steps()
+    assert saves == [save]
     condition = expression(save["if"])
     assert "github.ref == 'refs/heads/main'" in condition
     assert len(re.findall(r"matrix\.shard == \S+", condition)) == 1
