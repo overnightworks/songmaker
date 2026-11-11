@@ -91,6 +91,8 @@ jobs:
           --health-retries 5
     env:
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
+      SYSTEM_PACKAGES: ffmpeg redis-server
+      APT_OPTIONS: -o Acquire::Retries=3 -o Acquire::http::Timeout=30
     strategy:
       fail-fast: false
       matrix:
@@ -107,13 +109,45 @@ jobs:
           enable-cache: true
           save-cache: false
 
-      - name: Install system dependencies
-        # why: tests/support/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in, and the generation tests encode MP3s with a real ffmpeg. The runner image's package lists usually know both packages, so apt-get update is only the fallback; short timeouts and retries make a stalled mirror fail fast.
+      - name: Resolve the system packages
+        id: system-packages
+        # why: the key is the hash of the files to download (name, size and checksum from the image's signed package lists, not the mirror's address), so it changes exactly when a file does. apt-get update runs only when the image's lists do not know the packages.
         run: |
-          apt_options="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
-          sudo apt-get install -y $apt_options ffmpeg redis-server \
-            || { sudo apt-get update $apt_options && sudo apt-get install -y $apt_options ffmpeg redis-server; }
+          . /etc/os-release
+          files=$(sudo apt-get install --print-uris -qq $SYSTEM_PACKAGES \
+            || { sudo apt-get update $APT_OPTIONS && sudo apt-get install --print-uris -qq $SYSTEM_PACKAGES; })
+          digest=$(printf '%s\n' "$files" | cut --delimiter=' ' --fields=2- | sort | sha256sum | cut --characters=1-16)
+          echo "key=apt-$VERSION_CODENAME-$digest" | tee --append "$GITHUB_OUTPUT"
+          echo "prefix=apt-$VERSION_CODENAME-" >> "$GITHUB_OUTPUT"
+        timeout-minutes: 5
+
+      # The one job that writes the system package files is shard 1 on main (see the save step below).
+      - name: Restore the system package files
+        id: apt-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1 # why: a slow cache download is given up as a miss after a minute; the mirror then serves the files.
+        with:
+          path: ${{ runner.temp }}/apt-archives/*.deb
+          key: ${{ steps.system-packages.outputs.key }}
+          restore-keys: ${{ steps.system-packages.outputs.prefix }}
+        timeout-minutes: 3
+
+      - name: Install system dependencies
+        # why: tests/support/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in, and the generation tests encode MP3s with a real ffmpeg. The mirror can trickle for minutes, so the files come from the cache and the mirror is read only for files the cache lacks; apt takes a cached file when its name and size match the signed lists. Its note that the download is performed unsandboxed as root is expected: the runner user owns the directory, which _apt cannot write. autoclean drops the versions of a set restored by prefix that the lists no longer name, so the saved entry does not grow.
+        run: |
+          mkdir -p "$RUNNER_TEMP/apt-archives/partial"
+          sudo apt-get install -y $APT_OPTIONS -o Dir::Cache::Archives="$RUNNER_TEMP/apt-archives" -o APT::Keep-Downloaded-Packages=true $SYSTEM_PACKAGES
+          sudo apt-get autoclean -o Dir::Cache::Archives="$RUNNER_TEMP/apt-archives"
         timeout-minutes: 20 # why: a hung apt mirror must fail, not hold the queued main runs behind it for hours.
+
+      - name: Save the system package files
+        if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 1 && steps.apt-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/apt-archives/*.deb
+          key: ${{ steps.system-packages.outputs.key }}
+        timeout-minutes: 3
 
       - name: Install dependencies
         run: uv sync --frozen --extra server --extra dev --extra agent --extra image --extra signal # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.

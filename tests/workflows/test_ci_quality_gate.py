@@ -118,7 +118,7 @@ def test_g3_properties_have_no_gate_overrides_or_exemptions():
     assert not any(key.startswith("sonar.issue.ignore.") for key in keys)
 
 
-@pytest.mark.parametrize("job_id", ["coverage", "quality"])
+@pytest.mark.parametrize("job_id", ["coverage", "quality", "backend-shard"])
 def test_g3_new_action_references_are_commit_pinned(job_id):
     job = JOBS[job_id]
     references = (
@@ -156,6 +156,10 @@ HELPER_ARGUMENTS = re.compile(r"shard-artifacts\.ts (\S+) (\S+)")
 UPLOAD_ACTION = "actions/upload-artifact@"
 DOWNLOAD_ACTION = "actions/download-artifact@"
 SETUP_UV_ACTION = "astral-sh/setup-uv@"
+CACHE_RESTORE_ACTION = "actions/cache/restore@"
+CACHE_SAVE_ACTION = "actions/cache/save@"
+SYSTEM_PACKAGES_STEP = "Install system dependencies"
+ARCHIVES_OPTION = re.compile(r'Dir::Cache::Archives="([^"]+)"')
 FIRST_ATTEMPT_CONTEXTS = {"github.run_attempt": "1", "github.run_id": "7"}
 
 
@@ -761,3 +765,57 @@ def test_a_module_that_needs_the_vendored_engine_is_collected_without_it():
     )
     assert result.returncode == 0, result.stdout
     assert [line for line in result.stdout.splitlines() if "::" in line]
+
+
+def cache_steps(action):
+    return [
+        (job, step)
+        for jobs in (JOBS, E2E_JOBS)
+        for job in jobs.values()
+        for step in steps_using(job.get("steps", []), action)
+    ]
+
+
+def system_package_steps():
+    shard = JOBS["backend-shard"]
+    (restore,) = steps_using(shard["steps"], CACHE_RESTORE_ACTION)
+    (save,) = steps_using(shard["steps"], CACHE_SAVE_ACTION)
+    (resolve,) = [step for step in shard["steps"] if step.get("id") == "system-packages"]
+    return resolve, restore, backend_step("backend-shard", SYSTEM_PACKAGES_STEP), save
+
+
+def test_the_system_package_files_are_restored_into_the_directory_apt_installs_from():
+    resolve, restore, install, save = system_package_steps()
+    restored_directory = restore["with"]["path"].replace("${{ runner.temp }}", "$RUNNER_TEMP")
+    assert set(ARCHIVES_OPTION.findall(install["run"])) == {restored_directory.rsplit("/", 1)[0]}
+    assert save["with"]["path"] == restore["with"]["path"]
+    assert restore["with"]["key"] == save["with"]["key"]
+    outputs = f"steps.{resolve['id']}.outputs"
+    assert {expression(restore["with"]["key"]), expression(restore["with"]["restore-keys"])} == {
+        f"{outputs}.key",
+        f"{outputs}.prefix",
+    }
+
+
+def test_the_system_packages_have_one_owner_in_the_job_environment():
+    shard = JOBS["backend-shard"]
+    resolve, _, install, _ = system_package_steps()
+    for variable in ("SYSTEM_PACKAGES", "APT_OPTIONS"):
+        assert variable in shard["env"]
+        assert all(f"${variable}" in step["run"] for step in (resolve, install)), variable
+    for step in shard["steps"]:
+        assert not set(shard["env"]["SYSTEM_PACKAGES"].split()) & set(step_text(step).split())
+
+
+def test_exactly_one_system_package_cache_writer_and_only_on_main_shard_one_after_a_miss():
+    ((job, save),) = cache_steps(CACHE_SAVE_ACTION)
+    (restore,) = steps_using(job["steps"], CACHE_RESTORE_ACTION)
+    condition = expression(save["if"])
+    assert "github.ref == 'refs/heads/main'" in condition
+    assert len(re.findall(r"matrix\.shard == \S+", condition)) == 1
+    assert f"steps.{restore['id']}.outputs.cache-hit != 'true'" in condition
+
+
+def test_a_slow_restore_gives_up_before_its_step_does():
+    _, restore, _, _ = system_package_steps()
+    assert int(restore["env"]["SEGMENT_DOWNLOAD_TIMEOUT_MINS"]) < restore["timeout-minutes"]
