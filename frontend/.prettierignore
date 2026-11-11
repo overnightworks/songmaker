@@ -10,3 +10,6 @@ e2e/.artifacts/
 e2e/fixtures/
 # Prettier rewrites generated union types, so lint and generate_types --check cannot both pass.
 src/lib/api/types.ts
+# design-catalogs lays the modules out itself; prettier's single quotes and tabs would make
+# `design-catalogs --check` and `prettier --check` disagree.
+src/lib/words/

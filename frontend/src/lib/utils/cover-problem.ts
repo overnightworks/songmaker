@@ -1,21 +1,28 @@
 import type { CoverSuggestionRefusal, JobItem } from '#lib/api/types.ts';
+import { pageText } from '#lib/utils/page-words.ts';
+import type { Key } from '#lib/words/en.ts';
 
 /** The one of the agent's problems a cover suggestion ended with or was refused for. */
 export type CoverProblem = CoverSuggestionRefusal['problem'];
 
-export const COVER_PROBLEM_TEXTS: Record<CoverProblem, string> = {
-	busy: 'Cover suggestions are busy. Try again when Suggest opens.',
-	budget_spent: 'The budget for cover suggestions is used up. Try again later.',
-	not_enabled: 'Cover suggestions are not enabled for your account. Ask an admin to enable them.',
-	unavailable: 'Cover suggestions are unavailable right now. Try again later.',
-	sign_in_again: 'Log in again to get cover suggestions'
+const COVER_PROBLEM_KEYS: Record<CoverProblem, Key> = {
+	busy: 'coverProblem.busy',
+	budget_spent: 'coverProblem.budgetSpent',
+	not_enabled: 'coverProblem.notEnabled',
+	unavailable: 'coverProblem.unavailable',
+	sign_in_again: 'coverProblem.signInAgain'
 };
 
-const COVER_PROBLEMS: ReadonlySet<string> = new Set(Object.keys(COVER_PROBLEM_TEXTS));
+const COVER_PROBLEMS: ReadonlySet<string> = new Set(Object.keys(COVER_PROBLEM_KEYS));
 // Only the person can end these two, so they hold only for the run this page followed:
 // a later load, a new sign-in or joining the group starts with Suggest open again.
 const PERSONAL_PROBLEMS: ReadonlySet<CoverProblem> = new Set(['not_enabled', 'sign_in_again']);
 const MS_PER_SECOND = 1000;
+
+/** The sentence of a problem, read when it is shown so a later language load changes nothing here. */
+export function coverProblemText(problem: CoverProblem): string {
+	return pageText(COVER_PROBLEM_KEYS[problem]);
+}
 
 function asCoverProblem(value: unknown): CoverProblem | null {
 	return typeof value === 'string' && COVER_PROBLEMS.has(value) ? (value as CoverProblem) : null;

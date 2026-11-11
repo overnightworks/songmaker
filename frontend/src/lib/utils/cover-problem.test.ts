@@ -5,8 +5,11 @@ import {
 	coverBusyWaitSeconds,
 	coverProblemClosesSuggest,
 	coverRefusalProblem,
-	coverRunProblem
+	coverRunProblem,
+	coverProblemText,
+	type CoverProblem
 } from './cover-problem';
+import { words, type Key } from '#lib/words/en.ts';
 
 const ENDED_AT = Date.parse('2026-11-05T12:00:00Z');
 
@@ -108,4 +111,19 @@ describe('what each problem does to Suggest', () => {
 	] as const)('%s closes Suggest: %s', (problem, closes) => {
 		expect(coverProblemClosesSuggest(problem)).toBe(closes);
 	});
+});
+
+describe('the text of a cover problem', () => {
+	it.each([
+		['busy', 'coverProblem.busy'],
+		['budget_spent', 'coverProblem.budgetSpent'],
+		['not_enabled', 'coverProblem.notEnabled'],
+		['unavailable', 'coverProblem.unavailable'],
+		['sign_in_again', 'coverProblem.signInAgain']
+	] as [CoverProblem, Key][])(
+		'each cover problem reads its own catalog text: %s',
+		(problem, key) => {
+			expect(coverProblemText(problem)).toBe(words[key]);
+		}
+	);
 });

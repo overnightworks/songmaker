@@ -43,6 +43,7 @@ gate "Test helper duplication ratchet" scripts/test_helper_ratchet.sh
 gate "No silent-fallback smell check" python scripts/check_no_silent_fallbacks.py src/
 gate "No unreferenced backend symbols" python scripts/check_dead_symbols.py
 gate "TypeScript types in sync" python scripts/generate_types.py --check
+gate "Catalogs and their modules are current" design-catalogs --check
 gate "No test-only-alive exports" in_frontend bash ../scripts/check_test_only_exports.sh
 gate "No new style literals" in_frontend python3 ../scripts/check_style_literals.py
 gate "Frontend lint (eslint, prettier)" in_frontend pnpm lint

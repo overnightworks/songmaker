@@ -1,0 +1,24 @@
+msgid ""
+msgstr ""
+"Language: en\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgctxt "coverProblem.busy"
+msgid "Cover suggestions are busy. Try again when Suggest opens."
+msgstr ""
+
+msgctxt "coverProblem.budgetSpent"
+msgid "The budget for cover suggestions is used up. Try again later."
+msgstr ""
+
+msgctxt "coverProblem.notEnabled"
+msgid "Cover suggestions are not enabled for your account. Ask an admin to enable them."
+msgstr ""
+
+msgctxt "coverProblem.unavailable"
+msgid "Cover suggestions are unavailable right now. Try again later."
+msgstr ""
+
+msgctxt "coverProblem.signInAgain"
+msgid "Log in again to get cover suggestions"
+msgstr ""
