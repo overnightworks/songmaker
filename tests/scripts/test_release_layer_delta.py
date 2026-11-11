@@ -174,6 +174,7 @@ import json, sys
 reference = sys.argv[-1]
 registry = json.load(open({registry_file!r}))
 if reference in registry:
+    sys.stderr.write(registry[reference].get("stderr", ""))
     print(registry[reference]["stdout"], end="")
     sys.exit(registry[reference].get("exit", 0))
 sys.stderr.write("ERROR: " + reference + ": not found\\n")
@@ -251,10 +252,17 @@ def test_the_command_without_an_earlier_tag_marks_every_layer_new(registry, monk
     assert "kept" not in out
 
 
+@pytest.mark.parametrize("missing_marker", ["not found", "manifest unknown"])
 def test_the_command_says_so_when_the_previous_release_has_no_such_image(
-    registry, monkeypatch, capsys
+    registry, monkeypatch, capsys, missing_marker
 ):
     registry.publish(NEW_VERSION, BASE_LAYERS, "sha256:" + "3" * 64)
+    registry[_tag_reference(PREVIOUS_VERSION)] = {
+        "stdout": "",
+        "exit": 1,
+        "stderr": missing_marker,
+    }
+    registry.save()
 
     exit_code, out, _err = _run_release_layer_command(monkeypatch, capsys)
 
@@ -276,16 +284,18 @@ def test_the_command_fails_naming_the_image_when_the_new_tag_cannot_be_read(
 
 
 def test_the_command_relays_a_registry_failure_other_than_not_found(registry, monkeypatch, capsys):
-    registry[_tag_reference(NEW_VERSION)] = {"stdout": "", "exit": 1}
+    registry[_tag_reference(NEW_VERSION)] = {
+        "stdout": "",
+        "exit": 1,
+        "stderr": "denied: permission_denied",
+    }
     registry.save()
-    registry_stderr_marker = "not found"
 
-    exit_code, _out, err = _run_release_layer_command(monkeypatch, capsys)
+    exit_code, out, err = _run_release_layer_command(monkeypatch, capsys)
 
-    # the stand-in prints nothing on stderr for a listed entry, so the failure is the exit status
-    assert exit_code == 1
+    assert (exit_code, out) == (1, "")
     assert IMAGE in err
-    assert registry_stderr_marker not in err
+    assert "denied: permission_denied" in err
 
 
 def test_the_command_fails_on_malformed_json(registry, monkeypatch, capsys):
