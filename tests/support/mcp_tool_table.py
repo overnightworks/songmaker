@@ -2,7 +2,8 @@
 
 ``test_mcp_person_tools`` and ``test_mcp_person_lifecycle_tools`` drive every row through the
 real app; ``mcp_world`` seeds the two people the rows name. The rows of ``SHARES`` are the ones
-a person's own agent is refused: ``test_mcp_share_tools`` drives those.
+a person's own agent is refused: ``test_mcp_share_tools`` drives those. ``test_mcp_person_front``
+holds the table to the allowlist of marked tools: every marked tool has a row.
 """
 
 from __future__ import annotations
@@ -60,6 +61,11 @@ def repaint_arguments(subject: str, other: str) -> dict:
 # Reads of one resource of a person: a stranger's gets the browser's refusal.
 READS_OF_ONE_RESOURCE = [
     Tool("get_album", "GET", "/api/albums/{album_id}", lambda s, o: {"album_id": f"album-{s}"}),
+    Tool("get_song", "GET", "/api/songs/{song_id}", lambda s, o: {"song_id": f"song-{s}"}),
+    Tool("get_active_generation", "GET", "/api/songs/{song_id}/active-generation",
+         lambda s, o: {"song_id": f"song-{s}"}),
+    Tool("get_last_failed_generation", "GET", "/api/songs/{song_id}/last-failed-generation",
+         lambda s, o: {"song_id": f"song-{s}"}),
     Tool("list_cover_suggestions", "GET", "/api/albums/{album_id}/cover-suggestions",
          lambda s, o: {"album_id": f"album-{s}"}),
     Tool("get_take", "GET", "/api/generations/{gen_id}", _take_arguments),
@@ -77,6 +83,8 @@ READS_OF_ONE_RESOURCE = [
 
 # Reads of what a person has as a list, or of what every member sees.
 PLAIN_READS = [
+    Tool("list_albums", "GET", "/api/albums"),
+    Tool("list_songs", "GET", "/api/songs"),
     Tool("get_account", "GET", "/api/auth/me"),
     Tool("get_library_listen", "GET", "/api/library/listen"),
     Tool("get_library_write", "GET", "/api/library/write"),
@@ -129,6 +137,10 @@ WRITES_ON_ONE_RESOURCE = [
          crossed=True),
     Tool("add_song_to_playlist", "POST", "/api/playlists/{playlist_id}/entries/song",
          lambda s, o: {"playlist_id": f"playlist-{s}", "song_id": f"song-{o}"}, crossed=True),
+    Tool("create_song", "POST", "/api/songs",
+         lambda s, o: {"title": "Fresh song", "album_id": f"album-{s}"}),
+    Tool("generate_song", "POST", "/api/songs/{song_id}/generate",
+         lambda s, o: {"song_id": f"song-{s}", "model": "sft"}),
     Tool("update_album", "PUT", "/api/albums/{album_id}",
          lambda s, o: {"album_id": f"album-{s}", "title": "Renamed album"}),
     Tool("update_playlist", "PUT", "/api/playlists/{playlist_id}",
@@ -172,6 +184,7 @@ WRITES_ON_ONE_RESOURCE = [
 
 # Writes that make something new for the person.
 CREATIONS = [
+    Tool("create_album", "POST", "/api/albums", lambda s, o: {"title": "Fresh album"}),
     Tool("create_lora", "POST", "/api/loras", lambda s, o: {"name": "Fresh voice"}),
     Tool("create_playlist", "POST", "/api/playlists", lambda s, o: {"title": "Fresh list"}),
     Tool("create_preset", "POST", "/api/settings/presets",
