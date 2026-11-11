@@ -50,3 +50,12 @@ def test_every_quality_workflow_is_pinned_to_one_commit():
 
 def test_no_job_inherits_secrets():
     assert not any(job.get("secrets") == "inherit" for job in RELEASE_JOBS.values())
+
+
+def test_the_layers_job_reads_the_released_images_and_neither_writes_nor_gates_the_tag():
+    layers = RELEASE_JOBS["layers"]
+    released = {entry["image"] for entry in RELEASE_JOBS["image"]["strategy"]["matrix"]["include"]}
+
+    assert set(layers["strategy"]["matrix"]["image"]) == released
+    assert set(layers["permissions"].items()) <= {("contents", "read"), ("packages", "read")}
+    assert "layers" not in RELEASE_JOBS["tag"]["needs"]

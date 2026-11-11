@@ -742,9 +742,10 @@ The Release workflow builds the web, music worker, scoring worker and acestep wo
 GitHub-hosted runners from the commit quality's gate judged, main's green head.
 The acestep worker's build also checks out the pinned `vendor/acestep` commit,
 one level deep, with the job's token and without persisting it.
-Each job holds only its own permissions: only the tag job writes contents, and
-only the image jobs hold `packages`, `id-token` and `attestations`. Quality's
-`image.yml` signs each image's build provenance. Anyone with write access to the
+Each job holds only its own permissions: only the tag job writes contents, only
+the image jobs write packages and hold `id-token` and `attestations`, and the
+layers job only reads packages to print what changed against the previous
+release. Quality's `image.yml` signs each image's build provenance. Anyone with write access to the
 repository can dispatch the workflow; the gate bounds what that releases to main's
 green head, and the workflow passes no secret.
 
