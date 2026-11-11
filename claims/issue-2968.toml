@@ -1,0 +1,7 @@
+claim_id = "89ecec644191407f8c299db713482862"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "bb98a1eaa0c4aecb34a459f3ebaebceef6b0e108"
+branch = "claude/issue-2968-the-security-document-says-what-a-sign-o"
+scope = ["docs/security.md", "tests/songmaker_cli/test_request_policies_rate_limit.py"]
+opened_commit = "17c42115f7bc675286a299cfac92e113fdc569a9"
