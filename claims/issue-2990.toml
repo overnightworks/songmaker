@@ -1,0 +1,7 @@
+claim_id = "13a5508413504016b5d064c3cd97d95e"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "338f0c5ddd3514e193eea7c4c095fb63e6cd4e8d"
+branch = "claude/issue-2990-every-tool-an-agent-can-call-has-its-row"
+scope = ["tests/songmaker_cli/agent/test_mcp_person_front.py", "tests/songmaker_cli/agent/test_mcp_person_tools.py", "tests/support/mcp_tool_table.py"]
+opened_commit = "a1531990e7233adc4a19abdf36947b9d96e836d4"
