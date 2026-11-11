@@ -133,8 +133,11 @@ def _wait_until_waiting_on_a_lock_or_done(
 
 
 def _child_environment() -> dict[str, str]:
-    """This environment for a child pytest, without this run's pytest and xdist variables."""
-    return {key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")}
+    """This environment for a child pytest, without this run's pytest, xdist and shard variables."""
+    return {
+        key: value for key, value in os.environ.items()
+        if not key.startswith(("PYTEST_", "TEST_SHARD"))
+    }
 
 
 def _child_pytest(*selection: str) -> list[str]:

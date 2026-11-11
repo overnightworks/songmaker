@@ -12,6 +12,11 @@ permissions:
 
 env:
   UV_PYTHON_PREFERENCE: only-managed # why: setup-uv only sets UV_PYTHON; without this uv takes the runner's own Python, whose patch differs from the images'.
+  # The Python every backend job runs and the number of shards the backend tests are cut into: the
+  # matrix of backend-shard lists one job per shard, and the aggregator requires all of them.
+  # Not named TEST_SHARDS: that name without TEST_SHARD is a usage error in every job that runs pytest.
+  BACKEND_PYTHON: "3.14"
+  BACKEND_SHARD_TOTAL: 3
 
 concurrency:
   # A pull request's runs share a group by its number and a newer run cancels the older.
@@ -20,10 +25,56 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  backend:
-    name: Backend (Python ${{ matrix.python-version }})
+  # The backend's static checks: they need no service and no system package, and run beside the shards.
+  backend-static:
+    name: Backend static checks
     runs-on: ubuntu-latest
-    timeout-minutes: 75 # why: a hung job must not hold the queued main runs for six hours.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        with:
+          persist-credentials: false
+
+      # The one job that writes the uv cache is this one on main: an entry written for a pull request is
+      # readable only by that pull request's runs and counts against the shared quota, and jobs saving one key race.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.BACKEND_PYTHON }}
+          enable-cache: true
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Check uv.lock is in sync with pyproject.toml
+        run: uv lock --check
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra server --extra dev --extra agent --extra image --extra signal # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+
+      - name: Ruff lint
+        run: uv run --no-sync --frozen --no-build ruff check src/ tests/
+
+      - name: Test helper duplication ratchet
+        run: uv run --no-sync --frozen --no-build scripts/test_helper_ratchet.sh
+
+      - name: No silent-fallback smell check
+        run: uv run --no-sync --frozen --no-build python scripts/check_no_silent_fallbacks.py src/
+
+      - name: No unreferenced backend symbols
+        run: uv run --no-sync --frozen --no-build python scripts/check_dead_symbols.py
+
+      - name: CI and compose pin the same Postgres image
+        run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py
+
+      - name: Every requirement is cited by a test
+        run: uv run --no-sync --frozen --no-build python scripts/check_requirement_citations.py
+
+      - name: Check TypeScript types in sync
+        run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
+
+  # One shard of the backend tests, on a runner and a PostgreSQL service of its own.
+  backend-shard:
+    name: Backend tests (shard ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25 # why: a hung job must not hold the queued main runs for six hours; the worst apt step seen (902 s) and the tests of a shard fit inside it.
     services:
       postgres:
         image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
@@ -41,8 +92,9 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.14"]
+        shard: [1, 2, 3]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
@@ -51,11 +103,9 @@ jobs:
 
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.BACKEND_PYTHON }}
           enable-cache: true
-
-      - name: Check uv.lock is in sync with pyproject.toml
-        run: uv lock --check
+          save-cache: false
 
       - name: Install system dependencies
         # why: tests/support/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in, and the generation tests encode MP3s with a real ffmpeg. The runner image's package lists usually know both packages, so apt-get update is only the fallback; short timeouts and retries make a stalled mirror fail fast.
@@ -63,7 +113,7 @@ jobs:
           apt_options="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
           sudo apt-get install -y $apt_options ffmpeg redis-server \
             || { sudo apt-get update $apt_options && sudo apt-get install -y $apt_options ffmpeg redis-server; }
-        timeout-minutes: 45 # why: a hung apt mirror must fail, not hold the queued main runs behind it for hours.
+        timeout-minutes: 20 # why: a hung apt mirror must fail, not hold the queued main runs behind it for hours.
 
       - name: Install dependencies
         run: uv sync --frozen --extra server --extra dev --extra agent --extra image --extra signal # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
@@ -89,43 +139,134 @@ jobs:
           echo "Durability settings are still $effective after reload" >&2
           exit 1
 
-      - name: Ruff lint
-        run: uv run --no-sync --frozen --no-build ruff check src/ tests/
-
-      - name: Test helper duplication ratchet
-        run: uv run --no-sync --frozen --no-build scripts/test_helper_ratchet.sh
-
-      - name: No silent-fallback smell check
-        run: uv run --no-sync --frozen --no-build python scripts/check_no_silent_fallbacks.py src/
-
-      - name: No unreferenced backend symbols
-        run: uv run --no-sync --frozen --no-build python scripts/check_dead_symbols.py
-
-      - name: CI and compose pin the same Postgres image
-        run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py
-
-      - name: Every requirement is cited by a test
-        run: uv run --no-sync --frozen --no-build python scripts/check_requirement_citations.py
-
-      - name: Check TypeScript types in sync
-        run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
-
       - name: Run tests with coverage
         env:
+          TEST_SHARD: ${{ matrix.shard }}
+          TEST_SHARDS: ${{ env.BACKEND_SHARD_TOTAL }}
           COVERAGE_FILE: reports/coverage-data-backend
         run: |
-          set -o pipefail
           mkdir -p reports
-          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --junitxml=reports/backend-junit.xml --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-config=.github/workflows/coveragerc-ci.ini | tee pytest-output.txt
+          uv run --no-sync --frozen --no-build pytest tests/ -n auto -q --tb=short --junitxml=reports/backend-junit.xml --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-config=.github/workflows/coveragerc-ci.ini
+
+      # The aggregator proves from these files that the shards together ran every
+      # collected test and judges the floors over their coverage data; a shard
+      # whose file is missing fails here and so fails the job.
+      - name: Upload the JUnit report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
+        with:
+          name: junit-backend-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: reports/backend-junit.xml
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 14
+
+      - name: Upload backend coverage data
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
+        with:
+          name: coverage-data-backend-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: reports/coverage-data-backend
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 14
+
+  # The backend's one mandatory job: it stays one name however the shards are cut.
+  # It runs when the static job or a shard fails, is cancelled or is skipped, so it
+  # reports their real result; a skipped check run would be left unjudged by the
+  # deploy's reading of a main commit's checks. Its first step fails on their result.
+  # Every later step runs after a failed one, so the comparison names the tests a
+  # failed shard left out.
+  backend:
+    name: Backend (Python 3.14) # why: a job name cannot read env, so this repeats BACKEND_PYTHON; a test requires the two equal.
+    needs: [backend-static, backend-shard]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fail unless the static checks and every shard succeeded
+        env:
+          STATIC_RESULT: ${{ needs.backend-static.result }}
+          SHARD_RESULT: ${{ needs.backend-shard.result }}
+        run: |
+          echo "backend-static: $STATIC_RESULT"
+          echo "backend-shard: $SHARD_RESULT"
+          test "$STATIC_RESULT" = success
+          test "$SHARD_RESULT" = success
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        if: ${{ !cancelled() }}
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        if: ${{ !cancelled() }}
+        with:
+          python-version: ${{ env.BACKEND_PYTHON }}
+          enable-cache: true
+          save-cache: false
+
+      # The collection imports every test module, so it needs the shards' extras.
+      - name: Install dependencies
+        if: ${{ !cancelled() }}
+        run: uv sync --frozen --extra server --extra dev --extra agent --extra image --extra signal # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.x
+        if: ${{ !cancelled() }}
+        with:
+          node-version-file: frontend/.node-version
+          check-latest: true
+
+      - name: Download the JUnit reports
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: junit-backend-*
+          path: ${{ runner.temp }}/junit
+
+      # A re-run of failed jobs uploads again under a higher attempt while the green
+      # shards keep their first one, so each shard's newest attempt is the one read.
+      # A shard without a report fails this step; the comparison still runs on the rest.
+      - name: Choose the newest report of each shard
+        if: ${{ !cancelled() }}
+        run: |
+          node frontend/e2e/shard-artifacts.ts junit backend "$BACKEND_SHARD_TOTAL" "$RUNNER_TEMP/junit" > "$RUNNER_TEMP/chosen-junit.txt"
+          cat "$RUNNER_TEMP/chosen-junit.txt"
+
+      - name: Copy the chosen reports where the identity check reads them
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p reports
+          while read -r directory; do
+            shard=${directory##*/junit-backend-}
+            cp "$directory/backend-junit.xml" "reports/backend-junit-${shard%%-*}.xml"
+          done < "$RUNNER_TEMP/chosen-junit.txt"
+
+      # The listing is made with the shards' checkout, extras and Python and without
+      # a shard selection, so it holds every test a shard may run. It has no pipe,
+      # so the step fails on pytest's own exit code; -n and --cov change no node id.
+      - name: Collect the backend tests
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p reports
+          uv run --no-sync --frozen --no-build pytest tests/ --collect-only -q -p no:cacheprovider > reports/backend-collected.txt
+
+      - name: Compare the shards with the collected tests
+        if: ${{ !cancelled() }}
+        run: uv run --no-sync --frozen --no-build python scripts/check_backend_shard_identity.py "$BACKEND_SHARD_TOTAL"
 
       - name: Require every database proof to execute
+        if: ${{ !cancelled() }}
         run: |
           uv run --no-sync python - <<'PYTHON'
           import collections
+          import os
           import xml.etree.ElementTree as ET
 
           cases = [
-              case for case in ET.parse("reports/backend-junit.xml").iter("testcase")
+              case
+              for shard in range(1, int(os.environ["BACKEND_SHARD_TOTAL"]) + 1)
+              for case in ET.parse(f"reports/backend-junit-{shard}.xml").iter("testcase")
               if any(
                   prop.attrib["name"] == "database_case" for prop in case.iter("property")
               )
@@ -145,21 +286,28 @@ jobs:
           PYTHON
 
       - name: Backend test summary
-        if: always()
-        run: |
-          passed=$(grep -oP '^\d+ passed' pytest-output.txt | awk '{print $1}')
-          skipped=$(grep -oP '\d+ skipped' pytest-output.txt | awk '{print $1}')
-          echo "### Backend: ${passed} passed, ${skipped:-0} skipped" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload backend coverage data
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
-        with:
-          name: coverage-data-backend
-          path: reports/coverage-data-backend
-          if-no-files-found: error
-          retention-days: 7
-          overwrite: true
+        run: |
+          uv run --no-sync python - <<'PYTHON'
+          import os
+          import xml.etree.ElementTree as ET
+
+          fields = ("tests", "skipped", "failures", "errors")
+          total = dict.fromkeys(fields, 0)
+          lines = []
+          for shard in range(1, int(os.environ["BACKEND_SHARD_TOTAL"]) + 1):
+              suites = ET.parse(f"reports/backend-junit-{shard}.xml").iter("testsuite")
+              counts = dict.fromkeys(fields, 0)
+              for suite in suites:
+                  for field in fields:
+                      counts[field] += int(suite.attrib[field])
+              lines.append(f"- shard {shard}: " + ", ".join(f"{counts[f]} {f}" for f in fields))
+              for field in fields:
+                  total[field] += counts[field]
+          lines.insert(0, "### Backend: " + ", ".join(f"{total[f]} {f}" for f in fields))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as handle:
+              handle.write("\n".join(lines) + "\n")
+          PYTHON
 
   alert-rules:
     name: Alert rules (promtool)
@@ -268,22 +416,39 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ env.BACKEND_PYTHON }}
+          enable-cache: true
+          save-cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.x
+        with:
+          node-version-file: frontend/.node-version
+          check-latest: true
       - name: Install coverage tooling
         run: uv sync --frozen --no-install-project --extra dev
 
       - name: Download backend coverage data
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: coverage-data-*
-          merge-multiple: true
-          path: reports
+          pattern: coverage-data-backend-*
+          path: reports/shard-coverage
+
+      # The aggregator compared the newest report of each shard, so the data of the same attempt is combined.
+      - name: Choose the newest coverage data of each shard
+        run: |
+          node frontend/e2e/shard-artifacts.ts coverage-data backend "$BACKEND_SHARD_TOTAL" reports/shard-coverage > reports/chosen-coverage.txt
+          cat reports/chosen-coverage.txt
 
       - name: Combine backend coverage
         run: |
           set -o pipefail
+          mapfile -t inputs < <(sed 's|$|/coverage-data-backend|' reports/chosen-coverage.txt)
+          uv run --no-sync coverage combine --rcfile=.github/workflows/coveragerc-ci.ini --data-file=reports/coverage-data "${inputs[@]}" | tee reports/combine.log
           # coverage combine exits 0 when an input is unreadable, so each expected input must be reported as combined.
-          uv run --no-sync coverage combine --rcfile=.github/workflows/coveragerc-ci.ini --data-file=reports/coverage-data reports/coverage-data-backend | tee reports/combine.log
-          grep -qF "Combined data file reports/coverage-data-backend" reports/combine.log || { echo "::error::coverage combine did not combine reports/coverage-data-backend"; exit 1; }
+          # It prints each input's path relative to the working directory, which is how the inputs are named here.
+          for input in "${inputs[@]}"; do
+            grep -qxF "Combined data file $input" reports/combine.log || { echo "::error::coverage combine did not combine $input"; exit 1; }
+          done
           uv run --no-sync coverage xml --rcfile=.github/workflows/coveragerc-ci.ini --data-file=reports/coverage-data -o reports/coverage.xml
 
       - name: Coverage summary and floors
