@@ -592,8 +592,7 @@ def test_the_summary_counts_every_shard_once(tmp_path):
     write_reports(tmp_path, shard_reports())
     assert run_backend_step(backend_step("backend", SUMMARY_STEP), tmp_path).returncode == 0
     summary = (tmp_path / "summary.md").read_text()
-    assert re.search(r"\b19\b", summary)
-    assert re.search(r"\b7\b", summary)
+    assert "### Backend: 19 tests, 7 skipped, 0 failures, 0 errors" in summary
 
 
 @pytest.mark.parametrize("step_name", [COLLECT_STEP, IDENTITY_STEP])
@@ -755,6 +754,7 @@ def test_a_module_that_needs_the_vendored_engine_is_collected_without_it():
             "tests/acestep_engine/test_client_contract.py",
         ],
         cwd=ROOT,
+        env={k: v for k, v in os.environ.items() if k not in ("TEST_SHARD", "TEST_SHARDS")},
         check=False,
         capture_output=True,
         text=True,
