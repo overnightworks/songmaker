@@ -1,0 +1,8 @@
+claim_id = "ad060a6d668646459141b616cff900c7"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "0c35415541a37086c0367d071ec0513ba69fdce8"
+branch = "claude/issue-2916-an-agent-with-its-own-account-shares-its"
+scope = ["docs/architecture.md", "docs/security.md", "docs/sharing.md", "scripts/dead-symbols.allow", "src/songmaker_cli/auth_dependencies.py", "src/songmaker_cli/song_api.py", "tests/songmaker_cli/agent/test_mcp_person_front.py", "tests/songmaker_cli/agent/test_mcp_share_tools.py", "tests/songmaker_cli/test_mcp_server_agent_account.py", "tests/support/mcp_tool_table.py", "tests/support/mcp_world.py"]
+opened_commit = "eea9cb0cdd95c9dc7f927aa07dd49e19d61c3411"
+whole_reason = "The guard and the song's share mark land in one commit, because a guard without a marked route is dead code and a marked route without its guard publishes; its tests and the three documents that state the reach move with it."
