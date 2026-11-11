@@ -26,11 +26,19 @@ def system_package_steps():
 
 
 def test_the_system_package_files_are_restored_into_the_directory_apt_installs_from():
-    resolve, restore, install, save = system_package_steps()
+    _, restore, install, _ = system_package_steps()
     restored_directory = restore["with"]["path"].replace("${{ runner.temp }}", "$RUNNER_TEMP")
     assert set(ARCHIVES_OPTION.findall(install["run"])) == {restored_directory.rsplit("/", 1)[0]}
+
+
+def test_the_cache_saves_the_path_it_restores_under_the_same_key():
+    _, restore, _, save = system_package_steps()
     assert save["with"]["path"] == restore["with"]["path"]
     assert save["with"]["key"] == restore["with"]["key"]
+
+
+def test_the_restore_key_and_prefix_are_the_outputs_of_the_resolve_step():
+    resolve, restore, _, _ = system_package_steps()
     outputs = f"steps.{resolve['id']}.outputs"
     assert {expression(restore["with"]["key"]), expression(restore["with"]["restore-keys"])} == {
         f"{outputs}.key",
