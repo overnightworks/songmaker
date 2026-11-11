@@ -1,8 +1,0 @@
-claim_id = "42bd8cf5b33c4d6bb9c6038d2d318730"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "33ae6665cc51778987010177102019fe1ce9d265"
-branch = "claude/issue-2977-the-back-channel-logout-no-longer-checks"
-scope = ["docs/security.md", "src/songmaker_cli/auth_api.py", "src/songmaker_cli/request_policies.py", "src/songmaker_cli/settings.py", "tests/conftest.py", "tests/songmaker_cli/test_auth_api_backchannel_logout.py", "tests/songmaker_cli/test_auth_stores_write_lock_postgres.py", "tests/songmaker_cli/test_request_policies_rate_limit.py"]
-opened_commit = "0e7305ea00d14a76a29125c8bd6e8a61102cb4b4"
-whole_reason = "The guard, its setting and validator, the tests that pin them and the passages that describe them are true only together; a half-removed setting leaves a field nothing reads or a test of a Host that is admitted."
