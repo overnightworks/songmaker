@@ -19,6 +19,7 @@ import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
+import { words } from '../src/lib/words/en';
 import { LIBRARY_NEW_MENU_LABEL, LIBRARY_NEW_ALBUM_LABEL } from '../src/lib/constants/library';
 import {
 	EDITOR_GENERATE_LABEL,
@@ -64,7 +65,7 @@ const COWRITER_TURN_REFUSAL_FRAME = {
 	problem: 'unavailable',
 	retry_after_seconds: null
 };
-const COWRITER_TURN_REFUSAL = 'The co-writer is unavailable';
+const COWRITER_TURN_REFUSAL = words['cowriterProblem.unavailable'];
 const RUNNING_JOB = {
 	progress: 0.36,
 	takeIndex: 1,

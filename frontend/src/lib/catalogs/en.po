@@ -22,3 +22,35 @@ msgstr ""
 msgctxt "coverProblem.signInAgain"
 msgid "Log in again to get cover suggestions"
 msgstr ""
+
+msgctxt "cowriterProblem.busy"
+msgid "The co-writer is busy"
+msgstr ""
+
+msgctxt "cowriterProblem.budgetSpent"
+msgid "The co-writer's budget is used up. Try again later."
+msgstr ""
+
+msgctxt "cowriterProblem.notEnabled"
+msgid "The co-writer is not enabled for your account"
+msgstr ""
+
+msgctxt "cowriterProblem.signInAgain"
+msgid "Log in again to use the co-writer"
+msgstr ""
+
+msgctxt "cowriterProblem.unavailable"
+msgid "The co-writer is unavailable"
+msgstr ""
+
+msgctxt "cowriterProblem.noAnswer"
+msgid "The co-writer did not answer. Try again."
+msgstr ""
+
+msgctxt "problemLine.logIn"
+msgid "Log in"
+msgstr ""
+
+msgctxt "problemLine.tryAgain"
+msgid "Try again"
+msgstr ""

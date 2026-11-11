@@ -50,12 +50,18 @@ import CoWriterPanel from './CoWriterPanel.svelte';
 import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { historyComesToRest } from '#lib/history/historyController.ts';
+import { words } from '#lib/words/en.ts';
 import {
 	deleteConversation,
 	fetchMemory,
 	saveUserMemory,
 	startNewConversation
 } from '#lib/api/client.ts';
+
+const TRY_AGAIN = words['problemLine.tryAgain'];
+function errorText(target: HTMLElement): string | undefined {
+	return target.querySelector<HTMLElement>('.turn-error .text')?.textContent ?? undefined;
+}
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -922,15 +928,11 @@ describe('CoWriterPanel failed turns', () => {
 		return target;
 	}
 
-	function errorText(target: HTMLElement): string | undefined {
-		return target.querySelector<HTMLElement>('.turn-error .text')?.textContent ?? undefined;
-	}
-
 	it.each([
-		['unavailable', 'The co-writer is unavailable', 'wait', 'Try again'],
-		['busy', 'The co-writer is busy', 'wait', 'Try again'],
-		['sign_in_again', 'Log in again to use the co-writer', 'bad', 'Log in'],
-		['not_enabled', 'The co-writer is not enabled for your account', 'off', null]
+		['unavailable', words['cowriterProblem.unavailable'], 'wait', TRY_AGAIN],
+		['busy', words['cowriterProblem.busy'], 'wait', TRY_AGAIN],
+		['sign_in_again', words['cowriterProblem.signInAgain'], 'bad', words['problemLine.logIn']],
+		['not_enabled', words['cowriterProblem.notEnabled'], 'off', null]
 	] as const)(
 		'C8 C17 words %s below the retained user message in its tone, with its one action',
 		async (problem, text, tone, action) => {
@@ -965,13 +967,15 @@ describe('CoWriterPanel failed turns', () => {
 			vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
 			const target = await failWith(429, 'busy', 40);
 
-			expect(retryButton(target).textContent?.replace(/\s+/g, ' ').trim()).toBe('Try again 0:40');
+			expect(retryButton(target).textContent?.replace(/\s+/g, ' ').trim()).toBe(
+				`${TRY_AGAIN} 0:40`
+			);
 			expect(retryButton(target).disabled).toBe(true);
 
 			vi.advanceTimersByTime(40_000);
 			await tick();
 
-			expect(retryButton(target).textContent?.trim()).toBe('Try again');
+			expect(retryButton(target).textContent?.trim()).toBe(TRY_AGAIN);
 			expect(retryButton(target).disabled).toBe(false);
 		});
 	});
@@ -1004,9 +1008,7 @@ describe('CoWriterPanel failed turns', () => {
 			await sendTurn(target, 'write a chorus');
 
 			await vi.waitFor(() =>
-				expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-					'The co-writer did not answer. Try again.'
-				)
+				expect(errorText(target)).toContain(words['cowriterProblem.noAnswer'])
 			);
 			expect(target.querySelector('.typing')).toBeNull();
 			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
@@ -1061,7 +1063,7 @@ describe('CoWriterPanel failed turns', () => {
 		);
 		expect(target.querySelector('.typing')).toBeNull();
 		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
-		expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe('Try again');
+		expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe(TRY_AGAIN);
 
 		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
 
@@ -1136,11 +1138,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		const target = await leaveDuringATurnAndReturn();
 		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
 
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-				'The co-writer did not answer. Try again.'
-			)
-		);
+		await vi.waitFor(() => expect(errorText(target)).toContain(words['cowriterProblem.noAnswer']));
 		expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte');
 		expect(target.querySelector('.typing')).toBeNull();
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
@@ -1231,9 +1229,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 			const target = await sendInAnOpenConversation(onturncompleted);
 
 			await vi.waitFor(() =>
-				expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-					'The co-writer did not answer. Try again.'
-				)
+				expect(errorText(target)).toContain(words['cowriterProblem.noAnswer'])
 			);
 			expect(target.querySelectorAll('.message.user')).toHaveLength(2);
 			expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
@@ -1257,11 +1253,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 
 		await sendTurn(target, 'Ja bitte');
 
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-				'The co-writer did not answer. Try again.'
-			)
-		);
+		await vi.waitFor(() => expect(errorText(target)).toContain(words['cowriterProblem.noAnswer']));
 		expect(target.querySelectorAll('.message.user')).toHaveLength(2);
 	});
 
@@ -1420,11 +1412,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 
 		const target = await render();
 
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-				'The co-writer did not answer. Try again.'
-			)
-		);
+		await vi.waitFor(() => expect(errorText(target)).toContain(words['cowriterProblem.noAnswer']));
 		expect(target.querySelector('.typing')).toBeNull();
 		streamCoWriterTurn.mockReturnValue(turnEvents([]));
 		await sendTurn(target, 'Noch einmal');

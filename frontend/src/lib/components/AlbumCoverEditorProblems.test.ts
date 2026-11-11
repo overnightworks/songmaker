@@ -134,9 +134,9 @@ describe('a cover suggestion that cannot run names one of the agent’s problems
 
 		await vi.waitFor(() => expect(problemLine(target)).not.toBeNull());
 		const login = requireElement<HTMLAnchorElement>(problemLine(target) as HTMLElement, 'a');
-		expect(login.textContent?.trim()).toBe('Log in');
+		expect(login.textContent?.trim()).toBe(words['problemLine.logIn']);
 		expect(getByRoleButton(editor(target) as HTMLElement, 'Upload').disabled).toBe(false);
-		expect(target.textContent).not.toContain('Try again');
+		expect(target.textContent).not.toContain(words['problemLine.tryAgain']);
 	});
 
 	it.each([

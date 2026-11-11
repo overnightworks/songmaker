@@ -2,6 +2,7 @@ import { makeSong as song } from '#lib/test-utils/factories.ts';
 import { describe, expect, it } from 'vitest';
 
 import { COWRITER_BUSY_WAIT_CEILING_SECONDS } from '#lib/constants/cowriter.ts';
+import { words } from '#lib/words/en.ts';
 import type {
 	ChatTurnFailureFrame,
 	ChatTurnProblemFrame,
@@ -29,24 +30,24 @@ describe('co-writer copy', () => {
 		[
 			'log in again, with no wait',
 			{ type: 'error', status: 401, problem: 'sign_in_again', retry_after_seconds: null },
-			{ problem: 'sign_in_again', text: 'Log in again to use the co-writer', waitSeconds: 0 }
+			{ problem: 'sign_in_again', text: words['cowriterProblem.signInAgain'], waitSeconds: 0 }
 		],
 		[
 			'busy, with the service’s own wait',
 			{ type: 'error', status: 429, problem: 'busy', retry_after_seconds: 40 },
-			{ problem: 'busy', text: 'The co-writer is busy', waitSeconds: 40 }
+			{ problem: 'busy', text: words['cowriterProblem.busy'], waitSeconds: 40 }
 		],
 		[
 			'busy without a stated wait',
 			{ type: 'error', status: 429, problem: 'busy', retry_after_seconds: null },
-			{ problem: 'busy', text: 'The co-writer is busy', waitSeconds: 0 }
+			{ problem: 'busy', text: words['cowriterProblem.busy'], waitSeconds: 0 }
 		],
 		[
 			'busy with a wait the panel does not promise',
 			{ type: 'error', status: 429, problem: 'busy', retry_after_seconds: 86_400 },
 			{
 				problem: 'busy',
-				text: 'The co-writer is busy',
+				text: words['cowriterProblem.busy'],
 				waitSeconds: COWRITER_BUSY_WAIT_CEILING_SECONDS
 			}
 		],
@@ -55,21 +56,21 @@ describe('co-writer copy', () => {
 			{ type: 'error', status: 403, problem: 'not_enabled', retry_after_seconds: null },
 			{
 				problem: 'not_enabled',
-				text: 'The co-writer is not enabled for your account',
+				text: words['cowriterProblem.notEnabled'],
 				waitSeconds: 0
 			}
 		],
 		[
 			'unavailable',
 			{ type: 'error', status: 503, problem: 'unavailable', retry_after_seconds: null },
-			{ problem: 'unavailable', text: 'The co-writer is unavailable', waitSeconds: 0 }
+			{ problem: 'unavailable', text: words['cowriterProblem.unavailable'], waitSeconds: 0 }
 		],
 		[
 			'a spent budget, with no wait',
 			{ type: 'error', status: 429, problem: 'budget_spent', retry_after_seconds: null },
 			{
 				problem: 'budget_spent',
-				text: "The co-writer's budget is used up. Try again later.",
+				text: words['cowriterProblem.budgetSpent'],
 				waitSeconds: 0
 			}
 		],

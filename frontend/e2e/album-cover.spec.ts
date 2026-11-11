@@ -93,7 +93,7 @@ test('Add cover asks for nothing until Suggest, whose refused click says log in 
 
 	const line = problemLine(editing);
 	await expect(line).toContainText(words['coverProblem.signInAgain']);
-	await expect(line.getByRole('link', { name: 'Log in' })).toBeVisible();
+	await expect(line.getByRole('link', { name: words['problemLine.logIn'] })).toBeVisible();
 	await expect(suggestButton(editing)).toBeDisabled();
 	await expect(editing.getByRole('button', { name: 'Upload', exact: true })).toBeEnabled();
 	expect(await latestCoverJobId(page, library.albumId)).toBe(latestJobBefore);

@@ -36,6 +36,7 @@ import {
 } from '../src/lib/constants/models';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
+import { words } from '../src/lib/words/en';
 
 /**
  * What each test costs the API, measured on a green run against the CI recipe:
@@ -61,8 +62,14 @@ const DESKTOP_HEIGHT = 900;
 // sets a gateway it cannot reach, so a real turn ends with a named problem. That it is a
 // named problem, and never a silent switch to a local provider, is the ruled behaviour
 // (#820, line 8; #1476).
-const NAMED_TURN_FAILURES =
-	/The co-writer is unavailable|The co-writer is busy|The co-writer is not enabled for your account|Log in again to use the co-writer/;
+const NAMED_TURN_FAILURES = new RegExp(
+	[
+		words['cowriterProblem.unavailable'],
+		words['cowriterProblem.busy'],
+		words['cowriterProblem.notEnabled'],
+		words['cowriterProblem.signInAgain']
+	].join('|')
+);
 
 // Every row of the Models table: words, no control, no model and no status (#1949, #2055):
 // the agent file names the model, so the row says so.
