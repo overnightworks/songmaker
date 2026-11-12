@@ -31,8 +31,7 @@ import {
 import { newSongCardLabel } from '../src/lib/constants/album';
 import {
 	PLAYLISTS_WALL_EMPTY,
-	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
-	PLAYLISTS_PAGE_LABEL
+	PLAYLISTS_WALL_ORDER_GROUP_LABEL
 } from '../src/lib/constants/playlist';
 import {
 	NEW_ALBUM_CARD_LABEL,
@@ -238,7 +237,7 @@ for (const shell of ['mobile', 'desktop'] as const) {
 }
 
 async function expectBothRailGroups(rail: Locator): Promise<void> {
-	for (const group of [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL])
+	for (const group of [LIBRARY_PAGE_LABEL, words['places.playlists']])
 		await expect(rail.getByRole('button', { name: nameStartingWith(group) })).toBeVisible();
 }
 
