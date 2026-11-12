@@ -3,9 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from './coverage-test';
-import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { words } from '../src/lib/words/en';
-import { RAIL_LIBRARY_NAV_LABEL } from '../src/lib/constants/rail';
 import { archiveOwnedAlbum, BASE_URL, seedTake } from './seed';
 import {
 	boundingBoxes,
@@ -126,14 +124,18 @@ test('1354_65_C1 1354_37a_A6: a fresh album cover reaches wall, album header, de
 		await expect(page.locator('.collection-header .header-cover img')).toBeVisible();
 		if (!isMobile) {
 			const rail = page.getByRole('navigation', { name: words['rail.nav'] });
-			const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${LIBRARY_PAGE_LABEL}`) });
+			const libraryGroup = rail.getByRole('button', {
+				name: new RegExp(`^${words['places.library']}`)
+			});
 			if ((await libraryGroup.getAttribute('aria-expanded')) === 'false')
 				await libraryGroup.click();
 			const railAlbum = rail
-				.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+				.getByRole('navigation', { name: words['rail.libraryNav'] })
 				.getByRole('listitem')
 				.filter({ hasText: albumTitle });
-			await expect(railAlbum.getByRole('img', { name: `Album ${albumTitle}` })).toBeVisible();
+			await expect(
+				railAlbum.getByRole('img', { name: words['rail.albumCover']({ title: albumTitle }) })
+			).toBeVisible();
 		}
 
 		const publicContext = await browser.newContext({

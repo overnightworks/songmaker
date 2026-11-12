@@ -14,9 +14,7 @@
 // the routing is the same code on both shells.
 
 import { expect, test, type Page } from './coverage-test';
-import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { words } from '../src/lib/words/en';
-import { RAIL_LIBRARY_NAV_LABEL } from '../src/lib/constants/rail';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { FlowGuard, ONLY_IN_SHELL, containing, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
@@ -99,10 +97,12 @@ test(
 		await expect(page.getByRole('alert')).toContainText('No such playlist');
 
 		const rail = page.getByRole('navigation', { name: words['rail.nav'] });
-		const libraryGroup = rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) });
+		const libraryGroup = rail.getByRole('button', {
+			name: nameStartingWith(words['places.library'])
+		});
 		if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
 		await rail
-			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+			.getByRole('navigation', { name: words['rail.libraryNav'] })
 			.getByRole('listitem')
 			.filter({ hasText: library.albumTitle })
 			.getByRole('button', { name: containing(library.albumTitle) })
