@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libc6-dev \
-    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/* \
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/fontconfig.log /var/log/apt/* \
         /var/cache/ldconfig/aux-cache /var/cache/fontconfig/*
 
 COPY --from=uv /uv /uvx /usr/local/bin/

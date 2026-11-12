@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     git \
     libc6-dev \
-    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/* \
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/fontconfig.log /var/log/apt/* \
         /var/cache/ldconfig/aux-cache /var/cache/fontconfig/*
 
 COPY --from=uv /uv /uvx /usr/local/bin/
@@ -25,8 +25,10 @@ RUN chown songmaker:songmaker /app
 USER 1000:1000
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
+# Building the git-sourced libraries leaves lock files in /tmp whose names are random per build.
 RUN uv sync --frozen --no-dev --no-install-project \
-    --extra server --extra scoring --extra whisper
+    --extra server --extra scoring --extra whisper \
+    && rm -f /tmp/uv-*.lock
 
 ARG MODEL_WARMUP_TIMEOUT_SECONDS=1800
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub \

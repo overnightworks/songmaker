@@ -5,7 +5,7 @@ FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     git \
-    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/* \
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/fontconfig.log /var/log/apt/* \
         /var/cache/ldconfig/aux-cache /var/cache/fontconfig/*
 
 COPY --from=uv /uv /uvx /usr/local/bin/
@@ -28,8 +28,10 @@ RUN uv sync --frozen --no-build --no-dev --no-install-project \
     --no-install-package overnightworks-webauth \
     --no-install-package overnightworks-agents \
     --extra server --extra image # why: All resolved versions come from the committed uv.lock; --no-build makes any third-party source distribution fail here, so the two git-sourced libraries wait for the next step.
+# Building the git-sourced libraries leaves lock files in /tmp whose names are random per build.
 RUN uv sync --frozen --no-dev --no-install-project \
-    --extra server --extra image # why: Builds only what the first step left out, the two first-party libraries from their locked git commits.
+    --extra server --extra image \
+    && rm -f /tmp/uv-*.lock # why: Builds only what the first step left out, the two first-party libraries from their locked git commits.
 
 COPY --chown=root:root src/ src/
 COPY --chown=root:root alembic.ini ./

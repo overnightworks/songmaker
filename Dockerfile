@@ -22,7 +22,7 @@ FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     git \
-    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/* \
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/fontconfig.log /var/log/apt/* \
         /var/cache/ldconfig/aux-cache /var/cache/fontconfig/*
 
 COPY --from=uv /uv /uvx /usr/local/bin/
@@ -35,12 +35,13 @@ WORKDIR /app
 # Install dependencies first (cached unless pyproject.toml/uv.lock change). The
 # app's user cannot write beside the code, so the bytecode is compiled here:
 # without it every start compiles the imports again, about 3 s longer.
+# Building the git-sourced libraries leaves lock files in /tmp whose names are random per build.
 # Both syncs end by removing uv_cache.json from the project's dist-info and RECORD: it holds the
 # install's wall-clock time, uv has no switch to leave it out, and the entrypoint syncs nothing (--no-sync).
 COPY pyproject.toml uv.lock ./
 RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
     uv sync --frozen --no-dev --compile-bytecode --extra server --extra agent --extra image && \
-    rm -rf src/songmaker_cli/__init__.py && \
+    rm -rf src/songmaker_cli/__init__.py /tmp/uv-*.lock && \
     for marker in .venv/lib/python*/site-packages/*.dist-info/uv_cache.json; do \
         sed -i '/\.dist-info\/uv_cache\.json,/d' "${marker%/*}/RECORD" && rm "$marker"; done
 
