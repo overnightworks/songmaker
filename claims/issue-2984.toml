@@ -3,6 +3,6 @@ agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
 role = "builder"
 base = "3e2175548f3ca1835d4299ff3b0b956b7b3058d6"
 branch = "claude/issue-2984-move-to-quality-v0-12-0-the-pins"
-scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "docs/testing.md"]
+scope = [".github/workflows/ci.yml", ".github/workflows/code-scanning.yml", ".github/workflows/release.yml", "AGENTS.md", "docs/testing.md"]
 opened_commit = "efb6c97eff3d84f28df617a68f5de33b86d6e0bf"
 whole_reason = "The gate is one version across its five pins; the findings its new rules name and the document that names the version change with it."
