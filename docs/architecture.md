@@ -23,11 +23,13 @@
                               rate limits)
 ```
 
-## Docker Compose Layout
+## Service Layout
+
+The platform runs these services; the test stack (`docker/docker-compose.test.yml`) runs the same ones under Docker Compose for CI and the probes.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ Docker Compose                                                       │
+│ Platform (the test stack: Docker Compose)                            │
 │                                                                      │
 │  ┌──────────────────┐   ┌────────────┐   ┌─────────────────────┐    │
 │  │  songmaker-web    │   │  postgres   │   │  redis              │    │
@@ -1587,10 +1589,10 @@ When the ephemeral signal disappears, a missing signal within the 300-second
 restart grace after the last observation is `alive`; only a longer absence can
 be `dead`. The grace covers an ordinary container restart: ACE-Step's
 30-second healthcheck start period plus image start and reserve. It does not
-cover the Music/Scoring workers' full 600-second Docker Compose start period: a
+cover the Music/Scoring workers' full 600-second start period on the test stack: a
 worker still starting more than 300 seconds after its last observation (a long
 migration or a late store) shows as `dead` in `/health` until its first
-heartbeat, while Compose still shows it starting. An empty ACE-Step registry is
+heartbeat, while its container still reads as starting. An empty ACE-Step registry is
 `unknown` only when it has never been observed; with a newer observation, it is
 `alive`.
 
