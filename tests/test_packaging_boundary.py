@@ -276,6 +276,16 @@ def test_every_uv_sync_line_of_a_dockerfile_installs_the_same_extras() -> None:
         )
 
 
+def test_the_web_image_gives_the_app_user_no_recursive_ownership_of_its_code() -> None:
+    recursive_chown = re.compile(r"\bchown\s+(?:-\w*R|--recursive)")
+    offenders = [
+        instruction
+        for instruction in _final_stage_instructions(REPOSITORY_ROOT / "Dockerfile")
+        if recursive_chown.search(instruction)
+    ]
+    assert not offenders, f"a recursive chown re-ships and hands the app its code: {offenders}"
+
+
 def _compose_built_dockerfiles() -> dict[str, Path]:
     dockerfiles: dict[str, Path] = {}
     for name, service in _raw_compose_services().items():
