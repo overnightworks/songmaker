@@ -209,6 +209,11 @@ rule = "test-layout"
 reason = "proves docker-compose.yml, which lies outside every package"
 
 [[layout.allow]]
+path = "tests/test_dockerfile_installs.py"
+rule = "test-layout"
+reason = "proves the install lines of every Dockerfile, which lie outside every package"
+
+[[layout.allow]]
 path = "tests/test_packaging_boundary.py"
 rule = "test-layout"
 reason = "proves the container extras against the image entrypoints, which span every package"
