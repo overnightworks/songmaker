@@ -84,6 +84,12 @@ async function render(): Promise<HTMLElement> {
 	return target;
 }
 
+function newInLibrary(): string {
+	return words['newPlace.heading']({ library: words['places.library'] })
+		.map((part) => (typeof part === 'string' ? part : part.text))
+		.join('');
+}
+
 function newButton(root: ParentNode): HTMLButtonElement {
 	const button = root.querySelector<HTMLButtonElement>(
 		`[aria-label="${words['newPlace.menuLabel']}"]`
@@ -149,13 +155,34 @@ describe('1354_rule_14 915_C1 NewPlaceMenu', () => {
 		const menu = await openNewMenu(root);
 
 		expect(newButton(root).getAttribute('aria-expanded')).toBe('true');
-		expect(menu.textContent).toContain('New in Library');
+		expect(menu.querySelector('.new-menu-heading')?.textContent).toBe(newInLibrary());
 		const items = [...menu.querySelectorAll('button')];
 		expect(items.map((item) => item.textContent?.trim())).toEqual([
 			words['newPlace.album'],
 			words['newPlace.playlist']
 		]);
 		expect(items.every((item) => item.querySelector('svg') !== null)).toBe(true);
+	});
+
+	it('sets the destination apart in the head as bold text holding the Library name', async () => {
+		const root = await render();
+
+		const menu = await openNewMenu(root);
+
+		const marked = menu.querySelector('.new-menu-heading b');
+		expect(marked?.textContent).toBe(words['places.library']);
+	});
+
+	it('closes with a label that names the destination', async () => {
+		const root = await render();
+
+		await openNewMenu(root);
+
+		expect(
+			document.querySelector(
+				`[aria-label="${words['newPlace.menuClose']({ library: words['places.library'] })}"]`
+			)
+		).not.toBeNull();
 	});
 
 	it.each([NEW_ALBUM, NEW_PLAYLIST])(

@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { Marked } from 'overnightworks-design';
 	import { historyLayerState } from '#lib/stores/layers.ts';
-	import { pageText } from '#lib/utils/page-words.ts';
+	import { pageParts, pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import NewAlbumCard from './NewAlbumCard.svelte';
@@ -35,6 +36,8 @@
 	}
 </script>
 
+{#snippet strong({ text }: { text: string })}<b>{text}</b>{/snippet}
+
 <span class="new-place-menu">
 	<MenuPopover
 		bind:this={menu}
@@ -46,7 +49,12 @@
 		{#snippet trigger()}<span class="new-face"
 				><Icon name="plus" size={16} />{pageText('newPlace.face')}</span
 			>{/snippet}
-		<p class="new-menu-heading">New in <b>Library</b></p>
+		<p class="new-menu-heading">
+			<Marked
+				parts={pageParts('newPlace.heading', { library: pageText('places.library') })}
+				marked={{ strong }}
+			/>
+		</p>
 		<button type="button" class="new-menu-item" onclick={() => startNew('album')}
 			><Icon name="album" size={16} />{pageText('newPlace.album')}</button
 		>

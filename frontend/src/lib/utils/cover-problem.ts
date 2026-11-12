@@ -1,11 +1,10 @@
 import type { CoverSuggestionRefusal, JobItem } from '#lib/api/types.ts';
-import { pageText } from '#lib/utils/page-words.ts';
-import type { Key } from '#lib/words/en.ts';
+import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 
 /** The one of the agent's problems a cover suggestion ended with or was refused for. */
 export type CoverProblem = CoverSuggestionRefusal['problem'];
 
-const COVER_PROBLEM_KEYS: Record<CoverProblem, Key> = {
+const COVER_PROBLEM_KEYS: Record<CoverProblem, TextKey> = {
 	busy: 'coverProblem.busy',
 	budget_spent: 'coverProblem.budgetSpent',
 	not_enabled: 'coverProblem.notEnabled',
