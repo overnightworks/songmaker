@@ -96,7 +96,7 @@ export LORA_TRAINING_SAVE_EVERY_N_EPOCHS="$LORA_EPOCHS"
 
 cd "$PROJECT_ROOT"
 compose=(docker compose --env-file "$work_dir/empty.env"
-    -f docker-compose.yml -f docker/docker-compose.ci.yml
+    --project-directory . -f docker/docker-compose.test.yml
     -f "$work_dir/checkpoints-readonly.yml")
 base="http://127.0.0.1:$PROBE_PORT"
 cookie=""
@@ -182,11 +182,6 @@ generate_kind() { # generate_kind LABEL PATH JSON SONG_ID
     wait_for_job "$job" "$label"
     prove_take "$label" "$(newest_take "$song")"
 }
-
-# The compose file declares this network external (edge creates it on the
-# deploy host, e2e.yml on a runner); the probe never removes it.
-docker network inspect hal_backchannel_songmaker >/dev/null 2>&1 \
-    || docker network create hal_backchannel_songmaker >/dev/null
 
 # Every process migrates itself in init_db, as in e2e.yml: the stores first, then the apps.
 "${compose[@]}" --profile gpu up -d --wait postgres redis

@@ -22,7 +22,8 @@ a copy of it.
 Run inside the web container, where ``DATABASE_URL`` and the audio volume
 are mounted. Use the venv's Python directly:
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_song_takes.py \\
         --album-id e2e-album-mtizek8x --title "Many Takes" \\
         --take-count 25 --owner-username e2e-ci-admin \\

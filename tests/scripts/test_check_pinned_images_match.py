@@ -19,7 +19,7 @@ DRIFTED_REDIS_PIN = "redis:7.4.13-alpine@sha256:" + "d" * 64
 
 
 def _write_compose(directory: Path, postgres_image: str, redis_image: str) -> Path:
-    path = directory / "docker-compose.yml"
+    path = directory / "docker-compose.test.yml"
     path.write_text(
         textwrap.dedent(
             f"""\

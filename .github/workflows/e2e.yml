@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 env:
-  COMPOSE_FILES: -f docker-compose.yml -f docker/docker-compose.ci.yml
+  COMPOSE_FILES: --project-directory . -f docker/docker-compose.test.yml
   # The number of shards each project's tests are cut into: the legs' matrix lists
   # one leg per shard, and the aggregator requires all of them.
   SHARD_TOTAL: 8
@@ -55,9 +55,6 @@ jobs:
 
       - name: Reset stack
         run: docker compose $COMPOSE_FILES down -v
-
-      - name: Create the back-channel network the compose file declares external
-        run: docker network inspect hal_backchannel_songmaker >/dev/null 2>&1 || docker network create hal_backchannel_songmaker
 
       - name: Boot stack
         id: boot
@@ -164,7 +161,7 @@ jobs:
           retention-days: 14
 
       # Prints the busiest API and sign-in windows, from which the E2E-only
-      # IP_RATE_LIMIT and SIGN_IN_RATE_LIMIT in docker/docker-compose.ci.yml are
+      # IP_RATE_LIMIT and SIGN_IN_RATE_LIMIT in docker/docker-compose.test.yml are
       # sized, so neither is a dated number gone stale. Each budget is measured
       # over its own window, and each leg's stack has windows of its own.
       - name: Busiest API and sign-in rate-limit windows

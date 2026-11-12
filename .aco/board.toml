@@ -2,7 +2,6 @@ lane_shared = ["quality/baseline.toml"]
 dependency_paths = [
   ".github/workflows/",
   "Dockerfile",
-  "docker-compose.yml",
   "docker/",
   "frontend/package.json",
   "frontend/pnpm-lock.yaml",

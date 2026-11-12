@@ -4,7 +4,8 @@ Runs inside the web container, where the app's settings and database are
 mounted. The script itself arrives on stdin and the request as JSON in the
 ``SEED_SESSIONS_REQUEST`` environment variable:
 
-    docker compose exec -T -e SEED_SESSIONS_REQUEST='{"seed": [{"username": "e2e-x"}]}' \
+    docker compose --project-directory . -f docker/docker-compose.test.yml \
+        exec -T -e SEED_SESSIONS_REQUEST='{"seed": [{"username": "e2e-x"}]}' \
         songmaker-web /app/.venv/bin/python - < seed_sessions.py
 
 A request holds ``seed`` (entries ``username`` and optional ``role``).

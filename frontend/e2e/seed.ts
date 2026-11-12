@@ -23,7 +23,7 @@ const SEEDED_LIBRARY_FILE = path.join(ARTIFACT_DIR, 'seeded-library.json');
 // inferred from the cwd docker compose up already ran in) resolves to the
 // same running stack.
 const REPO_ROOT = path.join(E2E_DIR, '..', '..');
-const COMPOSE_ARGS = ['compose', '-f', 'docker-compose.yml', '-f', 'docker/docker-compose.ci.yml'];
+const COMPOSE_ARGS = ['compose', '--project-directory', '.', '-f', 'docker/docker-compose.test.yml'];
 
 export const STORAGE_STATE_FILE = path.join(ARTIFACT_DIR, 'storage-state.json');
 export const BASE_URL = requiredEnv('E2E_BASE_URL', PROBE_STACK_TARGET);
@@ -67,7 +67,7 @@ const NON_ADMIN_ROLE: AccountRole = 'user';
 
 export type AccountRole = 'admin' | 'user';
 
-// The compose defaults for the throwaway CI database (`docker-compose.yml`),
+// The compose defaults for the throwaway CI database (`docker/docker-compose.test.yml`),
 // which neither the workflow nor the README's local recipe overrides.
 function postgresUser(): string {
 	return process.env.POSTGRES_USER ?? 'songmaker';

@@ -74,7 +74,7 @@ songmaker_cli/memory_api.py:api_get_memory # HTTP dispatcher: router.get('/memor
 songmaker_cli/memory_api.py:api_put_album_memory # HTTP dispatcher: router.put('/memory/albums/{album_id}')
 songmaker_cli/memory_api.py:api_put_song_memory # HTTP dispatcher: router.put('/memory/songs/{song_id}')
 songmaker_cli/memory_api.py:api_put_user_memory # HTTP dispatcher: router.put('/memory/user')
-songmaker_cli/music_worker.py:MusicWorkerSettings # arq CLI entry point selected by docker-compose.yml music-worker command
+songmaker_cli/music_worker.py:MusicWorkerSettings # arq CLI entry point selected by the music-worker command of the test stack and the platform manifest
 songmaker_cli/playlist_api.py:api_add_album_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/album', responses={404: {'description': 'Playlist or album not found'}})
 songmaker_cli/playlist_api.py:api_add_generation_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/generation', responses={404: {'description': 'Playlist or generation not found'}})
 songmaker_cli/playlist_api.py:api_add_song_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/song', responses={400: {'description': 'Song has no playable take'}, 404: {'description': 'Playlist or song not found'}})
@@ -108,7 +108,7 @@ songmaker_cli/scoring/silence_detection.py:score_silence # Scorer registry: regi
 songmaker_cli/scoring/spectral_quality.py:score_spectral_quality # Scorer registry: register('spectral_quality')
 songmaker_cli/scoring/text_accuracy.py:clear_cache # Whisper cache cleanup seam used by tests/songmaker_cli/test_scoring_scorers_extended.py
 songmaker_cli/scoring/text_accuracy.py:score_text_accuracy # Scorer registry: register('text_accuracy')
-songmaker_cli/scoring_worker.py:ScoringWorkerSettings # arq CLI entry point selected by docker-compose.yml scoring-worker command
+songmaker_cli/scoring_worker.py:ScoringWorkerSettings # arq CLI entry point selected by the scoring-worker command of the test stack and the platform manifest
 songmaker_cli/settings_api.py:api_create_preset # HTTP dispatcher: router.post('/settings/presets', responses={400: {'description': 'Requested model is not available'}, 409: {'description': PRESET_NAME_EXISTS_DETAIL}})
 songmaker_cli/settings_api.py:api_delete_preset # HTTP dispatcher: router.delete('/settings/presets/{preset_id}', responses={404: {'description': 'Preset does not exist'}})
 songmaker_cli/settings_api.py:api_get_builtins # HTTP dispatcher: router.get('/settings/generation-builtins')

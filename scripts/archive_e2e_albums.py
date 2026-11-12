@@ -8,7 +8,8 @@ whose request budgets are measured against a clean library.
 
 Run inside the web container, where ``DATABASE_URL`` is mounted:
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \
+    docker compose --project-directory . -f docker/docker-compose.test.yml \
+        exec -T songmaker-web /app/.venv/bin/python \
         scripts/archive_e2e_albums.py \
         --title-prefix "E2E " --owner-username e2e-ci-admin
 
