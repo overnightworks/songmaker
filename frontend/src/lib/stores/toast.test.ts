@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { NEW_PLACE_OFFLINE } from '#lib/constants/new-collection.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { get, writable } from 'svelte/store';
 import { toasts, addToast, addUndoToast, dismissToast } from './toast';
@@ -13,6 +12,10 @@ beforeEach(() => {
 afterEach(() => {
 	resetConnectivityForTests();
 });
+
+// A toast long enough to read as a sentence.
+const LONG_TOAST_TEXT =
+	"You're offline, so nothing was created. Try again once you're back online.";
 
 describe('toast store', () => {
 	it('addToast creates a toast with correct fields', () => {
@@ -160,7 +163,7 @@ describe('toast store', () => {
 		'1160-F36-cause: unmigrated new-album toast retains offline-first=%s clearing',
 		(offlineFirst) => {
 			if (offlineFirst) reportResourceStreamReachable(false);
-			const id = addToast(NEW_PLACE_OFFLINE, 'error');
+			const id = addToast(LONG_TOAST_TEXT, 'error');
 			expect(get(toasts).map((toast) => toast.id)).toEqual([id]);
 			if (!offlineFirst) reportResourceStreamReachable(false);
 			reportResourceStreamReachable(true);

@@ -1,6 +1,8 @@
 import { makeAlbum as album } from '#lib/test-utils/factories.ts';
 import type { Component } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { words } from '#lib/words/en.ts';
+import { sourceLanguage } from '#lib/words/index.ts';
 
 // Drafts live for the session, which is the module's life; every test starts
 // a fresh session by loading the cards -- and the Svelte runtime and helpers
@@ -40,15 +42,15 @@ interface CardCase {
 
 const CARDS: CardCase[] = [
 	{
-		card: 'New album',
-		field: 'Title',
+		card: words['newAlbum.cardLabel'],
+		field: words['newAlbum.titleLabel'],
 		create: createAlbum,
 		load: () => import('./NewAlbumCard.svelte'),
 		props: {}
 	},
 	{
-		card: 'New playlist',
-		field: 'Name',
+		card: words['newPlaylist.cardLabel'],
+		field: words['newPlaylist.nameLabel'],
 		create: createNewPlaylist,
 		load: () => import('./NewPlaylistCard.svelte'),
 		props: {}
@@ -64,8 +66,11 @@ const CARDS: CardCase[] = [
 
 let mounted: object | undefined;
 
-beforeEach(() => {
+beforeEach(async () => {
 	vi.resetModules();
+	// The reset drops the loaded words with the modules; the cards read them afresh.
+	const { loadPageWords } = await import('#lib/utils/page-words.ts');
+	await loadPageWords(sourceLanguage);
 	createAlbum.mockReset().mockResolvedValue(NIGHTDRIVE);
 	createSong.mockReset().mockResolvedValue({ id: 's-new' });
 	createNewPlaylist.mockReset().mockResolvedValue({ id: 'p-new' });

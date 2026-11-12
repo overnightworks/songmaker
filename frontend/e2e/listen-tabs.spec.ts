@@ -3,12 +3,9 @@
 // Takes, the tab writes no history entry and survives a reload.
 
 import { expect, test as base, type Page } from './coverage-test';
+import { words } from '../src/lib/words/en';
 import { COWRITER_COMPOSER_PLACEHOLDER } from '../src/lib/constants/cowriter';
-import {
-	NEW_PLACE_CREATE_LABEL,
-	NEW_SONG_ROW_LABEL,
-	NEW_SONG_TITLE_LABEL
-} from '../src/lib/constants/new-collection';
+import { NEW_SONG_ROW_LABEL, NEW_SONG_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import { LIBRARY_SHARES_COPY_LABEL } from '../src/lib/constants/library';
 import {
 	EDITOR_TAB_TAKES_LABEL,
@@ -169,7 +166,7 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		const created = page.waitForResponse(
 			(response) => response.url().endsWith('/api/songs') && response.request().method() === 'POST'
 		);
-		await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
+		await card.getByRole('button', { name: words['newPlace.create'] }).click();
 		const song = (await (await created).json()) as { id: string };
 		await expect(surface.getByRole('heading', { name: 'Fresh recipe song' })).toBeVisible();
 		return song.id;

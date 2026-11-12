@@ -3,17 +3,8 @@
 	import { createAlbum } from '#lib/api/client.ts';
 	import { addAlbumToList } from '#lib/stores/libraryData.ts';
 	import { openAlbum } from '#lib/stores/navigation.ts';
-	import {
-		NEW_ALBUM_ARTIST_LABEL,
-		NEW_ALBUM_ARTIST_OPTIONAL,
-		NEW_ALBUM_CARD_LABEL,
-		NEW_ALBUM_CLOSE_LABEL,
-		NEW_ALBUM_FAILED,
-		NEW_ALBUM_HINT,
-		NEW_ALBUM_REFUSED,
-		NEW_ALBUM_TITLE_LABEL,
-		NEW_PLACE_TEXT_MAX_LENGTH
-	} from '#lib/constants/new-collection.ts';
+	import { NEW_PLACE_TEXT_MAX_LENGTH } from '#lib/constants/new-collection.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {
@@ -37,11 +28,11 @@
 </script>
 
 <NewPlaceCard
-	label={NEW_ALBUM_CARD_LABEL}
-	closeLabel={NEW_ALBUM_CLOSE_LABEL}
-	hint={NEW_ALBUM_HINT}
-	failedMessage={NEW_ALBUM_FAILED}
-	refusedMessage={NEW_ALBUM_REFUSED}
+	label={pageText('newAlbum.cardLabel')}
+	closeLabel={pageText('newAlbum.close')}
+	hint={pageText('newAlbum.hint')}
+	failedMessage={pageText('newAlbum.failed')}
+	refusedMessage={pageText('newAlbum.refused')}
 	draftKey="album"
 	bind:title
 	ready={title.trim() !== ''}
@@ -51,7 +42,7 @@
 	{oncreated}
 >
 	<label class="field">
-		<span class="field-label">{NEW_ALBUM_TITLE_LABEL}</span>
+		<span class="field-label">{pageText('newAlbum.titleLabel')}</span>
 		<input
 			bind:this={titleInput}
 			bind:value={title}
@@ -62,13 +53,15 @@
 		/>
 	</label>
 	<label class="field">
-		<span class="field-label">{NEW_ALBUM_ARTIST_LABEL} <em>{NEW_ALBUM_ARTIST_OPTIONAL}</em></span>
+		<span class="field-label"
+			>{pageText('newAlbum.artistLabel')} <em>{pageText('newAlbum.artistOptional')}</em></span
+		>
 		<input
 			bind:value={artist}
 			type="text"
 			autocomplete="off"
 			maxlength={NEW_PLACE_TEXT_MAX_LENGTH}
-			placeholder={NEW_ALBUM_ARTIST_LABEL}
+			placeholder={pageText('newAlbum.artistLabel')}
 		/>
 	</label>
 </NewPlaceCard>

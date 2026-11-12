@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, PlaylistItem } from '#lib/api/types.ts';
-import { LIBRARY_NEW_MENU_LABEL } from '#lib/constants/library.ts';
+import { words } from '#lib/words/en.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { makeAlbum, makePlaylist } from '#lib/test-utils/factories.ts';
@@ -85,14 +85,16 @@ async function render(): Promise<HTMLElement> {
 }
 
 function newButton(root: ParentNode): HTMLButtonElement {
-	const button = root.querySelector<HTMLButtonElement>(`[aria-label="${LIBRARY_NEW_MENU_LABEL}"]`);
+	const button = root.querySelector<HTMLButtonElement>(
+		`[aria-label="${words['newPlace.menuLabel']}"]`
+	);
 	if (!button) throw new Error('no + New');
 	return button;
 }
 
 function newMenu(): HTMLElement | null {
 	return document.querySelector<HTMLElement>(
-		`[role="dialog"][aria-label="${LIBRARY_NEW_MENU_LABEL}"]`
+		`[role="dialog"][aria-label="${words['newPlace.menuLabel']}"]`
 	);
 }
 
@@ -229,7 +231,7 @@ describeBackClosesOverlay({
 	},
 	isShown: () => newMenu() !== null,
 	afterBack: () =>
-		expect(document.activeElement?.getAttribute('aria-label')).toBe(LIBRARY_NEW_MENU_LABEL),
+		expect(document.activeElement?.getAttribute('aria-label')).toBe(words['newPlace.menuLabel']),
 	closeWays: []
 });
 
@@ -243,7 +245,7 @@ for (const kind of [NEW_ALBUM, NEW_PLAYLIST]) {
 		},
 		isShown: (target) => newCard(target, kind) !== null,
 		afterBack: () => {
-			expect(document.activeElement?.getAttribute('aria-label')).toBe(LIBRARY_NEW_MENU_LABEL);
+			expect(document.activeElement?.getAttribute('aria-label')).toBe(words['newPlace.menuLabel']);
 			expect(fetchStub).not.toHaveBeenCalled();
 		},
 		closeWays: [

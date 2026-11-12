@@ -20,22 +20,8 @@ import {
 	type Page,
 	type Route
 } from './coverage-test';
-import {
-	LIBRARY_NEW_ALBUM_LABEL,
-	LIBRARY_NEW_MENU_LABEL,
-	LIBRARY_NEW_PLAYLIST_LABEL
-} from '../src/lib/constants/library';
 import { newSongCardLabel } from '../src/lib/constants/album';
 import {
-	NEW_ALBUM_CARD_LABEL,
-	NEW_ALBUM_CLOSE_LABEL,
-	NEW_ALBUM_FAILED,
-	NEW_ALBUM_TITLE_LABEL,
-	NEW_PLACE_CREATE_LABEL,
-	NEW_PLACE_OFFLINE,
-	NEW_PLAYLIST_CARD_LABEL,
-	NEW_PLAYLIST_CLOSE_LABEL,
-	NEW_PLAYLIST_NAME_LABEL,
 	NEW_SONG_CLOSE_LABEL,
 	NEW_SONG_ROW_LABEL,
 	NEW_SONG_TITLE_LABEL
@@ -110,11 +96,11 @@ async function answerTheLibraryEmpty(page: Page): Promise<void> {
 }
 
 function newButton(page: Page) {
-	return workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true });
+	return workspace(page).getByRole('button', { name: words['newPlace.menuLabel'], exact: true });
 }
 
 function newMenu(page: Page) {
-	return page.getByRole('dialog', { name: LIBRARY_NEW_MENU_LABEL });
+	return page.getByRole('dialog', { name: words['newPlace.menuLabel'] });
 }
 
 test('1354_rule_14 an empty library makes its first album from + New on the Home head and opens it', async ({
@@ -141,24 +127,24 @@ test('1354_rule_14 an empty library makes its first album from + New on the Home
 	await expect(homeTitle).toBeVisible();
 
 	await newButton(page).click();
-	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_ALBUM_LABEL }).click();
-	const card = wall.getByRole('form', { name: NEW_ALBUM_CARD_LABEL });
+	await newMenu(page).getByRole('button', { name: words['newPlace.album'] }).click();
+	const card = wall.getByRole('form', { name: words['newAlbum.cardLabel'] });
 	await expect(card).toBeVisible();
 	const [homeTitleBox, cardBox] = await boundingBoxes(homeTitle, card);
 	expect(cardBox.y).toBeGreaterThanOrEqual(homeTitleBox.y + homeTitleBox.height);
-	await card.getByRole('button', { name: NEW_ALBUM_CLOSE_LABEL }).click();
+	await card.getByRole('button', { name: words['newAlbum.close'] }).click();
 	await expect(card).toBeHidden();
 
 	await newButton(page).click();
-	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_ALBUM_LABEL }).click();
-	await card.getByLabel(NEW_ALBUM_TITLE_LABEL).fill(title);
+	await newMenu(page).getByRole('button', { name: words['newPlace.album'] }).click();
+	await card.getByLabel(words['newAlbum.titleLabel']).fill(title);
 	await page.keyboard.press('Escape');
 	await expect(card).toBeHidden();
 
 	await newButton(page).click();
-	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_ALBUM_LABEL }).click();
-	await expect(card.getByLabel(NEW_ALBUM_TITLE_LABEL)).toHaveValue(title);
-	await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
+	await newMenu(page).getByRole('button', { name: words['newPlace.album'] }).click();
+	await expect(card.getByLabel(words['newAlbum.titleLabel'])).toHaveValue(title);
+	await card.getByRole('button', { name: words['newPlace.create'] }).click();
 
 	await expect(page).toHaveURL(/\/album\//);
 	await expect(workspace(page).getByRole('heading', { name: title })).toBeVisible();
@@ -172,24 +158,24 @@ test('1354_rule_14 + New makes a named playlist from the Home head and opens it'
 	const wall = workspace(page);
 
 	await newButton(page).click();
-	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_PLAYLIST_LABEL }).click();
-	const card = wall.getByRole('form', { name: NEW_PLAYLIST_CARD_LABEL });
+	await newMenu(page).getByRole('button', { name: words['newPlace.playlist'] }).click();
+	const card = wall.getByRole('form', { name: words['newPlaylist.cardLabel'] });
 	await expect(card).toBeVisible();
-	await card.getByRole('button', { name: NEW_PLAYLIST_CLOSE_LABEL }).click();
+	await card.getByRole('button', { name: words['newPlaylist.close'] }).click();
 	await expect(card).toBeHidden();
 	await expect(newButton(page)).toBeFocused();
 
 	await newButton(page).click();
-	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_PLAYLIST_LABEL }).click();
+	await newMenu(page).getByRole('button', { name: words['newPlace.playlist'] }).click();
 	await expect(card).toBeVisible();
 	await page.goBack();
 	await expect(card).toBeHidden();
 	await expect(newButton(page)).toBeFocused();
 
 	await newButton(page).click();
-	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_PLAYLIST_LABEL }).click();
-	await card.getByLabel(NEW_PLAYLIST_NAME_LABEL).fill(name);
-	await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
+	await newMenu(page).getByRole('button', { name: words['newPlace.playlist'] }).click();
+	await card.getByLabel(words['newPlaylist.nameLabel']).fill(name);
+	await card.getByRole('button', { name: words['newPlace.create'] }).click();
 
 	await expect(page).toHaveURL(/\/playlist\//);
 	await expect(workspace(page).getByRole('heading', { name })).toBeVisible();
@@ -259,9 +245,9 @@ test.describe('1354_rule_14 the Library and Playlists heads', () => {
 				await page.goto(address);
 				await expect(newButton(page)).toBeVisible();
 
-				await openNewCardFromMenu(page, LIBRARY_NEW_ALBUM_LABEL);
+				await openNewCardFromMenu(page, words['newPlace.album']);
 
-				const card = workspace(page).getByRole('form', { name: NEW_ALBUM_CARD_LABEL });
+				const card = workspace(page).getByRole('form', { name: words['newAlbum.cardLabel'] });
 				await expect(card).toBeVisible();
 				const head = workspace(page).getByRole('heading', { level: 1 });
 				const [headBox, cardBox] = await boundingBoxes(head, card);
@@ -308,17 +294,17 @@ const CREATE_CARDS: CreateCard[] = [
 	{
 		name: 'New album',
 		address: () => HOME_PATH,
-		open: (page) => openNewCardFromMenu(page, LIBRARY_NEW_ALBUM_LABEL),
-		form: (page) => workspace(page).getByRole('form', { name: NEW_ALBUM_CARD_LABEL }),
-		titleLabel: NEW_ALBUM_TITLE_LABEL,
+		open: (page) => openNewCardFromMenu(page, words['newPlace.album']),
+		form: (page) => workspace(page).getByRole('form', { name: words['newAlbum.cardLabel'] }),
+		titleLabel: words['newAlbum.titleLabel'],
 		foldsFocusTo: newButton
 	},
 	{
 		name: 'New playlist',
 		address: () => HOME_PATH,
-		open: (page) => openNewCardFromMenu(page, LIBRARY_NEW_PLAYLIST_LABEL),
-		form: (page) => workspace(page).getByRole('form', { name: NEW_PLAYLIST_CARD_LABEL }),
-		titleLabel: NEW_PLAYLIST_NAME_LABEL,
+		open: (page) => openNewCardFromMenu(page, words['newPlace.playlist']),
+		form: (page) => workspace(page).getByRole('form', { name: words['newPlaylist.cardLabel'] }),
+		titleLabel: words['newPlaylist.nameLabel'],
 		foldsFocusTo: newButton
 	},
 	{
@@ -377,9 +363,9 @@ async function answerAlbumCreates(
 
 async function typeIntoNewAlbumCard(page: Page, title: string): Promise<Locator> {
 	await page.goto(HOME_PATH);
-	await openNewCardFromMenu(page, LIBRARY_NEW_ALBUM_LABEL);
-	const card = workspace(page).getByRole('form', { name: NEW_ALBUM_CARD_LABEL });
-	await card.getByLabel(NEW_ALBUM_TITLE_LABEL).fill(title);
+	await openNewCardFromMenu(page, words['newPlace.album']);
+	const card = workspace(page).getByRole('form', { name: words['newAlbum.cardLabel'] });
+	await card.getByLabel(words['newAlbum.titleLabel']).fill(title);
 	return card;
 }
 
@@ -404,7 +390,7 @@ const FAILED_CREATES: FailedCreate[] = [
 		tag: ANSWERS_SERVER_ERROR_TAG,
 		arrange: (page) =>
 			answerAlbumCreates(page, () => ({ status: 500, detail: 'Internal Server Error' })),
-		toast: NEW_ALBUM_FAILED
+		toast: words['newAlbum.failed']
 	},
 	{
 		failure: 'the server rate-limits it: Try again, without its details',
@@ -415,14 +401,14 @@ const FAILED_CREATES: FailedCreate[] = [
 				detail: 'Too many requests',
 				headers: { 'Retry-After': '30' }
 			})),
-		toast: NEW_ALBUM_FAILED,
+		toast: words['newAlbum.failed'],
 		alsoSaid: RATE_LIMITED_TOAST_MESSAGE
 	},
 	{
 		failure: 'the network is gone: Try again once back online',
 		tag: LOSES_NETWORK_TAG,
 		arrange: (page, context) => loseNetwork(page, context),
-		toast: NEW_PLACE_OFFLINE
+		toast: words['newPlace.offline']
 	}
 ];
 
@@ -435,11 +421,11 @@ for (const { failure, tag, arrange, toast, alsoSaid } of FAILED_CREATES) {
 			const card = await typeIntoNewAlbumCard(page, title);
 			await arrange(page, context);
 
-			await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
+			await card.getByRole('button', { name: words['newPlace.create'] }).click();
 
 			await expect(toastMessages(page)).toHaveText(alsoSaid ? [alsoSaid, toast] : [toast]);
-			await expect(card.getByLabel(NEW_ALBUM_TITLE_LABEL)).toHaveValue(title);
-			await expect(card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL })).toBeEnabled();
+			await expect(card.getByLabel(words['newAlbum.titleLabel'])).toHaveValue(title);
+			await expect(card.getByRole('button', { name: words['newPlace.create'] })).toBeEnabled();
 		}
 	);
 }
@@ -458,7 +444,7 @@ test(
 			refusalReason === null ? null : { status: 422, detail: refusalReason }
 		);
 		const card = await typeIntoNewAlbumCard(page, title);
-		const create = card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL });
+		const create = card.getByRole('button', { name: words['newPlace.create'] });
 		let createdAlbumId: string | undefined;
 
 		try {

@@ -1,7 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import type { LibraryWriteResponse, PaginatedResponse, SongItem } from '../src/lib/api/types';
-import { LIBRARY_NEW_MENU_LABEL } from '../src/lib/constants/library';
 import {
 	SONG_MENU_LABEL,
 	SONG_MENU_DELETE_LABEL,
@@ -128,7 +127,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 				.evaluateAll((regions) => regions.map((region) => region.getAttribute('aria-label')))
 		).toEqual([words['homeListen.label'], words['homeWrite.label']]);
 		await expect(
-			workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true })
+			workspace(page).getByRole('button', { name: words['newPlace.menuLabel'], exact: true })
 		).toBeVisible();
 		await expect(workspace(page).getByText('Continue', { exact: true })).toHaveCount(0);
 		await page.screenshot({ path: testInfo.outputPath('write-empty.png') });
