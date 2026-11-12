@@ -6,6 +6,7 @@ import {
 } from '#lib/stores/connectivity.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { words } from '#lib/words/en.ts';
 
 const mocks = vi.hoisted(() => ({
 	listReferences: vi.fn(),
@@ -706,7 +707,9 @@ describe('where a reference is used', () => {
 		);
 		const showTakes = Array.from(
 			document.body.querySelectorAll<HTMLButtonElement>('.menu-panel button')
-		).find((button) => button.textContent?.includes('Show takes')) as HTMLButtonElement;
+		).find((button) =>
+			button.textContent?.includes(words['referenceMenu.showTakes'])
+		) as HTMLButtonElement;
 		expect(showTakes.textContent).toContain('3');
 		await pressReferenceControl(showTakes);
 

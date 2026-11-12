@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { words } from '#lib/words/en.ts';
 import ReferenceMenu from './ReferenceMenu.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -39,7 +40,7 @@ describe('ReferenceMenu', () => {
 		const ondelete = vi.fn();
 		const body = await openReferenceMenu(false, ondelete);
 		const button = Array.from(body.querySelectorAll('button')).find(
-			(candidate) => candidate.textContent?.trim() === 'Delete'
+			(candidate) => candidate.textContent?.trim() === words['referenceMenu.delete']
 		) as HTMLButtonElement;
 
 		expect(button.disabled).toBe(false);
@@ -51,11 +52,11 @@ describe('ReferenceMenu', () => {
 		const ondelete = vi.fn();
 		const body = await openReferenceMenu(true, ondelete);
 		const button = Array.from(body.querySelectorAll<HTMLButtonElement>('button')).find(
-			(candidate) => candidate.textContent?.includes('Delete')
+			(candidate) => candidate.textContent?.includes(words['referenceMenu.delete'])
 		) as HTMLButtonElement;
 
 		expect(button.disabled).toBe(true);
-		expect(button.textContent).toContain('In use');
+		expect(button.textContent).toContain(words['referenceMenu.inUse']);
 		expect(button.querySelector('[aria-hidden="true"]')).toBeNull();
 		button.click();
 		expect(ondelete).not.toHaveBeenCalled();
@@ -65,7 +66,7 @@ describe('ReferenceMenu', () => {
 		const onshowuses = vi.fn();
 		const used = await openReferenceMenu(true, vi.fn(), onshowuses);
 		const showTakes = Array.from(used.querySelectorAll<HTMLButtonElement>('button')).find(
-			(candidate) => candidate.textContent?.includes('Show takes')
+			(candidate) => candidate.textContent?.includes(words['referenceMenu.showTakes'])
 		) as HTMLButtonElement;
 
 		expect(showTakes.textContent).toContain('3');
@@ -76,6 +77,6 @@ describe('ReferenceMenu', () => {
 	it('hides Show takes for an unused reference', async () => {
 		const unused = await openReferenceMenu(false);
 
-		expect(unused.textContent).not.toContain('Show takes');
+		expect(unused.textContent).not.toContain(words['referenceMenu.showTakes']);
 	});
 });
