@@ -22,6 +22,7 @@ import yaml
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from support.compose_config import run_compose_config
+from support.dockerfile_stages import dockerfile_instructions, final_stage_instructions
 from support.repository_root import REPOSITORY_ROOT
 
 from songmaker_cli.settings import Settings
@@ -34,6 +35,7 @@ WEB_ENTRYPOINT_SCRIPT = "/app/start_web_server.sh"
 E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 DOCKER_DEFAULT_RESTART_POLICY = "no"
 WEB_SERVER_MODULE = "songmaker_cli.server"
+RECURSIVE_CHOWN = re.compile(r"\bchown(?:\s+-\S+)*?\s+(?:-\w*R\w*|--recursive)\b")
 
 
 @dataclass(frozen=True)
@@ -106,34 +108,10 @@ def _root_owning_extras() -> dict[str, frozenset[str]]:
     return {root: frozenset(extras) for root, extras in result.items()}
 
 
-def _dockerfile_instructions(dockerfile: Path) -> list[str]:
-    instructions: list[str] = []
-    current_instruction = ""
-    for line in dockerfile.read_text().splitlines():
-        if line.lstrip().startswith("#"):
-            continue
-        current_instruction += line.rstrip().removesuffix("\\") + " "
-        if line.rstrip().endswith("\\"):
-            continue
-        instructions.append(current_instruction.strip())
-        current_instruction = ""
-    return instructions
-
-
-def _final_stage_instructions(dockerfile: Path) -> list[str]:
-    instructions = _dockerfile_instructions(dockerfile)
-    last_stage_start = max(
-        index
-        for index, instruction in enumerate(instructions)
-        if instruction.upper().startswith("FROM ")
-    )
-    return instructions[last_stage_start:]
-
-
 def _sync_extras(dockerfile: Path) -> list[frozenset[str]]:
     return [
         frozenset(re.findall(r"--extra\s+([A-Za-z0-9-]+)", instruction))
-        for instruction in _final_stage_instructions(dockerfile)
+        for instruction in final_stage_instructions(dockerfile)
         if "uv sync" in instruction
     ]
 
@@ -289,10 +267,10 @@ def _image_identity(dockerfile: Path) -> tuple[str, set[str]]:
     """The final ``USER`` as ``uid:gid`` plus every ``uid:gid`` the file creates."""
     final_users = [
         instruction.split(maxsplit=1)[1]
-        for instruction in _final_stage_instructions(dockerfile)
+        for instruction in final_stage_instructions(dockerfile)
         if instruction.upper().startswith("USER ")
     ]
-    instructions = " ".join(_dockerfile_instructions(dockerfile))
+    instructions = " ".join(dockerfile_instructions(dockerfile))
     created_gids = re.findall(r"groupadd\s+--gid\s+(\d+)", instructions)
     created_users = re.findall(r"useradd\s+--uid\s+(\d+)\s+--gid\s+(\d+)", instructions)
     assert final_users, f"{dockerfile.name}: no USER in the final stage"
@@ -327,6 +305,28 @@ def test_every_compose_built_image_runs_as_the_numeric_user_it_creates() -> None
     assert len({final_user for final_user, _ in identities.values()}) == 1, (
         "images share volumes, so they must share one uid:gid"
     )
+
+
+@pytest.mark.parametrize(
+    "instruction",
+    [
+        "RUN chown -R songmaker:songmaker /app",
+        "RUN chown -f -R songmaker:songmaker /app",
+        "RUN chown --verbose --recursive songmaker:songmaker /app",
+    ],
+)
+def test_recursive_chown_is_found_after_other_options(instruction: str) -> None:
+    assert RECURSIVE_CHOWN.search(instruction)
+
+
+def test_no_final_stage_instruction_changes_ownership_recursively() -> None:
+    offenders = [
+        instruction
+        for instruction in final_stage_instructions(REPOSITORY_ROOT / "Dockerfile")
+        if RECURSIVE_CHOWN.search(instruction)
+    ]
+
+    assert offenders == []
 
 
 def _command_words(declaration: str | list[str]) -> tuple[str, ...]:
@@ -369,7 +369,7 @@ def _dockerfile_entrypoint_starts() -> list[ContainerStart]:
             _command_words(instruction.removeprefix("ENTRYPOINT").strip()),
         )
         for dockerfile in dockerfiles
-        for instruction in _dockerfile_instructions(dockerfile)
+        for instruction in dockerfile_instructions(dockerfile)
         if instruction.startswith("ENTRYPOINT ")
     ]
 

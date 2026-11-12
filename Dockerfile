@@ -28,10 +28,12 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 
-# Install dependencies first (cached unless pyproject.toml/uv.lock change)
+# Install dependencies first (cached unless pyproject.toml/uv.lock change). The
+# app's user cannot write beside the code, so the bytecode is compiled here:
+# without it every start compiles the imports again, about 3 s longer.
 COPY pyproject.toml uv.lock ./
 RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
-    uv sync --frozen --no-dev --extra server --extra agent --extra image && \
+    uv sync --frozen --no-dev --compile-bytecode --extra server --extra agent --extra image && \
     rm -rf src/songmaker_cli/__init__.py
 
 # Copy source code (only this layer rebuilds on code changes)
@@ -44,7 +46,9 @@ COPY alembic.ini ./
 # context, and a hand-picked list would silently miss the next operational
 # script someone adds.
 COPY scripts/ scripts/
-RUN uv sync --frozen --no-dev --extra server --extra agent --extra image
+# The editable install leaves src/ uncompiled.
+RUN uv sync --frozen --no-dev --extra server --extra agent --extra image && \
+    .venv/bin/python -m compileall -q src
 
 COPY --from=frontend-builder /app/frontend/build frontend/build
 
@@ -58,11 +62,13 @@ RUN groupadd --gid 1000 songmaker \
 # The web consumer owns the mounted CLI profile directories; Compose mounts
 # the binaries and credential mirrors read-only.
 RUN install -d -o songmaker -g songmaker /home/songmaker/.claude /home/songmaker/.grok /home/songmaker/.codex
-# Both are volume mount points. Docker seeds an empty named volume from
-# whichever image mounts it first — as root when that image lacks the
-# directory, which the app can never chown back under cap_drop: ALL.
-RUN mkdir -p /app/data/queue-streams /app/data/audio
-RUN chown -R songmaker:songmaker /app
+# Both are volume mount points and the only paths under /app the web process
+# writes. Docker seeds an empty named volume from whichever image mounts it
+# first — as root when that image lacks the directory, which the app can never
+# chown back under cap_drop: ALL. Code, scripts, the virtual environment and
+# the frontend build stay root-owned: the app's user reads them and cannot
+# rewrite them.
+RUN install -d -o songmaker -g songmaker /app/data/queue-streams /app/data/audio
 # After the last RUN so the node and uv layers stay cached across releases.
 ARG SONGMAKER_RELEASE
 ARG SONGMAKER_COMMIT
