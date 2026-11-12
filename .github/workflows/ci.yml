@@ -315,36 +315,6 @@ jobs:
               handle.write("\n".join(lines) + "\n")
           PYTHON
 
-  alert-rules:
-    name: Alert rules (promtool)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
-        with:
-          persist-credentials: false
-
-      # The rules are Prometheus' own schema, so Prometheus' own tool is
-      # the only honest checker — and it comes in the same image the
-      # compose stack runs, rather than as a second thing to install.
-      # `test rules` drives monitoring/alert.rules.test.yml against the
-      # real rule file (issue #333).
-      - name: Check and unit-test the alert rules
-        run: |
-          run_promtool() {
-            docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
-              --entrypoint promtool prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 "$@"
-          }
-          # check config reads the credentials file, so it gets a throwaway one.
-          scratch_token="$(mktemp)"
-          echo ci-throwaway-monitoring-token > "$scratch_token"
-          chmod 644 "$scratch_token"
-          docker run --rm -v "$PWD/monitoring:/etc/prometheus:ro" \
-            -v "$scratch_token:/run/secrets/monitoring_token:ro" \
-            --entrypoint promtool prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 check config /etc/prometheus/prometheus.yml
-          run_promtool check rules rules/alert.rules.yml
-          run_promtool test rules alert.rules.test.yml
-
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -529,7 +499,7 @@ jobs:
     uses: $/.github/workflows/e2e.yml
 
   quality:
-    needs: [backend, alert-rules, backend-coverage, frontend, coverage, e2e]
+    needs: [backend, backend-coverage, frontend, coverage, e2e]
     if: ${{ !cancelled() }}
     permissions:
       contents: read

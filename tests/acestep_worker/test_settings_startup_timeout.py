@@ -16,7 +16,6 @@ from songmaker_cli.job_timing import GENERATE_LOAD_MODEL_TIMEOUT_SECONDS
 
 ACESTEP_WORKER_SERVICE = "songmaker-acestep-worker-0"
 SCRATCH_ENVIRONMENT = {
-    "GRAFANA_PASSWORD": "scratch-grafana-password-not-a-secret",
     "OIDC_ISSUER": "https://keycloak.invalid/realms/scratch",
 }
 

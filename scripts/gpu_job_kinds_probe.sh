@@ -90,7 +90,6 @@ export SONGMAKER_SECRETS_DIR="$secrets_dir"
 export KEYCLOAK_CLIENT_SECRET_FILE="$work_dir/client-secret"
 export GATEWAY_KEY_FILE="$work_dir/gateway-key"
 export OIDC_ISSUER=https://keycloak.invalid/realms/gpu-probe
-export GRAFANA_PASSWORD=gpu-probe-grafana-password
 export PUBLIC_BASE_URL="http://localhost:$PROBE_PORT"
 export LORA_TRAINING_EPOCHS="$LORA_EPOCHS"
 export LORA_TRAINING_SAVE_EVERY_N_EPOCHS="$LORA_EPOCHS"

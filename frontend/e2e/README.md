@@ -306,7 +306,6 @@ export E2E_ADMIN_USERNAME=e2e-ci-admin
 export OIDC_ISSUER=https://keycloak.invalid/realms/e2e
 export KEYCLOAK_CLIENT_SECRET_FILE="$(mktemp)" && echo e2e-ci-client-secret > "$KEYCLOAK_CLIENT_SECRET_FILE"
 export GATEWAY_KEY_FILE="$(mktemp)" && echo e2e-ci-gateway-key > "$GATEWAY_KEY_FILE"
-export GRAFANA_PASSWORD=e2e-ci-grafana-password    # compose refuses up/down without it
 export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or the web app refuses to start
 # Two steps: this stack has no restart policy, so the apps start once the stores are healthy.
 docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml up -d --wait postgres redis

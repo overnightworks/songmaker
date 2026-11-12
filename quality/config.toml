@@ -1,11 +1,16 @@
 [gate]
 mandatory_jobs = [
     "Backend (Python 3.14)",
-    "Alert rules (promtool)",
     "Combine backend coverage",
     "Frontend",
     "E2E / Browser suite",
 ]
+
+[[gate.loosened]]
+what = 'mandatory job "Alert rules (promtool)" removed'
+item = "#2284"
+date = 2026-11-12
+reason = "the own Prometheus, Alertmanager and promtool rules leave the repository; the platform's Prometheus scrapes /metrics and runs songmaker's alerts (platform#337)"
 
 [[gate.loosened]]
 what = 'import contract "Only the agent, tool and route modules import the agent runtime client" removed'
@@ -176,10 +181,6 @@ entry = "legal/"
 reason = "the app's own section of the central privacy notice and terms of use, which the central legal pages read from git"
 
 [[root.allow]]
-entry = "monitoring/"
-reason = "the alert rules, dashboards and their start scripts, deployed apart from the Python package"
-
-[[root.allow]]
 entry = "vendor/"
 reason = "the ACE-Step fork, a git submodule"
 
@@ -237,8 +238,3 @@ reason = "a structural rule over tests/conftest.py, which mirrors no production 
 path = "tests/test_shard_selection.py"
 rule = "test-layout"
 reason = "proves the shard selection of tests/conftest.py, which lies outside every package"
-
-[[layout.allow]]
-path = "tests/monitoring/scripts/test_start_alertmanager.py"
-rule = "test-layout"
-reason = "proves monitoring/scripts/start_alertmanager.sh, which lies outside scripts/ and every package"

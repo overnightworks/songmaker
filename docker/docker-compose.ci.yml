@@ -1,8 +1,8 @@
 # CI override for docker-compose.yml — boots the web-facing services and the
-# music worker (no GPU, no monitoring) so the stack fits an ubuntu-24.04 runner.
-# `profiles: [gpu]` keeps the ACE-Step worker, the scoring worker (torch and a
-# baked Whisper checkpoint) and the monitoring services out of both
-# `docker compose config` and `up` without needing to delete them here.
+# music worker (no GPU) so the stack fits an ubuntu-24.04 runner.
+# `profiles: [gpu]` keeps the ACE-Step worker and the scoring worker (torch and
+# a baked Whisper checkpoint) out of both `docker compose config` and `up`
+# without needing to delete them here.
 
 # A test stack nobody tore down must stay down after a reboot, while the live
 # stack keeps `unless-stopped`; every service below merges this (#1355).
@@ -14,14 +14,6 @@ services:
     <<: *test_stack_service
   redis:
     <<: *test_stack_service
-  alertmanager:
-    <<: *test_stack_service
-  prometheus:
-    <<: *test_stack_service
-    profiles: ["gpu"]
-  grafana:
-    <<: *test_stack_service
-    profiles: ["gpu"]
   songmaker-acestep-worker-0:
     <<: *test_stack_service
     profiles: ["gpu"]

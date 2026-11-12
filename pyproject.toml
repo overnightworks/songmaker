@@ -83,9 +83,7 @@ dev = [
     # Carries a static GPL build of ffmpeg for the tests that run the real binary
     # (tests/support/ffmpeg_binary.py); no image installs this extra, so no image holds it.
     "imageio-ffmpeg>=0.8,<1",
-    # Reads back what monitoring/scripts/start_alertmanager.sh generates, so
-    # its escaping is asserted against a real YAML parser instead of
-    # against matching text (issue #333).
+    # Reads the workflow and Compose files the tests and image-pin check assert on.
     "pyyaml>=6.0,<7",
     # Brings the catalog generator `design-catalogs`; a git pin by tag like the other
     # first-party libraries, built from source in CI and local checks only, never in an image.

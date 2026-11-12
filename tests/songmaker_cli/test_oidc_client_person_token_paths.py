@@ -317,7 +317,6 @@ def test_t26_a_preflight_keeps_authorization_out_of_the_allowed_headers(
 def test_t15_compose_hands_token_clients_to_the_web_service_only(tmp_path: Path) -> None:
     env_file = tmp_path / "scratch.env"
     env_file.write_text(
-        "GRAFANA_PASSWORD=scratch-grafana-password-not-a-secret\n"
         "SONGMAKER_MONITORING_TOKEN=scratch-monitoring-token-not-a-secret\n"
         "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
         f"TOKEN_CLIENTS={TokenWorld.HAL}\n",

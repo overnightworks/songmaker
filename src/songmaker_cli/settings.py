@@ -472,8 +472,6 @@ class Settings(BaseSettings):
     postgres_user: str | None = None
     postgres_password: Annotated[SecretStr, Field(min_length=1)] | None = None
     postgres_db: str | None = None
-    grafana_user: str | None = None
-    grafana_password: SecretStr | None = None
     hf_token: SecretStr | None = None
     # Retired keys: declared and unread so an old .env still validates.
     claude_scoring_model: str | None = None
@@ -485,12 +483,10 @@ class Settings(BaseSettings):
     cover_max_concurrent_runs: int | None = None
 
     # ── Alert channel (issue #333) ─────────────────────────────────────
-    # Read directly from .env by scripts/send_alert.sh (systemd OnFailure=)
-    # and by the alertmanager container's startup command (fed by
-    # monitoring/rules/alert.rules.yml) — neither goes through this app
-    # process. Declared here only so extra="forbid" recognizes them
-    # instead of raising ValidationError the moment an operator sets
-    # them up.
+    # Read directly from .env by scripts/send_alert.sh (systemd OnFailure=),
+    # which does not go through this app process. Declared here only so
+    # extra="forbid" recognizes them instead of raising ValidationError the
+    # moment an operator sets them up.
     alert_email_to: str | None = None
     smtp_host: str | None = None
     smtp_port: int | None = None

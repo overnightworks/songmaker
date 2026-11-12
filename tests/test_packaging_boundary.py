@@ -775,7 +775,7 @@ def test_settings_accept_the_agent_the_web_service_is_rendered_with(
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
-def test_only_the_web_app_and_prometheus_hold_the_monitoring_token(
+def test_only_the_web_app_holds_the_monitoring_token(
     compose_files: tuple[str, ...],
 ) -> None:
     holders = {
@@ -783,7 +783,7 @@ def test_only_the_web_app_and_prometheus_hold_the_monitoring_token(
         for service_name, service in _rendered_test_stack_services(compose_files).items()
         if "songmaker_monitoring_token" in {s["source"] for s in service.get("secrets", [])}
     }
-    assert holders == {"songmaker-web", "prometheus"}
+    assert holders == {"songmaker-web"}
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())

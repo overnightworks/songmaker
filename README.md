@@ -6,7 +6,7 @@ SvelteKit frontend + FastAPI backend + PostgreSQL + Redis + arq job workers + GP
 
 ## Run with Docker
 
-Songmaker is Docker-only; there is no native local-dev path. The stack runs the web app, both arq workers, the ACE-Step GPU worker, PostgreSQL, Redis, Prometheus, and Grafana.
+Songmaker is Docker-only; there is no native local-dev path. The stack runs the web app, both arq workers, the ACE-Step GPU worker, PostgreSQL, and Redis.
 
 Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation), and a Hugging Face token (for downloading model weights).
 
@@ -22,7 +22,7 @@ sudo ./scripts/install_cli_credentials_mirror.sh  # agent-CLI login mirror
 
 - [`docker/.env.docker.example`](docker/.env.docker.example) lists every setting, which ones are required, and how to generate secrets.
 - A cold-cache build takes 8-15 minutes; [AGENTS.md](AGENTS.md#rules) says why it must not be interrupted. The first start also downloads the ACE-Step model weights into a Docker volume.
-- All persistent state (database, audio files, model cache, Grafana dashboards) lives in named Docker volumes and survives `docker compose down` and rebuilds.
+- All persistent state (database, audio files, model cache) lives in named Docker volumes and survives `docker compose down` and rebuilds.
 - Container confinement: [docs/security.md](docs/security.md#container-confinement).
 
 ## Operations

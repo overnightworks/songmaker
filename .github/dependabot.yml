@@ -72,10 +72,6 @@ updates:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
     ignore:
-      # frozen until the monitoring stack is removed
-      - dependency-name: "prom/prometheus"
-      - dependency-name: "prom/alertmanager"
-      - dependency-name: "grafana/grafana"
       # Dependabot reads 16.15 as major.minor, so the 16.x security releases are
       # its minor step: postgres moves within 16 (same data format), never to 17.
       - dependency-name: "postgres"
