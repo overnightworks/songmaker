@@ -15,7 +15,6 @@ import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { APP_NAME } from '../src/lib/constants/app';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import {
-	SEARCH_OPEN_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
@@ -31,7 +30,8 @@ import {
 } from '../src/lib/routes/addresses';
 import { BASE_URL } from './seed';
 import { words } from '../src/lib/words/en';
-import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
+import { PHONE_TABS } from '../src/lib/constants/phone-tabs';
+import { openSearchSheet, searchSheet } from './phone-search';
 import { routerHistoryEntryOf } from '../src/lib/test-utils/router-history-layout';
 
 /** The two shells the same flow drives — also the Playwright project names. */
@@ -344,7 +344,7 @@ export function wallBody(page: Page): Locator {
 
 /** Back to the wall through the word LIBRARY, in the same SPA document. */
 export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
-	await openPlace(page, shell, LIBRARY_PAGE_LABEL);
+	await openPlace(page, shell, LIBRARY_PAGE_LABEL, 'places.library');
 	await expect(page).toHaveURL(LIBRARY_URL);
 }
 
@@ -373,8 +373,8 @@ export async function openHome(page: Page, shell: Shell): Promise<void> {
 	} else {
 		const barBrand = appBar(page).getByRole('button', brand);
 		const home = page
-			.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })
-			.getByRole('button', { name: 'Home', exact: true });
+			.getByRole('navigation', { name: words['phoneTabs.nav'] })
+			.getByRole('button', { name: words['places.home'], exact: true });
 		if (await barBrand.isVisible()) await barBrand.click();
 		else {
 			if (!(await home.isVisible()))
@@ -387,7 +387,9 @@ export async function openHome(page: Page, shell: Shell): Promise<void> {
 	await expect(page).toHaveURL(HOME_URL);
 }
 
-async function openPlace(page: Page, shell: Shell, label: string): Promise<void> {
+type PlaceKey = (typeof PHONE_TABS)[number]['labelKey'];
+
+async function openPlace(page: Page, shell: Shell, label: string, tabKey: PlaceKey): Promise<void> {
 	if (shell === 'desktop') {
 		await (
 			await openRailNav(page, shell)
@@ -397,18 +399,18 @@ async function openPlace(page: Page, shell: Shell, label: string): Promise<void>
 		return;
 	}
 	const tab = page
-		.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })
-		.getByRole('button', { name: label, exact: true });
+		.getByRole('navigation', { name: words['phoneTabs.nav'] })
+		.getByRole('button', { name: words[tabKey], exact: true });
 	if (await tab.isVisible()) await tab.click();
 	else {
 		await openPageFromSearch(page, label);
-		await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toBeHidden();
+		await expect(searchSheet(page)).toBeHidden();
 	}
 }
 
 /** The Playlists page through the shell's navigation. */
 export async function openPlaylistsPage(page: Page, shell: Shell): Promise<void> {
-	await openPlace(page, shell, PLAYLISTS_PAGE_LABEL);
+	await openPlace(page, shell, PLAYLISTS_PAGE_LABEL, 'places.playlists');
 	await expect(page).toHaveURL(/\/playlists$/);
 }
 
@@ -442,10 +444,8 @@ export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
 
 /** Any page, a Settings section included, from the phone bar's Search sheet. */
 export async function openPageFromSearch(page: Page, pageLabel: string): Promise<void> {
-	const sheet = page.getByRole('dialog', { name: 'Search', exact: true });
-	if (!(await sheet.isVisible())) {
-		await appBar(page).getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true }).click();
-	}
+	const sheet = searchSheet(page);
+	if (!(await sheet.isVisible())) await openSearchSheet(page);
 	await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(pageLabel);
 	await sheet
 		.getByRole('group', { name: 'Pages', exact: true })

@@ -1,4 +1,3 @@
-import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // Phone Takes and generation states (#995, #914 L12); Settings also runs on desktop (#1143).
 // CI seeds jobs without a worker.
 
@@ -20,7 +19,6 @@ import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { GENERATION_PHASE_LABELS } from '../src/lib/constants/jobs';
 import { formatTime } from '../src/lib/utils/format';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
-import { SEARCH_OPEN_LABEL } from '../src/lib/constants/rail';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { words } from '../src/lib/words/en';
 import {
@@ -101,7 +99,7 @@ function songBackButton(page: Page): Locator {
 	return page.locator('.mobile-strip').getByRole('button', { name: /^Back to / });
 }
 
-const phoneTabs = (page: Page) => page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+const phoneTabs = (page: Page) => page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 
 async function observeTabAttachments(page: Page): Promise<void> {
 	await page.addInitScript((label) => {
@@ -123,7 +121,7 @@ async function observeTabAttachments(page: Page): Promise<void> {
 						});
 				}
 		}).observe(document, { childList: true, subtree: true });
-	}, PHONE_TABS_NAV_LABEL);
+	}, words['phoneTabs.nav']);
 }
 
 interface SongWithAnUnsavedDraft {
@@ -670,9 +668,12 @@ test.describe('song page at phone width', () => {
 					const address = page.url();
 					await page
 						.locator('.mobile-strip')
-						.getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true })
+						.getByRole('button', { name: words['phoneAppBar.searchOpen'], exact: true })
 						.click();
-					const search = page.getByRole('dialog', { name: 'Search', exact: true });
+					const search = page.getByRole('dialog', {
+						name: words['phoneAppBar.searchSheet'],
+						exact: true
+					});
 					await expect(search).toBeVisible();
 					await page.goBack();
 					await expect(search).toBeHidden();

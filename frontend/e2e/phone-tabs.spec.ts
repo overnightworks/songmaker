@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './coverage-test';
-import { PHONE_TABS, PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
+import { PHONE_TABS } from '../src/lib/constants/phone-tabs';
+import { words } from '../src/lib/words/en';
 import { NOW_PLAYING_CLOSE, openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { RAIL_NAV_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
@@ -17,11 +18,13 @@ import {
 import { openSearchSheet } from './phone-search';
 import { readSeededLibrary } from './seed';
 
-const tabs = (page: Page) => page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+const tabs = (page: Page) => page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 
 async function expectCurrent(page: Page, label: string | null): Promise<void> {
 	await expect(tabs(page)).toBeVisible();
-	await expect(tabs(page).getByRole('button')).toHaveText(PHONE_TABS.map((tab) => tab.label));
+	await expect(tabs(page).getByRole('button')).toHaveText(
+		PHONE_TABS.map((tab) => words[tab.labelKey])
+	);
 	await expect(tabs(page).locator('[aria-current="page"]')).toHaveCount(label ? 1 : 0);
 	if (label)
 		await expect(tabs(page).getByRole('button', { name: label, exact: true })).toHaveAttribute(
@@ -41,12 +44,12 @@ test(
 		const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 		await expect(rail).toBeVisible();
 		const links = rail.locator('.rail-page-link');
-		await expect(links).toHaveText(PHONE_TABS.map(({ label }) => new RegExp(label)));
+		await expect(links).toHaveText(PHONE_TABS.map(({ labelKey }) => new RegExp(words[labelKey])));
 		const icons = await links
 			.locator('svg')
 			.evaluateAll((nodes) => nodes.map((node) => node.innerHTML));
 		await page.setViewportSize(MOBILE_VIEWPORT);
-		await expectCurrent(page, 'Home');
+		await expectCurrent(page, words['places.home']);
 		await expect(tabs(page).locator('svg')).toHaveCount(icons.length);
 		expect(
 			await tabs(page)
@@ -64,8 +67,9 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		const guard = new FlowGuard(page);
 		await page.setViewportSize(MOBILE_VIEWPORT);
 		await page.goto(HOME_PATH);
-		await expectCurrent(page, 'Home');
-		for (const { label, place } of PHONE_TABS) {
+		await expectCurrent(page, words['places.home']);
+		for (const { labelKey, place } of PHONE_TABS) {
+			const label = words[labelKey];
 			const tab = tabs(page).getByRole('button', { name: label, exact: true });
 			await expect(tab.locator('svg')).toBeVisible();
 			await tab.click();
@@ -82,8 +86,8 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 				expect(
 					await page.evaluate(() => ({ address: location.href, length: history.length }))
 				).toEqual(before);
-				await tabs(page).getByRole('button', { name: 'Home', exact: true }).click();
-				await expectCurrent(page, 'Home');
+				await tabs(page).getByRole('button', { name: words['places.home'], exact: true }).click();
+				await expectCurrent(page, words['places.home']);
 				expect(await page.evaluate(() => history.length)).toBe(before.length + 1);
 			}
 		}
@@ -98,33 +102,33 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		const library = readSeededLibrary();
 		await page.goto(`/album/${library.albumId}`);
 		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
-		await expectCurrent(page, 'Library');
+		await expectCurrent(page, words['places.library']);
 		await workspace(page)
 			.getByRole('button', {
 				name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
 				exact: true
 			})
 			.click();
-		await expectCurrent(page, 'Library');
+		await expectCurrent(page, words['places.library']);
 		await page
 			.getByRole('contentinfo')
 			.getByRole('button', { name: openNowPlayingLabel(library.pickedSongTitle), exact: true })
 			.click();
 		await expect(tabs(page)).toHaveCount(0);
 		await page.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
-		await expectCurrent(page, 'Library');
+		await expectCurrent(page, words['places.library']);
 		guard.assertClean();
 	});
 
 	test('1354_61_C05: playlist detail selects Playlists', async ({ page }) => {
 		await page.goto('/playlists');
-		await expectCurrent(page, 'Playlists');
+		await expectCurrent(page, words['places.playlists']);
 		await workspace(page)
 			.getByRole('button', { name: /^Open playlist / })
 			.first()
 			.click();
 		await expect(page).toHaveURL(/\/playlist\/[^/]+$/);
-		await expectCurrent(page, 'Playlists');
+		await expectCurrent(page, words['places.playlists']);
 	});
 
 	for (const destination of ['Settings section', 'Voices'] as const) {
@@ -138,9 +142,9 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 			} else await page.goto('/loras');
 			await expectCurrent(page, null);
 			await expect(page.getByRole('contentinfo')).toBeVisible();
-			await tabs(page).getByRole('button', { name: 'Home', exact: true }).click();
+			await tabs(page).getByRole('button', { name: words['places.home'], exact: true }).click();
 			await expect.poll(() => new URL(page.url()).pathname).toBe('/');
-			await expectCurrent(page, 'Home');
+			await expectCurrent(page, words['places.home']);
 		});
 	}
 
