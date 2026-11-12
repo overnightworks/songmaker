@@ -1,7 +1,7 @@
 // Phone Takes and generation states (#995, #914 L12); Settings also runs on desktop (#1143).
 // CI seeds jobs without a worker.
 
-import { phoneSearchResult } from './phone-search';
+import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from './coverage-test';
 import type { VersionItem } from '../src/lib/api/types';
 import {
@@ -360,7 +360,7 @@ test.describe('song page at phone width', () => {
 				await (
 					await phoneSearchResult(
 						page,
-						'Albums',
+						GROUPS.albums,
 						library.secondAlbumTitle,
 						containing(library.secondAlbumTitle)
 					)

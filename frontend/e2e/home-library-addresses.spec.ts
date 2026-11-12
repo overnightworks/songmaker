@@ -14,7 +14,7 @@ import { SIGN_IN_NEXT_PARAM } from '../src/lib/constants/auth';
 // The hydration-first order cannot be forced here and is proven in the unit
 // suite (libraryContext.test.ts) with controlled promises.
 
-import { phoneSearchResult } from './phone-search';
+import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Page } from './coverage-test';
 import { LIBRARY_NEW_MENU_LABEL, LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
@@ -82,7 +82,7 @@ function albumAddress(library: SeededLibrary): RegExp {
 
 async function openAlbumFromHome(page: Page, shell: Shell, title: string): Promise<void> {
 	if (shell === 'mobile') {
-		await (await phoneSearchResult(page, 'Albums', title, nameStartingWith(title))).click();
+		await (await phoneSearchResult(page, GROUPS.albums, title, nameStartingWith(title))).click();
 	} else {
 		await openAlbumFromRail(page, shell, title);
 	}

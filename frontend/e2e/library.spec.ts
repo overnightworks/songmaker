@@ -6,7 +6,7 @@
 // curates a playlist through the detailed take list; on mobile, the Edit tab
 // carries no take strip and the Takes tab is the one playback entry point.
 
-import { phoneSearchResult } from './phone-search';
+import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from './coverage-test';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
@@ -214,7 +214,7 @@ async function closeNowPlaying(page: Page, shell: Shell): Promise<void> {
 
 async function openAlbumFromNavigation(page: Page, shell: Shell, title: string): Promise<void> {
 	if (shell === 'mobile') {
-		await (await phoneSearchResult(page, 'Albums', title, nameStartingWith(title))).click();
+		await (await phoneSearchResult(page, GROUPS.albums, title, nameStartingWith(title))).click();
 	} else {
 		const rail = await openRailNav(page, shell);
 		await railAlbumRow(rail, title)
@@ -755,7 +755,7 @@ test(
 			await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
 
 			await (
-				await phoneSearchResult(page, 'Albums', targetTitle, nameStartingWith(targetTitle))
+				await phoneSearchResult(page, GROUPS.albums, targetTitle, nameStartingWith(targetTitle))
 			).click();
 
 			await expect(surface.getByRole('heading', { name: targetTitle })).toBeVisible();
