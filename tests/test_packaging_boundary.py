@@ -22,6 +22,7 @@ import yaml
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from support.compose_config import run_compose_config
+from support.dockerfile_stages import dockerfile_instructions, final_stage_instructions
 from support.repository_root import REPOSITORY_ROOT
 
 from songmaker_cli.settings import Settings
@@ -106,34 +107,10 @@ def _root_owning_extras() -> dict[str, frozenset[str]]:
     return {root: frozenset(extras) for root, extras in result.items()}
 
 
-def _dockerfile_instructions(dockerfile: Path) -> list[str]:
-    instructions: list[str] = []
-    current_instruction = ""
-    for line in dockerfile.read_text().splitlines():
-        if line.lstrip().startswith("#"):
-            continue
-        current_instruction += line.rstrip().removesuffix("\\") + " "
-        if line.rstrip().endswith("\\"):
-            continue
-        instructions.append(current_instruction.strip())
-        current_instruction = ""
-    return instructions
-
-
-def _final_stage_instructions(dockerfile: Path) -> list[str]:
-    instructions = _dockerfile_instructions(dockerfile)
-    last_stage_start = max(
-        index
-        for index, instruction in enumerate(instructions)
-        if instruction.upper().startswith("FROM ")
-    )
-    return instructions[last_stage_start:]
-
-
 def _sync_extras(dockerfile: Path) -> list[frozenset[str]]:
     return [
         frozenset(re.findall(r"--extra\s+([A-Za-z0-9-]+)", instruction))
-        for instruction in _final_stage_instructions(dockerfile)
+        for instruction in final_stage_instructions(dockerfile)
         if "uv sync" in instruction
     ]
 
@@ -289,10 +266,10 @@ def _image_identity(dockerfile: Path) -> tuple[str, set[str]]:
     """The final ``USER`` as ``uid:gid`` plus every ``uid:gid`` the file creates."""
     final_users = [
         instruction.split(maxsplit=1)[1]
-        for instruction in _final_stage_instructions(dockerfile)
+        for instruction in final_stage_instructions(dockerfile)
         if instruction.upper().startswith("USER ")
     ]
-    instructions = " ".join(_dockerfile_instructions(dockerfile))
+    instructions = " ".join(dockerfile_instructions(dockerfile))
     created_gids = re.findall(r"groupadd\s+--gid\s+(\d+)", instructions)
     created_users = re.findall(r"useradd\s+--uid\s+(\d+)\s+--gid\s+(\d+)", instructions)
     assert final_users, f"{dockerfile.name}: no USER in the final stage"
@@ -369,7 +346,7 @@ def _dockerfile_entrypoint_starts() -> list[ContainerStart]:
             _command_words(instruction.removeprefix("ENTRYPOINT").strip()),
         )
         for dockerfile in dockerfiles
-        for instruction in _dockerfile_instructions(dockerfile)
+        for instruction in dockerfile_instructions(dockerfile)
         if instruction.startswith("ENTRYPOINT ")
     ]
 
