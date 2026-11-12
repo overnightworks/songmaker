@@ -1551,6 +1551,9 @@ SIGKILLed and even the values the run did produce would be lost.
   so the worker holds no provider credential; the subprocess is spawned with
   `SECRET_ENV_KEYS` scrubbed
 - Handles `score` tasks
+- Loads Whisper and AudioBox from files pinned by hash in its image
+  (`SCORING_WHISPER_MODEL_DIR`, `SCORING_AUDIOBOX_CHECKPOINT`), never from the
+  Hugging Face Hub ([security](security.md))
 - Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
 - `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)
 
