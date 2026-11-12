@@ -149,9 +149,6 @@ def test_backend_runs_the_database_tests_against_its_own_postgres_service():
     assert not [job_id for job_id in JOBS if "postgresql" in job_id]
 
 
-COMPOSE_BASE = ROOT / "docker/docker-compose.ci.yml"
-COMPOSE_CACHE_OVERLAY = ROOT / "docker/docker-compose.ci-cache.yml"
-E2E_FILE = ROOT / ".github/workflows/e2e.yml"
 NOT_SUCCESS = ("failure", "cancelled", "skipped")
 CONTINUES_AFTER_A_FAILED_STEP = ("!cancelled()", "always()")
 LEG_RESULT = re.compile(r"\$\{\{\s*needs\.([\w-]+)\.result\s*\}\}")
@@ -449,31 +446,6 @@ def test_every_limit_is_a_literal_and_no_step_outlasts_its_job(suite):
 def test_no_backend_job_waits_longer_than_fifteen_minutes():
     for job in BACKEND.jobs.values():
         assert job["timeout-minutes"] <= 15
-
-
-class ComposeLoader(yaml.SafeLoader):
-    """Reads a compose file whose merge tags (`!reset`, `!override`) do not matter here."""
-
-
-ComposeLoader.add_multi_constructor("!", lambda loader, tag, node: None)
-
-
-def test_one_job_writes_the_build_cache_and_only_on_main():
-    def build(path):
-        return yaml.load(path.read_text(), Loader=ComposeLoader)["services"]["songmaker-web"][  # noqa: S506 - ComposeLoader extends SafeLoader
-            "build"
-        ]
-
-    assert "cache_to" not in build(COMPOSE_BASE)
-    assert build(COMPOSE_BASE)["cache_from"]
-    assert build(COMPOSE_CACHE_OVERLAY)["cache_to"]
-    overlay_mentions = [
-        line for line in E2E_FILE.read_text().splitlines() if COMPOSE_CACHE_OVERLAY.name in line
-    ]
-    assert len(overlay_mentions) == 1
-    assert "github.ref == 'refs/heads/main'" in overlay_mentions[0]
-    for axis in BROWSER_LEGS[0]["strategy"]["matrix"]:
-        assert f"matrix.{axis} ==" in overlay_mentions[0]
 
 
 REPORTS_STEP = "Choose the newest report of each shard"

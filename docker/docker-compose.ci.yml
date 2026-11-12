@@ -3,11 +3,6 @@
 # `profiles: [gpu]` keeps the ACE-Step worker, the scoring worker (torch and a
 # baked Whisper checkpoint) and the monitoring services out of both
 # `docker compose config` and `up` without needing to delete them here.
-# Every job reads the web image's build cache; the one that writes it adds
-# docker-compose.ci-cache.yml.
-x-gha-cache: &gha_cache
-  cache_from:
-    - type=gha
 
 # A test stack nobody tore down must stay down after a reboot, while the live
 # stack keeps `unless-stopped`; every service below merges this (#1355).
@@ -39,7 +34,6 @@ services:
   songmaker-web:
     <<: *test_stack_service
     build:
-      <<: *gha_cache
       # E2E maps the shipped bundle back to source for its coverage report.
       args:
         BUILD_SOURCE_MAPS: "true"
