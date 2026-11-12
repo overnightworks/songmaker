@@ -14,8 +14,9 @@ import {
 } from '#lib/test-utils/hitbox.ts';
 import { APP_NAME } from '#lib/constants/app.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import { SEARCH_OPEN_LABEL, RAIL_SEARCH_LABEL } from '#lib/constants/rail.ts';
+import { RAIL_SEARCH_LABEL } from '#lib/constants/rail.ts';
 import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
+import { words } from '#lib/words/en.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import type { ResolvedPathname } from '$app/types';
@@ -35,7 +36,7 @@ import { playlistList, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { resetRailSearchForTests } from '#lib/stores/railSearch.ts';
 import { railTreeQuery } from '#lib/stores/librarySearch.ts';
 import { buildAlbum, buildPlaylist, buildSong } from './shell/rail-test-fixtures';
-import PhoneAppBar, { SEARCH_CLOSE_LABEL, SEARCH_SHEET_LABEL } from './PhoneAppBar.svelte';
+import PhoneAppBar from './PhoneAppBar.svelte';
 
 vi.mock('$app/state', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
@@ -98,7 +99,9 @@ function queryButton(root: ParentNode, name: string): HTMLButtonElement | null {
 }
 
 function searchSheet(): HTMLElement | null {
-	return document.querySelector(`[role="dialog"][aria-label="${SEARCH_SHEET_LABEL}"]`);
+	return document.querySelector(
+		`[role="dialog"][aria-label="${words['phoneAppBar.searchSheet']}"]`
+	);
 }
 
 // The app's own pages the bar names, as the library holds them.
@@ -230,7 +233,12 @@ describe('PhoneAppBar', () => {
 		expect(target.querySelector('h1')?.textContent?.trim()).toBe('Sommerlicht');
 		expect(target.querySelector('.brand')).toBeNull();
 		expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).toBeNull();
-		for (const name of [backLabel('Cold Harbour'), SEARCH_OPEN_LABEL, 'Share song', 'Song menu']) {
+		for (const name of [
+			backLabel('Cold Harbour'),
+			words['phoneAppBar.searchOpen'],
+			'Share song',
+			'Song menu'
+		]) {
 			expectFrequentHitbox(getByRoleButton(target, name), name);
 		}
 		await tick();
@@ -257,7 +265,7 @@ describe('PhoneAppBar', () => {
 			getByRoleButton(target, 'Share song'),
 			getByRoleButton(target, 'Song menu')
 		];
-		const otherControls = [getByRoleButton(target, SEARCH_OPEN_LABEL)];
+		const otherControls = [getByRoleButton(target, words['phoneAppBar.searchOpen'])];
 
 		expect(songControls().map(isInert)).toEqual([true, true, true]);
 		expect(otherControls.map(isInert)).toEqual([false]);
@@ -284,7 +292,10 @@ describe('PhoneAppBar', () => {
 		expect(circle.textContent?.trim()).toBe('F');
 		expect(header?.lastElementChild?.contains(circle)).toBe(true);
 		expectFrequentHitbox(circle, ACCOUNT_CIRCLE_NAME);
-		expectFrequentHitbox(getByRoleButton(target, SEARCH_OPEN_LABEL), SEARCH_OPEN_LABEL);
+		expectFrequentHitbox(
+			getByRoleButton(target, words['phoneAppBar.searchOpen']),
+			words['phoneAppBar.searchOpen']
+		);
 	});
 
 	// #1402, #1506: Home and the Playlists page are places the app opens on, as
@@ -313,7 +324,7 @@ describe('PhoneAppBar', () => {
 
 			expect(backName(target)).toBeNull();
 			expect(target.querySelector('.brand')?.textContent).toBe(APP_NAME);
-			expect(queryButton(target, SEARCH_OPEN_LABEL)).not.toBeNull();
+			expect(queryButton(target, words['phoneAppBar.searchOpen'])).not.toBeNull();
 			expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).not.toBeNull();
 		}
 	);
@@ -407,7 +418,7 @@ describe('PhoneAppBar', () => {
 			const back = getByRoleButton(target, backLabel(name));
 			expect(back.textContent?.trim()).toBe(name);
 			expectFrequentHitbox(back, backLabel(name));
-			expect(queryButton(target, SEARCH_OPEN_LABEL)).not.toBeNull();
+			expect(queryButton(target, words['phoneAppBar.searchOpen'])).not.toBeNull();
 			expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).toBeNull();
 			expect(target.querySelector('.brand')).toBeNull();
 		}
@@ -460,7 +471,7 @@ describe('PhoneAppBar search sheet', () => {
 	async function openSearch(): Promise<HTMLElement> {
 		const target = renderBar();
 		await tick();
-		getByRoleButton(target, SEARCH_OPEN_LABEL).click();
+		getByRoleButton(target, words['phoneAppBar.searchOpen']).click();
 		await tick();
 		const sheet = searchSheet();
 		if (!sheet) throw new Error('Expected the search sheet');
@@ -474,7 +485,10 @@ describe('PhoneAppBar search sheet', () => {
 
 		expect(sheet.getAttribute('aria-modal')).toBe('true');
 		expect(document.activeElement?.getAttribute('aria-label')).toBe(RAIL_SEARCH_LABEL);
-		expectFrequentHitbox(getByRoleButton(sheet, SEARCH_CLOSE_LABEL), SEARCH_CLOSE_LABEL);
+		expectFrequentHitbox(
+			getByRoleButton(sheet, words['phoneAppBar.searchClose']),
+			words['phoneAppBar.searchClose']
+		);
 	});
 
 	it('closes on Back and leaves the page where it was', async () => {
@@ -490,7 +504,7 @@ describe('PhoneAppBar search sheet', () => {
 	it('closes on its own ‹', async () => {
 		const sheet = await openSearch();
 
-		getByRoleButton(sheet, SEARCH_CLOSE_LABEL).click();
+		getByRoleButton(sheet, words['phoneAppBar.searchClose']).click();
 		await tick();
 
 		expect(searchSheet()).toBeNull();

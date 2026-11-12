@@ -16,4 +16,3 @@ export const RAIL_PLAYLISTS_NAV_LABEL = 'Rail playlists';
 // Shown when ensureAllAlbumsLoaded fails outright, so a library the rail
 // could not reach at all does not look like one that is merely empty.
 export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
-export const SEARCH_OPEN_LABEL = 'Search';

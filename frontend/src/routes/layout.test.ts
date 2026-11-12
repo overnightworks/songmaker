@@ -33,8 +33,8 @@ import { get } from 'svelte/store';
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
-import { SEARCH_OPEN_LABEL, RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
-import { SEARCH_SHEET_LABEL } from '#lib/components/PhoneAppBar.svelte';
+import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
+import { words } from '#lib/words/en.ts';
 import { apiFetch } from '#lib/api/fetch.ts';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
@@ -150,6 +150,7 @@ const appCss = readFileSync(join(process.cwd(), 'src/app.css'), 'utf8');
 
 const VIEWPORT_PX = 320;
 const USER = makeAuthUser();
+const SEARCH_SHEET = `[role="dialog"][aria-label="${words['phoneAppBar.searchSheet']}"]`;
 
 function extractRule(source: string, selector: string): string {
 	const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -643,12 +644,12 @@ describe('global Escape', () => {
 	it('1354_37b_71_escape: closes the open Search sheet first and leaves the song only on the next Escape', async () => {
 		selectedSongId.set('s1');
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
-		getByRoleButton(target, SEARCH_OPEN_LABEL).click();
+		getByRoleButton(target, words['phoneAppBar.searchOpen']).click();
 		await tick();
 
 		pressEscape(window);
 		await tick();
-		expect(target.querySelector(`[role="dialog"][aria-label="${SEARCH_SHEET_LABEL}"]`)).toBeNull();
+		expect(target.querySelector(SEARCH_SHEET)).toBeNull();
 		expect(get(selectedSongId)).toBe('s1');
 
 		pressEscape(window);
@@ -1060,7 +1061,7 @@ describe('a session lost behind the open Search sheet', () => {
 		const documentLoads = documentLoadsStandIn();
 		standInForDocumentLoadsForTests(documentLoads);
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
-		getByRoleButton(target, SEARCH_OPEN_LABEL).click();
+		getByRoleButton(target, words['phoneAppBar.searchOpen']).click();
 		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('search-sheet'));
 
 		const back = watchBack();
@@ -1086,9 +1087,8 @@ describe('overlays on Settings', () => {
 	it('Back closes the search sheet and the address stays', async () => {
 		replaceHistoryEntry('/settings/voices');
 		const target = await renderLayout('/settings/voices');
-		const sheet = () =>
-			document.querySelector(`[role="dialog"][aria-label="${SEARCH_SHEET_LABEL}"]`);
-		getByRoleButton(target, SEARCH_OPEN_LABEL).click();
+		const sheet = () => document.querySelector(SEARCH_SHEET);
+		getByRoleButton(target, words['phoneAppBar.searchOpen']).click();
 		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('search-sheet'));
 		expect(sheet()).not.toBeNull();
 

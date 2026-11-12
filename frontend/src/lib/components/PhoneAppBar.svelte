@@ -1,13 +1,7 @@
-<script module lang="ts">
-	export const SEARCH_SHEET_LABEL = 'Search';
-	export const SEARCH_CLOSE_LABEL = 'Close search';
-</script>
-
 <script lang="ts">
 	import { page } from '$app/state';
 	import { SONG_TITLE_LABEL } from '#lib/constants/song.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
-	import { SEARCH_OPEN_LABEL } from '#lib/constants/rail.ts';
 	import { backLabel, backTargetName, pageBackShown } from '#lib/routes/pageBack.ts';
 	import { standingPage } from '#lib/routes/standingAddress.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
@@ -17,6 +11,7 @@
 	import { playlistList } from '#lib/stores/playlists.ts';
 	import { phoneAppBar } from '#lib/stores/ui.ts';
 	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import AccountMenu from './AccountMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import ShareButton from './ShareButton.svelte';
@@ -71,7 +66,7 @@
 		data-hitbox="frequent"
 		aria-haspopup="dialog"
 		aria-expanded={$searchSheet}
-		aria-label={SEARCH_OPEN_LABEL}
+		aria-label={pageText('phoneAppBar.searchOpen')}
 		onclick={() => searchSheet.set(true)}
 	>
 		<svg
@@ -165,14 +160,14 @@
 		class="search-sheet"
 		role="dialog"
 		aria-modal="true"
-		aria-label={SEARCH_SHEET_LABEL}
+		aria-label={pageText('phoneAppBar.searchSheet')}
 		{@attach focusSearchField}
 	>
 		<button
 			type="button"
 			class="search-sheet-close"
 			data-hitbox="frequent"
-			aria-label={SEARCH_CLOSE_LABEL}
+			aria-label={pageText('phoneAppBar.searchClose')}
 			onclick={closeSearch}
 		>
 			{@render backChevron()}
