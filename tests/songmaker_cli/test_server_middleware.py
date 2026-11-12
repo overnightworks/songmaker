@@ -23,9 +23,9 @@ from webauth.middleware import (
     BodySizeLimitMiddleware,
     CsrfOriginMiddleware,
     IpRateLimitMiddleware,
+    PathRefusalMiddleware,
     SecurityHeadersMiddleware,
 )
-from webauth.middleware._path_refusal import PathRefusalMiddleware
 
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, LOGOUT_PATH
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
