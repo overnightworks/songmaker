@@ -1,0 +1,8 @@
+claim_id = "cb0b35b48d07415b9b83e8b85bbbfebd"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "b0422e8477292fcce94c61dd66933099d87ff8a1"
+branch = "claude/issue-3062-the-new-menu-s-head-is-one-catalog-sente"
+scope = ["frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/NewPlaceMenu.svelte", "frontend/src/lib/components/NewPlaceMenu.test.ts", "frontend/src/lib/utils/page-words.test.ts", "frontend/src/lib/utils/page-words.ts", "frontend/src/lib/words/en.ts", "frontend/src/lib/words/index.ts"]
+opened_commit = "8e2f76e927e46c8a064ce092ef691ff85facb528"
+whole_reason = "One sentence moves whole: its catalog entry with the generated modules, the reader that hands its parts to the page with its test, and the menu with its test."
