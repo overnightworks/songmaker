@@ -22,6 +22,7 @@
 - Sharing goes through `enable_sharing()` and `disable_sharing()` of `src/songmaker_cli/db/queries/sharing.py`; side effects live in the domain wrapper.
 - ACE-Step's parameter names come from the HTTP API code of `vendor/acestep`, our fork.
 - A reproducible seed needs `use_random_seed: false`; ACE-Step ignores `seed` otherwise.
+- A test that needs a real `ffmpeg` requests `locked_ffmpeg` (`tests/support/ffmpeg_binary.py`): the `dev` extra's locked `imageio-ffmpeg` is the only ffmpeg tests run, never the machine's.
 - Each pytest worker process keeps its own numba cache (`tests/conftest.py`); a scorer-test segfault in numba's compiled code means several processes filled one cache.
 - An interface text of a surface that reads `frontend/src/lib/utils/page-words.ts` is a key in `frontend/src/lib/catalogs/en.po`; any other new interface text goes into its surface's `frontend/src/lib/constants/` file, never as a literal in markup.
 - Test albums carry a recognizable title prefix and are archived, never deleted.

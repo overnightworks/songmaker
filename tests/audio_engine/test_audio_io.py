@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import struct
 import subprocess
 from pathlib import Path
@@ -271,7 +270,9 @@ def _one_second_of_tone() -> tuple[np.ndarray, np.ndarray]:
     return tone, tone
 
 
-def test_encoded_mp3_carries_the_ai_mark_with_and_without_other_metadata(tmp_path: Path) -> None:
+def test_encoded_mp3_carries_the_ai_mark_with_and_without_other_metadata(
+    tmp_path: Path, locked_ffmpeg: Path
+) -> None:
     left, right = _one_second_of_tone()
     for name, metadata in (("tagged.mp3", {"title": "Song"}), ("bare.mp3", None)):
         path = tmp_path / name
@@ -281,15 +282,18 @@ def test_encoded_mp3_carries_the_ai_mark_with_and_without_other_metadata(tmp_pat
         assert [frame.text for frame in frames] == [[IPTC_TRAINED_ALGORITHMIC_MEDIA]]
 
 
-def test_written_wav_carries_the_ai_mark_in_its_info_chunk(tmp_path: Path) -> None:
+def test_written_wav_carries_the_ai_mark_in_its_info_chunk(
+    tmp_path: Path, locked_ffmpeg: Path
+) -> None:
     left, right = _one_second_of_tone()
     path = tmp_path / "take.wav"
     write_stereo_wav(str(path), left, right, 8000)
 
-    probe = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_format", "-of", "json", str(path)],
+    tags = subprocess.run(
+        [str(locked_ffmpeg), "-v", "error", "-i", str(path), "-f", "ffmetadata", "-"],
         check=True, capture_output=True, text=True,
-    )
-    assert IPTC_TRAINED_ALGORITHMIC_MEDIA in json.loads(probe.stdout)["format"]["tags"]["comment"]
+    ).stdout
+    comment = next(line for line in tags.splitlines() if line.startswith("comment="))
+    assert IPTC_TRAINED_ALGORITHMIC_MEDIA in comment
     samples, _right, sample_rate = read_wav_bytes(path.read_bytes())
     assert (sample_rate, len(samples)) == (8000, 8000)

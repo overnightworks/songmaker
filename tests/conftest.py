@@ -67,6 +67,7 @@ pytest_plugins = [
     "support.mcp_world",
     "support.reference_link_migration",
     "support.database_case_record",
+    "support.ffmpeg_binary",
     "support.node_id_record",
     "pytester",
 ]

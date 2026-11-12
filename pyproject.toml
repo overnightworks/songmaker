@@ -80,6 +80,9 @@ dev = [
     "ruff>=0.4,<1",
     "import-linter>=2.0,<3",
     "fakeredis[lua]>=2.0,<3",
+    # Carries a static GPL build of ffmpeg for the tests that run the real binary
+    # (tests/support/ffmpeg_binary.py); no image installs this extra, so no image holds it.
+    "imageio-ffmpeg>=0.8,<1",
     # Reads back what monitoring/scripts/start_alertmanager.sh generates, so
     # its escaping is asserted against a real YAML parser instead of
     # against matching text (issue #333).
@@ -148,5 +151,5 @@ pythonpath = ["src"]
 
 # ---------------------------------------------------------------
 # External tools (must be on system PATH):
-#   ffmpeg      — MP3 encoding
+#   ffmpeg      — MP3 encoding; the tests take theirs from the dev extra's imageio-ffmpeg
 # ---------------------------------------------------------------
