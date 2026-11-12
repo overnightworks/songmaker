@@ -1,0 +1,8 @@
+claim_id = "cbf5b3922f92470caf375474ccd9af63"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "2bef8d9c27d08342b04a3a923bd0520fe619714f"
+branch = "claude/issue-3015-the-browser-suite-runs-in-eight-shards-p"
+scope = [".github/workflows/e2e.yml", "docker/docker-compose.ci.yml", "docs/testing.md", "frontend/e2e/README.md", "tests/workflows/test_ci_quality_gate.py"]
+opened_commit = "d33a9d2c85d42264d7378de62dd00b7346b94767"
+whole_reason = "The count has one owner in e2e.yml; the documents, comments and the shape test that name it change with it so that no copy of the old count stays."
