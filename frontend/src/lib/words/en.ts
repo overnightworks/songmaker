@@ -180,6 +180,11 @@ export type Words = {
     readonly "newSong.hint": string;
     readonly "newSong.failed": string;
     readonly "newSong.refused": string;
+    readonly "referenceMenu.label": string;
+    readonly "referenceMenu.close": string;
+    readonly "referenceMenu.showTakes": string;
+    readonly "referenceMenu.delete": string;
+    readonly "referenceMenu.inUse": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -386,5 +391,10 @@ export const words: Words = {
     "newSong.hint": "Opens the song on Write.",
     "newSong.failed": "The song could not be created. Try again.",
     "newSong.refused": "The song could not be created.",
+    "referenceMenu.label": "Reference menu",
+    "referenceMenu.close": "Close menu",
+    "referenceMenu.showTakes": "Show takes",
+    "referenceMenu.delete": "Delete",
+    "referenceMenu.inUse": "In use",
 };
 export type Key = keyof Words;
