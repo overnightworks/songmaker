@@ -16,7 +16,6 @@ import { SIGN_IN_NEXT_PARAM } from '../src/lib/constants/auth';
 
 import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Page } from './coverage-test';
-import { LIBRARY_NEW_MENU_LABEL } from '../src/lib/constants/library';
 import { words } from '../src/lib/words/en';
 import { kitWords } from './account-menu-words';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
@@ -71,7 +70,7 @@ const WALL_SELECTOR = '.library-wall';
 const homeHeading = (page: Page) =>
 	workspace(page).getByRole('heading', { name: words['places.home'], exact: true });
 const newButton = (page: Page) =>
-	workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true });
+	workspace(page).getByRole('button', { name: words['newPlace.menuLabel'], exact: true });
 const listenRegion = (page: Page) => workspace(page).getByRole('region', LISTEN_REGION);
 const wall = (page: Page) => workspace(page).locator(WALL_SELECTOR);
 const historyLength = (page: Page) => page.evaluate(() => history.length);

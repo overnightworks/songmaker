@@ -34,7 +34,6 @@ import {
 	pendingStart,
 	toggleOrStartCollection
 } from '#lib/stores/player.ts';
-import { LIBRARY_NEW_MENU_LABEL } from '#lib/constants/library.ts';
 import { words } from '#lib/words/en.ts';
 
 const fetchPlaylists = vi.fn();
@@ -125,7 +124,7 @@ describe('the Playlists page wall', () => {
 		expect(head?.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe(
 			words['libraryWall.sortPlaylists']
 		);
-		expect(head?.querySelector(`[aria-label="${LIBRARY_NEW_MENU_LABEL}"]`)).not.toBeNull();
+		expect(head?.querySelector(`[aria-label="${words['newPlace.menuLabel']}"]`)).not.toBeNull();
 		expect(pressedOrder(root)).toEqual([orderFace('title')]);
 	});
 
@@ -197,7 +196,7 @@ describe('the Playlists page wall', () => {
 });
 
 function newButtonOnHead(root: ParentNode): Element | null {
-	return root.querySelector(`.wall-titlebar [aria-label="${LIBRARY_NEW_MENU_LABEL}"]`);
+	return root.querySelector(`.wall-titlebar [aria-label="${words['newPlace.menuLabel']}"]`);
 }
 
 function emptyLibrary(): void {

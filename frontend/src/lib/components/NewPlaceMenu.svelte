@@ -1,12 +1,6 @@
 <script lang="ts">
 	import { historyLayerState } from '#lib/stores/layers.ts';
-	import {
-		LIBRARY_NEW_ALBUM_LABEL,
-		LIBRARY_NEW_FACE,
-		LIBRARY_NEW_MENU_CLOSE_LABEL,
-		LIBRARY_NEW_MENU_LABEL,
-		LIBRARY_NEW_PLAYLIST_LABEL
-	} from '#lib/constants/library.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import NewAlbumCard from './NewAlbumCard.svelte';
@@ -45,19 +39,19 @@
 	<MenuPopover
 		bind:this={menu}
 		layer="library-new"
-		label={LIBRARY_NEW_MENU_LABEL}
-		closeLabel={LIBRARY_NEW_MENU_CLOSE_LABEL}
+		label={pageText('newPlace.menuLabel')}
+		closeLabel={pageText('newPlace.menuClose', { library: pageText('places.library') })}
 		pressed={$card !== null}
 	>
 		{#snippet trigger()}<span class="new-face"
-				><Icon name="plus" size={16} />{LIBRARY_NEW_FACE}</span
+				><Icon name="plus" size={16} />{pageText('newPlace.face')}</span
 			>{/snippet}
 		<p class="new-menu-heading">New in <b>Library</b></p>
 		<button type="button" class="new-menu-item" onclick={() => startNew('album')}
-			><Icon name="album" size={16} />{LIBRARY_NEW_ALBUM_LABEL}</button
+			><Icon name="album" size={16} />{pageText('newPlace.album')}</button
 		>
 		<button type="button" class="new-menu-item" onclick={() => startNew('playlist')}
-			><Icon name="playlist" size={16} />{LIBRARY_NEW_PLAYLIST_LABEL}</button
+			><Icon name="playlist" size={16} />{pageText('newPlace.playlist')}</button
 		>
 	</MenuPopover>
 </span>

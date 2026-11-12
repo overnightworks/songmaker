@@ -152,6 +152,27 @@ export type Words = {
     readonly "songMove.sharedMessage": (gaps: { readonly album: string; readonly song: string }) => string;
     readonly "songMove.confirm": string;
     readonly "songMove.moved": (gaps: { readonly album: string }) => string;
+    readonly "newPlace.face": string;
+    readonly "newPlace.menuLabel": string;
+    readonly "newPlace.menuClose": (gaps: { readonly library: string }) => string;
+    readonly "newPlace.album": string;
+    readonly "newPlace.playlist": string;
+    readonly "newPlace.create": string;
+    readonly "newPlace.offline": string;
+    readonly "newAlbum.cardLabel": string;
+    readonly "newAlbum.close": string;
+    readonly "newAlbum.titleLabel": string;
+    readonly "newAlbum.artistLabel": string;
+    readonly "newAlbum.artistOptional": string;
+    readonly "newAlbum.hint": string;
+    readonly "newAlbum.failed": string;
+    readonly "newAlbum.refused": string;
+    readonly "newPlaylist.cardLabel": string;
+    readonly "newPlaylist.close": string;
+    readonly "newPlaylist.nameLabel": string;
+    readonly "newPlaylist.hint": string;
+    readonly "newPlaylist.failed": string;
+    readonly "newPlaylist.refused": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -330,5 +351,26 @@ export const words: Words = {
     "songMove.sharedMessage": (gaps: { readonly album: string; readonly song: string }) => gaps.song + " appears on " + gaps.album + "'s public page",
     "songMove.confirm": "Move",
     "songMove.moved": (gaps: { readonly album: string }) => "Moved to " + gaps.album,
+    "newPlace.face": "New",
+    "newPlace.menuLabel": "New album or playlist",
+    "newPlace.menuClose": (gaps: { readonly library: string }) => "Close New in " + gaps.library,
+    "newPlace.album": "Album",
+    "newPlace.playlist": "Playlist",
+    "newPlace.create": "Create",
+    "newPlace.offline": "You're offline, so nothing was created. Try again once you're back online.",
+    "newAlbum.cardLabel": "New album",
+    "newAlbum.close": "Close new album",
+    "newAlbum.titleLabel": "Title",
+    "newAlbum.artistLabel": "Artist",
+    "newAlbum.artistOptional": "optional",
+    "newAlbum.hint": "Opens the album; add songs there.",
+    "newAlbum.failed": "The album could not be created. Try again.",
+    "newAlbum.refused": "The album could not be created.",
+    "newPlaylist.cardLabel": "New playlist",
+    "newPlaylist.close": "Close new playlist",
+    "newPlaylist.nameLabel": "Name",
+    "newPlaylist.hint": "Opens the playlist; add songs from any album.",
+    "newPlaylist.failed": "The playlist could not be created. Try again.",
+    "newPlaylist.refused": "The playlist could not be created.",
 };
 export type Key = keyof Words;
