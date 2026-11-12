@@ -227,7 +227,9 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await expect(writeRegion(page).getByText(words['homeWrite.empty'])).toHaveCount(0);
 		await page.screenshot({ path: testInfo.outputPath('write-error.png') });
 		await page.unroute(writeEndpoint);
-		await writeRegion(page).getByRole('button', { name: 'Retry', exact: true }).click();
+		await writeRegion(page)
+			.getByRole('button', { name: words['homeList.retry'], exact: true })
+			.click();
 		await expectWrittenOrder(page, answer);
 
 		let holdFirst = true;

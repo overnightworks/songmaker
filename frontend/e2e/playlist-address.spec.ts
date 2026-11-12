@@ -30,8 +30,6 @@ import { readSeededLibrary, seedPlaylist } from './seed';
  */
 const PLAYLIST_ADDRESS_FLOW_API_REQUEST_BUDGET = 17;
 
-const WORKSPACE_LOADING_TEXT = 'Loading...';
-
 let guard: FlowGuard;
 
 test.beforeEach(({ page }) => {
@@ -47,7 +45,7 @@ test.afterEach(({}, testInfo) => {
 
 /** The workspace is up: no bootstrap gate left standing, no bootstrap failure. */
 async function expectWorkspaceStanding(page: Page): Promise<void> {
-	await expect(page.getByText(WORKSPACE_LOADING_TEXT, { exact: true })).toHaveCount(0);
+	await expect(page.getByText(words['libraryWorkspace.loading'], { exact: true })).toHaveCount(0);
 	await expect(page.getByText(RESOURCE_SYNC_ERROR, { exact: true })).toHaveCount(0);
 }
 
@@ -78,7 +76,7 @@ test(
 	async ({ page }) => {
 		await page.goto('/playlist/no-such-playlist-here');
 
-		await expect(page.getByRole('alert')).toContainText('No such playlist');
+		await expect(page.getByRole('alert')).toContainText(words['addressPage.noSuchPlaylist']);
 		await expect(page).toHaveURL(/\/playlist\/no-such-playlist-here$/);
 	}
 );
@@ -94,7 +92,7 @@ test(
 		const library = readSeededLibrary();
 		const unknownAddress = '/playlist/no-such-playlist-here';
 		await page.goto(unknownAddress);
-		await expect(page.getByRole('alert')).toContainText('No such playlist');
+		await expect(page.getByRole('alert')).toContainText(words['addressPage.noSuchPlaylist']);
 
 		const rail = page.getByRole('navigation', { name: words['rail.nav'] });
 		const libraryGroup = rail.getByRole('button', {
@@ -113,6 +111,6 @@ test(
 		await page.goBack();
 
 		await expect(page).toHaveURL(new RegExp(`${unknownAddress}$`));
-		await expect(page.getByRole('alert')).toContainText('No such playlist');
+		await expect(page.getByRole('alert')).toContainText(words['addressPage.noSuchPlaylist']);
 	}
 );

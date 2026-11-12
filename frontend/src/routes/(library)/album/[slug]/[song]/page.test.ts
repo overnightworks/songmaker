@@ -23,6 +23,7 @@ import {
 	startLibraryResourceSync
 } from '#lib/stores/resourceSync.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
+import { words } from '#lib/words/en.ts';
 
 const ALBUM_SLUG = 'anfield';
 const ALBUM_TITLE = 'Anfield';
@@ -278,7 +279,7 @@ describe('/album/<slug>/<song-slug> naming no song in a known album', () => {
 
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('No such song'));
+		await vi.waitFor(() => expect(target.textContent).toContain(words['addressPage.noSuchSong']));
 		const back = requireElement(target, 'a.address-action');
 		expect(back.getAttribute('href')).toBe(`/album/${ALBUM_SLUG}`);
 		expect(get(openCollection)).toBeNull();
@@ -294,14 +295,14 @@ describe('/album/<slug>/<song-slug> naming no album', () => {
 	it('says the address names no album instead of showing an empty page', async () => {
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('No such album'));
+		await vi.waitFor(() => expect(target.textContent).toContain(words['addressPage.noSuchAlbum']));
 		expect(target.querySelector('[role="alert"]')).not.toBeNull();
 	});
 
 	it('stays on the address instead of redirecting to the library', async () => {
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('No such album'));
+		await vi.waitFor(() => expect(target.textContent).toContain(words['addressPage.noSuchAlbum']));
 		expect(window.location.pathname).toBe('/album/ghost/some-song');
 	});
 });
@@ -322,7 +323,9 @@ describe('/album/<slug>/<song-slug> whose song cannot be reached', () => {
 		api.fetchAlbum.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('This song could not be loaded.'));
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain(words['addressPage.songUnreachable'])
+		);
 		expect(target.textContent).not.toContain('Failed to fetch');
 	});
 
@@ -330,8 +333,12 @@ describe('/album/<slug>/<song-slug> whose song cannot be reached', () => {
 		browserReportsOnline(false);
 		api.fetchAlbum.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
 		const target = openAddress();
-		await vi.waitFor(() => expect(target.textContent).toContain('This song could not be loaded.'));
-		expect(requireElement(target, 'button.address-action').textContent).toBe('Try again');
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain(words['addressPage.songUnreachable'])
+		);
+		expect(requireElement(target, 'button.address-action').textContent).toBe(
+			words['addressPage.tryAgain']
+		);
 
 		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
 		browserReportsOnline(true);
@@ -404,7 +411,7 @@ describe('/album/<slug>/<song-slug> after the library load failed', () => {
 
 		requireElement(target, 'button.address-action').click();
 		await tick();
-		expect(target.textContent).toContain('Loading song...');
+		expect(target.textContent).toContain(words['addressPage.loadingSong']);
 		expect(target.textContent).not.toContain(ALBUM_DOWN);
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
@@ -418,7 +425,7 @@ describe('/album/<slug>/<song-slug> after the library load failed', () => {
 
 		requireElement(target, 'button.address-action').click();
 		await tick();
-		expect(target.textContent).toContain('Loading song...');
+		expect(target.textContent).toContain(words['addressPage.loadingSong']);
 		await vi.waitFor(() => expect(target.querySelector('button.address-action')).not.toBeNull());
 		expect(target.textContent).toContain(ALBUM_DOWN);
 		expect(target.textContent).not.toContain(TRACK_TITLE);
@@ -448,7 +455,9 @@ describe('/album/<slug>/<song-slug> after the library load failed', () => {
 		await retryResourceSync();
 		failAddress(new ApiError(500, ALBUM_DOWN, '/api/albums'));
 		await tick();
-		expect(target.querySelector('.address-overlay')?.textContent).toContain('Loading song...');
+		expect(target.querySelector('.address-overlay')?.textContent).toContain(
+			words['addressPage.loadingSong']
+		);
 		expect(target.textContent).not.toContain(ALBUM_DOWN);
 		releaseRerun();
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));

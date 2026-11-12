@@ -164,7 +164,7 @@ describe('1354_rule_14 Listen', () => {
 		fetchListen.mockRejectedValueOnce(new TypeError('offline'));
 		await showListen();
 		expect(target.textContent).toContain(words['homeListen.error']);
-		getByRoleButton(target, 'Retry').click();
+		getByRoleButton(target, words['homeList.retry']).click();
 		await vi.waitFor(() => expect(rowNames()).toHaveLength(3));
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
