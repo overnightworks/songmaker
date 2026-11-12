@@ -3,12 +3,6 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LibraryListenItem } from '#lib/api/library.ts';
-import {
-	LIBRARY_NEW_ALBUM_LABEL,
-	LIBRARY_NEW_MENU_LABEL,
-	LIBRARY_NEW_PLAYLIST_LABEL
-} from '#lib/constants/library.ts';
-import { NEW_ALBUM_CARD_LABEL } from '#lib/constants/new-collection.ts';
 
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 
@@ -86,20 +80,20 @@ describe('1354_rule_14 LibraryHome', () => {
 		const head = target.querySelector('.home-titlebar');
 		if (!head) throw new Error('Expected the Home head');
 
-		getByRoleButton(head, LIBRARY_NEW_MENU_LABEL).click();
+		getByRoleButton(head, words['newPlace.menuLabel']).click();
 		await tick();
 		const menu = document.body.querySelector(
-			`[role="dialog"][aria-label="${LIBRARY_NEW_MENU_LABEL}"]`
+			`[role="dialog"][aria-label="${words['newPlace.menuLabel']}"]`
 		);
 		if (!menu) throw new Error('+ New opened no menu');
 		expect([...menu.querySelectorAll('button')].map(accessibleName)).toEqual([
-			LIBRARY_NEW_ALBUM_LABEL,
-			LIBRARY_NEW_PLAYLIST_LABEL
+			words['newPlace.album'],
+			words['newPlace.playlist']
 		]);
-		getByRoleButton(menu, LIBRARY_NEW_ALBUM_LABEL).click();
+		getByRoleButton(menu, words['newPlace.album']).click();
 		await tick();
 
-		const card = head.querySelector(`[aria-label="${NEW_ALBUM_CARD_LABEL}"]`);
+		const card = head.querySelector(`[aria-label="${words['newAlbum.cardLabel']}"]`);
 		expect(card).not.toBeNull();
 		const listenRegion = target.querySelector(`[aria-label="${words['homeListen.label']}"]`);
 		expect(card?.compareDocumentPosition(listenRegion as Node)).toBe(

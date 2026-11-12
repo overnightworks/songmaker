@@ -19,7 +19,6 @@ import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import { words } from '../src/lib/words/en';
-import { LIBRARY_NEW_MENU_LABEL, LIBRARY_NEW_ALBUM_LABEL } from '../src/lib/constants/library';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
@@ -29,7 +28,6 @@ import {
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
-import { NEW_ALBUM_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import {
 	appBar,
 	FlowGuard,
@@ -402,13 +400,13 @@ for (const surface of ['Home name', 'Search'] as const) {
 			let field: Locator;
 			if (surface === 'Home name') {
 				await workspace(page)
-					.getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true })
+					.getByRole('button', { name: words['newPlace.menuLabel'], exact: true })
 					.click();
 				await page
-					.getByRole('dialog', { name: LIBRARY_NEW_MENU_LABEL })
-					.getByRole('button', { name: LIBRARY_NEW_ALBUM_LABEL })
+					.getByRole('dialog', { name: words['newPlace.menuLabel'] })
+					.getByRole('button', { name: words['newPlace.album'] })
 					.click();
-				field = workspace(page).getByLabel(NEW_ALBUM_TITLE_LABEL);
+				field = workspace(page).getByLabel(words['newAlbum.titleLabel']);
 			} else {
 				field = (await openSearchSheet(page)).getByRole('combobox', {
 					name: words['railSearch.field']

@@ -16,6 +16,7 @@ import {
 	field,
 	type
 } from '#lib/test-utils/new-place-card.ts';
+import { words } from '#lib/words/en.ts';
 
 const createAlbum = vi.fn();
 
@@ -73,17 +74,22 @@ describe('NewAlbumCard', () => {
 	it('names itself New album and puts the cursor in Title', async () => {
 		const root = await render();
 
-		expect(root.querySelector('[aria-label="New album"]')).not.toBeNull();
-		expect(document.activeElement).toBe(field(root, 'Title'));
-		expect(field(root, 'Artist').required).toBe(false);
-		expect(field(root, 'Artist').placeholder).toBe('Artist');
+		expect(root.querySelector(`[aria-label="${words['newAlbum.cardLabel']}"]`)).not.toBeNull();
+		expect(document.activeElement).toBe(field(root, words['newAlbum.titleLabel']));
+		expect(field(root, words['newAlbum.artistLabel']).required).toBe(false);
+		expect(field(root, words['newAlbum.artistLabel']).placeholder).toBe(
+			words['newAlbum.artistLabel']
+		);
 	});
 
-	it.each(['Title', 'Artist'])('%s takes no more than the server keeps', async (label) => {
-		const root = await render();
+	it.each([words['newAlbum.titleLabel'], words['newAlbum.artistLabel']])(
+		'%s takes no more than the server keeps',
+		async (label) => {
+			const root = await render();
 
-		expect(field(root, label).maxLength).toBe(200);
-	});
+			expect(field(root, label).maxLength).toBe(200);
+		}
+	);
 
 	it.each([
 		{ case: 'no title', title: '' },
@@ -91,15 +97,15 @@ describe('NewAlbumCard', () => {
 	])('offers no Create for $case', async ({ title }) => {
 		const root = await render();
 
-		type(field(root, 'Title'), title);
+		type(field(root, words['newAlbum.titleLabel']), title);
 
 		expect(createButton(root).disabled).toBe(true);
 	});
 
 	it('creates the album with its title and optional artist, lists it and opens its page', async () => {
 		const root = await render();
-		type(field(root, 'Title'), '  Night Drive ');
-		type(field(root, 'Artist'), ' Lichtwechsel ');
+		type(field(root, words['newAlbum.titleLabel']), '  Night Drive ');
+		type(field(root, words['newAlbum.artistLabel']), ' Lichtwechsel ');
 
 		createButton(root).click();
 		await createSettled(createAlbum);
@@ -112,9 +118,9 @@ describe('NewAlbumCard', () => {
 
 	it('creates on Enter in the title field with an empty artist', async () => {
 		const root = await render();
-		type(field(root, 'Title'), 'Night Drive');
+		type(field(root, words['newAlbum.titleLabel']), 'Night Drive');
 
-		field(root, 'Title').form?.requestSubmit();
+		field(root, words['newAlbum.titleLabel']).form?.requestSubmit();
 		await createSettled(createAlbum);
 
 		expect(createAlbum).toHaveBeenCalledWith('Night Drive', '');
@@ -129,35 +135,35 @@ describe('NewAlbumCard', () => {
 		{
 			case: 'the server refuses it without a reason',
 			refusal: new ApiError(422, '', '/api/albums'),
-			reason: 'The album could not be created.'
+			reason: words['newAlbum.refused']
 		},
 		{
 			case: 'the server fails',
 			refusal: new ApiError(500, 'Internal Server Error', '/api/albums'),
-			reason: 'The album could not be created. Try again.'
+			reason: words['newAlbum.failed']
 		},
 		{
 			case: 'the server rate-limits it',
 			refusal: new ApiError(429, 'Too many requests', '/api/albums', 30),
-			reason: 'The album could not be created. Try again.'
+			reason: words['newAlbum.failed']
 		},
 		{
 			case: 'the network is gone',
 			refusal: new NetworkError('/api/albums', new TypeError('Failed to fetch')),
-			reason: "You're offline, so nothing was created. Try again once you're back online."
+			reason: words['newPlace.offline']
 		}
 	])(
 		'915_E2 keeps the card and what was typed when $case, and says why in words that fit',
 		async ({ refusal, reason }) => {
 			createAlbum.mockRejectedValue(refusal);
 			const root = await render();
-			type(field(root, 'Title'), 'Night Drive');
+			type(field(root, words['newAlbum.titleLabel']), 'Night Drive');
 
 			createButton(root).click();
 			await createSettled(createAlbum);
 
 			expect(creates).toBe(0);
-			expect(field(root, 'Title').value).toBe('Night Drive');
+			expect(field(root, words['newAlbum.titleLabel']).value).toBe('Night Drive');
 			expect(createButton(root).disabled).toBe(false);
 			expect(get(openCollection)).toBeNull();
 			expect(addToast).toHaveBeenCalledWith(reason, 'error');
@@ -170,7 +176,7 @@ describe('NewAlbumCard', () => {
 		const { escaped, restore } = captureUnhandledRejections();
 		restoreUnhandledRejections = restore;
 		const root = await render();
-		type(field(root, 'Title'), 'Night Drive');
+		type(field(root, words['newAlbum.titleLabel']), 'Night Drive');
 
 		createButton(root).click();
 		await createSettled(createAlbum);
@@ -182,9 +188,9 @@ describe('NewAlbumCard', () => {
 
 	it('× closes it and creates nothing', async () => {
 		const root = await render();
-		type(field(root, 'Title'), 'Night Drive');
+		type(field(root, words['newAlbum.titleLabel']), 'Night Drive');
 
-		root.querySelector<HTMLButtonElement>('[aria-label="Close new album"]')?.click();
+		root.querySelector<HTMLButtonElement>(`[aria-label="${words['newAlbum.close']}"]`)?.click();
 		await tick();
 
 		expect(cancels).toBe(1);

@@ -2,15 +2,8 @@
 	import { onMount } from 'svelte';
 	import { openPlaylist } from '#lib/stores/navigation.ts';
 	import { createNewPlaylist } from '#lib/stores/playlists.ts';
-	import {
-		NEW_PLACE_TEXT_MAX_LENGTH,
-		NEW_PLAYLIST_CARD_LABEL,
-		NEW_PLAYLIST_CLOSE_LABEL,
-		NEW_PLAYLIST_FAILED,
-		NEW_PLAYLIST_HINT,
-		NEW_PLAYLIST_NAME_LABEL,
-		NEW_PLAYLIST_REFUSED
-	} from '#lib/constants/new-collection.ts';
+	import { NEW_PLACE_TEXT_MAX_LENGTH } from '#lib/constants/new-collection.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {
@@ -32,11 +25,11 @@
 </script>
 
 <NewPlaceCard
-	label={NEW_PLAYLIST_CARD_LABEL}
-	closeLabel={NEW_PLAYLIST_CLOSE_LABEL}
-	hint={NEW_PLAYLIST_HINT}
-	failedMessage={NEW_PLAYLIST_FAILED}
-	refusedMessage={NEW_PLAYLIST_REFUSED}
+	label={pageText('newPlaylist.cardLabel')}
+	closeLabel={pageText('newPlaylist.close')}
+	hint={pageText('newPlaylist.hint')}
+	failedMessage={pageText('newPlaylist.failed')}
+	refusedMessage={pageText('newPlaylist.refused')}
 	draftKey="playlist"
 	bind:title={name}
 	ready={name.trim() !== ''}
@@ -46,7 +39,7 @@
 	{oncreated}
 >
 	<label class="field">
-		<span class="field-label">{NEW_PLAYLIST_NAME_LABEL}</span>
+		<span class="field-label">{pageText('newPlaylist.nameLabel')}</span>
 		<input
 			bind:this={nameInput}
 			bind:value={name}

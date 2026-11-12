@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, PlaylistItem } from '#lib/api/types.ts';
-import { LIBRARY_NEW_MENU_LABEL } from '#lib/constants/library.ts';
+import { words } from '#lib/words/en.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { makeAlbum, makePlaylist } from '#lib/test-utils/factories.ts';
@@ -22,7 +22,7 @@ import NewPlaceMenu from './NewPlaceMenu.svelte';
 const TAKEN = 'That name is taken';
 
 interface NewKind {
-	choice: 'Album' | 'Playlist';
+	choice: string;
 	card: string;
 	close: string;
 	field: string;
@@ -34,26 +34,26 @@ interface NewKind {
 }
 
 const NEW_ALBUM: NewKind = {
-	choice: 'Album',
-	card: 'New album',
-	close: 'Close new album',
-	field: 'Title',
+	choice: words['newPlace.album'],
+	card: words['newAlbum.cardLabel'],
+	close: words['newAlbum.close'],
+	field: words['newAlbum.titleLabel'],
 	endpoint: '/api/albums',
 	name: 'Night Drive',
 	created: makeAlbum({ id: 'a-night', title: 'Night Drive' }),
 	opened: { kind: 'album', id: 'a-night' },
-	serverFailure: 'The album could not be created. Try again.'
+	serverFailure: words['newAlbum.failed']
 };
 const NEW_PLAYLIST: NewKind = {
-	choice: 'Playlist',
-	card: 'New playlist',
-	close: 'Close new playlist',
-	field: 'Name',
+	choice: words['newPlace.playlist'],
+	card: words['newPlaylist.cardLabel'],
+	close: words['newPlaylist.close'],
+	field: words['newPlaylist.nameLabel'],
 	endpoint: '/api/playlists',
 	name: 'Road Trip',
 	created: makePlaylist({ id: 'p-road', title: 'Road Trip', share_slug: null }),
 	opened: { kind: 'playlist', id: 'p-road' },
-	serverFailure: 'The playlist could not be created. Try again.'
+	serverFailure: words['newPlaylist.failed']
 };
 
 const fetchStub = vi.fn();
@@ -85,14 +85,16 @@ async function render(): Promise<HTMLElement> {
 }
 
 function newButton(root: ParentNode): HTMLButtonElement {
-	const button = root.querySelector<HTMLButtonElement>(`[aria-label="${LIBRARY_NEW_MENU_LABEL}"]`);
+	const button = root.querySelector<HTMLButtonElement>(
+		`[aria-label="${words['newPlace.menuLabel']}"]`
+	);
 	if (!button) throw new Error('no + New');
 	return button;
 }
 
 function newMenu(): HTMLElement | null {
 	return document.querySelector<HTMLElement>(
-		`[role="dialog"][aria-label="${LIBRARY_NEW_MENU_LABEL}"]`
+		`[role="dialog"][aria-label="${words['newPlace.menuLabel']}"]`
 	);
 }
 
@@ -137,7 +139,7 @@ describe('1354_rule_14 915_C1 NewPlaceMenu', () => {
 	it('stands as + New with its plus', async () => {
 		const root = await render();
 
-		expect(newButton(root).textContent).toContain('New');
+		expect(newButton(root).textContent).toContain(words['newPlace.face']);
 		expect(newButton(root).querySelector('svg')).not.toBeNull();
 	});
 
@@ -149,7 +151,10 @@ describe('1354_rule_14 915_C1 NewPlaceMenu', () => {
 		expect(newButton(root).getAttribute('aria-expanded')).toBe('true');
 		expect(menu.textContent).toContain('New in Library');
 		const items = [...menu.querySelectorAll('button')];
-		expect(items.map((item) => item.textContent?.trim())).toEqual(['Album', 'Playlist']);
+		expect(items.map((item) => item.textContent?.trim())).toEqual([
+			words['newPlace.album'],
+			words['newPlace.playlist']
+		]);
 		expect(items.every((item) => item.querySelector('svg') !== null)).toBe(true);
 	});
 
@@ -229,7 +234,7 @@ describeBackClosesOverlay({
 	},
 	isShown: () => newMenu() !== null,
 	afterBack: () =>
-		expect(document.activeElement?.getAttribute('aria-label')).toBe(LIBRARY_NEW_MENU_LABEL),
+		expect(document.activeElement?.getAttribute('aria-label')).toBe(words['newPlace.menuLabel']),
 	closeWays: []
 });
 
@@ -243,7 +248,7 @@ for (const kind of [NEW_ALBUM, NEW_PLAYLIST]) {
 		},
 		isShown: (target) => newCard(target, kind) !== null,
 		afterBack: () => {
-			expect(document.activeElement?.getAttribute('aria-label')).toBe(LIBRARY_NEW_MENU_LABEL);
+			expect(document.activeElement?.getAttribute('aria-label')).toBe(words['newPlace.menuLabel']);
 			expect(fetchStub).not.toHaveBeenCalled();
 		},
 		closeWays: [

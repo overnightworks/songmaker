@@ -606,3 +606,87 @@ msgstr ""
 msgctxt "songMove.moved"
 msgid "Moved to {album}"
 msgstr ""
+
+msgctxt "newPlace.face"
+msgid "New"
+msgstr ""
+
+msgctxt "newPlace.menuLabel"
+msgid "New album or playlist"
+msgstr ""
+
+msgctxt "newPlace.menuClose"
+msgid "Close New in {library}"
+msgstr ""
+
+msgctxt "newPlace.album"
+msgid "Album"
+msgstr ""
+
+msgctxt "newPlace.playlist"
+msgid "Playlist"
+msgstr ""
+
+msgctxt "newPlace.create"
+msgid "Create"
+msgstr ""
+
+msgctxt "newPlace.offline"
+msgid "You're offline, so nothing was created. Try again once you're back online."
+msgstr ""
+
+msgctxt "newAlbum.cardLabel"
+msgid "New album"
+msgstr ""
+
+msgctxt "newAlbum.close"
+msgid "Close new album"
+msgstr ""
+
+msgctxt "newAlbum.titleLabel"
+msgid "Title"
+msgstr ""
+
+msgctxt "newAlbum.artistLabel"
+msgid "Artist"
+msgstr ""
+
+msgctxt "newAlbum.artistOptional"
+msgid "optional"
+msgstr ""
+
+msgctxt "newAlbum.hint"
+msgid "Opens the album; add songs there."
+msgstr ""
+
+msgctxt "newAlbum.failed"
+msgid "The album could not be created. Try again."
+msgstr ""
+
+msgctxt "newAlbum.refused"
+msgid "The album could not be created."
+msgstr ""
+
+msgctxt "newPlaylist.cardLabel"
+msgid "New playlist"
+msgstr ""
+
+msgctxt "newPlaylist.close"
+msgid "Close new playlist"
+msgstr ""
+
+msgctxt "newPlaylist.nameLabel"
+msgid "Name"
+msgstr ""
+
+msgctxt "newPlaylist.hint"
+msgid "Opens the playlist; add songs from any album."
+msgstr ""
+
+msgctxt "newPlaylist.failed"
+msgid "The playlist could not be created. Try again."
+msgstr ""
+
+msgctxt "newPlaylist.refused"
+msgid "The playlist could not be created."
+msgstr ""

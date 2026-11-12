@@ -1,8 +1,8 @@
 <script module lang="ts">
-	// Kept per card kind -- its failure message -- rather than per instance or
-	// label: a failure said by a card that was closed since, or that named
-	// another album, is just as false once that kind of place exists. One toast
-	// per kind: a repeat takes the place of the one before it.
+	// Kept per card kind (the draft key without its album) rather than per
+	// instance or label: a failure said by a card that was closed since, or that
+	// named another album, is just as false once that kind of place exists. One
+	// toast per kind: a repeat takes the place of the one before it.
 	const failureToastByCard: Record<string, number | undefined> = {};
 </script>
 
@@ -11,7 +11,7 @@
 	import { ApiError, describeFailure, isTransientApiFailure } from '#lib/api/fetch.ts';
 	import { dropTitleDraft, keepTitleDraft, titleDraft } from '#lib/stores/titleDrafts.ts';
 	import { addToast, dismissToast } from '#lib/stores/toast.ts';
-	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '#lib/constants/new-collection.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -58,6 +58,7 @@
 	$effect(() => keepTitleDraft(draftKey, title));
 
 	const canCreate = $derived(ready && !creating);
+	const cardKind = $derived(draftKey.split(':', 1)[0]);
 
 	async function submit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
@@ -79,7 +80,7 @@
 
 	function sayCreateFailed(err: unknown): void {
 		dismissEarlierFailure();
-		failureToastByCard[failedMessage] = addToast(createFailureMessage(err), 'error');
+		failureToastByCard[cardKind] = addToast(createFailureMessage(err), 'error');
 	}
 
 	function createFailureMessage(err: unknown): string {
@@ -87,16 +88,16 @@
 			return describeFailure(err, refusedMessage);
 		}
 		return describeFailure(err, failedMessage, {
-			offline: NEW_PLACE_OFFLINE,
+			offline: pageText('newPlace.offline'),
 			withholdServerDetail: true
 		});
 	}
 
 	function dismissEarlierFailure(): void {
-		const earlier = failureToastByCard[failedMessage];
+		const earlier = failureToastByCard[cardKind];
 		if (earlier === undefined) return;
 		dismissToast(earlier);
-		failureToastByCard[failedMessage] = undefined;
+		failureToastByCard[cardKind] = undefined;
 	}
 </script>
 
@@ -110,7 +111,9 @@
 	{@render children()}
 	<div class="card-foot">
 		<small>{hint}</small>
-		<button type="submit" class="create-btn" disabled={!canCreate}>{NEW_PLACE_CREATE_LABEL}</button>
+		<button type="submit" class="create-btn" disabled={!canCreate}
+			>{pageText('newPlace.create')}</button
+		>
 	</div>
 </form>
 
