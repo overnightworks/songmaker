@@ -1,0 +1,8 @@
+claim_id = "d24c156c66da47bfb8e5f993866d9298"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "102c75fe721303bede7fd1bd6c5444ce31250792"
+branch = "claude/issue-3005-the-phone-tabs-and-the-phone-bar-s-searc"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/e2e/phone-search.ts", "frontend/e2e/phone-tabs.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/e2e/rail-collapse.spec.ts", "frontend/e2e/shell-bottom-geometry.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/shell/PhoneTabs.svelte", "frontend/src/lib/components/shell/PhoneTabs.test.ts", "frontend/src/lib/constants/phone-tabs.ts", "frontend/src/lib/constants/rail.ts", "frontend/src/lib/words/en.ts", "frontend/src/routes/layout.test.ts"]
+opened_commit = "69ea2ed521950fbf56f3f38252ddccfc526027c4"
+whole_reason = "One surface moves whole (the epic's invariant 5): the tab bar and the phone bar's search words with their constants, the catalog with its generated module, and every test that finds these elements."
