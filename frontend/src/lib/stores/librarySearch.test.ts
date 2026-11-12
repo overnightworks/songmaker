@@ -88,32 +88,29 @@ describe('a failed search or browse', () => {
 	const failures = [
 		{
 			failure: 'a network failure',
-			err: new NetworkError('/api/library/search', new TypeError('Failed to fetch')),
-			error: 'Search failed'
+			err: new NetworkError('/api/library/search', new TypeError('Failed to fetch'))
 		},
 		{
 			failure: 'a server answer without a reason',
-			err: new ApiError(500, '', '/api/library/search'),
-			error: 'Search failed'
+			err: new ApiError(500, '', '/api/library/search')
 		},
 		{
 			failure: 'a server reason',
-			err: new ApiError(422, 'Query too long', '/api/library/search'),
-			error: 'Query too long'
+			err: new ApiError(422, 'Query too long', '/api/library/search')
 		}
 	];
 
-	it.each(failures)('shows $failure readably on a search', async ({ err, error }) => {
+	it.each(failures)('ends in the error status on $failure of a search', async ({ err }) => {
 		searchLibrary.mockRejectedValueOnce(err);
 		await restoreLibrarySearch('Catalog', 'newest', 1);
-		expect(get(librarySearch)).toMatchObject({ status: 'error', error });
+		expect(get(librarySearch)).toMatchObject({ status: 'error' });
 	});
 
-	it.each(failures)('shows $failure readably on a browse', async ({ err, error }) => {
+	it.each(failures)('ends in the error status on $failure of a browse', async ({ err }) => {
 		fetchAlbums.mockRejectedValueOnce(err);
 		fetchSongs.mockResolvedValueOnce({ items: [], total: 0, offset: 0, has_more: false });
 		expect(await loadLibraryBrowse({ reset: true })).toBe(false);
-		expect(get(libraryBrowse)).toMatchObject({ status: 'error', error });
+		expect(get(libraryBrowse)).toMatchObject({ status: 'error' });
 	});
 });
 
@@ -421,7 +418,6 @@ describe('applySyncedSong', () => {
 		librarySearch.set({
 			q: 'Search',
 			status: 'ready',
-			error: null,
 			items: [{ type: 'song', song: searchHit, album_id: 'a-local', album_title: 'Local Album' }],
 			hasMore: false,
 			nextCursor: null
@@ -464,7 +460,6 @@ describe('applySyncedSong', () => {
 		librarySearch.set({
 			q: 'Tide',
 			status: 'ready',
-			error: null,
 			items: [
 				{
 					type: 'song',
@@ -568,7 +563,7 @@ describe('a search or browse that a newer one replaced', () => {
 		else first.reject(new Error('stale failure'));
 		await superseded;
 
-		expect(get(librarySearch)).toMatchObject({ q: 'New', status: 'ready', error: null });
+		expect(get(librarySearch)).toMatchObject({ q: 'New', status: 'ready' });
 		expect(get(librarySearch).items.map((hit) => hit.type === 'song' && hit.song.id)).toEqual([
 			's-new'
 		]);
@@ -586,7 +581,7 @@ describe('a search or browse that a newer one replaced', () => {
 		firstAlbums.reject(new Error('stale failure'));
 
 		expect(await superseded).toBe(false);
-		expect(get(libraryBrowse)).toMatchObject({ status: 'ready', error: null });
+		expect(get(libraryBrowse)).toMatchObject({ status: 'ready' });
 		expect(get(albumList).map((item) => item.id)).toEqual(['new-album']);
 	});
 });
@@ -613,7 +608,7 @@ describe('restoring a browse scrolled far down', () => {
 		expect(await restoreLibraryBrowse('newest', 5, 0)).toBe(false);
 
 		expect(fetchAlbums).toHaveBeenCalledTimes(2);
-		expect(get(libraryBrowse)).toMatchObject({ status: 'error', error: 'Search failed' });
+		expect(get(libraryBrowse)).toMatchObject({ status: 'error' });
 	});
 });
 
@@ -623,7 +618,6 @@ describe('the loaded song ids', () => {
 		librarySearch.set({
 			q: 'Anfield',
 			status: 'ready',
-			error: null,
 			items: [albumHit('a-hit'), songHit('s-hit')],
 			hasMore: false,
 			nextCursor: null
