@@ -4,15 +4,9 @@ Playwright drives the real stack — `docker/docker-compose.ci.yml` (Postgres, R
 migrations, web, music worker) — through the click paths an operator walks by hand. Unit
 tests keep missing those; `.github/workflows/e2e.yml` runs these as the `E2E` job of `ci.yml`, on every PR and every push to main.
 
-CI cuts each Playwright project into shards by file (`--shard=<n>/<SHARD_TOTAL>`; `SHARD_TOTAL`
-in `.github/workflows/e2e.yml` owns the count). Each shard is a job with its own runner, stack,
-seeded sessions and rate-limit window, so a stack serves one shard of a project's files, and
-the specs are not re-sorted: a shard keeps the order of its files. The `Browser suite` job
-waits for every leg of both projects, lists each project's tests itself and checks that the newest
-attempt of every shard reported exactly those tests, each once (`report-identity.ts`;
-`shard-artifacts.ts` picks the attempts, because a re-run of failed jobs uploads again under
-a higher attempt while the green shards keep their first). It merges the shards' raw coverage
-stores into one report per project, which is measurement only and never fails the job.
+CI cuts each Playwright project into shards by file (`--shard=<n>/<SHARD_TOTAL>`); the specs
+are not re-sorted: a shard keeps the order of its files. What a shard job and the `Browser suite`
+job do, and what coverage they merge, is in [docs/testing.md](../../docs/testing.md).
 
 ## What runs
 
