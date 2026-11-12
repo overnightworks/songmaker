@@ -781,9 +781,7 @@ def test_generation_job_selects_musician_line(
     tmp_path,
     stream,
     cause,
-    completed,
-    caplog,
-    locked_ffmpeg,
+    completed, caplog, locked_ffmpeg
 ) -> None:
     """S5-B/D, L6: HTTP worker failures preserve real takes and sanitize stored detail."""
 
@@ -901,8 +899,7 @@ def test_s5_generation_job_reload_unavailable(
     generation_worker_peer,
     completed,
     load_fails,
-    tmp_path,
-    locked_ffmpeg,
+    tmp_path, locked_ffmpeg
 ):
     """S5-A/B/D, L3/L6/L10: Reload failure preserves completed takes and frees occupancy."""
     from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
@@ -949,15 +946,8 @@ def test_s5_generation_job_reload_unavailable(
     ids=["oom", "oom-success", "success-oom", "oom-oom", "oom-generic", "generic-oom"],
 )
 def test_s8_take_outcomes(
-    seeded_db,
-    generation_worker_peer,
-    tmp_path,
-    locked_ffmpeg,
-    outcomes,
-    status,
-    completed,
-    prefix,
-    gated_take,
+    seeded_db, generation_worker_peer, tmp_path, locked_ffmpeg,
+    outcomes, status, completed, prefix, gated_take,
 ):
     """S8-B/D/E/F: Real worker takes continue and retain the selected OOM cause."""
 
