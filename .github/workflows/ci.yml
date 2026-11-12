@@ -64,6 +64,9 @@ jobs:
       - name: CI and compose pin the same Postgres and Redis images
         run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py
 
+      - name: Test Postgres and Redis follow the platform's versions
+        run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py --platform
+
       - name: Every requirement is cited by a test
         run: uv run --no-sync --frozen --no-build python scripts/check_requirement_citations.py
 
@@ -80,7 +83,7 @@ jobs:
     timeout-minutes: 15 # why: a hung test must fail the run, not hold the queued runs.
     services:
       postgres:
-        image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+        image: postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
         env:
           POSTGRES_USER: songmaker
           POSTGRES_PASSWORD: songmaker # why: disposable password for this isolated GitHub Actions service container.

@@ -69,9 +69,6 @@
 "tests/songmaker_cli/test_server.py" = 1922
 "tests/songmaker_cli/test_sharing_api.py" = 2485
 
-[function_lines."scripts/mirror_agent_cli_credentials.py"]
-"main" = 65
-
 [function_lines."src/acestep_worker/__main__.py"]
 "build_deps" = 67
 
@@ -143,12 +140,6 @@
 "test_train_lora_pins_mode_from_eviction" = 60
 "test_train_lora_releases_handover_claim_after_setup_failure" = 61
 "test_worker_renewal_failure_releases_hold_and_cache_before_background_error" = 61
-
-[function_lines."tests/scripts/test_install_cli_credentials_mirror.py"]
-"run_installer" = 71
-
-[function_lines."tests/scripts/test_send_alert_script.py"]
-"test_trace_channels_never_expose_config_values" = 75
 
 [function_lines."tests/songmaker_cli/jobs/test_lora_training.py"]
 "test_happy_path_transitions_and_persists" = 90
