@@ -2,7 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '#lib/api/fetch.ts';
-import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
+import { words } from '#lib/words/en.ts';
 import { resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import { albumList, resetLibraryDataForTests } from '#lib/stores/libraryData.ts';
 import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';
@@ -80,30 +80,30 @@ describe('RailLibraryGroup Retry while the library load failed', () => {
 		let settle!: (recovered: boolean) => void;
 		vi.mocked(retryResourceSync).mockReturnValue(new Promise((resolve) => (settle = resolve)));
 
-		requireButtonContainingText(target, LIBRARY_RETRY_LABEL).click();
+		requireButtonContainingText(target, words['rail.retry']).click();
 		await tick();
 
-		expect(requireElement(target, '.rail-loading').textContent).toBe(LIBRARY_ALBUMS_LOADING);
+		expect(requireElement(target, '.rail-loading').textContent).toBe(words['rail.libraryLoading']);
 		expect(target.querySelector('.rail-load-error')).toBeNull();
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 		expect(fetchAlbums).toHaveBeenCalledTimes(loadsBefore);
 
 		settle(true);
-		await vi.waitFor(() => expect(target.textContent).not.toContain(LIBRARY_ALBUMS_LOADING));
+		await vi.waitFor(() => expect(target.textContent).not.toContain(words['rail.libraryLoading']));
 	});
 
 	it('shows its failure words and Retry again when the library retry settles false', async () => {
 		const target = await renderWithFailedRail();
 		vi.mocked(retryResourceSync).mockResolvedValue(false);
 
-		requireButtonContainingText(target, LIBRARY_RETRY_LABEL).click();
+		requireButtonContainingText(target, words['rail.retry']).click();
 		await tick();
-		expect(target.textContent).toContain(LIBRARY_ALBUMS_LOADING);
+		expect(target.textContent).toContain(words['rail.libraryLoading']);
 
 		await vi.waitFor(() =>
 			expect(requireElement(target, '[role="alert"]').textContent).toBe('Backend unreachable')
 		);
-		expect(requireButtonContainingText(target, LIBRARY_RETRY_LABEL)).toBeInstanceOf(
+		expect(requireButtonContainingText(target, words['rail.retry'])).toBeInstanceOf(
 			HTMLButtonElement
 		);
 	});
@@ -113,7 +113,7 @@ describe('RailLibraryGroup Retry while the library load failed', () => {
 		resourceSync.update((state) => ({ ...state, ready: true, status: 'live' }));
 		fetchAlbums.mockResolvedValueOnce(albumsPage());
 
-		requireButtonContainingText(target, LIBRARY_RETRY_LABEL).click();
+		requireButtonContainingText(target, words['rail.retry']).click();
 
 		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
 		expect(retryResourceSync).not.toHaveBeenCalled();

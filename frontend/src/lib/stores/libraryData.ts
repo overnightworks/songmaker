@@ -4,7 +4,7 @@ import { fetchAlbums, fetchSongs } from '#lib/api/client.ts';
 import type { LibraryListOptions } from '#lib/api/library.ts';
 import type { AlbumItem, GenerationItem, SongItem } from '#lib/api/types.ts';
 import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '#lib/constants/library.ts';
-import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import { compareTitles } from '#lib/utils/recency.ts';
 import { reloadWhileUnreachable } from './connectivity';
 import { forgetWritten, restoreWritten } from './libraryWrite';
@@ -291,7 +291,7 @@ function loadAllAlbums({ replace }: { replace: boolean }): Promise<boolean> {
 			allAlbumsLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
-			allAlbumsReloads.nameLoadFailure(err, RAIL_LIBRARY_LOAD_ERROR);
+			allAlbumsReloads.nameLoadFailure(err, pageText('rail.libraryLoadError'));
 			allAlbumsLoad.set({
 				status: err instanceof NetworkError ? 'unreachable' : 'error',
 				error: null

@@ -14,11 +14,7 @@ import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { APP_NAME } from '../src/lib/constants/app';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
-import {
-	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_SEARCH_LABEL,
-	RAIL_SETTINGS_LABEL
-} from '../src/lib/constants/rail';
+import { RAIL_SEARCH_LABEL, RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
@@ -341,7 +337,7 @@ export function wallBody(page: Page): Locator {
 
 /** Back to the wall through the word LIBRARY, in the same SPA document. */
 export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
-	await openPlace(page, shell, 'places.library', LIBRARY_PAGE_LABEL);
+	await openPlace(page, shell, 'places.library');
 	await expect(page).toHaveURL(LIBRARY_URL);
 }
 
@@ -352,10 +348,12 @@ export async function openAlbumFromRail(
 	albumTitle: string
 ): Promise<void> {
 	const rail = await openRailNav(page, shell);
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) });
+	const libraryGroup = rail.getByRole('button', {
+		name: nameStartingWith(words['places.library'])
+	});
 	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
 	await rail
-		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('navigation', { name: words['rail.libraryNav'] })
 		.getByRole('listitem')
 		.filter({ hasText: albumTitle })
 		.getByRole('button', { name: containing(albumTitle) })
@@ -387,14 +385,13 @@ export async function openHome(page: Page, shell: Shell): Promise<void> {
 async function openPlace(
 	page: Page,
 	shell: Shell,
-	key: Extract<Key, `places.${string}`>,
-	railLabel: string = words[key]
+	key: Extract<Key, `places.${string}`>
 ): Promise<void> {
 	if (shell === 'desktop') {
 		await (
 			await openRailNav(page, shell)
 		)
-			.getByRole('link', { name: nameStartingWith(railLabel) })
+			.getByRole('link', { name: nameStartingWith(words[key]) })
 			.click();
 		return;
 	}
