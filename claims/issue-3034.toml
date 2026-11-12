@@ -1,0 +1,7 @@
+claim_id = "0e0745cbe8074c59894764cfa2f1848a"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "26f380928946a1ccecb834fbe350b076dfa29d41"
+branch = "claude/issue-3034-take-webauth-0-37-1"
+scope = ["pyproject.toml", "tests/songmaker_cli/test_server_middleware.py", "uv.lock"]
+opened_commit = "e1a7de3d30cfafdbe7543ef2f0232316d7bdedec"
