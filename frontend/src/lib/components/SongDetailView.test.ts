@@ -28,13 +28,7 @@ import {
 	SONG_NEXT_LABEL,
 	SONG_PREVIOUS_LABEL
 } from '#lib/constants/song.ts';
-import {
-	TAKE_REPAINT_LABEL,
-	TAKE_COVER_LABEL,
-	TAKES_ERROR,
-	TAKES_LOADING,
-	TAKES_RETRY_LABEL
-} from '#lib/constants/take.ts';
+import { TAKES_ERROR, TAKES_LOADING, TAKES_RETRY_LABEL } from '#lib/constants/take.ts';
 import {
 	COMPACT_LAYOUT_MAX_PX,
 	COMPACT_LAYOUT_MEDIA,
@@ -471,7 +465,7 @@ describe('SongDetailView desktop vs compact layout', () => {
 		bar.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
 		const save = Array.from(bar.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(button) => button.textContent?.trim() === 'Save version'
+			(button) => button.textContent?.trim() === words['songMenu.save']
 		);
 		expect(save?.disabled).toBe(true);
 		setDraftLyrics('A changed verse');
@@ -819,7 +813,7 @@ describe('SongDetailView recipe and takes', () => {
 			const target = await renderView();
 			target.querySelector<HTMLButtonElement>('.take-row .menu-trigger')?.click();
 			await tick();
-			clickNamed(target, mode === 'repaint' ? TAKE_REPAINT_LABEL : TAKE_COVER_LABEL);
+			clickNamed(target, mode === 'repaint' ? words['takeMenu.repaint'] : words['takeMenu.cover']);
 			await tick();
 			expect(get(recipeOpen)).toBe(false);
 			expect(get(sourceMode)).toBe(mode);
@@ -1160,7 +1154,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 			await tick();
 			bar.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 			await tick();
-			clickNamed(bar, 'Save version');
+			clickNamed(bar, words['songMenu.save']);
 		} else {
 			writeSaveButton(target).click();
 		}
@@ -1312,7 +1306,7 @@ describe('SongDetailView phone Co-writer is a tab', () => {
 		expect(get(phoneAppBar)?.title).toBe(songTitle);
 		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(songTitle);
 		expect(bar.querySelector('[aria-label="Share song"]')).not.toBeNull();
-		expect(bar.querySelector('[aria-label="Song menu"]')).not.toBeNull();
+		expect(bar.querySelector(`[aria-label="${words['songMenu.label']}"]`)).not.toBeNull();
 
 		showTab(target, 'edit');
 		await tick();
