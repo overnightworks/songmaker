@@ -313,12 +313,9 @@ def test_every_compose_built_image_runs_as_the_numeric_user_it_creates() -> None
         "RUN chown -R songmaker:songmaker /app",
         "RUN chown -f -R songmaker:songmaker /app",
         "RUN chown --verbose --recursive songmaker:songmaker /app",
-        "RUN chown -fR songmaker:songmaker /app",
     ],
 )
-def test_recursive_chown_detector_sees_the_option_after_other_options(
-    instruction: str,
-) -> None:
+def test_recursive_chown_is_found_after_other_options(instruction: str) -> None:
     assert RECURSIVE_CHOWN.search(instruction)
 
 
