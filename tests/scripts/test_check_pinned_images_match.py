@@ -119,5 +119,62 @@ def test_missing_ci_service_fails(
     assert f"'{missing}'" in capsys.readouterr().err
 
 
+def _platform_manifests(postgres_image: str, redis_image: str) -> dict[str, str]:
+    def statefulset(name: str, image: str) -> str:
+        return (
+            "apiVersion: apps/v1\nkind: StatefulSet\nspec:\n  template:\n    spec:\n"
+            f"      containers:\n        - name: {name}\n"
+            f"          image: docker.io/library/{image}\n"
+        )
+
+    return {
+        checker.PLATFORM_MANIFESTS["postgres"]: "kind: Namespace\n---\n"
+        + statefulset("postgres", postgres_image),
+        checker.PLATFORM_MANIFESTS["redis"]: statefulset("redis", redis_image),
+    }
+
+
+def test_platform_leg_passes_when_tags_match_whatever_the_digest(tmp_path: Path) -> None:
+    compose = _write_compose(tmp_path, POSTGRES_PIN, REDIS_PIN)
+    workflow = _write_workflow(tmp_path, POSTGRES_PIN, REDIS_PIN)
+    manifests = _platform_manifests(
+        POSTGRES_PIN.replace("a" * 64, "e" * 64), REDIS_PIN.replace("c" * 64, "f" * 64)
+    )
+
+    assert checker.run(compose, workflow, manifests.__getitem__) == 0
+
+
+@pytest.mark.parametrize(
+    ("platform_postgres", "platform_redis", "drifted_service"),
+    [
+        pytest.param(DRIFTED_POSTGRES_PIN, REDIS_PIN, "postgres", id="platform_postgres_ahead"),
+        pytest.param(POSTGRES_PIN, DRIFTED_REDIS_PIN, "redis", id="platform_redis_ahead"),
+    ],
+)
+def test_platform_leg_fails_when_the_platform_runs_another_tag(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    platform_postgres: str,
+    platform_redis: str,
+    drifted_service: str,
+) -> None:
+    compose = _write_compose(tmp_path, POSTGRES_PIN, REDIS_PIN)
+    workflow = _write_workflow(tmp_path, POSTGRES_PIN, REDIS_PIN)
+    manifests = _platform_manifests(platform_postgres, platform_redis)
+
+    assert checker.run(compose, workflow, manifests.__getitem__) == 1
+    assert f"{drifted_service} differs from the platform" in capsys.readouterr().err
+
+
+def test_platform_leg_fails_when_the_manifest_names_no_image(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    compose = _write_compose(tmp_path, POSTGRES_PIN, REDIS_PIN)
+    workflow = _write_workflow(tmp_path, POSTGRES_PIN, REDIS_PIN)
+
+    assert checker.run(compose, workflow, lambda _path: "kind: Namespace\n") == 1
+    assert "no 'postgres' image" in capsys.readouterr().err
+
+
 def test_repository_pins_match() -> None:
-    assert checker.main() == 0
+    assert checker.main([]) == 0
