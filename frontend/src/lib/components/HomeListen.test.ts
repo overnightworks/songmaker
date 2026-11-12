@@ -329,30 +329,32 @@ describe('1354_rule_14 Listen', () => {
 		expect(fetchListen).toHaveBeenCalledTimes(2);
 	});
 
+	function arrangeCurrentSong(type: 'album' | 'playlist'): void {
+		const id = type === 'album' ? 'place-0' : 'place-1';
+		const title = type === 'album' ? 'Place 0' : 'Place 1';
+		playlistList.set([makePlaylist({ id: 'place-1', entry_count: 4 }), ...homePlaylists.slice(1)]);
+		albumList.set([makeAlbum({ id: 'place-0', song_count: 4 }), ...homeAlbums.slice(1)]);
+		songList.set([makeSong({ id: 'song', album_id: 'place-0', track_number: 2 })]);
+		queueContext.set(
+			type === 'album'
+				? { type, albumId: id }
+				: { type, playlist: { id, title }, entries: [], index: 1 }
+		);
+		audioPlayer.current = {
+			generation: makeGeneration(),
+			songId: 'song',
+			songTitle: 'Song',
+			albumTitle: 'Place 0',
+			artist: '',
+			lyrics: null
+		};
+	}
+
 	it.each(['album', 'playlist'] as const)(
 		'1354_rule_15 shows pause and the playing mark for the playing %s and its current song subtitle',
 		async (type) => {
-			const id = type === 'album' ? 'place-0' : 'place-1';
 			const title = type === 'album' ? 'Place 0' : 'Place 1';
-			playlistList.set([
-				makePlaylist({ id: 'place-1', entry_count: 4 }),
-				...homePlaylists.slice(1)
-			]);
-			albumList.set([makeAlbum({ id: 'place-0', song_count: 4 }), ...homeAlbums.slice(1)]);
-			songList.set([makeSong({ id: 'song', album_id: 'place-0', track_number: 2 })]);
-			queueContext.set(
-				type === 'album'
-					? { type, albumId: id }
-					: { type, playlist: { id, title }, entries: [], index: 1 }
-			);
-			audioPlayer.current = {
-				generation: makeGeneration(),
-				songId: 'song',
-				songTitle: 'Song',
-				albumTitle: 'Place 0',
-				artist: '',
-				lyrics: null
-			};
+			arrangeCurrentSong(type);
 			audioPlayer.status = 'playing';
 			await showListen();
 			const playingRow = getByRoleButton(target, `Pause ${title}`).closest('.library-row');
@@ -368,4 +370,33 @@ describe('1354_rule_14 Listen', () => {
 			);
 		}
 	);
+
+	it.each(['album', 'playlist'] as const)(
+		'1354_rule_15 shows play for the paused %s, its subtitle stopped at its current song',
+		async (type) => {
+			const title = type === 'album' ? 'Place 0' : 'Place 1';
+			arrangeCurrentSong(type);
+			audioPlayer.status = 'paused';
+			await showListen();
+			getByRoleButton(target, `Play ${title}`);
+			expect(target.textContent).toContain(
+				words[type === 'album' ? 'homeListen.albumStopped' : 'homeListen.playlistStopped']({
+					number: '2'
+				})
+			);
+		}
+	);
+
+	it('1354_rule_14 names the cover of each row for a screen reader', async () => {
+		const cover = { thumb: '/cover.webp', card: '/cover.webp', detail: '/cover.webp' };
+		fetchListen.mockImplementation(async () =>
+			Response.json({ items: places.map((place) => ({ ...place, cover })) })
+		);
+		await showListen();
+		expect(Array.from(target.querySelectorAll('img'), (image) => image.alt)).toEqual([
+			words['homeListen.albumCover']({ title: 'Place 0' }),
+			words['homeListen.playlistCover']({ title: 'Place 1' }),
+			words['homeListen.albumCover']({ title: 'Place 2' })
+		]);
+	});
 });
