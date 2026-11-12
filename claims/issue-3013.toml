@@ -1,0 +1,7 @@
+claim_id = "c03f33c3575f401695ffc891e4beba35"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "2bef8d9c27d08342b04a3a923bd0520fe619714f"
+branch = "claude/issue-3013-the-web-image-ships-its-code-once-and-re"
+scope = ["Dockerfile", "docs/security.md", "tests/test_packaging_boundary.py"]
+opened_commit = "8111b1c3859a7c599e971aad5a67058d61d68fad"
