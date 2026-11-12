@@ -2,15 +2,7 @@ import { derived, get, writable, type Readable } from 'svelte/store';
 import { moveSong } from '#lib/api/songs.ts';
 import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
-import {
-	SONG_MOVE_ALBUM_GONE,
-	SONG_MOVE_FAILED_REASON,
-	SONG_MOVE_NO_CONNECTION,
-	songMoveFailedLine,
-	songMovedToastLabel
-} from '#lib/constants/song.ts';
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
-import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
 import {
 	fetchEveryAlbum,
 	overlaySongList,
@@ -28,6 +20,7 @@ import { selectedSong, selectedSongId } from '#lib/stores/player.ts';
 import { matchesRailQuery, normalizeRailQuery } from '#lib/stores/librarySearch.ts';
 import { libraryWallOrder } from '#lib/stores/ui.ts';
 import { addToast } from '#lib/stores/toast.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 
 type OwnAlbumsLoad =
 	| { status: 'closed' }
@@ -97,7 +90,10 @@ async function loadOwnAlbums(quiet = false): Promise<void> {
 		if (mine === generation) load.set({ status: 'ready', albums });
 	} catch (err) {
 		if (mine === generation && !quiet) {
-			load.set({ status: 'failed', message: describeFailure(err, RAIL_LIBRARY_LOAD_ERROR) });
+			load.set({
+				status: 'failed',
+				message: describeFailure(err, pageText('songMove.libraryLoadError'))
+			});
 		}
 	}
 }
@@ -125,18 +121,18 @@ function refusal(err: unknown, songId: string, albumId: string): SongMoveRun {
 			status: 'failed',
 			songId,
 			albumId,
-			line: songMoveFailedLine(SONG_MOVE_ALBUM_GONE),
+			line: pageText('songMove.notMoved', { reason: pageText('songMove.albumGone') }),
 			retryable: false
 		};
 	}
-	const reason = describeFailure(err, SONG_MOVE_FAILED_REASON, {
-		offline: SONG_MOVE_NO_CONNECTION
+	const reason = describeFailure(err, pageText('songMove.failedReason'), {
+		offline: pageText('songMove.noConnection')
 	});
 	return {
 		status: 'failed',
 		songId,
 		albumId,
-		line: songMoveFailedLine(reason),
+		line: pageText('songMove.notMoved', { reason }),
 		retryable: true
 	};
 }
@@ -177,7 +173,7 @@ async function moveSongTo(
 	// The menu's history layer leaves before the address is replaced, or its step back undoes the replace.
 	onlanded();
 	if (get(selectedSongId) === moved.id) await reselectMovedSong(moved);
-	if (onPhone()) addToast(songMovedToastLabel(album.title));
+	if (onPhone()) addToast(pageText('songMove.moved', { album: album.title }));
 	return true;
 }
 

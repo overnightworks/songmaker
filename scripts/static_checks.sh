@@ -36,7 +36,7 @@ quality() {
     uvx --from "git+https://github.com/overnightworks/quality@$quality_pin" quality "$@"
 }
 
-gate "CI and compose pin the same Postgres image" python scripts/check_pinned_images_match.py
+gate "CI and compose pin the same Postgres and Redis images" python scripts/check_pinned_images_match.py
 gate "Every requirement is cited by a test" python scripts/check_requirement_citations.py
 gate "Ruff lint" ruff check src/ tests/
 gate "Test helper duplication ratchet" scripts/test_helper_ratchet.sh

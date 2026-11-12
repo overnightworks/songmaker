@@ -442,3 +442,167 @@ msgstr ""
 msgctxt "libraryWall.songCount.other"
 msgid "{count} songs"
 msgstr ""
+
+msgctxt "libraryWorkspace.loading"
+msgid "Loading..."
+msgstr ""
+
+msgctxt "libraryWorkspace.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "addressPage.loadingAlbum"
+msgid "Loading album..."
+msgstr ""
+
+msgctxt "addressPage.loadingSong"
+msgid "Loading song..."
+msgstr ""
+
+msgctxt "addressPage.loadingTake"
+msgid "Loading take..."
+msgstr ""
+
+msgctxt "addressPage.loadingPlaylist"
+msgid "Loading playlist..."
+msgstr ""
+
+msgctxt "addressPage.noSuchAlbum"
+msgid "No such album"
+msgstr ""
+
+msgctxt "addressPage.noSuchSong"
+msgid "No such song"
+msgstr ""
+
+msgctxt "addressPage.noSuchTake"
+msgid "No such take"
+msgstr ""
+
+msgctxt "addressPage.noSuchPlaylist"
+msgid "No such playlist"
+msgstr ""
+
+msgctxt "addressPage.albumUnknown"
+msgid "This address does not name an album in your library."
+msgstr ""
+
+msgctxt "addressPage.songUnknown"
+msgid "This address does not name a song in this album."
+msgstr ""
+
+msgctxt "addressPage.takeUnknown"
+msgid "This address does not name a take of this song."
+msgstr ""
+
+msgctxt "addressPage.playlistUnknown"
+msgid "This address does not name a playlist in your library."
+msgstr ""
+
+msgctxt "addressPage.albumUnreachable"
+msgid "This album could not be loaded."
+msgstr ""
+
+msgctxt "addressPage.songUnreachable"
+msgid "This song could not be loaded."
+msgstr ""
+
+msgctxt "addressPage.takeUnreachable"
+msgid "This take could not be loaded."
+msgstr ""
+
+msgctxt "addressPage.playlistUnreachable"
+msgid "This playlist could not be loaded."
+msgstr ""
+
+msgctxt "addressPage.backToLibrary"
+msgid "Back to the library"
+msgstr ""
+
+msgctxt "addressPage.backToAlbum"
+msgid "Back to the album"
+msgstr ""
+
+msgctxt "addressPage.backToSong"
+msgid "Back to the song"
+msgstr ""
+
+msgctxt "addressPage.tryAgain"
+msgid "Try again"
+msgstr ""
+
+msgctxt "homeList.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "songMove.heading"
+msgid "Move to"
+msgstr ""
+
+msgctxt "songMove.back"
+msgid "Back to song menu"
+msgstr ""
+
+msgctxt "songMove.filterLabel"
+msgid "Filter albums"
+msgstr ""
+
+msgctxt "songMove.filterPlaceholder"
+msgid "Filter"
+msgstr ""
+
+msgctxt "songMove.loading"
+msgid "Looking…"
+msgstr ""
+
+msgctxt "songMove.noOtherAlbum"
+msgid "No other album"
+msgstr ""
+
+msgctxt "songMove.noMatch"
+msgid "No album matches"
+msgstr ""
+
+msgctxt "songMove.albumCover"
+msgid "Album {title}"
+msgstr ""
+
+msgctxt "songMove.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "songMove.libraryLoadError"
+msgid "Couldn't load your library"
+msgstr ""
+
+msgctxt "songMove.notMoved"
+msgid "Not moved · {reason}"
+msgstr ""
+
+msgctxt "songMove.albumGone"
+msgid "album gone"
+msgstr ""
+
+msgctxt "songMove.noConnection"
+msgid "no connection"
+msgstr ""
+
+msgctxt "songMove.failedReason"
+msgid "something went wrong"
+msgstr ""
+
+msgctxt "songMove.sharedTitle"
+msgid "Move to a shared album?"
+msgstr ""
+
+msgctxt "songMove.sharedMessage"
+msgid "{song} appears on {album}'s public page"
+msgstr ""
+
+msgctxt "songMove.confirm"
+msgid "Move"
+msgstr ""
+
+msgctxt "songMove.moved"
+msgid "Moved to {album}"
+msgstr ""

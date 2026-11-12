@@ -1,16 +1,5 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
-	import {
-		SONG_MOVE_BACK_LABEL,
-		SONG_MOVE_FILTER_LABEL,
-		SONG_MOVE_FILTER_PLACEHOLDER,
-		SONG_MOVE_HEADING,
-		SONG_MOVE_LOADING_LABEL,
-		SONG_MOVE_NO_MATCH,
-		SONG_MOVE_NO_OTHER_ALBUM
-	} from '#lib/constants/song.ts';
-	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import type { AlbumItem } from '#lib/api/types.ts';
 	import {
 		closeSongMovePicker,
@@ -23,6 +12,7 @@
 		songMoveRunHere
 	} from '#lib/stores/songMove.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
@@ -61,7 +51,7 @@
 {#snippet albumFace(album: AlbumItem)}
 	<span class="pk-art">
 		{#if album.cover?.card}
-			<img src={album.cover.card} alt={`${ALBUM_COVER_ALT_TYPE} ${album.title}`} />
+			<img src={album.cover.card} alt={pageText('songMove.albumCover', { title: album.title })} />
 		{:else}
 			<span aria-hidden="true">{titleInitials(album.title)}</span>
 		{/if}
@@ -75,13 +65,13 @@
 		bind:this={backButton}
 		type="button"
 		class="pk-back"
-		aria-label={SONG_MOVE_BACK_LABEL}
+		aria-label={pageText('songMove.back')}
 		disabled={$songMoveRun.status === 'busy'}
 		onclick={closeSongMovePicker}
 	>
 		<Icon name="chevron-right" size={16} class="pk-back-icon" />
 	</button>
-	{SONG_MOVE_HEADING}
+	{pageText('songMove.heading')}
 </div>
 
 {#if $songMovePicker.status === 'ready'}
@@ -93,8 +83,8 @@
 			disabled={$songMoveRun.status === 'busy'}
 			class="pk-filter"
 			type="search"
-			aria-label={SONG_MOVE_FILTER_LABEL}
-			placeholder={SONG_MOVE_FILTER_PLACEHOLDER}
+			aria-label={pageText('songMove.filterLabel')}
+			placeholder={pageText('songMove.filterPlaceholder')}
 		/>
 	{/if}
 	{#if picker.current}
@@ -133,10 +123,10 @@
 			{/each}
 		</ul>
 		{#if picker.others.length === 0}
-			<p class="pk-empty">{SONG_MOVE_NO_MATCH}</p>
+			<p class="pk-empty">{pageText('songMove.noMatch')}</p>
 		{/if}
 	{:else}
-		<p class="pk-empty">{SONG_MOVE_NO_OTHER_ALBUM}</p>
+		<p class="pk-empty">{pageText('songMove.noOtherAlbum')}</p>
 	{/if}
 	{#if $songMoveRunHere.status === 'failed'}
 		<div class="pk-error pk-move-error" role="alert">
@@ -144,7 +134,7 @@
 			<span>{$songMoveRunHere.line}</span>
 			{#if $songMoveRunHere.retryable}
 				<button type="button" class="pk-retry" onclick={() => void retry()}>
-					{LIBRARY_RETRY_LABEL}
+					{pageText('songMove.retry')}
 				</button>
 			{/if}
 		</div>
@@ -154,11 +144,11 @@
 		<Icon name="circle-alert" size={16} />
 		<span>{$songMovePicker.message}</span>
 		<button type="button" class="pk-retry" onclick={() => void openSongMovePicker()}>
-			{LIBRARY_RETRY_LABEL}
+			{pageText('songMove.retry')}
 		</button>
 	</div>
 {:else}
-	<p class="pk-status" role="status">{SONG_MOVE_LOADING_LABEL}</p>
+	<p class="pk-status" role="status">{pageText('songMove.loading')}</p>
 {/if}
 
 <style>

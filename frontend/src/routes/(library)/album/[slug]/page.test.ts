@@ -14,6 +14,7 @@ import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
 import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
+import { words } from '#lib/words/en.ts';
 
 const ALBUM_SLUG = 'anfield';
 const ALBUM_TITLE = 'Anfield';
@@ -254,14 +255,16 @@ describe('/album/<slug> whose album cannot be reached', () => {
 		const target = openAddress();
 
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
-		expect(target.textContent).not.toContain('No such album');
+		expect(target.textContent).not.toContain(words['addressPage.noSuchAlbum']);
 	});
 
 	it('names a lost connection in its own words, never the browser text', async () => {
 		api.fetchAlbum.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('This album could not be loaded.'));
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain(words['addressPage.albumUnreachable'])
+		);
 		expect(target.textContent).not.toContain('Failed to fetch');
 	});
 
@@ -269,8 +272,12 @@ describe('/album/<slug> whose album cannot be reached', () => {
 		browserReportsOnline(false);
 		api.fetchAlbum.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
 		const target = openAddress();
-		await vi.waitFor(() => expect(target.textContent).toContain('This album could not be loaded.'));
-		expect(requireElement(target, 'button.address-action').textContent).toBe('Try again');
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain(words['addressPage.albumUnreachable'])
+		);
+		expect(requireElement(target, 'button.address-action').textContent).toBe(
+			words['addressPage.tryAgain']
+		);
 
 		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
 		browserReportsOnline(true);
@@ -311,14 +318,14 @@ describe('/album/<slug> naming no album', () => {
 	it('says the address names no album instead of showing an empty page', async () => {
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('No such album'));
+		await vi.waitFor(() => expect(target.textContent).toContain(words['addressPage.noSuchAlbum']));
 		expect(target.querySelector('[role="alert"]')).not.toBeNull();
 	});
 
 	it('stays on the address instead of redirecting to the library', async () => {
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('No such album'));
+		await vi.waitFor(() => expect(target.textContent).toContain(words['addressPage.noSuchAlbum']));
 		expect(window.location.pathname).toBe('/album/ghost');
 		expect(get(openCollection)).toBeNull();
 	});
@@ -339,7 +346,7 @@ describe('/album/<slug> after the library load failed', () => {
 		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
 		requireElement(target, 'button.address-action').click();
 		await tick();
-		expect(target.textContent).toContain('Loading album...');
+		expect(target.textContent).toContain(words['addressPage.loadingAlbum']);
 		expect(target.textContent).not.toContain('Album service is down');
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));

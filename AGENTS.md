@@ -3,8 +3,8 @@
 ## Commands
 
 - `bash scripts/static_checks.sh`: every static check CI runs, before reporting a tip; needs `.venv` and `frontend/node_modules`.
-- `pytest -q <files>`: targeted Python tests that need no database.
-- `scripts/test_postgresql.sh <files>`: targeted tests against a throwaway PostgreSQL container.
+- `pytest -q <files>`: targeted Python tests that need no database and no Redis server.
+- `scripts/test_postgresql.sh <files>`: targeted tests against throwaway PostgreSQL and Redis containers (the database tests and the Redis wire tests).
 - `pnpm exec vitest run <file>`: one frontend test file, from `frontend/`.
 - `python scripts/generate_types.py`: regenerates the frontend's API types from `src/songmaker_cli/api_models/` after a model change.
 - `design-catalogs`: regenerates `frontend/src/lib/words/` from `frontend/src/lib/catalogs/` after a catalog change; `--check` runs in the static checks.
@@ -22,6 +22,7 @@
 - Sharing goes through `enable_sharing()` and `disable_sharing()` of `src/songmaker_cli/db/queries/sharing.py`; side effects live in the domain wrapper.
 - ACE-Step's parameter names come from the HTTP API code of `vendor/acestep`, our fork.
 - A reproducible seed needs `use_random_seed: false`; ACE-Step ignores `seed` otherwise.
+- A test that needs a real `ffmpeg` requests `locked_ffmpeg` (`tests/support/ffmpeg_binary.py`): the `dev` extra's locked `imageio-ffmpeg` is the only ffmpeg tests run, never the machine's.
 - Each pytest worker process keeps its own numba cache (`tests/conftest.py`); a scorer-test segfault in numba's compiled code means several processes filled one cache.
 - An interface text of a surface that reads `frontend/src/lib/utils/page-words.ts` is a key in `frontend/src/lib/catalogs/en.po`; any other new interface text goes into its surface's `frontend/src/lib/constants/` file, never as a literal in markup.
 - Test albums carry a recognizable title prefix and are archived, never deleted.

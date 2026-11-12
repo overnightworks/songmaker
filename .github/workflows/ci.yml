@@ -61,7 +61,7 @@ jobs:
       - name: No unreferenced backend symbols
         run: uv run --no-sync --frozen --no-build python scripts/check_dead_symbols.py
 
-      - name: CI and compose pin the same Postgres image
+      - name: CI and compose pin the same Postgres and Redis images
         run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py
 
       - name: Every requirement is cited by a test
@@ -77,7 +77,7 @@ jobs:
   backend-shard:
     name: Backend tests (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15 # why: a hung test or a hung mirror must fail the run, not hold the queued runs.
+    timeout-minutes: 15 # why: a hung test must fail the run, not hold the queued runs.
     services:
       postgres:
         image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
@@ -92,10 +92,18 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7.4.12-alpine@sha256:338fbfc036dc5517ac0b04d6de21521085935336e565f223406180e9d84166e2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
-      SYSTEM_PACKAGES: ffmpeg redis-server
-      APT_OPTIONS: -o Acquire::Retries=3 -o Acquire::http::Timeout=30
+      TEST_REDIS_URL: redis://localhost:6379
     strategy:
       fail-fast: false
       matrix:
@@ -111,46 +119,6 @@ jobs:
           python-version: ${{ env.BACKEND_PYTHON }}
           enable-cache: true
           save-cache: false
-
-      - name: Resolve the system packages
-        id: system-packages
-        # why: the key is the hash of the files to download (name, size and checksum from the image's signed package lists, not the mirror's address), so it changes exactly when a file does. apt-get update runs only when the image's lists do not know the packages.
-        run: |
-          . /etc/os-release
-          files=$(sudo apt-get install --print-uris -qq $SYSTEM_PACKAGES \
-            || { sudo apt-get update $APT_OPTIONS && sudo apt-get install --print-uris -qq $SYSTEM_PACKAGES; })
-          digest=$(printf '%s\n' "$files" | cut --delimiter=' ' --fields=2- | sort | sha256sum | cut --characters=1-16)
-          echo "key=apt-$VERSION_CODENAME-$digest" | tee --append "$GITHUB_OUTPUT"
-          echo "prefix=apt-$VERSION_CODENAME-" >> "$GITHUB_OUTPUT"
-        timeout-minutes: 5
-
-      # The one job that writes the system package files is shard 1 on main (see the save step below).
-      - name: Restore the system package files
-        id: apt-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        env:
-          SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1 # why: a slow cache download is given up as a miss after a minute; the mirror then serves the files.
-        with:
-          path: ${{ runner.temp }}/apt-archives/*.deb
-          key: ${{ steps.system-packages.outputs.key }}
-          restore-keys: ${{ steps.system-packages.outputs.prefix }}
-        timeout-minutes: 3
-
-      - name: Install system dependencies
-        # why: tests/support/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in, and the generation tests encode MP3s with a real ffmpeg. The mirror can trickle for minutes, so the files come from the cache and the mirror is read only for files the cache lacks; apt takes a cached file when its name and size match the signed lists. Its note that the download is performed unsandboxed as root is expected: the runner user owns the directory, which _apt cannot write. autoclean drops the versions of a set restored by prefix that the lists no longer name, so the saved entry does not grow.
-        run: |
-          mkdir -p "$RUNNER_TEMP/apt-archives/partial"
-          sudo apt-get install -y $APT_OPTIONS -o Dir::Cache::Archives="$RUNNER_TEMP/apt-archives" -o APT::Keep-Downloaded-Packages=true $SYSTEM_PACKAGES
-          sudo apt-get autoclean -o Dir::Cache::Archives="$RUNNER_TEMP/apt-archives"
-        timeout-minutes: 8 # why: a hung apt mirror must fail the run, not hold the queued runs behind it.
-
-      - name: Save the system package files
-        if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 1 && steps.apt-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/apt-archives/*.deb
-          key: ${{ steps.system-packages.outputs.key }}
-        timeout-minutes: 3
 
       - name: Install dependencies
         run: uv sync --frozen --extra server --extra dev --extra agent --extra image --extra signal # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.

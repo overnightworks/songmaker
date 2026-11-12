@@ -36,7 +36,7 @@ def test_decode_audio_empty() -> None:
         _decode_audio(result)
 
 
-def test_write_output(tmp_path: Path) -> None:
+def test_write_output(tmp_path: Path, locked_ffmpeg: Path) -> None:
     left = np.sin(np.linspace(0, 2 * np.pi * 440, 44100)) * 0.3
     right = left.copy()
     audio = DecodedAudio(left=left, right=right, sample_rate=44100, duration=1.0)
