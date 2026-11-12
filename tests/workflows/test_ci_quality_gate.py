@@ -276,6 +276,7 @@ BACKEND = Suite(
     measurement_steps=lambda steps: [],
 )
 SUITES = [BROWSER, BACKEND]
+WAIT_BOUND_MINUTES = 15
 across_suites = pytest.mark.parametrize("suite", SUITES, ids=lambda suite: suite.name)
 BROWSER_STEPS = BROWSER.steps
 BROWSER_LEGS = BROWSER.matrix_legs
@@ -342,6 +343,47 @@ def test_the_comparison_of_each_project_can_fail_the_job():
     for step in comparisons:
         assert "continue-on-error" not in step
         assert BROWSER_STEPS.index(step) > 0
+
+
+SUCCEEDING_NODE = "#!/bin/sh\nexit 0\n"
+FAILING_NODE = "#!/bin/sh\nexit 1\n"
+SHARD_PROOF_STEPS = [
+    pytest.param(step, id=step["name"])
+    for step in BROWSER_STEPS
+    if "node e2e/" in step.get("run", "") and not is_coverage_step(step)
+]
+
+
+def run_browser_step(step, workdir, *, node):
+    """Runs a step's script in a directory of its own, with `node` replaced by a stand-in."""
+    stand_ins = workdir / "stand-ins"
+    stand_ins.mkdir(exist_ok=True)
+    (stand_ins / "node").write_text(node)
+    (stand_ins / "node").chmod(0o755)
+    (workdir / f"chosen-{step['env']['PROJECT']}.txt").write_text("")
+    variables = {
+        "PATH": os.pathsep.join([str(stand_ins), os.environ["PATH"]]),
+        "RUNNER_TEMP": str(workdir),
+        BROWSER.total_variable(): str(BROWSER.total()),
+    } | step["env"]
+    return subprocess.run(
+        ["bash", "-e", "-c", step["run"]],
+        cwd=workdir,
+        env=variables,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_every_project_has_a_step_that_chooses_and_a_step_that_compares_its_shards():
+    assert len(SHARD_PROOF_STEPS) == 2 * len(BROWSER_PROJECTS)
+
+
+@pytest.mark.parametrize("step", SHARD_PROOF_STEPS)
+def test_a_step_that_proves_the_shards_fails_when_its_command_fails(tmp_path, step):
+    assert run_browser_step(step, tmp_path, node=SUCCEEDING_NODE).returncode == 0
+    assert run_browser_step(step, tmp_path, node=FAILING_NODE).returncode != 0
 
 
 def test_none_of_the_coverage_steps_of_the_browser_aggregator_can_use_up_the_job():
@@ -435,17 +477,14 @@ def test_a_missing_report_fails_its_leg_and_a_missing_coverage_store_never_does(
 
 
 @across_suites
-def test_every_limit_is_a_literal_and_no_step_outlasts_its_job(suite):
-    for job in suite.jobs.values():
-        assert isinstance(job["timeout-minutes"], int)
+def test_every_job_has_a_literal_limit_of_at_most_fifteen_minutes_that_no_step_outlasts(suite):
+    for job_id, job in suite.jobs.items():
+        assert isinstance(job.get("timeout-minutes"), int), job_id
+        assert job["timeout-minutes"] <= WAIT_BOUND_MINUTES, job_id
         for step in job["steps"]:
-            assert step.get("timeout-minutes", 0) <= job["timeout-minutes"], step["name"]
-    assert suite.aggregator["timeout-minutes"] <= 15
-
-
-def test_no_backend_job_waits_longer_than_fifteen_minutes():
-    for job in BACKEND.jobs.values():
-        assert job["timeout-minutes"] <= 15
+            limit = step.get("timeout-minutes", 0)
+            assert isinstance(limit, int), step["name"]
+            assert limit <= job["timeout-minutes"], step["name"]
 
 
 REPORTS_STEP = "Choose the newest report of each shard"
