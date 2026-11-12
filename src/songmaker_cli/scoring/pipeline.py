@@ -49,6 +49,9 @@ __all__ = [
 # parent resolves and the messages that tell an operator which one is missing.
 SCORING_WHISPER_MODEL_DIR_SETTING: Final = "SCORING_WHISPER_MODEL_DIR"
 SCORING_AUDIOBOX_CHECKPOINT_SETTING: Final = "SCORING_AUDIOBOX_CHECKPOINT"
+# faster_whisper downloads a tokenizer from the Hub when the model directory lacks this file,
+# whatever local_files_only says.
+WHISPER_TOKENIZER_FILE: Final = "tokenizer.json"
 
 
 @dataclass(frozen=True)
@@ -84,10 +87,16 @@ class PipelineConfig:
             object.__setattr__(self, "pipeline_timeout", self._watchdog_timeout())
 
     def whisper_model_path(self) -> Path:
-        """The directory holding the Whisper model files; fails loud when unset or absent."""
-        return _existing_model_path(
+        """The directory holding the Whisper model files; fails loud when unset, absent or
+        without its tokenizer."""
+        directory = _existing_model_path(
             self.whisper_model_dir, SCORING_WHISPER_MODEL_DIR_SETTING, Path.is_dir,
         )
+        if not (directory / WHISPER_TOKENIZER_FILE).is_file():
+            raise FileNotFoundError(
+                f"{SCORING_WHISPER_MODEL_DIR_SETTING}={directory} has no {WHISPER_TOKENIZER_FILE}",
+            )
+        return directory
 
     def audiobox_checkpoint_path(self) -> Path:
         """The AudioBox checkpoint file; fails loud when unset or absent."""

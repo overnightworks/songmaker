@@ -271,6 +271,13 @@ def test_word_level_accuracy_empty() -> None:
 
 
 
+def _whisper_model_dir(parent: Path) -> Path:
+    model_dir = parent / "whisper"
+    model_dir.mkdir(exist_ok=True)
+    (model_dir / "tokenizer.json").write_text("{}")
+    return model_dir
+
+
 def test_get_whisper_model_caches() -> None:
     pytest.importorskip("faster_whisper")
     from songmaker_cli.scoring import text_accuracy as ta
@@ -521,7 +528,7 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
         ]),
         mock_info,
     )
-    config = PipelineConfig(device="cpu", whisper_model_dir=tmp_path)
+    config = PipelineConfig(device="cpu", whisper_model_dir=_whisper_model_dir(tmp_path))
 
     with patch("songmaker_cli.scoring.text_accuracy._get_whisper_model", return_value=mock_model):
         result = score_text_accuracy(tmp_path / "test.mp3", meta=meta, config=config)
@@ -546,7 +553,7 @@ def test_score_text_accuracy_no_meta(tmp_path: Path) -> None:
     mock_model.transcribe.return_value = (
         iter([_whisper_segment("la la la", 0.2, 1.8)]), info,
     )
-    config = PipelineConfig(device="cpu", whisper_model_dir=tmp_path)
+    config = PipelineConfig(device="cpu", whisper_model_dir=_whisper_model_dir(tmp_path))
 
     with patch(
         "songmaker_cli.scoring.text_accuracy._get_whisper_model",
@@ -630,7 +637,7 @@ def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
     mock_info.language = "en"
     mock_model = MagicMock()
     mock_model.transcribe.return_value = (iter(mock_segments), mock_info)
-    config = PipelineConfig(device="cpu", whisper_model_dir=tmp_path)
+    config = PipelineConfig(device="cpu", whisper_model_dir=_whisper_model_dir(tmp_path))
 
     with patch("songmaker_cli.scoring.text_accuracy._get_whisper_model", return_value=mock_model):
         result = score_text_accuracy(tmp_path / "test.mp3", meta=meta, config=config)

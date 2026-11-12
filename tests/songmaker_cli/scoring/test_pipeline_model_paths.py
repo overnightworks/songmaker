@@ -43,6 +43,7 @@ class ModelScorer:
 def _make_directory(parent: Path) -> Path:
     directory = parent / "whisper"
     directory.mkdir()
+    (directory / "tokenizer.json").write_text("{}")
     return directory
 
 
@@ -120,5 +121,20 @@ def test_scorer_with_a_missing_path_fails_instead_of_asking_the_hub(
 ) -> None:
     with scorer.stub_library() as library, pytest.raises(FileNotFoundError, match=scorer.setting):
         scorer.score(tmp_path / "take.mp3", config=scorer.config(tmp_path / "absent"))
+
+    library.assert_not_called()
+
+
+def test_whisper_directory_without_a_tokenizer_fails_instead_of_asking_the_hub(
+    tmp_path: Path,
+) -> None:
+    incomplete = tmp_path / "incomplete"
+    incomplete.mkdir()
+
+    with (
+        WHISPER.stub_library() as library,
+        pytest.raises(FileNotFoundError, match=WHISPER.setting),
+    ):
+        WHISPER.score(tmp_path / "take.mp3", config=WHISPER.config(incomplete))
 
     library.assert_not_called()
