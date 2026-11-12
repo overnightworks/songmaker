@@ -222,7 +222,6 @@ describe('library history snapshot', () => {
 		captureLibraryScroll(240);
 		libraryBrowse.set({
 			status: 'ready',
-			error: null,
 			albumHasMore: true,
 			songHasMore: false,
 			albumOffset: 50,
@@ -281,7 +280,6 @@ describe('library history snapshot', () => {
 		librarySearch.set({
 			q: 'old',
 			status: 'ready',
-			error: null,
 			items: [
 				{ type: 'album', album: album() },
 				{ type: 'album', album: album({ id: 'a2' }) }

@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
+import { kitWords } from '#lib/utils/kit-words.ts';
 import Page from './+page.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
@@ -17,12 +18,12 @@ describe('failed sign-in page', () => {
 		component = mount(Page, { target });
 		await tick();
 
-		expect(target.querySelector('h1')?.textContent).toBe('Login failed');
+		expect(target.querySelector('h1')?.textContent).toBe(kitWords()['signIn.loginFailed']);
 		expect(target.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
-			'Sign-in did not work. Please try again.'
+			kitWords()['signIn.loginFailedBanner']
 		);
 		const retry = Array.from(target.querySelectorAll('a')).find(
-			(link) => link.textContent?.trim() === 'Try again'
+			(link) => link.textContent?.trim() === kitWords()['signIn.tryAgain']
 		);
 		expect(retry?.getAttribute('href')).toBe('/login/oidc');
 		expect(retry?.hasAttribute('data-sveltekit-reload')).toBe(true);

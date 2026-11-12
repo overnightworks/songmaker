@@ -9,6 +9,3 @@ frontend/src/lib/history/historyController.ts:stepBackTo # exported for its firs
 frontend/src/lib/services/audioPlayer.svelte.ts:STALL_RECOVERY_MS # the stall-check interval is exported so the stall and recovery tests advance the clock by the one value instead of hand copies (#1330); its production reader is the stall watch in the same module.
 frontend/src/lib/stores/navigation.ts:initNavigation # attaches navigation without a live sync for isolated tests; production reaches it through followLibrarySync in the same module.
 frontend/src/lib/utils/recency.ts:titleComparatorFor # the e2e library spec orders its expected titles by the language the loaded page carries; Playwright's Node process has no document for compareTitles to ask.
-frontend/src/lib/words/index.ts:languages # the generated catalog loader's list of languages, built ahead of the page's language loading, which will read it.
-frontend/src/lib/words/index.ts:sourceLanguage # the generated catalog loader's source language, built ahead of the page's language loading, which will read it.
-frontend/src/lib/words/index.ts:loadWords # the generated catalog loader's word loader, built ahead of the page's language loading, which will read it.

@@ -70,7 +70,7 @@ test('1: dark chosen in browser A is shown by browser B of the same person at it
 	await page.emulateMedia({ colorScheme: 'light' });
 	const menu = await openAccountMenu(page, shellOf(info));
 	const saved = page.waitForResponse(themeAnswer('PUT'));
-	await themeChoiceRadio(menu, 'Dark').check();
+	await themeChoiceRadio(menu, 'account.dark').check();
 	expect((await saved).ok()).toBe(true);
 	await expect.poll(() => looks(page)).toMatchObject({ chosen: 'dark', copy: 'dark' });
 
@@ -154,7 +154,7 @@ test('21: choosing Light from the device choice on a dark device sends light', a
 		(request) => request.url().endsWith(THEME_PATH) && request.method() === 'PUT'
 	);
 
-	await themeChoiceRadio(menu, 'Light').check();
+	await themeChoiceRadio(menu, 'account.light').check();
 
 	expect((await sent).postDataJSON()).toEqual({ theme: 'light' });
 });

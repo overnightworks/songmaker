@@ -61,7 +61,7 @@ test('the account circle opens a menu with the name, Settings, the theme, Log ou
 	await expect(
 		menu.getByRole('button', { name: words['places.settings'], exact: true })
 	).toBeVisible();
-	for (const choice of ['Follow system', 'Light', 'Dark'] as const) {
+	for (const choice of ['account.followSystem', 'account.light', 'account.dark'] as const) {
 		await expect(themeChoiceRadio(menu, choice)).toBeVisible();
 	}
 	await expect(menu.getByRole('button', { name: LOG_OUT_NAME, exact: true })).toBeVisible();

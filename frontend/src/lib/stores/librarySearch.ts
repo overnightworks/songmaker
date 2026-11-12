@@ -1,5 +1,4 @@
 import { derived, get, writable } from 'svelte/store';
-import { describeFailure } from '#lib/api/fetch.ts';
 import { fetchAlbums } from '#lib/api/albums.ts';
 import { searchLibrary, type LibrarySort } from '#lib/api/library.ts';
 import { fetchSongs } from '#lib/api/songs.ts';
@@ -24,15 +23,12 @@ import { selectedSongId } from '#lib/stores/player.ts';
 // restore stops at the first page that fails. The loaded song ids name song
 // hits and the selected song, never an album.
 
-const SEARCH_FAILED_MESSAGE = 'Search failed';
-
 type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';
 export type LibrarySearchHit = LibrarySearchResponse['items'][number];
 
 interface LibrarySearchState {
 	q: string;
 	status: LibrarySearchStatus;
-	error: string | null;
 	items: LibrarySearchHit[];
 	hasMore: boolean;
 	nextCursor: string | null;
@@ -40,7 +36,6 @@ interface LibrarySearchState {
 
 interface LibraryBrowseState {
 	status: LibrarySearchStatus;
-	error: string | null;
 	albumHasMore: boolean;
 	songHasMore: boolean;
 	albumOffset: number;
@@ -50,7 +45,6 @@ interface LibraryBrowseState {
 const EMPTY_SEARCH: LibrarySearchState = {
 	q: '',
 	status: 'idle',
-	error: null,
 	items: [],
 	hasMore: false,
 	nextCursor: null
@@ -75,7 +69,6 @@ export const librarySort = writable<LibrarySort>('newest');
 export const librarySearch = writable<LibrarySearchState>({ ...EMPTY_SEARCH });
 export const libraryBrowse = writable<LibraryBrowseState>({
 	status: 'idle',
-	error: null,
 	albumHasMore: false,
 	songHasMore: false,
 	albumOffset: 0,
@@ -95,7 +88,6 @@ export async function restoreLibrarySearch(
 	librarySearch.set({
 		q,
 		status: 'loading',
-		error: null,
 		items: [],
 		hasMore: false,
 		nextCursor: null
@@ -140,7 +132,7 @@ export async function loadLibraryBrowse(options: { reset: boolean }): Promise<bo
 	const browse = get(libraryBrowse);
 	const albumOffset = reset ? 0 : browse.albumOffset;
 	const songOffset = reset ? 0 : browse.songOffset;
-	libraryBrowse.update((state) => ({ ...state, status: 'loading', error: null }));
+	libraryBrowse.update((state) => ({ ...state, status: 'loading' }));
 	try {
 		const [albumPage, songPage] = await Promise.all([
 			fetchAlbums(albumOffset, LIBRARY_ALBUM_PAGE_SIZE, { sort }),
@@ -158,19 +150,17 @@ export async function loadLibraryBrowse(options: { reset: boolean }): Promise<bo
 		}
 		libraryBrowse.set({
 			status: 'ready',
-			error: null,
 			albumHasMore: albumPage.has_more,
 			songHasMore: songPage.has_more,
 			albumOffset: albumOffset + albumPage.items.length,
 			songOffset: songOffset + songPage.items.length
 		});
 		return true;
-	} catch (err) {
+	} catch {
 		if (generation !== browseGeneration) return false;
 		libraryBrowse.update((state) => ({
 			...state,
-			status: 'error',
-			error: describeFailure(err, SEARCH_FAILED_MESSAGE)
+			status: 'error'
 		}));
 		return false;
 	}
@@ -236,7 +226,6 @@ export function resetLibrarySearchForTests(): void {
 	librarySearch.set({ ...EMPTY_SEARCH });
 	libraryBrowse.set({
 		status: 'idle',
-		error: null,
 		albumHasMore: false,
 		songHasMore: false,
 		albumOffset: 0,
@@ -251,9 +240,9 @@ async function runLibrarySearch(
 ): Promise<void> {
 	const generation = ++searchGeneration;
 	if (options.reset) {
-		librarySearch.update((state) => ({ ...state, q, status: 'loading', error: null }));
+		librarySearch.update((state) => ({ ...state, q, status: 'loading' }));
 	} else {
-		librarySearch.update((state) => ({ ...state, status: 'loading', error: null }));
+		librarySearch.update((state) => ({ ...state, status: 'loading' }));
 	}
 	const cursor = options.reset ? null : get(librarySearch).nextCursor;
 	try {
@@ -267,18 +256,16 @@ async function runLibrarySearch(
 		librarySearch.update((state) => ({
 			q,
 			status: 'ready',
-			error: null,
 			items: options.reset ? resp.items : dedupeHits([...state.items, ...resp.items]),
 			hasMore: resp.has_more,
 			nextCursor: resp.next_cursor
 		}));
-	} catch (err) {
+	} catch {
 		if (generation !== searchGeneration) return;
 		librarySearch.update((state) => ({
 			...state,
 			q,
-			status: 'error',
-			error: describeFailure(err, SEARCH_FAILED_MESSAGE)
+			status: 'error'
 		}));
 	}
 }

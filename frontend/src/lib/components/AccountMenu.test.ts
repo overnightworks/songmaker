@@ -31,12 +31,13 @@ import {
 	replaceHistoryEntry
 } from '#lib/test-utils/library-history.ts';
 import { words } from '#lib/words/en.ts';
+import { kitWords } from '#lib/utils/kit-words.ts';
 import AccountMenu from './AccountMenu.svelte';
 
 const USERNAME = 'felix';
 const ACCOUNT_CONSOLE_URL = 'https://login.test/realms/songmaker/account';
-// The kit's panel owns these words.
-const LOG_OUT_NAME = 'Log out';
+const LOG_OUT_NAME = kitWords()['account.logOut'];
+const LEGAL_LINKS = `nav[aria-label="${kitWords()['legalLinks.name']}"] a`;
 const TRIGGER_NAME = `${ACCOUNT_MENU_LABEL} · ${USERNAME}`;
 
 function storeChoice(choice: 'dark' | 'light' | 'system'): void {
@@ -108,17 +109,15 @@ describe('AccountMenu', () => {
 		getByRoleButton(panel, words['places.settings']);
 		getByRoleButton(panel, LOG_OUT_NAME);
 		expect(panel.querySelectorAll('input[type="radio"]')).toHaveLength(3);
-		expect(
-			Array.from(panel.querySelectorAll('nav[aria-label="Legal"] a')).map(
-				(link) => link.textContent
-			)
-		).toEqual(LEGAL_SECTIONS.map((section) => section.label));
+		expect(Array.from(panel.querySelectorAll(LEGAL_LINKS)).map((link) => link.textContent)).toEqual(
+			LEGAL_SECTIONS.map((section) => section.label)
+		);
 	});
 
 	it('opens every legal link in a new tab so the playing song is not left', async () => {
 		const panel = await openMenu(await renderAccountMenu());
 
-		const links = Array.from(panel.querySelectorAll('nav[aria-label="Legal"] a'));
+		const links = Array.from(panel.querySelectorAll(LEGAL_LINKS));
 		expect(links).toHaveLength(LEGAL_SECTIONS.length);
 		for (const link of links) {
 			expect(link.getAttribute('target')).toBe('_blank');
@@ -270,9 +269,7 @@ describe('AccountMenu focus', () => {
 	])('keeps focus inside: $way wraps around', async ({ shiftKey }) => {
 		const panel = await openMenu(await renderAccountMenu());
 		const name = requireElement<HTMLElement>(panel, `a[href="${ACCOUNT_CONSOLE_URL}"]`);
-		const lastLegal = Array.from(
-			panel.querySelectorAll<HTMLElement>('nav[aria-label="Legal"] a')
-		).at(-1);
+		const lastLegal = Array.from(panel.querySelectorAll<HTMLElement>(LEGAL_LINKS)).at(-1);
 		(shiftKey ? name : lastLegal)?.focus();
 
 		press('Tab', shiftKey);

@@ -3,6 +3,7 @@ import { SIGN_OUT_FAILED_MESSAGE } from '#lib/constants/auth.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_NAME } from '#lib/constants/app.ts';
 import { signOutFailed } from '#lib/stores/auth.ts';
+import { kitWords } from '#lib/utils/kit-words.ts';
 
 const mockLogout = vi.hoisted(() => vi.fn());
 vi.mock('#lib/stores/auth.ts', async (importOriginal) => ({
@@ -24,7 +25,7 @@ async function renderPage(): Promise<HTMLElement> {
 
 function logOutButton(target: HTMLElement): HTMLButtonElement | undefined {
 	return Array.from(target.querySelectorAll('button')).find(
-		(button) => button.textContent?.trim() === 'Log out'
+		(button) => button.textContent?.trim() === kitWords()['signIn.logOut']
 	);
 }
 
@@ -43,9 +44,9 @@ describe('no-access page', () => {
 	it('says the account has no access to the app, with a name or group nowhere', async () => {
 		const target = await renderPage();
 
-		expect(target.querySelector('h1')?.textContent).toBe('No access');
+		expect(target.querySelector('h1')?.textContent).toBe(kitWords()['signIn.noAccess']);
 		expect(target.textContent).toContain(
-			`You are signed in, but this account has no access to ${APP_NAME}.`
+			kitWords()['signIn.noAccessSentence']({ appName: APP_NAME })
 		);
 	});
 

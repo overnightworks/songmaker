@@ -14,6 +14,7 @@ import {
 import { APP_NAME } from '#lib/constants/app.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { words } from '#lib/words/en.ts';
+import { kitWords } from '#lib/utils/kit-words.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import type { ResolvedPathname } from '$app/types';
@@ -62,8 +63,7 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-// The kit's panel owns this word.
-const LOG_OUT_NAME = 'Log out';
+const LOG_OUT_NAME = kitWords()['account.logOut'];
 const ACCOUNT_CIRCLE_NAME = `${ACCOUNT_MENU_LABEL} · felix`;
 
 function renderBar(onlogout = vi.fn()): HTMLElement {

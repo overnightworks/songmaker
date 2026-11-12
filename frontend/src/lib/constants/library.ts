@@ -1,6 +1,5 @@
 import type { Key } from '#lib/words/en.ts';
 
-export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const LIBRARY_SEARCH_DEBOUNCE_MS = 200;
 export const LIBRARY_ALBUM_PAGE_SIZE = 50;
 export const LIBRARY_SONG_PAGE_SIZE = 200;
