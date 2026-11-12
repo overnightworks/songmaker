@@ -1,0 +1,8 @@
+claim_id = "1920ad8e64cc48be9e4624e146ae68f7"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "78ae86f2025caf2eec900ce7c86d7678cc418614"
+branch = "claude/issue-3050-the-song-move-picker-reads-its-words-fro"
+scope = ["frontend/e2e/song-move.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/editor/SongMenu.svelte", "frontend/src/lib/components/editor/SongMenu.test.ts", "frontend/src/lib/components/editor/SongMovePicker.svelte", "frontend/src/lib/constants/rail.ts", "frontend/src/lib/constants/song.ts", "frontend/src/lib/stores/songMove.test.ts", "frontend/src/lib/stores/songMove.ts", "frontend/src/lib/words/en.ts"]
+opened_commit = "b2982cc810be716fab25b459848c149e2c16625e"
+whole_reason = "One surface moves whole (the epic's invariant 5): the picker, the store that names its failures and its toast, the menu's move confirm, the catalog with its generated module, and every test that finds these elements."
