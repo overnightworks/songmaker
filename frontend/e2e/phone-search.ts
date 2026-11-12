@@ -1,14 +1,14 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { words } from '../src/lib/words/en';
-import { appBar } from './helpers';
 
 export function searchSheet(page: Page): Locator {
 	return page.getByRole('dialog', { name: words['phoneAppBar.searchSheet'], exact: true });
 }
 
 export async function openSearchSheet(page: Page): Promise<Locator> {
-	await appBar(page)
+	await page
+		.getByRole('banner')
 		.getByRole('button', { name: words['phoneAppBar.searchOpen'], exact: true })
 		.click();
 	await expect(searchSheet(page)).toBeVisible();

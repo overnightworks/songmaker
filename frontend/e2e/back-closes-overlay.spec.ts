@@ -25,7 +25,7 @@ import {
 	COLLECTION_MENU_SHARE_LABEL
 } from '../src/lib/constants/collection-menu';
 import { playlistEntryOverflowLabel, PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
-import { RAIL_LIBRARY_NAV_LABEL, RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
+import { RAIL_LIBRARY_NAV_LABEL } from '../src/lib/constants/rail';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
@@ -50,6 +50,7 @@ import {
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	openRailNav,
+	openSettingsSection,
 	openPageFromSearch,
 	playlistEntryRows,
 	shellOf,
@@ -355,13 +356,8 @@ function openVoicesFromSearch(page: Page): Promise<void> {
 }
 
 async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
-	if (shell === 'mobile') {
-		await openVoicesFromSearch(page);
-	} else {
-		const rail = await openRailNav(page, shell);
-		await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL }).click();
-		await rail.getByRole('link', { name: SETTINGS_SECTION, exact: true }).click();
-	}
+	if (shell === 'mobile') await openVoicesFromSearch(page);
+	else await openSettingsSection(page, shell, SETTINGS_SECTION);
 	await expectSettingsStands(page);
 }
 

@@ -3,7 +3,7 @@ import { PHONE_TABS } from '../src/lib/constants/phone-tabs';
 import { words } from '../src/lib/words/en';
 import { NOW_PLAYING_CLOSE, openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
-import { RAIL_NAV_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
+import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
@@ -41,7 +41,7 @@ test(
 		const guard = new FlowGuard(page);
 		await page.setViewportSize(DESKTOP_VIEWPORT);
 		await page.goto(HOME_PATH);
-		const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+		const rail = page.getByRole('navigation', { name: words['rail.nav'] });
 		await expect(rail).toBeVisible();
 		const links = rail.locator('.rail-page-link');
 		await expect(links).toHaveText(PHONE_TABS.map(({ labelKey }) => new RegExp(words[labelKey])));

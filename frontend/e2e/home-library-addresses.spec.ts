@@ -20,7 +20,7 @@ import { LIBRARY_NEW_MENU_LABEL, LIBRARY_PAGE_LABEL } from '../src/lib/constants
 import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
-import { words, type Key } from '../src/lib/words/en';
+import { words } from '../src/lib/words/en';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
 	routerHistoryEntry,
@@ -127,13 +127,8 @@ async function expectSettingsShown(page: Page, shell: Shell): Promise<void> {
 	await expect(page.getByRole('heading', { name: heading })).toBeVisible();
 }
 
-type RailWord = typeof HOME_PAGE_LABEL | typeof LIBRARY_PAGE_LABEL | typeof PLAYLISTS_PAGE_LABEL;
-const RAIL_WORDS: readonly RailWord[] = [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL];
-const TAB_KEY: Record<string, Extract<Key, `places.${string}`>> = {
-	[HOME_PAGE_LABEL]: 'places.home',
-	[LIBRARY_PAGE_LABEL]: 'places.library',
-	[PLAYLISTS_PAGE_LABEL]: 'places.playlists'
-};
+type RailWord = 'places.home' | 'places.library' | 'places.playlists';
+const RAIL_WORDS: readonly RailWord[] = ['places.library', 'places.playlists'];
 
 async function expectCurrentRailWord(
 	page: Page,
@@ -144,11 +139,13 @@ async function expectCurrentRailWord(
 		shell === 'mobile'
 			? page.getByRole('navigation', { name: words['phoneTabs.nav'] })
 			: await openRailNav(page, shell);
-	for (const label of shell === 'mobile' ? [HOME_PAGE_LABEL, ...RAIL_WORDS] : RAIL_WORDS) {
+	for (const key of shell === 'mobile' ? (['places.home', ...RAIL_WORDS] as const) : RAIL_WORDS) {
+		// The desktop Library group keeps its constant until its own words move.
+		const label = shell === 'desktop' && key === 'places.library' ? LIBRARY_PAGE_LABEL : words[key];
 		const word = rail.getByRole(shell === 'mobile' ? 'button' : 'link', {
-			name: nameStartingWith(shell === 'mobile' ? words[TAB_KEY[label]] : label)
+			name: nameStartingWith(label)
 		});
-		if (label === current) await expect(word).toHaveAttribute('aria-current', 'page');
+		if (key === current) await expect(word).toHaveAttribute('aria-current', 'page');
 		else await expect(word).not.toHaveAttribute('aria-current', 'page');
 	}
 }
@@ -421,7 +418,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			await expectWallShown(page);
 			await expect(homeHeading(page)).toHaveCount(0);
 			await expect(newButton(page)).toHaveCount(shell === 'desktop' ? 1 : 0);
-			if (shell === 'desktop') await expectCurrentRailWord(page, LIBRARY_PAGE_LABEL);
+			if (shell === 'desktop') await expectCurrentRailWord(page, 'places.library');
 			guard.assertClean();
 		}
 	);
@@ -465,8 +462,8 @@ test('1354_rule_31 row 3b: Home, the word Library, then reload stays the Library
 // page left behind: Settings changes no surface, so it must not leave the word
 // of the page it was opened from marked.
 for (const [origin, railWord] of [
-	[LIBRARY, LIBRARY_PAGE_LABEL],
-	[PLAYLISTS, PLAYLISTS_PAGE_LABEL]
+	[LIBRARY, 'places.library'],
+	[PLAYLISTS, 'places.playlists']
 ] as const) {
 	for (const shell of ['desktop', 'mobile'] as const) {
 		test(
@@ -775,9 +772,9 @@ test.describe('with the service worker in control', () => {
 });
 
 for (const [row, path, current, retainAlbum] of [
-	['1354_rule_31 row 1', HOME_PATH, HOME_PAGE_LABEL, false],
-	['1354_rule_31 row 2', LIBRARY_PATH, LIBRARY_PAGE_LABEL, false],
-	['1354_R1prime row 10c', HOME_PATH, HOME_PAGE_LABEL, true]
+	['1354_rule_31 row 1', HOME_PATH, 'places.home', false],
+	['1354_rule_31 row 2', LIBRARY_PATH, 'places.library', false],
+	['1354_R1prime row 10c', HOME_PATH, 'places.home', true]
 ] as const) {
 	test(
 		`${row}: 1354_61_C07: phone tab follows the address`,

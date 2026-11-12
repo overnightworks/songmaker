@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from './coverage-test';
 import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
-import { RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants/rail';
+import { words } from '../src/lib/words/en';
+import { RAIL_LIBRARY_NAV_LABEL } from '../src/lib/constants/rail';
 import { archiveOwnedAlbum, BASE_URL, seedTake } from './seed';
 import {
 	boundingBoxes,
@@ -124,7 +125,7 @@ test('1354_65_C1 1354_37a_A6: a fresh album cover reaches wall, album header, de
 		await page.goto(`/album/${album.id}`);
 		await expect(page.locator('.collection-header .header-cover img')).toBeVisible();
 		if (!isMobile) {
-			const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+			const rail = page.getByRole('navigation', { name: words['rail.nav'] });
 			const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${LIBRARY_PAGE_LABEL}`) });
 			if ((await libraryGroup.getAttribute('aria-expanded')) === 'false')
 				await libraryGroup.click();
