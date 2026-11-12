@@ -2,22 +2,23 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Place } from '#lib/stores/libraryContext.ts';
 import { reactiveProps } from '../../../tests/reactive-fixtures.svelte';
+import { words } from '#lib/words/en.ts';
 import Icon from '../Icon.svelte';
 import PhoneTabs from './PhoneTabs.svelte';
 
 const tabs = [
-	{ place: 'home', label: 'Home', icon: 'home' },
-	{ place: 'library', label: 'Library', icon: 'library' },
-	{ place: 'playlists', label: 'Playlists', icon: 'playlists' }
+	{ place: 'home', label: words['places.home'], icon: 'home' },
+	{ place: 'library', label: words['places.library'], icon: 'library' },
+	{ place: 'playlists', label: words['places.playlists'], icon: 'playlists' }
 ] as const;
 const routes = [
-	{ pathname: '/', current: 'Home' },
-	{ pathname: '/library', current: 'Library' },
-	{ pathname: '/playlists', current: 'Playlists' },
-	{ pathname: '/album/a1', current: 'Library' },
-	{ pathname: '/album/a1/song', current: 'Library' },
-	{ pathname: '/album/a1/song/take/1', current: 'Library' },
-	{ pathname: '/playlist/p1', current: 'Playlists' },
+	{ pathname: '/', current: words['places.home'] },
+	{ pathname: '/library', current: words['places.library'] },
+	{ pathname: '/playlists', current: words['places.playlists'] },
+	{ pathname: '/album/a1', current: words['places.library'] },
+	{ pathname: '/album/a1/song', current: words['places.library'] },
+	{ pathname: '/album/a1/song/take/1', current: words['places.library'] },
+	{ pathname: '/playlist/p1', current: words['places.playlists'] },
 	{ pathname: '/settings', current: null },
 	{ pathname: '/settings/generation', current: null },
 	{ pathname: '/loras', current: null },

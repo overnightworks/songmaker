@@ -1,4 +1,4 @@
-import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
+import { words } from '../src/lib/words/en';
 import { expect, test } from './coverage-test';
 import { RAIL_NAV_LABEL } from '../src/lib/constants/rail';
 import { HOME_PATH, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
@@ -32,7 +32,7 @@ for (const { shell, name, viewport } of [
 		await page.goto(HOME_PATH);
 
 		if (isMobile) {
-			await expect(page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })).toBeVisible();
+			await expect(page.getByRole('navigation', { name: words['phoneTabs.nav'] })).toBeVisible();
 			await expect(page.getByRole('navigation', { name: RAIL_NAV_LABEL })).toHaveCount(0);
 			return;
 		}
@@ -128,8 +128,8 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				await page.goto(shell === 'mobile' ? HOME_PATH : LIBRARY_PATH);
 				const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 				if (shell === 'mobile') {
-					const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
-					await tabs.getByRole('button', { name: 'Library', exact: true }).click();
+					const tabs = page.getByRole('navigation', { name: words['phoneTabs.nav'] });
+					await tabs.getByRole('button', { name: words['places.library'], exact: true }).click();
 					await expect(page).toHaveURL(LIBRARY_PATH);
 					await expect(rail).toHaveCount(0);
 					await expect(page.getByRole('dialog')).toHaveCount(0);

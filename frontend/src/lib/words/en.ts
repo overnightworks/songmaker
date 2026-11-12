@@ -42,6 +42,13 @@ export type Words = {
     readonly "homeListen.playlistStopped": (gaps: { readonly number: string }) => string;
     readonly "homeListen.albumPlayed": (gaps: { readonly time: string }) => string;
     readonly "homeListen.playlistPlayed": (gaps: { readonly time: string }) => string;
+    readonly "phoneTabs.nav": string;
+    readonly "places.home": string;
+    readonly "places.library": string;
+    readonly "places.playlists": string;
+    readonly "phoneAppBar.searchOpen": string;
+    readonly "phoneAppBar.searchSheet": string;
+    readonly "phoneAppBar.searchClose": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -84,5 +91,12 @@ export const words: Words = {
     "homeListen.playlistStopped": (gaps: { readonly number: string }) => "Playlist · stopped at song " + gaps.number,
     "homeListen.albumPlayed": (gaps: { readonly time: string }) => "Album · played " + gaps.time,
     "homeListen.playlistPlayed": (gaps: { readonly time: string }) => "Playlist · played " + gaps.time,
+    "phoneTabs.nav": "Places",
+    "places.home": "Home",
+    "places.library": "Library",
+    "places.playlists": "Playlists",
+    "phoneAppBar.searchOpen": "Search",
+    "phoneAppBar.searchSheet": "Search",
+    "phoneAppBar.searchClose": "Close search",
 };
 export type Key = keyof Words;

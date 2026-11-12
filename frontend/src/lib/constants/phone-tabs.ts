@@ -1,12 +1,8 @@
-import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
-import { PLAYLISTS_PAGE_LABEL } from '#lib/constants/playlist.ts';
-import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 import type { Place } from '#lib/stores/libraryContext.ts';
+import type { Key } from '#lib/words/en.ts';
 
 export const PHONE_TABS = [
-	{ place: 'home', label: HOME_PAGE_LABEL, icon: 'home' },
-	{ place: 'library', label: LIBRARY_PAGE_LABEL, icon: 'library' },
-	{ place: 'playlists', label: PLAYLISTS_PAGE_LABEL, icon: 'playlists' }
-] as const satisfies readonly { place: Place; label: string; icon: string }[];
-
-export const PHONE_TABS_NAV_LABEL = 'Places';
+	{ place: 'home', labelKey: 'places.home', icon: 'home' },
+	{ place: 'library', labelKey: 'places.library', icon: 'library' },
+	{ place: 'playlists', labelKey: 'places.playlists', icon: 'playlists' }
+] as const satisfies readonly { place: Place; labelKey: Key; icon: string }[];

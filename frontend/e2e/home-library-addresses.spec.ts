@@ -1,6 +1,5 @@
 import { scrollWallTo } from './wall-scroll';
 import { SIGN_IN_NEXT_PARAM } from '../src/lib/constants/auth';
-import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // Home at `/` and the Library at `/library` (#1506, #1354 rules 25, 31 and 40),
 // driven the way a person reaches them: a pasted address, the brand, the word
 // Library, a reload, Back and Forward. The rows are those of #1506's scenario
@@ -21,7 +20,7 @@ import { LIBRARY_NEW_MENU_LABEL, LIBRARY_PAGE_LABEL } from '../src/lib/constants
 import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
-import { words } from '../src/lib/words/en';
+import { words, type Key } from '../src/lib/words/en';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
 	routerHistoryEntry,
@@ -130,6 +129,11 @@ async function expectSettingsShown(page: Page, shell: Shell): Promise<void> {
 
 type RailWord = typeof HOME_PAGE_LABEL | typeof LIBRARY_PAGE_LABEL | typeof PLAYLISTS_PAGE_LABEL;
 const RAIL_WORDS: readonly RailWord[] = [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL];
+const TAB_KEY: Record<string, Extract<Key, `places.${string}`>> = {
+	[HOME_PAGE_LABEL]: 'places.home',
+	[LIBRARY_PAGE_LABEL]: 'places.library',
+	[PLAYLISTS_PAGE_LABEL]: 'places.playlists'
+};
 
 async function expectCurrentRailWord(
 	page: Page,
@@ -138,11 +142,11 @@ async function expectCurrentRailWord(
 ): Promise<void> {
 	const rail =
 		shell === 'mobile'
-			? page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })
+			? page.getByRole('navigation', { name: words['phoneTabs.nav'] })
 			: await openRailNav(page, shell);
 	for (const label of shell === 'mobile' ? [HOME_PAGE_LABEL, ...RAIL_WORDS] : RAIL_WORDS) {
 		const word = rail.getByRole(shell === 'mobile' ? 'button' : 'link', {
-			name: nameStartingWith(label)
+			name: nameStartingWith(shell === 'mobile' ? words[TAB_KEY[label]] : label)
 		});
 		if (label === current) await expect(word).toHaveAttribute('aria-current', 'page');
 		else await expect(word).not.toHaveAttribute('aria-current', 'page');

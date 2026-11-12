@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { PHONE_TABS, PHONE_TABS_NAV_LABEL } from '#lib/constants/phone-tabs.ts';
+	import { PHONE_TABS } from '#lib/constants/phone-tabs.ts';
 	import { libraryRouteShape } from '#lib/routes/addresses.ts';
 	import type { Place } from '#lib/stores/libraryContext.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 
 	let { pathname, onSelect }: { pathname: string; onSelect: (place: Place) => void } = $props();
@@ -26,7 +27,7 @@
 	const currentPlace = $derived(placeForPathname(pathname));
 </script>
 
-<nav class="phone-tabs" aria-label={PHONE_TABS_NAV_LABEL}>
+<nav class="phone-tabs" aria-label={pageText('phoneTabs.nav')}>
 	{#each PHONE_TABS as tab (tab.place)}
 		<button
 			type="button"
@@ -35,7 +36,7 @@
 			onclick={() => onSelect(tab.place)}
 		>
 			<span aria-hidden="true"><Icon name={tab.icon} size={22} /></span>
-			<span>{tab.label}</span>
+			<span>{pageText(tab.labelKey)}</span>
 		</button>
 	{/each}
 </nav>

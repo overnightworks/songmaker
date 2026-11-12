@@ -1,4 +1,4 @@
-import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
+import { words } from '../src/lib/words/en';
 import { RATE_LIMITED_TOAST_MESSAGE } from '../src/lib/constants/http';
 // + NEW on Home's head makes an album or a playlist at both widths, even from
 // an empty library (account_rule_1 in docs/navigation.md). The desktop
@@ -249,11 +249,11 @@ test(
 		await answerTheLibraryEmpty(page);
 		for (const { address } of LIST_PAGES) {
 			await page.goto(address);
-			const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+			const tabs = page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 			await expect(tabs.getByRole('button')).toHaveText([
-				'Home',
-				LIBRARY_PAGE_LABEL,
-				PLAYLISTS_PAGE_LABEL
+				words['places.home'],
+				words['places.library'],
+				words['places.playlists']
 			]);
 		}
 	}

@@ -158,3 +158,31 @@ msgstr ""
 msgctxt "homeListen.playlistPlayed"
 msgid "Playlist · played {time}"
 msgstr ""
+
+msgctxt "phoneTabs.nav"
+msgid "Places"
+msgstr ""
+
+msgctxt "places.home"
+msgid "Home"
+msgstr ""
+
+msgctxt "places.library"
+msgid "Library"
+msgstr ""
+
+msgctxt "places.playlists"
+msgid "Playlists"
+msgstr ""
+
+msgctxt "phoneAppBar.searchOpen"
+msgid "Search"
+msgstr ""
+
+msgctxt "phoneAppBar.searchSheet"
+msgid "Search"
+msgstr ""
+
+msgctxt "phoneAppBar.searchClose"
+msgid "Close search"
+msgstr ""

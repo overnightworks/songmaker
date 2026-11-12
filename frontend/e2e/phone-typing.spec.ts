@@ -1,4 +1,3 @@
-import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // Typing on the phone (issues #999, #1017): while a text field has focus and
 // the on-screen keyboard is open, the keyboard owns the bottom of the screen,
 // so the mini-player and the Generate bar step aside and come back once the
@@ -29,7 +28,7 @@ import {
 	SONG_TITLE_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
-import { SEARCH_OPEN_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
+import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { NEW_ALBUM_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import {
@@ -382,11 +381,11 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 
 		await expect(page).toHaveURL(new RegExp(`/album/${readSeededLibrary().songPhoneAlbumId}$`));
 		await expect(
-			appBar(page).getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true })
+			appBar(page).getByRole('button', { name: words['phoneAppBar.searchOpen'], exact: true })
 		).toBeVisible();
 		await expect(appBar(page).getByRole('button', { name: /^Back to / })).toBeVisible();
 		await expect(page.getByRole('contentinfo')).toBeVisible();
-		await expect(page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })).toBeVisible();
+		await expect(page.getByRole('navigation', { name: words['phoneTabs.nav'] })).toBeVisible();
 
 		guard.assertClean();
 	});
@@ -398,7 +397,7 @@ for (const surface of ['Home name', 'Search'] as const) {
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page, context }) => {
 			await page.goto('/');
-			const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+			const tabs = page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 			await expect(tabs).toBeVisible();
 			let field: Locator;
 			if (surface === 'Home name') {

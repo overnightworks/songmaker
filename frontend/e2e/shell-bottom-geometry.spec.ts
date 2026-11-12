@@ -1,4 +1,4 @@
-import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
+import { words } from '../src/lib/words/en';
 import { readSeededLibrary } from './seed';
 import { expect, test, type Page } from './coverage-test';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
@@ -111,7 +111,7 @@ for (const cell of CASES) {
 			const transport = page.locator('footer.player-bar');
 			const strip = offlineStrip(page); // 1354_65_A3
 			await expect(strip).toHaveCount(0);
-			const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+			const tabs = page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 			if (cell.offset) {
 				await expect(tabs).toBeVisible();
 				const [box] = await boundingBoxes(tabs);
@@ -218,7 +218,7 @@ for (const safeArea of [0, 24]) {
 			try {
 				const library = readSeededLibrary();
 				await page.goto(`/album/${library.albumId}`);
-				const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+				const tabs = page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 				await expect(tabs).toBeVisible();
 				const [tabBox, barBox] = await boundingBoxes(tabs, page.getByRole('contentinfo'));
 				expect(tabBox.height).toBe(PHONE_TABS_HEIGHT + safeArea);
