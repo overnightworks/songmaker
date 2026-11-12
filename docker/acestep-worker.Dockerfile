@@ -48,9 +48,10 @@ COPY --chown=songmaker vendor/acestep/pyproject.toml vendor/acestep/uv.lock ./
 # The torch layer: the upstream lock's packages that only torch brings. Every other package is
 # skipped by name (`uv tree` prunes the torch packages and lists what is still reachable on this
 # platform) and arrives with acestep-base's delta sync, so a bump of torch is a bump of the fork's
-# lock and a bump of any other package leaves this layer untouched. The build fails when a line of
-# the tree is neither a package line nor uv's footer, or when no package is listed: a changed
-# format must never move a package into this layer.
+# lock. Any change of the lock re-runs this layer (the whole lock is copied above it), and only
+# reproducible file timestamps would keep its digest. The build fails when a line of the tree is
+# neither a package line nor uv's footer, or when no package is listed: a changed format must
+# never move a package into this layer.
 RUN package_line='^[^A-Za-z0-9]*\([A-Za-z0-9._-]\{1,\}\)\(\[[^]]*\]\)\{0,1\} v[0-9]' \
     && uv_tree="$(uv tree --frozen --no-dev --prune torch --prune torchvision --prune torchaudio)" \
     && unparsed_lines="$(printf '%s\n' "$uv_tree" | grep -v -e "$package_line" -e '^(\*) ' -e '^$' || true)" \
