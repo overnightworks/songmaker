@@ -12,7 +12,6 @@ export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
 	played: 'Last played'
 };
 export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums';
-export const LIBRARY_PAGE_LABEL = 'Library';
 // Each page's head reads its name and count as one heading ('Library · 12').
 export function wallHeadingLabel(pageLabel: string, count: number): string {
 	return `${pageLabel} · ${count}`;

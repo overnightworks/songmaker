@@ -12,8 +12,8 @@
 
 [file_lines]
 "frontend/e2e/back-closes-overlay.spec.ts" = 1225
-"frontend/e2e/helpers.ts" = 824
-"frontend/e2e/library.spec.ts" = 1279
+"frontend/e2e/helpers.ts" = 822
+"frontend/e2e/library.spec.ts" = 1277
 "frontend/e2e/offline.spec.ts" = 804
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-versions.spec.ts" = 860
@@ -28,7 +28,7 @@
 "frontend/src/lib/components/PlayerBar.test.ts" = 1621
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 780
 "frontend/src/lib/components/SongDetailView.svelte" = 1020
-"frontend/src/lib/components/SongDetailView.test.ts" = 2247
+"frontend/src/lib/components/SongDetailView.test.ts" = 2246
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1303
 "frontend/src/lib/history/historyController.test.ts" = 906

@@ -10,7 +10,6 @@ import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from './coverage-test';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
-	LIBRARY_PAGE_LABEL,
 	wallHeadingLabel,
 	LIBRARY_WALL_ORDER_GROUP_LABEL,
 	LIBRARY_WALL_ORDER_LABELS,
@@ -27,7 +26,6 @@ import {
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
 	playlistEntryOverflowLabel,
-	PLAYLISTS_PAGE_LABEL,
 	PLAYLISTS_WALL_ORDER_GROUP_LABEL
 } from '../src/lib/constants/playlist';
 import { words } from '../src/lib/words/en';
@@ -149,7 +147,7 @@ function wallOrderChoice(surface: Locator, group: string) {
 /** Compact Now Playing stacks, so the judging panel arrives as its own sheet. */
 function playlistsHeading(page: Page, count: number): Locator {
 	return workspace(page).getByRole('heading', {
-		name: wallHeadingLabel(PLAYLISTS_PAGE_LABEL, count),
+		name: wallHeadingLabel(words['places.playlists'], count),
 		exact: true
 	});
 }
@@ -252,7 +250,7 @@ async function expectSettingsRailRoundTrip(
 ): Promise<void> {
 	if (shell === 'mobile') {
 		await backOnPhone(page, words['places.library']);
-		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
+		await expect(surface.getByRole('heading', { name: words['places.library'] })).toBeVisible();
 		await expectAccountMenuOnTheLibrary(page);
 	}
 	await openSettingsSection(page, shell, words['settingsSections.voices']);
@@ -399,7 +397,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	const surface = workspace(page);
 
 	await page.goto(LIBRARY_PATH);
-	await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
+	await expect(surface.getByRole('heading', { name: words['places.library'] })).toBeVisible();
 
 	await openWallTile(page, library.albumTitle);
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
@@ -824,7 +822,7 @@ test(
 		await backOnPhone(page, words['places.library']);
 
 		await expect(page).toHaveURL(LIBRARY_URL);
-		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
+		await expect(surface.getByRole('heading', { name: words['places.library'] })).toBeVisible();
 		await expect(album).toBeHidden();
 		expect(await page.evaluate(() => history.length)).toBe(tabLength);
 		await expect(accountCircle(page)).toBeVisible();
@@ -1250,7 +1248,7 @@ test(
 		const { 'places.library': library, 'places.playlists': playlists } = words;
 
 		await page.goto(LIBRARY_PATH);
-		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
+		await expect(surface.getByRole('heading', { name: words['places.library'] })).toBeVisible();
 		await expect(await groupWord(library)).toHaveAttribute('aria-current', 'page');
 		await expect(await groupArrow(library)).toHaveAttribute('aria-expanded', 'true');
 		await expect(
@@ -1272,7 +1270,7 @@ test(
 
 		await (await groupWord(library)).click();
 		await expect(page).toHaveURL(LIBRARY_URL);
-		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
+		await expect(surface.getByRole('heading', { name: words['places.library'] })).toBeVisible();
 		await expect(await groupWord(library)).toHaveAttribute('aria-current', 'page');
 		await expect(await groupArrow(library)).toHaveAttribute('aria-expanded', 'true');
 	}

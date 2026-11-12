@@ -68,7 +68,7 @@ import {
 	type SavedPlayback
 } from '#lib/stores/playbackResume.ts';
 import { LIBRARY_QUEUE_EMPTY_TITLE, PLAYLIST_LOADING_LABEL } from '#lib/constants/queue.ts';
-import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
@@ -792,7 +792,7 @@ export function idlePlayTarget(input: {
 		}
 		// A detail that failed to load has nothing to natively play -- fall
 		// back to the named library target instead of a dead Play button.
-		return { type: 'library', label: LIBRARY_PAGE_LABEL };
+		return { type: 'library', label: pageText('places.library') };
 	}
 	if (input.collection?.kind === 'album') {
 		return {
@@ -801,7 +801,7 @@ export function idlePlayTarget(input: {
 			albumId: input.collection.id
 		};
 	}
-	return { type: 'library', label: LIBRARY_PAGE_LABEL };
+	return { type: 'library', label: pageText('places.library') };
 }
 
 // The transport with no take: a start that waits for the network is what the

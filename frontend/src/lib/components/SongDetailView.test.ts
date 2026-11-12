@@ -209,6 +209,7 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import { addToast, addUndoToast } from '#lib/stores/toast.ts';
 import { loras } from '#lib/stores/loras.ts';
+import { words } from '#lib/words/en.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
@@ -1358,8 +1359,7 @@ describe('song header album rail', () => {
 		expect(target.querySelector(`[aria-label="${SONG_PREVIOUS_LABEL}"]`)).toBeNull();
 		expect(target.querySelector(`[aria-label="${SONG_NEXT_LABEL}"]`)).toBeNull();
 		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
-		expect(crumbs[0]).toBe('Library');
-		expect(crumbs[1]).toBe('Local Album');
+		expect(crumbs.slice(0, 2)).toEqual([words['places.library'], 'Local Album']);
 	});
 
 	it('shows one album line and disabled ends without wrapping through neighbors', async () => {
@@ -1450,8 +1450,7 @@ describe('song header album rail', () => {
 		selectedSongId.set('s1');
 		const target = await renderView();
 		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
-		expect(crumbs[0]).toBe('Library');
-		expect(crumbs[1]).toBe('Local Album');
+		expect(crumbs.slice(0, 2)).toEqual([words['places.library'], 'Local Album']);
 		expect(crumbs[2]).toBe(`Track ${songs.findIndex((s) => s.id === 's1') + 1} of ${songs.length}`);
 	});
 
