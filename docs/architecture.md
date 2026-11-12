@@ -722,7 +722,7 @@ root.
 | Components | Editor (`components/editor/`: `EditorHeader`, `SongMenu`, `RecipeLine`, `RecipeTabs`, `WriteColumn`, `ListenTabs`, `TakesList`, `TakeMenu`), `ConfirmDialog` (generic Save/Discard/Cancel-style confirm), PlayerBar/`TransportBarFrame`, `NowPlaying`/`NowPlayingFrame`/`NowPlayingQueue`/`NowPlayingTake`, LibraryWall, `CollectionHeader`/`CollectionHeaderFrame`/Menu, shell/Rail, CoWriterPanel, `components/share/` (`SharedCollection`, `SharedFooter`), etc. | `src/lib/components/` |
 | Stores | Reactive state: player, collection, libraryContext, navigation, editor, recipe, filter, jobs, auth, settings, ui | `src/lib/stores/` |
 | API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |
-| Words | The interface's texts: `catalogs/en.po` as source, `words/en.ts` written by design-catalogs, read through `utils/page-words.ts` | `src/lib/catalogs/`, `src/lib/words/`, `src/lib/utils/page-words.ts` |
+| Words | The interface's texts: `catalogs/en.po` as source, `words/en.ts` written by design-catalogs, read through `utils/page-words.ts`. The root layout's `load` decides the language once and loads the app's words and the design kit's words (`utils/kit-words.ts`, passed as `words` to every kit component) before any route renders; the kit's words never enter the catalog | `src/lib/catalogs/`, `src/lib/words/`, `src/lib/utils/page-words.ts`, `src/lib/utils/kit-words.ts`, `src/routes/+layout.ts` |
 
 The API client and `types.ts` are the frontend's contract with the backend.
 `scripts/generate_types.py --check` derives the browser-facing models from the
