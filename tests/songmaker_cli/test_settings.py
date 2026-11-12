@@ -94,9 +94,10 @@ def test_a_dotenv_that_still_sets_a_retired_key_raises(
 ) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(f"{key}=1\n")
+    required = _required_settings()
 
     with pytest.raises(ValidationError):
-        Settings(_env_file=env_file, **_required_settings())
+        Settings(_env_file=env_file, **required)
 
 
 def test_settings_build_with_none_of_the_removed_cover_keys(
