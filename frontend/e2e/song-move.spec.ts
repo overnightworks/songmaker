@@ -3,19 +3,8 @@
 // names the new album, and at the phone width, where a toast does.
 
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
-import { LIBRARY_RETRY_LABEL } from '../src/lib/constants/library';
 import { words } from '../src/lib/words/en';
-import {
-	SONG_MENU_LABEL,
-	SONG_MENU_MOVE_LABEL,
-	SONG_MOVE_ALBUM_GONE,
-	SONG_MOVE_HEADING,
-	SONG_MOVE_NO_OTHER_ALBUM,
-	SONG_MOVE_SHARED_TITLE,
-	songMoveFailedLine,
-	songMovedToastLabel,
-	songMoveSharedMessage
-} from '../src/lib/constants/song';
+import { SONG_MENU_LABEL, SONG_MENU_MOVE_LABEL } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { openSearchSheet } from './phone-search';
 import { FlowGuard, HOME_PATH, nameStartingWith, ONLY_IN_SHELL, type Shell } from './helpers';
@@ -155,7 +144,7 @@ async function openPicker(page: Page): Promise<Locator> {
 	const menu = page.getByRole('dialog', { name: SONG_MENU_LABEL });
 	// The row's › is drawn as content, so its accessible name reads "Move ›".
 	await menu.getByRole('button', { name: nameStartingWith(SONG_MENU_MOVE_LABEL) }).click();
-	await expect(menu.getByText(SONG_MOVE_HEADING, { exact: true })).toBeVisible();
+	await expect(menu.getByText(words['songMove.heading'], { exact: true })).toBeVisible();
 	return menu;
 }
 
@@ -209,7 +198,9 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				await expect(crumb.getByText(otherTitle, { exact: true })).toBeVisible();
 			} else {
 				await expect(
-					page.getByRole('alert').filter({ hasText: songMovedToastLabel(otherTitle) })
+					page
+						.getByRole('alert')
+						.filter({ hasText: words['songMove.moved']({ album: otherTitle }) })
 				).toBeVisible();
 			}
 			const moved = await person.api.get(`/api/songs/${song.id}`);
@@ -240,7 +231,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 
 			const menu = await openPicker(page);
 
-			await expect(menu.getByText(SONG_MOVE_NO_OTHER_ALBUM, { exact: true })).toBeVisible();
+			await expect(menu.getByText(words['songMove.noOtherAlbum'], { exact: true })).toBeVisible();
 			await expect(menu.locator('.pk-row')).toHaveCount(1);
 		});
 
@@ -276,20 +267,22 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			const song = await ownSong(person, currentId);
 			await openSongAs(page, shell, cookies, currentId, song);
 			const sharedTitle = await titleOf(person, sharedId);
-			const asking = page.getByRole('dialog', { name: SONG_MOVE_SHARED_TITLE });
+			const asking = page.getByRole('dialog', { name: words['songMove.sharedTitle'] });
 
 			const menu = await openPicker(page);
 			await albumRow(menu, sharedTitle).click();
 
 			await expect(asking).toBeVisible();
-			await expect(asking).toContainText(songMoveSharedMessage(SONG_TITLE, sharedTitle));
+			await expect(asking).toContainText(
+				words['songMove.sharedMessage']({ song: SONG_TITLE, album: sharedTitle })
+			);
 			await asking.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true }).click();
 			await expect(asking).toBeHidden();
 			expect(await albumIdOf(person, song.id)).toBe(currentId);
 
 			const again = await openPicker(page);
 			await albumRow(again, sharedTitle).click();
-			await asking.getByRole('button', { name: SONG_MENU_MOVE_LABEL, exact: true }).click();
+			await asking.getByRole('button', { name: words['songMove.confirm'], exact: true }).click();
 
 			await expect(page).toHaveURL(new RegExp(`/album/${sharedId}/${song.slug}$`));
 			expect(await albumIdOf(person, song.id)).toBe(sharedId);
@@ -306,7 +299,9 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			await albumRow(menu, await titleOf(person, privateId)).click();
 
 			await expect(page).toHaveURL(new RegExp(`/album/${privateId}/${song.slug}$`));
-			await expect(page.getByRole('dialog', { name: SONG_MOVE_SHARED_TITLE })).toHaveCount(0);
+			await expect(page.getByRole('dialog', { name: words['songMove.sharedTitle'] })).toHaveCount(
+				0
+			);
 			expect(await albumIdOf(person, song.id)).toBe(privateId);
 		});
 
@@ -322,7 +317,9 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			await albumRow(menu, await titleOf(person, privateId)).click();
 
 			await expect(page).toHaveURL(new RegExp(`/album/${privateId}/${song.slug}$`));
-			await expect(page.getByRole('dialog', { name: SONG_MOVE_SHARED_TITLE })).toHaveCount(0);
+			await expect(page.getByRole('dialog', { name: words['songMove.sharedTitle'] })).toHaveCount(
+				0
+			);
 			expect(await albumIdOf(person, song.id)).toBe(privateId);
 		});
 
@@ -414,9 +411,9 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				await albumRow(menu, await titleOf(person, targetId)).click();
 
 				const line = menu.getByRole('alert');
-				await expect(line).toContainText(songMoveFailedLine('Album is full'));
+				await expect(line).toContainText(words['songMove.notMoved']({ reason: 'Album is full' }));
 				expect(await albumIdOf(person, song.id)).toBe(currentId);
-				await line.getByRole('button', { name: LIBRARY_RETRY_LABEL, exact: true }).click();
+				await line.getByRole('button', { name: words['songMove.retry'], exact: true }).click();
 
 				await expect(page).toHaveURL(new RegExp(`/album/${targetId}/${song.slug}$`));
 				expect(await albumIdOf(person, song.id)).toBe(targetId);
@@ -444,7 +441,9 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				await albumRow(menu, await titleOf(person, targetId)).click();
 
 				const line = menu.getByRole('alert');
-				await expect(line).toContainText(songMoveFailedLine(SONG_MOVE_ALBUM_GONE));
+				await expect(line).toContainText(
+					words['songMove.notMoved']({ reason: words['songMove.albumGone'] })
+				);
 				await expect(line.getByRole('button')).toHaveCount(0);
 				await reloaded;
 			}

@@ -5,9 +5,7 @@
 		SONG_MENU_MOVE_LABEL,
 		SONG_MENU_RENAME_LABEL,
 		SONG_MENU_SAVE_LABEL,
-		SONG_MENU_LABEL,
-		SONG_MOVE_SHARED_TITLE,
-		songMoveSharedMessage
+		SONG_MENU_LABEL
 	} from '#lib/constants/song.ts';
 	import { COLLECTION_MENU_CLOSE_LABEL } from '#lib/constants/collection-menu.ts';
 	import { onDestroy } from 'svelte';
@@ -21,6 +19,7 @@
 		songMoveRun
 	} from '#lib/stores/songMove.ts';
 	import { selectedSongId } from '#lib/stores/player.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
 	import SongMovePicker from './SongMovePicker.svelte';
@@ -97,9 +96,9 @@
 
 {#if $songMoveConfirm}
 	<ConfirmDialog
-		title={SONG_MOVE_SHARED_TITLE}
-		message={songMoveSharedMessage(title, $songMoveConfirm.title)}
-		confirmLabel={SONG_MENU_MOVE_LABEL}
+		title={pageText('songMove.sharedTitle')}
+		message={pageText('songMove.sharedMessage', { song: title, album: $songMoveConfirm.title })}
+		confirmLabel={pageText('songMove.confirm')}
 		destructive={false}
 		onconfirm={() => void confirmSongMove()}
 		oncancel={cancelSongMove}
