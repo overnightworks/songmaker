@@ -7,14 +7,9 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { newSongCardLabel, ALBUM_NO_SONGS } from '../src/lib/constants/album';
+import { ALBUM_NO_SONGS } from '../src/lib/constants/album';
 import { COLLECTION_MENU_LABEL } from '../src/lib/constants/collection-menu';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
-import {
-	NEW_SONG_CLOSE_LABEL,
-	NEW_SONG_ROW_LABEL,
-	NEW_SONG_TITLE_LABEL
-} from '../src/lib/constants/new-collection';
 import {
 	appBar,
 	boundingBoxes,
@@ -51,7 +46,7 @@ test.afterEach(({}, testInfo) => {
 });
 
 function newSongRow(page: Page): Locator {
-	return workspace(page).getByRole('button', { name: NEW_SONG_ROW_LABEL, exact: true });
+	return workspace(page).getByRole('button', { name: words['newSong.rowLabel'], exact: true });
 }
 
 async function createEmptyAlbum(
@@ -84,7 +79,7 @@ test('a filled album ends its track list with + New song, under a header of Play
 	await expect(actions.nth(1)).toHaveAccessibleName(COLLECTION_MENU_LABEL);
 
 	const rows = surface.locator('.item-list > *');
-	await expect(rows.last().getByRole('button')).toHaveAccessibleName(NEW_SONG_ROW_LABEL);
+	await expect(rows.last().getByRole('button')).toHaveAccessibleName(words['newSong.rowLabel']);
 	await expect(newSongRow(page)).toBeVisible();
 	const [lastSong, row] = await boundingBoxes(rows.nth((await rows.count()) - 2), newSongRow(page));
 	expect(row.y).toBeGreaterThanOrEqual(lastSong.y + lastSong.height);
@@ -103,12 +98,14 @@ test('an empty album makes its first song from + New song and opens it', async (
 		await expect(surface.getByRole('heading', { name: album.title })).toBeVisible();
 		await expect(surface.getByText(ALBUM_NO_SONGS, { exact: true })).toBeVisible();
 
-		const card = surface.getByRole('form', { name: newSongCardLabel(album.title) });
+		const card = surface.getByRole('form', {
+			name: words['newSong.cardLabel']({ album: album.title })
+		});
 		await newSongRow(page).click();
 		await expect(card).toBeVisible();
 		await expect(newSongRow(page)).toBeHidden();
-		await expect(card.getByLabel(NEW_SONG_TITLE_LABEL)).toBeFocused();
-		await card.getByRole('button', { name: NEW_SONG_CLOSE_LABEL }).click();
+		await expect(card.getByLabel(words['newSong.titleLabel'])).toBeFocused();
+		await card.getByRole('button', { name: words['newSong.close'] }).click();
 		await expect(card).toBeHidden();
 		await expect(newSongRow(page)).toBeFocused();
 
@@ -120,7 +117,7 @@ test('an empty album makes its first song from + New song and opens it', async (
 		await expect(surface.getByRole('heading', { name: album.title })).toBeVisible();
 
 		await newSongRow(page).click();
-		await card.getByLabel(NEW_SONG_TITLE_LABEL).fill(songTitle);
+		await card.getByLabel(words['newSong.titleLabel']).fill(songTitle);
 		await card.getByRole('button', { name: words['newPlace.create'] }).click();
 
 		await expect(page).toHaveURL(new RegExp(`/album/${album.id}/`));

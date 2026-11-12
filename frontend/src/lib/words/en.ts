@@ -173,6 +173,13 @@ export type Words = {
     readonly "newPlaylist.hint": string;
     readonly "newPlaylist.failed": string;
     readonly "newPlaylist.refused": string;
+    readonly "newSong.rowLabel": string;
+    readonly "newSong.cardLabel": (gaps: { readonly album: string }) => string;
+    readonly "newSong.close": string;
+    readonly "newSong.titleLabel": string;
+    readonly "newSong.hint": string;
+    readonly "newSong.failed": string;
+    readonly "newSong.refused": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -372,5 +379,12 @@ export const words: Words = {
     "newPlaylist.hint": "Opens the playlist; add songs from any album.",
     "newPlaylist.failed": "The playlist could not be created. Try again.",
     "newPlaylist.refused": "The playlist could not be created.",
+    "newSong.rowLabel": "New song",
+    "newSong.cardLabel": (gaps: { readonly album: string }) => "New song in " + gaps.album,
+    "newSong.close": "Close new song",
+    "newSong.titleLabel": "Title",
+    "newSong.hint": "Opens the song on Write.",
+    "newSong.failed": "The song could not be created. Try again.",
+    "newSong.refused": "The song could not be created.",
 };
 export type Key = keyof Words;

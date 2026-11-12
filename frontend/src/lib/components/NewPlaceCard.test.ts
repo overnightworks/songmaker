@@ -56,8 +56,8 @@ const CARDS: CardCase[] = [
 		props: {}
 	},
 	{
-		card: 'New song',
-		field: 'Title',
+		card: words['newSong.rowLabel'],
+		field: words['newSong.titleLabel'],
 		create: createSong,
 		load: () => import('./NewSongCard.svelte'),
 		props: { album: NIGHTDRIVE }
