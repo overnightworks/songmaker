@@ -1,0 +1,8 @@
+claim_id = "fe699341741a4227b87f66b31437ab21"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "3fc78dfb3c75e5ea51947a1b27c011b5c39267ee"
+branch = "claude/issue-3021-the-images-layers-hold-no-build-time-noi"
+scope = ["Dockerfile", "docker/acestep-worker.Dockerfile", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile", "docs/acestep.md", "tests/test_packaging_boundary.py"]
+opened_commit = "2d128102cc2bdfc012b649eb2cc8aaf7cdb90d08"
+whole_reason = "The same three sources of noise stand in all four Dockerfiles; removing them in one leaves the release's layer report half true."
