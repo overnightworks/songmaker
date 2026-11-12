@@ -10,6 +10,7 @@ import {
 	DESKTOP_VIEWPORT,
 	HOME_PATH,
 	MOBILE_VIEWPORT,
+	nameStartingWith,
 	ONLY_IN_SHELL,
 	openSettingsSection,
 	workspace
@@ -165,7 +166,7 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 			.fill(words['settingsSections.voices']);
 		await search
 			.getByRole('group', { name: words['railSearch.groupPages'] })
-			.getByRole('option', { name: /^Voices\b/ })
+			.getByRole('option', { name: nameStartingWith(words['settingsSections.voices']) })
 			.click();
 		await expect(page).toHaveURL(/\/settings\/voices$/);
 		await expectCurrent(page, null);
