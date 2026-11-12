@@ -1,3 +1,20 @@
+import {
+	albumPage,
+	choiceLabel,
+	headLabel,
+	orderButton,
+	orderChoices,
+	orderFace,
+	phoneViewport,
+	place,
+	pressedOrder,
+	render,
+	seedWall,
+	songs,
+	tileLines,
+	tileTitles,
+	unmountAll
+} from '#lib/test-utils/library-wall.ts';
 import { replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
 import {
 	makeAlbum as album,
@@ -5,7 +22,7 @@ import {
 	makeSong,
 	makeGeneration
 } from '#lib/test-utils/factories.ts';
-import { mount, tick, unmount } from 'svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -48,11 +65,7 @@ import {
 } from '#lib/stores/player.ts';
 import { fetchSong } from '#lib/api/client.ts';
 import { NetworkError } from '#lib/api/fetch.ts';
-import {
-	LIBRARY_WALL_ORDER_KEYS,
-	LIBRARY_WALL_PLAYED_PAGE_SIZE,
-	type LibraryWallOrder
-} from '#lib/constants/library.ts';
+import { LIBRARY_WALL_PLAYED_PAGE_SIZE } from '#lib/constants/library.ts';
 import { words } from '#lib/words/en.ts';
 
 const fetchPlaylists = vi.fn();
@@ -78,14 +91,6 @@ vi.mock('#lib/api/client.ts', () => ({
 	fetchLastFailedGeneration: vi.fn().mockResolvedValue({ job: null })
 }));
 
-import LibraryWall from './LibraryWall.svelte';
-
-const mounted: Array<ReturnType<typeof mount>> = [];
-const songs = words['libraryWall.songCount'];
-const orderFace = (order: LibraryWallOrder) => words[LIBRARY_WALL_ORDER_KEYS[order]];
-const headLabel = (page: 'places.library' | 'places.playlists', count: number) =>
-	words['libraryWall.heading']({ page: words[page], count });
-
 beforeEach(() => {
 	fetchPlaylists.mockReset().mockResolvedValue([]);
 	fetchPlaylist.mockReset().mockResolvedValue({
@@ -105,11 +110,6 @@ beforeEach(() => {
 	playlistLoad.set({ status: 'ready', error: null });
 	replaceHistoryEntry('/');
 });
-
-async function unmountAll(): Promise<void> {
-	for (const component of mounted.splice(0)) await unmount(component);
-	document.body.replaceChildren();
-}
 
 afterEach(async () => {
 	await unmountAll();
@@ -131,10 +131,6 @@ afterEach(async () => {
 	allAlbumsLoad.set({ status: 'idle', error: null });
 });
 
-function albumPage(items: ReturnType<typeof album>[], hasMore: boolean) {
-	return { items, total: items.length, offset: 0, limit: 50, has_more: hasMore };
-}
-
 function returnToForeground(): void {
 	Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
 	document.dispatchEvent(new Event('visibilitychange'));
@@ -145,76 +141,10 @@ function reconnect(): void {
 	reportResourceStreamReachable(true);
 }
 
-async function render(kind: 'library' | 'playlists' = 'library'): Promise<HTMLElement> {
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted.push(mount(LibraryWall, { target, props: { kind } }));
-	await tick();
-	return target;
-}
-
-function tileTitles(root: ParentNode): string[] {
-	return [...root.querySelectorAll('.wall-tile .tile-title')].map(
-		(title) => title.textContent ?? ''
-	);
-}
-
-function tileLines(root: ParentNode): string[] {
-	return [...root.querySelectorAll('.wall-tile .tile-subtitle')].map(
-		(line) => line.textContent ?? ''
-	);
-}
-
-function orderChoices(root: ParentNode): HTMLButtonElement[] {
-	const group = root.querySelector('.wall-titlebar [role="group"]');
-	return [...(group?.querySelectorAll('button') ?? [])];
-}
-
-function choiceLabel(choice: HTMLButtonElement): string {
-	return choice.textContent?.trim() ?? '';
-}
-
-function orderButton(root: ParentNode, order: LibraryWallOrder): HTMLButtonElement {
-	const button = orderChoices(root).find((choice) => choiceLabel(choice) === orderFace(order));
-	if (!button) throw new Error(`no ${order} order`);
-	return button;
-}
-
-function pressedOrder(root: ParentNode): string[] {
-	return orderChoices(root)
-		.filter((choice) => choice.getAttribute('aria-pressed') === 'true')
-		.map(choiceLabel);
-}
-
-function place(type: 'album' | 'playlist', id: string, title: string, playedAt: string) {
-	return {
-		type,
-		id,
-		title,
-		cover: null,
-		album_covers: [],
-		song_id: null,
-		song_title: null,
-		song_number: null,
-		played_at: playedAt
-	};
-}
-
 type ListenPage = { offset: number; limit: number };
 
 function isLastPlayedRead(page: ListenPage): boolean {
 	return page.limit === LIBRARY_WALL_PLAYED_PAGE_SIZE;
-}
-
-function seedWall(): void {
-	albumList.set([
-		album({ id: 'a-sonne', title: 'Sonnenlauf', song_count: 7 }),
-		album({ id: 'a-fuer', title: 'Sonne für Andrea', song_count: 5 }),
-		album({ id: 'a-nacht', title: 'nachtstrom', song_count: 1 })
-	]);
-	playlistList.set([
-		playlist({ id: 'p-night', title: 'Night drive', entry_count: 14, share_slug: null })
-	]);
 }
 
 describe('LibraryWall', () => {
@@ -487,24 +417,6 @@ describe('LibraryWall', () => {
 		expect(get(openCollection)).toEqual(opens);
 	});
 });
-
-// Stubs every media query as matching the phone width; the returned function
-// turns the viewport to the phone width or away from it and tells the listeners.
-function phoneViewport(): (phone: boolean) => void {
-	let matches = true;
-	const listeners = new Set<() => void>();
-	vi.stubGlobal('matchMedia', () => ({
-		get matches() {
-			return matches;
-		},
-		addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
-		removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener)
-	}));
-	return (phone) => {
-		matches = phone;
-		for (const listener of listeners) listener();
-	};
-}
 
 it.each([
 	{ label: 'unloaded playable', flag: true, loaded: false, archived: false, expected: true },
