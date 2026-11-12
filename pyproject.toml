@@ -54,7 +54,7 @@ server = [
     "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@v0.37.1",
     # Bare: Settings imports the client's AgentConfig in every process, and both worker images
     # install this extra. Its HTTP backend sits in the agent extra, which only the web image installs.
-    "overnightworks-agents @ git+https://github.com/overnightworks/agents@v0.31.0",
+    "overnightworks-agents @ git+https://github.com/overnightworks/agents@v0.32.0",
 ]
 # Pillow normalizes a generated cover; a container installs it only when its entrypoint reaches it.
 image = [
@@ -63,7 +63,7 @@ image = [
 # The co-writer's gateway backend (GatewayBackend) and the MCP front of a person's own agent:
 # the web image installs them. A git pin by tag, like the other first-party libraries.
 agent = [
-    "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.31.0",
+    "overnightworks-agents[backend,mcp-server] @ git+https://github.com/overnightworks/agents@v0.32.0",
 ]
 acestep-worker = [
     "fastapi>=0.100,<1",
