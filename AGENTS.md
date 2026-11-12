@@ -40,5 +40,5 @@
 - `docs/catalog.md`, `docs/generation.md`, `docs/library.md`, `docs/navigation.md`, `docs/sharing.md`, `docs/co-writer.md`: read when changing a ruled behaviour of that area.
 - `docs/security.md`: read when touching sign-in, tokens, sharing, the agent front or the trust model.
 - `docs/acestep.md`: read when touching ACE-Step, its fork's pin and patches, or the workers.
-- design's `docs/languages.md`: read when adding or moving an interface text.
+- design's [language standard](https://github.com/overnightworks/design/blob/main/docs/languages.md): read when adding or moving an interface text.
 - `docs/testing.md`: read when adding tests, or changing CI, coverage floors or the quality gate.
