@@ -243,7 +243,6 @@ describe('LibraryWall', () => {
 
 	it('1354_rule_31 1354_rule_14: shows no Listen list, and reads no listens until Last played is chosen', async () => {
 		seedWall();
-
 		const root = await render();
 
 		expect(root.querySelector(`[aria-label="${words['homeListen.label']}"]`)).toBeNull();
