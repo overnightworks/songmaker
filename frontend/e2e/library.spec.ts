@@ -10,9 +10,7 @@ import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from './coverage-test';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
-	wallHeadingLabel,
-	LIBRARY_WALL_ORDER_GROUP_LABEL,
-	LIBRARY_WALL_ORDER_LABELS,
+	LIBRARY_WALL_ORDER_KEYS,
 	type LibraryWallOrder
 } from '../src/lib/constants/library';
 import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
@@ -25,8 +23,7 @@ import {
 import {
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
-	playlistEntryOverflowLabel,
-	PLAYLISTS_WALL_ORDER_GROUP_LABEL
+	playlistEntryOverflowLabel
 } from '../src/lib/constants/playlist';
 import { words } from '../src/lib/words/en';
 import {
@@ -89,6 +86,8 @@ const PHONE_ROW_HEIGHT_PX = 62;
 const HEADER_MIN_TITLE_PX = 160;
 // The header's line under the title: how many songs the page lists.
 const SONG_COUNT = /^\d+ songs?$/;
+const songForm = (n: number) => words['libraryWall.songCount'](n).replace(String(n), '\\d+');
+const WALL_SONG_COUNT = new RegExp(`^(${songForm(1)}|${songForm(2)})$`);
 
 let guard: FlowGuard;
 let playlist: SeededPlaylist;
@@ -141,13 +140,13 @@ function wallOrderChoice(surface: Locator, group: string) {
 	return (order: LibraryWallOrder) =>
 		surface
 			.getByRole('group', { name: group })
-			.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
+			.getByRole('button', { name: words[LIBRARY_WALL_ORDER_KEYS[order]], exact: true });
 }
 
 /** Compact Now Playing stacks, so the judging panel arrives as its own sheet. */
 function playlistsHeading(page: Page, count: number): Locator {
 	return workspace(page).getByRole('heading', {
-		name: wallHeadingLabel(words['places.playlists'], count),
+		name: words['libraryWall.heading']({ page: words['places.playlists'], count }),
 		exact: true
 	});
 }
@@ -1046,8 +1045,8 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 	page
 }, testInfo) => {
 	const surface = workspace(page);
-	const orders = surface.getByRole('group', { name: LIBRARY_WALL_ORDER_GROUP_LABEL });
-	const choice = wallOrderChoice(surface, LIBRARY_WALL_ORDER_GROUP_LABEL);
+	const orders = surface.getByRole('group', { name: words['libraryWall.sortAlbums'] });
+	const choice = wallOrderChoice(surface, words['libraryWall.sortAlbums']);
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
 	const firstLine = tiles.first().locator('.tile-subtitle');
 	const listenTitles = listenRegion(page).locator('.library-row .tile-title');
@@ -1060,8 +1059,8 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 
 	await page.goto(LIBRARY_PATH);
 	await expect(orders.getByRole('button')).toHaveText([
-		LIBRARY_WALL_ORDER_LABELS.title,
-		LIBRARY_WALL_ORDER_LABELS.played
+		words[LIBRARY_WALL_ORDER_KEYS.title],
+		words[LIBRARY_WALL_ORDER_KEYS.played]
 	]);
 	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
 	await expect(tiles.filter({ hasText: library.albumTitle })).toHaveCount(1);
@@ -1069,7 +1068,8 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 	const tileLabels = await tiles.evaluateAll((bodies) =>
 		bodies.map((body) => body.getAttribute('aria-label') ?? '')
 	);
-	expect(tileLabels.every((label) => label.startsWith('Open album '))).toBe(true);
+	const albumPrefix = words['libraryWall.openAlbum']({ title: '' });
+	expect(tileLabels.every((label) => label.startsWith(albumPrefix))).toBe(true);
 	await expect(listenTitles).toHaveCount(0);
 	const alphabetical = await tiles.locator('.tile-title').allTextContents();
 	expect(alphabetical).toEqual([...alphabetical].sort(await pageTitleOrder(page)));
@@ -1080,7 +1080,7 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 	await choice('played').click();
 	await expect(tiles.first()).toContainText(library.albumTitle);
 	await expect(firstLine).toHaveText(
-		shellOf(testInfo) === 'mobile' ? SONG_COUNT : /^today \d\d:\d\d$/
+		shellOf(testInfo) === 'mobile' ? WALL_SONG_COUNT : /^today \d\d:\d\d$/
 	);
 	await expect(listenTitles).toHaveCount(0);
 
@@ -1088,7 +1088,7 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 	await expect(choice('played')).toHaveAttribute('aria-pressed', 'true');
 	await expect(tiles.first()).toContainText(library.albumTitle);
 	await expect(firstLine).toHaveText(
-		shellOf(testInfo) === 'mobile' ? SONG_COUNT : /^today \d\d:\d\d$/
+		shellOf(testInfo) === 'mobile' ? WALL_SONG_COUNT : /^today \d\d:\d\d$/
 	);
 	await expect(listenTitles).toHaveCount(0);
 
@@ -1103,8 +1103,8 @@ test(
 		const shell = shellOf(testInfo);
 		const surface = workspace(page);
 		const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
-		const libraryChoice = wallOrderChoice(surface, LIBRARY_WALL_ORDER_GROUP_LABEL);
-		const playlistsChoice = wallOrderChoice(surface, PLAYLISTS_WALL_ORDER_GROUP_LABEL);
+		const libraryChoice = wallOrderChoice(surface, words['libraryWall.sortAlbums']);
+		const playlistsChoice = wallOrderChoice(surface, words['libraryWall.sortPlaylists']);
 
 		async function railOrderMatchingWall(railRows: string): Promise<string[]> {
 			const rail = await openRailNav(page, shell);
@@ -1169,12 +1169,12 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	const surface = workspace(page);
 	const heading = playlistsHeading(page, titles.length);
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
-	const choice = wallOrderChoice(surface, PLAYLISTS_WALL_ORDER_GROUP_LABEL);
+	const choice = wallOrderChoice(surface, words['libraryWall.sortPlaylists']);
 
 	async function expectPlaylistsStandFirst(title: string): Promise<void> {
 		await expect(page).toHaveURL(/\/playlists$/);
 		await expect(heading).toBeVisible();
-		await expect(tiles.first()).toHaveAccessibleName(`Open playlist ${title}`);
+		await expect(tiles.first()).toHaveAccessibleName(words['libraryWall.openPlaylist']({ title }));
 		if (shell === 'mobile') {
 			await expect(appBar(page).getByRole('button', { name: BACK_BUTTON_NAME })).toHaveCount(0);
 			await expect(accountCircle(page)).toBeVisible();
@@ -1186,9 +1186,9 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
 	expect(
 		await tiles.evaluateAll((bodies) => bodies.map((body) => body.getAttribute('aria-label')))
-	).toEqual(titles.map((title) => `Open playlist ${title}`));
+	).toEqual(titles.map((title) => words['libraryWall.openPlaylist']({ title })));
 	await expect(tiles.filter({ hasText: playlist.title }).locator('.tile-subtitle')).toHaveText(
-		/^\d+ songs?$/
+		WALL_SONG_COUNT
 	);
 
 	await choice('played').click();

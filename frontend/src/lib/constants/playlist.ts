@@ -1,5 +1,3 @@
-export const PLAYLISTS_WALL_ORDER_GROUP_LABEL = 'Sort playlists';
-export const PLAYLISTS_WALL_EMPTY = 'No playlists yet. + New on Home makes one.';
 const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
 
 export function playlistEntryOverflowLabel(songTitle: string): string {

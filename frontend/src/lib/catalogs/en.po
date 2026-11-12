@@ -370,3 +370,75 @@ msgstr ""
 msgctxt "settingsPage.adminOnly"
 msgid "admins only"
 msgstr ""
+
+msgctxt "libraryWall.heading"
+msgid "{page} · {count}"
+msgstr ""
+
+msgctxt "libraryWall.sortAlbums"
+msgid "Sort albums"
+msgstr ""
+
+msgctxt "libraryWall.sortPlaylists"
+msgid "Sort playlists"
+msgstr ""
+
+msgctxt "libraryWall.orderTitle"
+msgid "A–Z"
+msgstr ""
+
+msgctxt "libraryWall.orderPlayed"
+msgid "Last played"
+msgstr ""
+
+msgctxt "libraryWall.libraryLoading"
+msgid "Loading library…"
+msgstr ""
+
+msgctxt "libraryWall.libraryFailed"
+msgid "Could not load library."
+msgstr ""
+
+msgctxt "libraryWall.libraryEmpty"
+msgid "No albums yet. + New on {home} makes one."
+msgstr ""
+
+msgctxt "libraryWall.playlistsLoading"
+msgid "Loading playlists…"
+msgstr ""
+
+msgctxt "libraryWall.playlistsFailed"
+msgid "Failed to load playlists"
+msgstr ""
+
+msgctxt "libraryWall.playlistsEmpty"
+msgid "No playlists yet. + New on {home} makes one."
+msgstr ""
+
+msgctxt "libraryWall.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "libraryWall.openAlbum"
+msgid "Open album {title}"
+msgstr ""
+
+msgctxt "libraryWall.openPlaylist"
+msgid "Open playlist {title}"
+msgstr ""
+
+msgctxt "libraryWall.albumCover"
+msgid "Album {title}"
+msgstr ""
+
+msgctxt "libraryWall.playlistCover"
+msgid "Playlist cover for {title}"
+msgstr ""
+
+msgctxt "libraryWall.songCount.one"
+msgid "{count} song"
+msgstr ""
+
+msgctxt "libraryWall.songCount.other"
+msgid "{count} songs"
+msgstr ""

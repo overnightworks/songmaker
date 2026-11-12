@@ -94,6 +94,23 @@ export type Words = {
     readonly "settingsPage.documentTitle": (gaps: { readonly app: string }) => string;
     readonly "settingsPage.nav": string;
     readonly "settingsPage.adminOnly": string;
+    readonly "libraryWall.heading": (gaps: { readonly count: number; readonly page: string }) => string;
+    readonly "libraryWall.sortAlbums": string;
+    readonly "libraryWall.sortPlaylists": string;
+    readonly "libraryWall.orderTitle": string;
+    readonly "libraryWall.orderPlayed": string;
+    readonly "libraryWall.libraryLoading": string;
+    readonly "libraryWall.libraryFailed": string;
+    readonly "libraryWall.libraryEmpty": (gaps: { readonly home: string }) => string;
+    readonly "libraryWall.playlistsLoading": string;
+    readonly "libraryWall.playlistsFailed": string;
+    readonly "libraryWall.playlistsEmpty": (gaps: { readonly home: string }) => string;
+    readonly "libraryWall.retry": string;
+    readonly "libraryWall.openAlbum": (gaps: { readonly title: string }) => string;
+    readonly "libraryWall.openPlaylist": (gaps: { readonly title: string }) => string;
+    readonly "libraryWall.albumCover": (gaps: { readonly title: string }) => string;
+    readonly "libraryWall.playlistCover": (gaps: { readonly title: string }) => string;
+    readonly "libraryWall.songCount": (count: number) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -207,5 +224,29 @@ export const words: Words = {
     "settingsPage.documentTitle": (gaps: { readonly app: string }) => "Settings — " + gaps.app,
     "settingsPage.nav": "Settings sections",
     "settingsPage.adminOnly": "admins only",
+    "libraryWall.heading": (gaps: { readonly count: number; readonly page: string }) => gaps.page + " · " + numberFormat.format(gaps.count),
+    "libraryWall.sortAlbums": "Sort albums",
+    "libraryWall.sortPlaylists": "Sort playlists",
+    "libraryWall.orderTitle": "A–Z",
+    "libraryWall.orderPlayed": "Last played",
+    "libraryWall.libraryLoading": "Loading library…",
+    "libraryWall.libraryFailed": "Could not load library.",
+    "libraryWall.libraryEmpty": (gaps: { readonly home: string }) => "No albums yet. + New on " + gaps.home + " makes one.",
+    "libraryWall.playlistsLoading": "Loading playlists…",
+    "libraryWall.playlistsFailed": "Failed to load playlists",
+    "libraryWall.playlistsEmpty": (gaps: { readonly home: string }) => "No playlists yet. + New on " + gaps.home + " makes one.",
+    "libraryWall.retry": "Retry",
+    "libraryWall.openAlbum": (gaps: { readonly title: string }) => "Open album " + gaps.title,
+    "libraryWall.openPlaylist": (gaps: { readonly title: string }) => "Open playlist " + gaps.title,
+    "libraryWall.albumCover": (gaps: { readonly title: string }) => "Album " + gaps.title,
+    "libraryWall.playlistCover": (gaps: { readonly title: string }) => "Playlist cover for " + gaps.title,
+    "libraryWall.songCount": (count: number) => ({
+        zero: numberFormat.format(count) + " songs",
+        one: numberFormat.format(count) + " song",
+        two: numberFormat.format(count) + " songs",
+        few: numberFormat.format(count) + " songs",
+        many: numberFormat.format(count) + " songs",
+        other: numberFormat.format(count) + " songs",
+    })[pluralRules.select(count)],
 };
 export type Key = keyof Words;

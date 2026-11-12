@@ -43,24 +43,14 @@
 	import { pageText } from '#lib/utils/page-words.ts';
 	import type { Key } from '#lib/words/en.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
-	import { activityTimeLabel, songCountLabel } from '#lib/utils/format.ts';
+	import { activityTimeLabel } from '#lib/utils/format.ts';
 	import {
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
-		LIBRARY_WALL_EMPTY,
-		wallHeadingLabel,
-		LIBRARY_WALL_ORDER_GROUP_LABEL,
-		LIBRARY_WALL_ORDER_LABELS,
+		LIBRARY_WALL_ORDER_KEYS,
 		LIBRARY_WALL_ORDERS,
 		type LibraryWallOrder
 	} from '#lib/constants/library.ts';
 	import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
-	import {
-		PLAYLISTS_WALL_EMPTY,
-		PLAYLISTS_WALL_ORDER_GROUP_LABEL,
-		LIBRARY_PLAYLISTS_ERROR,
-		LIBRARY_PLAYLISTS_LOADING
-	} from '#lib/constants/playlist.ts';
-	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 	import EmptyState from './EmptyState.svelte';
 	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
@@ -80,33 +70,34 @@
 	// The Library wall of albums alone, or the Playlists page's wall of
 	// playlists alone (#1354 rule 7; frames D1 and D3).
 	type WallKind = 'library' | 'playlists';
-	type WallCopy = {
-		pageKey: Key;
-		orderGroup: string;
-		loading: string;
-		failed: string;
-		empty: string;
-		emptyIcon: string;
-	};
-
-	const WALL_COPY: Record<WallKind, WallCopy> = {
+	const WALL_COPY = {
 		library: {
 			pageKey: 'places.library',
-			orderGroup: LIBRARY_WALL_ORDER_GROUP_LABEL,
-			loading: 'Loading library…',
-			failed: 'Could not load library.',
-			empty: LIBRARY_WALL_EMPTY,
+			sortKey: 'libraryWall.sortAlbums',
+			loadingKey: 'libraryWall.libraryLoading',
+			failedKey: 'libraryWall.libraryFailed',
+			emptyKey: 'libraryWall.libraryEmpty',
 			emptyIcon: 'library'
 		},
 		playlists: {
 			pageKey: 'places.playlists',
-			orderGroup: PLAYLISTS_WALL_ORDER_GROUP_LABEL,
-			loading: LIBRARY_PLAYLISTS_LOADING,
-			failed: LIBRARY_PLAYLISTS_ERROR,
-			empty: PLAYLISTS_WALL_EMPTY,
+			sortKey: 'libraryWall.sortPlaylists',
+			loadingKey: 'libraryWall.playlistsLoading',
+			failedKey: 'libraryWall.playlistsFailed',
+			emptyKey: 'libraryWall.playlistsEmpty',
 			emptyIcon: 'playlists'
 		}
-	};
+	} as const satisfies Record<
+		WallKind,
+		Record<'pageKey' | 'sortKey' | 'loadingKey' | 'failedKey' | 'emptyKey', Key> & {
+			emptyIcon: string;
+		}
+	>;
+
+	const PLACE_KEYS = {
+		album: { open: 'libraryWall.openAlbum', cover: 'libraryWall.albumCover' },
+		playlist: { open: 'libraryWall.openPlaylist', cover: 'libraryWall.playlistCover' }
+	} as const satisfies Record<'album' | 'playlist', Record<'open' | 'cover', Key>>;
 
 	let { kind }: { kind: WallKind } = $props();
 
@@ -212,7 +203,10 @@
 	});
 
 	function sizeLabel(item: AlbumItem | PlaylistItem): string {
-		return songCountLabel('song_count' in item ? item.song_count : item.entry_count);
+		return pageText(
+			'libraryWall.songCount',
+			'song_count' in item ? item.song_count : item.entry_count
+		);
 	}
 
 	function tileDetail(item: AlbumItem | PlaylistItem): string {
@@ -294,7 +288,7 @@
 <svelte:document onvisibilitychange={catchUpOnReturnToForeground} />
 
 {#snippet orderSwitch()}
-	<div class="wall-order" role="group" aria-label={copy.orderGroup}>
+	<div class="wall-order" role="group" aria-label={pageText(copy.sortKey)}>
 		{#each LIBRARY_WALL_ORDERS as choice (choice)}
 			<button
 				type="button"
@@ -302,7 +296,7 @@
 				aria-pressed={order === choice}
 				onclick={() => chooseOrder(choice)}
 			>
-				<span class="wall-order-face">{LIBRARY_WALL_ORDER_LABELS[choice]}</span>
+				<span class="wall-order-face">{pageText(LIBRARY_WALL_ORDER_KEYS[choice])}</span>
 			</button>
 		{/each}
 	</div>
@@ -312,7 +306,9 @@
 	<div class="wall-titlebar">
 		<h1
 			class="wall-title"
-			aria-label={headCount === undefined ? pageName : wallHeadingLabel(pageName, headCount)}
+			aria-label={headCount === undefined
+				? pageName
+				: pageText('libraryWall.heading', { page: pageName, count: headCount })}
 		>
 			{pageName}
 			{#if headCount !== undefined}<span class="wall-count">{headCount}</span>{/if}
@@ -326,9 +322,11 @@
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
 				{#each wallItems as item (placeType + item.id)}
 					{@const transport = $collectionTransport(placeType, item.id)}
+					{@const keys = PLACE_KEYS[placeType]}
+					{@const openLabel = pageText(keys.open, { title: item.title })}
 					{@const content = {
 						title: item.title,
-						coverAlt: `${placeType === 'album' ? ALBUM_COVER_ALT_TYPE : 'Playlist cover for'} ${item.title}`,
+						coverAlt: pageText(keys.cover, { title: item.title }),
 						coverUrl: item.cover?.card ?? null,
 						fill: 'colors' in item ? usableAlbumPrimary(item.colors) : null,
 						playlistCovers: 'album_covers' in item ? item.album_covers : null
@@ -343,7 +341,7 @@
 							subtitle={sizeLabel(item)}
 							lightUp={placeToLight?.kind === placeType && placeToLight.id === item.id}
 							onlit={spendLight}
-							openLabel={`Open ${placeType} ${item.title}`}
+							{openLabel}
 							{onopen}
 							onplay={rowPlay(item)}
 							current={placeType === 'album' && transport.current}
@@ -351,12 +349,7 @@
 						/>
 					{:else}
 						<div class="wall-tile" class:selected>
-							<button
-								type="button"
-								class="wall-tile-body"
-								onclick={onopen}
-								aria-label={`Open ${placeType} ${item.title}`}
-							>
+							<button type="button" class="wall-tile-body" onclick={onopen} aria-label={openLabel}>
 								<LibraryTileContent {...content} subtitle={tileDetail(item)} />
 							</button>
 						</div>
@@ -364,12 +357,15 @@
 				{/each}
 			</div>
 		{:else if !orderKnown || loadStatuses.includes('loading')}
-			<p class="empty" role="status">{copy.loading}</p>
+			<p class="empty" role="status">{pageText(copy.loadingKey)}</p>
 		{:else if loadStatuses.includes('error')}
-			<p class="empty" role="alert">{copy.failed}</p>
-			<button class="retry-btn" onclick={retryLoad}>Retry</button>
+			<p class="empty" role="alert">{pageText(copy.failedKey)}</p>
+			<button class="retry-btn" onclick={retryLoad}>{pageText('libraryWall.retry')}</button>
 		{:else}
-			<EmptyState icon={copy.emptyIcon} text={copy.empty} />
+			<EmptyState
+				icon={copy.emptyIcon}
+				text={pageText(copy.emptyKey, { home: pageText('places.home') })}
+			/>
 		{/if}
 	</div>
 </div>

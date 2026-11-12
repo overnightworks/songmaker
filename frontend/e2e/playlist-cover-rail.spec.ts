@@ -95,9 +95,10 @@ test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop
 		});
 
 		await page.goto('/playlists');
-		const wallPlaylistTile = page
-			.locator('.library-wall .tile-grid')
-			.getByRole('button', { name: `Open playlist ${playlistTitle}`, exact: true });
+		const wallPlaylistTile = page.locator('.library-wall .tile-grid').getByRole('button', {
+			name: words['libraryWall.openPlaylist']({ title: playlistTitle }),
+			exact: true
+		});
 		const wallCover = wallPlaylistTile.locator('.playlist-cover-cell img');
 		await expect(wallCover).toHaveCount(1);
 		await expect(wallCover).toHaveJSProperty('complete', true);
@@ -207,7 +208,10 @@ test('defect:#1091: a playlist without covers shows readable initials on the Pla
 		await page.goto('/playlists');
 		const cover = page
 			.locator('.library-wall .tile-grid')
-			.getByRole('button', { name: `Open playlist ${playlistTitle}`, exact: true })
+			.getByRole('button', {
+				name: words['libraryWall.openPlaylist']({ title: playlistTitle }),
+				exact: true
+			})
 			.locator('.playlist-cover');
 		const initials = cover.locator('.playlist-cover-initials').first();
 		await expect(initials).toBeVisible();

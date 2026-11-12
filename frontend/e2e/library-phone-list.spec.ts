@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
+import { LIBRARY_WALL_ORDER_KEYS, type LibraryWallOrder } from '../src/lib/constants/library';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { words } from '../src/lib/words/en';
@@ -34,6 +35,10 @@ import {
 	type PhoneLibraryFixture
 } from './seed';
 
+const songs = words['libraryWall.songCount'];
+const openAlbum = (title: string) => words['libraryWall.openAlbum']({ title });
+const orderChoice = (page: Page, order: LibraryWallOrder) =>
+	page.getByRole('button', { name: words[LIBRARY_WALL_ORDER_KEYS[order]], exact: true });
 const LIBRARY_BACK_NAME = words['pageBack.backTo']({ page: words['places.library'] });
 
 let guard: FlowGuard;
@@ -54,7 +59,9 @@ function takePathsOf(albumId: string): string[] {
 function row(page: Page, title: string): Locator {
 	return workspace(page)
 		.locator('.wall-tile')
-		.filter({ has: page.getByRole('button', { name: `Open album ${title}`, exact: true }) });
+		.filter({
+			has: page.getByRole('button', { name: openAlbum(title), exact: true })
+		});
 }
 
 async function expectRows(page: Page): Promise<void> {
@@ -72,7 +79,7 @@ async function expectRows(page: Page): Promise<void> {
 	for (let index = 1; index < boxes.length; index++)
 		expect(boxes[index].top - boxes[index - 1].top).toBe(58);
 	await expect(rows.locator('.tile-subtitle')).toHaveText(
-		fixture.albums.map((album) => `${album.count} ${album.count === 1 ? 'song' : 'songs'}`)
+		fixture.albums.map((album) => songs(album.count))
 	);
 }
 
@@ -114,7 +121,7 @@ test(
 		expect(songsRead).toHaveLength(0);
 		await expect(row(page, empty.title).locator('.tile-cover')).toBeVisible();
 		await expect(row(page, empty.title).getByRole('button')).toHaveCount(1);
-		await expect(row(page, archived.title).locator('.tile-subtitle')).toHaveText('1 song');
+		await expect(row(page, archived.title).locator('.tile-subtitle')).toHaveText(songs(1));
 		await expect(row(page, archived.title).getByRole('button')).toHaveCount(1);
 		await expect(page.getByText('No takes', { exact: true })).toHaveCount(0);
 		const spacer = row(page, empty.title).locator('.row-play-spacer');
@@ -140,7 +147,7 @@ test(
 			exact: true
 		});
 		const open = row(page, playable.title).getByRole('button', {
-			name: `Open album ${playable.title}`,
+			name: openAlbum(playable.title),
 			exact: true
 		});
 		await open.focus();
@@ -214,7 +221,7 @@ test(
 			}))
 		).toEqual({ overflow: 'ellipsis', clipped: true });
 		await expect(
-			row(page, long.title).getByRole('button', { name: `Open album ${long.title}`, exact: true })
+			row(page, long.title).getByRole('button', { name: openAlbum(long.title), exact: true })
 		).toBeVisible();
 		await expect(row(page, long.title).locator('.tile-subtitle')).toBeVisible();
 		await expect(row(page, long.title).locator('.row-play')).toBeVisible();
@@ -236,13 +243,13 @@ test(
 		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toHaveCount(0);
 		await screenshot(page, 'bottom-of-list');
 		await expectRows(page);
-		await page.getByRole('button', { name: 'Last played', exact: true }).click();
+		await orderChoice(page, 'played').click();
 		await expect(workspace(page).locator('.wall-tile').first()).toContainText(last.title);
 		await expect(workspace(page).locator('.wall-tile').nth(1)).toContainText(playable.title);
 		const counts = await workspace(page).locator('.wall-tile .tile-subtitle').allTextContents();
-		expect(counts.filter((text) => text.trim() === '1 song')).toHaveLength(3);
-		expect(counts.filter((text) => text.trim() === '2 songs')).toHaveLength(1);
-		await page.getByRole('button', { name: 'A–Z', exact: true }).click();
+		expect(counts.filter((text) => text.trim() === songs(1))).toHaveLength(3);
+		expect(counts.filter((text) => text.trim() === songs(2))).toHaveLength(1);
+		await orderChoice(page, 'title').click();
 		await expect(workspace(page).locator('.wall-tile .tile-title')).toHaveText(
 			fixture.albums.map((album) => album.title)
 		);
@@ -251,13 +258,13 @@ test(
 		await expect(playlistRow).toHaveCount(1);
 		await expect(playlistRow.getByRole('button')).toHaveCount(1);
 		await expect(playlistRow.getByRole('button')).toHaveAccessibleName(
-			`Open playlist ${fixture.playlist.title}`
+			words['libraryWall.openPlaylist']({ title: fixture.playlist.title })
 		);
 		expect((await playlistRow.boundingBox())?.height).toBe(58);
-		await expect(playlistRow.locator('.tile-subtitle')).toHaveText('0 songs');
+		await expect(playlistRow.locator('.tile-subtitle')).toHaveText(songs(0));
 		await screenshot(page, 'playlist');
-		await page.getByRole('button', { name: 'Last played', exact: true }).click();
-		await expect(playlistRow.locator('.tile-subtitle')).toHaveText('0 songs');
+		await orderChoice(page, 'played').click();
+		await expect(playlistRow.locator('.tile-subtitle')).toHaveText(songs(0));
 		expect(
 			await playlistRow.locator('.tile-title').evaluate((el) => el.scrollWidth > el.clientWidth)
 		).toBe(true);
@@ -282,7 +289,7 @@ test(
 		expect(first?.width).toBe(208);
 		const cover = await tiles.first().locator('.tile-cover').boundingBox();
 		expect(cover?.width).toBe(cover?.height);
-		await expect(tiles.first().locator('.tile-subtitle')).toHaveText('0 songs');
+		await expect(tiles.first().locator('.tile-subtitle')).toHaveText(songs(0));
 		await tiles.first().getByRole('button').focus();
 		await page.keyboard.press('Enter');
 		await expect(
@@ -292,7 +299,7 @@ test(
 		await expect(tiles).toHaveCount(1);
 		await expect(tiles.locator('.row-play')).toHaveCount(0);
 		expect((await tiles.first().boundingBox())?.width).toBe(208);
-		await expect(tiles.first().locator('.tile-subtitle')).toHaveText('0 songs');
+		await expect(tiles.first().locator('.tile-subtitle')).toHaveText(songs(0));
 		await tiles.first().getByRole('button').click();
 		await expect(
 			workspace(page).getByRole('heading', { name: fixture.playlist.title, exact: true })
@@ -447,7 +454,7 @@ for (const cell of RETURN_CELLS) {
 			else expect(wall.before).toBeGreaterThan(0);
 			await watchLightUps(page);
 			await row(page, album.title)
-				.getByRole('button', { name: `Open album ${album.title}`, exact: true })
+				.getByRole('button', { name: openAlbum(album.title), exact: true })
 				.click();
 			await expect(
 				workspace(page).getByRole('heading', { name: album.title, exact: true })
@@ -480,8 +487,8 @@ for (const cell of RETURN_CELLS) {
 				await expect(lit).toHaveCount(0);
 			}
 			await wallBody(page).evaluate((body) => (body.scrollTop -= 200));
-			await page.getByRole('button', { name: 'Last played', exact: true }).click();
-			await page.getByRole('button', { name: 'A–Z', exact: true }).click();
+			await orderChoice(page, 'played').click();
+			await orderChoice(page, 'title').click();
 			await expectRows(page);
 			const seen = await lightUps(page);
 			expect(seen.marked).toEqual([album.title]);
@@ -503,7 +510,7 @@ test(
 		expect(before).toBeGreaterThan(0);
 		await watchLightUps(page);
 		await row(page, album.title)
-			.getByRole('button', { name: `Open album ${album.title}`, exact: true })
+			.getByRole('button', { name: openAlbum(album.title), exact: true })
 			.click();
 		await expect(
 			workspace(page).getByRole('heading', { name: album.title, exact: true })
@@ -604,7 +611,7 @@ async function playFirstTakeFromTheWall(
 			/^\/api\/songs\/[^/]+\/listen$/.test(new URL(response.url()).pathname)
 	);
 	await workspace(page)
-		.getByRole('button', { name: `Open album ${album.title}`, exact: true })
+		.getByRole('button', { name: openAlbum(album.title), exact: true })
 		.click();
 	await workspace(page)
 		.getByRole('button', { name: songEditorOpenLabel(fixture.tracks[album.id][0].title) })
@@ -691,7 +698,7 @@ for (const [shell, surfaces, proof] of [
 				});
 				await pauseATakeToRestore(page, shell, fixture.albums[2]);
 				await page.goto(lastPlayedPage.path);
-				await page.getByRole('button', { name: 'Last played', exact: true }).click();
+				await orderChoice(page, 'played').click();
 				await expect(workspace(page).locator('.tile-title').first()).toHaveText(lastPlayed[0]);
 				let answerDelayMs = 0;
 				await page.route(
@@ -755,7 +762,7 @@ test("1354_rule_8 1354_rule_14: a place played leads Home's Listen and the Libra
 		rail: '.album-label .row-title'
 	});
 	await page.goto(LIBRARY_PATH);
-	await page.getByRole('button', { name: 'Last played', exact: true }).click();
+	await orderChoice(page, 'played').click();
 	const tileTitles = workspace(page).locator('.library-wall .tile-grid .tile-title');
 	await expect(tileTitles.first()).toHaveText(older.title);
 	await playFirstTakeFromTheWall(page, shell, newest);

@@ -4,6 +4,7 @@ import {
 	FlowGuard,
 	LIBRARY_PATH,
 	LIBRARY_URL,
+	nameStartingWith,
 	openSettingsSection,
 	openPageFromSearch,
 	shellOf,
@@ -43,7 +44,10 @@ for (const position of ['halfway', 'bottom'] as const) {
 		const library = readSeededLibrary();
 		await page.goto(LIBRARY_PATH);
 		await expect(
-			wallBody(page).getByRole('button', { name: `Open album ${library.albumTitle}`, exact: true })
+			wallBody(page).getByRole('button', {
+				name: words['libraryWall.openAlbum']({ title: library.albumTitle }),
+				exact: true
+			})
 		).toBeVisible();
 		await expectLibraryWallLoaded(page);
 		const loaded = await wallBounds(page);
@@ -52,7 +56,9 @@ for (const position of ['halfway', 'bottom'] as const) {
 		const departed = await wallBounds(page);
 		expect(departed.scrollTop, JSON.stringify(departed)).toBe(leftAt);
 		const lastAlbum = wallBody(page)
-			.getByRole('button', { name: /^Open album / })
+			.getByRole('button', {
+				name: nameStartingWith(words['libraryWall.openAlbum']({ title: '' }))
+			})
 			.last();
 		const lastAlbumName = await lastAlbum.getAttribute('aria-label');
 		if (!lastAlbumName) throw new Error('The final album must have an accessible name');
