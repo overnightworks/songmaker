@@ -1,8 +1,0 @@
-claim_id = "23db88df678d48498acbebfb0dda842c"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "c5a8a0bd8975b1bd14492c8566bd269ce31eebcd"
-branch = "claude/issue-3049-the-acestep-worker-s-torch-layer-install"
-scope = ["docker/acestep-worker.Dockerfile", "docs/acestep.md", "quality/config.toml", "tests/songmaker_cli/test_dockerfile_installs.py", "tests/test_dockerfile_installs.py"]
-opened_commit = "311f86459429f31ebc6db7ddd26fc12c1adfa5f0"
-whole_reason = "The torch layer, the install rule's test with its layout entry, and the document that says how torch is bumped land together: the rule's test is the proof the layer's install stays locked."
