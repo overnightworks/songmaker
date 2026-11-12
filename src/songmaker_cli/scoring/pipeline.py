@@ -8,7 +8,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Final
 
 if TYPE_CHECKING:
     import numpy as np
@@ -45,6 +45,12 @@ __all__ = [
 ]
 
 
+# The names under which the deployment configures the model paths: the settings the
+# parent resolves and the messages that tell an operator which one is missing.
+SCORING_WHISPER_MODEL_DIR_SETTING: Final = "SCORING_WHISPER_MODEL_DIR"
+SCORING_AUDIOBOX_CHECKPOINT_SETTING: Final = "SCORING_AUDIOBOX_CHECKPOINT"
+
+
 @dataclass(frozen=True)
 class AudioData:
     """Pre-loaded audio shared across scorers to avoid redundant decoding."""
@@ -65,7 +71,8 @@ class PipelineConfig:
     scorer here needs one.
     """
 
-    whisper_model: str = "large-v3"  # turbo is faster but hallucinates on ~5% of songs
+    whisper_model_dir: Path | None = None
+    audiobox_checkpoint: Path | None = None
     whisper_device: str = ""
     device: str = "cpu"
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
@@ -75,6 +82,18 @@ class PipelineConfig:
     def __post_init__(self) -> None:
         if self.pipeline_timeout <= 0:
             object.__setattr__(self, "pipeline_timeout", self._watchdog_timeout())
+
+    def whisper_model_path(self) -> Path:
+        """The directory holding the Whisper model files; fails loud when unset or absent."""
+        return _existing_model_path(
+            self.whisper_model_dir, SCORING_WHISPER_MODEL_DIR_SETTING, Path.is_dir,
+        )
+
+    def audiobox_checkpoint_path(self) -> Path:
+        """The AudioBox checkpoint file; fails loud when unset or absent."""
+        return _existing_model_path(
+            self.audiobox_checkpoint, SCORING_AUDIOBOX_CHECKPOINT_SETTING, Path.is_file,
+        )
 
     def timeout_for(self, scorer: str) -> int:
         """Time budget for one scorer. text_accuracy has its own because a
@@ -96,6 +115,18 @@ class PipelineConfig:
             SCORING_PIPELINE_TIMEOUT_SECONDS,
             slowest_scorer + SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
         )
+
+
+def _existing_model_path(
+    path: Path | None, setting: str, exists: Callable[[Path], bool],
+) -> Path:
+    """Return the configured model path. The libraries fetch from the hub when a
+    path is absent, so the scorers check it first and never let them."""
+    if path is None:
+        raise ValueError(f"{setting} is not set: the scorer loads its model only from that path")
+    if not exists(path):
+        raise FileNotFoundError(f"{setting}={path} does not exist")
+    return path
 
 
 ScorerFunc = Callable[

@@ -46,10 +46,10 @@ def score_text_accuracy(
     similarity ratio is reported as 0.0.
     """
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
-    whisper_size = effective_config.whisper_model
+    model_dir = effective_config.whisper_model_path()
     device = effective_config.whisper_device or effective_config.device
     language = (meta.vocal_language or None) if meta else None
-    model = _get_whisper_model(whisper_size, device=device)
+    model = _get_whisper_model(model_dir, device=device)
 
     lyrics_text = meta.lyrics if meta else ""
     intended_lines = tuple(
@@ -199,7 +199,7 @@ def clean_lyrics(text: str) -> str:
 
 
 def _get_whisper_model(
-    model_size: str,
+    model_dir: Path,
     device: str = "cpu",
 ) -> object:
     from faster_whisper import WhisperModel
@@ -208,14 +208,15 @@ def _get_whisper_model(
 
     compute_type = "int8" if device == "cpu" else WHISPER_COMPUTE_TYPE
     global _whisper_model, _whisper_model_key
-    cache_key = f"{model_size}:{device}"
+    cache_key = f"{model_dir}:{device}"
     with _whisper_cache_lock:
         if _whisper_model_key != cache_key:
-            log.info("Loading Whisper model (%s) on %s (%s)...", model_size, device, compute_type)
+            log.info("Loading Whisper model (%s) on %s (%s)...", model_dir, device, compute_type)
             _whisper_model = WhisperModel(
-                model_size,
+                str(model_dir),
                 device=device,
                 compute_type=compute_type,
+                local_files_only=True,
             )
             _whisper_model_key = cache_key
     return _whisper_model
