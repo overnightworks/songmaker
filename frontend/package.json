@@ -51,6 +51,6 @@
 		"vitest": "^4.1.12"
 	},
 	"dependencies": {
-		"overnightworks-design": "https://github.com/overnightworks/design/releases/download/v0.26.0/overnightworks-design-0.26.0.tgz"
+		"overnightworks-design": "https://github.com/overnightworks/design/releases/download/v0.27.0/overnightworks-design-0.27.0.tgz"
 	}
 }
