@@ -35,6 +35,7 @@ WEB_ENTRYPOINT_SCRIPT = "/app/start_web_server.sh"
 E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 DOCKER_DEFAULT_RESTART_POLICY = "no"
 WEB_SERVER_MODULE = "songmaker_cli.server"
+RECURSIVE_CHOWN = re.compile(r"\bchown\s+(?:-\w*R|--recursive)")
 
 
 @dataclass(frozen=True)
@@ -304,6 +305,16 @@ def test_every_compose_built_image_runs_as_the_numeric_user_it_creates() -> None
     assert len({final_user for final_user, _ in identities.values()}) == 1, (
         "images share volumes, so they must share one uid:gid"
     )
+
+
+def test_no_final_stage_instruction_changes_ownership_recursively() -> None:
+    offenders = [
+        instruction
+        for instruction in final_stage_instructions(REPOSITORY_ROOT / "Dockerfile")
+        if RECURSIVE_CHOWN.search(instruction)
+    ]
+
+    assert offenders == []
 
 
 def _command_words(declaration: str | list[str]) -> tuple[str, ...]:
