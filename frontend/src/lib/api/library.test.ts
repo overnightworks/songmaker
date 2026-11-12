@@ -6,7 +6,6 @@ vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
-import { LIBRARY_QUERY_REQUIRED } from '#lib/constants/library.ts';
 import {
 	fetchLibraryListen,
 	fetchLibraryPoolQueue,
@@ -37,7 +36,7 @@ describe('searchLibrary', () => {
 
 	it('does not send an empty query', async () => {
 		await expect(searchLibrary({ q: '  ', sort: 'title', limit: 50 })).rejects.toThrow(
-			LIBRARY_QUERY_REQUIRED
+			'Search query is required'
 		);
 		expect(mockFetch).not.toHaveBeenCalled();
 	});

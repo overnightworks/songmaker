@@ -3,6 +3,7 @@
 	import { SIGN_OUT_FAILED_MESSAGE } from '#lib/constants/auth.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
 	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
+	import { kitWords } from '#lib/utils/kit-words.ts';
 	import { logout, signOutFailed } from '#lib/stores/auth.ts';
 </script>
 
@@ -14,4 +15,5 @@
 		logOutFailure: $signOutFailed ? SIGN_OUT_FAILED_MESSAGE : undefined
 	}}
 	legalLinks={LEGAL_SECTIONS}
+	words={kitWords()}
 />

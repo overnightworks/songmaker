@@ -24,7 +24,6 @@ import {
 } from '#lib/history/historyController.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-
 import { createRawSnippet, flushSync, mount, tick, unmount, type Snippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -33,6 +32,7 @@ import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
 import { words } from '#lib/words/en.ts';
+import { kitWords } from '#lib/utils/kit-words.ts';
 import { apiFetch } from '#lib/api/fetch.ts';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
@@ -1040,7 +1040,7 @@ describe('signing out on the phone', () => {
 		const backs = vi.spyOn(history, 'back');
 		onTestFinished(() => backs.mockRestore());
 
-		getByRoleButton(target, 'Log out').click();
+		getByRoleButton(target, kitWords()['account.logOut']).click();
 
 		await vi.waitFor(() => expect(documentLoads.submitPost).toHaveBeenCalledWith('/auth/logout'));
 		expect(standingHistoryEntry()?.layer).toBe('account-menu');

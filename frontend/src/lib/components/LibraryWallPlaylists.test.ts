@@ -177,8 +177,7 @@ describe('the Playlists page wall', () => {
 	it.each([
 		{
 			failing: 'the albums',
-			fail: () =>
-				libraryBrowse.update((state) => ({ ...state, status: 'error' as const, error: 'down' })),
+			fail: () => libraryBrowse.update((state) => ({ ...state, status: 'error' as const })),
 			says: words['libraryWall.playlistsEmpty']({ home: words['places.home'] })
 		},
 		{

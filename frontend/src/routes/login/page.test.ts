@@ -2,6 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import { APP_NAME } from '#lib/constants/app.ts';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
+import { kitWords } from '#lib/utils/kit-words.ts';
 import Page from './+page.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
@@ -24,11 +25,13 @@ describe('signed-out page', () => {
 		const target = renderPage();
 		await tick();
 
-		expect(target.querySelector('h1')?.textContent).toBe('You are logged out.');
+		expect(target.querySelector('h1')?.textContent).toBe(kitWords()['signIn.loggedOut']);
 		const actions = Array.from(target.querySelectorAll('a, button')).filter(
 			(action) => !action.closest('nav')
 		);
-		expect(actions.map((action) => action.textContent?.trim())).toEqual(['Log in']);
+		expect(actions.map((action) => action.textContent?.trim())).toEqual([
+			kitWords()['signIn.logIn']
+		]);
 		expect(actions[0].getAttribute('href')).toBe('/login/oidc');
 	});
 
