@@ -1,8 +1,0 @@
-claim_id = "bdd817cff7d74e7da460f4f1fbbe8a46"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "2e3fe7cf1cd8347ffb967ab1587e23d26b7d1ecb"
-branch = "claude/issue-3027-the-library-and-playlists-names-read-pla"
-scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/now-playing-phone-leave.spec.ts", "frontend/e2e/playback-retirement.spec.ts", "frontend/e2e/rail-collapse.spec.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/LibraryWorkspace.test.ts", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/constants/library.ts", "frontend/src/lib/constants/playlist.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
-opened_commit = "79a54f22b9339c8a74755336ccf3704f1b699969"
-whole_reason = "A constant retires only when every user moves with it: the two names' three remaining users in three files, the two constants, and every test that names them."
