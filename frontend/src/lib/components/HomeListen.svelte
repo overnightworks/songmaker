@@ -2,13 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { LibraryListenItem } from '#lib/api/library.ts';
 	import type { SongItem } from '#lib/api/types.ts';
-	import {
-		HOME_LISTEN_LABEL,
-		HOME_LISTEN_LIMIT,
-		HOME_LISTEN_EMPTY,
-		HOME_LISTEN_LOADING,
-		HOME_LISTEN_ERROR
-	} from '#lib/constants/home.ts';
+	import { HOME_LISTEN_LIMIT } from '#lib/constants/home.ts';
 	import {
 		ensureLastPlayedRead,
 		readLastPlayed,
@@ -34,8 +28,30 @@
 	import { whenBackOnline } from '#lib/stores/connectivity.ts';
 	import { activityTimeLabel } from '#lib/utils/format.ts';
 	import { albumRowOffersPlay } from '#lib/utils/playable.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
+	import type { Key } from '#lib/words/en.ts';
 	import LibraryRow from './LibraryRow.svelte';
 	import HomeListSection, { homeListPhase } from './HomeListSection.svelte';
+
+	const SENTENCE_KEYS = {
+		album: {
+			open: 'homeListen.openAlbum',
+			cover: 'homeListen.albumCover',
+			playing: 'homeListen.albumPlaying',
+			stopped: 'homeListen.albumStopped',
+			played: 'homeListen.albumPlayed'
+		},
+		playlist: {
+			open: 'homeListen.openPlaylist',
+			cover: 'homeListen.playlistCover',
+			playing: 'homeListen.playlistPlaying',
+			stopped: 'homeListen.playlistStopped',
+			played: 'homeListen.playlistPlayed'
+		}
+	} as const satisfies Record<
+		LibraryListenItem['type'],
+		Record<'open' | 'cover' | 'playing' | 'stopped' | 'played', Key>
+	>;
 
 	const albums = $derived(new Map($albumList.map((album) => [album.id, album])));
 	const playlists = $derived(new Map($playlistList.map((playlist) => [playlist.id, playlist])));
@@ -66,7 +82,7 @@
 	}
 
 	function subtitle(item: LibraryListenItem): string {
-		const type = item.type === 'album' ? 'Album' : 'Playlist';
+		const keys = SENTENCE_KEYS[item.type];
 		const state = $collectionTransport(item.type, item.id);
 		if (state.current) {
 			const queue = $queueContext;
@@ -79,11 +95,11 @@
 					? albums.get(item.id)?.song_count
 					: playlists.get(item.id)?.entry_count;
 			if (number && total && state.transport === 'playing')
-				return `${type} · playing · song ${number} of ${total}`;
-			if (number) return `${type} · stopped at song ${number}`;
+				return pageText(keys.playing, { number: String(number), total: String(total) });
+			if (number) return pageText(keys.stopped, { number: String(number) });
 		}
-		if (item.song_number) return `${type} · stopped at song ${item.song_number}`;
-		return `${type} · played ${activityTimeLabel(item.played_at, new Date())}`;
+		if (item.song_number) return pageText(keys.stopped, { number: String(item.song_number) });
+		return pageText(keys.played, { time: activityTimeLabel(item.played_at, new Date()) });
 	}
 
 	function rowPlay(item: LibraryListenItem): (() => void) | undefined {
@@ -103,10 +119,10 @@
 <svelte:document onvisibilitychange={foreground} />
 
 <HomeListSection
-	label={HOME_LISTEN_LABEL}
-	loadingText={HOME_LISTEN_LOADING}
-	errorText={HOME_LISTEN_ERROR}
-	emptyText={HOME_LISTEN_EMPTY}
+	label={pageText('homeListen.label')}
+	loadingText={pageText('homeListen.loading')}
+	errorText={pageText('homeListen.error')}
+	emptyText={pageText('homeListen.empty')}
 	{phase}
 	onretry={() => void readLastPlayed()}
 >
@@ -116,10 +132,10 @@
 			<LibraryRow
 				title={item.title}
 				subtitle={subtitle(item)}
-				coverAlt={`${item.type} cover for ${item.title}`}
+				coverAlt={pageText(SENTENCE_KEYS[item.type].cover, { title: item.title })}
 				coverUrl={item.cover?.card ?? null}
 				playlistCovers={item.type === 'playlist' ? item.album_covers : null}
-				openLabel={`Open ${item.type} ${item.title}`}
+				openLabel={pageText(SENTENCE_KEYS[item.type].open, { title: item.title })}
 				onopen={() =>
 					item.type === 'album' ? void openAlbum(item.id) : void openPlaylist(item.id)}
 				current={transport.current}

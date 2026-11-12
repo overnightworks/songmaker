@@ -49,6 +49,7 @@ import {
 import { fetchSong } from '#lib/api/client.ts';
 import { NetworkError } from '#lib/api/fetch.ts';
 import { LIBRARY_NEW_MENU_LABEL, LIBRARY_WALL_PLAYED_PAGE_SIZE } from '#lib/constants/library.ts';
+import { words } from '#lib/words/en.ts';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
@@ -242,10 +243,9 @@ describe('LibraryWall', () => {
 
 	it('1354_rule_31 1354_rule_14: shows no Listen list, and reads no listens until Last played is chosen', async () => {
 		seedWall();
-
 		const root = await render();
 
-		expect(root.querySelector('[aria-label="Listen"]')).toBeNull();
+		expect(root.querySelector(`[aria-label="${words['homeListen.label']}"]`)).toBeNull();
 		expect(fetchLibraryListen).not.toHaveBeenCalled();
 	});
 

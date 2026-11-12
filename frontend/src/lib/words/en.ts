@@ -28,6 +28,20 @@ export type Words = {
     readonly "homeWrite.workTake": (gaps: { readonly time: string }) => string;
     readonly "homeWrite.workCowriter": (gaps: { readonly time: string }) => string;
     readonly "homeWrite.workEdited": (gaps: { readonly time: string }) => string;
+    readonly "homeListen.label": string;
+    readonly "homeListen.empty": string;
+    readonly "homeListen.loading": string;
+    readonly "homeListen.error": string;
+    readonly "homeListen.openAlbum": (gaps: { readonly title: string }) => string;
+    readonly "homeListen.openPlaylist": (gaps: { readonly title: string }) => string;
+    readonly "homeListen.albumCover": (gaps: { readonly title: string }) => string;
+    readonly "homeListen.playlistCover": (gaps: { readonly title: string }) => string;
+    readonly "homeListen.albumPlaying": (gaps: { readonly number: string; readonly total: string }) => string;
+    readonly "homeListen.playlistPlaying": (gaps: { readonly number: string; readonly total: string }) => string;
+    readonly "homeListen.albumStopped": (gaps: { readonly number: string }) => string;
+    readonly "homeListen.playlistStopped": (gaps: { readonly number: string }) => string;
+    readonly "homeListen.albumPlayed": (gaps: { readonly time: string }) => string;
+    readonly "homeListen.playlistPlayed": (gaps: { readonly time: string }) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -56,5 +70,19 @@ export const words: Words = {
     "homeWrite.workTake": (gaps: { readonly time: string }) => "new take · " + gaps.time,
     "homeWrite.workCowriter": (gaps: { readonly time: string }) => "co-writer · " + gaps.time,
     "homeWrite.workEdited": (gaps: { readonly time: string }) => "edited · " + gaps.time,
+    "homeListen.label": "Listen",
+    "homeListen.empty": "Albums and playlists you play will appear here.",
+    "homeListen.loading": "Loading Listen…",
+    "homeListen.error": "Could not load Listen.",
+    "homeListen.openAlbum": (gaps: { readonly title: string }) => "Open album " + gaps.title,
+    "homeListen.openPlaylist": (gaps: { readonly title: string }) => "Open playlist " + gaps.title,
+    "homeListen.albumCover": (gaps: { readonly title: string }) => "album cover for " + gaps.title,
+    "homeListen.playlistCover": (gaps: { readonly title: string }) => "playlist cover for " + gaps.title,
+    "homeListen.albumPlaying": (gaps: { readonly number: string; readonly total: string }) => "Album · playing · song " + gaps.number + " of " + gaps.total,
+    "homeListen.playlistPlaying": (gaps: { readonly number: string; readonly total: string }) => "Playlist · playing · song " + gaps.number + " of " + gaps.total,
+    "homeListen.albumStopped": (gaps: { readonly number: string }) => "Album · stopped at song " + gaps.number,
+    "homeListen.playlistStopped": (gaps: { readonly number: string }) => "Playlist · stopped at song " + gaps.number,
+    "homeListen.albumPlayed": (gaps: { readonly time: string }) => "Album · played " + gaps.time,
+    "homeListen.playlistPlayed": (gaps: { readonly time: string }) => "Playlist · played " + gaps.time,
 };
 export type Key = keyof Words;

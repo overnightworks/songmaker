@@ -7,7 +7,6 @@ import {
 	COLLECTION_MENU_ARCHIVE_LABEL,
 	COLLECTION_MENU_DELETE_LABEL
 } from '#lib/constants/collection-menu.ts';
-import { HOME_LISTEN_EMPTY, HOME_LISTEN_ERROR } from '#lib/constants/home.ts';
 import { albumList, allAlbumsLoad, songList } from '#lib/stores/libraryData.ts';
 import { deletePlaylist, playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import {
@@ -20,6 +19,7 @@ import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { makeAlbum, makePlaylist, makeSong, makeGeneration } from '#lib/test-utils/factories.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { words } from '#lib/words/en.ts';
 import { openCollectionMenu, requireButtonContainingText } from './shell/rail-test-fixtures';
 import AlbumDetailView from './AlbumDetailView.svelte';
 import HomeListen from './HomeListen.svelte';
@@ -133,9 +133,9 @@ describe('1354_rule_14 Listen', () => {
 		await ensureLastPlayedRead();
 		await showListen();
 		expect(rowNames()).toEqual([
-			'Open album Place 0',
-			'Open playlist Place 1',
-			'Open album Place 2'
+			words['homeListen.openAlbum']({ title: 'Place 0' }),
+			words['homeListen.openPlaylist']({ title: 'Place 1' }),
+			words['homeListen.openAlbum']({ title: 'Place 2' })
 		]);
 		expect(
 			fetchListen.mock.calls.map(([url]) => new URL(url, 'http://localhost').pathname)
@@ -146,7 +146,7 @@ describe('1354_rule_14 Listen', () => {
 	it('1354_rule_18 names what fills an empty Listen', async () => {
 		fetchListen.mockImplementation(async () => Response.json({ items: [] }));
 		await showListen();
-		expect(target.textContent).toContain(HOME_LISTEN_EMPTY);
+		expect(target.textContent).toContain(words['homeListen.empty']);
 		expect(rowNames()).toEqual([]);
 	});
 
@@ -157,13 +157,13 @@ describe('1354_rule_14 Listen', () => {
 		await unmount(component);
 		await showListen();
 		expect(rowNames()).toHaveLength(3);
-		expect(target.textContent).not.toContain(HOME_LISTEN_ERROR);
+		expect(target.textContent).not.toContain(words['homeListen.error']);
 	});
 
 	it('1354_rule_19 offers Retry when never loaded and Retry fills the rows', async () => {
 		fetchListen.mockRejectedValueOnce(new TypeError('offline'));
 		await showListen();
-		expect(target.textContent).toContain(HOME_LISTEN_ERROR);
+		expect(target.textContent).toContain(words['homeListen.error']);
 		getByRoleButton(target, 'Retry').click();
 		await vi.waitFor(() => expect(rowNames()).toHaveLength(3));
 		expect(target.querySelector('[role="alert"]')).toBeNull();
@@ -181,20 +181,22 @@ describe('1354_rule_14 Listen', () => {
 			else albumList.set(homeAlbums.slice(1));
 			await tick();
 			expect(rowNames()).not.toContain(
-				action === 'delete playlist' ? 'Open playlist Place 1' : 'Open album Place 0'
+				action === 'delete playlist'
+					? words['homeListen.openPlaylist']({ title: 'Place 1' })
+					: words['homeListen.openAlbum']({ title: 'Place 0' })
 			);
 			if (action === 'delete album') {
 				albumList.set(homeAlbums);
 				await tick();
-				expect(rowNames()[0]).toBe('Open album Place 0');
+				expect(rowNames()[0]).toBe(words['homeListen.openAlbum']({ title: 'Place 0' }));
 			}
 		}
 	);
 
 	const deleteAlbumHere = () => removeOnAlbumPage(COLLECTION_MENU_DELETE_LABEL);
 	const deletePlaylistHere = () => deletePlaylist('place-1');
-	const album = 'Open album Place 0';
-	const playlist = 'Open playlist Place 1';
+	const album = words['homeListen.openAlbum']({ title: 'Place 0' });
+	const playlist = words['homeListen.openPlaylist']({ title: 'Place 1' });
 	const reloads = [
 		[
 			'album',
@@ -319,38 +321,40 @@ describe('1354_rule_14 Listen', () => {
 		document.dispatchEvent(new Event('visibilitychange'));
 		await vi.waitFor(() =>
 			expect(rowNames()).toEqual([
-				'Open playlist Place 3',
-				'Open album Place 2',
-				'Open playlist Place 1'
+				words['homeListen.openPlaylist']({ title: 'Place 3' }),
+				words['homeListen.openAlbum']({ title: 'Place 2' }),
+				words['homeListen.openPlaylist']({ title: 'Place 1' })
 			])
 		);
 		expect(fetchListen).toHaveBeenCalledTimes(2);
 	});
 
+	function arrangeCurrentSong(type: 'album' | 'playlist'): void {
+		const id = type === 'album' ? 'place-0' : 'place-1';
+		const title = type === 'album' ? 'Place 0' : 'Place 1';
+		playlistList.set([makePlaylist({ id: 'place-1', entry_count: 4 }), ...homePlaylists.slice(1)]);
+		albumList.set([makeAlbum({ id: 'place-0', song_count: 4 }), ...homeAlbums.slice(1)]);
+		songList.set([makeSong({ id: 'song', album_id: 'place-0', track_number: 2 })]);
+		queueContext.set(
+			type === 'album'
+				? { type, albumId: id }
+				: { type, playlist: { id, title }, entries: [], index: 1 }
+		);
+		audioPlayer.current = {
+			generation: makeGeneration(),
+			songId: 'song',
+			songTitle: 'Song',
+			albumTitle: 'Place 0',
+			artist: '',
+			lyrics: null
+		};
+	}
+
 	it.each(['album', 'playlist'] as const)(
 		'1354_rule_15 shows pause and the playing mark for the playing %s and its current song subtitle',
 		async (type) => {
-			const id = type === 'album' ? 'place-0' : 'place-1';
 			const title = type === 'album' ? 'Place 0' : 'Place 1';
-			playlistList.set([
-				makePlaylist({ id: 'place-1', entry_count: 4 }),
-				...homePlaylists.slice(1)
-			]);
-			albumList.set([makeAlbum({ id: 'place-0', song_count: 4 }), ...homeAlbums.slice(1)]);
-			songList.set([makeSong({ id: 'song', album_id: 'place-0', track_number: 2 })]);
-			queueContext.set(
-				type === 'album'
-					? { type, albumId: id }
-					: { type, playlist: { id, title }, entries: [], index: 1 }
-			);
-			audioPlayer.current = {
-				generation: makeGeneration(),
-				songId: 'song',
-				songTitle: 'Song',
-				albumTitle: 'Place 0',
-				artist: '',
-				lyrics: null
-			};
+			arrangeCurrentSong(type);
 			audioPlayer.status = 'playing';
 			await showListen();
 			const playingRow = getByRoleButton(target, `Pause ${title}`).closest('.library-row');
@@ -359,8 +363,40 @@ describe('1354_rule_14 Listen', () => {
 			).not.toBeNull();
 			expect(target.querySelectorAll(`[aria-label="${PLAYING_MARK_LABEL}"]`)).toHaveLength(1);
 			expect(target.textContent).toContain(
-				`${type === 'album' ? 'Album' : 'Playlist'} · playing · song 2 of 4`
+				words[type === 'album' ? 'homeListen.albumPlaying' : 'homeListen.playlistPlaying']({
+					number: '2',
+					total: '4'
+				})
 			);
 		}
 	);
+
+	it.each(['album', 'playlist'] as const)(
+		'1354_rule_15 shows play for the paused %s, its subtitle stopped at its current song',
+		async (type) => {
+			const title = type === 'album' ? 'Place 0' : 'Place 1';
+			arrangeCurrentSong(type);
+			audioPlayer.status = 'paused';
+			await showListen();
+			getByRoleButton(target, `Play ${title}`);
+			expect(target.textContent).toContain(
+				words[type === 'album' ? 'homeListen.albumStopped' : 'homeListen.playlistStopped']({
+					number: '2'
+				})
+			);
+		}
+	);
+
+	it('1354_rule_14 names the cover of each row for a screen reader', async () => {
+		const cover = { thumb: '/cover.webp', card: '/cover.webp', detail: '/cover.webp' };
+		fetchListen.mockImplementation(async () =>
+			Response.json({ items: places.map((place) => ({ ...place, cover })) })
+		);
+		await showListen();
+		expect(Array.from(target.querySelectorAll('img'), (image) => image.alt)).toEqual([
+			words['homeListen.albumCover']({ title: 'Place 0' }),
+			words['homeListen.playlistCover']({ title: 'Place 1' }),
+			words['homeListen.albumCover']({ title: 'Place 2' })
+		]);
+	});
 });

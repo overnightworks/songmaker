@@ -30,6 +30,7 @@ import {
 	libraryRouteShape
 } from '../src/lib/routes/addresses';
 import { BASE_URL } from './seed';
+import { words } from '../src/lib/words/en';
 import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 import { routerHistoryEntryOf } from '../src/lib/test-utils/router-history-layout';
 
@@ -315,15 +316,14 @@ export function offlineStrip(page: Page): Locator {
 
 /** Home's Listen list (`HomeListen.svelte`): the places last played. */
 export function listenRegion(page: Page): Locator {
-	return workspace(page).getByRole('region', { name: 'Listen', exact: true });
+	return workspace(page).getByRole('region', { name: words['homeListen.label'], exact: true });
 }
 
 /**
- * The phone app bar landmark (`PhoneAppBar.svelte`, mounted by
- * `+layout.svelte` outside `<main>`). On the song route at compact widths it
- * carries the song title, share, and menu; `workspace()` no longer sees them
- * there, so a mobile flow asserting on the song heading reads this landmark
- * instead.
+ * The phone app bar landmark (`PhoneAppBar.svelte`, mounted by `+layout.svelte` outside
+ * `<main>`). On the song route at compact widths it carries the song title, share, and menu;
+ * `workspace()` no longer sees them there, so a mobile flow asserting on the song heading reads
+ * this landmark instead.
  */
 export function appBar(page: Page): Locator {
 	return page.getByRole('banner');

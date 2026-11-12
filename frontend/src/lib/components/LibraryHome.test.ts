@@ -70,9 +70,9 @@ describe('1354_rule_14 LibraryHome', () => {
 			[...target.querySelectorAll('section[aria-label]')].map((region) =>
 				region.getAttribute('aria-label')
 			)
-		).toEqual(['Listen', words['homeWrite.label']]);
+		).toEqual([words['homeListen.label'], words['homeWrite.label']]);
 		expect(target.querySelector('.wall-tile-body')?.getAttribute('aria-label')).toBe(
-			'Open album Open Windows'
+			words['homeListen.openAlbum']({ title: 'Open Windows' })
 		);
 	});
 
@@ -102,7 +102,7 @@ describe('1354_rule_14 LibraryHome', () => {
 
 		const card = head.querySelector(`[aria-label="${NEW_ALBUM_CARD_LABEL}"]`);
 		expect(card).not.toBeNull();
-		const listenRegion = target.querySelector('[aria-label="Listen"]');
+		const listenRegion = target.querySelector(`[aria-label="${words['homeListen.label']}"]`);
 		expect(card?.compareDocumentPosition(listenRegion as Node)).toBe(
 			Node.DOCUMENT_POSITION_FOLLOWING
 		);

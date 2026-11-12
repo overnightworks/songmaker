@@ -5,7 +5,7 @@ import {
 	COLLECTION_MENU_DELETE_LABEL,
 	COLLECTION_MENU_ARCHIVE_LABEL
 } from '../src/lib/constants/collection-menu';
-import { HOME_LISTEN_EMPTY, HOME_LISTEN_ERROR } from '../src/lib/constants/home';
+import { words } from '../src/lib/words/en';
 import {
 	sameOriginHeaders,
 	FlowGuard,
@@ -14,6 +14,7 @@ import {
 	regainNetwork,
 	openHome,
 	listenRegion,
+	nameStartingWith,
 	shellOf,
 	workspace
 } from './helpers';
@@ -53,7 +54,7 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 		await context.clearCookies();
 		await context.addCookies(account.cookies);
 		await page.goto(HOME_PATH);
-		await expect(listenRegion(page).getByText(HOME_LISTEN_EMPTY)).toBeVisible();
+		await expect(listenRegion(page).getByText(words['homeListen.empty'])).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath('listen-empty.png') });
 
 		const songsResponse = await page.request.get(`/api/songs?album_id=${library.albumId}`);
@@ -71,7 +72,7 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 				generation_id: song.generations[0].id
 			});
 			await postFromPage(page, `/api/songs/${song.id}/listen`, { playlist_id: playlist.id });
-			titles.unshift(`Open playlist ${title}`);
+			titles.unshift(words['homeListen.openPlaylist']({ title }));
 		}
 		let reads = 0;
 		page.on('request', (req) => {
@@ -137,7 +138,9 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 
 		await postFromPage(page, `/api/songs/${song.id}/listen`);
 		await page.reload();
-		const albumRow = listenRegion(page).getByRole('button', { name: /^Open album / });
+		const albumRow = listenRegion(page).getByRole('button', {
+			name: nameStartingWith(words['homeListen.openAlbum']({ title: '' }))
+		});
 		await expect(albumRow).toHaveCount(1);
 		const albumLabel = await albumRow.getAttribute('aria-label');
 		if (!albumLabel) throw new Error('Listen album has no accessible name');
@@ -181,16 +184,16 @@ test('1354_rule_19: a never-loaded Home offers Retry and then loads Listen', asy
 		})
 	);
 	await page.goto(HOME_PATH);
-	await expect(listenRegion(page).getByText(HOME_LISTEN_ERROR)).toBeVisible();
+	await expect(listenRegion(page).getByText(words['homeListen.error'])).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('listen-error.png') });
 	await page.unroute('**/api/library/listen?*');
 	await listenRegion(page).getByRole('button', { name: 'Retry', exact: true }).click();
-	await expect(listenRegion(page).getByText(HOME_LISTEN_ERROR)).toHaveCount(0);
+	await expect(listenRegion(page).getByText(words['homeListen.error'])).toHaveCount(0);
 	await expect(listenRegion(page).getByRole('status')).toHaveCount(0);
 	await expect(
 		listenRegion(page)
 			.locator('.library-row')
-			.or(listenRegion(page).getByText(HOME_LISTEN_EMPTY))
+			.or(listenRegion(page).getByText(words['homeListen.empty']))
 			.first()
 	).toBeVisible();
 	guard.assertClean();
@@ -210,7 +213,10 @@ test('1354_rule_15: the playing Listen row offers Pause and its body opens the a
 		listenRegion(page).getByRole('button', { name: `Pause ${library.albumTitle}`, exact: true })
 	).toBeVisible();
 	await listenRegion(page)
-		.getByRole('button', { name: `Open album ${library.albumTitle}`, exact: true })
+		.getByRole('button', {
+			name: words['homeListen.openAlbum']({ title: library.albumTitle }),
+			exact: true
+		})
 		.click();
 	await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}$`));
 	guard.assertClean();
