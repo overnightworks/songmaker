@@ -1,0 +1,8 @@
+claim_id = "25f4a3ac39ff4e4b947155b593fbf13b"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "caef5ed329e9f4bd0b54757064f32f0c05c69932"
+branch = "claude/issue-3056-take-agents-0-33-0"
+scope = ["pyproject.toml", "src/songmaker_cli/agent/backend.py", "tests/songmaker_cli/test_conversation_api_gateway_turn.py", "tests/support/cowriter_gateway.py", "uv.lock"]
+opened_commit = "f417b59fa05b2c00f9b3e0e6f7c35971c07ae494"
+whole_reason = "A library bump lands whole: both pins, the lock, and the three files that name the event whose shape grows."
