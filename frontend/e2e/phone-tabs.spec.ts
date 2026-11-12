@@ -3,7 +3,6 @@ import { PHONE_TABS } from '../src/lib/constants/phone-tabs';
 import { words } from '../src/lib/words/en';
 import { NOW_PLAYING_CLOSE, openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
-import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
@@ -161,9 +160,9 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		).toBeVisible();
 		await expect(tabs(page)).toHaveCount(0);
 		const search = await openSearchSheet(page);
-		await search.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill('Voices');
+		await search.getByRole('combobox', { name: words['railSearch.field'] }).fill('Voices');
 		await search
-			.getByRole('group', { name: 'Pages' })
+			.getByRole('group', { name: words['railSearch.groupPages'] })
 			.getByRole('option', { name: /^Voices\b/ })
 			.click();
 		await expect(page).toHaveURL(/\/settings\/voices$/);

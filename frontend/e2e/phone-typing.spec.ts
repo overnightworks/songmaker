@@ -28,7 +28,6 @@ import {
 	SONG_TITLE_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
-import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { NEW_ALBUM_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import {
@@ -314,7 +313,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await expect(generateButton(page)).toBeVisible();
 
 		const search = await openSearchSheet(page);
-		await search.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).click();
+		await search.getByRole('combobox', { name: words['railSearch.field'] }).click();
 		await expect(miniPlayer).toBeHidden();
 		await page.keyboard.press('Escape');
 		await page.keyboard.press('Escape');
@@ -410,7 +409,9 @@ for (const surface of ['Home name', 'Search'] as const) {
 					.click();
 				field = workspace(page).getByLabel(NEW_ALBUM_TITLE_LABEL);
 			} else {
-				field = (await openSearchSheet(page)).getByRole('combobox', { name: RAIL_SEARCH_LABEL });
+				field = (await openSearchSheet(page)).getByRole('combobox', {
+					name: words['railSearch.field']
+				});
 			}
 			await field.focus();
 			await showOnScreenKeyboard(page, true);

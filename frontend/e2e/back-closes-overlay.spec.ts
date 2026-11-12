@@ -1,4 +1,4 @@
-import { openSearchSheet, phoneSearchResult, searchSheet } from './phone-search';
+import { GROUPS, openSearchSheet, phoneSearchResult, searchSheet } from './phone-search';
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import {
 	mockPlaylist,
@@ -722,7 +722,7 @@ test.describe('Back from Settings onto a page opened over another of its kind', 
 			await (
 				await phoneSearchResult(
 					page,
-					'Songs',
+					GROUPS.songs,
 					nextSong.songTitle,
 					nameStartingWith(nextSong.songTitle)
 				)
@@ -915,7 +915,7 @@ async function openAlbumFromNavigation(
 ): Promise<void> {
 	if (shell === 'mobile') {
 		await (
-			await phoneSearchResult(page, 'Albums', albumTitle, nameStartingWith(albumTitle))
+			await phoneSearchResult(page, GROUPS.albums, albumTitle, nameStartingWith(albumTitle))
 		).click();
 		return;
 	}

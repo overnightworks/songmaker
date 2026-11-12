@@ -14,7 +14,6 @@ import {
 } from '#lib/test-utils/hitbox.ts';
 import { APP_NAME } from '#lib/constants/app.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import { RAIL_SEARCH_LABEL } from '#lib/constants/rail.ts';
 import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 import { words } from '#lib/words/en.ts';
 import { goto } from '$app/navigation';
@@ -484,7 +483,7 @@ describe('PhoneAppBar search sheet', () => {
 		const sheet = await openSearch();
 
 		expect(sheet.getAttribute('aria-modal')).toBe('true');
-		expect(document.activeElement?.getAttribute('aria-label')).toBe(RAIL_SEARCH_LABEL);
+		expect(document.activeElement?.getAttribute('aria-label')).toBe(words['railSearch.field']);
 		expectFrequentHitbox(
 			getByRoleButton(sheet, words['phoneAppBar.searchClose']),
 			words['phoneAppBar.searchClose']

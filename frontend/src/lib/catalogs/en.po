@@ -250,3 +250,71 @@ msgstr ""
 msgctxt "rail.trackTakesPick.other"
 msgid "{count} takes · pick"
 msgstr ""
+
+msgctxt "railSearch.field"
+msgid "Search or go to…"
+msgstr ""
+
+msgctxt "railSearch.clear"
+msgid "Clear search"
+msgstr ""
+
+msgctxt "railSearch.searching"
+msgid "Searching…"
+msgstr ""
+
+msgctxt "railSearch.failed"
+msgid "Search failed"
+msgstr ""
+
+msgctxt "railSearch.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "railSearch.results"
+msgid "Search results"
+msgstr ""
+
+msgctxt "railSearch.noResults"
+msgid "No results for “{query}”."
+msgstr ""
+
+msgctxt "railSearch.groupAlbums"
+msgid "Albums"
+msgstr ""
+
+msgctxt "railSearch.groupSongs"
+msgid "Songs"
+msgstr ""
+
+msgctxt "railSearch.groupPlaylists"
+msgid "Playlists"
+msgstr ""
+
+msgctxt "railSearch.groupPages"
+msgid "Pages"
+msgstr ""
+
+msgctxt "railSearch.kindAlbum"
+msgid "Album"
+msgstr ""
+
+msgctxt "railSearch.kindSong"
+msgid "Song"
+msgstr ""
+
+msgctxt "railSearch.kindPlaylist"
+msgid "Playlist"
+msgstr ""
+
+msgctxt "railSearch.kindPage"
+msgid "Page"
+msgstr ""
+
+msgctxt "railSearch.songCount.one"
+msgid "{count} song"
+msgstr ""
+
+msgctxt "railSearch.songCount.other"
+msgid "{count} songs"
+msgstr ""

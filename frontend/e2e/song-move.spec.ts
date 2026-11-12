@@ -17,7 +17,6 @@ import {
 	songMoveSharedMessage
 } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
-import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { openSearchSheet } from './phone-search';
 import { FlowGuard, HOME_PATH, nameStartingWith, ONLY_IN_SHELL, type Shell } from './helpers';
 import {
@@ -386,7 +385,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				shell === 'mobile'
 					? await openSearchSheet(page)
 					: page.getByRole('navigation', { name: words['rail.nav'] });
-			await rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(OTHER_SONG_TITLE);
+			await rail.getByRole('combobox', { name: words['railSearch.field'] }).fill(OTHER_SONG_TITLE);
 			await rail.getByRole('option', { name: nameStartingWith(OTHER_SONG_TITLE) }).click();
 			await expect(page).toHaveURL(new RegExp(`/album/${currentId}/${second.slug}$`));
 			release();

@@ -2,7 +2,6 @@ import { expect, test, type Locator } from './coverage-test';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
 import { API_ERROR_GENERIC_MESSAGE } from '../src/lib/constants/http';
-import { RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_EVENT_HELLO
@@ -51,12 +50,12 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				shell === 'mobile'
 					? await openSearchSheet(page)
 					: page.getByRole('navigation', { name: words['rail.nav'] });
-			const search = rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL });
+			const search = rail.getByRole('combobox', { name: words['railSearch.field'] });
 			await expect(search).toHaveCount(1);
 			await expect(surface.locator('.search')).toHaveCount(0);
 
 			await search.fill(library.secondAlbumSongTitle);
-			await expect(rail.getByRole('group', { name: 'Songs' })).toBeVisible();
+			await expect(rail.getByRole('group', { name: words['railSearch.groupSongs'] })).toBeVisible();
 			await rail
 				.getByRole('option', { name: nameStartingWith(library.secondAlbumSongTitle) })
 				.click();
@@ -85,11 +84,11 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				shell === 'mobile'
 					? await openSearchSheet(page)
 					: page.getByRole('navigation', { name: words['rail.nav'] });
-			const search = rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL });
+			const search = rail.getByRole('combobox', { name: words['railSearch.field'] });
 
 			if (shell === 'mobile') await expectPhoneBarHeight(rail);
 			await search.fill(QUERY_MATCHING_EVERY_SEEDED_ALBUM);
-			const albumResults = rail.getByRole('group', { name: 'Albums' });
+			const albumResults = rail.getByRole('group', { name: words['railSearch.groupAlbums'] });
 			await expect(albumResults).toBeVisible();
 			if (shell === 'mobile') {
 				await expectPhoneBarHeight(rail);
@@ -99,19 +98,21 @@ for (const shell of ['desktop', 'mobile'] as const) {
 
 			await search.fill(library.albumTitle);
 			await expect(search).toHaveCSS('box-shadow', 'none');
-			const albums = rail.getByRole('group', { name: 'Albums' });
+			const albums = rail.getByRole('group', { name: words['railSearch.groupAlbums'] });
 			await expect(
 				albums.getByRole('option', { name: nameStartingWith(library.albumTitle) })
-			).toContainText('Album ·');
-			await expect(rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL })).toBeVisible();
+			).toContainText(`${words['railSearch.kindAlbum']} ·`);
+			await expect(rail.getByRole('button', { name: words['railSearch.clear'] })).toBeVisible();
 
 			await search.fill('gen');
 			const generation = rail
-				.getByRole('group', { name: 'Pages' })
+				.getByRole('group', { name: words['railSearch.groupPages'] })
 				.getByRole('option', { name: nameStartingWith('Generation') });
-			await expect(generation).toContainText('Page · Settings');
+			await expect(generation).toContainText(
+				`${words['railSearch.kindPage']} · ${words['places.settings']}`
+			);
 
-			await rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL }).click();
+			await rail.getByRole('button', { name: words['railSearch.clear'] }).click();
 			await expect(search).toHaveValue('');
 			await expect(search).toBeFocused();
 			guard.assertClean();
