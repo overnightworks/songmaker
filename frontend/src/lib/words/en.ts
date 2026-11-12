@@ -111,6 +111,29 @@ export type Words = {
     readonly "libraryWall.albumCover": (gaps: { readonly title: string }) => string;
     readonly "libraryWall.playlistCover": (gaps: { readonly title: string }) => string;
     readonly "libraryWall.songCount": (count: number) => string;
+    readonly "libraryWorkspace.loading": string;
+    readonly "libraryWorkspace.retry": string;
+    readonly "addressPage.loadingAlbum": string;
+    readonly "addressPage.loadingSong": string;
+    readonly "addressPage.loadingTake": string;
+    readonly "addressPage.loadingPlaylist": string;
+    readonly "addressPage.noSuchAlbum": string;
+    readonly "addressPage.noSuchSong": string;
+    readonly "addressPage.noSuchTake": string;
+    readonly "addressPage.noSuchPlaylist": string;
+    readonly "addressPage.albumUnknown": string;
+    readonly "addressPage.songUnknown": string;
+    readonly "addressPage.takeUnknown": string;
+    readonly "addressPage.playlistUnknown": string;
+    readonly "addressPage.albumUnreachable": string;
+    readonly "addressPage.songUnreachable": string;
+    readonly "addressPage.takeUnreachable": string;
+    readonly "addressPage.playlistUnreachable": string;
+    readonly "addressPage.backToLibrary": string;
+    readonly "addressPage.backToAlbum": string;
+    readonly "addressPage.backToSong": string;
+    readonly "addressPage.tryAgain": string;
+    readonly "homeList.retry": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -248,5 +271,28 @@ export const words: Words = {
         many: numberFormat.format(count) + " songs",
         other: numberFormat.format(count) + " songs",
     })[pluralRules.select(count)],
+    "libraryWorkspace.loading": "Loading...",
+    "libraryWorkspace.retry": "Retry",
+    "addressPage.loadingAlbum": "Loading album...",
+    "addressPage.loadingSong": "Loading song...",
+    "addressPage.loadingTake": "Loading take...",
+    "addressPage.loadingPlaylist": "Loading playlist...",
+    "addressPage.noSuchAlbum": "No such album",
+    "addressPage.noSuchSong": "No such song",
+    "addressPage.noSuchTake": "No such take",
+    "addressPage.noSuchPlaylist": "No such playlist",
+    "addressPage.albumUnknown": "This address does not name an album in your library.",
+    "addressPage.songUnknown": "This address does not name a song in this album.",
+    "addressPage.takeUnknown": "This address does not name a take of this song.",
+    "addressPage.playlistUnknown": "This address does not name a playlist in your library.",
+    "addressPage.albumUnreachable": "This album could not be loaded.",
+    "addressPage.songUnreachable": "This song could not be loaded.",
+    "addressPage.takeUnreachable": "This take could not be loaded.",
+    "addressPage.playlistUnreachable": "This playlist could not be loaded.",
+    "addressPage.backToLibrary": "Back to the library",
+    "addressPage.backToAlbum": "Back to the album",
+    "addressPage.backToSong": "Back to the song",
+    "addressPage.tryAgain": "Try again",
+    "homeList.retry": "Retry",
 };
 export type Key = keyof Words;

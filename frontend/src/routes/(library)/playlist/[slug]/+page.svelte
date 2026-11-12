@@ -4,35 +4,33 @@
 	import { LIBRARY_ROUTE_ID } from '#lib/routes/addresses.ts';
 	import { createAddressLoad } from '#lib/stores/addressLoad.svelte.ts';
 	import { openPlaylistAddress } from '#lib/stores/libraryContext.ts';
-
-	const RESOLVING_LABEL = 'Loading playlist...';
-	const UNKNOWN_PLAYLIST_HEADING = 'No such playlist';
-	const UNKNOWN_PLAYLIST_MESSAGE = 'This address does not name a playlist in your library.';
-	const UNREACHABLE_PLAYLIST_MESSAGE = 'This playlist could not be loaded.';
-	const BACK_TO_LIBRARY_LABEL = 'Back to the library';
-	const RETRY_LABEL = 'Try again';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	const slug = $derived(page.params.slug ?? '');
 
 	const address = createAddressLoad<'unknown'>({
 		load: () => openPlaylistAddress(slug),
-		fallbackMessage: UNREACHABLE_PLAYLIST_MESSAGE
+		fallbackMessage: pageText('addressPage.playlistUnreachable')
 	});
 </script>
 
 {#if address.state === 'unknown'}
 	<div class="address-overlay" role="alert">
-		<h1>{UNKNOWN_PLAYLIST_HEADING}</h1>
-		<p>{UNKNOWN_PLAYLIST_MESSAGE}</p>
-		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
+		<h1>{pageText('addressPage.noSuchPlaylist')}</h1>
+		<p>{pageText('addressPage.playlistUnknown')}</p>
+		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}
+			>{pageText('addressPage.backToLibrary')}</a
+		>
 	</div>
 {:else if address.state === 'unreachable' && !address.pressing}
 	<div class="address-overlay" role="alert">
-		<p>{address.failure ?? UNREACHABLE_PLAYLIST_MESSAGE}</p>
-		<button class="address-action" type="button" onclick={address.tryAgain}>{RETRY_LABEL}</button>
+		<p>{address.failure ?? pageText('addressPage.playlistUnreachable')}</p>
+		<button class="address-action" type="button" onclick={address.tryAgain}
+			>{pageText('addressPage.tryAgain')}</button
+		>
 	</div>
 {:else if address.state === 'resolving' || address.pressing}
-	<div class="address-overlay">{RESOLVING_LABEL}</div>
+	<div class="address-overlay">{pageText('addressPage.loadingPlaylist')}</div>
 {/if}
 
 <style>

@@ -16,6 +16,7 @@ import {
 	SONG_MENU_SAVE_LABEL,
 	SONG_TITLE_LABEL
 } from '../src/lib/constants/song';
+import { words } from '../src/lib/words/en';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import { COLLECTION_MENU_LABEL } from '../src/lib/constants/collection-menu';
@@ -33,7 +34,6 @@ import { expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-vi
 import { archiveOwnedAlbum } from './seed';
 
 const VIEWPORT_HEIGHT_PX = 844;
-const SONG_RESOLVING_TEXT = 'Loading song...';
 const ALBUM_FORM_MENU_WIDTH_PX = 238;
 const ROW_LABELS_IN_ORDER = [
 	SONG_MENU_SAVE_LABEL,
@@ -288,7 +288,7 @@ test(
 		await onOwnSong(page, TITLES[1], 390, async () => {
 			const trigger = appBar(page).getByLabel(SONG_MENU_LABEL, { exact: true });
 			await expect(trigger).toBeVisible();
-			await expect(page.getByText(SONG_RESOLVING_TEXT, { exact: true })).toBeVisible();
+			await expect(page.getByText(words['addressPage.loadingSong'], { exact: true })).toBeVisible();
 			const [triggerBox] = await boundingBoxes(trigger);
 			await page.mouse.click(
 				triggerBox.x + triggerBox.width / 2,

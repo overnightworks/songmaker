@@ -187,7 +187,9 @@ test('1354_rule_19: a never-loaded Home offers Retry and then loads Listen', asy
 	await expect(listenRegion(page).getByText(words['homeListen.error'])).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('listen-error.png') });
 	await page.unroute('**/api/library/listen?*');
-	await listenRegion(page).getByRole('button', { name: 'Retry', exact: true }).click();
+	await listenRegion(page)
+		.getByRole('button', { name: words['homeList.retry'], exact: true })
+		.click();
 	await expect(listenRegion(page).getByText(words['homeListen.error'])).toHaveCount(0);
 	await expect(listenRegion(page).getByRole('status')).toHaveCount(0);
 	await expect(

@@ -8,7 +8,6 @@ import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
@@ -93,7 +92,7 @@ describe('the library workspace', () => {
 	it('waits while the live stream has not delivered its first snapshot', () => {
 		const target = renderWorkspace();
 
-		expect(target.textContent).toContain('Loading...');
+		expect(target.textContent).toContain(words['libraryWorkspace.loading']);
 	});
 
 	it('shows the failure card with a retry when the stream never came up', async () => {
@@ -104,7 +103,9 @@ describe('the library workspace', () => {
 		expect(alert?.textContent).toContain('Stream refused');
 		expect(alert?.querySelector('svg')).not.toBeNull();
 
-		target.querySelector<HTMLButtonElement>(`button[aria-label="${LIBRARY_RETRY_LABEL}"]`)?.click();
+		target
+			.querySelector<HTMLButtonElement>(`button[aria-label="${words['libraryWorkspace.retry']}"]`)
+			?.click();
 		expect(retryResourceSync).toHaveBeenCalled();
 	});
 
@@ -121,7 +122,7 @@ describe('the library workspace', () => {
 		resourceSync.update((state) => ({ ...state, status: 'error', error: null }));
 
 		const target = renderWorkspace();
-		expect(target.textContent).toContain('Loading...');
+		expect(target.textContent).toContain(words['libraryWorkspace.loading']);
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 
 		browserReportsOnline(true);
@@ -154,7 +155,7 @@ describe('the library workspace', () => {
 
 		const second = renderWorkspace();
 
-		expect(second.textContent).not.toContain('Loading...');
+		expect(second.textContent).not.toContain(words['libraryWorkspace.loading']);
 		expect(second.textContent).toContain(ALBUM_TITLE);
 	});
 

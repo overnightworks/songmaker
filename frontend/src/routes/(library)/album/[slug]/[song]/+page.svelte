@@ -5,16 +5,7 @@
 	import { albumRoutePath, LIBRARY_ROUTE_ID } from '#lib/routes/addresses.ts';
 	import { createAddressLoad } from '#lib/stores/addressLoad.svelte.ts';
 	import { openSongAddress } from '#lib/stores/libraryContext.ts';
-
-	const RESOLVING_LABEL = 'Loading song...';
-	const UNKNOWN_ALBUM_HEADING = 'No such album';
-	const UNKNOWN_ALBUM_MESSAGE = 'This address does not name an album in your library.';
-	const UNKNOWN_SONG_HEADING = 'No such song';
-	const UNKNOWN_SONG_MESSAGE = 'This address does not name a song in this album.';
-	const UNREACHABLE_SONG_MESSAGE = 'This song could not be loaded.';
-	const BACK_TO_LIBRARY_LABEL = 'Back to the library';
-	const BACK_TO_ALBUM_LABEL = 'Back to the album';
-	const RETRY_LABEL = 'Try again';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	const albumSlug = $derived(page.params.slug ?? '');
 	const songSlug = $derived(page.params.song ?? '');
@@ -22,29 +13,35 @@
 
 	const address = createAddressLoad<'unknown-song' | 'unknown-album'>({
 		load: () => openSongAddress(albumSlug, songSlug, generationId),
-		fallbackMessage: UNREACHABLE_SONG_MESSAGE
+		fallbackMessage: pageText('addressPage.songUnreachable')
 	});
 </script>
 
 {#if address.state === 'unknown-song'}
 	<div class="address-overlay" role="alert">
-		<h1>{UNKNOWN_SONG_HEADING}</h1>
-		<p>{UNKNOWN_SONG_MESSAGE}</p>
-		<a class="address-action" href={albumRoutePath(albumSlug)}>{BACK_TO_ALBUM_LABEL}</a>
+		<h1>{pageText('addressPage.noSuchSong')}</h1>
+		<p>{pageText('addressPage.songUnknown')}</p>
+		<a class="address-action" href={albumRoutePath(albumSlug)}
+			>{pageText('addressPage.backToAlbum')}</a
+		>
 	</div>
 {:else if address.state === 'unknown-album'}
 	<div class="address-overlay" role="alert">
-		<h1>{UNKNOWN_ALBUM_HEADING}</h1>
-		<p>{UNKNOWN_ALBUM_MESSAGE}</p>
-		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
+		<h1>{pageText('addressPage.noSuchAlbum')}</h1>
+		<p>{pageText('addressPage.albumUnknown')}</p>
+		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}
+			>{pageText('addressPage.backToLibrary')}</a
+		>
 	</div>
 {:else if address.state === 'unreachable' && !address.pressing}
 	<div class="address-overlay" role="alert">
-		<p>{address.failure ?? UNREACHABLE_SONG_MESSAGE}</p>
-		<button class="address-action" type="button" onclick={address.tryAgain}>{RETRY_LABEL}</button>
+		<p>{address.failure ?? pageText('addressPage.songUnreachable')}</p>
+		<button class="address-action" type="button" onclick={address.tryAgain}
+			>{pageText('addressPage.tryAgain')}</button
+		>
 	</div>
 {:else if address.state === 'resolving' || address.pressing}
-	<div class="address-overlay">{RESOLVING_LABEL}</div>
+	<div class="address-overlay">{pageText('addressPage.loadingSong')}</div>
 {/if}
 
 <style>

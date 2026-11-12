@@ -4,35 +4,33 @@
 	import { LIBRARY_ROUTE_ID } from '#lib/routes/addresses.ts';
 	import { createAddressLoad } from '#lib/stores/addressLoad.svelte.ts';
 	import { openAlbumAddress } from '#lib/stores/libraryContext.ts';
-
-	const RESOLVING_LABEL = 'Loading album...';
-	const UNKNOWN_ALBUM_HEADING = 'No such album';
-	const UNKNOWN_ALBUM_MESSAGE = 'This address does not name an album in your library.';
-	const UNREACHABLE_ALBUM_MESSAGE = 'This album could not be loaded.';
-	const BACK_TO_LIBRARY_LABEL = 'Back to the library';
-	const RETRY_LABEL = 'Try again';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	const slug = $derived(page.params.slug ?? '');
 
 	const address = createAddressLoad<'unknown'>({
 		load: () => openAlbumAddress(slug),
-		fallbackMessage: UNREACHABLE_ALBUM_MESSAGE
+		fallbackMessage: pageText('addressPage.albumUnreachable')
 	});
 </script>
 
 {#if address.state === 'unknown'}
 	<div class="address-overlay" role="alert">
-		<h1>{UNKNOWN_ALBUM_HEADING}</h1>
-		<p>{UNKNOWN_ALBUM_MESSAGE}</p>
-		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
+		<h1>{pageText('addressPage.noSuchAlbum')}</h1>
+		<p>{pageText('addressPage.albumUnknown')}</p>
+		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}
+			>{pageText('addressPage.backToLibrary')}</a
+		>
 	</div>
 {:else if address.state === 'unreachable' && !address.pressing}
 	<div class="address-overlay" role="alert">
-		<p>{address.failure ?? UNREACHABLE_ALBUM_MESSAGE}</p>
-		<button class="address-action" type="button" onclick={address.tryAgain}>{RETRY_LABEL}</button>
+		<p>{address.failure ?? pageText('addressPage.albumUnreachable')}</p>
+		<button class="address-action" type="button" onclick={address.tryAgain}
+			>{pageText('addressPage.tryAgain')}</button
+		>
 	</div>
 {:else if address.state === 'resolving' || address.pressing}
-	<div class="address-overlay">{RESOLVING_LABEL}</div>
+	<div class="address-overlay">{pageText('addressPage.loadingAlbum')}</div>
 {/if}
 
 <style>
