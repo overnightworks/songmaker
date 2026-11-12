@@ -499,7 +499,7 @@ describe('deleting a reference', () => {
 
 	async function chooseDelete(target: HTMLElement, filename: string): Promise<void> {
 		await openMenuOf(target, filename);
-		await pressReferenceControl(buttonNamed(menuPanel(), 'Delete'));
+		await pressReferenceControl(buttonNamed(menuPanel(), words['referenceMenu.delete']));
 	}
 
 	function confirmDialog(): HTMLElement {
@@ -565,7 +565,7 @@ describe('deleting a reference', () => {
 		);
 		expect(faultOf(rowOf(target, 'storytime-drums.wav'))).toBeUndefined();
 		await openMenuOf(target, 'voice-memo.mp3');
-		expect(buttonNamed(menuPanel(), 'Delete').disabled).toBe(true);
+		expect(buttonNamed(menuPanel(), words['referenceMenu.delete']).disabled).toBe(true);
 		expect(rowOf(target, 'voice-memo.mp3').textContent).toContain('Used in 2 takes');
 	});
 
