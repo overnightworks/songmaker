@@ -1,0 +1,7 @@
+claim_id = "2bb7925365fb4aa8af575b4302d7377e"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "9a012073d104ba1656ad2c00931000c3bdac44fc"
+branch = "claude/issue-3038-the-job-reach-test-holds-whether-or-not"
+scope = ["tests/songmaker_cli/agent/test_mcp_job_reach.py", "tests/support/mcp_world.py"]
+opened_commit = "34bde1aad2215d74e7ff73a79b490a4f4233616d"
