@@ -231,8 +231,6 @@ services:
     build:
       context: .
       dockerfile: docker/scoring-worker.Dockerfile
-      secrets:
-        - hf_token
     command: ["songmaker_cli.scoring_worker.ScoringWorkerSettings"]
     restart: unless-stopped
     cap_drop:
@@ -263,7 +261,6 @@ services:
       - songmaker_internal_token
     volumes:
       - audiofiles:/app/data/audio
-      - hfcache:/app/.cache/huggingface/hub
 
   prometheus:
     image: prom/prometheus:latest
@@ -368,8 +365,6 @@ services:
       - ALL
 
 secrets:
-  hf_token:
-    environment: HF_TOKEN
   # The edge owns this file (a Keycloak client secret). A file-backed secret
   # keeps it out of `docker inspect` and the environment; it is read once at
   # startup by the web relying party. A throwaway stack (CI, local e2e) points
@@ -415,7 +410,6 @@ volumes:
   redisdata:
   audiofiles:
   queuestreams:
-  hfcache:
   promdata:
   grafdata:
   alertmanagerdata:
