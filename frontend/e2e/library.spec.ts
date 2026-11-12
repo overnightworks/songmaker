@@ -255,7 +255,7 @@ async function expectSettingsRailRoundTrip(
 		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
 		await expectAccountMenuOnTheLibrary(page);
 	}
-	await openSettingsSection(page, shell, 'Voices');
+	await openSettingsSection(page, shell, words['settingsSections.voices']);
 
 	await expect(page).toHaveURL(/\/settings\/voices$/);
 	if (shell === 'mobile') {

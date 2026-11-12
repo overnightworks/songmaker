@@ -338,3 +338,35 @@ msgstr ""
 msgctxt "pageBack.previousPage"
 msgid "Previous page"
 msgstr ""
+
+msgctxt "settingsSections.generation"
+msgid "Generation"
+msgstr ""
+
+msgctxt "settingsSections.voices"
+msgid "Voices"
+msgstr ""
+
+msgctxt "settingsSections.references"
+msgid "References"
+msgstr ""
+
+msgctxt "settingsSections.admin"
+msgid "Admin"
+msgstr ""
+
+msgctxt "settingsSections.about"
+msgid "About"
+msgstr ""
+
+msgctxt "settingsPage.documentTitle"
+msgid "Settings — {app}"
+msgstr ""
+
+msgctxt "settingsPage.nav"
+msgid "Settings sections"
+msgstr ""
+
+msgctxt "settingsPage.adminOnly"
+msgid "admins only"
+msgstr ""

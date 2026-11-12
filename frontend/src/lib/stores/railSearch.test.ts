@@ -206,21 +206,21 @@ describe('groupRailSearchResults', () => {
 			viewer: 'an administrator',
 			admin: true,
 			settingsPages: [
-				settingsPage('Generation', '/settings/generation'),
-				settingsPage('Voices', '/settings/voices'),
-				settingsPage('References', '/settings/references'),
-				settingsPage('Admin', '/settings/users'),
-				settingsPage('About', '/settings/about')
+				settingsPage(words['settingsSections.generation'], '/settings/generation'),
+				settingsPage(words['settingsSections.voices'], '/settings/voices'),
+				settingsPage(words['settingsSections.references'], '/settings/references'),
+				settingsPage(words['settingsSections.admin'], '/settings/users'),
+				settingsPage(words['settingsSections.about'], '/settings/about')
 			]
 		},
 		{
 			viewer: 'a non-administrator',
 			admin: false,
 			settingsPages: [
-				settingsPage('Generation', '/settings/generation'),
-				settingsPage('Voices', '/settings/voices'),
-				settingsPage('References', '/settings/references'),
-				settingsPage('About', '/settings/about')
+				settingsPage(words['settingsSections.generation'], '/settings/generation'),
+				settingsPage(words['settingsSections.voices'], '/settings/voices'),
+				settingsPage(words['settingsSections.references'], '/settings/references'),
+				settingsPage(words['settingsSections.about'], '/settings/about')
 			]
 		}
 	])(
@@ -328,7 +328,7 @@ describe('groupRailSearchResults', () => {
 		const library = groupRailSearchResults({ ...vernissageState, query: 'libr', hits: [] }, []);
 
 		expect(settings[0]?.results[0]).toMatchObject({
-			label: 'Generation',
+			label: words['settingsSections.generation'],
 			kindWord: words['railSearch.kindPage'],
 			detailParts: [{ text: words['places.settings'], matched: false }]
 		});
@@ -370,7 +370,11 @@ describe('groupRailSearchResults', () => {
 				{ text: 'ssage', matched: false }
 			]
 		],
-		['Voices', 'settings', [{ text: 'Voices', matched: false }]]
+		[
+			words['settingsSections.voices'],
+			'settings',
+			[{ text: words['settingsSections.voices'], matched: false }]
+		]
 	])('highlights the letters of %s that match %s', (label, query, parts) => {
 		const page = {
 			label,
@@ -387,8 +391,8 @@ describe('groupRailSearchResults', () => {
 		const [pages] = groupRailSearchResults({ ...vernissageState, query: 'set', hits: [] }, []);
 
 		expect(pages?.results[0]).toMatchObject({
-			label: 'Generation',
-			labelParts: [{ text: 'Generation', matched: false }],
+			label: words['settingsSections.generation'],
+			labelParts: [{ text: words['settingsSections.generation'], matched: false }],
 			detailParts: [
 				{ text: words['places.settings'].slice(0, 3), matched: true },
 				{ text: words['places.settings'].slice(3), matched: false }

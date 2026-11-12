@@ -17,7 +17,6 @@ vi.mock('#lib/api/settings.ts', () => ({
 
 import { goto } from '$app/navigation';
 import { updateTheme } from '#lib/api/settings.ts';
-import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import { currentUser, signOutFailed } from '#lib/stores/auth.ts';
 import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
@@ -31,6 +30,7 @@ import {
 	plannedHistoryIndex,
 	replaceHistoryEntry
 } from '#lib/test-utils/library-history.ts';
+import { words } from '#lib/words/en.ts';
 import AccountMenu from './AccountMenu.svelte';
 
 const USERNAME = 'felix';
@@ -105,7 +105,7 @@ describe('AccountMenu', () => {
 		expect(requireElement(panel, 'a[href="' + ACCOUNT_CONSOLE_URL + '"]').textContent).toContain(
 			USERNAME
 		);
-		getByRoleButton(panel, RAIL_SETTINGS_LABEL);
+		getByRoleButton(panel, words['places.settings']);
 		getByRoleButton(panel, LOG_OUT_NAME);
 		expect(panel.querySelectorAll('input[type="radio"]')).toHaveLength(3);
 		expect(
@@ -175,7 +175,7 @@ describe('AccountMenu', () => {
 		const target = await renderAccountMenu();
 		const panel = await openMenu(target);
 
-		getByRoleButton(panel, RAIL_SETTINGS_LABEL).click();
+		getByRoleButton(panel, words['places.settings']).click();
 		await tick();
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/settings'));
@@ -188,7 +188,7 @@ describe('AccountMenu', () => {
 		const target = await renderAccountMenu();
 		const panel = await openMenu(target);
 
-		getByRoleButton(panel, RAIL_SETTINGS_LABEL).click();
+		getByRoleButton(panel, words['places.settings']).click();
 		await tick();
 		await Promise.resolve();
 
@@ -327,7 +327,7 @@ describeBackClosesOverlay({
 		},
 		{
 			way: 'choosing Settings',
-			close: (target) => getByRoleButton(target, RAIL_SETTINGS_LABEL).click(),
+			close: (target) => getByRoleButton(target, words['places.settings']).click(),
 			actionSawHistoryAt: () => settingsSawHistoryAt
 		}
 	]

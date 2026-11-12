@@ -12,6 +12,7 @@ import {
 } from './coverage-test';
 
 import { FlowGuard, LIBRARY_PATH, openSettingsSection, shellOf, workspace } from './helpers';
+import { words } from '../src/lib/words/en';
 import {
 	archiveOwnedAlbum,
 	BASE_URL,
@@ -120,7 +121,7 @@ test('Settings › References shows an uploaded recording with its filename, len
 		await postReferenceAudio(api, 'storytime-drums.mp3');
 
 		await page.goto(LIBRARY_PATH);
-		await openSettingsSection(page, shellOf(testInfo), 'References');
+		await openSettingsSection(page, shellOf(testInfo), words['settingsSections.references']);
 
 		await expect(page).toHaveURL(/\/settings\/references$/);
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });

@@ -1,10 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
-import { SETTINGS_NAV_LABEL } from '#lib/constants/settings.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto, replaceState } from '$app/navigation';
 import { APP_NAME } from '#lib/constants/app.ts';
-import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 import {
 	installHistoryController,
 	resetHistoryControllerForTests,
@@ -20,12 +18,21 @@ import {
 	startFakeRouter
 } from '#lib/test-utils/app-navigation.ts';
 import { clearPointer, setPointer } from '#lib/test-utils/hitbox.ts';
+import { words } from '#lib/words/en.ts';
 
 vi.mock('$app/state', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
 );
 
 import SettingsPage from './+page.svelte';
+
+const {
+	'settingsSections.generation': generation,
+	'settingsSections.voices': voices,
+	'settingsSections.references': references,
+	'settingsSections.admin': admin,
+	'settingsSections.about': about
+} = words;
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -46,7 +53,7 @@ function landOnPage(): void {
 
 function listRows(target: HTMLElement): HTMLAnchorElement[] {
 	return Array.from(
-		target.querySelectorAll<HTMLAnchorElement>(`nav[aria-label="${SETTINGS_NAV_LABEL}"] a`)
+		target.querySelectorAll<HTMLAnchorElement>(`nav[aria-label="${words['settingsPage.nav']}"] a`)
 	);
 }
 
@@ -83,7 +90,7 @@ describe('settings index on the phone', () => {
 		landOnPage();
 		await laterTask();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'References', 'Admin', 'About']);
+		expect(rowLabels(target)).toEqual([generation, voices, references, admin, about]);
 		expect(listRows(target).map((row) => row.getAttribute('href'))).toEqual([
 			'/settings/generation',
 			'/settings/voices',
@@ -102,11 +109,11 @@ describe('settings index on the phone', () => {
 			row.querySelector('.settings-row-hint')?.textContent?.trim() ?? null
 		]);
 		expect(hints).toEqual([
-			['Generation', null],
-			['Voices', null],
-			['References', null],
-			['Admin', 'admins only'],
-			['About', null]
+			[generation, null],
+			[voices, null],
+			[references, null],
+			[admin, words['settingsPage.adminOnly']],
+			[about, null]
 		]);
 	});
 
@@ -114,13 +121,13 @@ describe('settings index on the phone', () => {
 		currentUser.set(makeAuthUser());
 		const target = await render();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'References', 'About']);
+		expect(rowLabels(target)).toEqual([generation, voices, references, about]);
 	});
 
 	it('names the tab after the Settings list', async () => {
 		await render();
 
-		expect(document.title).toBe(`${RAIL_SETTINGS_LABEL} — ${APP_NAME}`);
+		expect(document.title).toBe(words['settingsPage.documentTitle']({ app: APP_NAME }));
 	});
 });
 

@@ -52,7 +52,7 @@ import {
 } from './seed';
 
 const SONG_PHONE_SONG_TITLE = 'Song Phone Takes';
-const SETTINGS_SECTION = 'Generation';
+const SETTINGS_SECTION = words['settingsSections.generation'];
 // Chosen to prove the player names the real seeded version rather than an
 // assumed v1 — the whole point of L12's "version number as seeded" clause.
 const SONG_PHONE_VERSION_NUMBER = 7;
@@ -407,7 +407,7 @@ test.describe('song page at phone width', () => {
 				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 				.click();
 
-			const settingsHeading = page.getByRole('heading', { name: SETTINGS_SECTION, level: 1 });
+			const settingsHeading = page.getByRole('heading', { name: 'Generation', level: 1 });
 			await expect(page).toHaveURL(/\/settings\/generation$/);
 			await expect(settingsHeading).toBeVisible();
 			await page.reload();
@@ -726,7 +726,7 @@ test.describe('song page at phone width', () => {
 				.click();
 
 			await expect(page).toHaveURL(/\/settings\/generation$/);
-			await expect(page.getByRole('heading', { name: SETTINGS_SECTION, level: 1 })).toBeVisible();
+			await expect(page.getByRole('heading', { name: 'Generation', level: 1 })).toBeVisible();
 		}
 	);
 });

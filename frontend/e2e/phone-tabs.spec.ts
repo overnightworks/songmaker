@@ -136,7 +136,7 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		}) => {
 			await page.goto(HOME_PATH);
 			if (destination === 'Settings section') {
-				await openSettingsSection(page, 'mobile', 'Voices');
+				await openSettingsSection(page, 'mobile', words['settingsSections.voices']);
 				await expect(page).toHaveURL(/\/settings\/voices$/);
 			} else await page.goto('/loras');
 			await expectCurrent(page, null);
@@ -160,7 +160,9 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		).toBeVisible();
 		await expect(tabs(page)).toHaveCount(0);
 		const search = await openSearchSheet(page);
-		await search.getByRole('combobox', { name: words['railSearch.field'] }).fill('Voices');
+		await search
+			.getByRole('combobox', { name: words['railSearch.field'] })
+			.fill(words['settingsSections.voices']);
 		await search
 			.getByRole('group', { name: words['railSearch.groupPages'] })
 			.getByRole('option', { name: /^Voices\b/ })

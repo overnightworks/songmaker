@@ -72,7 +72,7 @@ import {
 
 const PLAY_PLAYLIST_LABEL = collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist');
 
-const SETTINGS_SECTION = 'Voices';
+const SETTINGS_SECTION = words['settingsSections.voices'];
 const SETTINGS_SECTION_HEADING = 'My Voices';
 const SONG_ADDRESS = /\/album\/[^/]+\/[^/]+/;
 // The base library's songs each carry one seeded take, their first.
