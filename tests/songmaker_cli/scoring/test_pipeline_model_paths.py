@@ -10,7 +10,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from songmaker_cli.db.models import Generation
+from songmaker_cli.jobs.scoring import run_scoring_job
 from songmaker_cli.scoring import audiobox_aesthetics, text_accuracy
+from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import (
     SCORING_AUDIOBOX_CHECKPOINT_SETTING,
     SCORING_WHISPER_MODEL_DIR_SETTING,
@@ -122,6 +125,60 @@ def test_scorer_with_a_missing_path_fails_instead_of_asking_the_hub(
     with scorer.stub_library() as library, pytest.raises(FileNotFoundError, match=scorer.setting):
         scorer.score(tmp_path / "take.mp3", config=scorer.config(tmp_path / "absent"))
 
+    library.assert_not_called()
+
+
+def _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path: Path) -> PipelineConfig:
+    with seeded_db() as session:
+        session.add(
+            Generation(
+                id="g1", song_id="s1", version_id="v1", generation_number=1,
+                mp3_path="user1/g1.mp3", seed=42,
+            ),
+        )
+        session.commit()
+    audio_dir = tmp_path / "audio"
+    (audio_dir / "user1" / "g1.mp3").write_bytes(b"fake-mp3")
+    captured: dict[str, PipelineConfig] = {}
+
+    def capture_score(mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None):
+        captured["config"] = config
+        return SongScores()
+
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process", return_value=MagicMock(score=capture_score),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+    return captured["config"]
+
+
+@MODEL_SCORERS
+def test_scoring_job_passes_the_configured_path_to_the_scorers(
+    scorer: ModelScorer, seeded_db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = scorer.make_path(tmp_path)
+    monkeypatch.setenv(scorer.setting, str(path))
+
+    config = _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path)
+
+    assert getattr(config, scorer.config_field) == path
+
+
+@MODEL_SCORERS
+@pytest.mark.parametrize("configured", [None, ""], ids=["unset", "empty"])
+def test_scoring_job_without_a_configured_path_leaves_the_scorers_to_fail_naming_the_setting(
+    scorer: ModelScorer, seeded_db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    configured: str | None,
+) -> None:
+    if configured is None:
+        monkeypatch.delenv(scorer.setting, raising=False)
+    else:
+        monkeypatch.setenv(scorer.setting, configured)
+
+    config = _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path)
+
+    with scorer.stub_library() as library, pytest.raises(ValueError, match=scorer.setting):
+        scorer.score(tmp_path / "take.mp3", config=config)
     library.assert_not_called()
 
 

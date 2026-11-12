@@ -66,11 +66,6 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
-from songmaker_cli.scoring.pipeline import (
-    SCORING_AUDIOBOX_CHECKPOINT_SETTING,
-    SCORING_WHISPER_MODEL_DIR_SETTING,
-    PipelineConfig,
-)
 
 
 async def _seed_healthy_worker(redis, db_factory, worker_id: str = "w1") -> None:
@@ -2189,68 +2184,6 @@ def test_scoring_job_uses_configured_per_scorer_budgets(
     assert config.timeout_for("text_accuracy") == 600
     assert config.timeout_for("silence") == 45
     assert config.pipeline_timeout > 600
-
-
-def _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path: Path) -> PipelineConfig:
-    _seed_generation(seeded_db)
-    audio_dir = _audio_dir_with_mp3(tmp_path)
-    captured: dict = {}
-
-    def _capture_score(
-        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None
-    ):
-        captured["config"] = config
-        return _scoring_result()
-
-    with patch(
-        "songmaker_cli.jobs.get_scorer_process",
-        return_value=MagicMock(score=_capture_score),
-    ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
-    return captured["config"]
-
-
-MODEL_PATH_SETTINGS = pytest.mark.parametrize(
-    ("setting", "config_field", "resolve_path"),
-    [
-        (SCORING_WHISPER_MODEL_DIR_SETTING, "whisper_model_dir", PipelineConfig.whisper_model_path),
-        (
-            SCORING_AUDIOBOX_CHECKPOINT_SETTING,
-            "audiobox_checkpoint",
-            PipelineConfig.audiobox_checkpoint_path,
-        ),
-    ],
-    ids=["whisper", "audiobox"],
-)
-
-
-@MODEL_PATH_SETTINGS
-def test_scoring_job_passes_the_configured_model_path_to_the_scorers(
-    seeded_db, tmp_path: Path, monkeypatch, setting: str, config_field: str, resolve_path,
-) -> None:
-    configured = tmp_path / "model"
-    monkeypatch.setenv(setting, str(configured))
-
-    config = _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path)
-
-    assert getattr(config, config_field) == configured
-
-
-@MODEL_PATH_SETTINGS
-@pytest.mark.parametrize("configured", [None, ""], ids=["unset", "empty"])
-def test_scoring_job_without_a_configured_model_path_leaves_the_scorers_to_fail_naming_it(
-    seeded_db, tmp_path: Path, monkeypatch, setting: str, config_field: str, resolve_path,
-    configured: str | None,
-) -> None:
-    if configured is None:
-        monkeypatch.delenv(setting, raising=False)
-    else:
-        monkeypatch.setenv(setting, configured)
-
-    config = _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path)
-
-    with pytest.raises(ValueError, match=setting):
-        resolve_path(config)
 
 
 def test_scoring_job_generation_not_found(seeded_db, tmp_path: Path) -> None:
