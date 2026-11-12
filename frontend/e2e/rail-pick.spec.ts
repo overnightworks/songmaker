@@ -56,7 +56,7 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 
 		await expect(pickedRow).toContainText(words['rail.trackTakesPick'](1));
 		await expect(unpickedRow).toContainText(words['rail.trackTakes'](1));
-		await expect(unpickedRow).not.toContainText('· pick');
+		await expect(unpickedRow).not.toContainText(words['rail.trackTakesPick'](1));
 
 		const detailLoaded = page.waitForResponse(
 			(response) =>
@@ -80,7 +80,7 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 		).toBeVisible();
 		await expect(page).toHaveURL(/\/album\/[^/]+\/[^/]+/);
 		await expect(pickedRow).toContainText(words['rail.trackTakesPick'](1));
-		await expect(unpickedRow).not.toContainText('· pick');
+		await expect(unpickedRow).not.toContainText(words['rail.trackTakesPick'](1));
 	} finally {
 		await archiveOwnedAlbum(page.request, album.id);
 	}
