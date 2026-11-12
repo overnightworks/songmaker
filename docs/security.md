@@ -729,7 +729,7 @@ Every service runs under Docker's default AppArmor and seccomp profiles, and
 Docker masks its system paths. `songmaker-web` and the three workers drop every
 capability and set `no-new-privileges:true`. The web image's code, scripts,
 installed packages and frontend build belong to root: the app's user cannot
-write them and writes only the audio and queue-stream data paths.
+write them.
 
 ### Trust model and accepted risks
 
