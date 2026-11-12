@@ -902,6 +902,7 @@ def test_s5_generation_job_reload_unavailable(
     completed,
     load_fails,
     tmp_path,
+    locked_ffmpeg,
 ):
     """S5-A/B/D, L3/L6/L10: Reload failure preserves completed takes and frees occupancy."""
     from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
@@ -1761,7 +1762,7 @@ def test_a_take_never_shows_an_earlier_phase_once_writing_began(
     ]
 
 
-def test_s8_cancel_after_oom(seeded_db, generation_worker_peer, tmp_path):
+def test_s8_cancel_after_oom(seeded_db, generation_worker_peer, tmp_path, locked_ffmpeg):
     """S8-F: Cancellation clears OOM, preserves a saved take, blocks writes and take 4."""
 
     async def exercise():
