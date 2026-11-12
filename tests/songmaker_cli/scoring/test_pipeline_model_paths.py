@@ -141,7 +141,9 @@ def _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path: Path) -> Pipe
     (audio_dir / "user1" / "g1.mp3").write_bytes(b"fake-mp3")
     captured: dict[str, PipelineConfig] = {}
 
-    def capture_score(mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None):
+    def capture_score(
+        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None,
+    ):
         captured["config"] = config
         return SongScores()
 
