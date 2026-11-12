@@ -6,7 +6,6 @@ import {
 	PLAYLIST_API,
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
-import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
@@ -24,7 +23,7 @@ import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_SHARE_LABEL
 } from '../src/lib/constants/collection-menu';
-import { playlistEntryOverflowLabel, PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
+import { playlistEntryOverflowLabel } from '../src/lib/constants/playlist';
 import { words } from '../src/lib/words/en';
 import {
 	collectionActionLabel,
@@ -73,6 +72,7 @@ import {
 const PLAY_PLAYLIST_LABEL = collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist');
 
 const SETTINGS_SECTION = words['settingsSections.voices'];
+const LIBRARY_HEADING = { name: words['places.library'] };
 const SETTINGS_SECTION_HEADING = 'My Voices';
 const SONG_ADDRESS = /\/album\/[^/]+\/[^/]+/;
 // The base library's songs each carry one seeded take, their first.
@@ -505,7 +505,7 @@ async function openSeededPlaylist(
 	const playlist = await seedPlaylist(request, readSeededLibrary());
 	const surface = workspace(page);
 	await page.goto('/playlists');
-	const wall = surface.getByRole('heading', { name: PLAYLISTS_PAGE_LABEL });
+	const wall = surface.getByRole('heading', { name: words['places.playlists'] });
 	await expect(wall).toBeVisible();
 	await wallTileNamed(page, playlist.title).click();
 	const playlistHeading = surface.getByRole('heading', { name: playlist.title });
@@ -619,7 +619,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 	}, testInfo) => {
 		const guard = new FlowGuard(page);
 		await page.goto(LIBRARY_PATH);
-		const wall = workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL });
+		const wall = workspace(page).getByRole('heading', LIBRARY_HEADING);
 		await expect(wall).toBeVisible();
 		await openVoicesSettings(page, shellOf(testInfo));
 
@@ -770,7 +770,7 @@ for (const gapMs of [30, 0]) {
 		const guard = new FlowGuard(page);
 		const library = readSeededLibrary();
 		const surface = workspace(page);
-		const wall = surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL });
+		const wall = surface.getByRole('heading', LIBRARY_HEADING);
 		const album = surface.getByRole('heading', { name: library.albumTitle });
 		await page.goto(LIBRARY_PATH);
 		await wallTiles(page)
@@ -825,7 +825,7 @@ test('two Backs in one task from Settings over a song show the album at its addr
 	const library = readSeededLibrary();
 	const shell = shellOf(testInfo);
 	const surface = workspace(page);
-	const wall = surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL });
+	const wall = surface.getByRole('heading', LIBRARY_HEADING);
 	const album = surface.getByRole('heading', { name: library.albumTitle });
 	const song = songBar(page, shell).getByRole('heading', { name: library.pickedSongTitle });
 	await page.goto(LIBRARY_PATH);
@@ -1057,7 +1057,7 @@ test(
 	async ({ page }) => {
 		const guard = new FlowGuard(page);
 		await page.goto(LIBRARY_PATH);
-		const wall = workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL });
+		const wall = workspace(page).getByRole('heading', LIBRARY_HEADING);
 		await expect(wall).toBeVisible();
 		await accountCircle(page).click();
 		await expect(accountMenu(page)).toBeVisible();
@@ -1078,7 +1078,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 
 	async function openVoicesOverTheWall(page: Page, shell: Shell): Promise<void> {
 		await page.goto(LIBRARY_PATH);
-		await expect(workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
+		await expect(workspace(page).getByRole('heading', LIBRARY_HEADING)).toBeVisible();
 		await openVoicesSettings(page, shell);
 	}
 

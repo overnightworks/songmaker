@@ -40,11 +40,12 @@
 		libraryPlaceOrder,
 		readLastPlayed
 	} from '#lib/stores/libraryOrder.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
+	import type { Key } from '#lib/words/en.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import { activityTimeLabel, songCountLabel } from '#lib/utils/format.ts';
 	import {
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
-		LIBRARY_PAGE_LABEL,
 		LIBRARY_WALL_EMPTY,
 		wallHeadingLabel,
 		LIBRARY_WALL_ORDER_GROUP_LABEL,
@@ -54,7 +55,6 @@
 	} from '#lib/constants/library.ts';
 	import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
 	import {
-		PLAYLISTS_PAGE_LABEL,
 		PLAYLISTS_WALL_EMPTY,
 		PLAYLISTS_WALL_ORDER_GROUP_LABEL,
 		LIBRARY_PLAYLISTS_ERROR,
@@ -81,7 +81,7 @@
 	// playlists alone (#1354 rule 7; frames D1 and D3).
 	type WallKind = 'library' | 'playlists';
 	type WallCopy = {
-		pageLabel: string;
+		pageKey: Key;
 		orderGroup: string;
 		loading: string;
 		failed: string;
@@ -91,7 +91,7 @@
 
 	const WALL_COPY: Record<WallKind, WallCopy> = {
 		library: {
-			pageLabel: LIBRARY_PAGE_LABEL,
+			pageKey: 'places.library',
 			orderGroup: LIBRARY_WALL_ORDER_GROUP_LABEL,
 			loading: 'Loading library…',
 			failed: 'Could not load library.',
@@ -99,7 +99,7 @@
 			emptyIcon: 'library'
 		},
 		playlists: {
-			pageLabel: PLAYLISTS_PAGE_LABEL,
+			pageKey: 'places.playlists',
 			orderGroup: PLAYLISTS_WALL_ORDER_GROUP_LABEL,
 			loading: LIBRARY_PLAYLISTS_LOADING,
 			failed: LIBRARY_PLAYLISTS_ERROR,
@@ -111,6 +111,7 @@
 	let { kind }: { kind: WallKind } = $props();
 
 	const copy = $derived(WALL_COPY[kind]);
+	const pageName = $derived(pageText(copy.pageKey));
 	const albums = $derived($albumList);
 	const playlists = $derived($playlistList);
 	const currentCollection = $derived($openCollection);
@@ -311,11 +312,9 @@
 	<div class="wall-titlebar">
 		<h1
 			class="wall-title"
-			aria-label={headCount === undefined
-				? copy.pageLabel
-				: wallHeadingLabel(copy.pageLabel, headCount)}
+			aria-label={headCount === undefined ? pageName : wallHeadingLabel(pageName, headCount)}
 		>
-			{copy.pageLabel}
+			{pageName}
 			{#if headCount !== undefined}<span class="wall-count">{headCount}</span>{/if}
 		</h1>
 		{@render orderSwitch()}

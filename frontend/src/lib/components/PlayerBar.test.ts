@@ -8,7 +8,7 @@ import {
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '#lib/api/types.ts';
-import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
+import { words } from '#lib/words/en.ts';
 import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
 import { REDUCED_MOTION_MEDIA, MINI_PLAYER_WITHOUT_COVER_MEDIA } from '#lib/constants/media.ts';
 import {
@@ -266,7 +266,7 @@ describe('PlayerBar stream boundaries', () => {
 		expect(audioPlayer.current).toBeNull();
 		const play = target.querySelector<HTMLButtonElement>('button[aria-label="Play"]');
 		expect(play?.disabled).toBe(false);
-		expect(target.querySelector('.track-title')?.textContent).toBe(LIBRARY_PAGE_LABEL);
+		expect(target.querySelector('.track-title')?.textContent).toBe(words['places.library']);
 		play?.click();
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
@@ -1265,7 +1265,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		await mountBar();
 
 		expect(openTargets()).toHaveLength(0);
-		expect(bar().querySelector('.track-title')?.textContent).toBe(LIBRARY_PAGE_LABEL);
+		expect(bar().querySelector('.track-title')?.textContent).toBe(words['places.library']);
 	});
 });
 

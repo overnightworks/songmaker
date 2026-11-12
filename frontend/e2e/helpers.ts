@@ -10,7 +10,6 @@ import {
 	type TestInfo
 } from '@playwright/test';
 import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
-import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { APP_NAME } from '../src/lib/constants/app';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
@@ -326,9 +325,8 @@ export function appBar(page: Page): Locator {
 // lands as one change that sets the wall back to the scroll the app last
 // heard of, so a scroll made before it can be undone by it.
 export async function expectLibraryWallLoaded(page: Page): Promise<void> {
-	await expect(
-		workspace(page).getByRole('heading', { name: new RegExp(`^${LIBRARY_PAGE_LABEL} · \\d+$`) })
-	).toBeVisible();
+	const head = new RegExp(`^${words['places.library']} · \\d+$`);
+	await expect(workspace(page).getByRole('heading', { name: head })).toBeVisible();
 }
 
 export function wallBody(page: Page): Locator {

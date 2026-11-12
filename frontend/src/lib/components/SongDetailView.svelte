@@ -76,7 +76,7 @@
 	} from '#lib/stores/recipe.ts';
 	import { setGenerationActions, takeActionsFor } from '#lib/contexts/generation-actions.ts';
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
-	import { LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
 	import {
 		SONG_COVER_ALT_TYPE,
@@ -179,7 +179,7 @@
 	const breadcrumbItems = $derived(
 		song
 			? [
-					{ label: LIBRARY_PAGE_LABEL, onclick: () => void openLibraryWall() },
+					{ label: pageText('places.library'), onclick: () => void openLibraryWall() },
 					{
 						label: song.album_title,
 						onclick: collection ? () => openCollectionEntry(collection) : undefined

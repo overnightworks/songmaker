@@ -17,7 +17,6 @@ import { SIGN_IN_NEXT_PARAM } from '../src/lib/constants/auth';
 import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Page } from './coverage-test';
 import { LIBRARY_NEW_MENU_LABEL } from '../src/lib/constants/library';
-import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { words } from '../src/lib/words/en';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
@@ -57,7 +56,7 @@ const SETTINGS_SECTION = words['settingsSections.voices'];
 const SETTINGS_SECTION_URL = /\/settings\/voices$/;
 const SETTINGS_LIST_URL = /\/settings$/;
 const PLAYLISTS_URL = /\/playlists$/;
-const PLAYLISTS_HEADING = new RegExp(`^${PLAYLISTS_PAGE_LABEL}( · \\d+)?$`);
+const PLAYLISTS_HEADING = new RegExp(`^${words['places.playlists']}( · \\d+)?$`);
 const SAME_DOCUMENT_KEY = 'sameDocument';
 const HISTORY_WRITES_KEY = 'historyWrites';
 const WALL_SIGHTINGS_KEY = 'wallSightings';
