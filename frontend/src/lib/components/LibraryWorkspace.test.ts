@@ -185,7 +185,7 @@ describe('the library workspace', () => {
 		const target = renderWorkspace();
 		await tick();
 
-		expect(target.querySelector('.library-home h1')?.textContent).toBe('Home');
+		expect(target.querySelector('.library-home h1')?.textContent).toBe(words['places.home']);
 		expect(
 			[...target.querySelectorAll('section[aria-label]')].map((region) =>
 				region.getAttribute('aria-label')

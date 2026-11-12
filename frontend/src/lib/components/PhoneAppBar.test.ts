@@ -1,4 +1,3 @@
-import { backLabel } from '#lib/routes/pageBack.ts';
 import { ACCOUNT_MENU_LABEL } from '#lib/constants/auth.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +13,6 @@ import {
 } from '#lib/test-utils/hitbox.ts';
 import { APP_NAME } from '#lib/constants/app.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 import { words } from '#lib/words/en.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
@@ -233,7 +231,7 @@ describe('PhoneAppBar', () => {
 		expect(target.querySelector('.brand')).toBeNull();
 		expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).toBeNull();
 		for (const name of [
-			backLabel('Cold Harbour'),
+			words['pageBack.backTo']({ page: 'Cold Harbour' }),
 			words['phoneAppBar.searchOpen'],
 			'Share song',
 			'Song menu'
@@ -357,13 +355,13 @@ describe('PhoneAppBar', () => {
 			page: 'an album opened from the Library',
 			opened: '/album/a1',
 			from: LIBRARY_ROUTE_PATH,
-			name: 'Library'
+			name: words['places.library']
 		},
 		{
 			page: 'an album opened from Home',
 			opened: '/album/a1',
 			from: HOME_ROUTE_PATH,
-			name: HOME_PAGE_LABEL
+			name: words['places.home']
 		},
 		{
 			page: 'an album opened from another album',
@@ -387,26 +385,26 @@ describe('PhoneAppBar', () => {
 			page: 'a Settings section opened from the Settings list',
 			opened: '/settings/voices',
 			from: '/settings',
-			name: 'Settings'
+			name: words['places.settings']
 		},
 		{
 			page: 'a playlist opened from the Playlists page',
 			opened: '/playlist/night-drive',
 			from: '/playlists',
-			name: 'Playlists'
+			name: words['places.playlists']
 		},
-		{ page: 'an album with nothing before it', opened: '/album/a1', name: 'Library' },
+		{ page: 'an album with nothing before it', opened: '/album/a1', name: words['places.library'] },
 		{
 			page: 'a playlist with nothing before it',
 			opened: '/playlist/night-drive',
-			name: 'Playlists'
+			name: words['places.playlists']
 		},
 		{
 			page: 'a Settings section with nothing before it',
 			opened: '/settings/voices',
-			name: 'Settings'
+			name: words['places.settings']
 		},
-		{ page: 'Settings with nothing before it', opened: '/settings', name: 'Library' }
+		{ page: 'Settings with nothing before it', opened: '/settings', name: words['places.library'] }
 	])(
 		'1354_rule_25: names ‹ on $page after $name, beside search and without the account circle',
 		async ({ opened, from, name }) => {
@@ -414,9 +412,9 @@ describe('PhoneAppBar', () => {
 			const target = renderBar();
 			await tick();
 
-			const back = getByRoleButton(target, backLabel(name));
+			const back = getByRoleButton(target, words['pageBack.backTo']({ page: name }));
 			expect(back.textContent?.trim()).toBe(name);
-			expectFrequentHitbox(back, backLabel(name));
+			expectFrequentHitbox(back, words['pageBack.backTo']({ page: name }));
 			expect(queryButton(target, words['phoneAppBar.searchOpen'])).not.toBeNull();
 			expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).toBeNull();
 			expect(target.querySelector('.brand')).toBeNull();
@@ -425,14 +423,14 @@ describe('PhoneAppBar', () => {
 
 	it.each([
 		{ from: '/album/a2' as const, name: 'Cold Harbour' },
-		{ from: '/' as const, name: HOME_PAGE_LABEL }
+		{ from: '/' as const, name: words['places.home'] }
 	])('1354_rule_32: song ‹ traverses to $name without adding an entry', async ({ from, name }) => {
 		await standOn('/album/a2/quiet-wind', from);
 		phoneAppBar.set(songBar());
 		const target = renderBar();
 		await tick();
 		const length = history.length;
-		getByRoleButton(target, backLabel(name)).click();
+		getByRoleButton(target, words['pageBack.backTo']({ page: name })).click();
 		await vi.waitFor(() => expect(location.pathname).toBe(from));
 		expect(history).toHaveLength(length);
 	});
@@ -440,14 +438,16 @@ describe('PhoneAppBar', () => {
 	it('renames ‹ when history moves onto another page', async () => {
 		const target = renderBar();
 		await tick();
-		expect(queryButton(target, backLabel('Library'))).toBeNull();
+		expect(
+			queryButton(target, words['pageBack.backTo']({ page: words['places.library'] }))
+		).toBeNull();
 
 		pushEntry('/album/a2', {});
 		await tick();
 		pushEntry('/album/a1', {});
 		await tick();
 
-		expect(queryButton(target, backLabel('Cold Harbour'))).not.toBeNull();
+		expect(queryButton(target, words['pageBack.backTo']({ page: 'Cold Harbour' }))).not.toBeNull();
 	});
 
 	it('steps back on ‹ onto the page below, whose ‹ names the page below it', async () => {
@@ -461,7 +461,7 @@ describe('PhoneAppBar', () => {
 
 		expect(location.pathname).toBe('/album/a2');
 		expect(history).toHaveLength(tabLength);
-		expect(backName(target)).toBe(backLabel('Library'));
+		expect(backName(target)).toBe(words['pageBack.backTo']({ page: words['places.library'] }));
 	});
 });
 

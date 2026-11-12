@@ -185,7 +185,12 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 			await writeRegion(page).locator(selector).first().click();
 			await expect(page).toHaveURL(new RegExp(`${editorPath}$`));
 			if (shellOf(testInfo) === 'mobile') {
-				await appBar(page).getByRole('button', { name: 'Back to Home', exact: true }).click();
+				await appBar(page)
+					.getByRole('button', {
+						name: words['pageBack.backTo']({ page: words['places.home'] }),
+						exact: true
+					})
+					.click();
 			} else {
 				await openHome(page, 'desktop');
 			}

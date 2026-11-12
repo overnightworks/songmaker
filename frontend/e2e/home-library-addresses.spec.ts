@@ -19,7 +19,6 @@ import { expect, test, type Page } from './coverage-test';
 import { LIBRARY_NEW_MENU_LABEL, LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
-import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
 import { words } from '../src/lib/words/en';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
@@ -66,7 +65,7 @@ const WALL_SIGHTINGS_KEY = 'wallSightings';
 const WALL_SELECTOR = '.library-wall';
 
 const homeHeading = (page: Page) =>
-	workspace(page).getByRole('heading', { name: HOME_PAGE_LABEL, exact: true });
+	workspace(page).getByRole('heading', { name: words['places.home'], exact: true });
 const newButton = (page: Page) =>
 	workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true });
 const listenRegion = (page: Page) => workspace(page).getByRole('region', LISTEN_REGION);
@@ -575,7 +574,7 @@ const BACK_ARROW_CELLS: readonly {
 }[] = [
 	{
 		origin: 'Home',
-		name: HOME_PAGE_LABEL,
+		name: words['places.home'],
 		openAlbum: async (page, shell, library) => {
 			await HOME.open(page, shell, library);
 			await openAlbumFromHome(page, shell, library.albumTitle);
@@ -614,7 +613,7 @@ for (const cell of BACK_ARROW_CELLS) {
 			await expectAlbumShown(page, library);
 
 			await appBar(page)
-				.getByRole('button', { name: `Back to ${cell.name}`, exact: true })
+				.getByRole('button', { name: words['pageBack.backTo']({ page: cell.name }), exact: true })
 				.click();
 
 			await cell.returnsTo.expectStands(page, 'mobile', library);

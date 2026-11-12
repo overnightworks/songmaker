@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import HomeWrite from './HomeWrite.svelte';
 	import HomeListen from './HomeListen.svelte';
 	import NewPlaceMenu from './NewPlaceMenu.svelte';
@@ -7,7 +7,7 @@
 
 <div class="library-home">
 	<div class="home-titlebar">
-		<h1 class="home-title">{HOME_PAGE_LABEL}</h1>
+		<h1 class="home-title">{pageText('places.home')}</h1>
 		<NewPlaceMenu />
 	</div>
 	<HomeListen />

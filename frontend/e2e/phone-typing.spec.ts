@@ -35,6 +35,7 @@ import {
 	FlowGuard,
 	loseNetwork,
 	offlineStrip,
+	BACK_BUTTON_NAME,
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	workspace
@@ -382,7 +383,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await expect(
 			appBar(page).getByRole('button', { name: words['phoneAppBar.searchOpen'], exact: true })
 		).toBeVisible();
-		await expect(appBar(page).getByRole('button', { name: /^Back to / })).toBeVisible();
+		await expect(appBar(page).getByRole('button', { name: BACK_BUTTON_NAME })).toBeVisible();
 		await expect(page.getByRole('contentinfo')).toBeVisible();
 		await expect(page.getByRole('navigation', { name: words['phoneTabs.nav'] })).toBeVisible();
 

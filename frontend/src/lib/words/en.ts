@@ -81,6 +81,11 @@ export type Words = {
     readonly "railSearch.kindPlaylist": string;
     readonly "railSearch.kindPage": string;
     readonly "railSearch.songCount": (count: number) => string;
+    readonly "pageBack.backTo": (gaps: { readonly page: string }) => string;
+    readonly "pageBack.album": string;
+    readonly "pageBack.playlist": string;
+    readonly "pageBack.song": string;
+    readonly "pageBack.previousPage": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -181,5 +186,10 @@ export const words: Words = {
         many: numberFormat.format(count) + " songs",
         other: numberFormat.format(count) + " songs",
     })[pluralRules.select(count)],
+    "pageBack.backTo": (gaps: { readonly page: string }) => "Back to " + gaps.page,
+    "pageBack.album": "Album",
+    "pageBack.playlist": "Playlist",
+    "pageBack.song": "Song",
+    "pageBack.previousPage": "Previous page",
 };
 export type Key = keyof Words;

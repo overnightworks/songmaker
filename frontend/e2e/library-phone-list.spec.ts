@@ -34,6 +34,8 @@ import {
 	type PhoneLibraryFixture
 } from './seed';
 
+const LIBRARY_BACK_NAME = words['pageBack.backTo']({ page: words['places.library'] });
+
 let guard: FlowGuard;
 let fixture: PhoneLibraryFixture;
 let account: APIRequestContext;
@@ -130,7 +132,7 @@ test(
 		await expect(
 			workspace(page).getByRole('heading', { name: empty.title, exact: true })
 		).toBeVisible();
-		await page.getByRole('button', { name: 'Back to Library', exact: true }).click();
+		await page.getByRole('button', { name: LIBRARY_BACK_NAME, exact: true }).click();
 		await expect(page).toHaveURL(LIBRARY_URL);
 
 		const play = row(page, playable.title).getByRole('button', {
@@ -200,7 +202,7 @@ test(
 			.poll(async () => (await playingAudioState(page)).time)
 			.toBeGreaterThan(paused.time + 0.2);
 		await row(page, empty.title).getByRole('button').click();
-		await page.getByRole('button', { name: 'Back to Library', exact: true }).click();
+		await page.getByRole('button', { name: LIBRARY_BACK_NAME, exact: true }).click();
 		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toBeVisible();
 
 		await row(page, long.title).scrollIntoViewIfNeeded();
@@ -452,7 +454,7 @@ for (const cell of RETURN_CELLS) {
 			).toBeVisible();
 
 			if (cell.via === 'back') await page.goBack();
-			else await page.getByRole('button', { name: 'Back to Library', exact: true }).click();
+			else await page.getByRole('button', { name: LIBRARY_BACK_NAME, exact: true }).click();
 
 			await expect(page).toHaveURL(LIBRARY_URL);
 			const lit = workspace(page).locator('.library-row.lit');

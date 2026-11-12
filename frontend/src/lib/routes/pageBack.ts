@@ -1,6 +1,4 @@
 import type { AlbumItem, PlaylistItem, SongItem } from '#lib/api/types.ts';
-import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
-import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 import {
 	albumRoutePath,
 	HOME_ROUTE_PATH,
@@ -14,6 +12,7 @@ import {
 } from '#lib/routes/addresses.ts';
 import type { StandingPage } from '#lib/routes/standingAddress.ts';
 import { visibleRailSearchPages } from '#lib/stores/railSearch.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 
 const LIBRARY_HREF = LIBRARY_ROUTE_PATH;
 const PLAYLISTS_HREF = PLAYLISTS_ROUTE_PATH;
@@ -21,13 +20,9 @@ export const SETTINGS_HREF = '/settings';
 // Home and the lists the app opens on, which carry the brand and the account
 // circle instead of ‹ wherever they were opened from.
 const PLACE_LISTS: ReadonlySet<string> = new Set([HOME_ROUTE_PATH, LIBRARY_HREF, PLAYLISTS_HREF]);
-const ALBUM_NAME = 'Album';
-const PLAYLIST_NAME = 'Playlist';
-const SONG_NAME = 'Song';
-const PREVIOUS_PAGE_NAME = 'Previous page';
 
-export function backLabel(pageName: string): string {
-	return `Back to ${pageName}`;
+export function backLabel(page: string): string {
+	return pageText('pageBack.backTo', { page });
 }
 
 interface LibraryTitles {
@@ -51,25 +46,29 @@ export function listOfPage(
 // gives it, an album, playlist or song by its title, or by its kind while
 // the library has not loaded it.
 function pageName(pathname: string, titles: LibraryTitles): string {
-	if (pathname === HOME_ROUTE_PATH) return HOME_PAGE_LABEL;
-	if (pathname === SETTINGS_HREF) return RAIL_SETTINGS_LABEL;
+	if (pathname === HOME_ROUTE_PATH) return pageText('places.home');
+	if (pathname === SETTINGS_HREF) return pageText('places.settings');
 	const appPage = visibleRailSearchPages(true).find((page) => page.href === pathname);
 	if (appPage) return appPage.label;
 	switch (libraryRouteShape(pathname)) {
 		case 'album':
 			return (
-				titles.albums.find((album) => albumRoutePath(album.id) === pathname)?.title ?? ALBUM_NAME
+				titles.albums.find((album) => albumRoutePath(album.id) === pathname)?.title ??
+				pageText('pageBack.album')
 			);
 		case 'playlist':
 			return (
 				titles.playlists.find((playlist) => playlistRoutePath(playlist.slug) === pathname)?.title ??
-				PLAYLIST_NAME
+				pageText('pageBack.playlist')
 			);
 		case 'album-song':
 		case 'album-song-take':
-			return titles.songs.find((song) => isSongAddress(pathname, song))?.title ?? SONG_NAME;
+			return (
+				titles.songs.find((song) => isSongAddress(pathname, song))?.title ??
+				pageText('pageBack.song')
+			);
 		default:
-			return PREVIOUS_PAGE_NAME;
+			return pageText('pageBack.previousPage');
 	}
 }
 
