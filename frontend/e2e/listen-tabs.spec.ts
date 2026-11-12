@@ -5,14 +5,12 @@
 import { expect, test as base, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import { COWRITER_COMPOSER_PLACEHOLDER } from '../src/lib/constants/cowriter';
-import { NEW_SONG_ROW_LABEL, NEW_SONG_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import { LIBRARY_SHARES_COPY_LABEL } from '../src/lib/constants/library';
 import {
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
-import { newSongCardLabel } from '../src/lib/constants/album';
 import { RECIPE_PANEL_LABEL } from '../src/lib/constants/recipe';
 import { sameOriginHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, readSeededLibrary, runMarker } from './seed';
@@ -160,9 +158,11 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 	async function createSongInUi(page: Page, album: OwnedAlbum): Promise<string> {
 		await page.goto(`/album/${album.id}`);
 		const surface = workspace(page);
-		await surface.getByRole('button', { name: NEW_SONG_ROW_LABEL, exact: true }).click();
-		const card = surface.getByRole('form', { name: newSongCardLabel(album.title) });
-		await card.getByLabel(NEW_SONG_TITLE_LABEL).fill('Fresh recipe song');
+		await surface.getByRole('button', { name: words['newSong.rowLabel'], exact: true }).click();
+		const card = surface.getByRole('form', {
+			name: words['newSong.cardLabel']({ album: album.title })
+		});
+		await card.getByLabel(words['newSong.titleLabel']).fill('Fresh recipe song');
 		const created = page.waitForResponse(
 			(response) => response.url().endsWith('/api/songs') && response.request().method() === 'POST'
 		);

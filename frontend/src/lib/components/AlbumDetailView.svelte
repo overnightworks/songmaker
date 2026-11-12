@@ -57,8 +57,8 @@
 		ALBUM_YEAR_MAX,
 		ALBUM_YEAR_MIN
 	} from '#lib/constants/album.ts';
-	import { NEW_SONG_ROW_LABEL } from '#lib/constants/new-collection.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { albumHasPlayableTake, albumSongsSettled, songPlayability } from '#lib/utils/playable.ts';
 	import type { SongItem } from '#lib/api/types.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
@@ -434,7 +434,7 @@
 							onclick={startNewSong}
 						>
 							<Icon name="plus" size={16} />
-							<span class="new-song-label">{NEW_SONG_ROW_LABEL}</span>
+							<span class="new-song-label">{pageText('newSong.rowLabel')}</span>
 						</button>
 					</div>
 				{/if}
