@@ -39,10 +39,6 @@ export const ALBUM_YEAR_MAX = 2100;
 export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
 export const PLACE_LINE_SEPARATOR = ' · ';
 
-export function newSongCardLabel(albumTitle: string): string {
-	return `New song in ${albumTitle}`;
-}
-
 export function albumCoverSuggestionAlt(title: string): string {
 	return `Cover suggestion for ${title}`;
 }

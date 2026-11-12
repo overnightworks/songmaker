@@ -20,12 +20,6 @@ import {
 	type Page,
 	type Route
 } from './coverage-test';
-import { newSongCardLabel } from '../src/lib/constants/album';
-import {
-	NEW_SONG_CLOSE_LABEL,
-	NEW_SONG_ROW_LABEL,
-	NEW_SONG_TITLE_LABEL
-} from '../src/lib/constants/new-collection';
 import {
 	boundingBoxes,
 	sameOriginHeaders,
@@ -278,7 +272,7 @@ async function openNewCardFromMenu(page: Page, kindLabel: string): Promise<void>
 }
 
 function newSongRow(page: Page): Locator {
-	return workspace(page).getByRole('button', { name: NEW_SONG_ROW_LABEL, exact: true });
+	return workspace(page).getByRole('button', { name: words['newSong.rowLabel'], exact: true });
 }
 
 interface CreateCard {
@@ -312,8 +306,10 @@ const CREATE_CARDS: CreateCard[] = [
 		address: (library) => `/album/${library.albumId}`,
 		open: (page) => newSongRow(page).click(),
 		form: (page, library) =>
-			workspace(page).getByRole('form', { name: newSongCardLabel(library.albumTitle) }),
-		titleLabel: NEW_SONG_TITLE_LABEL,
+			workspace(page).getByRole('form', {
+				name: words['newSong.cardLabel']({ album: library.albumTitle })
+			}),
+		titleLabel: words['newSong.titleLabel'],
 		foldsFocusTo: newSongRow
 	}
 ];
@@ -488,9 +484,13 @@ test(
 		try {
 			await page.goto(`/album/${albumId}`);
 			await newSongRow(page).click();
-			const card = workspace(page).getByRole('form', { name: newSongCardLabel(albumTitle) });
-			const heading = card.getByText(newSongCardLabel(albumTitle), { exact: true });
-			const close = card.getByRole('button', { name: NEW_SONG_CLOSE_LABEL });
+			const card = workspace(page).getByRole('form', {
+				name: words['newSong.cardLabel']({ album: albumTitle })
+			});
+			const heading = card.getByText(words['newSong.cardLabel']({ album: albumTitle }), {
+				exact: true
+			});
+			const close = card.getByRole('button', { name: words['newSong.close'] });
 
 			await expect(close).toBeInViewport({ ratio: 1 });
 			const [headingBox, closeBox, cardBox] = await boundingBoxes(heading, close, card);

@@ -690,3 +690,31 @@ msgstr ""
 msgctxt "newPlaylist.refused"
 msgid "The playlist could not be created."
 msgstr ""
+
+msgctxt "newSong.rowLabel"
+msgid "New song"
+msgstr ""
+
+msgctxt "newSong.cardLabel"
+msgid "New song in {album}"
+msgstr ""
+
+msgctxt "newSong.close"
+msgid "Close new song"
+msgstr ""
+
+msgctxt "newSong.titleLabel"
+msgid "Title"
+msgstr ""
+
+msgctxt "newSong.hint"
+msgid "Opens the song on Write."
+msgstr ""
+
+msgctxt "newSong.failed"
+msgid "The song could not be created. Try again."
+msgstr ""
+
+msgctxt "newSong.refused"
+msgid "The song could not be created."
+msgstr ""

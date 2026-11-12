@@ -65,7 +65,8 @@ async function render(): Promise<HTMLElement> {
 	return target;
 }
 
-const SONG_NOT_CREATED = 'The song could not be created. Try again.';
+const TITLE = words['newSong.titleLabel'];
+const SONG_NOT_CREATED = words['newSong.failed'];
 
 function toastMessages(): string[] {
 	return get(toasts).map((toast) => toast.message);
@@ -79,23 +80,25 @@ describe('NewSongCard', () => {
 	it('names the album it adds to, with one Title field that holds the cursor and no more than the server keeps', async () => {
 		const root = await render();
 
-		expect(root.querySelector('[aria-label="New song in Nightdrive"]')).not.toBeNull();
+		expect(
+			root.querySelector(`[aria-label="${words['newSong.cardLabel']({ album: 'Nightdrive' })}"]`)
+		).not.toBeNull();
 		expect(root.querySelectorAll('input')).toHaveLength(1);
-		expect(document.activeElement).toBe(field(root, 'Title'));
-		expect(field(root, 'Title').maxLength).toBe(200);
+		expect(document.activeElement).toBe(field(root, TITLE));
+		expect(field(root, TITLE).maxLength).toBe(200);
 	});
 
 	it.each(['', '   '])('offers no Create for the title %j', async (title) => {
 		const root = await render();
 
-		type(field(root, 'Title'), title);
+		type(field(root, TITLE), title);
 
 		expect(createButton(root).disabled).toBe(true);
 	});
 
 	it('creates the song in this album by its title, lists it and opens it on Write', async () => {
 		const root = await render();
-		type(field(root, 'Title'), '  Tidewater ');
+		type(field(root, TITLE), '  Tidewater ');
 
 		createButton(root).click();
 		await createSettled(createSong);
@@ -116,7 +119,7 @@ describe('NewSongCard', () => {
 		{
 			case: 'the server refuses it without a reason',
 			failure: new ApiError(404, '', '/api/songs'),
-			toast: 'The song could not be created.'
+			toast: words['newSong.refused']
 		},
 		{
 			case: 'the server fails',
@@ -138,13 +141,13 @@ describe('NewSongCard', () => {
 		async ({ failure, toast }) => {
 			createSong.mockRejectedValueOnce(failure);
 			const root = await render();
-			type(field(root, 'Title'), 'Tidewater');
+			type(field(root, TITLE), 'Tidewater');
 
 			createButton(root).click();
 			await createSettled(createSong);
 
 			expect(creates).toBe(0);
-			expect(field(root, 'Title').value).toBe('Tidewater');
+			expect(field(root, TITLE).value).toBe('Tidewater');
 			expect(createButton(root).disabled).toBe(false);
 			expect(get(songList)).toEqual([]);
 			expect(toastMessages()).toEqual([toast]);
@@ -155,7 +158,7 @@ describe('NewSongCard', () => {
 		failOnce(422, 'That title is taken');
 		failOnce(422, 'That title is too long');
 		const root = await render();
-		type(field(root, 'Title'), 'Tidewater');
+		type(field(root, TITLE), 'Tidewater');
 		createButton(root).click();
 		await vi.waitFor(() => expect(toastMessages()).toEqual(['That title is taken']));
 
@@ -167,7 +170,7 @@ describe('NewSongCard', () => {
 	it('915_E3 clears the failure it said once the song is made after all', async () => {
 		failOnce(500, 'Internal Server Error');
 		const root = await render();
-		type(field(root, 'Title'), 'Tidewater');
+		type(field(root, TITLE), 'Tidewater');
 		createButton(root).click();
 		await vi.waitFor(() => expect(toastMessages()).toContain(SONG_NOT_CREATED));
 
@@ -179,9 +182,9 @@ describe('NewSongCard', () => {
 
 	it('× closes it and creates nothing', async () => {
 		const root = await render();
-		type(field(root, 'Title'), 'Tidewater');
+		type(field(root, TITLE), 'Tidewater');
 
-		root.querySelector<HTMLButtonElement>('[aria-label="Close new song"]')?.click();
+		root.querySelector<HTMLButtonElement>(`[aria-label="${words['newSong.close']}"]`)?.click();
 		await tick();
 
 		expect(cancels).toBe(1);
