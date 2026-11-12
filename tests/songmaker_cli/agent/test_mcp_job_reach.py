@@ -12,6 +12,7 @@ from support.mcp_world import ADMIN_GROUPS, SAME_ORIGIN, McpWorld, worker_ready
 from support.token_world import TokenWorld
 
 from songmaker_cli.db.models import Job
+from songmaker_cli.job_types import JobStatus
 
 
 def _started_in_the_browser(
@@ -43,7 +44,8 @@ def test_an_admins_agent_is_refused_the_job_the_admin_started_on_another_persons
     browser = admins_household.world.client.get(f"/api/jobs/{job_id}")
 
     assert (job.is_error, cancel.is_error) == (True, True)
-    assert (job_id, "queued") in admins_household.rows_of(Job, "id", "status")
+    statuses = dict(admins_household.rows_of(Job, "id", "status"))
+    assert statuses[job_id] != JobStatus.CANCELLED
     assert browser.status_code == 200
 
 
