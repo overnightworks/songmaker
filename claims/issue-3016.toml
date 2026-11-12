@@ -3,6 +3,6 @@ agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
 role = "builder"
 base = "2e3fe7cf1cd8347ffb967ab1587e23d26b7d1ecb"
 branch = "claude/issue-3016-the-scoring-worker-s-models-are-pinned-b"
-scope = ["docker-compose.yml", "docker/docker-compose.ci.yml", "docker/scoring-worker.Dockerfile", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/config.py", "src/songmaker_cli/scoring", "tests/songmaker_cli/scoring", "tests/test_packaging_boundary.py"]
+scope = ["docker-compose.yml", "docker/docker-compose.ci.yml", "docker/scoring-worker.Dockerfile", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/config.py", "src/songmaker_cli/jobs/scoring.py", "src/songmaker_cli/scoring", "src/songmaker_cli/settings.py", "tests/songmaker_cli/scoring", "tests/songmaker_cli/test_scoring_scorers_extended.py", "tests/test_packaging_boundary.py"]
 opened_commit = "88a46313afc6520cc70345c0b5d10291a0f29df4"
 whole_reason = "The fetch, the loaders that read what it fetched, the configuration that names the paths, the compose wiring that fed the old path and the documents change together; any part alone leaves the worker loading by a name nothing resolves."
