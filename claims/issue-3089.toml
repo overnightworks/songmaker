@@ -1,8 +1,0 @@
-claim_id = "020c4b4af3c744c6b2a98c5f5f496d6f"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "4f4d66dbc7b1bdeb2ec502b43b398404d0a353d4"
-branch = "claude/issue-3089-settings-drops-the-compose-only-and-reti"
-scope = ["docs/acestep.md", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/settings.py", "tests/songmaker_cli/test_settings.py"]
-opened_commit = "f582632274867416ce9aae3f00e14e662a59adfa"
-whole_reason = "one Settings cleanup, its test and the three documents that still describe the live Compose"
