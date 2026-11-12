@@ -835,7 +835,9 @@ describe('TakesList', () => {
 		const row = target.querySelector<HTMLElement>('.take-row');
 		row?.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
-		expect(target.querySelector('.menu-heading')?.textContent).toBe('Take · v3 · 3');
+		expect(target.querySelector('.menu-heading')?.textContent).toBe(
+			words['takeMenu.headingWithVersion']({ version: '3', take: '3' })
+		);
 		expect(playTake).not.toHaveBeenCalled();
 	});
 
