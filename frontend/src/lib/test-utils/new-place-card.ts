@@ -1,5 +1,6 @@
 import { flushSync, tick } from 'svelte';
 import { expect, vi, type Mock } from 'vitest';
+import { words } from '#lib/words/en.ts';
 
 export function field(root: ParentNode, label: string): HTMLInputElement {
 	const input = [...root.querySelectorAll('label')]
@@ -23,9 +24,9 @@ export async function createSettled(create: Mock): Promise<void> {
 
 export function createButton(root: ParentNode): HTMLButtonElement {
 	const button = [...root.querySelectorAll('button')].find(
-		(candidate) => candidate.textContent?.trim() === 'Create'
+		(candidate) => candidate.textContent?.trim() === words['newPlace.create']
 	);
-	if (!button) throw new Error('no Create button');
+	if (!button) throw new Error(`no ${words['newPlace.create']} button`);
 	return button;
 }
 

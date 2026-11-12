@@ -16,6 +16,7 @@ import {
 	field,
 	type
 } from '#lib/test-utils/new-place-card.ts';
+import { words } from '#lib/words/en.ts';
 
 const createPlaylist = vi.fn();
 
@@ -87,23 +88,23 @@ describe('NewPlaylistCard', () => {
 	it('names itself New playlist with one Name field that holds the cursor and no more than the server keeps', async () => {
 		const root = await render();
 
-		expect(root.querySelector('[aria-label="New playlist"]')).not.toBeNull();
+		expect(root.querySelector(`[aria-label="${words['newPlaylist.cardLabel']}"]`)).not.toBeNull();
 		expect(root.querySelectorAll('input')).toHaveLength(1);
-		expect(document.activeElement).toBe(field(root, 'Name'));
-		expect(field(root, 'Name').maxLength).toBe(200);
+		expect(document.activeElement).toBe(field(root, words['newPlaylist.nameLabel']));
+		expect(field(root, words['newPlaylist.nameLabel']).maxLength).toBe(200);
 	});
 
 	it.each(['', '   '])('offers no Create for the name %j', async (name) => {
 		const root = await render();
 
-		type(field(root, 'Name'), name);
+		type(field(root, words['newPlaylist.nameLabel']), name);
 
 		expect(createButton(root).disabled).toBe(true);
 	});
 
 	it('creates the playlist by its name, lists it and opens it', async () => {
 		const root = await render();
-		type(field(root, 'Name'), '  Road Trip ');
+		type(field(root, words['newPlaylist.nameLabel']), '  Road Trip ');
 
 		createButton(root).click();
 		await createSettled(createPlaylist);
@@ -123,35 +124,35 @@ describe('NewPlaylistCard', () => {
 		{
 			case: 'the server refuses it without a reason',
 			refusal: new ApiError(422, '', '/api/playlists'),
-			reason: 'The playlist could not be created.'
+			reason: words['newPlaylist.refused']
 		},
 		{
 			case: 'the server fails',
 			refusal: new ApiError(500, 'Internal Server Error', '/api/playlists'),
-			reason: 'The playlist could not be created. Try again.'
+			reason: words['newPlaylist.failed']
 		},
 		{
 			case: 'the server rate-limits it',
 			refusal: new ApiError(429, 'Too many requests', '/api/playlists', 30),
-			reason: 'The playlist could not be created. Try again.'
+			reason: words['newPlaylist.failed']
 		},
 		{
 			case: 'the network is gone',
 			refusal: new NetworkError('/api/playlists', new TypeError('Failed to fetch')),
-			reason: "You're offline, so nothing was created. Try again once you're back online."
+			reason: words['newPlace.offline']
 		}
 	])(
 		'915_E2 keeps the card and the name when $case, and says why in words that fit',
 		async ({ refusal, reason }) => {
 			createPlaylist.mockRejectedValue(refusal);
 			const root = await render();
-			type(field(root, 'Name'), 'Road Trip');
+			type(field(root, words['newPlaylist.nameLabel']), 'Road Trip');
 
 			createButton(root).click();
 			await createSettled(createPlaylist);
 
 			expect(creates).toBe(0);
-			expect(field(root, 'Name').value).toBe('Road Trip');
+			expect(field(root, words['newPlaylist.nameLabel']).value).toBe('Road Trip');
 			expect(createButton(root).disabled).toBe(false);
 			expect(listedIds()).toEqual([]);
 			expect(addToast).toHaveBeenCalledWith(reason, 'error');
@@ -164,7 +165,7 @@ describe('NewPlaylistCard', () => {
 		const { escaped, restore } = captureUnhandledRejections();
 		restoreUnhandledRejections = restore;
 		const root = await render();
-		type(field(root, 'Name'), 'Road Trip');
+		type(field(root, words['newPlaylist.nameLabel']), 'Road Trip');
 
 		createButton(root).click();
 		await createSettled(createPlaylist);
@@ -176,9 +177,9 @@ describe('NewPlaylistCard', () => {
 
 	it('× closes it and creates nothing', async () => {
 		const root = await render();
-		type(field(root, 'Name'), 'Road Trip');
+		type(field(root, words['newPlaylist.nameLabel']), 'Road Trip');
 
-		root.querySelector<HTMLButtonElement>('[aria-label="Close new playlist"]')?.click();
+		root.querySelector<HTMLButtonElement>(`[aria-label="${words['newPlaylist.close']}"]`)?.click();
 		await tick();
 
 		expect(cancels).toBe(1);

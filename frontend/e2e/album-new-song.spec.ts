@@ -6,11 +6,11 @@
 // created on the wire, so making its first song leaves the seeded album alone.
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
+import { words } from '../src/lib/words/en';
 import { newSongCardLabel, ALBUM_NO_SONGS } from '../src/lib/constants/album';
 import { COLLECTION_MENU_LABEL } from '../src/lib/constants/collection-menu';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
-	NEW_PLACE_CREATE_LABEL,
 	NEW_SONG_CLOSE_LABEL,
 	NEW_SONG_ROW_LABEL,
 	NEW_SONG_TITLE_LABEL
@@ -121,7 +121,7 @@ test('an empty album makes its first song from + New song and opens it', async (
 
 		await newSongRow(page).click();
 		await card.getByLabel(NEW_SONG_TITLE_LABEL).fill(songTitle);
-		await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
+		await card.getByRole('button', { name: words['newPlace.create'] }).click();
 
 		await expect(page).toHaveURL(new RegExp(`/album/${album.id}/`));
 		const songHeading = shellOf(testInfo) === 'mobile' ? appBar(page) : surface;

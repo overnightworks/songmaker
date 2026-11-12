@@ -11,6 +11,7 @@ import { selectedSongId } from '#lib/stores/player.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
 import { createButton, createSettled, field, type } from '#lib/test-utils/new-place-card.ts';
+import { words } from '#lib/words/en.ts';
 
 const createSong = vi.fn();
 
@@ -130,7 +131,7 @@ describe('NewSongCard', () => {
 		{
 			case: 'the network is gone',
 			failure: new NetworkError('/api/songs', new TypeError('Failed to fetch')),
-			toast: "You're offline, so nothing was created. Try again once you're back online."
+			toast: words['newPlace.offline']
 		}
 	])(
 		'915_E2 keeps the card and the title when $case, and says why in words that fit',
