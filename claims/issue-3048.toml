@@ -3,6 +3,6 @@ agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
 role = "builder"
 base = "05087d79528bc1f3b54620fa1101e45c1553d910"
 branch = "claude/issue-3048-the-backend-shards-take-ffmpeg-from-the"
-scope = [".github/workflows/ci.yml", "AGENTS.md", "docs/testing.md", "pyproject.toml", "tests/audio_engine/test_audio_io.py", "tests/conftest.py", "tests/support/ffmpeg_binary.py", "tests/workflows/test_ci_quality_gate.py", "tests/workflows/test_ci_system_packages.py", "uv.lock"]
+scope = [".github/workflows/ci.yml", "AGENTS.md", "docs/testing.md", "pyproject.toml", "tests/audio_engine/test_audio_io.py", "tests/conftest.py", "tests/songmaker_cli/test_api.py", "tests/songmaker_cli/test_generate_cli_helpers.py", "tests/songmaker_cli/test_jobs.py", "tests/support/ffmpeg_binary.py", "tests/workflows/test_ci_quality_gate.py", "tests/workflows/test_ci_system_packages.py", "uv.lock"]
 opened_commit = "99d7dc82e8c57df373ae3ef66d95e2171cd25a0f"
 whole_reason = "The locked binary, the fixture that gives it to the two tests and the removal of the apt steps with their shape tests land together: without the first two the tests have no ffmpeg, without the last the install stays."
