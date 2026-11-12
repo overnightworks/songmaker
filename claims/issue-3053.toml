@@ -1,0 +1,8 @@
+claim_id = "2181aa9be44547d1bac98085812f2a2d"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "4f30f6165e8034e3af76373c4d6eb1ee5909c082"
+branch = "claude/issue-3053-the-new-menu-and-the-album-and-playlist"
+scope = ["frontend/e2e/album-new-song.spec.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/e2e/home-write.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/e2e/listen-tabs.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/LibraryHome.test.ts", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/NewAlbumCard.svelte", "frontend/src/lib/components/NewAlbumCard.test.ts", "frontend/src/lib/components/NewPlaceCard.svelte", "frontend/src/lib/components/NewPlaceCard.test.ts", "frontend/src/lib/components/NewPlaceMenu.svelte", "frontend/src/lib/components/NewPlaceMenu.test.ts", "frontend/src/lib/components/NewPlaylistCard.svelte", "frontend/src/lib/components/NewPlaylistCard.test.ts", "frontend/src/lib/components/NewSongCard.test.ts", "frontend/src/lib/constants/library.ts", "frontend/src/lib/constants/new-collection.ts", "frontend/src/lib/stores/toast.test.ts", "frontend/src/lib/test-utils/new-place-card.ts", "frontend/src/lib/words/en.ts"]
+opened_commit = "91825cc8e899f4100f5a684086812d2b428ee2f6"
+whole_reason = "One surface moves whole (the epic's invariant 5): the menu, the shared card and the two cards share the Create button, the offline line and one test helper, so the catalog, the four components and every test that finds these elements land together."
