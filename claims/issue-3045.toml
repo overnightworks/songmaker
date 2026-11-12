@@ -3,6 +3,6 @@ agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
 role = "builder"
 base = "4ffaa5329ce57a6d05519fa0ba1f7af9ed4defa6"
 branch = "claude/issue-3045-the-backend-shards-take-redis-from-a-ser"
-scope = [".github/workflows/ci.yml", "AGENTS.md", "docs/testing.md", "scripts/check_pinned_images_match.py", "scripts/test_postgresql.sh", "tests/scripts/test_check_pinned_images_match.py", "tests/songmaker_cli/test_arq_codec.py", "tests/support/redis_server.py", "tests/workflows/test_ci_quality_gate.py", "tests/workflows/test_ci_system_packages.py"]
+scope = [".github/workflows/ci.yml", "AGENTS.md", "docs/security.md", "docs/testing.md", "scripts/check_pinned_images_match.py", "scripts/static_checks.sh", "scripts/test_postgresql.sh", "tests/scripts/test_check_pinned_images_match.py", "tests/songmaker_cli/test_arq_codec.py", "tests/support/redis_server.py", "tests/workflows/test_ci_quality_gate.py", "tests/workflows/test_ci_system_packages.py"]
 opened_commit = "1336e99df380d18619f7dc5bcb7c093211f05e25"
 whole_reason = "The service, the fixture that uses it, the local script that gives the same server, the pin check and the documents change together, or the 63 cases have no server in one of the two places they run."
