@@ -4,15 +4,8 @@
 	import { createSong } from '#lib/api/client.ts';
 	import { addSongToList } from '#lib/stores/libraryData.ts';
 	import { selectSong } from '#lib/stores/navigation.ts';
-	import {
-		NEW_PLACE_TEXT_MAX_LENGTH,
-		NEW_SONG_CLOSE_LABEL,
-		NEW_SONG_FAILED,
-		NEW_SONG_HINT,
-		NEW_SONG_REFUSED,
-		NEW_SONG_TITLE_LABEL
-	} from '#lib/constants/new-collection.ts';
-	import { newSongCardLabel } from '#lib/constants/album.ts';
+	import { NEW_PLACE_TEXT_MAX_LENGTH } from '#lib/constants/new-collection.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {
@@ -40,11 +33,11 @@
 </script>
 
 <NewPlaceCard
-	label={newSongCardLabel(album.title)}
-	closeLabel={NEW_SONG_CLOSE_LABEL}
-	hint={NEW_SONG_HINT}
-	failedMessage={NEW_SONG_FAILED}
-	refusedMessage={NEW_SONG_REFUSED}
+	label={pageText('newSong.cardLabel', { album: album.title })}
+	closeLabel={pageText('newSong.close')}
+	hint={pageText('newSong.hint')}
+	failedMessage={pageText('newSong.failed')}
+	refusedMessage={pageText('newSong.refused')}
 	draftKey={`song:${album.id}`}
 	bind:title
 	ready={title.trim() !== ''}
@@ -54,7 +47,7 @@
 	{oncreated}
 >
 	<label class="field">
-		<span class="field-label">{NEW_SONG_TITLE_LABEL}</span>
+		<span class="field-label">{pageText('newSong.titleLabel')}</span>
 		<input
 			bind:this={titleInput}
 			bind:value={title}

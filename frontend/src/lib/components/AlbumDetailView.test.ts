@@ -16,14 +16,14 @@ import {
 } from '#lib/stores/connectivity.ts';
 import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import { newSongCardLabel, ALBUM_COVER_ALT_TYPE, ALBUM_NO_SONGS } from '#lib/constants/album.ts';
+import { ALBUM_COVER_ALT_TYPE, ALBUM_NO_SONGS } from '#lib/constants/album.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '#lib/constants/transport.ts';
-import { NEW_SONG_CLOSE_LABEL, NEW_SONG_ROW_LABEL } from '#lib/constants/new-collection.ts';
+import { words } from '#lib/words/en.ts';
 import {
 	accessibleName,
 	getByRoleButton,
@@ -1003,14 +1003,12 @@ describe('AlbumDetailView song row', () => {
 });
 
 describe('AlbumDetailView new song', () => {
-	const NEW_SONG_CARD = newSongCardLabel('Night Drive');
+	const { 'newSong.rowLabel': NEW_SONG_ROW, 'newSong.close': NEW_SONG_CLOSE } = words;
+	const NEW_SONG_CARD = words['newSong.cardLabel']({ album: 'Night Drive' });
 
 	function newSongRow(target: HTMLElement): HTMLButtonElement | null {
-		return (
-			Array.from(target.querySelectorAll('button')).find(
-				(button) => accessibleName(button) === NEW_SONG_ROW_LABEL
-			) ?? null
-		);
+		const buttons = Array.from(target.querySelectorAll('button'));
+		return buttons.find((button) => accessibleName(button) === NEW_SONG_ROW) ?? null;
 	}
 
 	function newSongCard(target: HTMLElement): HTMLFormElement | null {
@@ -1044,7 +1042,7 @@ describe('AlbumDetailView new song', () => {
 
 		expect(listItems(target).map((item) => item.textContent?.trim())).toEqual([
 			ALBUM_NO_SONGS,
-			NEW_SONG_ROW_LABEL
+			NEW_SONG_ROW
 		]);
 	});
 
@@ -1062,7 +1060,7 @@ describe('AlbumDetailView new song', () => {
 		const target = await renderDetail();
 		const card = await openNewSongCard(target);
 
-		type(field(card, 'Title'), 'Tidewater');
+		type(field(card, words['newSong.titleLabel']), 'Tidewater');
 		createButton(card).click();
 		await createSettled(createSong);
 
@@ -1074,9 +1072,9 @@ describe('AlbumDetailView new song', () => {
 	it('× folds the card back into the row, holding the focus, and creates nothing', async () => {
 		const target = await renderDetail();
 		const card = await openNewSongCard(target);
-		type(field(card, 'Title'), 'Tidewater');
+		type(field(card, words['newSong.titleLabel']), 'Tidewater');
 
-		card.querySelector<HTMLButtonElement>(`[aria-label="${NEW_SONG_CLOSE_LABEL}"]`)?.click();
+		card.querySelector<HTMLButtonElement>(`[aria-label="${NEW_SONG_CLOSE}"]`)?.click();
 		await tick();
 
 		expect(newSongCard(target)).toBeNull();
@@ -1092,14 +1090,14 @@ describe('AlbumDetailView new song', () => {
 		},
 		isShown: (target) => newSongCard(target) !== null,
 		afterBack: () => {
-			expect(accessibleName(document.activeElement ?? document.body)).toBe(NEW_SONG_ROW_LABEL);
+			expect(accessibleName(document.activeElement ?? document.body)).toBe(NEW_SONG_ROW);
 			expect(createSong).not.toHaveBeenCalled();
 		},
 		closeWays: [
 			{
 				way: '×',
 				close: (target) =>
-					target.querySelector<HTMLButtonElement>(`[aria-label="${NEW_SONG_CLOSE_LABEL}"]`)?.click()
+					target.querySelector<HTMLButtonElement>(`[aria-label="${NEW_SONG_CLOSE}"]`)?.click()
 			}
 		]
 	});
