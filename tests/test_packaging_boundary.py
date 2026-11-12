@@ -35,7 +35,7 @@ WEB_ENTRYPOINT_SCRIPT = "/app/start_web_server.sh"
 E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 DOCKER_DEFAULT_RESTART_POLICY = "no"
 WEB_SERVER_MODULE = "songmaker_cli.server"
-RECURSIVE_CHOWN = re.compile(r"\bchown\s+(?:-\w*R|--recursive)")
+RECURSIVE_CHOWN = re.compile(r"\bchown(?:\s+-\S+)*?\s+(?:-\w*R\w*|--recursive)\b")
 
 
 @dataclass(frozen=True)
@@ -305,6 +305,21 @@ def test_every_compose_built_image_runs_as_the_numeric_user_it_creates() -> None
     assert len({final_user for final_user, _ in identities.values()}) == 1, (
         "images share volumes, so they must share one uid:gid"
     )
+
+
+@pytest.mark.parametrize(
+    "instruction",
+    [
+        "RUN chown -R songmaker:songmaker /app",
+        "RUN chown -f -R songmaker:songmaker /app",
+        "RUN chown --verbose --recursive songmaker:songmaker /app",
+        "RUN chown -fR songmaker:songmaker /app",
+    ],
+)
+def test_recursive_chown_detector_sees_the_option_after_other_options(
+    instruction: str,
+) -> None:
+    assert RECURSIVE_CHOWN.search(instruction)
 
 
 def test_no_final_stage_instruction_changes_ownership_recursively() -> None:
