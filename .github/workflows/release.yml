@@ -58,6 +58,7 @@ jobs:
       build-args: ${{ matrix.build-args || '' }}
       submodules: ${{ matrix.submodules || false }}
       push: true
+      reproducible-layers: true
 
   tag:
     needs: [gate, image]

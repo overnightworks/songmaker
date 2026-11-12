@@ -10,7 +10,7 @@
 #
 # The torch layer is the heavy one (~4 GB). Its files and their hashes are a function of the
 # fork's lock and the Python minor version, so a torch bump is a bump of the fork's lock. Its
-# digest also holds file timestamps, which the release build does not fix.
+# digest also holds file timestamps, which the release build fixes (`reproducible-layers`).
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650472695d9a9326999 AS gpu-torch-base
 
@@ -48,10 +48,10 @@ COPY --chown=songmaker vendor/acestep/pyproject.toml vendor/acestep/uv.lock ./
 # The torch layer: the upstream lock's packages that only torch brings. Every other package is
 # skipped by name (`uv tree` prunes the torch packages and lists what is still reachable on this
 # platform) and arrives with acestep-base's delta sync, so a bump of torch is a bump of the fork's
-# lock. Any change of the lock re-runs this layer (the whole lock is copied above it), and only
-# reproducible file timestamps would keep its digest. The build fails when a line of the tree is
-# neither a package line nor uv's footer, or when no package is listed: a changed format must
-# never move a package into this layer.
+# lock. Any change of the lock re-runs this layer (the whole lock is copied above it); with the
+# release's fixed file times its digest stays the same while torch's closure in the lock is
+# unchanged. The build fails when a line of the tree is neither a package line nor uv's footer,
+# or when no package is listed: a changed format must never move a package into this layer.
 RUN package_line='^[^A-Za-z0-9]*\([A-Za-z0-9._-]\{1,\}\)\(\[[^]]*\]\)\{0,1\} v[0-9]' \
     && uv_tree="$(uv tree --frozen --no-dev --prune torch --prune torchvision --prune torchaudio)" \
     && unparsed_lines="$(printf '%s\n' "$uv_tree" | grep -v -e "$package_line" -e '^(\*) ' -e '^$' || true)" \
