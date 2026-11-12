@@ -1,8 +1,0 @@
-claim_id = "4a7ead10c5a74d9fba4b30176b6cc54c"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "4ffaa5329ce57a6d05519fa0ba1f7af9ed4defa6"
-branch = "claude/issue-3043-the-library-s-browse-and-search-stores-c"
-scope = ["frontend/src/lib/api/library.test.ts", "frontend/src/lib/api/library.ts", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/LibraryWallPlaylists.test.ts", "frontend/src/lib/constants/library.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/librarySearch.test.ts", "frontend/src/lib/stores/librarySearch.ts", "frontend/src/lib/test-utils/library-wall.ts"]
-opened_commit = "00c28e0d5b6b709fc63a3ba5811dfd12e32bb7b2"
-whole_reason = "A dead field leaves with every writer and every test that sets or pins it, or the type check fails."
