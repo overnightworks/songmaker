@@ -783,6 +783,7 @@ def test_generation_job_selects_musician_line(
     cause,
     completed,
     caplog,
+    locked_ffmpeg,
 ) -> None:
     """S5-B/D, L6: HTTP worker failures preserve real takes and sanitize stored detail."""
 

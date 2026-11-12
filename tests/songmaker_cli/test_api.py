@@ -4356,7 +4356,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
     asyncio.run(drive())
 
 
-def test_partial_oom_reload_retains_successful_take(client, generation_worker_peer):
+def test_partial_oom_reload_retains_successful_take(client, generation_worker_peer, locked_ffmpeg):
     """S9-B, S9-D: A real saved take survives and does not hide its own OOM partial."""
     from support.worker_http_peer import WorkerScenario, WorkerStream
 
