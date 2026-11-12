@@ -27,7 +27,7 @@ jobs:
     name: Boot stack + library flows (${{ matrix.project }}, shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     # A shard runs well inside this ceiling, which guards against a hang.
-    timeout-minutes: 20
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -125,10 +125,10 @@ jobs:
 
       # why: no system packages are installed: the pinned runner image carries Chromium's
       # libraries, and the package mirror can hang. The browser download takes seconds,
-      # so past 15 min the step is a hang and must not eat the job's ceiling.
+      # so past 5 min the step is a hang and must not eat the job's ceiling.
       - name: Install Playwright Chromium
         working-directory: frontend
-        timeout-minutes: 15
+        timeout-minutes: 5
         run: pnpm exec playwright install chromium
 
       - name: Library flows (${{ matrix.project }}, shard ${{ matrix.shard }}/${{ env.SHARD_TOTAL }})
@@ -152,9 +152,11 @@ jobs:
 
       # The aggregator merges the stores into one report per project. Coverage is
       # measurement only, so a failed upload never decides the leg.
+      # A store uploads in seconds, so past 1 min the step is a hang.
       - name: Upload the raw coverage store
         if: ${{ !cancelled() }}
         continue-on-error: true
+        timeout-minutes: 1
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
           name: e2e-coverage-store-${{ matrix.project }}-${{ matrix.shard }}-${{ github.run_attempt }}
@@ -252,8 +254,10 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      # A download takes seconds, so past 2 min it is a hang and must not eat the job's ceiling.
       - name: Download the desktop JSON reports
         if: ${{ !cancelled() }}
+        timeout-minutes: 2
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: e2e-json-report-desktop-*
@@ -261,6 +265,7 @@ jobs:
 
       - name: Download the mobile JSON reports
         if: ${{ !cancelled() }}
+        timeout-minutes: 2
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: e2e-json-report-mobile-*
