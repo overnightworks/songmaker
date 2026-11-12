@@ -1,8 +1,0 @@
-claim_id = "003ee8cf2b994584ad40f3f67ae8df4c"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "4f4d66dbc7b1bdeb2ec502b43b398404d0a353d4"
-branch = "claude/issue-3084-test-postgres-and-redis-pins-follow-the"
-scope = [".github/dependabot.yml", ".github/workflows/ci.yml", "docker/docker-compose.test.yml", "docs/security.md", "docs/testing.md", "scripts/check_pinned_images_match.py", "tests/scripts/test_check_pinned_images_match.py"]
-opened_commit = "96e0620b34968be3e5dbb8b991f94c26d70c6cd0"
-whole_reason = "one pin moves: the compose and CI pins, their drift check, the dependabot rule and the two docs that name the version change together"
