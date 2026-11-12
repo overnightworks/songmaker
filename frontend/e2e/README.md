@@ -1,6 +1,6 @@
 # End-to-end flows
 
-Playwright drives the real stack — `docker/docker-compose.ci.yml` (Postgres, Redis,
+Playwright drives the real stack — `docker/docker-compose.test.yml` (Postgres, Redis,
 migrations, web, music worker) — through the click paths an operator walks by hand. Unit
 tests keep missing those; `.github/workflows/e2e.yml` runs these as the `E2E` job of `ci.yml`, on every PR and every push to main.
 
@@ -220,10 +220,10 @@ one IP and to the API class by the same rate-limit policy the server uses
 windows" step prints that busiest 60-second API window after every Playwright run
 (in CI once per shard job, locally once for both projects), counting setup, cleanup, retries and browser traffic, so the figure cannot go
 stale. The CI stack's `IP_RATE_LIMIT: "8000"` override
-(`docker/docker-compose.ci.yml`) is kept at least three times above that
+(`docker/docker-compose.test.yml`) is kept at least three times above that
 peak, with room for one CI retry landing inside the same window (#1555). The
 same step prints the busiest sign-in window, measured over its own 600-second
-window, and `SIGN_IN_RATE_LIMIT` in `docker/docker-compose.ci.yml` is kept at
+window, and `SIGN_IN_RATE_LIMIT` in `docker/docker-compose.test.yml` is kept at
 least three times above the summed sign-in peak of both projects. A
 request the limiter refused never reaches the access log, so on a run that
 hit 429 the printed peak is only a lower bound. Re-running the suite
@@ -296,7 +296,7 @@ the CI stack on its own port and project, run, then throw it away:
 ```bash
 cd <repo root>
 export COMPOSE_PROJECT_NAME=songmaker-e2e-local WEB_PORT=18080
-export SONGMAKER_SECRETS_DIR="$(mktemp -d)"   # throwaway files; the default is ~/.secrets/songmaker, the live stack's
+export SONGMAKER_SECRETS_DIR="$(mktemp -d)"   # throwaway files; the stack has no default
 echo e2e-ci-postgres-password > "$SONGMAKER_SECRETS_DIR/postgres-password"
 echo e2e-ci-session-secret-do-not-reuse-anywhere-else > "$SONGMAKER_SECRETS_DIR/session-secret"
 echo e2e-ci-internal-token > "$SONGMAKER_SECRETS_DIR/internal-token"
@@ -308,15 +308,15 @@ export KEYCLOAK_CLIENT_SECRET_FILE="$(mktemp)" && echo e2e-ci-client-secret > "$
 export GATEWAY_KEY_FILE="$(mktemp)" && echo e2e-ci-gateway-key > "$GATEWAY_KEY_FILE"
 export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or the web app refuses to start
 # Two steps: this stack has no restart policy, so the apps start once the stores are healthy.
-docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml up -d --wait postgres redis
-docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
+docker compose --project-directory . -f docker/docker-compose.test.yml up -d --wait postgres redis
+docker compose --project-directory . -f docker/docker-compose.test.yml \
   up -d --build --wait songmaker-music-worker songmaker-web
 
 cd frontend
 E2E_BASE_URL=http://localhost:18080 pnpm test:e2e            # both shells
 E2E_BASE_URL=http://localhost:18080 pnpm test:e2e --project=mobile
 
-cd .. && docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml down -v --remove-orphans --rmi local
+cd .. && docker compose --project-directory . -f docker/docker-compose.test.yml down -v --remove-orphans --rmi local
 ```
 
 Re-running against the same stack repeatedly will trip the app's IP rate limit

@@ -152,7 +152,7 @@ The other services are single-stage images (`songmaker-music-worker`: server ext
 
 **Layers that repeat:** the release builds all four images with fixed file times, so a layer whose inputs did not change keeps its digest from one release to the next and a roll pulls only the layers that changed. The price is that every image's creation date reads 1970-01-01, so a filter or sort by an image's age treats a released image as old. A layer repeats only while it holds no logs, caches or wall-clock data: a `RUN` that writes a timestamp, a log or a package cache into its layer changes that layer's digest on every build.
 
-**Who gets the GPU:** only `songmaker-acestep-worker-N` (`runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES` pinned to its `GPU_ID`). `songmaker-scoring-worker` is given no GPU device and defaults to `SCORING_DEVICE=cpu`, so it carries CPU torch and never touches VRAM. Generation VRAM therefore has exactly one owner and needs no cross-container arbitration. Setting `SCORING_DEVICE=cuda` would break that assumption: the scoring worker would additionally need GPU access in `docker-compose.yml` and a release/verify protocol against the acestep-worker, neither of which exists today.
+**Who gets the GPU:** only `songmaker-acestep-worker-N` (`runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES` pinned to its `GPU_ID`). `songmaker-scoring-worker` is given no GPU device and defaults to `SCORING_DEVICE=cpu`, so it carries CPU torch and never touches VRAM. Generation VRAM therefore has exactly one owner and needs no cross-container arbitration. Setting `SCORING_DEVICE=cuda` would break that assumption: the scoring worker would additionally need GPU access in its platform manifest and a release/verify protocol against the acestep-worker, neither of which exists today.
 
 **GPU telemetry and health:** NVML (`pynvml`) is used only in `src/acestep_worker/gpu_util.py`. The worker reports VRAM in its heartbeat, which is republished on `/metrics`. `check_gpu_health()` makes the worker's `/health` answer 503 when `pynvml` is present but the device cannot be opened. A missing `pynvml` (CI, a unit test, a laptop) is not a broken worker and never blocks a job.
 
@@ -161,9 +161,9 @@ The other services are single-stage images (`songmaker-music-worker`: server ext
 **FFmpeg is a system dependency of the ACE-Step worker image.** The `gpu-torch-base` stage installs the distro `ffmpeg` package, so the inner ACE-Step venv can load TorchCodec's shared FFmpeg libraries while decoding training audio and operators have `ffprobe` available for diagnosis.
 
 The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The
-Python settings and `docker-compose.yml` both default `ARQ_JOB_TIMEOUT` to
+Python settings and the test stack (`docker/docker-compose.test.yml`) both default `ARQ_JOB_TIMEOUT` to
 1000 seconds. `ACESTEP_STARTUP_TIMEOUT_SECONDS` is a separate setting, 540
-seconds in both the Python default and the Compose fallback: a load now
+seconds in the Python default and in the platform's `apps/songmaker/acestep-worker.yaml`: a load now
 includes the eager DiT and LM init, which takes 5-8 minutes for a cold xl-turbo
 with vLLM, and 540 s plus one eviction (15 s grace, 5 s kill) stays under the
 scheduler's 600-second load timeout, so a slow load ends as the worker's own
@@ -421,7 +421,7 @@ There are two layers of env vars: ones the **acestep-worker container** reads at
 
 ### Worker container env vars (`WorkerSettings`)
 
-These are set on the `songmaker-acestep-worker-0` container in `docker-compose.yml` and read by the worker's Pydantic `Settings` at startup. `extra="forbid"` — typo'd names raise `ValidationError`.
+These are set on the worker's container in the platform's `apps/songmaker/acestep-worker.yaml` (on the test stack's `songmaker-acestep-worker-0`, in `docker/docker-compose.test.yml`) and read by the worker's Pydantic `Settings` at startup. `extra="forbid"` — typo'd names raise `ValidationError`.
 
 | Var | Default | Purpose |
 |-----|---------|---------|
@@ -446,7 +446,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 
 ### ACE-Step subprocess env vars (passed by the worker)
 
-Most of these are set on the subprocess by `subprocess_runner.py:build_env()` when it spawns ACE-Step, computed from the worker settings above; you don't set them directly. The three tuning vars below (`ACESTEP_LM_DIT_RESERVE_DURATION_S`, `ACESTEP_LM_DIT_RESERVE_BATCH`, `ACESTEP_SKIP_VRAM_PREFLIGHT`) are not built there — `build_env()` copies the worker container's environment, so they ride along from `docker-compose.yml` and are read by ACE-Step itself.
+Most of these are set on the subprocess by `subprocess_runner.py:build_env()` when it spawns ACE-Step, computed from the worker settings above; you don't set them directly. The three tuning vars below (`ACESTEP_LM_DIT_RESERVE_DURATION_S`, `ACESTEP_LM_DIT_RESERVE_BATCH`, `ACESTEP_SKIP_VRAM_PREFLIGHT`) are not built there — `build_env()` copies the worker container's environment, so they ride along from the platform's `apps/songmaker/acestep-worker.yaml` and are read by ACE-Step itself.
 
 | Var | Default / Source | Purpose |
 |-----|---|---|
@@ -525,7 +525,7 @@ The vendored fork keeps `_vram_preflight_check()` enabled by default. Before che
 
 **Current file:** `vendor/acestep/acestep/core/generation/handler/generate_music.py` (around the `_vram_preflight_check()` call in `GenerateMusicMixin.generate_music()`)
 
-**Emergency opt-out:** `ACESTEP_SKIP_VRAM_PREFLIGHT=1` skips only the safety check and logs a warning. The flag is CUDA-only and back to emergency semantics: `docker-compose.yml` defaults it to `0` (override via `.env`). With the check bypassed, a generation that would have been refused runs into an OOM instead. Because the worker copies its environment when starting the ACE-Step subprocess, the flag reaches the subprocess the same way any other passthrough var does.
+**Emergency opt-out:** `ACESTEP_SKIP_VRAM_PREFLIGHT=1` skips only the safety check and logs a warning. The flag is CUDA-only and back to emergency semantics: the platform's `apps/songmaker/acestep-worker.yaml` sets it to `0`. With the check bypassed, a generation that would have been refused runs into an OOM instead. Because the worker copies its environment when starting the ACE-Step subprocess, the flag reaches the subprocess the same way any other passthrough var does.
 
 Targeted fork tests lock both branches of the policy: the pre-flight runs when the flag is unset and is bypassed only for an explicit truthy opt-out.
 

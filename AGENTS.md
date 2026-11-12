@@ -11,8 +11,8 @@
 
 ## Rules
 
-- The live app runs only in Docker, started by the systemd units; `.venv` serves tests and type checking.
-- A deploy's `docker compose up --build --wait` never runs inside `timeout`: SIGTERM leaves a partial deploy.
+- The platform serves the live app; `docker/docker-compose.test.yml` is the test stack for CI's e2e boot, the probes and local runs, and `.venv` serves tests and type checking.
+- Every Compose call runs from the repository root as `docker compose --project-directory . -f docker/docker-compose.test.yml ...`, which keeps the per-worktree project name and the root `.env`.
 - PostgreSQL is the source of truth, not files.
 - One code path: the web UI, a person's token and their agent's marked `/mcp` routes all reach the same API; the CLI only starts the server.
 - Functions in `src/songmaker_cli/db/queries/` `flush()` and never `commit()`; the code that owns the transaction commits. A helper that calls `end_read_transaction_before_lock()` commits first, so its caller must hold no uncommitted change.
