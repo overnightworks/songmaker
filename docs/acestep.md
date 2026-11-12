@@ -27,7 +27,7 @@ an LRU cache of loaded models and exposes:
 | GET | `/loaded_models` | Loaded models, pinned set and available modes (no in-tree caller; the heartbeat is published by the worker itself) |
 | GET | `/health` | Liveness (the only route without the internal token) |
 
-Every route except `GET /health` needs the `X-Internal-Token` header: a missing header answers 422, a wrong or empty token 401. The routes sit on one router that carries the token check, so a new route is protected by default. `/health` stays open because the Compose healthcheck calls it headerless; the FastAPI `/docs`, `/redoc` and `/openapi.json` routes are switched off.
+Every route except `GET /health` needs the `X-Internal-Token` header: a missing header answers 422, a wrong or empty token 401. The routes sit on one router that carries the token check, so a new route is protected by default. `/health` stays open because the container healthcheck calls it headerless; the FastAPI `/docs`, `/redoc` and `/openapi.json` routes are switched off.
 
 Workers self-register with the web container at startup
 (`POST /api/internal/workers/register`) and heartbeat ephemeral state to
@@ -135,13 +135,13 @@ This section is the operator-facing reference for the ACE-Step worker pool archi
 
 ### Building the worker images
 
-`docker/acestep-worker.Dockerfile` builds the worker in three stages, so `docker compose build` builds the whole chain and no image has to exist beforehand:
+`docker/acestep-worker.Dockerfile` builds the worker in three stages, so building the worker image builds the whole chain and no image has to exist beforehand:
 
 ```
 python:3.14-slim
   └── gpu-torch-base   (the fork lock's CUDA torch + nvidia libraries — heavy layer)
         └── acestep-base   (upstream ACE-Step source + delta deps at /opt/acestep)
-              └── acestep-worker   (wrapper venv + entrypoint; the image compose runs)
+              └── acestep-worker   (wrapper venv + entrypoint; the image the platform and the test stack run)
 ```
 
 **The torch layer is the fork's lock.** `gpu-torch-base` creates the model venv in a layer of its own, then installs the packages only torch brings (torch, torchvision, torchaudio, the `nvidia-*` libraries, triton) with one `uv sync --frozen` of the vendored `pyproject.toml` and `uv.lock`. The same instruction derives the packages to skip: `uv tree` with the three torch packages pruned lists every package still reachable on the image's platform, and `--no-install-package` leaves those to the delta sync in `acestep-base`. The Dockerfile therefore holds no torch version, index or hash, and the layer's content (files and hashes) is a function of the lock and the Python minor version. A bump of torch is a bump of the fork's lock; a change to any other part of the lock re-runs the layer. Its digest stays the same across releases because the release fixes file times. Packages torch shares with the rest (numpy, sympy, filelock, ...) belong to the delta, so `import torch` works only from `acestep-base` on, where a layer of its own checks that the venv's torch is the lock's version and a CUDA build. **To bump torch,** bump the pins and the lock in the fork and move the submodule pointer; the Dockerfile stays as it is.
@@ -160,8 +160,7 @@ The other services are single-stage images (`songmaker-music-worker`: server ext
 
 **FFmpeg is a system dependency of the ACE-Step worker image.** The `gpu-torch-base` stage installs the distro `ffmpeg` package, so the inner ACE-Step venv can load TorchCodec's shared FFmpeg libraries while decoding training audio and operators have `ffprobe` available for diagnosis.
 
-The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The
-Python settings and the test stack (`docker/docker-compose.test.yml`) both default `ARQ_JOB_TIMEOUT` to
+The Python settings and the test stack (`docker/docker-compose.test.yml`) both default `ARQ_JOB_TIMEOUT` to
 1000 seconds. `ACESTEP_STARTUP_TIMEOUT_SECONDS` is a separate setting, 540
 seconds in the Python default and in the platform's `apps/songmaker/acestep-worker.yaml`: a load now
 includes the eager DiT and LM init, which takes 5-8 minutes for a cold xl-turbo
@@ -206,19 +205,19 @@ Operators need to know what's in Redis to debug stuck state. Keys to know:
 
 The Worker Pool panel mirrors a live hold as Training with the remaining hold lease; this projection never owns, renews, or releases the hold.
 
-**Useful debug commands:**
+**Useful debug commands** (the test stack; on the platform run the same `redis-cli` calls in the Redis pod):
 
 ```bash
-docker compose exec redis redis-cli KEYS 'songmaker:acestep:*'
-docker compose exec redis redis-cli GET 'songmaker:acestep:worker:acestep-worker-0'
-docker compose exec redis redis-cli TTL 'songmaker:acestep:worker:acestep-worker-0'
-docker compose exec redis redis-cli GET 'songmaker:acestep:download:xl-base'
+docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli KEYS 'songmaker:acestep:*'
+docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli GET 'songmaker:acestep:worker:acestep-worker-0'
+docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli TTL 'songmaker:acestep:worker:acestep-worker-0'
+docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli GET 'songmaker:acestep:download:xl-base'
 ```
 
 If a download appears stuck, check the `download:{mode}` key. If it exists but no arq job is running with that ID, it's a stale flag — delete it manually and the next click will re-acquire:
 
 ```bash
-docker compose exec redis redis-cli DEL 'songmaker:acestep:download:xl-base'
+docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli DEL 'songmaker:acestep:download:xl-base'
 ```
 
 The flag's 30-minute TTL is the automatic safety net for crashed arq workers.
@@ -238,7 +237,7 @@ When an `acestep-worker` container starts:
 If a worker is stuck in step 3:
 
 - Check container logs for the per-attempt warning lines (`"Registration attempt N failed: ..."`)
-- Verify the control plane URL is reachable from inside the worker container: `docker compose exec acestep-worker-0 curl -v http://songmaker-web:8080/health`
+- Verify the control plane URL is reachable from inside the worker container: `docker compose --project-directory . -f docker/docker-compose.test.yml exec songmaker-acestep-worker-0 curl -v http://songmaker-web:8080/health`
 - Verify the worker and the web container mount the same `internal-token` file content (both read it from `/run/secrets/songmaker_internal_token`; a rotated file reaches them only after a recreate)
 
 The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container stop) while still in the registration loop, the lifespan finally block cancels the registration task and awaits its cleanup before exiting. No orphaned tasks survive shutdown.
@@ -257,15 +256,15 @@ To verify the restart cycle from the admin UI: the Worker Pool card flips `onlin
 
 ### Restart policies
 
-The test stack (`docker/docker-compose.test.yml`) sets no restart policy on any service, so a container whose process exits stays exited until `docker compose up -d` or `docker start <container>`. A container that docker compose merely *created* but never started (e.g. `docker compose up` failing partway through, such as an NVIDIA driver mismatch) sits in state `Created` with `RestartCount: 0`, and no daemon start or host reboot brings it up. The only way out is an explicit `docker start <container>` or `docker compose up -d`. On the platform, the pod's restart policy governs the workers; the platform owns its behaviour.
+The test stack (`docker/docker-compose.test.yml`) sets no restart policy on any service, so a container whose process exits stays exited until `docker compose --project-directory . -f docker/docker-compose.test.yml up -d` or `docker start <container>`. A container that Compose merely *created* but never started (e.g. `docker compose --project-directory . -f docker/docker-compose.test.yml up` failing partway through, such as an NVIDIA driver mismatch) sits in state `Created` with `RestartCount: 0`, and no daemon start or host reboot brings it up. The only way out is an explicit `docker start <container>` or `docker compose --project-directory . -f docker/docker-compose.test.yml up -d`. On the platform, the pod's restart policy governs the workers; the platform owns its behaviour.
 
-**`docker compose ps` hides this.** Without `-a` it omits containers in `Created`, so the stack can look fully up when a container has in fact never run once. Diagnose a suspected stuck container with:
+**`ps` hides this.** Without `-a` it omits containers in `Created`, so the stack can look fully up when a container has in fact never run once. Diagnose a suspected stuck container with:
 
 ```bash
-docker compose ps -a
+docker compose --project-directory . -f docker/docker-compose.test.yml ps -a
 ```
 
-**Boot start.** Starting the stack after a host boot is the platform's, not a unit of this repository. On a Compose host started by hand, `docker compose up -d` starts every container regardless of the state it was left in — `running`, `exited`, or `Created` alike — which the test stack, with no restart policy, cannot do on its own.
+**Boot start.** Starting the platform after a host boot is the platform's, not a unit of this repository. The test stack has no restart policy and no boot unit: start it again with `docker compose --project-directory . -f docker/docker-compose.test.yml up -d`, which starts every container regardless of the state it was left in (`running`, `exited` or `Created`).
 
 ### Deploys and generation jobs
 
@@ -325,11 +324,11 @@ docker run --rm --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all \
 
 On this Docker 29 host, the legacy `--gpus all` / Compose `deploy.resources.reservations.devices` path fails even though the explicit NVIDIA runtime and CDI both work. The worker therefore uses `runtime: nvidia` plus `NVIDIA_VISIBLE_DEVICES`, and does not declare the failing deploy reservation. If the explicit-runtime test fails, stop: fix the NVIDIA Container Toolkit/daemon configuration before retrying Compose. If it succeeds, start exactly one worker and wait for registration before attempting generation.
 
-**"Worker won't register"** — `/health` returns 503. Check container logs for `"Registration attempt N failed: ..."`. Verify the control plane URL is reachable from inside the worker container with `docker compose exec songmaker-acestep-worker-0 curl -v http://songmaker-web:8080/health`. Verify the worker and the web container mount the same `internal-token` file content (a rotated file reaches them only after a recreate). The retry loop never gives up — fix the root cause and the next backoff tick will succeed.
+**"Worker won't register"** — `/health` returns 503. Check container logs for `"Registration attempt N failed: ..."`. Verify the control plane URL is reachable from inside the worker container with `docker compose --project-directory . -f docker/docker-compose.test.yml exec songmaker-acestep-worker-0 curl -v http://songmaker-web:8080/health`. Verify the worker and the web container mount the same `internal-token` file content (a rotated file reaches them only after a recreate). The retry loop never gives up — fix the root cause and the next backoff tick will succeed.
 
 **"Jobs fail with an init error"** — a child without its LM no longer stays up serving that error: the worker exits with code 75 and retries the failed load when the platform restarts it (see [Restart procedure](#restart-procedure)). If takes keep failing, the LM cannot initialise (VRAM held by another process, a missing LM checkpoint): read `acestep_reason` in `GET /health/details` first (`lm_init_failed` means this loop), then check the key with `redis-cli GET 'songmaker:acestep:lm-failure:{worker_id}'`, the restart count above and the container log's last lines, fix the cause, and the next restart comes online by itself.
 
-**"Download stalls"** — check the download flag: `docker compose exec redis redis-cli GET 'songmaker:acestep:download:{mode}'`. Cross-reference the value (a job_id) with the job's status in the admin UI. If the job is gone but the flag remains, it's stale — `redis-cli DEL` it and retry. The 30-minute TTL is the automatic safety net.
+**"Download stalls"** — check the download flag: `docker compose --project-directory . -f docker/docker-compose.test.yml exec redis redis-cli GET 'songmaker:acestep:download:{mode}'`. Cross-reference the value (a job_id) with the job's status in the admin UI. If the job is gone but the flag remains, it's stale — `redis-cli DEL` it and retry. The 30-minute TTL is the automatic safety net.
 
 **"Load fails with CapacityError"** — two distinct messages, both actionable. If the worker has models loaded, the message names the loaded/pinned/in-use sets and how much VRAM is already in use (measured or, without a reader, estimated from declared sizes); if the in-use set is non-empty, wait for those generations to finish; if it's all pinned, unpin one explicitly. If the worker has **nothing** loaded and still can't fit the request, the message says so explicitly — VRAM outside this cache's tracking (a stray process, an unreleased subprocess) is holding the GPU; check `nvidia-smi` on the worker host before retrying. The Worker Pool card's per-mode buttons make the first case directly actionable; the second needs a host-level check.
 
@@ -433,7 +432,7 @@ These are set on the worker's container in the platform's `apps/songmaker/aceste
 | `songmaker_internal_token` (file `/run/secrets/songmaker_internal_token`) | (required, non-empty) | Shared secret for control-plane auth. The worker refuses to start without it, and every route except `/health` checks it in the `X-Internal-Token` header (see "How Songmaker Uses ACE-Step"). |
 | `VRAM_BUDGET_GB` | 24.0 | VRAM budget in GB. Passed to the ACE-Step subprocess as `MAX_CUDA_VRAM`. Lower values (e.g. 22 on a 24 GB card) cause ACE-Step to auto-fall-back to CPU VAE decode during xl-turbo generation, which is ~100x slower than GPU — raise the budget if the admin panel shows very slow xl-turbo generations at ~0% GPU util. |
 | `GPU_ID` | None | CUDA device index passed deterministically to the inner process as `CUDA_VISIBLE_DEVICES` |
-| `NVIDIA_VISIBLE_DEVICES` | Compose: `0` | Host GPU exposed to the worker by the explicit NVIDIA container runtime |
+| `NVIDIA_VISIBLE_DEVICES` | `0` on the test stack | Host GPU exposed to the worker by the explicit NVIDIA container runtime |
 | `ACESTEP_CHECKPOINT_DIR` | `/opt/acestep` | Where ACE-Step model weights live |
 | `AUDIO_OUTPUT_DIR` | `/app/data/worker_output` | The worker's container-local output root for generated WAVs. The worker empties it at every start and refuses one that overlaps its shared audio root. Music fetches each take from it with `GET /tasks/{task_id}/result`, then frees it with `DELETE` of the same path; the task store's expiry sweep removes a file left behind together with its task record. The `done` payload carries no path |
 | `ACESTEP_INNER_PORT` | 8101 | Base port for ACE-Step subprocesses (inside the container). Each loaded model mode gets `base_port + offset`, offset taken from the mode's position in `MODEL_CONFIG_PATHS` (`subprocess_runner.MODEL_INNER_PORT_OFFSETS`) — this keeps two simultaneously loaded modes from colliding on one port, which used to make the second mode's health check see the first mode's still-running server and falsely report ready |

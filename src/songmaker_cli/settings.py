@@ -461,26 +461,12 @@ class Settings(BaseSettings):
     audio_dir: str = "data/audio"
     data_dir: str = "data"
 
-    # ── Docker Compose substitution fields ────────────────────────────
-    # These live in .env so docker-compose can substitute them into
-    # container environment blocks (POSTGRES_USER → the postgres
-    # container, HF_TOKEN → scripts/download_models.sh, etc.). The app
-    # code does not read them, except postgres_password, which `db/database_url.py`
-    # joins to `database_url`. Declared here so extra="forbid" still
-    # recognizes them and a typo on a real app field still raises
-    # ValidationError.
-    postgres_user: str | None = None
+    # ── Secrets read outside the app's own fields ──────────────────────
+    # postgres_password is joined to `database_url` by `db/database_url.py`;
+    # hf_token is declared so extra="forbid" accepts the HF_TOKEN that
+    # scripts/download_models.sh reads from the same .env.
     postgres_password: Annotated[SecretStr, Field(min_length=1)] | None = None
-    postgres_db: str | None = None
     hf_token: SecretStr | None = None
-    # Retired keys: declared and unread so an old .env still validates.
-    claude_scoring_model: str | None = None
-    claude_chat_model: str | None = None
-    anthropic_api_key: SecretStr | None = None
-    xai_api_key: SecretStr | None = None
-    openai_api_key: SecretStr | None = None
-    codex_cli_max_concurrent_processes: int | None = None
-    cover_max_concurrent_runs: int | None = None
 
 
 @lru_cache
