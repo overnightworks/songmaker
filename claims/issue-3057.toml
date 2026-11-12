@@ -1,0 +1,8 @@
+claim_id = "da97ad7a9a9a44e0845bedb7c0c0c3c3"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "3e0a30012b9e0bef240037ac0ad63cc46463a717"
+branch = "claude/issue-3057-the-new-song-card-reads-its-words-from-t"
+scope = ["frontend/e2e/album-new-song.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/e2e/listen-tabs.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/NewSongCard.svelte", "frontend/src/lib/components/NewSongCard.test.ts", "frontend/src/lib/constants/album.ts", "frontend/src/lib/constants/new-collection.ts", "frontend/src/lib/words/en.ts"]
+opened_commit = "8e73920bfacc7fb8a5fdab85f76c89755ed9f25c"
+whole_reason = "One surface moves whole (the epic's invariant 5): the row, the card, the catalog with its generated module, and every test that finds these elements."
