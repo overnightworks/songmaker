@@ -3,8 +3,8 @@
 ## Commands
 
 - `bash scripts/static_checks.sh`: every static check CI runs, before reporting a tip; needs `.venv` and `frontend/node_modules`.
-- `pytest -q <files>`: targeted Python tests that need no database.
-- `scripts/test_postgresql.sh <files>`: targeted tests against a throwaway PostgreSQL container.
+- `pytest -q <files>`: targeted Python tests that need no database and no Redis server.
+- `scripts/test_postgresql.sh <files>`: targeted tests against throwaway PostgreSQL and Redis containers (the database tests and the Redis wire tests).
 - `pnpm exec vitest run <file>`: one frontend test file, from `frontend/`.
 - `python scripts/generate_types.py`: regenerates the frontend's API types from `src/songmaker_cli/api_models/` after a model change.
 - `design-catalogs`: regenerates `frontend/src/lib/words/` from `frontend/src/lib/catalogs/` after a catalog change; `--check` runs in the static checks.

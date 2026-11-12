@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import coverage
 import pytest
@@ -147,6 +148,13 @@ def test_backend_runs_the_database_tests_against_its_own_postgres_service():
     (database_url,) = [url for key, url in shard["env"].items() if key.endswith("DATABASE_URL")]
     assert f"@localhost:{service_port}/" in database_url
     assert not [job_id for job_id in JOBS if "postgresql" in job_id]
+
+
+def test_backend_reaches_its_redis_service_on_the_published_port():
+    shard = JOBS["backend-shard"]
+    service_port = shard["services"]["redis"]["ports"][0].split(":")[0]
+    redis_url = urlsplit(shard["env"]["TEST_REDIS_URL"])
+    assert (redis_url.hostname, redis_url.port) == ("localhost", int(service_port))
 
 
 NOT_SUCCESS = ("failure", "cancelled", "skipped")

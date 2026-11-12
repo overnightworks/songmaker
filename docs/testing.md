@@ -13,8 +13,9 @@ changed `vendor/acestep` pin is fetched and checked out before Compose builds.
 # Backend — targeted (local / agents)
 pytest tests/songmaker_cli/db -q --tb=short
 pytest tests/songmaker_cli/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py -q
-# PostgreSQL tests — a disposable server per run, -n auto
+# PostgreSQL and Redis tests — a disposable server of each per run, -n auto
 scripts/test_postgresql.sh tests/songmaker_cli/test_db_postgresql.py -q
+scripts/test_postgresql.sh tests/songmaker_cli/test_arq_codec.py -q
 
 # Frontend — targeted (local / agents)
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
@@ -52,7 +53,7 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 
 Every database test runs on a real PostgreSQL; no test uses another database engine.
 
-**Running.** `scripts/test_postgresql.sh <files and pytest arguments>` starts a disposable container of Compose's PostgreSQL image, runs pytest against it and removes it. It needs Docker and `.venv`, refuses to start under high machine load, caps the run and the container's lifetime, and takes no probe-stack lock. Its header owns the limits and their values.
+**Running.** `scripts/test_postgresql.sh <files and pytest arguments>` starts a disposable container of Compose's PostgreSQL image and one of Compose's Redis image, runs pytest against them and removes both. Tests that need a Redis server (`tests/songmaker_cli/test_arq_codec.py`) run this way too: the script exports the Redis container's address as `TEST_REDIS_URL`, and `tests/support/redis_server.py` gives each xdist worker its own Redis database on it, flushed before every case; a run without `TEST_REDIS_URL`, or with more workers than the server has databases, fails every Redis test. It needs Docker and `.venv`, refuses to start under high machine load, caps the run and the container's lifetime, and takes no probe-stack lock. Its header owns the limits and their values.
 
 **Writing.** A test needs no marker: the case record (see CI PostgreSQL tests) decides from the fixture closure that it is a database test. Pick the fixture by what the test needs:
 - `pg_factory`: a session factory on this worker's migrated database; the fixture disposes its engine before the reset.
@@ -79,7 +80,7 @@ GitHub workflows (`.github/workflows/ci.yml` and `code-scanning.yml`) run on pus
 | Job | What |
 |---|---|
 | Backend static checks | `uv lock --check` · `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_requirement_citations.py` (every `REQ-` heading in `docs/*.md` is cited by a test, and no test cites an undefined one) · `scripts/generate_types.py --check` · `design-catalogs --check` (every catalog is valid and `frontend/src/lib/words/` is what the generator writes from `frontend/src/lib/catalogs/`, with no stray file); on `main` it alone writes the uv cache, since an entry written for a pull request is readable only by that pull request and counts against the shared quota |
-| Backend tests (shard n) | pytest against a PostgreSQL 16 service (one database per xdist worker: dialect-specific migrations, concurrency, rollback, event retention gaps), on the tests of its shard, collecting coverage data judged in Combine backend coverage; each uploads its junit report and coverage data under a name of its shard and attempt. Each installs ffmpeg and redis-server from the package files of a cache that only shard 1 of a run on `main` writes, and reads the mirror only for files the cache lacks |
+| Backend tests (shard n) | pytest against a PostgreSQL 16 service (one database per xdist worker: dialect-specific migrations, concurrency, rollback, event retention gaps) and a Redis service pinned like Compose's (`TEST_REDIS_URL`, one Redis database per xdist worker), on the tests of its shard, collecting coverage data judged in Combine backend coverage; each uploads its junit report and coverage data under a name of its shard and attempt. Each installs ffmpeg from the package files of a cache that only shard 1 of a run on `main` writes, and reads the mirror only for files the cache lacks |
 | Backend (Python 3.14) | The mandatory aggregator: runs when a shard or the static checks fail, are cancelled or are skipped, and is red unless all succeeded; it also collects the tests and is red unless the newest report of every shard holds exactly the collected node ids, each once, then runs the database proof and the summary over every shard's report |
 | Combine backend coverage | Combines the coverage data of each shard's newest attempt and judges the line and branch floors (see Coverage Targets) |
 | Quality | `quality / verdict`: `quality check`, Sonar findings, mandatory jobs and both coverage reports |
