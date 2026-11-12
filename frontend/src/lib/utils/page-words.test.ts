@@ -1,6 +1,7 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { pageText } from '#lib/utils/page-words.ts';
 import { words } from '#lib/words/en.ts';
+import { sourceLanguage } from '#lib/words/index.ts';
 
 it('reads a key without gaps as its text', () => {
 	expect(pageText('homeWrite.label')).toBe(words['homeWrite.label']);
@@ -32,4 +33,12 @@ it('refuses, at type check, values for a plain key and a missing or misnamed gap
 	// @ts-expect-error a plain key takes no count
 	void (() => pageText('rail.retry', 1));
 	expect(() => pageText('homeWrite.label')).not.toThrow();
+});
+
+it('refuses a read before the words are loaded and answers after the load', async () => {
+	vi.resetModules();
+	const fresh = await import('#lib/utils/page-words.ts');
+	expect(() => fresh.pageText('homeWrite.label')).toThrow(/read before .* loaded/);
+	await fresh.loadPageWords(sourceLanguage);
+	expect(fresh.pageText('homeWrite.label')).toBe(words['homeWrite.label']);
 });

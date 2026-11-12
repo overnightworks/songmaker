@@ -20,7 +20,7 @@ import {
 	shellOf,
 	stubIdentityProvider
 } from './helpers';
-import { LOG_OUT_NAME } from './account-menu-words';
+import { kitWords, LOG_OUT_NAME } from './account-menu-words';
 import { BASE_URL, runMarker, seedAccount, signedInApi, type SeededAccount } from './seed';
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -56,14 +56,6 @@ test('the sign-in start sends the browser to the issuer with a pending login tha
 	expect(pendingLogin?.value, 'the start leaves a pending-login cookie').toMatch(/samesite=lax/i);
 });
 
-// The words the design kit's SignInPage shows; the kit exports none.
-const SIGNED_OUT_HEADING = 'You are logged out.';
-const LOG_IN_LABEL = 'Log in';
-const LOG_OUT_LABEL = 'Log out';
-const NO_ACCESS_HEADING = 'No access';
-const SIGN_IN_FAILED_HEADING = 'Login failed';
-const TRY_AGAIN_LABEL = 'Try again';
-
 test('the signed-out page says so and starts the sign-in only when Log in is pressed', async ({
 	page
 }) => {
@@ -75,8 +67,8 @@ test('the signed-out page says so and starts the sign-in only when Log in is pre
 
 	await page.goto('/login');
 
-	await expect(page.getByRole('heading', { name: SIGNED_OUT_HEADING })).toBeVisible();
-	const logIn = page.getByRole('link', { name: LOG_IN_LABEL, exact: true });
+	await expect(page.getByRole('heading', { name: kitWords['signIn.loggedOut'] })).toBeVisible();
+	const logIn = page.getByRole('link', { name: kitWords['signIn.logIn'], exact: true });
 	await expect(logIn).toHaveAttribute('href', '/login/oidc');
 	await page.waitForLoadState('networkidle');
 	expect(started, 'the page redirects by itself').toEqual([]);
@@ -132,8 +124,8 @@ test('no access offers Log out and nothing else to press', async ({ page }) => {
 
 	await page.goto('/no-access');
 
-	await expect(page.getByRole('heading', { name: NO_ACCESS_HEADING })).toBeVisible();
-	await expect(page.getByRole('button', { name: LOG_OUT_LABEL })).toBeVisible();
+	await expect(page.getByRole('heading', { name: kitWords['signIn.noAccess'] })).toBeVisible();
+	await expect(page.getByRole('button', { name: kitWords['signIn.logOut'] })).toBeVisible();
 	const card = page.getByRole('main');
 	await expect(card.getByRole('link')).toHaveCount(0);
 	await expect(card.getByRole('button')).toHaveCount(1);
@@ -157,7 +149,7 @@ test('Log out on no access posts to the server and the answer sends the browser 
 				address.pathname.endsWith(LOGOUT_ENDPOINT_SUFFIX)
 			);
 		}),
-		page.getByRole('button', { name: LOG_OUT_LABEL }).click()
+		page.getByRole('button', { name: kitWords['signIn.logOut'] }).click()
 	]);
 
 	expect(answer.request().method()).toBe('POST');
@@ -218,11 +210,11 @@ for (const [refusal, query] of [
 
 		expect(response?.status()).toBe(403);
 		expect(response?.headers()['cache-control']).toContain('no-store');
-		await expect(page.getByRole('heading', { name: SIGN_IN_FAILED_HEADING })).toBeVisible();
+		await expect(page.getByRole('heading', { name: kitWords['signIn.loginFailed'] })).toBeVisible();
 		await expect(page.getByRole('alert')).toBeVisible();
 		const [start] = await Promise.all([
 			nextSignInStart(page),
-			page.getByRole('link', { name: TRY_AGAIN_LABEL, exact: true }).click()
+			page.getByRole('link', { name: kitWords['signIn.tryAgain'], exact: true }).click()
 		]);
 		expect(start.status).toBe(303);
 		await expect.poll(() => leftTheApp(page)).toBe(true);

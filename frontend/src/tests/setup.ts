@@ -2,6 +2,9 @@ import '@testing-library/jest-dom/vitest';
 import { beforeEach, vi } from 'vitest';
 import './browser-apis.ts';
 import './viz-colors.ts';
+import { loadPageKitWords } from '#lib/utils/kit-words.ts';
+import { loadPageWords } from '#lib/utils/page-words.ts';
+import { sourceLanguage } from '#lib/words/index.ts';
 
 // jsdom performs no layout, so it ships no ResizeObserver. Components that
 // re-measure when their box changes size must still be mountable here; a test
@@ -34,3 +37,6 @@ vi.mock('$app/navigation', async () =>
 beforeEach(() => {
 	document.documentElement.lang = 'en';
 });
+
+// Every test file starts with the page's and the kit's words loaded, as the root layout's `load` leaves them.
+await Promise.all([loadPageWords(sourceLanguage), loadPageKitWords(sourceLanguage)]);

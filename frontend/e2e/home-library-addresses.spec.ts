@@ -18,6 +18,7 @@ import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Page } from './coverage-test';
 import { LIBRARY_NEW_MENU_LABEL } from '../src/lib/constants/library';
 import { words } from '../src/lib/words/en';
+import { kitWords } from './account-menu-words';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
 	routerHistoryEntry,
@@ -350,7 +351,7 @@ test(
 
 		const [start] = await Promise.all([
 			nextSignInStart(page),
-			page.getByRole('link', { name: 'Log in', exact: true }).click()
+			page.getByRole('link', { name: kitWords['signIn.logIn'], exact: true }).click()
 		]);
 
 		expect(start.status).toBe(303);
