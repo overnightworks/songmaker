@@ -16,11 +16,9 @@ import { APP_NAME } from '../src/lib/constants/app';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import {
 	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL
 } from '../src/lib/constants/rail';
-import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
@@ -29,8 +27,7 @@ import {
 	libraryRouteShape
 } from '../src/lib/routes/addresses';
 import { BASE_URL } from './seed';
-import { words } from '../src/lib/words/en';
-import { PHONE_TABS } from '../src/lib/constants/phone-tabs';
+import { words, type Key } from '../src/lib/words/en';
 import { openSearchSheet, searchSheet } from './phone-search';
 import { routerHistoryEntryOf } from '../src/lib/test-utils/router-history-layout';
 
@@ -344,7 +341,7 @@ export function wallBody(page: Page): Locator {
 
 /** Back to the wall through the word LIBRARY, in the same SPA document. */
 export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
-	await openPlace(page, shell, LIBRARY_PAGE_LABEL, 'places.library');
+	await openPlace(page, shell, 'places.library', LIBRARY_PAGE_LABEL);
 	await expect(page).toHaveURL(LIBRARY_URL);
 }
 
@@ -387,30 +384,33 @@ export async function openHome(page: Page, shell: Shell): Promise<void> {
 	await expect(page).toHaveURL(HOME_URL);
 }
 
-type PlaceKey = (typeof PHONE_TABS)[number]['labelKey'];
-
-async function openPlace(page: Page, shell: Shell, label: string, tabKey: PlaceKey): Promise<void> {
+async function openPlace(
+	page: Page,
+	shell: Shell,
+	key: Extract<Key, `places.${string}`>,
+	railLabel: string = words[key]
+): Promise<void> {
 	if (shell === 'desktop') {
 		await (
 			await openRailNav(page, shell)
 		)
-			.getByRole('link', { name: nameStartingWith(label) })
+			.getByRole('link', { name: nameStartingWith(railLabel) })
 			.click();
 		return;
 	}
 	const tab = page
 		.getByRole('navigation', { name: words['phoneTabs.nav'] })
-		.getByRole('button', { name: words[tabKey], exact: true });
+		.getByRole('button', { name: words[key], exact: true });
 	if (await tab.isVisible()) await tab.click();
 	else {
-		await openPageFromSearch(page, label);
+		await openPageFromSearch(page, words[key]);
 		await expect(searchSheet(page)).toBeHidden();
 	}
 }
 
 /** The Playlists page through the shell's navigation. */
 export async function openPlaylistsPage(page: Page, shell: Shell): Promise<void> {
-	await openPlace(page, shell, PLAYLISTS_PAGE_LABEL, 'places.playlists');
+	await openPlace(page, shell, 'places.playlists');
 	await expect(page).toHaveURL(/\/playlists$/);
 }
 
@@ -422,7 +422,7 @@ export async function sameOriginHeaders(_page: Page): Promise<Record<string, str
 /** The desktop rail; phone callers use tabs or Search. */
 export async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
 	if (shell === 'mobile') throw new Error('The phone has tabs, not a rail');
-	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+	return page.getByRole('navigation', { name: words['rail.nav'] });
 }
 
 const ACCOUNT_MENU_NAME = new RegExp(`^${ACCOUNT_MENU_LABEL} · `);
@@ -468,7 +468,7 @@ export async function openSettingsSection(
 		return;
 	}
 	const rail = await openRailNav(page, shell);
-	await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true }).click();
+	await rail.getByRole('button', { name: words['places.settings'], exact: true }).click();
 	await rail.getByRole('link', { name: section, exact: true }).click();
 }
 

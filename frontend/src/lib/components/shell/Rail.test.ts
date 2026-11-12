@@ -19,6 +19,7 @@ import {
 	selectedPlaylistDetail
 } from '#lib/stores/playlists.ts';
 import { railCollapsed, railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '#lib/stores/ui.ts';
+import { words } from '#lib/words/en.ts';
 import {
 	buildAlbum as album,
 	buildPlaylist as playlist,
@@ -162,9 +163,14 @@ describe('Rail', () => {
 		const groupRows = target.querySelectorAll<HTMLElement>('.rail-group > .disclose-row');
 		expect(groupRows[0]?.textContent).toContain('Library');
 		await vi.waitFor(() => expect(groupRows[0]?.querySelector('.meta')?.textContent).toBe('1'));
-		expect(groupRows[1]?.textContent).toContain('Playlists');
-		expect(groupRows[2]?.textContent).toContain('Settings');
+		expect(groupRows[1]?.textContent).toContain(words['places.playlists']);
+		expect(groupRows[2]?.textContent).toContain(words['places.settings']);
 		expect(target.querySelector('.rail-bottom, .user-row, .collapsed-account')).toBeNull();
+	});
+
+	it('names its landmark from the catalog', async () => {
+		const target = await render();
+		expect(requireElement(target, 'nav.rail').getAttribute('aria-label')).toBe(words['rail.nav']);
 	});
 
 	it('renders the only search field directly beneath the brand', async () => {
@@ -182,10 +188,10 @@ describe('Rail', () => {
 		expect(rail.classList.contains('rail-collapsed')).toBe(true);
 		expect(
 			requireElement<HTMLButtonElement>(rail, '.rail-collapse').getAttribute('aria-label')
-		).toBe('Expand rail');
+		).toBe(words['rail.expand']);
 		expect(rail.querySelector('.rail-search-region')).not.toBeNull();
 		expect(rail.querySelectorAll<HTMLInputElement>('input[type="search"]')).toHaveLength(1);
-		for (const label of ['Library', 'Playlists', 'Settings']) {
+		for (const label of ['Library', words['places.playlists'], words['places.settings']]) {
 			const group = Array.from(rail.querySelectorAll<HTMLButtonElement>('.disclose')).find(
 				(button) => button.getAttribute('aria-label') === label
 			);
@@ -200,7 +206,7 @@ describe('Rail', () => {
 		const scroll = requireElement<HTMLElement>(target, '.rail-scroll');
 		scroll.scrollTop = 48;
 
-		expect(handle.getAttribute('aria-label')).toBe('Resize rail');
+		expect(handle.getAttribute('aria-label')).toBe(words['rail.resize']);
 		expect(handle.min).toBe(String(RAIL_MIN_WIDTH_PX));
 		expect(handle.max).toBe(String(RAIL_MAX_WIDTH_PX));
 		handle.focus();
@@ -241,9 +247,9 @@ describe('Rail', () => {
 				'.rail-scroll > a, .rail-scroll a.page-link'
 			);
 			expect(Array.from(links, (link) => link.textContent?.trim())).toEqual([
-				'Home',
+				words['places.home'],
 				'Library 0',
-				'Playlists 0'
+				`${words['places.playlists']} 0`
 			]);
 			expect(links[0]?.getAttribute('href')).toBe('/');
 			expect(links[0]?.getAttribute('aria-current')).toBe(path === '/' ? 'page' : null);
@@ -251,9 +257,9 @@ describe('Rail', () => {
 	);
 
 	it.each([
-		{ path: '/', surface: 'home', label: 'Home' },
+		{ path: '/', surface: 'home', label: words['places.home'] },
 		{ path: '/library', surface: 'browse', label: 'Library 0' },
-		{ path: '/playlists', surface: 'playlists', label: 'Playlists 0' }
+		{ path: '/playlists', surface: 'playlists', label: `${words['places.playlists']} 0` }
 	] as const)(
 		'1354_rule_40: $label current mark follows song visibility at $path',
 		async ({ path, surface, label }) => {
@@ -358,14 +364,16 @@ describe('Rail', () => {
 		const scrolledGroups = scroll.querySelectorAll('.rail-group > .disclose-row');
 		expect(scrolledGroups).toHaveLength(2);
 		expect(scrolledGroups[0]?.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
-		expect(scrolledGroups[1]?.querySelector('.group-title')?.textContent?.trim()).toBe('Playlists');
-		expect(scroll.textContent).not.toContain('Settings');
+		expect(scrolledGroups[1]?.querySelector('.group-title')?.textContent?.trim()).toBe(
+			words['places.playlists']
+		);
+		expect(scroll.textContent).not.toContain(words['places.settings']);
 
 		const settingsPin = requireElement(target, '.rail-settings-pin');
 		const settingsToggle = settingsPin.querySelector(
 			'.rail-group > .disclose-row > button.disclose'
 		);
-		expect(settingsToggle?.textContent).toContain('Settings');
+		expect(settingsToggle?.textContent).toContain(words['places.settings']);
 	});
 
 	it('opens an album through the kinetic rail click', async () => {

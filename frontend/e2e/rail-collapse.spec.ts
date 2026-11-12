@@ -1,6 +1,5 @@
 import { words } from '../src/lib/words/en';
 import { expect, test } from './coverage-test';
-import { RAIL_NAV_LABEL } from '../src/lib/constants/rail';
 import { HOME_PATH, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
 
 for (const { shell, name, viewport } of [
@@ -33,12 +32,12 @@ for (const { shell, name, viewport } of [
 
 		if (isMobile) {
 			await expect(page.getByRole('navigation', { name: words['phoneTabs.nav'] })).toBeVisible();
-			await expect(page.getByRole('navigation', { name: RAIL_NAV_LABEL })).toHaveCount(0);
+			await expect(page.getByRole('navigation', { name: words['rail.nav'] })).toHaveCount(0);
 			return;
 		}
 
-		const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-		const resizeHandle = rail.getByRole('slider', { name: 'Resize rail' });
+		const rail = page.getByRole('navigation', { name: words['rail.nav'] });
+		const resizeHandle = rail.getByRole('slider', { name: words['rail.resize'] });
 		const railScroll = rail.locator('.rail-scroll');
 		await expect(resizeHandle).toBeVisible();
 		await resizeHandle.focus();
@@ -59,22 +58,21 @@ for (const { shell, name, viewport } of [
 		await expect(resizeHandle).toBeFocused();
 		expect(await railScroll.evaluate((element) => element.scrollTop)).toBe(scrollTop);
 
-		const control = rail.getByRole('button', { name: 'Collapse rail' });
+		const control = rail.getByRole('button', { name: words['rail.collapse'] });
 		await expect(control).toBeVisible();
 		await control.click();
 		await expect(rail).toHaveClass(/rail-collapsed/);
 		await expect(rail).toHaveCSS('width', '52px');
-		await expect(rail.getByRole('button', { name: 'Expand rail' })).toBeVisible();
-		await expect(rail.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute(
-			'title',
-			'Settings'
-		);
+		await expect(rail.getByRole('button', { name: words['rail.expand'] })).toBeVisible();
+		await expect(
+			rail.getByRole('button', { name: words['places.settings'], exact: true })
+		).toHaveAttribute('title', words['places.settings']);
 		// defect:#1409 (#1354 rule 40): the fold control hides, so the icon column fits the 52 px rail.
 		expect(await railScroll.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
 			true
 		);
 		for (const [label, pathname] of [
-			['Playlists', '/playlists'],
+			[words['places.playlists'], '/playlists'],
 			['Library', LIBRARY_PATH]
 		]) {
 			const groupIcon = rail.getByRole('link', { name: new RegExp(`^${label}\\b`) });
@@ -85,10 +83,10 @@ for (const { shell, name, viewport } of [
 
 		await page.reload();
 		await expect(rail).toHaveClass(/rail-collapsed/);
-		await rail.getByRole('button', { name: 'Expand rail' }).click();
+		await rail.getByRole('button', { name: words['rail.expand'] }).click();
 		await expect(rail).not.toHaveClass(/rail-collapsed/);
 		await expect(rail).toHaveCSS('width', '330px');
-		await expect(rail.getByRole('slider', { name: 'Resize rail' })).toBeVisible();
+		await expect(rail.getByRole('slider', { name: words['rail.resize'] })).toBeVisible();
 	});
 }
 
@@ -126,7 +124,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			});
 			try {
 				await page.goto(shell === 'mobile' ? HOME_PATH : LIBRARY_PATH);
-				const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+				const rail = page.getByRole('navigation', { name: words['rail.nav'] });
 				if (shell === 'mobile') {
 					const tabs = page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 					await tabs.getByRole('button', { name: words['places.library'], exact: true }).click();

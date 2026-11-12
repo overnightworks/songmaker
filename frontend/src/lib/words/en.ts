@@ -49,6 +49,13 @@ export type Words = {
     readonly "phoneAppBar.searchOpen": string;
     readonly "phoneAppBar.searchSheet": string;
     readonly "phoneAppBar.searchClose": string;
+    readonly "rail.nav": string;
+    readonly "rail.collapse": string;
+    readonly "rail.expand": string;
+    readonly "rail.resize": string;
+    readonly "rail.playlistsNav": string;
+    readonly "places.settings": string;
+    readonly "rail.settingsNav": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -98,5 +105,12 @@ export const words: Words = {
     "phoneAppBar.searchOpen": "Search",
     "phoneAppBar.searchSheet": "Search",
     "phoneAppBar.searchClose": "Close search",
+    "rail.nav": "Primary",
+    "rail.collapse": "Collapse rail",
+    "rail.expand": "Expand rail",
+    "rail.resize": "Resize rail",
+    "rail.playlistsNav": "Rail playlists",
+    "places.settings": "Settings",
+    "rail.settingsNav": "Settings sections",
 };
 export type Key = keyof Words;

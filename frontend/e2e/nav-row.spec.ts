@@ -1,11 +1,8 @@
 import { expect, test, type Locator } from './coverage-test';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
+import { words } from '../src/lib/words/en';
 import { API_ERROR_GENERIC_MESSAGE } from '../src/lib/constants/http';
-import {
-	RAIL_NAV_LABEL,
-	RAIL_SEARCH_CLEAR_LABEL,
-	RAIL_SEARCH_LABEL
-} from '../src/lib/constants/rail';
+import { RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_EVENT_HELLO
@@ -53,7 +50,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			const rail =
 				shell === 'mobile'
 					? await openSearchSheet(page)
-					: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+					: page.getByRole('navigation', { name: words['rail.nav'] });
 			const search = rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL });
 			await expect(search).toHaveCount(1);
 			await expect(surface.locator('.search')).toHaveCount(0);
@@ -87,7 +84,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			const rail =
 				shell === 'mobile'
 					? await openSearchSheet(page)
-					: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+					: page.getByRole('navigation', { name: words['rail.nav'] });
 			const search = rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL });
 
 			if (shell === 'mobile') await expectPhoneBarHeight(rail);

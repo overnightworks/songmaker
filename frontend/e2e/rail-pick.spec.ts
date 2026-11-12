@@ -1,6 +1,7 @@
 import { expect, test, type Page } from './coverage-test';
 import { EDITOR_LYRICS_LABEL } from '../src/lib/constants/song';
-import { RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants/rail';
+import { words } from '../src/lib/words/en';
+import { RAIL_LIBRARY_NAV_LABEL } from '../src/lib/constants/rail';
 import { NOW_PLAYING_UNPICK_LABEL } from '../src/lib/constants/now-playing';
 import { archiveOwnedAlbum, seedTake } from './seed';
 import { ONLY_IN_SHELL, sameOriginHeaders } from './helpers';
@@ -49,7 +50,7 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 
 		await page.goto(`/album/${album.id}`);
 		const railLibrary = page
-			.getByRole('navigation', { name: RAIL_NAV_LABEL })
+			.getByRole('navigation', { name: words['rail.nav'] })
 			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL });
 		const pickedRow = railLibrary.getByRole('button', { name: new RegExp(pickedTitle) });
 		const unpickedRow = railLibrary.getByRole('button', { name: new RegExp(unpickedTitle) });

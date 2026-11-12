@@ -8,8 +8,7 @@
 	import { standingPathname } from '#lib/routes/standingAddress.ts';
 	import { followPlainClick, openHome } from '#lib/stores/navigation.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
-	import { RAIL_NAV_LABEL } from '#lib/constants/rail.ts';
-	import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { kineticScroll } from '#lib/actions/kineticScroll.ts';
 	import Icon from '../Icon.svelte';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
@@ -35,9 +34,7 @@
 		placeShown(homePlace, $librarySurface, $selectedSongId, standingPathname(page.state))
 	);
 
-	const collapseRailLabel = 'Collapse rail';
-	const expandRailLabel = 'Expand rail';
-	const resizeRailLabel = 'Resize rail';
+	const toggleRailLabel = $derived(pageText(collapsed ? 'rail.expand' : 'rail.collapse'));
 	let rail: HTMLElement;
 	let resizing = $state(false);
 
@@ -94,7 +91,12 @@
 	onpointercancel={stopResize}
 />
 
-<nav bind:this={rail} class="rail" class:rail-collapsed={collapsed} aria-label={RAIL_NAV_LABEL}>
+<nav
+	bind:this={rail}
+	class="rail"
+	class:rail-collapsed={collapsed}
+	aria-label={pageText('rail.nav')}
+>
 	<div class="rail-top">
 		<button
 			type="button"
@@ -117,12 +119,12 @@
 			class="home-link rail-page-link"
 			href={HOME_ROUTE_PATH}
 			aria-current={onHome ? 'page' : undefined}
-			title={collapsed ? HOME_PAGE_LABEL : undefined}
+			title={collapsed ? pageText('places.home') : undefined}
 			onclick={(event) => followPlainClick(event, openHome)}
 		>
 			<span class="home-fold-spacer" aria-hidden="true"></span>
 			<span aria-hidden="true"><Icon name={homePlace} size={14} /></span>
-			<span class="group-title">{HOME_PAGE_LABEL}</span>
+			<span class="group-title">{pageText('places.home')}</span>
 		</a>
 		<RailLibraryGroup />
 		<RailPlaylistsGroup />
@@ -135,8 +137,8 @@
 	<button
 		type="button"
 		class="rail-collapse"
-		aria-label={collapsed ? expandRailLabel : collapseRailLabel}
-		title={collapsed ? expandRailLabel : collapseRailLabel}
+		aria-label={toggleRailLabel}
+		title={toggleRailLabel}
 		onclick={toggleRailCollapsed}
 	>
 		{collapsed ? '›' : '‹'}
@@ -147,7 +149,7 @@
 			type="range"
 			class="rail-resize"
 			class:rail-resizing={resizing}
-			aria-label={resizeRailLabel}
+			aria-label={pageText('rail.resize')}
 			min={RAIL_MIN_WIDTH_PX}
 			max={RAIL_MAX_WIDTH_PX}
 			step={RAIL_WIDTH_STEP_PX}

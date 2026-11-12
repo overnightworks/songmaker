@@ -7,8 +7,7 @@ import {
 	COLLECTION_MENU_COVER_REMOVE_LABEL,
 	COLLECTION_MENU_LABEL
 } from '../src/lib/constants/collection-menu';
-import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
-import { RAIL_PLAYLISTS_NAV_LABEL } from '../src/lib/constants/rail';
+import { words } from '../src/lib/words/en';
 import { sameOriginHeaders, openPlaylistsPage, openRailNav } from './helpers';
 import { archiveOwnedAlbum, seedTake } from './seed';
 
@@ -28,10 +27,10 @@ async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
 
 async function railPlaylistRow(page: Page, title: string) {
 	const rail = await openRailNav(page, 'desktop');
-	const group = rail.getByRole('button', { name: PLAYLISTS_PAGE_LABEL, exact: true });
+	const group = rail.getByRole('button', { name: words['places.playlists'], exact: true });
 	if ((await group.getAttribute('aria-expanded')) === 'false') await group.click();
 	return rail
-		.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+		.getByRole('navigation', { name: words['rail.playlistsNav'] })
 		.getByRole('listitem')
 		.filter({ hasText: title });
 }
@@ -105,7 +104,7 @@ test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop
 		if (!isMobile) {
 			const rail = await openRailNav(page, 'desktop');
 			const playlistsGroup = rail.getByRole('button', {
-				name: PLAYLISTS_PAGE_LABEL,
+				name: words['places.playlists'],
 				exact: true
 			});
 			const collapsedMosaicRow = rail

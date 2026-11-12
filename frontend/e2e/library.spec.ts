@@ -30,11 +30,8 @@ import {
 	PLAYLISTS_PAGE_LABEL,
 	PLAYLISTS_WALL_ORDER_GROUP_LABEL
 } from '../src/lib/constants/playlist';
-import {
-	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_PLAYLISTS_NAV_LABEL,
-	RAIL_SETTINGS_LABEL
-} from '../src/lib/constants/rail';
+import { RAIL_LIBRARY_NAV_LABEL, RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
+import { words } from '../src/lib/words/en';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
@@ -900,7 +897,7 @@ test(
 		// row inside it plays and judges the same way a library track does.
 		const [firstPlaylistSongTitle] = playlist.songTitles;
 		await rail
-			.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+			.getByRole('navigation', { name: words['rail.playlistsNav'] })
 			.getByRole('button', { name: nameStartingWith(firstPlaylistSongTitle) })
 			.click();
 		await expectTakeShownInNowPlaying(page, shell, firstPlaylistSongTitle);
@@ -977,7 +974,7 @@ test(
 		// SETTINGS is the same kind of group header: both its visible text and
 		// caret only disclose its children. Neither can choose an admin page.
 		const settingsGroupToggle = rail.getByRole('button', {
-			name: RAIL_SETTINGS_LABEL,
+			name: words['places.settings'],
 			exact: true
 		});
 		const settingsUrl = page.url();
@@ -1251,6 +1248,7 @@ test(
 			(await openRailNav(page, shell)).getByRole('link', { name: nameStartingWith(label) });
 		const groupArrow = async (label: string) =>
 			(await openRailNav(page, shell)).getByRole('button', { name: label, exact: true });
+		const playlists = words['places.playlists'];
 
 		await page.goto(LIBRARY_PATH);
 		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
@@ -1264,13 +1262,13 @@ test(
 		await expect(await groupArrow(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'false');
 		await expect(page).toHaveURL(LIBRARY_URL);
 
-		await (await groupWord(PLAYLISTS_PAGE_LABEL)).click();
+		await (await groupWord(playlists)).click();
 		await expect(page).toHaveURL(/\/playlists$/);
-		await expect(await groupWord(PLAYLISTS_PAGE_LABEL)).toHaveAttribute('aria-current', 'page');
-		await expect(await groupArrow(PLAYLISTS_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'true');
+		await expect(await groupWord(playlists)).toHaveAttribute('aria-current', 'page');
+		await expect(await groupArrow(playlists)).toHaveAttribute('aria-expanded', 'true');
 
-		await (await groupArrow(PLAYLISTS_PAGE_LABEL)).click();
-		await expect(await groupArrow(PLAYLISTS_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'false');
+		await (await groupArrow(playlists)).click();
+		await expect(await groupArrow(playlists)).toHaveAttribute('aria-expanded', 'false');
 		await expect(page).toHaveURL(/\/playlists$/);
 
 		await (await groupWord(LIBRARY_PAGE_LABEL)).click();

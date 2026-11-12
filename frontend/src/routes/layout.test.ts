@@ -33,7 +33,6 @@ import { get } from 'svelte/store';
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
-import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 import { words } from '#lib/words/en.ts';
 import { apiFetch } from '#lib/api/fetch.ts';
 import {
@@ -508,7 +507,7 @@ describe('app shell', () => {
 		expect(target.querySelector('.mobile-strip')).toBeNull();
 		expect(target.querySelector('.phone-tabs')).toBeNull();
 		const rail = requireElement<HTMLElement>(target, '.rail');
-		expect(rail.textContent).toContain(RAIL_SETTINGS_LABEL);
+		expect(rail.textContent).toContain(words['places.settings']);
 		expect(rail.querySelector('.rail-bottom')).toBeNull();
 	});
 
@@ -519,7 +518,7 @@ describe('app shell', () => {
 		const control = requireElement<HTMLButtonElement>(rail, '.rail-collapse');
 
 		expect(shell.classList.contains('rail-collapsed')).toBe(false);
-		expect(control.getAttribute('aria-label')).toBe('Collapse rail');
+		expect(control.getAttribute('aria-label')).toBe(words['rail.collapse']);
 		control.click();
 		await tick();
 

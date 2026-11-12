@@ -8,9 +8,10 @@
 
 import { expect, test, type Locator, type Page } from './coverage-test';
 import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
+import { words } from '../src/lib/words/en';
 
 import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
-import { RAIL_NAV_LABEL, RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
+import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import {
 	accountCircle,
 	accountMenu,
@@ -73,7 +74,7 @@ test('the account circle opens a menu with the name, Settings, the theme, Log ou
 	await expect(menu.getByText('Signed in as')).toHaveCount(0);
 
 	if (shell === 'desktop') {
-		const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+		const rail = page.getByRole('navigation', { name: words['rail.nav'] });
 		await expect(rail.getByRole('button', { name: /^(Log ?out|Sign out)$/i })).toHaveCount(0);
 		await expect(rail.getByRole('link', { name: 'Account', exact: true })).toHaveCount(0);
 	}
