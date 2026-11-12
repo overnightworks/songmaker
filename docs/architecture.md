@@ -1795,12 +1795,7 @@ Access logs and HTTP duration metrics are recorded when the full exchange ends, 
 
 ### Alerting
 
-Two sources reach the operator:
-
-1. **systemd.** `scripts/send_alert.sh <subject> <body>` sends one email via curl's built-in SMTP client (`--ssl-reqd smtp://…` — no sendmail/msmtp install needed) to `ALERT_EMAIL_TO` in `.env`, from the operator's own SMTP account (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`). It reads its five config values exclusively from `.env` and fails loudly (non-zero exit, named reason on stderr) if any are missing or the send itself fails, a hung send included, which ends after its 60-second bound and is reported like any failed send; it never reports success it didn't achieve. It hands curl the credentials on a file descriptor (`--config`) rather than in `--user`, so they appear in no process argument. `scripts/alert_config.sh` owns the list of the five values. The template unit `scripts/songmaker-alert@.service` runs it; `songmaker-cli-credentials-mirror.service` declares `OnFailure=songmaker-alert@%n.service`, so a failed mirror run sends one mail. `scripts/install_cli_credentials_mirror.sh` installs the template unit alongside the mirror's (idempotent).
-2. **The platform's Prometheus.** Its rules cover the conditions `/metrics` exposes: no online ACE-Step worker (`NoOnlineAceStepWorker`), a job failure (`SongmakerJobFailure`), an unhealthy background loop (`SongmakerBackgroundLoopUnhealthy`) and the scrape target down (the generic `TargetDown` rule). The rules and their delivery live with the platform, not in this repository.
-
-The two sources share no deduplication: nothing correlates them, and one channel stays available when the other breaks.
+The platform's Prometheus is the only alert source. Its rules cover the conditions `/metrics` exposes: no online ACE-Step worker (`NoOnlineAceStepWorker`), a job failure (`SongmakerJobFailure`), an unhealthy background loop (`SongmakerBackgroundLoopUnhealthy`) and the scrape target down (the generic `TargetDown` rule). The rules and their delivery live with the platform, not in this repository.
 
 ## Backup & Restore
 
