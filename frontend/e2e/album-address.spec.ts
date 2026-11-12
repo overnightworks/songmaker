@@ -15,6 +15,7 @@
 // which costs the stack nothing.
 
 import { expect, test, type Page } from './coverage-test';
+import { words } from '../src/lib/words/en';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
@@ -33,7 +34,6 @@ import { readSeededLibrary } from './seed';
 const ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET = 33;
 
 const LIVE_STREAM_PATH = '/api/resource-events/stream';
-const WORKSPACE_LOADING_TEXT = 'Loading...';
 
 let guard: FlowGuard;
 
@@ -63,7 +63,7 @@ function countLiveStreamOpens(page: Page): () => number {
 
 /** The workspace is up: no bootstrap gate left standing, no bootstrap failure. */
 async function expectWorkspaceStanding(page: Page): Promise<void> {
-	await expect(page.getByText(WORKSPACE_LOADING_TEXT, { exact: true })).toHaveCount(0);
+	await expect(page.getByText(words['libraryWorkspace.loading'], { exact: true })).toHaveCount(0);
 	await expect(page.getByText(RESOURCE_SYNC_ERROR, { exact: true })).toHaveCount(0);
 }
 

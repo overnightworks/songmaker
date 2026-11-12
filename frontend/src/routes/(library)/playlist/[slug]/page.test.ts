@@ -18,6 +18,7 @@ import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
 import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
+import { words } from '#lib/words/en.ts';
 
 const PLAYLIST_SLUG = 'friday-night';
 const PLAYLIST_TITLE = 'Friday Night';
@@ -228,7 +229,7 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 		const target = openAddress();
 
 		await vi.waitFor(() => expect(target.textContent).toContain('Playlist service is down'));
-		expect(target.textContent).not.toContain('No such playlist');
+		expect(target.textContent).not.toContain(words['addressPage.noSuchPlaylist']);
 	});
 
 	it.each([
@@ -241,7 +242,7 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 		const target = openAddress();
 
 		await vi.waitFor(() =>
-			expect(target.textContent).toContain('This playlist could not be loaded.')
+			expect(target.textContent).toContain(words['addressPage.playlistUnreachable'])
 		);
 		expect(target.textContent).not.toMatch(/Failed to fetch|No answer from/);
 	});
@@ -253,9 +254,11 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 		);
 		const target = openAddress();
 		await vi.waitFor(() =>
-			expect(target.textContent).toContain('This playlist could not be loaded.')
+			expect(target.textContent).toContain(words['addressPage.playlistUnreachable'])
 		);
-		expect(requireElement(target, 'button.address-action').textContent).toBe('Try again');
+		expect(requireElement(target, 'button.address-action').textContent).toBe(
+			words['addressPage.tryAgain']
+		);
 
 		api.fetchPlaylists.mockResolvedValue([
 			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
@@ -304,14 +307,18 @@ describe('/playlist/<slug> naming no playlist', () => {
 	it('says the address names no playlist instead of showing an empty page', async () => {
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('No such playlist'));
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain(words['addressPage.noSuchPlaylist'])
+		);
 		expect(target.querySelector('[role="alert"]')).not.toBeNull();
 	});
 
 	it('stays on the address instead of redirecting to the library', async () => {
 		const target = openAddress();
 
-		await vi.waitFor(() => expect(target.textContent).toContain('No such playlist'));
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain(words['addressPage.noSuchPlaylist'])
+		);
 		expect(window.location.pathname).toBe('/playlist/ghost');
 		expect(get(openCollection)).toBeNull();
 	});
@@ -336,7 +343,7 @@ describe('/playlist/<slug> after the library load failed', () => {
 		]);
 		requireElement(target, 'button.address-action').click();
 		await tick();
-		expect(target.textContent).toContain('Loading playlist...');
+		expect(target.textContent).toContain(words['addressPage.loadingPlaylist']);
 		expect(target.textContent).not.toContain('Playlist service is down');
 
 		await vi.waitFor(() => expect(target.textContent).toContain(ENTRY_SONG_TITLE));

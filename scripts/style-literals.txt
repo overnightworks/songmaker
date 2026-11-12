@@ -1,4 +1,5 @@
 lib/components/AccountMenu.svelte 1
+lib/components/AddressOverlay.svelte 2
 lib/components/AgentProblemLine.svelte 2
 lib/components/AiNotice.svelte 2
 lib/components/AlbumCoverEditor.svelte 6
@@ -70,10 +71,6 @@ lib/components/shell/RailSearch.svelte 13
 lib/components/shell/RailSettings.svelte 2
 lib/styles/compact-ui.ts 2
 lib/utils/visualizer.ts 12
-routes/(library)/album/[slug]/+page.svelte 2
-routes/(library)/album/[slug]/[song]/+page.svelte 2
-routes/(library)/album/[slug]/[song]/take/[n]/+page.svelte 2
-routes/(library)/playlist/[slug]/+page.svelte 2
 routes/+layout.svelte 3
 routes/settings/+page.svelte 2
 routes/settings/about/+page.svelte 3

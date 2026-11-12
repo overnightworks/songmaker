@@ -24,8 +24,8 @@
 	import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';
 	import { libraryLoadFailed } from '#lib/stores/libraryRecovery.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
-	import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 	import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import BusyState from './BusyState.svelte';
 	import LoadFailure from './LoadFailure.svelte';
 	import LibraryHome from './LibraryHome.svelte';
@@ -73,17 +73,19 @@
 {#if bootstrapFailed}
 	<LoadFailure
 		message={sync.error || RESOURCE_SYNC_ERROR}
-		retryLabel={LIBRARY_RETRY_LABEL}
+		retryLabel={pageText('libraryWorkspace.retry')}
 		onretry={() => void retryLoad()}
 	/>
 {:else if !workspaceReady}
-	<BusyState text="Loading..." />
+	<BusyState text={pageText('libraryWorkspace.loading')} />
 {:else}
 	<div class="library-root">
 		{#if sync.status === 'error' && sync.error}
 			<div class="sync-status" role="alert">
 				<p>{sync.error}</p>
-				<button class="retry-btn" onclick={() => void retryLoad()}>{LIBRARY_RETRY_LABEL}</button>
+				<button class="retry-btn" onclick={() => void retryLoad()}
+					>{pageText('libraryWorkspace.retry')}</button
+				>
 			</div>
 		{/if}
 		<main class="main">

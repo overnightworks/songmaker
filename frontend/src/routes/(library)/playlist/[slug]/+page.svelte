@@ -4,78 +4,32 @@
 	import { LIBRARY_ROUTE_ID } from '#lib/routes/addresses.ts';
 	import { createAddressLoad } from '#lib/stores/addressLoad.svelte.ts';
 	import { openPlaylistAddress } from '#lib/stores/libraryContext.ts';
-
-	const RESOLVING_LABEL = 'Loading playlist...';
-	const UNKNOWN_PLAYLIST_HEADING = 'No such playlist';
-	const UNKNOWN_PLAYLIST_MESSAGE = 'This address does not name a playlist in your library.';
-	const UNREACHABLE_PLAYLIST_MESSAGE = 'This playlist could not be loaded.';
-	const BACK_TO_LIBRARY_LABEL = 'Back to the library';
-	const RETRY_LABEL = 'Try again';
+	import AddressOverlay from '#lib/components/AddressOverlay.svelte';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	const slug = $derived(page.params.slug ?? '');
 
 	const address = createAddressLoad<'unknown'>({
 		load: () => openPlaylistAddress(slug),
-		fallbackMessage: UNREACHABLE_PLAYLIST_MESSAGE
+		fallbackMessage: pageText('addressPage.playlistUnreachable')
 	});
 </script>
 
 {#if address.state === 'unknown'}
-	<div class="address-overlay" role="alert">
-		<h1>{UNKNOWN_PLAYLIST_HEADING}</h1>
-		<p>{UNKNOWN_PLAYLIST_MESSAGE}</p>
-		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
-	</div>
+	<AddressOverlay
+		kind="unknown"
+		head={pageText('addressPage.noSuchPlaylist')}
+		explanation={pageText('addressPage.playlistUnknown')}
+		backLabel={pageText('addressPage.backToLibrary')}
+		backHref={resolve(LIBRARY_ROUTE_ID)}
+	/>
 {:else if address.state === 'unreachable' && !address.pressing}
-	<div class="address-overlay" role="alert">
-		<p>{address.failure ?? UNREACHABLE_PLAYLIST_MESSAGE}</p>
-		<button class="address-action" type="button" onclick={address.tryAgain}>{RETRY_LABEL}</button>
-	</div>
+	<AddressOverlay
+		kind="unreachable"
+		message={address.failure ?? pageText('addressPage.playlistUnreachable')}
+		retryLabel={pageText('addressPage.tryAgain')}
+		onRetry={address.tryAgain}
+	/>
 {:else if address.state === 'resolving' || address.pressing}
-	<div class="address-overlay">{RESOLVING_LABEL}</div>
+	<AddressOverlay kind="loading" message={pageText('addressPage.loadingPlaylist')} />
 {/if}
-
-<style>
-	.address-overlay {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 16px;
-		padding: 0 24px;
-		text-align: center;
-		color: var(--text-muted);
-		background: var(--bg);
-	}
-
-	.address-overlay h1 {
-		margin: 0;
-		font-family: var(--font-display);
-		font-size: 1.4rem;
-		color: var(--text);
-	}
-
-	.address-overlay p {
-		margin: 0;
-	}
-
-	.address-action {
-		padding: 6px 12px;
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text-muted);
-		font-size: var(--label-font-size);
-		font-family: var(--font-body);
-		text-decoration: none;
-		cursor: pointer;
-	}
-
-	.address-action:hover {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-</style>

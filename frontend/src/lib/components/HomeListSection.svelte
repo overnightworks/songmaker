@@ -15,7 +15,7 @@
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	type Props = {
 		label: string;
@@ -38,7 +38,7 @@
 	{:else if phase === 'failed'}
 		<div class="home-list-error" role="alert">
 			<p>{errorText}</p>
-			<button type="button" disabled={busy} onclick={onretry}>{LIBRARY_RETRY_LABEL}</button>
+			<button type="button" disabled={busy} onclick={onretry}>{pageText('homeList.retry')}</button>
 		</div>
 	{:else if phase === 'empty'}
 		<p>{emptyText}</p>
