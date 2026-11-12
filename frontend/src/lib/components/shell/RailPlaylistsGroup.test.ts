@@ -32,6 +32,7 @@ import { pressBack } from '#lib/test-utils/library-history.ts';
 import { railTreeQuery } from '#lib/stores/librarySearch.ts';
 import { resetLibraryOrderForTests } from '#lib/stores/libraryOrder.ts';
 import { chooseLibraryWallOrder } from '#lib/stores/ui.ts';
+import { words } from '#lib/words/en.ts';
 import { fetchLibraryListen } from '#lib/api/library.ts';
 import {
 	buildPlaylist as playlist,
@@ -111,7 +112,9 @@ describe('RailPlaylistsGroup', () => {
 	it('shows the PLAYLISTS group with its icon and the current playlist count, collapsed with no playlist open', async () => {
 		const target = await render();
 		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		expect(target.querySelector('.group-title')?.textContent?.trim()).toBe('Playlists');
+		expect(target.querySelector('.group-title')?.textContent?.trim()).toBe(
+			words['places.playlists']
+		);
 		expect(target.querySelector('.meta')?.textContent).toBe('1');
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 	});
@@ -151,11 +154,18 @@ describe('RailPlaylistsGroup', () => {
 		expect(get(librarySurface)).toBe('detail');
 	});
 
+	it('names its navigation landmark from the catalog', async () => {
+		const target = await render();
+		expect(requireElement(target, 'nav').getAttribute('aria-label')).toBe(
+			words['rail.playlistsNav']
+		);
+	});
+
 	it('#1354 rule 40: the word Playlists opens the Playlists covers', async () => {
 		const target = await render();
 		const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
 		expect(word.getAttribute('href')).toBe('/playlists');
-		expect(word.textContent).toContain('Playlists');
+		expect(word.textContent).toContain(words['places.playlists']);
 
 		word.click();
 		await vi.waitFor(() => expect(get(librarySurface)).toBe('playlists'));

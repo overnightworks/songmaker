@@ -186,3 +186,31 @@ msgstr ""
 msgctxt "phoneAppBar.searchClose"
 msgid "Close search"
 msgstr ""
+
+msgctxt "rail.nav"
+msgid "Primary"
+msgstr ""
+
+msgctxt "rail.collapse"
+msgid "Collapse rail"
+msgstr ""
+
+msgctxt "rail.expand"
+msgid "Expand rail"
+msgstr ""
+
+msgctxt "rail.resize"
+msgid "Resize rail"
+msgstr ""
+
+msgctxt "rail.playlistsNav"
+msgid "Rail playlists"
+msgstr ""
+
+msgctxt "places.settings"
+msgid "Settings"
+msgstr ""
+
+msgctxt "rail.settingsNav"
+msgid "Settings sections"
+msgstr ""

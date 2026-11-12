@@ -32,8 +32,7 @@
 		libraryPlaceOrder
 	} from '#lib/stores/libraryOrder.ts';
 	import { libraryWallOrder } from '#lib/stores/ui.ts';
-	import { PLAYLISTS_PAGE_LABEL } from '#lib/constants/playlist.ts';
-	import { RAIL_PLAYLISTS_NAV_LABEL } from '#lib/constants/rail.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import PlaylistCover from '../PlaylistCover.svelte';
 	import PlayingMark from '../PlayingMark.svelte';
 	import Icon from '../Icon.svelte';
@@ -103,7 +102,7 @@
 {/snippet}
 
 <RailGroup
-	label={PLAYLISTS_PAGE_LABEL}
+	label={pageText('places.playlists')}
 	groupId="rail-playlists-group"
 	storageKey={PLAYLISTS_OPEN_STORAGE_KEY}
 	count={playlistCount}
@@ -116,7 +115,7 @@
 	{icon}
 >
 	{#snippet children(groupOpen: boolean)}
-		<nav class="rail-playlists-nav" aria-label={RAIL_PLAYLISTS_NAV_LABEL}>
+		<nav class="rail-playlists-nav" aria-label={pageText('rail.playlistsNav')}>
 			<ul class="playlist-list">
 				{#each visiblePlaylists as playlist (playlist.id)}
 					{@const playlistOpen = playlist.id === openPlaylistId}

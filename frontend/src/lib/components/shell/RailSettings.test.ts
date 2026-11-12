@@ -35,6 +35,7 @@ vi.mock('$app/state', async () => {
 
 import { page } from '$app/state';
 import RailSettings from './RailSettings.svelte';
+import { words } from '#lib/words/en.ts';
 
 // SvelteKit's real `page.url` type brands `pathname` to a union of known
 // routes; the mock only needs a plain, freely-assignable URL.
@@ -115,6 +116,16 @@ describe('RailSettings', () => {
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		expect(itemLabels(target)).toEqual(['Generation', 'Voices', 'References', 'Admin', 'About']);
+	});
+
+	it('names its group and its sections navigation from the catalog', async () => {
+		const target = await render();
+		expect(requireElement(target, '.group-title').textContent?.trim()).toBe(
+			words['places.settings']
+		);
+		expect(requireElement(target, 'nav').getAttribute('aria-label')).toBe(
+			words['rail.settingsNav']
+		);
 	});
 
 	it('links exactly the sections the shared settings list owns', async () => {
