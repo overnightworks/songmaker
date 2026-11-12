@@ -282,7 +282,7 @@ export function shellOf(testInfo: TestInfo): Shell {
 	return testInfo.project.use.isMobile ? 'mobile' : 'desktop';
 }
 
-function escapeForRegExp(literal: string): string {
+export function escapeForRegExp(literal: string): string {
 	return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
@@ -321,11 +321,11 @@ export function appBar(page: Page): Locator {
 	return page.getByRole('banner');
 }
 
-// The wall's head names its count once every album has loaded. The full list
-// lands as one change that sets the wall back to the scroll the app last
-// heard of, so a scroll made before it can be undone by it.
+// The wall's head names its count once every album has loaded. The full list lands as one
+// change that sets the wall back to the scroll the app last heard of, which undoes an earlier scroll.
 export async function expectLibraryWallLoaded(page: Page): Promise<void> {
-	const head = new RegExp(`^${words['places.library']} · \\d+$`);
+	const counted = words['libraryWall.heading']({ page: words['places.library'], count: 0 });
+	const head = new RegExp(`^${escapeForRegExp(counted).replace(/0$/, '\\d+')}$`);
 	await expect(workspace(page).getByRole('heading', { name: head })).toBeVisible();
 }
 

@@ -31,6 +31,7 @@ import {
 	LIBRARY_URL,
 	ONLY_IN_SHELL,
 	appBar,
+	escapeForRegExp,
 	expectLibraryWallLoaded,
 	loseNetwork,
 	nextSignInStart,
@@ -56,7 +57,11 @@ const SETTINGS_SECTION = words['settingsSections.voices'];
 const SETTINGS_SECTION_URL = /\/settings\/voices$/;
 const SETTINGS_LIST_URL = /\/settings$/;
 const PLAYLISTS_URL = /\/playlists$/;
-const PLAYLISTS_HEADING = new RegExp(`^${words['places.playlists']}( · \\d+)?$`);
+const openAlbum = (title: string) => words['libraryWall.openAlbum']({ title });
+const COUNT = escapeForRegExp(words['libraryWall.heading']({ page: '', count: 0 }));
+const PLAYLISTS_HEADING = new RegExp(
+	`^${words['places.playlists']}(${COUNT.replace('0', '\\d+')})?$`
+);
 const SAME_DOCUMENT_KEY = 'sameDocument';
 const HISTORY_WRITES_KEY = 'historyWrites';
 const WALL_SIGHTINGS_KEY = 'wallSightings';
@@ -280,7 +285,7 @@ for (const retainCollection of [false, true]) {
 			const guard = new FlowGuard(page);
 			const body = wallBody(page);
 			const album = wall(page).getByRole('button', {
-				name: `Open album ${readSeededLibrary().albumTitle}`,
+				name: openAlbum(readSeededLibrary().albumTitle),
 				exact: true
 			});
 			await page.goto(LIBRARY_PATH);
@@ -518,7 +523,7 @@ test('1354_rule_31 1354_rule_25 row 6 (H2/H3): Home, Library, album, then Back, 
 	await expectWallShown(page);
 	const scrolled = await scrollWallTo(page, 'halfway');
 	await workspace(page)
-		.getByRole('button', { name: `Open album ${library.albumTitle}`, exact: true })
+		.getByRole('button', { name: openAlbum(library.albumTitle), exact: true })
 		.click();
 	await expectAlbumShown(page, library);
 	const length = await historyLength(page);
@@ -585,7 +590,7 @@ const BACK_ARROW_CELLS: readonly {
 		openAlbum: async (page, shell, library) => {
 			await LIBRARY.open(page, shell, library);
 			await wall(page)
-				.getByRole('button', { name: `Open album ${library.albumTitle}`, exact: true })
+				.getByRole('button', { name: openAlbum(library.albumTitle), exact: true })
 				.click();
 		},
 		returnsTo: LIBRARY

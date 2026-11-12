@@ -171,7 +171,7 @@ describe('the library workspace', () => {
 		const titles = [...target.querySelectorAll('.wall-tile .tile-title')];
 		expect(titles.map((title) => title.textContent)).toEqual(['Night Drive']);
 		expect(target.querySelector('.library-wall h1')?.getAttribute('aria-label')).toBe(
-			'Playlists · 1'
+			words['libraryWall.heading']({ page: words['places.playlists'], count: 1 })
 		);
 	});
 

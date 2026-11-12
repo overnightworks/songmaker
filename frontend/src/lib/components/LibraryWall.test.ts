@@ -48,7 +48,12 @@ import {
 } from '#lib/stores/player.ts';
 import { fetchSong } from '#lib/api/client.ts';
 import { NetworkError } from '#lib/api/fetch.ts';
-import { LIBRARY_NEW_MENU_LABEL, LIBRARY_WALL_PLAYED_PAGE_SIZE } from '#lib/constants/library.ts';
+import {
+	LIBRARY_NEW_MENU_LABEL,
+	LIBRARY_WALL_ORDER_KEYS,
+	LIBRARY_WALL_PLAYED_PAGE_SIZE,
+	type LibraryWallOrder
+} from '#lib/constants/library.ts';
 import { words } from '#lib/words/en.ts';
 
 const fetchPlaylists = vi.fn();
@@ -77,6 +82,10 @@ vi.mock('#lib/api/client.ts', () => ({
 import LibraryWall from './LibraryWall.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
+const songs = words['libraryWall.songCount'];
+const orderFace = (order: LibraryWallOrder) => words[LIBRARY_WALL_ORDER_KEYS[order]];
+const headLabel = (page: 'places.library' | 'places.playlists', count: number) =>
+	words['libraryWall.heading']({ page: words[page], count });
 
 beforeEach(() => {
 	fetchPlaylists.mockReset().mockResolvedValue([]);
@@ -158,7 +167,7 @@ function tileLines(root: ParentNode): string[] {
 }
 
 function orderChoices(root: ParentNode): HTMLButtonElement[] {
-	const group = root.querySelector('[role="group"][aria-label^="Sort "]');
+	const group = root.querySelector('.wall-titlebar [role="group"]');
 	return [...(group?.querySelectorAll('button') ?? [])];
 }
 
@@ -166,9 +175,9 @@ function choiceLabel(choice: HTMLButtonElement): string {
 	return choice.textContent?.trim() ?? '';
 }
 
-function orderButton(root: ParentNode, label: string): HTMLButtonElement {
-	const button = orderChoices(root).find((choice) => choiceLabel(choice) === label);
-	if (!button) throw new Error(`no ${label} order`);
+function orderButton(root: ParentNode, order: LibraryWallOrder): HTMLButtonElement {
+	const button = orderChoices(root).find((choice) => choiceLabel(choice) === orderFace(order));
+	if (!button) throw new Error(`no ${order} order`);
 	return button;
 }
 
@@ -220,7 +229,11 @@ describe('LibraryWall', () => {
 
 		await vi.waitFor(() => expect(fetchPlaylists).toHaveBeenCalledTimes(1));
 		await vi.waitFor(() =>
-			expect(root.querySelector('[aria-label="Open playlist Night Drive"]')).not.toBeNull()
+			expect(
+				root.querySelector(
+					`[aria-label="${words['libraryWall.openPlaylist']({ title: 'Night Drive' })}"]`
+				)
+			).not.toBeNull()
 		);
 	});
 
@@ -229,16 +242,18 @@ describe('LibraryWall', () => {
 
 		const root = await render();
 
-		expect(orderChoices(root).map(choiceLabel)).toEqual(['A–Z', 'Last played']);
-		expect(pressedOrder(root)).toEqual(['A–Z']);
+		expect(orderChoices(root).map(choiceLabel)).toEqual([orderFace('title'), orderFace('played')]);
+		expect(pressedOrder(root)).toEqual([orderFace('title')]);
 		expect(tileTitles(root)).toEqual(['nachtstrom', 'Sonne für Andrea', 'Sonnenlauf']);
-		expect(tileLines(root)).toEqual(['1 song', '5 songs', '7 songs']);
+		expect(tileLines(root)).toEqual([songs(1), songs(5), songs(7)]);
 		await vi.waitFor(() =>
 			expect(root.querySelector('.wall-titlebar h1')?.getAttribute('aria-label')).toBe(
-				'Library · 3'
+				headLabel('places.library', 3)
 			)
 		);
-		expect(root.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Sort albums');
+		expect(root.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe(
+			words['libraryWall.sortAlbums']
+		);
 	});
 
 	it('1354_rule_31 1354_rule_14: shows no Listen list, and reads no listens until Last played is chosen', async () => {
@@ -272,13 +287,13 @@ describe('LibraryWall', () => {
 			fetchLibraryListen.mockResolvedValue({ items: everyPlace });
 			const root = await render();
 
-			orderButton(root, 'Last played').click();
+			orderButton(root, 'played').click();
 
 			await vi.waitFor(() =>
 				expect(tileTitles(root)).toEqual(['Sonne für Andrea', 'nachtstrom', 'Sonnenlauf'])
 			);
 			expect(fetchLibraryListen).toHaveBeenCalledWith({ offset: 0, limit: 200 });
-			expect(pressedOrder(root)).toEqual(['Last played']);
+			expect(pressedOrder(root)).toEqual([orderFace('played')]);
 			expect(tileLines(root)).toEqual(['today 05:47', 'Thu 20:31', '20 Sep']);
 		});
 
@@ -300,7 +315,7 @@ describe('LibraryWall', () => {
 			);
 			const root = await render();
 
-			orderButton(root, 'Last played').click();
+			orderButton(root, 'played').click();
 
 			await vi.waitFor(() => expect(tileTitles(root)).toEqual(titles.toReversed()));
 			expect(new Set(tileLines(root))).toEqual(new Set(['today 05:47']));
@@ -339,15 +354,15 @@ describe('LibraryWall', () => {
 			items: [place('album', 'a-sonne', 'Sonnenlauf', '2026-09-21T10:00:00Z')]
 		});
 		const first = await render();
-		orderButton(first, 'Last played').click();
+		orderButton(first, 'played').click();
 		await unmountAll();
 		libraryWallOrder.set('title');
 
 		const reopened = await render();
 
-		expect(pressedOrder(reopened)).toEqual(['Last played']);
+		expect(pressedOrder(reopened)).toEqual([orderFace('played')]);
 		await vi.waitFor(() => expect(tileTitles(reopened)[0]).toBe('Sonnenlauf'));
-		expect(tileLines(reopened).slice(1)).toEqual(['1 song', '5 songs']);
+		expect(tileLines(reopened).slice(1)).toEqual([songs(1), songs(5)]);
 	});
 
 	it.each([
@@ -374,7 +389,7 @@ describe('LibraryWall', () => {
 			Promise.resolve({ items: [place('album', album, album, '2026-09-21T10:00:00Z')] });
 		fetchLibraryListen.mockImplementation(() => rankedBy('a-sonne'));
 		const root = await render();
-		orderButton(root, 'Last played').click();
+		orderButton(root, 'played').click();
 		await vi.waitFor(() => expect(tileTitles(root)[0]).toBe('Sonnenlauf'));
 
 		const failedRead = Promise.reject(new Error('offline'));
@@ -430,7 +445,9 @@ describe('LibraryWall', () => {
 		const root = await render('playlists');
 
 		expect(
-			root.querySelector<HTMLImageElement>('img[alt="Playlist cover for Night Drive"]')?.src
+			root.querySelector<HTMLImageElement>(
+				`img[alt="${words['libraryWall.playlistCover']({ title: 'Night Drive' })}"]`
+			)?.src
 		).toContain('/covers/night-drive.jpg');
 		expect(root.querySelector('.playlist-cover')).toBeNull();
 	});
@@ -453,12 +470,12 @@ describe('LibraryWall', () => {
 	it.each([
 		{
 			wall: 'library' as const,
-			tile: 'Open album Local Album',
+			tile: words['libraryWall.openAlbum']({ title: 'Local Album' }),
 			opens: { kind: 'album', id: 'a-local' }
 		},
 		{
 			wall: 'playlists' as const,
-			tile: 'Open playlist Night Drive',
+			tile: words['libraryWall.openPlaylist']({ title: 'Night Drive' }),
 			opens: { kind: 'playlist', id: 'p-local' }
 		}
 	])('opens the matching collection from the $wall wall', async ({ wall, tile, opens }) => {
@@ -489,14 +506,16 @@ describe('the Playlists page wall', () => {
 		const root = await render('playlists');
 
 		expect(tileTitles(root)).toEqual(['Alpha mix', 'Night drive']);
-		expect(tileLines(root)).toEqual(['1 song', '14 songs']);
+		expect(tileLines(root)).toEqual([songs(1), songs(14)]);
 		const head = root.querySelector('.wall-titlebar');
-		expect(head?.querySelector('h1')?.getAttribute('aria-label')).toBe('Playlists · 2');
+		expect(head?.querySelector('h1')?.getAttribute('aria-label')).toBe(
+			headLabel('places.playlists', 2)
+		);
 		expect(head?.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe(
-			'Sort playlists'
+			words['libraryWall.sortPlaylists']
 		);
 		expect(head?.querySelector(`[aria-label="${LIBRARY_NEW_MENU_LABEL}"]`)).not.toBeNull();
-		expect(pressedOrder(root)).toEqual(['A–Z']);
+		expect(pressedOrder(root)).toEqual([orderFace('title')]);
 	});
 
 	it('states no count in its head until the playlists have loaded, whichever the library holds meanwhile', async () => {
@@ -513,7 +532,9 @@ describe('the Playlists page wall', () => {
 
 		deliver([nightDrive, playlist({ id: 'p-alpha', title: 'Alpha mix', share_slug: null })]);
 
-		await vi.waitFor(() => expect(heading()?.getAttribute('aria-label')).toBe('Playlists · 2'));
+		await vi.waitFor(() =>
+			expect(heading()?.getAttribute('aria-label')).toBe(headLabel('places.playlists', 2))
+		);
 	});
 
 	it('sorts by the one switch the Library uses, which this device remembers for both', async () => {
@@ -523,20 +544,22 @@ describe('the Playlists page wall', () => {
 		});
 		const playlists = await render('playlists');
 
-		orderButton(playlists, 'Last played').click();
+		orderButton(playlists, 'played').click();
 
 		await vi.waitFor(() => expect(tileTitles(playlists)).toEqual(['Night drive', 'Alpha mix']));
 		await unmountAll();
 		libraryWallOrder.set('title');
 		const library = await render('library');
-		expect(pressedOrder(library)).toEqual(['Last played']);
+		expect(pressedOrder(library)).toEqual([orderFace('played')]);
 	});
 
 	it('1354_rule_9: says so in one line when there is no playlist yet, and still offers New in Library', async () => {
 		emptyLibrary();
 		const root = await render('playlists');
 
-		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(NO_PLAYLISTS);
+		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(
+			words['libraryWall.playlistsEmpty']({ home: words['places.home'] })
+		);
 		expect(newButtonOnHead(root)).not.toBeNull();
 	});
 
@@ -545,12 +568,12 @@ describe('the Playlists page wall', () => {
 			failing: 'the albums',
 			fail: () =>
 				libraryBrowse.update((state) => ({ ...state, status: 'error' as const, error: 'down' })),
-			says: NO_PLAYLISTS
+			says: words['libraryWall.playlistsEmpty']({ home: words['places.home'] })
 		},
 		{
 			failing: 'the playlists',
 			fail: () => playlistLoad.set({ status: 'error', error: 'down' }),
-			says: 'Failed to load playlists'
+			says: words['libraryWall.playlistsFailed']
 		}
 	])('answers for its playlists alone when $failing could not load', async ({ fail, says }) => {
 		emptyLibrary();
@@ -562,9 +585,6 @@ describe('the Playlists page wall', () => {
 		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(says);
 	});
 });
-
-const NO_ALBUMS = 'No albums yet. + New on Home makes one.';
-const NO_PLAYLISTS = 'No playlists yet. + New on Home makes one.';
 
 function newButtonOnHead(root: ParentNode): Element | null {
 	return root.querySelector(`.wall-titlebar [aria-label="${LIBRARY_NEW_MENU_LABEL}"]`);
@@ -585,7 +605,9 @@ describe('1354_rule_14 915_C1 LibraryWall + New head', () => {
 
 		expect(newButtonOnHead(root)?.textContent).toContain('New');
 		expect(newButtonOnHead(root)?.querySelector('svg')).not.toBeNull();
-		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(NO_ALBUMS);
+		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(
+			words['libraryWall.libraryEmpty']({ home: words['places.home'] })
+		);
 	});
 
 	it.each(['library', 'playlists'] as const)(
@@ -662,7 +684,7 @@ it.each([
 		}
 		const root = await render();
 		expect(root.querySelector('[aria-label="Play Proof"]') !== null).toBe(expected);
-		expect(root.querySelector('.tile-subtitle')).toHaveTextContent('1 song');
+		expect(root.querySelector('.tile-subtitle')).toHaveTextContent(songs(1));
 	}
 );
 
@@ -683,7 +705,7 @@ it.each(['library', 'playlists'] as const)(
 				)
 			]
 		});
-		orderButton(root, 'Last played').click();
+		orderButton(root, 'played').click();
 		await tick();
 		await vi.waitFor(() =>
 			expect(tileTitles(root)[0]).toBe(kind === 'library' ? 'Sonnenlauf' : 'Night drive')
@@ -710,7 +732,7 @@ it('1354_rule_10: opening album B keeps the mark and Pause on queue source A', a
 	};
 	audioPlayer.status = 'playing';
 	const root = await render();
-	getByRoleButton(root, 'Open album Album B').click();
+	getByRoleButton(root, words['libraryWall.openAlbum']({ title: 'Album B' })).click();
 	await tick();
 	expect(get(openCollection)).toMatchObject({ kind: 'album', id: 'b' });
 	expect(root.querySelector('[aria-label="Pause Album A"]')).not.toBeNull();
