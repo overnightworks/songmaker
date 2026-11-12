@@ -6,13 +6,7 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
 import { installHistoryController } from '#lib/history/historyController.ts';
 import { historyLayerState } from '#lib/stores/layers.ts';
-import {
-	SONG_MOVE_ALBUM_GONE,
-	SONG_MOVE_FAILED_REASON,
-	SONG_MOVE_NO_CONNECTION,
-	songMoveFailedLine
-} from '#lib/constants/song.ts';
-import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
+import { words } from '#lib/words/en.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 
@@ -185,7 +179,10 @@ describe('the move picker', () => {
 	it('names a failed list and loads again on a second open', async () => {
 		vi.mocked(fetchAlbums).mockRejectedValueOnce(new Error('boom'));
 		await openSongMovePicker();
-		expect(get(songMovePicker)).toEqual({ status: 'failed', message: RAIL_LIBRARY_LOAD_ERROR });
+		expect(get(songMovePicker)).toEqual({
+			status: 'failed',
+			message: words['songMove.libraryLoadError']
+		});
 
 		ownAlbums(HOME, ABEND);
 		await openSongMovePicker();
@@ -272,7 +269,7 @@ describe('moving the open song', () => {
 			status: 'failed',
 			songId: 's1',
 			albumId: 'abend',
-			line: songMoveFailedLine('Album is full'),
+			line: words['songMove.notMoved']({ reason: 'Album is full' }),
 			retryable: true
 		});
 		expect(get(toasts)).toEqual([]);
@@ -285,7 +282,9 @@ describe('moving the open song', () => {
 
 		await askToMoveOpenSongTo(ABEND);
 
-		expect(get(songMoveRun)).toMatchObject({ line: songMoveFailedLine(SONG_MOVE_NO_CONNECTION) });
+		expect(get(songMoveRun)).toMatchObject({
+			line: words['songMove.notMoved']({ reason: words['songMove.noConnection'] })
+		});
 	});
 
 	it('falls back to a plain reason when the error carries no detail', async () => {
@@ -293,7 +292,9 @@ describe('moving the open song', () => {
 
 		await askToMoveOpenSongTo(ABEND);
 
-		expect(get(songMoveRun)).toMatchObject({ line: songMoveFailedLine(SONG_MOVE_FAILED_REASON) });
+		expect(get(songMoveRun)).toMatchObject({
+			line: words['songMove.notMoved']({ reason: words['songMove.failedReason'] })
+		});
 	});
 
 	it('says album gone without a retry on a 404 and loads the album list again', async () => {
@@ -310,7 +311,7 @@ describe('moving the open song', () => {
 			status: 'failed',
 			songId: 's1',
 			albumId: 'abend',
-			line: songMoveFailedLine(SONG_MOVE_ALBUM_GONE),
+			line: words['songMove.notMoved']({ reason: words['songMove.albumGone'] }),
 			retryable: false
 		});
 		expect(readyPicker().hasOthers).toBe(false);

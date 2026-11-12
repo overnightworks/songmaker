@@ -134,6 +134,24 @@ export type Words = {
     readonly "addressPage.backToSong": string;
     readonly "addressPage.tryAgain": string;
     readonly "homeList.retry": string;
+    readonly "songMove.heading": string;
+    readonly "songMove.back": string;
+    readonly "songMove.filterLabel": string;
+    readonly "songMove.filterPlaceholder": string;
+    readonly "songMove.loading": string;
+    readonly "songMove.noOtherAlbum": string;
+    readonly "songMove.noMatch": string;
+    readonly "songMove.albumCover": (gaps: { readonly title: string }) => string;
+    readonly "songMove.retry": string;
+    readonly "songMove.libraryLoadError": string;
+    readonly "songMove.notMoved": (gaps: { readonly reason: string }) => string;
+    readonly "songMove.albumGone": string;
+    readonly "songMove.noConnection": string;
+    readonly "songMove.failedReason": string;
+    readonly "songMove.sharedTitle": string;
+    readonly "songMove.sharedMessage": (gaps: { readonly album: string; readonly song: string }) => string;
+    readonly "songMove.confirm": string;
+    readonly "songMove.moved": (gaps: { readonly album: string }) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -294,5 +312,23 @@ export const words: Words = {
     "addressPage.backToSong": "Back to the song",
     "addressPage.tryAgain": "Try again",
     "homeList.retry": "Retry",
+    "songMove.heading": "Move to",
+    "songMove.back": "Back to song menu",
+    "songMove.filterLabel": "Filter albums",
+    "songMove.filterPlaceholder": "Filter",
+    "songMove.loading": "Looking…",
+    "songMove.noOtherAlbum": "No other album",
+    "songMove.noMatch": "No album matches",
+    "songMove.albumCover": (gaps: { readonly title: string }) => "Album " + gaps.title,
+    "songMove.retry": "Retry",
+    "songMove.libraryLoadError": "Couldn't load your library",
+    "songMove.notMoved": (gaps: { readonly reason: string }) => "Not moved · " + gaps.reason,
+    "songMove.albumGone": "album gone",
+    "songMove.noConnection": "no connection",
+    "songMove.failedReason": "something went wrong",
+    "songMove.sharedTitle": "Move to a shared album?",
+    "songMove.sharedMessage": (gaps: { readonly album: string; readonly song: string }) => gaps.song + " appears on " + gaps.album + "'s public page",
+    "songMove.confirm": "Move",
+    "songMove.moved": (gaps: { readonly album: string }) => "Moved to " + gaps.album,
 };
 export type Key = keyof Words;

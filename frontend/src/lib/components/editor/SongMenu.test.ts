@@ -7,17 +7,9 @@ import {
 	SONG_MENU_DELETE_LABEL,
 	SONG_MENU_MOVE_LABEL,
 	SONG_MENU_RENAME_LABEL,
-	SONG_MENU_SAVE_LABEL,
-	SONG_MOVE_ALBUM_GONE,
-	SONG_MOVE_BACK_LABEL,
-	SONG_MOVE_FAILED_REASON,
-	SONG_MOVE_NO_MATCH,
-	SONG_MOVE_NO_OTHER_ALBUM,
-	SONG_MOVE_SHARED_TITLE,
-	songMoveFailedLine,
-	songMoveSharedMessage
+	SONG_MENU_SAVE_LABEL
 } from '#lib/constants/song.ts';
-import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
+import { words } from '#lib/words/en.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
@@ -259,7 +251,7 @@ describe('SongMenu move picker', () => {
 		filter.value = 'zzz';
 		filter.dispatchEvent(new Event('input', { bubbles: true }));
 		await vi.waitFor(() =>
-			expect(target.querySelector('.pk-empty')?.textContent).toBe(SONG_MOVE_NO_MATCH)
+			expect(target.querySelector('.pk-empty')?.textContent).toBe(words['songMove.noMatch'])
 		);
 	});
 
@@ -297,13 +289,13 @@ describe('SongMenu move picker', () => {
 
 		expect(target.querySelector('.menu-item')).toBeNull();
 		expect(target.querySelector('.pk-row.here')?.textContent).toContain('Homeoffice');
-		expect(target.querySelector('.pk-empty')?.textContent).toBe(SONG_MOVE_NO_OTHER_ALBUM);
+		expect(target.querySelector('.pk-empty')?.textContent).toBe(words['songMove.noOtherAlbum']);
 	});
 
 	it('goes back to the menu rows with the back button', async () => {
 		const target = await openPicker();
 
-		target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_MOVE_BACK_LABEL}"]`)?.click();
+		target.querySelector<HTMLButtonElement>(`[aria-label="${words['songMove.back']}"]`)?.click();
 		await tick();
 
 		expect(menuRowLabels(target)).toContain(SONG_MENU_MOVE_LABEL);
@@ -333,8 +325,10 @@ describe('SongMenu move picker', () => {
 		it('asks with the consequence line once the popover closed, and moves nothing on Cancel', async () => {
 			const target = await chooseSharedAlbum();
 			const dialog = document.body.querySelector('[role="dialog"], [role="alertdialog"]');
-			expect(dialog?.textContent).toContain(SONG_MOVE_SHARED_TITLE);
-			expect(dialog?.textContent).toContain(songMoveSharedMessage('Sommerlicht', 'Cologne'));
+			expect(dialog?.textContent).toContain(words['songMove.sharedTitle']);
+			expect(dialog?.textContent).toContain(
+				words['songMove.sharedMessage']({ song: 'Sommerlicht', album: 'Cologne' })
+			);
 			expect(target.querySelector('.pk-list')).toBeNull();
 
 			[...document.body.querySelectorAll('button')]
@@ -384,7 +378,8 @@ describe('SongMenu move picker', () => {
 			expect(rowTitled(target, 'Dresden').disabled).toBe(true);
 			expect(target.querySelector<HTMLInputElement>('.pk-filter')?.disabled).toBe(true);
 			expect(
-				target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_MOVE_BACK_LABEL}"]`)?.disabled
+				target.querySelector<HTMLButtonElement>(`[aria-label="${words['songMove.back']}"]`)
+					?.disabled
 			).toBe(true);
 			expect(target.querySelector('.menu-panel')).not.toBeNull();
 		});
@@ -398,7 +393,7 @@ describe('SongMenu move picker', () => {
 
 			expect(target.querySelector('.pk-error')?.getAttribute('role')).toBe('alert');
 			expect(target.querySelector('.pk-error span')?.textContent).toBe(
-				songMoveFailedLine(SONG_MOVE_FAILED_REASON)
+				words['songMove.notMoved']({ reason: words['songMove.failedReason'] })
 			);
 			expect(rowTitled(target, 'Berlin').classList.contains('failed')).toBe(true);
 			expect(rowTitled(target, 'Dresden').disabled).toBe(false);
@@ -419,9 +414,9 @@ describe('SongMenu move picker', () => {
 			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
 
 			expect(target.querySelector('.pk-error')?.textContent).toContain(
-				songMoveFailedLine(SONG_MOVE_ALBUM_GONE)
+				words['songMove.notMoved']({ reason: words['songMove.albumGone'] })
 			);
-			expect(target.querySelector('.pk-error')?.textContent).not.toContain(LIBRARY_RETRY_LABEL);
+			expect(target.querySelector('.pk-error')?.textContent).not.toContain(words['songMove.retry']);
 		});
 
 		it('shows no busy row and disables every row on another song while a move runs', async () => {
@@ -495,7 +490,7 @@ describe('SongMenu move picker', () => {
 			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
 
 			expect(target.querySelector('.pk-error span')?.textContent).toBe(
-				songMoveFailedLine(SONG_MOVE_FAILED_REASON)
+				words['songMove.notMoved']({ reason: words['songMove.failedReason'] })
 			);
 			expect(target.querySelector('.pk-list .pk-row.failed')).not.toBeNull();
 		});
