@@ -421,7 +421,7 @@ class LimiterFailurePolicy(StrEnum):
 #
 # A login is scrubbed as a pair. The name half is no secret on its own, but
 # handing a child process one half of a credential is pointless generosity —
-# hence POSTGRES_USER and GRAFANA_USER beside their passwords. Every key here
+# hence POSTGRES_USER beside its password. Every key here
 # is a declared Settings field, so a process started from an exported .env
 # really does carry it in os.environ.
 SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
@@ -436,6 +436,4 @@ SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
     "POSTGRES_USER",
     "POSTGRES_PASSWORD",
     "HF_TOKEN",
-    "GRAFANA_USER",
-    "GRAFANA_PASSWORD",
 )

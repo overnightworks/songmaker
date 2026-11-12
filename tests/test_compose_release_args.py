@@ -17,7 +17,6 @@ SCRATCH_PROJECT_COMPOSE_ARGS = (
     "-f", "docker-compose.yml", "-p", "songmaker-compose-release-args-test",
 )
 SCRATCH_REQUIRED = (
-    "GRAFANA_PASSWORD=scratch-grafana-password-not-a-secret\n"
     "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
 )
 WEB_IMAGE_SERVICES = ("songmaker-web",)

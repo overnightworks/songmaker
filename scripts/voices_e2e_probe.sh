@@ -35,7 +35,6 @@ export E2E_ADMIN_USERNAME=e2e-ci-admin
 export OIDC_ISSUER=https://keycloak.invalid/realms/e2e
 export KEYCLOAK_CLIENT_SECRET_FILE="$secret_file"
 export GATEWAY_KEY_FILE="$gateway_key_file"
-export GRAFANA_PASSWORD=e2e-ci-grafana-password
 export PUBLIC_BASE_URL="http://localhost:$PROBE_PORT"
 export E2E_BASE_URL="http://localhost:$PROBE_PORT"
 export E2E_VOICES_STACK=1
@@ -46,8 +45,8 @@ compose=(docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml
 
 teardown() {
     trap - EXIT TERM
-    # The overlay puts alertmanager in the gpu profile; without the profile,
-    # down leaves it running. --rmi local removes the images the run built.
+    # The overlay puts the GPU workers in the gpu profile; without the profile,
+    # down leaves them running. --rmi local removes the images the run built.
     "${compose[@]}" --profile gpu down -v --remove-orphans --rmi local
     rm -rf "$secrets_dir"
     rm -f "$secret_file" "$gateway_key_file"

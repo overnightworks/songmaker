@@ -1,6 +1,6 @@
 """Compose fails closed without its required settings, against the real compose.
 
-Grafana needs its password (#1357) and the web app needs its Keycloak issuer.
+The web app needs its Keycloak issuer.
 The secret files are judged by the deploy preflight, not here.
 Each case runs the repository's docker-compose.yml through the real
 ``docker compose config --quiet`` — the same command the auto-deploy guard
@@ -19,10 +19,8 @@ from support.compose_config import run_compose_config
 SCRATCH_PROJECT_COMPOSE_ARGS = (
     "-f", "docker-compose.yml", "-p", "songmaker-compose-required-env-test",
 )
-SCRATCH_PASSWORD = "scratch-grafana-password-not-a-secret"
 SCRATCH_ISSUER = "https://keycloak.invalid/realms/scratch"
 EVERYTHING_REQUIRED = {
-    "GRAFANA_PASSWORD": SCRATCH_PASSWORD,
     "OIDC_ISSUER": SCRATCH_ISSUER,
 }
 
@@ -51,13 +49,12 @@ def _compose_config_quiet(
         pytest.param("", EVERYTHING_REQUIRED, id="set-only-in-process-env"),
     ],
 )
-def test_compose_accepts_the_required_settings_without_printing_the_password(
+def test_compose_accepts_the_required_settings(
     tmp_path: Path, env_file: str, process_env: dict[str, str],
 ) -> None:
     result = _compose_config_quiet(tmp_path, env_file, process_env)
 
     assert result.returncode == 0, result.stderr
-    assert SCRATCH_PASSWORD not in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("required", sorted(EVERYTHING_REQUIRED))

@@ -22,7 +22,6 @@ SCRATCH_PROJECT_COMPOSE_ARGS = (
     "-f", "docker-compose.yml", "-p", "songmaker-compose-secret-files-test",
 )
 SCRATCH_REQUIRED = (
-    "GRAFANA_PASSWORD=scratch-grafana-password-not-a-secret\n"
     "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
 )
 SECRET_ENVIRONMENT_KEYS = (

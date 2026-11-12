@@ -215,7 +215,7 @@ def _publish(path: Path, value: str) -> bool:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(value.encode())
             handle.flush()
-            os.fchmod(handle.fileno(), FILE_MODE)  # noqa: E501  # NOSONAR(S2612) 0644 inside the 0700 secrets directory: postgres (uid 70) and prometheus (65534) read these files, as hal's own secrets do.
+            os.fchmod(handle.fileno(), FILE_MODE)  # noqa: E501  # NOSONAR(S2612) 0644 inside the 0700 secrets directory: postgres (uid 70) reads these files, as hal's own secrets do.
             os.fsync(handle.fileno())
         os.link(temporary, path)
     except FileExistsError as exc:

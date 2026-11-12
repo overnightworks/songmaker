@@ -138,21 +138,6 @@ declared outside `songmaker_cli.api_models` that no named exemption in the
 script holds makes both modes exit 1, naming the model and its module, before
 anything is written.
 
-### Alert rules (promtool)
-
-`monitoring/rules/alert.rules.yml` is Prometheus' own schema, so Prometheus' own
-tool checks and unit-tests it rather than pytest.
-`monitoring/alert.rules.test.yml` feeds the real rule file synthetic series
-and asserts which alerts fire — in particular that a job failure is caught
-both when Prometheus watched the metric across it and when its very first
-sample of the series already carries it (issue #333). CI runs this as the
-`alert-rules` job; locally:
-
-```bash
-docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
-  --entrypoint promtool prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 test rules alert.rules.test.yml
-```
-
 ## End-to-end flows
 
 `frontend/e2e/` drives the real stack — Postgres, Redis and the web

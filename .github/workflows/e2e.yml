@@ -17,9 +17,6 @@ env:
   # No identity provider runs in this stack: web boots without reaching the
   # issuer, and the specs stub whatever leaves the app's origin.
   OIDC_ISSUER: https://keycloak.invalid/realms/e2e
-  # Compose refuses to load docker-compose.yml without it (#1357), so the
-  # down, up, and logs steps below need it even though no step starts Grafana.
-  GRAFANA_PASSWORD: e2e-ci-grafana-password
 
 jobs:
   # One leg is one shard of one project, on a runner and a stack of its own.

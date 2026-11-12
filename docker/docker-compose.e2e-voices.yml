@@ -8,9 +8,6 @@ x-service-logging: &service-logging
 # fake worker here instead of changing docker-compose.ci.yml, so library E2E
 # runs never start it.
 services:
-  alertmanager:
-    profiles: ["gpu"]
-
   songmaker-web:
     # Plain http, same as docker-compose.ci.yml this file always layers on
     # top of; named explicitly so this override stays correct standalone.

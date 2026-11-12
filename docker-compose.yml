@@ -83,8 +83,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       FINAL_DELETION_DAYS:
       # The container's own healthcheck calls localhost and the ACE-Step control
-      # plane and Prometheus call songmaker-web, so the Host check admits these
-      # whatever ALLOWED_HOSTS lists.
+      # plane and the platform's Prometheus call songmaker-web, so the Host
+      # check admits these whatever ALLOWED_HOSTS lists.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-},localhost,127.0.0.1,songmaker-web
       OIDC_ISSUER: ${OIDC_ISSUER:?OIDC_ISSUER must be set in .env (see docker/.env.docker.example)}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-songmaker}
@@ -262,108 +262,6 @@ services:
     volumes:
       - audiofiles:/app/data/audio
 
-  prometheus:
-    image: prom/prometheus:latest
-    restart: unless-stopped
-    logging: *service-logging
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-    ports:
-      - "127.0.0.1:9090:9090"
-    # Prometheus sends it as the bearer token of the songmaker job
-    # (monitoring/prometheus.yml); web mounts the same source to check it.
-    secrets:
-      - source: songmaker_monitoring_token
-        target: monitoring_token
-    volumes:
-      - ./monitoring:/etc/prometheus:ro
-      - promdata:/prometheus
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/-/ready"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      # A cold Prometheus may replay its WAL before its ready endpoint responds.
-      start_period: 60s
-    depends_on:
-      - songmaker-web
-      - alertmanager
-    cap_drop:
-      - ALL
-
-  # Delivers the four rules/alert.rules.yml conditions by email via Alertmanager's
-  # own SMTP client (issue #333) — see monitoring/alertmanager.yml.template
-  # for why this owns delivery instead of scripts/send_alert.sh or Grafana's
-  # native alerting. Internal-only, same as prometheus above (no published
-  # port): reached by Prometheus over the compose network, not by a human
-  # browser directly.
-  alertmanager:
-    image: prom/alertmanager:latest
-    restart: unless-stopped
-    logging: *service-logging
-    # Only the four non-secret values travel as environment (they are
-    # readable in `docker inspect`, which for a hostname, a port and two
-    # addresses is what they already are in docker/.env.docker.example). The
-    # password does NOT: it is mounted as the smtp_password secret below
-    # and read by Alertmanager itself from /run/secrets/smtp_password
-    # (smtp_auth_password_file in the template), so it never reaches this
-    # container's environment, argv, or writable layer.
-    environment:
-      ALERT_EMAIL_TO: "${ALERT_EMAIL_TO:-}"
-      SMTP_HOST: "${SMTP_HOST:-}"
-      SMTP_PORT: "${SMTP_PORT:-}"
-      SMTP_USER: "${SMTP_USER:-}"
-    secrets:
-      - smtp_password
-    volumes:
-      - ./monitoring/alertmanager.yml.template:/etc/alertmanager/alertmanager.yml.template:ro
-      - ./monitoring/scripts/start_alertmanager.sh:/etc/alertmanager/entrypoint.sh:ro
-      - alertmanagerdata:/alertmanager
-    # The image's own ENTRYPOINT is /bin/alertmanager; entrypoint: replaces
-    # it entirely so the SMTP config can be assembled first (see
-    # monitoring/scripts/start_alertmanager.sh, which then execs the real
-    # binary). Confirmed against prom/alertmanager:latest that /bin/sh,
-    # /bin/sed and /bin/amtool all exist in this image — no envsubst, sed
-    # substitution instead, and amtool validates the result before the
-    # daemon ever sees it.
-    entrypoint: ["/bin/sh", "/etc/alertmanager/entrypoint.sh"]
-    # Without this, a container stuck in a config-error restart loop still
-    # counts as "started" — `docker compose up --wait` would then wait on
-    # it forever and wedge the auto-deploy tick holding the lock (issue
-    # #333). Unhealthy is a state both `compose ps` and `--wait` can see.
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    cap_drop:
-      - ALL
-
-  grafana:
-    image: grafana/grafana:latest
-    restart: unless-stopped
-    logging: *service-logging
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      # No default on purpose: an unset or empty value refuses the whole
-      # stack instead of silently giving Grafana admin/admin (#1357).
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env (see docker/.env.docker.example)}
-      GF_AUTH_ANONYMOUS_ENABLED: "false"
-    # Loopback only, same reason as songmaker-web above. Reach the dashboards
-    # from another machine over an SSH tunnel, not over the LAN.
-    ports:
-      - "127.0.0.1:3000:3000"
-    volumes:
-      - grafdata:/var/lib/grafana
-      - ./monitoring/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/dashboards:/var/lib/grafana/dashboards:ro
-    depends_on:
-      - prometheus
-    cap_drop:
-      - ALL
-
 secrets:
   # The edge owns this file (a Keycloak client secret). A file-backed secret
   # keeps it out of `docker inspect` and the environment; it is read once at
@@ -375,13 +273,6 @@ secrets:
   # points GATEWAY_KEY_FILE at a file of its own.
   gateway_key:
     file: ${GATEWAY_KEY_FILE:-${HOME}/.secrets/litellm/apps/songmaker}
-  # Mounted into the alertmanager container at /run/secrets/smtp_password
-  # instead of being passed as an environment variable: a secret in
-  # `environment:` is visible in `docker inspect` and `docker compose
-  # config` for anyone on the host, and would additionally have to survive
-  # a text substitution on its way into the config (issue #333).
-  smtp_password:
-    environment: SMTP_PASSWORD
   # The songmaker secrets, one file each (made by hal setup;
   # scripts/secret_files.py copies an existing .env once).
   # Rotating one is a file write plus a recreate of its readers. A throwaway
@@ -410,6 +301,3 @@ volumes:
   redisdata:
   audiofiles:
   queuestreams:
-  promdata:
-  grafdata:
-  alertmanagerdata:

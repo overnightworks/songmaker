@@ -1,11 +1,7 @@
 #!/bin/bash
 # scripts/send_alert.sh — the one channel every host-level alert source uses
-# to reach the operator: a single email. Prometheus alerts go
-# through Alertmanager's own SMTP client instead (monitoring/
-# alertmanager.yml.template — same .env account, same inbox, see its
-# comment for why); this script is for systemd's OnFailure= path, where
-# there is no such engine and a plain synchronous send is all one failed
-# unit needs.
+# to reach the operator: a single email. It serves systemd's OnFailure= path,
+# where a plain synchronous send is all one failed unit needs.
 #
 # Usage: scripts/send_alert.sh "<subject>" "<body>"
 #
