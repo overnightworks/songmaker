@@ -18,20 +18,19 @@ Install and first start, in the deploy checkout `~/srv/songmaker` (a clone at a 
 cp docker/.env.docker.example .env                # fill in the required settings; the secrets are files, see docs/security.md ("Secrets")
 docker compose up -d --build --wait               # never wrap in `timeout`
 sudo ./scripts/install_cli_credentials_mirror.sh  # agent-CLI login mirror
-sudo ./scripts/install_autostart.sh               # start the stack after every boot
 ```
 
 - [`docker/.env.docker.example`](docker/.env.docker.example) lists every setting, which ones are required, and how to generate secrets.
 - A cold-cache build takes 8-15 minutes; [AGENTS.md](AGENTS.md#rules) says why it must not be interrupted. The first start also downloads the ACE-Step model weights into a Docker volume.
 - All persistent state (database, audio files, model cache, Grafana dashboards) lives in named Docker volumes and survives `docker compose down` and rebuilds.
-- Container confinement: [docs/security.md](docs/security.md#container-confinement). Why Docker's restart policy alone does not survive every reboot, and what the autostart unit adds: [docs/acestep.md](docs/acestep.md#restart-policy-limits-and-boot-autostart).
+- Container confinement: [docs/security.md](docs/security.md#container-confinement).
 
 ## Operations
 
-- **Updates:** a systemd timer (`scripts/install_autodeploy.sh` installs it) runs `scripts/run_autodeploy.sh`, which redeploys a release tag (`vYYYY.MM.DD.N` on `main`) once its checks are green and no job is running (the operator dispatches the Release workflow, which gates `main`, pushes the images to GHCR and sets the tag); a merge to `main` alone deploys nothing, and the header owns the rules.
+- **Updates:** the platform deploys a release tag (`vYYYY.MM.DD.N` on `main`) through Flux; the operator dispatches the Release workflow, which gates `main`, pushes the images to GHCR and sets the tag, and a merge to `main` alone deploys nothing.
 - **Logs and status:** `docker compose logs -f <service>` (the containers log through journald, so `journalctl -t <container>` reads the same lines) and `docker compose ps -a` (`-a` also shows a created-but-never-started container).
 - **Stop and start:** `docker compose stop` / `docker compose start` keep the volumes.
-- **Backup:** PostgreSQL and the audio volume are backed up together by `hal backup`, hal's scheduled backup (hal's `docs/backup.md`); `scripts/create_backup.sh` makes a manual copy ([`scripts/BACKUP.md`](scripts/BACKUP.md)).
+- **Backup:** PostgreSQL and the audio volume are backed up together by `hal backup`, hal's scheduled backup (hal's `docs/backup.md`), and restored by the platform.
 
 ## Development
 

@@ -247,7 +247,7 @@ The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container 
 
 The Worker Pool admin panel has a separated **Restart worker…** button at the end of each card. Clicking it opens a confirmation inside that card: **Restart `<id>`?**, **Running takes will stop.**, **Cancel** and **Restart**. Cancel or Escape closes it without restarting; only confirming with Restart calls `POST /api/admin/workers/{id}/restart`, which proxies to the worker's `POST /restart` endpoint. The worker logs the restart request, schedules `os.kill(os.getpid(), SIGTERM)` after a 100 ms delay (so the HTTP response is flushed first), and returns `{"status": "restarting", "pid": ...}`. Restart only works while the worker process is alive to receive that signal; when the card shows offline, the button is disabled and points at restarting the worker's container directly instead.
 
-The container is already running when the SIGTERM lands, so the Docker daemon's `restart: unless-stopped` policy restarts *that same container* automatically — this narrow in-process case needs neither docker compose nor a reboot. See [Restart-policy limits and boot autostart](#restart-policy-limits-and-boot-autostart) below for what `unless-stopped` does **not** cover. The new process goes through the normal startup sequence above (FastAPI bind → `/health` 503 → register → `/health` 200). Expected total downtime: ~10–15 s.
+The container is already running when the SIGTERM lands, so the Docker daemon's `restart: unless-stopped` policy restarts *that same container* automatically — this narrow in-process case needs neither docker compose nor a reboot. See [Restart-policy limits](#restart-policy-limits) below for what `unless-stopped` does **not** cover. The new process goes through the normal startup sequence above (FastAPI bind → `/health` 503 → register → `/health` 200). Expected total downtime: ~10–15 s.
 
 **In-flight generations fail.** Restarting kills the worker process, including any subprocess holding a generate task. Affected jobs surface as `error_type=worker_unreachable` in the user's job list. Restart only when the operator is willing to lose the in-flight work.
 
@@ -255,7 +255,7 @@ To verify the restart cycle from the admin UI: the Worker Pool card flips `onlin
 
 **LM failure.** The worker ends itself a second way. A load whose child came up without its LM (with `ACESTEP_INIT_LLM` on) is stopped and answered with 502 carrying the child's log tail; the worker writes `songmaker:acestep:lm-failure:{id}` = the mode, asks its own server to shut down (no signal, so the code survives; takes still running end with the server's streams, and the process is forced out after 30 s however long a take's polling lasts) and exits with code **75**, so `restart: unless-stopped` starts it again. At start the worker loads that mode before it registers: on success it clears the key and comes online with the mode resident; if the LM fails again the start fails (uvicorn's exit code 3) with the key kept, so the container keeps restarting and publishes no heartbeat meanwhile (the admin card reads offline); any other failure (unknown mode, capacity, a deleted checkpoint, a start error) clears the key, is kept as the worker's last error and the worker starts empty. A manual `POST /restart` writes no key and ends by SIGTERM, which uvicorn re-raises, so the container reads 143. There is no pacing between attempts beyond Docker's own backoff. `/health/details` names the loop first: while a registered worker carries the key it answers `acestep_reason: "lm_init_failed"` next to `acestep: "unhealthy"` when no other registered worker is online (with one online it reads `healthy` and still names the reason), and `null` again once the restarted worker has cleared the key. Read a loop further with `docker inspect --format '{{.State.ExitCode}} {{.RestartCount}}' <container>` (75 after a load, 3 after a failed retry) and the container log for the child's tail.
 
-### Restart-policy limits and boot autostart
+### Restart-policy limits
 
 `restart: unless-stopped` is a per-container Docker Engine policy, not a docker-compose feature: the daemon consults it whenever a container's own process exits, and again for every container whose last recorded state was `running` when the daemon itself restarts. It has one hard limit — **it only ever applies to a container that has been started at least once.** A container docker compose merely *created* but never started (e.g. `docker compose up` failing partway through, such as an NVIDIA driver mismatch) sits in state `Created` with `RestartCount: 0`. Docker ignores `Created` containers on every daemon start and every host reboot, indefinitely — there is no timeout and no self-heal. The only way out is an explicit `docker start <container>` or `docker compose up -d`.
 
@@ -265,34 +265,11 @@ To verify the restart cycle from the admin UI: the Worker Pool card flips `onlin
 docker compose ps -a
 ```
 
-**Boot autostart.** Since neither dockerd nor compose retries a `Created` container on its own, the host runs a systemd unit (`scripts/songmaker.service`) that runs `docker compose up -d` (no `--build`) once per boot, after `docker.service` is up. `docker compose up -d` starts every container regardless of the state it was left in — `running`, `exited`, or `Created` alike — which is exactly what the restart policy cannot do. Install it once with:
+**Boot start.** Starting the stack after a host boot is the platform's, not a unit of this repository. On a Compose host started by hand, `docker compose up -d` starts every container regardless of the state it was left in — `running`, `exited`, or `Created` alike — which is exactly what the restart policy cannot do.
 
-```bash
-sudo ./scripts/install_cli_credentials_mirror.sh
-sudo ./scripts/install_autostart.sh
-```
+### Deploys and generation jobs
 
-Run both installers from the main checkout: the autostart installer refuses a linked worktree before it can point a persistent unit at a disposable checkout. It derives `WorkingDirectory` from that checkout and `User` from whoever runs the installer — `$SUDO_USER` under `sudo`, otherwise the current user, refusing outright if that resolves to `root` — so the unit runs as the stack owner. The boot unit starts the stack without the mirror and runs no preflight; the deploy tick still runs it, and a missing mirror file fails the web container's start at its bind. The installer also refuses to take over a unit from another checkout unless the operator explicitly supplies `--force` after inspecting the existing unit.
-
-The script copies the unit into `/etc/systemd/system/` and runs `systemctl enable` — it does **not** touch the currently running stack. `enable` only takes effect on the *next* boot; the script's own output names the explicit `systemctl start` command for applying it immediately, and warns that doing so recreates containers (killing an in-flight generation) if `.env` or code changed since the containers last started, so that should happen in a maintenance window, not as a side effect of installing the unit. Rerunning the script is a no-op only if the unit file content is unchanged; if it changed, `daemon-reload` picks up the new file immediately, but `RemainAfterExit=yes` means an already-active unit only picks up the new `ExecStart` on the next boot or an explicit `systemctl restart songmaker.service`.
-
-**Verifying the fix.** To reproduce and confirm the exact failure this closes, without disturbing the live stack for longer than a deliberate maintenance window:
-
-```bash
-docker compose stop songmaker-acestep-worker-0
-docker compose rm -f songmaker-acestep-worker-0
-docker compose create songmaker-acestep-worker-0   # creates but does not start it
-docker compose ps -a                                # confirm: State = created
-sudo reboot
-# after the host comes back:
-docker compose ps -a                                # confirm: State = running, no manual `docker start` needed
-```
-
-### Auto-deploy and generation jobs
-
-`scripts/run_autodeploy.sh` (a systemd timer, see [Auto-Deploy](architecture.md#auto-deploy) in `docs/architecture.md` for the full mechanism) redeploys the stack when a release tag (`vYYYY.MM.DD.N`) is cut on a green `main` commit; a merge alone deploys nothing. The honest guarantee is never against a job that was active at the moment the guard last checked, not "never mid-generation" outright: it checks `jobs.status IN ('queued', 'running')` before checking out, again right after the image build (which does not touch running containers) and immediately before `docker compose up -d --wait` (the step that recreates acestep-worker and music-worker, killing whatever ACE-Step subprocess call is in flight — incident 2026-08-30 18:31, a redeploy mid-generation dropped every active stream). Splitting the build from the recreate keeps that residual window to the few seconds between the second check and the recreate, not the build's 8-15 minutes. A tick that finds jobs active defers to the next one — same "the next tick retries" tolerance this doc already gives migration lock_timeout failures like `c9d4a2f18e37` — and the next tick finds the image already built, so its own recheck lands within seconds.
-
-If the database itself is unreachable when the guard runs, auto-deploy fails **closed**: it refuses to deploy rather than assume the queue is empty.
+A deploy recreates the acestep-worker and music-worker containers, which kills whatever ACE-Step subprocess call is in flight: the affected jobs surface as `error_type=worker_unreachable`, as in [Restart procedure](#restart-procedure). No guard in this repository defers a deploy while a job is queued or running, so the operator releases when the queue is idle.
 
 ### pin_model semantics
 
