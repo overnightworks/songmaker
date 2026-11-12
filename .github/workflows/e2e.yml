@@ -10,7 +10,7 @@ env:
   COMPOSE_FILES: -f docker-compose.yml -f docker/docker-compose.ci.yml
   # The number of shards each project's tests are cut into: the legs' matrix lists
   # one leg per shard, and the aggregator requires all of them.
-  SHARD_TOTAL: 4
+  SHARD_TOTAL: 8
   WEB_PORT: 8080
   # The admin account the seeding helper creates (frontend/e2e/support/seed_sessions.py).
   E2E_ADMIN_USERNAME: e2e-ci-admin
@@ -32,7 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         project: [desktop, mobile]
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
