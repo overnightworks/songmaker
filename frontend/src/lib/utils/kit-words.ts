@@ -2,7 +2,7 @@ import { loadKitWords, type KitLanguage, type KitWords } from 'overnightworks-de
 import { languages, type Language } from '#lib/words/index.ts';
 
 // The type check fails when the app offers a language the kit lacks.
-void (languages satisfies readonly KitLanguage[]);
+const _kitCoversPageLanguages = languages satisfies readonly KitLanguage[];
 
 class KitWordsNotLoadedError extends Error {
 	override name = 'KitWordsNotLoadedError';
