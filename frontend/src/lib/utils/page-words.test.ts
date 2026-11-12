@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { pageText } from '#lib/utils/page-words.ts';
+import { pageParts, pageText } from '#lib/utils/page-words.ts';
 import { words } from '#lib/words/en.ts';
 import { sourceLanguage } from '#lib/words/index.ts';
 
@@ -19,6 +19,12 @@ it('reads a family with a count as the sentence of its plural category', () => {
 	expect(pageText('rail.trackTakes', 1)).not.toBe(pageText('rail.trackTakes', 2));
 });
 
+it('reads a sentence with a marked part as its parts, filled with the gap values', () => {
+	expect(pageParts('newPlace.heading', { library: 'Library' })).toEqual(
+		words['newPlace.heading']({ library: 'Library' })
+	);
+});
+
 it('refuses, at type check, values for a plain key and a missing or misnamed gap', () => {
 	// @ts-expect-error a plain key takes no values
 	void (() => pageText('homeWrite.label', { title: 'x' }));
@@ -32,6 +38,10 @@ it('refuses, at type check, values for a plain key and a missing or misnamed gap
 	void (() => pageText('rail.trackTakes', 'two'));
 	// @ts-expect-error a plain key takes no count
 	void (() => pageText('rail.retry', 1));
+	// @ts-expect-error parts are read for a marked sentence only
+	void (() => pageParts('homeWrite.label'));
+	// @ts-expect-error a marked sentence requires its gaps
+	void (() => pageParts('newPlace.heading'));
 	expect(() => pageText('homeWrite.label')).not.toThrow();
 });
 

@@ -738,3 +738,7 @@ msgstr ""
 msgctxt "referenceMenu.inUse"
 msgid "In use"
 msgstr ""
+
+msgctxt "newPlace.heading"
+msgid "New in {#strong}{library}{/strong}"
+msgstr ""
