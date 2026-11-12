@@ -1,0 +1,8 @@
+claim_id = "019d108f035f475ea6bea004a8c380aa"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "107fad94fd3b5806b00504d9a86278d278a5fcb0"
+branch = "claude/issue-3063-the-reference-menu-reads-its-words-from"
+scope = ["frontend/e2e/references-list.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/ReferenceMenu.svelte", "frontend/src/lib/components/ReferenceMenu.test.ts", "frontend/src/lib/words/en.ts", "frontend/src/routes/settings/references/page.test.ts"]
+opened_commit = "bba22ef5aa07cef40fa20e8013cb0d431e1bf9ce"
+whole_reason = "One surface moves whole (the epic's invariant 5): the menu, the catalog with its generated module, and every test that finds its elements."
