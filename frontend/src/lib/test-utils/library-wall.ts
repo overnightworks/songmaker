@@ -18,7 +18,7 @@ export const headLabel = (page: 'places.library' | 'places.playlists', count: nu
 	words['libraryWall.heading']({ page: words[page], count });
 
 export async function unmountAll(): Promise<void> {
-	for (const component of mounted.splice(0)) await unmount(component);
+	await Promise.all(mounted.splice(0).map((component) => unmount(component)));
 	document.body.replaceChildren();
 }
 
