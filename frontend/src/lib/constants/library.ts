@@ -1,3 +1,5 @@
+import type { Key } from '#lib/words/en.ts';
+
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const LIBRARY_SEARCH_DEBOUNCE_MS = 200;
 export const LIBRARY_ALBUM_PAGE_SIZE = 50;
@@ -7,16 +9,10 @@ export const LIBRARY_SEARCH_PAGE_SIZE = 50;
 export const LIBRARY_ALBUM_CARD_TRACK_MAX_PX = 208;
 export const LIBRARY_WALL_ORDERS = ['title', 'played'] as const;
 export type LibraryWallOrder = (typeof LIBRARY_WALL_ORDERS)[number];
-export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
-	title: 'A–Z',
-	played: 'Last played'
-};
-export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums';
-// Each page's head reads its name and count as one heading ('Library · 12').
-export function wallHeadingLabel(pageLabel: string, count: number): string {
-	return `${pageLabel} · ${count}`;
-}
-export const LIBRARY_WALL_EMPTY = 'No albums yet. + New on Home makes one.';
+export const LIBRARY_WALL_ORDER_KEYS = {
+	title: 'libraryWall.orderTitle',
+	played: 'libraryWall.orderPlayed'
+} as const satisfies Record<LibraryWallOrder, Key>;
 export const LIBRARY_NEW_FACE = 'New';
 export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';

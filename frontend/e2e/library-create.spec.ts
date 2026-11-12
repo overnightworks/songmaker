@@ -23,15 +23,9 @@ import {
 import {
 	LIBRARY_NEW_ALBUM_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
-	LIBRARY_NEW_PLAYLIST_LABEL,
-	LIBRARY_WALL_EMPTY,
-	LIBRARY_WALL_ORDER_GROUP_LABEL
+	LIBRARY_NEW_PLAYLIST_LABEL
 } from '../src/lib/constants/library';
 import { newSongCardLabel } from '../src/lib/constants/album';
-import {
-	PLAYLISTS_WALL_EMPTY,
-	PLAYLISTS_WALL_ORDER_GROUP_LABEL
-} from '../src/lib/constants/playlist';
 import {
 	NEW_ALBUM_CARD_LABEL,
 	NEW_ALBUM_CLOSE_LABEL,
@@ -204,13 +198,13 @@ test('1354_rule_14 + New makes a named playlist from the Home head and opens it'
 const LIST_PAGES = [
 	{
 		address: LIBRARY_PATH,
-		emptyLine: LIBRARY_WALL_EMPTY,
-		order: LIBRARY_WALL_ORDER_GROUP_LABEL
+		emptyLine: words['libraryWall.libraryEmpty']({ home: words['places.home'] }),
+		order: words['libraryWall.sortAlbums']
 	},
 	{
 		address: '/playlists',
-		emptyLine: PLAYLISTS_WALL_EMPTY,
-		order: PLAYLISTS_WALL_ORDER_GROUP_LABEL
+		emptyLine: words['libraryWall.playlistsEmpty']({ home: words['places.home'] }),
+		order: words['libraryWall.sortPlaylists']
 	}
 ];
 

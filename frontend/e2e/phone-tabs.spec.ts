@@ -124,7 +124,9 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await page.goto('/playlists');
 		await expectCurrent(page, words['places.playlists']);
 		await workspace(page)
-			.getByRole('button', { name: /^Open playlist / })
+			.getByRole('button', {
+				name: nameStartingWith(words['libraryWall.openPlaylist']({ title: '' }))
+			})
 			.first()
 			.click();
 		await expect(page).toHaveURL(/\/playlist\/[^/]+$/);

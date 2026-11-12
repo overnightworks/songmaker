@@ -11,6 +11,7 @@ import {
 	LIBRARY_PATH,
 	loseNetwork,
 	MOBILE_VIEWPORT,
+	nameStartingWith,
 	ONLY_IN_SHELL,
 	offlineStrip,
 	workspace
@@ -29,7 +30,7 @@ async function openLibrary(page: Page): Promise<void> {
 
 function lastAlbum(page: Page) {
 	return workspace(page)
-		.getByRole('button', { name: /^Open album / })
+		.getByRole('button', { name: nameStartingWith(words['libraryWall.openAlbum']({ title: '' })) })
 		.last();
 }
 
