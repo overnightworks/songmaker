@@ -85,12 +85,7 @@ def run_scoring_job(
 
         scorer = jobs.get_scorer_process()
 
-        settings = get_settings()
-        config = PipelineConfig(
-            device=device,
-            scorer_timeout=settings.scorer_timeout_seconds,
-            text_accuracy_timeout=settings.text_accuracy_timeout_seconds,
-        )
+        config = _pipeline_config(device)
         def _score_progress(completed: int, total: int, scorer_name: str) -> None:
             _update_job(db_factory, job_id, JobStatus.RUNNING, progress=completed / total)
 
@@ -139,6 +134,17 @@ def run_scoring_job(
             error=_sanitize_error(exc, job_id),
             error_type="scoring_error",
         )
+
+
+def _pipeline_config(device: str) -> PipelineConfig:
+    settings = get_settings()
+    return PipelineConfig(
+        device=device,
+        scorer_timeout=settings.scorer_timeout_seconds,
+        text_accuracy_timeout=settings.text_accuracy_timeout_seconds,
+        whisper_model_dir=settings.scoring_whisper_model_dir,
+        audiobox_checkpoint=settings.scoring_audiobox_checkpoint,
+    )
 
 
 def _load_scoring_input(

@@ -96,7 +96,7 @@ def test_force_cpu_env_restores_existing(monkeypatch) -> None:
     assert os.environ["CUDA_VISIBLE_DEVICES"] == "0,1"
 
 
-def test_get_predictor_caches() -> None:
+def test_get_predictor_caches(tmp_path: Path) -> None:
     pytest.importorskip("audiobox_aesthetics")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
@@ -105,15 +105,15 @@ def test_get_predictor_caches() -> None:
     mock_cls = MagicMock(return_value=MagicMock())
 
     with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        p1 = _get_predictor(device="cpu")
-        p2 = _get_predictor(device="cpu")
+        p1 = _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
+        p2 = _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
 
     assert p1 is p2
     assert mock_cls.call_count == 1
     ab.clear_cache()
 
 
-def test_get_predictor_cpu_uses_force_env() -> None:
+def test_get_predictor_cpu_uses_force_env(tmp_path: Path) -> None:
     pytest.importorskip("audiobox_aesthetics")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
@@ -122,13 +122,13 @@ def test_get_predictor_cpu_uses_force_env() -> None:
     mock_cls = MagicMock(return_value=MagicMock())
 
     with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        _get_predictor(device="cpu")
+        _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
 
     mock_cls.assert_called_once()
     ab.clear_cache()
 
 
-def test_get_predictor_cuda_no_force_env() -> None:
+def test_get_predictor_cuda_no_force_env(tmp_path: Path) -> None:
     pytest.importorskip("audiobox_aesthetics")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
@@ -137,13 +137,13 @@ def test_get_predictor_cuda_no_force_env() -> None:
     mock_cls = MagicMock(return_value=MagicMock())
 
     with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        _get_predictor(device="cuda")
+        _get_predictor(tmp_path / "checkpoint.pt", device="cuda")
 
     mock_cls.assert_called_once()
     ab.clear_cache()
 
 
-def test_get_predictor_default_cache() -> None:
+def test_get_predictor_default_cache(tmp_path: Path) -> None:
     pytest.importorskip("audiobox_aesthetics")
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
@@ -152,7 +152,7 @@ def test_get_predictor_default_cache() -> None:
     mock_cls = MagicMock(return_value=MagicMock())
 
     with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        result = _get_predictor(device="cpu")
+        result = _get_predictor(tmp_path / "checkpoint.pt", device="cpu")
 
     assert result is not None
     ab.clear_cache()
@@ -164,10 +164,13 @@ def test_score_audiobox(tmp_path: Path) -> None:
 
     mock_predictor = MagicMock()
     mock_predictor.forward.return_value = [{"CE": 7.5, "CU": 6.0, "PC": 8.0, "PQ": 7.0}]
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"weights")
+    config = PipelineConfig(device="cpu", audiobox_checkpoint=checkpoint)
 
     target = "songmaker_cli.scoring.audiobox_aesthetics._get_predictor"
     with patch(target, return_value=mock_predictor):
-        result = score_audiobox(tmp_path / "test.mp3", config=PipelineConfig(device="cpu"))
+        result = score_audiobox(tmp_path / "test.mp3", config=config)
 
     assert isinstance(result, AudioBoxScore)
     assert result.content_enjoyment == 7.5
@@ -268,7 +271,14 @@ def test_word_level_accuracy_empty() -> None:
 
 
 
-def test_get_whisper_model_caches() -> None:
+def _whisper_model_dir(parent: Path) -> Path:
+    model_dir = parent / "whisper"
+    model_dir.mkdir(exist_ok=True)
+    (model_dir / "tokenizer.json").write_text("{}")
+    return model_dir
+
+
+def test_get_whisper_model_caches(tmp_path: Path) -> None:
     pytest.importorskip("faster_whisper")
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
@@ -277,15 +287,15 @@ def test_get_whisper_model_caches() -> None:
     mock_model = MagicMock()
 
     with patch("faster_whisper.WhisperModel", return_value=mock_model) as mock_cls:
-        m1 = _get_whisper_model("base", device="cpu")
-        m2 = _get_whisper_model("base", device="cpu")
+        m1 = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
+        m2 = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
 
     assert m1 is m2
     assert mock_cls.call_count == 1
     ta.clear_cache()
 
 
-def test_get_whisper_model_default_cache() -> None:
+def test_get_whisper_model_default_cache(tmp_path: Path) -> None:
     pytest.importorskip("faster_whisper")
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
@@ -294,7 +304,7 @@ def test_get_whisper_model_default_cache() -> None:
     mock_model = MagicMock()
 
     with patch("faster_whisper.WhisperModel", return_value=mock_model):
-        result = _get_whisper_model("base", device="cpu")
+        result = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
 
     assert result is mock_model
     ta.clear_cache()
@@ -518,7 +528,7 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
         ]),
         mock_info,
     )
-    config = PipelineConfig(device="cpu", whisper_model="base")
+    config = PipelineConfig(device="cpu", whisper_model_dir=_whisper_model_dir(tmp_path))
 
     with patch("songmaker_cli.scoring.text_accuracy._get_whisper_model", return_value=mock_model):
         result = score_text_accuracy(tmp_path / "test.mp3", meta=meta, config=config)
@@ -543,7 +553,7 @@ def test_score_text_accuracy_no_meta(tmp_path: Path) -> None:
     mock_model.transcribe.return_value = (
         iter([_whisper_segment("la la la", 0.2, 1.8)]), info,
     )
-    config = PipelineConfig(device="cpu", whisper_model="base")
+    config = PipelineConfig(device="cpu", whisper_model_dir=_whisper_model_dir(tmp_path))
 
     with patch(
         "songmaker_cli.scoring.text_accuracy._get_whisper_model",
@@ -627,7 +637,7 @@ def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
     mock_info.language = "en"
     mock_model = MagicMock()
     mock_model.transcribe.return_value = (iter(mock_segments), mock_info)
-    config = PipelineConfig(device="cpu", whisper_model="base")
+    config = PipelineConfig(device="cpu", whisper_model_dir=_whisper_model_dir(tmp_path))
 
     with patch("songmaker_cli.scoring.text_accuracy._get_whisper_model", return_value=mock_model):
         result = score_text_accuracy(tmp_path / "test.mp3", meta=meta, config=config)

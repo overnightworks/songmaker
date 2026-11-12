@@ -67,7 +67,9 @@ def score_audiobox(
 ) -> AudioBoxScore:
     """Score audio quality using Meta's AudioBox Aesthetics model."""
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
-    predictor = _get_predictor(device=effective_config.device)
+    predictor = _get_predictor(
+        effective_config.audiobox_checkpoint_path(), device=effective_config.device,
+    )
     result = predictor.forward([{"path": str(mp3_path)}])  # type: ignore[union-attr]
 
     scores = result[0]
@@ -85,6 +87,7 @@ def score_audiobox(
 
 
 def _get_predictor(
+    checkpoint: Path,
     device: str = "cpu",
 ) -> object:
     """Return a cached AudioBox predictor, loading on first use.
@@ -100,9 +103,9 @@ def _get_predictor(
             if device == "cpu":
                 log.info("Loading AudioBox Aesthetics model on CPU...")
                 with _force_cpu_env():
-                    _predictor = AesPredictor(checkpoint_pth="default")
+                    _predictor = AesPredictor(checkpoint_pth=str(checkpoint))
             else:
                 log.info("Loading AudioBox Aesthetics model on %s...", device)
-                _predictor = AesPredictor(checkpoint_pth="default")
+                _predictor = AesPredictor(checkpoint_pth=str(checkpoint))
             _predictor_device = device
     return _predictor
