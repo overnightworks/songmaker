@@ -184,6 +184,14 @@ class Settings(BaseSettings):
             return _RELEASE_FIELD_DEFAULTS[info.field_name or ""]
         return value
 
+    @field_validator("scoring_whisper_model_dir", "scoring_audiobox_checkpoint", mode="before")
+    @classmethod
+    def blank_model_path_is_unset(cls, value: object) -> object:
+        """An empty value would read as the current directory, not as unset."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("token_clients")
     @classmethod
     def token_clients_have_no_empty_entry(cls, value: str) -> str:
@@ -402,6 +410,10 @@ class Settings(BaseSettings):
     music_max_jobs: int = 2
     scoring_max_jobs: int = 1
     scoring_device: str = "cpu"
+    # Where the scoring worker's image keeps the pinned model files; unset in every other
+    # service, and the scorers fail naming the setting at their first load.
+    scoring_whisper_model_dir: Path | None = None
+    scoring_audiobox_checkpoint: Path | None = None
     scorer_timeout_seconds: int = SCORER_TIMEOUT_SECONDS
 
     text_accuracy_timeout_seconds: int = TEXT_ACCURACY_TIMEOUT_SECONDS

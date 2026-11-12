@@ -122,7 +122,7 @@
 "load_model_on_worker" = 64
 
 [function_lines."src/songmaker_cli/jobs/scoring.py"]
-"run_scoring_job" = 103
+"run_scoring_job" = 98
 
 [function_lines."src/songmaker_cli/lora_api.py"]
 "api_add_sample" = 65
