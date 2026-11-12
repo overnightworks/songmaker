@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from './coverage-test';
 import type { SongItem } from '../src/lib/api/types';
-import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
+import { words } from '../src/lib/words/en';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
@@ -94,7 +94,7 @@ async function signOut(page: Page, shell: Shell): Promise<void> {
 					response.request().method() === 'GET' &&
 					url.origin === origin &&
 					url.pathname === '/api/library/search' &&
-					url.searchParams.get('q') === LIBRARY_PAGE_LABEL
+					url.searchParams.get('q') === words['places.library']
 				);
 			}),
 			openLibraryWall(page, shell)

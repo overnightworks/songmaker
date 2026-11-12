@@ -73,7 +73,7 @@ for (const { shell, name, viewport } of [
 		);
 		for (const [label, pathname] of [
 			[words['places.playlists'], '/playlists'],
-			['Library', LIBRARY_PATH]
+			[words['places.library'], LIBRARY_PATH]
 		]) {
 			const groupIcon = rail.getByRole('link', { name: new RegExp(`^${label}\\b`) });
 			await expect(groupIcon).toHaveAttribute('title', label);

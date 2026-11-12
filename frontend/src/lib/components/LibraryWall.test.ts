@@ -308,8 +308,8 @@ describe('LibraryWall', () => {
 	});
 
 	it.each([
-		['library', 'Library', ['Sonnenlauf', 'nachtstrom', 'Sonne für Andrea']],
-		['playlists', 'Playlists', ['Night drive']]
+		['library', words['places.library'], ['Sonnenlauf', 'nachtstrom', 'Sonne für Andrea']],
+		['playlists', words['places.playlists'], ['Night drive']]
 	] as const)(
 		'1354_rule_8: paints no %s tile, no count and no empty word while Last played is chosen and Listen has not answered',
 		async (kind, pageLabel, ranked) => {
@@ -508,8 +508,8 @@ describe('the Playlists page wall', () => {
 		const root = await render('playlists');
 		const heading = () => root.querySelector('.wall-titlebar h1');
 
-		expect(heading()?.getAttribute('aria-label')).toBe('Playlists');
-		expect(heading()?.textContent?.trim()).toBe('Playlists');
+		expect(heading()?.getAttribute('aria-label')).toBe(words['places.playlists']);
+		expect(heading()?.textContent?.trim()).toBe(words['places.playlists']);
 
 		deliver([nightDrive, playlist({ id: 'p-alpha', title: 'Alpha mix', share_slug: null })]);
 

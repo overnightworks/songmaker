@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
-import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
+import { words } from '../src/lib/words/en';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import {
 	NOW_PLAYING_CLOSE,
@@ -61,7 +61,7 @@ const NOW_PLAYING_ORIGINS: {
 			return {
 				playing,
 				origin,
-				cameFrom: workspace(page).getByRole('heading', { name: PLAYLISTS_PAGE_LABEL }),
+				cameFrom: workspace(page).getByRole('heading', { name: words['places.playlists'] }),
 				opensOnTakeSheet: false
 			};
 		}

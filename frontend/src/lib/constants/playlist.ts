@@ -1,6 +1,3 @@
-// The Playlists page: its head, which search names it by too, and the
-// count beside it, read as one heading ('Playlists · 3').
-export const PLAYLISTS_PAGE_LABEL = 'Playlists';
 export const PLAYLISTS_WALL_ORDER_GROUP_LABEL = 'Sort playlists';
 export const PLAYLISTS_WALL_EMPTY = 'No playlists yet. + New on Home makes one.';
 const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';

@@ -161,7 +161,7 @@ describe('Rail', () => {
 		// unscoped query would pick it up between Library, Playlists, and
 		// Settings.
 		const groupRows = target.querySelectorAll<HTMLElement>('.rail-group > .disclose-row');
-		expect(groupRows[0]?.textContent).toContain('Library');
+		expect(groupRows[0]?.textContent).toContain(words['places.library']);
 		await vi.waitFor(() => expect(groupRows[0]?.querySelector('.meta')?.textContent).toBe('1'));
 		expect(groupRows[1]?.textContent).toContain(words['places.playlists']);
 		expect(groupRows[2]?.textContent).toContain(words['places.settings']);
@@ -191,7 +191,11 @@ describe('Rail', () => {
 		).toBe(words['rail.expand']);
 		expect(rail.querySelector('.rail-search-region')).not.toBeNull();
 		expect(rail.querySelectorAll<HTMLInputElement>('input[type="search"]')).toHaveLength(1);
-		for (const label of ['Library', words['places.playlists'], words['places.settings']]) {
+		for (const label of [
+			words['places.library'],
+			words['places.playlists'],
+			words['places.settings']
+		]) {
 			const group = Array.from(rail.querySelectorAll<HTMLButtonElement>('.disclose')).find(
 				(button) => button.getAttribute('aria-label') === label
 			);
@@ -363,7 +367,9 @@ describe('Rail', () => {
 		const scroll = requireElement(target, '.rail-scroll');
 		const scrolledGroups = scroll.querySelectorAll('.rail-group > .disclose-row');
 		expect(scrolledGroups).toHaveLength(2);
-		expect(scrolledGroups[0]?.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
+		expect(scrolledGroups[0]?.querySelector('.group-title')?.textContent?.trim()).toBe(
+			words['places.library']
+		);
 		expect(scrolledGroups[1]?.querySelector('.group-title')?.textContent?.trim()).toBe(
 			words['places.playlists']
 		);

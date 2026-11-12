@@ -202,7 +202,9 @@ describe('the library workspace', () => {
 		const target = renderWorkspace();
 		await tick();
 
-		expect(target.querySelector('.library-wall h1')?.textContent).toContain('Library');
+		expect(target.querySelector('.library-wall h1')?.textContent).toContain(
+			words['places.library']
+		);
 		expect(target.querySelector(`[aria-label="${words['homeListen.label']}"]`)).toBeNull();
 	});
 
