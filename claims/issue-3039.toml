@@ -1,0 +1,7 @@
+claim_id = "51d9532b61f1490695a089624ae77a72"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "07fffb12163f55ee7e54bc62379ffbdb70f4827c"
+branch = "claude/issue-3039-take-agents-0-32-0"
+scope = ["pyproject.toml", "src/songmaker_cli/agent/tools.py", "uv.lock"]
+opened_commit = "08dd5b4138bc6928347fa8f922379fe51bf5988d"
