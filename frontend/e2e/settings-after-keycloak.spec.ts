@@ -7,11 +7,9 @@
 // for good and the stack's library must stay as seeded.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
 import { words } from '../src/lib/words/en';
 
 import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
-import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import {
 	accountCircle,
 	accountMenu,
@@ -60,7 +58,9 @@ test('the account circle opens a menu with the name, Settings, the theme, Log ou
 	const name = menu.getByRole('link', { name: /^\S/ }).first();
 	await expect(name).toHaveAttribute('href', ACCOUNT_CONSOLE_PATH);
 	await expect(name).toHaveAttribute('target', '_blank');
-	await expect(menu.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true })).toBeVisible();
+	await expect(
+		menu.getByRole('button', { name: words['places.settings'], exact: true })
+	).toBeVisible();
 	for (const choice of ['Follow system', 'Light', 'Dark'] as const) {
 		await expect(themeChoiceRadio(menu, choice)).toBeVisible();
 	}
@@ -89,14 +89,19 @@ test('a member sees Generation and Voices in Settings, an admin also Admin, and 
 	const member = await seedAccount(`e2e-member-${runMarker()}`);
 	const adminCookies = await page.context().cookies();
 
+	const {
+		'settingsSections.generation': generation,
+		'settingsSections.voices': voices,
+		'settingsSections.admin': admin
+	} = words;
 	for (const [cookies, shown, hidden] of [
-		[member.cookies, ['Generation', 'Voices'], ['Admin']],
-		[adminCookies, ['Generation', 'Voices', 'Admin'], []]
+		[member.cookies, [generation, voices], [admin]],
+		[adminCookies, [generation, voices, admin], []]
 	] as const) {
 		await page.context().clearCookies();
 		await page.context().addCookies([...cookies]);
 		await page.goto('/settings');
-		const sections = page.getByRole('navigation', { name: SETTINGS_NAV_LABEL });
+		const sections = page.getByRole('navigation', { name: words['settingsPage.nav'] });
 		await expect(sections).toBeVisible();
 		for (const label of shown) {
 			await expect(sections.getByRole('link', { name: nameStartingWith(label) })).toBeVisible();

@@ -428,7 +428,7 @@ describe('RailSearch', () => {
 		const root = await render();
 
 		expect(root.querySelector('[role="alert"]')?.textContent).toContain('Offline');
-		expect(root.textContent).toContain('Voices');
+		expect(root.textContent).toContain(words['settingsSections.voices']);
 		requireElement<HTMLInputElement>(root, 'input').dispatchEvent(
 			new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
 		);

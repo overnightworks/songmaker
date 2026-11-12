@@ -107,7 +107,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			await search.fill('gen');
 			const generation = rail
 				.getByRole('group', { name: words['railSearch.groupPages'] })
-				.getByRole('option', { name: nameStartingWith('Generation') });
+				.getByRole('option', { name: nameStartingWith(words['settingsSections.generation']) });
 			await expect(generation).toContainText(
 				`${words['railSearch.kindPage']} · ${words['places.settings']}`
 			);

@@ -16,9 +16,8 @@ import { SIGN_IN_NEXT_PARAM } from '../src/lib/constants/auth';
 
 import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Page } from './coverage-test';
-import { LIBRARY_NEW_MENU_LABEL, LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
+import { LIBRARY_NEW_MENU_LABEL } from '../src/lib/constants/library';
 import { PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
-import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import { words } from '../src/lib/words/en';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
@@ -54,7 +53,7 @@ import {
 import { readSeededLibrary, type SeededLibrary } from './seed';
 
 const LISTEN_REGION = { name: words['homeListen.label'] };
-const SETTINGS_SECTION = 'Voices';
+const SETTINGS_SECTION = words['settingsSections.voices'];
 const SETTINGS_SECTION_URL = /\/settings\/voices$/;
 const SETTINGS_LIST_URL = /\/settings$/;
 const PLAYLISTS_URL = /\/playlists$/;
@@ -120,7 +119,7 @@ async function openSettings(page: Page, shell: Shell): Promise<void> {
 async function expectSettingsShown(page: Page, shell: Shell): Promise<void> {
 	const [url, heading] =
 		shell === 'mobile'
-			? [SETTINGS_LIST_URL, RAIL_SETTINGS_LABEL]
+			? [SETTINGS_LIST_URL, words['places.settings']]
 			: [SETTINGS_SECTION_URL, SETTINGS_SECTION];
 	await expect(page).toHaveURL(url);
 	await expect(page.getByRole('heading', { name: heading })).toBeVisible();
@@ -583,7 +582,7 @@ const BACK_ARROW_CELLS: readonly {
 	},
 	{
 		origin: 'the Library',
-		name: LIBRARY_PAGE_LABEL,
+		name: words['places.library'],
 		openAlbum: async (page, shell, library) => {
 			await LIBRARY.open(page, shell, library);
 			await wall(page)
@@ -594,7 +593,7 @@ const BACK_ARROW_CELLS: readonly {
 	},
 	{
 		origin: 'a cold address',
-		name: LIBRARY_PAGE_LABEL,
+		name: words['places.library'],
 		openAlbum: async (page) => {
 			await page.goto(`/album/${readSeededLibrary().albumId}`);
 		},

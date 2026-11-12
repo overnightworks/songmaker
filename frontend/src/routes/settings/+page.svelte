@@ -1,15 +1,14 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { afterNavigate, goto } from '$app/navigation';
-	import { SETTINGS_ADMIN_ONLY_HINT, SETTINGS_NAV_LABEL } from '#lib/constants/settings.ts';
 	import { navigating } from '$app/state';
 	import { historyComesToRest, standingPageEntryId } from '#lib/history/historyController.ts';
 	import Icon from '#lib/components/Icon.svelte';
 	import { APP_NAME } from '#lib/constants/app.ts';
-	import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 	import { visibleSettingsSections } from '#lib/settingsSections.ts';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	let compact = $state<boolean | null>(null);
 
@@ -49,12 +48,12 @@
 </script>
 
 <svelte:head>
-	<title>{RAIL_SETTINGS_LABEL} — {APP_NAME}</title>
+	<title>{pageText('settingsPage.documentTitle', { app: APP_NAME })}</title>
 </svelte:head>
 
 {#if compact}
-	<h1>{RAIL_SETTINGS_LABEL}</h1>
-	<nav aria-label={SETTINGS_NAV_LABEL}>
+	<h1>{pageText('places.settings')}</h1>
+	<nav aria-label={pageText('settingsPage.nav')}>
 		<ul class="settings-list">
 			{#each sections as section (section.href)}
 				<li>
@@ -62,7 +61,7 @@
 						<Icon name={section.icon} size={20} class="settings-row-icon" />
 						<span class="settings-row-label">{section.label}</span>
 						{#if section.adminOnly}
-							<span class="settings-row-hint">{SETTINGS_ADMIN_ONLY_HINT}</span>
+							<span class="settings-row-hint">{pageText('settingsPage.adminOnly')}</span>
 						{/if}
 						<Icon name="chevron-right" class="settings-row-chevron" />
 					</a>

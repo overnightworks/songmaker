@@ -5,13 +5,13 @@
 		ACCOUNT_MENU_LABEL,
 		SIGN_OUT_FAILED_MESSAGE
 	} from '#lib/constants/auth.ts';
-	import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
 	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 	import { page } from '$app/state';
 	import { signOutFailed } from '#lib/stores/auth.ts';
 	import { leaveForLogout, openAppPage } from '#lib/stores/navigation.ts';
 	import { chooseTheme, themeChoice } from '#lib/stores/ui.ts';
 	import { accountInitial } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import MenuPopover from './MenuPopover.svelte';
 
 	let {
@@ -66,7 +66,7 @@
 				name={username}
 				{accountHref}
 				onAccountOpen={() => popover?.close(false)}
-				appRows={[{ label: RAIL_SETTINGS_LABEL, onSelect: openSettings }]}
+				appRows={[{ label: pageText('places.settings'), onSelect: openSettings }]}
 				theme={{ choice: KIT_CHOICE_BY_STORED[$themeChoice], onChange: chooseKitTheme }}
 				legalLinks={LEGAL_SECTIONS}
 				onLogOut={() => void leaveForLogout(onlogout)}

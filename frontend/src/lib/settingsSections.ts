@@ -1,9 +1,12 @@
+import { pageText } from '#lib/utils/page-words.ts';
+import type { Key } from '#lib/words/en.ts';
+
 type SettingsSectionId = 'generation' | 'voices' | 'references' | 'admin' | 'about';
 
 interface SettingsSection {
 	readonly id: SettingsSectionId;
 	readonly href: string;
-	readonly label: string;
+	readonly labelKey: Key;
 	readonly icon: string;
 	readonly adminOnly: boolean;
 }
@@ -12,26 +15,48 @@ const SETTINGS_SECTIONS = [
 	{
 		id: 'generation',
 		href: '/settings/generation',
-		label: 'Generation',
+		labelKey: 'settingsSections.generation',
 		icon: 'audio-lines',
 		adminOnly: false
 	},
-	{ id: 'voices', href: '/settings/voices', label: 'Voices', icon: 'mic', adminOnly: false },
+	{
+		id: 'voices',
+		href: '/settings/voices',
+		labelKey: 'settingsSections.voices',
+		icon: 'mic',
+		adminOnly: false
+	},
 	{
 		id: 'references',
 		href: '/settings/references',
-		label: 'References',
+		labelKey: 'settingsSections.references',
 		icon: 'file-music',
 		adminOnly: false
 	},
-	{ id: 'admin', href: '/settings/users', label: 'Admin', icon: 'shield', adminOnly: true },
-	{ id: 'about', href: '/settings/about', label: 'About', icon: 'info', adminOnly: false }
+	{
+		id: 'admin',
+		href: '/settings/users',
+		labelKey: 'settingsSections.admin',
+		icon: 'shield',
+		adminOnly: true
+	},
+	{
+		id: 'about',
+		href: '/settings/about',
+		labelKey: 'settingsSections.about',
+		icon: 'info',
+		adminOnly: false
+	}
 ] as const satisfies readonly SettingsSection[];
 
-export type SettingsSectionRoute = (typeof SETTINGS_SECTIONS)[number]['href'];
+type SettingsSectionEntry = (typeof SETTINGS_SECTIONS)[number];
+
+export type SettingsSectionRoute = SettingsSectionEntry['href'];
 
 export function visibleSettingsSections(
 	admin: boolean
-): readonly (typeof SETTINGS_SECTIONS)[number][] {
-	return SETTINGS_SECTIONS.filter((section) => admin || !section.adminOnly);
+): readonly (Omit<SettingsSectionEntry, 'labelKey'> & { readonly label: string })[] {
+	return SETTINGS_SECTIONS.filter((section) => admin || !section.adminOnly).map(
+		({ labelKey, ...section }) => ({ ...section, label: pageText(labelKey) })
+	);
 }

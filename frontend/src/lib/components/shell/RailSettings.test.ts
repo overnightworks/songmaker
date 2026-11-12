@@ -42,6 +42,13 @@ import { words } from '#lib/words/en.ts';
 const pageState = page as unknown as { url: URL };
 
 const { render, cleanup } = createComponentMount(RailSettings);
+const {
+	'settingsSections.generation': generation,
+	'settingsSections.voices': voices,
+	'settingsSections.references': references,
+	'settingsSections.admin': admin,
+	'settingsSections.about': about
+} = words;
 
 /** Flushes a `page.url` mutation through to the component, the same way
  * layout.test.ts flushes a state change that a mocked effect reacts to. */
@@ -93,7 +100,7 @@ describe('RailSettings', () => {
 	});
 
 	it('opens the clicked section', async () => {
-		await clickSection('Voices');
+		await clickSection(voices);
 
 		await vi.waitFor(() => expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/voices'));
 	});
@@ -101,7 +108,7 @@ describe('RailSettings', () => {
 	it('holds a section for the unsaved-changes dialog while the open song has a dirty draft (issue #1143)', async () => {
 		setDraftLyrics('unsaved edit');
 
-		await clickSection('Voices');
+		await clickSection(voices);
 
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
@@ -115,7 +122,7 @@ describe('RailSettings', () => {
 		toggle.click();
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-		expect(itemLabels(target)).toEqual(['Generation', 'Voices', 'References', 'Admin', 'About']);
+		expect(itemLabels(target)).toEqual([generation, voices, references, admin, about]);
 	});
 
 	it('names its group and its sections navigation from the catalog', async () => {
@@ -143,7 +150,7 @@ describe('RailSettings', () => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 
 		const active = requireElement<HTMLAnchorElement>(target, '.row-active');
-		expect(active.textContent?.trim()).toBe('Voices');
+		expect(active.textContent?.trim()).toBe(voices);
 		expect(active.getAttribute('href')).toBe('/settings/voices');
 	});
 
@@ -151,7 +158,7 @@ describe('RailSettings', () => {
 		currentUser.set(makeAuthUser());
 		pageState.url = new URL('https://songmaker.test/settings/generation');
 		const target = await render();
-		expect(itemLabels(target)).toEqual(['Generation', 'Voices', 'References', 'About']);
+		expect(itemLabels(target)).toEqual([generation, voices, references, about]);
 	});
 
 	it('persists its open state under RAIL_SETTINGS_OPEN_STORAGE_KEY', async () => {

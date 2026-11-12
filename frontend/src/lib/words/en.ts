@@ -86,6 +86,14 @@ export type Words = {
     readonly "pageBack.playlist": string;
     readonly "pageBack.song": string;
     readonly "pageBack.previousPage": string;
+    readonly "settingsSections.generation": string;
+    readonly "settingsSections.voices": string;
+    readonly "settingsSections.references": string;
+    readonly "settingsSections.admin": string;
+    readonly "settingsSections.about": string;
+    readonly "settingsPage.documentTitle": (gaps: { readonly app: string }) => string;
+    readonly "settingsPage.nav": string;
+    readonly "settingsPage.adminOnly": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -191,5 +199,13 @@ export const words: Words = {
     "pageBack.playlist": "Playlist",
     "pageBack.song": "Song",
     "pageBack.previousPage": "Previous page",
+    "settingsSections.generation": "Generation",
+    "settingsSections.voices": "Voices",
+    "settingsSections.references": "References",
+    "settingsSections.admin": "Admin",
+    "settingsSections.about": "About",
+    "settingsPage.documentTitle": (gaps: { readonly app: string }) => "Settings — " + gaps.app,
+    "settingsPage.nav": "Settings sections",
+    "settingsPage.adminOnly": "admins only",
 };
 export type Key = keyof Words;

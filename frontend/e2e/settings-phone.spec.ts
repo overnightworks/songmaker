@@ -6,14 +6,20 @@
 // session is the stack's admin, so Admin is listed.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
+import { words } from '../src/lib/words/en';
 import { ONLY_IN_SHELL, workspace } from './helpers';
 
-const ADMIN_SECTIONS = ['Generation', 'Voices', 'References', 'Admin', 'About'] as const;
+const ADMIN_SECTIONS = [
+	words['settingsSections.generation'],
+	words['settingsSections.voices'],
+	words['settingsSections.references'],
+	words['settingsSections.admin'],
+	words['settingsSections.about']
+] as const;
 const ROW_MIN_HEIGHT_PX = 52;
 
 function settingsList(page: Page): Locator {
-	return workspace(page).getByRole('navigation', { name: SETTINGS_NAV_LABEL });
+	return workspace(page).getByRole('navigation', { name: words['settingsPage.nav'] });
 }
 
 test(
@@ -23,7 +29,7 @@ test(
 		await page.goto('/settings');
 		await expect(page).toHaveURL(/\/settings$/);
 		await expect(
-			workspace(page).getByRole('heading', { name: 'Settings', exact: true })
+			workspace(page).getByRole('heading', { name: words['places.settings'], exact: true })
 		).toBeVisible();
 
 		const rows = settingsList(page).getByRole('link');
@@ -34,7 +40,7 @@ test(
 			expect(box?.height ?? 0).toBeGreaterThanOrEqual(ROW_MIN_HEIGHT_PX);
 		}
 
-		await rows.filter({ hasText: 'Voices' }).click();
+		await rows.filter({ hasText: words['settingsSections.voices'] }).click();
 		await expect(page).toHaveURL(/\/settings\/voices$/);
 		await expect(workspace(page).getByRole('heading', { name: 'My Voices' })).toBeVisible();
 

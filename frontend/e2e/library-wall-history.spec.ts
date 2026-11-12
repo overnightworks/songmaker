@@ -11,6 +11,7 @@ import {
 	workspace
 } from './helpers';
 import { readSeededLibrary } from './seed';
+import { words } from '../src/lib/words/en';
 import { scrollWallTo } from './wall-scroll';
 
 async function wallBounds(page: Page) {
@@ -63,8 +64,8 @@ for (const position of ['halfway', 'bottom'] as const) {
 		}
 
 		const shell = shellOf(testInfo);
-		if (shell === 'mobile') await openPageFromSearch(page, 'Voices');
-		else await openSettingsSection(page, shell, 'Voices');
+		if (shell === 'mobile') await openPageFromSearch(page, words['settingsSections.voices']);
+		else await openSettingsSection(page, shell, words['settingsSections.voices']);
 		await expect(page).toHaveURL(/\/settings\/voices$/);
 		await expect(
 			workspace(page).getByRole('heading', { name: 'My Voices', exact: true })

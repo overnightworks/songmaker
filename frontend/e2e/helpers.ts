@@ -9,12 +9,10 @@ import {
 	type Response,
 	type TestInfo
 } from '@playwright/test';
-import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
 import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { APP_NAME } from '../src/lib/constants/app';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
-import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
@@ -436,7 +434,9 @@ export function accountMenu(page: Page): Locator {
 /** Settings from the phone's account menu: the Settings list on the phone. */
 export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
 	await accountCircle(page).click();
-	await accountMenu(page).getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true }).click();
+	await accountMenu(page)
+		.getByRole('button', { name: words['places.settings'], exact: true })
+		.click();
 }
 
 /** Any page, a Settings section included, from the phone bar's Search sheet. */
@@ -459,7 +459,7 @@ export async function openSettingsSection(
 	if (shell === 'mobile') {
 		await openSettingsFromAccountMenu(page);
 		await page
-			.getByRole('navigation', { name: SETTINGS_NAV_LABEL })
+			.getByRole('navigation', { name: words['settingsPage.nav'] })
 			.getByRole('link', { name: nameStartingWith(section) })
 			.click();
 		return;

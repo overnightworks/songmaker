@@ -10,7 +10,7 @@
 // Both shells drive every flow.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import { SETTINGS_NAV_LABEL } from '../src/lib/constants/settings';
+import { words } from '../src/lib/words/en';
 
 import {
 	FlowGuard,
@@ -232,7 +232,7 @@ for (const [refusal, query] of [
 }
 
 function settingsSections(page: Page): Locator {
-	return page.getByRole('navigation', { name: SETTINGS_NAV_LABEL });
+	return page.getByRole('navigation', { name: words['settingsPage.nav'] });
 }
 
 async function signInAs(page: Page, account: SeededAccount): Promise<void> {
@@ -271,7 +271,9 @@ test('an open page whose session ended on the server leaves for the sign-in star
 		})
 	);
 	await page.goto('/settings');
-	const voices = settingsSections(page).getByRole('link', { name: nameStartingWith('Voices') });
+	const voices = settingsSections(page).getByRole('link', {
+		name: nameStartingWith(words['settingsSections.voices'])
+	});
 	await expect(voices).toBeVisible();
 	// The desktop Settings index forwards to its first section; the rail's link is the same one after it.
 	if (shell === 'desktop') await expect(page).toHaveURL(/\/settings\/generation$/);
