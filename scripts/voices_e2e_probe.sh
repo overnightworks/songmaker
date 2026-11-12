@@ -40,7 +40,7 @@ export E2E_BASE_URL="http://localhost:$PROBE_PORT"
 export E2E_VOICES_STACK=1
 
 cd "$PROJECT_ROOT"
-compose=(docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml
+compose=(docker compose --project-directory . -f docker/docker-compose.test.yml
     -f docker/docker-compose.e2e-voices.yml)
 
 teardown() {

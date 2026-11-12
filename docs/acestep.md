@@ -14,7 +14,7 @@ an LRU cache of loaded models and exposes:
 | POST | `/evict_model` | Evict from VRAM |
 | POST | `/pin_model` | Mark a loaded model as exempt from LRU eviction |
 | POST | `/unpin_model` | Remove a model from the pinned set |
-| POST | `/restart` | Ask the worker process to terminate so Docker restarts it |
+| POST | `/restart` | Ask the worker process to terminate so the platform restarts it |
 | POST | `/generate` | Submit generation, returns `{task_id}` |
 | POST | `/gpu_hold/reserve` | Reserve an idle worker for token-bound LoRA training |
 | POST | `/gpu_hold/renew` | Renew a token-bound LoRA hold |
@@ -152,7 +152,7 @@ The other services are single-stage images (`songmaker-music-worker`: server ext
 
 **Layers that repeat:** the release builds all four images with fixed file times, so a layer whose inputs did not change keeps its digest from one release to the next and a roll pulls only the layers that changed. The price is that every image's creation date reads 1970-01-01, so a filter or sort by an image's age treats a released image as old. A layer repeats only while it holds no logs, caches or wall-clock data: a `RUN` that writes a timestamp, a log or a package cache into its layer changes that layer's digest on every build.
 
-**Who gets the GPU:** only `songmaker-acestep-worker-N` (`runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES` pinned to its `GPU_ID`). `songmaker-scoring-worker` is given no GPU device and defaults to `SCORING_DEVICE=cpu`, so it carries CPU torch and never touches VRAM. Generation VRAM therefore has exactly one owner and needs no cross-container arbitration. Setting `SCORING_DEVICE=cuda` would break that assumption: the scoring worker would additionally need GPU access in `docker-compose.yml` and a release/verify protocol against the acestep-worker, neither of which exists today.
+**Who gets the GPU:** only `songmaker-acestep-worker-N` (`runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES` pinned to its `GPU_ID`). `songmaker-scoring-worker` is given no GPU device and defaults to `SCORING_DEVICE=cpu`, so it carries CPU torch and never touches VRAM. Generation VRAM therefore has exactly one owner and needs no cross-container arbitration. Setting `SCORING_DEVICE=cuda` would break that assumption: the scoring worker would additionally need GPU access in its platform manifest and a release/verify protocol against the acestep-worker, neither of which exists today.
 
 **GPU telemetry and health:** NVML (`pynvml`) is used only in `src/acestep_worker/gpu_util.py`. The worker reports VRAM in its heartbeat, which is republished on `/metrics`. `check_gpu_health()` makes the worker's `/health` answer 503 when `pynvml` is present but the device cannot be opened. A missing `pynvml` (CI, a unit test, a laptop) is not a broken worker and never blocks a job.
 
@@ -161,9 +161,9 @@ The other services are single-stage images (`songmaker-music-worker`: server ext
 **FFmpeg is a system dependency of the ACE-Step worker image.** The `gpu-torch-base` stage installs the distro `ffmpeg` package, so the inner ACE-Step venv can load TorchCodec's shared FFmpeg libraries while decoding training audio and operators have `ffprobe` available for diagnosis.
 
 The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The
-Python settings and `docker-compose.yml` both default `ARQ_JOB_TIMEOUT` to
+Python settings and the test stack (`docker/docker-compose.test.yml`) both default `ARQ_JOB_TIMEOUT` to
 1000 seconds. `ACESTEP_STARTUP_TIMEOUT_SECONDS` is a separate setting, 540
-seconds in both the Python default and the Compose fallback: a load now
+seconds in the Python default and in the platform's `apps/songmaker/acestep-worker.yaml`: a load now
 includes the eager DiT and LM init, which takes 5-8 minutes for a cold xl-turbo
 with vLLM, and 540 s plus one eviction (15 s grace, 5 s kill) stays under the
 scheduler's 600-second load timeout, so a slow load ends as the worker's own
@@ -247,17 +247,17 @@ The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container 
 
 The Worker Pool admin panel has a separated **Restart worker…** button at the end of each card. Clicking it opens a confirmation inside that card: **Restart `<id>`?**, **Running takes will stop.**, **Cancel** and **Restart**. Cancel or Escape closes it without restarting; only confirming with Restart calls `POST /api/admin/workers/{id}/restart`, which proxies to the worker's `POST /restart` endpoint. The worker logs the restart request, schedules `os.kill(os.getpid(), SIGTERM)` after a 100 ms delay (so the HTTP response is flushed first), and returns `{"status": "restarting", "pid": ...}`. Restart only works while the worker process is alive to receive that signal; when the card shows offline, the button is disabled and points at restarting the worker's container directly instead.
 
-The container is already running when the SIGTERM lands, so the Docker daemon's `restart: unless-stopped` policy restarts *that same container* automatically — this narrow in-process case needs neither docker compose nor a reboot. See [Restart-policy limits](#restart-policy-limits) below for what `unless-stopped` does **not** cover. The new process goes through the normal startup sequence above (FastAPI bind → `/health` 503 → register → `/health` 200). Expected total downtime: ~10–15 s.
+The container is already running when the SIGTERM lands, so the platform's pod restart policy starts *that same container* again — this narrow in-process case needs no redeploy and no reboot. The test stack sets no restart policy, so there the worker stays down until it is started (see [Restart policies](#restart-policies)). The new process goes through the normal startup sequence above (FastAPI bind → `/health` 503 → register → `/health` 200). Expected total downtime: ~10–15 s.
 
 **In-flight generations fail.** Restarting kills the worker process, including any subprocess holding a generate task. Affected jobs surface as `error_type=worker_unreachable` in the user's job list. Restart only when the operator is willing to lose the in-flight work.
 
 To verify the restart cycle from the admin UI: the Worker Pool card flips `online → offline → loading → online` over the cycle. The transitions are visible because the heartbeat TTL (15 s) outlasts the brief downtime.
 
-**LM failure.** The worker ends itself a second way. A load whose child came up without its LM (with `ACESTEP_INIT_LLM` on) is stopped and answered with 502 carrying the child's log tail; the worker writes `songmaker:acestep:lm-failure:{id}` = the mode, asks its own server to shut down (no signal, so the code survives; takes still running end with the server's streams, and the process is forced out after 30 s however long a take's polling lasts) and exits with code **75**, so `restart: unless-stopped` starts it again. At start the worker loads that mode before it registers: on success it clears the key and comes online with the mode resident; if the LM fails again the start fails (uvicorn's exit code 3) with the key kept, so the container keeps restarting and publishes no heartbeat meanwhile (the admin card reads offline); any other failure (unknown mode, capacity, a deleted checkpoint, a start error) clears the key, is kept as the worker's last error and the worker starts empty. A manual `POST /restart` writes no key and ends by SIGTERM, which uvicorn re-raises, so the container reads 143. There is no pacing between attempts beyond Docker's own backoff. `/health/details` names the loop first: while a registered worker carries the key it answers `acestep_reason: "lm_init_failed"` next to `acestep: "unhealthy"` when no other registered worker is online (with one online it reads `healthy` and still names the reason), and `null` again once the restarted worker has cleared the key. Read a loop further with `docker inspect --format '{{.State.ExitCode}} {{.RestartCount}}' <container>` (75 after a load, 3 after a failed retry) and the container log for the child's tail.
+**LM failure.** The worker ends itself a second way. A load whose child came up without its LM (with `ACESTEP_INIT_LLM` on) is stopped and answered with 502 carrying the child's log tail; the worker writes `songmaker:acestep:lm-failure:{id}` = the mode, asks its own server to shut down (no signal, so the code survives; takes still running end with the server's streams, and the process is forced out after 30 s however long a take's polling lasts) and exits with code **75**, so the platform's pod restart starts it again. At start the worker loads that mode before it registers: on success it clears the key and comes online with the mode resident; if the LM fails again the start fails (uvicorn's exit code 3) with the key kept, so the container keeps restarting and publishes no heartbeat meanwhile (the admin card reads offline); any other failure (unknown mode, capacity, a deleted checkpoint, a start error) clears the key, is kept as the worker's last error and the worker starts empty. A manual `POST /restart` writes no key and ends by SIGTERM, which uvicorn re-raises, so the container reads 143. There is no pacing between attempts beyond the platform's restart backoff. `/health/details` names the loop first: while a registered worker carries the key it answers `acestep_reason: "lm_init_failed"` next to `acestep: "unhealthy"` when no other registered worker is online (with one online it reads `healthy` and still names the reason), and `null` again once the restarted worker has cleared the key. Read a loop further with `docker inspect --format '{{.State.ExitCode}} {{.RestartCount}}' <container>` (75 after a load, 3 after a failed retry) and the container log for the child's tail.
 
-### Restart-policy limits
+### Restart policies
 
-`restart: unless-stopped` is a per-container Docker Engine policy, not a docker-compose feature: the daemon consults it whenever a container's own process exits, and again for every container whose last recorded state was `running` when the daemon itself restarts. It has one hard limit — **it only ever applies to a container that has been started at least once.** A container docker compose merely *created* but never started (e.g. `docker compose up` failing partway through, such as an NVIDIA driver mismatch) sits in state `Created` with `RestartCount: 0`. Docker ignores `Created` containers on every daemon start and every host reboot, indefinitely — there is no timeout and no self-heal. The only way out is an explicit `docker start <container>` or `docker compose up -d`.
+The test stack (`docker/docker-compose.test.yml`) sets no restart policy on any service, so a container whose process exits stays exited until `docker compose up -d` or `docker start <container>`. A container that docker compose merely *created* but never started (e.g. `docker compose up` failing partway through, such as an NVIDIA driver mismatch) sits in state `Created` with `RestartCount: 0`, and no daemon start or host reboot brings it up. The only way out is an explicit `docker start <container>` or `docker compose up -d`. On the platform, the pod's restart policy governs the workers; the platform owns its behaviour.
 
 **`docker compose ps` hides this.** Without `-a` it omits containers in `Created`, so the stack can look fully up when a container has in fact never run once. Diagnose a suspected stuck container with:
 
@@ -265,7 +265,7 @@ To verify the restart cycle from the admin UI: the Worker Pool card flips `onlin
 docker compose ps -a
 ```
 
-**Boot start.** Starting the stack after a host boot is the platform's, not a unit of this repository. On a Compose host started by hand, `docker compose up -d` starts every container regardless of the state it was left in — `running`, `exited`, or `Created` alike — which is exactly what the restart policy cannot do.
+**Boot start.** Starting the stack after a host boot is the platform's, not a unit of this repository. On a Compose host started by hand, `docker compose up -d` starts every container regardless of the state it was left in — `running`, `exited`, or `Created` alike — which the test stack, with no restart policy, cannot do on its own.
 
 ### Deploys and generation jobs
 
@@ -327,7 +327,7 @@ On this Docker 29 host, the legacy `--gpus all` / Compose `deploy.resources.rese
 
 **"Worker won't register"** — `/health` returns 503. Check container logs for `"Registration attempt N failed: ..."`. Verify the control plane URL is reachable from inside the worker container with `docker compose exec songmaker-acestep-worker-0 curl -v http://songmaker-web:8080/health`. Verify the worker and the web container mount the same `internal-token` file content (a rotated file reaches them only after a recreate). The retry loop never gives up — fix the root cause and the next backoff tick will succeed.
 
-**"Jobs fail with an init error"** — a child without its LM no longer stays up serving that error: the worker exits with code 75 and retries the failed load when Docker restarts it (see [Restart procedure](#restart-procedure)). If takes keep failing, the LM cannot initialise (VRAM held by another process, a missing LM checkpoint): read `acestep_reason` in `GET /health/details` first (`lm_init_failed` means this loop), then check the key with `redis-cli GET 'songmaker:acestep:lm-failure:{worker_id}'`, the restart count above and the container log's last lines, fix the cause, and the next restart comes online by itself.
+**"Jobs fail with an init error"** — a child without its LM no longer stays up serving that error: the worker exits with code 75 and retries the failed load when the platform restarts it (see [Restart procedure](#restart-procedure)). If takes keep failing, the LM cannot initialise (VRAM held by another process, a missing LM checkpoint): read `acestep_reason` in `GET /health/details` first (`lm_init_failed` means this loop), then check the key with `redis-cli GET 'songmaker:acestep:lm-failure:{worker_id}'`, the restart count above and the container log's last lines, fix the cause, and the next restart comes online by itself.
 
 **"Download stalls"** — check the download flag: `docker compose exec redis redis-cli GET 'songmaker:acestep:download:{mode}'`. Cross-reference the value (a job_id) with the job's status in the admin UI. If the job is gone but the flag remains, it's stale — `redis-cli DEL` it and retry. The 30-minute TTL is the automatic safety net.
 
@@ -421,7 +421,7 @@ There are two layers of env vars: ones the **acestep-worker container** reads at
 
 ### Worker container env vars (`WorkerSettings`)
 
-These are set on the `songmaker-acestep-worker-0` container in `docker-compose.yml` and read by the worker's Pydantic `Settings` at startup. `extra="forbid"` — typo'd names raise `ValidationError`.
+These are set on the worker's container in the platform's `apps/songmaker/acestep-worker.yaml` (on the test stack's `songmaker-acestep-worker-0`, in `docker/docker-compose.test.yml`) and read by the worker's Pydantic `Settings` at startup. `extra="forbid"` — typo'd names raise `ValidationError`.
 
 | Var | Default | Purpose |
 |-----|---------|---------|
@@ -446,7 +446,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 
 ### ACE-Step subprocess env vars (passed by the worker)
 
-Most of these are set on the subprocess by `subprocess_runner.py:build_env()` when it spawns ACE-Step, computed from the worker settings above; you don't set them directly. The three tuning vars below (`ACESTEP_LM_DIT_RESERVE_DURATION_S`, `ACESTEP_LM_DIT_RESERVE_BATCH`, `ACESTEP_SKIP_VRAM_PREFLIGHT`) are not built there — `build_env()` copies the worker container's environment, so they ride along from `docker-compose.yml` and are read by ACE-Step itself.
+Most of these are set on the subprocess by `subprocess_runner.py:build_env()` when it spawns ACE-Step, computed from the worker settings above; you don't set them directly. The three tuning vars below (`ACESTEP_LM_DIT_RESERVE_DURATION_S`, `ACESTEP_LM_DIT_RESERVE_BATCH`, `ACESTEP_SKIP_VRAM_PREFLIGHT`) are not built there — `build_env()` copies the worker container's environment, so they ride along from the platform's `apps/songmaker/acestep-worker.yaml` and are read by ACE-Step itself.
 
 | Var | Default / Source | Purpose |
 |-----|---|---|
@@ -525,7 +525,7 @@ The vendored fork keeps `_vram_preflight_check()` enabled by default. Before che
 
 **Current file:** `vendor/acestep/acestep/core/generation/handler/generate_music.py` (around the `_vram_preflight_check()` call in `GenerateMusicMixin.generate_music()`)
 
-**Emergency opt-out:** `ACESTEP_SKIP_VRAM_PREFLIGHT=1` skips only the safety check and logs a warning. The flag is CUDA-only and back to emergency semantics: `docker-compose.yml` defaults it to `0` (override via `.env`). With the check bypassed, a generation that would have been refused runs into an OOM instead. Because the worker copies its environment when starting the ACE-Step subprocess, the flag reaches the subprocess the same way any other passthrough var does.
+**Emergency opt-out:** `ACESTEP_SKIP_VRAM_PREFLIGHT=1` skips only the safety check and logs a warning. The flag is CUDA-only and back to emergency semantics: the platform's `apps/songmaker/acestep-worker.yaml` sets it to `0`. With the check bypassed, a generation that would have been refused runs into an OOM instead. Because the worker copies its environment when starting the ACE-Step subprocess, the flag reaches the subprocess the same way any other passthrough var does.
 
 Targeted fork tests lock both branches of the policy: the pre-flight runs when the flag is unset and is bypassed only for an explicit truthy opt-out.
 

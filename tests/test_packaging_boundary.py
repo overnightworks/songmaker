@@ -33,6 +33,7 @@ UV_INSTALLED_ENVIRONMENT_FLAGS = frozenset({"--no-sync", "--frozen", "--no-build
 IMAGE_VIRTUALENV_BIN = "/app/.venv/bin/"
 WEB_ENTRYPOINT_SCRIPT = "/app/start_web_server.sh"
 E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
+TEST_STACK_COMPOSE_FILE = DOCKER_ROOT / "docker-compose.test.yml"
 DOCKER_DEFAULT_RESTART_POLICY = "no"
 WEB_SERVER_MODULE = "songmaker_cli.server"
 RECURSIVE_CHOWN = re.compile(r"\bchown(?:\s+-\S+)*?\s+(?:-\w*R\w*|--recursive)\b")
@@ -152,7 +153,7 @@ def _compose_file(path: Path) -> dict[str, object]:
 
 
 def _raw_compose() -> dict[str, object]:
-    return _compose_file(REPOSITORY_ROOT / "docker-compose.yml")
+    return _compose_file(TEST_STACK_COMPOSE_FILE)
 
 
 def _raw_compose_services() -> dict[str, object]:
@@ -178,6 +179,15 @@ def _e2e_workflow_compose_files() -> tuple[str, ...]:
     return tuple(shlex.split(_e2e_workflow_environment()["COMPOSE_FILES"]))
 
 
+def _compose_file_arguments(compose_arguments: tuple[str, ...]) -> tuple[str, ...]:
+    """The files a Compose command line names, whatever other options it carries."""
+    return tuple(
+        argument
+        for flag, argument in itertools.pairwise(compose_arguments)
+        if flag in ("-f", "--file")
+    )
+
+
 def _test_stacks() -> dict[str, tuple[str, ...]]:
     workflow_files = _e2e_workflow_compose_files()
     return {
@@ -187,6 +197,12 @@ def _test_stacks() -> dict[str, tuple[str, ...]]:
 
 
 TEST_STACKS = _test_stacks()
+# The files e2e.yml's "Write the throwaway secret files" step writes at run time.
+E2E_WORKFLOW_SECRET_PATHS = {
+    "SONGMAKER_SECRETS_DIR": "/scratch/songmaker-secrets",
+    "KEYCLOAK_CLIENT_SECRET_FILE": "/scratch/keycloak-client-secret",
+    "GATEWAY_KEY_FILE": "/scratch/gateway-key",
+}
 
 
 @functools.cache
@@ -201,7 +217,11 @@ def _rendered_test_stack_services(
         (*compose_files, "--profile", "*"),
         ("--format", "json"),
         env_file=Path(os.devnull),
-        environment={**_e2e_workflow_environment(), **dict(operator_environment)},
+        environment={
+            **_e2e_workflow_environment(),
+            **E2E_WORKFLOW_SECRET_PATHS,
+            **dict(operator_environment),
+        },
     )
     assert rendered.returncode == 0, rendered.stderr
     return json.loads(rendered.stdout)["services"]
@@ -342,10 +362,7 @@ def _relative(path: Path) -> str:
 
 
 def _compose_entrypoint_starts() -> list[ContainerStart]:
-    compose_files = [
-        REPOSITORY_ROOT / "docker-compose.yml",
-        *sorted(DOCKER_ROOT.glob("docker-compose*.yml")),
-    ]
+    compose_files = sorted(DOCKER_ROOT.glob("docker-compose*.yml"))
     services_by_file = {path: _compose_file(path)["services"] for path in compose_files}
     repo_built_services = {
         name
@@ -572,7 +589,6 @@ EVERY_COMPOSE_FILE = tuple(
     ).splitlines()
     if re.search(r"(^|/)(docker-)?compose[^/]*\.ya?ml$", name)
 )
-PRODUCTION_COMPOSE_FILES = ("-f", "docker-compose.yml")
 
 
 def _as_linux_resolves(path: str) -> Path:
@@ -605,19 +621,19 @@ def _render_services(compose_args: tuple[str, ...], env_file: Path) -> dict[str,
     return json.loads(rendered.stdout)["services"]
 
 
-@pytest.mark.parametrize("stack", ["production", *TEST_STACKS], ids=str)
+@pytest.mark.parametrize("stack", TEST_STACKS, ids=str)
 def test_no_stack_binds_an_agent_cli_or_a_login(stack: str) -> None:
-    if stack == "production":
-        services = _render_services(PRODUCTION_COMPOSE_FILES, DOCKER_ROOT / ".env.docker.example")
-    else:
-        services = _rendered_test_stack_services(TEST_STACKS[stack])
+    services = _rendered_test_stack_services(TEST_STACKS[stack])
 
     assert _agent_login_binds(services) == []
 
 
 def test_every_compose_file_belongs_to_a_rendered_stack() -> None:
-    stacks = (PRODUCTION_COMPOSE_FILES, *TEST_STACKS.values())
-    rendered = {(REPOSITORY_ROOT / n).resolve() for files in stacks for n in files if n != "-f"}
+    rendered = {
+        (REPOSITORY_ROOT / name).resolve()
+        for files in TEST_STACKS.values()
+        for name in _compose_file_arguments(files)
+    }
     assert {path.resolve() for path in EVERY_COMPOSE_FILE} <= rendered
 
 
@@ -660,26 +676,7 @@ def test_the_agent_login_bind_check_names_the_service_and_the_bind(
     assert _agent_login_binds(services) == [f"songmaker-web binds {bind}"]
 
 
-CONFINED_SERVICES = (
-    "songmaker-web",
-    "songmaker-music-worker",
-    "songmaker-acestep-worker-0",
-    "songmaker-scoring-worker",
-)
 CONFINEMENT_REPLACING_OPTIONS = ("seccomp", "apparmor", "systempaths")
-
-
-@pytest.mark.parametrize("service_name", CONFINED_SERVICES)
-def test_a_confined_service_drops_every_capability_and_blocks_privilege_gain(
-    service_name: str,
-) -> None:
-    service = _raw_compose_services()[service_name]
-    assert isinstance(service, dict)
-
-    assert service["cap_drop"] == ["ALL"]
-    assert "cap_add" not in service
-    assert not service.get("privileged")
-    assert "no-new-privileges:true" in service["security_opt"]
 
 
 def _confinement_replacements(services: dict) -> dict[str, str]:
@@ -690,10 +687,6 @@ def _confinement_replacements(services: dict) -> dict[str, str]:
         for option in service.get("security_opt", [])
         if option.startswith(CONFINEMENT_REPLACING_OPTIONS)
     }
-
-
-def test_no_service_replaces_dockers_default_confinement() -> None:
-    assert not _confinement_replacements(_raw_compose_services())
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())

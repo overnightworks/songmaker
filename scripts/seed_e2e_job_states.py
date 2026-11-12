@@ -3,7 +3,7 @@
 
 ``frontend/e2e/song-phone.spec.ts`` (issue #995) proves the phone song page's
 Takes list, its in-progress generation and a failed one -- but CI's e2e stack
-(``docker-compose.ci.yml``) runs no ACE-Step worker, so none of those states
+(``docker/docker-compose.test.yml``) runs no ACE-Step worker, so none of those states
 can come from a real generation. Reaching a song already at version 7 through
 ``take_count`` individual saves, or a running job through a real generate
 call with no worker to advance it, would either cost requests the flow never
@@ -17,36 +17,43 @@ hand-built row shape.
 Run inside the web container, where ``DATABASE_URL`` and the audio volume are
 mounted. Use the venv's Python directly:
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py create-song \\
         --album-id e2e-album-mtizek8x --title "Song Phone Takes" \\
         --version-number 7 --take-count 2 --owner-username e2e-ci-admin \\
         < frontend/e2e/fixtures/take.mp3
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-running \\
         --song-id <id> --progress 0.36 --take-index 1 --take-count 2 \\
         --phase rendering --generation-started-offset 64 \\
         --owner-username e2e-ci-admin
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-phase \\
         --job-id <id> --progress 0.36 --phase rendering \\
         --generation-started-offset 64
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-failed \\
         --job-id <id> --error "ACE-Step worker: CUDA out of memory on device 0"
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-completed --job-id <id> \\
         < frontend/e2e/fixtures/take.mp3
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-cover-running \\
         --album-id <id> --started-offset 90 --owner-username e2e-ci-admin
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-cover-completed --job-id <id> \\
         < frontend/e2e/fixtures/cover.png
 

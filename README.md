@@ -4,33 +4,23 @@ AI-powered song generation platform. Create albums and songs with lyrics + style
 
 SvelteKit frontend + FastAPI backend + PostgreSQL + Redis + arq job workers + GPU ACE-Step worker.
 
-## Run with Docker
+## Deployment and the test stack
 
-Songmaker is Docker-only; there is no native local-dev path. The stack runs the web app, both arq workers, the ACE-Step GPU worker, PostgreSQL, and Redis.
+The platform serves Songmaker: it runs the web app, both arq workers, the ACE-Step GPU worker, PostgreSQL and Redis from the images the Release workflow pushes. This repository ships no deploy file.
 
-Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation), and a Hugging Face token (for downloading model weights).
-
-A process started from a checkout reads the first `.env` it finds walking up from its working directory and stops at the first `pyproject.toml`.
-
-Install and first start, in the deploy checkout `~/srv/songmaker` (a clone at a release tag; a work clone has no `.env` and cannot start the live stack):
+[`docker/docker-compose.test.yml`](docker/docker-compose.test.yml) is the test stack: CI's e2e boot, the GPU and Voices probes and local e2e runs boot it with throwaway secrets. Run every Compose call from the repository root, so the project name, the root `.env` and the relative paths keep resolving there:
 
 ```bash
-cp docker/.env.docker.example .env                # fill in the required settings; the secrets are files, see docs/security.md ("Secrets")
-docker compose up -d --build --wait               # never wrap in `timeout`
-sudo ./scripts/install_cli_credentials_mirror.sh  # agent-CLI login mirror
+docker compose --project-directory . -f docker/docker-compose.test.yml up -d --build --wait postgres redis
 ```
 
-- [`docker/.env.docker.example`](docker/.env.docker.example) lists every setting, which ones are required, and how to generate secrets.
-- A cold-cache build takes 8-15 minutes; [AGENTS.md](AGENTS.md#rules) says why it must not be interrupted. The first start also downloads the ACE-Step model weights into a Docker volume.
-- All persistent state (database, audio files, model cache) lives in named Docker volumes and survives `docker compose down` and rebuilds.
-- Container confinement: [docs/security.md](docs/security.md#container-confinement).
+[frontend/e2e/README.md](frontend/e2e/README.md#running-it-locally) lists the secrets and the boot steps of a local run; the ACE-Step worker runs only in the `gpu` profile.
 
 ## Operations
 
 - **Updates:** the platform deploys a release tag (`vYYYY.MM.DD.N` on `main`) through Flux; the operator dispatches the Release workflow, which gates `main`, pushes the images to GHCR and sets the tag, and a merge to `main` alone deploys nothing.
-- **Logs and status:** `docker compose logs -f <service>` (the containers log through journald, so `journalctl -t <container>` reads the same lines) and `docker compose ps -a` (`-a` also shows a created-but-never-started container).
-- **Stop and start:** `docker compose stop` / `docker compose start` keep the volumes.
 - **Backup:** PostgreSQL and the audio volume are backed up together by `hal backup`, hal's scheduled backup (hal's `docs/backup.md`), and restored by the platform.
+- **Container confinement:** [docs/security.md](docs/security.md#container-confinement).
 
 ## Development
 

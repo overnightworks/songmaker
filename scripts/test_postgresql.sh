@@ -56,11 +56,11 @@ capped_docker "$DOCKER_CALL_SECONDS" info > /dev/null 2>&1 \
 
 image=$("$python" -c '
 import yaml
-print(yaml.safe_load(open("docker-compose.yml"))["services"]["postgres"]["image"])
+print(yaml.safe_load(open("docker/docker-compose.test.yml"))["services"]["postgres"]["image"])
 ')
 redis_image=$("$python" -c '
 import yaml
-print(yaml.safe_load(open("docker-compose.yml"))["services"]["redis"]["image"])
+print(yaml.safe_load(open("docker/docker-compose.test.yml"))["services"]["redis"]["image"])
 ')
 suffix=$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')
 container="songmaker-test-postgresql-$suffix"

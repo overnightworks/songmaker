@@ -8,7 +8,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 RELEASE_JOBS = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())["jobs"]
-COMPOSE_SERVICES = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
+COMPOSE_SERVICES = yaml.safe_load((ROOT / "docker/docker-compose.test.yml").read_text())["services"]
 QUALITY_WORKFLOWS = "overnightworks/quality/"
 
 

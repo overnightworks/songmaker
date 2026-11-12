@@ -17,7 +17,8 @@ Run inside the web container, where ``DATABASE_URL`` is mounted. Use the
 venv's Python directly -- bare ``python`` on the container's ``PATH`` is the
 package-less system interpreter, not the app's:
 
-    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_filler_albums.py \\
         --count 30 --title-prefix "E2E Rail Filler mtizek8x" \\
         --owner-username e2e-ci-admin

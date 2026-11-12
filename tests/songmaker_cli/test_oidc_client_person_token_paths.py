@@ -8,8 +8,6 @@ fake issuer's. Matrix cells T1 to T26 of the work item are named in the case ids
 from __future__ import annotations
 
 import asyncio
-import json
-import subprocess
 from contextlib import suppress
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -21,7 +19,6 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session
 from starlette.requests import ClientDisconnect
 from starlette.types import ASGIApp
-from support.compose_config import run_compose_config
 from support.token_world import TokenWorld, make_token_world
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session, seed_user
 
@@ -309,33 +306,6 @@ def test_t26_a_preflight_keeps_authorization_out_of_the_allowed_headers(
 
     assert response.status_code == status
     assert "authorization" not in response.headers.get("access-control-allow-headers", "").lower()
-
-
-# -- T15: the deployment ---------------------------------------------------------------
-
-
-def test_t15_compose_hands_token_clients_to_the_web_service_only(tmp_path: Path) -> None:
-    env_file = tmp_path / "scratch.env"
-    env_file.write_text(
-        "SONGMAKER_MONITORING_TOKEN=scratch-monitoring-token-not-a-secret\n"
-        "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
-        f"TOKEN_CLIENTS={TokenWorld.HAL}\n",
-    )
-
-    result: subprocess.CompletedProcess[str] = run_compose_config(
-        ("-f", "docker-compose.yml", "-p", "songmaker-person-token-paths-test"),
-        ("--format", "json"),
-        env_file=env_file,
-        environment={},
-    )
-
-    assert result.returncode == 0, result.stderr
-    services = json.loads(result.stdout)["services"]
-    carrying = {
-        name for name, service in services.items()
-        if service.get("environment", {}).get("TOKEN_CLIENTS") == TokenWorld.HAL
-    }
-    assert carrying == {"songmaker-web"}
 
 
 # -- T16, T17, T18: the account ---------------------------------------------------------

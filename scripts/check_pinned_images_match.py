@@ -1,8 +1,8 @@
-"""CI guard: CI's Postgres and Redis services run the images docker-compose.yml pins.
+"""CI guard: CI's Postgres and Redis services run the images the test stack pins.
 
-Dependabot moves the pins in docker-compose.yml only; the services in
+Dependabot moves the pins in docker/docker-compose.test.yml only; the services in
 .github/workflows/ci.yml repeat them by hand, so a compose bump would leave CI
-testing another Postgres or Redis than the one deployed.
+testing another Postgres or Redis than the test stack boots.
 
 Run from the project root:
 
@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
-COMPOSE_FILE = REPOSITORY_ROOT / "docker-compose.yml"
+COMPOSE_FILE = REPOSITORY_ROOT / "docker/docker-compose.test.yml"
 WORKFLOW_FILE = REPOSITORY_ROOT / ".github/workflows/ci.yml"
 SERVICE_NAMES = ("postgres", "redis")
 

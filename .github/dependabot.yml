@@ -63,7 +63,7 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: docker-compose
-    directory: /
+    directory: /docker
     schedule:
       interval: weekly
     groups:

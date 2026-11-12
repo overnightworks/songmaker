@@ -170,7 +170,7 @@ reason = "Alembic's own configuration, which the tool finds at the root"
 
 [[root.allow]]
 entry = "docker/"
-reason = "the worker Dockerfiles and the CI and E2E compose files, built apart from the Python package"
+reason = "the worker Dockerfiles and the test stack's compose files, built apart from the Python package"
 
 [[root.allow]]
 entry = "frontend/"
@@ -198,16 +198,6 @@ reason = "proves the touch target size of the controls that sit in many componen
 path = "frontend/src/lib/components/share/share-import-boundary.test.ts"
 rule = "test-layout"
 reason = "a grep gate over every source file that the share surface mounts, with no single subject"
-
-[[layout.allow]]
-path = "tests/test_compose_release_args.py"
-rule = "test-layout"
-reason = "proves docker-compose.yml, which lies outside every package"
-
-[[layout.allow]]
-path = "tests/test_compose_required_env.py"
-rule = "test-layout"
-reason = "proves docker-compose.yml, which lies outside every package"
 
 [[layout.allow]]
 path = "tests/test_dockerfile_installs.py"

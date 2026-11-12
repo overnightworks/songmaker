@@ -45,6 +45,5 @@ legal/
 tests/
 
 # Docker
-docker-compose.yml
 Dockerfile
 .dockerignore

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Checks that every host path docker-compose.yml bind-mounts for the agent
-# CLIs is there AND is the kind of thing it is supposed to be (issue #350).
+# Checks that every host path the agent CLIs need is there AND is the kind of thing it is
+# supposed to be (issue #350).
 #
 # Why a type check and not just an existence check: compose mounts these with
 # `bind: create_host_path: false`, so a missing path already fails the stack

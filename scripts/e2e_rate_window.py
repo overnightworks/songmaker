@@ -6,8 +6,10 @@ every Playwright run instead of trusting a dated measurement. Each budget is
 measured over its own window. Run inside the web container, where the rate-limit
 policy that classifies each path is importable:
 
-    docker compose logs --no-color --no-log-prefix songmaker-web \\
-        | docker compose exec -T songmaker-web /app/.venv/bin/python \\
+    docker compose --project-directory . -f docker/docker-compose.test.yml \\
+        logs --no-color --no-log-prefix songmaker-web \\
+        | docker compose --project-directory . -f docker/docker-compose.test.yml \\
+            exec -T songmaker-web /app/.venv/bin/python \\
             scripts/e2e_rate_window.py
 
 The access log is written inside the rate limiter, so a request the limiter

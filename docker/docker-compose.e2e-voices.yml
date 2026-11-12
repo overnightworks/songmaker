@@ -5,11 +5,11 @@ x-service-logging: &service-logging
     labels: "com.docker.compose.service"
 
 # Test-only override for the Voices browser flow.  It deliberately adds the
-# fake worker here instead of changing docker-compose.ci.yml, so library E2E
+# fake worker here instead of changing docker-compose.test.yml, so library E2E
 # runs never start it.
 services:
   songmaker-web:
-    # Plain http, same as docker-compose.ci.yml this file always layers on
+    # Plain http, same as docker-compose.test.yml this file always layers on
     # top of; named explicitly so this override stays correct standalone.
     environment:
       COOKIE_SECURE: "false"
