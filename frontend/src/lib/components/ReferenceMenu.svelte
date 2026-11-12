@@ -1,12 +1,7 @@
 <script lang="ts">
-	import { COLLECTION_MENU_CLOSE_LABEL } from '#lib/constants/collection-menu.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
-
-	const MENU_LABEL = 'Reference menu';
-	const SHOW_TAKES_LABEL = 'Show takes';
-	const DELETE_LABEL = 'Delete';
-	const IN_USE_HINT = 'In use';
 
 	let {
 		filename,
@@ -28,8 +23,8 @@
 <MenuPopover
 	bind:this={popover}
 	layer="reference-menu"
-	label={MENU_LABEL}
-	closeLabel={COLLECTION_MENU_CLOSE_LABEL}
+	label={pageText('referenceMenu.label')}
+	closeLabel={pageText('referenceMenu.close')}
 >
 	{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
 	<p class="menu-heading">{filename}</p>
@@ -41,7 +36,7 @@
 				onshowuses();
 			}}
 		>
-			{SHOW_TAKES_LABEL}
+			{pageText('referenceMenu.showTakes')}
 			<span class="menu-item-hint">{usesCount}</span>
 		</button>
 	{/if}
@@ -54,8 +49,8 @@
 		}}
 	>
 		<Icon name="trash" size={14} />
-		{DELETE_LABEL}
-		{#if inUse}<span class="menu-item-hint">{IN_USE_HINT}</span>{/if}
+		{pageText('referenceMenu.delete')}
+		{#if inUse}<span class="menu-item-hint">{pageText('referenceMenu.inUse')}</span>{/if}
 	</button>
 </MenuPopover>
 

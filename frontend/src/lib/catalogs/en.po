@@ -718,3 +718,23 @@ msgstr ""
 msgctxt "newSong.refused"
 msgid "The song could not be created."
 msgstr ""
+
+msgctxt "referenceMenu.label"
+msgid "Reference menu"
+msgstr ""
+
+msgctxt "referenceMenu.close"
+msgid "Close menu"
+msgstr ""
+
+msgctxt "referenceMenu.showTakes"
+msgid "Show takes"
+msgstr ""
+
+msgctxt "referenceMenu.delete"
+msgid "Delete"
+msgstr ""
+
+msgctxt "referenceMenu.inUse"
+msgid "In use"
+msgstr ""

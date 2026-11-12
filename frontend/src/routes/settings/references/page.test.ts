@@ -6,6 +6,7 @@ import {
 } from '#lib/stores/connectivity.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { words } from '#lib/words/en.ts';
 
 const mocks = vi.hoisted(() => ({
 	listReferences: vi.fn(),
@@ -498,7 +499,7 @@ describe('deleting a reference', () => {
 
 	async function chooseDelete(target: HTMLElement, filename: string): Promise<void> {
 		await openMenuOf(target, filename);
-		await pressReferenceControl(buttonNamed(menuPanel(), 'Delete'));
+		await pressReferenceControl(buttonNamed(menuPanel(), words['referenceMenu.delete']));
 	}
 
 	function confirmDialog(): HTMLElement {
@@ -564,7 +565,7 @@ describe('deleting a reference', () => {
 		);
 		expect(faultOf(rowOf(target, 'storytime-drums.wav'))).toBeUndefined();
 		await openMenuOf(target, 'voice-memo.mp3');
-		expect(buttonNamed(menuPanel(), 'Delete').disabled).toBe(true);
+		expect(buttonNamed(menuPanel(), words['referenceMenu.delete']).disabled).toBe(true);
 		expect(rowOf(target, 'voice-memo.mp3').textContent).toContain('Used in 2 takes');
 	});
 
@@ -706,7 +707,9 @@ describe('where a reference is used', () => {
 		);
 		const showTakes = Array.from(
 			document.body.querySelectorAll<HTMLButtonElement>('.menu-panel button')
-		).find((button) => button.textContent?.includes('Show takes')) as HTMLButtonElement;
+		).find((button) =>
+			button.textContent?.includes(words['referenceMenu.showTakes'])
+		) as HTMLButtonElement;
 		expect(showTakes.textContent).toContain('3');
 		await pressReferenceControl(showTakes);
 

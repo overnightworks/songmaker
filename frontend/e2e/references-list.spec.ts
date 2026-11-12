@@ -273,10 +273,10 @@ test('Settings › References deletes an unused recording from its menu after a 
 		await page.goto('/settings/references');
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
 
-		await row.getByRole('button', { name: 'Reference menu' }).click();
+		await row.getByRole('button', { name: words['referenceMenu.label'] }).click();
 		await page
-			.getByRole('dialog', { name: 'Reference menu' })
-			.getByRole('button', { name: 'Delete' })
+			.getByRole('dialog', { name: words['referenceMenu.label'] })
+			.getByRole('button', { name: words['referenceMenu.delete'] })
 			.click();
 		const confirm = page.getByRole('dialog', { name: 'Delete reference?' });
 		await expect(confirm).toContainText('its audio file');
@@ -350,11 +350,13 @@ test('Settings › References greys Delete for a recording a song uses', async (
 		await page.goto('/settings/references');
 		const row = workspace(page).getByRole('listitem').filter({ hasText: 'storytime-drums.mp3' });
 
-		await row.getByRole('button', { name: 'Reference menu' }).click();
+		await row.getByRole('button', { name: words['referenceMenu.label'] }).click();
 
-		const choice = page.getByRole('dialog', { name: 'Reference menu' }).getByRole('button', {
-			name: /Delete\s*In use/
-		});
+		const choice = page
+			.getByRole('dialog', { name: words['referenceMenu.label'] })
+			.getByRole('button', {
+				name: new RegExp(`${words['referenceMenu.delete']}\\s*${words['referenceMenu.inUse']}`)
+			});
 		await expect(choice).toBeDisabled();
 		guard.assertClean();
 		testPassed = true;
@@ -381,10 +383,10 @@ test('Settings › References shows the in-use notice on the row when a song too
 		await expect(row).toBeVisible();
 		({ albumId } = await linkReferenceToSong(api, referenceId));
 
-		await row.getByRole('button', { name: 'Reference menu' }).click();
+		await row.getByRole('button', { name: words['referenceMenu.label'] }).click();
 		await page
-			.getByRole('dialog', { name: 'Reference menu' })
-			.getByRole('button', { name: 'Delete' })
+			.getByRole('dialog', { name: words['referenceMenu.label'] })
+			.getByRole('button', { name: words['referenceMenu.delete'] })
 			.click();
 		await page
 			.getByRole('dialog', { name: 'Delete reference?' })
@@ -392,9 +394,11 @@ test('Settings › References shows the in-use notice on the row when a song too
 			.click();
 
 		await expect(row.getByRole('alert')).toHaveText('In use — not deleted.');
-		await row.getByRole('button', { name: 'Reference menu' }).click();
+		await row.getByRole('button', { name: words['referenceMenu.label'] }).click();
 		await expect(
-			page.getByRole('dialog', { name: 'Reference menu' }).getByRole('button', { name: /Delete/ })
+			page
+				.getByRole('dialog', { name: words['referenceMenu.label'] })
+				.getByRole('button', { name: words['referenceMenu.delete'] })
 		).toBeDisabled();
 		guard.assertClean();
 		testPassed = true;
