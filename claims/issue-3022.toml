@@ -1,0 +1,8 @@
+claim_id = "1548814276854dafb46c418b25e68da4"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "47194f501dcf6ee4387331348bd2b463ee7f828c"
+branch = "claude/issue-3022-the-back-names-and-home-s-head-read-thei"
+scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/e2e/home-write.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/e2e/library-phone-list.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/e2e/take-folds.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/LibraryHome.svelte", "frontend/src/lib/components/LibraryHome.test.ts", "frontend/src/lib/components/LibraryWorkspace.test.ts", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/detail-back.test.ts", "frontend/src/lib/constants/home.ts", "frontend/src/lib/routes/pageBack.test.ts", "frontend/src/lib/routes/pageBack.ts", "frontend/src/lib/words/en.ts", "frontend/src/routes/layout.test.ts"]
+opened_commit = "c7eddc70c10dffc7b5f391522098de918329dc91"
+whole_reason = "One surface moves whole (the epic's invariant 5): the back control's sentence and names with Home's head that shares the name, the catalog with its generated module, and every test that finds these elements."
