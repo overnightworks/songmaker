@@ -1,5 +1,3 @@
-export const RAIL_SEARCH_LABEL = 'Search or go to…';
-export const RAIL_SEARCH_CLEAR_LABEL = 'Clear search';
 export const RAIL_SETTINGS_LABEL = 'Settings';
 export const RAIL_CONTEXT_NO_TAKES = '—';
 // Remembers whether the rail's Settings disclosure was left open, so it

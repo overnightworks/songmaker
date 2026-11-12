@@ -14,7 +14,7 @@ import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import { LIBRARY_PAGE_LABEL } from '../src/lib/constants/library';
 import { APP_NAME } from '../src/lib/constants/app';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
-import { RAIL_SEARCH_LABEL, RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
+import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
@@ -443,9 +443,9 @@ export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
 export async function openPageFromSearch(page: Page, pageLabel: string): Promise<void> {
 	const sheet = searchSheet(page);
 	if (!(await sheet.isVisible())) await openSearchSheet(page);
-	await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(pageLabel);
+	await sheet.getByRole('combobox', { name: words['railSearch.field'] }).fill(pageLabel);
 	await sheet
-		.getByRole('group', { name: 'Pages', exact: true })
+		.getByRole('group', { name: words['railSearch.groupPages'], exact: true })
 		.getByRole('option', { name: nameStartingWith(pageLabel) })
 		.click();
 }

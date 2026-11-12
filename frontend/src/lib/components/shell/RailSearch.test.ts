@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import { RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '#lib/constants/rail.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import {
 	clearHitboxStyles,
@@ -17,6 +16,7 @@ import {
 import { railTreeQuery } from '#lib/stores/librarySearch.ts';
 import { railSearch, resetRailSearchForTests } from '#lib/stores/railSearch.ts';
 import { playlistList, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
+import { words } from '#lib/words/en.ts';
 import {
 	buildAlbumSearchHit,
 	buildPlaylist,
@@ -112,7 +112,7 @@ describe('RailSearch', () => {
 		input.dispatchEvent(new Event('input', { bubbles: true }));
 		await tick();
 
-		expect(input.getAttribute('aria-label')).toBe(RAIL_SEARCH_LABEL);
+		expect(input.getAttribute('aria-label')).toBe(words['railSearch.field']);
 		expect(get(railTreeQuery)).toBe('stadion');
 	});
 
@@ -142,16 +142,20 @@ describe('RailSearch', () => {
 					`#${CSS.escape(group.getAttribute('aria-labelledby') ?? '')}`
 				).textContent?.trim()
 			)
-		).toEqual(['Albums', 'Songs', 'Playlists']);
+		).toEqual([
+			words['railSearch.groupAlbums'],
+			words['railSearch.groupSongs'],
+			words['railSearch.groupPlaylists']
+		]);
 		const [album, titleSong, otherSong, playlist] = resultRows(root);
 		expect(album?.querySelector('img')?.getAttribute('src')).toBe('/covers/a1-card.webp');
 		expect(titleSong?.querySelector('.rail-search-glyph')?.textContent).toBe('♪');
 		expect(playlist?.querySelector('.playlist-cover')).not.toBeNull();
 		expect(resultRows(root).map((row) => row.querySelector('small')?.textContent)).toEqual([
-			'Album · 6 songs',
-			'Song · Vernissage',
-			'Song · Whoever You Are',
-			'Playlist · 9 songs'
+			`${words['railSearch.kindAlbum']} · ${words['railSearch.songCount'](6)}`,
+			`${words['railSearch.kindSong']} · Vernissage`,
+			`${words['railSearch.kindSong']} · Whoever You Are`,
+			`${words['railSearch.kindPlaylist']} · ${words['railSearch.songCount'](9)}`
 		]);
 		expect(otherSong?.querySelector('mark')?.textContent).toBe('Verni');
 	});
@@ -163,7 +167,9 @@ describe('RailSearch', () => {
 
 		const [page] = resultRows(root);
 		expect(page?.querySelector('.rail-search-glyph')?.textContent).toBe('⚙');
-		expect(page?.querySelector('small')?.textContent).toBe('Page · Settings');
+		expect(page?.querySelector('small')?.textContent).toBe(
+			`${words['railSearch.kindPage']} · ${words['places.settings']}`
+		);
 	});
 
 	it('marks the matched letters of a page found by its section', async () => {
@@ -172,8 +178,12 @@ describe('RailSearch', () => {
 		const root = await render();
 
 		const [page] = resultRows(root);
-		expect(page?.querySelector('small')?.textContent).toBe('Page · Settings');
-		expect(page?.querySelector('small mark')?.textContent).toBe('Set');
+		expect(page?.querySelector('small')?.textContent).toBe(
+			`${words['railSearch.kindPage']} · ${words['places.settings']}`
+		);
+		expect(page?.querySelector('small mark')?.textContent).toBe(
+			words['places.settings'].slice(0, 3)
+		);
 		expect(page?.querySelector('.rail-search-title mark')).toBeNull();
 	});
 
@@ -329,14 +339,14 @@ describe('RailSearch', () => {
 
 		requireElement<HTMLButtonElement>(
 			root,
-			`button[aria-label="${RAIL_SEARCH_CLEAR_LABEL}"]`
+			`button[aria-label="${words['railSearch.clear']}"]`
 		).click();
 		await tick();
 
 		expect(get(railTreeQuery)).toBe('');
 		expect(input.value).toBe('');
 		expect(document.activeElement).toBe(input);
-		expect(root.querySelector(`button[aria-label="${RAIL_SEARCH_CLEAR_LABEL}"]`)).toBeNull();
+		expect(root.querySelector(`button[aria-label="${words['railSearch.clear']}"]`)).toBeNull();
 	});
 
 	async function renderResultsOnTouchScreen(): Promise<HTMLElement> {
@@ -385,15 +395,31 @@ describe('RailSearch', () => {
 		railTreeQuery.set('missing');
 		railSearch.set({ query: 'missing', status: 'loading', error: null, hits: [] });
 		const root = await render();
-		expect(root.textContent).toContain('Searching…');
+		expect(root.textContent).toContain(words['railSearch.searching']);
 
 		railSearch.set({ query: 'missing', status: 'ready', error: null, hits: [] });
 		await tick();
-		expect(root.textContent).toContain('No results for “missing”.');
+		expect(root.textContent).toContain(words['railSearch.noResults']({ query: 'missing' }));
 
 		railSearch.set({ query: 'missing', status: 'error', error: 'Offline', hits: [] });
 		await tick();
 		expect(root.querySelector('[role="alert"]')?.textContent).toContain('Offline');
+
+		railSearch.set({ query: 'missing', status: 'error', error: null, hits: [] });
+		await tick();
+		expect(root.querySelector('[role="alert"] p')?.textContent).toBe(words['railSearch.failed']);
+		expect(root.querySelector('[role="alert"] button')?.textContent).toBe(
+			words['railSearch.retry']
+		);
+	});
+
+	it('names the results list', async () => {
+		showVernissageResults();
+		const root = await render();
+
+		expect(root.querySelector('[role="listbox"]')?.getAttribute('aria-label')).toBe(
+			words['railSearch.results']
+		);
 	});
 
 	it('keeps local page results available while the server search fails', async () => {

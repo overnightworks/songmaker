@@ -1,5 +1,4 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { words } from '../src/lib/words/en';
 
 export function searchSheet(page: Page): Locator {
@@ -15,14 +14,19 @@ export async function openSearchSheet(page: Page): Promise<Locator> {
 	return searchSheet(page);
 }
 
+export const GROUPS = {
+	albums: words['railSearch.groupAlbums'],
+	songs: words['railSearch.groupSongs']
+};
+
 export async function phoneSearchResult(
 	page: Page,
-	group: 'Albums' | 'Songs',
+	group: string,
 	query: string,
 	name: string | RegExp
 ): Promise<Locator> {
 	const sheet = await openSearchSheet(page);
-	const search = sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL });
+	const search = sheet.getByRole('combobox', { name: words['railSearch.field'] });
 	// A repeated crossing must issue a fresh query rather than reuse old hits.
 	await search.fill('');
 	await search.fill(query);

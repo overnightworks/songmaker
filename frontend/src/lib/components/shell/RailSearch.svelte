@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '#lib/constants/rail.ts';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { railTreeQuery } from '#lib/stores/librarySearch.ts';
 	import {
@@ -14,6 +13,7 @@
 	import { openRailSearchTarget } from '#lib/stores/navigation.ts';
 	import { ensurePlaylistsLoaded, playlistList } from '#lib/stores/playlists.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import PlaylistCover from '../PlaylistCover.svelte';
 
 	// `onchoose` runs before a chosen result opens: a sheet holding the search
@@ -136,8 +136,8 @@
 			role="combobox"
 			data-hitbox="text"
 			value={query}
-			placeholder={RAIL_SEARCH_LABEL}
-			aria-label={RAIL_SEARCH_LABEL}
+			placeholder={pageText('railSearch.field')}
+			aria-label={pageText('railSearch.field')}
 			aria-autocomplete="list"
 			aria-expanded={listboxShown}
 			aria-controls={listboxId}
@@ -150,7 +150,7 @@
 				type="button"
 				class="rail-search-clear"
 				data-hitbox="frequent"
-				aria-label={RAIL_SEARCH_CLEAR_LABEL}
+				aria-label={pageText('railSearch.clear')}
 				onclick={clearSearch}>×</button
 			>
 		{/if}
@@ -159,16 +159,16 @@
 	{#if hasQuery}
 		<div class="rail-search-panel" aria-live="polite" bind:this={panel}>
 			{#if searchState.status === 'loading'}
-				<p class="rail-search-status">Searching…</p>
+				<p class="rail-search-status">{pageText('railSearch.searching')}</p>
 			{:else if searchState.status === 'error'}
 				<div class="rail-search-error" role="alert">
-					<p>{searchState.error ?? 'Search failed'}</p>
-					<button type="button" onclick={retryRailSearch}>Retry</button>
+					<p>{searchState.error ?? pageText('railSearch.failed')}</p>
+					<button type="button" onclick={retryRailSearch}>{pageText('railSearch.retry')}</button>
 				</div>
 			{/if}
 
 			{#if groups.length > 0}
-				<div id={listboxId} role="listbox" aria-label="Search results">
+				<div id={listboxId} role="listbox" aria-label={pageText('railSearch.results')}>
 					{#each groups as group, groupIndex (group.label)}
 						<ul class="rail-search-group" role="group" aria-labelledby={groupLabelId(groupIndex)}>
 							<li id={groupLabelId(groupIndex)} class="rail-search-group-label" role="presentation">
@@ -221,7 +221,9 @@
 					{/each}
 				</div>
 			{:else if searchState.status === 'ready'}
-				<p class="rail-search-status">No results for “{searchState.query}”.</p>
+				<p class="rail-search-status">
+					{pageText('railSearch.noResults', { query: searchState.query })}
+				</p>
 			{/if}
 		</div>
 	{/if}
