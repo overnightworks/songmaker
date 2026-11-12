@@ -13,6 +13,7 @@ from arq.connections import RedisSettings
 from arq.constants import in_progress_key_prefix, job_key_prefix, result_key_prefix
 from arq.jobs import DeserializationError, Job, JobStatus, SerializationError
 from arq.worker import create_worker
+from support.redis_server import configured_redis_url, database_number
 
 from songmaker_cli import arq_pool
 from songmaker_cli.arq_codec import deserialize_arq
@@ -23,8 +24,8 @@ from songmaker_cli.scoring_worker import ScoringWorkerSettings
 
 
 @asynccontextmanager
-async def codec_pool(socket, monkeypatch):
-    monkeypatch.setenv("REDIS_URL", f"unix://{socket}")
+async def codec_pool(redis_url, monkeypatch):
+    monkeypatch.setenv("REDIS_URL", redis_url)
     pool = await arq_pool.init_arq_pool()
     try:
         yield pool
@@ -32,10 +33,10 @@ async def codec_pool(socket, monkeypatch):
         await arq_pool.close_arq_pool()
 
 
-def codec_worker(settings, socket, function, name):
+def codec_worker(settings, redis_url, function, name):
     return create_worker(
         settings,
-        redis_settings=RedisSettings(unix_socket_path=str(socket)),
+        redis_settings=RedisSettings.from_dsn(redis_url),
         functions=[func(function, name=name)],
         on_startup=None,
         on_shutdown=None,
@@ -111,7 +112,7 @@ JOB_CASES = [
     ],
 )
 def test_configured_producers_and_workers_exchange_json(
-    settings, function, args, deferred, redis_socket, monkeypatch
+    settings, function, args, deferred, redis_url, monkeypatch
 ):
     """1301-F1-CODEC-JOBS: real web/worker pools preserve each caller's payload."""
 
@@ -119,8 +120,8 @@ def test_configured_producers_and_workers_exchange_json(
         return {"args": received, "kwargs": kwargs}
 
     async def scenario():
-        async with codec_pool(redis_socket, monkeypatch) as pool:
-            worker = codec_worker(settings, redis_socket, echo, function)
+        async with codec_pool(redis_url, monkeypatch) as pool:
+            worker = codec_worker(settings, redis_url, echo, function)
             try:
                 job = await pool.enqueue_job(function, *args, _queue_name=settings.queue_name)
                 raw = await pool.get(job_key_prefix + job.job_id)
@@ -150,7 +151,7 @@ def test_configured_producers_and_workers_exchange_json(
 
 @pytest.mark.parametrize("settings", [MusicWorkerSettings, ScoringWorkerSettings])
 @pytest.mark.parametrize("outcome", ["success", "failure", "cancelled"])
-def test_results_remain_readable_with_correct_success(settings, outcome, redis_socket, monkeypatch):
+def test_results_remain_readable_with_correct_success(settings, outcome, redis_url, monkeypatch):
     """1301-F1-CODEC-RESULTS: public readers distinguish success from inert failure."""
 
     async def complete(ctx):
@@ -161,8 +162,8 @@ def test_results_remain_readable_with_correct_success(settings, outcome, redis_s
         return {"finished": True, "details": [None, 42, "🎵"]}
 
     async def scenario():
-        async with codec_pool(redis_socket, monkeypatch) as pool:
-            worker = codec_worker(settings, redis_socket, complete, "complete")
+        async with codec_pool(redis_url, monkeypatch) as pool:
+            worker = codec_worker(settings, redis_url, complete, "complete")
             try:
                 job = await pool.enqueue_job("complete", _queue_name=settings.queue_name)
                 await worker.async_run()
@@ -189,11 +190,11 @@ def test_results_remain_readable_with_correct_success(settings, outcome, redis_s
 @pytest.mark.parametrize(
     "value", [object(), b"bytes", {1, 2}, {1: "key"}, float("nan"), float("inf"), float("-inf")]
 )
-def test_unsupported_values_cannot_be_enqueued(value, redis_socket, monkeypatch):
+def test_unsupported_values_cannot_be_enqueued(value, redis_url, monkeypatch):
     """1301-F1-CODEC-REJECT: rejected values leave no partial job or queue entry."""
 
     async def scenario():
-        async with codec_pool(redis_socket, monkeypatch) as pool:
+        async with codec_pool(redis_url, monkeypatch) as pool:
             job_id = "unsupported-value"
             queue = MusicWorkerSettings.queue_name
             with pytest.raises(SerializationError):
@@ -237,7 +238,7 @@ def test_unsupported_values_cannot_be_enqueued(value, redis_socket, monkeypatch)
 )
 @pytest.mark.parametrize("settings", [MusicWorkerSettings, ScoringWorkerSettings])
 def test_invalid_json_fails_visibly_without_execution(
-    payload, settings, redis_socket, monkeypatch, caplog
+    payload, settings, redis_url, monkeypatch, caplog
 ):
     """1301-F1-CODEC-REJECT: poison messages finish failed without execution or retry."""
     executed = []
@@ -246,8 +247,8 @@ def test_invalid_json_fails_visibly_without_execution(
         executed.append(True)
 
     async def scenario():
-        async with codec_pool(redis_socket, monkeypatch) as pool:
-            worker = codec_worker(settings, redis_socket, rejected, "rejected")
+        async with codec_pool(redis_url, monkeypatch) as pool:
+            worker = codec_worker(settings, redis_url, rejected, "rejected")
             try:
                 job = await pool.enqueue_job("rejected", _queue_name=settings.queue_name)
                 await pool.set(job_key_prefix + job.job_id, payload)
@@ -284,7 +285,7 @@ class PickleSentinel:
 
 @pytest.mark.parametrize("settings", [MusicWorkerSettings, ScoringWorkerSettings])
 def test_legacy_jobs_and_results_never_execute_pickle(
-    settings, redis_socket, monkeypatch, tmp_path
+    settings, redis_url, monkeypatch, tmp_path
 ):
     """1301-F1-CODEC-LEGACY / 1301-F1-CODEC-REJECT: rejection is visible and inert."""
     marker = tmp_path / "pickle-executed"
@@ -305,8 +306,8 @@ def test_legacy_jobs_and_results_never_execute_pickle(
         executed.append(True)
 
     async def scenario():
-        async with codec_pool(redis_socket, monkeypatch) as pool:
-            worker = codec_worker(settings, redis_socket, legacy, "legacy")
+        async with codec_pool(redis_url, monkeypatch) as pool:
+            worker = codec_worker(settings, redis_url, legacy, "legacy")
             try:
                 job = await pool.enqueue_job("legacy", _queue_name=settings.queue_name)
                 await pool.set(job_key_prefix + job.job_id, payload)
@@ -330,17 +331,17 @@ def test_legacy_jobs_and_results_never_execute_pickle(
     assert not executed
 
 
-def test_cron_scheduler_uses_the_worker_json_pool(redis_socket, monkeypatch):
+def test_cron_scheduler_uses_the_worker_json_pool(redis_url, monkeypatch):
     """1301-F1-CODEC-JOBS: arq itself enqueues and consumes a cron envelope."""
 
     async def scheduled(ctx):
         return "cron completed"
 
     async def scenario():
-        async with codec_pool(redis_socket, monkeypatch) as pool:
+        async with codec_pool(redis_url, monkeypatch) as pool:
             worker = create_worker(
                 MusicWorkerSettings,
-                redis_settings=RedisSettings(unix_socket_path=str(redis_socket)),
+                redis_settings=RedisSettings.from_dsn(redis_url),
                 functions=[],
                 on_startup=None,
                 on_shutdown=None,
@@ -362,3 +363,22 @@ def test_cron_scheduler_uses_the_worker_json_pool(redis_socket, monkeypatch):
                 await worker.close()
 
     asyncio.run(asyncio.wait_for(scenario(), timeout=30))
+
+
+def test_redis_cases_without_a_server_fail_naming_the_variable():
+    with pytest.raises(pytest.fail.Exception, match="TEST_REDIS_URL"):
+        configured_redis_url({})
+
+
+@pytest.mark.parametrize(
+    ("worker_id", "number"),
+    [("master", 0), ("gw0", 0), ("gw3", 3)],
+    ids=["without-xdist", "first-worker", "fourth-worker"],
+)
+def test_each_worker_selects_its_own_redis_database(worker_id, number):
+    assert database_number(worker_id, database_count=16) == number
+
+
+def test_a_worker_beyond_the_servers_databases_fails_naming_both():
+    with pytest.raises(pytest.fail.Exception, match=r"gw16.*16 databases"):
+        database_number("gw16", database_count=16)

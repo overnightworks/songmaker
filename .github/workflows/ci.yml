@@ -61,7 +61,7 @@ jobs:
       - name: No unreferenced backend symbols
         run: uv run --no-sync --frozen --no-build python scripts/check_dead_symbols.py
 
-      - name: CI and compose pin the same Postgres image
+      - name: CI and compose pin the same Postgres and Redis images
         run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py
 
       - name: Every requirement is cited by a test
@@ -92,9 +92,19 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7.4.12-alpine@sha256:338fbfc036dc5517ac0b04d6de21521085935336e565f223406180e9d84166e2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
-      SYSTEM_PACKAGES: ffmpeg redis-server
+      TEST_REDIS_URL: redis://localhost:6379
+      SYSTEM_PACKAGES: ffmpeg
       APT_OPTIONS: -o Acquire::Retries=3 -o Acquire::http::Timeout=30
     strategy:
       fail-fast: false
@@ -137,7 +147,7 @@ jobs:
         timeout-minutes: 3
 
       - name: Install system dependencies
-        # why: tests/support/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in, and the generation tests encode MP3s with a real ffmpeg. The mirror can trickle for minutes, so the files come from the cache and the mirror is read only for files the cache lacks; apt takes a cached file when its name and size match the signed lists. Its note that the download is performed unsandboxed as root is expected: the runner user owns the directory, which _apt cannot write. autoclean drops the versions of a set restored by prefix that the lists no longer name, so the saved entry does not grow.
+        # why: the generation tests encode MP3s with a real ffmpeg. The mirror can trickle for minutes, so the files come from the cache and the mirror is read only for files the cache lacks; apt takes a cached file when its name and size match the signed lists. Its note that the download is performed unsandboxed as root is expected: the runner user owns the directory, which _apt cannot write. autoclean drops the versions of a set restored by prefix that the lists no longer name, so the saved entry does not grow.
         run: |
           mkdir -p "$RUNNER_TEMP/apt-archives/partial"
           sudo apt-get install -y $APT_OPTIONS -o Dir::Cache::Archives="$RUNNER_TEMP/apt-archives" -o APT::Keep-Downloaded-Packages=true $SYSTEM_PACKAGES
