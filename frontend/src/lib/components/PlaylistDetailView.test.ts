@@ -1,3 +1,4 @@
+import { words } from '#lib/words/en.ts';
 import {
 	makePlaylistDetail as detail,
 	makePlaylistEntry as entry
@@ -165,7 +166,7 @@ describe('PlaylistDetailView header', () => {
 		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
 		await tick();
 		const upload = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(item) => item.textContent?.trim() === 'Upload…'
+			(item) => item.textContent?.trim() === words['collectionMenu.upload']
 		);
 		upload?.click();
 		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
@@ -179,7 +180,7 @@ describe('PlaylistDetailView header', () => {
 		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
 		await tick();
 		const remove = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(item) => item.textContent?.trim() === 'Remove cover'
+			(item) => item.textContent?.trim() === words['collectionMenu.removeCover']
 		);
 		remove?.click();
 		await vi.waitFor(() => expect(deletePlaylistCover).toHaveBeenCalledWith('p1'));
@@ -191,14 +192,14 @@ describe('PlaylistDetailView header', () => {
 	it.each([
 		{
 			action: 'a cover upload',
-			menuItem: 'Upload…',
+			menuItem: words['collectionMenu.upload'],
 			picksFile: true,
 			failure: new NetworkError('/api/playlists/p1/cover', new TypeError('Failed to fetch')),
 			toast: 'Cover upload failed'
 		},
 		{
 			action: 'a cover upload',
-			menuItem: 'Upload…',
+			menuItem: words['collectionMenu.upload'],
 			picksFile: true,
 			failure: new ApiError(413, 'Cover is too large', '/api/playlists/p1/cover'),
 			toast: 'Cover is too large'
@@ -249,7 +250,12 @@ describe('PlaylistDetailView header', () => {
 		await tick();
 		const menu = requireElement<HTMLElement>(document.body, '.menu-panel');
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Playlist · Night Drive');
-		expect(menuRowLabels(menu)).toEqual(['Share playlist', 'Upload…', 'Rename', 'Delete playlist']);
+		expect(menuRowLabels(menu)).toEqual([
+			words['collectionMenu.playlistShare'],
+			words['collectionMenu.upload'],
+			words['collectionMenu.rename'],
+			words['collectionMenu.playlistDelete']
+		]);
 	});
 });
 
