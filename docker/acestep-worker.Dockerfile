@@ -10,7 +10,7 @@
 #
 # The torch layer is the heavy one (~4 GB). Its files and their hashes are a function of the
 # fork's lock and the Python minor version, so a torch bump is a bump of the fork's lock. Its
-# digest also holds file timestamps, which the release build does not fix.
+# digest also holds file timestamps, which the release build fixes (`reproducible-layers`).
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650472695d9a9326999 AS gpu-torch-base
 
