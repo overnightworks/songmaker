@@ -3,5 +3,6 @@ agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
 role = "builder"
 base = "bd6d6da5cd9a219026861ff05d003942eeeb1c01"
 branch = "claude/issue-3064-the-release-builds-its-images-with-repea"
-scope = [".github/workflows/release.yml", "docs/acestep.md", "docs/architecture.md"]
+scope = [".github/workflows/release.yml", "docker/acestep-worker.Dockerfile", "docs/acestep.md", "docs/architecture.md"]
 opened_commit = "74dabc4205ef1794f23a3e451b548f887f47ad8e"
+whole_reason = "the release input, its one document paragraph, and the torch-layer comment that described the file times the input now fixes"
