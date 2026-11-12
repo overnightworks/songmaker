@@ -1,0 +1,8 @@
+claim_id = "c32375b483f84a8a832207d279169de8"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "4652bdfb0036bc741477dc6dc938d457371b3c50"
+branch = "claude/issue-3018-the-rail-s-search-field-and-its-results"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/nav-row.spec.ts", "frontend/e2e/phone-search.ts", "frontend/e2e/phone-tabs.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/e2e/song-move.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/components/shell/RailSearch.svelte", "frontend/src/lib/components/shell/RailSearch.test.ts", "frontend/src/lib/constants/rail.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/lib/stores/railSearch.ts", "frontend/src/lib/words/en.ts"]
+opened_commit = "574c2f2582ec50b80ba2a41656802d999a1827d0"
+whole_reason = "One surface moves whole (the epic's invariant 5): the search field with the store that builds its results, the catalog with its generated module, and every test that finds these elements."
