@@ -12,7 +12,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
-async function render(props: OverlayProps): Promise<HTMLElement> {
+async function mountOverlay(props: OverlayProps): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(AddressOverlay, { target, props });
@@ -22,7 +22,7 @@ async function render(props: OverlayProps): Promise<HTMLElement> {
 
 describe('AddressOverlay', () => {
 	it('shows only the loading message while an address resolves, and announces nothing', async () => {
-		const target = await render({ kind: 'loading', message: 'Loading thing...' });
+		const target = await mountOverlay({ kind: 'loading', message: 'Loading thing...' });
 
 		expect(target.textContent?.trim()).toBe('Loading thing...');
 		expect(target.querySelector('[role="alert"]')).toBeNull();
@@ -30,7 +30,7 @@ describe('AddressOverlay', () => {
 	});
 
 	it('announces an unknown address with its head, explanation and a link back', async () => {
-		const target = await render({
+		const target = await mountOverlay({
 			kind: 'unknown',
 			head: 'No such thing',
 			explanation: 'The address names nothing.',
@@ -49,7 +49,7 @@ describe('AddressOverlay', () => {
 
 	it('announces an unreachable address with its message and a retry button that calls its action', async () => {
 		const onRetry = vi.fn();
-		const target = await render({
+		const target = await mountOverlay({
 			kind: 'unreachable',
 			message: 'The thing could not be loaded.',
 			retryLabel: 'Try once more',
