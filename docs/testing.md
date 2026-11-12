@@ -6,9 +6,6 @@ GitHub CI explicitly sets `-n auto` for parallel test runs and owns the full sui
 
 A backend run with `TEST_SHARD=i` and `TEST_SHARDS=n` (1 ≤ i ≤ n) keeps the tests whose node id hashes into shard i of n and reports the rest as deselected; the partition is the same in every xdist worker and test order. Setting only one of the two, or a value outside that range, ends the run before any test runs. CI cuts the backend into three such shards; the `Backend (Python 3.14)` job compares the node ids of the newest report of each shard with one unsharded collection, and is red unless each collected test is in exactly one report.
 
-The auto-deploy subprocess tests fake Docker and GitHub: they prove that a
-changed `vendor/acestep` pin is fetched and checked out before Compose builds.
-
 ```bash
 # Backend — targeted (local / agents)
 pytest tests/songmaker_cli/db -q --tb=short

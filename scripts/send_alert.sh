@@ -1,6 +1,6 @@
 #!/bin/bash
-# scripts/send_alert.sh — the one channel every host-level alert source (issue
-# #333) uses to reach the operator: a single email. Prometheus alerts go
+# scripts/send_alert.sh — the one channel every host-level alert source uses
+# to reach the operator: a single email. Prometheus alerts go
 # through Alertmanager's own SMTP client instead (monitoring/
 # alertmanager.yml.template — same .env account, same inbox, see its
 # comment for why); this script is for systemd's OnFailure= path, where
@@ -10,9 +10,8 @@
 # Usage: scripts/send_alert.sh "<subject>" "<body>"
 #
 # Configuration comes exclusively from .env at the project root (resolved
-# from this script's own location, same SCRIPT_DIR/REPO_ROOT pattern as
-# run_autodeploy.sh — running a copy from a worktree reads that worktree's
-# own .env), loaded and validated by scripts/alert_config.sh, which owns
+# from this script's own location — running a copy from a worktree reads
+# that worktree's own .env), loaded and validated by scripts/alert_config.sh, which owns
 # the list of the five keys. Missing or empty configuration exits non-zero
 # with a named reason on stderr instead of silently skipping the send —
 # this script never reports success unless curl itself reported success.

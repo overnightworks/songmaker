@@ -103,11 +103,10 @@ TIMER_SOURCE="$SCRIPT_DIR/songmaker-cli-credentials-mirror.timer"
 TIMER_TARGET="$UNIT_DIR/songmaker-cli-credentials-mirror.timer"
 MIRROR_SCRIPT="$SCRIPT_DIR/mirror_agent_cli_credentials.py"
 CHECK_SCRIPT="$SCRIPT_DIR/check_agent_cli_mounts.sh"
-# The shared alert template unit (issue #333) — the mirror service declares
+# The shared alert template unit — the mirror service declares
 # OnFailure=songmaker-alert@%n.service, so it must exist before that unit is
-# installed. install_autostart.sh and install_autodeploy.sh install the same
-# file; all of them are idempotent and derive the same WorkingDirectory/User
-# from their own checkout.
+# installed. The install is idempotent and derives WorkingDirectory/User from
+# this checkout.
 ALERT_SERVICE_SOURCE="$SCRIPT_DIR/songmaker-alert@.service"
 ALERT_SERVICE_TARGET="$UNIT_DIR/songmaker-alert@.service"
 ALERT_SCRIPT="$SCRIPT_DIR/send_alert.sh"
