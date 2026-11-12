@@ -1,8 +1,0 @@
-claim_id = "8c682666b17943d4aa07e0393d9e138a"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "58570bdcdb41d425f9cc4eaa2b85d5c3b03e01a2"
-branch = "claude/issue-3004-take-design-v0-24-0"
-scope = ["frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/lib/words", "pyproject.toml", "scripts/dead-exports.allow", "uv.lock"]
-opened_commit = "c61b9ff5a1a7a51859c799bfcaaf94d5f4cf602a"
-whole_reason = "The pins with their locks and, where the app already generates modules, the regenerated modules with the new loader."
