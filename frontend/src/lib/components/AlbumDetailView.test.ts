@@ -550,15 +550,17 @@ describe('AlbumDetailView header', () => {
 	it('915_C3: names the album and lists Edit details, Cover, Pick album takes, Add to playlist, Share, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
-		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
+		expect(menu.querySelector('.menu-heading')?.textContent).toBe(
+			words['collectionMenu.albumHeading']({ title: 'Night Drive' })
+		);
 		expect(menuRowLabels(menu)).toEqual([
-			'Edit details',
-			'Cover',
-			'Pick album takes',
-			'Add to playlist',
-			'Share',
-			'Archive',
-			'Delete'
+			words['collectionMenu.editDetails'],
+			words['collectionMenu.cover'],
+			words['collectionMenu.curate'],
+			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.albumShare'],
+			words['collectionMenu.archive'],
+			words['collectionMenu.albumDelete']
 		]);
 	});
 
@@ -575,7 +577,7 @@ describe('AlbumDetailView header', () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		const curateItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Pick album takes'
+			(el) => el.textContent?.trim() === words['collectionMenu.curate']
 		);
 		curateItem?.click();
 		await tick();
@@ -645,7 +647,7 @@ describe('AlbumDetailView header', () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		const archiveItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Archive'
+			(el) => el.textContent?.trim() === words['collectionMenu.archive']
 		);
 		archiveItem?.click();
 		await tick();
@@ -662,7 +664,7 @@ describe('AlbumDetailView header', () => {
 async function uploadFromCoverEditor(target: HTMLElement): Promise<void> {
 	const menu = await openCollectionMenu(target);
 	Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
-		.find((item) => item.textContent?.trim().startsWith('Cover'))
+		.find((item) => item.textContent?.trim().startsWith(words['collectionMenu.cover']))
 		?.click();
 	await vi.waitFor(() => expect(target.querySelector('.cover-editor')).not.toBeNull());
 	getByRoleButton(requireElement(target, '.cover-editor'), 'Upload').click();
@@ -671,14 +673,19 @@ async function uploadFromCoverEditor(target: HTMLElement): Promise<void> {
 async function openEditDetails(target: HTMLElement): Promise<HTMLFormElement> {
 	const menu = await openCollectionMenu(target);
 	Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
-		.find((item) => item.textContent?.trim() === 'Edit details')
+		.find((item) => item.textContent?.trim() === words['collectionMenu.editDetails'])
 		?.click();
 	await tick();
-	return requireElement<HTMLFormElement>(target, 'form[aria-label="Edit details"]');
+	return requireElement<HTMLFormElement>(
+		target,
+		`form[aria-label="${words['collectionMenu.editDetails']}"]`
+	);
 }
 
 function detailsForm(target: HTMLElement): HTMLFormElement | null {
-	return target.querySelector<HTMLFormElement>('form[aria-label="Edit details"]');
+	return target.querySelector<HTMLFormElement>(
+		`form[aria-label="${words['collectionMenu.editDetails']}"]`
+	);
 }
 
 async function saveDetails(form: HTMLFormElement): Promise<void> {
