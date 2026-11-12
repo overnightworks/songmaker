@@ -9,8 +9,6 @@ import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
-	SONG_MENU_LABEL,
-	SONG_MENU_SAVE_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	songEditorOpenLabel
@@ -639,10 +637,10 @@ test.describe('song page at phone width', () => {
 					(request) => request.method() === 'PUT' && /\/api\/songs\/[^/]+$/.test(request.url())
 				);
 				try {
-					await page.getByRole('button', { name: SONG_MENU_LABEL, exact: true }).click();
+					await page.getByRole('button', { name: words['songMenu.label'], exact: true }).click();
 					await page
-						.getByRole('dialog', { name: SONG_MENU_LABEL })
-						.getByRole('button', { name: SONG_MENU_SAVE_LABEL, exact: true })
+						.getByRole('dialog', { name: words['songMenu.label'] })
+						.getByRole('button', { name: words['songMenu.save'], exact: true })
 						.click();
 					await sent;
 					const draft = `${await lyrics.inputValue()}\nmore typing during save`;

@@ -4,7 +4,6 @@
 
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { SONG_MENU_LABEL, SONG_MENU_MOVE_LABEL } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { openSearchSheet } from './phone-search';
 import { FlowGuard, HOME_PATH, nameStartingWith, ONLY_IN_SHELL, type Shell } from './helpers';
@@ -140,10 +139,10 @@ async function openSongAs(
 }
 
 async function openPicker(page: Page): Promise<Locator> {
-	await page.getByRole('button', { name: SONG_MENU_LABEL, exact: true }).click();
-	const menu = page.getByRole('dialog', { name: SONG_MENU_LABEL });
+	await page.getByRole('button', { name: words['songMenu.label'], exact: true }).click();
+	const menu = page.getByRole('dialog', { name: words['songMenu.label'] });
 	// The row's › is drawn as content, so its accessible name reads "Move ›".
-	await menu.getByRole('button', { name: nameStartingWith(SONG_MENU_MOVE_LABEL) }).click();
+	await menu.getByRole('button', { name: nameStartingWith(words['songMenu.move']) }).click();
 	await expect(menu.getByText(words['songMove.heading'], { exact: true })).toBeVisible();
 	return menu;
 }

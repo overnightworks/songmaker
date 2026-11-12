@@ -1,15 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import type { LibraryWriteResponse, PaginatedResponse, SongItem } from '../src/lib/api/types';
-import {
-	SONG_MENU_LABEL,
-	SONG_MENU_DELETE_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants/song';
-import {
-	COLLECTION_MENU_LABEL,
-	COLLECTION_MENU_ARCHIVE_LABEL
-} from '../src/lib/constants/collection-menu';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
 import { songRoutePath } from '../src/lib/routes/addresses';
 import {
@@ -101,7 +93,7 @@ async function foregroundWriter(page: Page): Promise<void> {
 // At phone widths the song menu sits in the app bar, outside the workspace.
 const songMenuOf = (page: Page, shell: Shell) =>
 	(shell === 'mobile' ? appBar(page) : workspace(page)).getByRole('button', {
-		name: SONG_MENU_LABEL,
+		name: words['songMenu.label'],
 		exact: true
 	});
 
@@ -252,7 +244,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 
 		await writeBodies(page).first().click();
 		await songMenuOf(page, shellOf(testInfo)).click();
-		await page.getByRole('button', { name: SONG_MENU_DELETE_LABEL, exact: true }).click();
+		await page.getByRole('button', { name: words['songMenu.delete'], exact: true }).click();
 		await page.getByRole('button', { name: 'Delete Song', exact: true }).click();
 		await expect(page.getByRole('alert').getByText('Song deleted', { exact: true })).toBeVisible();
 		await openHome(page, shellOf(testInfo));
@@ -269,8 +261,10 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 				name: nameStartingWith(words['homeListen.openAlbum']({ title: '' }))
 			})
 			.click();
-		await workspace(page).getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
-		await page.getByRole('button', { name: COLLECTION_MENU_ARCHIVE_LABEL, exact: true }).click();
+		await workspace(page)
+			.getByRole('button', { name: words['collectionMenu.label'], exact: true })
+			.click();
+		await page.getByRole('button', { name: words['collectionMenu.archive'], exact: true }).click();
 		await openHome(page, shellOf(testInfo));
 		await expect(writeRegion(page).getByText(words['homeWrite.empty'])).toBeVisible();
 		await page.getByRole('button', { name: 'Undo', exact: true }).click();

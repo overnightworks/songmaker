@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 
 import { get } from 'svelte/store';
-import { COLLECTION_MENU_LABEL } from '#lib/constants/collection-menu.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
@@ -32,6 +31,7 @@ import CollectionHeader from './CollectionHeader.svelte';
 import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import { openCollectionMenu } from './shell/rail-test-fixtures';
 import { getByRoleButton, getByRoleHeading } from '#lib/test-utils/accessible-name.ts';
+import { words } from '#lib/words/en.ts';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -476,7 +476,7 @@ describe('CollectionHeader', () => {
 		const actions = [...requireElement(target, '.header-actions').querySelectorAll('button')];
 		expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual([
 			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
-			COLLECTION_MENU_LABEL
+			words['collectionMenu.label']
 		]);
 	});
 

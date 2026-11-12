@@ -31,7 +31,6 @@ import {
 import {
 	TAKE_REPAINT_LABEL,
 	TAKE_COVER_LABEL,
-	TAKE_PLAYLIST_LABEL,
 	TAKES_ERROR,
 	TAKES_LOADING,
 	TAKES_RETRY_LABEL
@@ -526,7 +525,7 @@ describe('SongDetailView adding a take to a playlist', () => {
 		if (!row) throw new Error('Expected a take row');
 		row.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
-		menuRow(row, TAKE_PLAYLIST_LABEL).click();
+		menuRow(row, words['takeMenu.addToPlaylist']).click();
 		await tick();
 		row.querySelector<HTMLButtonElement>('.picker-item')?.click();
 		// The picker closes once the add has fully settled, toast included.

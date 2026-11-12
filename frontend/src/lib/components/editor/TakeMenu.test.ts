@@ -2,20 +2,12 @@ import { makeGeneration as gen } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-	TAKE_COVER_LABEL,
-	TAKE_DELETE_LABEL,
-	TAKE_PLAYLIST_LABEL,
-	TAKE_REPAINT_LABEL,
-	TAKE_RESTORE_LABEL,
-	TAKE_SHARE_LABEL
-} from '#lib/constants/take.ts';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import { HITBOX_STYLE as hitboxCss } from '#lib/styles/hitbox.ts';
 import TakeMenu from './TakeMenu.svelte';
+import { words } from '#lib/words/en.ts';
 
 function px(value: string): number {
 	const resolved = value.startsWith('var(')
@@ -99,12 +91,12 @@ describe('TakeMenu', () => {
 	it('names the take share page in the shared tooltip', async () => {
 		const { target } = await render({ gen: gen({ is_shared: true, share_slug: 'take' }) });
 
-		expect(menuRow(target, TAKE_SHARE_LABEL).title).toBe('Shared: /share/gen/take');
+		expect(menuRow(target, words['takeMenu.share']).title).toBe('Shared: /share/gen/take');
 	});
 
 	it.each([
 		{ seed: null, rows: [] as string[] },
-		{ seed: 4127730, rows: [TAKE_USE_SEED_LABEL] }
+		{ seed: 4127730, rows: [words['takeMenu.useSeed']] }
 	])(
 		'915_C3: offers ordered actions with an icon each, Use seed third only for a take with seed $seed, Delete last in red',
 		async ({ seed, rows: seedRows }) => {
@@ -112,12 +104,12 @@ describe('TakeMenu', () => {
 				gen: gen({ is_kept: true, is_shared: true, is_archived: false, seed })
 			});
 			expect(menuRowLabels(target)).toEqual([
-				TAKE_REPAINT_LABEL,
-				TAKE_COVER_LABEL,
+				words['takeMenu.repaint'],
+				words['takeMenu.cover'],
 				...seedRows,
-				TAKE_PLAYLIST_LABEL,
-				TAKE_SHARE_LABEL,
-				TAKE_DELETE_LABEL
+				words['takeMenu.addToPlaylist'],
+				words['takeMenu.share'],
+				words['takeMenu.delete']
 			]);
 			const rows = Array.from(target.querySelectorAll('.menu-item'));
 			expect(rows.every((row) => row.querySelector('svg') !== null)).toBe(true);
@@ -130,7 +122,7 @@ describe('TakeMenu', () => {
 
 	it.each([
 		{ shared: false, rows: [] as string[] },
-		{ shared: true, rows: [TAKE_SHARE_LABEL] }
+		{ shared: true, rows: [words['takeMenu.share']] }
 	])(
 		'offers Restore in place of Add to playlist on an archived take, with Share only while shared is $shared',
 		async ({ shared, rows: shareRows }) => {
@@ -143,11 +135,11 @@ describe('TakeMenu', () => {
 				})
 			});
 			expect(menuRowLabels(target)).toEqual([
-				TAKE_REPAINT_LABEL,
-				TAKE_COVER_LABEL,
-				TAKE_RESTORE_LABEL,
+				words['takeMenu.repaint'],
+				words['takeMenu.cover'],
+				words['takeMenu.restore'],
 				...shareRows,
-				TAKE_DELETE_LABEL
+				words['takeMenu.delete']
 			]);
 		}
 	);
@@ -157,7 +149,7 @@ describe('TakeMenu', () => {
 			gen: gen({ is_archived: true, is_shared: true, share_slug: 'take' })
 		});
 
-		menuRow(target, TAKE_SHARE_LABEL).click();
+		menuRow(target, words['takeMenu.share']).click();
 		await tick();
 
 		expect(props.onunshare).toHaveBeenCalledOnce();
@@ -166,9 +158,9 @@ describe('TakeMenu', () => {
 
 	it('C4: shows the seed as the Use seed row hint', async () => {
 		const { target } = await render({ gen: gen({ seed: 4127730 }) });
-		expect(menuRow(target, TAKE_USE_SEED_LABEL).querySelector('.menu-item-hint')?.textContent).toBe(
-			'4127730'
-		);
+		expect(
+			menuRow(target, words['takeMenu.useSeed']).querySelector('.menu-item-hint')?.textContent
+		).toBe('4127730');
 	});
 
 	it('915_C3: is a dialog of plain buttons named More, not a menu', async () => {
@@ -190,7 +182,7 @@ describe('TakeMenu', () => {
 		'915_C3: runs %s and closes the menu, handing focus back to More',
 		async (label, callback) => {
 			const { target, props } = await render({
-				gen: gen({ seed: 4127730, is_archived: label === TAKE_RESTORE_LABEL })
+				gen: gen({ seed: 4127730, is_archived: label === words['takeMenu.restore'] })
 			});
 			menuRow(target, label).click();
 			await vi.waitFor(() => expect(document.activeElement).toBe(moreButtonIn(target)));
@@ -207,7 +199,7 @@ describe('TakeMenu', () => {
 			const { target, props } = await render({
 				gen: gen({ is_shared: shared, share_slug: shared ? 'take' : null })
 			});
-			const share = menuRow(target, TAKE_SHARE_LABEL);
+			const share = menuRow(target, words['takeMenu.share']);
 			expect(share.getAttribute('aria-pressed')).toBe(String(shared));
 			expect(share.querySelector('.menu-item-hint')?.textContent?.trim()).toBe(
 				shared ? 'on' : 'off'
@@ -277,7 +269,7 @@ describeBackClosesOverlay({
 		},
 		{
 			way: 'choosing Repaint',
-			close: (target) => menuRow(target, TAKE_REPAINT_LABEL).click(),
+			close: (target) => menuRow(target, words['takeMenu.repaint']).click(),
 			actionSawHistoryAt: () => repaintSawHistoryAt
 		}
 	]

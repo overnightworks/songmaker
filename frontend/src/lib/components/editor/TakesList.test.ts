@@ -6,7 +6,6 @@ import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
 import {
 	TAKE_ARCHIVED_TITLE,
-	TAKE_PLAYLIST_LABEL,
 	TAKE_RESCORING_LABEL,
 	TAKES_EMPTY,
 	TAKES_ERROR,
@@ -95,6 +94,7 @@ import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import TakesListHarness from './tests/TakesListHarness.svelte';
 import { shownTransportFace } from '#lib/test-utils/transport-face.ts';
+import { words } from '#lib/words/en.ts';
 
 function measuredTakeDefaults(): Partial<GenerationItem> {
 	return { generation_params: { audio_duration: 195 }, audio_duration_sec: 195 };
@@ -848,7 +848,7 @@ describe('TakesList', () => {
 		if (!row) throw new Error('Expected a take row');
 		openTakeMenu(row);
 		await tick();
-		clickMenuItem(row, TAKE_PLAYLIST_LABEL);
+		clickMenuItem(row, words['takeMenu.addToPlaylist']);
 		await tick();
 
 		const picker = row.querySelector('.picker');
@@ -885,7 +885,7 @@ describe('TakesList', () => {
 				if (!row) throw new Error('Expected a take row');
 				openTakeMenu(row);
 				await tick();
-				clickMenuItem(row, TAKE_PLAYLIST_LABEL);
+				clickMenuItem(row, words['takeMenu.addToPlaylist']);
 				await tick();
 				row.querySelector<HTMLButtonElement>('.picker-item')?.click();
 			}
@@ -1068,11 +1068,11 @@ describe('TakesList archived takes', () => {
 		openTakeMenu(archivedRow);
 		await tick();
 		expect(archivedRow.querySelector('.menu-panel')).not.toBeNull();
-		expect(() => clickMenuItem(archivedRow, TAKE_PLAYLIST_LABEL)).toThrow();
+		expect(() => clickMenuItem(archivedRow, words['takeMenu.addToPlaylist'])).toThrow();
 
 		openTakeMenu(liveRow);
 		await tick();
-		clickMenuItem(liveRow, TAKE_PLAYLIST_LABEL);
+		clickMenuItem(liveRow, words['takeMenu.addToPlaylist']);
 		await tick();
 
 		const picker = liveRow.querySelector('.picker');

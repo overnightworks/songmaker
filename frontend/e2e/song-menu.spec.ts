@@ -7,19 +7,10 @@
 // laptop cells in the desktop one (the editor header carries it).
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
-import {
-	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
-	SONG_MENU_DELETE_LABEL,
-	SONG_MENU_LABEL,
-	SONG_MENU_MOVE_LABEL,
-	SONG_MENU_RENAME_LABEL,
-	SONG_MENU_SAVE_LABEL,
-	SONG_TITLE_LABEL
-} from '../src/lib/constants/song';
+import { SONG_TITLE_LABEL } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
-import { COLLECTION_MENU_LABEL } from '../src/lib/constants/collection-menu';
 import {
 	appBar,
 	boundingBoxes,
@@ -36,11 +27,11 @@ import { archiveOwnedAlbum } from './seed';
 const VIEWPORT_HEIGHT_PX = 844;
 const ALBUM_FORM_MENU_WIDTH_PX = 238;
 const ROW_LABELS_IN_ORDER = [
-	SONG_MENU_SAVE_LABEL,
-	SONG_MENU_RENAME_LABEL,
-	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
-	SONG_MENU_MOVE_LABEL,
-	SONG_MENU_DELETE_LABEL
+	words['songMenu.save'],
+	words['songMenu.rename'],
+	words['songMenu.addToPlaylist'],
+	words['songMenu.move'],
+	words['songMenu.delete']
 ];
 
 /**
@@ -120,12 +111,12 @@ async function onOwnSong(
 }
 
 function menuTrigger(page: Page): Locator {
-	return page.getByRole('button', { name: SONG_MENU_LABEL, exact: true });
+	return page.getByRole('button', { name: words['songMenu.label'], exact: true });
 }
 
 async function openSongMenu(page: Page): Promise<Locator> {
 	await menuTrigger(page).click();
-	const menu = page.getByRole('dialog', { name: SONG_MENU_LABEL });
+	const menu = page.getByRole('dialog', { name: words['songMenu.label'] });
 	await expect(menu).toBeVisible();
 	return menu;
 }
@@ -133,7 +124,7 @@ async function openSongMenu(page: Page): Promise<Locator> {
 /** Delete song from the open menu, down to the confirm dialog with Cancel focused. */
 async function openDeleteConfirm(page: Page, title: string): Promise<Locator> {
 	const menu = await openSongMenu(page);
-	await menu.getByRole('button', { name: SONG_MENU_DELETE_LABEL, exact: true }).click();
+	await menu.getByRole('button', { name: words['songMenu.delete'], exact: true }).click();
 
 	const confirm = page.getByRole('dialog', { name: `Delete "${title}"?` });
 	await expect(confirm).toBeVisible();
@@ -187,9 +178,9 @@ async function menuTextSizes(menu: Locator): Promise<MenuTextSizes> {
 async function openAlbumMenu(page: Page): Promise<Locator> {
 	await workspace(page)
 		.locator('.collection-header')
-		.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true })
+		.getByRole('button', { name: words['collectionMenu.label'], exact: true })
 		.click();
-	const menu = page.getByRole('dialog', { name: COLLECTION_MENU_LABEL });
+	const menu = page.getByRole('dialog', { name: words['collectionMenu.label'] });
 	await expect(menu).toBeVisible();
 	return menu;
 }
@@ -221,7 +212,7 @@ async function expectAlbumForm(page: Page, menu: Locator, title: string): Promis
 	expect(panel.width).toBeCloseTo(ALBUM_FORM_MENU_WIDTH_PX, 0);
 
 	const danger = await tokenColor(page, '--fail');
-	await expect(rows.last()).toHaveText(SONG_MENU_DELETE_LABEL);
+	await expect(rows.last()).toHaveText(words['songMenu.delete']);
 	await expect(rows.last()).toHaveCSS('color', danger);
 	await expect(rows.first()).not.toHaveCSS('color', danger);
 }
@@ -256,7 +247,7 @@ test(
 	async ({ page }) => {
 		await onOwnSong(page, TITLES[1], 1280, async () => {
 			const menu = await openSongMenu(page);
-			await menu.getByRole('button', { name: SONG_MENU_RENAME_LABEL, exact: true }).click();
+			await menu.getByRole('button', { name: words['songMenu.rename'], exact: true }).click();
 
 			await expect(menu).toBeHidden();
 			await expect(page.getByRole('textbox', { name: SONG_TITLE_LABEL })).toBeFocused();
@@ -286,7 +277,7 @@ test(
 	async ({ page }) => {
 		const listing = await holdSongListingRereads(page);
 		await onOwnSong(page, TITLES[1], 390, async () => {
-			const trigger = appBar(page).getByLabel(SONG_MENU_LABEL, { exact: true });
+			const trigger = appBar(page).getByLabel(words['songMenu.label'], { exact: true });
 			await expect(trigger).toBeVisible();
 			await expect(page.getByText(words['addressPage.loadingSong'], { exact: true })).toBeVisible();
 			const [triggerBox] = await boundingBoxes(trigger);
@@ -294,7 +285,7 @@ test(
 				triggerBox.x + triggerBox.width / 2,
 				triggerBox.y + triggerBox.height / 2
 			);
-			await expect(page.getByRole('dialog', { name: SONG_MENU_LABEL })).toBeHidden();
+			await expect(page.getByRole('dialog', { name: words['songMenu.label'] })).toBeHidden();
 
 			listing.release();
 			await openDeleteConfirm(page, TITLES[1]);

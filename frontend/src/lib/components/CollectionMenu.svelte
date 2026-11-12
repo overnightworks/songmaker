@@ -1,23 +1,7 @@
 <script lang="ts">
 	import type { ShareResult, UnplayableSongSummary } from '#lib/api/types.ts';
-	import {
-		COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
-		COLLECTION_MENU_ARCHIVE_LABEL,
-		COLLECTION_MENU_CLOSE_LABEL,
-		COLLECTION_MENU_COVER_HINT,
-		COLLECTION_MENU_COVER_LABEL,
-		COLLECTION_MENU_COVER_REMOVE_LABEL,
-		COLLECTION_MENU_CURATE_LABEL,
-		COLLECTION_MENU_DELETE_LABEL,
-		COLLECTION_MENU_EDIT_DETAILS_LABEL,
-		COLLECTION_MENU_LABEL,
-		COLLECTION_MENU_RENAME_LABEL,
-		COLLECTION_MENU_SHARE_LABEL,
-		COLLECTION_MENU_SHARE_OFF_HINT,
-		COLLECTION_MENU_SHARE_ON_HINT
-	} from '#lib/constants/collection-menu.ts';
-	import { ALBUM_COVER_UPLOAD_LABEL } from '#lib/constants/album.ts';
 	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
+	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import ShareDialog from './ShareDialog.svelte';
@@ -46,6 +30,19 @@
 		oncurate?: () => void;
 	}
 
+	const kindKeys = {
+		album: {
+			heading: 'collectionMenu.albumHeading',
+			share: 'collectionMenu.albumShare',
+			delete: 'collectionMenu.albumDelete'
+		},
+		playlist: {
+			heading: 'collectionMenu.playlistHeading',
+			share: 'collectionMenu.playlistShare',
+			delete: 'collectionMenu.playlistDelete'
+		}
+	} as const satisfies Record<'album' | 'playlist', Record<string, TextKey>>;
+
 	let {
 		kind,
 		title,
@@ -64,14 +61,6 @@
 		onaddtoplaylist,
 		oncurate
 	}: Props = $props();
-
-	const kindLabel = $derived(kind === 'album' ? 'Album' : 'Playlist');
-	const shareLabel = $derived(
-		kind === 'album' ? COLLECTION_MENU_SHARE_LABEL : `${COLLECTION_MENU_SHARE_LABEL} ${kind}`
-	);
-	const deleteLabel = $derived(
-		kind === 'album' ? COLLECTION_MENU_DELETE_LABEL : `${COLLECTION_MENU_DELETE_LABEL} ${kind}`
-	);
 
 	const shareToggle = createShareToggle(() => ({
 		kind,
@@ -132,10 +121,10 @@
 
 {#snippet shareRow()}
 	{@render actionRow(
-		shareLabel,
+		pageText(kindKeys[kind].share),
 		shareToggle.toggle,
 		shareToggle.iconName,
-		isShared ? COLLECTION_MENU_SHARE_ON_HINT : COLLECTION_MENU_SHARE_OFF_HINT,
+		pageText(isShared ? 'collectionMenu.shareOn' : 'collectionMenu.shareOff'),
 		runLeavingMenuOpen,
 		isShared,
 		shareToggle.sharedTooltip
@@ -146,15 +135,15 @@
 	<MenuPopover
 		bind:this={popover}
 		layer="collection-menu"
-		label={COLLECTION_MENU_LABEL}
-		closeLabel={COLLECTION_MENU_CLOSE_LABEL}
+		label={pageText('collectionMenu.label')}
+		closeLabel={pageText('collectionMenu.close')}
 	>
 		{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
-		<p class="menu-heading">{kindLabel} · {title}</p>
+		<p class="menu-heading">{pageText(kindKeys[kind].heading, { title })}</p>
 		{#if kind === 'album'}
 			{#if oneditdetails}
 				{@render actionRow(
-					COLLECTION_MENU_EDIT_DETAILS_LABEL,
+					pageText('collectionMenu.editDetails'),
 					oneditdetails,
 					'pencil',
 					undefined,
@@ -163,37 +152,37 @@
 			{/if}
 			{#if oncoveredit}
 				{@render actionRow(
-					COLLECTION_MENU_COVER_LABEL,
+					pageText('collectionMenu.cover'),
 					oncoveredit,
 					'image',
-					COLLECTION_MENU_COVER_HINT
+					pageText('collectionMenu.coverHint')
 				)}
 			{/if}
 			{#if oncurate}
-				{@render actionRow(COLLECTION_MENU_CURATE_LABEL, oncurate, 'spark')}
+				{@render actionRow(pageText('collectionMenu.curate'), oncurate, 'spark')}
 			{/if}
 			{#if onaddtoplaylist}
-				{@render actionRow(COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL, onaddtoplaylist, 'list-plus')}
+				{@render actionRow(pageText('collectionMenu.addToPlaylist'), onaddtoplaylist, 'list-plus')}
 			{/if}
 			{@render shareRow()}
 			{#if onarchive}
-				{@render actionRow(COLLECTION_MENU_ARCHIVE_LABEL, onarchive, 'archive')}
+				{@render actionRow(pageText('collectionMenu.archive'), onarchive, 'archive')}
 			{/if}
 		{:else}
 			{@render shareRow()}
 			{#if oncover}
-				{@render actionRow(ALBUM_COVER_UPLOAD_LABEL, oncover)}
+				{@render actionRow(pageText('collectionMenu.upload'), oncover)}
 			{/if}
 			{#if hasCover && onremovecover}
-				{@render actionRow(COLLECTION_MENU_COVER_REMOVE_LABEL, onremovecover)}
+				{@render actionRow(pageText('collectionMenu.removeCover'), onremovecover)}
 			{/if}
 			{#if onrename}
-				{@render actionRow(COLLECTION_MENU_RENAME_LABEL, onrename)}
+				{@render actionRow(pageText('collectionMenu.rename'), onrename)}
 			{/if}
 		{/if}
 		<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
 			<Icon name="trash" size={14} />
-			{deleteLabel}
+			{pageText(kindKeys[kind].delete)}
 		</button>
 	</MenuPopover>
 	<ShareDialog songs={missingTakeSongs} onclose={closeShareWarning} />
