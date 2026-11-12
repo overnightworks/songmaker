@@ -1,4 +1,3 @@
-import { backLabel } from '#lib/routes/pageBack.ts';
 import { RATE_LIMITED_TOAST_MESSAGE } from '#lib/constants/http.ts';
 import {
 	historyEntry,
@@ -147,6 +146,7 @@ import { goto } from '$app/navigation';
 // (CSS processing is off), so app.css is read from disk instead.
 const appCss = readFileSync(join(process.cwd(), 'src/app.css'), 'utf8');
 
+const backTo = (page: string) => words['pageBack.backTo']({ page });
 const VIEWPORT_PX = 320;
 const USER = makeAuthUser();
 const SEARCH_SHEET = `[role="dialog"][aria-label="${words['phoneAppBar.searchSheet']}"]`;
@@ -490,7 +490,7 @@ describe('app shell', () => {
 		const target = await renderLayout('/album/summer/sommerlicht');
 		expect(target.querySelectorAll('.mobile-strip')).toHaveLength(1);
 		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
-		expect(strip.querySelector('button[aria-label="Back to Album"]')).not.toBeNull();
+		expect(getByRoleButton(strip, backTo(words['pageBack.album']))).not.toBeNull();
 		expect(strip.querySelector('h1')?.textContent?.trim()).toBe('Sommerlicht');
 		expect(strip.querySelector('.brand')).toBeNull();
 		expect(strip.querySelector('[aria-label="Open menu"]')).toBeNull();
@@ -1128,13 +1128,13 @@ describe('‹ on the page a phone tab was entered on', () => {
 			page: 'an album',
 			address: '/album/a1',
 			collection: { kind: 'album' as const, id: 'a1' },
-			list: { name: 'Library', address: LIBRARY_ROUTE_PATH, surface: 'browse' }
+			list: { name: words['places.library'], address: LIBRARY_ROUTE_PATH, surface: 'browse' }
 		},
 		{
 			page: 'a playlist',
 			address: '/playlist/friday-night',
 			collection: { kind: 'playlist' as const, id: 'p1' },
-			list: { name: 'Playlists', address: '/playlists', surface: 'playlists' }
+			list: { name: words['places.playlists'], address: '/playlists', surface: 'playlists' }
 		}
 	])(
 		'1354_rule_25: on $page shows the $list.name list in its place',
@@ -1147,7 +1147,7 @@ describe('‹ on the page a phone tab was entered on', () => {
 			await vi.waitFor(() => expect(historyEntry()).toEqual(opened));
 			await historyStandsStill();
 			const tabLength = history.length;
-			expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel(list.name));
+			expect(barBack(target)?.getAttribute('aria-label')).toBe(backTo(list.name));
 
 			await pressBarBack(target, list.address);
 
@@ -1167,7 +1167,7 @@ describe('‹ on the page a phone tab was entered on', () => {
 		await pressBarBack(target, '/settings');
 
 		expect(history).toHaveLength(tabLength);
-		expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel('Library'));
+		expect(barBack(target)?.getAttribute('aria-label')).toBe(backTo(words['places.library']));
 
 		await pressBarBack(target, LIBRARY_ROUTE_PATH);
 

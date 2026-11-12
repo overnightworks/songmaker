@@ -294,6 +294,8 @@ export function nameStartingWith(...labels: string[]): RegExp {
 	return new RegExp(`^(${labels.map(escapeForRegExp).join('|')})`);
 }
 
+export const BACK_BUTTON_NAME = nameStartingWith(words['pageBack.backTo']({ page: '' }));
+
 /**
  * The open surface — wall, album, song editor or playlist. Scoping to it keeps
  * the flows off the rail, which mirrors the same titles in its context list.
@@ -373,9 +375,7 @@ export async function openHome(page: Page, shell: Shell): Promise<void> {
 		if (await barBrand.isVisible()) await barBrand.click();
 		else {
 			if (!(await home.isVisible()))
-				await appBar(page)
-					.getByRole('button', { name: /^Back to / })
-					.click();
+				await appBar(page).getByRole('button', { name: BACK_BUTTON_NAME }).click();
 			await home.click();
 		}
 	}

@@ -9,7 +9,6 @@ import {
 	LIBRARY_NEW_PLAYLIST_LABEL
 } from '#lib/constants/library.ts';
 import { NEW_ALBUM_CARD_LABEL } from '#lib/constants/new-collection.ts';
-import { HOME_PAGE_LABEL } from '#lib/constants/home.ts';
 
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 
@@ -65,7 +64,7 @@ describe('1354_rule_14 LibraryHome', () => {
 	it('1354_rule_31: heads the page Home and shows Listen then Write under it', async () => {
 		const target = await render();
 
-		expect(target.querySelector('h1')?.textContent).toBe(HOME_PAGE_LABEL);
+		expect(target.querySelector('h1')?.textContent).toBe(words['places.home']);
 		expect(
 			[...target.querySelectorAll('section[aria-label]')].map((region) =>
 				region.getAttribute('aria-label')

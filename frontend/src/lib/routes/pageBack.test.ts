@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeAlbum, makePlaylist, makeSong } from '#lib/test-utils/factories.ts';
+import { words } from '#lib/words/en.ts';
 import { backLabel, backTargetName, pageBackShown } from './pageBack';
 
 const titles = {
@@ -10,18 +11,18 @@ const titles = {
 
 describe('1354_rule_25: shared page Back readers', () => {
 	it.each([
-		['/', 'Home'],
-		['/library', 'Library'],
-		['/playlists', 'Playlists'],
-		['/settings', 'Settings'],
+		['/', words['places.home']],
+		['/library', words['places.library']],
+		['/playlists', words['places.playlists']],
+		['/settings', words['places.settings']],
 		['/album/a1', 'Lanterns'],
 		['/playlist/night-drive', 'Night Drive'],
 		['/album/a1/quiet-wind', 'Quiet Wind'],
 		['/album/a1/quiet-wind/take/2', 'Quiet Wind'],
-		['/album/missing', 'Album'],
-		['/playlist/missing', 'Playlist'],
-		['/album/missing/song/take/1', 'Song'],
-		['/unknown', 'Previous page']
+		['/album/missing', words['pageBack.album']],
+		['/playlist/missing', words['pageBack.playlist']],
+		['/album/missing/song/take/1', words['pageBack.song']],
+		['/unknown', words['pageBack.previousPage']]
 	])('names %s as %s', (pathname, name) => {
 		expect(
 			backTargetName({
@@ -31,7 +32,7 @@ describe('1354_rule_25: shared page Back readers', () => {
 				titles
 			})
 		).toBe(name);
-		expect(backLabel(name)).toBe(`Back to ${name}`);
+		expect(backLabel(name)).toBe(words['pageBack.backTo']({ page: name }));
 	});
 
 	it.each([
@@ -51,10 +52,10 @@ describe('1354_rule_25: shared page Back readers', () => {
 	});
 
 	it.each([
-		['/album/a1', 'Library'],
-		['/playlist/night-drive', 'Playlists'],
-		['/settings/voices', 'Settings'],
-		['/settings', 'Library']
+		['/album/a1', words['places.library']],
+		['/playlist/night-drive', words['places.playlists']],
+		['/settings/voices', words['places.settings']],
+		['/settings', words['places.library']]
 	])('names the cold fallback for %s as %s', (pathname, expected) => {
 		expect(backTargetName({ pathname, below: null, titles, shell: 'phone' })).toBe(expected);
 	});
@@ -64,8 +65,12 @@ describe('1354_rule_32: song Back names its destination', () => {
 	it.each([
 		{ pathname: '/album/a1/quiet-wind', below: null, name: 'Lanterns' },
 		{ pathname: '/album/a1/quiet-wind/take/2', below: null, name: 'Lanterns' },
-		{ pathname: '/album/missing/song', below: null, name: 'Album' },
-		{ pathname: '/album/a1/quiet-wind', below: 'https://songmaker.test/', name: 'Home' },
+		{ pathname: '/album/missing/song', below: null, name: words['pageBack.album'] },
+		{
+			pathname: '/album/a1/quiet-wind',
+			below: 'https://songmaker.test/',
+			name: words['places.home']
+		},
 		{
 			pathname: '/album/a1/quiet-wind',
 			below: 'https://songmaker.test/playlist/night-drive',

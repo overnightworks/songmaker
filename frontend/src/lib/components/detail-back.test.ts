@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { SongItem } from '#lib/api/types.ts';
+import { words } from '#lib/words/en.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { resetCollectionForTests, setOpenCollection } from '#lib/stores/collection.ts';
@@ -71,6 +72,7 @@ function detailSongDefaults(): Partial<SongItem> {
 }
 
 const mounted: Array<ReturnType<typeof mount>> = [];
+const BACK_BUTTON = `button[aria-label^="${words['pageBack.backTo']({ page: '' })}"]`;
 
 async function renderView(
 	factory: (target: HTMLElement) => ReturnType<typeof mount>
@@ -168,9 +170,9 @@ describe('SongDetailView phone Co-writer is a tab, not a history step', () => {
 			expect(target.querySelector('[role="tab"][aria-selected="true"]')?.id).toBe(
 				`song-tab-${tab}`
 			);
-			expect(target.querySelector('button[aria-label^="Back to "]')).toBeNull();
-			expect(bar.querySelector('button[aria-label^="Back to "]')?.getAttribute('aria-label')).toBe(
-				'Back to Local Album'
+			expect(target.querySelector(BACK_BUTTON)).toBeNull();
+			expect(bar.querySelector(BACK_BUTTON)?.getAttribute('aria-label')).toBe(
+				words['pageBack.backTo']({ page: 'Local Album' })
 			);
 			expect(location.pathname).toBe('/album/a-local/local-only');
 			expect(historyLength()).toBe(historyLengthBeforeSwitching);

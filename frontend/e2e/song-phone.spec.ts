@@ -33,6 +33,7 @@ import {
 import {
 	boundingBoxes,
 	containing,
+	BACK_BUTTON_NAME,
 	FlowGuard,
 	ONLY_IN_SHELL,
 	MOBILE_VIEWPORT,
@@ -96,7 +97,7 @@ async function seededTakeVersion(page: Page, songId: string): Promise<TakeVersio
 }
 
 function songBackButton(page: Page): Locator {
-	return page.locator('.mobile-strip').getByRole('button', { name: /^Back to / });
+	return page.locator('.mobile-strip').getByRole('button', { name: BACK_BUTTON_NAME });
 }
 
 const phoneTabs = (page: Page) => page.getByRole('navigation', { name: words['phoneTabs.nav'] });
@@ -486,7 +487,7 @@ test.describe('song page at phone width', () => {
 					const albumResponse = await page.request.get(`/api/albums/${songPhoneAlbumId}`);
 					expect(albumResponse.ok()).toBe(true);
 					const album: { title: string } = await albumResponse.json();
-					let name = `Back to ${album.title}`;
+					let name = words['pageBack.backTo']({ page: album.title });
 					let destination = `/album/${songPhoneAlbumId}`;
 					if (origin === 'Home') {
 						await page.goto('/');
@@ -495,7 +496,7 @@ test.describe('song page at phone width', () => {
 							.getByRole('button', { name: songEditorOpenLabel(title), exact: true })
 							.click();
 						await expect(songHeading).toBeVisible();
-						name = 'Back to Home';
+						name = words['pageBack.backTo']({ page: words['places.home'] });
 						destination = '/';
 					}
 					const back = bar.getByRole('button', { name, exact: true });
@@ -517,7 +518,9 @@ test.describe('song page at phone width', () => {
 						await expect(page).toHaveURL(address);
 						await expect(back).toBeVisible();
 						expect(await page.evaluate(() => history.length)).toBe(length);
-						await expect(workspace(page).getByRole('button', { name: /^Back to / })).toHaveCount(0);
+						await expect(
+							workspace(page).getByRole('button', { name: BACK_BUTTON_NAME })
+						).toHaveCount(0);
 					}
 					await back.click();
 					await expect(page).toHaveURL(new URL(destination, address).href);
@@ -693,7 +696,10 @@ test.describe('song page at phone width', () => {
 				const length = await page.evaluate(() => history.length);
 				await page
 					.locator('.mobile-strip')
-					.getByRole('button', { name: 'Back to Settings', exact: true })
+					.getByRole('button', {
+						name: words['pageBack.backTo']({ page: words['places.settings'] }),
+						exact: true
+					})
 					.click();
 				await expect(page).toHaveURL(/\/settings$/);
 				expect(await page.evaluate(() => history.length)).toBe(length);

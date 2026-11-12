@@ -46,7 +46,6 @@ import {
 	NEW_SONG_ROW_LABEL,
 	NEW_SONG_TITLE_LABEL
 } from '../src/lib/constants/new-collection';
-import { HOME_PAGE_LABEL } from '../src/lib/constants/home';
 import {
 	boundingBoxes,
 	sameOriginHeaders,
@@ -132,7 +131,7 @@ test('1354_rule_14 an empty library makes its first album from + New on the Home
 	await page.goto(HOME_PATH);
 
 	const wall = workspace(page);
-	const homeTitle = wall.getByRole('heading', { name: HOME_PAGE_LABEL, level: 1 });
+	const homeTitle = wall.getByRole('heading', { name: words['places.home'], level: 1 });
 	await expect(newButton(page)).toBeVisible();
 	const [titleBox, newBox] = await boundingBoxes(homeTitle, newButton(page));
 	expect(newBox.y).toBeLessThan(titleBox.y + titleBox.height);

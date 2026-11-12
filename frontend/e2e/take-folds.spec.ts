@@ -26,7 +26,7 @@ import {
 	NOW_PLAYING_CLOSE,
 	openNowPlayingLabel
 } from '../src/lib/constants/now-playing';
-import { appBar, sameOriginHeaders, ONLY_IN_SHELL, workspace } from './helpers';
+import { appBar, BACK_BUTTON_NAME, sameOriginHeaders, ONLY_IN_SHELL, workspace } from './helpers';
 import {
 	createAlbum,
 	FIRST_VERSION_TAKE_COUNT,
@@ -157,9 +157,7 @@ async function openSongOf(page: Page, title: string): Promise<void> {
 }
 
 async function backToAlbumOnPhone(page: Page): Promise<void> {
-	await appBar(page)
-		.getByRole('button', { name: /^Back to / })
-		.click();
+	await appBar(page).getByRole('button', { name: BACK_BUTTON_NAME }).click();
 }
 
 let albumId: string;

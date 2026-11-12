@@ -30,7 +30,6 @@ import {
 	PLAYLISTS_PAGE_LABEL,
 	PLAYLISTS_WALL_ORDER_GROUP_LABEL
 } from '../src/lib/constants/playlist';
-import { RAIL_SETTINGS_LABEL } from '../src/lib/constants/rail';
 import { words } from '../src/lib/words/en';
 import {
 	collectionActionLabel,
@@ -57,6 +56,7 @@ import {
 	sameOriginHeaders,
 	FlowGuard,
 	LIBRARY_FLOW_API_REQUEST_BUDGET,
+	BACK_BUTTON_NAME,
 	MOBILE_VIEWPORT,
 	NARROW_VIEWPORT,
 	nameStartingWith,
@@ -229,7 +229,7 @@ async function openAlbumFromNavigation(page: Page, shell: Shell, title: string):
  */
 async function backOnPhone(page: Page, to: string): Promise<void> {
 	await appBar(page)
-		.getByRole('button', { name: `Back to ${to}`, exact: true })
+		.getByRole('button', { name: words['pageBack.backTo']({ page: to }), exact: true })
 		.click();
 }
 
@@ -251,7 +251,7 @@ async function expectSettingsRailRoundTrip(
 	albumTitle: string
 ): Promise<void> {
 	if (shell === 'mobile') {
-		await backOnPhone(page, LIBRARY_PAGE_LABEL);
+		await backOnPhone(page, words['places.library']);
 		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
 		await expectAccountMenuOnTheLibrary(page);
 	}
@@ -260,7 +260,7 @@ async function expectSettingsRailRoundTrip(
 	await expect(page).toHaveURL(/\/settings\/voices$/);
 	if (shell === 'mobile') {
 		await expect(accountCircle(page)).toHaveCount(0);
-		await backOnPhone(page, RAIL_SETTINGS_LABEL);
+		await backOnPhone(page, words['places.settings']);
 		await expect(page).toHaveURL(/\/settings$/);
 		await page.goForward();
 		await expect(page).toHaveURL(/\/settings\/voices$/);
@@ -821,7 +821,7 @@ test(
 		await expect(album).toBeVisible();
 		const tabLength = await page.evaluate(() => history.length);
 
-		await backOnPhone(page, LIBRARY_PAGE_LABEL);
+		await backOnPhone(page, words['places.library']);
 
 		await expect(page).toHaveURL(LIBRARY_URL);
 		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
@@ -1172,14 +1172,13 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	const heading = playlistsHeading(page, titles.length);
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
 	const choice = wallOrderChoice(surface, PLAYLISTS_WALL_ORDER_GROUP_LABEL);
-	const phoneBack = appBar(page).getByRole('button', { name: /^Back to / });
 
 	async function expectPlaylistsStandFirst(title: string): Promise<void> {
 		await expect(page).toHaveURL(/\/playlists$/);
 		await expect(heading).toBeVisible();
 		await expect(tiles.first()).toHaveAccessibleName(`Open playlist ${title}`);
 		if (shell === 'mobile') {
-			await expect(phoneBack).toHaveCount(0);
+			await expect(appBar(page).getByRole('button', { name: BACK_BUTTON_NAME })).toHaveCount(0);
 			await expect(accountCircle(page)).toBeVisible();
 		}
 	}
@@ -1221,10 +1220,10 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	const freshGuard = new FlowGuard(fresh);
 	await fresh.goto(`/playlist/${playlist.slug}`);
 	const backToPlaylists = appBar(fresh).getByRole('button', {
-		name: `Back to ${PLAYLISTS_PAGE_LABEL}`,
+		name: words['pageBack.backTo']({ page: words['places.playlists'] }),
 		exact: true
 	});
-	await expect(backToPlaylists).toHaveText(PLAYLISTS_PAGE_LABEL);
+	await expect(backToPlaylists).toHaveText(words['places.playlists']);
 	const tabLength = await fresh.evaluate(() => history.length);
 
 	await backToPlaylists.click();
@@ -1232,7 +1231,7 @@ test('1354_37a_A6: the Playlists page opens by address and by search, lists only
 	await expect(fresh).toHaveURL(/\/playlists$/);
 	await expect(playlistsHeading(fresh, titles.length)).toBeVisible();
 	expect(await fresh.evaluate(() => history.length)).toBe(tabLength);
-	await expect(appBar(fresh).getByRole('button', { name: /^Back to / })).toHaveCount(0);
+	await expect(appBar(fresh).getByRole('button', { name: BACK_BUTTON_NAME })).toHaveCount(0);
 	await expect(accountCircle(fresh)).toBeVisible();
 	freshGuard.assertClean();
 	await fresh.close();

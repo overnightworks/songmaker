@@ -318,3 +318,23 @@ msgstr ""
 msgctxt "railSearch.songCount.other"
 msgid "{count} songs"
 msgstr ""
+
+msgctxt "pageBack.backTo"
+msgid "Back to {page}"
+msgstr ""
+
+msgctxt "pageBack.album"
+msgid "Album"
+msgstr ""
+
+msgctxt "pageBack.playlist"
+msgid "Playlist"
+msgstr ""
+
+msgctxt "pageBack.song"
+msgid "Song"
+msgstr ""
+
+msgctxt "pageBack.previousPage"
+msgid "Previous page"
+msgstr ""
