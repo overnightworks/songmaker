@@ -278,7 +278,7 @@ def _whisper_model_dir(parent: Path) -> Path:
     return model_dir
 
 
-def test_get_whisper_model_caches() -> None:
+def test_get_whisper_model_caches(tmp_path: Path) -> None:
     pytest.importorskip("faster_whisper")
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
@@ -287,15 +287,15 @@ def test_get_whisper_model_caches() -> None:
     mock_model = MagicMock()
 
     with patch("faster_whisper.WhisperModel", return_value=mock_model) as mock_cls:
-        m1 = _get_whisper_model("base", device="cpu")
-        m2 = _get_whisper_model("base", device="cpu")
+        m1 = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
+        m2 = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
 
     assert m1 is m2
     assert mock_cls.call_count == 1
     ta.clear_cache()
 
 
-def test_get_whisper_model_default_cache() -> None:
+def test_get_whisper_model_default_cache(tmp_path: Path) -> None:
     pytest.importorskip("faster_whisper")
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
@@ -304,7 +304,7 @@ def test_get_whisper_model_default_cache() -> None:
     mock_model = MagicMock()
 
     with patch("faster_whisper.WhisperModel", return_value=mock_model):
-        result = _get_whisper_model("base", device="cpu")
+        result = _get_whisper_model(_whisper_model_dir(tmp_path), device="cpu")
 
     assert result is mock_model
     ta.clear_cache()
