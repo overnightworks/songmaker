@@ -11,6 +11,7 @@
 	import { leaveForLogout, openAppPage } from '#lib/stores/navigation.ts';
 	import { chooseTheme, themeChoice } from '#lib/stores/ui.ts';
 	import { accountInitial } from '#lib/utils/format.ts';
+	import { kitWords } from '#lib/utils/kit-words.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import MenuPopover from './MenuPopover.svelte';
 
@@ -69,6 +70,7 @@
 				appRows={[{ label: pageText('places.settings'), onSelect: openSettings }]}
 				theme={{ choice: KIT_CHOICE_BY_STORED[$themeChoice], onChange: chooseKitTheme }}
 				legalLinks={LEGAL_SECTIONS}
+				words={kitWords()}
 				onLogOut={() => void leaveForLogout(onlogout)}
 				logOutFailure={$signOutFailed ? SIGN_OUT_FAILED_MESSAGE : undefined}
 			/>
