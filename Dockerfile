@@ -22,19 +22,27 @@ FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/* \
+        /var/cache/ldconfig/aux-cache /var/cache/fontconfig/*
 
 COPY --from=uv /uv /uvx /usr/local/bin/
+# Build-only (an ARG, not an ENV, so a uv run in the container keeps its cache): a uv cache in a
+# layer is dead weight that differs between builds.
+ARG UV_NO_CACHE=1
 
 WORKDIR /app
 
 # Install dependencies first (cached unless pyproject.toml/uv.lock change). The
 # app's user cannot write beside the code, so the bytecode is compiled here:
 # without it every start compiles the imports again, about 3 s longer.
+# Both syncs end by removing uv_cache.json from the project's dist-info and RECORD: it holds the
+# install's wall-clock time, uv has no switch to leave it out, and the entrypoint syncs nothing (--no-sync).
 COPY pyproject.toml uv.lock ./
 RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
     uv sync --frozen --no-dev --compile-bytecode --extra server --extra agent --extra image && \
-    rm -rf src/songmaker_cli/__init__.py
+    rm -rf src/songmaker_cli/__init__.py && \
+    for marker in .venv/lib/python*/site-packages/*.dist-info/uv_cache.json; do \
+        sed -i '/\.dist-info\/uv_cache\.json,/d' "${marker%/*}/RECORD" && rm "$marker"; done
 
 # Copy source code (only this layer rebuilds on code changes)
 COPY src/ src/
@@ -48,7 +56,9 @@ COPY alembic.ini ./
 COPY scripts/ scripts/
 # The editable install leaves src/ uncompiled.
 RUN uv sync --frozen --no-dev --extra server --extra agent --extra image && \
-    .venv/bin/python -m compileall -q src
+    .venv/bin/python -m compileall -q src && \
+    for marker in .venv/lib/python*/site-packages/*.dist-info/uv_cache.json; do \
+        sed -i '/\.dist-info\/uv_cache\.json,/d' "${marker%/*}/RECORD" && rm "$marker"; done
 
 COPY --from=frontend-builder /app/frontend/build frontend/build
 

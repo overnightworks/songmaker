@@ -5,9 +5,13 @@ FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/apt/* \
+        /var/cache/ldconfig/aux-cache /var/cache/fontconfig/*
 
 COPY --from=uv /uv /uvx /usr/local/bin/
+# Build-only (an ARG, not an ENV, so a uv run in the container keeps its cache): a uv cache in a
+# layer is dead weight that differs between builds.
+ARG UV_NO_CACHE=1
 
 WORKDIR /app
 
@@ -31,8 +35,12 @@ COPY --chown=root:root src/ src/
 COPY --chown=root:root alembic.ini ./
 COPY --chown=root:root scripts/arq_healthcheck.py scripts/
 USER root
+# uv_cache.json in the project's dist-info holds the install's wall-clock time and is listed in RECORD;
+# uv has no switch to leave it out, and nothing runs `uv sync` in the image again.
 RUN uv pip install --python .venv/bin/python --no-deps --no-build \
-    --editable . # why: The local project adds no resolved dependencies and cannot change locked versions.
+    --editable . \
+    && for marker in .venv/lib/python*/site-packages/*.dist-info/uv_cache.json; do \
+        sed -i '/\.dist-info\/uv_cache\.json,/d' "${marker%/*}/RECORD" && rm "$marker"; done # why: The local project adds no resolved dependencies and cannot change locked versions.
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image
