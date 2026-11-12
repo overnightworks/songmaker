@@ -5,7 +5,6 @@ import type {
 	LibraryWriteResponse
 } from './types';
 import { apiFetch } from './fetch';
-import { LIBRARY_QUERY_REQUIRED } from '#lib/constants/library.ts';
 import type { CreatedSort } from '#lib/utils/recency.ts';
 
 const LIBRARY_POOL_QUEUE_PATH = '/api/library/pool-queue';
@@ -35,7 +34,7 @@ export async function searchLibrary(options: {
 }): Promise<LibrarySearchResponse> {
 	const q = options.q.trim();
 	if (!q) {
-		throw new Error(LIBRARY_QUERY_REQUIRED);
+		throw new Error('Search query is required');
 	}
 	const params = new URLSearchParams({
 		q,

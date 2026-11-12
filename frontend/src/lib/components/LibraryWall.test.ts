@@ -297,8 +297,7 @@ describe('LibraryWall', () => {
 	it.each([
 		[
 			'a browse reload',
-			() =>
-				libraryBrowse.update((state) => ({ ...state, status: 'error' as const, error: 'offline' }))
+			() => libraryBrowse.update((state) => ({ ...state, status: 'error' as const }))
 		],
 		['a playlist reload', () => playlistLoad.set({ status: 'error', error: 'offline' })]
 	])('keeps the tiles on screen and names no failure when %s fails', async (_, failReload) => {
