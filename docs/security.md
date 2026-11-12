@@ -765,7 +765,7 @@ copy audio through the digest-pinned `postgres` image compose names (Alpine-base
 stack is not pinned. Dependabot moves the Dockerfile and compose pins, patch releases
 only (PostgreSQL within 16); a major or minor move of an image is its own change,
 for PostgreSQL 17 a data migration. The CI pins are moved by hand; `scripts/check_pinned_images_match.py` fails while
-CI's PostgreSQL service differs from compose's, so a Dependabot PostgreSQL bump
+CI's PostgreSQL or Redis service differs from compose's, so a Dependabot PostgreSQL or Redis bump
 needs the same edit in `.github/workflows/ci.yml`. Project tooling in CI and application dependencies in worker
 images are installed through `uv` with the committed `uv.lock`.
 The repository itself is installed as the trusted local editable project. All
