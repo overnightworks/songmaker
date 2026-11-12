@@ -23,6 +23,9 @@ type MarkedKey = {
 	[K in Key]: Words[K] extends (...values: never[]) => readonly unknown[] ? K : never;
 }[Key];
 
+/** The keys `pageText` reads: every key but the marked ones. */
+export type TextKey = Exclude<Key, MarkedKey>;
+
 type Parts<K extends MarkedKey> = Words[K] extends (...values: never[]) => infer P ? P : never;
 type PartsGaps<K extends MarkedKey> = Words[K] extends (...values: infer V) => unknown ? V : never;
 
@@ -31,8 +34,8 @@ function loadedEntry<K extends Key>(key: K): Words[K] {
 	return loadedWords[key];
 }
 
-/** The page's one reader of its interface words: the text of a catalog key in the page's language. */
-export function pageText<K extends Key>(key: K, ...values: Values<K>): string {
+/** The page's one reader of its interface words: the text of a catalog key in the page's language; a marked sentence is read with `pageParts`. */
+export function pageText<K extends TextKey>(key: K, ...values: Values<K>): string {
 	const entry: Words[Key] = loadedEntry(key);
 	return typeof entry === 'string' ? entry : (entry as (...values: unknown[]) => string)(...values);
 }

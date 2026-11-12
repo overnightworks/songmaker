@@ -19,8 +19,7 @@ import {
 import { EDITOR_VIEW_COWRITER_LABEL } from '#lib/constants/song.ts';
 import { DAY_LABEL_TODAY } from '#lib/constants/day-label.ts';
 import { pageLanguage } from './page-language.ts';
-import { pageText } from '#lib/utils/page-words.ts';
-import type { Key } from '#lib/words/en.ts';
+import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 import {
 	DAYS_NAMED_BY_WEEKDAY,
 	localClockTime,
@@ -79,7 +78,7 @@ export interface CowriterTurnError {
 	waitSeconds: number;
 }
 
-const COWRITER_PROBLEM_KEYS: Record<CowriterProblem, Key> = {
+const COWRITER_PROBLEM_KEYS: Record<CowriterProblem, TextKey> = {
 	unavailable: 'cowriterProblem.unavailable',
 	busy: 'cowriterProblem.busy',
 	budget_spent: 'cowriterProblem.budgetSpent',

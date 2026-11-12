@@ -42,6 +42,8 @@ it('refuses, at type check, values for a plain key and a missing or misnamed gap
 	void (() => pageParts('homeWrite.label'));
 	// @ts-expect-error a marked sentence requires its gaps
 	void (() => pageParts('newPlace.heading'));
+	// @ts-expect-error a marked sentence is read with its parts, never as text
+	void (() => pageText('newPlace.heading'));
 	expect(() => pageText('homeWrite.label')).not.toThrow();
 });
 
@@ -49,6 +51,9 @@ it('refuses a read before the words are loaded and answers after the load', asyn
 	vi.resetModules();
 	const fresh = await import('#lib/utils/page-words.ts');
 	expect(() => fresh.pageText('homeWrite.label')).toThrow(/read before .* loaded/);
+	expect(() => fresh.pageParts('newPlace.heading', { library: 'Library' })).toThrow(
+		/read before .* loaded/
+	);
 	await fresh.loadPageWords(sourceLanguage);
 	expect(fresh.pageText('homeWrite.label')).toBe(words['homeWrite.label']);
 });
