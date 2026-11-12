@@ -1,5 +1,4 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { RAIL_SEARCH_LABEL } from '../src/lib/constants/rail';
 import { words } from '../src/lib/words/en';
 
 export function searchSheet(page: Page): Locator {
@@ -15,6 +14,11 @@ export async function openSearchSheet(page: Page): Promise<Locator> {
 	return searchSheet(page);
 }
 
+const GROUP_WORDS = {
+	Albums: words['railSearch.groupAlbums'],
+	Songs: words['railSearch.groupSongs']
+};
+
 export async function phoneSearchResult(
 	page: Page,
 	group: 'Albums' | 'Songs',
@@ -22,12 +26,12 @@ export async function phoneSearchResult(
 	name: string | RegExp
 ): Promise<Locator> {
 	const sheet = await openSearchSheet(page);
-	const search = sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL });
+	const search = sheet.getByRole('combobox', { name: words['railSearch.field'] });
 	// A repeated crossing must issue a fresh query rather than reuse old hits.
 	await search.fill('');
 	await search.fill(query);
 	const result = sheet
-		.getByRole('group', { name: group, exact: true })
+		.getByRole('group', { name: GROUP_WORDS[group], exact: true })
 		.getByRole('option', { name });
 	await expect(result).toBeVisible();
 	return result;
