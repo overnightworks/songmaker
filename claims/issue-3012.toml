@@ -1,0 +1,8 @@
+claim_id = "47eb02b4e563450abdb20e76e4f22cf0"
+agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
+role = "builder"
+base = "7dd3c98b9f2b4c15995e42c64158b42953eb5923"
+branch = "claude/issue-3012-the-browser-legs-build-their-images-with"
+scope = [".github/workflows/e2e.yml", "docker/docker-compose.ci-cache.yml", "docker/docker-compose.ci.yml", "docs/testing.md", "tests/test_packaging_boundary.py", "tests/workflows/test_ci_quality_gate.py"]
+opened_commit = "dbaf22046fc3cfd7ed7d324f288fabe278a00f1a"
+whole_reason = "The builder step, the cache settings it exists for, the overlay file and the tests and sentence that pin them leave together; any part left behind would name a mechanism that is gone."
