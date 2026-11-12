@@ -1,8 +1,0 @@
-claim_id = "b00371f874ea48468d2b054578e632ef"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "091395ebcda6172b65889dcb5929def8d520e710"
-branch = "claude/issue-3067-take-design-v0-27-0-words-under-node-mar"
-scope = ["frontend/e2e/account-menu-words.ts", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/lib/words/en.ts", "frontend/src/lib/words/index.ts", "pyproject.toml", "uv.lock"]
-opened_commit = "891007061fe7798e2ade651a10b48d6b2ca95745"
-whole_reason = "one design bump: two pins with their lockfiles, the regenerated words modules and the one spec helper that read the kit's words outside its exports"
