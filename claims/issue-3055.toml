@@ -1,8 +1,0 @@
-claim_id = "93d6ab05f02f4126aa443220bcab45f0"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "caef5ed329e9f4bd0b54757064f32f0c05c69932"
-branch = "claude/issue-3055-take-design-v0-26-0-marked-parts-in-a-se"
-scope = ["frontend/package.json", "frontend/pnpm-lock.yaml", "pyproject.toml", "uv.lock"]
-opened_commit = "1bab927626218df1d8f659fd052955426d7fe03d"
-whole_reason = "A library bump lands whole: the kit's tarball pin and the generator's pin are one version, each with its lock."
