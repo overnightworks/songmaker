@@ -65,6 +65,22 @@ export type Words = {
     readonly "rail.albumCover": (gaps: { readonly title: string }) => string;
     readonly "rail.trackTakes": (count: number) => string;
     readonly "rail.trackTakesPick": (count: number) => string;
+    readonly "railSearch.field": string;
+    readonly "railSearch.clear": string;
+    readonly "railSearch.searching": string;
+    readonly "railSearch.failed": string;
+    readonly "railSearch.retry": string;
+    readonly "railSearch.results": string;
+    readonly "railSearch.noResults": (gaps: { readonly query: string }) => string;
+    readonly "railSearch.groupAlbums": string;
+    readonly "railSearch.groupSongs": string;
+    readonly "railSearch.groupPlaylists": string;
+    readonly "railSearch.groupPages": string;
+    readonly "railSearch.kindAlbum": string;
+    readonly "railSearch.kindSong": string;
+    readonly "railSearch.kindPlaylist": string;
+    readonly "railSearch.kindPage": string;
+    readonly "railSearch.songCount": (count: number) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -141,6 +157,29 @@ export const words: Words = {
         few: numberFormat.format(count) + " takes · pick",
         many: numberFormat.format(count) + " takes · pick",
         other: numberFormat.format(count) + " takes · pick",
+    })[pluralRules.select(count)],
+    "railSearch.field": "Search or go to…",
+    "railSearch.clear": "Clear search",
+    "railSearch.searching": "Searching…",
+    "railSearch.failed": "Search failed",
+    "railSearch.retry": "Retry",
+    "railSearch.results": "Search results",
+    "railSearch.noResults": (gaps: { readonly query: string }) => "No results for “" + gaps.query + "”.",
+    "railSearch.groupAlbums": "Albums",
+    "railSearch.groupSongs": "Songs",
+    "railSearch.groupPlaylists": "Playlists",
+    "railSearch.groupPages": "Pages",
+    "railSearch.kindAlbum": "Album",
+    "railSearch.kindSong": "Song",
+    "railSearch.kindPlaylist": "Playlist",
+    "railSearch.kindPage": "Page",
+    "railSearch.songCount": (count: number) => ({
+        zero: numberFormat.format(count) + " songs",
+        one: numberFormat.format(count) + " song",
+        two: numberFormat.format(count) + " songs",
+        few: numberFormat.format(count) + " songs",
+        many: numberFormat.format(count) + " songs",
+        other: numberFormat.format(count) + " songs",
     })[pluralRules.select(count)],
 };
 export type Key = keyof Words;

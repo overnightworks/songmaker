@@ -3,14 +3,14 @@ import { get, writable } from 'svelte/store';
 import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 import { searchLibrary, type LibrarySearchHit } from '#lib/api/library.ts';
 import type { AlbumCoverUrls, PlaylistItem } from '#lib/api/types.ts';
-import { LIBRARY_SEARCH_DEBOUNCE_MS, LIBRARY_PAGE_LABEL } from '#lib/constants/library.ts';
-import { PLAYLISTS_PAGE_LABEL } from '#lib/constants/playlist.ts';
-import { RAIL_SETTINGS_LABEL } from '#lib/constants/rail.ts';
+import { LIBRARY_SEARCH_DEBOUNCE_MS } from '#lib/constants/library.ts';
 import { LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { visibleSettingsSections, type SettingsSectionRoute } from '#lib/settingsSections.ts';
 import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 import { matchesRailQuery, normalizeRailQuery } from '#lib/stores/librarySearch.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import { compareByCreatedAt } from '#lib/utils/recency.ts';
+import type { Key } from '#lib/words/en.ts';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
 
@@ -67,14 +67,12 @@ interface RailSearchState {
 	hits: LibrarySearchHit[];
 }
 
-const SEARCH_FAILED_MESSAGE = 'Search failed';
-
-const RAIL_SEARCH_KINDS: Readonly<Record<RailSearchKind, { group: string; word: string }>> = {
-	album: { group: 'Albums', word: 'Album' },
-	song: { group: 'Songs', word: 'Song' },
-	playlist: { group: 'Playlists', word: 'Playlist' },
-	page: { group: 'Pages', word: 'Page' }
-};
+const RAIL_SEARCH_KINDS = {
+	album: { group: 'railSearch.groupAlbums', word: 'railSearch.kindAlbum' },
+	song: { group: 'railSearch.groupSongs', word: 'railSearch.kindSong' },
+	playlist: { group: 'railSearch.groupPlaylists', word: 'railSearch.kindPlaylist' },
+	page: { group: 'railSearch.groupPages', word: 'railSearch.kindPage' }
+} as const satisfies Record<RailSearchKind, { group: Key; word: Key }>;
 
 const RAIL_SEARCH_GROUP_ORDER: readonly RailSearchKind[] = ['album', 'song', 'playlist', 'page'];
 
@@ -85,15 +83,10 @@ const SETTINGS_PAGE_GLYPH = '⚙';
 
 // The library's own pages, before the Settings sections: the Library, and the
 // Playlists page (#1402), whose hit is also what names a playlist's ‹.
-const LIBRARY_PAGES: readonly RailSearchPage[] = [
-	{ label: LIBRARY_PAGE_LABEL, href: LIBRARY_ROUTE_PATH, section: null, glyph: LIBRARY_PAGE_GLYPH },
-	{
-		label: PLAYLISTS_PAGE_LABEL,
-		href: PLAYLISTS_ROUTE_PATH,
-		section: null,
-		glyph: PLAYLISTS_PAGE_GLYPH
-	}
-];
+const LIBRARY_PAGES = [
+	{ label: 'places.library', href: LIBRARY_ROUTE_PATH, glyph: LIBRARY_PAGE_GLYPH },
+	{ label: 'places.playlists', href: PLAYLISTS_ROUTE_PATH, glyph: PLAYLISTS_PAGE_GLYPH }
+] as const satisfies readonly { label: Key; href: RailSearchPageHref; glyph: string }[];
 
 const EMPTY_RAIL_SEARCH: RailSearchState = {
 	query: '',
@@ -151,7 +144,7 @@ export function groupRailSearchResults(
 		...pages.filter((page) => pageMatches(page, query)).map((page) => pageResult(page, query))
 	];
 	return RAIL_SEARCH_GROUP_ORDER.map((kind) => ({
-		label: RAIL_SEARCH_KINDS[kind].group,
+		label: pageText(RAIL_SEARCH_KINDS[kind].group),
 		results: prefixMatchesFirst(
 			results.filter((result) => result.target.kind === kind),
 			query
@@ -189,13 +182,18 @@ function railSearchTextParts(text: string, normalizedQuery: string): RailSearchT
 }
 
 export function visibleRailSearchPages(admin: boolean): readonly RailSearchPage[] {
+	const libraryPages = LIBRARY_PAGES.map(({ label, ...page }) => ({
+		...page,
+		label: pageText(label),
+		section: null
+	}));
 	const settingsPages = visibleSettingsSections(admin).map(({ label, href }) => ({
 		label,
 		href,
-		section: RAIL_SETTINGS_LABEL,
+		section: pageText('places.settings'),
 		glyph: SETTINGS_PAGE_GLYPH
 	}));
-	return [...LIBRARY_PAGES, ...settingsPages];
+	return [...libraryPages, ...settingsPages];
 }
 
 export function resetRailSearchForTests(): void {
@@ -248,7 +246,7 @@ async function runRailSearch(query: string): Promise<void> {
 		railSearch.set({
 			query,
 			status: 'error',
-			error: describeFailure(error, SEARCH_FAILED_MESSAGE),
+			error: describeFailure(error, pageText('railSearch.failed')),
 			hits: []
 		});
 	}
@@ -263,7 +261,7 @@ function libraryResult(hit: LibrarySearchHit, query: string): RailSearchResult {
 		return searchResult(query, {
 			id: `album:${hit.album.id}`,
 			label: hit.album.title,
-			detail: pluralize(hit.album.song_count, 'song'),
+			detail: pageText('railSearch.songCount', hit.album.song_count),
 			picture: { kind: 'album', cover: hit.album.cover ?? null },
 			target: { kind: 'album', id: hit.album.id }
 		});
@@ -281,7 +279,7 @@ function playlistResult(playlist: PlaylistItem, query: string): RailSearchResult
 	return searchResult(query, {
 		id: `playlist:${playlist.id}`,
 		label: playlist.title,
-		detail: pluralize(playlist.entry_count, 'song'),
+		detail: pageText('railSearch.songCount', playlist.entry_count),
 		picture: { kind: 'playlist', covers: playlist.album_covers, cover: playlist.cover ?? null },
 		target: { kind: 'playlist', id: playlist.id }
 	});
@@ -304,7 +302,7 @@ function searchResult(query: string, source: RailSearchResultSource): RailSearch
 	return {
 		...shown,
 		labelParts,
-		kindWord: RAIL_SEARCH_KINDS[source.target.kind].word,
+		kindWord: pageText(RAIL_SEARCH_KINDS[source.target.kind].word),
 		detailParts: detailTextParts(detail, titleMatched ? null : query)
 	};
 }
@@ -318,8 +316,4 @@ function pageMatches(page: RailSearchPage, query: string): boolean {
 	return [page.label, page.section]
 		.filter((value) => value !== null)
 		.some((value) => matchesRailQuery(value, query));
-}
-
-function pluralize(count: number, noun: string): string {
-	return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }

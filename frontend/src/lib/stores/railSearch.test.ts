@@ -27,6 +27,7 @@ import {
 	visibleRailSearchPages
 } from './railSearch';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
+import { words } from '#lib/words/en.ts';
 
 beforeEach(() => {
 	vi.useFakeTimers();
@@ -105,7 +106,7 @@ describe('syncRailSearch', () => {
 		{
 			failure: 'a browser error',
 			err: new TypeError('undefined is not a function'),
-			error: 'Search failed'
+			error: words['railSearch.failed']
 		}
 	])('names $failure without browser text and retries the same query', async ({ err, error }) => {
 		searchLibrary.mockRejectedValueOnce(err);
@@ -154,7 +155,7 @@ describe('syncRailSearch offline', () => {
 		expect(get(railSearch)).toMatchObject({
 			query: 'stadion',
 			status: 'error',
-			error: 'Search failed'
+			error: words['railSearch.failed']
 		});
 
 		searchLibrary.mockResolvedValueOnce({ items: [], next_cursor: null, has_more: false });
@@ -197,7 +198,7 @@ describe('groupRailSearchResults', () => {
 	const picks = buildPlaylist({ id: 'p1', title: 'Vernissage picks', entry_count: 9 });
 
 	function settingsPage(label: string, href: string) {
-		return { label, href, section: 'Settings', glyph: '⚙' };
+		return { label, href, section: words['places.settings'], glyph: '⚙' };
 	}
 
 	it.each([
@@ -226,8 +227,8 @@ describe('groupRailSearchResults', () => {
 		'offers $viewer the Library, the Playlists page and every Settings section they can see',
 		({ admin, settingsPages }) => {
 			expect(visibleRailSearchPages(admin)).toEqual([
-				{ label: 'Library', href: LIBRARY_ROUTE_PATH, section: null, glyph: '▦' },
-				{ label: 'Playlists', href: '/playlists', section: null, glyph: '♫' },
+				{ label: words['places.library'], href: LIBRARY_ROUTE_PATH, section: null, glyph: '▦' },
+				{ label: words['places.playlists'], href: '/playlists', section: null, glyph: '♫' },
 				...settingsPages
 			]);
 		}
@@ -240,7 +241,12 @@ describe('groupRailSearchResults', () => {
 
 		const groups = groupRailSearchResults(vernissageState, [picks], pages);
 
-		expect(groups.map((group) => group.label)).toEqual(['Albums', 'Songs', 'Playlists', 'Pages']);
+		expect(groups.map((group) => group.label)).toEqual([
+			words['railSearch.groupAlbums'],
+			words['railSearch.groupSongs'],
+			words['railSearch.groupPlaylists'],
+			words['railSearch.groupPages']
+		]);
 		expect(groups.map((group) => group.results.map((result) => result.target))).toEqual([
 			[{ kind: 'album', id: 'a1' }],
 			[
@@ -287,9 +293,9 @@ describe('groupRailSearchResults', () => {
 	});
 
 	it.each([
-		['an album', 'a1', 'Album', '6 songs'],
-		['a song', 's2', 'Song', 'Vernissage'],
-		['a playlist', 'p1', 'Playlist', '9 songs']
+		['an album', 'a1', words['railSearch.kindAlbum'], words['railSearch.songCount'](6)],
+		['a song', 's2', words['railSearch.kindSong'], 'Vernissage'],
+		['a playlist', 'p1', words['railSearch.kindPlaylist'], words['railSearch.songCount'](9)]
 	])('names %s by its kind word before its detail', (_, id, kindWord, detail) => {
 		const results = groupRailSearchResults(vernissageState, [picks]).flatMap(
 			(group) => group.results
@@ -305,11 +311,11 @@ describe('groupRailSearchResults', () => {
 	it('finds the Playlists page as a plain page with its own glyph', () => {
 		const [pages] = groupRailSearchResults({ ...vernissageState, query: 'playl', hits: [] }, []);
 
-		expect(pages?.label).toBe('Pages');
+		expect(pages?.label).toBe(words['railSearch.groupPages']);
 		expect(pages?.results).toEqual([
 			expect.objectContaining({
-				label: 'Playlists',
-				kindWord: 'Page',
+				label: words['places.playlists'],
+				kindWord: words['railSearch.kindPage'],
 				detailParts: [],
 				picture: { kind: 'page', glyph: '♫' },
 				target: { kind: 'page', href: '/playlists' }
@@ -323,12 +329,12 @@ describe('groupRailSearchResults', () => {
 
 		expect(settings[0]?.results[0]).toMatchObject({
 			label: 'Generation',
-			kindWord: 'Page',
-			detailParts: [{ text: 'Settings', matched: false }]
+			kindWord: words['railSearch.kindPage'],
+			detailParts: [{ text: words['places.settings'], matched: false }]
 		});
 		expect(library[0]?.results[0]).toMatchObject({
-			label: 'Library',
-			kindWord: 'Page',
+			label: words['places.library'],
+			kindWord: words['railSearch.kindPage'],
 			detailParts: []
 		});
 	});
@@ -366,7 +372,12 @@ describe('groupRailSearchResults', () => {
 		],
 		['Voices', 'settings', [{ text: 'Voices', matched: false }]]
 	])('highlights the letters of %s that match %s', (label, query, parts) => {
-		const page = { label, href: '/settings/voices', section: 'Settings', glyph: '⚙' } as const;
+		const page = {
+			label,
+			href: '/settings/voices',
+			section: words['places.settings'],
+			glyph: '⚙'
+		} as const;
 		const [group] = groupRailSearchResults({ ...vernissageState, query, hits: [] }, [], [page]);
 
 		expect(group?.results[0]?.labelParts).toEqual(parts);
@@ -379,15 +390,15 @@ describe('groupRailSearchResults', () => {
 			label: 'Generation',
 			labelParts: [{ text: 'Generation', matched: false }],
 			detailParts: [
-				{ text: 'Set', matched: true },
-				{ text: 'tings', matched: false }
+				{ text: words['places.settings'].slice(0, 3), matched: true },
+				{ text: words['places.settings'].slice(3), matched: false }
 			]
 		});
 	});
 
 	it('leaves the second line unmarked when the title already matches', () => {
 		const songs = groupRailSearchResults(vernissageState, []).find(
-			(group) => group.label === 'Songs'
+			(group) => group.label === words['railSearch.groupSongs']
 		);
 
 		expect(songs?.results[0]).toMatchObject({
