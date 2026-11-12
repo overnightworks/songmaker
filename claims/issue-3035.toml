@@ -1,8 +1,0 @@
-claim_id = "bf2ce615fd4f42a9b8b59de6c0626379"
-agent = "Claude 507c9b34-054d-4561-9d21-92ef412442bf"
-role = "builder"
-base = "c244ac69ade3f6b7918adcaa60d4d0c55e0ff553"
-branch = "claude/issue-3035-the-browser-legs-have-a-limit-of-15-minu"
-scope = [".github/workflows/e2e.yml", "docs/testing.md", "frontend/e2e/README.md", "tests/workflows/test_ci_quality_gate.py"]
-opened_commit = "7dd3c78346f0f28d735286d9fbe025d2182052ba"
-whole_reason = "The limits, the one test that guards them across the suites and the two documents that name what the legs do change together."
