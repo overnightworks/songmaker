@@ -7,9 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     git \
     libc6-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/fontconfig.log /var/log/apt/* \
+        /var/cache/ldconfig/aux-cache /var/cache/fontconfig/*
 
 COPY --from=uv /uv /uvx /usr/local/bin/
+# Build-only (an ARG, not an ENV, so a uv run in the container keeps its cache): a uv cache in a
+# layer is dead weight that differs between builds.
+ARG UV_NO_CACHE=1
 
 WORKDIR /app
 
@@ -21,8 +25,10 @@ RUN chown songmaker:songmaker /app
 USER 1000:1000
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
+# Building the git-sourced libraries leaves lock files in /tmp whose names are random per build.
 RUN uv sync --frozen --no-dev --no-install-project \
-    --extra server --extra scoring --extra whisper
+    --extra server --extra scoring --extra whisper \
+    && rm -f /tmp/uv-*.lock
 
 ARG MODEL_WARMUP_TIMEOUT_SECONDS=1800
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub \
@@ -43,8 +49,12 @@ RUN --mount=type=secret,id=hf_token,env=HF_TOKEN \
 COPY --chown=songmaker:songmaker src/ src/
 COPY --chown=root:root alembic.ini ./
 COPY --chown=root:root scripts/arq_healthcheck.py scripts/
+# uv_cache.json in the project's dist-info holds the install's wall-clock time and is listed in RECORD;
+# uv has no switch to leave it out, and nothing runs `uv sync` in the image again.
 RUN uv pip install --python .venv/bin/python --no-deps --no-build \
-    --editable . # why: The local project adds no resolved dependencies and cannot change locked versions.
+    --editable . \
+    && for marker in .venv/lib/python*/site-packages/*.dist-info/uv_cache.json; do \
+        sed -i '/\.dist-info\/uv_cache\.json,/d' "${marker%/*}/RECORD" && rm "$marker"; done # why: The local project adds no resolved dependencies and cannot change locked versions.
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image

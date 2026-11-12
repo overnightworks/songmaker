@@ -19,9 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libc6-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log /var/log/alternatives.log /var/log/fontconfig.log /var/log/apt/* \
+        /var/cache/ldconfig/aux-cache /var/cache/fontconfig/*
 
 COPY --from=uv /uv /uvx /usr/local/bin/
+# Build-only (an ARG, not an ENV, so a uv run in the container keeps its cache): a uv cache in a
+# layer is dead weight that differs between builds.
+ARG UV_NO_CACHE=1
 
 # Uid and gid 1000 own the volumes and the checkpoints bind mount, and Kubernetes' runAsNonRoot
 # can verify only a numeric USER.
@@ -54,6 +58,7 @@ ENV PYTHONUNBUFFERED=1
 # peft, nano-vllm, gradio, etc).
 FROM gpu-torch-base AS acestep-base
 
+ARG UV_NO_CACHE=1
 USER 1000:1000
 WORKDIR /opt/acestep
 
@@ -80,6 +85,7 @@ ENV HF_HUB_DISABLE_XET=1
 # songmaker-acestep-worker — leaf image
 FROM acestep-base
 
+ARG UV_NO_CACHE=1
 USER root
 RUN install -d -o songmaker -g songmaker /app
 USER 1000:1000
@@ -99,8 +105,12 @@ RUN uv export --frozen --no-dev --no-emit-project \
 
 COPY --chown=songmaker src/acestep_engine/ src/acestep_engine/
 COPY --chown=songmaker src/acestep_worker/ src/acestep_worker/
+# uv_cache.json in the project's dist-info holds the install's wall-clock time and is listed in RECORD;
+# uv has no switch to leave it out, and nothing runs `uv sync` in the image again.
 RUN uv pip install --python .venv/bin/python --no-deps --no-build \
-    --editable . # why: The local project adds no resolved dependencies and cannot change locked versions.
+    --editable . \
+    && for marker in .venv/lib/python*/site-packages/*.dist-info/uv_cache.json; do \
+        sed -i '/\.dist-info\/uv_cache\.json,/d' "${marker%/*}/RECORD" && rm "$marker"; done # why: The local project adds no resolved dependencies and cannot change locked versions.
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image
