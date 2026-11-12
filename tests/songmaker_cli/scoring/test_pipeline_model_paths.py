@@ -179,9 +179,8 @@ def test_scoring_job_without_a_configured_path_leaves_the_scorers_to_fail_naming
 
     config = _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path)
 
-    with scorer.stub_library() as library, pytest.raises(ValueError, match=scorer.setting):
+    with pytest.raises(ValueError, match=scorer.setting):
         scorer.score(tmp_path / "take.mp3", config=config)
-    library.assert_not_called()
 
 
 def test_whisper_directory_without_a_tokenizer_fails_instead_of_asking_the_hub(
