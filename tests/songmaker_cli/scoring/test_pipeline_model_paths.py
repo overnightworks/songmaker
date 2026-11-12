@@ -112,8 +112,12 @@ def test_whisper_never_resolves_a_model_through_the_hub(tmp_path: Path) -> None:
 def test_scorer_without_a_configured_path_fails_naming_the_setting(
     scorer: ModelScorer, tmp_path: Path,
 ) -> None:
-    with scorer.stub_library() as library, pytest.raises(ValueError, match=scorer.setting):
-        scorer.score(tmp_path / "take.mp3", config=scorer.config(None))
+    take = tmp_path / "take.mp3"
+    config = scorer.config(None)
+
+    with scorer.stub_library() as library:
+        with pytest.raises(ValueError, match=scorer.setting):
+            scorer.score(take, config=config)
 
     library.assert_not_called()
 
@@ -122,8 +126,12 @@ def test_scorer_without_a_configured_path_fails_naming_the_setting(
 def test_scorer_with_a_missing_path_fails_instead_of_asking_the_hub(
     scorer: ModelScorer, tmp_path: Path,
 ) -> None:
-    with scorer.stub_library() as library, pytest.raises(FileNotFoundError, match=scorer.setting):
-        scorer.score(tmp_path / "take.mp3", config=scorer.config(tmp_path / "absent"))
+    take = tmp_path / "take.mp3"
+    config = scorer.config(tmp_path / "absent")
+
+    with scorer.stub_library() as library:
+        with pytest.raises(FileNotFoundError, match=scorer.setting):
+            scorer.score(take, config=config)
 
     library.assert_not_called()
 
@@ -179,8 +187,10 @@ def test_scoring_job_without_a_configured_path_leaves_the_scorers_to_fail_naming
 
     config = _config_the_scoring_job_hands_the_scorers(seeded_db, tmp_path)
 
+    take = tmp_path / "take.mp3"
+
     with pytest.raises(ValueError, match=scorer.setting):
-        scorer.score(tmp_path / "take.mp3", config=config)
+        scorer.score(take, config=config)
 
 
 def test_whisper_directory_without_a_tokenizer_fails_instead_of_asking_the_hub(
@@ -189,10 +199,11 @@ def test_whisper_directory_without_a_tokenizer_fails_instead_of_asking_the_hub(
     incomplete = tmp_path / "incomplete"
     incomplete.mkdir()
 
-    with (
-        WHISPER.stub_library() as library,
-        pytest.raises(FileNotFoundError, match=WHISPER.setting),
-    ):
-        WHISPER.score(tmp_path / "take.mp3", config=WHISPER.config(incomplete))
+    take = tmp_path / "take.mp3"
+    config = WHISPER.config(incomplete)
+
+    with WHISPER.stub_library() as library:
+        with pytest.raises(FileNotFoundError, match=WHISPER.setting):
+            WHISPER.score(take, config=config)
 
     library.assert_not_called()
