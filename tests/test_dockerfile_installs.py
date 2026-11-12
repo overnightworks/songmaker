@@ -14,7 +14,9 @@ from support.repository_root import REPOSITORY_ROOT
 
 COMMAND_SEPARATORS = frozenset({"&&", "||", ";", "|", "(", ")"})
 SUBSTITUTION = re.compile(r"\$\(([^()]*)\)")
+ENVIRONMENT_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.DOTALL)
 OWN_PROJECT = "."
+OWN_PROJECT_INSTALL_FLAGS = frozenset({"--no-deps", "--no-build"})
 
 
 def _repository_dockerfiles() -> list[Path]:
@@ -40,6 +42,14 @@ def _words(shell_text: str) -> Iterator[str]:
             yield ";"
 
 
+def _leading_assignments(command: list[str]) -> int:
+    """How many ``NAME=value`` environment words open the command."""
+    count = 0
+    while count < len(command) and ENVIRONMENT_ASSIGNMENT.fullmatch(command[count]):
+        count += 1
+    return count
+
+
 def _uv_commands(dockerfile: Path) -> list[list[str]]:
     """Each ``uv`` invocation of the file, from ``uv`` to the next shell operator."""
     commands: list[list[str]] = []
@@ -51,7 +61,7 @@ def _uv_commands(dockerfile: Path) -> list[list[str]]:
             if word not in COMMAND_SEPARATORS:
                 current.append(word)
                 continue
-            program = [part for part in current if "=" not in part]
+            program = current[_leading_assignments(current) :]
             if program[:1] == ["uv"]:
                 commands.append(program)
             current = []
@@ -59,21 +69,22 @@ def _uv_commands(dockerfile: Path) -> list[list[str]]:
 
 
 def _installs_only_the_own_project(command: list[str]) -> bool:
-    """``--no-deps --editable .`` and nothing else to install."""
+    """``--no-deps --editable .`` and nothing else to install: no other flag can add a package."""
     arguments = iter(command[command.index("install") + 1 :])
     flags: set[str] = set()
     editable_targets: list[str | None] = []
-    requirements: list[str] = []
     for argument in arguments:
         if argument == "--python":
             next(arguments, None)
         elif argument in {"--editable", "-e"}:
             editable_targets.append(next(arguments, None))
-        elif argument.startswith("-"):
+        elif argument.startswith("--python="):
+            continue
+        elif argument in OWN_PROJECT_INSTALL_FLAGS:
             flags.add(argument)
         else:
-            requirements.append(argument)
-    return "--no-deps" in flags and editable_targets == [OWN_PROJECT] and not requirements
+            return False
+    return "--no-deps" in flags and editable_targets == [OWN_PROJECT]
 
 
 def _unlocked_installs(dockerfile: Path) -> list[str]:
@@ -111,6 +122,14 @@ def test_dockerfile_installs_only_from_a_lock(dockerfile: Path) -> None:
         ("RUN uv pip install --no-deps --editable .", 0),
         ("RUN uv pip install --python .venv/bin/python --no-deps --no-build --editable .", 0),
         ("RUN uv pip install --no-deps --editable . torch", 1),
+        ("RUN uv pip install --no-deps --editable . torch==2.9.0", 1),
+        ('RUN uv pip install --no-deps --editable . "torch>=2"', 1),
+        ("RUN uv pip install --no-deps --editable . -rrequirements.txt", 1),
+        ("RUN uv pip install --no-deps --editable . --requirement=requirements.txt", 1),
+        ("RUN uv pip install --no-deps --editable . -r requirements.txt", 1),
+        ("RUN uv pip install --python=.venv/bin/python --no-deps --editable .", 0),
+        ("RUN UV_NO_CACHE=1 uv pip install --no-deps --editable .", 0),
+        ("RUN UV_NO_CACHE=1 uv sync --no-dev", 1),
         ("RUN uv pip install --no-deps torch --editable .", 1),
         ("RUN uv pip install --no-deps --editable torch", 1),
         ("RUN uv pip install --no-deps --editable . --editable ./other", 1),
