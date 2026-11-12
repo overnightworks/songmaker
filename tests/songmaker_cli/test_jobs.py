@@ -948,7 +948,15 @@ def test_s5_generation_job_reload_unavailable(
     ids=["oom", "oom-success", "success-oom", "oom-oom", "oom-generic", "generic-oom"],
 )
 def test_s8_take_outcomes(
-    seeded_db, generation_worker_peer, tmp_path, outcomes, status, completed, prefix, gated_take,
+    seeded_db,
+    generation_worker_peer,
+    tmp_path,
+    locked_ffmpeg,
+    outcomes,
+    status,
+    completed,
+    prefix,
+    gated_take,
 ):
     """S8-B/D/E/F: Real worker takes continue and retain the selected OOM cause."""
 
