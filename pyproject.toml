@@ -89,7 +89,7 @@ dev = [
     "pyyaml>=6.0,<7",
     # Brings the catalog generator `design-catalogs`; a git pin by tag like the other
     # first-party libraries, built from source in CI and local checks only, never in an image.
-    "overnightworks-design[catalogs] @ git+https://github.com/overnightworks/design@v0.25.0",
+    "overnightworks-design[catalogs] @ git+https://github.com/overnightworks/design@v0.26.0",
 ]
 
 [project.scripts]
