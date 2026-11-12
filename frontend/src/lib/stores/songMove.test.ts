@@ -249,6 +249,23 @@ describe('moving the open song', () => {
 		expect(location.pathname).toBe('/album/abend/storytime');
 	});
 
+	it('names the new album in a toast on a phone, where the crumb is missing', async () => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: true }))
+		);
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+		vi.mocked(moveSong).mockResolvedValue(movedSong);
+
+		await askToMoveOpenSongTo(ABEND);
+
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: words['songMove.moved']({ album: 'Abendrot' }) })
+		]);
+	});
+
 	it('does nothing for the album the song already stands in', async () => {
 		await askToMoveOpenSongTo(HOME);
 
