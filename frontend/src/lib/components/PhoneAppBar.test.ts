@@ -234,14 +234,14 @@ describe('PhoneAppBar', () => {
 			words['pageBack.backTo']({ page: 'Cold Harbour' }),
 			words['phoneAppBar.searchOpen'],
 			'Share song',
-			'Song menu'
+			words['songMenu.label']
 		]) {
 			expectFrequentHitbox(getByRoleButton(target, name), name);
 		}
 		await tick();
-		getByRoleButton(target, 'Song menu').click();
+		getByRoleButton(target, words['songMenu.label']).click();
 		await tick();
-		getByRoleButton(target, 'Rename').click();
+		getByRoleButton(target, words['songMenu.rename']).click();
 		await tick();
 		const input = target.querySelector<HTMLInputElement>('input[aria-label="Song title"]');
 		if (!input) throw new Error('Expected inline title input');
@@ -260,7 +260,7 @@ describe('PhoneAppBar', () => {
 		const songControls = (): Element[] => [
 			target.querySelector('h1') as Element,
 			getByRoleButton(target, 'Share song'),
-			getByRoleButton(target, 'Song menu')
+			getByRoleButton(target, words['songMenu.label'])
 		];
 		const otherControls = [getByRoleButton(target, words['phoneAppBar.searchOpen'])];
 
@@ -270,9 +270,9 @@ describe('PhoneAppBar', () => {
 		libraryAddressOverlayActive.set(false);
 		await tick();
 		expect(songControls().map(isInert)).toEqual([false, false, false]);
-		getByRoleButton(target, 'Song menu').click();
+		getByRoleButton(target, words['songMenu.label']).click();
 		await tick();
-		expect(getByRoleButton(target, 'Delete song')).toBeTruthy();
+		expect(getByRoleButton(target, words['songMenu.delete'])).toBeTruthy();
 
 		libraryAddressOverlayActive.set(true);
 		await tick();
