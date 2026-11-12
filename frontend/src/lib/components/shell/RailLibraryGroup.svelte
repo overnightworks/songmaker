@@ -32,17 +32,12 @@
 		openRailSearchTarget,
 		selectSong
 	} from '#lib/stores/navigation.ts';
-	import {
-		LIBRARY_ALBUMS_LOADING,
-		LIBRARY_PAGE_LABEL,
-		LIBRARY_RETRY_LABEL
-	} from '#lib/constants/library.ts';
-	import { RAIL_CONTEXT_NO_TAKES, RAIL_LIBRARY_NAV_LABEL } from '#lib/constants/rail.ts';
-	import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
+	import { RAIL_CONTEXT_NO_TAKES } from '#lib/constants/rail.ts';
 	import type { SongItem } from '#lib/api/types.ts';
 	import { LIBRARY_ROUTE_ID, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 	import { standingPathname } from '#lib/routes/standingAddress.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import PlayingMark from '../PlayingMark.svelte';
 	import Icon from '../Icon.svelte';
 	import RailGroup from './RailGroup.svelte';
@@ -184,8 +179,10 @@
 
 	function trackMeta(song: SongItem): string {
 		if (songPlayability(song) === 'none') return RAIL_CONTEXT_NO_TAKES;
-		const takes = `${song.generation_count} take${song.generation_count !== 1 ? 's' : ''}`;
-		return song.has_pick ? `${takes} · pick` : takes;
+		return pageText(
+			song.has_pick ? 'rail.trackTakesPick' : 'rail.trackTakes',
+			song.generation_count
+		);
 	}
 
 	function onTrackClick(song: SongItem): void {
@@ -198,7 +195,7 @@
 {/snippet}
 
 <RailGroup
-	label={LIBRARY_PAGE_LABEL}
+	label={pageText('places.library')}
 	groupId="rail-library-group"
 	storageKey={LIBRARY_OPEN_STORAGE_KEY}
 	count={albumCount}
@@ -211,14 +208,14 @@
 	{icon}
 >
 	{#snippet children(groupOpen: boolean)}
-		<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
+		<nav class="rail-library-nav" aria-label={pageText('rail.libraryNav')}>
 			{#if retrying}
-				<p class="rail-status rail-loading">{LIBRARY_ALBUMS_LOADING}</p>
+				<p class="rail-status rail-loading">{pageText('rail.libraryLoading')}</p>
 			{:else if loadFailure !== null}
 				<div class="rail-load-error">
 					<p class="rail-status" role="alert">{loadFailure}</p>
 					<button type="button" class="rail-retry" onclick={retryLibraryLoad}>
-						{LIBRARY_RETRY_LABEL}
+						{pageText('rail.retry')}
 					</button>
 				</div>
 			{/if}
@@ -253,7 +250,10 @@
 							</svg>
 							<span class="album-art">
 								{#if album.cover?.card}
-									<img src={album.cover.card} alt={`${ALBUM_COVER_ALT_TYPE} ${album.title}`} />
+									<img
+										src={album.cover.card}
+										alt={pageText('rail.albumCover', { title: album.title })}
+									/>
 								{:else}
 									<span aria-hidden="true">{titleInitials(album.title)}</span>
 								{/if}

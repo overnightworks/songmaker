@@ -6,9 +6,8 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
-import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
-import { RAIL_LIBRARY_LOAD_ERROR } from '#lib/constants/rail.ts';
+import { words } from '#lib/words/en.ts';
 import { LIBRARY_ROUTE_ID, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 import { librarySurface, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
@@ -137,7 +136,9 @@ describe('RailLibraryGroup', () => {
 			allAlbumsLoad.set({ status, error: null });
 			railTreeQuery.set(query);
 			await tick();
-			expect(target.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
+			expect(target.querySelector('.group-title')?.textContent?.trim()).toBe(
+				words['places.library']
+			);
 			expect(target.querySelector('.meta')?.textContent).toBe(count);
 			expect(target.querySelectorAll('.album-label')).toHaveLength(rows);
 		}
@@ -158,7 +159,7 @@ describe('RailLibraryGroup', () => {
 		const target = await render();
 		const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
 		expect(word.getAttribute('href')).toBe(LIBRARY_ROUTE_PATH);
-		expect(word.textContent).toContain('Library');
+		expect(word.textContent).toContain(words['places.library']);
 
 		word.click();
 		await vi.waitFor(() => expect(get(librarySurface)).toBe('browse'));
@@ -331,7 +332,7 @@ describe('RailLibraryGroup', () => {
 
 		const cover = requireElement<HTMLImageElement>(target, '.album-art img');
 		expect(cover.src).toContain('/covers/nachtstrom.jpg');
-		expect(cover.alt).toBe('Album Nachtstrom');
+		expect(cover.alt).toBe(words['rail.albumCover']({ title: 'Nachtstrom' }));
 		expect(target.querySelectorAll('.album-art img')).toHaveLength(1);
 		expect(target.querySelectorAll('.album-art span')).toHaveLength(1);
 		expect(target.querySelector('.album-art span')?.textContent).toBe('AN');
@@ -394,7 +395,7 @@ describe('RailLibraryGroup', () => {
 		const meta = Array.from(target.querySelectorAll('.row-sub2 .row-meta')).map(
 			(el) => el.textContent
 		);
-		expect(meta).toEqual(['—', '3 takes · pick']);
+		expect(meta).toEqual(['—', words['rail.trackTakesPick'](3)]);
 	});
 
 	it('1354_rule_11: shows nothing to hear for a track of only archived takes, and no pick for an archived one', async () => {
@@ -422,7 +423,7 @@ describe('RailLibraryGroup', () => {
 		const meta = Array.from(target.querySelectorAll('.row-sub2 .row-meta')).map(
 			(el) => el.textContent
 		);
-		expect(meta).toEqual(['—', '2 takes']);
+		expect(meta).toEqual(['—', words['rail.trackTakes'](2)]);
 	});
 
 	it('selects a track when its row is clicked', async () => {
@@ -596,7 +597,9 @@ describe('RailLibraryGroup', () => {
 			song({ id: 's1', title: 'Tide', track_number: 1, generation_count: 1, generations: [] })
 		]);
 		const target = await render();
-		expect(target.querySelector('.row-sub2 .row-meta')?.textContent).toBe('1 take');
+		expect(target.querySelector('.row-sub2 .row-meta')?.textContent).toBe(
+			words['rail.trackTakes'](1)
+		);
 	});
 
 	it('shows a retry-able error instead of a silent empty library when the load fails', async () => {
@@ -613,7 +616,7 @@ describe('RailLibraryGroup', () => {
 		fetchAlbums.mockResolvedValueOnce(
 			albumsPage({ items: [album({ id: 'a9', title: 'Recovered' })] })
 		);
-		requireButtonContainingText(target, LIBRARY_RETRY_LABEL).click();
+		requireButtonContainingText(target, words['rail.retry']).click();
 
 		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
 		expect(requireButtonContainingText(target, 'Recovered')).toBeInstanceOf(HTMLButtonElement);
@@ -630,7 +633,7 @@ describe('RailLibraryGroup', () => {
 		await tick();
 
 		expect(target.querySelector('[role="alert"]')).toBeNull();
-		expect(target.textContent).not.toContain(LIBRARY_RETRY_LABEL);
+		expect(target.textContent).not.toContain(words['rail.retry']);
 		expect(target.querySelectorAll('.album-label')).toHaveLength(1);
 
 		fetchAlbums.mockResolvedValueOnce(
@@ -675,11 +678,13 @@ describe('RailLibraryGroup', () => {
 		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
 
 		expect(fetchAlbums).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
-		expect(requireElement(target, '[role="alert"]').textContent).toBe(RAIL_LIBRARY_LOAD_ERROR);
+		expect(requireElement(target, '[role="alert"]').textContent).toBe(
+			words['rail.libraryLoadError']
+		);
 		fetchAlbums.mockResolvedValueOnce(
 			albumsPage({ items: [album({ id: 'a9', title: 'Recovered' })] })
 		);
-		requireButtonContainingText(target, LIBRARY_RETRY_LABEL).click();
+		requireButtonContainingText(target, words['rail.retry']).click();
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(target.querySelector('[role="alert"]')).toBeNull();

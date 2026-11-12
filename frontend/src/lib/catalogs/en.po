@@ -214,3 +214,39 @@ msgstr ""
 msgctxt "rail.settingsNav"
 msgid "Settings sections"
 msgstr ""
+
+msgctxt "rail.libraryNav"
+msgid "Library albums"
+msgstr ""
+
+msgctxt "rail.libraryLoading"
+msgid "Loading albums…"
+msgstr ""
+
+msgctxt "rail.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "rail.libraryLoadError"
+msgid "Couldn't load your library"
+msgstr ""
+
+msgctxt "rail.albumCover"
+msgid "Album {title}"
+msgstr ""
+
+msgctxt "rail.trackTakes.one"
+msgid "{count} take"
+msgstr ""
+
+msgctxt "rail.trackTakes.other"
+msgid "{count} takes"
+msgstr ""
+
+msgctxt "rail.trackTakesPick.one"
+msgid "{count} take · pick"
+msgstr ""
+
+msgctxt "rail.trackTakesPick.other"
+msgid "{count} takes · pick"
+msgstr ""

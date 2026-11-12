@@ -1,7 +1,6 @@
 import { expect, test, type Page } from './coverage-test';
 import { EDITOR_LYRICS_LABEL } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
-import { RAIL_LIBRARY_NAV_LABEL } from '../src/lib/constants/rail';
 import { NOW_PLAYING_UNPICK_LABEL } from '../src/lib/constants/now-playing';
 import { archiveOwnedAlbum, seedTake } from './seed';
 import { ONLY_IN_SHELL, sameOriginHeaders } from './helpers';
@@ -51,13 +50,13 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 		await page.goto(`/album/${album.id}`);
 		const railLibrary = page
 			.getByRole('navigation', { name: words['rail.nav'] })
-			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL });
+			.getByRole('navigation', { name: words['rail.libraryNav'] });
 		const pickedRow = railLibrary.getByRole('button', { name: new RegExp(pickedTitle) });
 		const unpickedRow = railLibrary.getByRole('button', { name: new RegExp(unpickedTitle) });
 
-		await expect(pickedRow).toContainText('1 take · pick');
-		await expect(unpickedRow).toContainText('1 take');
-		await expect(unpickedRow).not.toContainText('· pick');
+		await expect(pickedRow).toContainText(words['rail.trackTakesPick'](1));
+		await expect(unpickedRow).toContainText(words['rail.trackTakes'](1));
+		await expect(unpickedRow).not.toContainText(words['rail.trackTakesPick'](1));
 
 		const detailLoaded = page.waitForResponse(
 			(response) =>
@@ -80,8 +79,8 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 			page.getByRole('textbox', { name: new RegExp(`^${EDITOR_LYRICS_LABEL}`) })
 		).toBeVisible();
 		await expect(page).toHaveURL(/\/album\/[^/]+\/[^/]+/);
-		await expect(pickedRow).toContainText('1 take · pick');
-		await expect(unpickedRow).not.toContainText('· pick');
+		await expect(pickedRow).toContainText(words['rail.trackTakesPick'](1));
+		await expect(unpickedRow).not.toContainText(words['rail.trackTakesPick'](1));
 	} finally {
 		await archiveOwnedAlbum(page.request, album.id);
 	}

@@ -25,7 +25,7 @@ import {
 	COLLECTION_MENU_SHARE_LABEL
 } from '../src/lib/constants/collection-menu';
 import { playlistEntryOverflowLabel, PLAYLISTS_PAGE_LABEL } from '../src/lib/constants/playlist';
-import { RAIL_LIBRARY_NAV_LABEL } from '../src/lib/constants/rail';
+import { words } from '../src/lib/words/en';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
@@ -364,9 +364,9 @@ async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
 // The desktop rail's library list, with its group expanded.
 async function railLibrary(page: Page, shell: Shell): Promise<Locator> {
 	const rail = await openRailNav(page, shell);
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) });
-	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
-	return rail.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL });
+	const group = rail.getByRole('button', { name: nameStartingWith(words['places.library']) });
+	if ((await group.getAttribute('aria-expanded')) === 'false') await group.click();
+	return rail.getByRole('navigation', { name: words['rail.libraryNav'] });
 }
 
 // Issue #1165: Back leaves Settings for the playlist it was opened over, with

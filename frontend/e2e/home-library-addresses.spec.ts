@@ -140,10 +140,8 @@ async function expectCurrentRailWord(
 			? page.getByRole('navigation', { name: words['phoneTabs.nav'] })
 			: await openRailNav(page, shell);
 	for (const key of shell === 'mobile' ? (['places.home', ...RAIL_WORDS] as const) : RAIL_WORDS) {
-		// The desktop Library group keeps its constant until its own words move.
-		const label = shell === 'desktop' && key === 'places.library' ? LIBRARY_PAGE_LABEL : words[key];
 		const word = rail.getByRole(shell === 'mobile' ? 'button' : 'link', {
-			name: nameStartingWith(label)
+			name: nameStartingWith(words[key])
 		});
 		if (key === current) await expect(word).toHaveAttribute('aria-current', 'page');
 		else await expect(word).not.toHaveAttribute('aria-current', 'page');
