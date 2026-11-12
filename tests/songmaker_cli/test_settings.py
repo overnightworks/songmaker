@@ -26,6 +26,9 @@ from songmaker_cli.settings import (
 
 _REMOVED_COVER_KEYS = ("COVER_EXECUTOR", "COVER_JOB_BUDGET_SECONDS", "COVER_CLI_DEADLINE_SECONDS")
 _RETIRED_KEYS = (
+    "POSTGRES_USER",
+    "POSTGRES_DB",
+    "CLAUDE_SCORING_MODEL",
     "ANTHROPIC_API_KEY",
     "XAI_API_KEY",
     "OPENAI_API_KEY",
@@ -86,13 +89,14 @@ def test_voice_capacity_defaults_are_configured() -> None:
 
 
 @pytest.mark.parametrize("key", _RETIRED_KEYS)
-def test_a_dotenv_that_still_sets_a_retired_key_builds_settings(
+def test_a_dotenv_that_still_sets_a_retired_key_raises(
     tmp_path: Path, key: str,
 ) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(f"{key}=1\n")
 
-    Settings(_env_file=env_file, **_required_settings())
+    with pytest.raises(ValidationError):
+        Settings(_env_file=env_file, **_required_settings())
 
 
 def test_settings_build_with_none_of_the_removed_cover_keys(
@@ -180,13 +184,6 @@ def test_default_settings_values() -> None:
     assert settings.max_queue_depth == 100
     assert settings.max_user_active_jobs == 10
     assert settings.max_concurrent_sessions_per_user == 10
-
-
-def test_a_dotenv_with_the_retired_scoring_model_key_still_validates(tmp_path) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text("CLAUDE_SCORING_MODEL=claude-opus-4-6\n")
-
-    Settings(_env_file=env_file, **_required_settings())
 
 
 def test_a_dotenv_with_a_misspelt_key_still_raises(tmp_path) -> None:
