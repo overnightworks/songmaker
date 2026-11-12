@@ -1,14 +1,10 @@
 import { words, type Key, type Words } from '#lib/words/en.ts';
 
-type GapKey = {
-	[K in Key]: Words[K] extends (gaps: never) => string ? K : never;
-}[Key];
-
-/** No values for a key whose entry is plain text, exactly the entry's gap names for one with gaps. */
-type Gaps<K extends Key> = [K] extends [GapKey] ? [gaps: Parameters<Words[K]>[0]] : [];
+/** What a key is read with: nothing for plain text, its gap names for a key with gaps, its count (then its gap names) for a plural family. */
+type Values<K extends Key> = Words[K] extends (...values: infer V) => string ? V : [];
 
 /** The page's one reader of its interface words: the text of a catalog key in the page's language. */
-export function pageText<K extends Key>(key: K, ...[gaps]: Gaps<K>): string {
+export function pageText<K extends Key>(key: K, ...values: Values<K>): string {
 	const entry: Words[Key] = words[key];
-	return typeof entry === 'string' ? entry : (entry as (values?: object) => string)(gaps);
+	return typeof entry === 'string' ? entry : (entry as (...values: unknown[]) => string)(...values);
 }

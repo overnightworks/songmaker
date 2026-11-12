@@ -1,6 +1,8 @@
 // Generated from the en catalog by design-catalogs. Do not edit.
 
 export const language = "en";
+const numberFormat = new Intl.NumberFormat("en");
+const pluralRules = new Intl.PluralRules("en");
 // prettier-ignore
 export type Words = {
     readonly "coverProblem.busy": string;
@@ -56,6 +58,13 @@ export type Words = {
     readonly "rail.playlistsNav": string;
     readonly "places.settings": string;
     readonly "rail.settingsNav": string;
+    readonly "rail.libraryNav": string;
+    readonly "rail.libraryLoading": string;
+    readonly "rail.retry": string;
+    readonly "rail.libraryLoadError": string;
+    readonly "rail.albumCover": (gaps: { readonly title: string }) => string;
+    readonly "rail.trackTakes": (count: number) => string;
+    readonly "rail.trackTakesPick": (count: number) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -112,5 +121,26 @@ export const words: Words = {
     "rail.playlistsNav": "Rail playlists",
     "places.settings": "Settings",
     "rail.settingsNav": "Settings sections",
+    "rail.libraryNav": "Library albums",
+    "rail.libraryLoading": "Loading albums…",
+    "rail.retry": "Retry",
+    "rail.libraryLoadError": "Couldn't load your library",
+    "rail.albumCover": (gaps: { readonly title: string }) => "Album " + gaps.title,
+    "rail.trackTakes": (count: number) => ({
+        zero: numberFormat.format(count) + " takes",
+        one: numberFormat.format(count) + " take",
+        two: numberFormat.format(count) + " takes",
+        few: numberFormat.format(count) + " takes",
+        many: numberFormat.format(count) + " takes",
+        other: numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "rail.trackTakesPick": (count: number) => ({
+        zero: numberFormat.format(count) + " takes · pick",
+        one: numberFormat.format(count) + " take · pick",
+        two: numberFormat.format(count) + " takes · pick",
+        few: numberFormat.format(count) + " takes · pick",
+        many: numberFormat.format(count) + " takes · pick",
+        other: numberFormat.format(count) + " takes · pick",
+    })[pluralRules.select(count)],
 };
 export type Key = keyof Words;
