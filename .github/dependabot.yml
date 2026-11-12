@@ -46,8 +46,8 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
-  # A major or minor move of an image (postgres 17, python 3.13) is its own change;
-  # for postgres it is a data migration.
+  # A major or minor move of an image (python 3.13) is its own change; postgres and
+  # redis follow the platform's versions (check_pinned_images_match.py --platform).
   - package-ecosystem: docker
     directories:
       - /
@@ -72,8 +72,8 @@ updates:
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
     ignore:
-      # Dependabot reads 16.15 as major.minor, so the 16.x security releases are
-      # its minor step: postgres moves within 16 (same data format), never to 17.
+      # Dependabot reads 17.11 as major.minor, so the 17.x security releases are
+      # its minor step: postgres moves within its major; a major move follows the platform.
       - dependency-name: "postgres"
         update-types: ["version-update:semver-major"]
       - dependency-name: "redis"

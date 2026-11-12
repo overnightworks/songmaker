@@ -759,10 +759,10 @@ The container images in the Dockerfiles and `docker/docker-compose.test.yml` (Py
 `uv`, PostgreSQL, Redis) and the CI references (CI's PostgreSQL
 service) are pinned by exact version and digest, as `<name>:<version>@sha256:<digest>`,
 so a rebuild cannot pull a different binary than CI tested. Dependabot moves the Dockerfile and compose pins, patch releases
-only (PostgreSQL within 16); a major or minor move of an image is its own change,
-for PostgreSQL 17 a data migration. The CI pins are moved by hand; `scripts/check_pinned_images_match.py` fails while
+only (PostgreSQL within its major); a major or minor move of an image is its own change,
+for PostgreSQL a data migration that follows the platform. The CI pins are moved by hand; `scripts/check_pinned_images_match.py` fails while
 CI's PostgreSQL or Redis service differs from the test stack's, so a Dependabot PostgreSQL or Redis bump
-needs the same edit in `.github/workflows/ci.yml`. Project tooling in CI and application dependencies in worker
+needs the same edit in `.github/workflows/ci.yml`. In CI the same script with `--platform` fails while the test stack's PostgreSQL or Redis version tag differs from the one overnightworks/platform's main runs live. Project tooling in CI and application dependencies in worker
 images are installed through `uv` with the committed `uv.lock`.
 The repository itself is installed as the trusted local editable project. All
 third-party dependencies must be wheels except `nvidia-ml-py3`, whose locked,
