@@ -314,10 +314,7 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
     pg_factory, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The advisory lock admits one of two simultaneous creates at the limit.
-
-    The session lock timeout turns a missed lock release into a test failure,
-    rather than an indefinitely blocked CI worker.
-    """
+    The lock timeout fails a missed lock release instead of blocking a CI worker."""
     monkeypatch.setenv("MAX_USER_LORAS", "1")
     get_settings.cache_clear()
     with pg_factory() as session:
@@ -325,7 +322,7 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
         session.commit()
 
     barrier = threading.Barrier(2)
-    statuses: list[int] = []
+    refusals: list[Refusal] = []
     errors: list[Exception] = []
     user = make_authenticated_user("lora-user")
 
@@ -336,9 +333,8 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
                 session.commit()
                 barrier.wait(timeout=10)
                 api_create_lora(UserLoraCreateRequest(name=name), user, session)
-                statuses.append(200)
         except Refusal as refusal:
-            statuses.append(refusal.status_code)
+            refusals.append(refusal)
         except Exception as exc:
             errors.append(exc)
 
@@ -350,7 +346,7 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
 
     assert not any(thread.is_alive() for thread in threads)
     assert not errors, f"Errors during concurrent LoRA creation: {errors}"
-    assert sorted(statuses) == [200, 409]
+    assert [refusal.status_code for refusal in refusals] == [409]
     with pg_factory() as session:
         assert session.query(UserLora).filter(UserLora.deleted_at.is_(None)).count() == 1
 
