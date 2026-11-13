@@ -45,6 +45,10 @@ def client(tmp_path: Path) -> TestClient:
         refusal.headers = {"Retry-After": "7"}
         raise refusal
 
+    @app.get("/probe/missing")
+    def missing() -> None:
+        raise Refusal(404, "takeRefusal.archived")
+
     @app.get("/probe/plain")
     def plain() -> None:
         raise HTTPException(409, "Plain sentence")
@@ -77,6 +81,19 @@ def test_a_refusal_keeps_the_headers_of_its_exception(client: TestClient) -> Non
 
     assert response.status_code == 409
     assert response.headers["Retry-After"] == "7"
+
+
+def test_a_404_refusal_keeps_its_sentence_and_its_key(client: TestClient) -> None:
+    response = client.get("/probe/missing")
+
+    assert response.status_code == 404
+    assert response.json() == refusal_body("takeRefusal.archived")
+
+
+def test_a_path_with_no_route_answers_not_found(client: TestClient) -> None:
+    response = client.get("/probe/no-such-route")
+
+    assert (response.status_code, response.json()) == (404, {"detail": "Not Found"})
 
 
 def test_an_error_that_is_no_refusal_answers_its_detail_alone(client: TestClient) -> None:
@@ -154,3 +171,26 @@ def test_an_inactive_model_is_refused_by_name_with_its_key(tmp_path: Path, pg_fa
 
     assert response.status_code == 400
     assert response.json() == refusal_body("modelRefusal.unavailable", model="sft")
+
+
+def test_the_live_app_keeps_the_sentence_of_an_api_404_and_answers_not_found_for_no_route(
+    tmp_path: Path, pg_factory
+) -> None:
+    live, _ = make_test_app(tmp_path, seed_db=_seed_song_with_archived_take, factory=pg_factory)
+    seed_session(live, OWNER)
+
+    @live.app.get("/api/probe/missing")
+    def missing() -> None:
+        raise Refusal(404, "takeRefusal.archived")
+
+    answers = [
+        live.get("/api/probe/missing"),
+        live.get("/api/songs/no-such-song"),
+        live.get("/api/no-such-route"),
+    ]
+
+    assert [(answer.status_code, answer.json()) for answer in answers] == [
+        (404, refusal_body("takeRefusal.archived")),
+        (404, {"detail": "Song not found"}),
+        (404, {"detail": "Not Found"}),
+    ]

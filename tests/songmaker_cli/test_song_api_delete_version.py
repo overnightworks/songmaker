@@ -1,4 +1,4 @@
-"""Deleting a version answers one body for a version that is missing and one the caller cannot reach."""
+"""Deleting a version answers one body for a missing version and one the caller cannot reach."""
 
 from __future__ import annotations
 

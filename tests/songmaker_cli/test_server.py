@@ -1091,12 +1091,6 @@ def test_spa_fallback_not_for_api(server_app: TestClient) -> None:
     assert resp.json()["detail"] == "Not Found"
 
 
-def test_an_api_404_keeps_the_sentence_its_route_raised(server_app: TestClient) -> None:
-    resp = server_app.get("/api/songs/no-such-song")
-    assert resp.status_code == 404
-    assert resp.json()["detail"] == "Song not found"
-
-
 def test_spa_fallback_not_for_audio(server_app: TestClient) -> None:
     resp = server_app.get("/audio/nonexistent/song.mp3")
     assert resp.status_code in (401, 404)

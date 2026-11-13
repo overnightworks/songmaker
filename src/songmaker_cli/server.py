@@ -348,17 +348,15 @@ def create_app(
 
     @app.exception_handler(404)
     async def spa_fallback(request: Request, exc: HTTPException) -> FileResponse | JSONResponse:
+        if request.url.path.startswith(("/api/", "/audio/")):
+            return not_found_response(request, exc)
         if (
-            not request.url.path.startswith("/api/")
-            and not request.url.path.startswith("/audio/")
-            and not request.url.path.startswith("/_app/")
+            not request.url.path.startswith("/_app/")
             and not request.url.path.startswith("/shared/")
             and request.url.path not in _pwa_exact_paths
             and sk_index.exists()
         ):
             return FileResponse(sk_index, media_type="text/html", headers=SPA_SHELL_HEADERS)
-        if request.url.path.startswith(("/api/", "/audio/")):
-            return not_found_response(request, exc)
         return JSONResponse({"detail": HTTP_NOT_FOUND}, status_code=404)
 
     return app
