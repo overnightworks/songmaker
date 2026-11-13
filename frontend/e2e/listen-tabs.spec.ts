@@ -4,7 +4,6 @@
 
 import { expect, test as base, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { COWRITER_COMPOSER_PLACEHOLDER } from '../src/lib/constants/cowriter';
 import { LIBRARY_SHARES_COPY_LABEL } from '../src/lib/constants/library';
 import { sameOriginHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, readSeededLibrary, runMarker } from './seed';
@@ -61,7 +60,8 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		workspace(page).getByRole('tab', { name: new RegExp(`^${words['songTabs.takes']}`) });
 	const cowriterTab = (page: Page) =>
 		workspace(page).getByRole('tab', { name: words['songTabs.cowriter'], exact: true });
-	const composer = (page: Page) => workspace(page).getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
+	const composer = (page: Page) =>
+		workspace(page).getByPlaceholder(words['cowriter.composerPlaceholder']);
 
 	test('Takes is the default tab and the header holds no Co-writer button (S9, #1927 acceptance 1)', async ({
 		page

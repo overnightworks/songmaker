@@ -4,20 +4,7 @@ import type {
 	ConversationItem,
 	SongItem
 } from '#lib/api/types.ts';
-import {
-	COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE,
-	COWRITER_ARCHIVED_CONVERSATION_TEMPLATE,
-	COWRITER_BUSY_WAIT_CEILING_SECONDS,
-	COWRITER_CONVERSATION_CONFIRM_TEMPLATE,
-	COWRITER_CONVERSATION_ROW_TEMPLATE,
-	COWRITER_CONVERSATION_SINCE_TEMPLATE,
-	COWRITER_NEW_CONVERSATION_LABEL,
-	COWRITER_MESSAGE_COUNT_TEMPLATE,
-	COWRITER_NEW_CONVERSATION_LINE,
-	COWRITER_SINGLE_MESSAGE_COUNT
-} from '#lib/constants/cowriter.ts';
-import { EDITOR_VIEW_COWRITER_LABEL } from '#lib/constants/song.ts';
-import { DAY_LABEL_TODAY } from '#lib/constants/day-label.ts';
+import { COWRITER_BUSY_WAIT_CEILING_SECONDS } from '#lib/constants/cowriter.ts';
 import { pageLanguage } from './page-language.ts';
 import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 import {
@@ -66,7 +53,7 @@ export function cowriterToolCallTarget(
 }
 
 export function cowriterThinkingLabel(): string {
-	return `${EDITOR_VIEW_COWRITER_LABEL} is thinking…`;
+	return pageText('cowriter.thinking');
 }
 
 export type CowriterProblem = ChatTurnProblemFrame['problem'];
@@ -123,7 +110,7 @@ export const COWRITER_PROBLEM_LOOKS: Record<CowriterProblem, { tone: string; ico
 function conversationDayLabel(createdAt: string, now: Date): string {
 	const started = new Date(createdAt);
 	const daysAgo = localDaysBetween(started, now);
-	if (daysAgo === 0) return DAY_LABEL_TODAY;
+	if (daysAgo === 0) return pageText('cowriter.today');
 	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) {
 		return localWeekday(started);
 	}
@@ -155,38 +142,41 @@ export function conversationLineLabel(
 	now: Date
 ): string {
 	if (conversation?.archived_at) {
-		return COWRITER_ARCHIVED_CONVERSATION_TEMPLATE.replace(
-			'{day}',
-			conversationDayLabel(conversation.created_at, now)
-		);
+		return pageText('cowriter.lineArchived', {
+			day: conversationDayLabel(conversation.created_at, now)
+		});
 	}
-	if (isNewConversation(conversation, chatHasMessages)) return COWRITER_NEW_CONVERSATION_LINE;
-	const day = conversation ? conversationDayLabel(conversation.created_at, now) : DAY_LABEL_TODAY;
-	return COWRITER_CONVERSATION_SINCE_TEMPLATE.replace('{day}', day);
+	if (isNewConversation(conversation, chatHasMessages))
+		return pageText('cowriter.newConversationLine');
+	const day = conversation
+		? conversationDayLabel(conversation.created_at, now)
+		: pageText('cowriter.today');
+	return pageText('cowriter.lineSince', { day });
 }
 
 export function conversationRowLabel(conversation: ConversationItem, now: Date): string {
 	if (conversation.title) return conversation.title;
-	if (isNewConversation(conversation)) return COWRITER_NEW_CONVERSATION_LABEL;
-	const template = conversation.archived_at
-		? COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE
-		: COWRITER_CONVERSATION_ROW_TEMPLATE;
-	return template
-		.replace('{day}', conversationDayLabel(conversation.created_at, now))
-		.replace('{time}', localClockTime(new Date(conversation.created_at)));
+	if (isNewConversation(conversation)) return pageText('cowriter.newConversation');
+	const gaps = {
+		day: conversationDayLabel(conversation.created_at, now),
+		time: localClockTime(new Date(conversation.created_at))
+	};
+	return pageText(
+		conversation.archived_at ? 'cowriter.archivedRow' : 'cowriter.conversationSince',
+		gaps
+	);
 }
 
 export function conversationMessageCountLabel(count: number): string {
-	if (count === 1) return COWRITER_SINGLE_MESSAGE_COUNT;
-	return COWRITER_MESSAGE_COUNT_TEMPLATE.replace('{count}', String(count));
+	return pageText('cowriter.messageCount', count);
 }
 
 /** The delete confirm names the conversation as its menu row does, count included. */
 export function conversationConfirmLabel(conversation: ConversationItem, now: Date): string {
-	return COWRITER_CONVERSATION_CONFIRM_TEMPLATE.replace(
-		'{name}',
-		conversationRowLabel(conversation, now)
-	).replace('{count}', conversationMessageCountLabel(conversation.message_count));
+	return pageText('cowriter.confirmRow', {
+		name: conversationRowLabel(conversation, now),
+		messages: conversationMessageCountLabel(conversation.message_count)
+	});
 }
 
 /**

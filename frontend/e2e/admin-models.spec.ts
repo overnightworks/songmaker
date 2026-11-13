@@ -19,7 +19,6 @@
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 
 import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
-import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '../src/lib/constants/cowriter';
 import {
 	MODELS_ADVANCED_LABEL,
 	MODELS_COLUMN_MODEL_LABEL,
@@ -203,9 +202,9 @@ test(
 			.click();
 		await surface.getByRole('tab', { name: words['songTabs.cowriter'], exact: true }).click();
 
-		const ask = surface.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
+		const ask = surface.getByPlaceholder(words['cowriter.composerPlaceholder']);
 		await ask.fill('Write me a second verse.');
-		await surface.getByRole('button', { name: COWRITER_SEND_LABEL, exact: true }).click();
+		await surface.getByRole('button', { name: words['cowriter.send'], exact: true }).click();
 
 		// The turn ends with the problem the service could not run it for -- never
 		// with a quiet switch to a provider that would have worked (#820, line 8; #1069).

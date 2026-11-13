@@ -2,8 +2,6 @@ export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been de
 
 export const EDITOR_QUEUED_LABEL = 'Queued';
 
-export const EDITOR_VIEW_COWRITER_LABEL = 'Co-writer';
-
 export const EDITOR_GENERATE_LABEL = 'Generate';
 export const EDITOR_GENERATE_QUEUED_TEMPLATE = `${EDITOR_QUEUED_LABEL} #{position}`;
 export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
