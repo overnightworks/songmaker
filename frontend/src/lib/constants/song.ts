@@ -22,7 +22,6 @@ export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';
 
 export const SONG_PREVIOUS_LABEL = 'Previous song';
 export const SONG_NEXT_LABEL = 'Next song';
-export const SONG_SHARE_LABEL = 'Share song';
 
 // Every row's PlayingMark reads this, in the rail, the detail views and the shared page.
 export const PLAYING_MARK_LABEL = 'Playing';

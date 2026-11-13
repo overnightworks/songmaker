@@ -2,6 +2,7 @@ import { expect, test as base, type Page } from './coverage-test';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
+import { words } from '../src/lib/words/en';
 // 1354_65_A4: playlist transport proofs use the shared-player control owner.
 import { control } from './share-album-fixtures';
 import type { SharedPlaylistPayload } from '../src/lib/api/types';
@@ -93,7 +94,11 @@ async function selected(page: Page, position: number, total = 3) {
 	await expect(page.locator('.lyrics-heading')).toHaveText(`Lyrics · ${songTitle(position)}`);
 	await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(position));
 	await expect(page.locator('.now-playing-line')).toHaveText(
-		`Now playing · ${songTitle(position)} · ${position} of ${total}`
+		words['share.nowPlaying']({
+			title: songTitle(position),
+			position: String(position),
+			total: String(total)
+		})
 	);
 }
 
@@ -129,7 +134,7 @@ async function currentCover(page: Page, cover: string) {
 	await expect(bar(page)).toBeVisible();
 	await expect(bar(page).locator('.track-cover img')).toHaveAttribute('src', cover);
 	await loadedImages(bar(page).locator('.track-cover img'));
-	await bar(page).getByRole('button', { name: 'Back to the player' }).first().click();
+	await bar(page).getByRole('button', { name: words['share.backToPlayer'] }).first().click();
 	await expect(bar(page)).toBeHidden();
 	await page.setViewportSize(viewport);
 }
@@ -178,7 +183,9 @@ for (const height of [900, 600]) {
 			if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
 			await openMock(page);
 			await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-			await expect(page.locator('.cover-line').first()).toHaveText(/^Playlist · 3 songs\b/);
+			await expect(page.locator('.cover-line').first()).toHaveText(
+				new RegExp(`^${words['share.playlistSubtitle'](3)}\\b`)
+			);
 			await expect(page.locator('.cover-art .playlist-cover-cell img')).toHaveCount(3);
 			await loadedImages(page.locator('.cover-art .playlist-cover-cell img'));
 			await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(1));
@@ -430,7 +437,9 @@ test('1374_rule_14 P10: unplayable entries are neither staged nor listed', async
 	payload.entries[0].audio_url = null;
 	await openMock(page, payload);
 	await expect(page.locator('.queue-title')).toHaveText([songTitle(2), songTitle(3)]);
-	await expect(page.locator('.cover-line').first()).toHaveText(/^Playlist · 2 songs\b/);
+	await expect(page.locator('.cover-line').first()).toHaveText(
+		new RegExp(`^${words['share.playlistSubtitle'](2)}\\b`)
+	);
 	await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(2));
 	payload.entries.forEach((entry) => {
 		entry.audio_url = null;
@@ -456,7 +465,7 @@ test('1374_rule_10 P11: missing words and failed covers recover on the next song
 	await page.route(`**${PLAYLIST_API}/album-covers/2?*`, (route) => route.fulfill({ status: 404 }));
 	await page.goto(PLAYLIST_URL);
 	await page.setViewportSize({ width: 390, height: 600 });
-	await expect(page.locator('.lyrics-empty')).toHaveText('No lyrics');
+	await expect(page.locator('.lyrics-empty')).toHaveText(words['share.noLyrics']);
 	await row(page, 1).click();
 	await scroll(page, 'bottom');
 	await expect(bar(page).locator('.track-cover')).toHaveText('J1');
@@ -555,7 +564,7 @@ for (const height of [900, 600]) {
 				bar(page)
 			);
 			expect(footer.y + footer.height).toBeLessThanOrEqual(transport.y);
-			await bar(page).getByRole('button', { name: 'Back to the player' }).first().click();
+			await bar(page).getByRole('button', { name: words['share.backToPlayer'] }).first().click();
 			await expect(control(page, 'Pause')).toBeInViewport();
 			await expect(bar(page)).toBeHidden();
 			await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -600,6 +609,8 @@ test('1374_rule_10 P14: uploaded cover mosaic revoke legal and signed-out rights
 	await realPlaylist.revoke();
 	expectedRefusals.push({ path: realPlaylist.api, statuses: [404] });
 	await page.reload();
-	await expect(page.getByRole('heading', { name: 'Playlist not found' })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: words['shareStatus.notFoundPlaylist'] })
+	).toBeVisible();
 	await expect(page.locator('.now-playing, .queue-row')).toHaveCount(0);
 });

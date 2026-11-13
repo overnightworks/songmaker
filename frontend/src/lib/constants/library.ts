@@ -15,4 +15,4 @@ export const LIBRARY_WALL_ORDER_KEYS = {
 // The listen endpoint's own ceiling (PAGE_MAX_LIMIT): Last played reads its places in pages this size.
 export const LIBRARY_WALL_PLAYED_PAGE_SIZE = 200;
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
-export const LIBRARY_SHARES_COPY_LABEL = 'Copy link';
+export const LIBRARY_SHARES_COPY_KEY = 'libraryShares.copyLink' as const satisfies Key;

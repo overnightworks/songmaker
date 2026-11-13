@@ -4,7 +4,7 @@ import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants/song.ts';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 import { shownTransportFace } from '#lib/test-utils/transport-face.ts';
 import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '#lib/constants/now-playing.ts';
-import { SHARE_NO_AUDIO_NOTICE } from '#lib/constants/share.ts';
+import { words } from '#lib/words/en.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import { trackPlaybackInfo, type SharedCollectionView } from '#lib/share/sharedCollection.ts';
@@ -417,7 +417,7 @@ describe('SharedCollection player page (#1391)', () => {
 			const target = await renderSharedSong(kind, { audioUrl: null });
 
 			expect(getByRoleButton(target, TRANSPORT_PLAY_LABEL).disabled).toBe(true);
-			expect(target.querySelector('[role="status"]')?.textContent).toBe(SHARE_NO_AUDIO_NOTICE);
+			expect(target.querySelector('[role="status"]')?.textContent).toBe(words['share.noAudio']);
 			expect(target.querySelector('.np-page-lyrics')).toBeNull();
 			expect(target.textContent).not.toContain('No lyrics');
 		}
@@ -432,9 +432,9 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		const target = await renderCollection({ tracks: [sharedTrack('first', 'Tide')] });
 		expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
 		expect(target.querySelector('.lyrics-heading')?.textContent).toBe('Lyrics · Tide');
-		expect(target.querySelector('.lyrics-empty')?.textContent).toBe('No lyrics');
+		expect(target.querySelector('.lyrics-empty')?.textContent).toBe(words['share.noLyrics']);
 		expect(target.querySelector('.now-playing-line')?.textContent).toBe(
-			'Now playing · Tide · 1 of 1'
+			words['share.nowPlaying']({ title: 'Tide', position: '1', total: '1' })
 		);
 		expect(audioPlayer.current).toBeNull();
 	});
@@ -463,7 +463,7 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		async ({ tracks }) => {
 			const target = await renderCollection({ tracks });
 			expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
-			expect(target.querySelector('[role="status"]')?.textContent).toBe(SHARE_NO_AUDIO_NOTICE);
+			expect(target.querySelector('[role="status"]')?.textContent).toBe(words['share.noAudio']);
 			expect(target.textContent).toContain('KI-generiert');
 			expect(target.querySelector('.now-playing, .np-lyrics, .np-queue')).toBeNull();
 			expect(audioPlayer.current).toBeNull();
@@ -509,7 +509,7 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		async (stacked) => {
 			stubLayout(stacked);
 			const target = await renderCollection({ tracks: [sharedTrack('first', 'Tide')] });
-			expect(target.querySelector('.queue-heading')?.textContent).toBe('Songs');
+			expect(target.querySelector('.queue-heading')?.textContent).toBe(words['share.songs']);
 			expect(
 				target.querySelector('.queue-take, .from-link, .go-to-song, [data-icon="pencil"]')
 			).toBeNull();
@@ -532,7 +532,7 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 		expect(target.querySelector('.queue-row.current .queue-title')?.textContent).toBe('Ebb');
 		expect(getByRoleButton(target, TRANSPORT_PAUSE_LABEL)).toBeDefined();
 		expect(target.querySelector('.now-playing-line')?.textContent).toBe(
-			'Now playing · Ebb · 2 of 2'
+			words['share.nowPlaying']({ title: 'Ebb', position: '2', total: '2' })
 		);
 		expect(target.querySelector('.np-page-lyrics')?.textContent).toContain('Ebb words');
 		target.querySelector<HTMLButtonElement>('.queue-row.current')?.click();
@@ -600,7 +600,9 @@ describe('Shared playlist metadata and artwork', () => {
 			})
 		);
 		const target = await renderShare({ kind: 'playlist', tracks });
-		expect(target.querySelector('.cover-line')?.textContent).toMatch(/^Playlist · 3 songs\b/);
+		expect(target.querySelector('.cover-line')?.textContent).toMatch(
+			new RegExp(`^${words['share.playlistSubtitle'](3)}\\b`)
+		);
 		const rows = () => Array.from(target.querySelectorAll<HTMLButtonElement>('.queue-row'));
 		const assertLabels = () => {
 			for (const row of rows()) {

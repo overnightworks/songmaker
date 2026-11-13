@@ -11,15 +11,7 @@
 		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
 	} from '#lib/constants/now-playing.ts';
-	import {
-		SHARE_SONGS_HEADING,
-		SHARE_BACK_TO_PLAYER_LABEL,
-		shareAlbumSubtitle,
-		sharePlaylistSubtitle,
-		shareNowPlayingLine,
-		SHARE_NO_AUDIO_NOTICE,
-		SHARE_NOW_PLAYING_NO_LYRICS
-	} from '#lib/constants/share.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { formatTime, titleInitials } from '#lib/utils/format.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import PlaylistCover from '#lib/components/PlaylistCover.svelte';
@@ -27,6 +19,7 @@
 	import NowPlayingFrame from '#lib/components/NowPlayingFrame.svelte';
 	import NowPlayingQueue from '#lib/components/NowPlayingQueue.svelte';
 	import AiNotice from '#lib/components/AiNotice.svelte';
+	import type { SharedCollectionKind } from '#lib/api/shared.ts';
 	import ShareStatus from '#lib/components/ShareStatus.svelte';
 	import SharedFooter from './SharedFooter.svelte';
 
@@ -35,7 +28,7 @@
 	interface Props {
 		loading: boolean;
 		errorKind: 'missing' | 'error' | null;
-		resource: string;
+		resource: SharedCollectionKind;
 		onretry?: () => void;
 		view: SharedCollectionView | null;
 		fetchStream: ShareStreamFetcher | null;
@@ -74,13 +67,15 @@
 					title: view.title,
 					subtitle:
 						view.kind === 'playlist'
-							? sharePlaylistSubtitle(tracks.length)
-							: shareAlbumSubtitle(view.artist),
-					nowPlaying: shareNowPlayingLine(
-						stagedTrack.title,
-						Math.max(0, playback.queue.currentIndex) + 1,
-						tracks.length
-					)
+							? pageText('share.playlistSubtitle', tracks.length)
+							: view.artist
+								? pageText('share.albumSubtitle', { artist: view.artist })
+								: pageText('share.albumSubtitleNoArtist'),
+					nowPlaying: pageText('share.nowPlaying', {
+						title: stagedTrack.title,
+						position: String(Math.max(0, playback.queue.currentIndex) + 1),
+						total: String(tracks.length)
+					})
 				}
 			: undefined
 	);
@@ -162,7 +157,7 @@
 		queue={playback.queue}
 		contextLabel={view?.title ?? null}
 		currentSongTitle={stagedTrack?.title ?? ''}
-		heading={SHARE_SONGS_HEADING}
+		heading={pageText('share.songs')}
 		{subtitleByEntryId}
 		onJump={(index) => {
 			if (index === playback.queue.currentIndex && playback.currentTrack)
@@ -217,16 +212,16 @@
 			onTogglePlay={() => playback.play()}
 			onSeek={(seconds) => playback.seek(seconds)}
 			ended={playback.ended}
-			unplayableNotice={tracks.length === 0 ? SHARE_NO_AUDIO_NOTICE : null}
+			unplayableNotice={tracks.length === 0 ? pageText('share.noAudio') : null}
 			showTakeLabel={false}
-			lyricsEmptyLabel={SHARE_NOW_PLAYING_NO_LYRICS}
+			lyricsEmptyLabel={pageText('share.noLyrics')}
 			lyricsCues={stagedTrack?.cues ?? null}
 			lyricsText={stagedTrack?.lyrics ?? null}
 		/>
 	{:else if view}
 		<h1 class="header-title">{view.title}</h1>
 		<p class="no-audio-mark"><AiNotice look="badge" /></p>
-		<p class="no-audio" role="status">{SHARE_NO_AUDIO_NOTICE}</p>
+		<p class="no-audio" role="status">{pageText('share.noAudio')}</p>
 	{/if}
 
 	<SharedFooter />
@@ -251,7 +246,7 @@
 		onOpenNowPlaying={scrollBackToPlayer}
 		nowPlayingDisabled={false}
 		{mobileTransport}
-		nowPlayingTargetLabel={SHARE_BACK_TO_PLAYER_LABEL}
+		nowPlayingTargetLabel={pageText('share.backToPlayer')}
 		onReturnToPlayer={scrollBackToPlayer}
 	/>
 {/if}

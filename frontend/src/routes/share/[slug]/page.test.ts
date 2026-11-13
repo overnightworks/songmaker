@@ -1,4 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
+import { words } from '#lib/words/en.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type {
 	QueueStreamManifest,
@@ -185,7 +186,9 @@ describe('shared album page', () => {
 		document.body.appendChild(target);
 		component = mount(Page, { target });
 
-		await vi.waitFor(() => expect(target.querySelector('h1')?.textContent).toBe('Album not found'));
+		await vi.waitFor(() =>
+			expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.notFoundAlbum'])
+		);
 		expect(target.textContent).toContain('This share link is invalid or was removed.');
 		expect(target.querySelector('.now-playing')).toBeNull();
 		expect(target.textContent).not.toContain('shared-album');
@@ -211,7 +214,7 @@ describe('shared album page', () => {
 		mockFetch.mockReturnValueOnce(new Promise((resolve) => (finishRetry = resolve)));
 		target.querySelector<HTMLButtonElement>('button')?.click();
 		await tick();
-		expect(target.querySelector('h1')?.textContent).toBe('Loading album');
+		expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.loadingAlbum']);
 
 		finishRetry?.({
 			ok: true,
@@ -237,7 +240,7 @@ describe('shared album page', () => {
 		document.body.appendChild(target);
 		component = mount(Page, { target });
 		await tick();
-		expect(target.querySelector('h1')?.textContent).toBe('Loading album');
+		expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.loadingAlbum']);
 
 		await vi.advanceTimersByTimeAsync(30_000);
 

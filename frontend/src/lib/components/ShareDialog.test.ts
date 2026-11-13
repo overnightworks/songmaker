@@ -1,4 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
+import { words } from '#lib/words/en.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
 import ShareDialog from './ShareDialog.svelte';
@@ -109,7 +110,7 @@ describeBackClosesOverlay({
 	afterBack: () => expect(shareWarning.closes).toBe(1),
 	closeWays: [
 		{
-			way: 'Got it',
+			way: words['shareDialog.close'],
 			close: (target) => target.querySelector<HTMLButtonElement>('.confirm-btn')?.click()
 		},
 		{

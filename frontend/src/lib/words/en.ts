@@ -785,6 +785,54 @@ export type Words = {
     readonly "memory.save": string;
     readonly "memory.saving": string;
     readonly "cowriter.emptyHint": string;
+    readonly "shareStatus.loadingAlbum": string;
+    readonly "shareStatus.loadingPlaylist": string;
+    readonly "shareStatus.loadingSong": string;
+    readonly "shareStatus.loadingTake": string;
+    readonly "shareStatus.notFoundAlbum": string;
+    readonly "shareStatus.notFoundPlaylist": string;
+    readonly "shareStatus.notFoundSong": string;
+    readonly "shareStatus.notFoundTake": string;
+    readonly "shareStatus.errorAlbum": string;
+    readonly "shareStatus.errorPlaylist": string;
+    readonly "shareStatus.errorSong": string;
+    readonly "shareStatus.errorTake": string;
+    readonly "shareStatus.errorBodyAlbum": string;
+    readonly "shareStatus.errorBodyPlaylist": string;
+    readonly "shareStatus.errorBodySong": string;
+    readonly "shareStatus.errorBodyTake": string;
+    readonly "shareStatus.invalidLink": string;
+    readonly "shareStatus.openApp": (gaps: { readonly app: string }) => string;
+    readonly "shareStatus.retry": string;
+    readonly "shareAlbumPage.documentTitle": (gaps: { readonly app: string; readonly artist: string; readonly title: string }) => string;
+    readonly "shareAlbumPage.fallbackTitle": (gaps: { readonly app: string }) => string;
+    readonly "sharePlaylistPage.documentTitle": (gaps: { readonly app: string; readonly title: string }) => string;
+    readonly "sharePlaylistPage.fallbackTitle": (gaps: { readonly app: string }) => string;
+    readonly "shareSongPage.documentTitle": (gaps: { readonly app: string; readonly artist: string; readonly title: string }) => string;
+    readonly "shareSongPage.fallbackTitle": (gaps: { readonly app: string }) => string;
+    readonly "shareTakePage.documentTitle": (gaps: { readonly app: string; readonly number: string; readonly title: string }) => string;
+    readonly "shareTakePage.fallbackTitle": (gaps: { readonly app: string }) => string;
+    readonly "share.nowPlaying": (gaps: { readonly position: string; readonly title: string; readonly total: string }) => string;
+    readonly "share.albumSubtitle": (gaps: { readonly artist: string }) => string;
+    readonly "share.albumSubtitleNoArtist": string;
+    readonly "share.playlistSubtitle": (count: number) => string;
+    readonly "share.noLyrics": string;
+    readonly "share.noAudio": string;
+    readonly "share.backToPlayer": string;
+    readonly "share.songs": string;
+    readonly "shareButton.copyFailedToast": string;
+    readonly "shareButton.copiedToast": string;
+    readonly "shareButton.unsharedToast": string;
+    readonly "shareButton.failedToast": string;
+    readonly "shareButton.fallbackTitle": string;
+    readonly "shareButton.songLabel": string;
+    readonly "shareToggle.sharedTooltip": (gaps: { readonly path: string }) => string;
+    readonly "shareLink.copiedToast": string;
+    readonly "shareLink.copyFailedToast": string;
+    readonly "shareDialog.title": string;
+    readonly "shareDialog.intro": string;
+    readonly "shareDialog.close": string;
+    readonly "libraryShares.copyLink": string;
     readonly "referenceRefusal.notFound": string;
     readonly "referenceRefusal.noFilename": string;
     readonly "referenceRefusal.filenameInvalid": string;
@@ -1789,6 +1837,61 @@ export const words: Words = {
     "memory.save": "Save",
     "memory.saving": "Saving...",
     "cowriter.emptyHint": "I can see the song you have open. Tell me what you want to work on, or ask me to browse your other songs — I'll pull them up as needed.",
+    "shareStatus.loadingAlbum": "Loading album",
+    "shareStatus.loadingPlaylist": "Loading playlist",
+    "shareStatus.loadingSong": "Loading song",
+    "shareStatus.loadingTake": "Loading take",
+    "shareStatus.notFoundAlbum": "Album not found",
+    "shareStatus.notFoundPlaylist": "Playlist not found",
+    "shareStatus.notFoundSong": "Song not found",
+    "shareStatus.notFoundTake": "Take not found",
+    "shareStatus.errorAlbum": "Could not load this album",
+    "shareStatus.errorPlaylist": "Could not load this playlist",
+    "shareStatus.errorSong": "Could not load this song",
+    "shareStatus.errorTake": "Could not load this take",
+    "shareStatus.errorBodyAlbum": "Something went wrong while loading this album.",
+    "shareStatus.errorBodyPlaylist": "Something went wrong while loading this playlist.",
+    "shareStatus.errorBodySong": "Something went wrong while loading this song.",
+    "shareStatus.errorBodyTake": "Something went wrong while loading this take.",
+    "shareStatus.invalidLink": "This share link is invalid or was removed.",
+    "shareStatus.openApp": (gaps: { readonly app: string }) => "Open " + gaps.app,
+    "shareStatus.retry": "Try again",
+    "shareAlbumPage.documentTitle": (gaps: { readonly app: string; readonly artist: string; readonly title: string }) => gaps.title + " — " + gaps.artist + " | " + gaps.app,
+    "shareAlbumPage.fallbackTitle": (gaps: { readonly app: string }) => "Shared album | " + gaps.app,
+    "sharePlaylistPage.documentTitle": (gaps: { readonly app: string; readonly title: string }) => gaps.title + " | " + gaps.app,
+    "sharePlaylistPage.fallbackTitle": (gaps: { readonly app: string }) => "Shared playlist | " + gaps.app,
+    "shareSongPage.documentTitle": (gaps: { readonly app: string; readonly artist: string; readonly title: string }) => gaps.title + " — " + gaps.artist + " | " + gaps.app,
+    "shareSongPage.fallbackTitle": (gaps: { readonly app: string }) => "Shared song | " + gaps.app,
+    "shareTakePage.documentTitle": (gaps: { readonly app: string; readonly number: string; readonly title: string }) => "Take " + gaps.number + " — " + gaps.title + " | " + gaps.app,
+    "shareTakePage.fallbackTitle": (gaps: { readonly app: string }) => "Shared take | " + gaps.app,
+    "share.nowPlaying": (gaps: { readonly position: string; readonly title: string; readonly total: string }) => "Now playing · " + gaps.title + " · " + gaps.position + " of " + gaps.total,
+    "share.albumSubtitle": (gaps: { readonly artist: string }) => gaps.artist + " · Album",
+    "share.albumSubtitleNoArtist": "Album",
+    "share.playlistSubtitle": (count: number) => ({
+        zero: "Playlist · " + numberFormat.format(count) + " songs",
+        one: "Playlist · " + numberFormat.format(count) + " song",
+        two: "Playlist · " + numberFormat.format(count) + " songs",
+        few: "Playlist · " + numberFormat.format(count) + " songs",
+        many: "Playlist · " + numberFormat.format(count) + " songs",
+        other: "Playlist · " + numberFormat.format(count) + " songs",
+    })[pluralRules.select(count)],
+    "share.noLyrics": "No lyrics",
+    "share.noAudio": "No audio available yet.",
+    "share.backToPlayer": "Back to the player",
+    "share.songs": "Songs",
+    "shareButton.copyFailedToast": "Shared — copy the link manually, clipboard write failed",
+    "shareButton.copiedToast": "Link copied to clipboard",
+    "shareButton.unsharedToast": "Sharing disabled",
+    "shareButton.failedToast": "Share failed",
+    "shareButton.fallbackTitle": "Share",
+    "shareButton.songLabel": "Share song",
+    "shareToggle.sharedTooltip": (gaps: { readonly path: string }) => "Shared: " + gaps.path,
+    "shareLink.copiedToast": "Link copied",
+    "shareLink.copyFailedToast": "Copy failed",
+    "shareDialog.title": "Missing from the share page",
+    "shareDialog.intro": "These songs have no playable take and won't appear when shared:",
+    "shareDialog.close": "Got it",
+    "libraryShares.copyLink": "Copy link",
     "referenceRefusal.notFound": "Not Found",
     "referenceRefusal.noFilename": "No filename provided",
     "referenceRefusal.filenameInvalid": "Invalid filename.",

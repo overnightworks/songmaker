@@ -1,4 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
+import { words } from '#lib/words/en.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest } from '#lib/api/types.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
@@ -149,7 +150,7 @@ describe('shared playlist page', () => {
 		component = mount(Page, { target });
 
 		await vi.waitFor(() =>
-			expect(target.querySelector('h1')?.textContent).toBe('Playlist not found')
+			expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.notFoundPlaylist'])
 		);
 		expect(target.textContent).toContain('This share link is invalid or was removed.');
 		expect(target.querySelector('.now-playing')).toBeNull();
