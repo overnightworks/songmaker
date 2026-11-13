@@ -3236,3 +3236,7 @@ msgstr ""
 msgctxt "memory.saving"
 msgid "Saving..."
 msgstr ""
+
+msgctxt "cowriter.emptyHint"
+msgid "I can see the song you have open. Tell me what you want to work on, or ask me to browse your other songs — I'll pull them up as needed."
+msgstr ""

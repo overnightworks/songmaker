@@ -1003,10 +1003,7 @@
 	{:else}
 		<div class="messages" bind:this={container} onscroll={rememberReadingPlace}>
 			{#if messages.length === 0}
-				<p class="empty-hint">
-					I can see the song you have open. Tell me what you want to work on, or ask me to browse
-					your other songs — I'll pull them up as needed.
-				</p>
+				<p class="empty-hint">{pageText('cowriter.emptyHint')}</p>
 			{/if}
 			{#each messages as msg, i (i)}
 				<div

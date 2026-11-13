@@ -784,6 +784,7 @@ export type Words = {
     readonly "memory.albumField": string;
     readonly "memory.save": string;
     readonly "memory.saving": string;
+    readonly "cowriter.emptyHint": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -1769,5 +1770,6 @@ export const words: Words = {
     "memory.albumField": "Album notes",
     "memory.save": "Save",
     "memory.saving": "Saving...",
+    "cowriter.emptyHint": "I can see the song you have open. Tell me what you want to work on, or ask me to browse your other songs — I'll pull them up as needed.",
 };
 export type Key = keyof Words;

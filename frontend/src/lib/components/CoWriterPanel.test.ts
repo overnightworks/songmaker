@@ -233,6 +233,11 @@ describe('CoWriterPanel', () => {
 		expect(target.querySelector('.app-bar')).toBeNull();
 	});
 
+	it('greets a new conversation with the catalog hint', async () => {
+		const target = await render();
+		expect(target.querySelector('.empty-hint')?.textContent).toBe(words['cowriter.emptyHint']);
+	});
+
 	it('keeps focus in the composer when Send is pressed, so the bars coming back cannot move Send from under a phone tap', async () => {
 		const target = await render();
 		const pressSend = new MouseEvent('mousedown', { bubbles: true, cancelable: true });

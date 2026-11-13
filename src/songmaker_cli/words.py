@@ -786,6 +786,7 @@ type Key = Literal[
     'memory.albumField',
     'memory.save',
     'memory.saving',
+    'cowriter.emptyHint',
 ]
 type Language = Literal[
     'en',
@@ -1671,6 +1672,7 @@ WORDS: Mapping[Language, Mapping[Key, str | Mapping[Category, str]]] = {
         'memory.albumField': 'Album notes',
         'memory.save': 'Save',
         'memory.saving': 'Saving...',
+        'cowriter.emptyHint': "I can see the song you have open. Tell me what you want to work on, or ask me to browse your other songs — I'll pull them up as needed.",
     },
 }
 
