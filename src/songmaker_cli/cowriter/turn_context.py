@@ -39,6 +39,7 @@ from songmaker_cli.db.queries.memory import (
 from songmaker_cli.db.queries.sharing import is_playable_take, presented_take
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.db.queries.versions import get_version
+from songmaker_cli.refusals import Refusal
 
 
 @dataclass(frozen=True)
@@ -290,12 +291,9 @@ def resolve_take_block(
             session, current_generation_id, user, require_owner=True,
         )
         if current_song is None or generation.song_id != current_song.id:
-            raise HTTPException(
-                422,
-                "Generation does not belong to the current song",
-            )
+            raise Refusal(422, "cowriterRefusal.takeNotInSong")
         if not is_playable_take(generation):
-            raise HTTPException(422, "Generation is not playable")
+            raise Refusal(422, "takeRefusal.notPlayable")
         return TurnContextBlock(TURN_BLOCK_CURRENT_TAKE, _format_take(generation))
 
     if current_song is None:

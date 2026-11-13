@@ -1314,3 +1314,139 @@ msgstr ""
 msgctxt "homeWrite.openInEditor"
 msgid "Open {title} in the song editor"
 msgstr ""
+
+msgctxt "voiceRefusal.deleted"
+msgid "LoRA is deleted"
+msgstr ""
+
+msgctxt "voiceRefusal.modifyDuringTraining"
+msgid "LoRA is {status} — cannot modify during training"
+msgstr ""
+
+msgctxt "voiceRefusal.deleteDuringTraining"
+msgid "LoRA is {status} — cannot delete during training"
+msgstr ""
+
+msgctxt "voiceRefusal.alreadyTraining"
+msgid "LoRA is {status} — already training"
+msgstr ""
+
+msgctxt "voiceRefusal.notReady"
+msgid "LoRA is not ready (status={status})"
+msgstr ""
+
+msgctxt "voiceRefusal.nameRequired"
+msgid "Name is required"
+msgstr ""
+
+msgctxt "voiceRefusal.limit"
+msgid "Could not create voice\nYou have reached the limit of {limit} voices. Delete a voice before creating another."
+msgstr ""
+
+msgctxt "voiceRefusal.slugConflict"
+msgid "LoRA slug conflict for '{name}'"
+msgstr ""
+
+msgctxt "voiceRefusal.sampleLimit"
+msgid "LoRA already has the maximum of {maximum} samples"
+msgstr ""
+
+msgctxt "voiceRefusal.captionRequired"
+msgid "Caption is required"
+msgstr ""
+
+msgctxt "voiceRefusal.lyricsRequired"
+msgid "Lyrics are required"
+msgstr ""
+
+msgctxt "voiceRefusal.captionEmpty"
+msgid "Caption cannot be empty"
+msgstr ""
+
+msgctxt "voiceRefusal.lyricsEmpty"
+msgid "Lyrics cannot be empty"
+msgstr ""
+
+msgctxt "voiceRefusal.unsupportedFormat"
+msgid "Unsupported audio format '{extension}'. Accepted: {accepted}"
+msgstr ""
+
+msgctxt "voiceRefusal.fileTooLarge"
+msgid "Audio file too large (max {maxMb}MB)"
+msgstr ""
+
+msgctxt "voiceRefusal.fileEmpty"
+msgid "Audio file is empty"
+msgstr ""
+
+msgctxt "voiceRefusal.tooFewSamples"
+msgid "At least {minimum} samples required for training (have {have})"
+msgstr ""
+
+msgctxt "voiceRefusal.samplesIncomplete"
+msgid "All samples must have non-empty caption and lyrics before training"
+msgstr ""
+
+msgctxt "voiceRefusal.trainingQueueFull"
+msgid "Training queue is full\n{waiting} trainings are already waiting. Try again when one training starts or finishes."
+msgstr ""
+
+msgctxt "generationRefusal.sourceNoAudio"
+msgid "Source generation has no audio file"
+msgstr ""
+
+msgctxt "generationRefusal.ffmpegMissing"
+msgid "ffmpeg is not available"
+msgstr ""
+
+msgctxt "generationRefusal.wavConversionFailed"
+msgid "Failed to convert MP3 to WAV"
+msgstr ""
+
+msgctxt "generationRefusal.noLinkedVersion"
+msgid "Generation has no linked version"
+msgstr ""
+
+msgctxt "generationRefusal.needsLyricsAndPrompt"
+msgid "Song needs lyrics and a style prompt before generating"
+msgstr ""
+
+msgctxt "generationRefusal.repaintRange"
+msgid "repainting_start must be less than repainting_end"
+msgstr ""
+
+msgctxt "generationRefusal.workerNotRunning"
+msgid "Worker not running"
+msgstr ""
+
+msgctxt "jobRefusal.queueUnavailable"
+msgid "Job queue unavailable"
+msgstr ""
+
+msgctxt "jobRefusal.queueFull"
+msgid "Queue is full. Try again later."
+msgstr ""
+
+msgctxt "jobRefusal.activeJob"
+msgid "You already have an active job. Wait for it to finish."
+msgstr ""
+
+msgctxt "jobRefusal.hourlyLimit"
+msgid "Rate limit reached ({limit}/{jobType}s per hour)."
+msgstr ""
+
+msgctxt "cowriterRefusal.browserLogin"
+msgid "The co-writer needs a browser login."
+msgstr ""
+
+msgctxt "cowriterRefusal.turnRunning"
+msgid "A co-writer reply is still being written"
+msgstr ""
+
+msgctxt "cowriterRefusal.takeNotInSong"
+msgid "Generation does not belong to the current song"
+msgstr ""
+
+msgctxt "takeRefusal.notPlayable"
+msgid "Generation is not playable"
+msgstr ""

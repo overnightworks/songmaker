@@ -16,12 +16,14 @@ from support.lora_api_world import (
     make_take,
     sample_routes,
 )
-from support.web_app import make_authenticated_user, make_router_app, web_client
+from support.web_app import make_authenticated_user, make_router_app, refusal_body, web_client
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
+    USER_LORA_AUDIO_EXTENSIONS,
     USER_LORA_MAX_SAMPLES,
+    USER_LORA_MIN_SAMPLES_FOR_TRAINING,
     USER_LORA_SAMPLE_MAX_BYTES,
     LoraStatus,
 )
@@ -34,6 +36,7 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora, update_user_lora
 from songmaker_cli.job_types import JobStatus
+from songmaker_cli.settings import get_settings
 
 
 @contextmanager
@@ -80,7 +83,10 @@ def test_create_lora_returns_named_voice_limit_error(
     assert response.json() == {
         "detail": "Could not create voice\n"
         "You have reached the limit of 1 voices. Delete a voice before creating another.",
-        "reason": "voice_limit",
+        "message": {
+            "key": "voiceRefusal.limit",
+            "values": {"limit": str(get_settings().max_user_loras)},
+        },
     }
 
 
@@ -164,6 +170,7 @@ def test_create_lora_integrity_error(
     ):
         resp = client.post("/api/loras", json={"name": "Boom"})
     assert resp.status_code == 409
+    assert resp.json() == refusal_body("voiceRefusal.slugConflict", name="Boom")
 
 
 # ── List / Get ────────────────────────────────────────────────────────
@@ -318,6 +325,9 @@ def test_delete_lora_rejected_if_active(
 
     resp = client.delete(f"/api/loras/{lora_id}")
     assert resp.status_code == 409
+    assert resp.json() == refusal_body(
+        "voiceRefusal.deleteDuringTraining", status=LoraStatus.TRAINING,
+    )
 
 
 def test_delete_lora_missing_returns_404(client_a: TestClient) -> None:
@@ -378,6 +388,7 @@ def test_add_sample_from_unplayable_take_is_rejected(
 
     assert response.status_code == 422
     assert response.json()["detail"] == "Generation is not playable"
+    assert response.json() == refusal_body("takeRefusal.notPlayable")
 
 
 def test_add_sample_from_missing_take_returns_404(
@@ -584,6 +595,11 @@ def test_add_sample_rejects_wrong_extension(
         files={"audio": ("clip.ogg", b"oggg", "audio/ogg")},
     )
     assert resp.status_code == 422
+    assert resp.json() == refusal_body(
+        "voiceRefusal.unsupportedFormat",
+        extension=".ogg",
+        accepted=", ".join(sorted(USER_LORA_AUDIO_EXTENSIONS)),
+    )
 
 
 def test_add_sample_rejects_empty_filename(
@@ -675,6 +691,9 @@ def test_add_sample_rejects_when_max_reached(
     resp = post_sample(client, lora_id, take_id)
 
     assert resp.status_code == 409
+    assert resp.json() == refusal_body(
+        "voiceRefusal.sampleLimit", maximum=str(USER_LORA_MAX_SAMPLES),
+    )
     with ctx.db() as session:
         assert (
             session.query(UserLoraSample).filter_by(user_lora_id=lora_id).count()
@@ -697,6 +716,9 @@ def test_add_sample_rejected_on_active_status(
         files={"audio": ("c.wav", b"abc" * 50, "audio/wav")},
     )
     assert resp.status_code == 409
+    assert resp.json() == refusal_body(
+        "voiceRefusal.modifyDuringTraining", status=LoraStatus.TRAINING,
+    )
 
 
 def test_add_sample_rejected_on_deleted_lora(
@@ -715,6 +737,7 @@ def test_add_sample_rejected_on_deleted_lora(
         files={"audio": ("c.wav", b"abc" * 50, "audio/wav")},
     )
     assert resp.status_code == 409
+    assert resp.json() == refusal_body("voiceRefusal.deleted")
 
 
 def test_add_sample_rollback_on_write_failure(
@@ -1046,6 +1069,9 @@ def test_train_rejects_below_min_samples(
 
     resp = client.post(f"/api/loras/{lora_id}/train")
     assert resp.status_code == 422
+    assert resp.json() == refusal_body(
+        "voiceRefusal.tooFewSamples", minimum=str(USER_LORA_MIN_SAMPLES_FOR_TRAINING), have="1",
+    )
 
 
 def test_train_rejects_when_caption_or_lyrics_empty(
@@ -1074,6 +1100,9 @@ def test_train_rejects_when_already_active(
 
     resp = client.post(f"/api/loras/{lora_id}/train")
     assert resp.status_code == 409
+    assert resp.json() == refusal_body(
+        "voiceRefusal.alreadyTraining", status=LoraStatus.TRAINING,
+    )
 
 
 def test_train_returns_named_training_queue_limit_error(
@@ -1095,7 +1124,10 @@ def test_train_returns_named_training_queue_limit_error(
     assert response.json() == {
         "detail": "Training queue is full\n"
         "1 trainings are already waiting. Try again when one training starts or finishes.",
-        "reason": "training_queue_full",
+        "message": {
+            "key": "voiceRefusal.trainingQueueFull",
+            "values": {"waiting": str(get_settings().max_queued_lora_training_jobs)},
+        },
     }
 
 

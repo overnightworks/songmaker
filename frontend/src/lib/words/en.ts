@@ -323,6 +323,40 @@ export type Words = {
     readonly "playlistPicker.createFailed": string;
     readonly "songRow.openInEditor": (gaps: { readonly title: string }) => string;
     readonly "homeWrite.openInEditor": (gaps: { readonly title: string }) => string;
+    readonly "voiceRefusal.deleted": string;
+    readonly "voiceRefusal.modifyDuringTraining": (gaps: { readonly status: string }) => string;
+    readonly "voiceRefusal.deleteDuringTraining": (gaps: { readonly status: string }) => string;
+    readonly "voiceRefusal.alreadyTraining": (gaps: { readonly status: string }) => string;
+    readonly "voiceRefusal.notReady": (gaps: { readonly status: string }) => string;
+    readonly "voiceRefusal.nameRequired": string;
+    readonly "voiceRefusal.limit": (gaps: { readonly limit: string }) => string;
+    readonly "voiceRefusal.slugConflict": (gaps: { readonly name: string }) => string;
+    readonly "voiceRefusal.sampleLimit": (gaps: { readonly maximum: string }) => string;
+    readonly "voiceRefusal.captionRequired": string;
+    readonly "voiceRefusal.lyricsRequired": string;
+    readonly "voiceRefusal.captionEmpty": string;
+    readonly "voiceRefusal.lyricsEmpty": string;
+    readonly "voiceRefusal.unsupportedFormat": (gaps: { readonly accepted: string; readonly extension: string }) => string;
+    readonly "voiceRefusal.fileTooLarge": (gaps: { readonly maxMb: string }) => string;
+    readonly "voiceRefusal.fileEmpty": string;
+    readonly "voiceRefusal.tooFewSamples": (gaps: { readonly have: string; readonly minimum: string }) => string;
+    readonly "voiceRefusal.samplesIncomplete": string;
+    readonly "voiceRefusal.trainingQueueFull": (gaps: { readonly waiting: string }) => string;
+    readonly "generationRefusal.sourceNoAudio": string;
+    readonly "generationRefusal.ffmpegMissing": string;
+    readonly "generationRefusal.wavConversionFailed": string;
+    readonly "generationRefusal.noLinkedVersion": string;
+    readonly "generationRefusal.needsLyricsAndPrompt": string;
+    readonly "generationRefusal.repaintRange": string;
+    readonly "generationRefusal.workerNotRunning": string;
+    readonly "jobRefusal.queueUnavailable": string;
+    readonly "jobRefusal.queueFull": string;
+    readonly "jobRefusal.activeJob": string;
+    readonly "jobRefusal.hourlyLimit": (gaps: { readonly jobType: string; readonly limit: string }) => string;
+    readonly "cowriterRefusal.browserLogin": string;
+    readonly "cowriterRefusal.turnRunning": string;
+    readonly "cowriterRefusal.takeNotInSong": string;
+    readonly "takeRefusal.notPlayable": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -714,5 +748,39 @@ export const words: Words = {
     "playlistPicker.createFailed": "Failed to create playlist",
     "songRow.openInEditor": (gaps: { readonly title: string }) => "Open " + gaps.title + " in the song editor",
     "homeWrite.openInEditor": (gaps: { readonly title: string }) => "Open " + gaps.title + " in the song editor",
+    "voiceRefusal.deleted": "LoRA is deleted",
+    "voiceRefusal.modifyDuringTraining": (gaps: { readonly status: string }) => "LoRA is " + gaps.status + " — cannot modify during training",
+    "voiceRefusal.deleteDuringTraining": (gaps: { readonly status: string }) => "LoRA is " + gaps.status + " — cannot delete during training",
+    "voiceRefusal.alreadyTraining": (gaps: { readonly status: string }) => "LoRA is " + gaps.status + " — already training",
+    "voiceRefusal.notReady": (gaps: { readonly status: string }) => "LoRA is not ready (status=" + gaps.status + ")",
+    "voiceRefusal.nameRequired": "Name is required",
+    "voiceRefusal.limit": (gaps: { readonly limit: string }) => "Could not create voice\nYou have reached the limit of " + gaps.limit + " voices. Delete a voice before creating another.",
+    "voiceRefusal.slugConflict": (gaps: { readonly name: string }) => "LoRA slug conflict for '" + gaps.name + "'",
+    "voiceRefusal.sampleLimit": (gaps: { readonly maximum: string }) => "LoRA already has the maximum of " + gaps.maximum + " samples",
+    "voiceRefusal.captionRequired": "Caption is required",
+    "voiceRefusal.lyricsRequired": "Lyrics are required",
+    "voiceRefusal.captionEmpty": "Caption cannot be empty",
+    "voiceRefusal.lyricsEmpty": "Lyrics cannot be empty",
+    "voiceRefusal.unsupportedFormat": (gaps: { readonly accepted: string; readonly extension: string }) => "Unsupported audio format '" + gaps.extension + "'. Accepted: " + gaps.accepted,
+    "voiceRefusal.fileTooLarge": (gaps: { readonly maxMb: string }) => "Audio file too large (max " + gaps.maxMb + "MB)",
+    "voiceRefusal.fileEmpty": "Audio file is empty",
+    "voiceRefusal.tooFewSamples": (gaps: { readonly have: string; readonly minimum: string }) => "At least " + gaps.minimum + " samples required for training (have " + gaps.have + ")",
+    "voiceRefusal.samplesIncomplete": "All samples must have non-empty caption and lyrics before training",
+    "voiceRefusal.trainingQueueFull": (gaps: { readonly waiting: string }) => "Training queue is full\n" + gaps.waiting + " trainings are already waiting. Try again when one training starts or finishes.",
+    "generationRefusal.sourceNoAudio": "Source generation has no audio file",
+    "generationRefusal.ffmpegMissing": "ffmpeg is not available",
+    "generationRefusal.wavConversionFailed": "Failed to convert MP3 to WAV",
+    "generationRefusal.noLinkedVersion": "Generation has no linked version",
+    "generationRefusal.needsLyricsAndPrompt": "Song needs lyrics and a style prompt before generating",
+    "generationRefusal.repaintRange": "repainting_start must be less than repainting_end",
+    "generationRefusal.workerNotRunning": "Worker not running",
+    "jobRefusal.queueUnavailable": "Job queue unavailable",
+    "jobRefusal.queueFull": "Queue is full. Try again later.",
+    "jobRefusal.activeJob": "You already have an active job. Wait for it to finish.",
+    "jobRefusal.hourlyLimit": (gaps: { readonly jobType: string; readonly limit: string }) => "Rate limit reached (" + gaps.limit + "/" + gaps.jobType + "s per hour).",
+    "cowriterRefusal.browserLogin": "The co-writer needs a browser login.",
+    "cowriterRefusal.turnRunning": "A co-writer reply is still being written",
+    "cowriterRefusal.takeNotInSong": "Generation does not belong to the current song",
+    "takeRefusal.notPlayable": "Generation is not playable",
 };
 export type Key = keyof Words;

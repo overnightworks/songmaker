@@ -201,21 +201,23 @@ def test_a_running_turn_already_shows_its_user_message_in_the_conversation(clien
 
 def test_a_turn_sent_while_another_runs_is_refused_and_the_message_answered_once(client, service):
     """Try again or a second tab cannot start a second turn on the same message (#1014)."""
-    from fastapi import HTTPException
-
     from songmaker_cli.api_models import ChatTurnV2Request
     from songmaker_cli.conversation_api import api_chat_turn
+    from songmaker_cli.refusals import Refusal
 
     c, factory = client
 
     async def _send_it_again():
         turn = ChatTurnV2Request(message="Ja bitte")
         request = signed_in_request(c)
-        with factory() as session, pytest.raises(HTTPException) as refused:
+        with factory() as session, pytest.raises(Refusal) as refused:
             await api_chat_turn(turn, request, _RETURNING_USER, session)
-        return refused.value.status_code
+        return refused.value.status_code, refused.value.key
 
-    assert _while_a_turn_runs(client, service, _send_it_again) == 409
+    assert _while_a_turn_runs(client, service, _send_it_again) == (
+        409,
+        "cowriterRefusal.turnRunning",
+    )
     assert _conversation_seen_by_a_returning_panel(factory) == (
         [("user", "Ja bitte"), ("assistant", "done")],
         False,

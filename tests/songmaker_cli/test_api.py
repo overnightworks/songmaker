@@ -13,7 +13,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from support.generation_failures import OTHER_GENERATION_ERROR_TYPES
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from support.web_app import (
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    refusal_body,
+    web_client,
+)
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli import audio_files
@@ -1751,6 +1757,7 @@ def test_repaint_without_ffmpeg_is_unavailable(client: TestClient) -> None:
 
     assert resp.status_code == 503
     assert resp.json()["detail"] == "ffmpeg is not available"
+    assert resp.json() == refusal_body("generationRefusal.ffmpegMissing")
 
 
 @pytest.mark.parametrize(
@@ -1798,6 +1805,7 @@ def test_repaint_and_cover_report_mp3_conversion_failure(
 
     assert resp.status_code == 500
     assert resp.json()["detail"] == "Failed to convert MP3 to WAV"
+    assert resp.json() == refusal_body("generationRefusal.wavConversionFailed")
 
 
 def test_repaint_not_found(client: TestClient) -> None:
@@ -2205,6 +2213,7 @@ def test_repaint_and_cover_report_an_unavailable_job_queue(
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Job queue unavailable"
+    assert response.json() == refusal_body("jobRefusal.queueUnavailable")
 
 
 def test_score_generation_not_found(client: TestClient) -> None:

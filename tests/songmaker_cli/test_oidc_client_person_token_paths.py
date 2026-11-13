@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from starlette.requests import ClientDisconnect
 from starlette.types import ASGIApp
 from support.token_world import TokenWorld, make_token_world
-from support.web_app import TEST_ORIGIN, make_test_app, seed_session, seed_user
+from support.web_app import TEST_ORIGIN, make_test_app, refusal_body, seed_session, seed_user
 
 from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LEEWAY_SECONDS, OIDC_LOGIN_GROUP
@@ -242,7 +242,7 @@ def test_t13_the_co_writer_turn_refuses_a_token_before_writing_any_chat_state(
     )
 
     assert (response.status_code, response.json()) == (
-        403, {"detail": "The co-writer needs a browser login."},
+        403, refusal_body("cowriterRefusal.browserLogin"),
     )
     assert token_world.rows(Job, "id") == []
     assert token_world.rows(ChatMessage, "id") == []

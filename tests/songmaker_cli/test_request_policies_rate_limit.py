@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 from support.fake_oidc_issuer import a_fake_issuer
-from support.web_app import make_test_app, seed_user, web_client
+from support.web_app import make_test_app, refusal_body, seed_user, web_client
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.middleware import IpRateLimitMiddleware
 from webauth.policies import RateLimitBudget, RateLimitPolicy
@@ -264,6 +264,7 @@ def test_queue_depth_limit(client: TestClient, monkeypatch) -> None:
 
     assert resp.status_code == 429
     assert "Queue is full" in resp.json()["detail"]
+    assert resp.json() == refusal_body("jobRefusal.queueFull")
 
 
 # ── Per-IP exemptions ───────────────────────────────────────────────
