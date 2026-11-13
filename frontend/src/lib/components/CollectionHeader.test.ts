@@ -329,7 +329,7 @@ describe('CollectionHeader', () => {
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
 		expect(menuRowLabels(menu)).toEqual([
 			words['collectionMenu.editDetails'],
-			'Cover',
+			words['collectionMenu.cover'],
 			words['collectionMenu.curate'],
 			words['collectionMenu.addToPlaylist'],
 			words['collectionMenu.albumShare'],
@@ -434,7 +434,7 @@ describe('CollectionHeader', () => {
 			const menu = await openCollectionMenu(target);
 
 			Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
-				.find((el) => el.textContent?.trim().startsWith('Cover'))
+				.find((el) => el.textContent?.trim().startsWith(words['collectionMenu.cover']))
 				?.click();
 			await tick();
 

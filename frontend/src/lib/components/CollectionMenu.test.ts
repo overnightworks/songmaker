@@ -246,7 +246,7 @@ describe('CollectionMenu album rows', () => {
 
 		expect(menuRowLabels(target)).toEqual([
 			words['collectionMenu.editDetails'],
-			'Cover',
+			words['collectionMenu.cover'],
 			words['collectionMenu.curate'],
 			words['collectionMenu.addToPlaylist'],
 			words['collectionMenu.albumShare'],
@@ -261,8 +261,8 @@ describe('CollectionMenu album rows', () => {
 		const { target } = await render(albumMenuProps());
 		await openCollectionMenu(target);
 
-		expect(menuRow(target, 'Cover').querySelector('.menu-item-hint')?.textContent).toBe(
-			'upload · suggest'
+		expect(menuRow(target, words['collectionMenu.cover']).querySelector('.menu-item-hint')?.textContent).toBe(
+			words['collectionMenu.coverHint']
 		);
 	});
 
@@ -273,7 +273,7 @@ describe('CollectionMenu album rows', () => {
 		await tick();
 
 		Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'))
-			.find((item) => item.textContent?.trim().startsWith('Cover'))
+			.find((item) => item.textContent?.trim().startsWith(words['collectionMenu.cover']))
 			?.click();
 		await tick();
 
