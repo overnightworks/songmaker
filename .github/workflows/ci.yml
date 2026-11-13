@@ -76,6 +76,9 @@ jobs:
       - name: Catalogs and their modules are current
         run: uv run --no-sync --frozen --no-build design-catalogs --check
 
+      - name: Every refusal names a plain catalog key
+        run: uv run --no-sync --frozen --no-build python scripts/check_refusal_keys.py
+
   # One shard of the backend tests, on a runner and a PostgreSQL service of its own.
   backend-shard:
     name: Backend tests (shard ${{ matrix.shard }})
