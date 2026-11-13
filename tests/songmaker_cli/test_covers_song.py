@@ -492,8 +492,9 @@ def test_write_song_cover_rejects_unsafe_song_ids(tmp_path: Path, song_id: str) 
     )
     song_id = unsafe_cover_id(song_id, sibling_marker)
     image = _png_bytes()
-    with pytest.raises(CoverRejectedError, match=CoverRejection.INVALID_SONG_ID):
+    with pytest.raises(CoverRejectedError) as rejected:
         write_song_cover(audio_dir, song_id, image)
+    assert rejected.value.reason == CoverRejection.INVALID_SONG_ID
     assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 

@@ -51,16 +51,6 @@ def admin_client(tmp_path: Path, pg_factory) -> TestClient:
     return client
 
 
-def test_a_restart_the_worker_answers_with_an_error_is_refused_as_failed(
-    admin_client: TestClient,
-) -> None:
-    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=_WorkerAnswering(500)):
-        response = admin_client.post(f"/api/admin/workers/{WORKER_ID}/restart")
-
-    assert response.status_code == 502
-    assert response.json()["detail"] == "Worker returned 500"
-
-
 class _WorkerUnreachable(_WorkerAnswering):
     async def post(self, url: str, **_kwargs) -> httpx.Response:
         raise httpx.ConnectError("refused")
@@ -84,12 +74,14 @@ def _message(response) -> dict:
     return response.json()["message"]
 
 
-def test_a_restart_the_worker_answers_with_an_error_names_its_status(
+def test_a_restart_the_worker_answers_with_an_error_is_refused_as_failed(
     admin_client: TestClient,
 ) -> None:
     with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=_WorkerAnswering(500)):
         response = admin_client.post(f"/api/admin/workers/{WORKER_ID}/restart")
 
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Worker returned 500"
     assert _message(response) == {
         "key": "workerRefusal.returnedStatus", "values": {"status": "500"},
     }

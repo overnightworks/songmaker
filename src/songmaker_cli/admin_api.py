@@ -56,6 +56,13 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
+_RELAYED_WORKER_STATUSES: Final = frozenset({400, 409})
+
+
+def _require_known_model_mode(mode: str) -> None:
+    if mode not in MODEL_CONFIG_PATHS:
+        raise Refusal(400, "adminRefusal.unknownModelMode", mode=mode)
+
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -223,8 +230,7 @@ async def load_model_on_worker_endpoint(
     worker = get_worker_identity(db, worker_id)
     if worker is None:
         raise HTTPException(404, f"Worker '{worker_id}' not found")
-    if req.mode not in MODEL_CONFIG_PATHS:
-        raise Refusal(400, "adminRefusal.unknownModelMode", mode=req.mode)
+    _require_known_model_mode(req.mode)
 
     job = create_job(db, JobFunction.LOAD_MODEL_ON_WORKER, user_id=admin.id)
     db.commit()
@@ -250,8 +256,7 @@ async def _command_worker_model(db: Session, worker_id: str, path: str, mode: st
     worker = get_worker_identity(db, worker_id)
     if worker is None:
         raise HTTPException(404, f"Worker '{worker_id}' not found")
-    if mode not in MODEL_CONFIG_PATHS:
-        raise Refusal(400, "adminRefusal.unknownModelMode", mode=mode)
+    _require_known_model_mode(mode)
 
     try:
         response = await _post_to_worker(worker.host, worker.port, path, {"mode": mode})
@@ -259,11 +264,10 @@ async def _command_worker_model(db: Session, worker_id: str, path: str, mode: st
         raise Refusal(502, "workerRefusal.unreachable", reason=str(exc))
     if response.status_code >= 400:
         cause = worker_response_cause(response)
-        if response.status_code == 400:
-            raise Refusal(400, "workerRefusal.relayed", cause=cause)
-        if response.status_code == 409:
-            raise Refusal(409, "workerRefusal.relayed", cause=cause)
-        raise Refusal(502, "workerRefusal.relayed", cause=cause)
+        refusal = Refusal(502, "workerRefusal.relayed", cause=cause)
+        if response.status_code in _RELAYED_WORKER_STATUSES:
+            refusal.status_code = response.status_code
+        raise refusal
 
 
 @router.post(
@@ -377,8 +381,7 @@ async def download_model_endpoint(
         update_job_status,
     )
 
-    if mode not in MODEL_CONFIG_PATHS:
-        raise Refusal(400, "adminRefusal.unknownModelMode", mode=mode)
+    _require_known_model_mode(mode)
 
     workers = list_worker_identities(db)
     online_states: dict[str, dict | None] = {}

@@ -132,23 +132,27 @@ def test_only_the_album_cover_post_route_gets_the_cover_budget() -> None:
 
 
 def test_decode_rejects_svg_and_webp() -> None:
-    with pytest.raises(CoverRejectedError, match=CoverRejection.UNSUPPORTED_TYPE):
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(b'<svg xmlns="http://www.w3.org/2000/svg"></svg>')
-    with pytest.raises(CoverRejectedError, match=CoverRejection.UNSUPPORTED_TYPE):
+    assert rejected.value.reason == CoverRejection.UNSUPPORTED_TYPE
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(b"RIFF\x00\x00\x00\x00WEBPVP8 ")
+    assert rejected.value.reason == CoverRejection.UNSUPPORTED_TYPE
 
 
 def test_decode_rejects_oversize_bytes() -> None:
     payload = COVER_JPEG_MAGIC + b"\x00" * COVER_MAX_BYTES
-    with pytest.raises(CoverRejectedError, match=CoverRejection.TOO_LARGE):
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(payload)
+    assert rejected.value.reason == CoverRejection.TOO_LARGE
 
 
 def test_decode_rejects_image_bomb() -> None:
     width = COVER_MAX_PIXELS + 1
     payload = _png_header(width, 1)
-    with pytest.raises(CoverRejectedError, match=CoverRejection.TOO_MANY_PIXELS):
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(payload)
+    assert rejected.value.reason == CoverRejection.TOO_MANY_PIXELS
 
 
 @pytest.mark.parametrize(
@@ -167,8 +171,9 @@ def test_decode_rejects_image_bomb() -> None:
 def test_decode_rejects_unreadable_or_oversized_headers(
     payload: bytes, reason: CoverRejection,
 ) -> None:
-    with pytest.raises(CoverRejectedError, match=reason):
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(payload)
+    assert rejected.value.reason == reason
 
 
 @pytest.mark.parametrize(
@@ -460,8 +465,9 @@ def test_write_album_cover_rejects_unsafe_album_ids(
     )
     album_id = unsafe_cover_id(album_id, sibling_marker)
     image = _png_bytes()
-    with pytest.raises(CoverRejectedError, match=CoverRejection.INVALID_ALBUM_ID):
+    with pytest.raises(CoverRejectedError) as rejected:
         write_album_cover(audio_dir, album_id, image)
+    assert rejected.value.reason == CoverRejection.INVALID_ALBUM_ID
     assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 
