@@ -405,6 +405,102 @@ export type Words = {
     readonly "collectionHeader.titlePlaylist": string;
     readonly "collectionHeader.editTitleAlbum": string;
     readonly "collectionHeader.editTitlePlaylist": string;
+    readonly "recipe.panel": string;
+    readonly "recipe.panelChanged": string;
+    readonly "recipe.tabsLabel": string;
+    readonly "recipe.close": string;
+    readonly "recipe.tabSong": string;
+    readonly "recipe.tabGenerate": string;
+    readonly "recipe.tabEngine": string;
+    readonly "recipe.savedWithVersion": string;
+    readonly "recipe.resetAll": string;
+    readonly "recipe.resetAuto": string;
+    readonly "recipe.resetEmpty": string;
+    readonly "recipe.resetNone": string;
+    readonly "recipe.resetReference": string;
+    readonly "recipe.resetModel": string;
+    readonly "recipe.resetTakes": string;
+    readonly "recipe.resetPreset": string;
+    readonly "recipe.bpm": string;
+    readonly "recipe.duration": string;
+    readonly "recipe.key": string;
+    readonly "recipe.auto": string;
+    readonly "recipe.empty": string;
+    readonly "recipe.none": string;
+    readonly "recipe.model": string;
+    readonly "recipe.modelLoading": string;
+    readonly "recipe.modelLoaded": string;
+    readonly "recipe.takes": string;
+    readonly "recipe.retry": string;
+    readonly "recipe.defaultsError": string;
+    readonly "recipe.engineEmptyHint": string;
+    readonly "recipe.preset": string;
+    readonly "recipe.presetDefault": string;
+    readonly "recipe.presetCustom": string;
+    readonly "recipe.presetShared": (gaps: { readonly name: string }) => string;
+    readonly "recipe.presetNamePlaceholder": string;
+    readonly "recipe.presetSave": string;
+    readonly "recipe.presetCancel": string;
+    readonly "recipe.presetSaveError": string;
+    readonly "recipe.saveAsPreset": string;
+    readonly "recipe.managePresets": string;
+    readonly "referencePicker.label": string;
+    readonly "referencePicker.chosen": (gaps: { readonly name: string }) => string;
+    readonly "referencePicker.none": string;
+    readonly "referencePicker.play": (gaps: { readonly name: string }) => string;
+    readonly "referencePicker.pause": (gaps: { readonly name: string }) => string;
+    readonly "referencePicker.loading": string;
+    readonly "referencePicker.loadError": string;
+    readonly "referencePicker.playError": string;
+    readonly "referencePicker.retry": string;
+    readonly "referencePicker.upload": string;
+    readonly "referencePicker.uploading": string;
+    readonly "referencePicker.uploadError": string;
+    readonly "referencePicker.all": string;
+    readonly "voicePicker.label": string;
+    readonly "voicePicker.mobileLabel": (gaps: { readonly mode: string }) => string;
+    readonly "voicePicker.none": string;
+    readonly "voicePicker.create": string;
+    readonly "voicePicker.stateNotForModel": string;
+    readonly "voicePicker.stateDeleted": string;
+    readonly "voicePicker.stateDraft": string;
+    readonly "voicePicker.stateTraining": string;
+    readonly "voicePicker.stateFailed": string;
+    readonly "voicePicker.chosenUnavailable": (gaps: { readonly name: string; readonly state: string }) => string;
+    readonly "voicePicker.optionUnavailable": (gaps: { readonly state: string }) => string;
+    readonly "referenceExpiry.deletesOn": (gaps: { readonly date: string }) => string;
+    readonly "referenceExpiry.daysLeft": (count: number) => string;
+    readonly "paramField.inferenceSteps": string;
+    readonly "paramField.guidanceScale": string;
+    readonly "paramField.shift": string;
+    readonly "paramField.cfgIntervalStart": string;
+    readonly "paramField.cfgIntervalEnd": string;
+    readonly "paramField.velocityNorm": string;
+    readonly "paramField.velocityEma": string;
+    readonly "paramField.latentShift": string;
+    readonly "paramField.latentRescale": string;
+    readonly "paramField.lmCodeStrength": string;
+    readonly "paramField.inferMethod": string;
+    readonly "paramField.sampler": string;
+    readonly "paramField.adaptiveDualGuidance": string;
+    readonly "paramField.temperature": string;
+    readonly "paramField.topK": string;
+    readonly "paramField.topP": string;
+    readonly "paramField.cfgScale": string;
+    readonly "paramField.repetitionPenalty": string;
+    readonly "paramField.batchSize": string;
+    readonly "paramField.thinking": string;
+    readonly "paramField.cotCaption": string;
+    readonly "paramField.cotLanguage": string;
+    readonly "paramField.negativePrompt": string;
+    readonly "paramField.negativePromptPlaceholder": string;
+    readonly "paramField.sectionDit": string;
+    readonly "paramField.sectionLm": string;
+    readonly "paramField.defaultOption": string;
+    readonly "paramField.defaultOptionValue": (gaps: { readonly value: string }) => string;
+    readonly "paramField.defaultMissing": (gaps: { readonly key: string }) => string;
+    readonly "paramField.resetTitle": string;
+    readonly "paramField.resetLabel": (gaps: { readonly field: string }) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -927,5 +1023,108 @@ export const words: Words = {
     "collectionHeader.titlePlaylist": "playlist title",
     "collectionHeader.editTitleAlbum": "Edit album title",
     "collectionHeader.editTitlePlaylist": "Edit playlist title",
+    "recipe.panel": "Recipe",
+    "recipe.panelChanged": "Recipe, changed",
+    "recipe.tabsLabel": "Recipe sections",
+    "recipe.close": "Close the recipe",
+    "recipe.tabSong": "Song",
+    "recipe.tabGenerate": "Generate",
+    "recipe.tabEngine": "Engine",
+    "recipe.savedWithVersion": "Saved with the version",
+    "recipe.resetAll": "Reset all",
+    "recipe.resetAuto": "Back to Auto",
+    "recipe.resetEmpty": "Back to empty",
+    "recipe.resetNone": "Back to None",
+    "recipe.resetReference": "Remove the reference",
+    "recipe.resetModel": "Back to the first model",
+    "recipe.resetTakes": "Back to ×1",
+    "recipe.resetPreset": "Back to Default",
+    "recipe.bpm": "BPM",
+    "recipe.duration": "Duration (s)",
+    "recipe.key": "Key",
+    "recipe.auto": "Auto",
+    "recipe.empty": "—",
+    "recipe.none": "None",
+    "recipe.model": "Model",
+    "recipe.modelLoading": "Loading…",
+    "recipe.modelLoaded": "Loaded",
+    "recipe.takes": "Takes per Generate",
+    "recipe.retry": "Retry",
+    "recipe.defaultsError": "Failed to load generation defaults",
+    "recipe.engineEmptyHint": "Empty field = the model's default",
+    "recipe.preset": "Preset",
+    "recipe.presetDefault": "Default",
+    "recipe.presetCustom": "Custom",
+    "recipe.presetShared": (gaps: { readonly name: string }) => gaps.name + " (shared)",
+    "recipe.presetNamePlaceholder": "Preset name",
+    "recipe.presetSave": "Save",
+    "recipe.presetCancel": "Cancel",
+    "recipe.presetSaveError": "Failed to save preset",
+    "recipe.saveAsPreset": "Save as preset",
+    "recipe.managePresets": "Manage in Settings → Generation",
+    "referencePicker.label": "Reference track",
+    "referencePicker.chosen": (gaps: { readonly name: string }) => "Reference track: " + gaps.name,
+    "referencePicker.none": "None",
+    "referencePicker.play": (gaps: { readonly name: string }) => "Play " + gaps.name,
+    "referencePicker.pause": (gaps: { readonly name: string }) => "Pause " + gaps.name,
+    "referencePicker.loading": "Loading references…",
+    "referencePicker.loadError": "Failed to load references",
+    "referencePicker.playError": "Can't play this recording",
+    "referencePicker.retry": "Retry",
+    "referencePicker.upload": "Upload audio",
+    "referencePicker.uploading": "Uploading…",
+    "referencePicker.uploadError": "Upload failed",
+    "referencePicker.all": "All references",
+    "voicePicker.label": "Your Voice",
+    "voicePicker.mobileLabel": (gaps: { readonly mode: string }) => "Your Voice · " + gaps.mode + " model",
+    "voicePicker.none": "None",
+    "voicePicker.create": "Create a voice",
+    "voicePicker.stateNotForModel": "not available for this model",
+    "voicePicker.stateDeleted": "voice deleted",
+    "voicePicker.stateDraft": "draft",
+    "voicePicker.stateTraining": "training",
+    "voicePicker.stateFailed": "failed",
+    "voicePicker.chosenUnavailable": (gaps: { readonly name: string; readonly state: string }) => gaps.name + " — " + gaps.state,
+    "voicePicker.optionUnavailable": (gaps: { readonly state: string }) => "— " + gaps.state,
+    "referenceExpiry.deletesOn": (gaps: { readonly date: string }) => "Deleted on " + gaps.date + " — keep to preserve",
+    "referenceExpiry.daysLeft": (count: number) => ({
+        zero: numberFormat.format(count) + "d",
+        one: numberFormat.format(count) + "d",
+        two: numberFormat.format(count) + "d",
+        few: numberFormat.format(count) + "d",
+        many: numberFormat.format(count) + "d",
+        other: numberFormat.format(count) + "d",
+    })[pluralRules.select(count)],
+    "paramField.inferenceSteps": "Inference Steps",
+    "paramField.guidanceScale": "Guidance Scale",
+    "paramField.shift": "Shift",
+    "paramField.cfgIntervalStart": "CFG Interval Start",
+    "paramField.cfgIntervalEnd": "CFG Interval End",
+    "paramField.velocityNorm": "Velocity Norm",
+    "paramField.velocityEma": "Velocity EMA",
+    "paramField.latentShift": "Latent Shift",
+    "paramField.latentRescale": "Latent Rescale",
+    "paramField.lmCodeStrength": "LM Code Strength",
+    "paramField.inferMethod": "Infer Method",
+    "paramField.sampler": "Sampler",
+    "paramField.adaptiveDualGuidance": "Adaptive Dual Guidance",
+    "paramField.temperature": "Temperature",
+    "paramField.topK": "Top-K",
+    "paramField.topP": "Top-P",
+    "paramField.cfgScale": "CFG Scale",
+    "paramField.repetitionPenalty": "Rep. Penalty",
+    "paramField.batchSize": "Batch Size",
+    "paramField.thinking": "Thinking",
+    "paramField.cotCaption": "CoT Caption",
+    "paramField.cotLanguage": "CoT Language",
+    "paramField.negativePrompt": "Negative Prompt",
+    "paramField.negativePromptPlaceholder": "e.g. bad quality, noise",
+    "paramField.sectionDit": "DiT (Sound)",
+    "paramField.sectionLm": "LM (Lyrics)",
+    "paramField.defaultOption": "default",
+    "paramField.defaultOptionValue": (gaps: { readonly value: string }) => "default (" + gaps.value + ")",
+    "paramField.defaultMissing": (gaps: { readonly key: string }) => "Default missing for " + gaps.key,
+    "paramField.resetTitle": "Back to the model's default",
+    "paramField.resetLabel": (gaps: { readonly field: string }) => gaps.field + ": Back to the model's default",
 };
 export type Key = keyof Words;

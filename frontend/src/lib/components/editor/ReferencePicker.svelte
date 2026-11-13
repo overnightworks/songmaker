@@ -7,24 +7,12 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import ReferenceExpiry from '#lib/components/ReferenceExpiry.svelte';
 	import { REFERENCE_AUDIO_ACCEPT } from '#lib/constants/reference.ts';
-	import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
-	import {
-		RECIPE_REFERENCE_ALL_LABEL,
-		RECIPE_REFERENCE_LABEL,
-		RECIPE_REFERENCE_LOAD_ERROR,
-		RECIPE_REFERENCE_LOADING,
-		RECIPE_REFERENCE_NONE_LABEL,
-		RECIPE_REFERENCE_PLAY_ERROR,
-		RECIPE_REFERENCE_UPLOAD,
-		RECIPE_REFERENCE_UPLOAD_ERROR,
-		RECIPE_REFERENCE_UPLOADING,
-		RECIPE_RETRY_LABEL
-	} from '#lib/constants/recipe.ts';
 	import { createReferencePreview } from '#lib/services/referencePreview.svelte.ts';
 	import { followAppPageLink } from '#lib/stores/navigation.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { refocusIfDropped } from '#lib/utils/focus-trap.ts';
 	import { formatTime } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	const REFERENCES_PATH = '/settings/references';
 	const CHOICE_GROUP = 'reference-choice';
@@ -40,7 +28,7 @@
 	} = $props();
 
 	const open = historyLayerState('reference-picker', false);
-	const preview = createReferencePreview(() => (playFault = RECIPE_REFERENCE_PLAY_ERROR));
+	const preview = createReferencePreview(() => (playFault = pageText('referencePicker.playError')));
 
 	let references = $state<ReferenceListRowResponse[]>([]);
 	let loaded = $state(false);
@@ -63,7 +51,7 @@
 			now = new Date();
 		} catch (error) {
 			if (request !== latestLoad) return;
-			loadFailure = describeFailure(error, RECIPE_REFERENCE_LOAD_ERROR);
+			loadFailure = describeFailure(error, pageText('referencePicker.loadError'));
 		}
 	}
 
@@ -96,7 +84,7 @@
 			onchange({ id: result.id, filename: result.filename });
 			await load();
 		} catch (error) {
-			uploadError = describeFailure(error, RECIPE_REFERENCE_UPLOAD_ERROR);
+			uploadError = describeFailure(error, pageText('referencePicker.uploadError'));
 		} finally {
 			uploading = false;
 			input.value = '';
@@ -105,7 +93,7 @@
 </script>
 
 <div class="kv" class:open={$open} data-field="reference">
-	<span class="k">{RECIPE_REFERENCE_LABEL}</span>
+	<span class="k">{pageText('referencePicker.label')}</span>
 	<span class="v">
 		<button
 			bind:this={triggerButton}
@@ -113,10 +101,12 @@
 			class="trigger"
 			aria-expanded={$open}
 			aria-controls={$open ? 'reference-picker-options' : undefined}
-			aria-label={`${RECIPE_REFERENCE_LABEL}: ${reference?.filename ?? RECIPE_REFERENCE_NONE_LABEL}`}
+			aria-label={pageText('referencePicker.chosen', {
+				name: reference?.filename ?? pageText('referencePicker.none')
+			})}
 			onclick={() => ($open = !$open)}
 		>
-			<span class="name">{reference?.filename ?? RECIPE_REFERENCE_NONE_LABEL}</span>
+			<span class="name">{reference?.filename ?? pageText('referencePicker.none')}</span>
 			<Icon name={$open ? 'chevron-up' : 'chevron-down'} size={16} />
 		</button>
 		{@render trailing?.()}
@@ -133,7 +123,7 @@
 					checked={reference === null}
 					onchange={() => choose(null)}
 				/>
-				<label class="fn" for="reference-choice-none">{RECIPE_REFERENCE_NONE_LABEL}</label>
+				<label class="fn" for="reference-choice-none">{pageText('referencePicker.none')}</label>
 			</li>
 		</ul>
 		<ul class="choices">
@@ -151,7 +141,9 @@
 						type="button"
 						class="face"
 						data-hitbox="frequent"
-						aria-label={`${playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${row.filename}`}
+						aria-label={pageText(playing ? 'referencePicker.pause' : 'referencePicker.play', {
+							name: row.filename
+						})}
 						onclick={() => preview.toggle(row.id)}
 					>
 						<span class="disc"><Icon name={playing ? 'pause' : 'play'} size={12} /></span>
@@ -162,7 +154,7 @@
 				</li>
 			{/each}
 			{#if !loaded && loadFailure === null}
-				<li class="quiet">{RECIPE_REFERENCE_LOADING}</li>
+				<li class="quiet">{pageText('referencePicker.loading')}</li>
 			{/if}
 		</ul>
 		<ul class="fixed">
@@ -174,8 +166,8 @@
 						type="button"
 						class="retry"
 						data-hitbox="frequent"
-						aria-label={RECIPE_RETRY_LABEL}
-						title={RECIPE_RETRY_LABEL}
+						aria-label={pageText('referencePicker.retry')}
+						title={pageText('referencePicker.retry')}
 						onclick={load}
 					>
 						<Icon name="refresh-cw" size={16} />
@@ -185,8 +177,8 @@
 			<li class="po up">
 				<label class="upload"
 					><Icon name="arrow-up" size={16} />{uploading
-						? RECIPE_REFERENCE_UPLOADING
-						: RECIPE_REFERENCE_UPLOAD}<input
+						? pageText('referencePicker.uploading')
+						: pageText('referencePicker.upload')}<input
 						type="file"
 						accept={REFERENCE_AUDIO_ACCEPT}
 						disabled={uploading}
@@ -199,7 +191,7 @@
 			{/if}
 			<li class="po more">
 				<a href={REFERENCES_PATH} onclick={(event) => followAppPageLink(event, REFERENCES_PATH)}
-					>{RECIPE_REFERENCE_ALL_LABEL}<Icon name="chevron-right" size={16} /></a
+					>{pageText('referencePicker.all')}<Icon name="chevron-right" size={16} /></a
 				>
 			</li>
 		</ul>

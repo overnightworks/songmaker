@@ -1670,3 +1670,391 @@ msgstr ""
 msgctxt "collectionHeader.editTitlePlaylist"
 msgid "Edit playlist title"
 msgstr ""
+
+msgctxt "recipe.panel"
+msgid "Recipe"
+msgstr ""
+
+msgctxt "recipe.panelChanged"
+msgid "Recipe, changed"
+msgstr ""
+
+msgctxt "recipe.tabsLabel"
+msgid "Recipe sections"
+msgstr ""
+
+msgctxt "recipe.close"
+msgid "Close the recipe"
+msgstr ""
+
+msgctxt "recipe.tabSong"
+msgid "Song"
+msgstr ""
+
+msgctxt "recipe.tabGenerate"
+msgid "Generate"
+msgstr ""
+
+msgctxt "recipe.tabEngine"
+msgid "Engine"
+msgstr ""
+
+msgctxt "recipe.savedWithVersion"
+msgid "Saved with the version"
+msgstr ""
+
+msgctxt "recipe.resetAll"
+msgid "Reset all"
+msgstr ""
+
+msgctxt "recipe.resetAuto"
+msgid "Back to Auto"
+msgstr ""
+
+msgctxt "recipe.resetEmpty"
+msgid "Back to empty"
+msgstr ""
+
+msgctxt "recipe.resetNone"
+msgid "Back to None"
+msgstr ""
+
+msgctxt "recipe.resetReference"
+msgid "Remove the reference"
+msgstr ""
+
+msgctxt "recipe.resetModel"
+msgid "Back to the first model"
+msgstr ""
+
+msgctxt "recipe.resetTakes"
+msgid "Back to ×1"
+msgstr ""
+
+msgctxt "recipe.resetPreset"
+msgid "Back to Default"
+msgstr ""
+
+msgctxt "recipe.bpm"
+msgid "BPM"
+msgstr ""
+
+msgctxt "recipe.duration"
+msgid "Duration (s)"
+msgstr ""
+
+msgctxt "recipe.key"
+msgid "Key"
+msgstr ""
+
+msgctxt "recipe.auto"
+msgid "Auto"
+msgstr ""
+
+msgctxt "recipe.empty"
+msgid "—"
+msgstr ""
+
+msgctxt "recipe.none"
+msgid "None"
+msgstr ""
+
+msgctxt "recipe.model"
+msgid "Model"
+msgstr ""
+
+msgctxt "recipe.modelLoading"
+msgid "Loading…"
+msgstr ""
+
+msgctxt "recipe.modelLoaded"
+msgid "Loaded"
+msgstr ""
+
+msgctxt "recipe.takes"
+msgid "Takes per Generate"
+msgstr ""
+
+msgctxt "recipe.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "recipe.defaultsError"
+msgid "Failed to load generation defaults"
+msgstr ""
+
+msgctxt "recipe.engineEmptyHint"
+msgid "Empty field = the model's default"
+msgstr ""
+
+msgctxt "recipe.preset"
+msgid "Preset"
+msgstr ""
+
+msgctxt "recipe.presetDefault"
+msgid "Default"
+msgstr ""
+
+msgctxt "recipe.presetCustom"
+msgid "Custom"
+msgstr ""
+
+msgctxt "recipe.presetShared"
+msgid "{name} (shared)"
+msgstr ""
+
+msgctxt "recipe.presetNamePlaceholder"
+msgid "Preset name"
+msgstr ""
+
+msgctxt "recipe.presetSave"
+msgid "Save"
+msgstr ""
+
+msgctxt "recipe.presetCancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "recipe.presetSaveError"
+msgid "Failed to save preset"
+msgstr ""
+
+msgctxt "recipe.saveAsPreset"
+msgid "Save as preset"
+msgstr ""
+
+msgctxt "recipe.managePresets"
+msgid "Manage in Settings → Generation"
+msgstr ""
+
+msgctxt "referencePicker.label"
+msgid "Reference track"
+msgstr ""
+
+msgctxt "referencePicker.chosen"
+msgid "Reference track: {name}"
+msgstr ""
+
+msgctxt "referencePicker.none"
+msgid "None"
+msgstr ""
+
+msgctxt "referencePicker.play"
+msgid "Play {name}"
+msgstr ""
+
+msgctxt "referencePicker.pause"
+msgid "Pause {name}"
+msgstr ""
+
+msgctxt "referencePicker.loading"
+msgid "Loading references…"
+msgstr ""
+
+msgctxt "referencePicker.loadError"
+msgid "Failed to load references"
+msgstr ""
+
+msgctxt "referencePicker.playError"
+msgid "Can't play this recording"
+msgstr ""
+
+msgctxt "referencePicker.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "referencePicker.upload"
+msgid "Upload audio"
+msgstr ""
+
+msgctxt "referencePicker.uploading"
+msgid "Uploading…"
+msgstr ""
+
+msgctxt "referencePicker.uploadError"
+msgid "Upload failed"
+msgstr ""
+
+msgctxt "referencePicker.all"
+msgid "All references"
+msgstr ""
+
+msgctxt "voicePicker.label"
+msgid "Your Voice"
+msgstr ""
+
+msgctxt "voicePicker.mobileLabel"
+msgid "Your Voice · {mode} model"
+msgstr ""
+
+msgctxt "voicePicker.none"
+msgid "None"
+msgstr ""
+
+msgctxt "voicePicker.create"
+msgid "Create a voice"
+msgstr ""
+
+msgctxt "voicePicker.stateNotForModel"
+msgid "not available for this model"
+msgstr ""
+
+msgctxt "voicePicker.stateDeleted"
+msgid "voice deleted"
+msgstr ""
+
+msgctxt "voicePicker.stateDraft"
+msgid "draft"
+msgstr ""
+
+msgctxt "voicePicker.stateTraining"
+msgid "training"
+msgstr ""
+
+msgctxt "voicePicker.stateFailed"
+msgid "failed"
+msgstr ""
+
+msgctxt "voicePicker.chosenUnavailable"
+msgid "{name} — {state}"
+msgstr ""
+
+msgctxt "voicePicker.optionUnavailable"
+msgid "— {state}"
+msgstr ""
+
+msgctxt "referenceExpiry.deletesOn"
+msgid "Deleted on {date} — keep to preserve"
+msgstr ""
+
+msgctxt "referenceExpiry.daysLeft.one"
+msgid "{count}d"
+msgstr ""
+
+msgctxt "referenceExpiry.daysLeft.other"
+msgid "{count}d"
+msgstr ""
+
+msgctxt "paramField.inferenceSteps"
+msgid "Inference Steps"
+msgstr ""
+
+msgctxt "paramField.guidanceScale"
+msgid "Guidance Scale"
+msgstr ""
+
+msgctxt "paramField.shift"
+msgid "Shift"
+msgstr ""
+
+msgctxt "paramField.cfgIntervalStart"
+msgid "CFG Interval Start"
+msgstr ""
+
+msgctxt "paramField.cfgIntervalEnd"
+msgid "CFG Interval End"
+msgstr ""
+
+msgctxt "paramField.velocityNorm"
+msgid "Velocity Norm"
+msgstr ""
+
+msgctxt "paramField.velocityEma"
+msgid "Velocity EMA"
+msgstr ""
+
+msgctxt "paramField.latentShift"
+msgid "Latent Shift"
+msgstr ""
+
+msgctxt "paramField.latentRescale"
+msgid "Latent Rescale"
+msgstr ""
+
+msgctxt "paramField.lmCodeStrength"
+msgid "LM Code Strength"
+msgstr ""
+
+msgctxt "paramField.inferMethod"
+msgid "Infer Method"
+msgstr ""
+
+msgctxt "paramField.sampler"
+msgid "Sampler"
+msgstr ""
+
+msgctxt "paramField.adaptiveDualGuidance"
+msgid "Adaptive Dual Guidance"
+msgstr ""
+
+msgctxt "paramField.temperature"
+msgid "Temperature"
+msgstr ""
+
+msgctxt "paramField.topK"
+msgid "Top-K"
+msgstr ""
+
+msgctxt "paramField.topP"
+msgid "Top-P"
+msgstr ""
+
+msgctxt "paramField.cfgScale"
+msgid "CFG Scale"
+msgstr ""
+
+msgctxt "paramField.repetitionPenalty"
+msgid "Rep. Penalty"
+msgstr ""
+
+msgctxt "paramField.batchSize"
+msgid "Batch Size"
+msgstr ""
+
+msgctxt "paramField.thinking"
+msgid "Thinking"
+msgstr ""
+
+msgctxt "paramField.cotCaption"
+msgid "CoT Caption"
+msgstr ""
+
+msgctxt "paramField.cotLanguage"
+msgid "CoT Language"
+msgstr ""
+
+msgctxt "paramField.negativePrompt"
+msgid "Negative Prompt"
+msgstr ""
+
+msgctxt "paramField.negativePromptPlaceholder"
+msgid "e.g. bad quality, noise"
+msgstr ""
+
+msgctxt "paramField.sectionDit"
+msgid "DiT (Sound)"
+msgstr ""
+
+msgctxt "paramField.sectionLm"
+msgid "LM (Lyrics)"
+msgstr ""
+
+msgctxt "paramField.defaultOption"
+msgid "default"
+msgstr ""
+
+msgctxt "paramField.defaultOptionValue"
+msgid "default ({value})"
+msgstr ""
+
+msgctxt "paramField.defaultMissing"
+msgid "Default missing for {key}"
+msgstr ""
+
+msgctxt "paramField.resetTitle"
+msgid "Back to the model's default"
+msgstr ""
+
+msgctxt "paramField.resetLabel"
+msgid "{field}: Back to the model's default"
+msgstr ""

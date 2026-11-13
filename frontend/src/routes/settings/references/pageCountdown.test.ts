@@ -1,6 +1,7 @@
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api/fetch.ts';
+import { words } from '#lib/words/en.ts';
 
 const mocks = vi.hoisted(() => ({
 	listReferences: vi.fn(),
@@ -73,8 +74,8 @@ describe('the reference row countdown', () => {
 
 		await vi.waitFor(() => expect(badgeOf(target)).not.toBeNull());
 		const badge = badgeOf(target) as HTMLElement;
-		expect(badge.textContent?.trim()).toBe('⏳ 10d');
-		expect(badge.title).toBe('Deleted on 18 Nov — keep to preserve');
+		expect(badge.textContent?.trim()).toBe(`⏳ ${words['referenceExpiry.daysLeft'](10)}`);
+		expect(badge.title).toBe(words['referenceExpiry.deletesOn']({ date: '18 Nov' }));
 		expect(badge.classList.contains('warn')).toBe(false);
 		const meta = badge.closest('.reference-meta') as HTMLElement;
 		expect(meta.textContent?.indexOf('27 Oct')).toBeLessThan(meta.textContent?.indexOf('⏳') ?? -1);
@@ -102,7 +103,11 @@ describe('the reference row countdown', () => {
 
 		const target = await renderReferencesPage();
 
-		await vi.waitFor(() => expect(badgeOf(target)?.textContent?.trim()).toBe('⏳ 0d'));
+		await vi.waitFor(() =>
+			expect(badgeOf(target)?.textContent?.trim()).toBe(
+				`⏳ ${words['referenceExpiry.daysLeft'](0)}`
+			)
+		);
 	});
 
 	it('shows no countdown when the row has no deletion date', async () => {
@@ -180,7 +185,9 @@ describe('the countdown acknowledgement', () => {
 		await vi.waitFor(() => expect(mocks.acknowledgeCountdown).toHaveBeenCalled());
 		await settle();
 
-		expect(badgeOf(target)?.textContent?.trim()).toBe('⏳ 10d');
+		expect(badgeOf(target)?.textContent?.trim()).toBe(
+			`⏳ ${words['referenceExpiry.daysLeft'](10)}`
+		);
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
 
@@ -249,11 +256,19 @@ describe('the countdown clock', () => {
 			answerWith([{ id: 'a', deletes_at: deletesInDays(10) }], EPOCH)
 		);
 		const target = await renderReferencesPage();
-		await vi.waitFor(() => expect(badgeOf(target)?.textContent?.trim()).toBe('⏳ 10d'));
+		await vi.waitFor(() =>
+			expect(badgeOf(target)?.textContent?.trim()).toBe(
+				`⏳ ${words['referenceExpiry.daysLeft'](10)}`
+			)
+		);
 		vi.setSystemTime(new Date(NOW.getTime() + 2 * 86_400_000));
 
 		(target.querySelector('.reference-keep') as HTMLButtonElement).click();
 
-		await vi.waitFor(() => expect(badgeOf(target)?.textContent?.trim()).toBe('⏳ 8d'));
+		await vi.waitFor(() =>
+			expect(badgeOf(target)?.textContent?.trim()).toBe(
+				`⏳ ${words['referenceExpiry.daysLeft'](8)}`
+			)
+		);
 	});
 });

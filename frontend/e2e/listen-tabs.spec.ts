@@ -6,7 +6,6 @@ import { expect, test as base, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import { COWRITER_COMPOSER_PLACEHOLDER } from '../src/lib/constants/cowriter';
 import { LIBRARY_SHARES_COPY_LABEL } from '../src/lib/constants/library';
-import { RECIPE_PANEL_LABEL } from '../src/lib/constants/recipe';
 import { sameOriginHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, readSeededLibrary, runMarker } from './seed';
 
@@ -135,7 +134,7 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 			await workspace(page).locator('.recipe-line').click();
 			const composerBox = await composer(page).boundingBox();
 			const panelBox = await workspace(page)
-				.getByRole('region', { name: RECIPE_PANEL_LABEL, exact: true })
+				.getByRole('region', { name: words['recipe.panel'], exact: true })
 				.boundingBox();
 			if (!composerBox || !panelBox) throw new Error('Expected both laid out');
 			await expect(composer(page)).toBeInViewport({ ratio: 1 });
@@ -176,7 +175,7 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await createSongInUi(page, ownedAlbum);
 		// The line's name gains ", changed" when its dot shows.
 		await expect(
-			workspace(page).getByRole('button', { name: RECIPE_PANEL_LABEL, exact: true })
+			workspace(page).getByRole('button', { name: words['recipe.panel'], exact: true })
 		).toBeVisible();
 	});
 
