@@ -283,19 +283,21 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await page.locator('.recipe-line').click();
 		if (isMobile) {
 			await test.info().attach('phone-recipe-expanded', {
-				body: await page.getByRole('region', { name: 'Recipe', exact: true }).screenshot(),
+				body: await page
+					.getByRole('region', { name: words['recipe.panel'], exact: true })
+					.screenshot(),
 				contentType: 'image/png'
 			});
 		}
 		const picker = page.locator('.voice-picker .picker');
 		await picker.click();
-		const options = page.getByRole('listbox', { name: 'Your Voice', exact: true });
+		const options = page.getByRole('listbox', { name: words['voicePicker.label'], exact: true });
 		const matchingVoice = options.getByRole('option', { name: new RegExp(voiceName) });
 		const foreignVoiceOption = options.getByRole('option', { name: new RegExp(foreignVoiceName) });
 		await expect(matchingVoice).toContainText('sft');
 		await expect(matchingVoice).toBeEnabled();
 		await expect(foreignVoiceOption).toContainText('turbo');
-		await expect(foreignVoiceOption).toContainText('not available for this model');
+		await expect(foreignVoiceOption).toContainText(words['voicePicker.stateNotForModel']);
 		await expect(foreignVoiceOption).toBeDisabled();
 
 		await page.goto('/settings/voices');
@@ -317,15 +319,19 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await page.locator('.recipe-line').click();
 		if (isMobile) {
 			await expect(page.locator('.voice-picker .mobile-label')).toHaveText(
-				'Your Voice · sft model'
+				words['voicePicker.mobileLabel']({ mode: 'sft' })
 			);
 		}
 		const deletedPicker = page.locator('.voice-picker .picker');
 		await deletedPicker.click();
 		const deletedVoiceOption = page
-			.getByRole('listbox', { name: 'Your Voice', exact: true })
-			.getByRole('option', { name: new RegExp(`${voiceName}.*voice deleted`) });
-		await expect(deletedVoiceOption).toContainText(`${voiceName} — voice deleted`);
+			.getByRole('listbox', { name: words['voicePicker.label'], exact: true })
+			.getByRole('option', {
+				name: new RegExp(`${voiceName}.*${words['voicePicker.stateDeleted']}`)
+			});
+		await expect(deletedVoiceOption).toContainText(
+			`${voiceName} ${words['voicePicker.optionUnavailable']({ state: words['voicePicker.stateDeleted'] })}`
+		);
 		await expect(deletedVoiceOption).toBeDisabled();
 		await deletedPicker.click();
 		if (isMobile) {

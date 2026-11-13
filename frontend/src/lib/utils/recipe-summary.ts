@@ -8,8 +8,8 @@ import {
 	LM_TEXT_FIELDS
 } from '#lib/constants/acestep-param-fields.ts';
 import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
-import { RECIPE_REFERENCE_LABEL } from '#lib/constants/recipe.ts';
 import { formatTime } from '#lib/utils/format.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 
 // A read-only account of what a take actually carries — its model, the
 // generation_params ParamControls knows how to edit, and the version's own
@@ -124,7 +124,7 @@ function buildModelEntries(generation: GenerationItem, paramEntries: ParamEntrie
 	}
 	for (const field of KNOWN_PARAM_FIELDS) {
 		const value = formatParamValue(field.key, paramEntries.get(field.key));
-		if (value !== null) modelEntries.push({ label: field.label, value });
+		if (value !== null) modelEntries.push({ label: pageText(field.labelKey), value });
 	}
 	// Only present at all when it diverges from the requested Batch Size row
 	// above (the backend never persists a match) — a VRAM-guard reduction,
@@ -172,7 +172,7 @@ function buildVersionEntries(
 	}
 	if (generation.reference) {
 		versionEntries.push({
-			label: RECIPE_REFERENCE_LABEL,
+			label: pageText('referencePicker.label'),
 			value: generation.reference.filename,
 			link: { route: '/settings/references', query: { reference: generation.reference.id } }
 		});
