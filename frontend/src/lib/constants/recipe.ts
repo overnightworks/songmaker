@@ -1,3 +1,4 @@
+import type { TextKey } from '#lib/utils/page-words.ts';
 import type { RecipeField, RecipeTab } from '#lib/utils/recipe-standard.ts';
 
 /** The Takes-per-Generate value the page starts with: the recipe's standard for that field. */
@@ -10,23 +11,13 @@ export const RECIPE_MAX_INFERENCE_STEPS_DEFAULT = 200;
 
 export const RECIPE_RESET_GLYPH = '↺';
 export const RECIPE_ENGINE_RESET_TITLE = "Back to the model's default";
-export const RECIPE_RESET_ALL_LABEL = 'Reset all';
-export const RECIPE_CLOSE_LABEL = 'Close the recipe';
-export const RECIPE_TABS_LABEL = 'Recipe sections';
-export const RECIPE_SAVED_WITH_VERSION = 'Saved with the version';
-export const RECIPE_ENGINE_EMPTY_HINT = "Empty field = the model's default";
 
-export const RECIPE_TAB_LABELS: Record<RecipeTab, string> = {
-	song: 'Song',
-	generate: 'Generate',
-	engine: 'Engine'
+export const RECIPE_TAB_LABELS: Record<RecipeTab, TextKey> = {
+	song: 'recipe.tabSong',
+	generate: 'recipe.tabGenerate',
+	engine: 'recipe.tabEngine'
 };
 
-export const RECIPE_BPM_LABEL = 'BPM';
-export const RECIPE_DURATION_LABEL = 'Duration (s)';
-export const RECIPE_KEY_LABEL = 'Key';
-export const RECIPE_AUTO_LABEL = 'Auto';
-export const RECIPE_EMPTY_LABEL = '—';
 export const RECIPE_REFERENCE_LABEL = 'Reference track';
 export const RECIPE_REFERENCE_UPLOAD = 'Upload audio';
 export const RECIPE_REFERENCE_UPLOADING = 'Uploading…';
@@ -36,31 +27,18 @@ export const RECIPE_REFERENCE_LOADING = 'Loading references…';
 export const RECIPE_REFERENCE_LOAD_ERROR = 'Failed to load references';
 export const RECIPE_REFERENCE_PLAY_ERROR = "Can't play this recording";
 export const RECIPE_REFERENCE_ALL_LABEL = 'All references';
-export const RECIPE_MODEL_LABEL = 'Model';
-export const RECIPE_MODEL_LOADING = 'Loading…';
-export const RECIPE_MODEL_LOADED = 'Loaded';
-export const RECIPE_TAKES_LABEL = 'Takes per Generate';
-export const RECIPE_RETRY_LABEL = 'Retry';
-export const RECIPE_DEFAULTS_ERROR = 'Failed to load generation defaults';
-export const RECIPE_PRESET_LABEL = 'Preset';
-export const RECIPE_PRESET_DEFAULT_OPTION = 'Default';
-export const RECIPE_PRESET_CUSTOM_OPTION = 'Custom';
-export const RECIPE_PRESET_NAME_PLACEHOLDER = 'Preset name';
-export const RECIPE_PRESET_SAVE_ERROR = 'Failed to save preset';
-export const RECIPE_SAVE_AS_PRESET_LABEL = 'Save as preset';
-export const RECIPE_MANAGE_PRESETS_LABEL = 'Manage in Settings → Generation';
 
-/** What each row's ↺ says it returns to. */
-export const RECIPE_FIELD_RESET_TITLES: Partial<Record<RecipeField, string>> = {
-	bpm: 'Back to Auto',
-	duration: 'Back to Auto',
-	key: 'Back to empty',
-	voice: 'Back to None',
-	reference: 'Remove the reference',
-	model: 'Back to the first model',
-	takes: 'Back to ×1',
-	preset: 'Back to Default'
+/** The key of what each row's ↺ says it returns to. */
+export const RECIPE_FIELD_RESET_TITLES: Partial<Record<RecipeField, TextKey>> = {
+	bpm: 'recipe.resetAuto',
+	duration: 'recipe.resetAuto',
+	key: 'recipe.resetEmpty',
+	voice: 'recipe.resetNone',
+	reference: 'recipe.resetReference',
+	model: 'recipe.resetModel',
+	takes: 'recipe.resetTakes',
+	preset: 'recipe.resetPreset'
 };
-export const RECIPE_CHANGED_LABEL = 'changed';
 export const RECIPE_SOURCE_DURATION_DEFAULT_SECONDS = 180;
+/** A frozen duplicate of the catalog key `recipe.panel`, read by NowPlayingTake. */
 export const RECIPE_PANEL_LABEL = 'Recipe';

@@ -28,40 +28,16 @@
 		type RecipeTab,
 		type RecipeValues
 	} from '#lib/utils/recipe-standard.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import {
-		RECIPE_AUTO_LABEL,
-		RECIPE_BPM_LABEL,
 		RECIPE_BPM_MAX,
-		RECIPE_CLOSE_LABEL,
-		RECIPE_DEFAULTS_ERROR,
-		RECIPE_DURATION_LABEL,
 		RECIPE_DURATION_MAX_SECONDS,
-		RECIPE_EMPTY_LABEL,
-		RECIPE_ENGINE_EMPTY_HINT,
 		RECIPE_FIELD_RESET_TITLES,
-		RECIPE_KEY_LABEL,
-		RECIPE_MANAGE_PRESETS_LABEL,
 		RECIPE_MAX_INFERENCE_STEPS_DEFAULT,
-		RECIPE_MODEL_LABEL,
-		RECIPE_MODEL_LOADED,
-		RECIPE_MODEL_LOADING,
-		RECIPE_PANEL_LABEL,
-		RECIPE_PRESET_CUSTOM_OPTION,
-		RECIPE_PRESET_DEFAULT_OPTION,
-		RECIPE_PRESET_LABEL,
-		RECIPE_PRESET_NAME_PLACEHOLDER,
-		RECIPE_PRESET_SAVE_ERROR,
-		RECIPE_RESET_ALL_LABEL,
 		RECIPE_RESET_GLYPH,
-		RECIPE_RETRY_LABEL,
-		RECIPE_SAVED_WITH_VERSION,
-		RECIPE_SAVE_AS_PRESET_LABEL,
-		RECIPE_TABS_LABEL,
 		RECIPE_TAB_LABELS,
-		RECIPE_TAKES_LABEL,
 		RECIPE_TAKES_OPTIONS
 	} from '#lib/constants/recipe.ts';
-	import { VOICE_PICKER_NONE_LABEL } from '#lib/constants/voice.ts';
 	import ParamControls from '../ParamControls.svelte';
 	import VoicePicker from '../VoicePicker.svelte';
 	import ReferencePicker from './ReferencePicker.svelte';
@@ -94,6 +70,11 @@
 	const sharedPresets = $derived(matchingPresets.filter((preset) => preset.is_shared));
 	const chosenPreset = $derived(matchingEnginePreset(values, $presets));
 	const hasEngineChange = $derived(changedFields.has('preset'));
+
+	function resetTitle(field: RecipeField): string {
+		const key = RECIPE_FIELD_RESET_TITLES[field];
+		return key === undefined ? '' : pageText(key);
+	}
 
 	function change(field: RecipeField): void {
 		onchange(resetRecipeField(values, field, standard));
@@ -146,13 +127,14 @@
 			savingPreset = false;
 			presetName = '';
 		} catch (error) {
-			presetError = describeFailure(error, RECIPE_PRESET_SAVE_ERROR);
+			presetError = describeFailure(error, pageText('recipe.presetSaveError'));
 		}
 	}
 </script>
 
-{#snippet mark(field: RecipeField, title: string)}
+{#snippet mark(field: RecipeField)}
 	{#if changedFields.has(field)}
+		{@const title = resetTitle(field)}
 		<i class="dot" data-field-changed aria-hidden="true"></i>
 		<button
 			type="button"
@@ -170,7 +152,7 @@
 		<span class="k">{label}</span>
 		<span class="v">
 			{@render control()}
-			{@render mark(field, RECIPE_FIELD_RESET_TITLES[field] ?? '')}
+			{@render mark(field)}
 		</span>
 	</div>
 {/snippet}
@@ -180,8 +162,8 @@
 		type="number"
 		min="0"
 		max={RECIPE_BPM_MAX}
-		aria-label={RECIPE_BPM_LABEL}
-		placeholder={RECIPE_AUTO_LABEL}
+		aria-label={pageText('recipe.bpm')}
+		placeholder={pageText('recipe.auto')}
 		value={values.bpm || ''}
 		oninput={(event) => setNumber('bpm', event.currentTarget.value)}
 	/>
@@ -192,8 +174,8 @@
 		type="number"
 		min="0"
 		max={RECIPE_DURATION_MAX_SECONDS}
-		aria-label={RECIPE_DURATION_LABEL}
-		placeholder={RECIPE_AUTO_LABEL}
+		aria-label={pageText('recipe.duration')}
+		placeholder={pageText('recipe.auto')}
 		value={values.audioDuration || ''}
 		oninput={(event) => setNumber('audioDuration', event.currentTarget.value)}
 	/>
@@ -202,8 +184,8 @@
 {#snippet keyControl()}
 	<input
 		type="text"
-		aria-label={RECIPE_KEY_LABEL}
-		placeholder={RECIPE_EMPTY_LABEL}
+		aria-label={pageText('recipe.key')}
+		placeholder={pageText('recipe.empty')}
 		value={values.keyScale}
 		oninput={(event) => onchange({ ...values, keyScale: event.currentTarget.value })}
 	/>
@@ -211,27 +193,27 @@
 
 {#snippet modelControl()}
 	<select
-		aria-label={RECIPE_MODEL_LABEL}
+		aria-label={pageText('recipe.model')}
 		value={values.model ?? ''}
 		disabled={$activeModelsLoading || !$activeModels.length}
 		onchange={(event) => onchange({ ...values, model: event.currentTarget.value })}
 	>
 		{#if $activeModelsLoading}
-			<option value="">{RECIPE_MODEL_LOADING}</option>
+			<option value="">{pageText('recipe.modelLoading')}</option>
 		{:else if !activeModel}
-			<option value="">{VOICE_PICKER_NONE_LABEL}</option>
+			<option value="">{pageText('recipe.none')}</option>
 		{/if}
 		{#each $activeModels as model (model.id)}
 			<option value={model.id}>{model.id.toUpperCase()}</option>
 		{/each}
 	</select>
 	{#if activeModel && modelsReady}
-		<span class="loaded">● {RECIPE_MODEL_LOADED}</span>
+		<span class="loaded">● {pageText('recipe.modelLoaded')}</span>
 	{/if}
 {/snippet}
 
 {#snippet takesControl()}
-	<span class="seg" role="group" aria-label={RECIPE_TAKES_LABEL}>
+	<span class="seg" role="group" aria-label={pageText('recipe.takes')}>
 		{#each RECIPE_TAKES_OPTIONS as count (count)}
 			<button
 				type="button"
@@ -244,19 +226,19 @@
 
 {#snippet presetControl()}
 	<select
-		aria-label={RECIPE_PRESET_LABEL}
+		aria-label={pageText('recipe.preset')}
 		value={chosenPreset?.id ?? (hasEngineChange ? 'custom' : '')}
 		onchange={(event) => choosePreset(event.currentTarget.value)}
 	>
 		{#if !chosenPreset && hasEngineChange}
-			<option value="custom" disabled>{RECIPE_PRESET_CUSTOM_OPTION}</option>
+			<option value="custom" disabled>{pageText('recipe.presetCustom')}</option>
 		{/if}
-		<option value="">{RECIPE_PRESET_DEFAULT_OPTION}</option>
+		<option value="">{pageText('recipe.presetDefault')}</option>
 		{#each ownPresets as preset (preset.id)}
 			<option value={preset.id}>{preset.name}</option>
 		{/each}
 		{#each sharedPresets as preset (preset.id)}
-			<option value={preset.id}>{preset.name} (shared)</option>
+			<option value={preset.id}>{pageText('recipe.presetShared', { name: preset.name })}</option>
 		{/each}
 	</select>
 {/snippet}
@@ -264,21 +246,26 @@
 {#snippet footer(tab: RecipeTab)}
 	<div class="foot">
 		{#if TABS_SAVED_WITH_VERSION.includes(tab)}
-			<span class="saved-badge">{RECIPE_SAVED_WITH_VERSION}</span>
+			<span class="saved-badge">{pageText('recipe.savedWithVersion')}</span>
 		{/if}
 		<button
 			type="button"
 			class="reset-all"
 			disabled={!changedTabs.has(tab)}
 			onclick={() => onchange(resetRecipeTab(values, tab, standard))}
-			>{RECIPE_RESET_ALL_LABEL}</button
+			>{pageText('recipe.resetAll')}</button
 		>
 	</div>
 {/snippet}
 
-<div class="card" role="region" aria-label={RECIPE_PANEL_LABEL}>
+<div class="card" role="region" aria-label={pageText('recipe.panel')}>
 	<div class="tabs">
-		<div class="tablist" role="tablist" aria-label={RECIPE_TABS_LABEL} bind:this={tablist}>
+		<div
+			class="tablist"
+			role="tablist"
+			aria-label={pageText('recipe.tabsLabel')}
+			bind:this={tablist}
+		>
 			{#each TABS as tab (tab)}
 				<button
 					type="button"
@@ -292,7 +279,7 @@
 					onclick={() => selectTab(tab)}
 					onkeydown={onTabKeydown}
 				>
-					{RECIPE_TAB_LABELS[tab]}
+					{pageText(RECIPE_TAB_LABELS[tab])}
 					{#if changedTabs.has(tab)}<i class="dot" data-tab-changed aria-hidden="true"></i>{/if}
 				</button>
 			{/each}
@@ -300,65 +287,69 @@
 		<button
 			type="button"
 			class="close"
-			title={RECIPE_CLOSE_LABEL}
-			aria-label={RECIPE_CLOSE_LABEL}
+			title={pageText('recipe.close')}
+			aria-label={pageText('recipe.close')}
 			onclick={onclose}>˄</button
 		>
 	</div>
 
 	<div id="recipe-panel" role="tabpanel" aria-labelledby={`recipe-tab-${selected}`}>
 		{#if selected === 'song'}
-			{@render row('bpm', RECIPE_BPM_LABEL, bpmControl)}
-			{@render row('duration', RECIPE_DURATION_LABEL, durationControl)}
-			{@render row('key', RECIPE_KEY_LABEL, keyControl)}
+			{@render row('bpm', pageText('recipe.bpm'), bpmControl)}
+			{@render row('duration', pageText('recipe.duration'), durationControl)}
+			{@render row('key', pageText('recipe.key'), keyControl)}
 			<div class="kv" data-field="voice">
 				<VoicePicker />
-				<span class="v">{@render mark('voice', RECIPE_FIELD_RESET_TITLES.voice ?? '')}</span>
+				<span class="v">{@render mark('voice')}</span>
 			</div>
 			<ReferencePicker
 				reference={values.reference}
 				onchange={(reference) => onchange({ ...values, reference })}
 			>
 				{#snippet trailing()}
-					{@render mark('reference', RECIPE_FIELD_RESET_TITLES.reference ?? '')}
+					{@render mark('reference')}
 				{/snippet}
 			</ReferencePicker>
 		{:else if selected === 'generate'}
-			{@render row('model', RECIPE_MODEL_LABEL, modelControl)}
+			{@render row('model', pageText('recipe.model'), modelControl)}
 			{#if $activeModelsError}
 				<p class="error" role="alert">{$activeModelsError}</p>
-				<button type="button" class="retry" onclick={loadActiveModels}>{RECIPE_RETRY_LABEL}</button>
+				<button type="button" class="retry" onclick={loadActiveModels}
+					>{pageText('recipe.retry')}</button
+				>
 			{/if}
-			{@render row('takes', RECIPE_TAKES_LABEL, takesControl)}
+			{@render row('takes', pageText('recipe.takes'), takesControl)}
 		{:else}
-			{@render row('preset', RECIPE_PRESET_LABEL, presetControl)}
+			{@render row('preset', pageText('recipe.preset'), presetControl)}
 			<div class="preset-actions">
 				{#if savingPreset}
 					<input
 						type="text"
-						aria-label={RECIPE_PRESET_NAME_PLACEHOLDER}
-						placeholder={RECIPE_PRESET_NAME_PLACEHOLDER}
+						aria-label={pageText('recipe.presetNamePlaceholder')}
+						placeholder={pageText('recipe.presetNamePlaceholder')}
 						bind:value={presetName}
 						onkeydown={(event) => event.key === 'Enter' && confirmSavePreset()}
 					/>
-					<button type="button" onclick={confirmSavePreset}>Save</button>
-					<button type="button" onclick={() => (savingPreset = false)}>Cancel</button>
+					<button type="button" onclick={confirmSavePreset}>{pageText('recipe.presetSave')}</button>
+					<button type="button" onclick={() => (savingPreset = false)}
+						>{pageText('recipe.presetCancel')}</button
+					>
 				{:else}
 					<button type="button" onclick={() => (savingPreset = true)}
-						>{RECIPE_SAVE_AS_PRESET_LABEL}</button
+						>{pageText('recipe.saveAsPreset')}</button
 					>
 				{/if}
 				<a
 					href="/settings/generation"
 					onclick={(event) => followAppPageLink(event, '/settings/generation')}
-					>{RECIPE_MANAGE_PRESETS_LABEL}</a
+					>{pageText('recipe.managePresets')}</a
 				>
 			</div>
 			{#if presetError}<p class="error" role="alert">{presetError}</p>{/if}
 			{#if $generationDefaultsError}
-				<p class="error" role="alert">{RECIPE_DEFAULTS_ERROR}</p>
+				<p class="error" role="alert">{pageText('recipe.defaultsError')}</p>
 				<button type="button" class="retry" onclick={loadGenerationDefaults}
-					>{RECIPE_RETRY_LABEL}</button
+					>{pageText('recipe.retry')}</button
 				>
 			{/if}
 			<div class="engine">
@@ -375,7 +366,7 @@
 						if (isEngineParamKey(key)) change(key);
 					}}
 				/>
-				<p class="hint">{RECIPE_ENGINE_EMPTY_HINT}</p>
+				<p class="hint">{pageText('recipe.engineEmptyHint')}</p>
 			</div>
 		{/if}
 		{@render footer(selected)}
