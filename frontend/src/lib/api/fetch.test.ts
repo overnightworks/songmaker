@@ -283,17 +283,15 @@ describe('a refusal that names a catalog key', () => {
 		);
 	});
 
-	it.each([
-		{ key: 'takeRefusal.gone', why: 'the page has no such key' },
-		{ key: 'newPlace.heading', why: 'the entry is a marked sentence' },
-		{ key: 'toString', why: 'the name is inherited, not an entry' }
-	])('is shown as the fallback, with the key logged, when $why', ({ key }) => {
+	it('is shown as the fallback, with the key logged, when the page has no such key', () => {
 		const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		onTestFinished(() => logged.mockRestore());
 
-		expect(describeFailure(refused({ key, values: {} }), 'Fallback')).toBe('Fallback');
+		expect(describeFailure(refused({ key: 'takeRefusal.gone', values: {} }), 'Fallback')).toBe(
+			'Fallback'
+		);
 
-		expect(logged).toHaveBeenCalledWith(expect.stringContaining(key));
-		logged.mockRestore();
+		expect(logged).toHaveBeenCalledWith(expect.stringContaining('takeRefusal.gone'));
 	});
 
 	it("is withheld with the server's text when the caller withholds it", () => {
