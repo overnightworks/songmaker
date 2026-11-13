@@ -215,20 +215,12 @@ function conversationStartedAt(createdAt: string) {
 }
 
 describe('CoWriterPanel', () => {
-	it('renders without a Close button (its lifecycle is owned by the Editor header toggle)', async () => {
-		const target = await render();
-		expect(target.querySelector('.close-btn')).toBeNull();
-	});
-
-	it('has no left border now that it fills the Write column instead of a side panel', async () => {
+	it('fills the Write column as its own body: no Close button, no left border, no back control above the Co-writer tab', async () => {
 		const target = await render();
 		const root = target.querySelector('.cowriter');
 		expect(root).not.toBeNull();
 		expect(getComputedStyle(root as Element).borderLeftWidth).not.toBe('1px');
-	});
-
-	it('renders no back control of its own — on the phone the song app bar stays above the Co-writer tab', async () => {
-		const target = await render();
+		expect(target.querySelector('.close-btn')).toBeNull();
 		expect(target.querySelector('.cowriter-back')).toBeNull();
 		expect(target.querySelector('.app-bar')).toBeNull();
 	});

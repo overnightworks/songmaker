@@ -19,7 +19,7 @@
 "frontend/e2e/song-versions.spec.ts" = 851
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 805
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1472
-"frontend/src/lib/components/CoWriterPanel.test.ts" = 1807
+"frontend/src/lib/components/CoWriterPanel.test.ts" = 1804
 "frontend/src/lib/components/LibraryWall.test.ts" = 925
 "frontend/src/lib/components/LoraDetail.svelte" = 960
 "frontend/src/lib/components/NowPlaying.test.ts" = 1092
