@@ -29,7 +29,6 @@ log = logging.getLogger(__name__)
 INITIAL_GENERATION_NUMBER: Final[int] = 1
 COHERENCE_SCORE_KEY: Final = "lyrical_coherence"
 COHERENCE_SUMMARY_KEY: Final = "lyrical_summary"
-ARCHIVED_TAKE_DETAIL: Final = "Restore this take first."
 
 
 class ArchivedTakeError(Exception):

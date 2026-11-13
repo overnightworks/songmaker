@@ -14,7 +14,6 @@ from songmaker_cli.api_models import RateRequest, RateResponse, StatusResponse
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.db.queries.generations import (
-    ARCHIVED_TAKE_DETAIL,
     ArchivedTakeError,
     keep_generation,
     pick_generation,
@@ -23,6 +22,8 @@ from songmaker_cli.db.queries.generations import (
     unkeep_generation,
     unpick_generation,
 )
+from songmaker_cli.refusals import Refusal
+from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 router = APIRouter()
 
@@ -78,7 +79,7 @@ def _mark_generation(
     try:
         return _toggle_generation(gen_id, user, session, action)
     except ArchivedTakeError:
-        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
+        raise Refusal(409, "takeRefusal.archived")
 
 
 _PICK_TAKE_DESCRIPTION = (
@@ -94,7 +95,7 @@ _PICK_TAKE_DESCRIPTION = (
     openapi_extra=agent_tool(name="pick_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Generation does not exist"},
-        409: {"description": ARCHIVED_TAKE_DETAIL},
+        409: {"description": text(SOURCE_LANGUAGE, "takeRefusal.archived")},
     },
 )
 def api_pick_generation(
@@ -134,7 +135,7 @@ _KEEP_TAKE_DESCRIPTION = "Protect one of the person's own takes from cleanup."
     openapi_extra=agent_tool(name="keep_take", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Generation does not exist"},
-        409: {"description": ARCHIVED_TAKE_DETAIL},
+        409: {"description": text(SOURCE_LANGUAGE, "takeRefusal.archived")},
     },
 )
 def api_keep_generation(
