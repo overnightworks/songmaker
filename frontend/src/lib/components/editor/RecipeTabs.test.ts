@@ -21,6 +21,7 @@ import { loras } from '#lib/stores/loras.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import type { RecipeStandard, RecipeValues } from '#lib/utils/recipe-standard.ts';
 import { reactiveProps } from '../../../tests/reactive-fixtures.svelte';
+import { words } from '#lib/words/en.ts';
 import RecipeTabs from './RecipeTabs.svelte';
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => ({
@@ -109,11 +110,13 @@ describe('RecipeTabs', () => {
 	it('shows the tabs Song, Generate and Engine as names only, opened on Song', async () => {
 		const target = await renderTabs(atStandard({ bpm: 0 }));
 		expect(tabButtons(target).map((el) => el.textContent?.trim())).toEqual([
-			'Song',
-			'Generate',
-			'Engine'
+			words['recipe.tabSong'],
+			words['recipe.tabGenerate'],
+			words['recipe.tabEngine']
 		]);
-		expect(recipeTabNamed(target, 'Song').getAttribute('aria-selected')).toBe('true');
+		expect(recipeTabNamed(target, words['recipe.tabSong']).getAttribute('aria-selected')).toBe(
+			'true'
+		);
 		expect(target.querySelector('[data-field="bpm"]')).not.toBeNull();
 	});
 
@@ -126,47 +129,53 @@ describe('RecipeTabs', () => {
 
 	it('returns a changed Duration to Auto', async () => {
 		const target = await renderTabs(atStandard({ audioDuration: 180 }));
-		expect(resetButton(target, 'duration')?.title).toBe('Back to Auto');
+		expect(resetButton(target, 'duration')?.title).toBe(words['recipe.resetAuto']);
 		await clickSettled(resetButton(target, 'duration') as HTMLElement);
 		expect(props.values).toEqual(atStandard());
 	});
 
 	it('marks a changed field and its tab, and resets only that field', async () => {
 		const target = await renderTabs(atStandard({ bpm: 145, keyScale: 'C' }));
-		expect(recipeTabNamed(target, 'Song').querySelector('[data-tab-changed]')).not.toBeNull();
-		expect(recipeTabNamed(target, 'Engine').querySelector('[data-tab-changed]')).toBeNull();
-		expect(resetButton(target, 'bpm')?.title).toBe('Back to Auto');
+		expect(
+			recipeTabNamed(target, words['recipe.tabSong']).querySelector('[data-tab-changed]')
+		).not.toBeNull();
+		expect(
+			recipeTabNamed(target, words['recipe.tabEngine']).querySelector('[data-tab-changed]')
+		).toBeNull();
+		expect(resetButton(target, 'bpm')?.title).toBe(words['recipe.resetAuto']);
 		expect(resetButton(target, 'duration')).toBeNull();
 		await clickSettled(resetButton(target, 'bpm') as HTMLElement);
 		expect(props.values).toEqual(atStandard({ keyScale: 'C' }));
 		expect(target.querySelector('[data-field="bpm"] [data-field-changed]')).toBeNull();
-		expect(recipeTabNamed(target, 'Song').querySelector('[data-tab-changed]')).not.toBeNull();
+		expect(
+			recipeTabNamed(target, words['recipe.tabSong']).querySelector('[data-tab-changed]')
+		).not.toBeNull();
 	});
 
 	it('Song Reset all touches no other tab', async () => {
 		const target = await renderTabs(
 			atStandard({ bpm: 145, takes: 3, genParams: { lm_temperature: 0.5 } })
 		);
-		await clickSettled(getByRoleButton(target, 'Reset all'));
+		await clickSettled(getByRoleButton(target, words['recipe.resetAll']));
 		expect(props.values).toEqual(atStandard({ takes: 3, genParams: { lm_temperature: 0.5 } }));
 	});
 
 	it('Generate shows Reset all but not the saved-with-the-version line', async () => {
 		const target = await renderTabs(atStandard({ model: 'sft', takes: 3 }));
-		await clickSettled(recipeTabNamed(target, 'Generate'));
-		expect(target.textContent).not.toContain('Saved with the version');
-		await clickSettled(getByRoleButton(target, 'Reset all'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabGenerate']));
+		expect(target.textContent).not.toContain(words['recipe.savedWithVersion']);
+		await clickSettled(getByRoleButton(target, words['recipe.resetAll']));
 		expect(props.values).toEqual(atStandard());
 	});
 
 	it('sets Takes per Generate from the five choices 1 2 3 5 10', async () => {
 		const target = await renderTabs();
-		await clickSettled(recipeTabNamed(target, 'Generate'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabGenerate']));
 		const choices = Array.from(target.querySelectorAll<HTMLButtonElement>('.seg button'));
 		expect(choices.map((choice) => choice.textContent)).toEqual(['1', '2', '3', '5', '10']);
 		await clickSettled(choices[3]);
 		expect(props.values.takes).toBe(5);
-		expect(resetButton(target, 'takes')?.title).toBe('Back to ×1');
+		expect(resetButton(target, 'takes')?.title).toBe(words['recipe.resetTakes']);
 	});
 
 	it('Engine Reset all keeps Voice and Reference', async () => {
@@ -176,16 +185,16 @@ describe('RecipeTabs', () => {
 				reference: { id: 'r1', filename: 'a.wav' }
 			})
 		);
-		await clickSettled(recipeTabNamed(target, 'Engine'));
-		expect(target.textContent).toContain('Saved with the version');
-		await clickSettled(getByRoleButton(target, 'Reset all'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabEngine']));
+		expect(target.textContent).toContain(words['recipe.savedWithVersion']);
+		await clickSettled(getByRoleButton(target, words['recipe.resetAll']));
 		expect(props.values.genParams).toEqual({ user_lora_id: 'mara' });
 		expect(props.values.reference).toEqual({ id: 'r1', filename: 'a.wav' });
 	});
 
 	it('shows an engine field equal to its grey default as unchanged', async () => {
 		const target = await renderTabs(atStandard({ genParams: { lm_temperature: 0.85 } }));
-		await clickSettled(recipeTabNamed(target, 'Engine'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabEngine']));
 		expect(target.querySelector('[data-field-changed]')).toBeNull();
 	});
 
@@ -193,9 +202,9 @@ describe('RecipeTabs', () => {
 		const target = await renderTabs(
 			atStandard({ genParams: { user_lora_id: 'mara', lm_temperature: 0.5 } })
 		);
-		await clickSettled(recipeTabNamed(target, 'Engine'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabEngine']));
 		const select = target.querySelector<HTMLSelectElement>(
-			'select[aria-label="Preset"]'
+			`select[aria-label="${words['recipe.preset']}"]`
 		) as HTMLSelectElement;
 		select.value = 'warm';
 		select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -207,34 +216,34 @@ describe('RecipeTabs', () => {
 		const target = await renderTabs(
 			atStandard({ genParams: { user_lora_id: 'mara', lm_temperature: 0.5 } })
 		);
-		await clickSettled(recipeTabNamed(target, 'Engine'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabEngine']));
 		const select = target.querySelector<HTMLSelectElement>(
-			'select[aria-label="Preset"]'
+			`select[aria-label="${words['recipe.preset']}"]`
 		) as HTMLSelectElement;
 		const row = target.querySelector('[data-field="preset"]') as HTMLElement;
-		expect(select.selectedOptions[0].textContent).toBe('Custom');
+		expect(select.selectedOptions[0].textContent).toBe(words['recipe.presetCustom']);
 		expect(row.querySelector('[data-field-changed]')).not.toBeNull();
 		const undo = resetButton(target, 'preset') as HTMLButtonElement;
-		expect(undo.title).toBe('Back to Default');
+		expect(undo.title).toBe(words['recipe.resetPreset']);
 		await clickSettled(undo);
 		expect(props.values.genParams).toEqual({ user_lora_id: 'mara' });
-		expect(select.selectedOptions[0].textContent).toBe('Default');
+		expect(select.selectedOptions[0].textContent).toBe(words['recipe.presetDefault']);
 	});
 
 	it('the Preset row names the chosen preset while a Voice is set', async () => {
 		const target = await renderTabs(
 			atStandard({ genParams: { user_lora_id: 'mara', inference_steps: 12 } })
 		);
-		await clickSettled(recipeTabNamed(target, 'Engine'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabEngine']));
 		const select = target.querySelector<HTMLSelectElement>(
-			'select[aria-label="Preset"]'
+			`select[aria-label="${words['recipe.preset']}"]`
 		) as HTMLSelectElement;
 		expect(select.value).toBe('warm');
 	});
 
 	it('closes from the end of the tab row', async () => {
 		const target = await renderTabs();
-		await clickSettled(getByRoleButton(target, 'Close the recipe'));
+		await clickSettled(getByRoleButton(target, words['recipe.close']));
 		expect(onclose).toHaveBeenCalledTimes(1);
 	});
 
@@ -255,24 +264,34 @@ describe('RecipeTabs', () => {
 			await tick();
 		};
 		await press('ArrowRight');
-		expect(recipeTabNamed(target, 'Generate').getAttribute('aria-selected')).toBe('true');
+		expect(recipeTabNamed(target, words['recipe.tabGenerate']).getAttribute('aria-selected')).toBe(
+			'true'
+		);
 		await press('End');
-		expect(recipeTabNamed(target, 'Engine').getAttribute('aria-selected')).toBe('true');
+		expect(recipeTabNamed(target, words['recipe.tabEngine']).getAttribute('aria-selected')).toBe(
+			'true'
+		);
 		await press('ArrowRight');
-		expect(recipeTabNamed(target, 'Song').getAttribute('aria-selected')).toBe('true');
+		expect(recipeTabNamed(target, words['recipe.tabSong']).getAttribute('aria-selected')).toBe(
+			'true'
+		);
 		await press('ArrowLeft');
-		expect(recipeTabNamed(target, 'Engine').getAttribute('aria-selected')).toBe('true');
+		expect(recipeTabNamed(target, words['recipe.tabEngine']).getAttribute('aria-selected')).toBe(
+			'true'
+		);
 		await press('Home');
-		expect(recipeTabNamed(target, 'Song').getAttribute('aria-selected')).toBe('true');
+		expect(recipeTabNamed(target, words['recipe.tabSong']).getAttribute('aria-selected')).toBe(
+			'true'
+		);
 	});
 
 	it('shows the models load failure in the Model row with Retry', async () => {
 		activeModelsError.set('Failed to load models');
 		const target = await renderTabs();
-		await clickSettled(recipeTabNamed(target, 'Generate'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabGenerate']));
 		expect(target.querySelector('[role="alert"]')?.textContent).toBe('Failed to load models');
 		vi.mocked(fetchActiveModels).mockResolvedValueOnce([{ id: 'turbo', is_active: true }]);
-		await clickSettled(getByRoleButton(target, 'Retry'));
+		await clickSettled(getByRoleButton(target, words['recipe.retry']));
 		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
 	});
 
@@ -280,39 +299,37 @@ describe('RecipeTabs', () => {
 		activeModels.set([]);
 		activeModelsLoading.set(true);
 		const target = await renderTabs(atStandard({ model: null }));
-		await clickSettled(recipeTabNamed(target, 'Generate'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabGenerate']));
 		const select = target.querySelector<HTMLSelectElement>(
-			'select[aria-label="Model"]'
+			`select[aria-label="${words['recipe.model']}"]`
 		) as HTMLSelectElement;
-		expect(select.selectedOptions[0].textContent).toBe('Loading…');
+		expect(select.selectedOptions[0].textContent).toBe(words['recipe.modelLoading']);
 		expect(select.disabled).toBe(true);
 	});
 
 	it('shows None with the Model select disabled when no model is active', async () => {
 		activeModels.set([]);
 		const target = await renderTabs(atStandard({ model: null }));
-		await clickSettled(recipeTabNamed(target, 'Generate'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabGenerate']));
 		const select = target.querySelector<HTMLSelectElement>(
-			'select[aria-label="Model"]'
+			`select[aria-label="${words['recipe.model']}"]`
 		) as HTMLSelectElement;
-		expect(select.selectedOptions[0].textContent).toBe('None');
+		expect(select.selectedOptions[0].textContent).toBe(words['recipe.none']);
 		expect(select.disabled).toBe(true);
 	});
 
 	it('shows the model as loaded once the models are in', async () => {
 		const target = await renderTabs();
-		await clickSettled(recipeTabNamed(target, 'Generate'));
-		expect(target.textContent).toContain('Loaded');
+		await clickSettled(recipeTabNamed(target, words['recipe.tabGenerate']));
+		expect(target.textContent).toContain(words['recipe.modelLoaded']);
 	});
 
 	it('shows the defaults failure on the Engine tab with Retry', async () => {
 		generationDefaultsError.set(true);
 		const target = await renderTabs();
-		await clickSettled(recipeTabNamed(target, 'Engine'));
-		expect(target.querySelector('[role="alert"]')?.textContent).toBe(
-			'Failed to load generation defaults'
-		);
-		await clickSettled(getByRoleButton(target, 'Retry'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabEngine']));
+		expect(target.querySelector('[role="alert"]')?.textContent).toBe(words['recipe.defaultsError']);
+		await clickSettled(getByRoleButton(target, words['recipe.retry']));
 		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
 		expect(fetchGenerationDefaults).toHaveBeenCalled();
 	});
@@ -321,7 +338,7 @@ describe('RecipeTabs', () => {
 		{
 			failure: 'with no network answer',
 			error: new NetworkError('/api/presets', new TypeError('Failed to fetch')),
-			shown: 'Failed to save preset'
+			shown: words['recipe.presetSaveError']
 		},
 		{
 			failure: 'refused by the server',
@@ -334,14 +351,14 @@ describe('RecipeTabs', () => {
 			vi.mocked(createPreset).mockRejectedValueOnce(error);
 			const start = atStandard({ genParams: { lm_temperature: 0.5 } });
 			const target = await renderTabs(start);
-			await clickSettled(recipeTabNamed(target, 'Engine'));
-			await clickSettled(getByRoleButton(target, 'Save as preset'));
+			await clickSettled(recipeTabNamed(target, words['recipe.tabEngine']));
+			await clickSettled(getByRoleButton(target, words['recipe.saveAsPreset']));
 			const name = target.querySelector<HTMLInputElement>(
-				'input[aria-label="Preset name"]'
+				`input[aria-label="${words['recipe.presetNamePlaceholder']}"]`
 			) as HTMLInputElement;
 			name.value = 'Night drive';
 			name.dispatchEvent(new Event('input', { bubbles: true }));
-			await clickSettled(getByRoleButton(target, 'Save'));
+			await clickSettled(getByRoleButton(target, words['recipe.presetSave']));
 			await vi.waitFor(() =>
 				expect(
 					Array.from(target.querySelectorAll('[role="alert"]')).map((el) => el.textContent)
@@ -355,9 +372,9 @@ describe('RecipeTabs', () => {
 		loadSongData(makeSong({ slug: 'test', lyrics: 'hello' }));
 		setDraftLyrics('unsaved edit');
 		const target = await renderTabs();
-		await clickSettled(recipeTabNamed(target, 'Engine'));
-		const manage = Array.from(target.querySelectorAll<HTMLAnchorElement>('a')).find((link) =>
-			link.textContent?.includes('Manage')
+		await clickSettled(recipeTabNamed(target, words['recipe.tabEngine']));
+		const manage = Array.from(target.querySelectorAll<HTMLAnchorElement>('a')).find(
+			(link) => link.textContent === words['recipe.managePresets']
 		) as HTMLAnchorElement;
 		manage.click();
 		await tick();
@@ -368,22 +385,22 @@ describe('RecipeTabs', () => {
 	it('shows Default, with no dot and no undo, for an empty engine beside a preset saved with empty engine fields', async () => {
 		presets.set([{ ...warmPreset, id: 'bare', name: 'Bare', params: {} } as PresetItem]);
 		const target = await renderTabs(atStandard({ genParams: { lm_temperature: 0.5 } }));
-		await clickSettled(recipeTabNamed(target, 'Engine'));
+		await clickSettled(recipeTabNamed(target, words['recipe.tabEngine']));
 		const select = target.querySelector<HTMLSelectElement>(
-			'select[aria-label="Preset"]'
+			`select[aria-label="${words['recipe.preset']}"]`
 		) as HTMLSelectElement;
 		await clickSettled(resetButton(target, 'preset') as HTMLElement);
-		expect(select.selectedOptions[0].textContent).toBe('Default');
+		expect(select.selectedOptions[0].textContent).toBe(words['recipe.presetDefault']);
 		expect(target.querySelector('[data-field="preset"] [data-field-changed]')).toBeNull();
 		expect(resetButton(target, 'preset')).toBeNull();
 		props.values = atStandard({ genParams: { lm_temperature: 0.5 } });
 		await tick();
-		expect(select.selectedOptions[0].textContent).toBe('Custom');
-		const resetAll = getByRoleButton(target, 'Reset all') as HTMLButtonElement;
+		expect(select.selectedOptions[0].textContent).toBe(words['recipe.presetCustom']);
+		const resetAll = getByRoleButton(target, words['recipe.resetAll']) as HTMLButtonElement;
 		expect(resetAll.disabled).toBe(false);
 		await clickSettled(resetAll);
 		expect(props.values.genParams).toBeNull();
-		expect(select.selectedOptions[0].textContent).toBe('Default');
+		expect(select.selectedOptions[0].textContent).toBe(words['recipe.presetDefault']);
 	});
 
 	it('removes the reference with its reset and keeps the voice', async () => {
@@ -400,7 +417,11 @@ describe('RecipeTabs', () => {
 
 	it('offers no Repaint, Off or Source', async () => {
 		const target = await renderTabs();
-		for (const name of ['Song', 'Generate', 'Engine']) {
+		for (const name of [
+			words['recipe.tabSong'],
+			words['recipe.tabGenerate'],
+			words['recipe.tabEngine']
+		]) {
 			await clickSettled(recipeTabNamed(target, name));
 			expect(target.textContent).not.toMatch(/Repaint|Source|\bOff\b/);
 		}

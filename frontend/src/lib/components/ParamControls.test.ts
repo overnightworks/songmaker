@@ -6,6 +6,7 @@ import type { VersionGenerationParams } from '#lib/api/types.ts';
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import { toasts } from '#lib/stores/toast.ts';
 
+import { words } from '#lib/words/en.ts';
 import ParamControls from './ParamControls.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -127,7 +128,9 @@ describe('ParamControls placeholders', () => {
 
 		const select = target.querySelector('select');
 		if (!(select instanceof HTMLSelectElement)) throw new Error('Expected a select input');
-		expect(select.options[0].textContent).toBe(`default (${LOADED_PLACEHOLDERS.infer_method})`);
+		expect(select.options[0].textContent).toBe(
+			words['paramField.defaultOptionValue']({ value: String(LOADED_PLACEHOLDERS.infer_method) })
+		);
 		expect(target.textContent).not.toContain('undefined');
 	});
 
@@ -136,7 +139,9 @@ describe('ParamControls placeholders', () => {
 		const target = await renderControls(false, incompletePlaceholders);
 
 		const errorText = target.querySelector('.param-error-text');
-		expect(errorText?.textContent).toBe('Default missing for inference_steps');
+		expect(errorText?.textContent).toBe(
+			words['paramField.defaultMissing']({ key: 'inference_steps' })
+		);
 		expect(
 			Array.from(target.querySelectorAll('input[type="number"]')).some(
 				(input) =>
@@ -152,11 +157,15 @@ describe('ParamControls placeholders', () => {
 
 		const select = target.querySelector('select');
 		if (!(select instanceof HTMLSelectElement)) throw new Error('Expected a select input');
-		expect(select.options[0].textContent).toBe(`default (${LOADED_PLACEHOLDERS.infer_method})`);
+		expect(select.options[0].textContent).toBe(
+			words['paramField.defaultOptionValue']({ value: String(LOADED_PLACEHOLDERS.infer_method) })
+		);
 
 		expect(
 			get(toasts).some(
-				(t) => t.type === 'error' && t.message === 'Default missing for inference_steps'
+				(t) =>
+					t.type === 'error' &&
+					t.message === words['paramField.defaultMissing']({ key: 'inference_steps' })
 			)
 		).toBe(true);
 	});
@@ -179,6 +188,10 @@ describe('ParamControls change marks', () => {
 		const resets = target.querySelectorAll<HTMLButtonElement>('[data-field-reset]');
 		expect(resets).toHaveLength(1);
 		expect(target.querySelectorAll('[data-field-changed]')).toHaveLength(1);
+		expect(resets[0].title).toBe(words['paramField.resetTitle']);
+		expect(resets[0].getAttribute('aria-label')).toBe(
+			words['paramField.resetLabel']({ field: words['paramField.temperature'] })
+		);
 		resets[0].click();
 		expect(onresetfield).toHaveBeenCalledWith('lm_temperature');
 	});
@@ -194,7 +207,7 @@ describe('ParamControls change marks', () => {
 			(candidate) => candidate.value === '0.5'
 		);
 		const label = input?.labels?.[0];
-		expect(label?.textContent).toMatch(/temperature/i);
+		expect(label?.textContent).toBe(words['paramField.temperature']);
 		label?.click();
 		expect(onresetfield).not.toHaveBeenCalled();
 		expect(input?.value).toBe('0.5');

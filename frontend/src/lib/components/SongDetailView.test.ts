@@ -29,7 +29,6 @@ import type { JobItem, SongItem } from '#lib/api/types.ts';
 import { EDITOR_GENERATE_LABEL, EDITOR_GENERATING_LABEL } from '#lib/constants/song.ts';
 import { TAKES_ERROR, TAKES_LOADING, TAKES_RETRY_LABEL } from '#lib/constants/take.ts';
 import { COMPACT_LAYOUT_MAX_PX } from '#lib/constants/media.ts';
-import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import { injectHitboxStyles } from '#lib/test-utils/hitbox.ts';
@@ -156,7 +155,7 @@ describe('SongDetailView header — one row, every state', () => {
 		const actions = header(target).querySelector<HTMLElement>('.editor-header-actions');
 		if (!actions) throw new Error('Expected header actions');
 		expect(visibleText(actions)).not.toContain(words['songTabs.cowriter']);
-		expect(visibleText(actions)).not.toContain(RECIPE_PANEL_LABEL);
+		expect(visibleText(actions)).not.toContain(words['recipe.panel']);
 		expect(target.querySelectorAll('.generate-action .primary-button')).toHaveLength(1);
 		expect(target.querySelector('.generate-action .primary-button')?.textContent).toContain(
 			EDITOR_GENERATE_LABEL
@@ -167,7 +166,7 @@ describe('SongDetailView header — one row, every state', () => {
 		const target = await renderView();
 		const writeColumn = target.querySelector<HTMLElement>('.write-column') as HTMLElement;
 		expect(target.querySelector('[role="region"][aria-label="Recipe"]')).toBeNull();
-		clickNamed(writeColumn, RECIPE_PANEL_LABEL + ' ›');
+		clickNamed(writeColumn, `${words['recipe.panel']} ›`);
 		await tick();
 		expect(get(recipeOpen)).toBe(true);
 		expect(writeColumn.querySelector('[role="region"][aria-label="Recipe"]')).not.toBeNull();

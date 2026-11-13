@@ -16,6 +16,7 @@ import { recipeModel, recipeOpen, takesPerGenerate } from '#lib/stores/recipe.ts
 import { activeModels, builtinDefaults, loadActiveModels, presets } from '#lib/stores/presets.ts';
 import { loras } from '#lib/stores/loras.ts';
 import { fetchBuiltinDefaults, fetchGenerationDefaults, fetchPresets } from '#lib/api/client.ts';
+import { words } from '#lib/words/en.ts';
 import RecipeLine from './RecipeLine.svelte';
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => ({
@@ -76,7 +77,9 @@ const changedDot = (target: HTMLElement) => target.querySelector('[data-recipe-c
 describe('RecipeLine', () => {
 	it('is one closed line with no value and no dot at the standard', async () => {
 		const target = await renderLine();
-		expect(closedLine(target).textContent?.replace(/\s+/g, ' ').trim()).toBe('Recipe ›');
+		expect(closedLine(target).textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			`${words['recipe.panel']} ›`
+		);
 		expect(changedDot(target)).toBeNull();
 	});
 
@@ -151,7 +154,7 @@ describe('RecipeLine', () => {
 		recipeOpen.set(true);
 		const target = await renderLine();
 		const input = target.querySelector<HTMLInputElement>(
-			'input[aria-label="BPM"]'
+			`input[aria-label="${words['recipe.bpm']}"]`
 		) as HTMLInputElement;
 		input.value = '145';
 		input.dispatchEvent(new Event('input', { bubbles: true }));

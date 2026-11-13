@@ -4,7 +4,6 @@
 
 import { readFileSync } from 'node:fs';
 import { expect, test } from './coverage-test';
-import { RECIPE_REFERENCE_LABEL } from '../src/lib/constants/recipe';
 import { FlowGuard, workspace } from './helpers';
 import {
 	archiveOwnedAlbum,
@@ -46,8 +45,10 @@ test('A reference uploaded from the recipe is chosen, saved with the version and
 			.click();
 		await expect(page.getByRole('heading', { name: title })).toBeVisible();
 		await page.locator('.recipe-line').click();
-		const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
-		await recipe.getByRole('button', { name: new RegExp(`^${RECIPE_REFERENCE_LABEL}:`) }).click();
+		const recipe = page.getByRole('region', { name: words['recipe.panel'], exact: true });
+		await recipe
+			.getByRole('button', { name: new RegExp(`^${words['referencePicker.label']}:`) })
+			.click();
 
 		await recipe.locator('input[type="file"]').setInputFiles({
 			name: filename,
@@ -70,8 +71,8 @@ test('A reference uploaded from the recipe is chosen, saved with the version and
 		await page.locator('.recipe-line').click();
 		await expect(
 			page
-				.getByRole('region', { name: 'Recipe', exact: true })
-				.getByRole('button', { name: `${RECIPE_REFERENCE_LABEL}: ${filename}` })
+				.getByRole('region', { name: words['recipe.panel'], exact: true })
+				.getByRole('button', { name: words['referencePicker.chosen']({ name: filename }) })
 		).toBeVisible();
 		guard.assertClean();
 	} finally {

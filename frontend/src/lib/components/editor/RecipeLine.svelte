@@ -25,7 +25,7 @@
 		recipeDiffersFromStandard,
 		type RecipeValues
 	} from '#lib/utils/recipe-standard.ts';
-	import { RECIPE_CHANGED_LABEL, RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import RecipeTabs from './RecipeTabs.svelte';
 
 	const values = $derived<RecipeValues>({
@@ -99,10 +99,10 @@
 		class="recipe-line"
 		bind:this={lineButton}
 		aria-expanded="false"
-		aria-label={differs ? `${RECIPE_PANEL_LABEL}, ${RECIPE_CHANGED_LABEL}` : RECIPE_PANEL_LABEL}
+		aria-label={pageText(differs ? 'recipe.panelChanged' : 'recipe.panel')}
 		onclick={open}
 	>
-		<span class="label">{RECIPE_PANEL_LABEL}</span>
+		<span class="label">{pageText('recipe.panel')}</span>
 		{#if differs}<i class="dot" data-recipe-changed aria-hidden="true"></i>{/if}
 		<span class="chevron" aria-hidden="true">›</span>
 	</button>

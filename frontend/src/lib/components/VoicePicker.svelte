@@ -7,17 +7,14 @@
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { recipeModel } from '#lib/stores/recipe.ts';
 	import { refocusIfDropped } from '#lib/utils/focus-trap.ts';
-	import {
-		VOICE_PICKER_CREATE_LABEL,
-		VOICE_PICKER_DELETED_LABEL,
-		VOICE_PICKER_LABEL,
-		VOICE_PICKER_NONE_LABEL,
-		VOICE_PICKER_NOT_AVAILABLE_FOR_MODEL,
-		voicePickerMobileLabel
-	} from '#lib/constants/voice.ts';
+	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import type { UserLoraItem, VersionGenerationParams } from '#lib/api/types.ts';
 
 	const NONE_VALUE = '__none__';
+	const SETTLED_STATE_KEYS: Readonly<Record<string, TextKey>> = {
+		draft: 'voicePicker.stateDraft',
+		failed: 'voicePicker.stateFailed'
+	};
 
 	const current = $derived(($editGenParams ?? {}).user_lora_id ?? null);
 	const visibleLoras = $derived(
@@ -41,19 +38,22 @@
 		);
 	}
 
-	function unavailableLabel(lora: UserLoraItem): string | null {
-		if (lora.deleted_at !== null) return VOICE_PICKER_DELETED_LABEL;
+	function unavailableState(lora: UserLoraItem): string | null {
+		if (lora.deleted_at !== null) return pageText('voicePicker.stateDeleted');
 		if (lora.status === 'ready' && lora.model_mode !== targetModelMode) {
-			return VOICE_PICKER_NOT_AVAILABLE_FOR_MODEL;
+			return pageText('voicePicker.stateNotForModel');
 		}
-		if (lora.status !== 'ready') return isLoraActive(lora.status) ? 'training' : lora.status;
-		return null;
+		if (isLoraActive(lora.status)) return pageText('voicePicker.stateTraining');
+		const settledKey = SETTLED_STATE_KEYS[lora.status];
+		return settledKey === undefined ? null : pageText(settledKey);
 	}
 
 	const selectedLabel = $derived.by(() => {
-		if (!selectedLora) return VOICE_PICKER_NONE_LABEL;
-		const unavailable = unavailableLabel(selectedLora);
-		return unavailable ? `${selectedLora.name} — ${unavailable}` : selectedLora.name;
+		if (!selectedLora) return pageText('voicePicker.none');
+		const state = unavailableState(selectedLora);
+		return state
+			? pageText('voicePicker.chosenUnavailable', { name: selectedLora.name, state })
+			: selectedLora.name;
 	});
 
 	function setChoice(value: string) {
@@ -76,8 +76,10 @@
 </script>
 
 <div class="voice-picker">
-	<span class="label desktop-label">{VOICE_PICKER_LABEL}</span>
-	<span class="label mobile-label">{voicePickerMobileLabel(targetModelMode)}</span>
+	<span class="label desktop-label">{pageText('voicePicker.label')}</span>
+	<span class="label mobile-label"
+		>{pageText('voicePicker.mobileLabel', { mode: targetModelMode })}</span
+	>
 	<div class="picker-wrap">
 		<button
 			bind:this={triggerButton}
@@ -92,7 +94,12 @@
 			<span aria-hidden="true">⌄</span>
 		</button>
 		{#if $open}
-			<div class="options" id="voice-picker-options" role="listbox" aria-label={VOICE_PICKER_LABEL}>
+			<div
+				class="options"
+				id="voice-picker-options"
+				role="listbox"
+				aria-label={pageText('voicePicker.label')}
+			>
 				<button
 					type="button"
 					class="option"
@@ -101,11 +108,11 @@
 					aria-selected={current === null}
 					onclick={() => setChoice(NONE_VALUE)}
 				>
-					{VOICE_PICKER_NONE_LABEL}
+					{pageText('voicePicker.none')}
 				</button>
 				{#each visibleLoras as lora (lora.id)}
 					{@const selectable = isSelectable(lora)}
-					{@const unavailable = unavailableLabel(lora)}
+					{@const unavailable = unavailableState(lora)}
 					<button
 						type="button"
 						class="option"
@@ -122,7 +129,9 @@
 							<span class="mode-chip">{lora.model_mode}</span>
 						{/if}
 						{#if unavailable}
-							<span class="unavailable-label">— {unavailable}</span>
+							<span class="unavailable-label"
+								>{pageText('voicePicker.optionUnavailable', { state: unavailable })}</span
+							>
 						{/if}
 					</button>
 				{/each}
@@ -134,7 +143,7 @@
 			class="hint"
 			href="/settings/voices"
 			onclick={(event) => followAppPageLink(event, '/settings/voices')}
-			>{VOICE_PICKER_CREATE_LABEL}</a
+			>{pageText('voicePicker.create')}</a
 		>
 	{/if}
 </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
 	import { localDayAndMonth, localDaysBetween } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	let { deletesAt, now }: { deletesAt: string; now: Date } = $props();
 
@@ -8,13 +9,13 @@
 		const deletesOn = new Date(deletesAt);
 		return {
 			days: Math.max(localDaysBetween(now, deletesOn), 0),
-			tooltip: `Deleted on ${localDayAndMonth(deletesOn, now)} — keep to preserve`
+			tooltip: pageText('referenceExpiry.deletesOn', { date: localDayAndMonth(deletesOn, now) })
 		};
 	});
 </script>
 
 <span class="exp" class:warn={deletion.days <= EXPIRY_WARN_DAYS} title={deletion.tooltip}
-	>⏳ {deletion.days}d</span
+	>⏳ {pageText('referenceExpiry.daysLeft', deletion.days)}</span
 >
 
 <style>

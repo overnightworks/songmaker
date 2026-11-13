@@ -1,7 +1,15 @@
 import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { describe, expect, it, vi } from 'vitest';
 import type { GenerationItem } from '#lib/api/types.ts';
-import { RECIPE_REFERENCE_LABEL } from '#lib/constants/recipe.ts';
+import { words } from '#lib/words/en.ts';
+import { sourceLanguage } from '#lib/words/index.ts';
+
+// The registry test resets the module graph, so each import brings its own page words to load.
+async function importBuildTakeRecipe() {
+	const { loadPageWords } = await import('#lib/utils/page-words.ts');
+	await loadPageWords(sourceLanguage);
+	return (await import('./recipe-summary')).buildTakeRecipe;
+}
 
 describe('buildTakeRecipe', () => {
 	it.each([
@@ -31,14 +39,14 @@ describe('buildTakeRecipe', () => {
 					label: 'Model & Sampling',
 					entries: [
 						{ label: 'Model', value: 'xl-sft' },
-						{ label: 'Inference Steps', value: '50' },
-						{ label: 'Guidance Scale', value: '7.5' },
-						{ label: 'Infer Method', value: 'sde' },
-						{ label: 'Sampler', value: 'heun' },
-						{ label: 'Adaptive Dual Guidance', value: 'On' },
-						{ label: 'Temperature', value: '0.85' },
-						{ label: 'Thinking', value: 'On' },
-						{ label: 'Negative Prompt', value: 'noise' }
+						{ label: words['paramField.inferenceSteps'], value: '50' },
+						{ label: words['paramField.guidanceScale'], value: '7.5' },
+						{ label: words['paramField.inferMethod'], value: 'sde' },
+						{ label: words['paramField.sampler'], value: 'heun' },
+						{ label: words['paramField.adaptiveDualGuidance'], value: 'On' },
+						{ label: words['paramField.temperature'], value: '0.85' },
+						{ label: words['paramField.thinking'], value: 'On' },
+						{ label: words['paramField.negativePrompt'], value: 'noise' }
 					]
 				},
 				{ label: 'Reproducibility', entries: [{ label: 'Seed', value: '48113' }] },
@@ -70,7 +78,7 @@ describe('buildTakeRecipe', () => {
 			groups: []
 		}
 	])('groups $name', async ({ generation: gen, song: s, groups }) => {
-		const { buildTakeRecipe } = await import('./recipe-summary');
+		const buildTakeRecipe = await importBuildTakeRecipe();
 		expect(buildTakeRecipe(gen, s)).toEqual(groups);
 	});
 });
@@ -91,7 +99,7 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 					...actual.DIT_NUMBER_FIELDS,
 					{
 						key: 'chroma_alignment',
-						label: 'Chroma Alignment (fake registry entry)',
+						labelKey: 'paramField.latentRescale',
 						min: 0,
 						max: 20,
 						step: 0.5
@@ -100,7 +108,7 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 			};
 		});
 
-		const { buildTakeRecipe } = await import('./recipe-summary');
+		const buildTakeRecipe = await importBuildTakeRecipe();
 		const groups = buildTakeRecipe(
 			generation({
 				seed: null,
@@ -115,7 +123,7 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 		expect(groups).toEqual([
 			{
 				label: 'Model & Sampling',
-				entries: [{ label: 'Chroma Alignment (fake registry entry)', value: '4.2' }]
+				entries: [{ label: words['paramField.latentRescale'], value: '4.2' }]
 			}
 		]);
 
@@ -124,7 +132,7 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 	});
 
 	it('falls back an unknown generation_params key to Other', async () => {
-		const { buildTakeRecipe } = await import('./recipe-summary');
+		const buildTakeRecipe = await importBuildTakeRecipe();
 		const groups = buildTakeRecipe(
 			generation({
 				seed: null,
@@ -139,7 +147,7 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 	});
 
 	it('renders textual generation parameters as their stored values', async () => {
-		const { buildTakeRecipe } = await import('./recipe-summary');
+		const buildTakeRecipe = await importBuildTakeRecipe();
 		const groups = buildTakeRecipe(
 			generation({
 				seed: null,
@@ -165,7 +173,7 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 
 describe('buildTakeRecipe deduplicating what the take already shows', () => {
 	it('does not repeat acestep_model under Other — it is the Model row shown already', async () => {
-		const { buildTakeRecipe } = await import('./recipe-summary');
+		const buildTakeRecipe = await importBuildTakeRecipe();
 		const groups = buildTakeRecipe(
 			generation({
 				seed: null,
@@ -198,7 +206,7 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 	])(
 		'shows a requested seed only when it $name',
 		async ({ seed, requestedSeed, reproducibilityEntries }) => {
-			const { buildTakeRecipe } = await import('./recipe-summary');
+			const buildTakeRecipe = await importBuildTakeRecipe();
 			const groups = buildTakeRecipe(
 				generation({ model_mode: '', seed, generation_params: { seed: requestedSeed } }),
 				song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
@@ -208,7 +216,7 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 	);
 
 	it('shows a VRAM-guard batch reduction next to Batch Size, not under Other', async () => {
-		const { buildTakeRecipe } = await import('./recipe-summary');
+		const buildTakeRecipe = await importBuildTakeRecipe();
 		const groups = buildTakeRecipe(
 			generation({
 				seed: null,
@@ -221,7 +229,7 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 			{
 				label: 'Model & Sampling',
 				entries: [
-					{ label: 'Batch Size', value: '2' },
+					{ label: words['paramField.batchSize'], value: '2' },
 					{ label: 'Delivered Batch Size', value: '1' }
 				]
 			}
@@ -229,20 +237,20 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 	});
 
 	it('shows no Delivered Batch Size row when the take carries none', async () => {
-		const { buildTakeRecipe } = await import('./recipe-summary');
+		const buildTakeRecipe = await importBuildTakeRecipe();
 		const groups = buildTakeRecipe(
 			generation({ seed: null, model_mode: '', generation_params: { batch_size: 2 } }),
 			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 		expect(groups).toEqual([
-			{ label: 'Model & Sampling', entries: [{ label: 'Batch Size', value: '2' }] }
+			{ label: 'Model & Sampling', entries: [{ label: words['paramField.batchSize'], value: '2' }] }
 		]);
 	});
 });
 
 describe('buildTakeRecipe reference', () => {
 	const buildRecipe = async (reference: GenerationItem['reference']) => {
-		const { buildTakeRecipe } = await import('./recipe-summary');
+		const buildTakeRecipe = await importBuildTakeRecipe();
 		return buildTakeRecipe(
 			generation({ seed: null, model_mode: '', generation_params: {}, reference }),
 			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
@@ -256,7 +264,7 @@ describe('buildTakeRecipe reference', () => {
 				label: 'Version',
 				entries: [
 					{
-						label: RECIPE_REFERENCE_LABEL,
+						label: words['referencePicker.label'],
 						value: 'demo take.wav',
 						link: { route: '/settings/references', query: { reference: 'r1' } }
 					}
