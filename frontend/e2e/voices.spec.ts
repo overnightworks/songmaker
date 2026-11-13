@@ -274,7 +274,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
 		await expect(page.getByRole('heading', { name: /E2E With Voice/ })).toBeVisible();
 		if (isMobile) {
-			await page.getByRole('tab', { name: 'Edit', exact: true }).click();
+			await page.getByRole('tab', { name: words['songTabs.edit'], exact: true }).click();
 			await test.info().attach('phone-recipe-collapsed', {
 				body: await page.locator('.recipe-line').screenshot(),
 				contentType: 'image/png'
@@ -312,7 +312,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
 		if (isMobile) {
-			await page.getByRole('tab', { name: 'Edit', exact: true }).click();
+			await page.getByRole('tab', { name: words['songTabs.edit'], exact: true }).click();
 		}
 		await page.locator('.recipe-line').click();
 		if (isMobile) {
