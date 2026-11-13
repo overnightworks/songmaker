@@ -10,9 +10,9 @@ import pytest
 from support.mcp_tool_table import ALICE, ALL_TOOLS, BOB, Tool
 from support.mcp_world import AGENT_SUBJECT, McpWorld, agent_claims
 from support.token_world import TokenWorld
+from support.web_app import refusal_body
 
 from songmaker_cli.agent.mcp import collect_route_tools
-from songmaker_cli.auth_dependencies import PERSONS_AGENT_SHARE_REFUSED_DETAIL
 from songmaker_cli.db.models import Generation
 
 AGENTS = "agents"
@@ -135,10 +135,10 @@ def test_a_persons_own_agent_is_refused_a_share_on_both_paths_and_nothing_is_wri
     path, _ = tool.request(subject)
     direct = persons_world.world.client.post(path, headers=persons_world.agent())
 
-    assert (through_mcp.is_error, PERSONS_AGENT_SHARE_REFUSED_DETAIL in through_mcp.text) == (
-        True, True)
-    assert (direct.status_code, direct.json()["detail"]) == (
-        403, PERSONS_AGENT_SHARE_REFUSED_DETAIL)
+    assert (through_mcp.is_error, through_mcp.json()) == (
+        True, refusal_body("shareRefusal.personsAgent"))
+    assert (direct.status_code, direct.json()) == (
+        403, refusal_body("shareRefusal.personsAgent"))
     assert persons_world.snapshot() == before
 
 
@@ -152,8 +152,8 @@ def test_a_token_of_a_stored_agent_account_outside_the_agent_group_is_refused(
     through_mcp = household.call("share_song", {"song_id": f"song-{ALICE}"})
     direct = _share_direct(household, f"song-{ALICE}")
 
-    assert (through_mcp.is_error, PERSONS_AGENT_SHARE_REFUSED_DETAIL in through_mcp.text) == (
-        True, True)
+    assert (through_mcp.is_error, through_mcp.json()) == (
+        True, refusal_body("shareRefusal.personsAgent"))
     assert direct.status_code == 403
     assert household.snapshot() == before
 

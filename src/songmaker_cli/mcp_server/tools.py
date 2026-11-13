@@ -62,6 +62,7 @@ from songmaker_cli.mcp_server.schemas import (
     VersionSummary,
     WriteResult,
 )
+from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 MAX_SEARCH_RESULTS = 50
 
@@ -333,7 +334,7 @@ def tool_suggest_album_cover(
     person. A caller without one is refused, because the picture needs a browser login.
     """
     if session_id is None:
-        raise MCPToolError("Cover suggestions need a browser login.")
+        raise MCPToolError(text(SOURCE_LANGUAGE, "coverSuggestionRefusal.browserLogin"))
     try:
         job = request_cover_suggestions(
             session, album_id, user, session_id=session_id, require_owner=True,

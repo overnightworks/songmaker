@@ -14,6 +14,7 @@ from support.web_app import (
     make_fake_redis,
     make_router_app,
     make_router_ctx,
+    refusal_body,
     web_client,
 )
 
@@ -35,7 +36,6 @@ from songmaker_cli.mcp_server.tools import tool_rename_song, tool_update_song_ly
 
 OWNER_ID = "owner"
 OWNER = make_authenticated_user(OWNER_ID, username="owner")
-IN_USE_DETAIL = "This version has a take rendering; wait for it to finish or cancel it."
 TERMINAL_STATUSES = [
     JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.PARTIAL, JobStatus.CANCELLED,
 ]
@@ -151,7 +151,7 @@ def test_a_version_an_active_job_references_answers_409_and_changes_nothing(
     )
 
     assert response.status_code == 409
-    assert response.json() == {"detail": IN_USE_DETAIL}
+    assert response.json() == refusal_body("versionRefusal.inUse")
     assert version_id in _version_ids(client)
     assert _job_version(client, job_id) == version_id
     with _database(client) as session:

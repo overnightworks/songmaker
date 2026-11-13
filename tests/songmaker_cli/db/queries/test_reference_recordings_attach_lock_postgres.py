@@ -16,7 +16,7 @@ from support.postgres_lock_harness import (
     wrote_to_tables,
 )
 from support.reference_rows import a_reference
-from support.web_app import make_test_app, seed_session
+from support.web_app import make_test_app, refusal_body, seed_session
 
 from songmaker_cli.db.models import Album, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.songs import create_song
@@ -24,7 +24,7 @@ from songmaker_cli.timestamps import utcnow
 
 OWNER = "u1"
 REFERENCE_ID = "reference-1"
-NOT_FOUND = {"detail": "Not Found"}
+NOT_FOUND = refusal_body("songRefusal.referenceMissing")
 IN_USE = {"detail": "Reference audio is in use."}
 
 

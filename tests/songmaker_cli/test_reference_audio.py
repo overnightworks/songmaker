@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from support.reference_rows import a_reference
-from support.web_app import make_test_app, seed_session
+from support.web_app import make_test_app, refusal_body, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, ReferenceRecording, Song, User, Version
@@ -289,7 +289,7 @@ def test_a_foreign_or_unknown_reference_answers_404_and_writes_nothing(
         )
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Not Found"}
+    assert response.json() == refusal_body("songRefusal.referenceMissing")
     with factory() as session:
         assert session.query(Song).filter_by(title="Foreign").first() is None
         assert all(row.unused_since is not None for row in session.query(ReferenceRecording))

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -12,7 +11,7 @@ from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
-    PLAYLIST_NOT_FOUND_DETAIL,
+    GENERATION_NOT_FOUND_DETAIL,
     can_access_album,
     check_album_access,
     check_generation_access,
@@ -82,9 +81,6 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-ALBUM_NOT_FOUND_DETAIL: Final = "Album not found"
-
-
 def _albums_reached_by(user: AuthenticatedUser) -> AlbumReach:
     return lambda album: can_access_album(album, user)
 
@@ -134,7 +130,7 @@ _GET_PLAYLIST_DESCRIPTION = (
     "/playlists/{playlist_id}",
     description=_GET_PLAYLIST_DESCRIPTION,
     openapi_extra=agent_tool(name="get_playlist", effect=ToolEffect.READ_ONLY),
-    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "playlistRefusal.notFound")}},
 )
 def api_get_playlist(
     playlist_id: str,
@@ -148,7 +144,7 @@ def api_get_playlist(
 @router.put(
     "/playlists/{playlist_id}",
     description="Rename one of the person's own playlists.",
-    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "playlistRefusal.notFound")}},
     openapi_extra=agent_tool(name="update_playlist", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_update_playlist(
@@ -162,14 +158,14 @@ def api_update_playlist(
     try:
         playlist = update_playlist(session, playlist_id, req.title, slug=slug)
     except ValueError:
-        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
+        raise Refusal(404, "playlistRefusal.notFound")
     session.commit()
     return PlaylistResponse.from_orm(playlist, reaches=_albums_reached_by(user))
 
 
 @router.delete(
     "/playlists/{playlist_id}",
-    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "playlistRefusal.notFound")}},
     openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_playlist(
@@ -182,7 +178,7 @@ def api_delete_playlist(
     try:
         delete_playlist(session, playlist_id)
     except ValueError:
-        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
+        raise Refusal(404, "playlistRefusal.notFound")
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     remove_playlist_cover_files(ctx.audio_dir, playlist_id)
@@ -213,7 +209,7 @@ def api_get_playlist_cover(
 
 @router.put(
     "/playlists/{playlist_id}/cover",
-    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "playlistRefusal.notFound")}},
     openapi_extra=exclude_route(Exclusion.BROWSER_ONLY),
 )
 async def api_upload_playlist_cover(
@@ -237,7 +233,7 @@ async def api_upload_playlist_cover(
 
 @router.delete(
     "/playlists/{playlist_id}/cover",
-    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "playlistRefusal.notFound")}},
     openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
 )
 def api_delete_playlist_cover(
@@ -283,7 +279,7 @@ def api_add_generation_to_playlist(
     try:
         entry = add_generation_to_playlist(session, playlist_id, req.generation_id)
     except ValueError:
-        raise HTTPException(404, "Generation not found")
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     except ArchivedTakeError:
         raise Refusal(409, "takeRefusal.archived")
     session.commit()
@@ -320,15 +316,15 @@ def api_add_song_to_playlist(
     song = check_song_access(session, req.song_id, user)
     playable = presented_take(song.generations)
     if playable is None:
-        raise HTTPException(400, "Song has no playable take")
+        raise Refusal(400, "playlistRefusal.songNotPlayable")
     try:
         resolve_audio_path(ctx.audio_dir, playable.mp3_path)
     except (AudioPathRejectedError, OSError):
-        raise HTTPException(400, "Song has no playable take")
+        raise Refusal(400, "playlistRefusal.songNotPlayable")
     try:
         add_song_to_playlist(session, playlist_id, req.song_id)
     except ValueError:
-        raise HTTPException(404, "Song not found")
+        raise Refusal(404, "songRefusal.notFound")
     except ArchivedTakeError:
         raise Refusal(409, "takeRefusal.archived")
     session.commit()
@@ -369,7 +365,7 @@ def api_add_album_to_playlist(
             session, playlist_id, req.album_id, is_readable=_readable
         )
     except ValueError:
-        raise HTTPException(404, ALBUM_NOT_FOUND_DETAIL)
+        raise Refusal(404, "albumRefusal.notFound")
     session.commit()
     return AddAlbumToPlaylistResponse(
         added_count=len(result.entries),
@@ -400,7 +396,7 @@ def api_remove_from_playlist(
     try:
         remove_from_playlist(session, playlist_id, entry_id)
     except ValueError:
-        raise HTTPException(404, "Playlist entry not found")
+        raise Refusal(404, "playlistRefusal.entryNotFound")
     session.commit()
     return StatusResponse()
 
@@ -422,7 +418,7 @@ def api_reorder_playlist_entry(
     try:
         reorder_playlist_entry(session, playlist_id, entry_id, req.new_position)
     except ValueError:
-        raise HTTPException(404, "Playlist entry not found")
+        raise Refusal(404, "playlistRefusal.entryNotFound")
     session.commit()
     return StatusResponse()
 
@@ -432,7 +428,7 @@ def api_reorder_playlist_entry(
 
 @router.post(
     "/playlists/{playlist_id}/share",
-    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "playlistRefusal.notFound")}},
     openapi_extra=exclude_route(Exclusion.SHARING),
 )
 def api_share_playlist(
@@ -443,8 +439,8 @@ def api_share_playlist(
     check_playlist_access(session, playlist_id, user)
     try:
         playlist = enable_playlist_sharing(session, playlist_id)
-    except ValueError:
-        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
+    except ValueError as exc:
+        raise Refusal(404, "playlistRefusal.notFound") from exc
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.PLAYLIST, playlist_id)
     share_url = public_share_url(ShareKind.PLAYLIST, playlist.share_slug)
     session.commit()
@@ -464,7 +460,7 @@ _UNSHARE_PLAYLIST_DESCRIPTION = (
     "/playlists/{playlist_id}/share",
     description=_UNSHARE_PLAYLIST_DESCRIPTION,
     openapi_extra=agent_tool(name="unshare_playlist", effect=ToolEffect.SIDE_EFFECTING),
-    responses={404: {"description": PLAYLIST_NOT_FOUND_DETAIL}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "playlistRefusal.notFound")}},
 )
 def api_unshare_playlist(
     playlist_id: str,
@@ -475,7 +471,7 @@ def api_unshare_playlist(
     try:
         disable_playlist_sharing(session, playlist_id)
     except ValueError:
-        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
+        raise Refusal(404, "playlistRefusal.notFound")
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     return StatusResponse()

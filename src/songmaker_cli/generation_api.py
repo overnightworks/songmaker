@@ -176,7 +176,7 @@ def _generation_version_or_error(gen: Generation, version_id: str | None) -> Ver
     if version_id:
         version = next((v for v in gen.song.versions if v.id == version_id), None)
         if not version:
-            raise HTTPException(404, "Version not found")
+            raise Refusal(404, "versionRefusal.notFound")
     else:
         version = gen.version
     if not version:
@@ -286,7 +286,7 @@ async def api_generate_song(
     if req.version_id:
         version = next((v for v in song.versions if v.id == req.version_id), None)
         if not version:
-            raise HTTPException(404, "Version not found")
+            raise Refusal(404, "versionRefusal.notFound")
     else:
         version = song.latest_version
     if not version or not version.lyrics or not version.prompt:
