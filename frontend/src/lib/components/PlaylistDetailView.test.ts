@@ -5,7 +5,6 @@ import {
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-
 import type { PlaylistDetailItem, PlaylistEntryItem } from '#lib/api/types.ts';
 import { ApiError } from '#lib/api/fetch.ts';
 import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
@@ -52,11 +51,11 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/stores/navigation.ts')>()),
 	selectSong: vi.fn()
 }));
-
 import { openPlaylistDetail, populatedPlaylistDefaults } from '#lib/test-utils/playlist-detail.ts';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { words } from '#lib/words/en.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
@@ -651,7 +650,8 @@ describe('PlaylistDetailView says song, never track', () => {
 
 		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
 		await tick();
-		menuRow(requireElement(document.body, '.menu-panel'), 'Delete playlist').click();
+		const panel = requireElement(document.body, '.menu-panel');
+		menuRow(panel, words['collectionMenu.playlistDelete']).click();
 		await tick();
 
 		expect(requireElement(document.body, '[role="dialog"] ul').textContent).toBe(counted);

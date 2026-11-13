@@ -328,13 +328,13 @@ describe('CollectionHeader', () => {
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
 		expect(menuRowLabels(menu)).toEqual([
-			'Edit details',
+			words['collectionMenu.editDetails'],
 			'Cover',
-			'Pick album takes',
-			'Add to playlist',
-			'Share',
-			'Archive',
-			'Delete'
+			words['collectionMenu.curate'],
+			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.albumShare'],
+			words['collectionMenu.archive'],
+			words['collectionMenu.albumDelete']
 		]);
 	});
 
@@ -343,13 +343,13 @@ describe('CollectionHeader', () => {
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
 		expect(menuRowLabels(menu)).toEqual([
-			'Share playlist',
-			'Upload…',
-			'Remove cover',
-			'Rename',
-			'Delete playlist'
+			words['collectionMenu.playlistShare'],
+			words['collectionMenu.upload'],
+			words['collectionMenu.removeCover'],
+			words['collectionMenu.rename'],
+			words['collectionMenu.playlistDelete']
 		]);
-		menuRow(menu, 'Remove cover').click();
+		menuRow(menu, words['collectionMenu.removeCover']).click();
 		expect(props.onremovecover).toHaveBeenCalledTimes(1);
 	});
 
@@ -446,14 +446,19 @@ describe('CollectionHeader', () => {
 		const props = { ...baseProps(), kind: 'playlist' as const };
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
-		expect(menuRowLabels(menu)).toEqual(['Share playlist', 'Upload…', 'Rename', 'Delete playlist']);
+		expect(menuRowLabels(menu)).toEqual([
+			words['collectionMenu.playlistShare'],
+			words['collectionMenu.upload'],
+			words['collectionMenu.rename'],
+			words['collectionMenu.playlistDelete']
+		]);
 	});
 
 	it('shares from the Share row and copies the link, without duplicating the logic', async () => {
 		const props = baseProps();
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
-		menuRow(menu, 'Share').click();
+		menuRow(menu, words['collectionMenu.albumShare']).click();
 		await vi.waitFor(() => expect(props.onshare).toHaveBeenCalledTimes(1));
 		await vi.waitFor(() =>
 			expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://x/y')
@@ -524,9 +529,14 @@ describe('CollectionHeader', () => {
 	it('opens the details editor in place of the title from Edit details, and its close ends it', async () => {
 		const target = await render(detailsEditingAlbum());
 		const menu = await openCollectionMenu(target);
-		expect(menuRowLabels(menu)).toEqual(['Edit details', 'Add to playlist', 'Share', 'Delete']);
+		expect(menuRowLabels(menu)).toEqual([
+			words['collectionMenu.editDetails'],
+			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.albumShare'],
+			words['collectionMenu.albumDelete']
+		]);
 
-		menuRow(menu, 'Edit details').click();
+		menuRow(menu, words['collectionMenu.editDetails']).click();
 		await tick();
 
 		const titles = requireElement(target, '.header-titles');
@@ -552,7 +562,7 @@ describe('CollectionHeader', () => {
 		const target = await render({ ...baseProps(), kind: 'playlist' as const });
 		const menu = await openCollectionMenu(target);
 		const renameItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Rename'
+			(el) => el.textContent?.trim() === words['collectionMenu.rename']
 		);
 		renameItem?.click();
 		await tick();
