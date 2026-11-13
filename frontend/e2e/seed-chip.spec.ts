@@ -13,12 +13,12 @@ import {
 	EDITOR_TAB_TAKES_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
-import { TAKE_OVERFLOW_LABEL, TAKE_REPAINT_LABEL } from '../src/lib/constants/take';
 import { NOW_PLAYING_TAKE_TAB, NOW_PLAYING_LABEL } from '../src/lib/constants/now-playing';
 import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { showTab } from './foldedSong';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
+import { words } from '../src/lib/words/en';
 
 const TAKE_COUNT = 3;
 // The takes list shows the newest first, so take 1 is the last row.
@@ -78,10 +78,10 @@ async function useSeedOfTakeOne(page: Page): Promise<void> {
 	await workspace(page)
 		.locator('.take-row')
 		.last()
-		.getByRole('button', { name: TAKE_OVERFLOW_LABEL })
+		.getByRole('button', { name: words['takeMenu.label'] })
 		.click();
 	await page
-		.getByRole('dialog', { name: TAKE_OVERFLOW_LABEL })
+		.getByRole('dialog', { name: words['takeMenu.label'] })
 		.getByRole('button', { name: nameStartingWith(TAKE_USE_SEED_LABEL) })
 		.click();
 }
@@ -147,11 +147,11 @@ test('A Repaint from the card sends the seed and the chip stays (S6)', async ({ 
 	await workspace(page)
 		.locator('.take-row')
 		.last()
-		.getByRole('button', { name: TAKE_OVERFLOW_LABEL })
+		.getByRole('button', { name: words['takeMenu.label'] })
 		.click();
 	await page
-		.getByRole('dialog', { name: TAKE_OVERFLOW_LABEL })
-		.getByRole('button', { name: TAKE_REPAINT_LABEL })
+		.getByRole('dialog', { name: words['takeMenu.label'] })
+		.getByRole('button', { name: words['takeMenu.repaint'] })
 		.click();
 	await expect(page.locator('.task')).toContainText('seed: from take');
 	await page.route(REPAINT_ROUTE, (route) => route.fulfill({ json: QUEUED_JOB }));

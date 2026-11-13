@@ -4,11 +4,7 @@
 
 import { readFileSync } from 'node:fs';
 import { expect, test } from './coverage-test';
-import {
-	SONG_MENU_LABEL,
-	SONG_MENU_SAVE_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants/song';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { RECIPE_REFERENCE_LABEL } from '../src/lib/constants/recipe';
 import { FlowGuard, workspace } from './helpers';
 import {
@@ -19,6 +15,7 @@ import {
 	signedInApi,
 	TAKE_FIXTURE
 } from './seed';
+import { words } from '../src/lib/words/en';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -60,14 +57,14 @@ test('A reference uploaded from the recipe is chosen, saved with the version and
 		});
 		await expect(recipe.getByLabel(filename, { exact: true })).toBeChecked();
 
-		await page.getByRole('button', { name: SONG_MENU_LABEL, exact: true }).click();
+		await page.getByRole('button', { name: words['songMenu.label'], exact: true }).click();
 		const saved = page.waitForResponse(
 			(response) =>
 				response.url().includes('/api/songs/') &&
 				response.request().method() === 'PUT' &&
 				response.ok()
 		);
-		await page.getByRole('button', { name: SONG_MENU_SAVE_LABEL, exact: true }).click();
+		await page.getByRole('button', { name: words['songMenu.save'], exact: true }).click();
 		await saved;
 
 		await page.reload();

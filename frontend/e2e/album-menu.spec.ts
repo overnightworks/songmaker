@@ -6,13 +6,6 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
-import {
-	COLLECTION_MENU_EDIT_DETAILS_LABEL,
-	COLLECTION_MENU_LABEL,
-	COLLECTION_MENU_SHARE_LABEL,
-	COLLECTION_MENU_SHARE_OFF_HINT,
-	COLLECTION_MENU_SHARE_ON_HINT
-} from '../src/lib/constants/collection-menu';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	ALBUM_DETAILS_CLOSE_LABEL,
@@ -25,6 +18,7 @@ import { NEW_ALBUM_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import { boundingBoxes, sameOriginHeaders, FlowGuard, shellOf, workspace } from './helpers';
 import { bottomOf, expectMenuInsideViewport, rightOf } from './menu-viewport';
 import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist } from './seed';
+import { words } from '../src/lib/words/en';
 
 const LAPTOP_WIDTH_PX = 1280;
 const PHONE_WIDTH_PX = 390;
@@ -87,14 +81,14 @@ async function expectActionRowUnderCoverAndTitle(
 async function expectMenuAtRowEnd(header: Locator): Promise<void> {
 	const [identity, menuTrigger] = await boundingBoxes(
 		header.locator('.header-identity'),
-		header.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true })
+		header.getByRole('button', { name: words['collectionMenu.label'], exact: true })
 	);
 	expect(rightOf(menuTrigger)).toBeCloseTo(rightOf(identity), 0);
 }
 
 async function openMenu(page: Page, header: Locator): Promise<Locator> {
-	await header.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
-	const menu = page.getByRole('dialog', { name: COLLECTION_MENU_LABEL });
+	await header.getByRole('button', { name: words['collectionMenu.label'], exact: true }).click();
+	const menu = page.getByRole('dialog', { name: words['collectionMenu.label'] });
 	await expect(menu).toBeVisible();
 	return menu;
 }
@@ -176,8 +170,10 @@ test('the public playlist opens with the page-player order', async ({ browser },
 
 async function openEditDetails(page: Page, header: Locator): Promise<Locator> {
 	const menu = await openMenu(page, header);
-	await menu.getByRole('button', { name: COLLECTION_MENU_EDIT_DETAILS_LABEL, exact: true }).click();
-	const editor = header.getByRole('form', { name: COLLECTION_MENU_EDIT_DETAILS_LABEL });
+	await menu
+		.getByRole('button', { name: words['collectionMenu.editDetails'], exact: true })
+		.click();
+	const editor = header.getByRole('form', { name: words['collectionMenu.editDetails'] });
 	await expect(editor).toBeVisible();
 	await expect(editor.getByLabel(NEW_ALBUM_TITLE_LABEL, { exact: true })).toBeFocused();
 	return editor;
@@ -320,7 +316,7 @@ async function centreOfWord(row: Locator, word: string): Promise<{ x: number; y:
 async function expectShareState(row: Locator, shared: boolean): Promise<void> {
 	await expect(row).toHaveAttribute('aria-pressed', String(shared));
 	await expect(row.locator('.menu-item-hint')).toHaveText(
-		shared ? COLLECTION_MENU_SHARE_ON_HINT : COLLECTION_MENU_SHARE_OFF_HINT
+		shared ? words['collectionMenu.shareOn'] : words['collectionMenu.shareOff']
 	);
 }
 
@@ -336,7 +332,7 @@ test('1480_R1, 1480_R2, 1480_R3: the album Share row is one 44 px target that sh
 		const header = workspace(page).locator('.collection-header');
 		await expect(header.getByRole('heading', { name: album.title })).toBeVisible();
 		const menu = await openMenu(page, header);
-		const share = shareRowOf(menu, COLLECTION_MENU_SHARE_LABEL);
+		const share = shareRowOf(menu, words['collectionMenu.albumShare']);
 
 		await expectRowIsOneTarget(share);
 		await expectShareState(share, false);
@@ -346,7 +342,7 @@ test('1480_R1, 1480_R2, 1480_R3: the album Share row is one 44 px target that sh
 				response.url().endsWith(`/api/albums/${album.id}/share`) &&
 				response.request().method() === 'POST'
 		);
-		await share.click({ position: await centreOfWord(share, COLLECTION_MENU_SHARE_LABEL) });
+		await share.click({ position: await centreOfWord(share, words['collectionMenu.albumShare']) });
 		expect((await sharing).ok()).toBe(true);
 		await expectShareState(share, true);
 		await expectRowIsOneTarget(share);
@@ -367,7 +363,7 @@ test('1480_R1, 1480_R2: the playlist Share row is the same 44 px target, named f
 	const playlist = await seedPlaylist(request, readSeededLibrary());
 	await page.goto(`/playlist/${playlist.slug}`);
 	const menu = await openMenu(page, workspace(page).locator('.collection-header'));
-	const share = shareRowOf(menu, `${COLLECTION_MENU_SHARE_LABEL} playlist`);
+	const share = shareRowOf(menu, words['collectionMenu.playlistShare']);
 
 	await expectRowIsOneTarget(share);
 	await expectShareState(share, false);

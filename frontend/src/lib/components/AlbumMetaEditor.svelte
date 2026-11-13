@@ -8,7 +8,6 @@
 
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { COLLECTION_MENU_EDIT_DETAILS_LABEL } from '#lib/constants/collection-menu.ts';
 	import {
 		ALBUM_DETAILS_CLOSE_LABEL,
 		ALBUM_DETAILS_SAVE_LABEL,
@@ -23,6 +22,7 @@
 		NEW_PLACE_TEXT_MAX_LENGTH
 	} from '#lib/constants/new-collection.ts';
 	import { holdOpenWhile } from '#lib/stores/layers.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -65,9 +65,9 @@
 	}
 </script>
 
-<form class="album-details" aria-label={COLLECTION_MENU_EDIT_DETAILS_LABEL} onsubmit={save}>
+<form class="album-details" aria-label={pageText('collectionMenu.editDetails')} onsubmit={save}>
 	<div class="details-head">
-		<span class="details-title">{COLLECTION_MENU_EDIT_DETAILS_LABEL}</span>
+		<span class="details-title">{pageText('collectionMenu.editDetails')}</span>
 		<button
 			type="button"
 			class="close-btn"

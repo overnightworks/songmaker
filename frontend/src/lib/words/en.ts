@@ -188,6 +188,46 @@ export type Words = {
     readonly "newPlace.heading": (gaps: { readonly library: string }) => readonly (string | { readonly marker: "strong"; readonly text: string })[];
     readonly "takeRefusal.archived": string;
     readonly "modelRefusal.unavailable": (gaps: { readonly model: string }) => string;
+    readonly "songMenu.label": string;
+    readonly "songMenu.close": string;
+    readonly "songMenu.heading": (gaps: { readonly title: string }) => string;
+    readonly "songMenu.save": string;
+    readonly "songMenu.rename": string;
+    readonly "songMenu.addToPlaylist": string;
+    readonly "songMenu.move": string;
+    readonly "songMenu.delete": string;
+    readonly "takeMenu.label": string;
+    readonly "takeMenu.close": string;
+    readonly "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => string;
+    readonly "takeMenu.heading": (gaps: { readonly take: string }) => string;
+    readonly "takeMenu.repaint": string;
+    readonly "takeMenu.cover": string;
+    readonly "takeMenu.useSeed": string;
+    readonly "takeMenu.restore": string;
+    readonly "takeMenu.addToPlaylist": string;
+    readonly "takeMenu.share": string;
+    readonly "takeMenu.shareOn": string;
+    readonly "takeMenu.shareOff": string;
+    readonly "takeMenu.delete": string;
+    readonly "collectionMenu.label": string;
+    readonly "collectionMenu.close": string;
+    readonly "collectionMenu.albumHeading": (gaps: { readonly title: string }) => string;
+    readonly "collectionMenu.playlistHeading": (gaps: { readonly title: string }) => string;
+    readonly "collectionMenu.editDetails": string;
+    readonly "collectionMenu.cover": string;
+    readonly "collectionMenu.coverHint": string;
+    readonly "collectionMenu.curate": string;
+    readonly "collectionMenu.addToPlaylist": string;
+    readonly "collectionMenu.archive": string;
+    readonly "collectionMenu.albumShare": string;
+    readonly "collectionMenu.playlistShare": string;
+    readonly "collectionMenu.shareOn": string;
+    readonly "collectionMenu.shareOff": string;
+    readonly "collectionMenu.upload": string;
+    readonly "collectionMenu.removeCover": string;
+    readonly "collectionMenu.rename": string;
+    readonly "collectionMenu.albumDelete": string;
+    readonly "collectionMenu.playlistDelete": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -402,5 +442,45 @@ export const words: Words = {
     "newPlace.heading": (gaps: { readonly library: string }): readonly (string | { readonly marker: "strong"; readonly text: string })[] => ["New in ", { marker: "strong", text: gaps.library }],
     "takeRefusal.archived": "Restore this take first.",
     "modelRefusal.unavailable": (gaps: { readonly model: string }) => "Model '" + gaps.model + "' is not currently available",
+    "songMenu.label": "Song menu",
+    "songMenu.close": "Close menu",
+    "songMenu.heading": (gaps: { readonly title: string }) => "Song · " + gaps.title,
+    "songMenu.save": "Save version",
+    "songMenu.rename": "Rename",
+    "songMenu.addToPlaylist": "Add to playlist",
+    "songMenu.move": "Move",
+    "songMenu.delete": "Delete song",
+    "takeMenu.label": "More",
+    "takeMenu.close": "Close menu",
+    "takeMenu.headingWithVersion": (gaps: { readonly take: string; readonly version: string }) => "Take · v" + gaps.version + " · " + gaps.take,
+    "takeMenu.heading": (gaps: { readonly take: string }) => "Take · " + gaps.take,
+    "takeMenu.repaint": "Repaint",
+    "takeMenu.cover": "Cover",
+    "takeMenu.useSeed": "Use seed",
+    "takeMenu.restore": "Restore",
+    "takeMenu.addToPlaylist": "Add to playlist",
+    "takeMenu.share": "Share",
+    "takeMenu.shareOn": "on",
+    "takeMenu.shareOff": "off",
+    "takeMenu.delete": "Delete",
+    "collectionMenu.label": "More",
+    "collectionMenu.close": "Close menu",
+    "collectionMenu.albumHeading": (gaps: { readonly title: string }) => "Album · " + gaps.title,
+    "collectionMenu.playlistHeading": (gaps: { readonly title: string }) => "Playlist · " + gaps.title,
+    "collectionMenu.editDetails": "Edit details",
+    "collectionMenu.cover": "Cover",
+    "collectionMenu.coverHint": "upload · suggest",
+    "collectionMenu.curate": "Pick album takes",
+    "collectionMenu.addToPlaylist": "Add to playlist",
+    "collectionMenu.archive": "Archive",
+    "collectionMenu.albumShare": "Share",
+    "collectionMenu.playlistShare": "Share playlist",
+    "collectionMenu.shareOn": "on",
+    "collectionMenu.shareOff": "off",
+    "collectionMenu.upload": "Upload…",
+    "collectionMenu.removeCover": "Remove cover",
+    "collectionMenu.rename": "Rename",
+    "collectionMenu.albumDelete": "Delete",
+    "collectionMenu.playlistDelete": "Delete playlist",
 };
 export type Key = keyof Words;

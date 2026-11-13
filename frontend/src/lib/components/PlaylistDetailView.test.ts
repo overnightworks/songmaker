@@ -5,9 +5,8 @@ import {
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-
 import type { PlaylistDetailItem, PlaylistEntryItem } from '#lib/api/types.ts';
-import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { ApiError } from '#lib/api/fetch.ts';
 import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
 import { playlistEntryOverflowLabel } from '#lib/constants/playlist.ts';
@@ -52,49 +51,18 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/stores/navigation.ts')>()),
 	selectSong: vi.fn()
 }));
-
+import { openPlaylistDetail, populatedPlaylistDefaults } from '#lib/test-utils/playlist-detail.ts';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
-import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
+import { words } from '#lib/words/en.ts';
+import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '#lib/stores/navigation.ts';
-import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '#lib/api/client.ts';
-import { addToast } from '#lib/stores/toast.ts';
-
-function populatedPlaylistDefaults(): Partial<PlaylistDetailItem> {
-	return {
-		share_slug: null,
-		entries: [entry({ song_title: 'Tide', album_title: 'Night Drive', mp3_path: 'tide.mp3' })]
-	};
-}
+import { fetchPlaylist } from '#lib/api/client.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
-
-// The header prefers the lightweight playlist in playlistList and falls
-// back to the detail once it matches the open id (see PlaylistDetailView.
-// svelte) — this seeds both, the way navigation.openPlaylist does, so tests
-// exercise the common (list populated) path. Tests for the fallback path
-// seed only the detail.
-function openPlaylistDetail(d: PlaylistDetailItem): void {
-	playlistList.set([
-		{
-			id: d.id,
-			title: d.title,
-			slug: d.slug,
-			entry_count: d.entry_count,
-			is_shared: d.is_shared,
-			share_slug: d.share_slug,
-			cover: d.cover,
-			album_covers: d.album_covers,
-			created_at: d.created_at
-		}
-	]);
-	setOpenCollection({ kind: 'playlist', id: d.id });
-	selectedPlaylistDetail.set(d);
-	playlistDetailLoad.set({ status: 'ready', error: null });
-}
 
 beforeEach(() => {
 	vi.mocked(fetchPlaylist).mockReset();
@@ -142,87 +110,6 @@ describe('PlaylistDetailView header', () => {
 		);
 	});
 
-	it('uploads and removes a playlist cover through the shared header actions', async () => {
-		const customCover = {
-			card: '/api/playlists/p1/cover?variant=card&v=custom.png',
-			detail: '/api/playlists/p1/cover?variant=detail&v=custom.png'
-		};
-		const playlistWithCover = {
-			id: 'p1',
-			title: 'Night Drive',
-			slug: 'night-drive',
-			entry_count: 1,
-			is_shared: false,
-			share_slug: null,
-			cover: customCover,
-			album_covers: [],
-			created_at: '2026-01-01T00:00:00+00:00'
-		};
-		vi.mocked(uploadPlaylistCover).mockResolvedValue(playlistWithCover);
-		vi.mocked(deletePlaylistCover).mockResolvedValue({ ...playlistWithCover, cover: null });
-		const target = await mountPlaylistView();
-
-		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-		await tick();
-		const upload = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(item) => item.textContent?.trim() === 'Upload…'
-		);
-		upload?.click();
-		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-		const file = new File(['cover'], 'cover.png', { type: 'image/png' });
-		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-		input.dispatchEvent(new Event('change', { bubbles: true }));
-		await vi.waitFor(() => expect(uploadPlaylistCover).toHaveBeenCalledWith('p1', file));
-		await tick();
-		expect(target.querySelector('.header-cover img')?.getAttribute('src')).toBe(customCover.detail);
-
-		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-		await tick();
-		const remove = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(item) => item.textContent?.trim() === 'Remove cover'
-		);
-		remove?.click();
-		await vi.waitFor(() => expect(deletePlaylistCover).toHaveBeenCalledWith('p1'));
-		await tick();
-		expect(target.querySelector('.header-cover img')).toBeNull();
-		expect(target.querySelectorAll('.header-cover .playlist-cover-cell')).toHaveLength(4);
-	});
-
-	it.each([
-		{
-			action: 'a cover upload',
-			menuItem: 'Upload…',
-			picksFile: true,
-			failure: new NetworkError('/api/playlists/p1/cover', new TypeError('Failed to fetch')),
-			toast: 'Cover upload failed'
-		},
-		{
-			action: 'a cover upload',
-			menuItem: 'Upload…',
-			picksFile: true,
-			failure: new ApiError(413, 'Cover is too large', '/api/playlists/p1/cover'),
-			toast: 'Cover is too large'
-		}
-	])('toasts $toast when $action fails', async ({ menuItem, picksFile, failure, toast }) => {
-		vi.mocked(addToast).mockReset();
-		vi.mocked(uploadPlaylistCover).mockRejectedValue(failure);
-		const target = await mountPlaylistView();
-
-		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-		await tick();
-		Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item'))
-			.find((item) => item.textContent?.trim() === menuItem)
-			?.click();
-		if (picksFile) {
-			const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-			const file = new File(['cover'], 'cover.png', { type: 'image/png' });
-			Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-			input.dispatchEvent(new Event('change', { bubbles: true }));
-		}
-
-		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith(toast, 'error'));
-	});
-
 	it('uses the collection header with Play, its song count and a … menu, with no breadcrumb, shuffle or visible Share icon (#1354 rule 24)', async () => {
 		const target = await renderTwoEntryPlaylist();
 		const header = requireElement(target, '.collection-header');
@@ -241,15 +128,6 @@ describe('PlaylistDetailView header', () => {
 		expect(header.querySelector('.share-btn')).toBeNull();
 		expect(target.textContent).toContain('Tide');
 		expect(header.querySelector('.playlist-cover-initials')?.textContent).toBe('ND');
-	});
-
-	it('1859_R1: lists Share playlist, Upload…, Rename and Delete playlist in the menu, with no Save offline', async () => {
-		const target = await mountPlaylistView();
-		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-		await tick();
-		const menu = requireElement<HTMLElement>(document.body, '.menu-panel');
-		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Playlist · Night Drive');
-		expect(menuRowLabels(menu)).toEqual(['Share playlist', 'Upload…', 'Rename', 'Delete playlist']);
 	});
 });
 
@@ -772,7 +650,8 @@ describe('PlaylistDetailView says song, never track', () => {
 
 		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
 		await tick();
-		menuRow(requireElement(document.body, '.menu-panel'), 'Delete playlist').click();
+		const panel = requireElement(document.body, '.menu-panel');
+		menuRow(panel, words['collectionMenu.playlistDelete']).click();
 		await tick();
 
 		expect(requireElement(document.body, '[role="dialog"] ul').textContent).toBe(counted);

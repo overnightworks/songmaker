@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 
 import { get } from 'svelte/store';
-import { COLLECTION_MENU_LABEL } from '#lib/constants/collection-menu.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
@@ -32,6 +31,7 @@ import CollectionHeader from './CollectionHeader.svelte';
 import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import { openCollectionMenu } from './shell/rail-test-fixtures';
 import { getByRoleButton, getByRoleHeading } from '#lib/test-utils/accessible-name.ts';
+import { words } from '#lib/words/en.ts';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -328,13 +328,13 @@ describe('CollectionHeader', () => {
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
 		expect(menuRowLabels(menu)).toEqual([
-			'Edit details',
-			'Cover',
-			'Pick album takes',
-			'Add to playlist',
-			'Share',
-			'Archive',
-			'Delete'
+			words['collectionMenu.editDetails'],
+			words['collectionMenu.cover'],
+			words['collectionMenu.curate'],
+			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.albumShare'],
+			words['collectionMenu.archive'],
+			words['collectionMenu.albumDelete']
 		]);
 	});
 
@@ -343,13 +343,13 @@ describe('CollectionHeader', () => {
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
 		expect(menuRowLabels(menu)).toEqual([
-			'Share playlist',
-			'Upload…',
-			'Remove cover',
-			'Rename',
-			'Delete playlist'
+			words['collectionMenu.playlistShare'],
+			words['collectionMenu.upload'],
+			words['collectionMenu.removeCover'],
+			words['collectionMenu.rename'],
+			words['collectionMenu.playlistDelete']
 		]);
-		menuRow(menu, 'Remove cover').click();
+		menuRow(menu, words['collectionMenu.removeCover']).click();
 		expect(props.onremovecover).toHaveBeenCalledTimes(1);
 	});
 
@@ -434,7 +434,7 @@ describe('CollectionHeader', () => {
 			const menu = await openCollectionMenu(target);
 
 			Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
-				.find((el) => el.textContent?.trim().startsWith('Cover'))
+				.find((el) => el.textContent?.trim().startsWith(words['collectionMenu.cover']))
 				?.click();
 			await tick();
 
@@ -446,14 +446,19 @@ describe('CollectionHeader', () => {
 		const props = { ...baseProps(), kind: 'playlist' as const };
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
-		expect(menuRowLabels(menu)).toEqual(['Share playlist', 'Upload…', 'Rename', 'Delete playlist']);
+		expect(menuRowLabels(menu)).toEqual([
+			words['collectionMenu.playlistShare'],
+			words['collectionMenu.upload'],
+			words['collectionMenu.rename'],
+			words['collectionMenu.playlistDelete']
+		]);
 	});
 
 	it('shares from the Share row and copies the link, without duplicating the logic', async () => {
 		const props = baseProps();
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
-		menuRow(menu, 'Share').click();
+		menuRow(menu, words['collectionMenu.albumShare']).click();
 		await vi.waitFor(() => expect(props.onshare).toHaveBeenCalledTimes(1));
 		await vi.waitFor(() =>
 			expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://x/y')
@@ -476,7 +481,7 @@ describe('CollectionHeader', () => {
 		const actions = [...requireElement(target, '.header-actions').querySelectorAll('button')];
 		expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual([
 			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
-			COLLECTION_MENU_LABEL
+			words['collectionMenu.label']
 		]);
 	});
 
@@ -524,9 +529,14 @@ describe('CollectionHeader', () => {
 	it('opens the details editor in place of the title from Edit details, and its close ends it', async () => {
 		const target = await render(detailsEditingAlbum());
 		const menu = await openCollectionMenu(target);
-		expect(menuRowLabels(menu)).toEqual(['Edit details', 'Add to playlist', 'Share', 'Delete']);
+		expect(menuRowLabels(menu)).toEqual([
+			words['collectionMenu.editDetails'],
+			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.albumShare'],
+			words['collectionMenu.albumDelete']
+		]);
 
-		menuRow(menu, 'Edit details').click();
+		menuRow(menu, words['collectionMenu.editDetails']).click();
 		await tick();
 
 		const titles = requireElement(target, '.header-titles');
@@ -552,7 +562,7 @@ describe('CollectionHeader', () => {
 		const target = await render({ ...baseProps(), kind: 'playlist' as const });
 		const menu = await openCollectionMenu(target);
 		const renameItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Rename'
+			(el) => el.textContent?.trim() === words['collectionMenu.rename']
 		);
 		renameItem?.click();
 		await tick();

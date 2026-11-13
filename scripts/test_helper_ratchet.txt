@@ -42,7 +42,7 @@ frontend press 2
 frontend pressEscape 2
 frontend px 2
 frontend reachSuggestionsLoads 2
-frontend render 45
+frontend render 44
 frontend renderAfterPageRead 2
 frontend renderPage 4
 frontend renderRow 3

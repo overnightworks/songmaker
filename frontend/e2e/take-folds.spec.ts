@@ -10,11 +10,9 @@ import {
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
-	SONG_MENU_LABEL,
-	SONG_MENU_SAVE_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
-import { TAKE_DELETE_LABEL, TAKE_OVERFLOW_LABEL, TAKES_EMPTY } from '../src/lib/constants/take';
+import { TAKE_DELETE_LABEL, TAKES_EMPTY } from '../src/lib/constants/take';
 import {
 	bulkDeleteLabel,
 	bulkDeleteTitle,
@@ -42,6 +40,7 @@ import {
 	seedSongPhoneSong,
 	seedTakeStripSong
 } from './seed';
+import { words } from '../src/lib/words/en';
 
 const EDITED_LYRICS = 'Third version lyrics';
 const SONG_PUT = /\/api\/songs\/[^/]+$/;
@@ -106,10 +105,10 @@ async function saveFromAppBarMenu(page: Page): Promise<void> {
 		(response) =>
 			SONG_PUT.test(new URL(response.url()).pathname) && response.request().method() === 'PUT'
 	);
-	await appBar(page).getByRole('button', { name: SONG_MENU_LABEL }).click();
+	await appBar(page).getByRole('button', { name: words['songMenu.label'] }).click();
 	await page
-		.getByRole('dialog', { name: SONG_MENU_LABEL })
-		.getByRole('button', { name: SONG_MENU_SAVE_LABEL })
+		.getByRole('dialog', { name: words['songMenu.label'] })
+		.getByRole('button', { name: words['songMenu.save'] })
 		.click();
 	await stored;
 }
@@ -305,7 +304,7 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await openTakes(page, song);
 		const release = await holdSave(page);
 		await startSave(page);
-		await takeRow(page, song.v2[0]).getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
+		await takeRow(page, song.v2[0]).getByRole('button', { name: words['takeMenu.label'] }).click();
 		await page.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
 
 		await release();
@@ -393,7 +392,7 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		const sent = recordDeleteRequests(page);
 		const release = await holdSave(page);
 		await startSave(page);
-		await takeRow(page, song.v1[0]).getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
+		await takeRow(page, song.v1[0]).getByRole('button', { name: words['takeMenu.label'] }).click();
 		await page.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
 		await deleteAsAnotherClient(page, song.v1[0]);
 		sent.length = 0;
@@ -412,7 +411,7 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await v1Row(page).click();
 		const sent = recordDeleteRequests(page);
 
-		await takeRow(page, song.v1[0]).getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
+		await takeRow(page, song.v1[0]).getByRole('button', { name: words['takeMenu.label'] }).click();
 		await page.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
 		await page.getByRole('dialog').getByRole('button', { name: TAKE_DELETE_LABEL }).click();
 

@@ -11,14 +11,11 @@ import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL
 } from '../src/lib/constants/song';
-import {
-	TAKE_COVER_LABEL,
-	TAKE_OVERFLOW_LABEL,
-	TAKE_REPAINT_LABEL
-} from '../src/lib/constants/take';
+import { TAKE_COVER_LABEL, TAKE_REPAINT_LABEL } from '../src/lib/constants/take';
 import { TAKE_TASK_CLOSE_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, shellOf } from './helpers';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
+import { words } from '../src/lib/words/en';
 
 const SONG_TITLE = 'Take task card cells';
 const TAKE_COUNT = 3;
@@ -49,10 +46,10 @@ function openVerb(page: Page, verb: string): Promise<void> {
 		await page
 			.locator('.take-row')
 			.first()
-			.getByRole('button', { name: TAKE_OVERFLOW_LABEL })
+			.getByRole('button', { name: words['takeMenu.label'] })
 			.click();
 		await page
-			.getByRole('dialog', { name: TAKE_OVERFLOW_LABEL })
+			.getByRole('dialog', { name: words['takeMenu.label'] })
 			.getByRole('button', { name: verb })
 			.click();
 	})();

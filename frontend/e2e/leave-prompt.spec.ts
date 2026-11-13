@@ -5,14 +5,10 @@
 // leave.
 
 import { expect, test as base, type Dialog, type Locator, type Page } from './coverage-test';
-import {
-	EDITOR_UNSAVED_TITLE,
-	SONG_MENU_LABEL,
-	SONG_MENU_SAVE_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants/song';
+import { EDITOR_UNSAVED_TITLE, songEditorOpenLabel } from '../src/lib/constants/song';
 import { sameOriginHeaders, workspace } from './helpers';
 import { archiveOwnedAlbum, runMarker, seedSongPhoneSong } from './seed';
+import { words } from '../src/lib/words/en';
 
 const test = base.extend<{ ownedAlbumId: string }>({
 	ownedAlbumId: async ({ page }, use) => {
@@ -180,14 +176,14 @@ test.describe('leave prompt', () => {
 	test('saving the edited version clears the browser prompt', async ({ page, ownedAlbumId }) => {
 		const song = await openSongCold(page, ownedAlbumId);
 		await typeUnsavedLine(song);
-		await page.getByRole('button', { name: SONG_MENU_LABEL, exact: true }).click();
+		await page.getByRole('button', { name: words['songMenu.label'], exact: true }).click();
 		const saved = page.waitForResponse(
 			(response) =>
 				response.url().includes('/api/songs/') &&
 				response.request().method() === 'PUT' &&
 				response.ok()
 		);
-		await page.getByRole('button', { name: SONG_MENU_SAVE_LABEL, exact: true }).click();
+		await page.getByRole('button', { name: words['songMenu.save'], exact: true }).click();
 		await saved;
 		await expect(page.getByText(/^Saved version \d+$/)).toBeVisible();
 		const dialogs = dialogsOf(page);

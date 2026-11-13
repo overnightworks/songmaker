@@ -2,13 +2,6 @@ import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { ApiError } from '#lib/api/fetch.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import {
-	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
-	SONG_MENU_DELETE_LABEL,
-	SONG_MENU_MOVE_LABEL,
-	SONG_MENU_RENAME_LABEL,
-	SONG_MENU_SAVE_LABEL
-} from '#lib/constants/song.ts';
 import { words } from '#lib/words/en.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
@@ -81,11 +74,11 @@ describe('SongMenu', () => {
 		await tick();
 		const items = Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'));
 		expect(menuRowLabels(target)).toEqual([
-			SONG_MENU_SAVE_LABEL,
-			SONG_MENU_RENAME_LABEL,
-			SONG_MENU_ADD_TO_PLAYLIST_LABEL,
-			SONG_MENU_MOVE_LABEL,
-			SONG_MENU_DELETE_LABEL
+			words['songMenu.save'],
+			words['songMenu.rename'],
+			words['songMenu.addToPlaylist'],
+			words['songMenu.move'],
+			words['songMenu.delete']
 		]);
 		expect(items.every((item) => item.querySelector('svg') !== null)).toBe(true);
 		expect(items.map((item) => item.classList.contains('destructive'))).toEqual([
@@ -103,7 +96,7 @@ describe('SongMenu', () => {
 			const { target, props } = await renderMenu({ saveDisabled });
 			openSongMenu(target);
 			await tick();
-			const save = menuRow(target, SONG_MENU_SAVE_LABEL);
+			const save = menuRow(target, words['songMenu.save']);
 			expect(save.disabled).toBe(saveDisabled);
 			save.click();
 			await tick();
@@ -113,10 +106,10 @@ describe('SongMenu', () => {
 	);
 
 	it.each([
-		{ label: SONG_MENU_SAVE_LABEL, handler: 'onsave' as const },
-		{ label: SONG_MENU_RENAME_LABEL, handler: 'onrename' as const },
-		{ label: SONG_MENU_ADD_TO_PLAYLIST_LABEL, handler: 'onaddtoplaylist' as const },
-		{ label: SONG_MENU_DELETE_LABEL, handler: 'ondelete' as const }
+		{ label: words['songMenu.save'], handler: 'onsave' as const },
+		{ label: words['songMenu.rename'], handler: 'onrename' as const },
+		{ label: words['songMenu.addToPlaylist'], handler: 'onaddtoplaylist' as const },
+		{ label: words['songMenu.delete'], handler: 'ondelete' as const }
 	])(
 		'defect:#1495: runs only $handler and closes the menu on $label',
 		async ({ label, handler }) => {
@@ -152,12 +145,12 @@ describe('SongMenu', () => {
 		});
 		openSongMenu(target);
 		await tick();
-		menuRow(target, SONG_MENU_RENAME_LABEL).click();
+		menuRow(target, words['songMenu.rename']).click();
 		await focusSettled();
 		expect(document.activeElement).toBe(titleField);
 	});
 
-	it.each([SONG_MENU_ADD_TO_PLAYLIST_LABEL, SONG_MENU_DELETE_LABEL])(
+	it.each([words['songMenu.addToPlaylist'], words['songMenu.delete']])(
 		'defect:#1495: hands focus back to its trigger after %s',
 		async (label) => {
 			const { target } = await renderMenu();
@@ -196,7 +189,7 @@ describeBackClosesOverlay({
 		},
 		{
 			way: 'choosing Rename',
-			close: (target) => menuRow(target, SONG_MENU_RENAME_LABEL).click(),
+			close: (target) => menuRow(target, words['songMenu.rename']).click(),
 			actionSawHistoryAt: () => renameSawHistoryAt
 		}
 	]
@@ -217,7 +210,7 @@ describe('SongMenu move picker', () => {
 		const { target } = await renderMenu();
 		openSongMenu(target);
 		await tick();
-		menuRow(target, SONG_MENU_MOVE_LABEL).click();
+		menuRow(target, words['songMenu.move']).click();
 		await vi.waitFor(() => expect(target.querySelector(settled)).not.toBeNull());
 		return target;
 	}
@@ -270,7 +263,7 @@ describe('SongMenu move picker', () => {
 		const { target } = await renderMenu();
 		openSongMenu(target);
 		await tick();
-		menuRow(target, SONG_MENU_MOVE_LABEL).click();
+		menuRow(target, words['songMenu.move']).click();
 		await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
 
 		vi.mocked(fetchAlbums).mockResolvedValue({
@@ -298,7 +291,7 @@ describe('SongMenu move picker', () => {
 		target.querySelector<HTMLButtonElement>(`[aria-label="${words['songMove.back']}"]`)?.click();
 		await tick();
 
-		expect(menuRowLabels(target)).toContain(SONG_MENU_MOVE_LABEL);
+		expect(menuRowLabels(target)).toContain(words['songMenu.move']);
 	});
 
 	it('opens on the menu rows again after the popover closed over the picker', async () => {
@@ -309,7 +302,7 @@ describe('SongMenu move picker', () => {
 		openSongMenu(target);
 		await tick();
 
-		expect(menuRowLabels(target)).toContain(SONG_MENU_MOVE_LABEL);
+		expect(menuRowLabels(target)).toContain(words['songMenu.move']);
 	});
 	describe('moving into a shared album', () => {
 		async function chooseSharedAlbum() {
@@ -484,7 +477,7 @@ describe('SongMenu move picker', () => {
 			target.querySelector<HTMLButtonElement>('.pk-list .pk-row')?.click();
 			await vi.waitFor(() => expect(get(songMoveConfirm)).not.toBeNull());
 			[...document.body.querySelectorAll('button')]
-				.find((button) => button.textContent?.trim() === SONG_MENU_MOVE_LABEL)
+				.find((button) => button.textContent?.trim() === words['songMenu.move'])
 				?.click();
 
 			await vi.waitFor(() => expect(target.querySelector('.pk-error')).not.toBeNull());
