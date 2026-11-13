@@ -226,6 +226,69 @@ export type Words = {
     readonly "collectionMenu.rename": string;
     readonly "collectionMenu.albumDelete": string;
     readonly "collectionMenu.playlistDelete": string;
+    readonly "albumPage.loading": string;
+    readonly "albumPage.retry": string;
+    readonly "albumPage.noSongs": string;
+    readonly "albumPage.coverAlt": (gaps: { readonly title: string }) => string;
+    readonly "albumPage.coverAltFallback": string;
+    readonly "albumPage.songTakes": (count: number) => string;
+    readonly "albumPage.coverUploadFailed": string;
+    readonly "albumPage.coverDiscardFailed": string;
+    readonly "albumPage.coverRemoved": string;
+    readonly "albumPage.coverRemoveFailed": string;
+    readonly "albumPage.yearWhole": string;
+    readonly "albumPage.yearRange": (gaps: { readonly max: string; readonly min: string }) => string;
+    readonly "albumPage.deleted": string;
+    readonly "albumPage.restored": string;
+    readonly "albumPage.restoreFailed": string;
+    readonly "albumPage.deleteFailed": string;
+    readonly "albumPage.archived": string;
+    readonly "albumPage.unarchived": string;
+    readonly "albumPage.unarchiveFailed": string;
+    readonly "albumPage.archiveFailed": string;
+    readonly "albumPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => string;
+    readonly "albumPage.addedToPlaylist": string;
+    readonly "albumPage.addFailed": string;
+    readonly "albumPage.songsLoadFailed": string;
+    readonly "albumPage.deleteTitle": (gaps: { readonly title: string }) => string;
+    readonly "albumPage.deleteSongs": (count: number, gaps: { readonly titles: string }) => string;
+    readonly "albumPage.deleteTakes": (count: number) => string;
+    readonly "albumPage.deleteHistory": string;
+    readonly "albumPage.deleteConfirm": string;
+    readonly "albumCover.add": string;
+    readonly "albumCover.edit": string;
+    readonly "albumCover.editing": string;
+    readonly "albumCover.editingClose": string;
+    readonly "albumCover.upload": string;
+    readonly "albumCover.suggest": string;
+    readonly "albumCover.suggestAnother": string;
+    readonly "albumCover.use": string;
+    readonly "albumCover.remove": string;
+    readonly "albumCover.previousSuggestion": string;
+    readonly "albumCover.nextSuggestion": string;
+    readonly "albumCover.suggestionsLoading": string;
+    readonly "albumCover.suggesting": string;
+    readonly "albumCover.suggestionFailedTitle": string;
+    readonly "albumCover.suggestionFailedFallback": string;
+    readonly "albumCover.throttledFallback": string;
+    readonly "albumCover.suggestionsRetry": string;
+    readonly "albumCover.alt": (gaps: { readonly title: string }) => string;
+    readonly "albumCover.suggestionAlt": (gaps: { readonly title: string }) => string;
+    readonly "albumCover.suggestionPosition": (gaps: { readonly shown: string; readonly total: string }) => string;
+    readonly "albumCover.stageLabel": (gaps: { readonly shown: string; readonly total: string }) => string;
+    readonly "albumCover.saved": string;
+    readonly "albumDetails.close": string;
+    readonly "albumDetails.title": string;
+    readonly "albumDetails.subtitle": string;
+    readonly "albumDetails.year": string;
+    readonly "albumDetails.save": string;
+    readonly "albumDetails.titleRequired": string;
+    readonly "albumDetails.saved": string;
+    readonly "albumDetails.saveFailed": string;
+    readonly "coverMark.waiting": (count: number) => string;
+    readonly "coverMark.runningName": (gaps: { readonly label: string }) => string;
+    readonly "coverMark.waitingName": (gaps: { readonly label: string; readonly waiting: string }) => string;
+    readonly "collectionHeader.songCount": (count: number) => string;
     readonly "songPage.coverAlt": (gaps: { readonly title: string }) => string;
     readonly "songPage.coverAltAlbum": (gaps: { readonly title: string }) => string;
     readonly "songPage.coverAltBare": string;
@@ -560,6 +623,104 @@ export const words: Words = {
     "collectionMenu.rename": "Rename",
     "collectionMenu.albumDelete": "Delete",
     "collectionMenu.playlistDelete": "Delete playlist",
+    "albumPage.loading": "Loading albums…",
+    "albumPage.retry": "Retry",
+    "albumPage.noSongs": "No songs yet.",
+    "albumPage.coverAlt": (gaps: { readonly title: string }) => "Album " + gaps.title,
+    "albumPage.coverAltFallback": "Album",
+    "albumPage.songTakes": (count: number) => ({
+        zero: numberFormat.format(count) + " takes",
+        one: numberFormat.format(count) + " take",
+        two: numberFormat.format(count) + " takes",
+        few: numberFormat.format(count) + " takes",
+        many: numberFormat.format(count) + " takes",
+        other: numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "albumPage.coverUploadFailed": "Cover upload failed",
+    "albumPage.coverDiscardFailed": "Cover suggestions could not be discarded",
+    "albumPage.coverRemoved": "Cover removed",
+    "albumPage.coverRemoveFailed": "Cover remove failed",
+    "albumPage.yearWhole": "Year must be a whole number",
+    "albumPage.yearRange": (gaps: { readonly max: string; readonly min: string }) => "Year must be between " + gaps.min + " and " + gaps.max,
+    "albumPage.deleted": "Album deleted",
+    "albumPage.restored": "Album restored",
+    "albumPage.restoreFailed": "Restore failed",
+    "albumPage.deleteFailed": "Delete failed",
+    "albumPage.archived": "Album archived",
+    "albumPage.unarchived": "Album unarchived",
+    "albumPage.unarchiveFailed": "Unarchive failed",
+    "albumPage.archiveFailed": "Archive failed",
+    "albumPage.addedSkipped": (gaps: { readonly added: string; readonly skipped: string }) => "Added " + gaps.added + ", skipped " + gaps.skipped,
+    "albumPage.addedToPlaylist": "Added to playlist",
+    "albumPage.addFailed": "Failed to add",
+    "albumPage.songsLoadFailed": "Failed to load songs",
+    "albumPage.deleteTitle": (gaps: { readonly title: string }) => "Delete \"" + gaps.title + "\"?",
+    "albumPage.deleteSongs": (count: number, gaps: { readonly titles: string }) => ({
+        zero: numberFormat.format(count) + " songs (" + gaps.titles + ")",
+        one: numberFormat.format(count) + " song (" + gaps.titles + ")",
+        two: numberFormat.format(count) + " songs (" + gaps.titles + ")",
+        few: numberFormat.format(count) + " songs (" + gaps.titles + ")",
+        many: numberFormat.format(count) + " songs (" + gaps.titles + ")",
+        other: numberFormat.format(count) + " songs (" + gaps.titles + ")",
+    })[pluralRules.select(count)],
+    "albumPage.deleteTakes": (count: number) => ({
+        zero: numberFormat.format(count) + " takes",
+        one: numberFormat.format(count) + " take",
+        two: numberFormat.format(count) + " takes",
+        few: numberFormat.format(count) + " takes",
+        many: numberFormat.format(count) + " takes",
+        other: numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "albumPage.deleteHistory": "All versions, scores, and chat history",
+    "albumPage.deleteConfirm": "Delete Album",
+    "albumCover.add": "Add cover",
+    "albumCover.edit": "Edit cover",
+    "albumCover.editing": "Cover editing",
+    "albumCover.editingClose": "Close cover editing",
+    "albumCover.upload": "Upload",
+    "albumCover.suggest": "Suggest",
+    "albumCover.suggestAnother": "Suggest another",
+    "albumCover.use": "Use",
+    "albumCover.remove": "Remove",
+    "albumCover.previousSuggestion": "Previous suggestion",
+    "albumCover.nextSuggestion": "Next suggestion",
+    "albumCover.suggestionsLoading": "Loading cover suggestion…",
+    "albumCover.suggesting": "Making a cover",
+    "albumCover.suggestionFailedTitle": "Couldn’t make a cover suggestion",
+    "albumCover.suggestionFailedFallback": "The cover suggestion failed. Try again.",
+    "albumCover.throttledFallback": "Too many requests right now. Press Suggest again in a moment.",
+    "albumCover.suggestionsRetry": "Try again",
+    "albumCover.alt": (gaps: { readonly title: string }) => "Album " + gaps.title,
+    "albumCover.suggestionAlt": (gaps: { readonly title: string }) => "Cover suggestion for " + gaps.title,
+    "albumCover.suggestionPosition": (gaps: { readonly shown: string; readonly total: string }) => gaps.shown + " / " + gaps.total,
+    "albumCover.stageLabel": (gaps: { readonly shown: string; readonly total: string }) => "Cover suggestion " + gaps.shown + " of " + gaps.total,
+    "albumCover.saved": "Cover saved",
+    "albumDetails.close": "Close edit details",
+    "albumDetails.title": "Title",
+    "albumDetails.subtitle": "Subtitle",
+    "albumDetails.year": "Year",
+    "albumDetails.save": "Save",
+    "albumDetails.titleRequired": "Title cannot be empty",
+    "albumDetails.saved": "Details saved",
+    "albumDetails.saveFailed": "Saving the details failed",
+    "coverMark.waiting": (count: number) => ({
+        zero: numberFormat.format(count) + " waiting",
+        one: numberFormat.format(count) + " waiting",
+        two: numberFormat.format(count) + " waiting",
+        few: numberFormat.format(count) + " waiting",
+        many: numberFormat.format(count) + " waiting",
+        other: numberFormat.format(count) + " waiting",
+    })[pluralRules.select(count)],
+    "coverMark.runningName": (gaps: { readonly label: string }) => gaps.label + " · making a suggestion",
+    "coverMark.waitingName": (gaps: { readonly label: string; readonly waiting: string }) => gaps.label + " · " + gaps.waiting,
+    "collectionHeader.songCount": (count: number) => ({
+        zero: numberFormat.format(count) + " songs",
+        one: numberFormat.format(count) + " song",
+        two: numberFormat.format(count) + " songs",
+        few: numberFormat.format(count) + " songs",
+        many: numberFormat.format(count) + " songs",
+        other: numberFormat.format(count) + " songs",
+    })[pluralRules.select(count)],
     "songPage.coverAlt": (gaps: { readonly title: string }) => "Song " + gaps.title,
     "songPage.coverAltAlbum": (gaps: { readonly title: string }) => "Album " + gaps.title,
     "songPage.coverAltBare": "Song",

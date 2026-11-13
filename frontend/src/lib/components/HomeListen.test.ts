@@ -98,7 +98,7 @@ async function removeOnAlbumPage(action: string): Promise<void> {
 	requireButtonContainingText(await openCollectionMenu(page), action).click();
 	await tick();
 	if (action === words['collectionMenu.albumDelete'])
-		getByRoleButton(document.body, 'Delete Album').click();
+		getByRoleButton(document.body, words['albumPage.deleteConfirm']).click();
 	await vi.waitFor(() => expect(get(toasts).some((toast) => toast.action)).toBe(true));
 	await unmount(albumPage);
 	page.remove();

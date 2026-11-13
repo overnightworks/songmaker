@@ -3,29 +3,7 @@
 	import { RATE_LIMITED_STATUS } from '#lib/constants/http.ts';
 	import { createAlbumCoverSuggestions, selectAlbumCoverSuggestion } from '#lib/api/albums.ts';
 	import type { AlbumItem } from '#lib/api/types.ts';
-	import {
-		albumCoverStageLabel,
-		albumCoverSuggestionAlt,
-		albumCoverSuggestionPosition,
-		ALBUM_COVER_ADD_LABEL,
-		ALBUM_COVER_ALT_TYPE,
-		ALBUM_COVER_THROTTLED_FALLBACK,
-		ALBUM_COVER_EDITING_CLOSE_LABEL,
-		ALBUM_COVER_EDITING_LABEL,
-		ALBUM_COVER_EDITING_REMOVE_LABEL,
-		ALBUM_COVER_EDITING_UPLOAD_LABEL,
-		ALBUM_COVER_NEXT_SUGGESTION_LABEL,
-		ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL,
-		ALBUM_COVER_SUGGESTING_LABEL,
-		ALBUM_COVER_SUGGESTIONS_LOADING,
-		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
-		ALBUM_COVER_SUGGESTION_FAILED_FALLBACK,
-		ALBUM_COVER_SUGGESTION_FAILED_TITLE,
-		ALBUM_COVER_SUGGESTION_USE_LABEL,
-		ALBUM_COVER_SUGGEST_ANOTHER_LABEL,
-		ALBUM_COVER_SUGGEST_LABEL,
-		ALBUM_COVER_SWIPE_TRAVEL_PX
-	} from '#lib/constants/album.ts';
+	import { ALBUM_COVER_SWIPE_TRAVEL_PX } from '#lib/constants/album.ts';
 	import { updateAlbumInList } from '#lib/stores/libraryData.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import { releaseCoverSuggestions } from '#lib/stores/coverRuns.ts';
@@ -57,6 +35,7 @@
 		type CoverProblem
 	} from '#lib/utils/cover-problem.ts';
 	import { formatTime } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import AgentProblemLine from './AgentProblemLine.svelte';
 	import CoverRunElapsed from './CoverRunElapsed.svelte';
 	import Icon from './Icon.svelte';
@@ -134,7 +113,12 @@
 	const shownSuggestionId = $derived(shownSlot?.kind === 'suggestion' ? shownSlot.id : null);
 	const shownSuggestionNumber = $derived(shownSuggestionId ? shownSlotIndex + 1 : null);
 	const stageLabel = $derived(
-		shownSuggestionNumber ? albumCoverStageLabel(shownSuggestionNumber, suggestionCount) : undefined
+		shownSuggestionNumber
+			? pageText('albumCover.stageLabel', {
+					shown: String(shownSuggestionNumber),
+					total: String(suggestionCount)
+				})
+			: undefined
 	);
 
 	// The album page keeps the cover state read; the editor shows it. Opening
@@ -230,14 +214,14 @@
 			followedRunId = latestCoverJob?.id ?? null;
 			return;
 		}
-		throttleNote = describeFailure(refusal, ALBUM_COVER_THROTTLED_FALLBACK);
+		throttleNote = describeFailure(refusal, pageText('albumCover.throttledFallback'));
 	}
 
 	// The server deletes the rows and commits before it removes the files, so
 	// a failed or uncertain discard may come after the suggestions are gone;
 	// the discard reads the state again, so the editor shows what is left.
 	function reportDiscardFailure(error: unknown): void {
-		addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
+		addToast(describeFailure(error, pageText('albumCover.suggestionFailedFallback')), 'error');
 	}
 
 	async function discardAndClose(): Promise<void> {
@@ -269,9 +253,9 @@
 				reportDiscardFailure(error);
 			}
 			updateAlbumInList(albumId, () => updated);
-			addToast('Cover saved', 'success');
+			addToast(pageText('albumCover.saved'), 'success');
 		} catch (error) {
-			addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
+			addToast(describeFailure(error, pageText('albumCover.suggestionFailedFallback')), 'error');
 		} finally {
 			endCoverSave(albumId);
 		}
@@ -300,7 +284,7 @@
 	}
 </script>
 
-<div class="cover-editor" role="group" aria-label={ALBUM_COVER_EDITING_LABEL}>
+<div class="cover-editor" role="group" aria-label={pageText('albumCover.editing')}>
 	<div
 		class="cover-stage"
 		role="group"
@@ -313,7 +297,7 @@
 			<button
 				type="button"
 				class="stage-nav"
-				aria-label={ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL}
+				aria-label={pageText('albumCover.previousSuggestion')}
 				disabled={coverSuggestionsBusy || shownSlotIndex === 0}
 				onclick={() => showSlot(shownSlotIndex - 1)}>‹</button
 			>
@@ -322,12 +306,16 @@
 		{/if}
 		<div class="stage-art" class:stage-art-empty={!shownSlot && !album.cover}>
 			{#if shownSlot?.kind === 'suggestion'}
-				<img src={shownSlot.url} alt={albumCoverSuggestionAlt(album.title)} draggable="false" />
+				<img
+					src={shownSlot.url}
+					alt={pageText('albumCover.suggestionAlt', { title: album.title })}
+					draggable="false"
+				/>
 			{:else if shownSlot?.kind === 'making'}
 				<div class="stage-making" role="status">
 					<span class="stage-ring" aria-hidden="true"></span>
 					<span
-						>{ALBUM_COVER_SUGGESTING_LABEL}{#if shownSlot.startedAt}<CoverRunElapsed
+						>{pageText('albumCover.suggesting')}{#if shownSlot.startedAt}<CoverRunElapsed
 								startedAt={shownSlot.startedAt}
 							/>{/if}</span
 					>
@@ -335,12 +323,12 @@
 			{:else if album.cover}
 				<img
 					src={album.cover.detail}
-					alt={`${ALBUM_COVER_ALT_TYPE} ${album.title}`}
+					alt={pageText('albumCover.alt', { title: album.title })}
 					draggable="false"
 				/>
 			{:else}
 				<button type="button" class="stage-empty" onclick={() => onupload()}
-					>{ALBUM_COVER_ADD_LABEL}</button
+					>{pageText('albumCover.add')}</button
 				>
 			{/if}
 		</div>
@@ -348,7 +336,7 @@
 			<button
 				type="button"
 				class="stage-nav"
-				aria-label={ALBUM_COVER_NEXT_SUGGESTION_LABEL}
+				aria-label={pageText('albumCover.nextSuggestion')}
 				disabled={coverSuggestionsBusy || shownSlotIndex === stageSlots.length - 1}
 				onclick={() => showSlot(shownSlotIndex + 1)}>›</button
 			>
@@ -363,21 +351,26 @@
 				class="cover-suggestions-retry"
 				type="button"
 				onclick={() => retryCoverActivity(currentAlbumId)}
-				>{ALBUM_COVER_SUGGESTIONS_RETRY_LABEL}</button
+				>{pageText('albumCover.suggestionsRetry')}</button
 			>
 		{:else if coverSuggestions}
 			{#if shownSuggestionNumber}
-				<b>{albumCoverSuggestionPosition(shownSuggestionNumber, suggestionCount)}</b>
+				<b
+					>{pageText('albumCover.suggestionPosition', {
+						shown: String(shownSuggestionNumber),
+						total: String(suggestionCount)
+					})}</b
+				>
 			{/if}
 		{:else if coverSuggestionsLoading}
-			<span role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</span>
+			<span role="status">{pageText('albumCover.suggestionsLoading')}</span>
 		{/if}
 		{#if throttleNote}
 			<span class="cover-limit">{throttleNote}</span>
 		{/if}
 		{#if coverSuggestionsFailure}
 			<span class="cover-failure" role="alert">
-				<strong>{ALBUM_COVER_SUGGESTION_FAILED_TITLE}</strong>
+				<strong>{pageText('albumCover.suggestionFailedTitle')}</strong>
 				{coverSuggestionsFailure}
 			</span>
 		{/if}
@@ -394,7 +387,7 @@
 			class="cover-action"
 			data-hitbox="frequent"
 			disabled={coverSuggestionsBusy}
-			onclick={() => onupload()}>{ALBUM_COVER_EDITING_UPLOAD_LABEL}</button
+			onclick={() => onupload()}>{pageText('albumCover.upload')}</button
 		>
 		<button
 			type="button"
@@ -404,8 +397,8 @@
 			disabled={!canSuggestCover}
 			onclick={suggestCover}
 			>{hasSuggestions
-				? ALBUM_COVER_SUGGEST_ANOTHER_LABEL
-				: ALBUM_COVER_SUGGEST_LABEL}{#if coverProblem === 'busy'}<span class="cover-wait-time"
+				? pageText('albumCover.suggestAnother')
+				: pageText('albumCover.suggest')}{#if coverProblem === 'busy'}<span class="cover-wait-time"
 					>&nbsp;{formatTime(busyWaitSeconds)}</span
 				>{/if}</button
 		>
@@ -416,7 +409,7 @@
 				data-hitbox="frequent"
 				disabled={!shownSuggestionId || coverSuggestionsBusy}
 				onclick={() => shownSuggestionId && selectCoverSuggestion(shownSuggestionId)}
-				>{ALBUM_COVER_SUGGESTION_USE_LABEL}</button
+				>{pageText('albumCover.use')}</button
 			>
 		{/if}
 		{#if album.cover}
@@ -425,15 +418,15 @@
 				class="cover-action cover-remove"
 				data-hitbox="frequent"
 				disabled={coverSuggestionsBusy}
-				onclick={onremove}>{ALBUM_COVER_EDITING_REMOVE_LABEL}</button
+				onclick={onremove}>{pageText('albumCover.remove')}</button
 			>
 		{/if}
 		<button
 			type="button"
 			class="cover-close"
 			data-hitbox="frequent"
-			aria-label={ALBUM_COVER_EDITING_CLOSE_LABEL}
-			title={ALBUM_COVER_EDITING_CLOSE_LABEL}
+			aria-label={pageText('albumCover.editingClose')}
+			title={pageText('albumCover.editingClose')}
 			disabled={coverSuggestionsBusy || saving}
 			onclick={discardAndClose}
 		>

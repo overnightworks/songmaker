@@ -9,7 +9,6 @@ import { get } from 'svelte/store';
 
 import { lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
 import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
-import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 import { words } from '#lib/words/en.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRowLabels } from '#lib/test-utils/collection-menu.ts';
@@ -204,13 +203,13 @@ describe('AlbumDetailView menu', () => {
 		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledTimes(1));
 		await vi.waitFor(() =>
 			expect(target.querySelector('img')?.getAttribute('alt')).toBe(
-				`${ALBUM_COVER_ALT_TYPE} Night Drive`
+				words['albumPage.coverAlt']({ title: 'Night Drive' })
 			)
 		);
 	});
 
 	it.each([
-		{ failure: lostNetwork(), toast: 'Cover upload failed' },
+		{ failure: lostNetwork(), toast: words['albumPage.coverUploadFailed'] },
 		{ failure: serverRefusal('Cover must be an image'), toast: 'Cover must be an image' }
 	])('toasts $toast when a cover upload fails', async ({ failure, toast }) => {
 		uploadAlbumCover.mockRejectedValue(failure);
@@ -266,5 +265,5 @@ async function uploadFromCoverEditor(target: HTMLElement): Promise<void> {
 		.find((item) => item.textContent?.trim().startsWith(words['collectionMenu.cover']))
 		?.click();
 	await vi.waitFor(() => expect(target.querySelector('.cover-editor')).not.toBeNull());
-	getByRoleButton(requireElement(target, '.cover-editor'), 'Upload').click();
+	getByRoleButton(requireElement(target, '.cover-editor'), words['albumCover.upload']).click();
 }

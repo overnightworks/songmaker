@@ -30,7 +30,7 @@ async function render(props: Props): Promise<HTMLElement> {
 }
 
 async function submit(target: HTMLElement): Promise<void> {
-	getByRoleButton(target, 'Save').click();
+	getByRoleButton(target, words['albumDetails.save']).click();
 	await tick();
 	await tick();
 }
@@ -53,19 +53,19 @@ describe('AlbumMetaEditor', () => {
 		expect(target.querySelector('form')?.getAttribute('aria-label')).toBe(
 			words['collectionMenu.editDetails']
 		);
-		expect(field(target, 'Title').value).toBe('Night Drive');
-		expect(field(target, 'Subtitle').value).toBe('Live at the Roxy');
-		expect(field(target, 'Year').value).toBe('1994');
-		expect(document.activeElement).toBe(field(target, 'Title'));
+		expect(field(target, words['albumDetails.title']).value).toBe('Night Drive');
+		expect(field(target, words['albumDetails.subtitle']).value).toBe('Live at the Roxy');
+		expect(field(target, words['albumDetails.year']).value).toBe('1994');
+		expect(document.activeElement).toBe(field(target, words['albumDetails.title']));
 	});
 
 	it('saves title, subtitle and year together, trimmed, then closes', async () => {
 		const props = baseProps();
 		const target = await render(props);
 
-		type(field(target, 'Title'), ' Nightdrive ');
-		type(field(target, 'Subtitle'), 'Late-night synthwave');
-		type(field(target, 'Year'), '2026');
+		type(field(target, words['albumDetails.title']), ' Nightdrive ');
+		type(field(target, words['albumDetails.subtitle']), 'Late-night synthwave');
+		type(field(target, words['albumDetails.year']), '2026');
 		await submit(target);
 
 		expect(props.onsave).toHaveBeenCalledWith({
@@ -80,8 +80,8 @@ describe('AlbumMetaEditor', () => {
 		const props = baseProps();
 		const target = await render(props);
 
-		type(field(target, 'Year'), '2026');
-		getByRoleButton(target, 'Close edit details').click();
+		type(field(target, words['albumDetails.year']), '2026');
+		getByRoleButton(target, words['albumDetails.close']).click();
 		await tick();
 
 		expect(props.onclose).toHaveBeenCalledTimes(1);
@@ -93,7 +93,7 @@ describe('AlbumMetaEditor', () => {
 		const target = await render(props);
 
 		await submit(target);
-		const close = getByRoleButton(target, 'Close edit details');
+		const close = getByRoleButton(target, words['albumDetails.close']);
 		close.click();
 
 		expect(close.disabled).toBe(true);
@@ -111,12 +111,12 @@ describe('AlbumMetaEditor', () => {
 		const stopListening = listenForGlobalEscape();
 		const target = await render(props);
 
-		type(field(target, 'Year'), '2026');
+		type(field(target, words['albumDetails.year']), '2026');
 		await submit(target);
 		pressEscape();
 
 		expect(onclose).not.toHaveBeenCalled();
-		expect(field(target, 'Year').value).toBe('2026');
+		expect(field(target, words['albumDetails.year']).value).toBe('2026');
 
 		finishSave();
 		await tick();
@@ -139,7 +139,7 @@ describe('AlbumMetaEditor', () => {
 		const stopListening = listenForGlobalEscape();
 		const target = await render(props);
 
-		type(field(target, 'Year'), '1850');
+		type(field(target, words['albumDetails.year']), '1850');
 		await submit(target);
 		pressEscape();
 		refuseSave();
@@ -148,32 +148,32 @@ describe('AlbumMetaEditor', () => {
 		stopListening();
 
 		expect(onclose).not.toHaveBeenCalled();
-		expect(field(target, 'Year').value).toBe('1850');
-		expect(getByRoleButton(target, 'Save').disabled).toBe(false);
+		expect(field(target, words['albumDetails.year']).value).toBe('1850');
+		expect(getByRoleButton(target, words['albumDetails.save']).disabled).toBe(false);
 	});
 
 	it('offers no Save while the title is blank and names why beside the title', async () => {
 		const target = await render(baseProps());
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 
-		type(field(target, 'Title'), '   ');
+		type(field(target, words['albumDetails.title']), '   ');
 
-		expect(getByRoleButton(target, 'Save').disabled).toBe(true);
+		expect(getByRoleButton(target, words['albumDetails.save']).disabled).toBe(true);
 		expect(target.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
-			'Title cannot be empty'
+			words['albumDetails.titleRequired']
 		);
-		expect(field(target, 'Title').getAttribute('aria-invalid')).toBe('true');
+		expect(field(target, words['albumDetails.title']).getAttribute('aria-invalid')).toBe('true');
 	});
 
 	it('stays open with the draft when the save is refused', async () => {
 		const props = baseProps({ onsave: vi.fn().mockRejectedValue(new Error('refused')) });
 		const target = await render(props);
 
-		type(field(target, 'Year'), '1850');
+		type(field(target, words['albumDetails.year']), '1850');
 		await submit(target);
 
 		expect(props.onclose).not.toHaveBeenCalled();
-		expect(field(target, 'Year').value).toBe('1850');
-		expect(getByRoleButton(target, 'Save').disabled).toBe(false);
+		expect(field(target, words['albumDetails.year']).value).toBe('1850');
+		expect(getByRoleButton(target, words['albumDetails.save']).disabled).toBe(false);
 	});
 });
