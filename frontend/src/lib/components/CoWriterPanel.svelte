@@ -526,7 +526,7 @@
 			await followTurnRunningElsewhere(msg, assistantIndex);
 		} else if (refusal) {
 			const fallback =
-				refusal.status === 503 ? cowriterProblemText('unavailable') : refusal.message;
+				refusal.status === 503 ? cowriterProblemText('unavailable') : cowriterNoAnswerText();
 			markTurnFailed(assistantIndex, describeFailure(refusal, fallback));
 		} else if (streamError) {
 			markTurnFailed(

@@ -37,12 +37,24 @@ afterEach(async () => {
 });
 
 describe('CoWriterPanel refused turn', () => {
-	it('shows the words of the refusal key under the message and never the detail', async () => {
+	it.each([
+		{
+			name: 'shows the words of the refusal key under the message and never the detail',
+			key: 'cowriterRefusal.takeNotInSong',
+			expected: words['cowriterRefusal.takeNotInSong']
+		},
+		{
+			name: 'shows the page fallback for a refusal key the page does not know, never the detail',
+			key: 'cowriterRefusal.notAKnownKey',
+			expected: words['cowriterProblem.noAnswer']
+		}
+	])('$name', async ({ key, expected }) => {
+		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		streamCoWriterTurn.mockReturnValue(
 			(async function* () {
 				yield* [];
 				throw new ApiError(422, 'Sentence of the server', '/api/chat/turn', null, '', null, null, {
-					key: 'cowriterRefusal.takeNotInSong',
+					key,
 					values: {}
 				});
 			})()
@@ -63,9 +75,7 @@ describe('CoWriterPanel refused turn', () => {
 		target.querySelector<HTMLButtonElement>('.send-btn')?.click();
 
 		await vi.waitFor(() =>
-			expect(target.querySelector('.turn-error .text')?.textContent).toBe(
-				words['cowriterRefusal.takeNotInSong']
-			)
+			expect(target.querySelector('.turn-error .text')?.textContent).toBe(expected)
 		);
 	});
 });
