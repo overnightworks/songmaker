@@ -1,3 +1,4 @@
+import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
@@ -21,12 +22,12 @@ afterEach(async () => {
 
 describe('SharedFooter legal links', () => {
 	it.each(LEGAL_SECTIONS)(
-		'1785_rule_1 opens $label on the central site in a new tab, so playback keeps running',
-		async ({ label, href }) => {
+		'1785_rule_1 opens $labelKey on the central site in a new tab, so playback keeps running',
+		async ({ labelKey, href }) => {
 			const target = await render();
 
 			const link = Array.from(target.querySelectorAll('a')).find(
-				(anchor) => anchor.textContent === label
+				(anchor) => anchor.textContent === words[labelKey]
 			);
 			expect(link?.getAttribute('href')).toBe(href);
 			expect(link?.getAttribute('target')).toBe('_blank');

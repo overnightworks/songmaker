@@ -1,5 +1,4 @@
 import { mount, tick, unmount } from 'svelte';
-import { ACCOUNT_MENU_CLOSE_LABEL, ACCOUNT_MENU_LABEL } from '#lib/constants/auth.ts';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,7 +37,7 @@ const USERNAME = 'felix';
 const ACCOUNT_CONSOLE_URL = 'https://login.test/realms/songmaker/account';
 const LOG_OUT_NAME = kitWords()['account.logOut'];
 const LEGAL_LINKS = `nav[aria-label="${kitWords()['legalLinks.name']}"] a`;
-const TRIGGER_NAME = `${ACCOUNT_MENU_LABEL} · ${USERNAME}`;
+const TRIGGER_NAME = words['account.menu'](USERNAME);
 
 function storeChoice(choice: 'dark' | 'light' | 'system'): void {
 	localStorage.setItem('songmaker.theme', choice);
@@ -110,7 +109,7 @@ describe('AccountMenu', () => {
 		getByRoleButton(panel, LOG_OUT_NAME);
 		expect(panel.querySelectorAll('input[type="radio"]')).toHaveLength(3);
 		expect(Array.from(panel.querySelectorAll(LEGAL_LINKS)).map((link) => link.textContent)).toEqual(
-			LEGAL_SECTIONS.map((section) => section.label)
+			LEGAL_SECTIONS.map((section) => words[section.labelKey])
 		);
 	});
 
@@ -281,7 +280,7 @@ describe('AccountMenu focus', () => {
 		{ way: 'Escape', close: () => press('Escape') },
 		{
 			way: 'a tap outside',
-			close: (target: HTMLElement) => getByRoleButton(target, ACCOUNT_MENU_CLOSE_LABEL).click()
+			close: (target: HTMLElement) => getByRoleButton(target, words['account.menuClose']).click()
 		},
 		{
 			way: 'the circle again',
@@ -315,7 +314,7 @@ describeBackClosesOverlay({
 	closeWays: [
 		{
 			way: 'a tap outside',
-			close: (target) => getByRoleButton(target, ACCOUNT_MENU_CLOSE_LABEL).click()
+			close: (target) => getByRoleButton(target, words['account.menuClose']).click()
 		},
 		{
 			way: 'Escape',

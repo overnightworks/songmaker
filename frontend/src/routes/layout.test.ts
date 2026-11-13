@@ -34,11 +34,7 @@ import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
 import { words } from '#lib/words/en.ts';
 import { kitWords } from '#lib/utils/kit-words.ts';
 import { apiFetch } from '#lib/api/fetch.ts';
-import {
-	AUTH_CHECK_NETWORK_ERROR,
-	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
-	ACCOUNT_MENU_LABEL
-} from '#lib/constants/auth.ts';
+import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '#lib/constants/auth.ts';
 import {
 	checkAuth,
 	currentUser,
@@ -846,7 +842,7 @@ describe('auth check failure', () => {
 		vi.mocked(checkAuth).mockImplementationOnce(async () => {
 			currentUser.set(null);
 			authLoading.set(false);
-			authCheckError.set('Too many requests. Retry in a moment to check your session.');
+			authCheckError.set(words['auth.checkRateLimited']);
 			return null;
 		});
 		const target = mountLayout(LIBRARY_ROUTE_PATH);
@@ -857,7 +853,7 @@ describe('auth check failure', () => {
 		expect(signInRedirects()).toEqual([]);
 		expect(target.querySelector('.app-shell')).toBeNull();
 		const retry = requireElement<HTMLButtonElement>(target, '.auth-retry button');
-		expect(retry.textContent).toBe('Retry');
+		expect(retry.textContent).toBe(words['auth.retry']);
 		expect(target.querySelector('.auth-retry')?.textContent).toContain('Too many requests');
 	});
 
@@ -878,7 +874,7 @@ describe('auth check failure', () => {
 		const target = mountLayout(LIBRARY_ROUTE_PATH);
 
 		await vi.waitFor(() => expect(target.textContent).toContain(OFFLINE_STRIP_MESSAGE));
-		expect(target.textContent).not.toContain(AUTH_CHECK_NETWORK_ERROR);
+		expect(target.textContent).not.toContain(words['auth.checkNetworkError']);
 		expect(target.querySelector('.auth-retry')).toBeNull();
 		expect(signInRedirects()).toEqual([]);
 
@@ -1035,7 +1031,7 @@ describe('signing out on the phone', () => {
 		);
 		const documentLoads = documentLoadsStandIn();
 		standInForDocumentLoadsForTests(documentLoads);
-		getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click();
+		getByRoleButton(target, words['account.menu'](USER.username)).click();
 		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('account-menu'));
 		const backs = vi.spyOn(history, 'back');
 		onTestFinished(() => backs.mockRestore());

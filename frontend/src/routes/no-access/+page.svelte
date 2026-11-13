@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { SignInPage } from 'overnightworks-design';
-	import { SIGN_OUT_FAILED_MESSAGE } from '#lib/constants/auth.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
-	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
+	import { legalLinks } from '#lib/utils/legal-links.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { kitWords } from '#lib/utils/kit-words.ts';
 	import { logout, signOutFailed } from '#lib/stores/auth.ts';
 </script>
@@ -12,8 +12,8 @@
 	state={{
 		page: 'no-access',
 		onLogOut: () => void logout(),
-		logOutFailure: $signOutFailed ? SIGN_OUT_FAILED_MESSAGE : undefined
+		logOutFailure: $signOutFailed ? pageText('account.signOutFailed') : undefined
 	}}
-	legalLinks={LEGAL_SECTIONS}
+	legalLinks={legalLinks()}
 	words={kitWords()}
 />

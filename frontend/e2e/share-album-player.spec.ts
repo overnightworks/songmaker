@@ -1,3 +1,4 @@
+import { words } from '../src/lib/words/en';
 // A shared album opens as the player view with its songs (#1443, #1374
 // slice 6), signed out, at the desktop and the phone width. The real seeded
 // album (three three-second songs) carries the flows that need a real song
@@ -487,7 +488,7 @@ test.describe('a long album', () => {
 				await page.screenshot({ path: testInfo.outputPath('album-scroll-bar.png') });
 				const [barBox, footerBox] = await boundingBoxes(
 					bar,
-					page.getByRole('link', { name: 'Impressum' })
+					page.getByRole('link', { name: words['legal.imprint'] })
 				);
 				expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(barBox.y);
 

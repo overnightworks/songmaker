@@ -1,3 +1,4 @@
+import { words } from '../src/lib/words/en';
 import { expect, test as base, type Page } from './coverage-test';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -551,7 +552,7 @@ for (const height of [900, 600]) {
 			await bar(page).getByRole('button', { name: 'Play', exact: true }).click();
 			await expect(bar(page).getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
 			const [footer, transport] = await boundingBoxes(
-				page.getByRole('link', { name: 'Impressum' }),
+				page.getByRole('link', { name: words['legal.imprint'] }),
 				bar(page)
 			);
 			expect(footer.y + footer.height).toBeLessThanOrEqual(transport.y);

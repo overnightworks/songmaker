@@ -785,6 +785,17 @@ export type Words = {
     readonly "memory.save": string;
     readonly "memory.saving": string;
     readonly "cowriter.emptyHint": string;
+    readonly "legal.imprint": string;
+    readonly "legal.privacy": string;
+    readonly "legal.terms": string;
+    readonly "account.menu": (gaps: { readonly username: string }) => string;
+    readonly "account.menuClose": string;
+    readonly "account.signOutFailed": string;
+    readonly "auth.loading": string;
+    readonly "auth.retry": string;
+    readonly "auth.checkRateLimited": string;
+    readonly "auth.checkServerError": string;
+    readonly "auth.checkNetworkError": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -1771,5 +1782,16 @@ export const words: Words = {
     "memory.save": "Save",
     "memory.saving": "Saving...",
     "cowriter.emptyHint": "I can see the song you have open. Tell me what you want to work on, or ask me to browse your other songs — I'll pull them up as needed.",
+    "legal.imprint": "Legal notice",
+    "legal.privacy": "Privacy",
+    "legal.terms": "Terms of use",
+    "account.menu": (gaps: { readonly username: string }) => "Account · " + gaps.username,
+    "account.menuClose": "Close account menu",
+    "account.signOutFailed": "Couldn't log out. Check your connection and try again.",
+    "auth.loading": "Loading...",
+    "auth.retry": "Retry",
+    "auth.checkRateLimited": "Too many requests. Retry in a moment to check your session.",
+    "auth.checkServerError": "Could not verify your session. Retry to try again.",
+    "auth.checkNetworkError": "Network error. Retry to check your session.",
 };
 export type Key = keyof Words;

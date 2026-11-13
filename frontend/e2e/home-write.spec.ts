@@ -1,5 +1,4 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
-import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import type { LibraryWriteResponse, PaginatedResponse, SongItem } from '../src/lib/api/types';
 import { words } from '../src/lib/words/en';
 import { songRoutePath } from '../src/lib/routes/addresses';
@@ -320,7 +319,7 @@ for (const pending of [false, true]) {
 			}
 			await page
 				.getByRole('button', {
-					name: `${ACCOUNT_MENU_LABEL} · ${accounts[0].username}`,
+					name: words['account.menu'](accounts[0].username),
 					exact: true
 				})
 				.click();

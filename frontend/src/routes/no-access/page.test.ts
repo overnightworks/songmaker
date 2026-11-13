@@ -1,5 +1,5 @@
+import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
-import { SIGN_OUT_FAILED_MESSAGE } from '#lib/constants/auth.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_NAME } from '#lib/constants/app.ts';
 import { signOutFailed } from '#lib/stores/auth.ts';
@@ -76,6 +76,8 @@ describe('no-access page', () => {
 		signOutFailed.set(true);
 		await tick();
 
-		expect(target.querySelector('[role="alert"]')?.textContent).toBe(SIGN_OUT_FAILED_MESSAGE);
+		expect(target.querySelector('[role="alert"]')?.textContent).toBe(
+			words['account.signOutFailed']
+		);
 	});
 });

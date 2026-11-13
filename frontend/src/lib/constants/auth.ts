@@ -1,12 +1,6 @@
 // The route a sign-out posts to; the server answers the page that ends the identity provider's session.
 export const LOGOUT_ADDRESS = '/auth/logout';
 
-export const AUTH_CHECK_RATE_LIMITED_ERROR =
-	'Too many requests. Retry in a moment to check your session.';
-export const AUTH_CHECK_SERVER_ERROR = 'Could not verify your session. Retry to try again.';
-export const AUTH_CHECK_NETWORK_ERROR = 'Network error. Retry to check your session.';
-export const AUTH_CHECK_RETRY_LABEL = 'Retry';
-
 // A session check the server did not answer asks again this often, the same
 // cadence the library's return probe keeps, so the app loads within about a
 // second of the server's return (#1118).
@@ -16,8 +10,5 @@ export { RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS as AUTH_CHECK_RETURN_PROBE_INTER
 // return to from this param.
 export const SIGN_IN_NEXT_PARAM = 'next';
 
-// The account circle and the menu it opens (issue #1158).
+// The account circle's name prefix, read only by the e2e helpers; the app reads `account.menu`.
 export const ACCOUNT_MENU_LABEL = 'Account';
-export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
-// Shown when the log-out could not reach the server; the session stands.
-export const SIGN_OUT_FAILED_MESSAGE = "Couldn't log out. Check your connection and try again.";
