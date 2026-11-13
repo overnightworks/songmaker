@@ -1,8 +1,0 @@
-claim_id = "6bbf1cf09cc44074bfd245ff6ec816c9"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "fa83ec705c9024fde197e5cbbb912e39d9747f81"
-branch = "claude/issue-3116-probe-stacks-run-through-probe-run-with"
-scope = ["docs/testing.md", "frontend/e2e/README.md", "scripts/free_loopback_port.sh", "scripts/gpu_job_kinds_probe.sh", "scripts/test_postgresql.sh", "scripts/voices_e2e_probe.sh"]
-opened_commit = "db0690e1f4fd682e698dd7b23b0c095810ce0273"
-whole_reason = "Every probe entry point and its docs move to probe-run together, with one shared free-port helper."
