@@ -34,7 +34,7 @@ from support.mcp_world import (
     worker_ready,
 )
 from support.token_world import TokenWorld
-from support.web_app import seed_session
+from support.web_app import refusal_body, seed_session
 
 from songmaker_cli.agent.mcp import Exclusion
 from songmaker_cli.constants import SongWorkKind
@@ -111,6 +111,23 @@ def test_a_list_tool_holds_only_the_callers_content(household: McpWorld, tool: T
 
     assert reply.is_error is False
     assert BOB not in reply.text
+
+
+def test_search_library_refuses_a_foreign_or_changed_cursor_with_the_browsers_body(
+    household: McpWorld,
+) -> None:
+    first = household.call("search_library", {"q": "a", "limit": 1})
+    cursor = first.json()["next_cursor"]
+
+    mismatch = household.call("search_library", {"q": "b", "cursor": cursor})
+    invalid = household.call("search_library", {"q": "a", "cursor": "not-a-cursor"})
+
+    assert (mismatch.is_error, mismatch.json()) == (
+        True, refusal_body("libraryRefusal.cursorMismatch"),
+    )
+    assert (invalid.is_error, invalid.json()) == (
+        True, refusal_body("libraryRefusal.cursorInvalid"),
+    )
 
 
 @pytest.mark.parametrize("tool", PLAIN_READS, ids=lambda t: t.name)
@@ -445,10 +462,16 @@ def test_an_admins_agent_is_refused_the_admins_own_model_jobs_on_a_worker(
 
     job = admins_world.call("get_job", {"job_id": "model-job"}, groups=ADMIN_GROUPS)
     cancel = admins_world.call("cancel_job", {"job_id": "model-job"}, groups=ADMIN_GROUPS)
+    missing_job = admins_world.call("get_job", {"job_id": "no-such-job"}, groups=ADMIN_GROUPS)
+    missing_cancel = admins_world.call(
+        "cancel_job", {"job_id": "no-such-job"}, groups=ADMIN_GROUPS,
+    )
     seed_session(admins_world.world.client, "alice")
     browser = admins_world.world.client.get("/api/jobs/model-job")
 
     assert (job.is_error, cancel.is_error) == (True, True)
+    assert job.json() == missing_job.json() == refusal_body("jobRefusal.notFound")
+    assert cancel.json() == missing_cancel.json() == refusal_body("jobRefusal.notFound")
     assert ("model-job", "queued") in admins_world.rows_of(Job, "id", "status")
     assert browser.status_code == 200
 
@@ -458,9 +481,15 @@ def test_an_admins_agent_is_refused_another_persons_job_and_is_a_user_in_the_acc
 ) -> None:
     job = admins_world.call("get_job", {"job_id": "job-bobs"}, groups=ADMIN_GROUPS)
     cancel = admins_world.call("cancel_job", {"job_id": "job-bobs"}, groups=ADMIN_GROUPS)
+    missing_job = admins_world.call("get_job", {"job_id": "no-such-job"}, groups=ADMIN_GROUPS)
+    missing_cancel = admins_world.call(
+        "cancel_job", {"job_id": "no-such-job"}, groups=ADMIN_GROUPS,
+    )
     account = admins_world.call("get_account", groups=ADMIN_GROUPS)
 
     assert (job.is_error, cancel.is_error) == (True, True)
+    assert job.json() == missing_job.json() == refusal_body("jobRefusal.notFound")
+    assert cancel.json() == missing_cancel.json() == refusal_body("jobRefusal.notFound")
     assert ("job-bobs", "queued") in admins_world.rows_of(Job, "id", "status")
     assert (account.is_error, account.json()["role"]) == (False, "user")
 
