@@ -31,7 +31,6 @@ songmaker_cli/album_api.py:api_unshare_album # HTTP dispatcher: router.delete('/
 songmaker_cli/album_api.py:api_update_album # HTTP dispatcher: router.put('/albums/{album_id}', responses={404: {'description': 'Album not found'}, 422: {'description': 'Album title is required'}})
 songmaker_cli/album_api.py:api_upload_album_cover # HTTP dispatcher: router.post('/albums/{album_id}/cover')
 songmaker_cli/audio_api.py:get_audio # HTTP dispatcher: router.get('/audio/{owner_id}/{filename}', responses={404: {'description': 'Audio file not found'}})
-songmaker_cli/auth_api.py:me # HTTP dispatcher: router.get('/me')
 songmaker_cli/conversation_api.py:api_chat_turn # HTTP dispatcher: router.post('/chat/turn', responses={404: {'description': 'A mentioned album, version, song or take, or the current song, does not exist'}, 422: {'description': 'Chat context or co-writer configuration is invalid'}})
 songmaker_cli/conversation_api.py:api_conversation_messages # HTTP dispatcher: router.get('/conversations/{conversation_id}', responses={404: {'description': 'Conversation does not exist'}})
 songmaker_cli/conversation_api.py:api_delete_conversation # HTTP dispatcher: router.delete('/conversations/{conversation_id}', responses={404: {'description': 'Conversation does not exist'}})

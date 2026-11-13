@@ -4,11 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '#lib/api/client.ts';
 import type { ChatMessageItem } from '#lib/api/types.ts';
 import {
-	COWRITER_CONVERSATION_MENU_LABEL,
-	COWRITER_DELETE_CONVERSATION_TITLE,
-	COWRITER_DELETE_CONVERSATION_WARNING,
-	COWRITER_MEMORY_LABEL,
-	COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
 	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 	COWRITER_RUNNING_TURN_POLL_MS
 } from '#lib/constants/cowriter.ts';
@@ -200,17 +195,19 @@ async function openConversationMenu(target: HTMLElement): Promise<HTMLElement> {
 async function openMemoryFromMenu(target: HTMLElement): Promise<void> {
 	const menu = await openConversationMenu(target);
 	Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-		.find((item) => item.textContent?.trim() === 'Memory')
+		.find((item) => item.textContent?.trim() === words['cowriter.memory'])
 		?.click();
 	await tick();
 }
 
+const memorySection = (target: HTMLElement) =>
+	target.querySelector(`section[aria-label="${words['cowriter.memory']}"]`);
 function userMemoryField(target: HTMLElement): HTMLTextAreaElement | null {
 	return target.querySelector<HTMLTextAreaElement>('textarea[aria-label="User memory"]');
 }
 
 function focusedConversationMenuTrigger(): boolean {
-	return document.activeElement?.getAttribute('aria-label') === COWRITER_CONVERSATION_MENU_LABEL;
+	return document.activeElement?.getAttribute('aria-label') === words['cowriter.conversationMenu'];
 }
 
 function conversationStartedAt(createdAt: string) {
@@ -218,22 +215,19 @@ function conversationStartedAt(createdAt: string) {
 }
 
 describe('CoWriterPanel', () => {
-	it('renders without a Close button (its lifecycle is owned by the Editor header toggle)', async () => {
-		const target = await render();
-		expect(target.querySelector('.close-btn')).toBeNull();
-	});
-
-	it('has no left border now that it fills the Write column instead of a side panel', async () => {
+	it('fills the Write column as its own body: no Close button, no left border, no back control above the Co-writer tab', async () => {
 		const target = await render();
 		const root = target.querySelector('.cowriter');
 		expect(root).not.toBeNull();
 		expect(getComputedStyle(root as Element).borderLeftWidth).not.toBe('1px');
-	});
-
-	it('renders no back control of its own — on the phone the song app bar stays above the Co-writer tab', async () => {
-		const target = await render();
+		expect(target.querySelector('.close-btn')).toBeNull();
 		expect(target.querySelector('.cowriter-back')).toBeNull();
 		expect(target.querySelector('.app-bar')).toBeNull();
+	});
+
+	it('greets a new conversation with the catalog hint', async () => {
+		const target = await render();
+		expect(target.querySelector('.empty-hint')?.textContent).toBe(words['cowriter.emptyHint']);
 	});
 
 	it('keeps focus in the composer when Send is pressed, so the bars coming back cannot move Send from under a phone tap', async () => {
@@ -298,7 +292,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			Array.from(line?.querySelectorAll('button') ?? [], (button) =>
 				button.getAttribute('aria-label')
 			)
-		).toEqual([COWRITER_CONVERSATION_MENU_LABEL]);
+		).toEqual([words['cowriter.conversationMenu']]);
 	});
 
 	it('keeps a new conversation and switching conversations in its ⋯ menu', async () => {
@@ -309,7 +303,6 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		};
 		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00'), older]);
 		const target = await render();
-
 		const menu = await openConversationMenu(target);
 		expect(menu.textContent).not.toContain('Claude');
 		const conversationRows = menu.querySelectorAll<HTMLButtonElement>('.conv-pick');
@@ -320,11 +313,12 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await tick();
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		expect(conversationLine(target)).toBe('Co-writer · archived conversation from Sep 20');
-
+		target.querySelector<HTMLButtonElement>('.readonly-banner button')?.click();
+		await vi.waitFor(() => expect(startNewConversation).toHaveBeenCalledTimes(1));
 		const reopened = await openConversationMenu(target);
 		reopened.querySelector<HTMLButtonElement>('.convo-new')?.click();
 		await tick();
-		expect(startNewConversation).toHaveBeenCalledTimes(1);
+		expect(startNewConversation).toHaveBeenCalledTimes(2);
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		await vi.waitFor(() => expect(conversationLine(target)).toBe('Co-writer · new conversation'));
 	});
@@ -526,17 +520,17 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		const target = await render();
 		expect(
 			Array.from(target.querySelectorAll('button'), (button) => button.textContent?.trim())
-		).not.toContainEqual(expect.stringMatching(/^Memory/));
+		).not.toContainEqual(expect.stringMatching(new RegExp(`^${words['cowriter.memory']}`)));
 
 		await openMemoryFromMenu(target);
 
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		await vi.waitFor(() => expect(userMemoryField(target)?.value).toBe('Prefers short lines'));
-		expect(
-			target.querySelector('section[aria-label="Memory"]')?.contains(document.activeElement)
-		).toBe(true);
+		expect(memorySection(target)?.contains(document.activeElement)).toBe(true);
 
-		target.querySelector<HTMLButtonElement>('button[aria-label="Close memory"]')?.click();
+		target
+			.querySelector<HTMLButtonElement>(`button[aria-label="${words['memory.close']}"]`)
+			?.click();
 		await tick();
 		expect(userMemoryField(target)).toBeNull();
 		expect(focusedConversationMenuTrigger()).toBe(true);
@@ -592,7 +586,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			await vi.waitFor(() => expect(target.querySelector('.proposal')).toBeNull());
 			await tick();
 
-			const memory = target.querySelector('section[aria-label="Memory"]');
+			const memory = memorySection(target);
 			expect(memory?.contains(document.activeElement)).toBe(true);
 			const escape = new KeyboardEvent('keydown', {
 				key: 'Escape',
@@ -602,7 +596,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			document.activeElement?.dispatchEvent(escape);
 			await tick();
 
-			expect(target.querySelector('section[aria-label="Memory"]')).toBeNull();
+			expect(memorySection(target)).toBeNull();
 			expect(escape.defaultPrevented).toBe(true);
 			expect(focusedConversationMenuTrigger()).toBe(true);
 		}
@@ -635,18 +629,13 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 	it('marks ⋯ and its Memory item while a memory proposal waits, and says so in their names until it is answered', async () => {
 		const target = await renderWithOneWaitingProposal();
 		const trigger = target.querySelector<HTMLButtonElement>('button.convo-menu-btn');
-		const waitingName = (label: string) =>
-			`${label}, ${COWRITER_MEMORY_PROPOSAL_WAITING_LABEL.toLowerCase()}`;
-
 		await vi.waitFor(() =>
-			expect(trigger?.getAttribute('aria-label')).toBe(
-				waitingName(COWRITER_CONVERSATION_MENU_LABEL)
-			)
+			expect(trigger?.getAttribute('aria-label')).toBe(words['cowriter.conversationMenuWaiting'])
 		);
 		expect(trigger?.querySelectorAll('.proposal-waiting')).toHaveLength(1);
 		const menu = await openConversationMenu(target);
 		const memoryItem = menu.querySelector<HTMLButtonElement>('.convo-memory');
-		expect(memoryItem?.getAttribute('aria-label')).toBe(waitingName(COWRITER_MEMORY_LABEL));
+		expect(memoryItem?.getAttribute('aria-label')).toBe(words['cowriter.memoryWaiting']);
 		expect(memoryItem?.querySelector('.proposal-waiting')).not.toBeNull();
 
 		memoryItem?.click();
@@ -656,7 +645,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await tick();
 
 		expect(target.querySelectorAll('.proposal-waiting')).toHaveLength(0);
-		expect(trigger?.getAttribute('aria-label')).toBe(COWRITER_CONVERSATION_MENU_LABEL);
+		expect(trigger?.getAttribute('aria-label')).toBe(words['cowriter.conversationMenu']);
 	});
 
 	it('shows the waiting proposal above the memory fields when Memory opens from its marked item', async () => {
@@ -669,7 +658,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await vi.waitFor(() => expect(target.querySelector('.proposal')).not.toBeNull());
 
 		const proposal = target.querySelector('.proposal');
-		const firstField = target.querySelector('section[aria-label="Memory"] textarea');
+		const firstField = memorySection(target)?.querySelector('textarea');
 		if (!proposal || !firstField) throw new Error('Expected the proposal and the memory fields');
 		expect(
 			proposal.compareDocumentPosition(firstField) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -709,9 +698,9 @@ describe('CoWriterPanel deleting a conversation', () => {
 
 		const dialog = await openDeleteConfirm(target);
 
-		expect(dialog.querySelector('h3')?.textContent).toBe(COWRITER_DELETE_CONVERSATION_TITLE);
+		expect(dialog.querySelector('h3')?.textContent).toBe(words['cowriter.deleteConversationTitle']);
 		expect(dialog.querySelector('.warning')?.textContent).toBe(
-			COWRITER_DELETE_CONVERSATION_WARNING
+			words['cowriter.deleteConversationWarning']
 		);
 		expect(dialogButton(dialog, 'Delete')).toBeDefined();
 		expect(dialogButton(dialog, 'Cancel')).toBeDefined();
@@ -727,7 +716,7 @@ describe('CoWriterPanel deleting a conversation', () => {
 
 		expect(labelId).toBeTruthy();
 		expect(document.getElementById(labelId ?? '')?.textContent).toBe(
-			COWRITER_DELETE_CONVERSATION_TITLE
+			words['cowriter.deleteConversationTitle']
 		);
 	});
 
@@ -1783,12 +1772,14 @@ describeBackClosesOverlay({
 		await openMemoryFromMenu(target);
 		await historyComesToRest();
 	},
-	isShown: (target) => target.querySelector('section[aria-label="Memory"]') !== null,
+	isShown: (target) => memorySection(target) !== null,
 	closeWays: [
 		{
 			way: 'its close button',
 			close: (target) =>
-				target.querySelector<HTMLButtonElement>('button[aria-label="Close memory"]')?.click()
+				target
+					.querySelector<HTMLButtonElement>(`button[aria-label="${words['memory.close']}"]`)
+					?.click()
 		},
 		{ way: 'Escape', close: (target) => pressEscapeIn(userMemoryField(target)) }
 	]

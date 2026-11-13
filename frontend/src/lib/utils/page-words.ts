@@ -18,16 +18,18 @@ export async function loadPageWords(language: Language): Promise<void> {
 	loadedWords = await loadWords(language);
 }
 
-/** The keys whose sentence has a marked part: the generated entry is a function of its gaps that returns the sentence as parts. */
+/** The keys whose sentence has a marked part: the generated entry is the sentence as parts, a function of its gaps when it has any. */
 type MarkedKey = {
-	[K in Key]: Words[K] extends (...values: never[]) => readonly unknown[] ? K : never;
+	[K in Key]: Words[K] extends readonly unknown[] | ((...values: never[]) => readonly unknown[])
+		? K
+		: never;
 }[Key];
 
 /** The keys `pageText` reads: every key but the marked ones. */
 export type TextKey = Exclude<Key, MarkedKey>;
 
-type Parts<K extends MarkedKey> = Words[K] extends (...values: never[]) => infer P ? P : never;
-type PartsGaps<K extends MarkedKey> = Words[K] extends (...values: infer V) => unknown ? V : never;
+type Parts<K extends MarkedKey> = Words[K] extends (...values: never[]) => infer P ? P : Words[K];
+type PartsGaps<K extends MarkedKey> = Words[K] extends (...values: infer V) => unknown ? V : [];
 
 function loadedEntry<K extends Key>(key: K): Words[K] {
 	if (loadedWords === undefined) throw new PageWordsNotLoadedError();
@@ -42,7 +44,10 @@ export function pageText<K extends TextKey>(key: K, ...values: Values<K>): strin
 
 /** The page's reader of a sentence with a marked part: its parts in the page's language, which the kit's `Marked` renders. */
 export function pageParts<K extends MarkedKey>(key: K, ...gaps: PartsGaps<K>): Parts<K> {
-	return (loadedEntry(key) as (...gaps: unknown[]) => Parts<K>)(...gaps);
+	const entry = loadedEntry(key);
+	return typeof entry === 'function'
+		? (entry as (...gaps: unknown[]) => Parts<K>)(...gaps)
+		: (entry as Parts<K>);
 }
 
 /**

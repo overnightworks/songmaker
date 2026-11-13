@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 	import { pageLanguage } from '#lib/utils/page-language.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	type MentionItem =
 		{ type: 'album' } | { type: 'version'; item: VersionItem } | { type: 'song'; item: SongItem };
@@ -17,7 +18,7 @@
 
 <div class="mention-dropdown">
 	{#if items.length === 0}
-		<div class="mention-empty">No matches</div>
+		<div class="mention-empty">{pageText('cowriter.noMatches')}</div>
 	{/if}
 	{#each items as result, idx (idx)}
 		<button

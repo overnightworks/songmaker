@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { words } from '#lib/words/en.ts';
 import ChatInput from './ChatInput.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -33,8 +34,10 @@ describe('ChatInput', () => {
 	it('asks for a rewrite and offers Send as a worded primary, as frame 7 draws the composer', async () => {
 		const target = await render(false);
 
-		expect(target.querySelector('textarea')?.placeholder).toBe('Ask for a rewrite…');
-		expect(sendButton(target).textContent?.trim()).toBe('Send');
+		expect(target.querySelector('textarea')?.placeholder).toBe(
+			words['cowriter.composerPlaceholder']
+		);
+		expect(sendButton(target).textContent?.trim()).toBe(words['cowriter.send']);
 	});
 
 	it('sends when Send is pressed', async () => {

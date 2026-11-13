@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { MemoryBundle, MemoryScopeItem } from '#lib/api/types.ts';
-	import { COWRITER_MEMORY_LABEL } from '#lib/constants/cowriter.ts';
 	import { refocusIfDropped } from '#lib/utils/focus-trap.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 	import {
 		shouldReplaceMemoryDraft,
@@ -97,15 +97,21 @@
 	const albumDirty = $derived(bundle?.album != null && albumDraft !== bundle.album.body);
 
 	function scopeLabel(scope: MemoryScope): string {
-		if (scope === 'user') return 'You';
-		if (scope === 'song') return 'This song';
-		return 'Album notes';
+		if (scope === 'user') return pageText('memory.you');
+		if (scope === 'song') return pageText('memory.thisSong');
+		return pageText('memory.albumNotes');
+	}
+
+	function proposedLabel(scope: MemoryScope): string {
+		if (scope === 'user') return pageText('memory.proposedUser');
+		if (scope === 'song') return pageText('memory.proposedSong');
+		return pageText('memory.proposedAlbum');
 	}
 
 	function hint(scope: MemoryScope): string {
-		if (scope === 'user') return 'Taste, language, standing rules';
-		if (scope === 'song') return 'Concept, locked vs open decisions, names, open questions';
-		return 'Album-level notes — not lyrics';
+		if (scope === 'user') return pageText('memory.hintUser');
+		if (scope === 'song') return pageText('memory.hintSong');
+		return pageText('memory.hintAlbum');
 	}
 
 	async function saveScope(
@@ -118,15 +124,15 @@
 </script>
 
 {#if open}
-	<section class="memory" aria-label={COWRITER_MEMORY_LABEL}>
+	<section class="memory" aria-label={pageText('cowriter.memory')}>
 		<header class="memory-head">
-			<span class="memory-title">{COWRITER_MEMORY_LABEL}</span>
+			<span class="memory-title">{pageText('cowriter.memory')}</span>
 			<button
 				bind:this={closeButton}
 				type="button"
 				class="memory-close"
-				aria-label="Close memory"
-				title="Close memory"
+				aria-label={pageText('memory.close')}
+				title={pageText('memory.close')}
 				onclick={onClose}
 			>
 				<Icon name="x" size={16} />
@@ -138,15 +144,15 @@
 					{#each proposals as proposal, i (i)}
 						<div class="proposal">
 							<p class="proposal-title">
-								Proposed {scopeLabel(proposal.scope)}
+								{proposedLabel(proposal.scope)}
 							</p>
 							<pre class="proposal-body">{proposal.proposedBody}</pre>
 							<div class="proposal-actions">
 								<button class="accept" onclick={() => answerProposal(() => onAccept(proposal))}
-									>Accept</button
+									>{pageText('memory.accept')}</button
 								>
 								<button class="reject" onclick={() => answerProposal(() => onReject(proposal))}
-									>Reject</button
+									>{pageText('memory.reject')}</button
 								>
 							</div>
 						</div>
@@ -154,20 +160,21 @@
 				</div>
 			{/if}
 			{#if loading}
-				<p class="hint">Loading memory…</p>
+				<p class="hint">{pageText('memory.loading')}</p>
 			{:else if error}
 				<p class="memory-error" role="alert">{error}</p>
 			{:else if bundle}
 				<label class="scope">
 					<span class="scope-title">{scopeLabel('user')}</span>
 					<span class="scope-hint">{hint('user')}</span>
-					<textarea aria-label="User memory" bind:value={userDraft} rows="3"></textarea>
+					<textarea aria-label={pageText('memory.userField')} bind:value={userDraft} rows="3"
+					></textarea>
 					<button
 						class="save"
 						disabled={!userDirty || savingScope === 'user'}
 						onclick={() => saveScope('user', bundle.user, userDraft)}
 					>
-						{savingScope === 'user' ? 'Saving...' : 'Save'}
+						{savingScope === 'user' ? pageText('memory.saving') : pageText('memory.save')}
 					</button>
 				</label>
 				{#if bundle.song}
@@ -175,13 +182,14 @@
 					<label class="scope">
 						<span class="scope-title">{scopeLabel('song')}</span>
 						<span class="scope-hint">{hint('song')}</span>
-						<textarea aria-label="Song memory" bind:value={songDraft} rows="3"></textarea>
+						<textarea aria-label={pageText('memory.songField')} bind:value={songDraft} rows="3"
+						></textarea>
 						<button
 							class="save"
 							disabled={!songDirty || savingScope === 'song'}
 							onclick={() => saveScope('song', songMem, songDraft)}
 						>
-							{savingScope === 'song' ? 'Saving...' : 'Save'}
+							{savingScope === 'song' ? pageText('memory.saving') : pageText('memory.save')}
 						</button>
 					</label>
 				{/if}
@@ -190,13 +198,14 @@
 					<label class="scope">
 						<span class="scope-title">{scopeLabel('album')}</span>
 						<span class="scope-hint">{hint('album')}</span>
-						<textarea aria-label="Album notes" bind:value={albumDraft} rows="3"></textarea>
+						<textarea aria-label={pageText('memory.albumField')} bind:value={albumDraft} rows="3"
+						></textarea>
 						<button
 							class="save"
 							disabled={!albumDirty || savingScope === 'album'}
 							onclick={() => saveScope('album', albumMem, albumDraft)}
 						>
-							{savingScope === 'album' ? 'Saving...' : 'Save'}
+							{savingScope === 'album' ? pageText('memory.saving') : pageText('memory.save')}
 						</button>
 					</label>
 				{/if}

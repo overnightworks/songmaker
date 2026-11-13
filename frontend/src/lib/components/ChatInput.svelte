@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '#lib/constants/cowriter.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	interface Props {
 		value: string;
@@ -24,12 +24,14 @@
 	<textarea
 		class="chat-input"
 		rows="1"
-		placeholder={COWRITER_COMPOSER_PLACEHOLDER}
+		placeholder={pageText('cowriter.composerPlaceholder')}
 		bind:value
 		bind:this={inputRef}
 		{onkeydown}
 		{oninput}></textarea>
-	<button type="button" class="send-btn" onclick={onsend} {disabled}>{COWRITER_SEND_LABEL}</button>
+	<button type="button" class="send-btn" onclick={onsend} {disabled}
+		>{pageText('cowriter.send')}</button
+	>
 </div>
 
 <style>

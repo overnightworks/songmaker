@@ -25,6 +25,10 @@ it('reads a sentence with a marked part as its parts, filled with the gap values
 	);
 });
 
+it('reads a gapless marked sentence as its parts', () => {
+	expect(pageParts('cowriter.archivedBanner')).toEqual(words['cowriter.archivedBanner']);
+});
+
 describe('refusalText', () => {
 	it('reads a plain key as its text', () => {
 		expect(refusalText('takeRefusal.archived', {})).toBe(words['takeRefusal.archived']);
