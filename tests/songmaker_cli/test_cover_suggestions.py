@@ -16,6 +16,7 @@ from support.web_app import (
     make_router_app,
     make_router_ctx,
     make_test_app,
+    refusal_body,
     seed_session,
     seed_user,
     web_client,
@@ -26,7 +27,6 @@ from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
-    COVER_SUGGESTION_NOT_FOUND,
     JSON_REQUEST_BODY_MAX_BYTES,
     AuditAction,
     ResourceType,
@@ -250,7 +250,7 @@ def test_suggest_with_a_hal_token_is_refused_and_creates_no_job(
     response = world.client.post(suggestions, headers=bearer)
 
     assert response.status_code == 403
-    assert response.json() == {"detail": "Cover suggestions need a browser login."}
+    assert response.json() == refusal_body("coverSuggestionRefusal.browserLogin")
     declared_suggest_refusal(403).model_validate(response.json())
     with world.factory() as session:
         assert session.query(Job).count() == 0
@@ -488,7 +488,7 @@ def test_foreign_cover_suggestion_routes_are_not_found(
     foreign = getattr(client, method)(path, **kwargs)
 
     assert foreign.status_code == 404
-    assert foreign.json() == {"detail": "Album not found"}
+    assert foreign.json() == refusal_body("albumRefusal.notFound")
 
 
 def test_cover_suggestions_have_no_public_share_route(
@@ -528,7 +528,7 @@ def test_full_app_answers_a_suggestion_outside_the_audio_root_like_a_missing_one
     missing = getattr(client, method)(path_for(missing_id), **kwargs_for(missing_id))
 
     assert rejected.status_code == missing.status_code == 404
-    assert rejected.json() == missing.json() == {"detail": COVER_SUGGESTION_NOT_FOUND}
+    assert rejected.json() == missing.json() == refusal_body("coverSuggestionRefusal.notFound")
 
 
 def test_a_traversal_suggestion_id_matches_no_route_and_a_missing_one_keeps_its_sentence(
@@ -542,7 +542,7 @@ def test_a_traversal_suggestion_id_matches_no_route_and_a_missing_one_keeps_its_
     )
 
     assert missing.status_code == traversal.status_code == 404
-    assert missing.json() == {"detail": COVER_SUGGESTION_NOT_FOUND}
+    assert missing.json() == refusal_body("coverSuggestionRefusal.notFound")
     assert traversal.json() == {"detail": "Not Found"}
     with factory() as session:
         assert session.query(AlbumCoverSuggestion).count() == 0
@@ -576,7 +576,7 @@ def test_a_suggestion_resolving_outside_the_audio_root_answers_like_a_missing_su
     response = getattr(client, method)(path, **kwargs)
 
     assert response.status_code == 404
-    assert response.json() == {"detail": COVER_SUGGESTION_NOT_FOUND}
+    assert response.json() == refusal_body("coverSuggestionRefusal.notFound")
 
 
 @pytest.mark.parametrize("damage", ["skewed_stored_path", "missing_file"])
@@ -613,7 +613,7 @@ def test_a_suggestion_whose_row_and_file_disagree_answers_like_a_missing_one(
     response = getattr(client, method)(path_for(suggestion_id), **kwargs_for(suggestion_id))
 
     assert response.status_code == 404
-    assert response.json() == {"detail": COVER_SUGGESTION_NOT_FOUND}
+    assert response.json() == refusal_body("coverSuggestionRefusal.notFound")
 
 
 def test_discarding_a_suggestion_whose_file_is_already_gone_removes_its_row(

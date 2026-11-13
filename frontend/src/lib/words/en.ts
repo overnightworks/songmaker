@@ -711,6 +711,27 @@ export type Words = {
     readonly "takeRecipe.language": string;
     readonly "takeRecipe.on": string;
     readonly "takeRecipe.off": string;
+    readonly "albumRefusal.notFound": string;
+    readonly "albumRefusal.titleRequired": string;
+    readonly "albumRefusal.idConflict": (gaps: { readonly title: string }) => string;
+    readonly "songRefusal.notFound": string;
+    readonly "songRefusal.titleRequired": string;
+    readonly "songRefusal.titleTooLong": string;
+    readonly "songRefusal.moveTargetMissing": string;
+    readonly "songRefusal.restoreAlbumDeleted": (gaps: { readonly id: string }) => string;
+    readonly "songRefusal.notPlayable": string;
+    readonly "songRefusal.playlistLacksSong": string;
+    readonly "songRefusal.referenceMissing": string;
+    readonly "versionRefusal.notFound": string;
+    readonly "versionRefusal.inUse": string;
+    readonly "playlistRefusal.notFound": string;
+    readonly "playlistRefusal.entryNotFound": string;
+    readonly "playlistRefusal.songNotPlayable": string;
+    readonly "coverSuggestionRefusal.notFound": string;
+    readonly "coverSuggestionRefusal.nothingNamed": string;
+    readonly "coverSuggestionRefusal.browserLogin": string;
+    readonly "shareRefusal.personsAgent": string;
+    readonly "libraryRefusal.queryRequired": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -1616,5 +1637,26 @@ export const words: Words = {
     "takeRecipe.language": "Language",
     "takeRecipe.on": "On",
     "takeRecipe.off": "Off",
+    "albumRefusal.notFound": "Album not found",
+    "albumRefusal.titleRequired": "Title is required",
+    "albumRefusal.idConflict": (gaps: { readonly title: string }) => "Album ID conflict for '" + gaps.title + "'. Try a different title.",
+    "songRefusal.notFound": "Song not found",
+    "songRefusal.titleRequired": "Title is required",
+    "songRefusal.titleTooLong": "Title is too long",
+    "songRefusal.moveTargetMissing": "Song or album not found",
+    "songRefusal.restoreAlbumDeleted": (gaps: { readonly id: string }) => "Cannot restore song " + gaps.id + ": parent album is deleted",
+    "songRefusal.notPlayable": "Song is not playable",
+    "songRefusal.playlistLacksSong": "Playlist does not hold this song",
+    "songRefusal.referenceMissing": "Not Found",
+    "versionRefusal.notFound": "Version not found",
+    "versionRefusal.inUse": "This version has a take rendering; wait for it to finish or cancel it.",
+    "playlistRefusal.notFound": "Playlist not found",
+    "playlistRefusal.entryNotFound": "Playlist entry not found",
+    "playlistRefusal.songNotPlayable": "Song has no playable take",
+    "coverSuggestionRefusal.notFound": "Album not found",
+    "coverSuggestionRefusal.nothingNamed": "Name the suggestions or runs to discard",
+    "coverSuggestionRefusal.browserLogin": "Cover suggestions need a browser login.",
+    "shareRefusal.personsAgent": "A person's own agent cannot share; the person shares in the app.",
+    "libraryRefusal.queryRequired": "Search query is required",
 };
 export type Key = keyof Words;

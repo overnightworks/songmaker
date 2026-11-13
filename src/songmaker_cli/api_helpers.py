@@ -23,7 +23,6 @@ from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
     COVER_NOT_FOUND,
     HTTP_NOT_FOUND,
-    LIBRARY_QUERY_REQUIRED,
     PAGE_DEFAULT_LIMIT,
     PAGE_MAX_LIMIT,
     RATE_LIMIT_WINDOW_SECONDS,
@@ -79,7 +78,6 @@ if TYPE_CHECKING:
 
     from songmaker_cli.settings import Settings
 
-SONG_NOT_FOUND_DETAIL: Final = "Song not found"
 LORA_NOT_FOUND_DETAIL: Final = "LoRA not found"
 LORA_SAMPLE_NOT_FOUND_DETAIL: Final = "LoRA sample not found"
 GENERATION_NOT_FOUND_DETAIL: Final = "Generation not found"
@@ -88,7 +86,6 @@ DEFAULT_AUDIO_MEDIA_TYPE: Final = "application/octet-stream"
 # may keep it for good; "private" forbids any shared cache (CDN, proxy) from
 # holding one.
 AUDIO_FILE_CACHE_CONTROL: Final = "private, max-age=31536000, immutable"
-PLAYLIST_NOT_FOUND_DETAIL: Final = "Playlist not found"
 
 _UNBOUNDED_SLUG_LENGTH = 0
 _SLUG_COUNTER_SUFFIX_BUDGET = 20
@@ -302,7 +299,7 @@ def create_job_with_rate_limit(
         song_id = expect_present(song_id, "create_job_with_rate_limit: version_id requires song_id")
         if lock_song_and_find_version(session, song_id, version_id) is None:
             session.rollback()
-            raise HTTPException(404, "Version not found")
+            raise version_not_found()
 
     return create_job(
         session, job_type, user_id=user.id, song_id=song_id, version_id=version_id,
@@ -463,11 +460,23 @@ def can_access_album(album: Album | None, user: Actor, *, require_owner: bool = 
     return album is not None and album.created_by == user.id
 
 
+def song_not_found() -> Refusal:
+    return Refusal(404, "songRefusal.notFound")
+
+
+def playlist_not_found() -> Refusal:
+    return Refusal(404, "playlistRefusal.notFound")
+
+
+def version_not_found() -> Refusal:
+    return Refusal(404, "versionRefusal.notFound")
+
+
 def check_album_access(
     album: Album | None, user: AuthenticatedUser, *, require_owner: bool = False,
 ) -> Album:
     if not album or not can_access_album(album, user, require_owner=require_owner):
-        raise HTTPException(404, "Album not found")
+        raise Refusal(404, "albumRefusal.notFound")
     return album
 
 
@@ -478,9 +487,9 @@ def check_song_access(
     """Load a song and verify ownership. Returns the song or raises 404."""
     song = get_song(session, song_id)
     if not song:
-        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+        raise song_not_found()
     if not can_access_album(song.album, user, require_owner=require_owner):
-        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+        raise song_not_found()
     return song
 
 
@@ -495,10 +504,10 @@ def check_song_access_including_deleted(
     """
     song = get_song(session, song_id, include_deleted_rows=True)
     if not song:
-        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+        raise song_not_found()
     album = get_album(session, song.album_id, include_deleted_rows=True)
     if not can_access_album(album, user):
-        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+        raise song_not_found()
     return song
 
 
@@ -509,9 +518,9 @@ def check_playlist_access(
     """Load a playlist and verify ownership. Returns the playlist or raises 404."""
     playlist = get_playlist(session, playlist_id)
     if not playlist:
-        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
+        raise playlist_not_found()
     if (require_owner or user.role != AppRole.ADMIN) and playlist.created_by != user.id:
-        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
+        raise playlist_not_found()
     return playlist
 
 
@@ -716,5 +725,5 @@ def parse_optional_search_query(q: str | None) -> str | None:
 def parse_required_search_query(q: str) -> str:
     stripped = q.strip()
     if not stripped:
-        raise HTTPException(422, LIBRARY_QUERY_REQUIRED)
+        raise Refusal(422, "libraryRefusal.queryRequired")
     return stripped

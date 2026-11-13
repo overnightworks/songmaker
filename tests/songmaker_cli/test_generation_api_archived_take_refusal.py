@@ -194,7 +194,7 @@ def test_adding_a_song_with_only_archived_takes_answers_400(client: TestClient) 
     response = client.post("/api/playlists/pl-owner/entries/song", json={"song_id": "s-archived"})
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Song has no playable take"}
+    assert response.json() == refusal_body("playlistRefusal.songNotPlayable")
 
 
 def test_adding_an_album_with_only_archived_takes_skips_the_song(client: TestClient) -> None:

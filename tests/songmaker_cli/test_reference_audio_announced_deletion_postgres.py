@@ -19,7 +19,7 @@ from support.postgres_lock_harness import (
 from support.reference_countdown import publish_countdown, stored_file
 from support.reference_rows import a_reference
 from support.reference_take_world import persist_take_linking, seed_owner_song_and_running_job
-from support.web_app import make_test_app, seed_session
+from support.web_app import make_test_app, refusal_body, seed_session
 
 from songmaker_cli.cleanup import run_cleanup_expired, run_generation_retention
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, Version
@@ -41,7 +41,7 @@ STAMPED = datetime(2026, 1, 1, tzinfo=timezone.utc)
 PUBLISHED = datetime(2026, 1, 5, tzinfo=timezone.utc)
 NOW = datetime(2026, 6, 1, tzinfo=timezone.utc)
 LONG_AGO = timedelta(days=400)
-NOT_FOUND = {"detail": "Not Found"}
+NOT_FOUND = refusal_body("songRefusal.referenceMissing")
 
 
 def _seed_stamped_row(session) -> None:

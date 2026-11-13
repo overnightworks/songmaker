@@ -48,13 +48,13 @@ from songmaker_cli.audio_paths import AudioPathRejectedError
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
-    COVER_SUGGESTION_NOT_FOUND,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
     AuditAction,
     ResourceType,
 )
 from songmaker_cli.cover_suggestions import (
+    CoverSuggestionAlbumNotFoundError,
     CoverSuggestionAlreadyRunningError,
     CoverSuggestionRequestError,
     remove_cover_suggestion_files,
@@ -97,6 +97,7 @@ from songmaker_cli.db.queries.sentinels import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
 from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
 from songmaker_cli.refusals import Refusal
+from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 log = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ def api_create_album(
 ) -> AlbumResponse:
     title = data.title.strip()
     if not title:
-        raise HTTPException(422, "Title is required")
+        raise Refusal(422, "albumRefusal.titleRequired")
     album_id = unique_album_id(session, title)
     try:
         album = create_album(
@@ -216,7 +217,7 @@ def api_create_album(
         session.commit()
     except IntegrityError:
         session.rollback()
-        raise HTTPException(409, f"Album ID conflict for '{title}'. Try a different title.")
+        raise Refusal(409, "albumRefusal.idConflict", title=title)
     return AlbumResponse.from_orm(album, song_count=0, picked_count=0)
 
 
@@ -224,7 +225,7 @@ def api_create_album(
     "/albums/{album_id}",
     description="Change an own album's title, subtitle or year; a field left out stays as it is.",
     responses={
-        404: {"description": "Album not found"},
+        404: {"description": text(SOURCE_LANGUAGE, "albumRefusal.notFound")},
         422: {"description": "Album title is required"},
     },
     openapi_extra=agent_tool(name="update_album", effect=ToolEffect.SIDE_EFFECTING),
@@ -251,7 +252,7 @@ def api_update_album(
     if "title" in fields_set:
         title = req.title.strip() if req.title else ""
         if not title:
-            raise HTTPException(422, "Title is required")
+            raise Refusal(422, "albumRefusal.titleRequired")
 
     subtitle = (req.subtitle or "").strip() if "subtitle" in fields_set else UNSET
     if "year" in fields_set:
@@ -262,7 +263,7 @@ def api_update_album(
     try:
         album = update_album(session, album_id, title=title, subtitle=subtitle, year=year)
     except ValueError:
-        raise HTTPException(404, "Album not found")
+        raise Refusal(404, "albumRefusal.notFound")
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album_id)
     session.commit()
     return _single_album_response(session, album)
@@ -465,7 +466,7 @@ async def api_upload_album_cover(
             "description": "A browser login is needed, or the account may not suggest covers",
             "model": CoverSuggestionForbiddenBody,
         },
-        404: {"description": "Album not found"},
+        404: {"description": text(SOURCE_LANGUAGE, "albumRefusal.notFound")},
         409: {"description": "Cover suggestions are already running"},
         503: {
             "description": "Cover suggestions are unavailable",
@@ -483,7 +484,7 @@ def api_create_cover_suggestions(
     session.commit()
     session_id = session_id_from_request(request, installed_web_auth_config(request.app))
     if session_id is None:
-        raise HTTPException(403, "Cover suggestions need a browser login.")
+        raise Refusal(403, "coverSuggestionRefusal.browserLogin")
     refusal = cover_admission(TurnCaller(request.app, session_id, user))
     if refusal is not None:
         raise HTTPException(
@@ -497,6 +498,9 @@ def api_create_cover_suggestions(
     except CoverSuggestionAlreadyRunningError as exc:
         session.rollback()
         raise Refusal(409, "coverSuggestionRefusal.alreadyRunning") from exc
+    except CoverSuggestionAlbumNotFoundError as exc:
+        session.rollback()
+        raise Refusal(404, "albumRefusal.notFound") from exc
     except CoverSuggestionRequestError as exc:
         session.rollback()
         raise HTTPException(exc.status_code, str(exc)) from exc
@@ -526,6 +530,10 @@ def api_list_cover_suggestions(
     )
 
 
+def cover_suggestion_not_found() -> Refusal:
+    return Refusal(404, "coverSuggestionRefusal.notFound")
+
+
 @router.get(
     "/albums/{album_id}/cover-suggestions/{suggestion_id}",
     responses={404: {"description": "Album or cover suggestion not found"}},
@@ -542,11 +550,11 @@ def api_get_cover_suggestion(
     check_album_access(album, user)
     suggestion = get_album_cover_suggestion(session, album.id, suggestion_id)
     if suggestion is None:
-        raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND)
+        raise cover_suggestion_not_found()
     try:
         path = resolve_suggestion_png(ctx.audio_dir, album.id, suggestion.id, suggestion.png_path)
     except (FileNotFoundError, AudioPathRejectedError):
-        raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND) from None
+        raise cover_suggestion_not_found() from None
     return FileResponse(path, media_type="image/png", headers=COVER_RESPONSE_HEADERS)
 
 
@@ -554,6 +562,7 @@ def api_get_cover_suggestion(
     "/albums/{album_id}/cover",
     responses={
         404: {"description": "Album or cover suggestion not found"},
+        413: {"description": text(SOURCE_LANGUAGE, "coverRefusal.tooLarge")},
         422: {"description": "Cover suggestion cannot be used"},
     },
     openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
@@ -569,7 +578,7 @@ def api_select_album_cover_suggestion(
     check_album_access(album, user)
     suggestion = get_album_cover_suggestion(session, album.id, data.suggestion_id)
     if suggestion is None:
-        raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND)
+        raise cover_suggestion_not_found()
     try:
         payload = resolve_suggestion_png(
             ctx.audio_dir, album.id, suggestion.id, suggestion.png_path,
@@ -578,7 +587,7 @@ def api_select_album_cover_suggestion(
             ctx.audio_dir, album.id, payload, ai_generated=True,
         )
     except (FileNotFoundError, AudioPathRejectedError):
-        raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND) from None
+        raise cover_suggestion_not_found() from None
     except CoverRejectedError as exc:
         raise_cover_refusal(exc)
     album = set_album_cover_key(session, album.id, cover_key)
@@ -605,7 +614,7 @@ def api_delete_cover_suggestions(
     # A discard names what it releases, so a suggestion asked for after it --
     # on this device or another -- is never deleted with it.
     if not suggestion_id and not job_id:
-        raise HTTPException(422, "Name the suggestions or runs to discard")
+        raise Refusal(422, "coverSuggestionRefusal.nothingNamed")
     paths = delete_named_cover_suggestions(session, album.id, suggestion_id, job_id)
     session.commit()
     remove_cover_suggestion_files(ctx.audio_dir, paths)

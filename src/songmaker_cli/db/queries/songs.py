@@ -515,6 +515,14 @@ def soft_delete_song(session: Session, song_id: str) -> datetime:
     return now
 
 
+class RestoreParentDeletedError(Exception):
+    """A song cannot come back because its album is deleted or gone."""
+
+    def __init__(self, song_id: str) -> None:
+        super().__init__(song_id)
+        self.song_id = song_id
+
+
 def restore_song(session: Session, song_id: str) -> Song:
     """Clear deleted_at on a song. Raises if past the restore window or album is deleted."""
     song = (
@@ -535,7 +543,7 @@ def restore_song(session: Session, song_id: str) -> Song:
         .first()
     )
     if album is None or album.deleted_at is not None:
-        raise ValueError(f"Cannot restore song {song_id}: parent album is deleted")
+        raise RestoreParentDeletedError(song_id)
     song.deleted_at = None
     session.flush()
     return song

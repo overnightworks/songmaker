@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Final
-
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -23,7 +21,9 @@ from songmaker_cli.api_helpers import (
     page_has_more,
     parse_optional_search_query,
     raise_cover_refusal,
+    song_not_found,
     unique_song_slug,
+    version_not_found,
 )
 from songmaker_cli.api_models import (
     LibrarySort,
@@ -41,7 +41,6 @@ from songmaker_cli.api_models import (
 from songmaker_cli.api_models.songs import ShareKind, SongListenRequest, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import (
-    PERSONS_AGENT_SHARE_REFUSED_DETAIL,
     get_current_user,
     require_sharing_caller,
 )
@@ -70,6 +69,7 @@ from songmaker_cli.db.queries.reference_recordings import (
 from songmaker_cli.db.queries.sharing import has_playable_pick, presented_take
 from songmaker_cli.db.queries.songs import (
     EmptySongTitleError,
+    RestoreParentDeletedError,
     UnstorableSongTitleError,
     count_generations_by_song,
     count_songs,
@@ -91,6 +91,7 @@ from songmaker_cli.db.queries.versions import VersionInUseError, delete_version
 from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
 from songmaker_cli.reference_audio import commit_unused_stamps
 from songmaker_cli.refusals import Refusal
+from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 
 def _attach_reference(session: Session, user_id: str, reference_id: str | None) -> None:
@@ -102,7 +103,7 @@ def _attach_reference(session: Session, user_id: str, reference_id: str | None) 
     if reference_id is None:
         return
     if lock_and_mark_reference_used(session, user_id, reference_id) is None:
-        raise HTTPException(404)
+        raise Refusal(404, "songRefusal.referenceMissing")
 
 
 router = APIRouter()
@@ -111,12 +112,6 @@ router = APIRouter()
 def _song_response(song: Song) -> SongResponse:
     # Every detail path loads song.generations, so the pick needs no query.
     return SongResponse.from_orm(song, has_pick=has_playable_pick(song.generations))
-
-SONG_NOT_FOUND_DETAIL: Final = "Song not found"
-VERSION_NOT_FOUND_DETAIL: Final = "Version not found"
-VERSION_IN_USE_DETAIL: Final = (
-    "This version has a take rendering; wait for it to finish or cancel it."
-)
 
 
 @router.get(
@@ -184,8 +179,10 @@ def api_get_song(
     return _song_response(song)
 
 
-def _title_refusal_detail(error: UnstorableSongTitleError) -> str:
-    return "Title is required" if isinstance(error, EmptySongTitleError) else "Title is too long"
+def _title_refusal(error: UnstorableSongTitleError) -> Refusal:
+    if isinstance(error, EmptySongTitleError):
+        return Refusal(422, "songRefusal.titleRequired")
+    return Refusal(422, "songRefusal.titleTooLong")
 
 
 @router.post(
@@ -212,7 +209,7 @@ def api_create_song(
     try:
         title = stored_song_title(req.title)
     except UnstorableSongTitleError as exc:
-        raise HTTPException(422, _title_refusal_detail(exc)) from exc
+        raise _title_refusal(exc) from exc
     slug = unique_song_slug(session, req.album_id, title)
     _attach_reference(session, user.id, req.reference_recording_id)
     song = create_song(
@@ -271,7 +268,7 @@ def api_update_song(
             session, song_id, force_new_version=req.new_version, edited_by=user.id, **kwargs,
         )
     except ValueError:
-        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     commit_unused_stamps(session, candidates)
@@ -282,7 +279,7 @@ def api_update_song(
     "/songs/{song_id}/title",
     description="Rename one of the person's own songs.",
     responses={
-        404: {"description": SONG_NOT_FOUND_DETAIL},
+        404: {"description": text(SOURCE_LANGUAGE, "songRefusal.notFound")},
         422: {"description": "Song title is required or too long"},
     },
     openapi_extra=agent_tool(name="rename_song", effect=ToolEffect.SIDE_EFFECTING),
@@ -296,7 +293,7 @@ def api_rename_song(
     try:
         title = stored_song_title(req.title)
     except UnstorableSongTitleError as exc:
-        raise HTTPException(422, _title_refusal_detail(exc)) from exc
+        raise _title_refusal(exc) from exc
     slug = unique_song_slug(
         session, song.album_id, title, exclude_song_id=song_id,
     )
@@ -305,7 +302,7 @@ def api_rename_song(
             session, song_id, title, slug=slug, edited_by=user.id,
         )
     except ValueError:
-        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return _song_response(song)
@@ -321,7 +318,7 @@ _MOVE_SONG_DESCRIPTION = (
 @router.put(
     "/songs/{song_id}/album",
     description=_MOVE_SONG_DESCRIPTION,
-    responses={404: {"description": "Song or album not found"}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "songRefusal.moveTargetMissing")}},
     openapi_extra=agent_tool(name="move_song", effect=ToolEffect.SIDE_EFFECTING),
 )
 def api_move_song(
@@ -338,7 +335,7 @@ def api_move_song(
     try:
         song = move_song(session, song_id, req.album_id, slug=slug)
     except ValueError:
-        raise HTTPException(404, "Song or album not found")
+        raise Refusal(404, "songRefusal.moveTargetMissing")
     record_audit(
         session, user.id, AuditAction.MOVE, ResourceType.SONG,
         song_id, f"album={req.album_id}",
@@ -357,7 +354,7 @@ _DELETE_SONG_DESCRIPTION = (
     "/songs/{song_id}",
     description=_DELETE_SONG_DESCRIPTION,
     openapi_extra=agent_tool(name="delete_song", effect=ToolEffect.SIDE_EFFECTING),
-    responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "songRefusal.notFound")}},
 )
 def api_delete_song(
     song_id: str,
@@ -368,7 +365,7 @@ def api_delete_song(
     try:
         soft_delete_song(session, song_id)
     except ValueError:
-        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.SONG, song_id)
     session.commit()
     return StatusResponse()
@@ -384,7 +381,7 @@ _RESTORE_SONG_DESCRIPTION = (
     description=_RESTORE_SONG_DESCRIPTION,
     openapi_extra=agent_tool(name="restore_song", effect=ToolEffect.SIDE_EFFECTING),
     responses={
-        404: {"description": SONG_NOT_FOUND_DETAIL},
+        404: {"description": text(SOURCE_LANGUAGE, "songRefusal.notFound")},
         410: {"description": "Song restore window has expired"},
     },
 )
@@ -401,8 +398,10 @@ def api_restore_song(
             410, "songRefusal.restoreWindowPassed",
             id=exc.row_id, days=str(exc.days_ago), window=str(exc.window_days),
         ) from exc
-    except ValueError as e:
-        raise HTTPException(404, str(e))
+    except RestoreParentDeletedError as exc:
+        raise Refusal(404, "songRefusal.restoreAlbumDeleted", id=exc.song_id) from exc
+    except ValueError:
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.RESTORE, ResourceType.SONG, song_id)
     session.commit()
     return _song_response(restored)
@@ -424,12 +423,12 @@ def api_record_song_listen(
 ) -> StatusResponse:
     song = check_song_access(session, song_id, user)
     if presented_take(song.generations) is None:
-        raise HTTPException(422, "Song is not playable")
+        raise Refusal(422, "songRefusal.notPlayable")
     playlist = None
     if req is not None and req.playlist_id is not None:
         playlist = check_own_playlist_access(session, req.playlist_id, user)
         if not playlist_holds_song(session, playlist, song):
-            raise HTTPException(422, "Playlist does not hold this song")
+            raise Refusal(422, "songRefusal.playlistLacksSong")
     if playlist is not None:
         record_playlist_listen(session, playlist, song=song)
     record_song_played(
@@ -447,8 +446,8 @@ def api_record_song_listen(
         "A person's own agent is refused; only an agent with its own account may share."
     ),
     responses={
-        403: {"description": PERSONS_AGENT_SHARE_REFUSED_DETAIL},
-        404: {"description": SONG_NOT_FOUND_DETAIL},
+        403: {"description": text(SOURCE_LANGUAGE, "shareRefusal.personsAgent")},
+        404: {"description": text(SOURCE_LANGUAGE, "songRefusal.notFound")},
     },
     openapi_extra=agent_tool(name="share_song", effect=ToolEffect.SIDE_EFFECTING),
 )
@@ -460,8 +459,8 @@ def api_share_song(
     check_song_access(session, song_id, user)
     try:
         song = enable_song_sharing(session, song_id)
-    except ValueError:
-        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+    except ValueError as exc:
+        raise song_not_found() from exc
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.SONG, song_id)
     share_url = public_share_url(ShareKind.SONG, song.share_slug)
     session.commit()
@@ -535,7 +534,7 @@ _UNSHARE_SONG_DESCRIPTION = (
     "/songs/{song_id}/share",
     description=_UNSHARE_SONG_DESCRIPTION,
     openapi_extra=agent_tool(name="unshare_song", effect=ToolEffect.SIDE_EFFECTING),
-    responses={404: {"description": SONG_NOT_FOUND_DETAIL}},
+    responses={404: {"description": text(SOURCE_LANGUAGE, "songRefusal.notFound")}},
 )
 def api_unshare_song(
     song_id: str,
@@ -546,7 +545,7 @@ def api_unshare_song(
     try:
         disable_song_sharing(session, song_id)
     except ValueError:
-        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.SONG, song_id)
     session.commit()
     return StatusResponse()
@@ -574,7 +573,7 @@ def api_song_versions(
 @router.delete(
     "/versions/{version_id}",
     responses={
-        404: {"description": VERSION_NOT_FOUND_DETAIL},
+        404: {"description": text(SOURCE_LANGUAGE, "versionRefusal.notFound")},
         409: {"description": "A queued or running job renders this version"},
     },
     openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
@@ -590,12 +589,12 @@ def api_delete_version(
 
     ver = session.query(VersionModel).filter_by(id=version_id).first()
     if not ver:
-        raise HTTPException(404, VERSION_NOT_FOUND_DETAIL)
+        raise version_not_found()
     try:
         check_song_access(session, ver.song_id, user)
     except HTTPException as refusal:
         # A version the caller cannot reach reads like a missing one.
-        raise HTTPException(404, VERSION_NOT_FOUND_DETAIL) from refusal
+        raise version_not_found() from refusal
     candidates = linked_reference_ids(session, [ver.song_id])
     try:
         paths = delete_version(
@@ -603,9 +602,9 @@ def api_delete_version(
             delete_generations=delete_generations,
         )
     except VersionInUseError:
-        raise HTTPException(409, VERSION_IN_USE_DETAIL)
+        raise Refusal(409, "versionRefusal.inUse")
     except ValueError:
-        raise HTTPException(404, VERSION_NOT_FOUND_DETAIL)
+        raise version_not_found()
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.VERSION, version_id)
     session.commit()
     commit_unused_stamps(session, candidates)

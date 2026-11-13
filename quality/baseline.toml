@@ -59,7 +59,7 @@
 "tests/songmaker_cli/test_db.py" = 2440
 "tests/songmaker_cli/test_db_postgresql.py" = 831
 "tests/songmaker_cli/test_jobs.py" = 3102
-"tests/songmaker_cli/test_library_api.py" = 1626
+"tests/songmaker_cli/test_library_api.py" = 1625
 "tests/songmaker_cli/test_lora_api.py" = 1188
 "tests/songmaker_cli/test_playlist_api.py" = 1100
 "tests/songmaker_cli/test_queue_streams.py" = 2311
@@ -251,9 +251,6 @@ soft_delete_user_lora = [["src/songmaker_cli/db/queries/songs.py", "soft_delete_
 [clones."src/songmaker_cli/db/queries/playlists.py"]
 get_playlist_by_slug = [["src/songmaker_cli/db/queries/songs.py", "get_song_by_slug"]]
 set_playlist_cover_key = [["src/songmaker_cli/db/queries/songs.py", "set_song_cover_key"]]
-
-[clones."src/songmaker_cli/generation_api.py"]
-api_unshare_generation = [["src/songmaker_cli/playlist_api.py", "api_delete_playlist"], ["src/songmaker_cli/playlist_api.py", "api_unshare_playlist"], ["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]
 
 [clones."src/songmaker_cli/playlist_api.py"]
 api_delete_playlist = [["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]
