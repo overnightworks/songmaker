@@ -79,9 +79,7 @@ const NOW_PLAYING_ORIGINS: {
 			await page
 				.getByRole('tabpanel')
 				.getByRole('button', {
-					name: nameStartingWith(
-						words['takeRow.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) })
-					)
+					name: nameStartingWith(words['takeRow.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) }))
 				})
 				.click();
 			await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
