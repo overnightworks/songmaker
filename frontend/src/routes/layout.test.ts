@@ -1031,7 +1031,7 @@ describe('signing out on the phone', () => {
 		);
 		const documentLoads = documentLoadsStandIn();
 		standInForDocumentLoadsForTests(documentLoads);
-		getByRoleButton(target, words['account.menu'](USER.username)).click();
+		getByRoleButton(target, words['account.menu']({ username: USER.username })).click();
 		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('account-menu'));
 		const backs = vi.spyOn(history, 'back');
 		onTestFinished(() => backs.mockRestore());

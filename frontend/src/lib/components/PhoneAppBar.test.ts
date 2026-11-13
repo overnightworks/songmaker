@@ -63,7 +63,7 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 const LOG_OUT_NAME = kitWords()['account.logOut'];
-const ACCOUNT_CIRCLE_NAME = words['account.menu']('felix');
+const ACCOUNT_CIRCLE_NAME = words['account.menu']({ username: 'felix' });
 
 function renderBar(onlogout = vi.fn()): HTMLElement {
 	const target = document.createElement('div');

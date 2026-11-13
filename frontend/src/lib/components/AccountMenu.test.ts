@@ -37,7 +37,7 @@ const USERNAME = 'felix';
 const ACCOUNT_CONSOLE_URL = 'https://login.test/realms/songmaker/account';
 const LOG_OUT_NAME = kitWords()['account.logOut'];
 const LEGAL_LINKS = `nav[aria-label="${kitWords()['legalLinks.name']}"] a`;
-const TRIGGER_NAME = words['account.menu'](USERNAME);
+const TRIGGER_NAME = words['account.menu']({ username: USERNAME });
 
 function storeChoice(choice: 'dark' | 'light' | 'system'): void {
 	localStorage.setItem('songmaker.theme', choice);

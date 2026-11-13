@@ -9,6 +9,3 @@ export { RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS as AUTH_CHECK_RETURN_PROBE_INTER
 // The server's sign-in start (`GET /login/oidc?next=`) reads the address to
 // return to from this param.
 export const SIGN_IN_NEXT_PARAM = 'next';
-
-// The account circle's name prefix, read only by the e2e helpers; the app reads `account.menu`.
-export const ACCOUNT_MENU_LABEL = 'Account';

@@ -319,7 +319,7 @@ for (const pending of [false, true]) {
 			}
 			await page
 				.getByRole('button', {
-					name: words['account.menu'](accounts[0].username),
+					name: words['account.menu']({ username: accounts[0].username }),
 					exact: true
 				})
 				.click();
