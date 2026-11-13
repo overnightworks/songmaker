@@ -1807,7 +1807,7 @@ The platform's Prometheus is the only alert source. Its rules cover the conditio
 
 ## Backup & Restore
 
-Songmaker's backup is `hal backup`, which declares its database and audio volume; hal's `docs/backup.md` owns the schedule, the retention and the restore, and the platform restores songmaker from it.
+The platform owns songmaker's backup: its schedule, retention and restore (platform `docs/app.md` and `docs/runbooks/restore-a-database.md`). hal does not back songmaker up and `hal restore songmaker` refuses.
 
 DB and audio must be backed up and restored together — one without the other leaves orphaned records or unreachable files.
 

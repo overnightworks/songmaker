@@ -19,7 +19,7 @@ docker compose --project-directory . -f docker/docker-compose.test.yml up -d --b
 ## Operations
 
 - **Updates:** the platform deploys a release tag (`vYYYY.MM.DD.N` on `main`) through Flux; the operator dispatches the Release workflow, which gates `main`, pushes the images to GHCR and sets the tag, and a merge to `main` alone deploys nothing.
-- **Backup:** PostgreSQL and the audio volume are backed up together by `hal backup`, hal's scheduled backup (hal's `docs/backup.md`), and restored by the platform.
+- **Backup:** PostgreSQL and the audio volume are backed up together and restored by the platform's k8up (platform `docs/app.md`, `docs/runbooks/restore-a-database.md`).
 - **Container confinement:** [docs/security.md](docs/security.md#container-confinement).
 
 ## Development
