@@ -54,7 +54,12 @@ async function playwright(args: string[], reportFile?: string): Promise<string> 
 async function runShard(project: string, shard: number): Promise<string> {
 	const reportFile = path.join(scratch, `${project}-${shard}.json`);
 	await playwright(
-		[`--project=${project}`, `--shard=${shard}/${SHARDS}`, '--reporter=json'],
+		[
+			`--project=${project}`,
+			`--shard=${shard}/${SHARDS}`,
+			'--reporter=json',
+			`--output=${path.join(scratch, `${project}-${shard}-results`)}`
+		],
 		reportFile
 	);
 	return reportFile;
