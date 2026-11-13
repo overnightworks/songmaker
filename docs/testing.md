@@ -76,7 +76,7 @@ GitHub workflows (`.github/workflows/ci.yml` and `code-scanning.yml`) run on pus
 
 | Job | What |
 |---|---|
-| Backend static checks | `uv lock --check` · `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_requirement_citations.py` (every `REQ-` heading in `docs/*.md` is cited by a test, and no test cites an undefined one) · `scripts/generate_types.py --check` · `design-catalogs --check` (every catalog is valid and `frontend/src/lib/words/` is what the generator writes from `frontend/src/lib/catalogs/`, with no stray file); on `main` it alone writes the uv cache, since an entry written for a pull request is readable only by that pull request and counts against the shared quota |
+| Backend static checks | `uv lock --check` · `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_requirement_citations.py` (every `REQ-` heading in `docs/*.md` is cited by a test, and no test cites an undefined one) · `scripts/generate_types.py --check` · `design-catalogs --check` (every catalog is valid and `frontend/src/lib/words/` and `src/songmaker_cli/words.py` are what the generator writes from `frontend/src/lib/catalogs/`, with no stray file) · `scripts/check_refusal_keys.py` (see below); on `main` it alone writes the uv cache, since an entry written for a pull request is readable only by that pull request and counts against the shared quota |
 | Backend tests (shard n) | pytest against a PostgreSQL service pinned to the platform's version (one database per xdist worker: dialect-specific migrations, concurrency, rollback, event retention gaps) and a Redis service pinned like Compose's (`TEST_REDIS_URL`, one Redis database per xdist worker), on the tests of its shard, collecting coverage data judged in Combine backend coverage; each uploads its junit report and coverage data under a name of its shard and attempt. Each installs nothing at run time: the ffmpeg its tests run comes from the `dev` extra's locked `imageio-ffmpeg` |
 | Backend (Python 3.14) | The mandatory aggregator: runs when a shard or the static checks fail, are cancelled or are skipped, and is red unless all succeeded; it also collects the tests and is red unless the newest report of every shard holds exactly the collected node ids, each once, then runs the database proof and the summary over every shard's report |
 | Combine backend coverage | Combines the coverage data of each shard's newest attempt and judges the line and branch floors (see Coverage Targets) |
@@ -117,6 +117,17 @@ file's job:
 `tests/scripts/test_check_no_silent_fallbacks.py` runs the checker over the real
 `src/` tree, over a table of read and write statements that pins that
 boundary, and over seeded files at every path that used to be exempt.
+
+### Refusal keys check
+
+`scripts/check_refusal_keys.py` walks `src/songmaker_cli` for every `Refusal(...)` call and
+every call of the generated `songmaker_cli.words.text` (SQLAlchemy's `text` is not counted).
+A call must name a string-literal key that is a plain entry of `words.py`, and pass
+exactly the sentence's gaps as keywords with no `**` spread. A `Refusal` call also needs an
+int literal status other than 404 (the server answers 404 through its own handler, which would
+drop the message) and a key of the form `<resource>Refusal.<reason>`.
+`tests/scripts/test_check_refusal_keys.py` seeds a package for each rule and runs the check over
+the real tree.
 
 ### API type contract
 

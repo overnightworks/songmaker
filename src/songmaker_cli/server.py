@@ -64,6 +64,7 @@ from songmaker_cli.middleware.access_log import AccessLogMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
+from songmaker_cli.refusals import install_refusal_handler
 from songmaker_cli.request_policies import (
     SIGN_IN_PATHS,
     SPA_SHELL_HEADERS,
@@ -162,6 +163,22 @@ def audio_path_rejected_handler(
 ) -> JSONResponse:
     """Answer a rejected audio path exactly like a missing resource."""
     return JSONResponse({"detail": HTTP_NOT_FOUND}, status_code=404)
+
+
+def _install_error_handlers(app: FastAPI) -> None:
+    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
+    install_refusal_handler(app)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
+        fields = sorted({".".join(str(loc) for loc in e["loc"]) for e in exc.errors()})
+        return JSONResponse(
+            {"detail": f"Validation error on: {', '.join(fields)}"},
+            status_code=422,
+        )
 
 
 def _oidc_sign_in_or_default(given: OidcSignIn | None, settings: Settings) -> OidcSignIn:
@@ -312,18 +329,7 @@ def create_app(
     # still sit behind the whole block above.
     app.state.mcp_front = mount_mcp_front(app, agent_tools, mcp_resource, app.state.oidc_sign_in)
 
-    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_error_handler(
-        request: Request,
-        exc: RequestValidationError,
-    ) -> JSONResponse:
-        fields = sorted({".".join(str(loc) for loc in e["loc"]) for e in exc.errors()})
-        return JSONResponse(
-            {"detail": f"Validation error on: {', '.join(fields)}"},
-            status_code=422,
-        )
+    _install_error_handlers(app)
 
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"

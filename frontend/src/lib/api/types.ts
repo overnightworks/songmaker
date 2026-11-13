@@ -718,6 +718,16 @@ export interface ReferenceVersionUseResponse {
 	is_trashed: boolean;
 }
 
+export interface RefusalMessage {
+	key: string;
+	values: Record<string, string>;
+}
+
+export interface RefusalResponse {
+	detail: string;
+	message: RefusalMessage;
+}
+
 export interface RegistryModelItem {
 	mode: string;
 	availability: 'downloaded' | 'not_downloaded' | 'unknown_no_worker';

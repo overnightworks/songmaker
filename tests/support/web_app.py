@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
 
 if TYPE_CHECKING:
     from songmaker_cli.oidc_client import OidcSignIn
@@ -24,6 +25,14 @@ TEST_ORIGIN: Final = "https://testserver"
 
 def make_fake_redis() -> fakeredis.FakeRedis:
     return fakeredis.FakeRedis(decode_responses=True)
+
+
+def refusal_body(key: Key, **values: str) -> dict[str, object]:
+    """The body a `Refusal` of this key answers, its sentence read from the catalog."""
+    return {
+        "detail": text(SOURCE_LANGUAGE, key, **values),
+        "message": {"key": key, "values": values},
+    }
 
 
 def web_client(app, **kwargs) -> TestClient:
@@ -90,10 +99,12 @@ def make_router_app(ctx: AppContext, *, user: AuthenticatedUser | None = None) -
     from songmaker_cli.api import router
     from songmaker_cli.audio_paths import AudioPathRejectedError
     from songmaker_cli.auth_dependencies import get_current_user
+    from songmaker_cli.refusals import install_refusal_handler
     from songmaker_cli.server import audio_path_rejected_handler
 
     app = FastAPI()
     app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
+    install_refusal_handler(app)
     install_app_context(app, ctx)
     if user is not None:
         app.dependency_overrides[get_current_user] = lambda: user

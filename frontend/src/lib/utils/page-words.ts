@@ -44,3 +44,17 @@ export function pageText<K extends TextKey>(key: K, ...values: Values<K>): strin
 export function pageParts<K extends MarkedKey>(key: K, ...gaps: PartsGaps<K>): Parts<K> {
 	return (loadedEntry(key) as (...gaps: unknown[]) => Parts<K>)(...gaps);
 }
+
+/**
+ * The text of the catalog key a server refusal names, filled with the refusal's values, or null when the page has no such
+ * entry or the entry does not yield a sentence (a marked sentence returns parts). The caller shows its own fallback and names the key.
+ */
+export function refusalText(key: string, values: Readonly<Record<string, string>>): string | null {
+	if (loadedWords === undefined) throw new PageWordsNotLoadedError();
+	if (!Object.hasOwn(loadedWords, key)) return null;
+	const entry: unknown = (loadedWords as Record<string, unknown>)[key];
+	if (typeof entry === 'string') return entry;
+	if (typeof entry !== 'function') return null;
+	const sentence: unknown = entry(values);
+	return typeof sentence === 'string' ? sentence : null;
+}
