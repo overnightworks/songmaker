@@ -7,8 +7,6 @@
 
 import { expect, test, type Locator, type Page } from './coverage-test';
 import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
-import { TAKE_COVER_LABEL, TAKE_REPAINT_LABEL } from '../src/lib/constants/take';
-import { TAKE_TASK_CLOSE_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, shellOf } from './helpers';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
 import { words } from '../src/lib/words/en';
@@ -62,7 +60,7 @@ test('Repaint opens a card under the take and its button sends the range (S4, #1
 		if (shellOf(testInfo) === 'mobile') {
 			await page.getByRole('tab', { name: new RegExp(words['songTabs.takes']) }).click();
 		}
-		await openVerb(page, TAKE_REPAINT_LABEL);
+		await openVerb(page, words['takeTask.repaint']);
 		await expect(card(page)).toHaveCount(1);
 		await expect(page.locator('.take-row').first().locator('+ .task')).toBeVisible();
 		await expect(
@@ -85,7 +83,7 @@ test('Repaint opens a card under the take and its button sends the range (S4, #1
 		const ownScrollbar = await card(page).evaluate((el) => el.scrollHeight > el.clientHeight);
 		expect(ownScrollbar).toBe(false);
 
-		await card(page).getByRole('button', { name: TAKE_TASK_CLOSE_LABEL }).click();
+		await card(page).getByRole('button', { name: words['takeTask.close'] }).click();
 		await expect(card(page)).toHaveCount(0);
 	});
 });
@@ -97,10 +95,10 @@ test('Cover swaps the card and its button sends the cover request (S4, #1912 acc
 		if (shellOf(testInfo) === 'mobile') {
 			await page.getByRole('tab', { name: new RegExp(words['songTabs.takes']) }).click();
 		}
-		await openVerb(page, TAKE_REPAINT_LABEL);
-		await openVerb(page, TAKE_COVER_LABEL);
+		await openVerb(page, words['takeTask.repaint']);
+		await openVerb(page, words['takeTask.cover']);
 		await expect(card(page)).toHaveCount(1);
-		await expect(card(page).locator('.what')).toHaveText(TAKE_COVER_LABEL);
+		await expect(card(page).locator('.what')).toHaveText(words['takeTask.cover']);
 
 		const trackWidths = await card(page)
 			.locator('input[type="range"]')
@@ -126,13 +124,13 @@ test('With a card open the Recipe holds no Repaint row, no Off and no Source bar
 	const mobile = shellOf(testInfo) === 'mobile';
 	await onOwnTakes(page, async () => {
 		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.takes']) }).click();
-		await openVerb(page, TAKE_REPAINT_LABEL);
+		await openVerb(page, words['takeTask.repaint']);
 		await expect(card(page)).toHaveCount(1);
 		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.edit']) }).click();
 		await page.locator('.recipe-line').click();
 		const recipe = page.getByRole('region', { name: words['recipe.panel'], exact: true });
 		await expect(recipe).toBeVisible();
-		await expect(recipe).not.toContainText(TAKE_REPAINT_LABEL);
+		await expect(recipe).not.toContainText(words['takeTask.repaint']);
 		await expect(recipe).not.toContainText('Off');
 		await expect(recipe).not.toContainText('Source');
 	});
@@ -144,7 +142,7 @@ test('The header Generate stays plain with a card open and sends no repaint (S4,
 	const mobile = shellOf(testInfo) === 'mobile';
 	await onOwnTakes(page, async () => {
 		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.takes']) }).click();
-		await openVerb(page, TAKE_REPAINT_LABEL);
+		await openVerb(page, words['takeTask.repaint']);
 		await expect(card(page)).toHaveCount(1);
 		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.edit']) }).click();
 

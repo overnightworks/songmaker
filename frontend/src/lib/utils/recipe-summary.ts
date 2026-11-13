@@ -9,17 +9,12 @@ import {
 } from '#lib/constants/acestep-param-fields.ts';
 import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
 import { formatTime } from '#lib/utils/format.ts';
-import { pageText } from '#lib/utils/page-words.ts';
+import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 
 // A read-only account of what a take actually carries — its model, the
 // generation_params ParamControls knows how to edit, and the version's own
 // bpm/duration/key. Grouped for a listener deciding "why does this take
 // sound like this", not for editing (NowPlayingTake, #212).
-
-const RECIPE_TAKE_GROUP_MODEL_LABEL = 'Model & Sampling';
-const RECIPE_TAKE_GROUP_REPRODUCIBILITY_LABEL = 'Reproducibility';
-const RECIPE_TAKE_GROUP_VERSION_LABEL = 'Version';
-const RECIPE_TAKE_GROUP_OTHER_LABEL = 'Other';
 
 interface RecipeLink {
 	route: SettingsSectionRoute;
@@ -60,10 +55,10 @@ const KNOWN_PARAM_FIELDS = [
 // describe the song, not how the model rendered it. One list: the loop that
 // builds the Version group and the "already accounted for" check below both
 // read it, so there's never a second place that has to agree with this one.
-const VERSION_PARAM_FIELDS: { key: 'bpm' | 'audio_duration' | 'key_scale'; label: string }[] = [
-	{ key: 'bpm', label: 'BPM' },
-	{ key: 'audio_duration', label: 'Duration' },
-	{ key: 'key_scale', label: 'Key' }
+const VERSION_PARAM_FIELDS: { key: 'bpm' | 'audio_duration' | 'key_scale'; labelKey: TextKey }[] = [
+	{ key: 'bpm', labelKey: 'takeRecipe.bpm' },
+	{ key: 'audio_duration', labelKey: 'takeRecipe.duration' },
+	{ key: 'key_scale', labelKey: 'takeRecipe.key' }
 ];
 
 // generation_params keys that name something this summary already shows from
@@ -81,7 +76,7 @@ const DUPLICATE_PARAM_KEYS = new Set(['acestep_model', 'seed', 'delivered_batch_
 
 function formatParamValue(key: string, rawValue: GenerationParamValue): string | null {
 	if (rawValue === null || rawValue === undefined || rawValue === '') return null;
-	if (typeof rawValue === 'boolean') return rawValue ? 'On' : 'Off';
+	if (typeof rawValue === 'boolean') return pageText(rawValue ? 'takeRecipe.on' : 'takeRecipe.off');
 	if (key === 'audio_duration' && typeof rawValue === 'number') return formatTime(rawValue);
 	return String(rawValue);
 }
@@ -102,16 +97,19 @@ export function buildTakeRecipe(generation: GenerationItem, song: SongItem): Rec
 	const params = generation.generation_params ?? {};
 	const paramEntries: ParamEntries = new Map(Object.entries(params));
 	const groups: RecipeGroup[] = [
-		{ label: RECIPE_TAKE_GROUP_MODEL_LABEL, entries: buildModelEntries(generation, paramEntries) },
 		{
-			label: RECIPE_TAKE_GROUP_REPRODUCIBILITY_LABEL,
+			label: pageText('takeRecipe.groupModel'),
+			entries: buildModelEntries(generation, paramEntries)
+		},
+		{
+			label: pageText('takeRecipe.groupReproducibility'),
 			entries: buildReproducibilityEntries(generation, paramEntries)
 		},
 		{
-			label: RECIPE_TAKE_GROUP_VERSION_LABEL,
+			label: pageText('takeRecipe.groupVersion'),
 			entries: buildVersionEntries(generation, song, paramEntries)
 		},
-		{ label: RECIPE_TAKE_GROUP_OTHER_LABEL, entries: buildOtherEntries(paramEntries) }
+		{ label: pageText('takeRecipe.groupOther'), entries: buildOtherEntries(paramEntries) }
 	];
 
 	return groups.filter((group) => group.entries.length > 0);
@@ -120,7 +118,7 @@ export function buildTakeRecipe(generation: GenerationItem, song: SongItem): Rec
 function buildModelEntries(generation: GenerationItem, paramEntries: ParamEntries): RecipeEntry[] {
 	const modelEntries: RecipeEntry[] = [];
 	if (generation.model_mode) {
-		modelEntries.push({ label: 'Model', value: generation.model_mode });
+		modelEntries.push({ label: pageText('takeRecipe.model'), value: generation.model_mode });
 	}
 	for (const field of KNOWN_PARAM_FIELDS) {
 		const value = formatParamValue(field.key, paramEntries.get(field.key));
@@ -134,7 +132,10 @@ function buildModelEntries(generation: GenerationItem, paramEntries: ParamEntrie
 		paramEntries.get('delivered_batch_size')
 	);
 	if (deliveredBatchSize !== null) {
-		modelEntries.push({ label: 'Delivered Batch Size', value: deliveredBatchSize });
+		modelEntries.push({
+			label: pageText('takeRecipe.deliveredBatchSize'),
+			value: deliveredBatchSize
+		});
 	}
 	return modelEntries;
 }
@@ -145,14 +146,20 @@ function buildReproducibilityEntries(
 ): RecipeEntry[] {
 	const reproducibilityEntries: RecipeEntry[] = [];
 	if (generation.seed != null) {
-		reproducibilityEntries.push({ label: 'Seed', value: String(generation.seed) });
+		reproducibilityEntries.push({
+			label: pageText('takeRecipe.seed'),
+			value: String(generation.seed)
+		});
 	}
 	// The requested seed only earns its own row when it diverges from the
 	// stored seed_value above — on a fixed-seed take the two always match, so
 	// showing both would just repeat the same number twice.
 	const requestedSeed = paramEntries.get('seed');
 	if (typeof requestedSeed === 'number' && requestedSeed !== generation.seed) {
-		reproducibilityEntries.push({ label: 'Requested Seed', value: String(requestedSeed) });
+		reproducibilityEntries.push({
+			label: pageText('takeRecipe.requestedSeed'),
+			value: String(requestedSeed)
+		});
 	}
 	return reproducibilityEntries;
 }
@@ -165,10 +172,10 @@ function buildVersionEntries(
 	const versionEntries: RecipeEntry[] = [];
 	for (const field of VERSION_PARAM_FIELDS) {
 		const value = formatParamValue(field.key, paramEntries.get(field.key));
-		if (value !== null) versionEntries.push({ label: field.label, value });
+		if (value !== null) versionEntries.push({ label: pageText(field.labelKey), value });
 	}
 	if (song.vocal_language) {
-		versionEntries.push({ label: 'Language', value: song.vocal_language });
+		versionEntries.push({ label: pageText('takeRecipe.language'), value: song.vocal_language });
 	}
 	if (generation.reference) {
 		versionEntries.push({

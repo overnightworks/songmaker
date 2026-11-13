@@ -14,7 +14,6 @@ import { words } from '../src/lib/words/en';
 import {
 	nowPlayingOpenSourceLabel,
 	nowPlayingTakeLabel,
-	currentVersionHeadLabel,
 	takeVersion,
 	type TakeVersion,
 	NOW_PLAYING_CLOSE,
@@ -189,7 +188,9 @@ test.describe('song page at phone width', () => {
 			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			const { versionNumber } = await seededTakeVersion(page, songId);
 			await expect(
-				panel.getByText(currentVersionHeadLabel(versionNumber, SONG_PHONE_TAKE_COUNT))
+				panel.getByText(
+					words['takesList.currentHead'](SONG_PHONE_TAKE_COUNT, { number: String(versionNumber) })
+				)
 			).toBeVisible();
 
 			const playButtons = panel.getByRole('button', {

@@ -27,7 +27,6 @@ import PhoneAppBar from './PhoneAppBar.svelte';
 
 import type { JobItem, SongItem } from '#lib/api/types.ts';
 import { EDITOR_GENERATE_LABEL, EDITOR_GENERATING_LABEL } from '#lib/constants/song.ts';
-import { TAKES_ERROR, TAKES_LOADING, TAKES_RETRY_LABEL } from '#lib/constants/take.ts';
 import { COMPACT_LAYOUT_MAX_PX } from '#lib/constants/media.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
@@ -420,7 +419,7 @@ describe('SongDetailView recipe and takes', () => {
 		const target = await renderView();
 		await settleRender();
 		expect(target.querySelectorAll('.take-row')).toHaveLength(1);
-		expect(target.textContent).not.toContain(TAKES_ERROR);
+		expect(target.textContent).not.toContain(words['takesList.error']);
 		expect(target.textContent).not.toContain('Failed to fetch');
 		expect(target.querySelector('.takes-list [role="alert"]')).toBeNull();
 	});
@@ -431,8 +430,8 @@ describe('SongDetailView recipe and takes', () => {
 		const target = await renderView();
 		await settleRender();
 		const alert = target.querySelector('.takes-list [role="alert"]') as HTMLElement;
-		expect(alert.textContent).toContain(TAKES_ERROR);
-		expect(getByRoleButton(alert, TAKES_RETRY_LABEL)).toBeTruthy();
+		expect(alert.textContent).toContain(words['takesList.error']);
+		expect(getByRoleButton(alert, words['takesList.retry'])).toBeTruthy();
 	});
 
 	it('waits for the takes offline and reloads them by itself once the page is back online', async () => {
@@ -441,8 +440,8 @@ describe('SongDetailView recipe and takes', () => {
 		songList.set([song({ ...editableSongDefaults(), generation_count: 2, generations: [] })]);
 		const target = await renderView();
 		await settleRender();
-		expect(target.textContent).toContain(TAKES_LOADING);
-		expect(target.textContent).not.toContain(TAKES_ERROR);
+		expect(target.textContent).toContain(words['takesList.loading']);
+		expect(target.textContent).not.toContain(words['takesList.error']);
 
 		vi.mocked(fetchSong).mockResolvedValueOnce(
 			song({
@@ -460,12 +459,12 @@ describe('SongDetailView recipe and takes', () => {
 			failure: 'a server refusal',
 			error: new ApiError(503, 'Takes are resting', '/api/songs/s1'),
 			shown: 'Takes are resting',
-			hidden: TAKES_ERROR
+			hidden: words['takesList.error']
 		},
 		{
 			failure: 'a bug that is not the network',
 			error: new TypeError('generations is not iterable'),
-			shown: TAKES_ERROR,
+			shown: words['takesList.error'],
 			hidden: 'generations is not iterable'
 		}
 	])(

@@ -86,7 +86,6 @@ import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { albumRoutePath, HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { LIBRARY_HISTORY_KIND } from '#lib/constants/library.ts';
 import { words } from '#lib/words/en.ts';
-import { TAKES_ERROR, TAKES_RETRY_LABEL } from '#lib/constants/take.ts';
 import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants/http.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';
@@ -1317,8 +1316,8 @@ describe('opening a song recovers its generation state', () => {
 describe('song selection (dead song link)', () => {
 	it.each([
 		[new ApiError(500, 'Song loading failed', '/api/songs/s1'), 'Song loading failed'],
-		[new TypeError('generations is not iterable'), TAKES_ERROR],
-		[null, TAKES_ERROR]
+		[new TypeError('generations is not iterable'), words['takesList.error']],
+		[null, words['takesList.error']]
 	])(
 		'shows the context-loading error with retry in Takes without a toast or clearing selection (%s)',
 		async (error, message) => {
@@ -1335,7 +1334,7 @@ describe('song selection (dead song link)', () => {
 				expect(alerts).toHaveLength(1);
 				expect(alerts[0]).toHaveTextContent(message);
 				expect(alerts[0].querySelector('button')?.getAttribute('aria-label')).toBe(
-					TAKES_RETRY_LABEL
+					words['takesList.retry']
 				);
 			});
 			expect(get(toasts)).toEqual([]);

@@ -3,6 +3,7 @@ import { makeGeneration as generation } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
 import { toasts } from '#lib/stores/toast.ts';
+import { words } from '#lib/words/en.ts';
 import type { GenerationItem } from '#lib/api/types.ts';
 import {
 	clearSource,
@@ -97,7 +98,10 @@ describe('seed from a take (C1, #1928 acceptance 1)', () => {
 	it('is set from the take, says so in a toast and is replaced by the next one', () => {
 		useSeed(generation({ seed: 4127730, generation_number: 11 }));
 		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: 'Seed from take 11', type: 'success' })
+			expect.objectContaining({
+				message: words['takeActions.useSeed']({ number: '11' }),
+				type: 'success'
+			})
 		]);
 		expect(get(seedFromTake)).toEqual({ seed: 4127730, takeNumber: 11 });
 		useSeed(generation({ seed: 9, generation_number: 7 }));
