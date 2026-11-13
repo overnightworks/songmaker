@@ -24,7 +24,7 @@ cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 
 ## Static analysis (SonarCloud)
 
-GitHub CI calls the SHA-pinned `overnightworks/quality` v0.12.0 reusable gate from `.github/workflows/ci.yml`. Its `quality / verdict` check combines `quality check`, Sonar findings and the mandatory job names in [`quality/config.toml`](../quality/config.toml). Failed or skipped dependencies still reach the verdict; cancelled runs do not start the caller. There are no actor or fork exclusions: missing `SONAR_TOKEN` fails closed, including tokenless forks. Dependabot needs the separately configured Dependabot secret.
+GitHub CI calls the SHA-pinned `overnightworks/quality` v0.16.0 reusable gate from `.github/workflows/ci.yml`. Its `quality / verdict` check combines `quality check`, Sonar findings and the mandatory job names in [`quality/config.toml`](../quality/config.toml). Failed or skipped dependencies still reach the verdict; cancelled runs do not start the caller. There are no actor or fork exclusions: missing `SONAR_TOKEN` fails closed, including tokenless forks. Dependabot needs the separately configured Dependabot secret.
 
 The backend and frontend producers retain their separate coverage artifacts. The `coverage` assembly job downloads both, requires nonempty XML and LCOV reports, and uploads exactly those files as `coverage`, replacing the artifact on reruns. The gate restores it into the checkout; [`sonar-project.properties`](../sonar-project.properties) therefore names `coverage.xml` and `frontend-coverage/lcov.info`. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=overnightworks_songmaker) shows the resulting analysis and coverage.
 
