@@ -1,35 +1,6 @@
 <script lang="ts">
 	import type { GenerationItem, SongItem } from '#lib/api/types.ts';
-	import {
-		TAKE_COVER_LABEL,
-		TAKE_REPAINT_LABEL,
-		TAKE_RESCORE_LABEL,
-		TAKE_RESCORING_LABEL
-	} from '#lib/constants/take.ts';
-	import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
-	import {
-		NOW_PLAYING_IMPORTED_TAKE_HEADING,
-		NOW_PLAYING_DEVIATIONS_EMPTY,
-		NOW_PLAYING_DEVIATIONS_LABEL,
-		NOW_PLAYING_DEVIATIONS_UNAVAILABLE,
-		NOW_PLAYING_DEVIATION_ADDED_TITLE,
-		NOW_PLAYING_KEEP_LABEL,
-		NOW_PLAYING_LYRICS_ROW_LABEL,
-		NOW_PLAYING_PICK_LABEL,
-		NOW_PLAYING_RATING_LABEL,
-		NOW_PLAYING_RATING_NOTES_PLACEHOLDER,
-		NOW_PLAYING_RATING_SAVE,
-		NOW_PLAYING_RATING_SAVING,
-		NOW_PLAYING_RESCORE_ACTION_LABEL,
-		NOW_PLAYING_SCORES_EMPTY,
-		NOW_PLAYING_SCORES_LABEL,
-		NOW_PLAYING_UNKEEP_LABEL,
-		NOW_PLAYING_UNPICK_LABEL,
-		nowPlayingTakeMeta,
-		openVersionLabel,
-		takeVersion,
-		NOW_PLAYING_TAKE_PREFIX
-	} from '#lib/constants/now-playing.ts';
+	import { takeVersion } from '#lib/constants/now-playing.ts';
 	import {
 		appPageAddress,
 		followAppPageLink,
@@ -37,13 +8,15 @@
 		revealPlayingSong
 	} from '#lib/stores/navigation.ts';
 	import { closeNowPlaying } from '#lib/stores/player.ts';
-	import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
 	import { pendingTakeUse, type TakeUse } from '#lib/stores/recipe.ts';
 	import { rate, rescore, rescoringTakeIds, setKeep, setPick } from '#lib/stores/takeActions.ts';
 	import { computeDiffByKey } from '#lib/utils/diff.ts';
 	import { normalizeLyricsToken } from '#lib/utils/lyrics-normalize.ts';
 	import { buildTakeRecipe } from '#lib/utils/recipe-summary.ts';
-	import { formatScore, scoreColor, scoreReadings } from '#lib/utils/scores.ts';
+	import { pageLanguage } from '#lib/utils/page-language.ts';
+	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
+	import { formatTime } from '#lib/utils/format.ts';
+	import { formatScore, scoreColor, scoreReadings, type ScoreKey } from '#lib/utils/scores.ts';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -55,6 +28,15 @@
 		song: SongItem;
 		lyrics: string | null;
 	} = $props();
+
+	const SCORE_LABEL_KEYS: Record<ScoreKey, TextKey> = {
+		user_rating: 'nowPlayingTake.scoreRating',
+		text_accuracy: 'nowPlayingTake.scoreLyricsSung',
+		dynamics: 'nowPlayingTake.scoreDynamics',
+		audiobox_quality: 'nowPlayingTake.scoreQuality',
+		audiobox_enjoyment: 'nowPlayingTake.scoreEnjoyment',
+		lyrical_coherence: 'nowPlayingTake.scoreCoherence'
+	};
 
 	interface ScoreEntry {
 		label: string;
@@ -74,7 +56,7 @@
 	// panel has room for each scorer's own scale, so it keeps it.
 	const scoreEntries = $derived.by((): ScoreEntry[] => {
 		const entries: ScoreEntry[] = scoreReadings(scores).map(({ metric, value }) => ({
-			label: metric.label,
+			label: pageText(SCORE_LABEL_KEYS[metric.key]),
 			value: formatScore(metric, value, 'panel'),
 			color: scoreColor(metric.key, value)
 		}));
@@ -83,8 +65,10 @@
 		if (scores?.bpm_detected !== undefined) {
 			const dev = scores.bpm_deviation ?? 0;
 			entries.push({
-				label: 'BPM',
-				value: scores.bpm_detected.toFixed(0),
+				label: pageText('nowPlayingTake.scoreBpm'),
+				value: new Intl.NumberFormat(pageLanguage(), { maximumFractionDigits: 0 }).format(
+					scores.bpm_detected
+				),
 				color: dev < 5 ? 'good' : dev < 15 ? 'ok' : 'bad'
 			});
 		}
@@ -227,26 +211,31 @@
 	}
 
 	const openableVersion = $derived(takeVersion(generation.version_id, generation.version_number));
-	// "v · take · duration · mode" — the same take-description formatter every
-	// other surface uses (TakesList's row, the queue), so this panel can never
-	// drift into describing a take differently from the rest of the app. An
-	// imported take has no version and no model of ours to name.
-	const takeHeading = $derived(
-		openableVersion
-			? nowPlayingTakeMeta({
-					artist: null,
-					versionNumber: openableVersion.versionNumber,
-					generationNumber: generation.generation_number,
-					durationSec: generation.audio_duration_sec ?? null,
-					modelMode: generation.model_mode
-				})
-			: NOW_PLAYING_IMPORTED_TAKE_HEADING
-	);
+	// "v · take · duration · mode": the duration shows only when the take has
+	// one and the mode only when it names a model. An imported take has no
+	// version and no model of ours to name.
+	const takeHeading = $derived.by((): string => {
+		if (!openableVersion) return pageText('nowPlayingTake.importedHeading');
+		const durationSec = generation.audio_duration_sec ?? null;
+		const gaps = {
+			version: String(openableVersion.versionNumber),
+			take: String(generation.generation_number),
+			duration: durationSec !== null && durationSec > 0 ? formatTime(durationSec) : '',
+			mode: generation.model_mode || ''
+		};
+		if (gaps.duration && gaps.mode) return pageText('nowPlayingTake.headingDurationMode', gaps);
+		if (gaps.duration) return pageText('nowPlayingTake.headingDuration', gaps);
+		if (gaps.mode) return pageText('nowPlayingTake.headingMode', gaps);
+		return pageText('nowPlayingTake.heading', gaps);
+	});
 
 	const recipeGroups = $derived(buildTakeRecipe(generation, song));
 </script>
 
-<div class="np-take" aria-label="{NOW_PLAYING_TAKE_PREFIX} {generation.generation_number}">
+<div
+	class="np-take"
+	aria-label={pageText('nowPlayingTake.label', { number: String(generation.generation_number) })}
+>
 	<div class="take-heading-row">
 		<h3 class="take-heading">{takeHeading}</h3>
 		{#if openableVersion}
@@ -256,10 +245,9 @@
 				class="open-version"
 				data-hitbox="text"
 				onclick={() => openVersion(versionId)}
-				>{openVersionLabel(openableVersion.versionNumber)}<Icon
-					name="chevron-right"
-					size={14}
-				/></button
+				>{pageText('nowPlayingTake.openVersion', {
+					number: String(openableVersion.versionNumber)
+				})}<Icon name="chevron-right" size={14} /></button
 			>
 		{/if}
 		<div class="take-badges">
@@ -270,8 +258,10 @@
 				class:on={generation.is_picked}
 				onclick={onTogglePick}
 				aria-pressed={generation.is_picked}
-				aria-label={generation.is_picked ? NOW_PLAYING_UNPICK_LABEL : NOW_PLAYING_PICK_LABEL}
-				title={generation.is_picked ? NOW_PLAYING_UNPICK_LABEL : NOW_PLAYING_PICK_LABEL}
+				aria-label={pageText(
+					generation.is_picked ? 'nowPlayingTake.unpick' : 'nowPlayingTake.pick'
+				)}
+				title={pageText(generation.is_picked ? 'nowPlayingTake.unpick' : 'nowPlayingTake.pick')}
 			>
 				<Icon name={generation.is_picked ? 'star-filled' : 'star'} size={18} />
 			</button>
@@ -282,8 +272,8 @@
 				class:on={generation.is_kept}
 				onclick={onToggleKeep}
 				aria-pressed={generation.is_kept}
-				aria-label={generation.is_kept ? NOW_PLAYING_UNKEEP_LABEL : NOW_PLAYING_KEEP_LABEL}
-				title={generation.is_kept ? NOW_PLAYING_UNKEEP_LABEL : NOW_PLAYING_KEEP_LABEL}
+				aria-label={pageText(generation.is_kept ? 'nowPlayingTake.unkeep' : 'nowPlayingTake.keep')}
+				title={pageText(generation.is_kept ? 'nowPlayingTake.unkeep' : 'nowPlayingTake.keep')}
 			>
 				<Icon name={generation.is_kept ? 'heart-filled' : 'heart'} size={18} />
 			</button>
@@ -291,7 +281,7 @@
 	</div>
 
 	<section class="take-section">
-		<h4 class="section-title">{NOW_PLAYING_SCORES_LABEL}</h4>
+		<h4 class="section-title">{pageText('nowPlayingTake.scores')}</h4>
 		{#if scoreEntries.length > 0}
 			<div class="scores-grid">
 				{#each scoreEntries as entry (entry.label)}
@@ -302,12 +292,12 @@
 				{/each}
 			</div>
 		{:else}
-			<p class="empty-note">{NOW_PLAYING_SCORES_EMPTY}</p>
+			<p class="empty-note">{pageText('nowPlayingTake.scoresEmpty')}</p>
 		{/if}
 	</section>
 
 	<section class="take-section">
-		<h4 class="section-title">{NOW_PLAYING_DEVIATIONS_LABEL}</h4>
+		<h4 class="section-title">{pageText('nowPlayingTake.deviations')}</h4>
 		{#if !hasCues}
 			<button
 				type="button"
@@ -316,13 +306,13 @@
 				disabled={rescoring}
 				onclick={onRescore}
 			>
-				{rescoring ? TAKE_RESCORING_LABEL : NOW_PLAYING_RESCORE_ACTION_LABEL}
+				{pageText(rescoring ? 'nowPlayingTake.rescoring' : 'nowPlayingTake.rescoreAction')}
 			</button>
 		{/if}
 		{#if !hasTranscript}
-			<p class="empty-note">{NOW_PLAYING_DEVIATIONS_UNAVAILABLE}</p>
+			<p class="empty-note">{pageText('nowPlayingTake.deviationsUnavailable')}</p>
 		{:else if !hasDeviations}
-			<p class="empty-note">{NOW_PLAYING_DEVIATIONS_EMPTY}</p>
+			<p class="empty-note">{pageText('nowPlayingTake.deviationsEmpty')}</p>
 		{:else}
 			<p class="deviation-text">
 				{#each deviationTokens as token, index (index)}<span
@@ -331,12 +321,12 @@
 						class:missing={token.kind === 'missing'}
 						class:added={token.kind === 'added'}
 						title={token.lyricsText
-							? `${NOW_PLAYING_LYRICS_ROW_LABEL}: ${token.lyricsText}`
+							? pageText('nowPlayingTake.lyricsRow', { lyrics: token.lyricsText })
 							: token.kind === 'added'
-								? NOW_PLAYING_DEVIATION_ADDED_TITLE
+								? pageText('nowPlayingTake.deviationAddedTitle')
 								: undefined}
 						aria-label={token.kind === 'added'
-							? `${token.text} (${NOW_PLAYING_DEVIATION_ADDED_TITLE})`
+							? pageText('nowPlayingTake.deviationAdded', { value: token.text })
 							: undefined}>{token.text}</span
 					>{/each}
 			</p>
@@ -346,7 +336,9 @@
 	{#if recipeGroups.length > 0}
 		<section class="take-section">
 			<details class="recipe-section">
-				<summary class="section-title recipe-summary-toggle">{RECIPE_PANEL_LABEL}</summary>
+				<summary class="section-title recipe-summary-toggle"
+					>{pageText('nowPlayingTake.recipe')}</summary
+				>
 				<div class="recipe-groups">
 					{#each recipeGroups as group (group.label)}
 						<div class="recipe-group">
@@ -386,7 +378,7 @@
 
 	<section class="take-section">
 		<div class="rating-row">
-			<span class="section-title">{NOW_PLAYING_RATING_LABEL}</span>
+			<span class="section-title">{pageText('nowPlayingTake.rating')}</span>
 			<input
 				type="range"
 				class="rating-slider"
@@ -399,7 +391,7 @@
 		</div>
 		<textarea
 			class="rating-notes"
-			placeholder={NOW_PLAYING_RATING_NOTES_PLACEHOLDER}
+			placeholder={pageText('nowPlayingTake.ratingNotes')}
 			bind:value={ratingNotes}
 			rows="2"></textarea>
 		{#if ratingDirty}
@@ -410,7 +402,7 @@
 				onclick={onSaveRating}
 				disabled={ratingSaving}
 			>
-				{ratingSaving ? NOW_PLAYING_RATING_SAVING : NOW_PLAYING_RATING_SAVE}
+				{pageText(ratingSaving ? 'nowPlayingTake.ratingSaving' : 'nowPlayingTake.ratingSave')}
 			</button>
 		{/if}
 	</section>
@@ -424,7 +416,7 @@
 				onclick={() => useOnSong('seed')}
 			>
 				<Icon name="pin" size={12} />
-				{TAKE_USE_SEED_LABEL}
+				{pageText('nowPlayingTake.useSeed')}
 				<span class="use-seed-hint">{generation.seed}</span>
 			</button>
 		{/if}
@@ -434,7 +426,7 @@
 			data-hitbox="frequent"
 			onclick={() => useOnSong('repaint')}
 		>
-			{TAKE_REPAINT_LABEL}
+			{pageText('nowPlayingTake.repaint')}
 		</button>
 		<button
 			type="button"
@@ -442,7 +434,7 @@
 			data-hitbox="frequent"
 			onclick={() => useOnSong('cover')}
 		>
-			{TAKE_COVER_LABEL}
+			{pageText('nowPlayingTake.cover')}
 		</button>
 		<button
 			type="button"
@@ -451,7 +443,7 @@
 			disabled={rescoring}
 			onclick={onRescore}
 		>
-			{rescoring ? TAKE_RESCORING_LABEL : TAKE_RESCORE_LABEL}
+			{pageText(rescoring ? 'nowPlayingTake.rescoring' : 'nowPlayingTake.rescore')}
 		</button>
 	</div>
 </div>

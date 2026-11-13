@@ -1,4 +1,3 @@
-import type { GenerationParams } from '#lib/api/types.ts';
 import { formatTime } from '#lib/utils/format.ts';
 
 // Now Playing copy and layout constants.
@@ -40,26 +39,6 @@ export function nowPlayingTakeLabel(
 	return versionNumber != null ? `v${versionNumber}${META_SEPARATOR}${takePart}` : takePart;
 }
 
-export const TAKE_SELECT_LABEL = 'Select';
-
-export const TAKE_SELECT_ALL_UNKEPT_LABEL = 'Select all unkept';
-
-export function selectedCountLabel(count: number): string {
-	return `${count} selected`;
-}
-
-export function bulkDeleteLabel(count: number): string {
-	return `Delete ${count}`;
-}
-
-export function bulkDeleteTitle(count: number): string {
-	return `Delete ${count} take${count === 1 ? '' : 's'}?`;
-}
-
-export function takeRowLabel(generationNumber: number): string {
-	return `Take ${generationNumber}`;
-}
-
 export interface TakeVersion {
 	versionId: string;
 	versionNumber: number;
@@ -72,37 +51,6 @@ export function takeVersion(
 	versionNumber: number | null
 ): TakeVersion | null {
 	return versionId === null || versionNumber === null ? null : { versionId, versionNumber };
-}
-
-// A take with no version was imported: no lyrics or recipe were saved with
-// it, so it names where it came from instead of a version and a model.
-const IMPORTED_TAKES_GROUP = 'Imported';
-export const NOW_PLAYING_IMPORTED_TAKE_HEADING = 'Imported take';
-export const EARLIER_VERSIONS_LABEL = 'Earlier versions';
-
-function takeCountLabel(count: number): string {
-	return `${count} take${count === 1 ? '' : 's'}`;
-}
-
-export function currentVersionHeadLabel(versionNumber: number, count: number): string {
-	return `v${versionNumber} current${META_SEPARATOR}${takeCountLabel(count)}`;
-}
-
-// The row of a folded version, or of Imported (no version number): archived
-// takes count in the total and are named after it.
-export function foldedGroupLabel(
-	versionNumber: number | null,
-	count: number,
-	archivedCount: number
-): string {
-	const origin = versionNumber === null ? IMPORTED_TAKES_GROUP : `v${versionNumber}`;
-	const archivedShare = archivedCount === count ? 'all' : archivedCount;
-	const archived = archivedCount === 0 ? '' : `${META_SEPARATOR}${archivedShare} archived`;
-	return `${origin}${META_SEPARATOR}${takeCountLabel(count)}${archived}`;
-}
-
-export function openVersionLabel(versionNumber: number): string {
-	return `Open v${versionNumber}`;
 }
 
 interface TakeMetaParts {
@@ -121,20 +69,6 @@ interface TakeMetaParts {
 // it ever stopped being terse.
 function takeModelModeLabel(modelMode: string | null | undefined): string | null {
 	return modelMode || null;
-}
-
-// ACE-Step's VRAM guard can quietly cut a requested batch size down before
-// generation runs ("2 asked, 1 delivered"). The backend
-// only ever persists delivered_batch_size when it actually diverges from
-// batch_size, so presence alone would already be a safe signal — this still
-// checks both explicitly rather than trusting that invariant from the UI.
-export function takeBatchReductionLabel(
-	generationParams: GenerationParams | null | undefined
-): string | null {
-	const requested = generationParams?.batch_size;
-	const delivered = generationParams?.delivered_batch_size;
-	if (requested == null || delivered == null || requested === delivered) return null;
-	return `${delivered} of ${requested}`;
 }
 
 // A row's full description of a take — "Artist · v1 · take 1 · 3:15" — built
@@ -185,28 +119,16 @@ export function nowPlayingQueueHeading(contextLabel: string | null): string {
 		: NOW_PLAYING_QUEUE_TAB;
 }
 
-export const NOW_PLAYING_SCORES_LABEL = 'Scores';
-export const NOW_PLAYING_SCORES_EMPTY = 'No scores yet';
-export const NOW_PLAYING_DEVIATIONS_LABEL = 'Sung vs. lyrics';
-export const NOW_PLAYING_DEVIATIONS_EMPTY = 'Sung text matches the lyrics';
-export const NOW_PLAYING_DEVIATIONS_UNAVAILABLE = 'No transcript to compare against yet';
 export const NOW_PLAYING_LYRICS_ROW_LABEL = 'Lyrics';
 // A take scored before its cues were recorded has whisper_text but no whisper_cues,
 // so its lyrics stay static instead of following the audio. The lyrics panel
 // only names that state — it also renders for a public share listener, who
 // cannot re-score anything. The take panel owns the action that fixes it.
 export const NOW_PLAYING_LYRICS_UNSYNCED_NOTE = "Lyrics aren't synced for this take.";
-export const NOW_PLAYING_RESCORE_ACTION_LABEL = 'Re-score this take to follow the lyrics.';
 
 export const NOW_PLAYING_PICK_LABEL = 'Pick';
-export const NOW_PLAYING_UNPICK_LABEL = 'Unpick';
 export const NOW_PLAYING_KEEP_LABEL = 'Keep';
 export const NOW_PLAYING_UNKEEP_LABEL = 'Unkeep';
-export const NOW_PLAYING_RATING_LABEL = 'Your rating';
-export const NOW_PLAYING_RATING_NOTES_PLACEHOLDER = 'Notes (optional)';
-export const NOW_PLAYING_RATING_SAVE = 'Save rating';
-export const NOW_PLAYING_RATING_SAVING = 'Saving…';
-export const NOW_PLAYING_DEVIATION_ADDED_TITLE = 'Not in lyrics';
 
 // Curation mode: walking an album's per-song candidate takes
 // one after another, right from the cover column's transport row so it never
@@ -270,4 +192,3 @@ export const NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS = 'Imported take — no lyrics 
 export const NOW_PLAYING_LYRICS_FOLLOW_LABEL = 'Follow';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
-export const NOW_PLAYING_TAKE_PREFIX = 'Take';

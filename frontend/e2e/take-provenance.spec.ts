@@ -8,9 +8,8 @@
 
 import { expect, test, type Page, type Route } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { TAKE_PROVENANCE_REPAINT_PREFIX } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
-import { foldedGroupLabel, openNowPlayingLabel } from '../src/lib/constants/now-playing';
+import { openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import {
 	createAlbum,
 	FIRST_VERSION_TAKE_COUNT,
@@ -90,13 +89,13 @@ async function seedJumpSong(page: Page, label: string): Promise<JumpSong> {
 
 const folded = (page: Page) =>
 	workspace(page).getByRole('button', {
-		name: foldedGroupLabel(1, FIRST_VERSION_TAKE_COUNT, 0),
+		name: words['takesList.foldedVersion'](FIRST_VERSION_TAKE_COUNT, { number: String(1) }),
 		exact: false
 	});
 const takeRow = (page: Page, id: string) => workspace(page).locator(`#take-${id}`);
 const provenanceLink = (page: Page, song: JumpSong) =>
 	takeRow(page, song.repaint).getByRole('link', {
-		name: new RegExp(TAKE_PROVENANCE_REPAINT_PREFIX)
+		name: new RegExp(words['takeRow.provenanceRepaint']({ take: '' }).trim())
 	});
 const unsavedChangesDialog = (page: Page) =>
 	page.getByRole('dialog', { name: words['songPage.unsavedTitle'] });

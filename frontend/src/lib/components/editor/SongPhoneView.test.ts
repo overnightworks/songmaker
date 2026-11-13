@@ -12,7 +12,6 @@ import songPhoneViewSource from './SongPhoneView.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
 import { EDITOR_GENERATE_LABEL, EDITOR_MISSING_CONTENT_TITLE } from '#lib/constants/song.ts';
-import { TAKES_EMPTY } from '#lib/constants/take.ts';
 import type { GenerateState } from '#lib/stores/generateAction.ts';
 import { words } from '#lib/words/en.ts';
 
@@ -151,7 +150,7 @@ describe('SongPhoneView', () => {
 	});
 
 	it.each([
-		['ready', TAKES_EMPTY],
+		['ready', words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL })],
 		['loading', 'Loading takes…'],
 		['error', 'Failed to load takes']
 	] as const)(

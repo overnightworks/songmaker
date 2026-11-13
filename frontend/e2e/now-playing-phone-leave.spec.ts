@@ -4,8 +4,7 @@ import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	NOW_PLAYING_TAKE_TAB,
-	openNowPlayingLabel,
-	takeRowLabel
+	openNowPlayingLabel
 } from '../src/lib/constants/now-playing';
 import {
 	FlowGuard,
@@ -79,7 +78,9 @@ const NOW_PLAYING_ORIGINS: {
 			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			await page
 				.getByRole('tabpanel')
-				.getByRole('button', { name: nameStartingWith(takeRowLabel(SEEDED_TAKE_NUMBER)) })
+				.getByRole('button', {
+					name: nameStartingWith(words['takeRow.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) }))
+				})
 				.click();
 			await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
 			return {

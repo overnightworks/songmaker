@@ -6,15 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
-import { TAKE_DELETE_LABEL, TAKES_EMPTY, takesDraftBanner } from '#lib/constants/take.ts';
-import {
-	EARLIER_VERSIONS_LABEL,
-	bulkDeleteTitle,
-	currentVersionHeadLabel,
-	foldedGroupLabel,
-	openVersionLabel,
-	selectedCountLabel
-} from '#lib/constants/now-playing.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
 import {
 	clearSelection,
@@ -37,6 +28,7 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
 
 import { bulkDeleteGenerations } from '#lib/api/client.ts';
 import { jumpToTake } from '#lib/stores/navigation.ts';
+import { EDITOR_GENERATE_LABEL } from '#lib/constants/song.ts';
 import { words } from '#lib/words/en.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -150,8 +142,11 @@ function foldToggle(target: HTMLElement, label: string): HTMLButtonElement {
 	return toggle;
 }
 
-const V2_ROW = foldedGroupLabel(2, 3, 1);
-const V1_ROW = foldedGroupLabel(1, 1, 1);
+const V2_ROW = words['takesList.foldedVersionArchived'](3, { number: '2', archived: '1' });
+const V1_ROW = words['takesList.foldedVersionArchived'](1, {
+	number: '1',
+	archived: words['takesList.allArchived']
+});
 
 async function clickThenTick(element: HTMLElement): Promise<void> {
 	element.click();
@@ -211,9 +206,9 @@ describe('TakesList folds the earlier versions (S3)', () => {
 		const { target } = await render();
 
 		expect(target.querySelector('.version-head')?.textContent).toContain(
-			currentVersionHeadLabel(3, 2)
+			words['takesList.currentHead'](2, { number: '3' })
 		);
-		expect(target.textContent).toContain(EARLIER_VERSIONS_LABEL);
+		expect(target.textContent).toContain(words['takesList.earlier']);
 		expect(foldToggle(target, V2_ROW).getAttribute('aria-expanded')).toBe('false');
 		expect(foldToggle(target, V1_ROW).getAttribute('aria-expanded')).toBe('false');
 		expect(rowIds(target)).toEqual(['c1', 'c2']);
@@ -223,13 +218,26 @@ describe('TakesList folds the earlier versions (S3)', () => {
 		const generations = [...storytime(), takeOn('a4', 2, { is_picked: true })];
 		const { target, generationActions } = await render({ generations });
 
-		expect(foldToggle(target, foldedGroupLabel(2, 4, 1)).textContent).toContain('Take 4');
-		await clickThenTick(foldToggle(target, foldedGroupLabel(2, 4, 1)));
+		expect(
+			foldToggle(
+				target,
+				words['takesList.foldedVersionArchived'](4, { number: '2', archived: '1' })
+			).textContent
+		).toContain(words['takesList.takeLabel']({ number: '4' }));
+		await clickThenTick(
+			foldToggle(
+				target,
+				words['takesList.foldedVersionArchived'](4, { number: '2', archived: '1' })
+			)
+		);
 
-		const toggle = foldToggle(target, foldedGroupLabel(2, 4, 1));
-		expect(toggle.textContent).not.toContain('Take 4');
+		const toggle = foldToggle(
+			target,
+			words['takesList.foldedVersionArchived'](4, { number: '2', archived: '1' })
+		);
+		expect(toggle.textContent).not.toContain(words['takesList.takeLabel']({ number: '4' }));
 		const open = [...target.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-			button.textContent?.includes(openVersionLabel(2))
+			button.textContent?.includes(words['takesList.openVersion']({ number: '2' }))
 		);
 		expect(open?.closest('[aria-expanded]')).toBeNull();
 		await clickThenTick(open as HTMLElement);
@@ -263,7 +271,15 @@ describe('TakesList folds the earlier versions (S3)', () => {
 			})
 		];
 		const { target } = await render({ generations });
-		await clickThenTick(foldToggle(target, foldedGroupLabel(2, 1, 1)));
+		await clickThenTick(
+			foldToggle(
+				target,
+				words['takesList.foldedVersionArchived'](1, {
+					number: '2',
+					archived: words['takesList.allArchived']
+				})
+			)
+		);
 
 		const row = target.querySelector<HTMLElement>('#take-a3');
 		expect(row?.textContent).toContain('archived');
@@ -278,11 +294,13 @@ describe('TakesList folds the earlier versions (S3)', () => {
 		const { target } = await render({ generations, latestVersionNumber: 3 });
 
 		expect(target.querySelector('.version-head')?.textContent).toContain(
-			currentVersionHeadLabel(3, 0)
+			words['takesList.currentHead'](0, { number: '3' })
 		);
 		expect(target.querySelector('.version-head')?.textContent).not.toContain('Open v');
-		expect(target.textContent).toContain(TAKES_EMPTY);
-		expect(foldToggle(target, foldedGroupLabel(2, 1, 0))).toBeTruthy();
+		expect(target.textContent).toContain(
+			words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL })
+		);
+		expect(foldToggle(target, words['takesList.foldedVersion'](1, { number: '2' }))).toBeTruthy();
 	});
 
 	it('keeps the draft banner above the head, with the empty text, for a dirty empty current version', async () => {
@@ -292,8 +310,12 @@ describe('TakesList folds the earlier versions (S3)', () => {
 			draftVersionNumber: 3
 		});
 
-		expect(target.querySelector('.draft-banner')?.textContent?.trim()).toBe(takesDraftBanner(3, 3));
-		expect(target.textContent).toContain(TAKES_EMPTY);
+		expect(target.querySelector('.draft-banner')?.textContent?.trim()).toBe(
+			words['takesList.draftDiffers']({ latest: '3', next: '3' })
+		);
+		expect(target.textContent).toContain(
+			words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL })
+		);
 	});
 
 	it('shows no head, no Open link and no Earlier versions label for a song with no saved version', async () => {
@@ -309,7 +331,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 			'Draft — unsaved changes. Generate creates v1.'
 		);
 		expect(target.querySelector('.version-head')).toBeNull();
-		expect(target.textContent).not.toContain(EARLIER_VERSIONS_LABEL);
+		expect(target.textContent).not.toContain(words['takesList.earlier']);
 		expect(target.textContent).not.toContain('Open v');
 	});
 });
@@ -321,7 +343,7 @@ describe('Imported (Q1 a)', () => {
 		const { target, component } = await render({ generations: importedOnly() });
 		expect(rowIds(target)).toEqual(['i1', 'i2']);
 
-		await clickThenTick(foldToggle(target, foldedGroupLabel(null, 2, 0)));
+		await clickThenTick(foldToggle(target, words['takesList.foldedImported'](2)));
 		expect(rowIds(target)).toEqual([]);
 
 		await unmount(component);
@@ -336,12 +358,12 @@ describe('Imported (Q1 a)', () => {
 		const labels = [...target.querySelectorAll('button[aria-expanded]')].map((b) =>
 			b.textContent?.trim()
 		);
-		expect(labels.at(-1)).toContain(foldedGroupLabel(null, 2, 0));
+		expect(labels.at(-1)).toContain(words['takesList.foldedImported'](2));
 		expect(rowIds(target)).toEqual(['c1', 'c2']);
-		await clickThenTick(foldToggle(target, foldedGroupLabel(null, 2, 0)));
+		await clickThenTick(foldToggle(target, words['takesList.foldedImported'](2)));
 		expect(rowIds(target)).toEqual(['c1', 'c2', 'i1', 'i2']);
 		expect(
-			foldToggle(target, foldedGroupLabel(null, 2, 0))
+			foldToggle(target, words['takesList.foldedImported'](2))
 				.closest('.version-section')
 				?.querySelector('.version-link')
 		).toBeNull();
@@ -364,7 +386,7 @@ describe('the selection stays within the rendered takes (rules 6 and 7, cells 16
 		toggleSelection('a1');
 		await tick();
 
-		expect(toolbarCount(target)).toBe(selectedCountLabel(1));
+		expect(toolbarCount(target)).toBe(words['takesList.selectedCount'](1));
 		expect([...get(selectedIds)]).toEqual(['c1']);
 	});
 
@@ -374,10 +396,10 @@ describe('the selection stays within the rendered takes (rules 6 and 7, cells 16
 		await ctrlTickTakes('a1');
 		await ctrlTickTakes('a2');
 		await ctrlTickTakes('c1');
-		expect(toolbarCount(target)).toBe(selectedCountLabel(3));
+		expect(toolbarCount(target)).toBe(words['takesList.selectedCount'](3));
 
 		await clickThenTick(foldToggle(target, V2_ROW));
-		expect(toolbarCount(target)).toBe(selectedCountLabel(1));
+		expect(toolbarCount(target)).toBe(words['takesList.selectedCount'](1));
 		await clickThenTick(foldToggle(target, V2_ROW));
 
 		expect([...get(selectedIds)]).toEqual(['c1']);
@@ -416,7 +438,7 @@ describe('the selection stays within the rendered takes (rules 6 and 7, cells 16
 		const again = await render();
 
 		expect([...get(selectedIds)]).toEqual(['c1']);
-		expect(toolbarCount(again.target)).toBe(selectedCountLabel(1));
+		expect(toolbarCount(again.target)).toBe(words['takesList.selectedCount'](1));
 	});
 
 	it('clears the ticks of a folded version in the same way while the takes are still loading', async () => {
@@ -439,7 +461,7 @@ describe('the selection stays within the rendered takes (rules 6 and 7, cells 16
 
 		await replaceTakes(storytime().filter((gen) => gen.id !== 'c1'));
 
-		expect(toolbarCount(target)).toBe(selectedCountLabel(1));
+		expect(toolbarCount(target)).toBe(words['takesList.selectedCount'](1));
 	});
 
 	it('clears the ticks of the old current version when a new version folds it', async () => {
@@ -448,9 +470,11 @@ describe('the selection stays within the rendered takes (rules 6 and 7, cells 16
 
 		await saveNewVersion(4);
 
-		expect(foldToggle(target, foldedGroupLabel(3, 2, 0)).getAttribute('aria-expanded')).toBe(
-			'false'
-		);
+		expect(
+			foldToggle(target, words['takesList.foldedVersion'](2, { number: '3' })).getAttribute(
+				'aria-expanded'
+			)
+		).toBe('false');
 		expect(get(selectionMode)).toBe(false);
 		expect(rowIds(target)).toEqual([]);
 	});
@@ -464,12 +488,12 @@ describe('Delete sends rendered takes only, checked at confirm time (rule 8, cel
 		await ctrlTickTakes('a1');
 		await ctrlTickTakes('c1');
 		await clickThenTick(target.querySelector('.selection-toolbar .destructive') as HTMLElement);
-		expect(confirmDialog()?.textContent).toContain(bulkDeleteTitle(2));
+		expect(confirmDialog()?.textContent).toContain(words['takesList.bulkDeleteTitle'](2));
 
 		toggleTakeGroup('v2', groupTakes(storytime(), 3));
 		await tick();
-		expect(confirmDialog()?.textContent).toContain(bulkDeleteTitle(1));
-		await pressInDialog(TAKE_DELETE_LABEL);
+		expect(confirmDialog()?.textContent).toContain(words['takesList.bulkDeleteTitle'](1));
+		await pressInDialog(words['takesList.deleteConfirm']);
 
 		expect(bulkDeleteGenerations).toHaveBeenCalledExactlyOnceWith(['c1']);
 	});
@@ -495,7 +519,7 @@ describe('Delete sends rendered takes only, checked at confirm time (rule 8, cel
 		toggleTakeGroup('v2', groupTakes(storytime(), 3));
 		const confirm = [
 			...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')
-		].find((button) => button.textContent?.trim() === TAKE_DELETE_LABEL);
+		].find((button) => button.textContent?.trim() === words['takesList.deleteConfirm']);
 		confirm?.click();
 		await tick();
 
@@ -519,7 +543,7 @@ describe('Delete sends rendered takes only, checked at confirm time (rule 8, cel
 		const { target, generationActions } = await render();
 
 		await askToDelete(target, 'c1');
-		await pressInDialog(TAKE_DELETE_LABEL);
+		await pressInDialog(words['takesList.deleteConfirm']);
 
 		expect(generationActions.del).toHaveBeenCalledExactlyOnceWith('c1');
 	});
@@ -531,7 +555,7 @@ describe('Delete sends rendered takes only, checked at confirm time (rule 8, cel
 
 		toggleTakeGroup('v2', groupTakes(storytime(), 3));
 		flushSync();
-		await pressInDialog(TAKE_DELETE_LABEL);
+		await pressInDialog(words['takesList.deleteConfirm']);
 
 		expect(generationActions.del).not.toHaveBeenCalled();
 		expect(confirmDialog()).toBeNull();
@@ -542,7 +566,7 @@ describe('Delete sends rendered takes only, checked at confirm time (rule 8, cel
 		await askToDelete(target, 'c1');
 
 		await replaceTakes(storytime().filter((gen) => gen.id !== 'c1'));
-		await pressInDialog(TAKE_DELETE_LABEL);
+		await pressInDialog(words['takesList.deleteConfirm']);
 
 		expect(generationActions.del).not.toHaveBeenCalled();
 		expect(confirmDialog()).toBeNull();

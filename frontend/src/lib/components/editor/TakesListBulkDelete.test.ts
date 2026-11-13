@@ -4,11 +4,10 @@ import { SvelteMap } from 'svelte/reactivity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
-import { TAKE_DELETE_LABEL, TAKE_DELETE_MESSAGE } from '#lib/constants/take.ts';
-import { bulkDeleteTitle } from '#lib/constants/now-playing.ts';
 import { ApiError } from '#lib/api/fetch.ts';
 import { clearSelection, selectedIds, toggleSelection } from '#lib/stores/selection.ts';
 import { get } from 'svelte/store';
+import { words } from '#lib/words/en.ts';
 import TakesListHarness from './tests/TakesListHarness.svelte';
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => {
@@ -135,9 +134,9 @@ describe('TakesList bulk delete asks first (S11)', () => {
 		deleteButton(target).click();
 		await tick();
 
-		expect(dialog()?.textContent).toContain(bulkDeleteTitle(3));
-		expect(dialog()?.textContent).toContain(TAKE_DELETE_MESSAGE);
-		expect(dialog()?.textContent).toContain(TAKE_DELETE_LABEL);
+		expect(dialog()?.textContent).toContain(words['takesList.bulkDeleteTitle'](3));
+		expect(dialog()?.textContent).toContain(words['takesList.deleteMessage']);
+		expect(dialog()?.textContent).toContain(words['takesList.deleteConfirm']);
 		expect(bulkDeleteGenerations).not.toHaveBeenCalled();
 	});
 
@@ -172,7 +171,7 @@ describe('TakesList bulk delete asks first (S11)', () => {
 		deleteButton(target).click();
 		await tick();
 
-		await press(TAKE_DELETE_LABEL);
+		await press(words['takesList.deleteConfirm']);
 
 		expect(bulkDeleteGenerations).toHaveBeenCalledExactlyOnceWith(['g1', 'g3']);
 		expect(addToast).toHaveBeenCalledWith('Deleted 2 takes', 'success');
@@ -187,8 +186,8 @@ describe('TakesList bulk delete asks first (S11)', () => {
 		await tick();
 
 		await removeTakes('g2');
-		expect(dialog()?.textContent).toContain(bulkDeleteTitle(2));
-		await press(TAKE_DELETE_LABEL);
+		expect(dialog()?.textContent).toContain(words['takesList.bulkDeleteTitle'](2));
+		await press(words['takesList.deleteConfirm']);
 
 		expect(bulkDeleteGenerations).toHaveBeenCalledExactlyOnceWith(['g1', 'g3']);
 	});
@@ -224,7 +223,7 @@ describe('TakesList bulk delete asks first (S11)', () => {
 		deleteButton(target).click();
 		await tick();
 
-		await press(TAKE_DELETE_LABEL);
+		await press(words['takesList.deleteConfirm']);
 
 		expect(addToast).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'error');
 		expect([...get(selectedIds)]).toEqual(['g1', 'g2']);

@@ -8,7 +8,6 @@
 import { expect, test, type Locator, type Page } from './coverage-test';
 import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { NOW_PLAYING_TAKE_TAB, NOW_PLAYING_LABEL } from '../src/lib/constants/now-playing';
-import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { showTab } from './foldedSong';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
@@ -76,7 +75,7 @@ async function useSeedOfTakeOne(page: Page): Promise<void> {
 		.click();
 	await page
 		.getByRole('dialog', { name: words['takeMenu.label'] })
-		.getByRole('button', { name: nameStartingWith(TAKE_USE_SEED_LABEL) })
+		.getByRole('button', { name: nameStartingWith(words['takeMenu.useSeed']) })
 		.click();
 }
 
@@ -86,7 +85,9 @@ function chip(page: Page): Locator {
 
 async function showChip(page: Page, takeNumber: number): Promise<void> {
 	await showTab(page, words['songTabs.edit']);
-	await expect(chip(page)).toHaveText(new RegExp(`^\\s*Seed · take ${takeNumber}`));
+	await expect(chip(page)).toHaveText(
+		new RegExp(`^\\s*${words['seedChip.label']({ number: String(takeNumber) })}`)
+	);
 }
 
 async function pressGenerate(page: Page): Promise<Record<string, unknown>> {
@@ -129,7 +130,7 @@ test('× takes the chip away and the next Generate sends no seed (S6)', async ({
 	await openOwnSong(page);
 	await useSeedOfTakeOne(page);
 	await showChip(page, 1);
-	await chip(page).getByRole('button', { name: SEED_CHIP_CLEAR_LABEL }).click();
+	await chip(page).getByRole('button', { name: words['seedChip.clear'] }).click();
 	await expect(chip(page)).toHaveCount(0);
 	expect(await pressGenerate(page)).not.toHaveProperty('seed');
 });
@@ -186,9 +187,11 @@ test(
 		await page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB, exact: true }).click();
 		await page
 			.locator('.np-take')
-			.getByRole('button', { name: nameStartingWith(TAKE_USE_SEED_LABEL) })
+			.getByRole('button', { name: nameStartingWith(words['nowPlayingTake.useSeed']) })
 			.click();
 		await expect(page.getByRole('heading', { name: songs.otherTitle, exact: true })).toBeVisible();
-		await expect(chip(page)).toHaveText(new RegExp(`^\\s*Seed · take 1`));
+		await expect(chip(page)).toHaveText(
+			new RegExp(`^\\s*${words['seedChip.label']({ number: '1' })}`)
+		);
 	}
 );

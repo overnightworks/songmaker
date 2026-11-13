@@ -34,7 +34,6 @@ import {
 import { navigateToSongTab, openEditTab } from '#lib/stores/navigation.ts';
 import { recipeModel } from '#lib/stores/recipe.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
-import { openVersionLabel } from '#lib/constants/now-playing.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 
 // Stands in for the router the way the real one behaves for this app: a song
@@ -212,7 +211,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			buttons(css).find((button) => button.textContent?.includes(text));
 		named('button[aria-expanded="false"]', `v${n} ·`)?.click();
 		flushSync();
-		named('.version-link', openVersionLabel(n))?.click();
+		named('.version-link', words['takesList.openVersion']({ number: String(n) }))?.click();
 		await settleRender();
 	}
 

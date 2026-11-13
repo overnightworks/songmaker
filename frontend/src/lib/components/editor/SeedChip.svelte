@@ -1,18 +1,18 @@
 <script lang="ts">
-	import { SEED_CHIP_CLEAR_LABEL, seedChipLabel } from '#lib/constants/take-task.ts';
 	import { clearSeed, seedFromTake } from '#lib/stores/recipe.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 </script>
 
 {#if $seedFromTake}
 	<span class="seed-chip">
-		{seedChipLabel($seedFromTake.takeNumber)}
+		{pageText('seedChip.label', { number: String($seedFromTake.takeNumber) })}
 		<button
 			type="button"
 			class="clear"
 			data-hitbox="frequent"
-			title={SEED_CHIP_CLEAR_LABEL}
-			aria-label={SEED_CHIP_CLEAR_LABEL}
+			title={pageText('seedChip.clear')}
+			aria-label={pageText('seedChip.clear')}
 			onclick={clearSeed}
 		>
 			<Icon name="x" size={14} />

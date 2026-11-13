@@ -27,19 +27,16 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { words } from '../src/lib/words/en';
+
+const openVersion = (number: number) => words['takesList.openVersion']({ number: String(number) });
+const firstTake = words['takeRow.takeLabel']({ number: '1' });
 import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
-import { takesDraftBanner } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
-	NOW_PLAYING_IMPORTED_TAKE_HEADING,
 	NOW_PLAYING_QUEUE_TAB,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	NOW_PLAYING_TAKE_TAB,
-	openVersionLabel,
-	currentVersionHeadLabel,
-	foldedGroupLabel,
-	takeRowLabel,
 	takeVersion,
 	type TakeVersion,
 	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
@@ -245,8 +242,8 @@ async function showTakes(page: Page): Promise<void> {
 }
 
 function takeGroup(page: Page, version: TakeVersion | null, takeCount: number): Locator {
-	const versionNumber = version?.versionNumber ?? null;
-	const hasText = foldedGroupLabel(versionNumber, takeCount, 0);
+	const key = version ? 'takesList.foldedVersion' : 'takesList.foldedImported';
+	const hasText = words[key](takeCount, { number: String(version?.versionNumber) });
 	return workspace(page).locator('.version-section').filter({ hasText });
 }
 
@@ -505,7 +502,8 @@ test.describe('the versions of a song', () => {
 
 		await expect(page.getByText(words['songPage.unsavedTitle'], { exact: true })).toHaveCount(0);
 		await showTakes(page);
-		await expect(workspace(page).getByText(takesDraftBanner(2, 3), { exact: true })).toBeVisible();
+		const banner = words['takesList.draftDiffers']({ latest: '2', next: '3' });
+		await expect(workspace(page).getByText(banner, { exact: true })).toBeVisible();
 		if (shellOf(testInfo) === 'mobile') return;
 
 		await lyricsField(page).fill(`${FIRST_VERSION_LYRICS}\n${UNSAVED_LINE}`);
@@ -632,7 +630,7 @@ test.describe('the versions of a song', () => {
 		await openSongEditor(page, song);
 		await showTakes(page);
 
-		await page.getByRole('button', { name: openVersionLabel(1) }).click();
+		await page.getByRole('button', { name: openVersion(1) }).click();
 
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 		await expect(versionChip(page)).toHaveText(versionDraftName(2));
@@ -648,7 +646,7 @@ test.describe('the versions of a song', () => {
 		await openSongEditor(page, song);
 		await showTakes(page);
 
-		await page.getByRole('button', { name: openVersionLabel(2) }).click();
+		await page.getByRole('button', { name: openVersion(2) }).click();
 
 		await expect(lyricsField(page)).toBeFocused();
 		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
@@ -665,12 +663,12 @@ test.describe('the versions of a song', () => {
 		await openSongEditor(page, song);
 		await showTakes(page);
 		await takeGroup(page, song.v1, 1)
-			.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) })
+			.getByRole('button', { name: nameStartingWith(firstTake) })
 			.click();
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 
-		const openV1 = page.getByRole('button', { name: openVersionLabel(1), exact: true }).last();
+		const openV1 = page.getByRole('button', { name: openVersion(1), exact: true }).last();
 		await openV1.click();
 
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
@@ -688,7 +686,7 @@ test.describe('the versions of a song', () => {
 		await openSongEditor(page, song);
 		await showTakes(page);
 		await takeGroup(page, song.v1, 1)
-			.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) })
+			.getByRole('button', { name: nameStartingWith(firstTake) })
 			.click();
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
@@ -727,7 +725,7 @@ test.describe('the versions of a song', () => {
 		}
 		await page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB }).click();
 
-		const openV1 = page.getByRole('button', { name: openVersionLabel(1), exact: true }).last();
+		const openV1 = page.getByRole('button', { name: openVersion(1), exact: true }).last();
 		await openV1.click();
 
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
@@ -762,7 +760,7 @@ test.describe('the versions of a song', () => {
 		await versionsSheet(page).getByRole('button', { name: words['versions.close'] }).click();
 		await expect(versionsSheet(page)).toBeHidden();
 		await showTakes(page);
-		await expect(page.getByText(currentVersionHeadLabel(2, 1))).toBeVisible();
+		await expect(page.getByText(words['takesList.currentHead'](1, { number: '2' }))).toBeVisible();
 		await expect(takeGroup(page, song.v1, 1)).toHaveCount(0);
 	});
 
@@ -840,14 +838,13 @@ test.describe('the versions of a song', () => {
 		await showTakes(page);
 
 		const imported = takeGroup(page, null, 1);
-		await expect(imported).toBeVisible();
 		await expect(imported.getByRole('button', { name: /Open v/ })).toHaveCount(0);
 
-		await imported.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) }).click();
+		await imported.getByRole('button', { name: nameStartingWith(firstTake) }).click();
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
 		await expect(page.getByText(NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS)).toBeVisible();
 		await expect(
-			page.getByRole('heading', { name: NOW_PLAYING_IMPORTED_TAKE_HEADING, exact: true })
+			page.getByRole('heading', { name: words['nowPlayingTake.importedHeading'], exact: true })
 		).toBeVisible();
 		await expect(page.getByRole('button', { name: /^Open v/ })).toHaveCount(0);
 	});

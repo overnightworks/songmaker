@@ -11,10 +11,10 @@ import {
 	unkeepGeneration,
 	unpickGeneration
 } from '#lib/api/client.ts';
-import { TAKE_RESCORE_QUEUED_TOAST } from '#lib/constants/take.ts';
 import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
 import { upsertSongInList } from '#lib/stores/libraryData.ts';
 import { addToast } from '#lib/stores/toast.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 
 // The one mutation owner for a generation's judged state (pick, keep, rating,
 // pinned seed, re-score) shared by every surface that judges a take. Each
@@ -39,7 +39,7 @@ export async function setPick(songId: string, genId: string, picked: boolean): P
 		await refreshSong(songId);
 		return true;
 	} catch (e) {
-		addToast(describeFailure(e, 'Pick failed'), 'error');
+		addToast(describeFailure(e, pageText('takeActions.pickFailed')), 'error');
 		return false;
 	}
 }
@@ -50,7 +50,7 @@ export async function setKeep(songId: string, genId: string, kept: boolean): Pro
 		else await unkeepGeneration(genId);
 		await refreshSong(songId);
 	} catch (e) {
-		addToast(describeFailure(e, 'Keep failed'), 'error');
+		addToast(describeFailure(e, pageText('takeActions.keepFailed')), 'error');
 	}
 }
 
@@ -59,7 +59,7 @@ export async function restoreTake(songId: string, genId: string): Promise<void> 
 		await unarchiveGeneration(genId);
 		await refreshSong(songId);
 	} catch (e) {
-		addToast(describeFailure(e, 'Restore failed'), 'error');
+		addToast(describeFailure(e, pageText('takeActions.restoreFailed')), 'error');
 	}
 }
 
@@ -72,9 +72,9 @@ export async function rate(
 	try {
 		await rateGeneration(genId, rating, notes);
 		await refreshSong(songId);
-		addToast('Rating saved', 'success');
+		addToast(pageText('takeActions.ratingSaved'), 'success');
 	} catch (e) {
-		addToast(describeFailure(e, 'Rating failed'), 'error');
+		addToast(describeFailure(e, pageText('takeActions.ratingFailed')), 'error');
 	}
 }
 
@@ -107,9 +107,9 @@ export async function rescore(songId: string, genId: string): Promise<void> {
 	try {
 		const job = await scoreGeneration(genId);
 		trackJob(job, { songId, genId });
-		addToast(TAKE_RESCORE_QUEUED_TOAST, 'info');
+		addToast(pageText('takeActions.rescoreQueued'), 'info');
 	} catch (e) {
-		addToast(describeFailure(e, 'Re-score failed'), 'error');
+		addToast(describeFailure(e, pageText('takeActions.rescoreFailed')), 'error');
 	} finally {
 		clearRequestInFlight(genId);
 	}
