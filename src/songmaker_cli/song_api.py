@@ -111,6 +111,7 @@ def _song_response(song: Song) -> SongResponse:
     return SongResponse.from_orm(song, has_pick=has_playable_pick(song.generations))
 
 SONG_NOT_FOUND_DETAIL: Final = "Song not found"
+VERSION_NOT_FOUND_DETAIL: Final = "Version not found"
 VERSION_IN_USE_DETAIL: Final = (
     "This version has a take rendering; wait for it to finish or cancel it."
 )
@@ -568,7 +569,7 @@ def api_song_versions(
 @router.delete(
     "/versions/{version_id}",
     responses={
-        404: {"description": "Version not found"},
+        404: {"description": VERSION_NOT_FOUND_DETAIL},
         409: {"description": "A queued or running job renders this version"},
     },
     openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
@@ -584,8 +585,12 @@ def api_delete_version(
 
     ver = session.query(VersionModel).filter_by(id=version_id).first()
     if not ver:
-        raise HTTPException(404, "Version not found")
-    check_song_access(session, ver.song_id, user)
+        raise HTTPException(404, VERSION_NOT_FOUND_DETAIL)
+    try:
+        check_song_access(session, ver.song_id, user)
+    except HTTPException as refusal:
+        # A version the caller cannot reach reads like a missing one.
+        raise HTTPException(404, VERSION_NOT_FOUND_DETAIL) from refusal
     candidates = linked_reference_ids(session, [ver.song_id])
     try:
         paths = delete_version(
@@ -595,7 +600,7 @@ def api_delete_version(
     except VersionInUseError:
         raise HTTPException(409, VERSION_IN_USE_DETAIL)
     except ValueError:
-        raise HTTPException(404, "Version not found")
+        raise HTTPException(404, VERSION_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.VERSION, version_id)
     session.commit()
     commit_unused_stamps(session, candidates)
