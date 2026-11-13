@@ -6,7 +6,6 @@ import {
 	PLAYLIST_API,
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
-import { TAKE_DELETE_TITLE_TEMPLATE } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { words } from '../src/lib/words/en';
 import {
@@ -18,7 +17,6 @@ import {
 	NOW_PLAYING_EXPAND_LABEL,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	nowPlayingSheetCloseLabel,
-	takeRowLabel,
 	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel
@@ -175,7 +173,9 @@ async function songsTakes(page: Page, shell: Shell): Promise<Locator> {
 }
 
 function seededTakeRow(takes: Locator): Locator {
-	return takes.getByRole('button', { name: nameStartingWith(takeRowLabel(SEEDED_TAKE_NUMBER)) });
+	return takes.getByRole('button', {
+		name: nameStartingWith(words['takesList.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) }))
+	});
 }
 
 function takeMenu(page: Page): Locator {
@@ -184,7 +184,7 @@ function takeMenu(page: Page): Locator {
 
 function deleteConfirm(page: Page): Locator {
 	return page.getByRole('dialog', {
-		name: TAKE_DELETE_TITLE_TEMPLATE.replace('{number}', String(SEEDED_TAKE_NUMBER))
+		name: words['takesList.deleteTitle']({ number: String(SEEDED_TAKE_NUMBER) })
 	});
 }
 

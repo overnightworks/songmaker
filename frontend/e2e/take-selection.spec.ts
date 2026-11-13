@@ -10,13 +10,6 @@
 import { expect, test, type Page } from './coverage-test';
 import type { SongItem } from '../src/lib/api/types';
 import { words } from '../src/lib/words/en';
-import { TAKE_DELETE_MESSAGE } from '../src/lib/constants/take';
-import {
-	bulkDeleteLabel,
-	bulkDeleteTitle,
-	selectedCountLabel,
-	TAKE_SELECT_ALL_UNKEPT_LABEL
-} from '../src/lib/constants/now-playing';
 import { sameOriginHeaders, FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, seedTakeStripSong } from './seed';
 
@@ -75,7 +68,7 @@ test(
 			for (let index = 0; index < SELECTED_TAKE_COUNT; index += 1)
 				await playControls.nth(index).click({ modifiers: ['ControlOrMeta'] });
 			const toolbar = page.locator('.selection-toolbar');
-			await expect(toolbar).toContainText(`${SELECTED_TAKE_COUNT} selected`);
+			await expect(toolbar).toContainText(words['takesList.selectedCount'](SELECTED_TAKE_COUNT));
 
 			await page.goBack();
 			await openSong(page, SONG_B_TITLE);
@@ -116,22 +109,24 @@ test(
 			}
 			const toolbar = page.locator('.selection-toolbar');
 			await expect(toolbar.locator(':scope > *')).toHaveText([
-				TAKE_SELECT_ALL_UNKEPT_LABEL,
-				selectedCountLabel(SELECTED_TAKE_COUNT),
-				bulkDeleteLabel(SELECTED_TAKE_COUNT),
+				words['takesList.selectAllUnkept'],
+				words['takesList.selectedCount'](SELECTED_TAKE_COUNT),
+				words['takesList.bulkDeleteLabel'](SELECTED_TAKE_COUNT),
 				'Cancel'
 			]);
 
 			const deleteButton = toolbar.getByRole('button', {
-				name: bulkDeleteLabel(SELECTED_TAKE_COUNT),
+				name: words['takesList.bulkDeleteLabel'](SELECTED_TAKE_COUNT),
 				exact: true
 			});
-			const dialog = page.getByRole('dialog', { name: bulkDeleteTitle(SELECTED_TAKE_COUNT) });
+			const dialog = page.getByRole('dialog', {
+				name: words['takesList.bulkDeleteTitle'](SELECTED_TAKE_COUNT)
+			});
 			await deleteButton.click();
-			await expect(dialog).toContainText(TAKE_DELETE_MESSAGE);
+			await expect(dialog).toContainText(words['takesList.deleteMessage']);
 			await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
-			await expect(toolbar).toContainText(`${SELECTED_TAKE_COUNT} selected`);
+			await expect(toolbar).toContainText(words['takesList.selectedCount'](SELECTED_TAKE_COUNT));
 			expect(await takeIdsOf(page, songId)).toEqual(before);
 
 			await deleteButton.click();

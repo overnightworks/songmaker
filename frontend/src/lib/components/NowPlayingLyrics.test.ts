@@ -4,9 +4,9 @@ import type { WhisperCue } from '#lib/api/types.ts';
 import type { AlignmentRequest, AlignmentResult } from '#lib/services/lyricsAlignment.svelte.ts';
 import {
 	NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
-	NOW_PLAYING_RESCORE_ACTION_LABEL,
 	NOW_PLAYING_LYRICS_FOLLOW_LABEL
 } from '#lib/constants/now-playing.ts';
+import { words as pageWords } from '#lib/words/en.ts';
 import { alignLyricsToCues } from '#lib/utils/lyrics-align.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { reactiveProps } from '../../tests/reactive-fixtures.svelte';
@@ -279,7 +279,7 @@ describe('NowPlayingLyrics', () => {
 		// The panel also renders for a public share listener, who cannot
 		// re-score anything — NowPlayingTake owns that action.
 		await render({ lyrics: LINE_1, cues: null, whisperText: 'a rough transcript' });
-		expect(target.textContent).not.toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
+		expect(target.textContent).not.toContain(pageWords['nowPlayingTake.rescoreAction']);
 		expect(target.querySelector('button')).toBeNull();
 	});
 

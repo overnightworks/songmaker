@@ -1,29 +1,8 @@
 <script lang="ts">
 	import type { SongItem, GenerationItem, UserLoraItem } from '#lib/api/types.ts';
 	import type { SourceMode } from '#lib/stores/recipe.ts';
-	import {
-		TAKE_DELETE_TITLE_TEMPLATE,
-		TAKE_DELETE_MESSAGE,
-		TAKE_DELETE_LABEL,
-		TAKES_EMPTY,
-		TAKES_ERROR,
-		TAKES_LOADING,
-		TAKES_MOBILE_HINT,
-		TAKES_RETRY_LABEL,
-		takesDraftBanner
-	} from '#lib/constants/take.ts';
+	import { EDITOR_GENERATE_LABEL } from '#lib/constants/song.ts';
 	import { COARSE_POINTER_MEDIA } from '#lib/constants/media.ts';
-	import {
-		TAKE_SELECT_ALL_UNKEPT_LABEL,
-		bulkDeleteLabel,
-		bulkDeleteTitle,
-		selectedCountLabel,
-		openVersionLabel,
-		currentVersionHeadLabel,
-		foldedGroupLabel,
-		takeRowLabel,
-		EARLIER_VERSIONS_LABEL
-	} from '#lib/constants/now-playing.ts';
 	import { removeGenerationFromSong } from '#lib/stores/libraryData.ts';
 	import { currentVersionIndex, versions } from '#lib/stores/editor.ts';
 	import { selectedGenerationId } from '#lib/stores/player.ts';
@@ -55,6 +34,7 @@
 	import { bulkDeleteGenerations } from '#lib/api/client.ts';
 	import { describeFailure } from '#lib/api/fetch.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 	import InfoTip from '../InfoTip.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
@@ -163,9 +143,9 @@
 				persistLibraryHistory();
 			}
 			clearSelection();
-			addToast(`Deleted ${ids.length} take${ids.length !== 1 ? 's' : ''}`, 'success');
+			addToast(pageText('takesList.deleted', ids.length), 'success');
 		} catch (e) {
-			addToast(describeFailure(e, 'Bulk delete failed'), 'error');
+			addToast(describeFailure(e, pageText('takesList.bulkDeleteFailed')), 'error');
 		}
 	}
 
@@ -173,12 +153,31 @@
 		if (!playlistFor) return;
 		try {
 			await actions.addToPlaylist(playlistId, playlistFor);
-			addToast('Added to playlist', 'success');
+			addToast(pageText('takesList.addedToPlaylist'), 'success');
 		} catch (e) {
-			addToast(describeFailure(e, 'Failed to add'), 'error');
+			addToast(describeFailure(e, pageText('takesList.addFailed')), 'error');
 		} finally {
 			playlistFor = null;
 		}
+	}
+
+	// The row of a folded version, or of Imported (no version number): archived
+	// takes count in the total and are named after it.
+	function foldedLabel(group: TakeGroup): string {
+		const count = group.generations.length;
+		const archived =
+			group.archivedCount === count
+				? pageText('takesList.allArchived')
+				: String(group.archivedCount);
+		if (group.versionNumber === null) {
+			return group.archivedCount === 0
+				? pageText('takesList.foldedImported', count)
+				: pageText('takesList.foldedImportedArchived', count, { archived });
+		}
+		const number = String(group.versionNumber);
+		return group.archivedCount === 0
+			? pageText('takesList.foldedVersion', count, { number })
+			: pageText('takesList.foldedVersionArchived', count, { number, archived });
 	}
 
 	// The first generation of a song has zero takes; the empty state must not hide a job in flight.
@@ -195,7 +194,10 @@
 			onclick={() => void actions.clickVersion(version.versionId)}
 		>
 			<span class="version-open"
-				>{openVersionLabel(version.versionNumber)}<Icon name="chevron-right" size={14} /></span
+				>{pageText('takesList.openVersion', { number: String(version.versionNumber) })}<Icon
+					name="chevron-right"
+					size={14}
+				/></span
 			>
 		</button>
 	{/if}
@@ -203,7 +205,7 @@
 
 {#snippet takesTip()}
 	{#if touchPointer && song.generations.length > 0}
-		<InfoTip label="About takes" text={TAKES_MOBILE_HINT} />
+		<InfoTip label={pageText('takesList.aboutTakes')} text={pageText('takesList.mobileHint')} />
 	{/if}
 {/snippet}
 
@@ -230,7 +232,7 @@
 
 {#if loadStatus === 'error' && song.generations.length === 0}
 	<div class="empty" role="alert">
-		<p>{loadError || TAKES_ERROR}</p>
+		<p>{loadError || pageText('takesList.error')}</p>
 		{#if onretry}
 			<button
 				type="button"
@@ -238,8 +240,8 @@
 				data-hitbox="frequent"
 				data-hitbox-face
 				onclick={onretry}
-				aria-label={TAKES_RETRY_LABEL}
-				title={TAKES_RETRY_LABEL}
+				aria-label={pageText('takesList.retry')}
+				title={pageText('takesList.retry')}
 			>
 				<Icon name="refresh-cw" size={16} />
 			</button>
@@ -254,15 +256,15 @@
 				<span class="skeleton-bar skeleton-badge"></span>
 			</div>
 		{/each}
-		<p class="skeleton-caption">{TAKES_LOADING}</p>
+		<p class="skeleton-caption">{pageText('takesList.loading')}</p>
 	</div>
 {:else if song.generations.length === 0 && !groups.current && !dirty && !jobRunning}
-	<div class="empty">{TAKES_EMPTY}</div>
+	<div class="empty">{pageText('takesList.empty', { generate: EDITOR_GENERATE_LABEL })}</div>
 {:else}
 	<div class="takes-list">
 		{#if loadStatus === 'error'}
 			<div class="load-error" role="alert">
-				<span>{loadError || TAKES_ERROR}</span>
+				<span>{loadError || pageText('takesList.error')}</span>
 				{#if onretry}
 					<button
 						type="button"
@@ -270,8 +272,8 @@
 						data-hitbox="frequent"
 						data-hitbox-face
 						onclick={onretry}
-						aria-label={TAKES_RETRY_LABEL}
-						title={TAKES_RETRY_LABEL}
+						aria-label={pageText('takesList.retry')}
+						title={pageText('takesList.retry')}
 					>
 						<Icon name="refresh-cw" size={16} />
 					</button>
@@ -281,7 +283,12 @@
 
 		{#if dirty}
 			<div class="draft-banner">
-				{takesDraftBanner(song.version_count > 0 ? latestVersionNumber : null, draftVersionNumber)}
+				{song.version_count > 0
+					? pageText('takesList.draftDiffers', {
+							latest: String(latestVersionNumber),
+							next: String(draftVersionNumber)
+						})
+					: pageText('takesList.draftUnsaved', { next: String(draftVersionNumber) })}
 			</div>
 		{/if}
 
@@ -290,20 +297,24 @@
 			<div class="version-section">
 				<div class="version-header-row version-head">
 					<span class="version-header">
-						{currentVersionHeadLabel(current.versionNumber ?? 0, current.generations.length)}
+						{pageText('takesList.currentHead', current.generations.length, {
+							number: String(current.versionNumber ?? 0)
+						})}
 					</span>
 					{@render takesTip()}
 					{@render openLink(current)}
 				</div>
 				{#if current.generations.length === 0 && !jobRunning}
-					<div class="version-empty">{TAKES_EMPTY}</div>
+					<div class="version-empty">
+						{pageText('takesList.empty', { generate: EDITOR_GENERATE_LABEL })}
+					</div>
 				{/if}
 				{@render takeRows(current.generations)}
 			</div>
 		{/if}
 
 		{#if groups.current && groups.earlier.length > 0}
-			<p class="earlier-label">{EARLIER_VERSIONS_LABEL}</p>
+			<p class="earlier-label">{pageText('takesList.earlier')}</p>
 		{/if}
 
 		{#each groups.earlier as group, index (group.key)}
@@ -319,13 +330,13 @@
 					>
 						<Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} />
 						<span class="version-header">
-							{foldedGroupLabel(group.versionNumber, group.generations.length, group.archivedCount)}
+							{foldedLabel(group)}
 						</span>
 						{#if !open && group.pick}
 							<span class="version-pick"
-								><Icon name="star-filled" size={12} />{takeRowLabel(
-									group.pick.generation_number
-								)}</span
+								><Icon name="star-filled" size={12} />{pageText('takesList.takeLabel', {
+									number: String(group.pick.generation_number)
+								})}</span
 							>
 						{/if}
 					</button>
@@ -345,13 +356,15 @@
 					class="toolbar-btn select-all"
 					onclick={() => selectAllUnkept(renderedGenerations)}
 				>
-					{TAKE_SELECT_ALL_UNKEPT_LABEL}
+					{pageText('takesList.selectAllUnkept')}
 				</button>
-				<span class="toolbar-count">{selectedCountLabel(tickedIds.length)}</span>
+				<span class="toolbar-count">{pageText('takesList.selectedCount', tickedIds.length)}</span>
 				<button type="button" class="toolbar-btn destructive" onclick={openBulkDelete}>
-					{bulkDeleteLabel(tickedIds.length)}
+					{pageText('takesList.bulkDeleteLabel', tickedIds.length)}
 				</button>
-				<button type="button" class="toolbar-btn cancel" onclick={clearSelection}>Cancel</button>
+				<button type="button" class="toolbar-btn cancel" onclick={clearSelection}
+					>{pageText('takesList.cancel')}</button
+				>
 			</div>
 		{/if}
 	</div>
@@ -359,9 +372,9 @@
 
 {#if deleteFor}
 	<ConfirmDialog
-		title={TAKE_DELETE_TITLE_TEMPLATE.replace('{number}', String(deleteFor.generation_number))}
-		message={TAKE_DELETE_MESSAGE}
-		confirmLabel={TAKE_DELETE_LABEL}
+		title={pageText('takesList.deleteTitle', { number: String(deleteFor.generation_number) })}
+		message={pageText('takesList.deleteMessage')}
+		confirmLabel={pageText('takesList.deleteConfirm')}
 		destructive={true}
 		onconfirm={() => {
 			const id = deleteFor?.id;
@@ -374,9 +387,9 @@
 
 {#if confirmingBulkDelete}
 	<ConfirmDialog
-		title={bulkDeleteTitle(tickedIds.length)}
-		message={TAKE_DELETE_MESSAGE}
-		confirmLabel={TAKE_DELETE_LABEL}
+		title={pageText('takesList.bulkDeleteTitle', tickedIds.length)}
+		message={pageText('takesList.deleteMessage')}
+		confirmLabel={pageText('takesList.deleteConfirm')}
 		destructive={true}
 		onconfirm={handleBulkDelete}
 		oncancel={() => (confirmingBulkDelete = false)}

@@ -1,4 +1,5 @@
 import type { GenerationItem, TrackScores } from '#lib/api/types.ts';
+import { pageLanguage } from '#lib/utils/page-language.ts';
 
 interface ScoreThreshold {
 	good: number;
@@ -21,7 +22,7 @@ export function scoreColor(key: string, value: number): string {
 	return value >= t.ok ? 'ok' : 'bad';
 }
 
-type ScoreKey =
+export type ScoreKey =
 	| 'user_rating'
 	| 'text_accuracy'
 	| 'dynamics'
@@ -38,28 +39,32 @@ type PanelFormat = 'integer' | 'percent' | 'decimal';
 
 interface ScoreMetric {
 	key: ScoreKey;
-	label: string;
 	scale: ScoreScale;
 	panelFormat: PanelFormat;
 }
 
 // The one table both take surfaces read: the row's score pill takes the first
-// metric a take carries, the This-take panel lists every one of them, and both
-// name it the same. Ordered by how much it tells the listener — their own
-// verdict first, then the automatic scores. BPM is not here: it names the
-// tempo that was detected, not how good the take is, and it colours itself
-// from its deviation rather than from a threshold, so the panel keeps it as
-// its own entry.
+// metric a take carries and the This-take panel lists every one of them, each
+// surface naming it under its own catalog key. Ordered by how much it tells
+// the listener — their own verdict first, then the automatic scores. BPM is
+// not here: it names the tempo that was detected, not how good the take is,
+// and it colours itself from its deviation rather than from a threshold, so
+// the panel keeps it as its own entry.
 const SCORE_METRICS: readonly ScoreMetric[] = [
-	{ key: 'user_rating', label: 'Rating', scale: 'hundred', panelFormat: 'integer' },
-	{ key: 'text_accuracy', label: 'Lyrics sung', scale: 'hundred', panelFormat: 'percent' },
-	{ key: 'dynamics', label: 'Dynamics', scale: 'hundred', panelFormat: 'integer' },
-	{ key: 'audiobox_quality', label: 'Quality', scale: 'ten', panelFormat: 'decimal' },
-	{ key: 'audiobox_enjoyment', label: 'Enjoyment', scale: 'ten', panelFormat: 'decimal' },
-	{ key: 'lyrical_coherence', label: 'Coherence', scale: 'ten', panelFormat: 'integer' }
+	{ key: 'user_rating', scale: 'hundred', panelFormat: 'integer' },
+	{ key: 'text_accuracy', scale: 'hundred', panelFormat: 'percent' },
+	{ key: 'dynamics', scale: 'hundred', panelFormat: 'integer' },
+	{ key: 'audiobox_quality', scale: 'ten', panelFormat: 'decimal' },
+	{ key: 'audiobox_enjoyment', scale: 'ten', panelFormat: 'decimal' },
+	{ key: 'lyrical_coherence', scale: 'ten', panelFormat: 'integer' }
 ];
 
 const TEN_TO_HUNDRED = 10;
+const PERCENT_DIVISOR = 100;
+
+function wholeNumber(value: number): string {
+	return new Intl.NumberFormat(pageLanguage(), { maximumFractionDigits: 0 }).format(value);
+}
 
 // The panel shows each score beside its own label, so it can keep the scorer's
 // own scale. The pill shows a single unlabelled number in a take row, where an
@@ -67,15 +72,21 @@ const TEN_TO_HUNDRED = 10;
 // every metric is put on the same 0-100 scale, rounded to a whole number.
 export function formatScore(metric: ScoreMetric, value: number, display: 'panel' | 'pill'): string {
 	if (display === 'pill') {
-		return Math.round(metric.scale === 'ten' ? value * TEN_TO_HUNDRED : value).toString();
+		return wholeNumber(metric.scale === 'ten' ? value * TEN_TO_HUNDRED : value);
 	}
 	switch (metric.panelFormat) {
 		case 'percent':
-			return `${value.toFixed(0)}%`;
+			return new Intl.NumberFormat(pageLanguage(), {
+				style: 'percent',
+				maximumFractionDigits: 0
+			}).format(value / PERCENT_DIVISOR);
 		case 'decimal':
-			return value.toFixed(2);
+			return new Intl.NumberFormat(pageLanguage(), {
+				minimumFractionDigits: 2,
+				maximumFractionDigits: 2
+			}).format(value);
 		case 'integer':
-			return value.toFixed(0);
+			return wholeNumber(value);
 	}
 }
 
@@ -102,10 +113,7 @@ export function scoreReadings(scores: TrackScores | null): ScoreReading[] {
 // runs this long (issue #222).
 const QUALITY_FLAG_SILENCE_SECONDS = 15;
 
-interface QualityFlag {
-	label: string;
-	title: string;
-}
+export type QualityFlag = { kind: 'noVocals' } | { kind: 'longSilence'; seconds: number };
 
 // The hard-failure flags a take can carry, independent of the headline pill —
 // a take can carry a good headline score (e.g. a listener's own rating) while
@@ -115,19 +123,14 @@ interface QualityFlag {
 export function qualityFlag(
 	take: Pick<GenerationItem, 'scores' | 'whisper_text' | 'version_lyrics'>
 ): QualityFlag | null {
-	if (take.whisper_text === '' && take.version_lyrics?.trim()) {
-		return { label: 'No vocals', title: 'No vocals detected in this take' };
-	}
+	if (take.whisper_text === '' && take.version_lyrics?.trim()) return { kind: 'noVocals' };
 	const scores = take.scores;
 	if (!scores) return null;
 	if (
 		scores.silence_longest !== undefined &&
 		scores.silence_longest >= QUALITY_FLAG_SILENCE_SECONDS
 	) {
-		return {
-			label: 'Long silence',
-			title: `${Math.round(scores.silence_longest)}s of silence detected`
-		};
+		return { kind: 'longSilence', seconds: Math.round(scores.silence_longest) };
 	}
 	return null;
 }

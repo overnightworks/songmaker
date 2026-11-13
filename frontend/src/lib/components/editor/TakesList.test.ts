@@ -2,15 +2,7 @@ import { failed } from '#lib/test-utils/generate-states.ts';
 import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-	TAKE_ARCHIVED_TITLE,
-	TAKE_RESCORING_LABEL,
-	TAKES_EMPTY,
-	TAKES_ERROR,
-	TAKES_LOADING,
-	TAKES_MOBILE_HINT,
-	TAKES_RETRY_LABEL
-} from '#lib/constants/take.ts';
+import { EDITOR_GENERATE_LABEL } from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import {
 	clearHitboxStyles,
@@ -19,11 +11,6 @@ import {
 	minSquarePx,
 	setPointer
 } from '#lib/test-utils/hitbox.ts';
-import {
-	currentVersionHeadLabel,
-	foldedGroupLabel,
-	openVersionLabel
-} from '#lib/constants/now-playing.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
 import { get } from 'svelte/store';
 import { clearSelection, selectedIds, toggleSelection } from '#lib/stores/selection.ts';
@@ -107,6 +94,13 @@ import {
 } from '#lib/test-utils/takes-list.ts';
 import { words } from '#lib/words/en.ts';
 
+const emptyText = words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL });
+const takeOne = words['takeRow.takeVersioned']({ version: '1', take: '1' });
+const repaintFromOne = words['takeRow.provenanceRepaint']({ take: takeOne });
+const takeTwo = words['takeRow.takeVersioned']({ version: '3', take: '2' });
+const takeThree = words['takeRow.takeVersioned']({ version: '3', take: '3' });
+const noVocals = `⚠ ${words['takeRow.flagNoVocals']}`;
+const playTakeLabel = (action: string) => words['takeRow.playTake']({ action, take: takeThree });
 // defect:#1568 — these fixtures retain determinate progress and no elapsed phase.
 const RUNNING: GenerateState = {
 	kind: 'generating',
@@ -223,7 +217,7 @@ describe('TakesList', () => {
 		const { target } = await render({ song: songWithDeletedVoice, voices: [voice()] });
 
 		expect(target.querySelector('.take-voice')?.textContent?.trim()).toBe(
-			'Voice: Folk Alto — voice deleted'
+			words['takeRow.voiceDeleted']({ name: 'Folk Alto' })
 		);
 		target.querySelector<HTMLElement>('.play-btn')?.click();
 		expect(playTake).toHaveBeenCalledWith(deletedVoiceTake, songWithDeletedVoice);
@@ -234,7 +228,10 @@ describe('TakesList', () => {
 		const headers = Array.from(target.querySelectorAll('.version-header')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(headers).toEqual([currentVersionHeadLabel(3, 2), foldedGroupLabel(2, 1, 0)]);
+		expect(headers).toEqual([
+			words['takesList.currentHead'](2, { number: '3' }),
+			words['takesList.foldedVersion'](1, { number: '2' })
+		]);
 	});
 
 	it('names each row Take n without repeating the version', async () => {
@@ -247,7 +244,7 @@ describe('TakesList', () => {
 		});
 		expect(
 			Array.from(target.querySelectorAll('.take-label'), (label) => label.textContent?.trim())
-		).toEqual(['Take 1', 'Take 2', 'Take 3', 'Take 4']);
+		).toEqual(['1', '2', '3', '4'].map((number) => words['takesList.takeLabel']({ number })));
 	});
 
 	it('opens the version the current head names, through the one version load', async () => {
@@ -258,7 +255,7 @@ describe('TakesList', () => {
 		});
 
 		const open = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-link')).find(
-			(button) => button.textContent?.includes(openVersionLabel(7))
+			(button) => button.textContent?.includes(words['takesList.openVersion']({ number: '7' }))
 		);
 		open?.click();
 		await tick();
@@ -285,7 +282,7 @@ describe('TakesList', () => {
 		});
 
 		expect(target.querySelector('.version-toggle')?.textContent?.trim()).toBe(
-			foldedGroupLabel(null, 2, 0)
+			words['takesList.foldedImported'](2)
 		);
 		expect(target.querySelector('.version-link')).toBeNull();
 		expect(target.textContent).not.toContain('Open v');
@@ -301,7 +298,7 @@ describe('TakesList', () => {
 			draftVersionNumber: 4
 		});
 		expect(dirty.querySelector('.draft-banner')?.textContent?.trim()).toBe(
-			'Draft — differs from v3. Generate creates v4.'
+			words['takesList.draftDiffers']({ latest: '3', next: '4' })
 		);
 	});
 
@@ -313,7 +310,7 @@ describe('TakesList', () => {
 			draftVersionNumber: 1
 		});
 		expect(target.querySelector('.draft-banner')?.textContent?.trim()).toBe(
-			'Draft — unsaved changes. Generate creates v1.'
+			words['takesList.draftUnsaved']({ next: '1' })
 		);
 	});
 
@@ -330,7 +327,7 @@ describe('TakesList', () => {
 			expect(target.textContent).not.toContain(VRAM_CAUSE);
 			expect(target.querySelector('[role="alert"]')).toBeNull();
 			if (hasTakes) expect(target.querySelectorAll('.take-row')).toHaveLength(1);
-			else expect(target.textContent).toContain(TAKES_EMPTY);
+			else expect(target.textContent).toContain(emptyText);
 		}
 	);
 
@@ -399,7 +396,7 @@ describe('TakesList', () => {
 				song: song({ ...versionedSongDefaults(), generations: [] })
 			});
 			expect(target.querySelector('.status-slot') !== null).toBe(expectSlot);
-			expect(target.textContent?.includes(TAKES_EMPTY)).toBe(expectEmpty);
+			expect(target.textContent?.includes(emptyText)).toBe(expectEmpty);
 			if (state.kind === 'queued') {
 				expect(target.querySelector('.status-title')?.textContent).toContain('Queued #2');
 			}
@@ -499,8 +496,8 @@ describe('TakesList', () => {
 
 	const LYRICS = 'Night current';
 	it.each([
-		['lyrics and an empty transcript', LYRICS, '', undefined, '⚠ No vocals'],
-		['a stored coherence of 7', LYRICS, '', { lyrical_coherence: 7 }, '⚠ No vocals'],
+		['lyrics and an empty transcript', LYRICS, '', undefined, noVocals],
+		['a stored coherence of 7', LYRICS, '', { lyrical_coherence: 7 }, noVocals],
 		['a transcript not yet made', LYRICS, null, undefined, null],
 		['no lyrics (an instrumental)', '  ', '', undefined, null],
 		['a transcript, stored coherence 0', LYRICS, 'night', { lyrical_coherence: 0 }, null]
@@ -511,7 +508,7 @@ describe('TakesList', () => {
 		});
 		const badge = target.querySelector<HTMLElement>('.quality-flag-badge');
 		expect(badge?.textContent?.trim() ?? null).toBe(label);
-		if (label) expect(badge?.title).toBe('No vocals detected in this take');
+		if (label) expect(badge?.title).toBe(words['takeRow.flagNoVocalsTitle']);
 	});
 
 	it('flags a take with a long silent gap', async () => {
@@ -527,8 +524,8 @@ describe('TakesList', () => {
 			})
 		});
 		const badge = target.querySelector<HTMLElement>('.quality-flag-badge');
-		expect(badge?.textContent?.trim()).toBe('⚠ Long silence');
-		expect(badge?.title).toBe('20s of silence detected');
+		expect(badge?.textContent?.trim()).toBe(`⚠ ${words['takeRow.flagLongSilence']}`);
+		expect(badge?.title).toBe(words['takeRow.flagLongSilenceTitle']({ count: 20 }));
 	});
 
 	it('shows no quality flag for a short, ordinary silence gap', async () => {
@@ -581,10 +578,10 @@ describe('TakesList', () => {
 	);
 
 	it.each([
-		['.pick-btn', 'picked', 'is_picked', false, 'Pick v3 · take 2'],
-		['.pick-btn', 'picked', 'is_picked', true, 'Unpick v3 · take 2'],
-		['.keep-btn', 'kept', 'is_kept', false, 'Keep v3 · take 2'],
-		['.keep-btn', 'kept', 'is_kept', true, 'Unkeep v3 · take 2']
+		['.pick-btn', 'picked', 'is_picked', false, words['takeRow.pickTake']({ take: takeTwo })],
+		['.pick-btn', 'picked', 'is_picked', true, words['takeRow.unpickTake']({ take: takeTwo })],
+		['.keep-btn', 'kept', 'is_kept', false, words['takeRow.keepTake']({ take: takeTwo })],
+		['.keep-btn', 'kept', 'is_kept', true, words['takeRow.unkeepTake']({ take: takeTwo })]
 	] as const)(
 		'marks %s %s when %s is %s and names its tap after its own take: %s',
 		async (selector, filledClass, flag, on, label) => {
@@ -666,8 +663,8 @@ describe('TakesList', () => {
 	});
 
 	it.each([
-		['repaint', 'Repaint from v1 · take 1'],
-		['cover', 'Cover from v1 · take 1']
+		['repaint', repaintFromOne],
+		['cover', words['takeRow.provenanceCover']({ take: takeOne })]
 	] as const)(
 		'shows %s provenance with a link to its existing source',
 		async (task_type, label) => {
@@ -707,7 +704,7 @@ describe('TakesList', () => {
 		});
 		const provenance = target.querySelector<HTMLElement>('#take-result .take-origin');
 
-		expect(provenance?.textContent?.trim()).toBe('Repaint from v1 · take 1');
+		expect(provenance?.textContent?.trim()).toBe(repaintFromOne);
 		expect(provenance?.querySelector('a')).toBeNull();
 	});
 
@@ -817,7 +814,7 @@ describe('TakesList', () => {
 			}
 		]);
 		await tick();
-		expect(row?.querySelector('.rescoring-badge')?.textContent).toBe(TAKE_RESCORING_LABEL);
+		expect(row?.querySelector('.rescoring-badge')?.textContent).toBe(words['takeRow.rescoring']);
 		activeJobs.set([]);
 		await tick();
 		expect(row?.querySelector('.rescoring-badge')).toBeNull();
@@ -826,7 +823,7 @@ describe('TakesList', () => {
 	it('plays only from its named play control, independently of the pick and menu', async () => {
 		const { target } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
-		const play = row?.querySelector<HTMLButtonElement>('[aria-label="Play v3 · take 3"]');
+		const play = row?.querySelector<HTMLButtonElement>(`[aria-label="${playTakeLabel('Play')}"]`);
 		expect(play).not.toBeNull();
 		expect(play?.contains(row?.querySelector('.pick-btn') ?? null)).toBe(false);
 		expect(play?.contains(row?.querySelector('.keep-btn') ?? null)).toBe(false);
@@ -860,7 +857,9 @@ describe('TakesList', () => {
 			};
 			audioPlayer.status = status;
 			const { target } = await render({ song: currentSong });
-			const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label} v3 · take 3"]`);
+			const button = target.querySelector<HTMLButtonElement>(
+				`[aria-label="${playTakeLabel(label)}"]`
+			);
 			expect({ busy: button?.getAttribute('aria-busy'), face: shownTransportFace(button) }).toEqual(
 				{
 					busy,
@@ -932,7 +931,7 @@ describe('TakesList archived takes', () => {
 		if (!archivedRow) throw new Error('Expected the archived take row');
 
 		expect(archivedRow.classList.contains('archived')).toBe(true);
-		expect(archivedRow.getAttribute('title')).toBe(TAKE_ARCHIVED_TITLE);
+		expect(archivedRow.getAttribute('title')).toBe(words['takeRow.archivedTitle']);
 		expect(archivedRow.querySelector('.take-label')?.previousElementSibling).toBeNull();
 		expect(archivedRow.querySelector('.play-btn')).toBeNull();
 
@@ -1113,14 +1112,14 @@ describe('TakesList load states', () => {
 			name: 'empty',
 			loadStatus: 'ready' as const,
 			assert: (target: HTMLElement) => {
-				expect(target.textContent).toContain(TAKES_EMPTY);
+				expect(target.textContent).toContain(emptyText);
 			}
 		},
 		{
 			name: 'loading',
 			loadStatus: 'loading' as const,
 			assert: (target: HTMLElement) => {
-				expect(target.textContent).toContain(TAKES_LOADING);
+				expect(target.textContent).toContain(words['takesList.loading']);
 				expect(target.querySelectorAll('.skeleton-row')).toHaveLength(3);
 			}
 		},
@@ -1128,7 +1127,7 @@ describe('TakesList load states', () => {
 			name: 'error',
 			loadStatus: 'error' as const,
 			assert: (target: HTMLElement) => {
-				expect(target.textContent).toContain(TAKES_ERROR);
+				expect(target.textContent).toContain(words['takesList.error']);
 			}
 		}
 	])('draws the $name state instead of a blank area', async ({ loadStatus, assert }) => {
@@ -1140,7 +1139,7 @@ describe('TakesList load states', () => {
 		const onretry = vi.fn();
 		const { target } = await render({ song: song({}), loadStatus: 'error', onretry });
 		const retry = target.querySelector<HTMLButtonElement>('.retry-btn');
-		expect(retry?.getAttribute('aria-label')).toBe(TAKES_RETRY_LABEL);
+		expect(retry?.getAttribute('aria-label')).toBe(words['takesList.retry']);
 		retry?.click();
 		expect(onretry).toHaveBeenCalledOnce();
 	});
@@ -1159,7 +1158,7 @@ describe('TakesList touch hint', () => {
 	it('offers the tap hint behind an info tip on a coarse pointer and not on a mouse', async () => {
 		stubCoarsePointer(true);
 		const tip = (await render()).target.querySelector('.version-head [role="tooltip"]');
-		expect(tip?.textContent).toBe(TAKES_MOBILE_HINT);
+		expect(tip?.textContent).toBe(words['takesList.mobileHint']);
 		const unsaved = song({ version_count: 0, generations: [generation({})] });
 		const imported = (await render({ song: unsaved })).target;
 		expect(imported.querySelector('.version-header-row [role="tooltip"]')).not.toBeNull();

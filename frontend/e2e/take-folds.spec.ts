@@ -6,18 +6,7 @@
 // makes v3, which folds v2.
 
 import { expect, test, type Page, type Route } from './coverage-test';
-import { TAKE_DELETE_LABEL, TAKES_EMPTY } from '../src/lib/constants/take';
-import {
-	bulkDeleteLabel,
-	bulkDeleteTitle,
-	currentVersionHeadLabel,
-	EARLIER_VERSIONS_LABEL,
-	foldedGroupLabel,
-	selectedCountLabel,
-	TAKE_SELECT_ALL_UNKEPT_LABEL,
-	NOW_PLAYING_CLOSE,
-	openNowPlayingLabel
-} from '../src/lib/constants/now-playing';
+import { NOW_PLAYING_CLOSE, openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import { appBar, BACK_BUTTON_NAME, sameOriginHeaders, ONLY_IN_SHELL, workspace } from './helpers';
 import {
 	createAlbum,
@@ -34,6 +23,7 @@ import {
 	seedSongPhoneSong,
 	seedTakeStripSong
 } from './seed';
+import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
 
 const EDITED_LYRICS = 'Third version lyrics';
@@ -45,11 +35,13 @@ async function takeIdsOf(page: Page, songId: string): Promise<string[]> {
 
 const v1Row = (page: Page, takeCount = FIRST_VERSION_TAKE_COUNT) =>
 	workspace(page).getByRole('button', {
-		name: foldedGroupLabel(1, takeCount, 0),
+		name: words['takesList.foldedVersion'](takeCount, { number: String(1) }),
 		exact: false
 	});
 const v2Row = (page: Page) =>
-	workspace(page).getByRole('button', { name: foldedGroupLabel(2, SECOND_VERSION_TAKE_COUNT, 0) });
+	workspace(page).getByRole('button', {
+		name: words['takesList.foldedVersion'](SECOND_VERSION_TAKE_COUNT, { number: String(2) })
+	});
 const takeRow = (page: Page, id: string) => workspace(page).locator(`#take-${id}`);
 const toolbar = (page: Page) => workspace(page).locator('.selection-toolbar');
 
@@ -61,8 +53,10 @@ async function tickTakes(page: Page, ...ids: string[]): Promise<void> {
 }
 
 async function expectSelected(page: Page, count: number): Promise<void> {
-	await expect(toolbar(page)).toContainText(selectedCountLabel(count));
-	await expect(toolbar(page).getByRole('button', { name: bulkDeleteLabel(count) })).toBeVisible();
+	await expect(toolbar(page)).toContainText(words['takesList.selectedCount'](count));
+	await expect(
+		toolbar(page).getByRole('button', { name: words['takesList.bulkDeleteLabel'](count) })
+	).toBeVisible();
 }
 
 // Holds the real Save's PUT until the test releases it.
@@ -179,10 +173,12 @@ test.describe('deleting the takes', () => {
 		await expectSelected(page, 1);
 
 		await toolbar(page)
-			.getByRole('button', { name: bulkDeleteLabel(1) })
+			.getByRole('button', { name: words['takesList.bulkDeleteLabel'](1) })
 			.click();
-		const dialog = page.getByRole('dialog', { name: bulkDeleteTitle(1) });
-		await dialog.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: words['takesList.bulkDeleteTitle'](1) });
+		await dialog
+			.getByRole('button', { name: words['takesList.deleteConfirm'], exact: true })
+			.click();
 
 		await expect(takeRow(page, song.v2[0])).toHaveCount(0);
 		expect(sent).toEqual([bulkDeleteRequest(song.v2[0])]);
@@ -197,8 +193,10 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		const song = await seedFoldedSong(page, albumId, 'fold');
 		await openTakes(page, song);
 		const head = workspace(page).locator('.version-head');
-		await expect(head).toContainText(currentVersionHeadLabel(2, SECOND_VERSION_TAKE_COUNT));
-		await expect(workspace(page).getByText(EARLIER_VERSIONS_LABEL)).toBeVisible();
+		await expect(head).toContainText(
+			words['takesList.currentHead'](SECOND_VERSION_TAKE_COUNT, { number: String(2) })
+		);
+		await expect(workspace(page).getByText(words['takesList.earlier'])).toBeVisible();
 		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'false');
 
 		await v1Row(page).click();
@@ -242,7 +240,7 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await openTakes(page, song);
 		await tickTakes(page, song.v2[0]);
 
-		await toolbar(page).getByRole('button', { name: TAKE_SELECT_ALL_UNKEPT_LABEL }).click();
+		await toolbar(page).getByRole('button', { name: words['takesList.selectAllUnkept'] }).click();
 
 		await expectSelected(page, SECOND_VERSION_TAKE_COUNT);
 		await v1Row(page).click();
@@ -262,15 +260,19 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		const release = await holdSave(page);
 		await startSave(page);
 		await toolbar(page)
-			.getByRole('button', { name: bulkDeleteLabel(3) })
+			.getByRole('button', { name: words['takesList.bulkDeleteLabel'](3) })
 			.click();
-		await expect(page.getByRole('dialog', { name: bulkDeleteTitle(3) })).toBeVisible();
+		await expect(
+			page.getByRole('dialog', { name: words['takesList.bulkDeleteTitle'](3) })
+		).toBeVisible();
 
 		await release();
 
-		const dialog = page.getByRole('dialog', { name: bulkDeleteTitle(2) });
+		const dialog = page.getByRole('dialog', { name: words['takesList.bulkDeleteTitle'](2) });
 		await expect(dialog).toBeVisible();
-		await dialog.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+		await dialog
+			.getByRole('button', { name: words['takesList.deleteConfirm'], exact: true })
+			.click();
 		await expect(takeRow(page, song.v1[0])).toHaveCount(0);
 		expect(await takeIdsOf(page, song.songId)).toEqual([...song.v2, song.v1[2]].sort());
 	});
@@ -282,9 +284,11 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		const release = await holdSave(page);
 		await startSave(page);
 		await toolbar(page)
-			.getByRole('button', { name: bulkDeleteLabel(1) })
+			.getByRole('button', { name: words['takesList.bulkDeleteLabel'](1) })
 			.click();
-		await expect(page.getByRole('dialog', { name: bulkDeleteTitle(1) })).toBeVisible();
+		await expect(
+			page.getByRole('dialog', { name: words['takesList.bulkDeleteTitle'](1) })
+		).toBeVisible();
 
 		await release();
 
@@ -301,11 +305,14 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		const release = await holdSave(page);
 		await startSave(page);
 		await takeRow(page, song.v2[0]).getByRole('button', { name: words['takeMenu.label'] }).click();
-		await page.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+		await page.getByRole('button', { name: words['takesList.deleteConfirm'], exact: true }).click();
 
 		await release();
 		await expect(v2Row(page)).toBeVisible();
-		await page.getByRole('dialog').getByRole('button', { name: TAKE_DELETE_LABEL }).click();
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: words['takesList.deleteConfirm'] })
+			.click();
 
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		expect(await takeIdsOf(page, song.songId)).toEqual([...song.v1, ...song.v2].sort());
@@ -327,10 +334,12 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await openSongOf(page, title);
 
 		await expect(workspace(page).locator('.version-head')).toContainText(
-			currentVersionHeadLabel(1, 0)
+			words['takesList.currentHead'](0, { number: String(1) })
 		);
 		await expect(workspace(page).locator('.status-slot')).toBeVisible();
-		await expect(workspace(page).getByText(TAKES_EMPTY)).toHaveCount(0);
+		await expect(
+			workspace(page).getByText(words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL }))
+		).toHaveCount(0);
 	});
 
 	test('26 a take another client deleted leaves the selection with the Save that drops it', async ({
@@ -350,10 +359,12 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await expect(takeRow(page, song.v1[0])).toHaveCount(0);
 		await expectSelected(page, 1);
 		await toolbar(page)
-			.getByRole('button', { name: bulkDeleteLabel(1) })
+			.getByRole('button', { name: words['takesList.bulkDeleteLabel'](1) })
 			.click();
-		const dialog = page.getByRole('dialog', { name: bulkDeleteTitle(1) });
-		await dialog.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: words['takesList.bulkDeleteTitle'](1) });
+		await dialog
+			.getByRole('button', { name: words['takesList.deleteConfirm'], exact: true })
+			.click();
 		await expect(takeRow(page, song.v1[1])).toHaveCount(0);
 		expect(sent).toEqual([bulkDeleteRequest(song.v1[1])]);
 		expect(await takeIdsOf(page, song.songId)).toEqual([song.v1[2], ...song.v2].sort());
@@ -371,9 +382,11 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await startSave(page);
 
 		await expect(workspace(page).locator('.version-head')).toContainText(
-			currentVersionHeadLabel(3, 0)
+			words['takesList.currentHead'](0, { number: String(3) })
 		);
-		await expect(workspace(page).locator('.version-empty')).toHaveText(TAKES_EMPTY);
+		await expect(workspace(page).locator('.version-empty')).toHaveText(
+			words['takesList.empty']({ generate: EDITOR_GENERATE_LABEL })
+		);
 		await expect(v2Row(page)).toHaveAttribute('aria-expanded', 'false');
 		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'true');
 		await expect(toolbar(page)).toHaveCount(0);
@@ -389,13 +402,16 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		const release = await holdSave(page);
 		await startSave(page);
 		await takeRow(page, song.v1[0]).getByRole('button', { name: words['takeMenu.label'] }).click();
-		await page.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+		await page.getByRole('button', { name: words['takesList.deleteConfirm'], exact: true }).click();
 		await deleteAsAnotherClient(page, song.v1[0]);
 		sent.length = 0;
 
 		await release();
 		await expect(takeRow(page, song.v1[0])).toHaveCount(0);
-		await page.getByRole('dialog').getByRole('button', { name: TAKE_DELETE_LABEL }).click();
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: words['takesList.deleteConfirm'] })
+			.click();
 
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		expect(sent).toEqual([]);
@@ -408,8 +424,11 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		const sent = recordDeleteRequests(page);
 
 		await takeRow(page, song.v1[0]).getByRole('button', { name: words['takeMenu.label'] }).click();
-		await page.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
-		await page.getByRole('dialog').getByRole('button', { name: TAKE_DELETE_LABEL }).click();
+		await page.getByRole('button', { name: words['takesList.deleteConfirm'], exact: true }).click();
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: words['takesList.deleteConfirm'] })
+			.click();
 
 		await expect(takeRow(page, song.v1[0])).toHaveCount(0);
 		expect(sent).toEqual([singleDeleteRequest(song.v1[0])]);
@@ -540,7 +559,9 @@ test.describe('Imported (Q1 a)', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await page.goto(`/album/${albumId}`);
 		await openSongOf(page, songTitle);
 		await showTab(page, words['songTabs.takes']);
-		const imported = workspace(page).getByRole('button', { name: foldedGroupLabel(null, 2, 0) });
+		const imported = workspace(page).getByRole('button', {
+			name: words['takesList.foldedImported'](2)
+		});
 		await expect(workspace(page).locator('.take-row')).toHaveCount(2);
 
 		await tickTakes(page, ...(await takeIds(page)));
@@ -563,7 +584,9 @@ test.describe('Imported on the phone (Q1 a)', { tag: ONLY_IN_SHELL.mobile }, () 
 		await page.goto(`/album/${albumId}`);
 		await openSongOf(page, songTitle);
 		await showTab(page, words['songTabs.takes']);
-		const imported = workspace(page).getByRole('button', { name: foldedGroupLabel(null, 2, 0) });
+		const imported = workspace(page).getByRole('button', {
+			name: words['takesList.foldedImported'](2)
+		});
 		await expect(imported).toHaveAttribute('aria-expanded', 'true');
 
 		await imported.click();

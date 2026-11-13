@@ -535,6 +535,155 @@ export type Words = {
     readonly "cowriterRefusal.turnRunning": string;
     readonly "cowriterRefusal.takeNotInSong": string;
     readonly "takeRefusal.notPlayable": string;
+    readonly "takesList.loading": string;
+    readonly "takesList.error": string;
+    readonly "takesList.retry": string;
+    readonly "takesList.aboutTakes": string;
+    readonly "takesList.mobileHint": string;
+    readonly "takesList.empty": (gaps: { readonly generate: string }) => string;
+    readonly "takesList.draftUnsaved": (gaps: { readonly next: string }) => string;
+    readonly "takesList.draftDiffers": (gaps: { readonly latest: string; readonly next: string }) => string;
+    readonly "takesList.openVersion": (gaps: { readonly number: string }) => string;
+    readonly "takesList.currentHead": (count: number, gaps: { readonly number: string }) => string;
+    readonly "takesList.foldedVersion": (count: number, gaps: { readonly number: string }) => string;
+    readonly "takesList.foldedImported": (count: number) => string;
+    readonly "takesList.foldedVersionArchived": (count: number, gaps: { readonly archived: string; readonly number: string }) => string;
+    readonly "takesList.foldedImportedArchived": (count: number, gaps: { readonly archived: string }) => string;
+    readonly "takesList.allArchived": string;
+    readonly "takesList.earlier": string;
+    readonly "takesList.takeLabel": (gaps: { readonly number: string }) => string;
+    readonly "takesList.selectAllUnkept": string;
+    readonly "takesList.selectedCount": (count: number) => string;
+    readonly "takesList.bulkDeleteLabel": (count: number) => string;
+    readonly "takesList.bulkDeleteTitle": (count: number) => string;
+    readonly "takesList.cancel": string;
+    readonly "takesList.deleteTitle": (gaps: { readonly number: string }) => string;
+    readonly "takesList.deleteMessage": string;
+    readonly "takesList.deleteConfirm": string;
+    readonly "takesList.deleted": (count: number) => string;
+    readonly "takesList.bulkDeleteFailed": string;
+    readonly "takesList.addedToPlaylist": string;
+    readonly "takesList.addFailed": string;
+    readonly "takeRow.takeLabel": (gaps: { readonly number: string }) => string;
+    readonly "takeRow.takeVersioned": (gaps: { readonly take: string; readonly version: string }) => string;
+    readonly "takeRow.takeUnversioned": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.archivedTitle": string;
+    readonly "takeRow.selectTake": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.playTake": (gaps: { readonly action: string; readonly take: string }) => string;
+    readonly "takeRow.pickTake": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.unpickTake": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.keepTake": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.unkeepTake": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.provenanceRepaint": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.provenanceCover": (gaps: { readonly take: string }) => string;
+    readonly "takeRow.batchBadge": (gaps: { readonly delivered: string; readonly requested: string }) => string;
+    readonly "takeRow.batchTitle": (gaps: { readonly delivered: string; readonly requested: string }) => string;
+    readonly "takeRow.flagNoVocals": string;
+    readonly "takeRow.flagNoVocalsTitle": string;
+    readonly "takeRow.flagLongSilence": string;
+    readonly "takeRow.flagLongSilenceTitle": (gaps: { readonly count: number }) => string;
+    readonly "takeRow.rescoring": string;
+    readonly "takeRow.archived": string;
+    readonly "takeRow.archivedBadgeTitle": string;
+    readonly "takeRow.expiryBadge": (gaps: { readonly count: number }) => string;
+    readonly "takeRow.expiresIn": (count: number) => string;
+    readonly "takeRow.voice": (gaps: { readonly name: string }) => string;
+    readonly "takeRow.voiceDeleted": (gaps: { readonly name: string }) => string;
+    readonly "takeRow.scoreTitle": (gaps: { readonly metric: string; readonly value: string }) => string;
+    readonly "takeRow.scoreRating": string;
+    readonly "takeRow.scoreLyricsSung": string;
+    readonly "takeRow.scoreDynamics": string;
+    readonly "takeRow.scoreQuality": string;
+    readonly "takeRow.scoreEnjoyment": string;
+    readonly "takeRow.scoreCoherence": string;
+    readonly "takeTask.repaint": string;
+    readonly "takeTask.cover": string;
+    readonly "takeTask.close": string;
+    readonly "takeTask.closeTitle": string;
+    readonly "takeTask.fromTake": (gaps: { readonly number: string }) => string;
+    readonly "takeTask.detailVersioned": (gaps: { readonly duration: string; readonly version: string }) => string;
+    readonly "takeTask.detail": (gaps: { readonly duration: string }) => string;
+    readonly "takeTask.range": string;
+    readonly "takeTask.rangeCaption": string;
+    readonly "takeTask.repaintAmount": string;
+    readonly "takeTask.modeConservative": string;
+    readonly "takeTask.modeBalanced": string;
+    readonly "takeTask.modeAggressive": string;
+    readonly "takeTask.repaintStrength": string;
+    readonly "takeTask.strengthValue": (gaps: { readonly count: number }) => string;
+    readonly "takeTask.coverCloseness": (gaps: { readonly number: string }) => string;
+    readonly "takeTask.coverFree": string;
+    readonly "takeTask.coverStrict": string;
+    readonly "takeTask.coverStrength": string;
+    readonly "takeTask.noise": string;
+    readonly "takeTask.noiseCaption": string;
+    readonly "takeTask.noiseBound": (gaps: { readonly count: number }) => string;
+    readonly "takeTask.promptHint": string;
+    readonly "takeTask.seedLine": (gaps: { readonly number: string }) => string;
+    readonly "takeTask.landing": (gaps: { readonly number: string }) => string;
+    readonly "takeTask.headerNote": string;
+    readonly "takeTask.repaintPress": (gaps: { readonly end: string; readonly start: string }) => string;
+    readonly "seedChip.label": (gaps: { readonly number: string }) => string;
+    readonly "seedChip.clear": string;
+    readonly "takeActions.pickFailed": string;
+    readonly "takeActions.keepFailed": string;
+    readonly "takeActions.restoreFailed": string;
+    readonly "takeActions.ratingSaved": string;
+    readonly "takeActions.ratingFailed": string;
+    readonly "takeActions.rescoreQueued": string;
+    readonly "takeActions.rescoreFailed": string;
+    readonly "takeActions.useSeed": (gaps: { readonly number: string }) => string;
+    readonly "nowPlayingTake.label": (gaps: { readonly number: string }) => string;
+    readonly "nowPlayingTake.importedHeading": string;
+    readonly "nowPlayingTake.heading": (gaps: { readonly take: string; readonly version: string }) => string;
+    readonly "nowPlayingTake.headingDuration": (gaps: { readonly duration: string; readonly take: string; readonly version: string }) => string;
+    readonly "nowPlayingTake.headingMode": (gaps: { readonly mode: string; readonly take: string; readonly version: string }) => string;
+    readonly "nowPlayingTake.headingDurationMode": (gaps: { readonly duration: string; readonly mode: string; readonly take: string; readonly version: string }) => string;
+    readonly "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => string;
+    readonly "nowPlayingTake.pick": string;
+    readonly "nowPlayingTake.unpick": string;
+    readonly "nowPlayingTake.keep": string;
+    readonly "nowPlayingTake.unkeep": string;
+    readonly "nowPlayingTake.scores": string;
+    readonly "nowPlayingTake.scoresEmpty": string;
+    readonly "nowPlayingTake.scoreRating": string;
+    readonly "nowPlayingTake.scoreLyricsSung": string;
+    readonly "nowPlayingTake.scoreDynamics": string;
+    readonly "nowPlayingTake.scoreQuality": string;
+    readonly "nowPlayingTake.scoreEnjoyment": string;
+    readonly "nowPlayingTake.scoreCoherence": string;
+    readonly "nowPlayingTake.scoreBpm": string;
+    readonly "nowPlayingTake.deviations": string;
+    readonly "nowPlayingTake.deviationsEmpty": string;
+    readonly "nowPlayingTake.deviationsUnavailable": string;
+    readonly "nowPlayingTake.lyricsRow": (gaps: { readonly lyrics: string }) => string;
+    readonly "nowPlayingTake.deviationAddedTitle": string;
+    readonly "nowPlayingTake.deviationAdded": (gaps: { readonly value: string }) => string;
+    readonly "nowPlayingTake.rescoreAction": string;
+    readonly "nowPlayingTake.rescoring": string;
+    readonly "nowPlayingTake.rescore": string;
+    readonly "nowPlayingTake.recipe": string;
+    readonly "nowPlayingTake.rating": string;
+    readonly "nowPlayingTake.ratingNotes": string;
+    readonly "nowPlayingTake.ratingSave": string;
+    readonly "nowPlayingTake.ratingSaving": string;
+    readonly "nowPlayingTake.useSeed": string;
+    readonly "nowPlayingTake.repaint": string;
+    readonly "nowPlayingTake.cover": string;
+    readonly "takeRecipe.groupModel": string;
+    readonly "takeRecipe.groupReproducibility": string;
+    readonly "takeRecipe.groupVersion": string;
+    readonly "takeRecipe.groupOther": string;
+    readonly "takeRecipe.model": string;
+    readonly "takeRecipe.deliveredBatchSize": string;
+    readonly "takeRecipe.seed": string;
+    readonly "takeRecipe.requestedSeed": string;
+    readonly "takeRecipe.bpm": string;
+    readonly "takeRecipe.duration": string;
+    readonly "takeRecipe.key": string;
+    readonly "takeRecipe.language": string;
+    readonly "takeRecipe.on": string;
+    readonly "takeRecipe.off": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -1194,5 +1343,224 @@ export const words: Words = {
     "cowriterRefusal.turnRunning": "A co-writer reply is still being written",
     "cowriterRefusal.takeNotInSong": "Generation does not belong to the current song",
     "takeRefusal.notPlayable": "Generation is not playable",
+    "takesList.loading": "Loading takes…",
+    "takesList.error": "Failed to load takes",
+    "takesList.retry": "Try again",
+    "takesList.aboutTakes": "About takes",
+    "takesList.mobileHint": "Tap play → details in Now Playing",
+    "takesList.empty": (gaps: { readonly generate: string }) => "No takes yet · " + gaps.generate + " makes the first",
+    "takesList.draftUnsaved": (gaps: { readonly next: string }) => "Draft — unsaved changes. Generate creates v" + gaps.next + ".",
+    "takesList.draftDiffers": (gaps: { readonly latest: string; readonly next: string }) => "Draft — differs from v" + gaps.latest + ". Generate creates v" + gaps.next + ".",
+    "takesList.openVersion": (gaps: { readonly number: string }) => "Open v" + gaps.number,
+    "takesList.currentHead": (count: number, gaps: { readonly number: string }) => ({
+        zero: "v" + gaps.number + " current · " + numberFormat.format(count) + " takes",
+        one: "v" + gaps.number + " current · " + numberFormat.format(count) + " take",
+        two: "v" + gaps.number + " current · " + numberFormat.format(count) + " takes",
+        few: "v" + gaps.number + " current · " + numberFormat.format(count) + " takes",
+        many: "v" + gaps.number + " current · " + numberFormat.format(count) + " takes",
+        other: "v" + gaps.number + " current · " + numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "takesList.foldedVersion": (count: number, gaps: { readonly number: string }) => ({
+        zero: "v" + gaps.number + " · " + numberFormat.format(count) + " takes",
+        one: "v" + gaps.number + " · " + numberFormat.format(count) + " take",
+        two: "v" + gaps.number + " · " + numberFormat.format(count) + " takes",
+        few: "v" + gaps.number + " · " + numberFormat.format(count) + " takes",
+        many: "v" + gaps.number + " · " + numberFormat.format(count) + " takes",
+        other: "v" + gaps.number + " · " + numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "takesList.foldedImported": (count: number) => ({
+        zero: "Imported · " + numberFormat.format(count) + " takes",
+        one: "Imported · " + numberFormat.format(count) + " take",
+        two: "Imported · " + numberFormat.format(count) + " takes",
+        few: "Imported · " + numberFormat.format(count) + " takes",
+        many: "Imported · " + numberFormat.format(count) + " takes",
+        other: "Imported · " + numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "takesList.foldedVersionArchived": (count: number, gaps: { readonly archived: string; readonly number: string }) => ({
+        zero: "v" + gaps.number + " · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+        one: "v" + gaps.number + " · " + numberFormat.format(count) + " take · " + gaps.archived + " archived",
+        two: "v" + gaps.number + " · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+        few: "v" + gaps.number + " · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+        many: "v" + gaps.number + " · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+        other: "v" + gaps.number + " · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+    })[pluralRules.select(count)],
+    "takesList.foldedImportedArchived": (count: number, gaps: { readonly archived: string }) => ({
+        zero: "Imported · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+        one: "Imported · " + numberFormat.format(count) + " take · " + gaps.archived + " archived",
+        two: "Imported · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+        few: "Imported · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+        many: "Imported · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+        other: "Imported · " + numberFormat.format(count) + " takes · " + gaps.archived + " archived",
+    })[pluralRules.select(count)],
+    "takesList.allArchived": "all",
+    "takesList.earlier": "Earlier versions",
+    "takesList.takeLabel": (gaps: { readonly number: string }) => "Take " + gaps.number,
+    "takesList.selectAllUnkept": "Select all unkept",
+    "takesList.selectedCount": (count: number) => ({
+        zero: numberFormat.format(count) + " selected",
+        one: numberFormat.format(count) + " selected",
+        two: numberFormat.format(count) + " selected",
+        few: numberFormat.format(count) + " selected",
+        many: numberFormat.format(count) + " selected",
+        other: numberFormat.format(count) + " selected",
+    })[pluralRules.select(count)],
+    "takesList.bulkDeleteLabel": (count: number) => ({
+        zero: "Delete " + numberFormat.format(count),
+        one: "Delete " + numberFormat.format(count),
+        two: "Delete " + numberFormat.format(count),
+        few: "Delete " + numberFormat.format(count),
+        many: "Delete " + numberFormat.format(count),
+        other: "Delete " + numberFormat.format(count),
+    })[pluralRules.select(count)],
+    "takesList.bulkDeleteTitle": (count: number) => ({
+        zero: "Delete " + numberFormat.format(count) + " takes?",
+        one: "Delete " + numberFormat.format(count) + " take?",
+        two: "Delete " + numberFormat.format(count) + " takes?",
+        few: "Delete " + numberFormat.format(count) + " takes?",
+        many: "Delete " + numberFormat.format(count) + " takes?",
+        other: "Delete " + numberFormat.format(count) + " takes?",
+    })[pluralRules.select(count)],
+    "takesList.cancel": "Cancel",
+    "takesList.deleteTitle": (gaps: { readonly number: string }) => "Delete take " + gaps.number + "?",
+    "takesList.deleteMessage": "Audio files will be permanently deleted",
+    "takesList.deleteConfirm": "Delete",
+    "takesList.deleted": (count: number) => ({
+        zero: "Deleted " + numberFormat.format(count) + " takes",
+        one: "Deleted " + numberFormat.format(count) + " take",
+        two: "Deleted " + numberFormat.format(count) + " takes",
+        few: "Deleted " + numberFormat.format(count) + " takes",
+        many: "Deleted " + numberFormat.format(count) + " takes",
+        other: "Deleted " + numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "takesList.bulkDeleteFailed": "Bulk delete failed",
+    "takesList.addedToPlaylist": "Added to playlist",
+    "takesList.addFailed": "Failed to add",
+    "takeRow.takeLabel": (gaps: { readonly number: string }) => "Take " + gaps.number,
+    "takeRow.takeVersioned": (gaps: { readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take,
+    "takeRow.takeUnversioned": (gaps: { readonly take: string }) => "take " + gaps.take,
+    "takeRow.archivedTitle": "Archived take",
+    "takeRow.selectTake": (gaps: { readonly take: string }) => "Select " + gaps.take,
+    "takeRow.playTake": (gaps: { readonly action: string; readonly take: string }) => gaps.action + " " + gaps.take,
+    "takeRow.pickTake": (gaps: { readonly take: string }) => "Pick " + gaps.take,
+    "takeRow.unpickTake": (gaps: { readonly take: string }) => "Unpick " + gaps.take,
+    "takeRow.keepTake": (gaps: { readonly take: string }) => "Keep " + gaps.take,
+    "takeRow.unkeepTake": (gaps: { readonly take: string }) => "Unkeep " + gaps.take,
+    "takeRow.provenanceRepaint": (gaps: { readonly take: string }) => "Repaint from " + gaps.take,
+    "takeRow.provenanceCover": (gaps: { readonly take: string }) => "Cover from " + gaps.take,
+    "takeRow.batchBadge": (gaps: { readonly delivered: string; readonly requested: string }) => gaps.delivered + " of " + gaps.requested,
+    "takeRow.batchTitle": (gaps: { readonly delivered: string; readonly requested: string }) => "Batch size reduced by ACE-Step due to available VRAM: delivered " + gaps.delivered + " of " + gaps.requested,
+    "takeRow.flagNoVocals": "No vocals",
+    "takeRow.flagNoVocalsTitle": "No vocals detected in this take",
+    "takeRow.flagLongSilence": "Long silence",
+    "takeRow.flagLongSilenceTitle": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + "s of silence detected",
+    "takeRow.rescoring": "Re-scoring…",
+    "takeRow.archived": "archived",
+    "takeRow.archivedBadgeTitle": "Archived — will be hard-deleted",
+    "takeRow.expiryBadge": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + "d",
+    "takeRow.expiresIn": (count: number) => ({
+        zero: "Expires in " + numberFormat.format(count) + " days — pick or keep to preserve",
+        one: "Expires in " + numberFormat.format(count) + " day — pick or keep to preserve",
+        two: "Expires in " + numberFormat.format(count) + " days — pick or keep to preserve",
+        few: "Expires in " + numberFormat.format(count) + " days — pick or keep to preserve",
+        many: "Expires in " + numberFormat.format(count) + " days — pick or keep to preserve",
+        other: "Expires in " + numberFormat.format(count) + " days — pick or keep to preserve",
+    })[pluralRules.select(count)],
+    "takeRow.voice": (gaps: { readonly name: string }) => "Voice: " + gaps.name,
+    "takeRow.voiceDeleted": (gaps: { readonly name: string }) => "Voice: " + gaps.name + " — voice deleted",
+    "takeRow.scoreTitle": (gaps: { readonly metric: string; readonly value: string }) => gaps.metric + " " + gaps.value,
+    "takeRow.scoreRating": "Rating",
+    "takeRow.scoreLyricsSung": "Lyrics sung",
+    "takeRow.scoreDynamics": "Dynamics",
+    "takeRow.scoreQuality": "Quality",
+    "takeRow.scoreEnjoyment": "Enjoyment",
+    "takeRow.scoreCoherence": "Coherence",
+    "takeTask.repaint": "Repaint",
+    "takeTask.cover": "Cover",
+    "takeTask.close": "Close",
+    "takeTask.closeTitle": "Close — nothing changes",
+    "takeTask.fromTake": (gaps: { readonly number: string }) => "take " + gaps.number,
+    "takeTask.detailVersioned": (gaps: { readonly duration: string; readonly version: string }) => "· v" + gaps.version + " · " + gaps.duration,
+    "takeTask.detail": (gaps: { readonly duration: string }) => "· " + gaps.duration,
+    "takeTask.range": "Range",
+    "takeTask.rangeCaption": "drag the handles",
+    "takeTask.repaintAmount": "How much changes",
+    "takeTask.modeConservative": "Conservative",
+    "takeTask.modeBalanced": "Balanced",
+    "takeTask.modeAggressive": "Aggressive",
+    "takeTask.repaintStrength": "Repaint strength",
+    "takeTask.strengthValue": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + "%",
+    "takeTask.coverCloseness": (gaps: { readonly number: string }) => "How close to take " + gaps.number,
+    "takeTask.coverFree": "Free",
+    "takeTask.coverStrict": "Strict",
+    "takeTask.coverStrength": "Cover strength",
+    "takeTask.noise": "Noise",
+    "takeTask.noiseCaption": "more noise, more surprise",
+    "takeTask.noiseBound": (gaps: { readonly count: number }) => numberFormat.format(gaps.count),
+    "takeTask.promptHint": "Paints using the lyrics and style currently in the editor — not the source take's own.",
+    "takeTask.seedLine": (gaps: { readonly number: string }) => "seed: from take " + gaps.number,
+    "takeTask.landing": (gaps: { readonly number: string }) => "New take in v" + gaps.number,
+    "takeTask.headerNote": "· the header Generate stays what it is",
+    "takeTask.repaintPress": (gaps: { readonly end: string; readonly start: string }) => "Repaint " + gaps.start + " – " + gaps.end,
+    "seedChip.label": (gaps: { readonly number: string }) => "Seed · take " + gaps.number,
+    "seedChip.clear": "Clear seed",
+    "takeActions.pickFailed": "Pick failed",
+    "takeActions.keepFailed": "Keep failed",
+    "takeActions.restoreFailed": "Restore failed",
+    "takeActions.ratingSaved": "Rating saved",
+    "takeActions.ratingFailed": "Rating failed",
+    "takeActions.rescoreQueued": "Re-scoring this take…",
+    "takeActions.rescoreFailed": "Re-score failed",
+    "takeActions.useSeed": (gaps: { readonly number: string }) => "Seed from take " + gaps.number,
+    "nowPlayingTake.label": (gaps: { readonly number: string }) => "Take " + gaps.number,
+    "nowPlayingTake.importedHeading": "Imported take",
+    "nowPlayingTake.heading": (gaps: { readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take,
+    "nowPlayingTake.headingDuration": (gaps: { readonly duration: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.duration,
+    "nowPlayingTake.headingMode": (gaps: { readonly mode: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.mode,
+    "nowPlayingTake.headingDurationMode": (gaps: { readonly duration: string; readonly mode: string; readonly take: string; readonly version: string }) => "v" + gaps.version + " · take " + gaps.take + " · " + gaps.duration + " · " + gaps.mode,
+    "nowPlayingTake.openVersion": (gaps: { readonly number: string }) => "Open v" + gaps.number,
+    "nowPlayingTake.pick": "Pick",
+    "nowPlayingTake.unpick": "Unpick",
+    "nowPlayingTake.keep": "Keep",
+    "nowPlayingTake.unkeep": "Unkeep",
+    "nowPlayingTake.scores": "Scores",
+    "nowPlayingTake.scoresEmpty": "No scores yet",
+    "nowPlayingTake.scoreRating": "Rating",
+    "nowPlayingTake.scoreLyricsSung": "Lyrics sung",
+    "nowPlayingTake.scoreDynamics": "Dynamics",
+    "nowPlayingTake.scoreQuality": "Quality",
+    "nowPlayingTake.scoreEnjoyment": "Enjoyment",
+    "nowPlayingTake.scoreCoherence": "Coherence",
+    "nowPlayingTake.scoreBpm": "BPM",
+    "nowPlayingTake.deviations": "Sung vs. lyrics",
+    "nowPlayingTake.deviationsEmpty": "Sung text matches the lyrics",
+    "nowPlayingTake.deviationsUnavailable": "No transcript to compare against yet",
+    "nowPlayingTake.lyricsRow": (gaps: { readonly lyrics: string }) => "Lyrics: " + gaps.lyrics,
+    "nowPlayingTake.deviationAddedTitle": "Not in lyrics",
+    "nowPlayingTake.deviationAdded": (gaps: { readonly value: string }) => gaps.value + " (Not in lyrics)",
+    "nowPlayingTake.rescoreAction": "Re-score this take to follow the lyrics.",
+    "nowPlayingTake.rescoring": "Re-scoring…",
+    "nowPlayingTake.rescore": "Re-score",
+    "nowPlayingTake.recipe": "Recipe",
+    "nowPlayingTake.rating": "Your rating",
+    "nowPlayingTake.ratingNotes": "Notes (optional)",
+    "nowPlayingTake.ratingSave": "Save rating",
+    "nowPlayingTake.ratingSaving": "Saving…",
+    "nowPlayingTake.useSeed": "Use seed",
+    "nowPlayingTake.repaint": "Repaint",
+    "nowPlayingTake.cover": "Cover",
+    "takeRecipe.groupModel": "Model & Sampling",
+    "takeRecipe.groupReproducibility": "Reproducibility",
+    "takeRecipe.groupVersion": "Version",
+    "takeRecipe.groupOther": "Other",
+    "takeRecipe.model": "Model",
+    "takeRecipe.deliveredBatchSize": "Delivered Batch Size",
+    "takeRecipe.seed": "Seed",
+    "takeRecipe.requestedSeed": "Requested Seed",
+    "takeRecipe.bpm": "BPM",
+    "takeRecipe.duration": "Duration",
+    "takeRecipe.key": "Key",
+    "takeRecipe.language": "Language",
+    "takeRecipe.on": "On",
+    "takeRecipe.off": "Off",
 };
 export type Key = keyof Words;

@@ -18,11 +18,7 @@ import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import type { VersionItem } from '../src/lib/api/types';
-import {
-	currentVersionHeadLabel,
-	takeVersion,
-	type TakeVersion
-} from '../src/lib/constants/now-playing';
+import { takeVersion, type TakeVersion } from '../src/lib/constants/now-playing';
 import {
 	FlowGuard,
 	loseNetwork,
@@ -98,7 +94,9 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 		await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 		await expect(panel.getByRole('progressbar')).toBeVisible();
 		await expect(
-			panel.getByText(currentVersionHeadLabel(seeded.versionNumber, SEEDED_TAKE_COUNT))
+			panel.getByText(
+				words['takesList.currentHead'](SEEDED_TAKE_COUNT, { number: String(seeded.versionNumber) })
+			)
 		).toBeVisible();
 		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT);
 
@@ -108,7 +106,11 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 			page.getByRole('alert').filter({ hasText: GENERATION_COMPLETED_TOAST })
 		).toBeVisible();
 		await expect(
-			panel.getByText(currentVersionHeadLabel(seeded.versionNumber, SEEDED_TAKE_COUNT + 2))
+			panel.getByText(
+				words['takesList.currentHead'](SEEDED_TAKE_COUNT + 2, {
+					number: String(seeded.versionNumber)
+				})
+			)
 		).toBeVisible();
 		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT + 2);
 		await expect(panel.getByRole('progressbar')).toHaveCount(0);
@@ -169,7 +171,11 @@ test.describe(
 				.poll(() => streamOpens, { timeout: CUT_OFF_TIMEOUT_MS })
 				.toBeGreaterThanOrEqual(CUT_OFF_STREAM_OPENS);
 			await expect(
-				panel.getByText(currentVersionHeadLabel(seeded.versionNumber, SEEDED_TAKE_COUNT + 1))
+				panel.getByText(
+					words['takesList.currentHead'](SEEDED_TAKE_COUNT + 1, {
+						number: String(seeded.versionNumber)
+					})
+				)
 			).toHaveCount(0);
 
 			await page.unroute(JOB_STREAM_ROUTE);
@@ -178,7 +184,11 @@ test.describe(
 			await regainNetwork(page, context);
 
 			await expect(
-				panel.getByText(currentVersionHeadLabel(seeded.versionNumber, SEEDED_TAKE_COUNT + 1))
+				panel.getByText(
+					words['takesList.currentHead'](SEEDED_TAKE_COUNT + 1, {
+						number: String(seeded.versionNumber)
+					})
+				)
 			).toBeVisible({
 				timeout: TAKE_AFTER_RETURN_MS
 			});

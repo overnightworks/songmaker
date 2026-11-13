@@ -21,8 +21,7 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
 }));
 
 import { get } from 'svelte/store';
-import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '#lib/constants/take.ts';
-import { NOW_PLAYING_RESCORE_ACTION_LABEL, openVersionLabel } from '#lib/constants/now-playing.ts';
+import { words } from '#lib/words/en.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
 import { rate, rescore, setKeep, setPick } from '#lib/stores/takeActions.ts';
 import { followAppPageLink, openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
@@ -134,7 +133,7 @@ describe('NowPlayingTake', () => {
 
 	it('shows a named empty state when there are no scores yet', async () => {
 		await render({ generation: generation(generationDefaults) });
-		expect(target.textContent).toContain('No scores yet');
+		expect(target.textContent).toContain(words['nowPlayingTake.scoresEmpty']);
 	});
 
 	// Spec: REQ-SCORE-02
@@ -147,7 +146,9 @@ describe('NowPlayingTake', () => {
 		expect(tokens.map((el) => el.textContent)).toEqual(['die', 'Luft', 'schmeckt', 'breit']);
 		const changed = target.querySelector('.dev-token.changed');
 		expect(changed?.textContent).toBe('breit');
-		expect(changed?.getAttribute('title')).toBe('Lyrics: weit');
+		expect(changed?.getAttribute('title')).toBe(
+			words['nowPlayingTake.lyricsRow']({ lyrics: 'weit' })
+		);
 		expect(target.querySelectorAll('.dev-token.changed, .dev-token.missing')).toHaveLength(1);
 	});
 
@@ -156,7 +157,7 @@ describe('NowPlayingTake', () => {
 			lyrics: 'Rahmen, Luft.',
 			generation: generation({ ...generationDefaults, whisper_text: 'rahmen luft' })
 		});
-		expect(target.textContent).toContain('Sung text matches the lyrics');
+		expect(target.textContent).toContain(words['nowPlayingTake.deviationsEmpty']);
 	});
 
 	it('does not flag a case-only difference as a deviation', async () => {
@@ -164,7 +165,7 @@ describe('NowPlayingTake', () => {
 			lyrics: 'Die Luft Schmeckt',
 			generation: generation({ ...generationDefaults, whisper_text: 'die luft schmeckt' })
 		});
-		expect(target.textContent).toContain('Sung text matches the lyrics');
+		expect(target.textContent).toContain(words['nowPlayingTake.deviationsEmpty']);
 	});
 
 	it('marks a sung word absent from the lyrics as added, with its own tooltip', async () => {
@@ -174,8 +175,10 @@ describe('NowPlayingTake', () => {
 		});
 		const added = target.querySelector('.dev-token.added');
 		expect(added?.textContent).toBe('frische');
-		expect(added?.getAttribute('title')).toBe('Not in lyrics');
-		expect(added?.getAttribute('aria-label')).toBe('frische (Not in lyrics)');
+		expect(added?.getAttribute('title')).toBe(words['nowPlayingTake.deviationAddedTitle']);
+		expect(added?.getAttribute('aria-label')).toBe(
+			words['nowPlayingTake.deviationAdded']({ value: 'frische' })
+		);
 		expect(target.querySelector('.dev-token.changed')).toBeNull();
 	});
 
@@ -187,7 +190,7 @@ describe('NowPlayingTake', () => {
 				whisper_text: 'die Luft schmeckt weit\nhalt die Haende auf'
 			})
 		});
-		expect(target.textContent).toContain('Sung text matches the lyrics');
+		expect(target.textContent).toContain(words['nowPlayingTake.deviationsEmpty']);
 	});
 
 	it('shows a matches-the-lyrics state when the transcript is identical', async () => {
@@ -195,7 +198,7 @@ describe('NowPlayingTake', () => {
 			lyrics: 'die Luft schmeckt weit',
 			generation: generation({ ...generationDefaults, whisper_text: 'die Luft schmeckt weit' })
 		});
-		expect(target.textContent).toContain('Sung text matches the lyrics');
+		expect(target.textContent).toContain(words['nowPlayingTake.deviationsEmpty']);
 	});
 
 	it('shows an unavailable state with no transcript yet', async () => {
@@ -203,21 +206,21 @@ describe('NowPlayingTake', () => {
 			lyrics: 'die Luft schmeckt weit',
 			generation: generation(generationDefaults)
 		});
-		expect(target.textContent).toContain('No transcript to compare against yet');
+		expect(target.textContent).toContain(words['nowPlayingTake.deviationsUnavailable']);
 	});
 
 	it('asks for a re-score while the take has no lyric cues', async () => {
 		// #141/9: without cues the lyrics cannot follow the audio, and the panel
 		// says why instead of leaving the listener to guess.
 		await render({ generation: generation(generationDefaults) });
-		expect(target.textContent).toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
+		expect(target.textContent).toContain(words['nowPlayingTake.rescoreAction']);
 	});
 
 	it('re-scores the take from the hint, once', async () => {
 		await render({ generation: generation(generationDefaults) });
 		const hint = target.querySelector<HTMLButtonElement>('.rescore-hint');
 		if (!hint) throw new Error('Expected the re-score hint button');
-		expect(hint.textContent?.trim()).toBe(NOW_PLAYING_RESCORE_ACTION_LABEL);
+		expect(hint.textContent?.trim()).toBe(words['nowPlayingTake.rescoreAction']);
 
 		hint.click();
 		await tick();
@@ -247,7 +250,7 @@ describe('NowPlayingTake', () => {
 		const hint = target.querySelector<HTMLButtonElement>('.rescore-hint');
 		if (!hint) throw new Error('Expected the re-score hint button');
 
-		expect(hint.textContent?.trim()).toBe(TAKE_RESCORING_LABEL);
+		expect(hint.textContent?.trim()).toBe(words['nowPlayingTake.rescoring']);
 		expect(hint.disabled).toBe(true);
 
 		hint.click();
@@ -267,7 +270,7 @@ describe('NowPlayingTake', () => {
 		});
 		const entry = target.querySelector<HTMLButtonElement>('.rescore');
 		if (!entry) throw new Error('Expected the Re-score entry');
-		expect(entry.textContent?.trim()).toBe(TAKE_RESCORE_LABEL);
+		expect(entry.textContent?.trim()).toBe(words['nowPlayingTake.rescore']);
 		expect(target.querySelector('.rescore-hint')).toBeNull();
 
 		entry.click();
@@ -303,7 +306,7 @@ describe('NowPlayingTake', () => {
 		const entry = target.querySelector<HTMLButtonElement>('.rescore');
 		if (!entry) throw new Error('Expected the Re-score entry');
 
-		expect(entry.textContent?.trim()).toBe(TAKE_RESCORING_LABEL);
+		expect(entry.textContent?.trim()).toBe(words['nowPlayingTake.rescoring']);
 		expect(entry.disabled).toBe(true);
 
 		entry.click();
@@ -318,7 +321,7 @@ describe('NowPlayingTake', () => {
 				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
 			})
 		});
-		expect(target.textContent).not.toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
+		expect(target.textContent).not.toContain(words['nowPlayingTake.rescoreAction']);
 	});
 
 	it.each(['.badge-btn', '.use-seed', '.take-source-action', '.rescore-hint', '.rescore'])(
@@ -383,7 +386,9 @@ describe('NowPlayingTake', () => {
 	it('C5: names the seed action Use seed with the seed as its hint', async () => {
 		await render({ generation: generation(generationDefaults) });
 		const row = target.querySelector<HTMLButtonElement>('.use-seed');
-		expect(row?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Use seed 48113');
+		expect(row?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			`${words['nowPlayingTake.useSeed']} 48113`
+		);
 		expect(row?.querySelector('.use-seed-hint')?.textContent).toBe('48113');
 		expect(row?.querySelector('svg')).not.toBeNull();
 	});
@@ -430,7 +435,8 @@ describe('NowPlayingTake Open vN', () => {
 	function openVersionLink(): HTMLButtonElement | null {
 		return (
 			Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
-				(button) => button.textContent?.trim() === openVersionLabel(5)
+				(button) =>
+					button.textContent?.trim() === words['nowPlayingTake.openVersion']({ number: '5' })
 			) ?? null
 		);
 	}
@@ -462,7 +468,9 @@ describe('NowPlayingTake Open vN', () => {
 				})
 			});
 
-			expect(target.querySelector('.take-heading')?.textContent).toBe('Imported take');
+			expect(target.querySelector('.take-heading')?.textContent).toBe(
+				words['nowPlayingTake.importedHeading']
+			);
 			expect(target.textContent).not.toContain('Open v');
 		}
 	);
@@ -502,16 +510,20 @@ describe('NowPlayingTake recipe section', () => {
 		const groupLabels = Array.from(target.querySelectorAll('.recipe-group-label')).map(
 			(el) => el.textContent
 		);
-		expect(groupLabels).toEqual(['Model & Sampling', 'Reproducibility', 'Version']);
+		expect(groupLabels).toEqual([
+			words['takeRecipe.groupModel'],
+			words['takeRecipe.groupReproducibility'],
+			words['takeRecipe.groupVersion']
+		]);
 		expect(recipeRows(target)).toEqual([
-			['Model', 'xl-sft'],
-			['Inference Steps', '50'],
-			['Guidance Scale', '7.5'],
-			['Seed', '48113'],
-			['BPM', '128'],
-			['Duration', '3:15'],
-			['Key', 'Am'],
-			['Language', 'en']
+			[words['takeRecipe.model'], 'xl-sft'],
+			[words['paramField.inferenceSteps'], '50'],
+			[words['paramField.guidanceScale'], '7.5'],
+			[words['takeRecipe.seed'], '48113'],
+			[words['takeRecipe.bpm'], '128'],
+			[words['takeRecipe.duration'], '3:15'],
+			[words['takeRecipe.key'], 'Am'],
+			[words['takeRecipe.language'], 'en']
 		]);
 	});
 
@@ -535,7 +547,7 @@ describe('NowPlayingTake recipe section', () => {
 		});
 		expect(
 			Array.from(target.querySelectorAll('.recipe-group-label')).map((el) => el.textContent)
-		).toEqual(['Other']);
+		).toEqual([words['takeRecipe.groupOther']]);
 		expect(recipeRows(target)).toEqual([['Repaint Wav Crossfade Sec', '0.25']]);
 	});
 

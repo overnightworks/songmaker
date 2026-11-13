@@ -29,5 +29,3 @@ export const RECIPE_FIELD_RESET_TITLES: Partial<Record<RecipeField, TextKey>> = 
 	preset: 'recipe.resetPreset'
 };
 export const RECIPE_SOURCE_DURATION_DEFAULT_SECONDS = 180;
-/** A frozen duplicate of the catalog key `recipe.panel`, read by NowPlayingTake. */
-export const RECIPE_PANEL_LABEL = 'Recipe';

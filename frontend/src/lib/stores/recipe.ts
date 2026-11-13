@@ -4,8 +4,8 @@ import {
 	RECIPE_SOURCE_DURATION_DEFAULT_SECONDS,
 	RECIPE_TAKES_STANDARD
 } from '#lib/constants/recipe.ts';
-import { takeUseSeedToast } from '#lib/constants/take-task.ts';
 import { addToast } from '#lib/stores/toast.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 
 export type SourceMode = 'repaint' | 'cover';
 export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';
@@ -52,7 +52,7 @@ export const seedFromTake = writable<SeedFromTake | null>(null);
 export function useSeed(gen: GenerationItem): void {
 	if (gen.seed == null) return;
 	seedFromTake.set({ seed: gen.seed, takeNumber: gen.generation_number });
-	addToast(takeUseSeedToast(gen.generation_number), 'success');
+	addToast(pageText('takeActions.useSeed', { number: String(gen.generation_number) }), 'success');
 }
 
 export function clearSeed(): void {

@@ -2194,3 +2194,639 @@ msgstr ""
 msgctxt "takeRefusal.notPlayable"
 msgid "Generation is not playable"
 msgstr ""
+
+msgctxt "takesList.loading"
+msgid "Loading takes…"
+msgstr ""
+
+msgctxt "takesList.error"
+msgid "Failed to load takes"
+msgstr ""
+
+msgctxt "takesList.retry"
+msgid "Try again"
+msgstr ""
+
+msgctxt "takesList.aboutTakes"
+msgid "About takes"
+msgstr ""
+
+msgctxt "takesList.mobileHint"
+msgid "Tap play → details in Now Playing"
+msgstr ""
+
+msgctxt "takesList.empty"
+msgid "No takes yet · {generate} makes the first"
+msgstr ""
+
+msgctxt "takesList.draftUnsaved"
+msgid "Draft — unsaved changes. Generate creates v{next}."
+msgstr ""
+
+msgctxt "takesList.draftDiffers"
+msgid "Draft — differs from v{latest}. Generate creates v{next}."
+msgstr ""
+
+msgctxt "takesList.openVersion"
+msgid "Open v{number}"
+msgstr ""
+
+msgctxt "takesList.currentHead.one"
+msgid "v{number} current · {count} take"
+msgstr ""
+
+msgctxt "takesList.currentHead.other"
+msgid "v{number} current · {count} takes"
+msgstr ""
+
+msgctxt "takesList.foldedVersion.one"
+msgid "v{number} · {count} take"
+msgstr ""
+
+msgctxt "takesList.foldedVersion.other"
+msgid "v{number} · {count} takes"
+msgstr ""
+
+msgctxt "takesList.foldedImported.one"
+msgid "Imported · {count} take"
+msgstr ""
+
+msgctxt "takesList.foldedImported.other"
+msgid "Imported · {count} takes"
+msgstr ""
+
+msgctxt "takesList.foldedVersionArchived.one"
+msgid "v{number} · {count} take · {archived} archived"
+msgstr ""
+
+msgctxt "takesList.foldedVersionArchived.other"
+msgid "v{number} · {count} takes · {archived} archived"
+msgstr ""
+
+msgctxt "takesList.foldedImportedArchived.one"
+msgid "Imported · {count} take · {archived} archived"
+msgstr ""
+
+msgctxt "takesList.foldedImportedArchived.other"
+msgid "Imported · {count} takes · {archived} archived"
+msgstr ""
+
+msgctxt "takesList.allArchived"
+msgid "all"
+msgstr ""
+
+msgctxt "takesList.earlier"
+msgid "Earlier versions"
+msgstr ""
+
+msgctxt "takesList.takeLabel"
+msgid "Take {number}"
+msgstr ""
+
+msgctxt "takesList.selectAllUnkept"
+msgid "Select all unkept"
+msgstr ""
+
+msgctxt "takesList.selectedCount.one"
+msgid "{count} selected"
+msgstr ""
+
+msgctxt "takesList.selectedCount.other"
+msgid "{count} selected"
+msgstr ""
+
+msgctxt "takesList.bulkDeleteLabel.one"
+msgid "Delete {count}"
+msgstr ""
+
+msgctxt "takesList.bulkDeleteLabel.other"
+msgid "Delete {count}"
+msgstr ""
+
+msgctxt "takesList.bulkDeleteTitle.one"
+msgid "Delete {count} take?"
+msgstr ""
+
+msgctxt "takesList.bulkDeleteTitle.other"
+msgid "Delete {count} takes?"
+msgstr ""
+
+msgctxt "takesList.cancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "takesList.deleteTitle"
+msgid "Delete take {number}?"
+msgstr ""
+
+msgctxt "takesList.deleteMessage"
+msgid "Audio files will be permanently deleted"
+msgstr ""
+
+msgctxt "takesList.deleteConfirm"
+msgid "Delete"
+msgstr ""
+
+msgctxt "takesList.deleted.one"
+msgid "Deleted {count} take"
+msgstr ""
+
+msgctxt "takesList.deleted.other"
+msgid "Deleted {count} takes"
+msgstr ""
+
+msgctxt "takesList.bulkDeleteFailed"
+msgid "Bulk delete failed"
+msgstr ""
+
+msgctxt "takesList.addedToPlaylist"
+msgid "Added to playlist"
+msgstr ""
+
+msgctxt "takesList.addFailed"
+msgid "Failed to add"
+msgstr ""
+
+msgctxt "takeRow.takeLabel"
+msgid "Take {number}"
+msgstr ""
+
+msgctxt "takeRow.takeVersioned"
+msgid "v{version} · take {take}"
+msgstr ""
+
+msgctxt "takeRow.takeUnversioned"
+msgid "take {take}"
+msgstr ""
+
+msgctxt "takeRow.archivedTitle"
+msgid "Archived take"
+msgstr ""
+
+msgctxt "takeRow.selectTake"
+msgid "Select {take}"
+msgstr ""
+
+msgctxt "takeRow.playTake"
+msgid "{action} {take}"
+msgstr ""
+
+msgctxt "takeRow.pickTake"
+msgid "Pick {take}"
+msgstr ""
+
+msgctxt "takeRow.unpickTake"
+msgid "Unpick {take}"
+msgstr ""
+
+msgctxt "takeRow.keepTake"
+msgid "Keep {take}"
+msgstr ""
+
+msgctxt "takeRow.unkeepTake"
+msgid "Unkeep {take}"
+msgstr ""
+
+msgctxt "takeRow.provenanceRepaint"
+msgid "Repaint from {take}"
+msgstr ""
+
+msgctxt "takeRow.provenanceCover"
+msgid "Cover from {take}"
+msgstr ""
+
+msgctxt "takeRow.batchBadge"
+msgid "{delivered} of {requested}"
+msgstr ""
+
+msgctxt "takeRow.batchTitle"
+msgid "Batch size reduced by ACE-Step due to available VRAM: delivered {delivered} of {requested}"
+msgstr ""
+
+msgctxt "takeRow.flagNoVocals"
+msgid "No vocals"
+msgstr ""
+
+msgctxt "takeRow.flagNoVocalsTitle"
+msgid "No vocals detected in this take"
+msgstr ""
+
+msgctxt "takeRow.flagLongSilence"
+msgid "Long silence"
+msgstr ""
+
+msgctxt "takeRow.flagLongSilenceTitle"
+msgid "{count}s of silence detected"
+msgstr ""
+
+msgctxt "takeRow.rescoring"
+msgid "Re-scoring…"
+msgstr ""
+
+msgctxt "takeRow.archived"
+msgid "archived"
+msgstr ""
+
+msgctxt "takeRow.archivedBadgeTitle"
+msgid "Archived — will be hard-deleted"
+msgstr ""
+
+msgctxt "takeRow.expiryBadge"
+msgid "{count}d"
+msgstr ""
+
+msgctxt "takeRow.expiresIn.one"
+msgid "Expires in {count} day — pick or keep to preserve"
+msgstr ""
+
+msgctxt "takeRow.expiresIn.other"
+msgid "Expires in {count} days — pick or keep to preserve"
+msgstr ""
+
+msgctxt "takeRow.voice"
+msgid "Voice: {name}"
+msgstr ""
+
+msgctxt "takeRow.voiceDeleted"
+msgid "Voice: {name} — voice deleted"
+msgstr ""
+
+msgctxt "takeRow.scoreTitle"
+msgid "{metric} {value}"
+msgstr ""
+
+msgctxt "takeRow.scoreRating"
+msgid "Rating"
+msgstr ""
+
+msgctxt "takeRow.scoreLyricsSung"
+msgid "Lyrics sung"
+msgstr ""
+
+msgctxt "takeRow.scoreDynamics"
+msgid "Dynamics"
+msgstr ""
+
+msgctxt "takeRow.scoreQuality"
+msgid "Quality"
+msgstr ""
+
+msgctxt "takeRow.scoreEnjoyment"
+msgid "Enjoyment"
+msgstr ""
+
+msgctxt "takeRow.scoreCoherence"
+msgid "Coherence"
+msgstr ""
+
+msgctxt "takeTask.repaint"
+msgid "Repaint"
+msgstr ""
+
+msgctxt "takeTask.cover"
+msgid "Cover"
+msgstr ""
+
+msgctxt "takeTask.close"
+msgid "Close"
+msgstr ""
+
+msgctxt "takeTask.closeTitle"
+msgid "Close — nothing changes"
+msgstr ""
+
+msgctxt "takeTask.fromTake"
+msgid "take {number}"
+msgstr ""
+
+msgctxt "takeTask.detailVersioned"
+msgid "· v{version} · {duration}"
+msgstr ""
+
+msgctxt "takeTask.detail"
+msgid "· {duration}"
+msgstr ""
+
+msgctxt "takeTask.range"
+msgid "Range"
+msgstr ""
+
+msgctxt "takeTask.rangeCaption"
+msgid "drag the handles"
+msgstr ""
+
+msgctxt "takeTask.repaintAmount"
+msgid "How much changes"
+msgstr ""
+
+msgctxt "takeTask.modeConservative"
+msgid "Conservative"
+msgstr ""
+
+msgctxt "takeTask.modeBalanced"
+msgid "Balanced"
+msgstr ""
+
+msgctxt "takeTask.modeAggressive"
+msgid "Aggressive"
+msgstr ""
+
+msgctxt "takeTask.repaintStrength"
+msgid "Repaint strength"
+msgstr ""
+
+msgctxt "takeTask.strengthValue"
+msgid "{count}%"
+msgstr ""
+
+msgctxt "takeTask.coverCloseness"
+msgid "How close to take {number}"
+msgstr ""
+
+msgctxt "takeTask.coverFree"
+msgid "Free"
+msgstr ""
+
+msgctxt "takeTask.coverStrict"
+msgid "Strict"
+msgstr ""
+
+msgctxt "takeTask.coverStrength"
+msgid "Cover strength"
+msgstr ""
+
+msgctxt "takeTask.noise"
+msgid "Noise"
+msgstr ""
+
+msgctxt "takeTask.noiseCaption"
+msgid "more noise, more surprise"
+msgstr ""
+
+msgctxt "takeTask.noiseBound"
+msgid "{count}"
+msgstr ""
+
+msgctxt "takeTask.promptHint"
+msgid "Paints using the lyrics and style currently in the editor — not the source take's own."
+msgstr ""
+
+msgctxt "takeTask.seedLine"
+msgid "seed: from take {number}"
+msgstr ""
+
+msgctxt "takeTask.landing"
+msgid "New take in v{number}"
+msgstr ""
+
+msgctxt "takeTask.headerNote"
+msgid "· the header Generate stays what it is"
+msgstr ""
+
+msgctxt "takeTask.repaintPress"
+msgid "Repaint {start} – {end}"
+msgstr ""
+
+msgctxt "seedChip.label"
+msgid "Seed · take {number}"
+msgstr ""
+
+msgctxt "seedChip.clear"
+msgid "Clear seed"
+msgstr ""
+
+msgctxt "takeActions.pickFailed"
+msgid "Pick failed"
+msgstr ""
+
+msgctxt "takeActions.keepFailed"
+msgid "Keep failed"
+msgstr ""
+
+msgctxt "takeActions.restoreFailed"
+msgid "Restore failed"
+msgstr ""
+
+msgctxt "takeActions.ratingSaved"
+msgid "Rating saved"
+msgstr ""
+
+msgctxt "takeActions.ratingFailed"
+msgid "Rating failed"
+msgstr ""
+
+msgctxt "takeActions.rescoreQueued"
+msgid "Re-scoring this take…"
+msgstr ""
+
+msgctxt "takeActions.rescoreFailed"
+msgid "Re-score failed"
+msgstr ""
+
+msgctxt "takeActions.useSeed"
+msgid "Seed from take {number}"
+msgstr ""
+
+msgctxt "nowPlayingTake.label"
+msgid "Take {number}"
+msgstr ""
+
+msgctxt "nowPlayingTake.importedHeading"
+msgid "Imported take"
+msgstr ""
+
+msgctxt "nowPlayingTake.heading"
+msgid "v{version} · take {take}"
+msgstr ""
+
+msgctxt "nowPlayingTake.headingDuration"
+msgid "v{version} · take {take} · {duration}"
+msgstr ""
+
+msgctxt "nowPlayingTake.headingMode"
+msgid "v{version} · take {take} · {mode}"
+msgstr ""
+
+msgctxt "nowPlayingTake.headingDurationMode"
+msgid "v{version} · take {take} · {duration} · {mode}"
+msgstr ""
+
+msgctxt "nowPlayingTake.openVersion"
+msgid "Open v{number}"
+msgstr ""
+
+msgctxt "nowPlayingTake.pick"
+msgid "Pick"
+msgstr ""
+
+msgctxt "nowPlayingTake.unpick"
+msgid "Unpick"
+msgstr ""
+
+msgctxt "nowPlayingTake.keep"
+msgid "Keep"
+msgstr ""
+
+msgctxt "nowPlayingTake.unkeep"
+msgid "Unkeep"
+msgstr ""
+
+msgctxt "nowPlayingTake.scores"
+msgid "Scores"
+msgstr ""
+
+msgctxt "nowPlayingTake.scoresEmpty"
+msgid "No scores yet"
+msgstr ""
+
+msgctxt "nowPlayingTake.scoreRating"
+msgid "Rating"
+msgstr ""
+
+msgctxt "nowPlayingTake.scoreLyricsSung"
+msgid "Lyrics sung"
+msgstr ""
+
+msgctxt "nowPlayingTake.scoreDynamics"
+msgid "Dynamics"
+msgstr ""
+
+msgctxt "nowPlayingTake.scoreQuality"
+msgid "Quality"
+msgstr ""
+
+msgctxt "nowPlayingTake.scoreEnjoyment"
+msgid "Enjoyment"
+msgstr ""
+
+msgctxt "nowPlayingTake.scoreCoherence"
+msgid "Coherence"
+msgstr ""
+
+msgctxt "nowPlayingTake.scoreBpm"
+msgid "BPM"
+msgstr ""
+
+msgctxt "nowPlayingTake.deviations"
+msgid "Sung vs. lyrics"
+msgstr ""
+
+msgctxt "nowPlayingTake.deviationsEmpty"
+msgid "Sung text matches the lyrics"
+msgstr ""
+
+msgctxt "nowPlayingTake.deviationsUnavailable"
+msgid "No transcript to compare against yet"
+msgstr ""
+
+msgctxt "nowPlayingTake.lyricsRow"
+msgid "Lyrics: {lyrics}"
+msgstr ""
+
+msgctxt "nowPlayingTake.deviationAddedTitle"
+msgid "Not in lyrics"
+msgstr ""
+
+msgctxt "nowPlayingTake.deviationAdded"
+msgid "{value} (Not in lyrics)"
+msgstr ""
+
+msgctxt "nowPlayingTake.rescoreAction"
+msgid "Re-score this take to follow the lyrics."
+msgstr ""
+
+msgctxt "nowPlayingTake.rescoring"
+msgid "Re-scoring…"
+msgstr ""
+
+msgctxt "nowPlayingTake.rescore"
+msgid "Re-score"
+msgstr ""
+
+msgctxt "nowPlayingTake.recipe"
+msgid "Recipe"
+msgstr ""
+
+msgctxt "nowPlayingTake.rating"
+msgid "Your rating"
+msgstr ""
+
+msgctxt "nowPlayingTake.ratingNotes"
+msgid "Notes (optional)"
+msgstr ""
+
+msgctxt "nowPlayingTake.ratingSave"
+msgid "Save rating"
+msgstr ""
+
+msgctxt "nowPlayingTake.ratingSaving"
+msgid "Saving…"
+msgstr ""
+
+msgctxt "nowPlayingTake.useSeed"
+msgid "Use seed"
+msgstr ""
+
+msgctxt "nowPlayingTake.repaint"
+msgid "Repaint"
+msgstr ""
+
+msgctxt "nowPlayingTake.cover"
+msgid "Cover"
+msgstr ""
+
+msgctxt "takeRecipe.groupModel"
+msgid "Model & Sampling"
+msgstr ""
+
+msgctxt "takeRecipe.groupReproducibility"
+msgid "Reproducibility"
+msgstr ""
+
+msgctxt "takeRecipe.groupVersion"
+msgid "Version"
+msgstr ""
+
+msgctxt "takeRecipe.groupOther"
+msgid "Other"
+msgstr ""
+
+msgctxt "takeRecipe.model"
+msgid "Model"
+msgstr ""
+
+msgctxt "takeRecipe.deliveredBatchSize"
+msgid "Delivered Batch Size"
+msgstr ""
+
+msgctxt "takeRecipe.seed"
+msgid "Seed"
+msgstr ""
+
+msgctxt "takeRecipe.requestedSeed"
+msgid "Requested Seed"
+msgstr ""
+
+msgctxt "takeRecipe.bpm"
+msgid "BPM"
+msgstr ""
+
+msgctxt "takeRecipe.duration"
+msgid "Duration"
+msgstr ""
+
+msgctxt "takeRecipe.key"
+msgid "Key"
+msgstr ""
+
+msgctxt "takeRecipe.language"
+msgid "Language"
+msgstr ""
+
+msgctxt "takeRecipe.on"
+msgid "On"
+msgstr ""
+
+msgctxt "takeRecipe.off"
+msgid "Off"
+msgstr ""

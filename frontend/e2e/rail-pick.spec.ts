@@ -1,6 +1,5 @@
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { NOW_PLAYING_UNPICK_LABEL } from '../src/lib/constants/now-playing';
 import { archiveOwnedAlbum, seedTake } from './seed';
 import { ONLY_IN_SHELL, sameOriginHeaders } from './helpers';
 
@@ -69,7 +68,11 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 		// Album list items carry no takes, so a take row exists only once the detail response is
 		// merged into the song list, in the same update as its has_pick.
 		await expect(
-			page.getByRole('button', { name: new RegExp(`^${NOW_PLAYING_UNPICK_LABEL} take`) })
+			page.getByRole('button', {
+				name: new RegExp(
+					`^${words['takeRow.unpickTake']({ take: words['takeRow.takeUnversioned']({ take: '' }) })}`
+				)
+			})
 		).toBeVisible();
 		// A later album-list refresh keeps the merged takes but takes has_pick from its summary, so the
 		// detail response itself must carry the pick for the rail check below to prove it.

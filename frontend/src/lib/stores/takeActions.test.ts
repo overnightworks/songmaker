@@ -28,6 +28,7 @@ import {
 } from '#lib/api/client.ts';
 import { songList } from '#lib/stores/libraryData.ts';
 import { toasts } from '#lib/stores/toast.ts';
+import { words } from '#lib/words/en.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
 import { rate, rescore, rescoringTakeIds, restoreTake, setKeep, setPick } from './takeActions';
 
@@ -199,7 +200,7 @@ describe('rate', () => {
 		expect(rateGeneration).toHaveBeenCalledWith('g1', 80, 'great take');
 		expect(get(songList)).toEqual([song(actionSongDefaults())]);
 		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: 'Rating saved', type: 'success' })
+			expect.objectContaining({ message: words['takeActions.ratingSaved'], type: 'success' })
 		]);
 	});
 
@@ -231,7 +232,7 @@ describe('rescore', () => {
 		expect(scoreGeneration).toHaveBeenCalledWith('g1');
 		expect(get(rescoringTakeIds).has('g1')).toBe(true);
 		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: 'Re-scoring this take…', type: 'info' })
+			expect.objectContaining({ message: words['takeActions.rescoreQueued'], type: 'info' })
 		]);
 
 		activeJobs.set([]);
@@ -296,25 +297,25 @@ describe('a failed take action', () => {
 			name: 'pick',
 			request: pickGeneration,
 			run: () => setPick('s1', 'g1', true),
-			fallback: 'Pick failed'
+			fallback: words['takeActions.pickFailed']
 		},
 		{
 			name: 'keep',
 			request: keepGeneration,
 			run: () => setKeep('s1', 'g1', true),
-			fallback: 'Keep failed'
+			fallback: words['takeActions.keepFailed']
 		},
 		{
 			name: 'rating',
 			request: rateGeneration,
 			run: () => rate('s1', 'g1', 80),
-			fallback: 'Rating failed'
+			fallback: words['takeActions.ratingFailed']
 		},
 		{
 			name: 're-score',
 			request: scoreGeneration,
 			run: () => rescore('s1', 'g1'),
-			fallback: 'Re-score failed'
+			fallback: words['takeActions.rescoreFailed']
 		}
 	];
 

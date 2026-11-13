@@ -36,31 +36,34 @@ describe('buildTakeRecipe', () => {
 			song: song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: 'en' }),
 			groups: [
 				{
-					label: 'Model & Sampling',
+					label: words['takeRecipe.groupModel'],
 					entries: [
-						{ label: 'Model', value: 'xl-sft' },
+						{ label: words['takeRecipe.model'], value: 'xl-sft' },
 						{ label: words['paramField.inferenceSteps'], value: '50' },
 						{ label: words['paramField.guidanceScale'], value: '7.5' },
 						{ label: words['paramField.inferMethod'], value: 'sde' },
 						{ label: words['paramField.sampler'], value: 'heun' },
-						{ label: words['paramField.adaptiveDualGuidance'], value: 'On' },
+						{ label: words['paramField.adaptiveDualGuidance'], value: words['takeRecipe.on'] },
 						{ label: words['paramField.temperature'], value: '0.85' },
-						{ label: words['paramField.thinking'], value: 'On' },
+						{ label: words['paramField.thinking'], value: words['takeRecipe.on'] },
 						{ label: words['paramField.negativePrompt'], value: 'noise' }
 					]
 				},
-				{ label: 'Reproducibility', entries: [{ label: 'Seed', value: '48113' }] },
 				{
-					label: 'Version',
+					label: words['takeRecipe.groupReproducibility'],
+					entries: [{ label: words['takeRecipe.seed'], value: '48113' }]
+				},
+				{
+					label: words['takeRecipe.groupVersion'],
 					entries: [
-						{ label: 'BPM', value: '128' },
-						{ label: 'Duration', value: '3:15' },
-						{ label: 'Key', value: 'Am' },
-						{ label: 'Language', value: 'en' }
+						{ label: words['takeRecipe.bpm'], value: '128' },
+						{ label: words['takeRecipe.duration'], value: '3:15' },
+						{ label: words['takeRecipe.key'], value: 'Am' },
+						{ label: words['takeRecipe.language'], value: 'en' }
 					]
 				},
 				{
-					label: 'Other',
+					label: words['takeRecipe.groupOther'],
 					entries: [{ label: 'Cover Noise Strength', value: '0.4' }]
 				}
 			]
@@ -69,7 +72,12 @@ describe('buildTakeRecipe', () => {
 			name: 'a sparse take that carries only its model',
 			generation: generation({ seed: null, model_mode: 'turbo' }),
 			song: song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' }),
-			groups: [{ label: 'Model & Sampling', entries: [{ label: 'Model', value: 'turbo' }] }]
+			groups: [
+				{
+					label: words['takeRecipe.groupModel'],
+					entries: [{ label: words['takeRecipe.model'], value: 'turbo' }]
+				}
+			]
 		},
 		{
 			name: 'a take with nothing set at all',
@@ -122,7 +130,7 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 
 		expect(groups).toEqual([
 			{
-				label: 'Model & Sampling',
+				label: words['takeRecipe.groupModel'],
 				entries: [{ label: words['paramField.latentRescale'], value: '4.2' }]
 			}
 		]);
@@ -142,7 +150,10 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 		expect(groups).toEqual([
-			{ label: 'Other', entries: [{ label: 'Repaint Wav Crossfade Sec', value: '0.25' }] }
+			{
+				label: words['takeRecipe.groupOther'],
+				entries: [{ label: 'Repaint Wav Crossfade Sec', value: '0.25' }]
+			}
 		]);
 	});
 
@@ -161,7 +172,7 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 		);
 		expect(groups).toEqual([
 			{
-				label: 'Other',
+				label: words['takeRecipe.groupOther'],
 				entries: [
 					{ label: 'Timesteps', value: '1000,500,0' },
 					{ label: 'Task Type', value: 'repaint' }
@@ -183,7 +194,10 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 		expect(groups).toEqual([
-			{ label: 'Model & Sampling', entries: [{ label: 'Model', value: 'xl-sft' }] }
+			{
+				label: words['takeRecipe.groupModel'],
+				entries: [{ label: words['takeRecipe.model'], value: 'xl-sft' }]
+			}
 		]);
 	});
 
@@ -192,15 +206,15 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 			name: 'matches the stored seed_value',
 			seed: 48113,
 			requestedSeed: 48113,
-			reproducibilityEntries: [{ label: 'Seed', value: '48113' }]
+			reproducibilityEntries: [{ label: words['takeRecipe.seed'], value: '48113' }]
 		},
 		{
 			name: 'diverges from the stored seed_value',
 			seed: 48113,
 			requestedSeed: -1,
 			reproducibilityEntries: [
-				{ label: 'Seed', value: '48113' },
-				{ label: 'Requested Seed', value: '-1' }
+				{ label: words['takeRecipe.seed'], value: '48113' },
+				{ label: words['takeRecipe.requestedSeed'], value: '-1' }
 			]
 		}
 	])(
@@ -211,7 +225,9 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 				generation({ model_mode: '', seed, generation_params: { seed: requestedSeed } }),
 				song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 			);
-			expect(groups).toEqual([{ label: 'Reproducibility', entries: reproducibilityEntries }]);
+			expect(groups).toEqual([
+				{ label: words['takeRecipe.groupReproducibility'], entries: reproducibilityEntries }
+			]);
 		}
 	);
 
@@ -227,10 +243,10 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 		);
 		expect(groups).toEqual([
 			{
-				label: 'Model & Sampling',
+				label: words['takeRecipe.groupModel'],
 				entries: [
 					{ label: words['paramField.batchSize'], value: '2' },
-					{ label: 'Delivered Batch Size', value: '1' }
+					{ label: words['takeRecipe.deliveredBatchSize'], value: '1' }
 				]
 			}
 		]);
@@ -243,7 +259,10 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 		expect(groups).toEqual([
-			{ label: 'Model & Sampling', entries: [{ label: words['paramField.batchSize'], value: '2' }] }
+			{
+				label: words['takeRecipe.groupModel'],
+				entries: [{ label: words['paramField.batchSize'], value: '2' }]
+			}
 		]);
 	});
 });
@@ -261,7 +280,7 @@ describe('buildTakeRecipe reference', () => {
 		const groups = await buildRecipe({ id: 'r1', filename: 'demo take.wav' });
 		expect(groups).toEqual([
 			{
-				label: 'Version',
+				label: words['takeRecipe.groupVersion'],
 				entries: [
 					{
 						label: words['referencePicker.label'],

@@ -78,7 +78,6 @@
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
-	import { TAKES_ERROR } from '#lib/constants/take.ts';
 	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
 	import { ALBUM_ART_EMPTY_INITIALS } from '#lib/constants/album.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
@@ -351,7 +350,7 @@
 			if (editorSongId !== songId) return;
 			if (e instanceof NetworkError && get(offline)) return;
 			takesStatus = 'error';
-			takesError = describeFailure(e, TAKES_ERROR);
+			takesError = describeFailure(e, pageText('takesList.error'));
 		}
 	}
 

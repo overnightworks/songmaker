@@ -2,23 +2,7 @@
 	import { flushSync } from 'svelte';
 	import type { SongItem, GenerationItem, UserLoraItem } from '#lib/api/types.ts';
 	import type { SourceMode } from '#lib/stores/recipe.ts';
-	import {
-		TAKE_ARCHIVED_TITLE,
-		TAKE_PROVENANCE_COVER_PREFIX,
-		TAKE_PROVENANCE_REPAINT_PREFIX,
-		TAKE_KEEP_LABEL,
-		TAKE_PICK_LABEL,
-		TAKE_UNKEEP_LABEL,
-		TAKE_RESCORING_LABEL
-	} from '#lib/constants/take.ts';
 	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
-	import {
-		nowPlayingTakeLabel,
-		takeBatchReductionLabel,
-		takeRowLabel,
-		TAKE_SELECT_LABEL,
-		NOW_PLAYING_UNPICK_LABEL
-	} from '#lib/constants/now-playing.ts';
 	import { playTake, playTakeAndShowNowPlaying } from '#lib/stores/player.ts';
 	import { rescoringTakeIds, restoreTake } from '#lib/stores/takeActions.ts';
 	import {
@@ -27,7 +11,14 @@
 		transportButtonLabel,
 		transportIsBusy
 	} from '#lib/services/audioPlayer.svelte.ts';
-	import { formatScore, qualityFlag, scoreColor, scoreReadings } from '#lib/utils/scores.ts';
+	import {
+		formatScore,
+		qualityFlag,
+		scoreColor,
+		scoreReadings,
+		type QualityFlag,
+		type ScoreKey
+	} from '#lib/utils/scores.ts';
 	import {
 		getGenerationActions,
 		type GenerationActions
@@ -36,6 +27,7 @@
 	import { revealTakeGroup, takeGroupKey } from '#lib/stores/takeFolds.ts';
 	import { followPlainClick, jumpToTake } from '#lib/stores/navigation.ts';
 	import { formatTime } from '#lib/utils/format.ts';
+	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 	import TransportButtonIcon from '../TransportButtonIcon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
@@ -72,6 +64,24 @@
 		audioPlayer.status === 'loading' || audioPlayer.status === 'buffering'
 	);
 
+	const SCORE_LABEL_KEYS: Record<ScoreKey, TextKey> = {
+		user_rating: 'takeRow.scoreRating',
+		text_accuracy: 'takeRow.scoreLyricsSung',
+		dynamics: 'takeRow.scoreDynamics',
+		audiobox_quality: 'takeRow.scoreQuality',
+		audiobox_enjoyment: 'takeRow.scoreEnjoyment',
+		lyrical_coherence: 'takeRow.scoreCoherence'
+	};
+
+	function flagText(flag: QualityFlag): { label: string; title: string } {
+		return flag.kind === 'noVocals'
+			? { label: pageText('takeRow.flagNoVocals'), title: pageText('takeRow.flagNoVocalsTitle') }
+			: {
+					label: pageText('takeRow.flagLongSilence'),
+					title: pageText('takeRow.flagLongSilenceTitle', { count: flag.seconds })
+				};
+	}
+
 	interface HeadlineScore {
 		label: string;
 		text: string;
@@ -88,7 +98,7 @@
 		if (!reading) return null;
 		const { metric, value } = reading;
 		return {
-			label: metric.label,
+			label: pageText(SCORE_LABEL_KEYS[metric.key]),
 			text: formatScore(metric, value, 'pill'),
 			color: scoreColor(metric.key, value)
 		};
@@ -167,9 +177,30 @@
 		const source = song.generations.find((candidate) => candidate.id === gen.src_generation_id);
 		const sourceVersionNumber = source?.version_number ?? gen.src_generation_version_number ?? null;
 		return {
-			label: `${taskType === 'repaint' ? TAKE_PROVENANCE_REPAINT_PREFIX : TAKE_PROVENANCE_COVER_PREFIX} ${nowPlayingTakeLabel(sourceVersionNumber, gen.src_generation_number)}`,
+			label: pageText(
+				taskType === 'repaint' ? 'takeRow.provenanceRepaint' : 'takeRow.provenanceCover',
+				{ take: takeName(sourceVersionNumber, gen.src_generation_number) }
+			),
 			source: source ?? null
 		};
+	}
+
+	function takeName(versionNumber: number | null, generationNumber: number): string {
+		const take = String(generationNumber);
+		return versionNumber === null
+			? pageText('takeRow.takeUnversioned', { take })
+			: pageText('takeRow.takeVersioned', { version: String(versionNumber), take });
+	}
+
+	// ACE-Step's VRAM guard can quietly cut a requested batch size down before
+	// generation runs ("2 asked, 1 delivered"). The backend only persists
+	// delivered_batch_size when it diverges from batch_size, but the row checks
+	// both rather than trusting that invariant.
+	function batchReduction(gen: GenerationItem): { delivered: string; requested: string } | null {
+		const requested = gen.generation_params?.batch_size;
+		const delivered = gen.generation_params?.delivered_batch_size;
+		if (requested == null || delivered == null || requested === delivered) return null;
+		return { delivered: String(delivered), requested: String(requested) };
 	}
 
 	function voiceForGeneration(gen: GenerationItem): UserLoraItem | undefined {
@@ -185,7 +216,8 @@
 	const provenance = $derived(compact ? null : takeProvenance(gen));
 	const headline = $derived(compact ? null : headlineScore(gen));
 	const flag = $derived(compact ? null : qualityFlag(gen));
-	const batchNotice = $derived(compact ? null : takeBatchReductionLabel(gen.generation_params));
+	const flagWords = $derived(flag ? flagText(flag) : null);
+	const batchNotice = $derived(compact ? null : batchReduction(gen));
 	const voice = $derived(compact ? undefined : voiceForGeneration(gen));
 	// A plain click on a link to another take unfolds the version holding it,
 	// then the navigation owner writes the song's entry at the take's anchor and
@@ -199,7 +231,7 @@
 		});
 	}
 
-	const takeName = $derived(nowPlayingTakeLabel(gen.version_number, gen.generation_number));
+	const name = $derived(takeName(gen.version_number, gen.generation_number));
 </script>
 
 <div
@@ -210,7 +242,7 @@
 	class:buffering={isGenLoading(gen)}
 	class:selected={$selectedIds.has(gen.id)}
 	class:archived={gen.is_archived}
-	title={gen.is_archived ? TAKE_ARCHIVED_TITLE : undefined}
+	title={gen.is_archived ? pageText('takeRow.archivedTitle') : undefined}
 >
 	<span class="take-main">
 		<span class="take-headline">
@@ -223,7 +255,9 @@
 					onclick={(event) => handlePlayClick(gen, event)}
 					aria-pressed={$selectionMode ? $selectedIds.has(gen.id) : undefined}
 					aria-busy={$selectionMode ? undefined : transportIsBusy(transport)}
-					aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : transportButtonLabel(transport)} ${takeName}`}
+					aria-label={$selectionMode
+						? pageText('takeRow.selectTake', { take: name })
+						: pageText('takeRow.playTake', { action: transportButtonLabel(transport), take: name })}
 				>
 					{#if $selectionMode}
 						<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
@@ -243,7 +277,7 @@
 				onkeydown={(e) => handleRowKeydown(gen, e)}
 			>
 				<span class="take-label">
-					{takeRowLabel(gen.generation_number)}
+					{pageText('takeRow.takeLabel', { number: String(gen.generation_number) })}
 				</span>
 
 				{#if duration}
@@ -251,7 +285,10 @@
 				{/if}
 
 				{#if headline}
-					<span class="score-badge {headline.color}" title={`${headline.label} ${headline.text}`}>
+					<span
+						class="score-badge {headline.color}"
+						title={pageText('takeRow.scoreTitle', { metric: headline.label, value: headline.text })}
+					>
 						<span class="score-shape" aria-hidden="true"></span>
 						{headline.text}
 					</span>
@@ -260,36 +297,30 @@
 		</span>
 		<span class="take-details">
 			{#if batchNotice}
-				<span
-					class="batch-badge"
-					title="Batch size reduced by ACE-Step due to available VRAM: delivered {batchNotice}"
-				>
-					⚠ {batchNotice}
+				<span class="batch-badge" title={pageText('takeRow.batchTitle', batchNotice)}>
+					⚠ {pageText('takeRow.batchBadge', batchNotice)}
 				</span>
 			{/if}
 
-			{#if flag}
-				<span class="quality-flag-badge" title={flag.title}>
-					⚠ {flag.label}
+			{#if flagWords}
+				<span class="quality-flag-badge" title={flagWords.title}>
+					⚠ {flagWords.label}
 				</span>
 			{/if}
 
 			{#if !compact && $rescoringTakeIds.has(gen.id)}
-				<span class="rescoring-badge">{TAKE_RESCORING_LABEL}</span>
+				<span class="rescoring-badge">{pageText('takeRow.rescoring')}</span>
 			{/if}
 
 			{#if gen.is_archived}
-				<span class="expiry-badge archived" title="Archived — will be hard-deleted">
-					archived
+				<span class="expiry-badge archived" title={pageText('takeRow.archivedBadgeTitle')}>
+					{pageText('takeRow.archived')}
 				</span>
 			{:else}
 				{@const daysLeft = daysUntilExpiry(gen)}
 				{#if daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS}
-					<span
-						class="expiry-badge warn"
-						title="Expires in {daysLeft} day{daysLeft === 1 ? '' : 's'} — pick or keep to preserve"
-					>
-						⏳ {daysLeft}d
+					<span class="expiry-badge warn" title={pageText('takeRow.expiresIn', daysLeft)}>
+						⏳ {pageText('takeRow.expiryBadge', { count: daysLeft })}
 					</span>
 				{/if}
 			{/if}
@@ -316,7 +347,9 @@
 
 		{#if voice}
 			<span class:deleted-voice={voice.deleted_at !== null} class="take-voice">
-				Voice: {voice.name}{voice.deleted_at ? ' — voice deleted' : ''}
+				{pageText(voice.deleted_at ? 'takeRow.voiceDeleted' : 'takeRow.voice', {
+					name: voice.name
+				})}
 			</span>
 		{/if}
 	</span>
@@ -333,7 +366,9 @@
 					actions.pick(gen.id, !gen.is_picked);
 				}}
 				aria-pressed={gen.is_picked}
-				aria-label={`${gen.is_picked ? NOW_PLAYING_UNPICK_LABEL : TAKE_PICK_LABEL} ${takeName}`}
+				aria-label={pageText(gen.is_picked ? 'takeRow.unpickTake' : 'takeRow.pickTake', {
+					take: name
+				})}
 			>
 				<Icon name={gen.is_picked ? 'star-filled' : 'star'} size={16} />
 			</button>
@@ -347,7 +382,9 @@
 					actions.keep(gen.id, !gen.is_kept);
 				}}
 				aria-pressed={gen.is_kept}
-				aria-label={`${gen.is_kept ? TAKE_UNKEEP_LABEL : TAKE_KEEP_LABEL} ${takeName}`}
+				aria-label={pageText(gen.is_kept ? 'takeRow.unkeepTake' : 'takeRow.keepTake', {
+					take: name
+				})}
 			>
 				<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} size={16} />
 			</button>
