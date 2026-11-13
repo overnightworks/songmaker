@@ -36,6 +36,7 @@ import {
 	afterPageRead
 } from '#lib/test-utils/album-cover-editor.ts';
 import { deferred } from '#lib/test-utils/deferred.ts';
+import { words } from '#lib/words/en.ts';
 
 const createAlbumCoverSuggestions = vi.fn();
 const fetchAlbumCoverSuggestions = vi.fn();
@@ -105,9 +106,9 @@ async function openEditorWithRunningSuggestion(
 
 async function askForAnotherSuggestion(target: HTMLElement): Promise<void> {
 	await vi.waitFor(() =>
-		expect(editorButton(target, 'albumCover.suggestAnother').disabled).toBe(false)
+		expect(editorButton(target, words['albumCover.suggestAnother']).disabled).toBe(false)
 	);
-	pressEditorButton(target, 'albumCover.suggestAnother');
+	pressEditorButton(target, words['albumCover.suggestAnother']);
 	await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
 }
 
@@ -171,7 +172,7 @@ describe('Leaving the album cover editor', () => {
 	it.each([
 		{
 			way: '×',
-			leave: (target: HTMLElement) => pressEditorButton(target, 'albumCover.editingClose')
+			leave: (target: HTMLElement) => pressEditorButton(target, words['albumCover.editingClose'])
 		},
 		{
 			way: 'Upload',
@@ -184,9 +185,9 @@ describe('Leaving the album cover editor', () => {
 			way: 'Use',
 			leave: async (target: HTMLElement) => {
 				selectAlbumCoverSuggestion.mockResolvedValue(coveredAlbum());
-				pressEditorButton(target, 'albumCover.previousSuggestion');
+				pressEditorButton(target, words['albumCover.previousSuggestion']);
 				await tick();
-				pressEditorButton(target, 'albumCover.use');
+				pressEditorButton(target, words['albumCover.use']);
 			}
 		}
 	])('$way stops the running suggestion and discards the unused ones', async ({ leave }) => {
@@ -226,7 +227,7 @@ describe('Leaving the album cover editor', () => {
 			way: 'Remove',
 			leave: (target: HTMLElement) => {
 				deleteAlbumCover.mockResolvedValue(album({ id: 'a-local', title: 'Night Drive' }));
-				pressEditorButton(target, 'albumCover.remove');
+				pressEditorButton(target, words['albumCover.remove']);
 			}
 		}
 	])(
@@ -271,13 +272,13 @@ describe('Leaving the album cover editor', () => {
 	it.each([
 		{
 			way: '×',
-			leave: (target: HTMLElement) => pressEditorButton(target, 'albumCover.editingClose')
+			leave: (target: HTMLElement) => pressEditorButton(target, words['albumCover.editingClose'])
 		},
 		{
 			way: 'Use',
 			leave: (target: HTMLElement) => {
 				selectAlbumCoverSuggestion.mockResolvedValue(coveredAlbum());
-				pressEditorButton(target, 'albumCover.use');
+				pressEditorButton(target, words['albumCover.use']);
 			}
 		},
 		{
@@ -323,7 +324,7 @@ describe('Leaving the album cover editor', () => {
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
 		await askForAnotherSuggestion(target);
 
-		pressEditorButton(target, 'albumCover.use');
+		pressEditorButton(target, words['albumCover.use']);
 		serverRunsUntilCancelled(ONE_SUGGESTION);
 		asking.resolve(coverJob());
 		await vi.waitFor(() =>
@@ -362,13 +363,15 @@ describe('Leaving the album cover editor', () => {
 			const target = await renderDetail();
 			await openCoverEditing(target);
 			await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
-			const suggestAnother = () => editorButton(target, 'albumCover.suggestAnother');
+			const suggestAnother = () => editorButton(target, words['albumCover.suggestAnother']);
 			await vi.waitFor(() => expect(suggestAnother().disabled).toBe(false));
-			const actions = (
-				['albumCover.upload', 'albumCover.remove', 'albumCover.suggestAnother'] as const
-			).map((key) => () => editorButton(target, key));
+			const actions = [
+				words['albumCover.upload'],
+				words['albumCover.remove'],
+				words['albumCover.suggestAnother']
+			].map((name) => () => editorButton(target, name));
 
-			pressEditorButton(target, 'albumCover.use');
+			pressEditorButton(target, words['albumCover.use']);
 			await vi.waitFor(() => expect(selectAlbumCoverSuggestion).toHaveBeenCalledTimes(1));
 			for (const action of actions) {
 				expect(action().disabled).toBe(true);
@@ -458,7 +461,7 @@ describe('Leaving the album cover editor', () => {
 		const target = await renderDetail();
 		await openEditorWithRunningSuggestion(target, ONE_SUGGESTION);
 
-		pressEditorButton(target, 'albumCover.editingClose');
+		pressEditorButton(target, words['albumCover.editingClose']);
 
 		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Could not stop', 'error'));
 		expect(editor(target)).not.toBeNull();
@@ -475,7 +478,7 @@ describe('Leaving the album cover editor', () => {
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
 
-		pressEditorButton(target, 'albumCover.editingClose');
+		pressEditorButton(target, words['albumCover.editingClose']);
 
 		await vi.waitFor(() =>
 			expect(addToast).toHaveBeenCalledWith('Could not discard suggestions', 'error')
@@ -491,9 +494,9 @@ describe('Leaving the album cover editor', () => {
 		const target = await renderDetail();
 		await openEditorWithRunningSuggestion(target, ONE_SUGGESTION);
 
-		pressEditorButton(target, 'albumCover.previousSuggestion');
+		pressEditorButton(target, words['albumCover.previousSuggestion']);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
-		pressEditorButton(target, 'albumCover.use');
+		pressEditorButton(target, words['albumCover.use']);
 
 		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Could not save', 'error'));
 		expect(selectAlbumCoverSuggestion).toHaveBeenCalledWith('a-local', { suggestion_id: 'one' });
@@ -520,7 +523,7 @@ describe('Leaving the album cover editor', () => {
 			act: async (target: HTMLElement) => {
 				const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 				vi.spyOn(input, 'click').mockImplementation(() => undefined);
-				pressEditorButton(target, 'albumCover.upload');
+				pressEditorButton(target, words['albumCover.upload']);
 				Object.defineProperty(input, 'files', { configurable: true, value: [] });
 				input.dispatchEvent(new Event('change', { bubbles: true }));
 				await tick();
@@ -550,7 +553,7 @@ describe('Leaving the album cover editor', () => {
 			expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
 		);
 
-		pressEditorButton(target, 'albumCover.editingClose');
+		pressEditorButton(target, words['albumCover.editingClose']);
 
 		await editingClosed(target);
 		expect(cancelJob.mock.invocationCallOrder[0]).toBeLessThan(
@@ -573,7 +576,7 @@ describe('Leaving the album cover editor', () => {
 		await pressSuggestOnceLoaded(target);
 		await reachSuggestionsLoads(2);
 
-		pressEditorButton(target, 'albumCover.editingClose');
+		pressEditorButton(target, words['albumCover.editingClose']);
 		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
 		loadAfterAsking.resolve(coverSuggestions({ job: coverJob({ status: 'running' }) }));
 		await tick();
@@ -594,7 +597,7 @@ describe('Leaving the album cover editor', () => {
 		await pressSuggestOnceLoaded(target);
 		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
 
-		pressEditorButton(target, 'albumCover.editingClose');
+		pressEditorButton(target, words['albumCover.editingClose']);
 		await editingClosed(target);
 		expect(cancelJob).not.toHaveBeenCalled();
 		suggestionJob.resolve(coverJob());
@@ -614,7 +617,7 @@ describe('Leaving the album cover editor', () => {
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
 		await askForAnotherSuggestion(target);
-		pressEditorButton(target, 'albumCover.editingClose');
+		pressEditorButton(target, words['albumCover.editingClose']);
 		await editingClosed(target);
 		discardAlbumCoverSuggestions.mockClear();
 
@@ -645,7 +648,7 @@ describe('Leaving the album cover editor', () => {
 			.mockResolvedValue(coverSuggestions());
 		await openCoverEditing(target);
 		await reachSuggestionsLoads(1);
-		pressEditorButton(target, 'albumCover.editingClose');
+		pressEditorButton(target, words['albumCover.editingClose']);
 		await editingClosed(target);
 		await openCoverEditing(target);
 		await pressSuggestOnceLoaded(target);
@@ -662,7 +665,7 @@ describe('Leaving the album cover editor', () => {
 	const exitsBeforeTheFirstLoad = [
 		{
 			way: '×',
-			leave: (target: HTMLElement) => pressEditorButton(target, 'albumCover.editingClose')
+			leave: (target: HTMLElement) => pressEditorButton(target, words['albumCover.editingClose'])
 		},
 		{
 			way: 'Upload',
@@ -718,14 +721,14 @@ describe('Leaving the album cover editor', () => {
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
 
-		pressEditorButton(target, 'albumCover.remove');
-		pressEditorButton(target, 'albumCover.use');
+		pressEditorButton(target, words['albumCover.remove']);
+		pressEditorButton(target, words['albumCover.use']);
 		removal.resolve({ ...coveredAlbum(), cover: null });
 		await editingClosed(target);
 		await openCoverEditing(target);
 
 		await tick();
-		expect(editorButton(target, 'albumCover.suggestAnother').disabled).toBe(true);
+		expect(editorButton(target, words['albumCover.suggestAnother']).disabled).toBe(true);
 		useSave.resolve(coveredAlbum(UPLOADED));
 		await editingClosed(target);
 	});
@@ -737,7 +740,7 @@ describe('Leaving the album cover editor', () => {
 		const target = await renderDetail();
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
-		pressEditorButton(target, 'albumCover.use');
+		pressEditorButton(target, words['albumCover.use']);
 
 		for (const [from, to] of [
 			[200, 100],
@@ -782,7 +785,7 @@ describe('Leaving the album cover editor', () => {
 		await openCoverEditing(target);
 		await reachSuggestionsLoads(1);
 
-		pressEditorButton(target, 'albumCover.editingClose');
+		pressEditorButton(target, words['albumCover.editingClose']);
 		await editingClosed(target);
 
 		await reachSuggestionsLoads(2);

@@ -144,7 +144,7 @@ describe('The album cover editor while the network is out', () => {
 		await openCoverEditing(target);
 		await reachSuggestionsLoads(fetchAlbumCoverSuggestions, 1);
 
-		pressEditorButton(target, 'albumCover.suggest');
+		pressEditorButton(target, words['albumCover.suggest']);
 		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
 		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
 

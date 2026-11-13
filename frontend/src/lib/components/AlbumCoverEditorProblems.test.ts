@@ -135,7 +135,7 @@ describe('a cover suggestion that cannot run names one of the agent’s problems
 		await vi.waitFor(() => expect(problemLine(target)).not.toBeNull());
 		const login = requireElement<HTMLAnchorElement>(problemLine(target) as HTMLElement, 'a');
 		expect(login.textContent?.trim()).toBe(words['problemLine.logIn']);
-		expect(editorButton(target, 'albumCover.upload').disabled).toBe(false);
+		expect(editorButton(target, words['albumCover.upload']).disabled).toBe(false);
 		expect(target.textContent).not.toContain(words['problemLine.tryAgain']);
 	});
 
@@ -203,7 +203,7 @@ describe('a cover suggestion that cannot run names one of the agent’s problems
 		expect(suggestButton(target).disabled).toBe(true);
 		expect(accessibleName(suggestButton(target))).toContain('0:42');
 
-		pressEditorButton(target, 'albumCover.editingClose');
+		pressEditorButton(target, words['albumCover.editingClose']);
 		await editingClosed(target);
 		await vi.advanceTimersByTimeAsync(30_000);
 		await openCoverEditing(target);

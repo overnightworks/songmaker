@@ -65,7 +65,7 @@ import AlbumDetailView from './AlbumDetailView.svelte';
 const { render: renderDetail, cleanup } = createComponentMount(AlbumDetailView);
 
 async function closeWithX(target: HTMLElement): Promise<void> {
-	pressEditorButton(target, 'albumCover.editingClose');
+	pressEditorButton(target, words['albumCover.editingClose']);
 	await editingClosed(target);
 }
 
@@ -181,7 +181,7 @@ describe('The album cover state around the editor', () => {
 			await openCoverEditing(target);
 
 			await vi.waitFor(() =>
-				expect(editorButton(target, 'albumCover.suggest').disabled).toBe(false)
+				expect(editorButton(target, words['albumCover.suggest']).disabled).toBe(false)
 			);
 		}
 	);
@@ -195,21 +195,21 @@ describe('The album cover state around the editor', () => {
 		const target = await renderDetail();
 		await openCoverEditing(target);
 		await vi.waitFor(() =>
-			expect(editorButton(target, 'albumCover.suggestAnother').disabled).toBe(false)
+			expect(editorButton(target, words['albumCover.suggestAnother']).disabled).toBe(false)
 		);
-		editorButton(target, 'albumCover.suggestAnother').click();
+		editorButton(target, words['albumCover.suggestAnother']).click();
 		await closeWithX(target);
 		await openCoverEditing(target);
 		await vi.waitFor(() =>
-			expect(editorButton(target, 'albumCover.suggestAnother').disabled).toBe(false)
+			expect(editorButton(target, words['albumCover.suggestAnother']).disabled).toBe(false)
 		);
-		editorButton(target, 'albumCover.suggestAnother').click();
+		editorButton(target, words['albumCover.suggestAnother']).click();
 		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledTimes(2));
 
 		retiredAsk.reject(new Error('down'));
 		await new Promise((settled) => setTimeout(settled, 0));
 
-		expect(editorButton(target, 'albumCover.suggestAnother').disabled).toBe(true);
+		expect(editorButton(target, words['albumCover.suggestAnother']).disabled).toBe(true);
 		expect(target.querySelector('.cover-failure')).toBeNull();
 	});
 });

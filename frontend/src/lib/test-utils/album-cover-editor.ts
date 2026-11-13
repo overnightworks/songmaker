@@ -6,7 +6,7 @@ import { announcedText, getByRoleButton } from '#lib/test-utils/accessible-name.
 import { requireElement } from '#lib/components/shell/rail-test-fixtures.ts';
 import type { CoverSuggestionsResponse, JobItem } from '#lib/api/types.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
-import { words, type Key } from '#lib/words/en.ts';
+import { words } from '#lib/words/en.ts';
 
 // What the album cover editor tests share: the editor is reached through the
 // album header, so these helpers drive the page as a person does.
@@ -92,30 +92,24 @@ export function shownImage(target: HTMLElement): string | null {
 }
 
 export async function pressSuggestOnceLoaded(target: HTMLElement): Promise<void> {
-	await vi.waitFor(() => expect(editorButton(target, 'albumCover.suggest').disabled).toBe(false));
-	pressEditorButton(target, 'albumCover.suggest');
+	await vi.waitFor(() =>
+		expect(editorButton(target, words['albumCover.suggest']).disabled).toBe(false)
+	);
+	pressEditorButton(target, words['albumCover.suggest']);
 }
 
-/** The editor's button the catalog key names. */
-export type EditorButtonKey = Key & `albumCover.${string}`;
-
-/** The names the editor's buttons carry, in the order of the keys. */
-export function editorButtonNames(...keys: EditorButtonKey[]): string[] {
-	return keys.map((key) => words[key] as string);
+export function editorButton(target: HTMLElement, name: string): HTMLButtonElement {
+	return getByRoleButton(requireElement(target, '.cover-editor'), name);
 }
 
-export function editorButton(target: HTMLElement, key: EditorButtonKey): HTMLButtonElement {
-	return getByRoleButton(requireElement(target, '.cover-editor'), words[key] as string);
-}
-
-export function pressEditorButton(target: HTMLElement, key: EditorButtonKey): void {
-	editorButton(target, key).click();
+export function pressEditorButton(target: HTMLElement, name: string): void {
+	editorButton(target, name).click();
 }
 
 export function uploadCoverFile(target: HTMLElement): void {
 	const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 	vi.spyOn(input, 'click').mockImplementation(() => undefined);
-	pressEditorButton(target, 'albumCover.upload');
+	pressEditorButton(target, words['albumCover.upload']);
 	const file = new File([new Uint8Array([1])], 'cover.jpg', { type: 'image/jpeg' });
 	Object.defineProperty(input, 'files', { configurable: true, value: [file] });
 	input.dispatchEvent(new Event('change', { bubbles: true }));
