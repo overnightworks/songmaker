@@ -96,9 +96,6 @@
 [function_lines."src/songmaker_cli/db/queries/songs.py"]
 "update_song" = 62
 
-[function_lines."src/songmaker_cli/generation_api.py"]
-"api_repaint_generation" = 60
-
 [function_lines."src/songmaker_cli/health_api.py"]
 "_format_prometheus" = 104
 "metrics_endpoint" = 70
