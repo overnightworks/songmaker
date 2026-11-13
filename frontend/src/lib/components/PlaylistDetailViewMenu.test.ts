@@ -1,22 +1,15 @@
+import PlaylistDetailView from './PlaylistDetailView.svelte';
+import { createComponentMount, requireElement } from './shell/rail-test-fixtures';
+import { openPlaylistDetail, populatedPlaylistDefaults } from '#lib/test-utils/playlist-detail.ts';
 import { words } from '#lib/words/en.ts';
-import {
-	makePlaylistDetail as detail,
-	makePlaylistEntry as entry
-} from '#lib/test-utils/factories.ts';
-import { mount, tick, unmount } from 'svelte';
+import { makePlaylistDetail as detail } from '#lib/test-utils/factories.ts';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PlaylistDetailItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import { setOpenCollection } from '#lib/stores/collection.ts';
 import { closeNowPlaying, queueContext, setShuffle } from '#lib/stores/player.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
-import {
-	playlistDetailLoad,
-	playlistList,
-	resetPlaylistsForTests,
-	selectedPlaylistDetail
-} from '#lib/stores/playlists.ts';
+import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
@@ -37,44 +30,12 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
 	selectSong: vi.fn()
 }));
 
-import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { selectSong } from '#lib/stores/navigation.ts';
 import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '#lib/api/client.ts';
 import { addToast } from '#lib/stores/toast.ts';
 
-function populatedPlaylistDefaults(): Partial<PlaylistDetailItem> {
-	return {
-		share_slug: null,
-		entries: [entry({ song_title: 'Tide', album_title: 'Night Drive', mp3_path: 'tide.mp3' })]
-	};
-}
-
-const mounted: Array<ReturnType<typeof mount>> = [];
-
-// The header prefers the lightweight playlist in playlistList and falls
-// back to the detail once it matches the open id (see PlaylistDetailView.
-// svelte) — this seeds both, the way navigation.openPlaylist does, so tests
-// exercise the common (list populated) path. Tests for the fallback path
-// seed only the detail.
-function openPlaylistDetail(d: PlaylistDetailItem): void {
-	playlistList.set([
-		{
-			id: d.id,
-			title: d.title,
-			slug: d.slug,
-			entry_count: d.entry_count,
-			is_shared: d.is_shared,
-			share_slug: d.share_slug,
-			cover: d.cover,
-			album_covers: d.album_covers,
-			created_at: d.created_at
-		}
-	]);
-	setOpenCollection({ kind: 'playlist', id: d.id });
-	selectedPlaylistDetail.set(d);
-	playlistDetailLoad.set({ status: 'ready', error: null });
-}
+const { render: mountPlaylistView, cleanup } = createComponentMount(PlaylistDetailView);
 
 beforeEach(() => {
 	vi.mocked(fetchPlaylist).mockReset();
@@ -98,8 +59,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	for (const component of mounted.splice(0)) await unmount(component);
-	document.body.replaceChildren();
+	await cleanup();
 	resetPlaylistsForTests();
 	audioPlayer.current = null;
 	queueContext.set({ type: 'library' });
@@ -108,12 +68,6 @@ afterEach(async () => {
 	audioPlayer.status = 'idle';
 	delete document.documentElement.dataset.pointer;
 });
-
-function requireElement<T extends Element>(root: ParentNode, selector: string): T {
-	const element = root.querySelector<T>(selector);
-	if (!element) throw new Error(`Expected ${selector} to be rendered`);
-	return element;
-}
 
 describe('PlaylistDetailView menu', () => {
 	it('uploads and removes a playlist cover through the shared header actions', async () => {
@@ -211,11 +165,3 @@ describe('PlaylistDetailView menu', () => {
 		]);
 	});
 });
-
-async function mountPlaylistView(): Promise<HTMLElement> {
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted.push(mount(PlaylistDetailView, { target }));
-	await tick();
-	return target;
-}

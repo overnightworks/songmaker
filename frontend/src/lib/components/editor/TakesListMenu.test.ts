@@ -1,9 +1,5 @@
-import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
-import { mount, tick, unmount } from 'svelte';
+import { tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GenerationItem, SongItem } from '#lib/api/types.ts';
-import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
-import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '#lib/test-utils/hitbox.ts';
 import { selectedSongId } from '#lib/stores/player.ts';
 import { clearSelection } from '#lib/stores/selection.ts';
@@ -47,90 +43,27 @@ import { activeJobs, generationFailures } from '#lib/stores/jobs.ts';
 import { playTake, playTakeAndShowNowPlaying } from '#lib/stores/player.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
-import TakesListHarness from './tests/TakesListHarness.svelte';
+import {
+	IDLE,
+	addToPlaylist,
+	clickMenuItem,
+	clickVersion,
+	keep,
+	mounted,
+	openTakeMenu,
+	pick,
+	playlist,
+	render,
+	useSeed
+} from '#lib/test-utils/takes-list.ts';
 import { words } from '#lib/words/en.ts';
-
-function measuredTakeDefaults(): Partial<GenerationItem> {
-	return { generation_params: { audio_duration: 195 }, audio_duration_sec: 195 };
-}
-
-function versionedSongDefaults(): Partial<SongItem> {
-	return {
-		album_id: 'a-local',
-		album_title: 'Local Album',
-		version_count: 3,
-		generation_count: 5,
-		generations: [
-			generation({
-				...measuredTakeDefaults(),
-				version_number: 3,
-				generation_number: 3,
-				is_picked: true
-			}),
-			generation({
-				...measuredTakeDefaults(),
-				id: 'g2',
-				version_number: 3,
-				generation_number: 2
-			}),
-			generation({ ...measuredTakeDefaults(), id: 'g3', version_number: 2 })
-		]
-	};
-}
-
-const IDLE: GenerateState = { kind: 'idle' };
-
-const playlist = {
-	id: 'p1',
-	title: 'Night Drive',
-	slug: 'night-drive',
-	entry_count: 0,
-	is_shared: false,
-	share_slug: null,
-	album_covers: [],
-	created_at: '2026-01-01T00:00:00+00:00'
-};
-
-function openTakeMenu(row: HTMLElement): void {
-	row.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-}
-
-function clickMenuItem(root: ParentNode, label: string): void {
-	menuRow(root, label).click();
-}
 
 vi.mock('#lib/stores/playlists.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/stores/playlists.ts')>();
 	return { ...actual, ensurePlaylistsLoaded: vi.fn(async () => undefined) };
 });
 
-const mounted: Array<ReturnType<typeof mount>> = [];
 let songSequence = 0;
-const pick = vi.fn();
-const keep = vi.fn();
-const useSeed = vi.fn();
-const clickVersion = vi.fn(async () => true);
-
-const addToPlaylist = vi.fn(async () => undefined);
-
-function mockActions(): GenerationActions {
-	return {
-		pick,
-		keep,
-		del: vi.fn(),
-		rate: vi.fn(async () => undefined),
-		share: vi.fn(async () => ({
-			status: 'ok',
-			share_url: '',
-			share_slug: '',
-			songs_without_playable_take: []
-		})),
-		unshare: vi.fn(async () => undefined),
-		addToPlaylist,
-		useSeed,
-		clickVersion
-	};
-}
 
 beforeEach(() => {
 	pick.mockReset();
@@ -173,28 +106,6 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 	clearSelection();
 });
-
-async function render(overrides: Partial<Record<string, unknown>> = {}) {
-	const target = document.createElement('div');
-	document.body.append(target);
-	const takeSong = (overrides.song as SongItem | undefined) ?? song(versionedSongDefaults());
-	const props = {
-		song: takeSong,
-		dirty: false,
-		draftVersionNumber: 4,
-		latestVersionNumber: Math.max(0, ...takeSong.generations.map((gen) => gen.version_number ?? 0)),
-		onsource: vi.fn(),
-		...overrides
-	};
-	mounted.push(
-		mount(TakesListHarness, {
-			target,
-			props: { ...props, actions: mockActions() }
-		})
-	);
-	await tick();
-	return { target, props };
-}
 
 describe('TakesList menu', () => {
 	it("names the take on the row's menu, without also playing it", async () => {

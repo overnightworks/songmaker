@@ -3,18 +3,22 @@ import {
 	makeGeneration as generation,
 	makeSong as song
 } from '#lib/test-utils/factories.ts';
-import { mount, tick, unmount } from 'svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { CoverSuggestionsResponse } from '#lib/api/types.ts';
 import { lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
 import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
 import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 import { words } from '#lib/words/en.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRowLabels } from '#lib/test-utils/collection-menu.ts';
-import { openCollectionMenu } from './shell/rail-test-fixtures';
+import {
+	createComponentMount,
+	openCollectionMenu,
+	requireElement
+} from './shell/rail-test-fixtures';
+import { coverSuggestions } from '#lib/test-utils/album-cover-editor.ts';
 import { clearHitboxStyles, clearPointer } from '#lib/test-utils/hitbox.ts';
 import { clearComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
@@ -86,6 +90,7 @@ vi.mock('#lib/stores/player.ts', async (importOriginal) => {
 });
 
 import AlbumDetailView from './AlbumDetailView.svelte';
+const { render: renderDetail, cleanup } = createComponentMount(AlbumDetailView);
 import { selectSong } from '#lib/stores/navigation.ts';
 import {
 	ensureGenerationsLoaded,
@@ -98,21 +103,6 @@ import {
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { addToast } from '#lib/stores/toast.ts';
 
-const mounted: Array<ReturnType<typeof mount>> = [];
-
-const NO_COVER_SUGGESTIONS: CoverSuggestionsResponse = {
-	job: null,
-	suggestions: []
-};
-
-async function renderDetail(): Promise<HTMLElement> {
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted.push(mount(AlbumDetailView, { target }));
-	await tick();
-	return target;
-}
-
 beforeEach(() => {
 	albumList.set([album({ id: 'a-local', title: 'Night Drive' })]);
 	songList.set([
@@ -123,7 +113,7 @@ beforeEach(() => {
 	updateAlbum.mockReset();
 	archiveAlbum.mockReset();
 	unarchiveAlbum.mockReset();
-	fetchAlbumCoverSuggestions.mockReset().mockResolvedValue(NO_COVER_SUGGESTIONS);
+	fetchAlbumCoverSuggestions.mockReset().mockResolvedValue(coverSuggestions());
 	vi.mocked(addToast).mockReset();
 	vi.mocked(selectSong).mockReset();
 	createSong.mockReset();
@@ -134,8 +124,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	for (const component of mounted.splice(0)) await unmount(component);
-	document.body.replaceChildren();
+	await cleanup();
 	clearHitboxStyles();
 	clearComponentStyles();
 	clearPointer();
@@ -155,12 +144,6 @@ afterEach(async () => {
 	resetConnectivityForTests();
 	resetLibraryDataForTests();
 });
-
-function requireElement<T extends Element>(root: ParentNode, selector: string): T {
-	const element = root.querySelector<T>(selector);
-	if (!element) throw new Error(`Expected ${selector} to be rendered`);
-	return element;
-}
 
 describe('AlbumDetailView menu', () => {
 	it('915_C3: names the album and lists Edit details, Cover, Pick album takes, Add to playlist, Share, Archive, Delete in the menu', async () => {
