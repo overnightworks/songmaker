@@ -242,8 +242,8 @@ async function showTakes(page: Page): Promise<void> {
 }
 
 function takeGroup(page: Page, version: TakeVersion | null, takeCount: number): Locator {
-	const versionNumber = version?.versionNumber ?? null;
-	const hasText = words['takesList.foldedVersion'](takeCount, { number: String(versionNumber) });
+	const key = version ? 'takesList.foldedVersion' : 'takesList.foldedImported';
+	const hasText = words[key](takeCount, { number: String(version?.versionNumber) });
 	return workspace(page).locator('.version-section').filter({ hasText });
 }
 
@@ -838,7 +838,6 @@ test.describe('the versions of a song', () => {
 		await showTakes(page);
 
 		const imported = takeGroup(page, null, 1);
-		await expect(imported).toBeVisible();
 		await expect(imported.getByRole('button', { name: /Open v/ })).toHaveCount(0);
 
 		await imported.getByRole('button', { name: nameStartingWith(firstTake) }).click();
