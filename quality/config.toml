@@ -7,6 +7,12 @@ mandatory_jobs = [
 ]
 
 [[gate.loosened]]
+what = "import contract 'The application's layers point downward and routes stay apart' gains the module words in its leaf row"
+item = "#3097"
+date = 2026-11-13
+reason = "words.py is the module design-catalogs generates from the catalogs and imports nothing in-tree, so it joins the leaf row; the exhaustive contract needs a row for every module"
+
+[[gate.loosened]]
 what = 'mandatory job "Alert rules (promtool)" removed'
 item = "#2284"
 date = 2026-11-12
@@ -162,6 +168,13 @@ path = "frontend/src/lib/words/en.ts"
 job = "Backend (Python 3.14)"
 item = "#2987"
 date = 2026-11-11
+reason = "written by design-catalogs from frontend/src/lib/catalogs/en.po and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
+
+[[size.generated]]
+path = "src/songmaker_cli/words.py"
+job = "Backend (Python 3.14)"
+item = "#3097"
+date = 2026-11-13
 reason = "written by design-catalogs from frontend/src/lib/catalogs/en.po and proven by its --check in Backend static checks, which Backend (Python 3.14) needs"
 
 [[root.allow]]
