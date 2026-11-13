@@ -20,8 +20,7 @@ import {
 	editor,
 	openCoverEditing,
 	editingClosed,
-	pressEditorButton,
-	afterPageRead
+	pressEditorButton
 } from '#lib/test-utils/album-cover-editor.ts';
 
 const createAlbumCoverSuggestions = vi.fn();
