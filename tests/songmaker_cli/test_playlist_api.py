@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import event
 from sqlalchemy.orm import Session
+from support.cover_refusals import COVER_TOO_LARGE, COVER_UNSUPPORTED_TYPE
 from support.web_app import (
     make_authenticated_user,
     make_router_app,
@@ -26,8 +27,6 @@ from songmaker_cli.constants import COVER_MAX_BYTES, COVER_VARIANT_CARD, COVER_V
 from songmaker_cli.covers import (
     COVER_JPEG_MAGIC,
     COVER_PNG_EXTENSION,
-    COVER_TOO_LARGE,
-    COVER_UNSUPPORTED_TYPE,
     COVER_VARIANT_ORIGINAL,
     PLAYLIST_COVER_DIRNAME,
     write_playlist_cover,
