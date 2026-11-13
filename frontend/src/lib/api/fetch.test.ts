@@ -20,6 +20,7 @@ import {
 	signInAddress
 } from './fetch';
 import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants/http.ts';
+import { words } from '#lib/words/en.ts';
 import { hangsUntilAborted, sentUpload, uploadAnswers } from '#lib/test-utils/network.ts';
 
 afterEach(() => {
@@ -236,6 +237,73 @@ describe('apiFetch error detail', () => {
 		const err = await apiFetch('/api/songs/s1/generate').catch((e: unknown) => e);
 
 		expect(err).toMatchObject({ detail: 'Not now', errorType, jobId });
+	});
+});
+
+describe('a refusal that names a catalog key', () => {
+	const archived = { key: 'takeRefusal.archived', values: {} };
+
+	function refused(refusal: { key: string; values: Record<string, string> } | null) {
+		return new ApiError(409, 'Sentence of the server', '/api/x', null, '', null, null, refusal);
+	}
+
+	it.each([
+		{ message: archived, read: archived },
+		{
+			message: { key: 'modelRefusal.unavailable', values: { model: 'turbo' } },
+			read: { key: 'modelRefusal.unavailable', values: { model: 'turbo' } }
+		},
+		{ message: { key: 'takeRefusal.archived', values: { model: 7 } }, read: null },
+		{ message: { key: 'takeRefusal.archived' }, read: null },
+		{ message: { values: {} }, read: null },
+		{ message: 'takeRefusal.archived', read: null },
+		{ message: null, read: null }
+	])('is read from the message of $message as $read', async ({ message, read }) => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 409,
+			headers: { get: () => null },
+			json: () => Promise.resolve({ detail: 'Sentence of the server', message })
+		});
+
+		const err = await apiFetch('/api/generations/g1/pick').catch((e: unknown) => e);
+
+		expect(err).toMatchObject({ detail: 'Sentence of the server', refusal: read });
+	});
+
+	it("is shown as the page's words for its key, never as the server's sentence", () => {
+		expect(describeFailure(refused(archived), 'Fallback')).toBe(words['takeRefusal.archived']);
+	});
+
+	it("is shown with the refusal's values in the gaps", () => {
+		const refusal = { key: 'modelRefusal.unavailable', values: { model: 'turbo' } };
+
+		expect(describeFailure(refused(refusal), 'Fallback')).toBe(
+			words['modelRefusal.unavailable']({ model: 'turbo' })
+		);
+	});
+
+	it.each([
+		{ key: 'takeRefusal.gone', why: 'the page has no such key' },
+		{ key: 'newPlace.heading', why: 'the entry is a marked sentence' },
+		{ key: 'toString', why: 'the name is inherited, not an entry' }
+	])('is shown as the fallback, with the key logged, when $why', ({ key }) => {
+		const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		expect(describeFailure(refused({ key, values: {} }), 'Fallback')).toBe('Fallback');
+
+		expect(logged).toHaveBeenCalledWith(expect.stringContaining(key));
+		logged.mockRestore();
+	});
+
+	it("is withheld with the server's text when the caller withholds it", () => {
+		expect(describeFailure(refused(archived), 'Fallback', { withholdServerDetail: true })).toBe(
+			'Fallback'
+		);
+	});
+
+	it("leaves an error without a key to show the server's sentence", () => {
+		expect(describeFailure(refused(null), 'Fallback')).toBe('Sentence of the server');
 	});
 });
 

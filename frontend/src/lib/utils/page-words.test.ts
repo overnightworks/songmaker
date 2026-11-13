@@ -1,5 +1,5 @@
-import { expect, it, vi } from 'vitest';
-import { pageParts, pageText } from '#lib/utils/page-words.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { pageParts, pageText, refusalText } from '#lib/utils/page-words.ts';
 import { words } from '#lib/words/en.ts';
 import { sourceLanguage } from '#lib/words/index.ts';
 
@@ -23,6 +23,27 @@ it('reads a sentence with a marked part as its parts, filled with the gap values
 	expect(pageParts('newPlace.heading', { library: 'Library' })).toEqual(
 		words['newPlace.heading']({ library: 'Library' })
 	);
+});
+
+describe('refusalText', () => {
+	it('reads a plain key as its text', () => {
+		expect(refusalText('takeRefusal.archived', {})).toBe(words['takeRefusal.archived']);
+	});
+
+	it('fills the gaps of a key with the refusal values', () => {
+		expect(refusalText('modelRefusal.unavailable', { model: 'turbo' })).toBe(
+			words['modelRefusal.unavailable']({ model: 'turbo' })
+		);
+	});
+
+	it.each([
+		{ key: 'takeRefusal.gone', why: 'no entry has the key' },
+		{ key: 'toString', why: 'the name is inherited, not an entry' },
+		{ key: '__proto__', why: 'the name is the prototype, not an entry' },
+		{ key: 'newPlace.heading', why: 'the entry is a marked sentence, not text' }
+	])('gives null when $why', ({ key }) => {
+		expect(refusalText(key, { library: 'Library' })).toBeNull();
+	});
 });
 
 it('refuses, at type check, values for a plain key and a missing or misnamed gap', () => {
