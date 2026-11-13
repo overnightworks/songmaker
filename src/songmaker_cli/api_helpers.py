@@ -299,7 +299,7 @@ def create_job_with_rate_limit(
         song_id = expect_present(song_id, "create_job_with_rate_limit: version_id requires song_id")
         if lock_song_and_find_version(session, song_id, version_id) is None:
             session.rollback()
-            raise Refusal(404, "versionRefusal.notFound")
+            raise version_not_found()
 
     return create_job(
         session, job_type, user_id=user.id, song_id=song_id, version_id=version_id,
@@ -460,6 +460,18 @@ def can_access_album(album: Album | None, user: Actor, *, require_owner: bool = 
     return album is not None and album.created_by == user.id
 
 
+def song_not_found() -> Refusal:
+    return Refusal(404, "songRefusal.notFound")
+
+
+def playlist_not_found() -> Refusal:
+    return Refusal(404, "playlistRefusal.notFound")
+
+
+def version_not_found() -> Refusal:
+    return Refusal(404, "versionRefusal.notFound")
+
+
 def check_album_access(
     album: Album | None, user: AuthenticatedUser, *, require_owner: bool = False,
 ) -> Album:
@@ -475,9 +487,9 @@ def check_song_access(
     """Load a song and verify ownership. Returns the song or raises 404."""
     song = get_song(session, song_id)
     if not song:
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     if not can_access_album(song.album, user, require_owner=require_owner):
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     return song
 
 
@@ -492,10 +504,10 @@ def check_song_access_including_deleted(
     """
     song = get_song(session, song_id, include_deleted_rows=True)
     if not song:
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     album = get_album(session, song.album_id, include_deleted_rows=True)
     if not can_access_album(album, user):
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     return song
 
 
@@ -506,9 +518,9 @@ def check_playlist_access(
     """Load a playlist and verify ownership. Returns the playlist or raises 404."""
     playlist = get_playlist(session, playlist_id)
     if not playlist:
-        raise Refusal(404, "playlistRefusal.notFound")
+        raise playlist_not_found()
     if (require_owner or user.role != AppRole.ADMIN) and playlist.created_by != user.id:
-        raise Refusal(404, "playlistRefusal.notFound")
+        raise playlist_not_found()
     return playlist
 
 

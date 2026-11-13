@@ -18,6 +18,7 @@ from songmaker_cli.api_helpers import (
     check_playlist_access,
     check_song_access,
     cover_file_response,
+    playlist_not_found,
     raise_cover_refusal,
     unique_playlist_slug,
 )
@@ -158,7 +159,7 @@ def api_update_playlist(
     try:
         playlist = update_playlist(session, playlist_id, req.title, slug=slug)
     except ValueError:
-        raise Refusal(404, "playlistRefusal.notFound")
+        raise playlist_not_found()
     session.commit()
     return PlaylistResponse.from_orm(playlist, reaches=_albums_reached_by(user))
 
@@ -178,7 +179,7 @@ def api_delete_playlist(
     try:
         delete_playlist(session, playlist_id)
     except ValueError:
-        raise Refusal(404, "playlistRefusal.notFound")
+        raise playlist_not_found()
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     remove_playlist_cover_files(ctx.audio_dir, playlist_id)
@@ -440,7 +441,7 @@ def api_share_playlist(
     try:
         playlist = enable_playlist_sharing(session, playlist_id)
     except ValueError as exc:
-        raise Refusal(404, "playlistRefusal.notFound") from exc
+        raise playlist_not_found() from exc
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.PLAYLIST, playlist_id)
     share_url = public_share_url(ShareKind.PLAYLIST, playlist.share_slug)
     session.commit()
@@ -471,7 +472,7 @@ def api_unshare_playlist(
     try:
         disable_playlist_sharing(session, playlist_id)
     except ValueError:
-        raise Refusal(404, "playlistRefusal.notFound")
+        raise playlist_not_found()
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     return StatusResponse()
