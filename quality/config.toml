@@ -7,18 +7,6 @@ mandatory_jobs = [
 ]
 
 [[gate.loosened]]
-what = "import contract 'The application's layers point downward and routes stay apart' gains the module refusals in its api_helpers row"
-item = "#3097"
-date = 2026-11-13
-reason = "refusals.py raises the HTTP error every route module uses and imports api_models below it, as api_helpers does, so it joins that row; the exhaustive contract needs a row for every module"
-
-[[gate.loosened]]
-what = "import contract 'The application's layers point downward and routes stay apart' gains the module words in its leaf row"
-item = "#3097"
-date = 2026-11-13
-reason = "words.py is the module design-catalogs generates from the catalogs and imports nothing in-tree, so it joins the leaf row; the exhaustive contract needs a row for every module"
-
-[[gate.loosened]]
 what = 'mandatory job "Alert rules (promtool)" removed'
 item = "#2284"
 date = 2026-11-12
