@@ -177,13 +177,21 @@ def test_a_file_without_a_row_is_not_counted_and_stays_untouched(quota_context):
 
 
 @pytest.mark.parametrize(
-    "state,status,detail",
+    "state,status,detail,message",
     [
-        ("full", 409, "Reference audio storage limit reached."),
-        ("invalid", 400, "Unsupported format '.txt'. Accepted: .flac, .mp3, .ogg, .wav"),
+        (
+            "full", 409, "Reference audio storage limit reached.",
+            {"key": "referenceRefusal.quotaReached", "values": {}},
+        ),
+        (
+            "invalid", 400, "Unsupported format '.txt'. Accepted: .flac, .mp3, .ogg, .wav",
+            None,
+        ),
     ],
 )
-def test_upload_refusals_are_exact_and_add_nothing(quota_context, state, status, detail):
+def test_upload_refusals_are_exact_and_add_nothing(
+    quota_context, state, status, detail, message,
+):
     """Q3 and the public bodies of invariant 7."""
     ctx = quota_context
     _seed_rows(ctx, "owner", 50)
@@ -194,7 +202,8 @@ def test_upload_refusals_are_exact_and_add_nothing(quota_context, state, status,
             files={"file": ("ref.txt" if state == "invalid" else "ref.wav", b"a" * 100)},
         )
     assert result.status_code == status
-    assert result.json() == {"detail": detail}
+    assert result.json()["detail"] == detail
+    assert result.json().get("message") == message
     assert _row_count(ctx) == 50
     assert _files(ctx) == []
 
@@ -215,7 +224,10 @@ def test_a_failed_file_write_answers_the_storage_error_and_leaves_no_file_or_row
             result = client.post("/api/references", files={"file": ("ref.wav", b"a" * 100)})
 
     assert result.status_code == 500
-    assert result.json() == {"detail": REFERENCE_AUDIO_STORAGE_DETAIL}
+    assert result.json() == {
+        "detail": REFERENCE_AUDIO_STORAGE_DETAIL,
+        "message": {"key": "referenceRefusal.storage", "values": {}},
+    }
     assert _row_count(ctx) == 0
     assert _files(ctx) == []
     assert "user owner" in caplog.text

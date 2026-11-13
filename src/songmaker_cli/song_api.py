@@ -22,6 +22,7 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     page_has_more,
     parse_optional_search_query,
+    raise_cover_refusal,
     unique_song_slug,
 )
 from songmaker_cli.api_models import (
@@ -89,6 +90,7 @@ from songmaker_cli.db.queries.songs import (
 from songmaker_cli.db.queries.versions import VersionInUseError, delete_version
 from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
 from songmaker_cli.reference_audio import commit_unused_stamps
+from songmaker_cli.refusals import Refusal
 
 
 def _attach_reference(session: Session, user_id: str, reference_id: str | None) -> None:
@@ -393,8 +395,11 @@ def api_restore_song(
     check_song_access_including_deleted(session, song_id, user)
     try:
         restored = restore_song(session, song_id)
-    except RestoreWindowExpiredError as e:
-        raise HTTPException(410, str(e))
+    except RestoreWindowExpiredError as exc:
+        raise Refusal(
+            410, "songRefusal.restoreWindowPassed",
+            id=exc.row_id, days=str(exc.days_ago), window=str(exc.window_days),
+        ) from exc
     except ValueError as e:
         raise HTTPException(404, str(e))
     record_audit(session, user.id, AuditAction.RESTORE, ResourceType.SONG, song_id)
@@ -497,7 +502,7 @@ async def api_upload_song_cover(
     try:
         cover_key = write_song_cover(ctx.audio_dir, song.id, payload)
     except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
+        raise_cover_refusal(exc)
     song = set_song_cover_key(session, song.id, cover_key)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song.id)
     session.commit()

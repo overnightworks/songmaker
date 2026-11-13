@@ -90,5 +90,8 @@ def test_another_persons_preset_is_refused_as_default(people):
     assert response.json()["detail"] == (
         "Invalid config: must be null, 'sft', 'turbo', or a preset ID"
     )
+    assert response.json()["message"] == {
+        "key": "settingsRefusal.invalidDefaultConfig", "values": {},
+    }
     with factory() as session:
         assert session.get(User, "u-ana").default_generation_config is None

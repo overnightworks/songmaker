@@ -17,6 +17,11 @@ from support.cover_escape import (
     cover_escape_layout,
     unsafe_cover_id,
 )
+from support.cover_refusals import (
+    COVER_TOO_MANY_PIXELS,
+    COVER_UNSUPPORTED_TYPE,
+    COVER_VARIANT_UNKNOWN,
+)
 from support.web_app import make_test_app, seed_session, seed_user, web_client
 
 from songmaker_cli.cleanup import run_cleanup_expired
@@ -29,7 +34,6 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.covers import (
     COVER_DIRNAME,
-    COVER_INVALID_ALBUM_ID,
     COVER_JPEG_EXTENSION,
     COVER_JPEG_MAGIC,
     COVER_KEY_PNG,
@@ -37,13 +41,9 @@ from songmaker_cli.covers import (
     COVER_OLD_DIRNAME_SUFFIX,
     COVER_PNG_EXTENSION,
     COVER_STAGING_DIRNAME_SUFFIX,
-    COVER_TOO_LARGE,
-    COVER_TOO_MANY_PIXELS,
-    COVER_UNREADABLE,
-    COVER_UNSUPPORTED_TYPE,
     COVER_VARIANT_ORIGINAL,
-    COVER_VARIANT_UNKNOWN,
     CoverRejectedError,
+    CoverRejection,
     decode_cover_image,
     remove_album_cover_files,
     resolve_cover_file,
@@ -132,42 +132,48 @@ def test_only_the_album_cover_post_route_gets_the_cover_budget() -> None:
 
 
 def test_decode_rejects_svg_and_webp() -> None:
-    with pytest.raises(CoverRejectedError, match=COVER_UNSUPPORTED_TYPE):
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(b'<svg xmlns="http://www.w3.org/2000/svg"></svg>')
-    with pytest.raises(CoverRejectedError, match=COVER_UNSUPPORTED_TYPE):
+    assert rejected.value.reason == CoverRejection.UNSUPPORTED_TYPE
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(b"RIFF\x00\x00\x00\x00WEBPVP8 ")
+    assert rejected.value.reason == CoverRejection.UNSUPPORTED_TYPE
 
 
 def test_decode_rejects_oversize_bytes() -> None:
     payload = COVER_JPEG_MAGIC + b"\x00" * COVER_MAX_BYTES
-    with pytest.raises(CoverRejectedError, match=COVER_TOO_LARGE) as exc:
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(payload)
-    assert exc.value.status_code == 413
+    assert rejected.value.reason == CoverRejection.TOO_LARGE
 
 
 def test_decode_rejects_image_bomb() -> None:
     width = COVER_MAX_PIXELS + 1
     payload = _png_header(width, 1)
-    with pytest.raises(CoverRejectedError, match=COVER_TOO_MANY_PIXELS):
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(payload)
+    assert rejected.value.reason == CoverRejection.TOO_MANY_PIXELS
 
 
 @pytest.mark.parametrize(
-    ("payload", "message"),
+    ("payload", "reason"),
     [
-        pytest.param(b"", COVER_UNREADABLE, id="empty-payload"),
-        pytest.param(_png_header(0, 1), COVER_UNREADABLE, id="zero-width-header"),
-        pytest.param(_png_header(1, 0), COVER_UNREADABLE, id="zero-height-header"),
+        pytest.param(b"", CoverRejection.UNREADABLE, id="empty-payload"),
+        pytest.param(_png_header(0, 1), CoverRejection.UNREADABLE, id="zero-width-header"),
+        pytest.param(_png_header(1, 0), CoverRejection.UNREADABLE, id="zero-height-header"),
         pytest.param(
-            _png_header(COVER_MAX_PIXELS * 9, 1), COVER_TOO_MANY_PIXELS,
+            _png_header(COVER_MAX_PIXELS * 9, 1), CoverRejection.TOO_MANY_PIXELS,
             id="header-past-pillows-own-bomb-limit",
         ),
-        pytest.param(_png_bytes()[:-30], COVER_UNREADABLE, id="truncated-png"),
+        pytest.param(_png_bytes()[:-30], CoverRejection.UNREADABLE, id="truncated-png"),
     ],
 )
-def test_decode_rejects_unreadable_or_oversized_headers(payload: bytes, message: str) -> None:
-    with pytest.raises(CoverRejectedError, match=message):
+def test_decode_rejects_unreadable_or_oversized_headers(
+    payload: bytes, reason: CoverRejection,
+) -> None:
+    with pytest.raises(CoverRejectedError) as rejected:
         decode_cover_image(payload)
+    assert rejected.value.reason == reason
 
 
 @pytest.mark.parametrize(
@@ -262,6 +268,7 @@ def test_upload_rejects_too_many_pixels(alice_app: tuple[TestClient, object]) ->
     )
     assert resp.status_code == 422
     assert resp.json()["detail"] == COVER_TOO_MANY_PIXELS
+    assert resp.json()["message"] == {"key": "coverRefusal.tooManyPixels", "values": {}}
 
 
 def test_upload_rejects_oversize_file(alice_app: tuple[TestClient, object]) -> None:
@@ -458,8 +465,9 @@ def test_write_album_cover_rejects_unsafe_album_ids(
     )
     album_id = unsafe_cover_id(album_id, sibling_marker)
     image = _png_bytes()
-    with pytest.raises(CoverRejectedError, match=COVER_INVALID_ALBUM_ID):
+    with pytest.raises(CoverRejectedError) as rejected:
         write_album_cover(audio_dir, album_id, image)
+    assert rejected.value.reason == CoverRejection.INVALID_ALBUM_ID
     assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 

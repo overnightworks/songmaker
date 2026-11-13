@@ -55,6 +55,7 @@ def test_a_second_preset_with_the_same_name_and_model_is_refused(people):
     )
 
     assert (response.status_code, response.json()["detail"]) == (409, PRESET_NAME_EXISTS_DETAIL)
+    assert response.json()["message"] == {"key": "presetRefusal.nameTaken", "values": {}}
     assert _stored_presets(factory) == before
 
 
@@ -127,6 +128,7 @@ def test_a_rename_onto_another_preset_of_the_same_model_is_refused(people):
     response = clients["ana"].put(f"{PRESETS_URL}/{cool['id']}", json={"name": "warm"})
 
     assert (response.status_code, response.json()["detail"]) == (409, PRESET_NAME_EXISTS_DETAIL)
+    assert response.json()["message"] == {"key": "presetRefusal.nameTaken", "values": {}}
     assert _stored_presets(factory) == before
 
 

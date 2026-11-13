@@ -33,6 +33,13 @@ _SESSION_FLAG = "include_deleted"
 class RestoreWindowExpiredError(Exception):
     """Raised when restore is attempted past the soft-delete restore window."""
 
+    def __init__(self, entity: str, row_id: str, days_ago: int, window_days: int) -> None:
+        super().__init__(entity, row_id, days_ago, window_days)
+        self.entity = entity
+        self.row_id = row_id
+        self.days_ago = days_ago
+        self.window_days = window_days
+
 
 def soft_delete_cutoff(now: datetime) -> datetime:
     """Return the instant before which a soft-deleted row is past its window."""
@@ -44,8 +51,7 @@ def ensure_within_restore_window(entity: str, row_id: str, deleted_at: datetime)
     now = datetime.now(timezone.utc)
     if deleted_at < soft_delete_cutoff(now):
         raise RestoreWindowExpiredError(
-            f"{entity} {row_id} was deleted {(now - deleted_at).days} days ago, "
-            f"past the {get_settings().final_deletion_days}-day restore window",
+            entity, row_id, (now - deleted_at).days, get_settings().final_deletion_days,
         )
 
 

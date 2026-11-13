@@ -17,6 +17,11 @@ from support.cover_escape import (
     cover_escape_layout,
     unsafe_cover_id,
 )
+from support.cover_refusals import (
+    COVER_TOO_MANY_PIXELS,
+    COVER_UNSUPPORTED_TYPE,
+    COVER_VARIANT_UNKNOWN,
+)
 from support.web_app import make_test_app, seed_session, seed_user, web_client
 
 from songmaker_cli.cleanup import run_cleanup_expired
@@ -29,18 +34,15 @@ from songmaker_cli.constants import (
     JSON_REQUEST_BODY_MAX_BYTES,
 )
 from songmaker_cli.covers import (
-    COVER_INVALID_SONG_ID,
     COVER_JPEG_EXTENSION,
     COVER_KEY_PNG,
     COVER_OLD_DIRNAME_SUFFIX,
     COVER_PNG_EXTENSION,
     COVER_STAGING_DIRNAME_SUFFIX,
-    COVER_TOO_MANY_PIXELS,
-    COVER_UNSUPPORTED_TYPE,
     COVER_VARIANT_ORIGINAL,
-    COVER_VARIANT_UNKNOWN,
     SONG_COVER_DIRNAME,
     CoverRejectedError,
+    CoverRejection,
     remove_song_cover_files,
     resolve_song_cover_file,
     write_album_cover,
@@ -208,6 +210,7 @@ def test_upload_rejects_too_many_pixels(alice_app: tuple[TestClient, object]) ->
     )
     assert resp.status_code == 422
     assert resp.json()["detail"] == COVER_TOO_MANY_PIXELS
+    assert resp.json()["message"] == {"key": "coverRefusal.tooManyPixels", "values": {}}
 
 
 def test_foreign_song_cover_is_404(tmp_path: Path, pg_factory) -> None:
@@ -489,8 +492,9 @@ def test_write_song_cover_rejects_unsafe_song_ids(tmp_path: Path, song_id: str) 
     )
     song_id = unsafe_cover_id(song_id, sibling_marker)
     image = _png_bytes()
-    with pytest.raises(CoverRejectedError, match=COVER_INVALID_SONG_ID):
+    with pytest.raises(CoverRejectedError) as rejected:
         write_song_cover(audio_dir, song_id, image)
+    assert rejected.value.reason == CoverRejection.INVALID_SONG_ID
     assert_escape_markers_survive(audio_dir, marker, sibling_marker, legit)
 
 

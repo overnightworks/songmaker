@@ -442,14 +442,14 @@ def test_api_restore_album_round_trip(tmp_path: Path, pg_factory) -> None:
 
 
 @pytest.mark.parametrize(
-    ("entity", "model", "row_id"),
+    ("entity", "model", "row_id", "key"),
     [
-        pytest.param("albums", Album, "rock", id="album"),
-        pytest.param("songs", Song, "s1", id="song"),
+        pytest.param("albums", Album, "rock", "albumRefusal.restoreWindowPassed", id="album"),
+        pytest.param("songs", Song, "s1", "songRefusal.restoreWindowPassed", id="song"),
     ],
 )
 def test_api_restore_410_after_window(
-    tmp_path: Path, pg_factory, entity: str, model: type, row_id: str,
+    tmp_path: Path, pg_factory, entity: str, model: type, row_id: str, key: str,
 ) -> None:
     client = _make_client(tmp_path, pg_factory)
     client.delete(f"/api/{entity}/{row_id}")
@@ -467,6 +467,14 @@ def test_api_restore_410_after_window(
     assert r.status_code == 410
     assert f"{row_id} was deleted" in r.json()["detail"]
     assert "restore window" in r.json()["detail"]
+    assert r.json()["message"] == {
+        "key": key,
+        "values": {
+            "id": row_id,
+            "days": str(RESTORE_WINDOW.days),
+            "window": str(RESTORE_WINDOW.days),
+        },
+    }
     with factory() as session:
         assert query(session).one().deleted_at is not None
 
