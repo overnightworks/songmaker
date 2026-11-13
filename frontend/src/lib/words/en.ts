@@ -186,6 +186,8 @@ export type Words = {
     readonly "referenceMenu.delete": string;
     readonly "referenceMenu.inUse": string;
     readonly "newPlace.heading": (gaps: { readonly library: string }) => readonly (string | { readonly marker: "strong"; readonly text: string })[];
+    readonly "takeRefusal.archived": string;
+    readonly "modelRefusal.unavailable": (gaps: { readonly model: string }) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -398,5 +400,7 @@ export const words: Words = {
     "referenceMenu.delete": "Delete",
     "referenceMenu.inUse": "In use",
     "newPlace.heading": (gaps: { readonly library: string }): readonly (string | { readonly marker: "strong"; readonly text: string })[] => ["New in ", { marker: "strong", text: gaps.library }],
+    "takeRefusal.archived": "Restore this take first.",
+    "modelRefusal.unavailable": (gaps: { readonly model: string }) => "Model '" + gaps.model + "' is not currently available",
 };
 export type Key = keyof Words;

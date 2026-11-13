@@ -27,6 +27,7 @@ WORDS = {
 
 REFUSAL_IMPORT = "from songmaker_cli.refusals import Refusal\n"
 WORDS_IMPORT = "from songmaker_cli.words import text\n"
+WORDS_MODULE_IMPORT = "from songmaker_cli import words\n"
 
 
 def _scan(
@@ -88,11 +89,14 @@ def test_a_call_with_a_plain_key_and_its_gaps_passes(
             "unexpected ['other']",
         ),
         (REFUSAL_IMPORT + 'Refusal(400, "modelRefusal.unavailable", **gaps)\n', "** spread"),
-        (REFUSAL_IMPORT + 'Refusal(409, "takeRefusal.archived", count=2)\n', "unexpected ['count']"),
+        (
+            REFUSAL_IMPORT + 'Refusal(409, "takeRefusal.archived", count=2)\n',
+            "unexpected ['count']",
+        ),
         (WORDS_IMPORT + 'text("en", "takeRefusal.gone")\n', "not a plain entry"),
         (WORDS_IMPORT + 'text("en", key)\n', "not a string literal"),
         (WORDS_IMPORT + 'text("en", "modelRefusal.unavailable")\n', "missing ['model']"),
-        ("from songmaker_cli import words\n" + 'words.text("en", "songCount", count=2)\n', "plain entry"),
+        (WORDS_MODULE_IMPORT + 'words.text("en", "songCount", count=2)\n', "plain entry"),
     ],
     ids=[
         "unknown-key",

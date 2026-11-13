@@ -57,7 +57,7 @@ from songmaker_cli.covers import (
 from songmaker_cli.db.models import Generation
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import record_audit
-from songmaker_cli.db.queries.generations import ARCHIVED_TAKE_DETAIL, ArchivedTakeError
+from songmaker_cli.db.queries.generations import ArchivedTakeError
 from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
@@ -74,6 +74,8 @@ from songmaker_cli.db.queries.playlists import (
     update_playlist,
 )
 from songmaker_cli.db.queries.sharing import presented_take
+from songmaker_cli.refusals import Refusal
+from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 log = logging.getLogger(__name__)
 
@@ -266,7 +268,7 @@ _ADD_TAKE_TO_PLAYLIST_DESCRIPTION = (
     openapi_extra=agent_tool(name="add_take_to_playlist", effect=ToolEffect.SIDE_EFFECTING),
     responses={
         404: {"description": "Playlist or generation not found"},
-        409: {"description": ARCHIVED_TAKE_DETAIL},
+        409: {"description": text(SOURCE_LANGUAGE, "takeRefusal.archived")},
     },
 )
 def api_add_generation_to_playlist(
@@ -282,7 +284,7 @@ def api_add_generation_to_playlist(
     except ValueError:
         raise HTTPException(404, "Generation not found")
     except ArchivedTakeError:
-        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
+        raise Refusal(409, "takeRefusal.archived")
     session.commit()
     entry = session.merge(entry)
     playlist = get_playlist(session, playlist_id)
@@ -303,7 +305,7 @@ _ADD_SONG_TO_PLAYLIST_DESCRIPTION = (
     responses={
         400: {"description": "Song has no playable take"},
         404: {"description": "Playlist or song not found"},
-        409: {"description": ARCHIVED_TAKE_DETAIL},
+        409: {"description": text(SOURCE_LANGUAGE, "takeRefusal.archived")},
     },
 )
 def api_add_song_to_playlist(
@@ -327,7 +329,7 @@ def api_add_song_to_playlist(
     except ValueError:
         raise HTTPException(404, "Song not found")
     except ArchivedTakeError:
-        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
+        raise Refusal(409, "takeRefusal.archived")
     session.commit()
     return StatusResponse()
 

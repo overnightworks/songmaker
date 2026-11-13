@@ -13,7 +13,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from support.generation_failures import OTHER_GENERATION_ERROR_TYPES
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from support.web_app import (
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    refusal_body,
+    web_client,
+)
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli import audio_files
@@ -1936,7 +1942,7 @@ def test_endpoint_rejects_inactive_model(
         session.commit()
     resp = client.post(url, json={**base_payload, "model": "turbo"})
     assert resp.status_code == 400
-    assert "not currently available" in resp.json()["detail"]
+    assert resp.json() == refusal_body("modelRefusal.unavailable", model="turbo")
 
 
 # ── Reference audio upload ──────────────────────────────────────────

@@ -742,3 +742,11 @@ msgstr ""
 msgctxt "newPlace.heading"
 msgid "New in {#strong}{library}{/strong}"
 msgstr ""
+
+msgctxt "takeRefusal.archived"
+msgid "Restore this take first."
+msgstr ""
+
+msgctxt "modelRefusal.unavailable"
+msgid "Model '{model}' is not currently available"
+msgstr ""

@@ -188,6 +188,8 @@ type Key = Literal[
     'referenceMenu.delete',
     'referenceMenu.inUse',
     'newPlace.heading',
+    'takeRefusal.archived',
+    'modelRefusal.unavailable',
 ]
 type Language = Literal[
     'en',
@@ -400,6 +402,8 @@ WORDS: Mapping[Language, Mapping[Key, str | Mapping[Category, str]]] = {
         'referenceMenu.delete': 'Delete',
         'referenceMenu.inUse': 'In use',
         'newPlace.heading': 'New in {library}',
+        'takeRefusal.archived': 'Restore this take first.',
+        'modelRefusal.unavailable': "Model '{model}' is not currently available",
     },
 }
 
