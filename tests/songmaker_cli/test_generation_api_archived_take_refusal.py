@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from support.web_app import make_test_app, seed_session, seed_user
+from support.web_app import make_test_app, refusal_body, seed_session, seed_user
 
 from songmaker_cli.db.models import (
     Album,
@@ -19,7 +19,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 
-RESTORE_FIRST = {"detail": "Restore this take first."}
+RESTORE_FIRST = refusal_body("takeRefusal.archived")
 OWNER = "owner"
 STRANGER = "stranger"
 ARCHIVED_PICK = "g-archived-pick"

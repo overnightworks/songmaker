@@ -1,4 +1,4 @@
-import type { JobItem } from './types';
+import type { JobItem, RefusalMessage } from './types';
 import { SIGN_IN_NEXT_PARAM } from '#lib/constants/auth.ts';
 import {
 	RATE_LIMITED_STATUS,
@@ -6,6 +6,7 @@ import {
 	API_ERROR_GENERIC_MESSAGE
 } from '#lib/constants/http.ts';
 import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
+import { refusalText } from '#lib/utils/page-words.ts';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -47,7 +48,8 @@ export class ApiError extends Error {
 		public readonly retryAfterSeconds: number | null = null,
 		public readonly responseDetail: unknown = detail,
 		public readonly errorType: string | null = null,
-		public readonly jobId: string | null = null
+		public readonly jobId: string | null = null,
+		public readonly refusal: RefusalMessage | null = null
 	) {
 		super(detail || API_ERROR_GENERIC_MESSAGE);
 		this.name = 'ApiError';
@@ -87,10 +89,11 @@ interface FailureWording {
 
 /**
  * The one place a failure becomes user-facing text: the caller's offline
- * wording when the request got no answer, the server's own words when it
- * answered with a reason (unless the caller withholds them), a module's own
- * worded failure, otherwise the caller's named fallback -- never a browser
- * error's text.
+ * wording when the request got no answer, the page's words for the key a
+ * refusal names, the server's own words when it answered with a reason and no
+ * key (unless the caller withholds the server's text), a module's own worded
+ * failure, otherwise the caller's named fallback -- never a browser error's
+ * text, and never the sentence of a refusal whose key the page does not know.
  */
 export function describeFailure(
 	err: unknown,
@@ -98,8 +101,17 @@ export function describeFailure(
 	wording: FailureWording = {}
 ): string {
 	if (err instanceof NetworkError && wording.offline) return wording.offline;
-	if (err instanceof ApiError && err.detail && !wording.withholdServerDetail) return err.detail;
+	if (err instanceof ApiError && !wording.withholdServerDetail) {
+		if (err.refusal) return refusalSentence(err.refusal) ?? fallback;
+		if (err.detail) return err.detail;
+	}
 	return fallback;
+}
+
+function refusalSentence(refusal: RefusalMessage): string | null {
+	const sentence = refusalText(refusal.key, refusal.values);
+	if (sentence === null) console.error(`The page has no words for the refusal key ${refusal.key}`);
+	return sentence;
 }
 
 /**
@@ -120,18 +132,30 @@ interface ErrorBody {
 	responseDetail: unknown;
 	errorType: string | null;
 	jobId: string | null;
+	refusal: RefusalMessage | null;
 }
 
 const EMPTY_ERROR_BODY: ErrorBody = {
 	detail: '',
 	responseDetail: '',
 	errorType: null,
-	jobId: null
+	jobId: null,
+	refusal: null
 };
 
 function stringField(body: object, key: string): string | null {
 	const value: unknown = (body as Record<string, unknown>)[key];
 	return typeof value === 'string' ? value : null;
+}
+
+function refusalField(body: object): RefusalMessage | null {
+	const message: unknown = (body as Record<string, unknown>).message;
+	if (typeof message !== 'object' || message === null) return null;
+	const { key, values } = message as Record<string, unknown>;
+	if (typeof key !== 'string' || typeof values !== 'object' || values === null) return null;
+	const entries = Object.entries(values);
+	if (!entries.every(([, value]) => typeof value === 'string')) return null;
+	return { key, values: Object.fromEntries(entries) as Record<string, string> };
 }
 
 async function readErrorBody(response: Pick<Response, 'json'>): Promise<ErrorBody> {
@@ -145,7 +169,8 @@ async function readErrorBody(response: Pick<Response, 'json'>): Promise<ErrorBod
 			detail: typeof responseDetail === 'string' ? responseDetail : '',
 			responseDetail,
 			errorType: stringField(body, 'error_type'),
-			jobId: stringField(body, 'job_id')
+			jobId: stringField(body, 'job_id'),
+			refusal: refusalField(body)
 		};
 	} catch {
 		return EMPTY_ERROR_BODY;
@@ -236,7 +261,7 @@ function abortOnCallerOrTimeout(
 
 async function throwForFailedResponse(response: Response, path: string): Promise<void> {
 	if (response.ok) return;
-	const { detail, responseDetail, errorType, jobId } = await readErrorBody(response);
+	const { detail, responseDetail, errorType, jobId, refusal } = await readErrorBody(response);
 	if (response.status === RATE_LIMITED_STATUS) installedReactions.rateLimited(path);
 	if (isSessionLostResponse(response.status, path)) await installedReactions.sessionLost();
 	throw new ApiError(
@@ -246,7 +271,8 @@ async function throwForFailedResponse(response: Response, path: string): Promise
 		parseRetryAfterSeconds(response),
 		responseDetail,
 		errorType,
-		jobId
+		jobId,
+		refusal
 	);
 }
 

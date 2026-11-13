@@ -102,6 +102,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.design-catalogs]
 source = "en"
+python = "src/songmaker_cli/words.py"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -142,6 +143,8 @@ select = ["E", "F", "W", "I", "PLE2502"]
 [tool.ruff.lint.per-file-ignores]
 "tests/songmaker_cli/test_scoring_scorers.py" = ["E402", "I001"]
 "tests/songmaker_cli/test_scoring_scorers_extended.py" = ["E402", "I001"]
+# why: design-catalogs writes the module with its own layout (a sentence per line, the lookup's long lines), and `design-catalogs --check` proves it current.
+"src/songmaker_cli/words.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

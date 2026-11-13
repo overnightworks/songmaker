@@ -58,7 +58,6 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import Generation, Version
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.generations import (
-    ARCHIVED_TAKE_DETAIL,
     ArchivedTakeError,
     bulk_delete_generations,
     delete_generation,
@@ -82,7 +81,9 @@ from songmaker_cli.jobs.generation_failure import (
     musician_job_response,
 )
 from songmaker_cli.reference_audio import commit_unused_stamps
+from songmaker_cli.refusals import Refusal
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
+from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ _LAST_FAILED_GENERATION_DESCRIPTION: Final = (
 def _check_model_active(session: Session, model: str) -> None:
     active_ids = {m.id for m in list_active_models(session)}
     if model not in active_ids:
-        raise HTTPException(400, f"Model '{model}' is not currently available")
+        raise Refusal(400, "modelRefusal.unavailable", model=model)
 
 
 def _check_version_lora_ready(
@@ -573,7 +574,7 @@ async def api_score_generation(
     "/generations/{gen_id}/share",
     responses={
         404: {"description": "Generation does not exist"},
-        409: {"description": ARCHIVED_TAKE_DETAIL},
+        409: {"description": text(SOURCE_LANGUAGE, "takeRefusal.archived")},
     },
     openapi_extra=exclude_route(Exclusion.SHARING),
 )
@@ -588,7 +589,7 @@ def api_share_generation(
     except ValueError:
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     except ArchivedTakeError:
-        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
+        raise Refusal(409, "takeRefusal.archived")
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
     share_url = public_share_url(ShareKind.GENERATION, gen.share_slug)
     session.commit()
