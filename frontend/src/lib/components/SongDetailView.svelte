@@ -78,39 +78,9 @@
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
-	import {
-		SONG_COVER_ALT_TYPE,
-		SONG_COVER_REPLACE_LABEL,
-		SONG_COVER_UPLOAD_LABEL,
-		EDITOR_SAVE_ACCESSIBLE_LABEL,
-		EDITOR_SAVE_FAILED,
-		EDITOR_SAVE_LABEL,
-		EDITOR_UNSAVED_TITLE,
-		EDITOR_UNSAVED_MESSAGE,
-		EDITOR_UNSAVED_SAVE_LABEL,
-		EDITOR_UNSAVED_DISCARD_LABEL
-	} from '#lib/constants/song.ts';
 	import { TAKES_ERROR } from '#lib/constants/take.ts';
 	import { EXPIRY_WARN_DAYS } from '#lib/constants/expiry.ts';
-	import {
-		TOAST_UNDO_LABEL,
-		VERSION_DELETE_CONFIRM_LABEL,
-		VERSION_DELETE_DRAFT_GOES,
-		VERSION_DELETE_LOAD_UNDO_GOES,
-		VERSION_DELETE_EMPTIES_EDITOR,
-		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
-		VERSION_REPLACE_DRAFT_TITLE,
-		versionDeleteTitle,
-		versionDeleteReplacedBy,
-		versionDeleteLoadedDraftGoes,
-		versionDeleteLoadedDraftReplacedBy,
-		versionDeletePickWarning,
-		versionAlreadyTheDraftLabel,
-		versionLabel,
-		versionLoadedToastLabel,
-		versionReplaceDraftMessage
-	} from '#lib/constants/versions.ts';
-	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
+	import { ALBUM_ART_EMPTY_INITIALS } from '#lib/constants/album.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
@@ -152,15 +122,15 @@
 	const hasOwnCover = $derived(Boolean(song?.cover));
 	const coverAlt = $derived(
 		ownCoverUrl && song
-			? `${SONG_COVER_ALT_TYPE} ${song.title}`
+			? pageText('songPage.coverAlt', { title: song.title })
 			: parentAlbum
-				? `${ALBUM_COVER_ALT_TYPE} ${parentAlbum.title}`
-				: SONG_COVER_ALT_TYPE
+				? pageText('songPage.coverAltAlbum', { title: parentAlbum.title })
+				: pageText('songPage.coverAltBare')
 	);
 	const artFill = $derived(parentAlbum ? usableAlbumPrimary(parentAlbum.colors) : null);
 	const initials = $derived(song ? titleInitials(song.title) : ALBUM_ART_EMPTY_INITIALS);
 	const coverActionLabel = $derived(
-		hasOwnCover ? SONG_COVER_REPLACE_LABEL : SONG_COVER_UPLOAD_LABEL
+		pageText(hasOwnCover ? 'songPage.coverReplace' : 'songPage.coverUpload')
 	);
 	const neighbors = $derived(
 		song ? albumTrackNeighbors(song.id, songs) : { previous: null, next: null }
@@ -184,7 +154,15 @@
 						label: song.album_title,
 						onclick: collection ? () => openCollectionEntry(collection) : undefined
 					},
-					{ label: trackTotal > 0 ? `Track ${trackPosition} of ${trackTotal}` : song.title }
+					{
+						label:
+							trackTotal > 0
+								? pageText('songPage.trackOf', {
+										position: String(trackPosition),
+										total: String(trackTotal)
+									})
+								: song.title
+					}
 				]
 			: []
 	);
@@ -229,9 +207,9 @@
 			const updated = await uploadSongCover(song.id, file);
 			updateSongInList(song.id, (current) => ({ ...current, cover: updated.cover }));
 			coverFailed = false;
-			addToast('Cover saved', 'success');
+			addToast(pageText('songPage.coverSaved'), 'success');
 		} catch (e) {
-			addToast(describeFailure(e, 'Cover upload failed'), 'error');
+			addToast(describeFailure(e, pageText('songPage.coverUploadFailed')), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -244,9 +222,9 @@
 			const updated = await deleteSongCover(song.id);
 			updateSongInList(song.id, (current) => ({ ...current, cover: updated.cover ?? null }));
 			coverFailed = false;
-			addToast('Cover removed', 'success');
+			addToast(pageText('songPage.coverRemoved'), 'success');
 		} catch (e) {
-			addToast(describeFailure(e, 'Cover remove failed'), 'error');
+			addToast(describeFailure(e, pageText('songPage.coverRemoveFailed')), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -431,9 +409,12 @@
 		if (!request) return;
 		try {
 			await handleDeleteVersion(request.songId, request.version.id, true);
-			addToast(`Deleted ${versionLabel(request.version.version_number)}`, 'success');
+			addToast(
+				pageText('versions.deleted', { number: String(request.version.version_number) }),
+				'success'
+			);
 		} catch (e) {
-			addToast(describeFailure(e, 'Delete failed'), 'error');
+			addToast(describeFailure(e, pageText('songPage.deleteFailed')), 'error');
 		}
 	}
 
@@ -441,16 +422,21 @@
 		switch (loss.kind) {
 			case 'unsaved-draft':
 				return loss.emptiesEditor
-					? [VERSION_DELETE_DRAFT_GOES, VERSION_DELETE_EMPTIES_EDITOR]
-					: [VERSION_DELETE_DRAFT_GOES];
+					? [pageText('versions.deleteDraftGoes'), pageText('versions.deleteEmptiesEditor')]
+					: [pageText('versions.deleteDraftGoes')];
 			case 'loaded-draft-goes':
-				return [versionDeleteLoadedDraftGoes(loss.loadedFrom)];
+				return [pageText('versions.deleteLoadedDraftGoes', { number: String(loss.loadedFrom) })];
 			case 'loaded-draft-replaced':
-				return [versionDeleteLoadedDraftReplacedBy(loss.loadedFrom, loss.replacedBy)];
+				return [
+					pageText('versions.deleteLoadedDraftReplaced', {
+						loadedFrom: String(loss.loadedFrom),
+						replacedBy: String(loss.replacedBy)
+					})
+				];
 			case 'current-lyrics':
-				return [versionDeleteReplacedBy(loss.replacedBy)];
+				return [pageText('versions.deleteReplacedBy', { number: String(loss.replacedBy) })];
 			case 'all-lyrics':
-				return [VERSION_DELETE_EMPTIES_EDITOR];
+				return [pageText('versions.deleteEmptiesEditor')];
 		}
 	}
 
@@ -461,22 +447,25 @@
 		dropsLoadUndo: boolean
 	): string[] {
 		return [
-			...(holdsPick ? [versionDeletePickWarning(takeCount)] : []),
+			...(holdsPick ? [pageText('versions.deletePick', takeCount)] : []),
 			...(editorLoss ? editorLossLines(editorLoss) : []),
-			...(dropsLoadUndo ? [VERSION_DELETE_LOAD_UNDO_GOES] : [])
+			...(dropsLoadUndo ? [pageText('versions.deleteLoadUndoGoes')] : [])
 		];
 	}
 
 	function loadVersionWithUndo(version: VersionItem): VersionLoadAnswer {
 		const load = loadVersionAsDraft(version);
 		if (!load) {
-			addToast(versionAlreadyTheDraftLabel(version.version_number), 'info');
+			addToast(
+				pageText('versions.alreadyDraft', { number: String(version.version_number) }),
+				'info'
+			);
 			return 'already-the-draft';
 		}
 		addUndoToast(
-			versionLoadedToastLabel(version.version_number),
+			pageText('versions.loaded', { number: String(version.version_number) }),
 			{
-				label: TOAST_UNDO_LABEL,
+				label: pageText('versions.undo'),
 				handler: load.undo,
 				holds: load.holds,
 				setAside: load.setAside,
@@ -493,9 +482,9 @@
 		try {
 			const updated = await renameSong(songId, newTitle);
 			updateSongInList(songId, () => updated);
-			addToast('Song renamed', 'success');
+			addToast(pageText('songPage.renamed'), 'success');
 		} catch (e) {
-			addToast(describeFailure(e, 'Rename failed'), 'error');
+			addToast(describeFailure(e, pageText('songPage.renameFailed')), 'error');
 			throw e;
 		}
 	}
@@ -525,20 +514,20 @@
 			await deleteSong(songId);
 			removeSongFromList(songId);
 			backToCollection();
-			addUndoToast('Song deleted', {
-				label: 'Undo',
+			addUndoToast(pageText('songPage.deleted'), {
+				label: pageText('songPage.undo'),
 				handler: async () => {
 					try {
 						const restored = await restoreSong(songId);
 						addSongsToList([restored]);
-						addToast('Song restored', 'success');
+						addToast(pageText('songPage.restored'), 'success');
 					} catch (e) {
-						addToast(describeFailure(e, 'Restore failed'), 'error');
+						addToast(describeFailure(e, pageText('songPage.restoreFailed')), 'error');
 					}
 				}
 			});
 		} catch (e) {
-			addToast(describeFailure(e, 'Delete failed'), 'error');
+			addToast(describeFailure(e, pageText('songPage.deleteFailed')), 'error');
 		}
 	}
 
@@ -567,9 +556,9 @@
 				clearGenerationSelection();
 				persistLibraryHistory();
 			}
-			addToast('Take deleted', 'success');
+			addToast(pageText('songPage.takeDeleted'), 'success');
 		} catch (e) {
-			addToast(describeFailure(e, 'Delete failed'), 'error');
+			addToast(describeFailure(e, pageText('songPage.deleteFailed')), 'error');
 		}
 	}
 
@@ -577,9 +566,9 @@
 		if (!song) return;
 		try {
 			await addSongToPlaylist(playlistId, song.id);
-			addToast('Added to playlist', 'success');
+			addToast(pageText('songPage.addedToPlaylist'), 'success');
 		} catch (e) {
-			addToast(describeFailure(e, 'Failed to add'), 'error');
+			addToast(describeFailure(e, pageText('songPage.addToPlaylistFailed')), 'error');
 		}
 	}
 
@@ -590,9 +579,12 @@
 		try {
 			await handleSave(song.id);
 			const savedVersionNumber = get(versions)[0]?.version_number;
-			addToast(`Saved version ${savedVersionNumber}`, 'success');
+			addToast(
+				pageText('songPage.savedVersion', { number: String(savedVersionNumber) }),
+				'success'
+			);
 		} catch (e) {
-			addToast(describeFailure(e, EDITOR_SAVE_FAILED), 'error');
+			addToast(describeFailure(e, pageText('songPage.saveFailed')), 'error');
 		}
 	}
 
@@ -644,7 +636,7 @@
 			try {
 				await handleSave(song.id);
 			} catch (e) {
-				addToast(describeFailure(e, EDITOR_SAVE_FAILED), 'error');
+				addToast(describeFailure(e, pageText('songPage.saveFailed')), 'error');
 				pendingTakeUse.set(null);
 				pendingVersionLoad.set(null);
 				return;
@@ -660,7 +652,7 @@
 	{#snippet saveAction()}
 		<div class="write-save">
 			<p class="write-save-hint" role="status">
-				{#if $draftHasUnversionedChanges}{EDITOR_UNSAVED_TITLE}{/if}
+				{#if $draftHasUnversionedChanges}{pageText('songPage.unsavedTitle')}{/if}
 			</p>
 			<button
 				type="button"
@@ -668,10 +660,10 @@
 				class:dirty
 				data-hitbox="text"
 				disabled={!dirty}
-				aria-label={EDITOR_SAVE_ACCESSIBLE_LABEL}
+				aria-label={pageText('songPage.saveName')}
 				onclick={() => void onSaveVersion()}
 			>
-				{EDITOR_SAVE_LABEL}
+				{pageText('songPage.save')}
 			</button>
 		</div>
 	{/snippet}
@@ -774,14 +766,12 @@
 			<div class="expiry-digest">
 				<span class="expiry-digest-icon">⏳</span>
 				<span>
-					{expiringSoon.count} take{expiringSoon.count === 1 ? '' : 's'} expire{expiringSoon.count ===
-					1
-						? 's'
-						: ''}
-					{expiringSoon.minDays === 0
-						? 'soon'
-						: `in ${expiringSoon.minDays} day${expiringSoon.minDays === 1 ? '' : 's'}`} — pick or keep
-					to preserve.
+					{pageText('songPage.expiry', expiringSoon.count, {
+						when:
+							expiringSoon.minDays === 0
+								? pageText('songPage.expirySoon')
+								: pageText('songPage.expiryDays', expiringSoon.minDays)
+					})}
 				</span>
 			</div>
 		{/if}
@@ -800,12 +790,12 @@
 
 {#if $pendingDirtyNavigation}
 	<ConfirmDialog
-		title={EDITOR_UNSAVED_TITLE}
-		message={EDITOR_UNSAVED_MESSAGE}
-		confirmLabel={EDITOR_UNSAVED_SAVE_LABEL}
+		title={pageText('songPage.unsavedTitle')}
+		message={pageText('songPage.unsavedMessage')}
+		confirmLabel={pageText('songPage.unsavedSave')}
 		destructive={false}
 		onconfirm={() => void resolveDirtyNavigation('save')}
-		secondaryLabel={EDITOR_UNSAVED_DISCARD_LABEL}
+		secondaryLabel={pageText('songPage.unsavedDiscard')}
 		onsecondary={() => void resolveDirtyNavigation('discard')}
 		oncancel={() => void resolveDirtyNavigation('cancel')}
 	/>
@@ -813,9 +803,11 @@
 
 {#if versionAwaitingReplace}
 	<ConfirmDialog
-		title={VERSION_REPLACE_DRAFT_TITLE}
-		message={versionReplaceDraftMessage(versionAwaitingReplace.version.version_number)}
-		confirmLabel={VERSION_REPLACE_DRAFT_CONFIRM_LABEL}
+		title={pageText('versions.replaceTitle')}
+		message={pageText('versions.replaceMessage', {
+			number: String(versionAwaitingReplace.version.version_number)
+		})}
+		confirmLabel={pageText('versions.replaceConfirm')}
 		destructive={false}
 		onconfirm={() => answerVersionReplace(true)}
 		oncancel={() => answerVersionReplace(false)}
@@ -825,14 +817,18 @@
 {#if $versionDeleteRequest}
 	{@const request = $versionDeleteRequest}
 	<ConfirmDeleteDialog
-		title={versionDeleteTitle(request.version.version_number, request.takeCount)}
+		title={request.takeCount === 0
+			? pageText('versions.deleteTitle', { number: String(request.version.version_number) })
+			: pageText('versions.deleteTitleTakes', request.takeCount, {
+					number: String(request.version.version_number)
+				})}
 		items={versionDeleteConsequences(
 			request.takeCount,
 			request.holdsPick,
 			request.editorLoss,
 			$versionLoadUndoOutstanding
 		)}
-		confirmLabel={VERSION_DELETE_CONFIRM_LABEL}
+		confirmLabel={pageText('versions.deleteConfirm')}
 		onconfirm={() => void confirmVersionDelete()}
 		oncancel={() => versionDeleteRequest.set(null)}
 	/>
@@ -840,13 +836,13 @@
 
 {#if showDeleteConfirm && song}
 	<ConfirmDeleteDialog
-		title={`Delete "${song.title}"?`}
+		title={pageText('songPage.deleteTitle', { title: song.title })}
 		items={[
-			`${song.generation_count} take${song.generation_count !== 1 ? 's' : ''}`,
-			`${song.version_count} version${song.version_count !== 1 ? 's' : ''}`,
-			'All scores, ratings, and chat history'
+			pageText('songPage.deleteTakes', song.generation_count),
+			pageText('songPage.deleteVersions', song.version_count),
+			pageText('songPage.deleteHistory')
 		]}
-		confirmLabel="Delete Song"
+		confirmLabel={pageText('songPage.deleteConfirm')}
 		onconfirm={() => {
 			showDeleteConfirm = false;
 			onDeleteSong();

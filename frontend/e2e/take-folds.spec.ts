@@ -6,12 +6,7 @@
 // makes v3, which folds v2.
 
 import { expect, test, type Page, type Route } from './coverage-test';
-import {
-	EDITOR_SAVE_ACCESSIBLE_LABEL,
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_TAB_TAKES_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants/song';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TAKE_DELETE_LABEL, TAKES_EMPTY } from '../src/lib/constants/take';
 import {
 	bulkDeleteLabel,
@@ -89,14 +84,14 @@ async function holdSave(page: Page): Promise<() => Promise<void>> {
 }
 
 async function editLyrics(page: Page): Promise<void> {
-	await showTab(page, EDITOR_TAB_EDIT_LABEL);
+	await showTab(page, words['songTabs.edit']);
 	await page.getByRole('textbox', { name: /^Lyrics/ }).fill(EDITED_LYRICS);
 }
 
 async function startSave(page: Page): Promise<void> {
 	await editLyrics(page);
-	await page.getByRole('button', { name: EDITOR_SAVE_ACCESSIBLE_LABEL }).click();
-	await showTab(page, EDITOR_TAB_TAKES_LABEL);
+	await page.getByRole('button', { name: words['songPage.saveName'] }).click();
+	await showTab(page, words['songTabs.takes']);
 }
 
 // The phone's Save lives in the app bar's song menu; it returns once the new version is stored.
@@ -458,8 +453,8 @@ test.describe('folding the takes on the phone', { tag: ONLY_IN_SHELL.mobile }, (
 		await tickTakes(page, song.v2[0], song.v1[0]);
 		await expectSelected(page, 2);
 
-		await showTab(page, EDITOR_TAB_EDIT_LABEL);
-		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+		await showTab(page, words['songTabs.edit']);
+		await showTab(page, words['songTabs.takes']);
 		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'true');
 		await expectSelected(page, 2);
 
@@ -476,12 +471,12 @@ test.describe('folding the takes on the phone', { tag: ONLY_IN_SHELL.mobile }, (
 		await tickTakes(page, song.v1[0]);
 		await expectSelected(page, 1);
 
-		await showTab(page, EDITOR_TAB_EDIT_LABEL);
+		await showTab(page, words['songTabs.edit']);
 		await backToAlbumOnPhone(page);
 		await openSongOf(page, other.title);
 		await backToAlbumOnPhone(page);
 		await openSongOf(page, song.title);
-		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+		await showTab(page, words['songTabs.takes']);
 
 		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'false');
 		await expect(toolbar(page)).toHaveCount(0);
@@ -495,13 +490,13 @@ test.describe('folding the takes on the phone', { tag: ONLY_IN_SHELL.mobile }, (
 		await v1Row(page).click();
 		await tickTakes(page, song.v1[0]);
 		await expectSelected(page, 1);
-		await showTab(page, EDITOR_TAB_EDIT_LABEL);
+		await showTab(page, words['songTabs.edit']);
 		await deleteAsAnotherClient(page, song.v1[0]);
 		await editLyrics(page);
 		await saveFromAppBarMenu(page);
 		const toolbarWasShown = await watchForToolbar(page);
 
-		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+		await showTab(page, words['songTabs.takes']);
 
 		await expect(v1Row(page, FIRST_VERSION_TAKE_COUNT - 1)).toHaveAttribute(
 			'aria-expanded',
@@ -543,7 +538,7 @@ test.describe('Imported (Q1 a)', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await seedTakeStripSong(albumId, songTitle, 2);
 		await page.goto(`/album/${albumId}`);
 		await openSongOf(page, songTitle);
-		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+		await showTab(page, words['songTabs.takes']);
 		const imported = workspace(page).getByRole('button', { name: foldedGroupLabel(null, 2, 0) });
 		await expect(workspace(page).locator('.take-row')).toHaveCount(2);
 
@@ -566,20 +561,20 @@ test.describe('Imported on the phone (Q1 a)', { tag: ONLY_IN_SHELL.mobile }, () 
 		await seedTakeStripSong(albumId, otherTitle, 2);
 		await page.goto(`/album/${albumId}`);
 		await openSongOf(page, songTitle);
-		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+		await showTab(page, words['songTabs.takes']);
 		const imported = workspace(page).getByRole('button', { name: foldedGroupLabel(null, 2, 0) });
 		await expect(imported).toHaveAttribute('aria-expanded', 'true');
 
 		await imported.click();
-		await showTab(page, EDITOR_TAB_EDIT_LABEL);
-		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+		await showTab(page, words['songTabs.edit']);
+		await showTab(page, words['songTabs.takes']);
 		await expect(imported).toHaveAttribute('aria-expanded', 'false');
 
 		await backToAlbumOnPhone(page);
 		await openSongOf(page, otherTitle);
 		await backToAlbumOnPhone(page);
 		await openSongOf(page, songTitle);
-		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+		await showTab(page, words['songTabs.takes']);
 		await expect(imported).toHaveAttribute('aria-expanded', 'true');
 	});
 });

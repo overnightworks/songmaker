@@ -22,9 +22,6 @@ import { words } from '../src/lib/words/en';
 import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_VIEW_COWRITER_LABEL,
-	SONG_TITLE_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
@@ -172,7 +169,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await expect(generate).toBeVisible();
 		expect(await reservedTransportBarRoom(page)).not.toBe(NO_RESERVED_ROOM);
 
-		await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+		await page.getByRole('tab', { name: words['songTabs.cowriter'], exact: true }).click();
 		const composer = page.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
 		await composer.click();
 		await expect(miniPlayer).toBeHidden();
@@ -198,7 +195,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		const panel = page.getByRole('tabpanel');
 		const miniPlayer = page.getByRole('contentinfo');
 		const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
-		const editTab = page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL });
+		const editTab = page.getByRole('tab', { name: words['songTabs.edit'] });
 
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await panel.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) }).click();
@@ -304,7 +301,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 
 		await page.goForward();
 		await appBar(page)
-			.getByRole('button', { name: `Edit ${SONG_TITLE_LABEL.toLowerCase()}` })
+			.getByRole('button', { name: `Edit ${words['songHeader.title'].toLowerCase()}` })
 			.click();
 		await expect(miniPlayer).toBeHidden();
 		await page.keyboard.press('Escape');
@@ -347,7 +344,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await openSeededSongFromItsAlbum(page);
 		const miniPlayer = page.getByRole('contentinfo');
 
-		await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+		await page.getByRole('tab', { name: words['songTabs.cowriter'], exact: true }).click();
 		const composer = page.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
 		await composer.click();
 		await showOnScreenKeyboard(page, true);
@@ -371,7 +368,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		const guard = new FlowGuard(page);
 		await openSeededSongFromItsAlbum(page);
 
-		await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+		await page.getByRole('tab', { name: words['songTabs.cowriter'], exact: true }).click();
 		await page.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER).click();
 		await showOnScreenKeyboard(page, true);
 		await expect(page.getByRole('contentinfo')).toBeHidden();

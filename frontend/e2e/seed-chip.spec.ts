@@ -6,13 +6,7 @@
 // and 1440 px (the header).
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import {
-	EDITOR_GENERATE_LABEL,
-	EDITOR_LYRICS_LABEL,
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_TAB_TAKES_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants/song';
+import { EDITOR_GENERATE_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
 import { NOW_PLAYING_TAKE_TAB, NOW_PLAYING_LABEL } from '../src/lib/constants/now-playing';
 import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
@@ -74,7 +68,7 @@ async function openOwnSong(page: Page): Promise<Songs> {
 }
 
 async function useSeedOfTakeOne(page: Page): Promise<void> {
-	await showTab(page, EDITOR_TAB_TAKES_LABEL);
+	await showTab(page, words['songTabs.takes']);
 	await workspace(page)
 		.locator('.take-row')
 		.last()
@@ -91,7 +85,7 @@ function chip(page: Page): Locator {
 }
 
 async function showChip(page: Page, takeNumber: number): Promise<void> {
-	await showTab(page, EDITOR_TAB_EDIT_LABEL);
+	await showTab(page, words['songTabs.edit']);
 	await expect(chip(page)).toHaveText(new RegExp(`^\\s*Seed · take ${takeNumber}`));
 }
 
@@ -121,7 +115,7 @@ test('Generate after the lyrics changed saves them and still sends the pinned se
 	await useSeedOfTakeOne(page);
 	await showChip(page, 1);
 	await page
-		.getByRole('textbox', { name: new RegExp(`^${EDITOR_LYRICS_LABEL}`) })
+		.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) })
 		.fill('[Verse]\nA changed line');
 	const saved = page.waitForResponse(
 		(response) =>
@@ -143,7 +137,7 @@ test('× takes the chip away and the next Generate sends no seed (S6)', async ({
 test('A Repaint from the card sends the seed and the chip stays (S6)', async ({ page }) => {
 	await openOwnSong(page);
 	await useSeedOfTakeOne(page);
-	await showTab(page, EDITOR_TAB_TAKES_LABEL);
+	await showTab(page, words['songTabs.takes']);
 	await workspace(page)
 		.locator('.take-row')
 		.last()
@@ -167,11 +161,11 @@ test('A song switch clears the chip and coming back shows none (D5)', async ({ p
 	await showChip(page, 1);
 	await page.goBack();
 	await openSong(page, songs.otherTitle);
-	await showTab(page, EDITOR_TAB_EDIT_LABEL);
+	await showTab(page, words['songTabs.edit']);
 	await expect(chip(page)).toHaveCount(0);
 	await page.goBack();
 	await openSong(page, songs.title);
-	await showTab(page, EDITOR_TAB_EDIT_LABEL);
+	await showTab(page, words['songTabs.edit']);
 	await expect(chip(page)).toHaveCount(0);
 });
 

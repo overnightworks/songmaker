@@ -13,18 +13,7 @@
 	import { activityTimeLabel } from '#lib/utils/format.ts';
 	import { isSungLine } from '#lib/utils/lyrics-align.ts';
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
-	import {
-		VERSIONS_SHEET_CLOSE_LABEL,
-		VERSIONS_SHEET_LABEL,
-		VERSION_CURRENT_TAG,
-		VERSION_NO_LYRICS,
-		VERSION_PICKED_LABEL,
-		versionChipLabel,
-		versionDeleteLabel,
-		versionLabel,
-		versionTakesLabel,
-		versionsChipAccessibleLabel
-	} from '#lib/constants/versions.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { takeVersion } from '#lib/constants/now-playing.ts';
 	import Icon from '../Icon.svelte';
 
@@ -59,7 +48,13 @@
 	let popoverLeft = $state(0);
 
 	const latest = $derived<VersionItem | null>($versions[0] ?? null);
-	const chipLabel = $derived(latest ? versionChipLabel(latest.version_number, $isDirty) : '');
+	const chipLabel = $derived(
+		latest
+			? pageText($isDirty ? 'versions.chipDraft' : 'versions.name', {
+					number: String(latest.version_number)
+				})
+			: ''
+	);
 
 	const NO_TAKES: VersionTakes = { count: 0, holdsPick: false };
 
@@ -84,7 +79,8 @@
 			version,
 			takes: takes[version.version_number] ?? NO_TAKES,
 			when: activityTimeLabel(version.created_at, now),
-			firstLine: version.lyrics.split('\n').find(isSungLine)?.trim() ?? VERSION_NO_LYRICS
+			firstLine:
+				version.lyrics.split('\n').find(isSungLine)?.trim() ?? pageText('versions.noLyrics')
 		}));
 	});
 
@@ -161,7 +157,7 @@
 			data-hitbox="text"
 			aria-haspopup="dialog"
 			aria-expanded={$open}
-			aria-label={versionsChipAccessibleLabel(chipLabel)}
+			aria-label={pageText('versions.chipName', { chip: chipLabel })}
 			onclick={() => ($open ? ($open = false) : void openSheet())}
 		>
 			<span class="chip-face">
@@ -175,7 +171,7 @@
 					type="button"
 					class="versions-backdrop"
 					tabindex="-1"
-					aria-label={VERSIONS_SHEET_CLOSE_LABEL}
+					aria-label={pageText('versions.close')}
 					onclick={() => ($open = false)}
 				></button>
 				<div
@@ -183,7 +179,7 @@
 					class="versions-panel"
 					role="dialog"
 					aria-modal="true"
-					aria-label={VERSIONS_SHEET_LABEL}
+					aria-label={pageText('versions.heading')}
 					tabindex="-1"
 					style:--popover-top="{popoverTop}px"
 					style:--popover-left="{popoverLeft}px"
@@ -191,12 +187,12 @@
 					onkeydown={onPanelKeydown}
 				>
 					<div class="versions-head">
-						<span class="versions-title">{VERSIONS_SHEET_LABEL}</span>
+						<span class="versions-title">{pageText('versions.heading')}</span>
 						<button
 							type="button"
 							class="versions-close"
 							data-hitbox="frequent"
-							aria-label={VERSIONS_SHEET_CLOSE_LABEL}
+							aria-label={pageText('versions.close')}
 							onclick={() => ($open = false)}
 						>
 							<Icon name="x" size={18} />
@@ -207,14 +203,22 @@
 							{@const isCurrent = row.version.id === latest.id}
 							<li class="version-item" class:current={isCurrent}>
 								<button type="button" class="version-row" onclick={() => void choose(row.version)}>
-									<span class="version-number">{versionLabel(row.version.version_number)}</span>
+									<span class="version-number"
+										>{pageText('versions.name', {
+											number: String(row.version.version_number)
+										})}</span
+									>
 									<span class="version-lines">
 										<span class="version-takes">
-											{versionTakesLabel(row.takes.count)}
+											{row.takes.count === 0
+												? pageText('versions.noTakes')
+												: pageText('versions.takes', row.takes.count)}
 											{#if row.takes.holdsPick}
-												· ★ {VERSION_PICKED_LABEL}
+												· ★ {pageText('versions.picked')}
 											{/if}
-											{#if isCurrent}<span class="version-current">{VERSION_CURRENT_TAG}</span>{/if}
+											{#if isCurrent}<span class="version-current"
+													>{pageText('versions.current')}</span
+												>{/if}
 										</span>
 										<span class="version-meta">
 											{row.when} · {row.firstLine}
@@ -225,7 +229,9 @@
 									type="button"
 									class="version-delete"
 									data-hitbox="frequent"
-									aria-label={versionDeleteLabel(row.version.version_number)}
+									aria-label={pageText('versions.deleteName', {
+										number: String(row.version.version_number)
+									})}
 									onclick={() => askToDelete(row)}
 								>
 									<Icon name="trash" size={16} />

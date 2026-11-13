@@ -5,7 +5,7 @@
 // leave.
 
 import { expect, test as base, type Dialog, type Locator, type Page } from './coverage-test';
-import { EDITOR_UNSAVED_TITLE, songEditorOpenLabel } from '../src/lib/constants/song';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { sameOriginHeaders, workspace } from './helpers';
 import { archiveOwnedAlbum, runMarker, seedSongPhoneSong } from './seed';
 import { words } from '../src/lib/words/en';
@@ -185,7 +185,9 @@ test.describe('leave prompt', () => {
 		);
 		await page.getByRole('button', { name: words['songMenu.save'], exact: true }).click();
 		await saved;
-		await expect(page.getByText(/^Saved version \d+$/)).toBeVisible();
+		await expect(
+			page.getByText(new RegExp(`^${words['songPage.savedVersion']({ number: '\\d+' })}$`))
+		).toBeVisible();
 		const dialogs = dialogsOf(page);
 		await page.reload();
 		await expect(song.lyrics).toHaveValue(`${song.savedLyrics}\n${TYPED_LINE}`);
@@ -203,7 +205,7 @@ test.describe('leave prompt', () => {
 
 		await page.keyboard.press('Escape');
 
-		await expect(page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: words['songPage.unsavedTitle'] })).toBeVisible();
 		expect(dialogs).toEqual([]);
 	});
 });

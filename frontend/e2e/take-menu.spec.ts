@@ -7,7 +7,6 @@
 // in the desktop one (the takes column beside the lyrics).
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
-import { EDITOR_UNSAVED_TITLE } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
@@ -387,7 +386,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await page.keyboard.press('Escape');
 				await expectConfirmFill(
 					page,
-					page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE }),
+					page.getByRole('dialog', { name: words['songPage.unsavedTitle'] }),
 					'--accent'
 				);
 			});

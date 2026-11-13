@@ -41,12 +41,7 @@ import {
 	COWRITER_DELETE_CONVERSATION_TITLE,
 	COWRITER_TURN_PATH
 } from '../src/lib/constants/cowriter';
-import {
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_TAB_TAKES_LABEL,
-	EDITOR_VIEW_COWRITER_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants/song';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
@@ -152,13 +147,13 @@ async function openCowriterOnPickedSong(page: Page): Promise<void> {
 }
 
 async function showCowriterTab(page: Page): Promise<void> {
-	await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+	await page.getByRole('tab', { name: words['songTabs.cowriter'], exact: true }).click();
 }
 
 async function lookAtEditAndTakes(page: Page): Promise<void> {
-	await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
+	await page.getByRole('tab', { name: words['songTabs.edit'], exact: true }).click();
 	await expect(page.getByPlaceholder(/Ask for a rewrite/)).toBeHidden();
-	await page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) }).click();
+	await page.getByRole('tab', { name: nameStartingWith(words['songTabs.takes']) }).click();
 	await expect(page.getByPlaceholder(/Ask for a rewrite/)).toBeHidden();
 }
 
@@ -476,7 +471,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 			await expect.poll(() => turnState).toBe('running');
 			if (scrolledUp) await scrollChatToTop(page);
 
-			await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
+			await page.getByRole('tab', { name: words['songTabs.edit'], exact: true }).click();
 			const replyStored = page.waitForResponse(
 				(response) =>
 					response.url().endsWith(`/api/conversations/${CONVERSATION_ID}`) &&

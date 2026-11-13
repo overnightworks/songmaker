@@ -85,12 +85,7 @@ import { setDesktopNowPlayingSurface } from '#lib/stores/playbackSettings.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { albumRoutePath, HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { LIBRARY_HISTORY_KIND } from '#lib/constants/library.ts';
-import {
-	EDITOR_SAVE_FAILED,
-	EDITOR_UNSAVED_DISCARD_LABEL,
-	EDITOR_UNSAVED_SAVE_LABEL,
-	EDITOR_UNSAVED_TITLE
-} from '#lib/constants/song.ts';
+import { words } from '#lib/words/en.ts';
 import { TAKES_ERROR, TAKES_RETRY_LABEL } from '#lib/constants/take.ts';
 import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants/http.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
@@ -1976,7 +1971,9 @@ describe.each([
 	}
 
 	function unsavedChangesDialog(): HTMLElement | null {
-		return document.querySelector(`[role="dialog"][aria-label="${EDITOR_UNSAVED_TITLE}"]`);
+		return document.querySelector(
+			`[role="dialog"][aria-label="${words['songPage.unsavedTitle']}"]`
+		);
 	}
 
 	async function pressBackAndSeeTheQuestion(): Promise<void> {
@@ -2026,7 +2023,7 @@ describe.each([
 		await editTheSongOpenedFrom(() => openAlbum('a1'));
 		await pressBackAndSeeTheQuestion();
 
-		answer(EDITOR_UNSAVED_DISCARD_LABEL);
+		answer(words['songPage.unsavedDiscard']);
 
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 		expect(window.location.pathname).toBe('/album/a1');
@@ -2042,7 +2039,7 @@ describe.each([
 		);
 		await pressBackAndSeeTheQuestion();
 
-		answer(EDITOR_UNSAVED_SAVE_LABEL);
+		answer(words['songPage.unsavedSave']);
 
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 		expect(window.location.pathname).toBe('/album/a1');
@@ -2062,11 +2059,11 @@ describe.each([
 		);
 		await pressBackAndSeeTheQuestion();
 
-		answer(EDITOR_UNSAVED_SAVE_LABEL);
+		answer(words['songPage.unsavedSave']);
 
 		await vi.waitFor(() =>
 			expect(get(toasts)).toEqual([
-				expect.objectContaining({ type: 'error', message: EDITOR_SAVE_FAILED })
+				expect.objectContaining({ type: 'error', message: words['songPage.saveFailed'] })
 			])
 		);
 		await expectOnTheSongWithItsDraft();
@@ -2082,7 +2079,7 @@ describe.each([
 		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/s1'));
 		expect(get(selectedSongId)).toBe('s1');
 
-		answer(EDITOR_UNSAVED_DISCARD_LABEL);
+		answer(words['songPage.unsavedDiscard']);
 
 		await vi.waitFor(() => expect(window.location.pathname).toBe('/settings/voices'));
 		expect(updateSong).not.toHaveBeenCalled();

@@ -1,11 +1,7 @@
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
 	import { detailTab, navigateToSongTab } from '#lib/stores/navigation.ts';
-	import {
-		EDITOR_TAB_TAKES_LABEL,
-		EDITOR_TABS_LABEL,
-		EDITOR_VIEW_COWRITER_LABEL
-	} from '#lib/constants/song.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import TakesList from './TakesList.svelte';
 
 	interface Props {
@@ -58,7 +54,7 @@
 </script>
 
 <div class="listen-tabs" class:fills-body={selected === 'cowriter'}>
-	<div class="tablist" role="tablist" aria-label={EDITOR_TABS_LABEL}>
+	<div class="tablist" role="tablist" aria-label={pageText('songTabs.label')}>
 		{#each LISTEN_TABS as tab (tab)}
 			<button
 				type="button"
@@ -73,9 +69,10 @@
 				onkeydown={onKeydown}
 			>
 				{#if tab === 'takes'}
-					{EDITOR_TAB_TAKES_LABEL} <span class="count">{takeListProps.song.generation_count}</span>
+					{pageText('songTabs.takes')}
+					<span class="count">{takeListProps.song.generation_count}</span>
 				{:else}
-					{EDITOR_VIEW_COWRITER_LABEL}
+					{pageText('songTabs.cowriter')}
 				{/if}
 			</button>
 		{/each}

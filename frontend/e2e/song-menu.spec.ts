@@ -7,7 +7,6 @@
 // laptop cells in the desktop one (the editor header carries it).
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
-import { SONG_TITLE_LABEL } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
@@ -126,7 +125,7 @@ async function openDeleteConfirm(page: Page, title: string): Promise<Locator> {
 	const menu = await openSongMenu(page);
 	await menu.getByRole('button', { name: words['songMenu.delete'], exact: true }).click();
 
-	const confirm = page.getByRole('dialog', { name: `Delete "${title}"?` });
+	const confirm = page.getByRole('dialog', { name: words['songPage.deleteTitle']({ title }) });
 	await expect(confirm).toBeVisible();
 	await expect(confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL })).toBeFocused();
 	return confirm;
@@ -250,7 +249,7 @@ test(
 			await menu.getByRole('button', { name: words['songMenu.rename'], exact: true }).click();
 
 			await expect(menu).toBeHidden();
-			await expect(page.getByRole('textbox', { name: SONG_TITLE_LABEL })).toBeFocused();
+			await expect(page.getByRole('textbox', { name: words['songHeader.title'] })).toBeFocused();
 		});
 	}
 );

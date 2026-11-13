@@ -3,8 +3,9 @@
 // provenance spec (#1843, rule 10) shares it with take-folds.spec.ts.
 
 import { expect, type Page } from '@playwright/test';
+import { words } from '../src/lib/words/en';
 import type { SongItem } from '../src/lib/api/types';
-import { EDITOR_TAB_TAKES_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { sameOriginHeaders, nameStartingWith, workspace } from './helpers';
 import {
 	completeGenerationJobWithoutEvent,
@@ -71,7 +72,7 @@ export async function openTakes(page: Page, song: FoldedSong): Promise<void> {
 	await workspace(page)
 		.getByRole('button', { name: songEditorOpenLabel(song.title) })
 		.click();
-	await showTab(page, EDITOR_TAB_TAKES_LABEL);
+	await showTab(page, words['songTabs.takes']);
 	await expect(workspace(page).locator('.take-row')).toHaveCount(SECOND_VERSION_TAKE_COUNT);
 }
 

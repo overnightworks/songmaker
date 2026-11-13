@@ -4,8 +4,9 @@
 // so the notice is judged at 1440 and at 390: in view, never clipped.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
+import { words } from '../src/lib/words/en';
 import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants/now-playing';
-import { EDITOR_VIEW_COWRITER_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
@@ -77,7 +78,7 @@ test('1906_E3: the co-writer says Du schreibst mit einer KI under its header', a
 		.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
 		.click();
 	await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
-	await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+	await page.getByRole('tab', { name: words['songTabs.cowriter'], exact: true }).click();
 
 	const notice = page.locator('.cowriter').getByText(WRITING_WITH_AI_WORDS, { exact: true });
 	await expect(notice).toBeVisible();

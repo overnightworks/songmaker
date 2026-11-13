@@ -26,26 +26,9 @@ import { phoneAppBar } from '#lib/stores/ui.ts';
 import PhoneAppBar from './PhoneAppBar.svelte';
 
 import type { JobItem, SongItem } from '#lib/api/types.ts';
-import {
-	EDITOR_GENERATE_LABEL,
-	EDITOR_GENERATING_LABEL,
-	EDITOR_SAVE_ACCESSIBLE_LABEL,
-	EDITOR_SAVE_FAILED,
-	EDITOR_SAVE_LABEL,
-	EDITOR_UNSAVED_SAVE_LABEL,
-	EDITOR_UNSAVED_TITLE,
-	EDITOR_VIEW_COWRITER_LABEL,
-	SONG_COVER_ALT_TYPE,
-	SONG_COVER_REMOVE_LABEL,
-	SONG_COVER_REPLACE_LABEL,
-	SONG_COVER_UPLOAD_LABEL,
-	SONG_NEXT_LABEL,
-	SONG_PREVIOUS_LABEL
-} from '#lib/constants/song.ts';
+import { EDITOR_GENERATE_LABEL, EDITOR_GENERATING_LABEL } from '#lib/constants/song.ts';
 import { TAKES_ERROR, TAKES_LOADING, TAKES_RETRY_LABEL } from '#lib/constants/take.ts';
 import { COMPACT_LAYOUT_MAX_PX } from '#lib/constants/media.ts';
-import { versionDeleteLabel } from '#lib/constants/versions.ts';
-import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
@@ -172,7 +155,7 @@ describe('SongDetailView header — one row, every state', () => {
 		const target = await renderView();
 		const actions = header(target).querySelector<HTMLElement>('.editor-header-actions');
 		if (!actions) throw new Error('Expected header actions');
-		expect(visibleText(actions)).not.toContain(EDITOR_VIEW_COWRITER_LABEL);
+		expect(visibleText(actions)).not.toContain(words['songTabs.cowriter']);
 		expect(visibleText(actions)).not.toContain(RECIPE_PANEL_LABEL);
 		expect(target.querySelectorAll('.generate-action .primary-button')).toHaveLength(1);
 		expect(target.querySelector('.generate-action .primary-button')?.textContent).toContain(
@@ -229,8 +212,8 @@ describe('SongDetailView desktop vs compact layout', () => {
 		expect(target.querySelector('.editor-columns')).not.toBeNull();
 		const tabs = target.querySelectorAll('.editor-columns [role="tab"]');
 		expect(Array.from(tabs, (tab) => tab.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
-			'Takes 1',
-			'Co-writer'
+			`${words['songTabs.takes']} 1`,
+			words['songTabs.cowriter']
 		]);
 		expect(target.querySelector('.lyrics-area')).not.toBeNull();
 		expect(target.querySelector('.take-row')).not.toBeNull();
@@ -275,9 +258,9 @@ describe('SongDetailView desktop vs compact layout', () => {
 		await tick();
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		expect(Array.from(tabs, (tab) => tab.textContent?.trim())).toEqual([
-			'Edit',
-			'Co-writer',
-			'Takes (1)'
+			words['songTabs.edit'],
+			words['songTabs.cowriter'],
+			`${words['songTabs.takes']} (1)`
 		]);
 		tabs[2].click();
 		await tick();
@@ -310,7 +293,9 @@ describe('SongDetailView adding a take to a playlist', () => {
 		await vi.waitFor(() => expect(row.querySelector('.picker')).toBeNull());
 
 		expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1');
-		expect(vi.mocked(addToast).mock.calls).toEqual([['Added to playlist', 'success']]);
+		expect(vi.mocked(addToast).mock.calls).toEqual([
+			[words['songPage.addedToPlaylist'], 'success']
+		]);
 	});
 });
 
@@ -337,7 +322,7 @@ describe('SongDetailView failure wording', () => {
 	const actions = [
 		{
 			action: 'renaming the song',
-			fallback: 'Rename failed',
+			fallback: words['songPage.renameFailed'],
 			fail: (error: Error) => vi.mocked(renameSong).mockRejectedValueOnce(error),
 			run: () =>
 				appBar()
@@ -346,13 +331,13 @@ describe('SongDetailView failure wording', () => {
 		},
 		{
 			action: 'uploading a cover',
-			fallback: 'Cover upload failed',
+			fallback: words['songPage.coverUploadFailed'],
 			fail: (error: Error) => uploadSongCover.mockRejectedValueOnce(error),
 			run: (target: HTMLElement) => chooseCoverFile(target)
 		},
 		{
 			action: 'removing the cover',
-			fallback: 'Cover remove failed',
+			fallback: words['songPage.coverRemoveFailed'],
 			ownCover: true,
 			fail: (error: Error) => deleteSongCover.mockRejectedValueOnce(error),
 			run: (target: HTMLElement) =>
@@ -360,13 +345,13 @@ describe('SongDetailView failure wording', () => {
 		},
 		{
 			action: 'saving a version',
-			fallback: EDITOR_SAVE_FAILED,
+			fallback: words['songPage.saveFailed'],
 			fail: (error: Error) => vi.mocked(updateSong).mockRejectedValueOnce(error),
 			run: () => appBar().menu.onsave()
 		},
 		{
 			action: 'deleting a version from its Versions row',
-			fallback: 'Delete failed',
+			fallback: words['songPage.deleteFailed'],
 			versions: [version({ id: 'v1', version_number: 1 })],
 			fail: (error: Error) => vi.mocked(deleteVersion).mockRejectedValueOnce(error),
 			run: async (target: HTMLElement) => {
@@ -377,14 +362,14 @@ describe('SongDetailView failure wording', () => {
 				});
 				chip.click();
 				await tick();
-				getByRoleButton(document.body, versionDeleteLabel(1)).click();
+				getByRoleButton(document.body, words['versions.deleteName']({ number: '1' })).click();
 				await tick();
 				document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
 			}
 		},
 		{
 			action: 'deleting the song',
-			fallback: 'Delete failed',
+			fallback: words['songPage.deleteFailed'],
 			fail: (error: Error) => vi.mocked(deleteSong).mockRejectedValueOnce(error),
 			run: async () => {
 				appBar().menu.ondelete();
@@ -846,7 +831,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		selectSong('s-last', song({ ...editableSongDefaults(), id: 's-last', title: 'Last' }));
 		await tick();
 
-		expect(target.querySelector('.dialog h3')?.textContent).toBe(EDITOR_UNSAVED_TITLE);
+		expect(target.querySelector('.dialog h3')?.textContent).toBe(words['songPage.unsavedTitle']);
 		expect(get(selectedSongId)).toBe('s1');
 
 		clickNamed(target, 'Cancel');
@@ -878,7 +863,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		await tick();
 		const dialog = target.querySelector<HTMLElement>('.dialog');
 		if (!dialog) throw new Error('Expected the unsaved-changes dialog');
-		clickNamed(dialog, EDITOR_UNSAVED_SAVE_LABEL);
+		clickNamed(dialog, words['songPage.unsavedSave']);
 
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s-last'));
 		expect(updateSong).toHaveBeenCalled();
@@ -894,20 +879,17 @@ describe('SongDetailView unsaved-draft guard', () => {
 		if (!dialog) throw new Error('Expected the unsaved-changes dialog');
 
 		const buttons = Array.from(target.querySelectorAll('button'));
-		expect(buttons.filter((el) => accessibleName(el) === EDITOR_UNSAVED_SAVE_LABEL)).toHaveLength(
-			1
-		);
-		expect(
-			buttons.filter((el) => accessibleName(el) === EDITOR_SAVE_ACCESSIBLE_LABEL)
-		).toHaveLength(1);
-		expect(EDITOR_SAVE_ACCESSIBLE_LABEL).not.toBe(EDITOR_UNSAVED_SAVE_LABEL);
+		const named = (name: string) => buttons.filter((el) => accessibleName(el) === name);
+		expect(named(words['songPage.unsavedSave'])).toHaveLength(1);
+		expect(named(words['songPage.saveName'])).toHaveLength(1);
+		expect(words['songPage.saveName']).not.toBe(words['songPage.unsavedSave']);
 	});
 
 	it('makes unsaved changes visible on the write surface before you hunt for them', async () => {
 		const target = await renderView();
 		const save = writeSaveButton(target);
 		expect(save.disabled).toBe(true);
-		expect(save.textContent?.trim()).toBe(EDITOR_SAVE_LABEL);
+		expect(save.textContent?.trim()).toBe(words['songPage.save']);
 		expect(target.querySelector('.write-save [role="status"]')?.textContent?.trim()).toBe('');
 		expect(header(target).querySelector('.save-btn')).toBeNull();
 
@@ -916,7 +898,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		expect(save.disabled).toBe(false);
 		expect(target.querySelector('.write-save [role="status"]')?.textContent?.trim()).toBe(
-			EDITOR_UNSAVED_TITLE
+			words['songPage.unsavedTitle']
 		);
 	});
 
@@ -972,14 +954,22 @@ describe('SongDetailView unsaved-draft guard', () => {
 		writeSaveButton(target).click();
 		await settleRender();
 
-		expect(addToast).toHaveBeenCalledWith('Saved version 5', 'success');
+		expect(addToast).toHaveBeenCalledWith(
+			words['songPage.savedVersion']({ number: '5' }),
+			'success'
+		);
 	});
 
 	it.each([
 		{ choice: 'Cancel', button: 'Cancel', saveFails: false, use: 'repaint' },
 		{ choice: 'Cancel', button: 'Cancel', saveFails: false, use: 'seed' },
-		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true, use: 'repaint' },
-		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true, use: 'seed' }
+		{
+			choice: 'a failed Save',
+			button: words['songPage.unsavedSave'],
+			saveFails: true,
+			use: 'repaint'
+		},
+		{ choice: 'a failed Save', button: words['songPage.unsavedSave'], saveFails: true, use: 'seed' }
 	] as const)(
 		'C4: cross-song $use or Open vN: $choice leaves it unapplied, the seed unset, and drops what was pending',
 		async ({ button, saveFails, use }) => {
@@ -1124,6 +1114,10 @@ describe('SongDetailView phone Co-writer is a tab', () => {
 });
 
 describe('song header album rail', () => {
+	function neighborButton(target: HTMLElement, key: 'songHeader.previous' | 'songHeader.next') {
+		return target.querySelector<HTMLButtonElement>(`[aria-label="${words[key]}"]`);
+	}
+
 	beforeEach(() => {
 		injectHitboxStyles();
 	});
@@ -1133,8 +1127,8 @@ describe('song header album rail', () => {
 		songList.set(albumSongs());
 		const target = await renderView();
 		expect(target.querySelector('.song-rail')).toBeNull();
-		expect(target.querySelector(`[aria-label="${SONG_PREVIOUS_LABEL}"]`)).toBeNull();
-		expect(target.querySelector(`[aria-label="${SONG_NEXT_LABEL}"]`)).toBeNull();
+		expect(neighborButton(target, 'songHeader.previous')).toBeNull();
+		expect(neighborButton(target, 'songHeader.next')).toBeNull();
 		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
 		expect(crumbs.slice(0, 2)).toEqual([words['places.library'], 'Local Album']);
 	});
@@ -1145,8 +1139,8 @@ describe('song header album rail', () => {
 		songList.set(albumSongs());
 		selectedSongId.set('s1');
 		const target = await renderView();
-		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
-		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		const prev = neighborButton(target, 'songHeader.previous');
+		const next = neighborButton(target, 'songHeader.next');
 		const albumLine = target.querySelector('.mobile-album-line');
 		if (!prev || !next || !albumLine) throw new Error('Expected mobile album navigation');
 		expect(albumLine.textContent).toContain('Local Album · 3 songs');
@@ -1172,8 +1166,8 @@ describe('song header album rail', () => {
 	it('keeps previous and next present and disabled on a one-song album', async () => {
 		stubLibraryMedia({ narrow: true, compact: false });
 		const target = await renderView();
-		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
-		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		const prev = neighborButton(target, 'songHeader.previous');
+		const next = neighborButton(target, 'songHeader.next');
 		if (!prev || !next) throw new Error('Expected previous and next');
 		expect(prev.disabled).toBe(true);
 		expect(next.disabled).toBe(true);
@@ -1190,7 +1184,7 @@ describe('song header album rail', () => {
 		navigateToSongTab('takes');
 		const before = { length: historyLength(), index: historyEntry().index };
 		const target = await renderView();
-		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		const next = neighborButton(target, 'songHeader.next');
 		if (!next) throw new Error('Expected next');
 		next.click();
 		await tick();
@@ -1209,8 +1203,8 @@ describe('song header album rail', () => {
 		const target = await renderView({ widthPx: 320 });
 		const headerEl = target.querySelector('.detail-header');
 		const rail = target.querySelector('.mobile-album-line');
-		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
-		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		const prev = neighborButton(target, 'songHeader.previous');
+		const next = neighborButton(target, 'songHeader.next');
 		if (!(headerEl instanceof HTMLElement) || !(rail instanceof HTMLElement) || !prev || !next) {
 			throw new Error('Expected header song rail');
 		}
@@ -1228,7 +1222,10 @@ describe('song header album rail', () => {
 		const target = await renderView();
 		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
 		expect(crumbs.slice(0, 2)).toEqual([words['places.library'], 'Local Album']);
-		expect(crumbs[2]).toBe(`Track ${songs.findIndex((s) => s.id === 's1') + 1} of ${songs.length}`);
+		const position = songs.findIndex((s) => s.id === 's1') + 1;
+		expect(crumbs[2]).toBe(
+			words['songPage.trackOf']({ position: String(position), total: String(songs.length) })
+		);
 	});
 
 	it('removes the album line and breadcrumbs on mobile', async () => {
@@ -1263,10 +1260,12 @@ describe('SongDetailView cover hero', () => {
 		const target = await renderView();
 		const img = target.querySelector<HTMLImageElement>('img');
 		expect(img?.getAttribute('src')).toContain('/api/albums/a-local/cover?variant=detail');
-		expect(img?.getAttribute('alt')).toBe(`${ALBUM_COVER_ALT_TYPE} Local Album`);
+		expect(img?.getAttribute('alt')).toBe(
+			words['songPage.coverAltAlbum']({ title: 'Local Album' })
+		);
 		expect(target.querySelector('.cover-remove')).toBeNull();
 		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
-			SONG_COVER_UPLOAD_LABEL
+			words['songPage.coverUpload']
 		);
 		expect(fetchAlbum).not.toHaveBeenCalled();
 	});
@@ -1317,12 +1316,12 @@ describe('SongDetailView cover hero', () => {
 		const target = await renderView();
 		const img = target.querySelector<HTMLImageElement>('img');
 		expect(img?.getAttribute('src')).toContain('/api/songs/s1/cover?variant=detail');
-		expect(img?.getAttribute('alt')).toBe(`${SONG_COVER_ALT_TYPE} Local Only`);
+		expect(img?.getAttribute('alt')).toBe(words['songPage.coverAlt']({ title: 'Local Only' }));
 		expect(
 			target.querySelector<HTMLButtonElement>('.cover-remove')?.getAttribute('aria-label')
-		).toBe(SONG_COVER_REMOVE_LABEL);
+		).toBe(words['songHeader.removeCover']);
 		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
-			SONG_COVER_REPLACE_LABEL
+			words['songPage.coverReplace']
 		);
 	});
 

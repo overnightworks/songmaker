@@ -6,11 +6,7 @@ import {
 	PLAYLIST_API,
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
-import {
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_UNSAVED_TITLE,
-	songEditorOpenLabel
-} from '../src/lib/constants/song';
+import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TAKE_DELETE_TITLE_TEMPLATE } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { playlistEntryOverflowLabel } from '../src/lib/constants/playlist';
@@ -227,14 +223,14 @@ function lyricsField(page: Page): Locator {
 }
 
 function unsavedDraftDialog(page: Page): Locator {
-	return page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+	return page.getByRole('dialog', { name: words['songPage.unsavedTitle'] });
 }
 
 // Escape takes the song one level up to its collection, which a dirty draft
 // holds back with the unsaved-draft dialog.
 async function leaveWithADirtyDraft(page: Page, playlist: SeededPlaylist): Promise<string> {
 	await openSong(page, 'mobile', playlist);
-	await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
+	await page.getByRole('tab', { name: words['songTabs.edit'], exact: true }).click();
 	const lyrics = lyricsField(page);
 	const saved = await lyrics.inputValue();
 	await lyrics.fill(`${saved}\n${DRAFT_LINE}`);

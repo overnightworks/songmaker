@@ -1,13 +1,8 @@
 import { expect, test as base, type Locator, type Page } from './coverage-test';
+import { words } from '../src/lib/words/en';
 import type { JobItem } from '../src/lib/api/types';
 import { ADMIN_TABS_LABEL, ADMIN_WORKER_POOL_HREF } from '../src/lib/constants/admin';
-import {
-	EDITOR_OPEN_WORKER_POOL_LABEL,
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_UNSAVED_DISCARD_LABEL,
-	EDITOR_UNSAVED_SAVE_LABEL,
-	EDITOR_UNSAVED_TITLE
-} from '../src/lib/constants/song';
+import { EDITOR_OPEN_WORKER_POOL_LABEL } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { sameOriginHeaders, ONLY_IN_SHELL } from './helpers';
@@ -125,7 +120,7 @@ for (const width of WIDTHS) {
 							.first()
 							.click();
 						if (width === 390)
-							await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
+							await page.getByRole('tab', { name: words['songTabs.edit'], exact: true }).click();
 						await expect(page.locator('.generate-action:visible [role="status"]')).toBeVisible();
 						ended = true;
 						releaseFailure();
@@ -150,15 +145,15 @@ for (const width of WIDTHS) {
 
 						for (const outcome of [
 							DIALOG_CANCEL_LABEL,
-							EDITOR_UNSAVED_SAVE_LABEL,
-							EDITOR_UNSAVED_DISCARD_LABEL
+							words['songPage.unsavedSave'],
+							words['songPage.unsavedDiscard']
 						]) {
 							const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 							const original = await lyrics.inputValue();
 							const draft = `${original}\nQA worker pool ${outcome}`;
 							await lyrics.fill(draft);
 							await link.click();
-							const dialog = page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+							const dialog = page.getByRole('dialog', { name: words['songPage.unsavedTitle'] });
 							await expect(dialog).toBeVisible();
 							await dialog.getByRole('button', { name: outcome, exact: true }).click();
 							if (outcome === DIALOG_CANCEL_LABEL) {
@@ -170,7 +165,7 @@ for (const width of WIDTHS) {
 								await expectWorkerPool(page, width);
 								await page.goBack();
 								await expect(lyrics).toHaveValue(
-									outcome === EDITOR_UNSAVED_SAVE_LABEL ? draft : original
+									outcome === words['songPage.unsavedSave'] ? draft : original
 								);
 							}
 						}
@@ -194,7 +189,9 @@ for (const width of WIDTHS) {
 						await popup.setViewportSize({ width, height: 900 });
 						try {
 							await expectWorkerPool(popup, width);
-							await expect(page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE })).toBeHidden();
+							await expect(
+								page.getByRole('dialog', { name: words['songPage.unsavedTitle'] })
+							).toBeHidden();
 							await expect(lyrics).toHaveValue(draft);
 						} finally {
 							await popup.close();
