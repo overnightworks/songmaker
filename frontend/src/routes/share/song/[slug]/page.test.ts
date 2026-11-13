@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_NAME } from '#lib/constants/app.ts';
 import { SEEK_PLAYBACK_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '#lib/constants/now-playing.ts';
-import { SHARE_NO_AUDIO_NOTICE } from '#lib/constants/share.ts';
+import { words } from '#lib/words/en.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 
@@ -151,14 +151,14 @@ describe('shared song page', () => {
 	it('shows an honest empty state when the song has no audio', async () => {
 		const target = await openSharedSong(sharedSong({ audio_url: null, generation_id: null }));
 
-		expect(target.textContent).toContain(SHARE_NO_AUDIO_NOTICE);
+		expect(target.textContent).toContain(words['share.noAudio']);
 		expect(getByRoleButton(target, TRANSPORT_PLAY_LABEL).disabled).toBe(true);
 	});
 
 	it('says in one line that a link is no longer shared, with a way back and no player', async () => {
 		const target = await openSharedSong({ ok: false, status: 404 });
 
-		expect(target.querySelector('h1')?.textContent).toBe('Song not found');
+		expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.notFoundSong']);
 		expect(target.textContent).toContain('This share link is invalid or was removed.');
 		const wayBack = target.querySelector<HTMLAnchorElement>('.share-status a');
 		expect([wayBack?.textContent, wayBack?.getAttribute('href')]).toEqual([

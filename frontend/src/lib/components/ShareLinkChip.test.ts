@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SHARE_LINK_COPIED_TOAST, SHARE_LINK_COPY_FAILED_TOAST } from '#lib/constants/share.ts';
+import { LIBRARY_SHARES_COPY_KEY } from '#lib/constants/library.ts';
+import { words } from '#lib/words/en.ts';
 
 const addToast = vi.hoisted(() => vi.fn());
 vi.mock('#lib/stores/toast.ts', () => ({ addToast }));
@@ -37,7 +38,7 @@ describe('ShareLinkChip', () => {
 		const { target, url } = await render();
 
 		const button = chipButton(target);
-		expect(button.textContent?.trim()).toBe('Copy link');
+		expect(button.textContent?.trim()).toBe(words[LIBRARY_SHARES_COPY_KEY]);
 		expect(target.textContent).not.toContain(url);
 		expect(button.title).toBe(url);
 	});
@@ -53,7 +54,7 @@ describe('ShareLinkChip', () => {
 		await vi.waitFor(() => expect(addToast).toHaveBeenCalledTimes(1));
 
 		expect(navigator.clipboard.writeText).toHaveBeenCalledWith(url);
-		expect(addToast).toHaveBeenCalledWith(SHARE_LINK_COPIED_TOAST, 'success');
+		expect(addToast).toHaveBeenCalledWith(words['shareLink.copiedToast'], 'success');
 	});
 
 	it('reports a copy failure without crashing when the clipboard write throws', async () => {
@@ -66,6 +67,6 @@ describe('ShareLinkChip', () => {
 		chipButton(target).click();
 		await vi.waitFor(() => expect(addToast).toHaveBeenCalledTimes(1));
 
-		expect(addToast).toHaveBeenCalledWith(SHARE_LINK_COPY_FAILED_TOAST, 'error');
+		expect(addToast).toHaveBeenCalledWith(words['shareLink.copyFailedToast'], 'error');
 	});
 });

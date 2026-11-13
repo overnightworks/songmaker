@@ -1,4 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
+import { APP_NAME } from '#lib/constants/app.ts';
+import { words } from '#lib/words/en.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WhisperCue } from '#lib/api/types.ts';
 import { TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
@@ -128,7 +130,9 @@ describe('shared generation (take) page', () => {
 		expect(target.textContent).toContain('Album · Artist');
 		expect(target.textContent).not.toContain('take 3');
 		// #141/10: the page names a take; only the URL segment stays /share/gen/.
-		expect(document.title).toContain('Take 3 — Solo Track');
+		expect(document.title).toContain(
+			words['shareTakePage.documentTitle']({ number: '3', title: 'Solo Track', app: APP_NAME })
+		);
 		expect(document.title).not.toContain('Gen #');
 
 		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
@@ -165,7 +169,7 @@ describe('shared generation (take) page', () => {
 	it('defect:#1374 says in one line that a take is no longer shared, with a way back and no player', async () => {
 		const target = await openSharedTake({ ok: false, status: 404 });
 
-		expect(target.querySelector('h1')?.textContent).toBe('Take not found');
+		expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.notFoundTake']);
 		expect(target.querySelector('.share-status a')?.getAttribute('href')).toBe('/login');
 		expect(target.querySelector('.now-playing')).toBeNull();
 	});

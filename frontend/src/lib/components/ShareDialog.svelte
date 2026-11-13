@@ -4,9 +4,7 @@
 	import { focusFirstIn, handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 	import type { UnplayableSongSummary } from '#lib/api/types.ts';
 
-	const SHARE_DIALOG_TITLE = 'Missing from the share page';
-	const SHARE_DIALOG_INTRO = "These songs have no playable take and won't appear when shared:";
-	const SHARE_DIALOG_CLOSE_LABEL = 'Got it';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	let { songs, onclose }: { songs: UnplayableSongSummary[]; onclose: () => void } = $props();
 
@@ -35,25 +33,25 @@
 			class="overlay-backdrop"
 			tabindex="-1"
 			onclick={close}
-			aria-label={SHARE_DIALOG_CLOSE_LABEL}
+			aria-label={pageText('shareDialog.close')}
 		></button>
 		<div
 			bind:this={dialog}
 			class="dialog"
 			role="dialog"
 			aria-modal="true"
-			aria-label={SHARE_DIALOG_TITLE}
+			aria-label={pageText('shareDialog.title')}
 			tabindex="-1"
 		>
-			<h3>{SHARE_DIALOG_TITLE}</h3>
-			<p class="message">{SHARE_DIALOG_INTRO}</p>
+			<h3>{pageText('shareDialog.title')}</h3>
+			<p class="message">{pageText('shareDialog.intro')}</p>
 			<ul>
 				{#each songs as song (song.id)}
 					<li>{song.title}</li>
 				{/each}
 			</ul>
 			<div class="actions">
-				<button class="confirm-btn" onclick={close}>{SHARE_DIALOG_CLOSE_LABEL}</button>
+				<button class="confirm-btn" onclick={close}>{pageText('shareDialog.close')}</button>
 			</div>
 		</div>
 	</div>
