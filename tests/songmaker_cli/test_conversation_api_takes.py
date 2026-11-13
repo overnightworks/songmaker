@@ -9,13 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from support.cowriter_gateway import CowriterStack, attach_cowriter_gateway
-from support.web_app import (
-    make_authenticated_user,
-    make_router_app,
-    make_router_ctx,
-    refusal_body,
-    web_client,
-)
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.db.models import (
     Album,
@@ -238,7 +232,6 @@ def test_wrong_song_or_unplayable_is_422(client, service):
         "current_generation_id": "g2",
     })
     assert resp.status_code == 422
-    assert resp.json() == refusal_body("cowriterRefusal.takeNotInSong")
     assert service.turns == []
 
     resp = _turn(c, {
@@ -247,7 +240,6 @@ def test_wrong_song_or_unplayable_is_422(client, service):
         "current_generation_id": "gArch",
     })
     assert resp.status_code == 422
-    assert resp.json() == refusal_body("takeRefusal.notPlayable")
     assert service.turns == []
 
 

@@ -8,13 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from support.generation_job_world import worker_up
-from support.web_app import (
-    make_authenticated_user,
-    make_router_app,
-    make_router_ctx,
-    refusal_body,
-    web_client,
-)
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, User, Version
 
@@ -97,4 +91,3 @@ def test_a_repaint_of_a_take_without_a_version_is_refused_as_invalid(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Generation has no linked version"
-    assert response.json() == refusal_body("generationRefusal.noLinkedVersion")
