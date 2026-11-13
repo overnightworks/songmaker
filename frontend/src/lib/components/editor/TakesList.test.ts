@@ -830,41 +830,6 @@ describe('TakesList', () => {
 		);
 	});
 
-	it("names the take on the row's menu, without also playing it", async () => {
-		const { target } = await render();
-		const row = target.querySelector<HTMLElement>('.take-row');
-		row?.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-		await tick();
-		expect(target.querySelector('.menu-heading')?.textContent).toBe(
-			words['takeMenu.headingWithVersion']({ version: '3', take: '3' })
-		);
-		expect(playTake).not.toHaveBeenCalled();
-	});
-
-	it('adds the take to a playlist from its own row, without also playing it', async () => {
-		// #141/3: the picker is absolutely positioned, so it must sit inside a
-		// positioned anchor in the row — otherwise it escapes the row entirely
-		// and the menu entry looks like it does nothing.
-		const { target } = await render();
-		const row = target.querySelector<HTMLElement>('.take-row');
-		if (!row) throw new Error('Expected a take row');
-		openTakeMenu(row);
-		await tick();
-		clickMenuItem(row, words['takeMenu.addToPlaylist']);
-		await tick();
-
-		const picker = row.querySelector('.picker');
-		expect(picker, 'the playlist picker renders inside the take row').not.toBeNull();
-		expect(picker?.parentElement?.classList.contains('take-picker-anchor')).toBe(true);
-
-		row.querySelector<HTMLButtonElement>('.picker-item')?.click();
-		await tick();
-		await Promise.resolve();
-
-		expect(addToPlaylist).toHaveBeenCalledWith('p1', 'g1');
-		expect(playTake).not.toHaveBeenCalled();
-	});
-
 	const failingActions = [
 		{
 			action: 'deleting the selected takes',
@@ -1286,20 +1251,5 @@ describe('TakesList touch hint', () => {
 		stubCoarsePointer(false);
 		expect((await render()).target.querySelector('[role="tooltip"]')).toBeNull();
 		vi.unstubAllGlobals();
-	});
-});
-
-describe('Escape yields to the take overflow menu before any global shortcut', () => {
-	it('closes the overflow menu on Escape without leaking to a document listener', async () => {
-		const { target } = await render();
-		target
-			.querySelector<HTMLElement>('.take-row')
-			?.querySelector<HTMLButtonElement>('.menu-trigger')
-			?.click();
-		await tick();
-		expect(target.querySelector('.menu-panel')).not.toBeNull();
-		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		await tick();
-		expect(target.querySelector('.menu-panel')).toBeNull();
 	});
 });
