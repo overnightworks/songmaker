@@ -31,6 +31,7 @@ import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
 import { recipeModel } from '#lib/stores/recipe.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
+import { words } from '#lib/words/en.ts';
 import VoicePicker from './VoicePicker.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -108,7 +109,7 @@ describe('VoicePicker', () => {
 		expect(none.disabled).toBe(false);
 		expect(sft.disabled).toBe(false);
 		expect(turbo.disabled).toBe(true);
-		expect(turbo.textContent).toContain('not available for this model');
+		expect(turbo.textContent).toContain(words['voicePicker.stateNotForModel']);
 
 		sft.click();
 		expect(get(editGenParams)?.user_lora_id).toBe('lora-sft');
@@ -133,6 +134,28 @@ describe('VoicePicker', () => {
 		for (const voice of voices) expect(voice.disabled).toBe(true);
 	});
 
+	it.each([
+		{ status: 'draft', state: words['voicePicker.stateDraft'] },
+		{ status: 'failed', state: words['voicePicker.stateFailed'] },
+		{ status: 'queued', state: words['voicePicker.stateTraining'] },
+		{ status: 'preprocessing', state: words['voicePicker.stateTraining'] },
+		{ status: 'training', state: words['voicePicker.stateTraining'] },
+		{ status: 'exporting', state: words['voicePicker.stateTraining'] }
+	])('names a $status voice by its state and keeps it disabled', async ({ status, state }) => {
+		setDraftGenParams({ user_lora_id: 'lora-sft' });
+		loras.set([lora({ status })]);
+		const target = await render();
+		const [, voice] = await openOptions(target);
+
+		expect(voice.disabled).toBe(true);
+		expect(voice.querySelector('.unavailable-label')?.textContent).toBe(
+			words['voicePicker.optionUnavailable']({ state })
+		);
+		expect(picker(target)?.textContent).toContain(
+			words['voicePicker.chosenUnavailable']({ name: 'My Tenor', state })
+		);
+	});
+
 	it('keeps a referenced deleted voice visible but disabled', async () => {
 		setDraftGenParams({ user_lora_id: 'deleted-lora' });
 		loras.set([
@@ -148,8 +171,13 @@ describe('VoicePicker', () => {
 
 		expect(none).toBeDefined();
 		expect(deleted.disabled).toBe(true);
-		expect(deleted.textContent).toContain('voice deleted');
-		expect(target.querySelector('.picker')?.textContent).toContain('voice deleted');
+		expect(deleted.textContent).toContain(words['voicePicker.stateDeleted']);
+		expect(target.querySelector('.picker')?.textContent).toContain(
+			words['voicePicker.chosenUnavailable']({
+				name: 'Folk Alto',
+				state: words['voicePicker.stateDeleted']
+			})
+		);
 		expect(target.textContent).not.toContain('Retired Baritone');
 	});
 
@@ -158,8 +186,10 @@ describe('VoicePicker', () => {
 		const target = await render();
 		const options = await openOptions(target);
 
-		expect(target.querySelector('.desktop-label')?.textContent).toBe('Your Voice');
-		expect(target.querySelector('.mobile-label')?.textContent).toBe('Your Voice · sft model');
+		expect(target.querySelector('.desktop-label')?.textContent).toBe(words['voicePicker.label']);
+		expect(target.querySelector('.mobile-label')?.textContent).toBe(
+			words['voicePicker.mobileLabel']({ mode: 'sft' })
+		);
 		expect(options[1].querySelector('.mode-chip')?.textContent).toBe('sft');
 		expect(target.querySelector('.picker .mode-chip')).toBeNull();
 	});

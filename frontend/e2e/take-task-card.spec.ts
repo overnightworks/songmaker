@@ -65,7 +65,9 @@ test('Repaint opens a card under the take and its button sends the range (S4, #1
 		await openVerb(page, TAKE_REPAINT_LABEL);
 		await expect(card(page)).toHaveCount(1);
 		await expect(page.locator('.take-row').first().locator('+ .task')).toBeVisible();
-		await expect(page.getByRole('region', { name: 'Recipe', exact: true })).toHaveCount(0);
+		await expect(
+			page.getByRole('region', { name: words['recipe.panel'], exact: true })
+		).toHaveCount(0);
 
 		const request = page.waitForRequest(/\/api\/generations\/[^/]+\/repaint$/);
 		await page.route(/\/api\/generations\/[^/]+\/repaint$/, (route) =>
@@ -128,7 +130,7 @@ test('With a card open the Recipe holds no Repaint row, no Off and no Source bar
 		await expect(card(page)).toHaveCount(1);
 		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.edit']) }).click();
 		await page.locator('.recipe-line').click();
-		const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
+		const recipe = page.getByRole('region', { name: words['recipe.panel'], exact: true });
 		await expect(recipe).toBeVisible();
 		await expect(recipe).not.toContainText(TAKE_REPAINT_LABEL);
 		await expect(recipe).not.toContainText('Off');
