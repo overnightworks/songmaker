@@ -1,0 +1,7 @@
+claim_id = "43654c5121884e0c9b502d9a00f711f2"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "56db9a1f2a2b8cfd262c103d962e132a10fc96a6"
+branch = "claude/issue-3114-the-report-identity-test-s-parallel-shar"
+scope = ["frontend/e2e/report-identity.test.ts"]
+opened_commit = "617b4ae6d08622883a3eca2a2d6b00d32f82d94d"
