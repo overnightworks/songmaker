@@ -1,0 +1,8 @@
+claim_id = "65951e577e0548eaa14d7e68a0906eb7"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "56db9a1f2a2b8cfd262c103d962e132a10fc96a6"
+branch = "claude/issue-3110-the-docs-name-the-platform-not-hal-or-co"
+scope = ["AGENTS.md", "README.md", "docs/acestep.md", "docs/architecture.md", "docs/security.md"]
+opened_commit = "3169e789b876bed000c42cc724371cca9726c286"
+whole_reason = "five documents carry the same stale platform facts"
