@@ -11,14 +11,6 @@ export function formatTime(seconds: number): string {
 	return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function pluralize(count: number, noun: string): string {
-	return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
-
-export function songCountLabel(songCount: number): string {
-	return pluralize(songCount, 'song');
-}
-
 export function titleInitials(title: string): string {
 	const trimmed = title.trim();
 	if (!trimmed) return ALBUM_ART_EMPTY_INITIALS;

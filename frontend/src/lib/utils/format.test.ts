@@ -6,7 +6,6 @@ import {
 	localDayAndMonth,
 	localWeekday,
 	releaseDayLabel,
-	songCountLabel,
 	titleInitials
 } from './format.ts';
 
@@ -29,16 +28,6 @@ describe('formatTime', () => {
 
 	it('floors fractional seconds', () => {
 		expect(formatTime(61.7)).toBe('1:01');
-	});
-});
-
-describe('songCountLabel', () => {
-	it.each([
-		[0, '0 songs'],
-		[1, '1 song'],
-		[6, '6 songs']
-	])('count=%i -> %j', (count, expected) => {
-		expect(songCountLabel(count)).toBe(expected);
 	});
 });
 
