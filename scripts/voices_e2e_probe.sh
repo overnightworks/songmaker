@@ -56,9 +56,12 @@ teardown() {
     rm -f "$secret_file" "$gateway_key_file"
 }
 drive_pid=""
-# Ending the drive first lets the EXIT trap tear the stack down at once.
+# The drive is stopped and awaited before the EXIT trap tears the stack down.
 stop_drive() {
-    [[ -z "$drive_pid" ]] || kill -TERM "$drive_pid" 2>/dev/null || true
+    if [[ -n "$drive_pid" ]]; then
+        kill -TERM "$drive_pid" 2>/dev/null || true
+        wait "$drive_pid" || true
+    fi
     exit 143
 }
 trap teardown EXIT
