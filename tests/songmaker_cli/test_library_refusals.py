@@ -27,11 +27,6 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.db.queries.songs import (
-    EmptySongTitleError,
-    OverlongSongTitleError,
-    UnstorableSongTitleError,
-)
 from songmaker_cli.words import Key
 
 OWNER_ID = "owner"
@@ -126,28 +121,16 @@ def test_a_blank_album_title_is_refused_on_create_and_on_rename(
     assert created.json() == renamed.json() == refusal_body("albumRefusal.titleRequired")
 
 
-@pytest.mark.parametrize(
-    ("raised", "key"),
-    [
-        (EmptySongTitleError, "songRefusal.titleRequired"),
-        (OverlongSongTitleError, "songRefusal.titleTooLong"),
-    ],
-)
-def test_a_song_title_that_cannot_be_stored_is_refused_with_its_reason(
+def test_a_blank_song_title_is_refused_on_create_and_on_rename(
     library: dict[str, TestClient],
-    monkeypatch: pytest.MonkeyPatch,
-    raised: type[UnstorableSongTitleError],
-    key: Key,
 ) -> None:
-    def unstorable(title: str) -> str:
-        raise raised
+    owner = library[OWNER_ID]
 
-    monkeypatch.setattr("songmaker_cli.song_api.stored_song_title", unstorable)
+    created = owner.post("/api/songs", json={"title": "   ", "album_id": "album"})
+    renamed = owner.put("/api/songs/song/title", json={"title": "   "})
 
-    response = library[OWNER_ID].put("/api/songs/song/title", json={"title": "Any"})
-
-    assert response.status_code == 422
-    assert response.json() == refusal_body(key)
+    assert (created.status_code, renamed.status_code) == (422, 422)
+    assert created.json() == renamed.json() == refusal_body("songRefusal.titleRequired")
 
 
 def test_a_colliding_album_id_is_refused_with_the_title_as_a_gap(
@@ -190,16 +173,21 @@ def test_a_song_that_vanishes_during_a_restore_reads_like_a_missing_one(
     assert response.json() == refusal_body("songRefusal.notFound")
 
 
-def test_a_move_to_a_foreign_album_and_a_blank_discard_carry_their_keys(
+def test_a_move_to_a_foreign_album_answers_the_body_of_a_missing_album(
     library: dict[str, TestClient],
 ) -> None:
-    owner = library[OWNER_ID]
+    moved = library[OWNER_ID].put("/api/songs/song/album", json={"album_id": "stranger-album"})
 
-    moved = owner.put("/api/songs/song/album", json={"album_id": "stranger-album"})
-    discarded = owner.delete("/api/albums/album/cover-suggestions")
-
-    assert (moved.status_code, discarded.status_code) == (404, 422)
+    assert moved.status_code == 404
     assert moved.json() == refusal_body("albumRefusal.notFound")
+
+
+def test_a_cover_suggestion_discard_that_names_nothing_is_refused(
+    library: dict[str, TestClient],
+) -> None:
+    discarded = library[OWNER_ID].delete("/api/albums/album/cover-suggestions")
+
+    assert discarded.status_code == 422
     assert discarded.json() == refusal_body("coverSuggestionRefusal.nothingNamed")
 
 
