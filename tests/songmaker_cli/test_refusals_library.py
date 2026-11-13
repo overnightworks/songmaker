@@ -221,7 +221,8 @@ def test_a_persons_own_agent_reads_a_foreign_song_like_a_missing_one(
     foreign = household.call("get_song", {"song_id": f"song-{BOB}"})
     missing = household.call("get_song", {"song_id": f"song-{ALICE}-missing"})
 
-    assert foreign.is_error and missing.is_error
+    assert foreign.is_error
+    assert missing.is_error
     assert foreign.json() == missing.json() == refusal_body("songRefusal.notFound")
 
 
