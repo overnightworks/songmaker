@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
@@ -223,7 +222,7 @@ def _mentioned_album_block(
     if mentioned_album_id is None:
         return None
     if current_song is None or mentioned_album_id != current_song.album_id:
-        raise HTTPException(404, "Album not found")
+        raise Refusal(404, "albumRefusal.notFound")
     album = get_album(session, mentioned_album_id)
     check_album_access(album, user, require_owner=True)
     tracks = list_songs(
@@ -248,10 +247,10 @@ def _mentioned_version_block(
     if not version_ids:
         return None
     if current_song is None:
-        raise HTTPException(404, "Version not found")
+        raise Refusal(404, "versionRefusal.notFound")
     versions = [get_version(session, version_id, current_song.id) for version_id in version_ids]
     if any(version is None for version in versions):
-        raise HTTPException(404, "Version not found")
+        raise Refusal(404, "versionRefusal.notFound")
     body = "\n\n".join(_format_version(version, current_song) for version in versions)
     return TurnContextBlock(TURN_BLOCK_MENTIONED_VERSIONS, body)
 

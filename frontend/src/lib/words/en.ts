@@ -711,58 +711,27 @@ export type Words = {
     readonly "takeRecipe.language": string;
     readonly "takeRecipe.on": string;
     readonly "takeRecipe.off": string;
-    readonly "cowriter.title": string;
-    readonly "cowriter.thinking": string;
-    readonly "cowriter.conversationMenu": string;
-    readonly "cowriter.conversationMenuWaiting": string;
-    readonly "cowriter.composerPlaceholder": string;
-    readonly "cowriter.send": string;
-    readonly "cowriter.newConversation": string;
-    readonly "cowriter.memory": string;
-    readonly "cowriter.memoryWaiting": string;
-    readonly "cowriter.deleteConversationTitle": string;
-    readonly "cowriter.deleteConversationWarning": string;
-    readonly "cowriter.deleteConversation": string;
-    readonly "cowriter.newConversationLine": string;
-    readonly "cowriter.lineSince": (gaps: { readonly day: string }) => string;
-    readonly "cowriter.lineArchived": (gaps: { readonly day: string }) => string;
-    readonly "cowriter.conversationSince": (gaps: { readonly day: string; readonly time: string }) => string;
-    readonly "cowriter.archivedRow": (gaps: { readonly day: string; readonly time: string }) => string;
-    readonly "cowriter.confirmRow": (gaps: { readonly messages: string; readonly name: string }) => string;
-    readonly "cowriter.messageCount": (count: number) => string;
-    readonly "cowriter.today": string;
-    readonly "cowriter.toolRan": (gaps: { readonly name: string }) => string;
-    readonly "cowriter.toolTarget": (gaps: { readonly title: string }) => string;
-    readonly "cowriter.toolForeignTarget": string;
-    readonly "cowriter.historyUnavailable": string;
-    readonly "cowriter.loadingChat": string;
-    readonly "cowriter.startFailed": string;
-    readonly "cowriter.deleteFailed": string;
-    readonly "cowriter.archivedToast": string;
-    readonly "cowriter.archivedBanner": readonly (string | { readonly marker: "link"; readonly text: string })[];
-    readonly "cowriter.albumFallback": string;
-    readonly "cowriter.noMatches": string;
-    readonly "cowriter.memoryUnavailable": string;
-    readonly "cowriter.memorySaveFailed": string;
-    readonly "cowriter.proposalStale": string;
-    readonly "memory.close": string;
-    readonly "memory.loading": string;
-    readonly "memory.you": string;
-    readonly "memory.thisSong": string;
-    readonly "memory.albumNotes": string;
-    readonly "memory.hintUser": string;
-    readonly "memory.hintSong": string;
-    readonly "memory.hintAlbum": string;
-    readonly "memory.proposedUser": string;
-    readonly "memory.proposedSong": string;
-    readonly "memory.proposedAlbum": string;
-    readonly "memory.accept": string;
-    readonly "memory.reject": string;
-    readonly "memory.userField": string;
-    readonly "memory.songField": string;
-    readonly "memory.albumField": string;
-    readonly "memory.save": string;
-    readonly "memory.saving": string;
+    readonly "albumRefusal.notFound": string;
+    readonly "albumRefusal.titleRequired": string;
+    readonly "albumRefusal.idConflict": (gaps: { readonly title: string }) => string;
+    readonly "songRefusal.notFound": string;
+    readonly "songRefusal.titleRequired": string;
+    readonly "songRefusal.titleTooLong": string;
+    readonly "songRefusal.moveTargetMissing": string;
+    readonly "songRefusal.restoreAlbumDeleted": (gaps: { readonly id: string }) => string;
+    readonly "songRefusal.notPlayable": string;
+    readonly "songRefusal.playlistLacksSong": string;
+    readonly "songRefusal.referenceMissing": string;
+    readonly "versionRefusal.notFound": string;
+    readonly "versionRefusal.inUse": string;
+    readonly "playlistRefusal.notFound": string;
+    readonly "playlistRefusal.entryNotFound": string;
+    readonly "playlistRefusal.songNotPlayable": string;
+    readonly "coverSuggestionRefusal.notFound": string;
+    readonly "coverSuggestionRefusal.nothingNamed": string;
+    readonly "coverSuggestionRefusal.browserLogin": string;
+    readonly "shareRefusal.personsAgent": string;
+    readonly "libraryRefusal.queryRequired": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -1668,64 +1637,26 @@ export const words: Words = {
     "takeRecipe.language": "Language",
     "takeRecipe.on": "On",
     "takeRecipe.off": "Off",
-    "cowriter.title": "Co-writer",
-    "cowriter.thinking": "Co-writer is thinking…",
-    "cowriter.conversationMenu": "Conversation menu",
-    "cowriter.conversationMenuWaiting": "Conversation menu, memory proposal waiting",
-    "cowriter.composerPlaceholder": "Ask for a rewrite…",
-    "cowriter.send": "Send",
-    "cowriter.newConversation": "New conversation",
-    "cowriter.memory": "Memory",
-    "cowriter.memoryWaiting": "Memory, memory proposal waiting",
-    "cowriter.deleteConversationTitle": "Delete conversation?",
-    "cowriter.deleteConversationWarning": "This can't be undone.",
-    "cowriter.deleteConversation": "Delete conversation",
-    "cowriter.newConversationLine": "new conversation",
-    "cowriter.lineSince": (gaps: { readonly day: string }) => "conversation since " + gaps.day,
-    "cowriter.lineArchived": (gaps: { readonly day: string }) => "archived conversation from " + gaps.day,
-    "cowriter.conversationSince": (gaps: { readonly day: string; readonly time: string }) => "Conversation since " + gaps.day + " " + gaps.time,
-    "cowriter.archivedRow": (gaps: { readonly day: string; readonly time: string }) => "Archived · " + gaps.day + " " + gaps.time,
-    "cowriter.confirmRow": (gaps: { readonly messages: string; readonly name: string }) => gaps.name + " · " + gaps.messages,
-    "cowriter.messageCount": (count: number) => ({
-        zero: numberFormat.format(count) + " msgs",
-        one: numberFormat.format(count) + " msg",
-        two: numberFormat.format(count) + " msgs",
-        few: numberFormat.format(count) + " msgs",
-        many: numberFormat.format(count) + " msgs",
-        other: numberFormat.format(count) + " msgs",
-    })[pluralRules.select(count)],
-    "cowriter.today": "today",
-    "cowriter.toolRan": (gaps: { readonly name: string }) => "ran tool: " + gaps.name,
-    "cowriter.toolTarget": (gaps: { readonly title: string }) => "for: " + gaps.title,
-    "cowriter.toolForeignTarget": "This proposal applies to a different song than the one you have open",
-    "cowriter.historyUnavailable": "Conversation history unavailable",
-    "cowriter.loadingChat": "Loading chat…",
-    "cowriter.startFailed": "Failed to start new conversation",
-    "cowriter.deleteFailed": "Failed to delete conversation",
-    "cowriter.archivedToast": "Viewing an archived conversation — start a new one to reply",
-    "cowriter.archivedBanner": ["Archived — ", { marker: "link", text: "start a new conversation" }, " to reply."] as readonly (string | { readonly marker: "link"; readonly text: string })[],
-    "cowriter.albumFallback": "Album",
-    "cowriter.noMatches": "No matches",
-    "cowriter.memoryUnavailable": "Memory unavailable",
-    "cowriter.memorySaveFailed": "Failed to save memory",
-    "cowriter.proposalStale": "Memory proposal is stale or belongs elsewhere",
-    "memory.close": "Close memory",
-    "memory.loading": "Loading memory…",
-    "memory.you": "You",
-    "memory.thisSong": "This song",
-    "memory.albumNotes": "Album notes",
-    "memory.hintUser": "Taste, language, standing rules",
-    "memory.hintSong": "Concept, locked vs open decisions, names, open questions",
-    "memory.hintAlbum": "Album-level notes — not lyrics",
-    "memory.proposedUser": "Proposed You",
-    "memory.proposedSong": "Proposed This song",
-    "memory.proposedAlbum": "Proposed Album notes",
-    "memory.accept": "Accept",
-    "memory.reject": "Reject",
-    "memory.userField": "User memory",
-    "memory.songField": "Song memory",
-    "memory.albumField": "Album notes",
-    "memory.save": "Save",
-    "memory.saving": "Saving...",
+    "albumRefusal.notFound": "Album not found",
+    "albumRefusal.titleRequired": "Title is required",
+    "albumRefusal.idConflict": (gaps: { readonly title: string }) => "Album ID conflict for '" + gaps.title + "'. Try a different title.",
+    "songRefusal.notFound": "Song not found",
+    "songRefusal.titleRequired": "Title is required",
+    "songRefusal.titleTooLong": "Title is too long",
+    "songRefusal.moveTargetMissing": "Song or album not found",
+    "songRefusal.restoreAlbumDeleted": (gaps: { readonly id: string }) => "Cannot restore song " + gaps.id + ": parent album is deleted",
+    "songRefusal.notPlayable": "Song is not playable",
+    "songRefusal.playlistLacksSong": "Playlist does not hold this song",
+    "songRefusal.referenceMissing": "Not Found",
+    "versionRefusal.notFound": "Version not found",
+    "versionRefusal.inUse": "This version has a take rendering; wait for it to finish or cancel it.",
+    "playlistRefusal.notFound": "Playlist not found",
+    "playlistRefusal.entryNotFound": "Playlist entry not found",
+    "playlistRefusal.songNotPlayable": "Song has no playable take",
+    "coverSuggestionRefusal.notFound": "Album not found",
+    "coverSuggestionRefusal.nothingNamed": "Name the suggestions or runs to discard",
+    "coverSuggestionRefusal.browserLogin": "Cover suggestions need a browser login.",
+    "shareRefusal.personsAgent": "A person's own agent cannot share; the person shares in the app.",
+    "libraryRefusal.queryRequired": "Search query is required",
 };
 export type Key = keyof Words;

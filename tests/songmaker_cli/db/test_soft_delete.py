@@ -42,6 +42,7 @@ from songmaker_cli.db.queries.albums import (
 from songmaker_cli.db.queries.generations import pick_generation
 from songmaker_cli.db.queries.playlists import add_song_to_playlist, create_playlist, get_playlist
 from songmaker_cli.db.queries.songs import (
+    RestoreParentDeletedError,
     create_song,
     delete_song,
     enable_song_sharing,
@@ -248,8 +249,9 @@ def test_restore_window_follows_the_final_deletion_setting(
 def test_restore_song_rejects_deleted_album(seeded: Session) -> None:
     soft_delete_album(seeded, "rock")
     seeded.commit()
-    with pytest.raises(ValueError, match="parent album is deleted"):
+    with pytest.raises(RestoreParentDeletedError) as refusal:
         restore_song(seeded, "s1")
+    assert refusal.value.song_id == "s1"
 
 
 @pytest.mark.parametrize(

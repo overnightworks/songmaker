@@ -2941,6 +2941,88 @@ msgctxt "takeRecipe.off"
 msgid "Off"
 msgstr ""
 
+msgctxt "albumRefusal.notFound"
+msgid "Album not found"
+msgstr ""
+
+msgctxt "albumRefusal.titleRequired"
+msgid "Title is required"
+msgstr ""
+
+msgctxt "albumRefusal.idConflict"
+msgid "Album ID conflict for '{title}'. Try a different title."
+msgstr ""
+
+msgctxt "songRefusal.notFound"
+msgid "Song not found"
+msgstr ""
+
+msgctxt "songRefusal.titleRequired"
+msgid "Title is required"
+msgstr ""
+
+msgctxt "songRefusal.titleTooLong"
+msgid "Title is too long"
+msgstr ""
+
+msgctxt "songRefusal.moveTargetMissing"
+msgid "Song or album not found"
+msgstr ""
+
+msgctxt "songRefusal.restoreAlbumDeleted"
+msgid "Cannot restore song {id}: parent album is deleted"
+msgstr ""
+
+msgctxt "songRefusal.notPlayable"
+msgid "Song is not playable"
+msgstr ""
+
+msgctxt "songRefusal.playlistLacksSong"
+msgid "Playlist does not hold this song"
+msgstr ""
+
+msgctxt "songRefusal.referenceMissing"
+msgid "Not Found"
+msgstr ""
+
+msgctxt "versionRefusal.notFound"
+msgid "Version not found"
+msgstr ""
+
+msgctxt "versionRefusal.inUse"
+msgid "This version has a take rendering; wait for it to finish or cancel it."
+msgstr ""
+
+msgctxt "playlistRefusal.notFound"
+msgid "Playlist not found"
+msgstr ""
+
+msgctxt "playlistRefusal.entryNotFound"
+msgid "Playlist entry not found"
+msgstr ""
+
+msgctxt "playlistRefusal.songNotPlayable"
+msgid "Song has no playable take"
+msgstr ""
+
+msgctxt "coverSuggestionRefusal.notFound"
+msgid "Album not found"
+msgstr ""
+
+msgctxt "coverSuggestionRefusal.nothingNamed"
+msgid "Name the suggestions or runs to discard"
+msgstr ""
+
+msgctxt "coverSuggestionRefusal.browserLogin"
+msgid "Cover suggestions need a browser login."
+msgstr ""
+
+msgctxt "shareRefusal.personsAgent"
+msgid "A person's own agent cannot share; the person shares in the app."
+msgstr ""
+
+msgctxt "libraryRefusal.queryRequired"
+msgid "Search query is required"
 msgctxt "cowriter.title"
 msgid "Co-writer"
 msgstr ""

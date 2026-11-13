@@ -18,11 +18,10 @@ from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import lock_session_row
 from songmaker_cli.db.queries.jobs import create_job, has_active_cover_job
 from songmaker_cli.job_types import JobType
+from songmaker_cli.words import SOURCE_LANGUAGE, text
 
 log = logging.getLogger(__name__)
 
-ALBUM_NOT_FOUND: Final = "Album not found"
-COVER_SUGGESTIONS_ALREADY_RUNNING: Final = "Cover suggestions are already being generated"
 SESSION_ENDED: Final = "Log in again to suggest covers."
 
 
@@ -36,14 +35,14 @@ class CoverSuggestionAlbumNotFoundError(CoverSuggestionRequestError):
     status_code = 404
 
     def __init__(self) -> None:
-        super().__init__(ALBUM_NOT_FOUND)
+        super().__init__(text(SOURCE_LANGUAGE, "albumRefusal.notFound"))
 
 
 class CoverSuggestionAlreadyRunningError(CoverSuggestionRequestError):
     status_code = 409
 
     def __init__(self) -> None:
-        super().__init__(COVER_SUGGESTIONS_ALREADY_RUNNING)
+        super().__init__(text(SOURCE_LANGUAGE, "coverSuggestionRefusal.alreadyRunning"))
 
 
 class CoverSuggestionSessionEndedError(CoverSuggestionRequestError):

@@ -185,6 +185,6 @@ def test_the_live_app_keeps_the_sentence_of_an_api_404_and_answers_not_found_for
 
     assert [(answer.status_code, answer.json()) for answer in answers] == [
         (404, refusal_body("takeRefusal.archived")),
-        (404, {"detail": "Song not found"}),
+        (404, refusal_body("songRefusal.notFound")),
         (404, {"detail": "Not Found"}),
     ]

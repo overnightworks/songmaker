@@ -18,7 +18,6 @@ from songmaker_cli.constants import (
     LIBRARY_CURSOR_MISMATCH,
     LIBRARY_ITEM_ALBUM,
     LIBRARY_ITEM_SONG,
-    LIBRARY_QUERY_REQUIRED,
     LIBRARY_SORT_NEWEST,
     LIBRARY_SORT_OLDEST,
     LIBRARY_SORT_TITLE,
@@ -1095,7 +1094,7 @@ def test_search_requires_query(alice: TestClient) -> None:
     assert alice.get("/api/library/search", params={"q": ""}).status_code == 422
     resp = alice.get("/api/library/search", params={"q": "   "})
     assert resp.status_code == 422
-    assert resp.json()["detail"] == LIBRARY_QUERY_REQUIRED
+    assert resp.json()["detail"] == "Search query is required"
 
 
 def test_search_album_title_nachtstrom(alice: TestClient) -> None:
@@ -1350,7 +1349,7 @@ def test_list_albums_q_and_sort(alice: TestClient) -> None:
 
     empty = alice.get("/api/albums", params={"q": "   "})
     assert empty.status_code == 422
-    assert empty.json()["detail"] == LIBRARY_QUERY_REQUIRED
+    assert empty.json()["detail"] == "Search query is required"
 
 
 def test_list_songs_q_and_sort(alice: TestClient) -> None:
