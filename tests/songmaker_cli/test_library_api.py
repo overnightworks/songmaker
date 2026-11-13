@@ -11,7 +11,13 @@ import pytest
 from fastapi.testclient import TestClient
 from slugify import slugify
 from sqlalchemy import event, select
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from support.web_app import (
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    refusal_body,
+    web_client,
+)
 
 from songmaker_cli.constants import (
     LIBRARY_ITEM_ALBUM,
@@ -1299,19 +1305,11 @@ def test_cursor_mismatch_and_tampering_are_rejected(alice: TestClient) -> None:
     cursor = first["next_cursor"]
     assert cursor
 
-    mismatch = alice.get(
-        "/api/library/search",
-        params={"q": "tide", "sort": LIBRARY_SORT_NEWEST, "cursor": cursor},
-    )
-    assert mismatch.status_code == 422
-    assert mismatch.json()["message"]["key"] == "libraryRefusal.cursorMismatch"
-
-    sort_mismatch = alice.get(
-        "/api/library/search",
-        params={"q": "nachtstrom", "sort": LIBRARY_SORT_TITLE, "cursor": cursor},
-    )
-    assert sort_mismatch.status_code == 422
-    assert sort_mismatch.json()["message"]["key"] == "libraryRefusal.cursorMismatch"
+    for changed in ({"q": "tide", "sort": LIBRARY_SORT_NEWEST},
+                    {"q": "nachtstrom", "sort": LIBRARY_SORT_TITLE}):
+        mismatch = alice.get("/api/library/search", params={**changed, "cursor": cursor})
+        assert mismatch.status_code == 422
+        assert mismatch.json() == refusal_body("libraryRefusal.cursorMismatch")
 
     for invalid_cursor in (
         cursor[:-1] + ("0" if cursor[-1] != "0" else "1"),
@@ -1323,7 +1321,7 @@ def test_cursor_mismatch_and_tampering_are_rejected(alice: TestClient) -> None:
             params={"q": "nachtstrom", "cursor": invalid_cursor},
         )
         assert response.status_code == 422
-        assert response.json()["message"]["key"] == "libraryRefusal.cursorInvalid"
+        assert response.json() == refusal_body("libraryRefusal.cursorInvalid")
 
 
 def test_like_metacharacters_are_literal(alice: TestClient) -> None:
