@@ -1,25 +1,49 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
+	import type { SharedCollectionKind } from '#lib/api/shared.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
+	import type { Key } from '#lib/words/en.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
+
+	const SHARE_STATUS_HEADINGS = {
+		loading: {
+			album: 'shareStatus.loadingAlbum',
+			playlist: 'shareStatus.loadingPlaylist',
+			song: 'shareStatus.loadingSong',
+			take: 'shareStatus.loadingTake'
+		},
+		missing: {
+			album: 'shareStatus.notFoundAlbum',
+			playlist: 'shareStatus.notFoundPlaylist',
+			song: 'shareStatus.notFoundSong',
+			take: 'shareStatus.notFoundTake'
+		},
+		error: {
+			album: 'shareStatus.errorAlbum',
+			playlist: 'shareStatus.errorPlaylist',
+			song: 'shareStatus.errorSong',
+			take: 'shareStatus.errorTake'
+		}
+	} as const satisfies Record<string, Record<SharedCollectionKind, Key>>;
+
+	const SHARE_STATUS_ERROR_BODIES = {
+		album: 'shareStatus.errorBodyAlbum',
+		playlist: 'shareStatus.errorBodyPlaylist',
+		song: 'shareStatus.errorBodySong',
+		take: 'shareStatus.errorBodyTake'
+	} as const satisfies Record<SharedCollectionKind, Key>;
 
 	interface Props {
 		kind: 'loading' | 'missing' | 'error';
-		resource: string;
+		resource: SharedCollectionKind;
 		onretry?: () => void;
 	}
 
 	let { kind, resource, onretry }: Props = $props();
 	let headingElement: HTMLHeadingElement | undefined = $state();
-	const resourceName = $derived(resource.charAt(0).toUpperCase() + resource.slice(1));
 
-	const heading = $derived(
-		kind === 'loading'
-			? `Loading ${resource}`
-			: kind === 'missing'
-				? `${resourceName} not found`
-				: `Could not load this ${resource}`
-	);
+	const heading = $derived(pageText(SHARE_STATUS_HEADINGS[kind][resource]));
 	const icon = $derived(
 		kind === 'loading' ? 'refresh-cw' : kind === 'missing' ? 'link-off' : 'triangle-alert'
 	);
@@ -40,14 +64,16 @@
 	</div>
 	<h1 bind:this={headingElement} tabindex="-1">{heading}</h1>
 	{#if kind === 'missing'}
-		<p>This share link is invalid or was removed.</p>
-		<a class="primary" href="/login">Open {APP_NAME}</a>
+		<p>{pageText('shareStatus.invalidLink')}</p>
+		<a class="primary" href="/login">{pageText('shareStatus.openApp', { app: APP_NAME })}</a>
 	{:else if kind === 'error'}
-		<p>Something went wrong while loading this {resource}.</p>
+		<p>{pageText(SHARE_STATUS_ERROR_BODIES[resource])}</p>
 		{#if onretry}
-			<button type="button" class="primary" onclick={onretry}>Try again</button>
+			<button type="button" class="primary" onclick={onretry}
+				>{pageText('shareStatus.retry')}</button
+			>
 		{/if}
-		<a href="/login">Open {APP_NAME}</a>
+		<a href="/login">{pageText('shareStatus.openApp', { app: APP_NAME })}</a>
 	{/if}
 </section>
 

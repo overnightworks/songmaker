@@ -1,11 +1,6 @@
 import type { ShareResult } from '#lib/api/types.ts';
 import { describeFailure } from '#lib/api/fetch.ts';
-import {
-	SHARE_BUTTON_COPIED_TOAST,
-	SHARE_BUTTON_COPY_FAILED_TOAST,
-	SHARE_BUTTON_FAILED_TOAST,
-	SHARE_BUTTON_UNSHARED_TOAST
-} from '#lib/constants/share.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import { sharePagePath, type ShareKind } from '#lib/routes/addresses.ts';
 import { addToast } from './toast';
 
@@ -33,18 +28,18 @@ export function createShareToggle(source: () => ShareToggleSource) {
 			const { isShared, onshare, onunshare } = source();
 			if (isShared) {
 				await onunshare();
-				addToast(SHARE_BUTTON_UNSHARED_TOAST, 'success');
+				addToast(pageText('shareButton.unsharedToast'), 'success');
 			} else {
 				const result = await onshare();
 				try {
 					await navigator.clipboard.writeText(result.share_url);
-					addToast(SHARE_BUTTON_COPIED_TOAST, 'success');
+					addToast(pageText('shareButton.copiedToast'), 'success');
 				} catch {
-					addToast(SHARE_BUTTON_COPY_FAILED_TOAST, 'success');
+					addToast(pageText('shareButton.copyFailedToast'), 'success');
 				}
 			}
 		} catch (e) {
-			addToast(describeFailure(e, SHARE_BUTTON_FAILED_TOAST), 'error');
+			addToast(describeFailure(e, pageText('shareButton.failedToast')), 'error');
 		} finally {
 			busy = false;
 		}
@@ -59,7 +54,9 @@ export function createShareToggle(source: () => ShareToggleSource) {
 		},
 		get sharedTooltip() {
 			const { kind, isShared, shareSlug } = source();
-			return isShared ? `Shared: ${sharePagePath(kind, shareSlug ?? '')}` : undefined;
+			return isShared
+				? pageText('shareToggle.sharedTooltip', { path: sharePagePath(kind, shareSlug ?? '') })
+				: undefined;
 		},
 		toggle
 	};

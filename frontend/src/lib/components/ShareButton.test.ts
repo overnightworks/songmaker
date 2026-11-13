@@ -1,10 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShareResult } from '#lib/api/types.ts';
-import {
-	SHARE_BUTTON_COPY_FAILED_TOAST,
-	SHARE_BUTTON_UNSHARED_TOAST
-} from '#lib/constants/share.ts';
+import { words } from '#lib/words/en.ts';
 
 const addToast = vi.hoisted(() => vi.fn());
 vi.mock('#lib/stores/toast.ts', () => ({ addToast }));
@@ -76,7 +73,7 @@ describe('ShareButton', () => {
 
 			expect(props.onshare).toHaveBeenCalledTimes(1);
 			expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.test/share/abc');
-			expect(addToast).toHaveBeenCalledWith('Link copied to clipboard', 'success');
+			expect(addToast).toHaveBeenCalledWith(words['shareButton.copiedToast'], 'success');
 		}
 	);
 
@@ -85,7 +82,7 @@ describe('ShareButton', () => {
 		async (isShared) => {
 			const { target } = await render({ iconOnly: true, isShared });
 			const button = target.querySelector('button');
-			expect(button?.getAttribute('aria-label')).toBe('Share song');
+			expect(button?.getAttribute('aria-label')).toBe(words['shareButton.songLabel']);
 			expect(button?.getAttribute('aria-pressed')).toBe(String(isShared));
 			expect(button?.getAttribute('data-hitbox')).toBe('frequent');
 		}
@@ -103,7 +100,7 @@ describe('ShareButton', () => {
 		await clickShare(target);
 
 		expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
-		expect(addToast).toHaveBeenCalledWith('Share failed', 'error');
+		expect(addToast).toHaveBeenCalledWith(words['shareButton.failedToast'], 'error');
 		expect(addToast).not.toHaveBeenCalledWith(expect.stringContaining('copy'), expect.anything());
 	});
 
@@ -122,8 +119,8 @@ describe('ShareButton', () => {
 		await clickShare(target);
 
 		expect(props.onshare).toHaveBeenCalledTimes(1);
-		expect(addToast).not.toHaveBeenCalledWith('Share failed', 'error');
-		expect(addToast).toHaveBeenCalledWith(SHARE_BUTTON_COPY_FAILED_TOAST, 'success');
+		expect(addToast).not.toHaveBeenCalledWith(words['shareButton.failedToast'], 'error');
+		expect(addToast).toHaveBeenCalledWith(words['shareButton.copyFailedToast'], 'success');
 	});
 
 	it('1480_R4: unshares a shared item, reporting it, without copying a link', async () => {
@@ -138,7 +135,7 @@ describe('ShareButton', () => {
 		expect(props.onunshare).toHaveBeenCalledTimes(1);
 		expect(props.onshare).not.toHaveBeenCalled();
 		expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
-		expect(addToast).toHaveBeenCalledWith(SHARE_BUTTON_UNSHARED_TOAST, 'success');
+		expect(addToast).toHaveBeenCalledWith(words['shareButton.unsharedToast'], 'success');
 	});
 
 	it('1480_R4: is disabled while a share is under way and enabled again once it is done', async () => {
@@ -160,8 +157,12 @@ describe('ShareButton', () => {
 	});
 
 	it.each([
-		{ isShared: false, shareSlug: null, tooltip: 'Share' },
-		{ isShared: true, shareSlug: 'abc', tooltip: 'Shared: /share/song/abc' }
+		{ isShared: false, shareSlug: null, tooltip: words['shareButton.fallbackTitle'] },
+		{
+			isShared: true,
+			shareSlug: 'abc',
+			tooltip: words['shareToggle.sharedTooltip']({ path: '/share/song/abc' })
+		}
 	])(
 		'1480_R4: titles the button "$tooltip" when isShared is $isShared',
 		async ({ tooltip, ...props }) => {

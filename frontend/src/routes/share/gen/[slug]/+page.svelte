@@ -5,6 +5,7 @@
 		sharedCollectionFailure,
 		type SharedCollectionFailure
 	} from '#lib/api/shared.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
 	import SharedCollection from '#lib/components/share/SharedCollection.svelte';
 	import {
@@ -38,7 +39,13 @@
 
 <svelte:head>
 	<title
-		>{data ? `Take ${data.generation_number} — ${data.title}` : 'Shared take'} | {APP_NAME}</title
+		>{data
+			? pageText('shareTakePage.documentTitle', {
+					number: String(data.generation_number),
+					title: data.title,
+					app: APP_NAME
+				})
+			: pageText('shareTakePage.fallbackTitle', { app: APP_NAME })}</title
 	>
 </svelte:head>
 

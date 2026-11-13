@@ -18,11 +18,7 @@ import {
 	NOW_PLAYING_PLAY_AGAIN_LABEL,
 	NOW_PLAYING_GO_TO_SONG
 } from '../src/lib/constants/now-playing';
-import {
-	SHARE_BACK_TO_PLAYER_LABEL,
-	shareAlbumSubtitle,
-	shareNowPlayingLine
-} from '../src/lib/constants/share';
+import { words } from '../src/lib/words/en';
 import {
 	boundingBoxes,
 	FlowGuard,
@@ -110,7 +106,11 @@ async function openSeededAlbum({ page }: Visitor): Promise<void> {
 
 async function expectNowPlayingLine(page: Page, title: string, position: number, total: number) {
 	await expect(page.locator('.now-playing-line')).toHaveText(
-		shareNowPlayingLine(title, position, total)
+		words['share.nowPlaying']({
+			title,
+			position: String(position),
+			total: String(total)
+		})
 	);
 }
 
@@ -227,7 +227,9 @@ test.describe('before Play', () => {
 			await openMockAlbum(visitor, mockSongs(3), longName);
 			const { page } = visitor;
 			const notice = page.getByText('KI-generiert', { exact: true });
-			const nameText = page.getByText(shareAlbumSubtitle(longName), { exact: true });
+			const nameText = page.getByText(words['share.albumSubtitle']({ artist: longName }), {
+				exact: true
+			});
 			const nameRows = await nameText.evaluate((text) => {
 				const range = document.createRange();
 				range.selectNodeContents(text);
@@ -252,7 +254,7 @@ test('1374_rule_2 A6: song 1 without lyrics shows No lyrics before Play', async 
 	const tracks = mockSongs(2);
 	tracks[0].lyrics = null;
 	await openMockAlbum(visitor, tracks);
-	await expect(visitor.page.locator('.lyrics-empty')).toHaveText('No lyrics');
+	await expect(visitor.page.locator('.lyrics-empty')).toHaveText(words['share.noLyrics']);
 	await expectLyricsOf(visitor.page, mockSongTitle(1));
 });
 
@@ -492,7 +494,7 @@ test.describe('a long album', () => {
 				);
 				expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(barBox.y);
 
-				await bar.getByRole('button', { name: SHARE_BACK_TO_PLAYER_LABEL }).first().click();
+				await bar.getByRole('button', { name: words['share.backToPlayer'] }).first().click();
 				await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeInViewport();
 				await expect(bar).toBeHidden();
 				expect(await page.evaluate(() => window.history.length)).toBe(history);

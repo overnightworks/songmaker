@@ -26,7 +26,7 @@ it.each<{ kind: ShareKind; address: string }>([
 		onunshare: vi.fn()
 	}));
 
-	expect(toggle.sharedTooltip).toBe(`Shared: ${address}`);
+	expect(toggle.sharedTooltip).toBe(words['shareToggle.sharedTooltip']({ path: address }));
 });
 
 it('toasts the page words of the key a refusal names when sharing is refused', async () => {
