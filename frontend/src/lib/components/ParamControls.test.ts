@@ -129,7 +129,7 @@ describe('ParamControls placeholders', () => {
 		const select = target.querySelector('select');
 		if (!(select instanceof HTMLSelectElement)) throw new Error('Expected a select input');
 		expect(select.options[0].textContent).toBe(
-			words['paramField.defaultOptionValue']({ value: LOADED_PLACEHOLDERS.infer_method })
+			words['paramField.defaultOptionValue']({ value: String(LOADED_PLACEHOLDERS.infer_method) })
 		);
 		expect(target.textContent).not.toContain('undefined');
 	});
@@ -158,7 +158,7 @@ describe('ParamControls placeholders', () => {
 		const select = target.querySelector('select');
 		if (!(select instanceof HTMLSelectElement)) throw new Error('Expected a select input');
 		expect(select.options[0].textContent).toBe(
-			words['paramField.defaultOptionValue']({ value: LOADED_PLACEHOLDERS.infer_method })
+			words['paramField.defaultOptionValue']({ value: String(LOADED_PLACEHOLDERS.infer_method) })
 		);
 
 		expect(
