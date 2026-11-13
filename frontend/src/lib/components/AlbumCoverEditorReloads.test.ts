@@ -30,6 +30,7 @@ import {
 	stageText
 } from '#lib/test-utils/album-cover-editor.ts';
 import { deferred } from '#lib/test-utils/deferred.ts';
+import { words } from '#lib/words/en.ts';
 import { createComponentMount, requireElement } from './shell/rail-test-fixtures';
 
 const fetchAlbumCoverSuggestions = vi.fn();
@@ -57,8 +58,6 @@ vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn(), addUndoToast: vi.fn(
 import AlbumDetailView from './AlbumDetailView.svelte';
 
 const { render: renderDetail, cleanup } = createComponentMount(AlbumDetailView);
-
-const renderAfterPageRead = () => afterPageRead(renderDetail, fetchAlbumCoverSuggestions);
 
 beforeEach(() => {
 	albumList.set([album({ id: 'a-local', title: 'Night Drive' })]);
@@ -89,7 +88,7 @@ afterEach(async () => {
 describe('The album cover editor while the network is out', () => {
 	it('reloads the suggestions once the connection is back', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-		const target = await renderAfterPageRead();
+		const target = await afterPageRead(renderDetail, fetchAlbumCoverSuggestions);
 		reportResourceStreamReachable(false);
 		fetchAlbumCoverSuggestions.mockRejectedValue(lostNetwork());
 		await openCoverEditing(target);
@@ -107,7 +106,7 @@ describe('The album cover editor while the network is out', () => {
 
 	it('offers a quiet Try again once the bounded reloads still find no network while online', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-		const target = await renderAfterPageRead();
+		const target = await afterPageRead(renderDetail, fetchAlbumCoverSuggestions);
 		fetchAlbumCoverSuggestions.mockRejectedValue(lostNetwork());
 		await openCoverEditing(target);
 		await reachSuggestionsLoads(fetchAlbumCoverSuggestions, 1);
@@ -119,7 +118,7 @@ describe('The album cover editor while the network is out', () => {
 
 		await vi.waitFor(() =>
 			expect(target.querySelector('.cover-suggestions-retry')?.textContent?.trim()).toBe(
-				'Try again'
+				words['albumCover.suggestionsRetry']
 			)
 		);
 		expect(target.querySelector('[role="alert"]')).toBeNull();
@@ -138,19 +137,19 @@ describe('The album cover editor while the network is out', () => {
 		albumList.set([coveredAlbum()]);
 		const suggestionJob = deferred<JobItem>();
 		createAlbumCoverSuggestions.mockImplementation(() => suggestionJob.promise);
-		const target = await renderAfterPageRead();
+		const target = await afterPageRead(renderDetail, fetchAlbumCoverSuggestions);
 		fetchAlbumCoverSuggestions
 			.mockRejectedValueOnce(lostNetwork())
 			.mockResolvedValue(coverSuggestions({ job: coverJob({ status: 'running' }) }));
 		await openCoverEditing(target);
 		await reachSuggestionsLoads(fetchAlbumCoverSuggestions, 1);
 
-		pressEditorButton(target, 'Suggest');
+		pressEditorButton(target, 'albumCover.suggest');
 		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
 		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
 
 		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 		suggestionJob.resolve(coverJob());
-		await vi.waitFor(() => expect(stageText(target)).toContain('Making a cover'));
+		await vi.waitFor(() => expect(stageText(target)).toContain(words['albumCover.suggesting']));
 	});
 });

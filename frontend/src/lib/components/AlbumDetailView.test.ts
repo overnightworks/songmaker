@@ -16,7 +16,6 @@ import {
 } from '#lib/stores/connectivity.ts';
 import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import { ALBUM_NO_SONGS } from '#lib/constants/album.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
@@ -212,11 +211,11 @@ function songsPage(items: ReturnType<typeof song>[]) {
 }
 
 describe('AlbumDetailView songs that could not load', () => {
-	const ALBUM_SONGS_FAILURE = 'Failed to load songs';
+	const ALBUM_SONGS_FAILURE = words['albumPage.songsLoadFailed'];
 
 	function retryButton(target: HTMLElement): HTMLButtonElement | undefined {
 		return Array.from(target.querySelectorAll('button')).find(
-			(button) => button.textContent?.trim() === 'Retry'
+			(button) => button.textContent?.trim() === words['albumPage.retry']
 		);
 	}
 
@@ -285,7 +284,9 @@ describe('AlbumDetailView header', () => {
 		const header = requireElement(target, '.collection-header');
 		expect(header.querySelector('.header-cover')).not.toBeNull();
 		expect(header.querySelector('.header-title')?.textContent).toContain('Night Drive');
-		expect(requireElement(header, '.header-count').textContent).toBe('1 song');
+		expect(requireElement(header, '.header-count').textContent).toBe(
+			words['collectionHeader.songCount'](1)
+		);
 		expect(
 			getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'))
 		).not.toBeNull();
@@ -312,7 +313,9 @@ describe('AlbumDetailView header', () => {
 		});
 		const target = await renderDetail();
 
-		expect(requireElement(target, '.collection-header .header-count').textContent).toBe('5 songs');
+		expect(requireElement(target, '.collection-header .header-count').textContent).toBe(
+			words['collectionHeader.songCount'](5)
+		);
 	});
 
 	it('starts this album in order from its play circle', async () => {
@@ -588,7 +591,7 @@ describe('AlbumDetailView song row', () => {
 	it('counts takes, not gens, on a song row', async () => {
 		const target = await renderSongs();
 		expect(rowOf(target, 'Tide').querySelector('.song-row-meta')?.textContent?.trim()).toBe(
-			'2 takes'
+			words['albumPage.songTakes'](2)
 		);
 	});
 
@@ -674,7 +677,10 @@ describe('AlbumDetailView song row', () => {
 
 		expect(
 			[...rowOf(target, 'Tide').querySelectorAll('button')].map((button) => accessibleName(button))
-		).toEqual([expect.stringMatching(/^Tide\s+2 takes$/), songEditorOpenLabel('Tide')]);
+		).toEqual([
+			expect.stringMatching(new RegExp(`^Tide\\s+${words['albumPage.songTakes'](2)}$`)),
+			songEditorOpenLabel('Tide')
+		]);
 	});
 
 	it.each(['playing', 'paused'] as const)(
@@ -737,7 +743,7 @@ describe('AlbumDetailView new song', () => {
 		const target = await renderDetail();
 
 		expect(listItems(target).map((item) => item.textContent?.trim())).toEqual([
-			ALBUM_NO_SONGS,
+			words['albumPage.noSongs'],
 			NEW_SONG_ROW
 		]);
 	});

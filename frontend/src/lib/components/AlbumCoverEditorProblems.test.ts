@@ -11,14 +11,14 @@ import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libra
 import { selectedAlbumId } from '#lib/stores/player.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
 import { words } from '#lib/words/en.ts';
-import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { accessibleName } from '#lib/test-utils/accessible-name.ts';
 import {
 	FakeJobEventSource,
 	coverJob,
 	coverSuggestions,
 	editingClosed,
-	editor,
 	openCoverEditing,
+	editorButton,
 	pressEditorButton,
 	pressSuggestOnceLoaded
 } from '#lib/test-utils/album-cover-editor.ts';
@@ -78,7 +78,7 @@ describe('a cover suggestion that cannot run names one of the agent’s problems
 	function suggestButton(target: HTMLElement): HTMLButtonElement {
 		const button = Array.from(
 			requireElement(target, '.cover-actions').querySelectorAll<HTMLButtonElement>('button')
-		).find((el) => accessibleName(el).startsWith('Suggest'));
+		).find((el) => accessibleName(el).startsWith(words['albumCover.suggest']));
 		if (!button) throw new Error('Expected the Suggest button');
 		return button;
 	}
@@ -135,7 +135,7 @@ describe('a cover suggestion that cannot run names one of the agent’s problems
 		await vi.waitFor(() => expect(problemLine(target)).not.toBeNull());
 		const login = requireElement<HTMLAnchorElement>(problemLine(target) as HTMLElement, 'a');
 		expect(login.textContent?.trim()).toBe(words['problemLine.logIn']);
-		expect(getByRoleButton(editor(target) as HTMLElement, 'Upload').disabled).toBe(false);
+		expect(editorButton(target, 'albumCover.upload').disabled).toBe(false);
 		expect(target.textContent).not.toContain(words['problemLine.tryAgain']);
 	});
 
@@ -203,7 +203,7 @@ describe('a cover suggestion that cannot run names one of the agent’s problems
 		expect(suggestButton(target).disabled).toBe(true);
 		expect(accessibleName(suggestButton(target))).toContain('0:42');
 
-		pressEditorButton(target, 'Close cover editing');
+		pressEditorButton(target, 'albumCover.editingClose');
 		await editingClosed(target);
 		await vi.advanceTimersByTimeAsync(30_000);
 		await openCoverEditing(target);
@@ -213,6 +213,6 @@ describe('a cover suggestion that cannot run names one of the agent’s problems
 
 		await vi.waitFor(() => expect(suggestButton(target).disabled).toBe(false));
 		expect(problemLine(target)).toBeNull();
-		expect(accessibleName(suggestButton(target))).toBe('Suggest');
+		expect(accessibleName(suggestButton(target))).toBe(words['albumCover.suggest']);
 	});
 });

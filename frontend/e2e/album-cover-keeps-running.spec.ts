@@ -19,14 +19,7 @@ import {
 	type Page,
 	type TestInfo
 } from './coverage-test';
-import {
-	albumCoverSuggestionAlt,
-	ALBUM_COVER_EDITING_CLOSE_LABEL,
-	ALBUM_COVER_EDITING_LABEL,
-	ALBUM_COVER_EDITING_UPLOAD_LABEL,
-	ALBUM_COVER_SUGGESTING_LABEL
-} from '../src/lib/constants/album';
-import { albumCoverWaitingText } from '../src/lib/constants/album-cover-mark';
+import { words } from '../src/lib/words/en';
 import { sameOriginHeaders, HOME_PATH, shellOf, workspace } from './helpers';
 import { archiveOwnedAlbum, BASE_URL, STORAGE_STATE_FILE } from './seed';
 import { completeCoverJob, seedRunningCoverJob } from './seed-cover';
@@ -52,7 +45,7 @@ const SECONDS_PER_MINUTE = 60;
 // The running slot names the time since the server started the run (E3), and
 // it is a status, not a progress bar: the run has no percentage.
 async function expectElapsedTimeSinceStart(editing: Locator): Promise<void> {
-	const making = editing.getByRole('status').filter({ hasText: ALBUM_COVER_SUGGESTING_LABEL });
+	const making = editing.getByRole('status').filter({ hasText: words['albumCover.suggesting'] });
 	await expect(making).toBeVisible();
 	await expect(editing.getByRole('progressbar')).toHaveCount(0);
 	const [, minutes = '', secondsPart = ''] =
@@ -82,8 +75,8 @@ async function readSuggestions(page: Page, albumId: string): Promise<CoverSugges
 
 async function openCoverEditor(page: Page, album: FreshAlbum) {
 	await page.goto(`/album/${album.id}`);
-	await workspace(page).getByRole('button', { name: 'Add cover' }).click();
-	return workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
+	await workspace(page).getByRole('button', { name: words['albumCover.add'] }).click();
+	return workspace(page).getByRole('group', { name: words['albumCover.editing'] });
 }
 
 async function withFreshAlbum(
@@ -130,7 +123,7 @@ test('a suggestion that finished while away waits when the editor opens again', 
 		const jobId = await seedRunningCoverJob(album.id);
 		const editing = await openCoverEditor(page, album);
 		await expect(
-			editing.getByRole('status').filter({ hasText: ALBUM_COVER_SUGGESTING_LABEL })
+			editing.getByRole('status').filter({ hasText: words['albumCover.suggesting'] })
 		).toBeVisible();
 		await page.goto(HOME_PATH);
 
@@ -138,7 +131,7 @@ test('a suggestion that finished while away waits when the editor opens again', 
 		const reopened = await openCoverEditor(page, album);
 
 		await expect(
-			reopened.getByRole('img', { name: albumCoverSuggestionAlt(album.title) })
+			reopened.getByRole('img', { name: words['albumCover.suggestionAlt']({ title: album.title }) })
 		).toBeVisible();
 		await expect(reopened.getByRole('progressbar')).toHaveCount(0);
 		await expect(reopened.getByText(/^1 \/ 1/)).toBeVisible();
@@ -151,10 +144,10 @@ test('× stops the running suggestion', async ({ page }, testInfo) => {
 		const jobId = await seedRunningCoverJob(album.id);
 		const editing = await openCoverEditor(page, album);
 		await expect(
-			editing.getByRole('status').filter({ hasText: ALBUM_COVER_SUGGESTING_LABEL })
+			editing.getByRole('status').filter({ hasText: words['albumCover.suggesting'] })
 		).toBeVisible();
 
-		await editing.getByRole('button', { name: ALBUM_COVER_EDITING_CLOSE_LABEL }).click();
+		await editing.getByRole('button', { name: words['albumCover.editingClose'] }).click();
 
 		await expect(editing).toHaveCount(0);
 		await expect
@@ -166,12 +159,21 @@ test('× stops the running suggestion', async ({ page }, testInfo) => {
 
 // The closed cover is one button whose name says what it carries; the mark at
 // its foot shows the ring and the time, or the waiting count.
-function closedCover(page: Page, state: string): Locator {
-	return workspace(page).getByRole('button', { name: new RegExp(`^(Add|Edit) cover · ${state}`) });
+function closedCover(page: Page, name: (label: string) => string): Locator {
+	const names = [words['albumCover.add'], words['albumCover.edit']].map(name);
+	return workspace(page).getByRole('button', { name: new RegExp(`^(${names.join('|')})`) });
 }
 
+const runningCover = (page: Page) =>
+	closedCover(page, (label) => words['coverMark.runningName']({ label }));
+
+const waitingCover = (page: Page, count: number) =>
+	closedCover(page, (label) =>
+		words['coverMark.waitingName']({ label, waiting: words['coverMark.waiting'](count) })
+	);
+
 async function expectRunningMarkWithTime(page: Page): Promise<void> {
-	const cover = closedCover(page, 'making a suggestion');
+	const cover = runningCover(page);
 	await expect(cover).toBeVisible();
 	const mark = cover.locator('.cover-mark');
 	await expect(mark).toHaveText(/\d+:\d{2}/);
@@ -184,9 +186,9 @@ async function expectRunningMarkWithTime(page: Page): Promise<void> {
 }
 
 async function expectWaitingMark(page: Page, count: number): Promise<void> {
-	const cover = closedCover(page, `${count} waiting`);
+	const cover = waitingCover(page, count);
 	await expect(cover).toBeVisible();
-	await expect(cover.locator('.cover-mark')).toHaveText(albumCoverWaitingText(count));
+	await expect(cover.locator('.cover-mark')).toHaveText(words['coverMark.waiting'](count));
 }
 
 async function expectNoMark(page: Page): Promise<void> {
@@ -256,19 +258,19 @@ test('after it finished the cover says "● 1 waiting", a tap opens the editor o
 	await withFreshAlbum(page, shellOf(testInfo), async (album) => {
 		const jobId = await seedRunningCoverJob(album.id);
 		await page.goto(`/album/${album.id}`);
-		await expect(closedCover(page, 'making a suggestion')).toBeVisible();
+		await expect(runningCover(page)).toBeVisible();
 
 		await completeCoverJob(jobId);
 		await expectWaitingMark(page, 1);
 		await page.reload();
 		await expectWaitingMark(page, 1);
 
-		await closedCover(page, '1 waiting').click();
-		const editing = workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
+		await waitingCover(page, 1).click();
+		const editing = workspace(page).getByRole('group', { name: words['albumCover.editing'] });
 		await expect(
-			editing.getByRole('img', { name: albumCoverSuggestionAlt(album.title) })
+			editing.getByRole('img', { name: words['albumCover.suggestionAlt']({ title: album.title }) })
 		).toBeVisible();
-		await editing.getByRole('button', { name: ALBUM_COVER_EDITING_CLOSE_LABEL }).click();
+		await editing.getByRole('button', { name: words['albumCover.editingClose'] }).click();
 
 		await expect(editing).toHaveCount(0);
 		await expectNoMark(page);
@@ -284,9 +286,9 @@ test('Use clears the waiting mark', async ({ page }, testInfo) => {
 		await page.goto(`/album/${album.id}`);
 		await expectWaitingMark(page, 1);
 
-		await closedCover(page, '1 waiting').click();
-		const editing = workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
-		await editing.getByRole('button', { name: 'Use', exact: true }).click();
+		await waitingCover(page, 1).click();
+		const editing = workspace(page).getByRole('group', { name: words['albumCover.editing'] });
+		await editing.getByRole('button', { name: words['albumCover.use'], exact: true }).click();
 
 		await expect(editing).toHaveCount(0);
 		await expect(workspace(page).getByRole('button', { name: /^Edit cover$/ })).toBeVisible();
@@ -301,13 +303,13 @@ test('Upload clears the waiting mark', async ({ page }, testInfo) => {
 		await page.goto(`/album/${album.id}`);
 		await expectWaitingMark(page, 1);
 
-		await closedCover(page, '1 waiting').click();
-		const editing = workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
+		await waitingCover(page, 1).click();
+		const editing = workspace(page).getByRole('group', { name: words['albumCover.editing'] });
 		// Upload is pressed as a person does: the press is when the page takes
 		// note of the suggestions an uploaded cover releases.
 		const [chooser] = await Promise.all([
 			page.waitForEvent('filechooser'),
-			editing.getByRole('button', { name: ALBUM_COVER_EDITING_UPLOAD_LABEL }).click()
+			editing.getByRole('button', { name: words['albumCover.upload'] }).click()
 		]);
 		await chooser.setFiles({
 			name: 'album-cover.png',

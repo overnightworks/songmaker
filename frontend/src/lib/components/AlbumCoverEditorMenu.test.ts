@@ -101,7 +101,7 @@ describe('AlbumCoverEditor menu', () => {
 		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 		const picker = vi.spyOn(input, 'click').mockImplementation(() => undefined);
 
-		pressEditorButton(target, 'Upload');
+		pressEditorButton(target, 'albumCover.upload');
 		expect(picker).toHaveBeenCalledTimes(1);
 		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
 		Object.defineProperty(input, 'files', { configurable: true, value: [file] });

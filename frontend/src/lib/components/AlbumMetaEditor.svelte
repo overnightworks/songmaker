@@ -8,19 +8,8 @@
 
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import {
-		ALBUM_DETAILS_CLOSE_LABEL,
-		ALBUM_DETAILS_SAVE_LABEL,
-		ALBUM_DETAILS_TITLE_REQUIRED,
-		ALBUM_SUBTITLE_LABEL,
-		ALBUM_SUBTITLE_MAX_LENGTH,
-		ALBUM_YEAR_LABEL,
-		ALBUM_YEAR_MAX_LENGTH
-	} from '#lib/constants/album.ts';
-	import {
-		NEW_ALBUM_TITLE_LABEL,
-		NEW_PLACE_TEXT_MAX_LENGTH
-	} from '#lib/constants/new-collection.ts';
+	import { ALBUM_SUBTITLE_MAX_LENGTH, ALBUM_YEAR_MAX_LENGTH } from '#lib/constants/album.ts';
+	import { NEW_PLACE_TEXT_MAX_LENGTH } from '#lib/constants/new-collection.ts';
 	import { holdOpenWhile } from '#lib/stores/layers.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
@@ -71,7 +60,7 @@
 		<button
 			type="button"
 			class="close-btn"
-			aria-label={ALBUM_DETAILS_CLOSE_LABEL}
+			aria-label={pageText('albumDetails.close')}
 			disabled={saving}
 			onclick={onclose}
 		>
@@ -79,7 +68,7 @@
 		</button>
 	</div>
 	<label class="field">
-		<span class="field-label">{NEW_ALBUM_TITLE_LABEL}</span>
+		<span class="field-label">{pageText('albumDetails.title')}</span>
 		<input
 			bind:this={titleInput}
 			bind:value={draft.title}
@@ -92,12 +81,12 @@
 		/>
 		{#if titleMissing}
 			<span id={titleReasonId} class="field-reason" role="alert"
-				>{ALBUM_DETAILS_TITLE_REQUIRED}</span
+				>{pageText('albumDetails.titleRequired')}</span
 			>
 		{/if}
 	</label>
 	<label class="field">
-		<span class="field-label">{ALBUM_SUBTITLE_LABEL}</span>
+		<span class="field-label">{pageText('albumDetails.subtitle')}</span>
 		<input
 			bind:value={draft.subtitle}
 			type="text"
@@ -106,7 +95,7 @@
 		/>
 	</label>
 	<label class="field field-year">
-		<span class="field-label">{ALBUM_YEAR_LABEL}</span>
+		<span class="field-label">{pageText('albumDetails.year')}</span>
 		<input
 			bind:value={draft.year}
 			type="text"
@@ -116,7 +105,9 @@
 		/>
 	</label>
 	<div class="details-foot">
-		<button type="submit" class="save-btn" disabled={!canSave}>{ALBUM_DETAILS_SAVE_LABEL}</button>
+		<button type="submit" class="save-btn" disabled={!canSave}
+			>{pageText('albumDetails.save')}</button
+		>
 	</div>
 </form>
 

@@ -9,8 +9,6 @@ import { compareTitles } from '#lib/utils/recency.ts';
 import { reloadWhileUnreachable } from './connectivity';
 import { forgetWritten, restoreWritten } from './libraryWrite';
 
-const ALBUM_SONGS_LOAD_ERROR = 'Failed to load songs';
-
 // The library's in-memory cache of every browsed album and song. Every
 // surface that lists, filters, or mutates library data reads and writes
 // through these two stores and the helpers below, so a take picked in one
@@ -118,7 +116,7 @@ async function settleAlbumSongsLoad(albumId: string): Promise<void> {
 		setAlbumSongsLoad(albumId, 'idle');
 	} catch (err) {
 		if (generation !== albumSongsGeneration) return;
-		albumSongsReloadsFor(albumId).nameLoadFailure(err, ALBUM_SONGS_LOAD_ERROR);
+		albumSongsReloadsFor(albumId).nameLoadFailure(err, pageText('albumPage.songsLoadFailed'));
 		setAlbumSongsLoad(albumId, err instanceof NetworkError ? 'unreachable' : 'failed');
 	} finally {
 		if (generation === albumSongsGeneration) albumSongLoads.delete(albumId);
@@ -140,7 +138,7 @@ async function mergeSongsOfAlbum(albumId: string, generation: number): Promise<v
 }
 
 export function albumSongsErrorMessage(err: unknown): string {
-	return describeFailure(err, ALBUM_SONGS_LOAD_ERROR);
+	return describeFailure(err, pageText('albumPage.songsLoadFailed'));
 }
 
 function mergeAlbumSongs(list: SongItem[], incoming: SongItem[]): SongItem[] {

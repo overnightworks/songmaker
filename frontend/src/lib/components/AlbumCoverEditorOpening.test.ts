@@ -23,6 +23,7 @@ import {
 	coveredAlbum,
 	editingClosed,
 	openCoverEditing,
+	editorButton,
 	pressEditorButton,
 	pressSuggestOnceLoaded,
 	shownImage,
@@ -58,16 +59,13 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 }));
 vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn(), addUndoToast: vi.fn() }));
 
+import { words } from '#lib/words/en.ts';
 import AlbumDetailView from './AlbumDetailView.svelte';
 
 const { render: renderDetail, cleanup } = createComponentMount(AlbumDetailView);
 
-function editorButton(target: HTMLElement, name: string): HTMLButtonElement {
-	return getByRoleButton(requireElement(target, '.cover-editor'), name);
-}
-
 async function closeWithX(target: HTMLElement): Promise<void> {
-	pressEditorButton(target, 'Close cover editing');
+	pressEditorButton(target, 'albumCover.editingClose');
 	await editingClosed(target);
 }
 
@@ -124,7 +122,7 @@ describe('The album cover state around the editor', () => {
 		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 		const picker = vi.spyOn(input, 'click').mockImplementation(() => undefined);
 
-		getByRoleButton(requireElement(target, '.cover-stage'), 'Add cover').click();
+		getByRoleButton(requireElement(target, '.cover-stage'), words['albumCover.add']).click();
 
 		expect(picker).toHaveBeenCalledTimes(1);
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
@@ -161,7 +159,7 @@ describe('The album cover state around the editor', () => {
 		const target = await renderDetail();
 
 		await openCoverEditing(target);
-		expect(countLine(target)).toBe('Loading cover suggestion…');
+		expect(countLine(target)).toBe(words['albumCover.suggestionsLoading']);
 
 		pageRead.resolve(coverSuggestions());
 		await vi.waitFor(() => expect(countLine(target)).toBe(''));
@@ -182,7 +180,9 @@ describe('The album cover state around the editor', () => {
 			await new Promise((settled) => setTimeout(settled, 0));
 			await openCoverEditing(target);
 
-			await vi.waitFor(() => expect(editorButton(target, 'Suggest').disabled).toBe(false));
+			await vi.waitFor(() =>
+				expect(editorButton(target, 'albumCover.suggest').disabled).toBe(false)
+			);
 		}
 	);
 
@@ -194,18 +194,22 @@ describe('The album cover state around the editor', () => {
 			.mockReturnValueOnce(deferred<JobItem>().promise);
 		const target = await renderDetail();
 		await openCoverEditing(target);
-		await vi.waitFor(() => expect(editorButton(target, 'Suggest another').disabled).toBe(false));
-		editorButton(target, 'Suggest another').click();
+		await vi.waitFor(() =>
+			expect(editorButton(target, 'albumCover.suggestAnother').disabled).toBe(false)
+		);
+		editorButton(target, 'albumCover.suggestAnother').click();
 		await closeWithX(target);
 		await openCoverEditing(target);
-		await vi.waitFor(() => expect(editorButton(target, 'Suggest another').disabled).toBe(false));
-		editorButton(target, 'Suggest another').click();
+		await vi.waitFor(() =>
+			expect(editorButton(target, 'albumCover.suggestAnother').disabled).toBe(false)
+		);
+		editorButton(target, 'albumCover.suggestAnother').click();
 		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledTimes(2));
 
 		retiredAsk.reject(new Error('down'));
 		await new Promise((settled) => setTimeout(settled, 0));
 
-		expect(editorButton(target, 'Suggest another').disabled).toBe(true);
+		expect(editorButton(target, 'albumCover.suggestAnother').disabled).toBe(true);
 		expect(target.querySelector('.cover-failure')).toBeNull();
 	});
 });

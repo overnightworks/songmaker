@@ -169,7 +169,9 @@ describe('CollectionHeader', () => {
 			const titles = requireElement(target, '.header-titles');
 
 			expect(titles.querySelector('.header-title')?.textContent).toContain('Night Drive');
-			expect(requireElement(titles, '.header-count').textContent).toBe('5 songs');
+			expect(requireElement(titles, '.header-count').textContent).toBe(
+				words['collectionHeader.songCount'](5)
+			);
 		}
 	);
 
@@ -357,12 +359,15 @@ describe('CollectionHeader', () => {
 		{
 			state: 'a running suggestion',
 			coverMark: { running: true, startedAt: '2026-10-22T10:00:00Z', waiting: 0 },
-			name: 'Edit cover · making a suggestion'
+			name: words['coverMark.runningName']({ label: words['albumCover.edit'] })
 		},
 		{
 			state: 'waiting suggestions',
 			coverMark: { running: false, startedAt: null, waiting: 2 },
-			name: 'Edit cover · 2 waiting'
+			name: words['coverMark.waitingName']({
+				label: words['albumCover.edit'],
+				waiting: words['coverMark.waiting'](2)
+			})
 		}
 	])('carries $state on the closed cover, named without the ticking time', async (arrange) => {
 		const target = await render({
@@ -390,13 +395,21 @@ describe('CollectionHeader', () => {
 
 		const place = requireElement(target, '.header-cover-add');
 
-		expect(place.textContent).toBe('Add cover');
-		expect(getByRoleButton(target, 'Add cover · 2 waiting')).not.toBeNull();
+		expect(place.textContent).toBe(words['albumCover.add']);
+		expect(
+			getByRoleButton(
+				target,
+				words['coverMark.waitingName']({
+					label: words['albumCover.add'],
+					waiting: words['coverMark.waiting'](2)
+				})
+			)
+		).not.toBeNull();
 	});
 
 	it.each([
-		{ coverUrl: null, place: 'Add cover' },
-		{ coverUrl: 'https://x/cover.jpg', place: 'Edit cover' }
+		{ coverUrl: null, place: words['albumCover.add'] },
+		{ coverUrl: 'https://x/cover.jpg', place: words['albumCover.edit'] }
 	])(
 		'makes the album cover place, $place, open cover editing in place above Play',
 		async ({ coverUrl, place }) => {
@@ -424,7 +437,7 @@ describe('CollectionHeader', () => {
 
 		expect(target.querySelector('.header-cover')).not.toBeNull();
 		expect(target.querySelector('button.header-cover')).toBeNull();
-		expect(target.textContent).not.toContain('Add cover');
+		expect(target.textContent).not.toContain(words['albumCover.add']);
 	});
 
 	it.each([{ coverUrl: null }, { coverUrl: 'https://x/cover.jpg' }])(

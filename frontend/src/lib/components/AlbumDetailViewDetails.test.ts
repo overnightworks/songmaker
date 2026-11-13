@@ -4,6 +4,7 @@
 import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 
 import { serverRefusal } from '#lib/test-utils/network.ts';
 import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
@@ -88,7 +89,7 @@ function detailsForm(target: HTMLElement): HTMLFormElement | null {
 }
 
 async function saveDetails(form: HTMLFormElement): Promise<void> {
-	getByRoleButton(form, 'Save').click();
+	getByRoleButton(form, words['albumDetails.save']).click();
 	await tick();
 	await tick();
 	await tick();
@@ -119,7 +120,7 @@ describe('AlbumDetailView Edit details', () => {
 		await Promise.resolve();
 		await tick();
 
-		expect(document.activeElement).toBe(field(form, 'Title'));
+		expect(document.activeElement).toBe(field(form, words['albumDetails.title']));
 	});
 
 	it('saves title, subtitle and year in one update, and the header reads the new details', async () => {
@@ -129,9 +130,9 @@ describe('AlbumDetailView Edit details', () => {
 		const target = await renderDetail();
 		const form = await openEditDetails(target);
 
-		type(field(form, 'Title'), 'Nightdrive');
-		type(field(form, 'Subtitle'), 'Late-night synthwave');
-		type(field(form, 'Year'), '2026');
+		type(field(form, words['albumDetails.title']), 'Nightdrive');
+		type(field(form, words['albumDetails.subtitle']), 'Late-night synthwave');
+		type(field(form, words['albumDetails.year']), '2026');
 		await saveDetails(form);
 
 		expect(updateAlbum).toHaveBeenCalledWith('a-local', {
@@ -143,7 +144,7 @@ describe('AlbumDetailView Edit details', () => {
 		expect(get(albumList)[0].title).toBe('Nightdrive');
 		expect(target.querySelector('.header-title')?.textContent?.trim()).toBe('Nightdrive');
 		expect(target.querySelector('.header-meta')?.textContent).toBe('Late-night synthwave · 2026');
-		expect(addToast).toHaveBeenCalledWith('Details saved', 'success');
+		expect(addToast).toHaveBeenCalledWith(words['albumDetails.saved'], 'success');
 	});
 
 	it('clears the year with an emptied field', async () => {
@@ -151,7 +152,7 @@ describe('AlbumDetailView Edit details', () => {
 		const target = await renderDetail();
 		const form = await openEditDetails(target);
 
-		type(field(form, 'Year'), '');
+		type(field(form, words['albumDetails.year']), '');
 		await saveDetails(form);
 
 		expect(updateAlbum).toHaveBeenCalledWith('a-local', {
@@ -162,19 +163,19 @@ describe('AlbumDetailView Edit details', () => {
 	});
 
 	it.each([
-		{ year: 'abcd', reason: 'Year must be a whole number' },
-		{ year: '1899', reason: 'Year must be between 1900 and 2100' }
+		{ year: 'abcd', reason: words['albumPage.yearWhole'] },
+		{ year: '1899', reason: words['albumPage.yearRange']({ min: '1900', max: '2100' }) }
 	])('refuses the year $year with a readable reason, saving nothing', async ({ year, reason }) => {
 		const target = await renderDetail();
 		const form = await openEditDetails(target);
 
-		type(field(form, 'Year'), year);
+		type(field(form, words['albumDetails.year']), year);
 		await saveDetails(form);
 
 		expect(updateAlbum).not.toHaveBeenCalled();
 		expect(addToast).toHaveBeenCalledWith(reason, 'error');
 		expect(detailsForm(target)).not.toBeNull();
-		expect(field(form, 'Year').value).toBe(year);
+		expect(field(form, words['albumDetails.year']).value).toBe(year);
 	});
 
 	it('names the server refusal and keeps the editor open with the draft', async () => {
@@ -182,14 +183,14 @@ describe('AlbumDetailView Edit details', () => {
 		const target = await renderDetail();
 		const form = await openEditDetails(target);
 
-		type(field(form, 'Title'), 'Taken');
+		type(field(form, words['albumDetails.title']), 'Taken');
 		await saveDetails(form);
 
 		await vi.waitFor(() =>
 			expect(addToast).toHaveBeenCalledWith('Title is already taken', 'error')
 		);
 		expect(detailsForm(target)).not.toBeNull();
-		expect(field(form, 'Title').value).toBe('Taken');
+		expect(field(form, words['albumDetails.title']).value).toBe('Taken');
 		expect(get(albumList)[0].title).toBe('Night Drive');
 	});
 
@@ -197,8 +198,8 @@ describe('AlbumDetailView Edit details', () => {
 		const target = await renderDetail();
 		const form = await openEditDetails(target);
 
-		type(field(form, 'Year'), '2026');
-		getByRoleButton(form, 'Close edit details').click();
+		type(field(form, words['albumDetails.year']), '2026');
+		getByRoleButton(form, words['albumDetails.close']).click();
 		await tick();
 
 		expect(detailsForm(target)).toBeNull();
@@ -226,14 +227,14 @@ describeBackClosesOverlay({
 	open: async (target) => {
 		const form = await openEditDetails(target);
 		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('details-editing'));
-		type(field(form, 'Year'), '2026');
+		type(field(form, words['albumDetails.year']), '2026');
 	},
 	isShown: (target) => detailsForm(target) !== null,
 	afterBack: () => expect(updateAlbum).not.toHaveBeenCalled(),
 	closeWays: [
 		{
 			way: '×',
-			close: (target) => getByRoleButton(target, 'Close edit details').click()
+			close: (target) => getByRoleButton(target, words['albumDetails.close']).click()
 		},
 		{
 			way: 'Escape in a field',
