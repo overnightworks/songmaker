@@ -2194,3 +2194,113 @@ msgstr ""
 msgctxt "takeRefusal.notPlayable"
 msgid "Generation is not playable"
 msgstr ""
+
+msgctxt "settingsRefusal.modelUnavailable"
+msgid "Model '{mode}' is not available"
+msgstr ""
+
+msgctxt "settingsRefusal.invalidDefaultConfig"
+msgid "Invalid config: must be null, 'sft', 'turbo', or a preset ID"
+msgstr ""
+
+msgctxt "settingsRefusal.tailBudgetRange"
+msgid "tail_token_budget must be between {minimum} and {maximum}"
+msgstr ""
+
+msgctxt "settingsRefusal.unknownKeys"
+msgid "Unknown setting keys: {keys}"
+msgstr ""
+
+msgctxt "settingsRefusal.negativeValue"
+msgid "Value for {key} must be non-negative"
+msgstr ""
+
+msgctxt "presetRefusal.nameTaken"
+msgid "A preset with that name already exists"
+msgstr ""
+
+msgctxt "adminRefusal.unknownModelMode"
+msgid "Unknown model mode '{mode}'"
+msgstr ""
+
+msgctxt "adminRefusal.noOnlineWorkers"
+msgid "No online workers available to download"
+msgstr ""
+
+msgctxt "adminRefusal.alreadyDownloaded"
+msgid "Model '{mode}' is already downloaded"
+msgstr ""
+
+msgctxt "adminRefusal.alreadyDownloading"
+msgid "Model '{mode}' is already being downloaded (job {jobId})"
+msgstr ""
+
+msgctxt "workerRefusal.unreachable"
+msgid "Worker unreachable: {reason}"
+msgstr ""
+
+msgctxt "workerRefusal.relayed"
+msgid "{cause}"
+msgstr ""
+
+msgctxt "workerRefusal.notResponding"
+msgid ""
+"Worker '{workerId}' isn't responding, so it can't be asked to restart itself. "
+"Its container is likely stopped or crashed — restart the container directly."
+msgstr ""
+
+msgctxt "workerRefusal.returnedStatus"
+msgid "Worker returned {status}"
+msgstr ""
+
+msgctxt "coverRefusal.tooLarge"
+msgid "Cover file is too large"
+msgstr ""
+
+msgctxt "coverRefusal.unreadable"
+msgid "Cover image could not be read"
+msgstr ""
+
+msgctxt "coverRefusal.unsupportedType"
+msgid "Cover must be a JPEG or PNG image"
+msgstr ""
+
+msgctxt "coverRefusal.tooManyPixels"
+msgid "Cover image is too large"
+msgstr ""
+
+msgctxt "coverRefusal.variantUnknown"
+msgid "Unknown cover variant"
+msgstr ""
+
+msgctxt "coverRefusal.invalidAlbumId"
+msgid "Invalid album id for cover storage"
+msgstr ""
+
+msgctxt "coverRefusal.invalidSongId"
+msgid "Invalid song id for cover storage"
+msgstr ""
+
+msgctxt "coverRefusal.invalidPlaylistId"
+msgid "Invalid playlist id for cover storage"
+msgstr ""
+
+msgctxt "coverSuggestionRefusal.alreadyRunning"
+msgid "Cover suggestions are already being generated"
+msgstr ""
+
+msgctxt "referenceRefusal.quotaReached"
+msgid "Reference audio storage limit reached."
+msgstr ""
+
+msgctxt "referenceRefusal.storage"
+msgid "Reference audio storage could not be checked."
+msgstr ""
+
+msgctxt "albumRefusal.restoreWindowPassed"
+msgid "Album {id} was deleted {days} days ago, past the {window}-day restore window"
+msgstr ""
+
+msgctxt "songRefusal.restoreWindowPassed"
+msgid "Song {id} was deleted {days} days ago, past the {window}-day restore window"
+msgstr ""

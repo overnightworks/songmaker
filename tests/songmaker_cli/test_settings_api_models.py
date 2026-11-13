@@ -99,6 +99,9 @@ def test_a_deactivated_model_leaves_the_active_list_and_refuses_a_preset(clients
     assert (refused.status_code, refused.json()["detail"]) == (
         400, "Model 'turbo' is not available",
     )
+    assert refused.json()["message"] == {
+        "key": "settingsRefusal.modelUnavailable", "values": {"mode": "turbo"},
+    }
 
 
 def test_an_unknown_model_id_is_not_found_and_nothing_is_audited(clients, factory):

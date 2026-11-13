@@ -49,6 +49,7 @@ from songmaker_cli.db.queries.auth import (
 from songmaker_cli.db.queries.loras import list_user_loras_for_admin
 from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
 from songmaker_cli.job_types import JobFunction, JobStatus
+from songmaker_cli.refusals import Refusal
 from songmaker_cli.scheduler import worker_request_headers, worker_response_cause
 from songmaker_cli.settings import get_settings
 
@@ -223,7 +224,7 @@ async def load_model_on_worker_endpoint(
     if worker is None:
         raise HTTPException(404, f"Worker '{worker_id}' not found")
     if req.mode not in MODEL_CONFIG_PATHS:
-        raise HTTPException(400, f"Unknown model mode '{req.mode}'")
+        raise Refusal(400, "adminRefusal.unknownModelMode", mode=req.mode)
 
     job = create_job(db, JobFunction.LOAD_MODEL_ON_WORKER, user_id=admin.id)
     db.commit()
@@ -239,7 +240,7 @@ async def load_model_on_worker_endpoint(
             db, job.id, JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
         )
         db.commit()
-        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
+        raise Refusal(503, "jobRefusal.queueUnavailable")
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
@@ -250,17 +251,19 @@ async def _command_worker_model(db: Session, worker_id: str, path: str, mode: st
     if worker is None:
         raise HTTPException(404, f"Worker '{worker_id}' not found")
     if mode not in MODEL_CONFIG_PATHS:
-        raise HTTPException(400, f"Unknown model mode '{mode}'")
+        raise Refusal(400, "adminRefusal.unknownModelMode", mode=mode)
 
     try:
         response = await _post_to_worker(worker.host, worker.port, path, {"mode": mode})
     except httpx.HTTPError as exc:
-        raise HTTPException(502, f"Worker unreachable: {exc}")
+        raise Refusal(502, "workerRefusal.unreachable", reason=str(exc))
     if response.status_code >= 400:
-        raise HTTPException(
-            response.status_code if response.status_code in (400, 409) else 502,
-            worker_response_cause(response),
-        )
+        cause = worker_response_cause(response)
+        if response.status_code == 400:
+            raise Refusal(400, "workerRefusal.relayed", cause=cause)
+        if response.status_code == 409:
+            raise Refusal(409, "workerRefusal.relayed", cause=cause)
+        raise Refusal(502, "workerRefusal.relayed", cause=cause)
 
 
 @router.post(
@@ -344,14 +347,9 @@ async def restart_worker_endpoint(
         response = await _post_to_worker(worker.host, worker.port, "/restart")
     except httpx.HTTPError as exc:
         # Restart asks the running worker process to end itself; nothing is listening to ask.
-        raise HTTPException(
-            502,
-            f"Worker '{worker_id}' isn't responding, so it can't be asked to "
-            "restart itself. Its container is likely stopped or crashed — "
-            "restart the container directly.",
-        ) from exc
+        raise Refusal(502, "workerRefusal.notResponding", workerId=worker_id) from exc
     if response.status_code >= 400:
-        raise HTTPException(502, f"Worker returned {response.status_code}")
+        raise Refusal(502, "workerRefusal.returnedStatus", status=str(response.status_code))
     return StatusResponse(status="restarting")
 
 
@@ -380,7 +378,7 @@ async def download_model_endpoint(
     )
 
     if mode not in MODEL_CONFIG_PATHS:
-        raise HTTPException(400, f"Unknown model mode '{mode}'")
+        raise Refusal(400, "adminRefusal.unknownModelMode", mode=mode)
 
     workers = list_worker_identities(db)
     online_states: dict[str, dict | None] = {}
@@ -388,21 +386,18 @@ async def download_model_endpoint(
         online_states[w.id] = await read_worker_state(pool, w.id)
 
     if not any(worker_is_online(state) for state in online_states.values()):
-        raise HTTPException(503, "No online workers available to download")
+        raise Refusal(503, "adminRefusal.noOnlineWorkers")
 
     downloaded_union: set[str] = set()
     for state in online_states.values():
         if state is not None:
             downloaded_union.update(state.get("available_modes", []))
     if mode in downloaded_union:
-        raise HTTPException(409, f"Model '{mode}' is already downloaded")
+        raise Refusal(409, "adminRefusal.alreadyDownloaded", mode=mode)
 
     in_progress = await read_download_in_progress(pool, mode)
     if in_progress is not None:
-        raise HTTPException(
-            409,
-            f"Model '{mode}' is already being downloaded (job {in_progress})",
-        )
+        raise Refusal(409, "adminRefusal.alreadyDownloading", mode=mode, jobId=in_progress)
 
     job = create_job(db, JobFunction.DOWNLOAD_MODEL_ON_WORKER, user_id=admin.id)
     db.commit()
@@ -418,7 +413,7 @@ async def download_model_endpoint(
             db, job.id, JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
         )
         db.commit()
-        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
+        raise Refusal(503, "jobRefusal.queueUnavailable")
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
 
