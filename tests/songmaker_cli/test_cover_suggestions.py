@@ -528,7 +528,7 @@ def test_full_app_answers_a_suggestion_outside_the_audio_root_like_a_missing_one
     missing = getattr(client, method)(path_for(missing_id), **kwargs_for(missing_id))
 
     assert rejected.status_code == missing.status_code == 404
-    assert rejected.json() == missing.json() == {"detail": "Album not found"}
+    assert rejected.json() == missing.json() == {"detail": COVER_SUGGESTION_NOT_FOUND}
 
 
 def test_a_traversal_suggestion_id_matches_no_route_and_a_missing_one_keeps_its_sentence(
@@ -542,7 +542,7 @@ def test_a_traversal_suggestion_id_matches_no_route_and_a_missing_one_keeps_its_
     )
 
     assert missing.status_code == traversal.status_code == 404
-    assert missing.json() == {"detail": "Album not found"}
+    assert missing.json() == {"detail": COVER_SUGGESTION_NOT_FOUND}
     assert traversal.json() == {"detail": "Not Found"}
     with factory() as session:
         assert session.query(AlbumCoverSuggestion).count() == 0
@@ -613,7 +613,7 @@ def test_a_suggestion_whose_row_and_file_disagree_answers_like_a_missing_one(
     response = getattr(client, method)(path_for(suggestion_id), **kwargs_for(suggestion_id))
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Album not found"}
+    assert response.json() == {"detail": COVER_SUGGESTION_NOT_FOUND}
 
 
 def test_discarding_a_suggestion_whose_file_is_already_gone_removes_its_row(

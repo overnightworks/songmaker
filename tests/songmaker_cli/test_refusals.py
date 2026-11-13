@@ -90,12 +90,6 @@ def test_a_404_refusal_keeps_its_sentence_and_its_key(client: TestClient) -> Non
     assert response.json() == refusal_body("takeRefusal.archived")
 
 
-def test_a_path_with_no_route_answers_not_found(client: TestClient) -> None:
-    response = client.get("/probe/no-such-route")
-
-    assert (response.status_code, response.json()) == (404, {"detail": "Not Found"})
-
-
 def test_an_error_that_is_no_refusal_answers_its_detail_alone(client: TestClient) -> None:
     response = client.get("/probe/plain")
 
