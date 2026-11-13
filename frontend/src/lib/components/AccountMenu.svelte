@@ -53,7 +53,7 @@
 	<MenuPopover
 		bind:this={popover}
 		layer="account-menu"
-		label={pageText('account.menu', username)}
+		label={pageText('account.menu', { username })}
 		closeLabel={pageText('account.menuClose')}
 	>
 		{#snippet trigger()}<span class="account-initial">{initial}</span>{/snippet}
