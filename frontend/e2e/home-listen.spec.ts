@@ -151,7 +151,9 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 				.click();
 			await page.getByRole('button', { name: action, exact: true }).click();
 			if (action === words['collectionMenu.albumDelete'])
-				await page.getByRole('button', { name: 'Delete Album', exact: true }).click();
+				await page
+					.getByRole('button', { name: words['albumPage.deleteConfirm'], exact: true })
+					.click();
 			await openHome(page, shellOf(testInfo));
 			await expect(
 				listenRegion(page).getByRole('button', { name: albumLabel, exact: true })

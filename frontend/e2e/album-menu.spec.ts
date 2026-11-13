@@ -7,14 +7,6 @@
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
-import {
-	ALBUM_DETAILS_CLOSE_LABEL,
-	ALBUM_DETAILS_SAVED,
-	ALBUM_DETAILS_SAVE_LABEL,
-	ALBUM_SUBTITLE_LABEL,
-	ALBUM_YEAR_LABEL
-} from '../src/lib/constants/album';
-import { NEW_ALBUM_TITLE_LABEL } from '../src/lib/constants/new-collection';
 import { boundingBoxes, sameOriginHeaders, FlowGuard, shellOf, workspace } from './helpers';
 import { bottomOf, expectMenuInsideViewport, rightOf } from './menu-viewport';
 import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist } from './seed';
@@ -175,7 +167,7 @@ async function openEditDetails(page: Page, header: Locator): Promise<Locator> {
 		.click();
 	const editor = header.getByRole('form', { name: words['collectionMenu.editDetails'] });
 	await expect(editor).toBeVisible();
-	await expect(editor.getByLabel(NEW_ALBUM_TITLE_LABEL, { exact: true })).toBeFocused();
+	await expect(editor.getByLabel(words['albumDetails.title'], { exact: true })).toBeFocused();
 	return editor;
 }
 
@@ -229,10 +221,12 @@ test('Edit details changes title, subtitle and year; × and Back discard', async
 
 		const renamed = `${title} remastered`;
 		let editor = await openEditDetails(page, header);
-		await editor.getByLabel(NEW_ALBUM_TITLE_LABEL, { exact: true }).fill(renamed);
-		await editor.getByLabel(ALBUM_SUBTITLE_LABEL, { exact: true }).fill('Late-night synthwave');
-		await editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true }).fill('2026');
-		await editor.getByRole('button', { name: ALBUM_DETAILS_SAVE_LABEL, exact: true }).click();
+		await editor.getByLabel(words['albumDetails.title'], { exact: true }).fill(renamed);
+		await editor
+			.getByLabel(words['albumDetails.subtitle'], { exact: true })
+			.fill('Late-night synthwave');
+		await editor.getByLabel(words['albumDetails.year'], { exact: true }).fill('2026');
+		await editor.getByRole('button', { name: words['albumDetails.save'], exact: true }).click();
 
 		await expect(editor).toBeHidden();
 		await expect(header.getByRole('heading', { name: renamed })).toBeVisible();
@@ -240,13 +234,13 @@ test('Edit details changes title, subtitle and year; × and Back discard', async
 		await expect(meta).toHaveText('Late-night synthwave · 2026');
 
 		editor = await openEditDetails(page, header);
-		await editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true }).fill('1999');
-		await editor.getByRole('button', { name: ALBUM_DETAILS_CLOSE_LABEL, exact: true }).click();
+		await editor.getByLabel(words['albumDetails.year'], { exact: true }).fill('1999');
+		await editor.getByRole('button', { name: words['albumDetails.close'], exact: true }).click();
 		await expect(editor).toBeHidden();
 		await expect(meta).toHaveText('Late-night synthwave · 2026');
 
 		editor = await openEditDetails(page, header);
-		await editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true }).fill('1999');
+		await editor.getByLabel(words['albumDetails.year'], { exact: true }).fill('1999');
 		await page.goBack();
 		await expect(editor).toBeHidden();
 		await expect(page).toHaveURL(new RegExp(`/album/${album.id}$`));
@@ -273,17 +267,19 @@ test('Back during a slow Edit details save keeps the form until the details are 
 		});
 
 		const editor = await openEditDetails(page, header);
-		await editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true }).fill('2026');
-		await editor.getByRole('button', { name: ALBUM_DETAILS_SAVE_LABEL, exact: true }).click();
+		await editor.getByLabel(words['albumDetails.year'], { exact: true }).fill('2026');
+		await editor.getByRole('button', { name: words['albumDetails.save'], exact: true }).click();
 		await saveIsSent;
 		await page.goBack();
 
 		await expect(editor).toBeVisible();
-		await expect(editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true })).toHaveValue('2026');
+		await expect(editor.getByLabel(words['albumDetails.year'], { exact: true })).toHaveValue(
+			'2026'
+		);
 		await expect(page).toHaveURL(new RegExp(`/album/${album.id}$`));
 
 		answerSave();
-		await expect(page.getByText(ALBUM_DETAILS_SAVED, { exact: true })).toBeVisible();
+		await expect(page.getByText(words['albumDetails.saved'], { exact: true })).toBeVisible();
 		await expect(editor).toBeHidden();
 		await expect(header.locator('.header-meta')).toHaveText('2026');
 		await expect(page).toHaveURL(new RegExp(`/album/${album.id}$`));

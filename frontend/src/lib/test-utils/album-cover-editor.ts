@@ -5,6 +5,8 @@ import { makeAlbum as album } from '#lib/test-utils/factories.ts';
 import { announcedText, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { requireElement } from '#lib/components/shell/rail-test-fixtures.ts';
 import type { CoverSuggestionsResponse, JobItem } from '#lib/api/types.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
+import { words } from '#lib/words/en.ts';
 
 // What the album cover editor tests share: the editor is reached through the
 // album header, so these helpers drive the page as a person does.
@@ -91,19 +93,23 @@ export function shownImage(target: HTMLElement): string | null {
 
 export async function pressSuggestOnceLoaded(target: HTMLElement): Promise<void> {
 	await vi.waitFor(() =>
-		expect(getByRoleButton(requireElement(target, '.cover-editor'), 'Suggest').disabled).toBe(false)
+		expect(editorButton(target, words['albumCover.suggest']).disabled).toBe(false)
 	);
-	pressEditorButton(target, 'Suggest');
+	pressEditorButton(target, words['albumCover.suggest']);
+}
+
+export function editorButton(target: HTMLElement, name: string): HTMLButtonElement {
+	return getByRoleButton(requireElement(target, '.cover-editor'), name);
 }
 
 export function pressEditorButton(target: HTMLElement, name: string): void {
-	getByRoleButton(requireElement(target, '.cover-editor'), name).click();
+	editorButton(target, name).click();
 }
 
 export function uploadCoverFile(target: HTMLElement): void {
 	const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 	vi.spyOn(input, 'click').mockImplementation(() => undefined);
-	pressEditorButton(target, 'Upload');
+	pressEditorButton(target, words['albumCover.upload']);
 	const file = new File([new Uint8Array([1])], 'cover.jpg', { type: 'image/jpeg' });
 	Object.defineProperty(input, 'files', { configurable: true, value: [file] });
 	input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -122,4 +128,12 @@ export async function afterPageRead(
 	await tick();
 	readSuggestions.mockClear();
 	return target;
+}
+
+export const RELOAD_ATTEMPTS = UNREACHABLE_RELOAD_DELAYS_MS.length;
+export const PAST_EVERY_RELOAD_MS = UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0) * 2;
+
+export async function reachSuggestionsLoads(readSuggestions: Mock, count: number): Promise<void> {
+	await vi.waitFor(() => expect(readSuggestions).toHaveBeenCalledTimes(count));
+	await tick();
 }

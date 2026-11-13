@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-	import { albumCoverWaitingText } from '#lib/constants/album-cover-mark.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import CoverRunElapsed from './CoverRunElapsed.svelte';
 
 	let { running, startedAt, waiting }: CoverMark = $props();
@@ -22,7 +22,7 @@
 {:else if waiting > 0}
 	<span class="cover-mark" aria-hidden="true">
 		<span class="mark-dot"></span>
-		{albumCoverWaitingText(waiting)}
+		{pageText('coverMark.waiting', waiting)}
 	</span>
 {/if}
 

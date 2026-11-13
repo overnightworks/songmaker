@@ -7,7 +7,6 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { ALBUM_NO_SONGS } from '../src/lib/constants/album';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
@@ -95,7 +94,7 @@ test('an empty album makes its first song from + New song and opens it', async (
 		await page.goto(`/album/${album.id}`);
 		const surface = workspace(page);
 		await expect(surface.getByRole('heading', { name: album.title })).toBeVisible();
-		await expect(surface.getByText(ALBUM_NO_SONGS, { exact: true })).toBeVisible();
+		await expect(surface.getByText(words['albumPage.noSongs'], { exact: true })).toBeVisible();
 
 		const card = surface.getByRole('form', {
 			name: words['newSong.cardLabel']({ album: album.title })
