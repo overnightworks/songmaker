@@ -1,8 +1,8 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import { addToast } from '#lib/stores/toast.ts';
-	import { LIBRARY_SHARES_COPY_LABEL } from '#lib/constants/library.ts';
-	import { SHARE_LINK_COPIED_TOAST, SHARE_LINK_COPY_FAILED_TOAST } from '#lib/constants/share.ts';
+	import { LIBRARY_SHARES_COPY_KEY } from '#lib/constants/library.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	interface Props {
 		url: string;
@@ -13,16 +13,16 @@
 	async function copyLink(): Promise<void> {
 		try {
 			await navigator.clipboard.writeText(url);
-			addToast(SHARE_LINK_COPIED_TOAST, 'success');
+			addToast(pageText('shareLink.copiedToast'), 'success');
 		} catch {
-			addToast(SHARE_LINK_COPY_FAILED_TOAST, 'error');
+			addToast(pageText('shareLink.copyFailedToast'), 'error');
 		}
 	}
 </script>
 
 <button type="button" class="share-link-chip" onclick={copyLink} title={url}>
 	<Icon name="link" size={13} />
-	<span>{LIBRARY_SHARES_COPY_LABEL}</span>
+	<span>{pageText(LIBRARY_SHARES_COPY_KEY)}</span>
 </button>
 
 <style>

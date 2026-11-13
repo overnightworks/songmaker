@@ -232,7 +232,9 @@ test('1354_65_C2 1354_37b_62_A: a shared playlist replaces its upload with the c
 			});
 			expect(unshare.ok(), `Playlist unshare failed: ${await unshare.text()}`).toBeTruthy();
 			await publicPage.reload();
-			await expect(publicPage.getByRole('heading', { name: 'Playlist not found' })).toBeVisible();
+			await expect(
+				publicPage.getByRole('heading', { name: words['shareStatus.notFoundPlaylist'] })
+			).toBeVisible();
 			await expect(publicPage.locator('.cover-art')).toHaveCount(0);
 		} finally {
 			try {

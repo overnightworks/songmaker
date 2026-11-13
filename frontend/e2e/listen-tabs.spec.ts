@@ -4,7 +4,7 @@
 
 import { expect, test as base, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { LIBRARY_SHARES_COPY_LABEL } from '../src/lib/constants/library';
+import { LIBRARY_SHARES_COPY_KEY } from '../src/lib/constants/library';
 import { sameOriginHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, readSeededLibrary, runMarker } from './seed';
 
@@ -191,7 +191,7 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		expect(shared.ok()).toBe(true);
 		await page.reload();
 		await expect(
-			workspace(page).getByRole('button', { name: LIBRARY_SHARES_COPY_LABEL })
+			workspace(page).getByRole('button', { name: words[LIBRARY_SHARES_COPY_KEY] })
 		).toBeVisible();
 		for (const height of [900, 700, 600]) {
 			await page.setViewportSize({ width: 1440, height });

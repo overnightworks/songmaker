@@ -6,6 +6,7 @@
 		sharedCollectionFailure,
 		type SharedCollectionFailure
 	} from '#lib/api/shared.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
 	import SharedCollection from '#lib/components/share/SharedCollection.svelte';
 	import { fromSharedPlaylist, type SharedPlaylistPayload } from '#lib/share/sharedCollection.ts';
@@ -35,7 +36,11 @@
 </script>
 
 <svelte:head>
-	<title>{playlist ? playlist.title : 'Shared playlist'} | {APP_NAME}</title>
+	<title
+		>{playlist
+			? pageText('sharePlaylistPage.documentTitle', { title: playlist.title, app: APP_NAME })
+			: pageText('sharePlaylistPage.fallbackTitle', { app: APP_NAME })}</title
+	>
 </svelte:head>
 
 <SharedCollection

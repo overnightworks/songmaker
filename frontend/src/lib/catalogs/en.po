@@ -3240,3 +3240,199 @@ msgstr ""
 msgctxt "cowriter.emptyHint"
 msgid "I can see the song you have open. Tell me what you want to work on, or ask me to browse your other songs — I'll pull them up as needed."
 msgstr ""
+
+msgctxt "shareStatus.loadingAlbum"
+msgid "Loading album"
+msgstr ""
+
+msgctxt "shareStatus.loadingPlaylist"
+msgid "Loading playlist"
+msgstr ""
+
+msgctxt "shareStatus.loadingSong"
+msgid "Loading song"
+msgstr ""
+
+msgctxt "shareStatus.loadingTake"
+msgid "Loading take"
+msgstr ""
+
+msgctxt "shareStatus.notFoundAlbum"
+msgid "Album not found"
+msgstr ""
+
+msgctxt "shareStatus.notFoundPlaylist"
+msgid "Playlist not found"
+msgstr ""
+
+msgctxt "shareStatus.notFoundSong"
+msgid "Song not found"
+msgstr ""
+
+msgctxt "shareStatus.notFoundTake"
+msgid "Take not found"
+msgstr ""
+
+msgctxt "shareStatus.errorAlbum"
+msgid "Could not load this album"
+msgstr ""
+
+msgctxt "shareStatus.errorPlaylist"
+msgid "Could not load this playlist"
+msgstr ""
+
+msgctxt "shareStatus.errorSong"
+msgid "Could not load this song"
+msgstr ""
+
+msgctxt "shareStatus.errorTake"
+msgid "Could not load this take"
+msgstr ""
+
+msgctxt "shareStatus.errorBodyAlbum"
+msgid "Something went wrong while loading this album."
+msgstr ""
+
+msgctxt "shareStatus.errorBodyPlaylist"
+msgid "Something went wrong while loading this playlist."
+msgstr ""
+
+msgctxt "shareStatus.errorBodySong"
+msgid "Something went wrong while loading this song."
+msgstr ""
+
+msgctxt "shareStatus.errorBodyTake"
+msgid "Something went wrong while loading this take."
+msgstr ""
+
+msgctxt "shareStatus.invalidLink"
+msgid "This share link is invalid or was removed."
+msgstr ""
+
+msgctxt "shareStatus.openApp"
+msgid "Open {app}"
+msgstr ""
+
+msgctxt "shareStatus.retry"
+msgid "Try again"
+msgstr ""
+
+msgctxt "shareAlbumPage.documentTitle"
+msgid "{title} — {artist} | {app}"
+msgstr ""
+
+msgctxt "shareAlbumPage.fallbackTitle"
+msgid "Shared album | {app}"
+msgstr ""
+
+msgctxt "sharePlaylistPage.documentTitle"
+msgid "{title} | {app}"
+msgstr ""
+
+msgctxt "sharePlaylistPage.fallbackTitle"
+msgid "Shared playlist | {app}"
+msgstr ""
+
+msgctxt "shareSongPage.documentTitle"
+msgid "{title} — {artist} | {app}"
+msgstr ""
+
+msgctxt "shareSongPage.fallbackTitle"
+msgid "Shared song | {app}"
+msgstr ""
+
+msgctxt "shareTakePage.documentTitle"
+msgid "Take {number} — {title} | {app}"
+msgstr ""
+
+msgctxt "shareTakePage.fallbackTitle"
+msgid "Shared take | {app}"
+msgstr ""
+
+msgctxt "share.nowPlaying"
+msgid "Now playing · {title} · {position} of {total}"
+msgstr ""
+
+msgctxt "share.albumSubtitle"
+msgid "{artist} · Album"
+msgstr ""
+
+msgctxt "share.albumSubtitleNoArtist"
+msgid "Album"
+msgstr ""
+
+msgctxt "share.playlistSubtitle.one"
+msgid "Playlist · {count} song"
+msgstr ""
+
+msgctxt "share.playlistSubtitle.other"
+msgid "Playlist · {count} songs"
+msgstr ""
+
+msgctxt "share.noLyrics"
+msgid "No lyrics"
+msgstr ""
+
+msgctxt "share.noAudio"
+msgid "No audio available yet."
+msgstr ""
+
+msgctxt "share.backToPlayer"
+msgid "Back to the player"
+msgstr ""
+
+msgctxt "share.songs"
+msgid "Songs"
+msgstr ""
+
+msgctxt "shareButton.copyFailedToast"
+msgid "Shared — copy the link manually, clipboard write failed"
+msgstr ""
+
+msgctxt "shareButton.copiedToast"
+msgid "Link copied to clipboard"
+msgstr ""
+
+msgctxt "shareButton.unsharedToast"
+msgid "Sharing disabled"
+msgstr ""
+
+msgctxt "shareButton.failedToast"
+msgid "Share failed"
+msgstr ""
+
+msgctxt "shareButton.fallbackTitle"
+msgid "Share"
+msgstr ""
+
+msgctxt "shareButton.songLabel"
+msgid "Share song"
+msgstr ""
+
+msgctxt "shareToggle.sharedTooltip"
+msgid "Shared: {path}"
+msgstr ""
+
+msgctxt "shareLink.copiedToast"
+msgid "Link copied"
+msgstr ""
+
+msgctxt "shareLink.copyFailedToast"
+msgid "Copy failed"
+msgstr ""
+
+msgctxt "shareDialog.title"
+msgid "Missing from the share page"
+msgstr ""
+
+msgctxt "shareDialog.intro"
+msgid "These songs have no playable take and won't appear when shared:"
+msgstr ""
+
+msgctxt "shareDialog.close"
+msgid "Got it"
+msgstr ""
+
+msgctxt "libraryShares.copyLink"
+msgid "Copy link"
+msgstr ""

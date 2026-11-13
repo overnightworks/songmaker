@@ -1,13 +1,15 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { APP_NAME } from '#lib/constants/app.ts';
+import { words } from '#lib/words/en.ts';
 import ShareStatus from './ShareStatus.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 interface ShareStatusProps {
 	kind: 'loading' | 'missing' | 'error';
-	resource: string;
+	resource: 'album' | 'playlist' | 'song' | 'take';
 	onretry?: () => void;
 }
 
@@ -30,12 +32,12 @@ describe('ShareStatus', () => {
 		const target = render({ kind: 'missing', resource: 'playlist' });
 		await tick();
 		const heading = target.querySelector('h1');
-		expect(heading?.textContent).toBe('Playlist not found');
+		expect(heading?.textContent).toBe(words['shareStatus.notFoundPlaylist']);
 		expect(document.activeElement).toBe(heading);
 		expect(target.querySelector('.status-mark.missing')).not.toBeNull();
 		const links = target.querySelectorAll('a');
 		expect(links).toHaveLength(1);
-		expect(links[0].textContent).toBe('Open Hallucinai');
+		expect(links[0].textContent).toBe(words['shareStatus.openApp']({ app: APP_NAME }));
 		expect(links[0].getAttribute('href')).toBe('/login');
 	});
 
@@ -44,10 +46,10 @@ describe('ShareStatus', () => {
 		const onretry = vi.fn();
 		const target = render({ kind: 'error', resource: 'song', onretry });
 		await tick();
-		expect(target.querySelector('h1')?.textContent).toBe('Could not load this song');
+		expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.errorSong']);
 		expect(target.querySelector('.status-mark.error')).not.toBeNull();
 		const retry = target.querySelector('button');
-		expect(retry?.textContent).toBe('Try again');
+		expect(retry?.textContent).toBe(words['shareStatus.retry']);
 		retry?.click();
 		expect(onretry).toHaveBeenCalledOnce();
 		expect(target.querySelectorAll('a')).toHaveLength(1);
