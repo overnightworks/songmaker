@@ -80,7 +80,7 @@ def test_create_lora_returns_named_voice_limit_error(
     assert response.json() == {
         "detail": "Could not create voice\n"
         "You have reached the limit of 1 voices. Delete a voice before creating another.",
-        "reason": "voice_limit",
+        "message": {"key": "voiceRefusal.limit", "values": {"limit": "1"}},
     }
 
 
@@ -1095,7 +1095,7 @@ def test_train_returns_named_training_queue_limit_error(
     assert response.json() == {
         "detail": "Training queue is full\n"
         "1 trainings are already waiting. Try again when one training starts or finishes.",
-        "reason": "training_queue_full",
+        "message": {"key": "voiceRefusal.trainingQueueFull", "values": {"waiting": "1"}},
     }
 
 

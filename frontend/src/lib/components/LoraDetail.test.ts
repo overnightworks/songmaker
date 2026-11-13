@@ -1,7 +1,16 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api/fetch.ts';
+import { words } from '#lib/words/en.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
+
+function refused(
+	status: number,
+	path: string,
+	refusal: { key: string; values: Record<string, string> }
+) {
+	return new ApiError(status, 'Sentence of the server', path, null, '', null, null, refusal);
+}
 
 const jobStore = vi.hoisted(() => {
 	let value: { job: Record<string, unknown> }[] = [];
@@ -173,7 +182,7 @@ describe('LoraDetail', () => {
 		expect(addLoraSample).not.toHaveBeenCalled();
 	});
 
-	it('keeps the server 409 sentence visible when copying a take is rejected', async () => {
+	it('shows the words of the refusal key when copying a take is rejected', async () => {
 		listOwnPlayableTakes.mockResolvedValueOnce([
 			{
 				generation_id: 'g1',
@@ -184,8 +193,13 @@ describe('LoraDetail', () => {
 				lyrics: 'A line from the take'
 			}
 		]);
-		const detail = 'LoRA already has the maximum of 20 samples';
-		addLoraSampleFromGeneration.mockRejectedValueOnce(new ApiError(409, detail, '/api/loras/l1'));
+		const sentence = words['voiceRefusal.sampleLimit']({ maximum: '20' });
+		addLoraSampleFromGeneration.mockRejectedValueOnce(
+			refused(409, '/api/loras/l1', {
+				key: 'voiceRefusal.sampleLimit',
+				values: { maximum: '20' }
+			})
+		);
 		const target = await render();
 
 		target.querySelector<HTMLButtonElement>('.own-takes-toggle')?.click();
@@ -193,9 +207,9 @@ describe('LoraDetail', () => {
 		target.querySelector<HTMLButtonElement>('.use-take-btn')?.click();
 
 		await vi.waitFor(() =>
-			expect(target.querySelector('[role="alert"]')?.textContent).toBe(detail)
+			expect(target.querySelector('[role="alert"]')?.textContent).toBe(sentence)
 		);
-		expect(addToast).toHaveBeenCalledWith(detail, 'error');
+		expect(addToast).toHaveBeenCalledWith(sentence, 'error');
 	});
 
 	it('uploads an audio file with the entered caption and lyrics', async () => {
@@ -310,10 +324,14 @@ describe('LoraDetail', () => {
 		expect(target.textContent).toContain('Training cancelled');
 	});
 
-	it('wraps the complete server queue-limit detail without truncation in a 375 px container', async () => {
-		const detail =
-			'Training queue is full\n2 trainings are already waiting. Try again when one training starts or finishes.';
-		trainLora.mockRejectedValueOnce(new ApiError(409, detail, '/api/loras/l1/train'));
+	it('wraps the complete queue-limit sentence without truncation in a 375 px container', async () => {
+		const sentence = words['voiceRefusal.trainingQueueFull']({ waiting: '2' });
+		trainLora.mockRejectedValueOnce(
+			refused(409, '/api/loras/l1/train', {
+				key: 'voiceRefusal.trainingQueueFull',
+				values: { waiting: '2' }
+			})
+		);
 		const target = await render(
 			lora({
 				status: 'failed',
@@ -329,7 +347,7 @@ describe('LoraDetail', () => {
 		target.querySelector<HTMLButtonElement>('.train-btn')?.click();
 
 		await vi.waitFor(() =>
-			expect(target.querySelector('.training-error')?.textContent).toBe(detail)
+			expect(target.querySelector('.training-error')?.textContent).toBe(sentence)
 		);
 		target.style.width = '375px';
 		const trainingError = target.querySelector<HTMLElement>('.training-error');

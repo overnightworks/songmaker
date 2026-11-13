@@ -5,7 +5,8 @@
 		UserLoraItem,
 		UserLoraSampleItem
 	} from '#lib/api/types.ts';
-	import { addLoraSample, patchLoraSample, deleteLoraSample, ApiError } from '#lib/api/client.ts';
+	import { addLoraSample, patchLoraSample, deleteLoraSample } from '#lib/api/client.ts';
+	import { describeFailure } from '#lib/api/fetch.ts';
 	import { cancelJob, fetchJob } from '#lib/api/jobs.ts';
 	import { addLoraSampleFromGeneration, listOwnPlayableTakes } from '#lib/api/loras.ts';
 	import { activeJobs, isActiveJobStatus, removeJob, trackJob } from '#lib/stores/jobs.ts';
@@ -190,8 +191,7 @@
 			if (fileInputEl) fileInputEl.value = '';
 			addToast('Sample added', 'success');
 		} catch (e) {
-			const message =
-				e instanceof ApiError ? e.detail || LORA_SAMPLE_UPLOAD_FAILED : LORA_SAMPLE_UPLOAD_FAILED;
+			const message = describeFailure(e, LORA_SAMPLE_UPLOAD_FAILED);
 			sampleError = message;
 			addToast(message, 'error');
 		} finally {
@@ -208,8 +208,7 @@
 		try {
 			ownTakes = await listOwnPlayableTakes();
 		} catch (e) {
-			const message =
-				e instanceof ApiError ? e.detail || LORA_OWN_TAKES_LOAD_FAILED : LORA_OWN_TAKES_LOAD_FAILED;
+			const message = describeFailure(e, LORA_OWN_TAKES_LOAD_FAILED);
 			sampleError = message;
 			addToast(message, 'error');
 		} finally {
@@ -225,8 +224,7 @@
 			await refreshLora(lora.id);
 			addToast('Sample added', 'success');
 		} catch (e) {
-			const message =
-				e instanceof ApiError ? e.detail || LORA_SAMPLE_COPY_FAILED : LORA_SAMPLE_COPY_FAILED;
+			const message = describeFailure(e, LORA_SAMPLE_COPY_FAILED);
 			sampleError = message;
 			addToast(message, 'error');
 		} finally {
@@ -239,7 +237,7 @@
 			await patchLoraSample(lora.id, sample.id, { caption, lyrics });
 			await refreshLora(lora.id);
 		} catch (e) {
-			addToast(e instanceof ApiError ? e.detail || 'Save failed' : 'Save failed', 'error');
+			addToast(describeFailure(e, 'Save failed'), 'error');
 		}
 	}
 
@@ -249,7 +247,7 @@
 			await deleteLoraSample(lora.id, sample.id);
 			await refreshLora(lora.id);
 		} catch (e) {
-			addToast(e instanceof ApiError ? e.detail || 'Delete failed' : 'Delete failed', 'error');
+			addToast(describeFailure(e, 'Delete failed'), 'error');
 		}
 	}
 
@@ -265,8 +263,7 @@
 			}
 			addToast(LORA_TRAINING_QUEUED_TOAST, 'success');
 		} catch (e) {
-			const message =
-				e instanceof ApiError ? e.detail || LORA_TRAINING_START_FAILED : LORA_TRAINING_START_FAILED;
+			const message = describeFailure(e, LORA_TRAINING_START_FAILED);
 			trainingError = message;
 			addToast(message, 'error');
 		} finally {
@@ -283,12 +280,7 @@
 			cancelledTrainingJob = cancelled;
 			removeJob(job.id);
 		} catch (e) {
-			addToast(
-				e instanceof ApiError
-					? e.detail || LORA_TRAINING_CANCEL_FAILED
-					: LORA_TRAINING_CANCEL_FAILED,
-				'error'
-			);
+			addToast(describeFailure(e, LORA_TRAINING_CANCEL_FAILED), 'error');
 		} finally {
 			cancellingTraining = false;
 		}
