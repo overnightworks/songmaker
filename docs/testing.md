@@ -263,12 +263,14 @@ stack. It starts the test-only worker at
 `tests/support/fake_training_worker.py`; the Library E2E continues to use
 only `docker/docker-compose.test.yml`.
 
-Run the proof as one capped command through `probe-run`; the script starts the
-isolated stack under its own Compose project name and on a free loopback port,
-runs `e2e/voices.spec.ts` against it and tears the stack down:
+Run the script directly, not through `probe-run`. It builds the images, starts the
+isolated stack under its own Compose project name and on a free loopback port and
+waits until it is healthy; only the drive, `e2e/voices.spec.ts`, runs under
+`probe-run`, so a long build does not eat the drive's cap. Its trap tears the stack
+down on every exit:
 
 ```bash
-probe-run -k 120 1700 scripts/voices_e2e_probe.sh
+scripts/voices_e2e_probe.sh
 ```
 
 The fake worker uses the same internal worker registration, Redis heartbeat,

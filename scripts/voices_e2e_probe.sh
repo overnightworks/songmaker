@@ -3,13 +3,13 @@
 # isolated stack, then removes the stack. The stack is the CI one plus the
 # test-only fake training worker; every value below is test-only.
 #
-# Run it only through probe-run, as one capped command:
-#   probe-run -k 120 1700 scripts/voices_e2e_probe.sh
-# CAP 1700 + K 120 = 1820, within probe-run's 1830. K covers the
-# teardown (`--profile gpu down -v --remove-orphans --rmi local`), measured at
-# about 2 s without the image removal; 120 s leaves room for removing the
-# probe's images. The image build runs inside the capped command: the script has
-# no split between building and driving.
+# Run it directly, not through probe-run: the script builds the images, starts
+# the stack and waits until it is healthy on its own time, then runs only the
+# drive (the Playwright proof) under `probe-run -k 30 1700`. CAP 1700 + K 30 =
+# 1730, within probe-run's 1830; K is the time the drive gets to stop after TERM.
+# The teardown (`--profile gpu down -v --remove-orphans --rmi local`) runs in
+# this script's trap after the drive, outside the cap; it was measured at about
+# 2 s without the image removal.
 #
 # Each run takes its own Compose project name and a free loopback port, so
 # two runs at once do not share a stack.
@@ -55,8 +55,14 @@ teardown() {
     rm -rf "$secrets_dir"
     rm -f "$secret_file" "$gateway_key_file"
 }
+drive_pid=""
+# Ending the drive first lets the EXIT trap tear the stack down at once.
+stop_drive() {
+    [[ -z "$drive_pid" ]] || kill -TERM "$drive_pid" 2>/dev/null || true
+    exit 143
+}
 trap teardown EXIT
-trap 'teardown; exit 143' TERM
+trap stop_drive TERM
 
 # Two steps: the stack has no restart policy, so the apps start only once the
 # stores are healthy, and the fake worker only once web is.
@@ -64,4 +70,6 @@ trap 'teardown; exit 143' TERM
 "${compose[@]}" up -d --build --wait songmaker-web songmaker-music-worker
 "${compose[@]}" up -d --build --wait songmaker-voices-e2e-worker
 
-pnpm --dir frontend exec playwright test e2e/voices.spec.ts
+probe-run -k 30 1700 pnpm --dir frontend exec playwright test e2e/voices.spec.ts &
+drive_pid=$!
+wait "$drive_pid"

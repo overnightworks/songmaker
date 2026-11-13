@@ -8,15 +8,15 @@
 # ready, its storage path holding the adapter's files), and nothing left in the
 # worker's local output root.
 #
-# Usage, only through probe-run, as one capped command:
-#   probe-run -k 120 1700 \
-#       scripts/gpu_job_kinds_probe.sh <deploy checkout>/vendor/acestep/checkpoints
-# CAP 1700 + K 120 = 1820, within probe-run's 1830. K covers the
-# teardown (`--profile gpu down -v --remove-orphans --rmi local`), measured at
-# about 2 s on the voices stack without the image removal; 120 s leaves room
-# for a worker that still holds the GPU and for removing the probe's images. The image
-# build runs inside the capped command: the script has no split between building and
-# driving.
+# Usage, run directly, not through probe-run:
+#   scripts/gpu_job_kinds_probe.sh <deploy checkout>/vendor/acestep/checkpoints
+# The script builds the images, starts the stack and waits until it is healthy on
+# its own time, then runs only the drive under `probe-run -k 30 1700`. CAP 1700 +
+# K 30 = 1730, within probe-run's 1830; K is the time the drive gets to stop after
+# TERM. The teardown (`--profile gpu down -v --remove-orphans --rmi local`) runs
+# in this script's trap after the drive, outside the cap; it was measured at about
+# 2 s on the voices stack without the image removal, and a worker that still holds
+# the GPU or the removal of the probe's images adds to it.
 #
 # Each run takes its own Compose project name and a free loopback port; the one GPU
 # still admits one run, because the script refuses while any other project's worker runs.
@@ -100,9 +100,11 @@ export LORA_TRAINING_EPOCHS="$LORA_EPOCHS"
 export LORA_TRAINING_SAVE_EVERY_N_EPOCHS="$LORA_EPOCHS"
 
 cd "$PROJECT_ROOT"
-compose=(docker compose --env-file "$work_dir/empty.env"
-    --project-directory . -f docker/docker-compose.test.yml
-    -f "$work_dir/checkpoints-readonly.yml")
+compose() {
+    docker compose --env-file "$work_dir/empty.env" \
+        --project-directory . -f docker/docker-compose.test.yml \
+        -f "$work_dir/checkpoints-readonly.yml" "$@"
+}
 base="http://127.0.0.1:$PROBE_PORT"
 cookie=""
 
@@ -112,7 +114,7 @@ teardown() {
     # The CI override puts the GPU and music services in the gpu profile; without
     # the profile, down leaves them running. The images it built go too: the
     # worker's alone is about 9 GB.
-    "${compose[@]}" --profile gpu down -v --remove-orphans --rmi local || status=1
+    compose --profile gpu down -v --remove-orphans --rmi local || status=1
     rm -rf "$work_dir"
     local left
     left="$(docker ps -a -q --filter "label=com.docker.compose.project=$PROJECT")$(
@@ -125,8 +127,14 @@ teardown() {
     fi
     exit "$status"
 }
+drive_pid=""
+# Ending the drive first lets the EXIT trap tear the stack down at once.
+stop_drive() {
+    [[ -z "$drive_pid" ]] || kill -TERM "$drive_pid" 2>/dev/null || true
+    exit 143
+}
 trap teardown EXIT
-trap 'exit 143' TERM
+trap stop_drive TERM
 
 api() { # api METHOD PATH [curl args...]; the Origin passes the app's same-origin CSRF check
     local method="$1" path="$2"
@@ -165,7 +173,7 @@ newest_take() { # newest_take SONG_ID -> JSON of the song's newest generation
 
 audio_file_exists() { # audio_file_exists RELATIVE_PATH: a non-empty file in the audio tree
     local relative="$1"
-    "${compose[@]}" exec -T songmaker-web sh -c 'test -s "$1"' _ "/app/data/audio/$relative"
+    compose exec -T songmaker-web sh -c 'test -s "$1"' _ "/app/data/audio/$relative"
 }
 
 prove_take() { # prove_take LABEL TAKE_JSON: an mp3 and a wav served, the raw.wav beside them
@@ -189,90 +197,98 @@ generate_kind() { # generate_kind LABEL PATH JSON SONG_ID
 }
 
 # Every process migrates itself in init_db, as in e2e.yml: the stores first, then the apps.
-"${compose[@]}" --profile gpu up -d --wait postgres redis
-"${compose[@]}" --profile gpu up -d --build --wait \
+compose --profile gpu up -d --wait postgres redis
+compose --profile gpu up -d --build --wait \
     songmaker-web songmaker-music-worker "$WORKER_SERVICE"
 
-echo "--- checkpoints read-only ---"
-if "${compose[@]}" exec -T "$WORKER_SERVICE" sh -c 'touch /opt/acestep/checkpoints/.gpu-probe-write' 2>/dev/null; then
-    fail "the worker could write into the checkpoint mount"
-fi
-echo "PROOF checkpoints: the worker cannot write into /opt/acestep/checkpoints"
+drive() {
+    echo "--- checkpoints read-only ---"
+    if compose exec -T "$WORKER_SERVICE" sh -c 'touch /opt/acestep/checkpoints/.gpu-probe-write' 2>/dev/null; then
+        fail "the worker could write into the checkpoint mount"
+    fi
+    echo "PROOF checkpoints: the worker cannot write into /opt/acestep/checkpoints"
 
-# The stack has no admin bootstrap: the seeding helper opens a database session
-# for a throwaway admin, signed as the app signs it.
-seeded="$("${compose[@]}" exec -T \
-    -e 'SEED_SESSIONS_REQUEST={"seed":[{"username":"gpu-probe-admin","role":"admin"}]}' \
-    songmaker-web /app/.venv/bin/python - < frontend/e2e/support/seed_sessions.py | tail -n 1)"
-cookie="$(jq -r '.[0] | "\(.session_cookie_name)=\(.session_cookie_value)"' <<<"$seeded")"
-# A fresh stack activates only songmaker's default model; the probe takes what it offers.
-model="$(api GET /api/settings/models | jq -r 'first.id // empty')"
-[[ -n "$model" ]] || fail "the stack offers no active model"
+    # The stack has no admin bootstrap: the seeding helper opens a database session
+    # for a throwaway admin, signed as the app signs it.
+    seeded="$(compose exec -T \
+        -e 'SEED_SESSIONS_REQUEST={"seed":[{"username":"gpu-probe-admin","role":"admin"}]}' \
+        songmaker-web /app/.venv/bin/python - < frontend/e2e/support/seed_sessions.py | tail -n 1)"
+    cookie="$(jq -r '.[0] | "\(.session_cookie_name)=\(.session_cookie_value)"' <<<"$seeded")"
+    # A fresh stack activates only songmaker's default model; the probe takes what it offers.
+    model="$(api GET /api/settings/models | jq -r 'first.id // empty')"
+    [[ -n "$model" ]] || fail "the stack offers no active model"
 
-album="$(api_json POST /api/albums '{"title":"gpu-probe album","artist":"gpu-probe"}' | jq -r .id)"
-song_body="$(jq -nc --arg album "$album" --argjson seconds "$TAKE_SECONDS" '{
-    title: "gpu-probe song", album_id: $album, audio_duration: $seconds,
-    lyrics: "[verse]\nla la la la\nla la la la", prompt: "calm piano, slow"}')"
-song="$(api_json POST /api/songs "$song_body" | jq -r .id)"
-generate_body="$(jq -nc --arg model "$model" '{count: 1, model: $model}')"
+    album="$(api_json POST /api/albums '{"title":"gpu-probe album","artist":"gpu-probe"}' | jq -r .id)"
+    song_body="$(jq -nc --arg album "$album" --argjson seconds "$TAKE_SECONDS" '{
+        title: "gpu-probe song", album_id: $album, audio_duration: $seconds,
+        lyrics: "[verse]\nla la la la\nla la la la", prompt: "calm piano, slow"}')"
+    song="$(api_json POST /api/songs "$song_body" | jq -r .id)"
+    generate_body="$(jq -nc --arg model "$model" '{count: 1, model: $model}')"
 
-# 1. Generation
-generate_kind generation "/api/songs/$song/generate" "$generate_body" "$song"
-source_take="$(newest_take "$song")"
-source_id="$(jq -r .id <<<"$source_take")"
+    # 1. Generation
+    generate_kind generation "/api/songs/$song/generate" "$generate_body" "$song"
+    source_take="$(newest_take "$song")"
+    source_id="$(jq -r .id <<<"$source_take")"
 
-# 2. Reference: the first take, uploaded as the song's reference recording
-api GET "/audio/$(jq -r .wav_path <<<"$source_take")" -o "$work_dir/reference.wav"
-reference="$(api POST /api/references -F "file=@$work_dir/reference.wav;filename=reference.wav" | jq -r .id)"
-api_json PUT "/api/songs/$song" "$(jq -nc --arg id "$reference" '{reference_recording_id: $id}')" > /dev/null
-generate_kind reference "/api/songs/$song/generate" "$generate_body" "$song"
-[[ "$(newest_take "$song" | jq -r '.reference.id // empty')" == "$reference" ]] \
-    || fail "reference: the new take does not link the uploaded reference"
-echo "PROOF reference: the new take links reference $reference"
+    # 2. Reference: the first take, uploaded as the song's reference recording
+    api GET "/audio/$(jq -r .wav_path <<<"$source_take")" -o "$work_dir/reference.wav"
+    reference="$(api POST /api/references -F "file=@$work_dir/reference.wav;filename=reference.wav" | jq -r .id)"
+    api_json PUT "/api/songs/$song" "$(jq -nc --arg id "$reference" '{reference_recording_id: $id}')" > /dev/null
+    generate_kind reference "/api/songs/$song/generate" "$generate_body" "$song"
+    [[ "$(newest_take "$song" | jq -r '.reference.id // empty')" == "$reference" ]] \
+        || fail "reference: the new take does not link the uploaded reference"
+    echo "PROOF reference: the new take links reference $reference"
 
-# 3. Repaint the middle of the first take
-repaint_body="$(jq -nc --arg src "$source_id" --arg model "$model" '{
-    src_generation_id: $src, repainting_start: 0.3, repainting_end: 0.6, count: 1, model: $model}')"
-generate_kind repaint "/api/generations/$source_id/repaint" "$repaint_body" "$song"
+    # 3. Repaint the middle of the first take
+    repaint_body="$(jq -nc --arg src "$source_id" --arg model "$model" '{
+        src_generation_id: $src, repainting_start: 0.3, repainting_end: 0.6, count: 1, model: $model}')"
+    generate_kind repaint "/api/generations/$source_id/repaint" "$repaint_body" "$song"
 
-# 4. Cover of the first take
-cover_body="$(jq -nc --arg src "$source_id" --arg model "$model" '{
-    src_generation_id: $src, count: 1, model: $model}')"
-generate_kind cover "/api/generations/$source_id/cover" "$cover_body" "$song"
+    # 4. Cover of the first take
+    cover_body="$(jq -nc --arg src "$source_id" --arg model "$model" '{
+        src_generation_id: $src, count: 1, model: $model}')"
+    generate_kind cover "/api/generations/$source_id/cover" "$cover_body" "$song"
 
-# 5. LoRA training on three of the takes, then the adopted adapter
-voice="$(api_json POST /api/loras '{"name":"gpu-probe voice"}' | jq -r .id)"
-for take_id in $(api GET "/api/songs/$song" | jq -r '.generations | sort_by(.created_at) | .[:3][].id'); do
-    api_json POST "/api/loras/$voice/samples/from-generation" \
-        "$(jq -nc --arg id "$take_id" '{generation_id: $id}')" > /dev/null
-done
-api POST "/api/loras/$voice/train" > /dev/null
-lora_deadline=$((SECONDS + LORA_TIMEOUT_SECONDS))
-while ((SECONDS < lora_deadline)); do
-    lora="$(api GET "/api/loras/$voice")"
-    status="$(jq -r .status <<<"$lora")"
-    [[ "$status" == ready ]] && break
-    [[ "$status" == failed ]] && fail "lora: training failed: $(jq -c '{error}' <<<"$lora")"
-    sleep 10
-done
-[[ "$(jq -r .status <<<"$lora")" == ready ]] || fail "lora: still $status after ${LORA_TIMEOUT_SECONDS}s"
-# A trained adapter is adopted as its storage path (jobs/lora_training.py, _mark_lora_training_complete).
-storage="$(jq -r '.storage_path // empty' <<<"$lora")"
-[[ -n "$storage" ]] || fail "lora: ready without a storage path"
-"${compose[@]}" exec -T songmaker-web sh -c 'test -n "$(ls -A "$1")"' _ "/app/data/audio/$storage" \
-    || fail "lora: no adapter files under $storage"
-echo "PROOF lora: voice $voice ready with its adapter adopted ($storage)"
+    # 5. LoRA training on three of the takes, then the adopted adapter
+    voice="$(api_json POST /api/loras '{"name":"gpu-probe voice"}' | jq -r .id)"
+    for take_id in $(api GET "/api/songs/$song" | jq -r '.generations | sort_by(.created_at) | .[:3][].id'); do
+        api_json POST "/api/loras/$voice/samples/from-generation" \
+            "$(jq -nc --arg id "$take_id" '{generation_id: $id}')" > /dev/null
+    done
+    api POST "/api/loras/$voice/train" > /dev/null
+    lora_deadline=$((SECONDS + LORA_TIMEOUT_SECONDS))
+    while ((SECONDS < lora_deadline)); do
+        lora="$(api GET "/api/loras/$voice")"
+        status="$(jq -r .status <<<"$lora")"
+        [[ "$status" == ready ]] && break
+        [[ "$status" == failed ]] && fail "lora: training failed: $(jq -c '{error}' <<<"$lora")"
+        sleep 10
+    done
+    [[ "$(jq -r .status <<<"$lora")" == ready ]] || fail "lora: still $status after ${LORA_TIMEOUT_SECONDS}s"
+    # A trained adapter is adopted as its storage path (jobs/lora_training.py, _mark_lora_training_complete).
+    storage="$(jq -r '.storage_path // empty' <<<"$lora")"
+    [[ -n "$storage" ]] || fail "lora: ready without a storage path"
+    compose exec -T songmaker-web sh -c 'test -n "$(ls -A "$1")"' _ "/app/data/audio/$storage" \
+        || fail "lora: no adapter files under $storage"
+    echo "PROOF lora: voice $voice ready with its adapter adopted ($storage)"
 
-echo "--- nothing on the shared volume from the worker ---"
-# A missing audio volume or a failed listing fails here instead of reading as no take.
-"${compose[@]}" exec -T songmaker-web sh -c \
-    'set -eu; test -d /app/data/audio; test -d "$1" || exit 0; listing=$(ls -A "$1"); case "$listing" in *.wav*) exit 1 ;; *) ;; esac' \
-    _ /app/data/audio/worker_output \
-    || fail "generation: the shared audio volume's worker_output holds a take or cannot be read"
-echo "PROOF output: no take under the shared audio volume's worker_output"
-# An unset root, a missing one or a failed listing fails here instead of reading as empty.
-"${compose[@]}" exec -T "$WORKER_SERVICE" sh -c \
-    'set -eu; test -d "$AUDIO_OUTPUT_DIR"; listing=$(ls -A "$AUDIO_OUTPUT_DIR"); test -z "$listing"' \
-    || fail "generation: the worker's local output root is not readable as empty"
-echo "PROOF output: the worker's local output root is empty"
-echo "PROOF all five job kinds held"
+    echo "--- nothing on the shared volume from the worker ---"
+    # A missing audio volume or a failed listing fails here instead of reading as no take.
+    compose exec -T songmaker-web sh -c \
+        'set -eu; test -d /app/data/audio; test -d "$1" || exit 0; listing=$(ls -A "$1"); case "$listing" in *.wav*) exit 1 ;; *) ;; esac' \
+        _ /app/data/audio/worker_output \
+        || fail "generation: the shared audio volume's worker_output holds a take or cannot be read"
+    echo "PROOF output: no take under the shared audio volume's worker_output"
+    # An unset root, a missing one or a failed listing fails here instead of reading as empty.
+    compose exec -T "$WORKER_SERVICE" sh -c \
+        'set -eu; test -d "$AUDIO_OUTPUT_DIR"; listing=$(ls -A "$AUDIO_OUTPUT_DIR"); test -z "$listing"' \
+        || fail "generation: the worker's local output root is not readable as empty"
+    echo "PROOF output: the worker's local output root is empty"
+    echo "PROOF all five job kinds held"
+}
+
+export base work_dir PROJECT WORKER_SERVICE TAKE_SECONDS JOB_TIMEOUT_SECONDS LORA_TIMEOUT_SECONDS
+export -f compose api api_json fail wait_for_job newest_take audio_file_exists prove_take generate_kind drive
+probe-run -k 30 1700 bash -c 'set -euo pipefail; drive' &
+drive_pid=$!
+wait "$drive_pid"
