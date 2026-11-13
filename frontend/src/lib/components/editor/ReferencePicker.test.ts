@@ -14,6 +14,7 @@ vi.mock('#lib/api/references.ts', async (importActual) => ({
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { makeGeneration } from '#lib/test-utils/factories.ts';
 import { listAnswer, referenceRecording } from '#lib/test-utils/references.ts';
+import { words } from '#lib/words/en.ts';
 import ReferencePicker from './ReferencePicker.svelte';
 
 const onchange = vi.fn();
@@ -96,7 +97,7 @@ afterEach(async () => {
 describe('reference picker', () => {
 	it('shows None closed when nothing is chosen and the chosen name when one is', async () => {
 		await mountPicker();
-		expect(target.querySelector('.trigger')?.textContent).toContain('None');
+		expect(target.querySelector('.trigger')?.textContent).toContain(words['referencePicker.none']);
 		await unmount(mounted as object);
 		await mountPicker({ id: 'a', filename: 'storytime-drums.wav' });
 		expect(target.querySelector('.trigger')?.textContent).toContain('storytime-drums.wav');
@@ -111,12 +112,12 @@ describe('reference picker', () => {
 			item.textContent?.replace(/\s+/g, ' ').trim()
 		);
 		expect(labels).toEqual([
-			'None',
+			words['referencePicker.none'],
 			'newest.wav 0:42',
-			'older.mp3 ⏳ 28d 0:31',
+			`older.mp3 ⏳ ${words['referenceExpiry.daysLeft'](28)} 0:31`,
 			'oldest.flac',
-			'Upload audio',
-			'All references'
+			words['referencePicker.upload'],
+			words['referencePicker.all']
 		]);
 	});
 
@@ -127,8 +128,12 @@ describe('reference picker', () => {
 		const scrolling = Array.from(target.querySelectorAll('.choices > li')).map((item) =>
 			item.textContent?.replace(/\s+/g, ' ').trim()
 		);
-		expect(scrolling).toEqual(['newest.wav 0:42', 'older.mp3 ⏳ 28d 0:31', 'oldest.flac']);
-		expect(choice('None').closest('.choices')).toBeNull();
+		expect(scrolling).toEqual([
+			'newest.wav 0:42',
+			`older.mp3 ⏳ ${words['referenceExpiry.daysLeft'](28)} 0:31`,
+			'oldest.flac'
+		]);
+		expect(choice(words['referencePicker.none']).closest('.choices')).toBeNull();
 		expect(target.querySelector('input[type="file"]')?.closest('.choices')).toBeNull();
 		expect(target.querySelector('a[href="/settings/references"]')?.closest('.choices')).toBeNull();
 	});
@@ -193,7 +198,7 @@ describe('reference picker', () => {
 		await mountPicker({ id: 'a', filename: 'newest.wav' });
 		await openPicker();
 
-		await afterAction(() => choice('None').click());
+		await afterAction(() => choice(words['referencePicker.none']).click());
 
 		expect(onchange).toHaveBeenCalledWith(null);
 	});
@@ -220,19 +225,25 @@ describe('reference picker', () => {
 		await afterAction(() => previewButton('older.mp3').click());
 
 		expect(audioPlayer.transport).toBe('paused');
-		expect(previewButton('older.mp3').getAttribute('aria-label')).toBe('Pause older.mp3');
+		expect(previewButton('older.mp3').getAttribute('aria-label')).toBe(
+			words['referencePicker.pause']({ name: 'older.mp3' })
+		);
 	});
 
 	it('stops a preview when the picker closes', async () => {
 		await mountPicker();
 		await openPicker();
 		await afterAction(() => previewButton('newest.wav').click());
-		expect(previewButton('newest.wav').getAttribute('aria-label')).toBe('Pause newest.wav');
+		expect(previewButton('newest.wav').getAttribute('aria-label')).toBe(
+			words['referencePicker.pause']({ name: 'newest.wav' })
+		);
 
 		await afterAction(() => target.querySelector<HTMLButtonElement>('.trigger')?.click());
 		await openPicker();
 
-		expect(previewButton('newest.wav').getAttribute('aria-label')).toBe('Play newest.wav');
+		expect(previewButton('newest.wav').getAttribute('aria-label')).toBe(
+			words['referencePicker.play']({ name: 'newest.wav' })
+		);
 	});
 
 	it('uploads from the picker, sets the draft and shows the file in the list', async () => {
@@ -273,7 +284,7 @@ describe('reference picker', () => {
 		{
 			failure: 'with no network answer',
 			error: new NetworkError('/api/references', new TypeError('Failed to fetch')),
-			shown: 'Upload failed'
+			shown: words['referencePicker.uploadError']
 		},
 		{
 			failure: 'over the storage quota',
@@ -298,7 +309,7 @@ describe('reference picker', () => {
 				).toEqual([shown])
 			);
 			const alert = target.querySelector('[role="alert"]') as HTMLElement;
-			expect(alert.previousElementSibling?.textContent).toContain('Upload audio');
+			expect(alert.previousElementSibling?.textContent).toContain(words['referencePicker.upload']);
 			expect(onchange).not.toHaveBeenCalled();
 		}
 	);
@@ -312,7 +323,7 @@ describe('reference picker', () => {
 		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).not.toBeNull());
 		expect(target.querySelector('input[type="file"]')).not.toBeNull();
 		expect(target.querySelector('a[href="/settings/references"]')).not.toBeNull();
-		await afterAction(() => choice('None').click());
+		await afterAction(() => choice(words['referencePicker.none']).click());
 		expect(onchange).toHaveBeenCalledWith(null);
 
 		await afterAction(() => target.querySelector<HTMLButtonElement>('.failure button')?.click());
@@ -326,7 +337,7 @@ describe('reference picker', () => {
 		await openPicker();
 
 		expect(target.querySelector('a[href="/settings/references"]')?.textContent).toContain(
-			'All references'
+			words['referencePicker.all']
 		);
 	});
 });

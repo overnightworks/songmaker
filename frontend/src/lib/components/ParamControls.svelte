@@ -17,7 +17,8 @@
 	import { ensureCompactUiStyles } from '#lib/styles/compact-ui.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import { addToast } from '#lib/stores/toast.ts';
-	import { RECIPE_ENGINE_RESET_TITLE, RECIPE_RESET_GLYPH } from '#lib/constants/recipe.ts';
+	import { RECIPE_RESET_GLYPH } from '#lib/constants/recipe.ts';
+	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 
 	interface Props {
 		values: VersionGenerationParams;
@@ -86,8 +87,6 @@
 
 	const defaultsLoaded = $derived(Object.keys(placeholders).length > 0);
 
-	const DEFAULT_MISSING_PREFIX = 'Default missing for';
-
 	// Once defaultsLoaded is true, every rendered field is either hidden by
 	// hiddenParams or must have a resolved default. A visible field with no
 	// default at that point means the loaded defaults are incomplete for the
@@ -97,7 +96,7 @@
 	function resolvedPlaceholder(key: keyof VersionGenerationParams): number | string | boolean {
 		const value = placeholders[key];
 		if (value === undefined || value === null) {
-			throw new Error(`${DEFAULT_MISSING_PREFIX} ${key}`);
+			throw new Error(fieldErrorMessage(key));
 		}
 		return value;
 	}
@@ -109,7 +108,7 @@
 	}
 
 	function fieldErrorMessage(key: keyof VersionGenerationParams): string {
-		return `${DEFAULT_MISSING_PREFIX} ${key}`;
+		return pageText('paramField.defaultMissing', { key });
 	}
 
 	function reportFieldError(key: keyof VersionGenerationParams, error: unknown): void {
@@ -127,17 +126,17 @@
 				type="button"
 				class="field-reset"
 				data-field-reset
-				title={RECIPE_ENGINE_RESET_TITLE}
-				aria-label={`${label}: ${RECIPE_ENGINE_RESET_TITLE}`}
+				title={pageText('paramField.resetTitle')}
+				aria-label={pageText('paramField.resetLabel', { field: label })}
 				onclick={() => onresetfield?.(key)}>{RECIPE_RESET_GLYPH}</button
 			>
 		{/if}</span
 	>
 {/snippet}
 
-{#snippet fieldError(f: { key: keyof VersionGenerationParams; label: string })}
+{#snippet fieldError(f: { key: keyof VersionGenerationParams; labelKey: TextKey })}
 	<div class="setting param-error" title={tooltip(f.key)}>
-		<span>{f.label}</span>
+		<span>{pageText(f.labelKey)}</span>
 		<p class="param-error-text">{fieldErrorMessage(f.key)}</p>
 	</div>
 {/snippet}
@@ -145,7 +144,7 @@
 {#snippet numberField(f: NumberParamField)}
 	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
 		<div class="setting" title={tooltip(f.key)}>
-			{@render fieldHead(f.key, f.label)}
+			{@render fieldHead(f.key, pageText(f.labelKey))}
 			<input
 				id={fieldId(f.key)}
 				type="number"
@@ -167,7 +166,7 @@
 {#snippet selectField(f: SelectParamField)}
 	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
 		<div class="setting" title={tooltip(f.key)}>
-			{@render fieldHead(f.key, f.label)}
+			{@render fieldHead(f.key, pageText(f.labelKey))}
 			<select
 				id={fieldId(f.key)}
 				value={values[f.key] ?? ''}
@@ -175,7 +174,11 @@
 				onchange={(e) => setParam(f.key, e.currentTarget.value || undefined)}
 			>
 				<option value=""
-					>{defaultsLoaded ? `default (${resolvedPlaceholder(f.key)})` : 'default'}</option
+					>{defaultsLoaded
+						? pageText('paramField.defaultOptionValue', {
+								value: String(resolvedPlaceholder(f.key))
+							})
+						: pageText('paramField.defaultOption')}</option
 				>
 				{#each f.options as opt (opt)}
 					<option value={opt}>{opt}</option>
@@ -190,12 +193,12 @@
 
 {#snippet textField(f: TextParamField)}
 	<div class="setting full-width" title={tooltip(f.key)}>
-		{@render fieldHead(f.key, f.label)}
+		{@render fieldHead(f.key, pageText(f.labelKey))}
 		<input
 			id={fieldId(f.key)}
 			type="text"
 			value={(values[f.key] as string | null | undefined) ?? ''}
-			placeholder={f.placeholder}
+			placeholder={pageText(f.placeholderKey)}
 			title={tooltip(f.key)}
 			oninput={(e) => setParam(f.key, e.currentTarget.value || undefined)}
 		/>
@@ -204,7 +207,7 @@
 
 {#snippet boolField(f: BoolParamField)}
 	<div class="setting toggle" title={tooltip(f.key)}>
-		{@render fieldHead(f.key, f.label)}
+		{@render fieldHead(f.key, pageText(f.labelKey))}
 		<input
 			id={fieldId(f.key)}
 			type="checkbox"
@@ -220,7 +223,7 @@
 
 <div class="param-controls" class:compact>
 	<details class="param-section" open>
-		<summary class="section-label">DiT (Sound)</summary>
+		<summary class="section-label">{pageText('paramField.sectionDit')}</summary>
 		<div class="settings-grid">
 			{#each ditNumbers as f (f.key)}
 				{@render numberField(f)}
@@ -235,7 +238,7 @@
 	</details>
 
 	<details class="param-section" open>
-		<summary class="section-label">LM (Lyrics)</summary>
+		<summary class="section-label">{pageText('paramField.sectionLm')}</summary>
 		<div class="settings-grid">
 			{#each lmNumbers as f (f.key)}
 				{@render numberField(f)}
