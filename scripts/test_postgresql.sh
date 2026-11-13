@@ -9,7 +9,7 @@
 # tests/support/postgresql.py. A second container runs Compose's Redis image pin the same
 # way (loopback port, no persistence, no volume) and is named to the tests by TEST_REDIS_URL;
 # each xdist worker selects its own database on it (tests/support/redis_server.py).
-# The run takes no shared probe-stack lock (operator ruling in #2280); it checks the load
+# The run does not use probe-run; it checks the load
 # and caps pytest instead:
 #   setpriv --pdeathsig TERM timeout -k 30 1200
 # CAP 1200 s holds a targeted run; K 30 s bounds pytest's exit after TERM.
