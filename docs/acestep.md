@@ -4,7 +4,7 @@ Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored
 
 ## How Songmaker Uses ACE-Step
 
-ACE-Step runs in dedicated `acestep-worker-N` peer containers, one per GPU. Each
+ACE-Step runs in the platform Deployment `acestep-worker` (`apps/songmaker/acestep-worker.yaml` in the platform repository); the test stack runs one `acestep-worker-N` per GPU. Each
 worker hosts a FastAPI wrapper (`src/acestep_worker/wrapper.py`) that manages
 an LRU cache of loaded models and exposes:
 
@@ -152,7 +152,7 @@ The other services are single-stage images (`songmaker-music-worker`: server ext
 
 **Layers that repeat:** the release builds all four images with fixed file times, so a layer whose inputs did not change keeps its digest from one release to the next and a roll pulls only the layers that changed. The price is that every image's creation date reads 1970-01-01, so a filter or sort by an image's age treats a released image as old. A layer repeats only while it holds no logs, caches or wall-clock data: a `RUN` that writes a timestamp, a log or a package cache into its layer changes that layer's digest on every build.
 
-**Who gets the GPU:** only `songmaker-acestep-worker-N` (`runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES` pinned to its `GPU_ID`). `songmaker-scoring-worker` is given no GPU device and defaults to `SCORING_DEVICE=cpu`, so it carries CPU torch and never touches VRAM. Generation VRAM therefore has exactly one owner and needs no cross-container arbitration. Setting `SCORING_DEVICE=cuda` would break that assumption: the scoring worker would additionally need GPU access in its platform manifest and a release/verify protocol against the acestep-worker, neither of which exists today.
+**Who gets the GPU:** only the platform's `acestep-worker` Deployment (`runtimeClassName: nvidia`; `songmaker-acestep-worker-N` is the test stack's name for it). `songmaker-scoring-worker` is given no GPU device and defaults to `SCORING_DEVICE=cpu`, so it carries CPU torch and never touches VRAM. Generation VRAM therefore has exactly one owner and needs no cross-container arbitration. Setting `SCORING_DEVICE=cuda` would break that assumption: the scoring worker would additionally need GPU access in its platform manifest and a release/verify protocol against the acestep-worker, neither of which exists today.
 
 **GPU telemetry and health:** NVML (`pynvml`) is used only in `src/acestep_worker/gpu_util.py`. The worker reports VRAM in its heartbeat, which is republished on `/metrics`. `check_gpu_health()` makes the worker's `/health` answer 503 when `pynvml` is present but the device cannot be opened. A missing `pynvml` (CI, a unit test, a laptop) is not a broken worker and never blocks a job.
 
