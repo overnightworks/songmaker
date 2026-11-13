@@ -11,7 +11,7 @@ import {
 	EDITOR_UNSAVED_TITLE,
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
-import { TAKE_DELETE_LABEL, TAKE_DELETE_TITLE_TEMPLATE } from '../src/lib/constants/take';
+import { TAKE_DELETE_TITLE_TEMPLATE } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { playlistEntryOverflowLabel } from '../src/lib/constants/playlist';
 import { words } from '../src/lib/words/en';
@@ -203,7 +203,7 @@ async function openDeleteConfirm(
 	await openSong(page, shell, playlist);
 	const takes = await songsTakes(page, shell);
 	await takes.getByRole('button', { name: words['takeMenu.label'], exact: true }).first().click();
-	await takeMenu(page).getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+	await takeMenu(page).getByRole('button', { name: words['takeMenu.delete'], exact: true }).click();
 	await expect(deleteConfirm(page)).toBeVisible();
 }
 
