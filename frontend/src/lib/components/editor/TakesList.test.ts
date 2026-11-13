@@ -244,7 +244,7 @@ describe('TakesList', () => {
 		});
 		expect(
 			Array.from(target.querySelectorAll('.take-label'), (label) => label.textContent?.trim())
-		).toEqual(['1', '2', '3', '4'].map((number) => words['takesList.takeLabel']({ number })));
+		).toEqual(['1', '2', '3', '4'].map((number) => words['takeRow.takeLabel']({ number })));
 	});
 
 	it('opens the version the current head names, through the one version load', async () => {

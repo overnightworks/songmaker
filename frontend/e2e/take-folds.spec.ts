@@ -305,7 +305,7 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		const release = await holdSave(page);
 		await startSave(page);
 		await takeRow(page, song.v2[0]).getByRole('button', { name: words['takeMenu.label'] }).click();
-		await page.getByRole('button', { name: words['takesList.deleteConfirm'], exact: true }).click();
+		await page.getByRole('button', { name: words['takeMenu.delete'], exact: true }).click();
 
 		await release();
 		await expect(v2Row(page)).toBeVisible();

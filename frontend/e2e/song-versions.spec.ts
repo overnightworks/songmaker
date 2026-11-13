@@ -29,7 +29,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from './coverage
 import { words } from '../src/lib/words/en';
 
 const openVersion = (number: number) => words['takesList.openVersion']({ number: String(number) });
-const firstTake = words['takesList.takeLabel']({ number: '1' });
+const firstTake = words['takeRow.takeLabel']({ number: '1' });
 import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';

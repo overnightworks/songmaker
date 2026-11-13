@@ -80,7 +80,7 @@ const NOW_PLAYING_ORIGINS: {
 				.getByRole('tabpanel')
 				.getByRole('button', {
 					name: nameStartingWith(
-						words['takesList.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) })
+						words['takeRow.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) })
 					)
 				})
 				.click();

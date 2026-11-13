@@ -174,7 +174,7 @@ async function songsTakes(page: Page, shell: Shell): Promise<Locator> {
 
 function seededTakeRow(takes: Locator): Locator {
 	return takes.getByRole('button', {
-		name: nameStartingWith(words['takesList.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) }))
+		name: nameStartingWith(words['takeRow.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) }))
 	});
 }
 
