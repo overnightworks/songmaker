@@ -28,7 +28,7 @@
 "frontend/src/lib/components/PlayerBar.test.ts" = 1621
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 659
 "frontend/src/lib/components/SongDetailView.svelte" = 1020
-"frontend/src/lib/components/SongDetailView.test.ts" = 2239
+"frontend/src/lib/components/SongDetailView.test.ts" = 1424
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1170
 "frontend/src/lib/history/historyController.test.ts" = 906
