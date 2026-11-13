@@ -1,7 +1,0 @@
-claim_id = "efe121407cc6415fa09668657f91ca4c"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "5bb5c0e9a251f6489391ad4a26341432e35c7b58"
-branch = "claude/issue-3118-the-probe-scripts-build-and-start-their"
-scope = ["docs/testing.md", "scripts/gpu_job_kinds_probe.sh", "scripts/voices_e2e_probe.sh"]
-opened_commit = "ed86838f6fd0bcbb2c903eccbd8c210e80b30270"
