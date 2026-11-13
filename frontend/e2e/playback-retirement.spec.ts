@@ -1,7 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from './coverage-test';
 import type { SongItem } from '../src/lib/api/types';
 import { words } from '../src/lib/words/en';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	accountCircle,
@@ -133,7 +132,7 @@ async function observeStorage(page: Page): Promise<StorageNotice[]> {
 async function openTakes(page: Page, library: ProofLibrary, shell: Shell): Promise<void> {
 	await page.goto(`/album/${library.albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(library.song.title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: library.song.title }) })
 		.click();
 	if (shell === 'mobile') await workspace(page).getByRole('tab', { name: /Takes/ }).click();
 	await expect(workspace(page).locator('.take-row')).toHaveCount(1);

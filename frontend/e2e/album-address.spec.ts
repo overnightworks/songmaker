@@ -16,7 +16,6 @@
 
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
@@ -94,7 +93,9 @@ test(
 		// across it (issue #276), so the editor no longer remounts on the way
 		// there.
 		await surface
-			.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
+			.getByRole('button', {
+				name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
+			})
 			.click();
 		await expect(page).toHaveURL(songAddress);
 		await expectWorkspaceStanding(page);

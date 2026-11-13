@@ -13,7 +13,7 @@
 
 import { expect, test, type Page } from './coverage-test';
 import { JOB_TYPE_GENERATE } from '../src/lib/constants/jobs';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
+import { words } from '../src/lib/words/en';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
@@ -93,7 +93,7 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
+			.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 			.click();
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(panel.getByRole('progressbar')).toBeVisible();
@@ -156,7 +156,7 @@ test.describe(
 
 			await page.goto(`/album/${library.songPhoneAlbumId}`);
 			await workspace(page)
-				.getByRole('button', { name: songEditorOpenLabel(songTitle) })
+				.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 				.click();
 			await page.getByRole('tab', { name: /Takes/ }).click();
 			await expect(panel.getByRole('progressbar')).toBeVisible();

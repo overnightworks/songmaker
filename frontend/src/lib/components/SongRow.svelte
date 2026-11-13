@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { songEditorOpenLabel } from '#lib/constants/song.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 	import PlayingMark from './PlayingMark.svelte';
 
@@ -49,8 +49,8 @@
 					type="button"
 					class="song-row-edit"
 					data-hitbox="frequent"
-					aria-label={songEditorOpenLabel(title)}
-					title={songEditorOpenLabel(title)}
+					aria-label={pageText('songRow.openInEditor', { title })}
+					title={pageText('songRow.openInEditor', { title })}
 					onclick={onedit}
 				>
 					<Icon name="pencil" size={18} />

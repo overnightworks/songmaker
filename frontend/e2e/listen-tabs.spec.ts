@@ -6,11 +6,7 @@ import { expect, test as base, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import { COWRITER_COMPOSER_PLACEHOLDER } from '../src/lib/constants/cowriter';
 import { LIBRARY_SHARES_COPY_LABEL } from '../src/lib/constants/library';
-import {
-	EDITOR_TAB_TAKES_LABEL,
-	EDITOR_VIEW_COWRITER_LABEL,
-	songEditorOpenLabel
-} from '../src/lib/constants/song';
+import { EDITOR_TAB_TAKES_LABEL, EDITOR_VIEW_COWRITER_LABEL } from '../src/lib/constants/song';
 import { RECIPE_PANEL_LABEL } from '../src/lib/constants/recipe';
 import { sameOriginHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, readSeededLibrary, runMarker } from './seed';
@@ -55,7 +51,9 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		const library = readSeededLibrary();
 		await page.goto(`/album/${library.albumId}`);
 		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
+			.getByRole('button', {
+				name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
+			})
 			.click();
 		await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
 		return library;

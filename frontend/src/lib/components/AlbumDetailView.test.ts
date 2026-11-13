@@ -14,7 +14,8 @@ import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
-import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
+import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
+import { songEditorOpenName } from '#lib/test-utils/song-row.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { ALBUM_NO_SONGS } from '#lib/constants/album.ts';
 import {
@@ -834,7 +835,7 @@ describe('AlbumDetailView song row', () => {
 		async (title) => {
 			const target = await renderSongs();
 
-			getByRoleButton(rowOf(target, title), songEditorOpenLabel(title)).click();
+			getByRoleButton(rowOf(target, title), songEditorOpenName(title)).click();
 			await tick();
 
 			expect(selectSong).toHaveBeenCalledExactlyOnceWith(`s-${title.toLowerCase()}`);
@@ -859,10 +860,9 @@ describe('AlbumDetailView song row', () => {
 
 	it('carries no play glyph of its own: the box and its ✎ are its only buttons', async () => {
 		const target = await renderSongs();
-
 		expect(
 			[...rowOf(target, 'Tide').querySelectorAll('button')].map((button) => accessibleName(button))
-		).toEqual([expect.stringMatching(/^Tide\s+2 takes$/), songEditorOpenLabel('Tide')]);
+		).toEqual([expect.stringMatching(/^Tide\s+2 takes$/), songEditorOpenName('Tide')]);
 	});
 
 	it.each(['playing', 'paused'] as const)(

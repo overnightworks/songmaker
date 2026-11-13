@@ -9,7 +9,7 @@
 
 import { expect, test, type Page } from './coverage-test';
 import type { SongItem } from '../src/lib/api/types';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
+import { words } from '../src/lib/words/en';
 import { TAKE_DELETE_MESSAGE } from '../src/lib/constants/take';
 import {
 	bulkDeleteLabel,
@@ -42,7 +42,7 @@ test.afterEach(({}, testInfo) => {
 
 async function openSong(page: Page, title: string): Promise<void> {
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 		.click();
 	await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
 	await expect(page.locator('.take-row')).toHaveCount(TAKES_PER_SONG);

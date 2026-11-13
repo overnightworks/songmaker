@@ -13,13 +13,8 @@ import {
 	LIBRARY_WALL_ORDER_KEYS,
 	type LibraryWallOrder
 } from '../src/lib/constants/library';
-import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
+import { PLAYING_MARK_LABEL } from '../src/lib/constants/song';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
-import {
-	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
-	PLAYLIST_ENTRY_REMOVE_LABEL,
-	playlistEntryOverflowLabel
-} from '../src/lib/constants/playlist';
 import { words } from '../src/lib/words/en';
 import {
 	collectionActionLabel,
@@ -406,7 +401,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	await expect(surface.getByRole('button', { name: /shuffle/i })).toHaveCount(0);
 	const pickedSongRow = surface.locator('.song-row').filter({ hasText: library.pickedSongTitle });
 	const openPickedSong = pickedSongRow.getByRole('button', {
-		name: songEditorOpenLabel(library.pickedSongTitle)
+		name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
 	});
 	await expect(pickedSongRow.getByRole('button')).toHaveCount(2);
 	await surface
@@ -500,7 +495,9 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 
 		const entryRows = playlistEntryRows(page);
 		const chooseEntryAction = async (songTitle: string, action: string) => {
-			await surface.getByRole('button', { name: playlistEntryOverflowLabel(songTitle) }).click();
+			await surface
+				.getByRole('button', { name: words['playlistPage.entryMore']({ title: songTitle }) })
+				.click();
 			await surface.getByRole('menuitem', { name: action }).click();
 		};
 		await expect(entryRows).toHaveText([
@@ -509,14 +506,14 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 			containing(library.pickedSongTitle)
 		]);
 
-		await chooseEntryAction(firstPlaylistSong, PLAYLIST_ENTRY_MOVE_DOWN_LABEL);
+		await chooseEntryAction(firstPlaylistSong, words['playlistPage.moveDown']);
 		await expect(entryRows).toHaveText([
 			containing(secondPlaylistSong),
 			containing(firstPlaylistSong),
 			containing(library.pickedSongTitle)
 		]);
 
-		await chooseEntryAction(library.pickedSongTitle, PLAYLIST_ENTRY_REMOVE_LABEL);
+		await chooseEntryAction(library.pickedSongTitle, words['playlistPage.remove']);
 		await expect(entryRows).toHaveText([
 			containing(secondPlaylistSong),
 			containing(firstPlaylistSong)

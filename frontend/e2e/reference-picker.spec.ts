@@ -4,7 +4,6 @@
 
 import { readFileSync } from 'node:fs';
 import { expect, test } from './coverage-test';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { RECIPE_REFERENCE_LABEL } from '../src/lib/constants/recipe';
 import { FlowGuard, workspace } from './helpers';
 import {
@@ -43,7 +42,7 @@ test('A reference uploaded from the recipe is chosen, saved with the version and
 
 		await page.goto(`/album/${albumId}`);
 		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(title) })
+			.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 			.click();
 		await expect(page.getByRole('heading', { name: title })).toBeVisible();
 		await page.locator('.recipe-line').click();

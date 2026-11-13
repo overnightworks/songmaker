@@ -2,6 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
+import { words } from '#lib/words/en.ts';
 import PlaylistPicker from './PlaylistPicker.svelte';
 
 const NIGHT_DRIVE = {
@@ -70,6 +71,23 @@ it('defect:#1444 lists every supplied playlist with its title and entry count', 
 		{ title: 'Night Drive', count: '3' },
 		{ title: 'Morning Run', count: '0' }
 	]);
+});
+
+it('names its dialog and heading and says it is loading from the catalog', async () => {
+	playlistList.set([]);
+	playlistLoad.set({ status: 'loading', error: null });
+	const target = document.createElement('div');
+	document.body.append(target);
+	playlistPicker.open(target);
+	await tick();
+
+	expect(target.querySelector('[role="status"]')?.textContent).toBe(
+		words['playlistPicker.loading']
+	);
+	expect(target.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe(
+		words['playlistPicker.label']
+	);
+	expect(target.querySelector('.picker-header')?.textContent).toBe(words['playlistPicker.heading']);
 });
 
 describe('the playlist picker closes on history Back', () => {

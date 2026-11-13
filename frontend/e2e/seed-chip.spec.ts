@@ -10,8 +10,7 @@ import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_LYRICS_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_TAB_TAKES_LABEL,
-	songEditorOpenLabel
+	EDITOR_TAB_TAKES_LABEL
 } from '../src/lib/constants/song';
 import { NOW_PLAYING_TAKE_TAB, NOW_PLAYING_LABEL } from '../src/lib/constants/now-playing';
 import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
@@ -61,7 +60,7 @@ async function seedSongs(): Promise<Songs> {
 
 async function openSong(page: Page, title: string): Promise<void> {
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 		.click();
 	await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
 }

@@ -5,7 +5,7 @@
 // leave.
 
 import { expect, test as base, type Dialog, type Locator, type Page } from './coverage-test';
-import { EDITOR_UNSAVED_TITLE, songEditorOpenLabel } from '../src/lib/constants/song';
+import { EDITOR_UNSAVED_TITLE } from '../src/lib/constants/song';
 import { sameOriginHeaders, workspace } from './helpers';
 import { archiveOwnedAlbum, runMarker, seedSongPhoneSong } from './seed';
 import { words } from '../src/lib/words/en';
@@ -41,7 +41,7 @@ async function openSongCold(page: Page, ownedAlbumId: string): Promise<OpenSong>
 	const discovery = await page.context().newPage();
 	await discovery.goto(`/album/${ownedAlbumId}`);
 	await workspace(discovery)
-		.getByRole('button', { name: songEditorOpenLabel(title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 		.click();
 	await expect(discovery.getByRole('heading', { name: title })).toBeVisible();
 	const address = discovery.url();
