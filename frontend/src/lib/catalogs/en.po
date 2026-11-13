@@ -3023,6 +3023,8 @@ msgstr ""
 
 msgctxt "libraryRefusal.queryRequired"
 msgid "Search query is required"
+msgstr ""
+
 msgctxt "cowriter.title"
 msgid "Co-writer"
 msgstr ""

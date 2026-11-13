@@ -732,6 +732,58 @@ export type Words = {
     readonly "coverSuggestionRefusal.browserLogin": string;
     readonly "shareRefusal.personsAgent": string;
     readonly "libraryRefusal.queryRequired": string;
+    readonly "cowriter.title": string;
+    readonly "cowriter.thinking": string;
+    readonly "cowriter.conversationMenu": string;
+    readonly "cowriter.conversationMenuWaiting": string;
+    readonly "cowriter.composerPlaceholder": string;
+    readonly "cowriter.send": string;
+    readonly "cowriter.newConversation": string;
+    readonly "cowriter.memory": string;
+    readonly "cowriter.memoryWaiting": string;
+    readonly "cowriter.deleteConversationTitle": string;
+    readonly "cowriter.deleteConversationWarning": string;
+    readonly "cowriter.deleteConversation": string;
+    readonly "cowriter.newConversationLine": string;
+    readonly "cowriter.lineSince": (gaps: { readonly day: string }) => string;
+    readonly "cowriter.lineArchived": (gaps: { readonly day: string }) => string;
+    readonly "cowriter.conversationSince": (gaps: { readonly day: string; readonly time: string }) => string;
+    readonly "cowriter.archivedRow": (gaps: { readonly day: string; readonly time: string }) => string;
+    readonly "cowriter.confirmRow": (gaps: { readonly messages: string; readonly name: string }) => string;
+    readonly "cowriter.messageCount": (count: number) => string;
+    readonly "cowriter.today": string;
+    readonly "cowriter.toolRan": (gaps: { readonly name: string }) => string;
+    readonly "cowriter.toolTarget": (gaps: { readonly title: string }) => string;
+    readonly "cowriter.toolForeignTarget": string;
+    readonly "cowriter.historyUnavailable": string;
+    readonly "cowriter.loadingChat": string;
+    readonly "cowriter.startFailed": string;
+    readonly "cowriter.deleteFailed": string;
+    readonly "cowriter.archivedToast": string;
+    readonly "cowriter.archivedBanner": readonly (string | { readonly marker: "link"; readonly text: string })[];
+    readonly "cowriter.albumFallback": string;
+    readonly "cowriter.noMatches": string;
+    readonly "cowriter.memoryUnavailable": string;
+    readonly "cowriter.memorySaveFailed": string;
+    readonly "cowriter.proposalStale": string;
+    readonly "memory.close": string;
+    readonly "memory.loading": string;
+    readonly "memory.you": string;
+    readonly "memory.thisSong": string;
+    readonly "memory.albumNotes": string;
+    readonly "memory.hintUser": string;
+    readonly "memory.hintSong": string;
+    readonly "memory.hintAlbum": string;
+    readonly "memory.proposedUser": string;
+    readonly "memory.proposedSong": string;
+    readonly "memory.proposedAlbum": string;
+    readonly "memory.accept": string;
+    readonly "memory.reject": string;
+    readonly "memory.userField": string;
+    readonly "memory.songField": string;
+    readonly "memory.albumField": string;
+    readonly "memory.save": string;
+    readonly "memory.saving": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -1658,5 +1710,64 @@ export const words: Words = {
     "coverSuggestionRefusal.browserLogin": "Cover suggestions need a browser login.",
     "shareRefusal.personsAgent": "A person's own agent cannot share; the person shares in the app.",
     "libraryRefusal.queryRequired": "Search query is required",
+    "cowriter.title": "Co-writer",
+    "cowriter.thinking": "Co-writer is thinking…",
+    "cowriter.conversationMenu": "Conversation menu",
+    "cowriter.conversationMenuWaiting": "Conversation menu, memory proposal waiting",
+    "cowriter.composerPlaceholder": "Ask for a rewrite…",
+    "cowriter.send": "Send",
+    "cowriter.newConversation": "New conversation",
+    "cowriter.memory": "Memory",
+    "cowriter.memoryWaiting": "Memory, memory proposal waiting",
+    "cowriter.deleteConversationTitle": "Delete conversation?",
+    "cowriter.deleteConversationWarning": "This can't be undone.",
+    "cowriter.deleteConversation": "Delete conversation",
+    "cowriter.newConversationLine": "new conversation",
+    "cowriter.lineSince": (gaps: { readonly day: string }) => "conversation since " + gaps.day,
+    "cowriter.lineArchived": (gaps: { readonly day: string }) => "archived conversation from " + gaps.day,
+    "cowriter.conversationSince": (gaps: { readonly day: string; readonly time: string }) => "Conversation since " + gaps.day + " " + gaps.time,
+    "cowriter.archivedRow": (gaps: { readonly day: string; readonly time: string }) => "Archived · " + gaps.day + " " + gaps.time,
+    "cowriter.confirmRow": (gaps: { readonly messages: string; readonly name: string }) => gaps.name + " · " + gaps.messages,
+    "cowriter.messageCount": (count: number) => ({
+        zero: numberFormat.format(count) + " msgs",
+        one: numberFormat.format(count) + " msg",
+        two: numberFormat.format(count) + " msgs",
+        few: numberFormat.format(count) + " msgs",
+        many: numberFormat.format(count) + " msgs",
+        other: numberFormat.format(count) + " msgs",
+    })[pluralRules.select(count)],
+    "cowriter.today": "today",
+    "cowriter.toolRan": (gaps: { readonly name: string }) => "ran tool: " + gaps.name,
+    "cowriter.toolTarget": (gaps: { readonly title: string }) => "for: " + gaps.title,
+    "cowriter.toolForeignTarget": "This proposal applies to a different song than the one you have open",
+    "cowriter.historyUnavailable": "Conversation history unavailable",
+    "cowriter.loadingChat": "Loading chat…",
+    "cowriter.startFailed": "Failed to start new conversation",
+    "cowriter.deleteFailed": "Failed to delete conversation",
+    "cowriter.archivedToast": "Viewing an archived conversation — start a new one to reply",
+    "cowriter.archivedBanner": ["Archived — ", { marker: "link", text: "start a new conversation" }, " to reply."] as readonly (string | { readonly marker: "link"; readonly text: string })[],
+    "cowriter.albumFallback": "Album",
+    "cowriter.noMatches": "No matches",
+    "cowriter.memoryUnavailable": "Memory unavailable",
+    "cowriter.memorySaveFailed": "Failed to save memory",
+    "cowriter.proposalStale": "Memory proposal is stale or belongs elsewhere",
+    "memory.close": "Close memory",
+    "memory.loading": "Loading memory…",
+    "memory.you": "You",
+    "memory.thisSong": "This song",
+    "memory.albumNotes": "Album notes",
+    "memory.hintUser": "Taste, language, standing rules",
+    "memory.hintSong": "Concept, locked vs open decisions, names, open questions",
+    "memory.hintAlbum": "Album-level notes — not lyrics",
+    "memory.proposedUser": "Proposed You",
+    "memory.proposedSong": "Proposed This song",
+    "memory.proposedAlbum": "Proposed Album notes",
+    "memory.accept": "Accept",
+    "memory.reject": "Reject",
+    "memory.userField": "User memory",
+    "memory.songField": "Song memory",
+    "memory.albumField": "Album notes",
+    "memory.save": "Save",
+    "memory.saving": "Saving...",
 };
 export type Key = keyof Words;
