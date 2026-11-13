@@ -510,7 +510,7 @@ describe('Delete sends rendered takes only, checked at confirm time (rule 8, cel
 		);
 		await clickThenTick(trigger as HTMLElement);
 		const item = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-			(button) => button.textContent?.trim() === TAKE_DELETE_LABEL
+			(button) => button.textContent?.trim() === words['takeMenu.delete']
 		);
 		await clickThenTick(item as HTMLElement);
 	}

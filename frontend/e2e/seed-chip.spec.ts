@@ -13,7 +13,6 @@ import {
 	EDITOR_TAB_TAKES_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
-import { TAKE_REPAINT_LABEL } from '../src/lib/constants/take';
 import { NOW_PLAYING_TAKE_TAB, NOW_PLAYING_LABEL } from '../src/lib/constants/now-playing';
 import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
@@ -152,7 +151,7 @@ test('A Repaint from the card sends the seed and the chip stays (S6)', async ({ 
 		.click();
 	await page
 		.getByRole('dialog', { name: words['takeMenu.label'] })
-		.getByRole('button', { name: TAKE_REPAINT_LABEL })
+		.getByRole('button', { name: words['takeMenu.repaint'] })
 		.click();
 	await expect(page.locator('.task')).toContainText('seed: from take');
 	await page.route(REPAINT_ROUTE, (route) => route.fulfill({ json: QUEUED_JOB }));
