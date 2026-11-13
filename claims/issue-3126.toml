@@ -1,0 +1,8 @@
+claim_id = "e8a13e5f72c741e0bd007daf919d0d2f"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "dfd06714db4b4acb945624619ed9bd473b8037bb"
+branch = "claude/issue-3126-the-co-writer-panel-and-memory-editor-re"
+scope = ["frontend/e2e/admin-models.spec.ts", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/listen-tabs.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/ChatInput.svelte", "frontend/src/lib/components/ChatInput.test.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/components/CoWriterPanelAiNotice.test.ts", "frontend/src/lib/components/CoWriterPanelMemoryProposals.test.ts", "frontend/src/lib/components/CoWriterPanelRefusal.test.ts", "frontend/src/lib/components/MemoryEditor.svelte", "frontend/src/lib/components/MemoryEditor.test.ts", "frontend/src/lib/components/MentionDropdown.svelte", "frontend/src/lib/constants/cowriter.ts", "frontend/src/lib/constants/song.ts", "frontend/src/lib/utils/cowriter-ui.test.ts", "frontend/src/lib/utils/cowriter-ui.ts", "frontend/src/lib/words/en.ts", "src/songmaker_cli/words.py"]
+opened_commit = "b14e2529a74693c30bc788c0182feec799b30aae"
+whole_reason = "one surface slice: the co-writer panel and memory editor read their words from the catalog"
