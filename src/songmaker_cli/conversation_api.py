@@ -72,6 +72,7 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.settings import get_cowriter_tail_token_budget
 from songmaker_cli.job_types import JOB_ACTIVE_STATUSES, JobStatus, JobType
+from songmaker_cli.refusals import Refusal
 
 log = logging.getLogger(__name__)
 
@@ -202,7 +203,6 @@ _PROBLEM_STATUS: Final = {
     AgentProblem.SIGN_IN_AGAIN: 401,
 }
 _TURN_FAILED_STATUS: Final = 500
-_TURN_ALREADY_RUNNING_STATUS: Final = 409
 _CHAT_REQUEST_FAILED: Final = "Chat request failed"
 _CHAT_COMPLETION_FAILED: Final = "Chat completion failed"
 
@@ -230,7 +230,7 @@ async def api_chat_turn(
 ) -> StreamingResponse:
     session_id = session_id_from_request(request, installed_web_auth_config(request.app))
     if session_id is None:
-        raise HTTPException(status_code=403, detail="The co-writer needs a browser login.")
+        raise Refusal(403, "cowriterRefusal.browserLogin")
     prepared = _prepare_chat_turn(req, request, user, session)
     frames = _start_chat_turn(req, TurnCaller(request.app, session_id, user), prepared)
     return StreamingResponse(
@@ -267,10 +267,7 @@ def _refuse_while_another_turn_runs(session: Session, user: AuthenticatedUser) -
     """
     if _running_turn_count(session, user) > 1:
         session.rollback()
-        raise HTTPException(
-            _TURN_ALREADY_RUNNING_STATUS,
-            "A co-writer reply is still being written",
-        )
+        raise Refusal(409, "cowriterRefusal.turnRunning")
 
 
 def _prepare_chat_messages(

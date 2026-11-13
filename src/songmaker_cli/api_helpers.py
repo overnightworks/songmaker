@@ -65,6 +65,7 @@ from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.invariants import expect_present
 from songmaker_cli.job_types import JobType
+from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness, read_worker_liveness
 
@@ -222,20 +223,20 @@ def _enforce_job_limits(
         return
     if count_total_queued_jobs(session) >= max_queue_depth:
         session.rollback()
-        raise HTTPException(429, "Queue is full. Try again later.")
+        raise Refusal(429, "jobRefusal.queueFull")
     max_active = resolve_rate_limit(
         session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, settings.max_user_active_jobs,
     )
     if count_user_active_jobs(session, user.id, job_type) >= max_active:
         session.rollback()
-        raise HTTPException(429, "You already have an active job. Wait for it to finish.")
+        raise Refusal(429, "jobRefusal.activeJob")
     limit = resolve_rate_limit(
         session, user.id, hourly_limit.setting_key, hourly_limit.settings_limit(settings),
     )
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:
         session.rollback()
-        raise HTTPException(429, f"Rate limit reached ({limit}/{job_type}s per hour).")
+        raise Refusal(429, "jobRefusal.hourlyLimit", limit=str(limit), jobType=job_type)
 
 
 def create_job_with_rate_limit(
@@ -528,11 +529,9 @@ def check_lora_ready_for_generation(
     if lora.user_id != user.id:
         raise HTTPException(404, LORA_NOT_FOUND_DETAIL)
     if lora.deleted_at is not None:
-        raise HTTPException(422, "LoRA is deleted")
+        raise Refusal(422, "voiceRefusal.deleted")
     if lora.status != LoraStatus.READY:
-        raise HTTPException(
-            422, f"LoRA is not ready (status={lora.status})",
-        )
+        raise Refusal(422, "voiceRefusal.notReady", status=lora.status)
     return lora
 
 

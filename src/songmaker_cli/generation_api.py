@@ -152,22 +152,22 @@ def _resolve_source_wav(audio_dir: Path, gen: Generation) -> tuple[Path, str]:
 
     mp3 = audio_dir / gen.mp3_path
     if not mp3.exists():
-        raise HTTPException(400, "Source generation has no audio file")
+        raise Refusal(400, "generationRefusal.sourceNoAudio")
 
     wav = mp3.with_suffix(".wav")
     if not wav.exists():
         ffmpeg = shutil.which("ffmpeg")
         if ffmpeg is None:
-            raise HTTPException(503, "ffmpeg is not available")
+            raise Refusal(503, "generationRefusal.ffmpegMissing")
         try:
             subprocess.run(  # noqa: S603 - ffmpeg argv without a shell and both paths lie under audio_dir so none starts with a dash
                 [ffmpeg, "-y", "-i", str(mp3), str(wav)],
                 check=True, capture_output=True,
             )
         except FileNotFoundError as exc:
-            raise HTTPException(503, "ffmpeg is not available") from exc
+            raise Refusal(503, "generationRefusal.ffmpegMissing") from exc
         except subprocess.CalledProcessError as exc:
-            raise HTTPException(500, "Failed to convert MP3 to WAV") from exc
+            raise Refusal(500, "generationRefusal.wavConversionFailed") from exc
 
     return wav, str(wav.relative_to(audio_dir))
 
@@ -180,7 +180,7 @@ def _generation_version_or_error(gen: Generation, version_id: str | None) -> Ver
     else:
         version = gen.version
     if not version:
-        raise HTTPException(400, "Generation has no linked version")
+        raise Refusal(400, "generationRefusal.noLinkedVersion")
     return version
 
 
@@ -290,7 +290,7 @@ async def api_generate_song(
     else:
         version = song.latest_version
     if not version or not version.lyrics or not version.prompt:
-        raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
+        raise Refusal(400, "generationRefusal.needsLyricsAndPrompt")
 
     _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
@@ -318,8 +318,7 @@ async def api_generate_song(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        _fail_job(ctx, job.id)
-        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
+        raise _queue_unavailable_refusal(ctx, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -404,7 +403,7 @@ async def api_repaint_generation(
     version = _generation_version_or_error(gen, req.version_id)
 
     if req.repainting_start >= req.repainting_end:
-        raise HTTPException(400, "repainting_start must be less than repainting_end")
+        raise Refusal(400, "generationRefusal.repaintRange")
 
     _check_model_active(session, req.model)
     _check_version_lora_ready(session, version, user)
@@ -448,8 +447,7 @@ async def api_repaint_generation(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        _fail_job(ctx, job.id)
-        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
+        raise _queue_unavailable_refusal(ctx, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -522,8 +520,7 @@ async def api_cover_generation(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        _fail_job(ctx, job.id)
-        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
+        raise _queue_unavailable_refusal(ctx, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -558,14 +555,13 @@ async def api_score_generation(
     try:
         if not await is_scoring_worker_healthy():
             _fail_job(ctx, job.id)
-            raise HTTPException(503, WORKER_NOT_RUNNING_DETAIL)
+            raise Refusal(503, "generationRefusal.workerNotRunning")
         await get_arq_pool().enqueue_job(
             JobFunction.SCORE, job.id, gen_id, req.scorers,
             _queue_name=ARQ_SCORING_QUEUE_NAME,
         )
     except ConnectionError:
-        _fail_job(ctx, job.id)
-        raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
+        raise _queue_unavailable_refusal(ctx, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -642,6 +638,11 @@ async def _generation_capacity_error(
         )
         return JSONResponse(status_code=503, content=response.model_dump())
     return None
+
+
+def _queue_unavailable_refusal(ctx: AppContext, job_id: str) -> Refusal:
+    _fail_job(ctx, job_id)
+    return Refusal(503, "jobRefusal.queueUnavailable")
 
 
 def _fail_job(

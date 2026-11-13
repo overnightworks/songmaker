@@ -12,6 +12,7 @@
 		saveAlbumMemory,
 		ApiError
 	} from '#lib/api/client.ts';
+	import { describeFailure } from '#lib/api/fetch.ts';
 	import type { CoWriterStreamEvent } from '#lib/api/client.ts';
 	import type {
 		ChatMessageItem,
@@ -524,7 +525,9 @@
 		if (refusal?.status === TURN_ALREADY_RUNNING_STATUS) {
 			await followTurnRunningElsewhere(msg, assistantIndex);
 		} else if (refusal) {
-			markTurnFailed(assistantIndex, refusalMessage(refusal));
+			const fallback =
+				refusal.status === 503 ? cowriterProblemText('unavailable') : cowriterNoAnswerText();
+			markTurnFailed(assistantIndex, describeFailure(refusal, fallback));
 		} else if (streamError) {
 			markTurnFailed(
 				assistantIndex,
@@ -593,11 +596,6 @@
 		return (
 			cowriterTurnError(frame) ?? { problem: null, text: cowriterNoAnswerText(), waitSeconds: 0 }
 		);
-	}
-
-	function refusalMessage(refusal: ApiError): string {
-		if (refusal.status === 503) return refusal.detail || cowriterProblemText('unavailable');
-		return refusal.message;
 	}
 
 	function applyStreamEventAt(assistantIndex: number, event: CoWriterStreamEvent): void {

@@ -35,8 +35,6 @@ from songmaker_cli.api_models.library import (
 )
 from songmaker_cli.api_models.loras import (
     AdminUserLoraResponse,
-    LoraCapacityErrorResponse,
-    LoraCapacityReason,
     OwnPlayableTakeListResponse,
     OwnPlayableTakeResponse,
     UserLoraCreateRequest,
@@ -265,9 +263,7 @@ __all__ = [
     "HealthResponse",
     "HealthStatusResponse",
     "JobResponse",
-    "LoraCapacityErrorResponse",
     "GenerationUnavailableResponse",
-    "LoraCapacityReason",
     "LIBRARY_SORT_VALUES",
     "LastFailedGenerationResponse",
     "LibraryAlbumHit",
