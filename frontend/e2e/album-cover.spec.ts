@@ -18,6 +18,7 @@ import { UNREACHABLE_RELOAD_DELAYS_MS } from '../src/lib/constants/connectivity'
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import { words, type Key } from '../src/lib/words/en';
 
+const addOrEditCover = new RegExp(`^(${words['albumCover.add']}|${words['albumCover.edit']})$`);
 const PHONE_VIEWPORT = { width: 375, height: 844 };
 // What a cover job's row may hold and no page may show (#2055 matrix cell 26).
 const STORED_ERROR_CANARY = 'gateway detail sk-e2e-canary for session e2e-canary';
@@ -70,7 +71,7 @@ test('Add cover asks for nothing until Suggest, whose refused click says log in 
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 	await expect(surface.getByText('Choose a cover')).toHaveCount(0);
 
-	const editing = surface.getByRole('group', { name: 'Cover editing' });
+	const editing = surface.getByRole('group', { name: words['albumCover.editing'] });
 	await surface.getByRole('button', { name: words['albumCover.add'] }).click();
 	await expect(
 		editing.getByRole('button', { name: words['albumCover.suggest'], exact: true })
@@ -201,9 +202,7 @@ test.describe('cover suggestions retry', () => {
 			route.request().method() === 'GET' ? route.abort('failed') : route.continue()
 		);
 		await page.goto(`/album/${library.albumId}`);
-		await workspace(page)
-			.getByRole('button', { name: /^(Add|Edit) cover$/ })
-			.click();
+		await workspace(page).getByRole('button', { name: addOrEditCover }).click();
 		const editing = workspace(page).getByRole('group', { name: words['albumCover.editing'] });
 		const retry = editing.getByRole('button', { name: words['albumCover.suggestionsRetry'] });
 		await expect(retry).toBeVisible({ timeout: retryBudget });
@@ -251,8 +250,8 @@ test('an API-seeded suggestion can be chosen and its selected cover removed', as
 
 	const surface = workspace(page);
 	await page.goto(`/album/${library.albumId}`);
-	await surface.getByRole('button', { name: /^(Add|Edit) cover$/ }).click();
-	const editing = surface.getByRole('group', { name: 'Cover editing' });
+	await surface.getByRole('button', { name: addOrEditCover }).click();
+	const editing = surface.getByRole('group', { name: words['albumCover.editing'] });
 	const use = editing.getByRole('button', { name: words['albumCover.use'], exact: true });
 	await expect(use).toBeEnabled();
 	await use.click();

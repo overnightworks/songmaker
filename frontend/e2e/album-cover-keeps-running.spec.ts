@@ -38,6 +38,7 @@ interface CoverSuggestionsReading {
 	suggestions: { id: string }[];
 }
 
+const addOrEditCover = new RegExp(`^(${words['albumCover.add']}|${words['albumCover.edit']})$`);
 const RUN_STARTED_SECONDS_AGO = 90;
 const ELAPSED_TIME_SLACK_SECONDS = 20;
 const SECONDS_PER_MINUTE = 60;
@@ -192,7 +193,7 @@ async function expectWaitingMark(page: Page, count: number): Promise<void> {
 }
 
 async function expectNoMark(page: Page): Promise<void> {
-	await expect(workspace(page).getByRole('button', { name: /^(Add|Edit) cover$/ })).toBeVisible();
+	await expect(workspace(page).getByRole('button', { name: addOrEditCover })).toBeVisible();
 	await expect(workspace(page).locator('.cover-mark')).toHaveCount(0);
 }
 
@@ -291,7 +292,9 @@ test('Use clears the waiting mark', async ({ page }, testInfo) => {
 		await editing.getByRole('button', { name: words['albumCover.use'], exact: true }).click();
 
 		await expect(editing).toHaveCount(0);
-		await expect(workspace(page).getByRole('button', { name: /^Edit cover$/ })).toBeVisible();
+		await expect(
+			workspace(page).getByRole('button', { name: new RegExp(`^${words['albumCover.edit']}$`) })
+		).toBeVisible();
 		await expect(workspace(page).locator('.cover-mark')).toHaveCount(0);
 	});
 });
