@@ -6,7 +6,6 @@
 // makes v3, which folds v2.
 
 import { expect, test, type Page, type Route } from './coverage-test';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TAKE_DELETE_LABEL, TAKES_EMPTY } from '../src/lib/constants/take';
 import {
 	bulkDeleteLabel,
@@ -148,7 +147,7 @@ async function watchForToolbar(page: Page): Promise<() => Promise<boolean>> {
 
 async function openSongOf(page: Page, title: string): Promise<void> {
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 		.click();
 }
 
@@ -433,12 +432,12 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 
 		await page.goBack();
 		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(other.title) })
+			.getByRole('button', { name: words['songRow.openInEditor']({ title: other.title }) })
 			.click();
 		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'false');
 		await page.goBack();
 		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(song.title) })
+			.getByRole('button', { name: words['songRow.openInEditor']({ title: song.title }) })
 			.click();
 		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'false');
 		await expect(toolbar(page)).toHaveCount(0);

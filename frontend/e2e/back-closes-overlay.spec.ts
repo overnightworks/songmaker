@@ -6,10 +6,8 @@ import {
 	PLAYLIST_API,
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TAKE_DELETE_TITLE_TEMPLATE } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
-import { playlistEntryOverflowLabel } from '../src/lib/constants/playlist';
 import { words } from '../src/lib/words/en';
 import {
 	collectionActionLabel,
@@ -63,7 +61,6 @@ const SETTINGS_SECTION_HEADING = 'My Voices';
 const SONG_ADDRESS = /\/album\/[^/]+\/[^/]+/;
 // The base library's songs each carry one seeded take, their first.
 const SEEDED_TAKE_NUMBER = 1;
-const PLAYLIST_PICKER_LABEL = 'Add to Playlist';
 const SHARE_WARNING_LABEL = 'Missing from the share page';
 const DRAFT_LINE = 'a line nobody saved';
 
@@ -113,7 +110,7 @@ async function expectSongStands(page: Page, shell: Shell, title: string): Promis
 
 async function openEntryMenu(page: Page, playlist: SeededPlaylist): Promise<void> {
 	await workspace(page)
-		.getByRole('button', { name: playlistEntryOverflowLabel(firstSong(playlist)) })
+		.getByRole('button', { name: words['playlistPage.entryMore']({ title: firstSong(playlist) }) })
 		.click();
 	await expect(workspace(page).getByRole('menu')).toBeVisible();
 }
@@ -121,7 +118,7 @@ async function openEntryMenu(page: Page, playlist: SeededPlaylist): Promise<void
 // The entry's ✎ is the one way from a playlist row to its song (#1383).
 async function openSongFromEntryPencil(page: Page, playlist: SeededPlaylist): Promise<void> {
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(firstSong(playlist)) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: firstSong(playlist) }) })
 		.click();
 }
 
@@ -262,7 +259,7 @@ function unsavedDraftRow(): OverlayRow {
 }
 
 function playlistPicker(page: Page): Locator {
-	return page.getByRole('dialog', { name: PLAYLIST_PICKER_LABEL });
+	return page.getByRole('dialog', { name: words['playlistPicker.label'] });
 }
 
 const PLAYLIST_PICKER_ROW: OverlayRow = {
@@ -703,7 +700,7 @@ test.describe('Back from Settings onto a page opened over another of its kind', 
 		const [song, nextSong] = readSeededLibrary().albumTracks;
 		await page.goto(`/album/${readSeededLibrary().albumId}`);
 		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(song.songTitle) })
+			.getByRole('button', { name: words['songRow.openInEditor']({ title: song.songTitle }) })
 			.click();
 		await expectSongStands(page, shell, song.songTitle);
 		const songAddress = page.url();
@@ -821,7 +818,11 @@ test('two Backs in one task from Settings over a song show the album at its addr
 	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
 	await expect(album).toBeVisible();
 	const albumAddress = page.url();
-	await surface.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) }).click();
+	await surface
+		.getByRole('button', {
+			name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
+		})
+		.click();
 	await expect(song).toBeVisible();
 	await openVoicesSettings(page, shell);
 
@@ -875,7 +876,7 @@ test('one Back right after a song opens from its album returns to the album', as
 		name: library.pickedSongTitle
 	});
 	const songRow = surface.getByRole('button', {
-		name: songEditorOpenLabel(library.pickedSongTitle)
+		name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
 	});
 
 	for (let open = 1; open <= SONG_OPENS; open += 1) {

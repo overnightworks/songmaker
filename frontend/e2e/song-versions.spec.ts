@@ -27,7 +27,7 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { EDITOR_GENERATE_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
+import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { takesDraftBanner } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
@@ -155,7 +155,7 @@ async function saveFurtherVersions(page: Page, songId: string, count: number): P
 async function openSongEditor(page: Page, song: SeededVersions): Promise<void> {
 	await page.goto(`/album/${song.albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(song.title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: song.title }) })
 		.click();
 	const editTab = page.getByRole('tab', { name: words['songTabs.edit'], exact: true });
 	if (await editTab.isVisible()) await editTab.click();
@@ -832,10 +832,10 @@ test.describe('the versions of a song', () => {
 	test('an imported take groups as Imported with no Open link, and Now Playing names it "Imported take" and says why it has no lyrics', async ({
 		page
 	}) => {
-		const library = readSeededLibrary();
-		await page.goto(`/album/${library.albumId}`);
+		const { albumId, pickedSongTitle: title } = readSeededLibrary();
+		await page.goto(`/album/${albumId}`);
 		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
+			.getByRole('button', { name: words['songRow.openInEditor']({ title }) })
 			.click();
 		await showTakes(page);
 

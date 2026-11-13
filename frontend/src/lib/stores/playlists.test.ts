@@ -15,7 +15,6 @@ import {
 	uploadPlaylistCover as uploadPlaylistCoverApi,
 	updatePlaylist
 } from '#lib/api/client.ts';
-import { LIBRARY_PLAYLISTS_ERROR } from '#lib/constants/playlist.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import {
@@ -24,6 +23,7 @@ import {
 } from '#lib/stores/connectivity.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '#lib/api/types.ts';
+import { words } from '#lib/words/en.ts';
 import {
 	createNewPlaylist,
 	deletePlaylist,
@@ -356,7 +356,10 @@ describe('loadPlaylistDetail without a connection', () => {
 			await vi.advanceTimersByTimeAsync(delay);
 		}
 
-		expect(get(playlistDetailLoad)).toEqual({ status: 'error', error: LIBRARY_PLAYLISTS_ERROR });
+		expect(get(playlistDetailLoad)).toEqual({
+			status: 'error',
+			error: words['playlistPage.loadError']
+		});
 	});
 });
 
@@ -365,12 +368,12 @@ describe('loadPlaylists', () => {
 		{
 			failure: 'a network failure',
 			err: new NetworkError('/api/playlists', new TypeError('Failed to fetch')),
-			error: LIBRARY_PLAYLISTS_ERROR
+			error: words['playlistPage.loadError']
 		},
 		{
 			failure: 'a server answer without a reason',
 			err: new ApiError(500, '', '/api/playlists'),
-			error: LIBRARY_PLAYLISTS_ERROR
+			error: words['playlistPage.loadError']
 		},
 		{
 			failure: 'a server reason',
@@ -407,7 +410,7 @@ describe('loadPlaylists', () => {
 	it('uses the named load error when the failure is not an Error', async () => {
 		vi.mocked(fetchPlaylists).mockRejectedValueOnce('nope');
 		await loadPlaylists();
-		expect(get(playlistLoad).error).toBe(LIBRARY_PLAYLISTS_ERROR);
+		expect(get(playlistLoad).error).toBe(words['playlistPage.loadError']);
 	});
 
 	it('keeps a playlist created while the lazy fetch is still in flight', async () => {

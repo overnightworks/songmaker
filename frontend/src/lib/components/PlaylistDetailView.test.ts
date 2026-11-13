@@ -7,9 +7,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { PlaylistDetailItem, PlaylistEntryItem } from '#lib/api/types.ts';
 import { ApiError } from '#lib/api/fetch.ts';
-import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
-import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
-import { playlistEntryOverflowLabel } from '#lib/constants/playlist.ts';
+import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
@@ -452,7 +450,7 @@ describe('PlaylistDetailView row actions', () => {
 		const items = Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Move up', 'Remove from playlist']);
+		expect(items).toEqual([words['playlistPage.moveUp'], words['playlistPage.remove']]);
 	});
 
 	it('carries no play glyph: the row plays, and its ✎ and … menu are named after the song', async () => {
@@ -463,7 +461,6 @@ describe('PlaylistDetailView row actions', () => {
 			})
 		);
 		const target = await mountPlaylistView();
-
 		const row = requireElement<HTMLElement>(target, '.entry-row');
 		expect(Array.from(row.querySelectorAll('button')).map((button) => button.className)).toEqual([
 			expect.stringContaining('song-row-body'),
@@ -471,9 +468,10 @@ describe('PlaylistDetailView row actions', () => {
 			expect.stringContaining('overflow-btn')
 		]);
 		expect(requireElement(row, '.song-row-body').textContent).toContain('Tide');
-		expect(accessibleName(requireElement(row, '.song-row-edit'))).toBe(songEditorOpenLabel('Tide'));
+		const editName = accessibleName(requireElement(row, '.song-row-edit'));
+		expect(editName).toBe(words['songRow.openInEditor']({ title: 'Tide' }));
 		expect(requireElement(row, '.overflow-btn').getAttribute('aria-label')).toBe(
-			playlistEntryOverflowLabel('Tide')
+			words['playlistPage.entryMore']({ title: 'Tide' })
 		);
 	});
 
@@ -482,7 +480,7 @@ describe('PlaylistDetailView row actions', () => {
 
 		getByRoleButton(
 			target.querySelectorAll<HTMLElement>('.entry-row')[1],
-			songEditorOpenLabel('Ebb')
+			words['songRow.openInEditor']({ title: 'Ebb' })
 		).click();
 		await tick();
 
@@ -514,7 +512,7 @@ describe('PlaylistDetailView row actions', () => {
 		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
 		expect(
 			Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) => el.textContent?.trim())
-		).toEqual(['Move up', 'Remove from playlist']);
+		).toEqual([words['playlistPage.moveUp'], words['playlistPage.remove']]);
 	});
 });
 
@@ -551,7 +549,7 @@ describe('PlaylistDetailView load failure (#139)', () => {
 		expect(target.querySelector('.entry-row')).toBeNull();
 		expect(requireElement(target, '[role="alert"]').textContent).toBe('Too many requests');
 		expect(requireElement<HTMLButtonElement>(target, '.retry-btn').textContent).toBe(
-			LIBRARY_RETRY_LABEL
+			words['playlistPage.retry']
 		);
 	});
 
@@ -616,7 +614,9 @@ describe('PlaylistDetailView with an empty playlistList (#139)', () => {
 
 		const target = await mountPlaylistView();
 
-		expect(requireElement(target, '[role="status"]').textContent).toBe('Loading playlist…');
+		expect(requireElement(target, '[role="status"]')).toHaveTextContent(
+			words['playlistPage.loading']
+		);
 	});
 
 	it('offline, shows neither a failure nor a spinner text under the strip', async () => {
@@ -635,7 +635,7 @@ describe('PlaylistDetailView says song, never track', () => {
 	it('defect:#1529 an empty playlist says No songs in this playlist yet.', async () => {
 		const target = await renderPlaylist([]);
 
-		expect(requireElement(target, '.empty-tab').textContent).toBe('No songs in this playlist yet.');
+		expect(requireElement(target, '.empty-tab').textContent).toBe(words['playlistPage.empty']);
 	});
 
 	it.each([

@@ -291,6 +291,38 @@ export type Words = {
     readonly "coverMark.runningName": (gaps: { readonly label: string }) => string;
     readonly "coverMark.waitingName": (gaps: { readonly label: string; readonly waiting: string }) => string;
     readonly "collectionHeader.songCount": (count: number) => string;
+    readonly "playlistPage.coverAlt": (gaps: { readonly title: string }) => string;
+    readonly "playlistPage.coverAltEmpty": string;
+    readonly "playlistPage.loading": string;
+    readonly "playlistPage.empty": string;
+    readonly "playlistPage.retry": string;
+    readonly "playlistPage.loadError": string;
+    readonly "playlistPage.entryMore": (gaps: { readonly title: string }) => string;
+    readonly "playlistPage.moveUp": string;
+    readonly "playlistPage.moveDown": string;
+    readonly "playlistPage.remove": string;
+    readonly "playlistPage.deleted": string;
+    readonly "playlistPage.deleteFailed": string;
+    readonly "playlistPage.renameFailed": string;
+    readonly "playlistPage.coverSaved": string;
+    readonly "playlistPage.coverSaveFailed": string;
+    readonly "playlistPage.coverRemoved": string;
+    readonly "playlistPage.coverRemoveFailed": string;
+    readonly "playlistPage.removeFailed": string;
+    readonly "playlistPage.reorderFailed": string;
+    readonly "playlistPage.deleteTitle": (gaps: { readonly title: string }) => string;
+    readonly "playlistPage.songCount": (count: number) => string;
+    readonly "playlistPage.deleteConfirm": string;
+    readonly "playlistPicker.label": string;
+    readonly "playlistPicker.heading": string;
+    readonly "playlistPicker.loading": string;
+    readonly "playlistPicker.error": string;
+    readonly "playlistPicker.retry": string;
+    readonly "playlistPicker.newPlaceholder": string;
+    readonly "playlistPicker.add": string;
+    readonly "playlistPicker.createFailed": string;
+    readonly "songRow.openInEditor": (gaps: { readonly title: string }) => string;
+    readonly "homeWrite.openInEditor": (gaps: { readonly title: string }) => string;
     readonly "songPage.coverAlt": (gaps: { readonly title: string }) => string;
     readonly "songPage.coverAltAlbum": (gaps: { readonly title: string }) => string;
     readonly "songPage.coverAltBare": string;
@@ -725,6 +757,45 @@ export const words: Words = {
         many: numberFormat.format(count) + " songs",
         other: numberFormat.format(count) + " songs",
     })[pluralRules.select(count)],
+    "playlistPage.coverAlt": (gaps: { readonly title: string }) => "Playlist cover for " + gaps.title,
+    "playlistPage.coverAltEmpty": "Playlist cover",
+    "playlistPage.loading": "Loading playlist…",
+    "playlistPage.empty": "No songs in this playlist yet.",
+    "playlistPage.retry": "Retry",
+    "playlistPage.loadError": "Failed to load playlists",
+    "playlistPage.entryMore": (gaps: { readonly title: string }) => "More for " + gaps.title,
+    "playlistPage.moveUp": "Move up",
+    "playlistPage.moveDown": "Move down",
+    "playlistPage.remove": "Remove from playlist",
+    "playlistPage.deleted": "Playlist deleted",
+    "playlistPage.deleteFailed": "Delete failed",
+    "playlistPage.renameFailed": "Rename failed",
+    "playlistPage.coverSaved": "Cover saved",
+    "playlistPage.coverSaveFailed": "Cover upload failed",
+    "playlistPage.coverRemoved": "Cover removed",
+    "playlistPage.coverRemoveFailed": "Cover remove failed",
+    "playlistPage.removeFailed": "Remove failed",
+    "playlistPage.reorderFailed": "Reorder failed",
+    "playlistPage.deleteTitle": (gaps: { readonly title: string }) => "Delete \"" + gaps.title + "\"?",
+    "playlistPage.songCount": (count: number) => ({
+        zero: numberFormat.format(count) + " songs",
+        one: numberFormat.format(count) + " song",
+        two: numberFormat.format(count) + " songs",
+        few: numberFormat.format(count) + " songs",
+        many: numberFormat.format(count) + " songs",
+        other: numberFormat.format(count) + " songs",
+    })[pluralRules.select(count)],
+    "playlistPage.deleteConfirm": "Delete Playlist",
+    "playlistPicker.label": "Add to Playlist",
+    "playlistPicker.heading": "Add to Playlist",
+    "playlistPicker.loading": "Loading playlists…",
+    "playlistPicker.error": "Failed to load playlists",
+    "playlistPicker.retry": "Retry",
+    "playlistPicker.newPlaceholder": "New playlist...",
+    "playlistPicker.add": "Add playlist",
+    "playlistPicker.createFailed": "Failed to create playlist",
+    "songRow.openInEditor": (gaps: { readonly title: string }) => "Open " + gaps.title + " in the song editor",
+    "homeWrite.openInEditor": (gaps: { readonly title: string }) => "Open " + gaps.title + " in the song editor",
     "songPage.coverAlt": (gaps: { readonly title: string }) => "Song " + gaps.title,
     "songPage.coverAltAlbum": (gaps: { readonly title: string }) => "Album " + gaps.title,
     "songPage.coverAltBare": "Song",

@@ -41,7 +41,6 @@ import {
 	COWRITER_DELETE_CONVERSATION_TITLE,
 	COWRITER_TURN_PATH
 } from '../src/lib/constants/cowriter';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
@@ -140,7 +139,9 @@ async function openCowriterOnPickedSong(page: Page): Promise<void> {
 	const library = readSeededLibrary();
 	await page.goto(`/album/${library.albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
+		.getByRole('button', {
+			name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
+		})
 		.click();
 	await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
 	await showCowriterTab(page);

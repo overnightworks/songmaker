@@ -1,7 +1,6 @@
 import { words } from '../src/lib/words/en';
 import { readSeededLibrary } from './seed';
 import { expect, test, type Page } from './coverage-test';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	boundingBoxes,
@@ -226,7 +225,10 @@ for (const safeArea of [0, 24]) {
 				expect(barBox.height).toBe(64);
 				expect(barBox.y + barBox.height).toBe(tabBox.y);
 				await workspace(page)
-					.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle), exact: true })
+					.getByRole('button', {
+						name: words['songRow.openInEditor']({ title: library.pickedSongTitle }),
+						exact: true
+					})
 					.click();
 				await expect(page).toHaveURL(/\/album\/[^/]+\/[^/]+$/);
 				await expect(tabs).toHaveCount(0);

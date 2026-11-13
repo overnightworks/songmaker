@@ -28,8 +28,3 @@ export const SONG_SHARE_LABEL = 'Share song';
 
 // Every row's PlayingMark reads this, in the rail, the detail views and the shared page.
 export const PLAYING_MARK_LABEL = 'Playing';
-
-// A song box's ✎: the box itself plays the song, so the pencil names the place it opens.
-export function songEditorOpenLabel(songTitle: string): string {
-	return `Open ${songTitle} in the song editor`;
-}

@@ -6,7 +6,7 @@
 // and 1440 px (the header).
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import { EDITOR_GENERATE_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
+import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { NOW_PLAYING_TAKE_TAB, NOW_PLAYING_LABEL } from '../src/lib/constants/now-playing';
 import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
@@ -55,7 +55,7 @@ async function seedSongs(): Promise<Songs> {
 
 async function openSong(page: Page, title: string): Promise<void> {
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 		.click();
 	await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
 }

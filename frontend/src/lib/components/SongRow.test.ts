@@ -1,10 +1,11 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
+import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { accessibleName } from '#lib/test-utils/accessible-name.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
+import { words } from '#lib/words/en.ts';
 import SongRow from './SongRow.svelte';
 import songRowSource from './SongRow.svelte?raw';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
@@ -40,7 +41,7 @@ describe('SongRow', () => {
 		{
 			surface: 'the app',
 			onedit: vi.fn(),
-			names: ['Quiet Wind 1 take', songEditorOpenLabel('Quiet Wind')]
+			names: ['Quiet Wind 1 take', words['songRow.openInEditor']({ title: 'Quiet Wind' })]
 		},
 		{ surface: 'a share page', onedit: undefined, names: ['Quiet Wind 1 take'] }
 	])('gives the box a ✎ only where $surface passes one', async ({ onedit, names }) => {

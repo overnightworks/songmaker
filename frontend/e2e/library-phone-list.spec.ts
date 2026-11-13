@@ -4,7 +4,6 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { LIBRARY_WALL_ORDER_KEYS, type LibraryWallOrder } from '../src/lib/constants/library';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { words } from '../src/lib/words/en';
 import {
@@ -614,7 +613,9 @@ async function playFirstTakeFromTheWall(
 		.getByRole('button', { name: openAlbum(album.title), exact: true })
 		.click();
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(fixture.tracks[album.id][0].title) })
+		.getByRole('button', {
+			name: words['songRow.openInEditor']({ title: fixture.tracks[album.id][0].title })
+		})
 		.click();
 	if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	const take = workspace(page).locator('.take-row');

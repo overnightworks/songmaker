@@ -1183,6 +1183,138 @@ msgctxt "collectionHeader.songCount.other"
 msgid "{count} songs"
 msgstr ""
 
+msgctxt "playlistPage.coverAlt"
+msgid "Playlist cover for {title}"
+msgstr ""
+
+msgctxt "playlistPage.coverAltEmpty"
+msgid "Playlist cover"
+msgstr ""
+
+msgctxt "playlistPage.loading"
+msgid "Loading playlist…"
+msgstr ""
+
+msgctxt "playlistPage.empty"
+msgid "No songs in this playlist yet."
+msgstr ""
+
+msgctxt "playlistPage.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "playlistPage.loadError"
+msgid "Failed to load playlists"
+msgstr ""
+
+msgctxt "playlistPage.entryMore"
+msgid "More for {title}"
+msgstr ""
+
+msgctxt "playlistPage.moveUp"
+msgid "Move up"
+msgstr ""
+
+msgctxt "playlistPage.moveDown"
+msgid "Move down"
+msgstr ""
+
+msgctxt "playlistPage.remove"
+msgid "Remove from playlist"
+msgstr ""
+
+msgctxt "playlistPage.deleted"
+msgid "Playlist deleted"
+msgstr ""
+
+msgctxt "playlistPage.deleteFailed"
+msgid "Delete failed"
+msgstr ""
+
+msgctxt "playlistPage.renameFailed"
+msgid "Rename failed"
+msgstr ""
+
+msgctxt "playlistPage.coverSaved"
+msgid "Cover saved"
+msgstr ""
+
+msgctxt "playlistPage.coverSaveFailed"
+msgid "Cover upload failed"
+msgstr ""
+
+msgctxt "playlistPage.coverRemoved"
+msgid "Cover removed"
+msgstr ""
+
+msgctxt "playlistPage.coverRemoveFailed"
+msgid "Cover remove failed"
+msgstr ""
+
+msgctxt "playlistPage.removeFailed"
+msgid "Remove failed"
+msgstr ""
+
+msgctxt "playlistPage.reorderFailed"
+msgid "Reorder failed"
+msgstr ""
+
+msgctxt "playlistPage.deleteTitle"
+msgid "Delete \"{title}\"?"
+msgstr ""
+
+msgctxt "playlistPage.songCount.one"
+msgid "{count} song"
+msgstr ""
+
+msgctxt "playlistPage.songCount.other"
+msgid "{count} songs"
+msgstr ""
+
+msgctxt "playlistPage.deleteConfirm"
+msgid "Delete Playlist"
+msgstr ""
+
+msgctxt "playlistPicker.label"
+msgid "Add to Playlist"
+msgstr ""
+
+msgctxt "playlistPicker.heading"
+msgid "Add to Playlist"
+msgstr ""
+
+msgctxt "playlistPicker.loading"
+msgid "Loading playlists…"
+msgstr ""
+
+msgctxt "playlistPicker.error"
+msgid "Failed to load playlists"
+msgstr ""
+
+msgctxt "playlistPicker.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "playlistPicker.newPlaceholder"
+msgid "New playlist..."
+msgstr ""
+
+msgctxt "playlistPicker.add"
+msgid "Add playlist"
+msgstr ""
+
+msgctxt "playlistPicker.createFailed"
+msgid "Failed to create playlist"
+msgstr ""
+
+msgctxt "songRow.openInEditor"
+msgid "Open {title} in the song editor"
+msgstr ""
+
+msgctxt "homeWrite.openInEditor"
+msgid "Open {title} in the song editor"
+msgstr ""
+
 msgctxt "songPage.coverAlt"
 msgid "Song {title}"
 msgstr ""

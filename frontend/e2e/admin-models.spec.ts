@@ -20,7 +20,6 @@ import { expect, test, type Locator, type Page, type TestInfo } from './coverage
 
 import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
 import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '../src/lib/constants/cowriter';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import {
 	MODELS_ADVANCED_LABEL,
 	MODELS_COLUMN_MODEL_LABEL,
@@ -198,7 +197,9 @@ test(
 
 		await page.goto(`/album/${library.albumId}`);
 		await surface
-			.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
+			.getByRole('button', {
+				name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
+			})
 			.click();
 		await surface.getByRole('tab', { name: words['songTabs.cowriter'], exact: true }).click();
 

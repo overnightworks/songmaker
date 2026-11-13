@@ -3,7 +3,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	sameOriginHeaders,
@@ -208,7 +207,7 @@ async function playTheSongsTake(
 ): Promise<void> {
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 		.click();
 	if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	const take = workspace(page).locator('.take-row');

@@ -4,7 +4,7 @@
 import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from './coverage-test';
 import type { VersionItem } from '../src/lib/api/types';
-import { EDITOR_GENERATE_TAKE_TEMPLATE, songEditorOpenLabel } from '../src/lib/constants/song';
+import { EDITOR_GENERATE_TAKE_TEMPLATE } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { GENERATION_PHASE_LABELS } from '../src/lib/constants/jobs';
 import { formatTime } from '../src/lib/utils/format';
@@ -132,7 +132,7 @@ async function openSongWithAnUnsavedDraft(
 	const lyrics = page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 		.click();
 	await expect(songHeading).toBeVisible();
 	expectSongAddressStands(page, albumId, title);
@@ -309,7 +309,7 @@ test.describe('song page at phone width', () => {
 			const takesTab = page.getByRole('tab', { name: new RegExp(`^${words['songTabs.takes']}`) });
 			const openFromAlbum = async (title: string) => {
 				await workspace(page)
-					.getByRole('button', { name: songEditorOpenLabel(title) })
+					.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 					.click();
 				await expect(page.getByRole('heading', { name: title })).toBeVisible();
 				expectSongAddressStands(page, library.songPhoneAlbumId, title);
@@ -483,7 +483,10 @@ test.describe('song page at phone width', () => {
 						await page.goto('/');
 						await page
 							.getByRole('region', { name: words['homeWrite.label'], exact: true })
-							.getByRole('button', { name: songEditorOpenLabel(title), exact: true })
+							.getByRole('button', {
+								name: words['songRow.openInEditor']({ title: title }),
+								exact: true
+							})
 							.click();
 						await expect(songHeading).toBeVisible();
 						name = words['pageBack.backTo']({ page: words['places.home'] });

@@ -25,16 +25,10 @@
 	import { selectSong } from '#lib/stores/navigation.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
-	import { LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
-	import {
-		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
-		PLAYLIST_ENTRY_MOVE_UP_LABEL,
-		PLAYLIST_ENTRY_REMOVE_LABEL,
-		playlistEntryOverflowLabel
-	} from '#lib/constants/playlist.ts';
 	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ACCEPT } from '#lib/constants/album.ts';
 	import { nowPlayingTakeMeta } from '#lib/constants/now-playing.ts';
-	import { songCountLabel, titleInitials } from '#lib/utils/format.ts';
+	import { titleInitials } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
@@ -78,7 +72,9 @@
 	);
 	const coverUrl = $derived(playlistMeta?.cover?.detail ?? null);
 	const coverAlt = $derived(
-		playlistMeta ? `Playlist cover for ${playlistMeta.title}` : 'Playlist cover'
+		playlistMeta
+			? pageText('playlistPage.coverAlt', { title: playlistMeta.title })
+			: pageText('playlistPage.coverAltEmpty')
 	);
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);
@@ -133,10 +129,10 @@
 		try {
 			await deletePlaylist(playlistId);
 		} catch {
-			addToast('Delete failed', 'error');
+			addToast(pageText('playlistPage.deleteFailed'), 'error');
 			return;
 		}
-		addToast('Playlist deleted', 'success');
+		addToast(pageText('playlistPage.deleted'), 'success');
 	}
 
 	async function onPlaylistRename(newTitle: string): Promise<void> {
@@ -144,7 +140,7 @@
 		try {
 			await renamePlaylist(playlistMeta.id, newTitle);
 		} catch {
-			addToast('Rename failed', 'error');
+			addToast(pageText('playlistPage.renameFailed'), 'error');
 			throw new Error('Rename failed');
 		}
 	}
@@ -157,9 +153,9 @@
 		coverBusy = true;
 		try {
 			await uploadPlaylistCover(playlistMeta.id, file);
-			addToast('Cover saved', 'success');
+			addToast(pageText('playlistPage.coverSaved'), 'success');
 		} catch (error) {
-			addToast(describeFailure(error, 'Cover upload failed'), 'error');
+			addToast(describeFailure(error, pageText('playlistPage.coverSaveFailed')), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -174,9 +170,9 @@
 		coverBusy = true;
 		try {
 			await deletePlaylistCover(playlistMeta.id);
-			addToast('Cover removed', 'success');
+			addToast(pageText('playlistPage.coverRemoved'), 'success');
 		} catch (error) {
-			addToast(describeFailure(error, 'Cover remove failed'), 'error');
+			addToast(describeFailure(error, pageText('playlistPage.coverRemoveFailed')), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -187,7 +183,7 @@
 		try {
 			await removePlaylistEntry(playlistDetail.id, entryId);
 		} catch {
-			addToast('Remove failed', 'error');
+			addToast(pageText('playlistPage.removeFailed'), 'error');
 		}
 	}
 
@@ -197,7 +193,7 @@
 		try {
 			await movePlaylistEntry(playlistDetail.id, entryId, newPos);
 		} catch {
-			addToast('Reorder failed', 'error');
+			addToast(pageText('playlistPage.reorderFailed'), 'error');
 		} finally {
 			reorderBusy = false;
 		}
@@ -282,7 +278,7 @@
 											data-hitbox-face
 											aria-haspopup="menu"
 											aria-expanded={$overflowId === entry.id}
-											aria-label={playlistEntryOverflowLabel(entry.song_title)}
+											aria-label={pageText('playlistPage.entryMore', { title: entry.song_title })}
 											onclick={(e) => toggleOverflow(entry.id, e)}
 										>
 											<Icon name="more-horizontal" size={16} />
@@ -308,7 +304,7 @@
 															void onMoveEntry(entry.id, i - 1);
 														}}
 													>
-														{PLAYLIST_ENTRY_MOVE_UP_LABEL}
+														{pageText('playlistPage.moveUp')}
 													</button>
 												{/if}
 												{#if i < playlistDetail.entries.length - 1}
@@ -323,7 +319,7 @@
 															void onMoveEntry(entry.id, i + 1);
 														}}
 													>
-														{PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
+														{pageText('playlistPage.moveDown')}
 													</button>
 												{/if}
 												<button
@@ -336,7 +332,7 @@
 														void onRemoveEntry(entry.id);
 													}}
 												>
-													{PLAYLIST_ENTRY_REMOVE_LABEL}
+													{pageText('playlistPage.remove')}
 												</button>
 											</div>
 										{/if}
@@ -347,17 +343,17 @@
 					{/each}
 				</ul>
 				{#if playlistDetail.entries.length === 0}
-					<p class="empty-tab">No songs in this playlist yet.</p>
+					<p class="empty-tab">{pageText('playlistPage.empty')}</p>
 				{/if}
 			{:else if detailLoad.status === 'error'}
 				<p class="empty-tab" role="alert">{detailLoad.error}</p>
 				<button
 					class="retry-btn"
 					onclick={() => $selectedPlaylistId && loadPlaylistDetail($selectedPlaylistId)}
-					>{LIBRARY_RETRY_LABEL}</button
+					>{pageText('playlistPage.retry')}</button
 				>
 			{:else if detailLoad.status !== 'unreachable'}
-				<p class="empty-tab" role="status">Loading playlist…</p>
+				<p class="empty-tab" role="status">{pageText('playlistPage.loading')}</p>
 			{/if}
 		</div>
 	</div>
@@ -365,9 +361,9 @@
 
 {#if showDeleteConfirm && playlistMeta}
 	<ConfirmDeleteDialog
-		title={`Delete "${playlistMeta.title}"?`}
-		items={[songCountLabel(playlistMeta.entry_count)]}
-		confirmLabel="Delete Playlist"
+		title={pageText('playlistPage.deleteTitle', { title: playlistMeta.title })}
+		items={[pageText('playlistPage.songCount', playlistMeta.entry_count)]}
+		confirmLabel={pageText('playlistPage.deleteConfirm')}
 		onconfirm={() => {
 			showDeleteConfirm = false;
 			onPlaylistDelete();

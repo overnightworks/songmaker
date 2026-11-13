@@ -19,11 +19,7 @@ import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import { words } from '../src/lib/words/en';
-import {
-	EDITOR_GENERATE_LABEL,
-	EDITOR_GENERATE_TAKE_TEMPLATE,
-	songEditorOpenLabel
-} from '../src/lib/constants/song';
+import { EDITOR_GENERATE_LABEL, EDITOR_GENERATE_TAKE_TEMPLATE } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
@@ -121,7 +117,7 @@ async function openSeededSongFromItsAlbum(
 	await arrange(await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1));
 	await page.goto(`/album/${library.songPhoneAlbumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 		.click();
 	await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 	// The song shows before its route module has loaded, and only then does

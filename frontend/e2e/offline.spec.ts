@@ -8,8 +8,7 @@ import {
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
 	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATE_RECONNECTING_LABEL,
-	EDITOR_GENERATE_TAKE_TEMPLATE,
-	songEditorOpenLabel
+	EDITOR_GENERATE_TAKE_TEMPLATE
 } from '../src/lib/constants/song';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
@@ -559,7 +558,7 @@ async function seedOfflineRunningSong(suffix: string, progress: number) {
 async function openSong(page: Page, albumId: string, songTitle: string): Promise<void> {
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 		.click();
 }
 

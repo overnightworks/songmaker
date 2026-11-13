@@ -1,5 +1,4 @@
 import { expect, test, type Locator } from './coverage-test';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
 import { API_ERROR_GENERIC_MESSAGE } from '../src/lib/constants/http';
 import {
@@ -136,7 +135,11 @@ test('album content begins at its header, song and take content at their breadcr
 	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
 	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 
-	await surface.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) }).click();
+	await surface
+		.getByRole('button', {
+			name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
+		})
+		.click();
 	await expect(page).toHaveURL(songAddress);
 	if (isMobile) {
 		// The layout's own app bar carries the song header at compact widths
@@ -224,7 +227,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				try {
 					await page.goto(`/album/${library.albumId}`);
 					const openSong = workspace(page).getByRole('button', {
-						name: songEditorOpenLabel(library.pickedSongTitle)
+						name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
 					});
 					await expect(openSong).toBeVisible();
 					await expect(offlineStrip(page)).toHaveCount(0);

@@ -5,7 +5,6 @@
 import { expect, type Page } from '@playwright/test';
 import { words } from '../src/lib/words/en';
 import type { SongItem } from '../src/lib/api/types';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { sameOriginHeaders, nameStartingWith, workspace } from './helpers';
 import {
 	completeGenerationJobWithoutEvent,
@@ -70,7 +69,7 @@ export async function seedFoldedSong(
 export async function openTakes(page: Page, song: FoldedSong): Promise<void> {
 	await page.goto(`/album/${song.albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(song.title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: song.title }) })
 		.click();
 	await showTab(page, words['songTabs.takes']);
 	await expect(workspace(page).locator('.take-row')).toHaveCount(SECOND_VERSION_TAKE_COUNT);

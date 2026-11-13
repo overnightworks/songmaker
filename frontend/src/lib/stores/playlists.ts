@@ -15,7 +15,7 @@ import {
 	deletePlaylistCover as apiDeletePlaylistCover
 } from '#lib/api/client.ts';
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '#lib/api/types.ts';
-import { LIBRARY_PLAYLISTS_ERROR } from '#lib/constants/playlist.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import { openCollection, setOpenCollection } from '#lib/stores/collection.ts';
 import { forgetListenedPlace } from '#lib/stores/libraryOrder.ts';
 import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
@@ -131,7 +131,10 @@ export async function loadPlaylists(): Promise<boolean> {
 			playlistLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
-			playlistLoad.set({ status: 'error', error: describeFailure(err, LIBRARY_PLAYLISTS_ERROR) });
+			playlistLoad.set({
+				status: 'error',
+				error: describeFailure(err, pageText('playlistPage.loadError'))
+			});
 			return false;
 		} finally {
 			playlistsInflight = null;
@@ -205,7 +208,7 @@ function failPlaylistDetailLoad(err: unknown): void {
 	} else {
 		playlistDetailReloads.stop();
 	}
-	const message = describeFailure(err, LIBRARY_PLAYLISTS_ERROR);
+	const message = describeFailure(err, pageText('playlistPage.loadError'));
 	selectedPlaylistDetail.set(null);
 	playlistDetailLoad.set({ status: 'error', error: message });
 	addToast(message, 'error');
