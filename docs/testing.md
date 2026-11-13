@@ -124,8 +124,7 @@ boundary, and over seeded files at every path that used to be exempt.
 every call of the generated `songmaker_cli.words.text` (SQLAlchemy's `text` is not counted).
 A call must name a string-literal key that is a plain entry of `words.py`, and pass
 exactly the sentence's gaps as keywords with no `**` spread. A `Refusal` call also needs an
-int literal status other than 404 (the server answers 404 through its own handler, which would
-drop the message) and a key of the form `<resource>Refusal.<reason>`.
+int literal status and a key of the form `<resource>Refusal.<reason>`.
 `tests/scripts/test_check_refusal_keys.py` seeds a package for each rule and runs the check over
 the real tree.
 

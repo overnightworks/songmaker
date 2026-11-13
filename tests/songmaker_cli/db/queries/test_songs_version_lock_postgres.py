@@ -22,6 +22,7 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.songs import create_song, update_song
 from songmaker_cli.mcp_server.tools import tool_rename_song, tool_update_song_lyrics
+from songmaker_cli.song_api import VERSION_NOT_FOUND_DETAIL
 
 OWNER = "u1"
 OWNER_USER = make_authenticated_user(OWNER, username="owner")
@@ -185,7 +186,7 @@ def test_a_second_delete_of_one_version_waits_and_then_answers_not_found(
     answers = race(pg_factory, world.delete_version(2), world.delete_version(2))
     assert answers["first"].status_code == 200
     assert answers["second"].status_code == 404
-    assert answers["second"].json() == {"detail": "Not Found"}
+    assert answers["second"].json() == {"detail": VERSION_NOT_FOUND_DETAIL}
     assert world.versions() == {1: ("", REFERENCES["H"])}
 
 
@@ -197,7 +198,7 @@ def test_an_enqueue_waits_for_a_version_delete_and_answers_404_without_a_job(
         answers = race(pg_factory, world.delete_version(2), world.enqueue(2))
     assert answers["first"].status_code == 200
     assert answers["second"].status_code == 404
-    assert answers["second"].json() == {"detail": "Not Found"}
+    assert answers["second"].json() == {"detail": VERSION_NOT_FOUND_DETAIL}
     assert world.job_versions() == []
     assert world.versions() == {1: ("", REFERENCES["H"])}
 
