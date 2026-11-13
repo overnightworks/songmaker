@@ -129,7 +129,7 @@ async function openSongWithAnUnsavedDraft(
 ): Promise<SongWithAnUnsavedDraft> {
 	await seedSongPhoneSong(albumId, title, 1, 1);
 	const songHeading = page.getByRole('heading', { name: title });
-	const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+	const lyrics = page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
 		.getByRole('button', { name: songEditorOpenLabel(title) })
@@ -186,7 +186,7 @@ test.describe('song page at phone width', () => {
 			await page.goto(songAddress);
 			await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			const { versionNumber } = await seededTakeVersion(page, songId);
 			await expect(
 				panel.getByText(currentVersionHeadLabel(versionNumber, SONG_PHONE_TAKE_COUNT))
@@ -240,7 +240,7 @@ test.describe('song page at phone width', () => {
 			);
 			await page.clock.pauseAt(Date.now() + CLOCK_HOLD_LEAD_MS);
 
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			await expect(panel.getByRole('progressbar')).toBeVisible();
 			await expect(panel.getByText(LOADING_JOB_PHASE_LABEL)).toBeVisible();
 			await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: true })).toBeVisible();
@@ -255,7 +255,7 @@ test.describe('song page at phone width', () => {
 			await expect(panel.locator('.status-title')).toContainText(elapsedAfterRun);
 			await page.getByRole('tab', { name: words['songTabs.edit'] }).click();
 			await expect(generateStatus).toContainText(`Loading model… ${elapsedAfterRun}`);
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			await page.clock.resume();
 
 			// Leaving the model load live, over the same job's still-open SSE
@@ -580,7 +580,9 @@ test.describe('song page at phone width', () => {
 					const cold = await coldContext.newPage();
 					await observeTabAttachments(cold);
 					await cold.goto(address);
-					const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
+					const coldLyrics = cold.getByRole('textbox', {
+						name: new RegExp(`^${words['writeColumn.lyrics']}`)
+					});
 					await expect(coldLyrics).toHaveValue(savedLyrics);
 					expect(await cold.evaluate(() => Reflect.get(window, 'phoneTabAttachments'))).toEqual([]);
 					await expect(cold.locator('.workspace-wrapper')).not.toHaveAttribute('inert');

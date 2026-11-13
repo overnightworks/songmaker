@@ -114,7 +114,8 @@ for (const width of WIDTHS) {
 					try {
 						await page.goto(address);
 						await expect(page.getByRole('heading', { name: title })).toBeVisible();
-						if (width === 390) await page.getByRole('tab', { name: /Takes/ }).click();
+						if (width === 390)
+							await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 						await page
 							.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
 							.first()
@@ -148,7 +149,9 @@ for (const width of WIDTHS) {
 							words['songPage.unsavedSave'],
 							words['songPage.unsavedDiscard']
 						]) {
-							const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+							const lyrics = page.getByRole('textbox', {
+								name: new RegExp(`^${words['writeColumn.lyrics']}`)
+							});
 							const original = await lyrics.inputValue();
 							const draft = `${original}\nQA worker pool ${outcome}`;
 							await lyrics.fill(draft);
@@ -171,7 +174,9 @@ for (const width of WIDTHS) {
 						}
 
 						// A modified click opens a new tab without asking to discard this draft.
-						const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+						const lyrics = page.getByRole('textbox', {
+							name: new RegExp(`^${words['writeColumn.lyrics']}`)
+						});
 						const draft = `${await lyrics.inputValue()}\nQA keep this draft`;
 						await lyrics.fill(draft);
 						// Hold the tab's document until Playwright has reported the tab, so the

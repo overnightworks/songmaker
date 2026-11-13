@@ -457,7 +457,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 
 	await openPickedSong.click();
 	if (shell === 'mobile') {
-		const takesTab = surface.getByRole('tab', { name: /Takes/ });
+		const takesTab = surface.getByRole('tab', { name: words['songTabs.takes'] });
 		await expect(takesTab).toHaveCount(1);
 		await takesTab.click();
 	}

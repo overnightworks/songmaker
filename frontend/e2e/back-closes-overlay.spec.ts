@@ -173,7 +173,7 @@ async function openSong(page: Page, shell: Shell, playlist: SeededPlaylist): Pro
 // The phone lists takes under their tab; the desktop shows them beside the lyrics.
 async function songsTakes(page: Page, shell: Shell): Promise<Locator> {
 	if (shell === 'desktop') return workspace(page);
-	await page.getByRole('tab', { name: /Takes/ }).click();
+	await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	return page.getByRole('tabpanel');
 }
 
@@ -219,7 +219,7 @@ function deleteConfirmRow(shell: Shell): OverlayRow {
 }
 
 function lyricsField(page: Page): Locator {
-	return page.getByRole('textbox', { name: /^Lyrics/ });
+	return page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 }
 
 function unsavedDraftDialog(page: Page): Locator {

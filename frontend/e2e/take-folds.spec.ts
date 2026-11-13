@@ -85,7 +85,9 @@ async function holdSave(page: Page): Promise<() => Promise<void>> {
 
 async function editLyrics(page: Page): Promise<void> {
 	await showTab(page, words['songTabs.edit']);
-	await page.getByRole('textbox', { name: /^Lyrics/ }).fill(EDITED_LYRICS);
+	await page
+		.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) })
+		.fill(EDITED_LYRICS);
 }
 
 async function startSave(page: Page): Promise<void> {

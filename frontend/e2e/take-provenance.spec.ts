@@ -100,7 +100,8 @@ const provenanceLink = (page: Page, song: JumpSong) =>
 	});
 const unsavedChangesDialog = (page: Page) =>
 	page.getByRole('dialog', { name: words['songPage.unsavedTitle'] });
-const lyricsField = (page: Page) => page.getByRole('textbox', { name: /^Lyrics/ });
+const lyricsField = (page: Page) =>
+	page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 const entriesOf = (page: Page) => page.evaluate(() => history.length);
 // Chromium's Navigation API: the index of the entry on screen, which every Back lowers by one.
 const historyIndex = (page: Page) =>

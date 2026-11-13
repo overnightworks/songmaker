@@ -3,6 +3,7 @@
 // loseNetwork also closes open streams; setOffline alone leaves them running.
 
 import { expect, test, type Locator, type Page, type Route } from './coverage-test';
+import { words } from '../src/lib/words/en';
 import {
 	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
@@ -380,7 +381,7 @@ test.describe('tapping a take row Play while the network is gone', () => {
 		const takeRowPlay = playTakeButton(workspace(page).locator('.take-row'));
 
 		await openSong(page, library.songPhoneAlbumId, songTitle);
-		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
+		if (isMobile) await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
 		await expect(takeRowPlay).toBeVisible();
 
@@ -507,7 +508,7 @@ test.describe('pressing the album header Play while the network is gone', () => 
 		await watchTheLockScreen(page);
 
 		await openSong(page, library.songPhoneAlbumId, loadedTitle);
-		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
+		if (isMobile) await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 		await playTakeButton(workspace(page).locator('.take-row')).click();
 		await expect(barPause.locator('.spinner')).toHaveCount(0);
 		await barPause.click();
@@ -565,7 +566,7 @@ async function openSong(page: Page, albumId: string, songTitle: string): Promise
 
 async function openOfflineTakes(page: Page, albumId: string, songTitle: string): Promise<void> {
 	await openSong(page, albumId, songTitle);
-	await page.getByRole('tab', { name: /Takes/ }).click();
+	await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	// Wait for the song route before cutting the network during its module load.
 	await expect(page).toHaveURL(new RegExp(`/album/${albumId}/[^/]+$`));
 }
@@ -590,7 +591,7 @@ test.describe(
 					0.4
 				);
 				const panel = page.getByRole('tabpanel');
-				const takesTab = page.getByRole('tab', { name: /Takes/ });
+				const takesTab = page.getByRole('tab', { name: words['songTabs.takes'] });
 				const runningRing = takesTab.locator('.ring');
 				const playTakePrefix = `${TRANSPORT_PLAY_LABEL} v`;
 				const playButtons = panel.getByRole('button', { name: new RegExp(`^${playTakePrefix}`) });

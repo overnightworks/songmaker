@@ -194,7 +194,7 @@ async function pickTheTakeOf(page: Page, songId: string, versionNumber: number):
 }
 
 function lyricsField(page: Page): Locator {
-	return page.getByRole('textbox', { name: /^Lyrics/ });
+	return page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 }
 
 function versionChip(page: Page): Locator {

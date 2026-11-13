@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from './coverage-test';
+import { words } from '../src/lib/words/en';
 import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
@@ -209,7 +210,7 @@ async function playTheSongsTake(
 	await workspace(page)
 		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 		.click();
-	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
+	if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	const take = workspace(page).locator('.take-row');
 	await expect(take).toHaveCount(1);
 	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();

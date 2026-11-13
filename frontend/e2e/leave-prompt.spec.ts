@@ -47,7 +47,7 @@ async function openSongCold(page: Page, ownedAlbumId: string): Promise<OpenSong>
 	const address = discovery.url();
 	await discovery.close();
 	await page.goto(address);
-	const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+	const lyrics = page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 	await expect(lyrics).toBeVisible();
 	await lyrics.click();
 	return { lyrics, savedLyrics: await lyrics.inputValue() };

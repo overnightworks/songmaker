@@ -846,7 +846,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		selectSong('s-last', song({ ...editableSongDefaults(), id: 's-last', title: 'Last' }));
 		await tick();
-		clickNamed(target, 'Discard');
+		clickNamed(target, words['songPage.unsavedDiscard']);
 		await tick();
 
 		expect(get(selectedSongId)).toBe('s-last');
@@ -1029,7 +1029,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 			})
 		);
 		await tick();
-		clickNamed(target, 'Discard');
+		clickNamed(target, words['songPage.unsavedDiscard']);
 		await tick();
 		await tick();
 

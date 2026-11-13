@@ -135,7 +135,8 @@ async function openTakes(page: Page, library: ProofLibrary, shell: Shell): Promi
 	await workspace(page)
 		.getByRole('button', { name: songEditorOpenLabel(library.song.title) })
 		.click();
-	if (shell === 'mobile') await workspace(page).getByRole('tab', { name: /Takes/ }).click();
+	if (shell === 'mobile')
+		await workspace(page).getByRole('tab', { name: words['songTabs.takes'] }).click();
 	await expect(workspace(page).locator('.take-row')).toHaveCount(1);
 }
 

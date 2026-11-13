@@ -139,7 +139,9 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 
 		const miniPlayer = page.getByRole('contentinfo');
 		const generate = generateButton(page);
-		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+		const lyrics = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.lyrics']}`)
+		});
 		await expect(miniPlayer).toBeVisible();
 		await expect(generate).toBeVisible();
 
@@ -197,14 +199,16 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
 		const editTab = page.getByRole('tab', { name: words['songTabs.edit'] });
 
-		await page.getByRole('tab', { name: /Takes/ }).click();
+		await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 		await panel.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) }).click();
 		await expect(pause).toBeVisible();
 		await editTab.click();
 		const progress = panel.getByRole('status');
 		await expect(progress.getByText(RUNNING_JOB_TAKE_COUNTER)).toBeVisible();
 
-		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+		const lyrics = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.lyrics']}`)
+		});
 		await lyrics.click();
 		await showOnScreenKeyboard(page, true);
 		// A pasted block leaves the page where it was; typing on at its end is
@@ -234,7 +238,9 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 	}) => {
 		const guard = new FlowGuard(page);
 		await openSeededSongFromItsAlbum(page);
-		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+		const lyrics = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.lyrics']}`)
+		});
 		await lyrics.click();
 		await showOnScreenKeyboard(page, true);
 		await lyrics.fill(`${LONG_LYRICS}\n${LAST_SECTION_LABEL}`);
@@ -291,7 +297,9 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await openSeededSongFromItsAlbum(page);
 		const miniPlayer = page.getByRole('contentinfo');
 
-		await page.getByRole('textbox', { name: /^Lyrics/ }).click();
+		await page
+			.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) })
+			.click();
 		// The client-side route change keeps this document, and with it the
 		// open keyboard, for every field below.
 		await showOnScreenKeyboard(page, true);
