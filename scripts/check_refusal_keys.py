@@ -94,17 +94,33 @@ class WordsBindings:
         return False
 
 
+def _from_import_names(tree: ast.Module, module: str, name: str) -> set[str]:
+    return {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == module
+        for alias in node.names
+        if alias.name == name
+    }
+
+
+def _import_names(tree: ast.Module, module: str) -> set[str]:
+    return {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.name == module
+    }
+
+
 def words_bindings(tree: ast.Module) -> WordsBindings:
-    functions: set[str] = set()
-    modules: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == WORDS_MODULE:
-            functions.update(a.asname or a.name for a in node.names if a.name == TEXT_NAME)
-        elif isinstance(node, ast.ImportFrom) and node.module == PACKAGE_MODULE:
-            modules.update(a.asname or a.name for a in node.names if a.name == WORDS_NAME)
-        elif isinstance(node, ast.Import):
-            modules.update(a.asname or a.name for a in node.names if a.name == WORDS_MODULE)
-    return WordsBindings(frozenset(functions), frozenset(modules))
+    return WordsBindings(
+        functions=frozenset(_from_import_names(tree, WORDS_MODULE, TEXT_NAME)),
+        modules=frozenset(
+            _from_import_names(tree, PACKAGE_MODULE, WORDS_NAME) | _import_names(tree, WORDS_MODULE)
+        ),
+    )
 
 
 def _is_refusal_call(call: ast.Call) -> bool:

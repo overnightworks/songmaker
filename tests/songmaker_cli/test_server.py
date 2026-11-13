@@ -20,7 +20,6 @@ from support.web_app import (
     TEST_SECRET,
     make_fake_redis,
     make_test_app,
-    refusal_body,
     seed_session,
     seed_user,
     web_client,
@@ -82,21 +81,6 @@ def test_security_headers(server_app: TestClient) -> None:
     assert "frame-ancestors 'none'" in resp.headers["Content-Security-Policy"]
     assert resp.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
     assert "camera=()" in resp.headers["Permissions-Policy"]
-
-
-def test_the_live_app_answers_a_refusal_with_its_key_under_the_security_headers(
-    server_app: TestClient,
-) -> None:
-    with server_app.app.state.ctx.db() as session:
-        session.get(Generation, "g1").is_archived = True
-        session.commit()
-
-    response = server_app.post("/api/generations/g1/pick")
-
-    assert response.status_code == 409
-    assert response.json() == refusal_body("takeRefusal.archived")
-    assert response.headers["X-Content-Type-Options"] == "nosniff"
-    assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
 
 
 @pytest.mark.parametrize("path", ["/", "/albums/any-album", "/api/albums"])

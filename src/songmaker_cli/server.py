@@ -165,6 +165,22 @@ def audio_path_rejected_handler(
     return JSONResponse({"detail": HTTP_NOT_FOUND}, status_code=404)
 
 
+def _install_error_handlers(app: FastAPI) -> None:
+    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
+    install_refusal_handler(app)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
+        fields = sorted({".".join(str(loc) for loc in e["loc"]) for e in exc.errors()})
+        return JSONResponse(
+            {"detail": f"Validation error on: {', '.join(fields)}"},
+            status_code=422,
+        )
+
+
 def _oidc_sign_in_or_default(given: OidcSignIn | None, settings: Settings) -> OidcSignIn:
     return build_oidc_sign_in(settings) if given is None else given
 
@@ -313,19 +329,7 @@ def create_app(
     # still sit behind the whole block above.
     app.state.mcp_front = mount_mcp_front(app, agent_tools, mcp_resource, app.state.oidc_sign_in)
 
-    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
-    install_refusal_handler(app)
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_error_handler(
-        request: Request,
-        exc: RequestValidationError,
-    ) -> JSONResponse:
-        fields = sorted({".".join(str(loc) for loc in e["loc"]) for e in exc.errors()})
-        return JSONResponse(
-            {"detail": f"Validation error on: {', '.join(fields)}"},
-            status_code=422,
-        )
+    _install_error_handlers(app)
 
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"

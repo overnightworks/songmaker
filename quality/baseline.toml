@@ -132,7 +132,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"create_app" = 136
+"create_app" = 125
 
 [function_lines."tests/acestep_worker/test_wrapper_train_lora.py"]
 "test_default_train_lora_runner_dispatches" = 140
@@ -258,7 +258,6 @@ get_playlist_by_slug = [["src/songmaker_cli/db/queries/songs.py", "get_song_by_s
 set_playlist_cover_key = [["src/songmaker_cli/db/queries/songs.py", "set_song_cover_key"]]
 
 [clones."src/songmaker_cli/generation_api.py"]
-api_share_generation = [["src/songmaker_cli/playlist_api.py", "api_share_playlist"], ["src/songmaker_cli/song_api.py", "api_share_song"]]
 api_unshare_generation = [["src/songmaker_cli/playlist_api.py", "api_delete_playlist"], ["src/songmaker_cli/playlist_api.py", "api_unshare_playlist"], ["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]
 
 [clones."src/songmaker_cli/playlist_api.py"]

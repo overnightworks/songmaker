@@ -7,13 +7,23 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import sessionmaker
-from support.web_app import make_router_app, make_router_ctx
+from sqlalchemy.orm import Session, sessionmaker
+from support.web_app import (
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    make_test_app,
+    refusal_body,
+    seed_session,
+    seed_user,
+)
 
+from songmaker_cli.db.models import Album, AvailableModel, Generation, Song, Version
 from songmaker_cli.refusals import Refusal
 from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
 
 GAP_WITH_MARKUP = "<i>{braces}</i> & 'quotes'"
+OWNER = "owner"
 
 
 @pytest.fixture
@@ -89,3 +99,58 @@ def test_a_refusal_with_the_wrong_gaps_fails_where_it_is_built(
 ) -> None:
     with pytest.raises(TypeError):
         Refusal(400, key, **gaps)
+
+
+def _seed_song_with_archived_take(session: Session) -> None:
+    owner = seed_user(session, OWNER, user_id=OWNER)
+    session.add(Album(id="album", title="Album", artist="X", created_by=owner.id))
+    session.flush()
+    session.add(Song(id="song", title="Song", album_id="album", track_number=1, slug="song"))
+    session.flush()
+    session.add(Version(id="version", song_id="song", version_number=1, lyrics="l", prompt="p"))
+    session.flush()
+    session.add(Generation(
+        id="take", song_id="song", version_id="version", generation_number=1,
+        mp3_path=f"{OWNER}/take.mp3", is_archived=True,
+    ))
+    session.query(AvailableModel).filter(AvailableModel.id == "sft").update({"is_active": False})
+
+
+def test_the_live_app_answers_a_refusal_with_its_key_under_the_security_headers(
+    tmp_path: Path, pg_factory
+) -> None:
+    live, _ = make_test_app(tmp_path, seed_db=_seed_song_with_archived_take, factory=pg_factory)
+    seed_session(live, OWNER)
+
+    response = live.post("/api/generations/take/pick")
+
+    assert response.status_code == 409
+    assert response.json() == refusal_body("takeRefusal.archived")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+
+
+def test_the_router_app_answers_the_same_refusal_body_as_the_live_app(
+    tmp_path: Path, pg_factory
+) -> None:
+    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed_song_with_archived_take)
+    router = TestClient(
+        make_router_app(ctx, user=make_authenticated_user(OWNER, username=OWNER))
+    )
+
+    response = router.post("/api/generations/take/pick")
+
+    assert response.status_code == 409
+    assert response.json() == refusal_body("takeRefusal.archived")
+
+
+def test_an_inactive_model_is_refused_by_name_with_its_key(tmp_path: Path, pg_factory) -> None:
+    ctx = make_router_ctx(tmp_path, db=pg_factory, seed_db=_seed_song_with_archived_take)
+    router = TestClient(
+        make_router_app(ctx, user=make_authenticated_user(OWNER, username=OWNER))
+    )
+
+    response = router.post("/api/songs/song/generate", json={"model": "sft"})
+
+    assert response.status_code == 400
+    assert response.json() == refusal_body("modelRefusal.unavailable", model="sft")
