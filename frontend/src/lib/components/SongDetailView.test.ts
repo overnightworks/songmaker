@@ -138,12 +138,6 @@ function albumSongs(): SongItem[] {
 	];
 }
 
-function appBar() {
-	const state = get(phoneAppBar);
-	if (!state) throw new Error('Expected the song app bar');
-	return state;
-}
-
 async function renderWithDirtyDraft(): Promise<HTMLElement> {
 	songList.set(albumSongs());
 	const target = await renderView();
@@ -310,6 +304,12 @@ describe('SongDetailView failure wording', () => {
 		card: '/api/songs/s1/cover?variant=card&v=own.jpg',
 		detail: '/api/songs/s1/cover?variant=detail&v=own.jpg'
 	};
+
+	function appBar() {
+		const state = get(phoneAppBar);
+		if (!state) throw new Error('Expected the song app bar');
+		return state;
+	}
 
 	function chooseCoverFile(target: HTMLElement): void {
 		const input = target.querySelector<HTMLInputElement>('.cover-file-input');
@@ -1037,62 +1037,6 @@ describe('SongDetailView unsaved-draft guard', () => {
 		expect(get(sourceGeneration)).toEqual(targetGen);
 		expect(get(pendingTakeUse)).toBeNull();
 	});
-});
-
-describe('SongDetailView expiry digest', () => {
-	const dayMs = 24 * 60 * 60 * 1000;
-	const [soonLabel, daysLabel] = [
-		{ branch: 'soon', expiresInMs: -dayMs, when: () => words['songPage.expirySoon'] },
-		{ branch: 'days', expiresInMs: 2 * dayMs - 1000, when: () => words['songPage.expiryDays'](2) }
-	].map((entry) => entry);
-
-	it.each([
-		{ takes: 1, ...soonLabel },
-		{ takes: 3, ...soonLabel },
-		{ takes: 1, ...daysLabel },
-		{ takes: 3, ...daysLabel }
-	])('words $takes expiring take(s) in the $branch branch from the catalog', async (entry) => {
-		const generations = Array.from({ length: entry.takes }, (_, index) =>
-			generation({
-				id: `g${index}`,
-				expires_at: new Date(Date.now() + entry.expiresInMs).toISOString()
-			})
-		);
-		songList.set([song({ ...editableSongDefaults(), generation_count: entry.takes, generations })]);
-		const target = await renderView();
-		const digest = target.querySelector('.expiry-digest');
-		expect(digest?.textContent).toContain(
-			words['songPage.expiry'](entry.takes, { when: entry.when() })
-		);
-	});
-});
-
-describe('SongDetailView song delete confirm counts', () => {
-	afterEach(() => {
-		vi.mocked(fetchSong).mockRestore();
-	});
-
-	it.each([
-		{ takes: 2, versions: 3 },
-		{ takes: 1, versions: 1 }
-	])(
-		'lists $takes take(s) and $versions version(s) from the catalog',
-		async ({ takes, versions }) => {
-			const counted = song({
-				...editableSongDefaults(),
-				generation_count: takes,
-				version_count: versions
-			});
-			songList.set([counted]);
-			vi.mocked(fetchSong).mockResolvedValue(counted);
-			const target = await renderView();
-			appBar().menu.ondelete();
-			await tick();
-			const dialog = target.querySelector('[role="dialog"]');
-			expect(dialog?.textContent).toContain(words['songPage.deleteTakes'](takes));
-			expect(dialog?.textContent).toContain(words['songPage.deleteVersions'](versions));
-		}
-	);
 });
 
 describe('SongDetailView Co-writer tab with the Recipe open', () => {

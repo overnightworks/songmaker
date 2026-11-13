@@ -1,7 +1,6 @@
 // Network loss: phone Generate placement (#1039) and generation recovery (#1098),
 // plus server, take-play (#1161) and album-start (#1288) recovery in both shells.
 // loseNetwork also closes open streams; setOffline alone leaves them running.
-
 import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import {
