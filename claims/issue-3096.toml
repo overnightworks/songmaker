@@ -1,0 +1,8 @@
+claim_id = "9e894b581b3a41ef96a3762fbf2c00e8"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "439b9115f1e636b5b11733c32ea999485b1d4fbe"
+branch = "claude/issue-3096-every-api-404-loses-its-sentence-to-the"
+scope = ["scripts/check_refusal_keys.py", "src/songmaker_cli/server.py", "tests/scripts/test_check_refusal_keys.py", "tests/support/web_app.py", "tests/test_server.py"]
+opened_commit = "efa6c65c9f79f7d64f04d4006bb401cdc06e1e9c"
+whole_reason = "handler, its test app twin and the key check move together"
