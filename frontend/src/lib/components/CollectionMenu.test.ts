@@ -257,7 +257,7 @@ describe('CollectionMenu album rows', () => {
 		expect(items[items.length - 1].classList.contains('destructive')).toBe(true);
 	});
 
-	it('tells on the Cover row what the cover editor offers: upload · suggest', async () => {
+	it('tells on the Cover row what the cover editor offers', async () => {
 		const { target } = await render(albumMenuProps());
 		await openCollectionMenu(target);
 
