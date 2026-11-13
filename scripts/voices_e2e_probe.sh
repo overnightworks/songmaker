@@ -3,12 +3,16 @@
 # isolated stack, then removes the stack. The stack is the CI one plus the
 # test-only fake training worker; every value below is test-only.
 #
-# Run it only under the probe lock, as one capped command:
-#   flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 120 1700 scripts/voices_e2e_probe.sh
-# CAP 1700 + K 120 = 1820, within the lock contract's 1830. K covers the
+# Run it only through probe-run, as one capped command:
+#   probe-run -k 120 1700 scripts/voices_e2e_probe.sh
+# CAP 1700 + K 120 = 1820, within probe-run's 1830. K covers the
 # teardown (`--profile gpu down -v --remove-orphans --rmi local`), measured at
 # about 2 s without the image removal; 120 s leaves room for removing the
-# probe's images.
+# probe's images. The image build runs inside the capped command: the script has
+# no split between building and driving.
+#
+# Each run takes its own Compose project name and a free loopback port, so
+# two runs at once do not share a stack.
 #
 # The exit code is the proof's own; a failed build or start exits non-zero too.
 
@@ -16,7 +20,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-PROBE_PORT=18080
+PROBE_PORT="$("$SCRIPT_DIR/free_loopback_port.sh")"
 
 secrets_dir="$(mktemp -d)"
 echo e2e-ci-postgres-password > "$secrets_dir/postgres-password"
@@ -28,7 +32,7 @@ echo e2e-ci-client-secret > "$secret_file"
 gateway_key_file="$(mktemp)"
 echo e2e-ci-gateway-key > "$gateway_key_file"
 
-export COMPOSE_PROJECT_NAME=songmaker-i689-probe
+export COMPOSE_PROJECT_NAME="songmaker-voices-probe-$$"
 export WEB_PORT="$PROBE_PORT"
 export SONGMAKER_SECRETS_DIR="$secrets_dir"
 export E2E_ADMIN_USERNAME=e2e-ci-admin

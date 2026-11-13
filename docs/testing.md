@@ -50,7 +50,7 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 
 Every database test runs on a real PostgreSQL; no test uses another database engine.
 
-**Running.** `scripts/test_postgresql.sh <files and pytest arguments>` starts a disposable container of Compose's PostgreSQL image and one of Compose's Redis image, runs pytest against them and removes both. Tests that need a Redis server (`tests/songmaker_cli/test_arq_codec.py`) run this way too: the script exports the Redis container's address as `TEST_REDIS_URL`, and `tests/support/redis_server.py` gives each xdist worker its own Redis database on it, flushed before every case; a run without `TEST_REDIS_URL`, or with more workers than the server has databases, fails every Redis test. It needs Docker and `.venv`, refuses to start under high machine load, caps the run and the container's lifetime, and takes no probe-stack lock. Its header owns the limits and their values.
+**Running.** `scripts/test_postgresql.sh <files and pytest arguments>` starts a disposable container of Compose's PostgreSQL image and one of Compose's Redis image, runs pytest against them and removes both. Tests that need a Redis server (`tests/songmaker_cli/test_arq_codec.py`) run this way too: the script exports the Redis container's address as `TEST_REDIS_URL`, and `tests/support/redis_server.py` gives each xdist worker its own Redis database on it, flushed before every case; a run without `TEST_REDIS_URL`, or with more workers than the server has databases, fails every Redis test. It needs Docker and `.venv`, refuses to start under high machine load, caps the run and the container's lifetime, and does not use `probe-run`. Its header owns the limits and their values.
 
 **Writing.** A test needs no marker: the case record (see CI PostgreSQL tests) decides from the fixture closure that it is a database test. Pick the fixture by what the test needs:
 - `pg_factory`: a session factory on this worker's migrated database; the fixture disposes its engine before the reset.
@@ -229,8 +229,9 @@ request budget per shell.
   No `data-testid`. A row that cannot be found by its accessible name is an
   accessibility defect, not a selector problem.
 - **Locally, never point them at port 8080** — that is the operator's stack.
-  Boot the CI stack on its own port and project (`WEB_PORT=18080`), run
-  `E2E_BASE_URL=http://localhost:18080 pnpm test:e2e`, then `down -v --remove-orphans --rmi local`.
+  Boot the CI stack on its own project and a free loopback port
+  (`scripts/free_loopback_port.sh`), run `probe-run pnpm test:e2e` against it, then
+  `down -v --remove-orphans --rmi local`; the recipe is in `frontend/e2e/README.md`.
 - Re-running against a warm stack trips the app's IP rate limit (120 requests
   per window) and the flow reports 429s. That is the guard working, not
   flakiness — reset the stack or wait out the window.
@@ -263,11 +264,12 @@ stack. It starts the test-only worker at
 `tests/support/fake_training_worker.py`; the Library E2E continues to use
 only `docker/docker-compose.test.yml`.
 
-Run the proof as one capped command under the probe lock; the script starts the
-isolated stack, runs `e2e/voices.spec.ts` against it and tears the stack down:
+Run the proof as one capped command through `probe-run`; the script starts the
+isolated stack under its own Compose project name and on a free loopback port,
+runs `e2e/voices.spec.ts` against it and tears the stack down:
 
 ```bash
-flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 120 1700 scripts/voices_e2e_probe.sh
+probe-run -k 120 1700 scripts/voices_e2e_probe.sh
 ```
 
 The fake worker uses the same internal worker registration, Redis heartbeat,

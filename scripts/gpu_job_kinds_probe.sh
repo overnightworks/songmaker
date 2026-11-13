@@ -8,13 +8,18 @@
 # ready, its storage path holding the adapter's files), and nothing left in the
 # worker's local output root.
 #
-# Usage, only as one capped command under the probe lock:
-#   flock -o -w 3600 /tmp/probe-stack.lock setpriv --pdeathsig TERM timeout -k 120 1700 \
+# Usage, only through probe-run, as one capped command:
+#   probe-run -k 120 1700 \
 #       scripts/gpu_job_kinds_probe.sh <deploy checkout>/vendor/acestep/checkpoints
-# CAP 1700 + K 120 = 1820, within the lock contract's 1830. K covers the
+# CAP 1700 + K 120 = 1820, within probe-run's 1830. K covers the
 # teardown (`--profile gpu down -v --remove-orphans --rmi local`), measured at
 # about 2 s on the voices stack without the image removal; 120 s leaves room
-# for a worker that still holds the GPU and for removing the probe's images.
+# for a worker that still holds the GPU and for removing the probe's images. The image
+# build runs inside the capped command: the script has no split between building and
+# driving.
+#
+# Each run takes its own Compose project name and a free loopback port; the one GPU
+# still admits one run, because the script refuses while any other project's worker runs.
 #
 # The operator stops the live `acestep-worker-0` first and restarts it after;
 # the script refuses to start while one runs (one GPU, one worker name).
@@ -30,8 +35,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-PROBE_PORT=18081
-PROJECT=songmaker-gpu-probe
+PROBE_PORT="$("$SCRIPT_DIR/free_loopback_port.sh")"
+PROJECT="songmaker-gpu-probe-$$"
 WORKER_SERVICE=songmaker-acestep-worker-0
 # Takes of 8 s and a LoRA of 5 epochs keep the whole proof well inside the cap.
 TAKE_SECONDS=8

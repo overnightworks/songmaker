@@ -291,11 +291,13 @@ from expanded for this pattern.
 ## Running it locally
 
 Never point the flows at the stack on port 8080; that is the operator's. Boot
-the CI stack on its own port and project, run, then throw it away:
+the CI stack on its own project and a free loopback port, so another lane's
+stack at the same time does not collide, drive it through `probe-run`, then
+throw it away:
 
 ```bash
 cd <repo root>
-export COMPOSE_PROJECT_NAME=songmaker-e2e-local WEB_PORT=18080
+export COMPOSE_PROJECT_NAME="songmaker-e2e-$$" WEB_PORT="$(scripts/free_loopback_port.sh)"
 export SONGMAKER_SECRETS_DIR="$(mktemp -d)"   # throwaway files; the stack has no default
 echo e2e-ci-postgres-password > "$SONGMAKER_SECRETS_DIR/postgres-password"
 echo e2e-ci-session-secret-do-not-reuse-anywhere-else > "$SONGMAKER_SECRETS_DIR/session-secret"
@@ -306,15 +308,15 @@ export E2E_ADMIN_USERNAME=e2e-ci-admin
 export OIDC_ISSUER=https://keycloak.invalid/realms/e2e
 export KEYCLOAK_CLIENT_SECRET_FILE="$(mktemp)" && echo e2e-ci-client-secret > "$KEYCLOAK_CLIENT_SECRET_FILE"
 export GATEWAY_KEY_FILE="$(mktemp)" && echo e2e-ci-gateway-key > "$GATEWAY_KEY_FILE"
-export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or the web app refuses to start
+export PUBLIC_BASE_URL="http://localhost:$WEB_PORT"   # share links (#339) need this or the web app refuses to start
 # Two steps: this stack has no restart policy, so the apps start once the stores are healthy.
 docker compose --project-directory . -f docker/docker-compose.test.yml up -d --wait postgres redis
 docker compose --project-directory . -f docker/docker-compose.test.yml \
   up -d --build --wait songmaker-music-worker songmaker-web
 
 cd frontend
-E2E_BASE_URL=http://localhost:18080 pnpm test:e2e            # both shells
-E2E_BASE_URL=http://localhost:18080 pnpm test:e2e --project=mobile
+E2E_BASE_URL="http://localhost:$WEB_PORT" probe-run pnpm test:e2e            # both shells
+E2E_BASE_URL="http://localhost:$WEB_PORT" probe-run pnpm test:e2e --project=mobile
 
 cd .. && docker compose --project-directory . -f docker/docker-compose.test.yml down -v --remove-orphans --rmi local
 ```
