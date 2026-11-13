@@ -530,6 +530,10 @@ def api_list_cover_suggestions(
     )
 
 
+def cover_suggestion_not_found() -> Refusal:
+    return Refusal(404, "coverSuggestionRefusal.notFound")
+
+
 @router.get(
     "/albums/{album_id}/cover-suggestions/{suggestion_id}",
     responses={404: {"description": "Album or cover suggestion not found"}},
@@ -546,11 +550,11 @@ def api_get_cover_suggestion(
     check_album_access(album, user)
     suggestion = get_album_cover_suggestion(session, album.id, suggestion_id)
     if suggestion is None:
-        raise Refusal(404, "coverSuggestionRefusal.notFound")
+        raise cover_suggestion_not_found()
     try:
         path = resolve_suggestion_png(ctx.audio_dir, album.id, suggestion.id, suggestion.png_path)
     except (FileNotFoundError, AudioPathRejectedError):
-        raise Refusal(404, "coverSuggestionRefusal.notFound") from None
+        raise cover_suggestion_not_found() from None
     return FileResponse(path, media_type="image/png", headers=COVER_RESPONSE_HEADERS)
 
 
@@ -574,7 +578,7 @@ def api_select_album_cover_suggestion(
     check_album_access(album, user)
     suggestion = get_album_cover_suggestion(session, album.id, data.suggestion_id)
     if suggestion is None:
-        raise Refusal(404, "coverSuggestionRefusal.notFound")
+        raise cover_suggestion_not_found()
     try:
         payload = resolve_suggestion_png(
             ctx.audio_dir, album.id, suggestion.id, suggestion.png_path,
@@ -583,7 +587,7 @@ def api_select_album_cover_suggestion(
             ctx.audio_dir, album.id, payload, ai_generated=True,
         )
     except (FileNotFoundError, AudioPathRejectedError):
-        raise Refusal(404, "coverSuggestionRefusal.notFound") from None
+        raise cover_suggestion_not_found() from None
     except CoverRejectedError as exc:
         raise_cover_refusal(exc)
     album = set_album_cover_key(session, album.id, cover_key)
