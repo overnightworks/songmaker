@@ -195,11 +195,13 @@ async function openConversationMenu(target: HTMLElement): Promise<HTMLElement> {
 async function openMemoryFromMenu(target: HTMLElement): Promise<void> {
 	const menu = await openConversationMenu(target);
 	Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-		.find((item) => item.textContent?.trim() === 'Memory')
+		.find((item) => item.textContent?.trim() === words['cowriter.memory'])
 		?.click();
 	await tick();
 }
 
+const memorySection = (target: HTMLElement) =>
+	target.querySelector(`section[aria-label="${words['cowriter.memory']}"]`);
 function userMemoryField(target: HTMLElement): HTMLTextAreaElement | null {
 	return target.querySelector<HTMLTextAreaElement>('textarea[aria-label="User memory"]');
 }
@@ -304,7 +306,6 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		};
 		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00'), older]);
 		const target = await render();
-
 		const menu = await openConversationMenu(target);
 		expect(menu.textContent).not.toContain('Claude');
 		const conversationRows = menu.querySelectorAll<HTMLButtonElement>('.conv-pick');
@@ -315,11 +316,12 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await tick();
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		expect(conversationLine(target)).toBe('Co-writer · archived conversation from Sep 20');
-
+		target.querySelector<HTMLButtonElement>('.readonly-banner button')?.click();
+		await vi.waitFor(() => expect(startNewConversation).toHaveBeenCalledTimes(1));
 		const reopened = await openConversationMenu(target);
 		reopened.querySelector<HTMLButtonElement>('.convo-new')?.click();
 		await tick();
-		expect(startNewConversation).toHaveBeenCalledTimes(1);
+		expect(startNewConversation).toHaveBeenCalledTimes(2);
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		await vi.waitFor(() => expect(conversationLine(target)).toBe('Co-writer · new conversation'));
 	});
@@ -521,15 +523,13 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		const target = await render();
 		expect(
 			Array.from(target.querySelectorAll('button'), (button) => button.textContent?.trim())
-		).not.toContainEqual(expect.stringMatching(/^Memory/));
+		).not.toContainEqual(expect.stringMatching(new RegExp(`^${words['cowriter.memory']}`)));
 
 		await openMemoryFromMenu(target);
 
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		await vi.waitFor(() => expect(userMemoryField(target)?.value).toBe('Prefers short lines'));
-		expect(
-			target.querySelector('section[aria-label="Memory"]')?.contains(document.activeElement)
-		).toBe(true);
+		expect(memorySection(target)?.contains(document.activeElement)).toBe(true);
 
 		target
 			.querySelector<HTMLButtonElement>(`button[aria-label="${words['memory.close']}"]`)
@@ -589,7 +589,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			await vi.waitFor(() => expect(target.querySelector('.proposal')).toBeNull());
 			await tick();
 
-			const memory = target.querySelector('section[aria-label="Memory"]');
+			const memory = memorySection(target);
 			expect(memory?.contains(document.activeElement)).toBe(true);
 			const escape = new KeyboardEvent('keydown', {
 				key: 'Escape',
@@ -599,7 +599,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			document.activeElement?.dispatchEvent(escape);
 			await tick();
 
-			expect(target.querySelector('section[aria-label="Memory"]')).toBeNull();
+			expect(memorySection(target)).toBeNull();
 			expect(escape.defaultPrevented).toBe(true);
 			expect(focusedConversationMenuTrigger()).toBe(true);
 		}
@@ -661,7 +661,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await vi.waitFor(() => expect(target.querySelector('.proposal')).not.toBeNull());
 
 		const proposal = target.querySelector('.proposal');
-		const firstField = target.querySelector('section[aria-label="Memory"] textarea');
+		const firstField = memorySection(target)?.querySelector('textarea');
 		if (!proposal || !firstField) throw new Error('Expected the proposal and the memory fields');
 		expect(
 			proposal.compareDocumentPosition(firstField) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -1775,7 +1775,7 @@ describeBackClosesOverlay({
 		await openMemoryFromMenu(target);
 		await historyComesToRest();
 	},
-	isShown: (target) => target.querySelector('section[aria-label="Memory"]') !== null,
+	isShown: (target) => memorySection(target) !== null,
 	closeWays: [
 		{
 			way: 'its close button',

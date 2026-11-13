@@ -37,7 +37,7 @@ describe('ChatInput', () => {
 		expect(target.querySelector('textarea')?.placeholder).toBe(
 			words['cowriter.composerPlaceholder']
 		);
-		expect(sendButton(target).textContent?.trim()).toBe('Send');
+		expect(sendButton(target).textContent?.trim()).toBe(words['cowriter.send']);
 	});
 
 	it('sends when Send is pressed', async () => {

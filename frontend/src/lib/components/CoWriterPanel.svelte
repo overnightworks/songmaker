@@ -696,12 +696,6 @@
 
 	const memoryProposalWaiting = $derived(pendingProposals.length > 0);
 
-	// The waiting dot is only drawn, so the controls that carry it say it in their names.
-	function announcingProposalWaiting(control: 'conversationMenu' | 'memory'): string {
-		const waiting = control === 'memory' ? 'memoryWaiting' : 'conversationMenuWaiting';
-		return pageText(memoryProposalWaiting ? `cowriter.${waiting}` : `cowriter.${control}`);
-	}
-
 	async function saveMemoryScope(
 		scope: MemoryScope,
 		targetId: string,
@@ -914,7 +908,9 @@
 				data-hitbox="frequent"
 				aria-haspopup="menu"
 				aria-expanded={$conversationMenuOpen}
-				aria-label={announcingProposalWaiting('conversationMenu')}
+				aria-label={pageText(
+					memoryProposalWaiting ? 'cowriter.conversationMenuWaiting' : 'cowriter.conversationMenu'
+				)}
 				title={pageText('cowriter.conversationMenu')}
 				onclick={toggleConversationMenu}
 			>
@@ -942,7 +938,9 @@
 						type="button"
 						role="menuitem"
 						class="convo-memory"
-						aria-label={announcingProposalWaiting('memory')}
+						aria-label={pageText(
+							memoryProposalWaiting ? 'cowriter.memoryWaiting' : 'cowriter.memory'
+						)}
 						onclick={() => chooseFromConversationMenu(openMemory)}
 						>{pageText(
 							'cowriter.memory'
