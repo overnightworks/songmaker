@@ -243,7 +243,9 @@ describe('PhoneAppBar', () => {
 		await tick();
 		getByRoleButton(target, words['songMenu.rename']).click();
 		await tick();
-		const input = target.querySelector<HTMLInputElement>('input[aria-label="Song title"]');
+		const input = target.querySelector<HTMLInputElement>(
+			`input[aria-label="${words['songHeader.title']}"]`
+		);
 		if (!input) throw new Error('Expected inline title input');
 		input.value = 'Abendlicht';
 		input.dispatchEvent(new Event('input', { bubbles: true }));

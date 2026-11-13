@@ -902,3 +902,359 @@ msgstr ""
 msgctxt "collectionMenu.playlistDelete"
 msgid "Delete playlist"
 msgstr ""
+
+msgctxt "songPage.coverAlt"
+msgid "Song {title}"
+msgstr ""
+
+msgctxt "songPage.coverAltAlbum"
+msgid "Album {title}"
+msgstr ""
+
+msgctxt "songPage.coverAltBare"
+msgid "Song"
+msgstr ""
+
+msgctxt "songPage.coverUpload"
+msgid "Upload song cover"
+msgstr ""
+
+msgctxt "songPage.coverReplace"
+msgid "Replace song cover"
+msgstr ""
+
+msgctxt "songPage.trackOf"
+msgid "Track {position} of {total}"
+msgstr ""
+
+msgctxt "songPage.save"
+msgid "Save"
+msgstr ""
+
+msgctxt "songPage.saveName"
+msgid "Save changes"
+msgstr ""
+
+msgctxt "songPage.unsavedTitle"
+msgid "Unsaved changes"
+msgstr ""
+
+msgctxt "songPage.unsavedMessage"
+msgid "Save this draft as a new version before leaving, or discard it?"
+msgstr ""
+
+msgctxt "songPage.unsavedSave"
+msgid "Save"
+msgstr ""
+
+msgctxt "songPage.unsavedDiscard"
+msgid "Discard"
+msgstr ""
+
+msgctxt "songPage.coverSaved"
+msgid "Cover saved"
+msgstr ""
+
+msgctxt "songPage.coverUploadFailed"
+msgid "Cover upload failed"
+msgstr ""
+
+msgctxt "songPage.coverRemoved"
+msgid "Cover removed"
+msgstr ""
+
+msgctxt "songPage.coverRemoveFailed"
+msgid "Cover remove failed"
+msgstr ""
+
+msgctxt "songPage.renamed"
+msgid "Song renamed"
+msgstr ""
+
+msgctxt "songPage.renameFailed"
+msgid "Rename failed"
+msgstr ""
+
+msgctxt "songPage.deleted"
+msgid "Song deleted"
+msgstr ""
+
+msgctxt "songPage.undo"
+msgid "Undo"
+msgstr ""
+
+msgctxt "songPage.restored"
+msgid "Song restored"
+msgstr ""
+
+msgctxt "songPage.restoreFailed"
+msgid "Restore failed"
+msgstr ""
+
+msgctxt "songPage.deleteFailed"
+msgid "Delete failed"
+msgstr ""
+
+msgctxt "songPage.takeDeleted"
+msgid "Take deleted"
+msgstr ""
+
+msgctxt "songPage.addedToPlaylist"
+msgid "Added to playlist"
+msgstr ""
+
+msgctxt "songPage.addToPlaylistFailed"
+msgid "Failed to add"
+msgstr ""
+
+msgctxt "songPage.savedVersion"
+msgid "Saved version {number}"
+msgstr ""
+
+msgctxt "songPage.saveFailed"
+msgid "Save failed"
+msgstr ""
+
+msgctxt "songPage.deleteTitle"
+msgid "Delete \"{title}\"?"
+msgstr ""
+
+msgctxt "songPage.deleteTakes.one"
+msgid "{count} take"
+msgstr ""
+
+msgctxt "songPage.deleteTakes.other"
+msgid "{count} takes"
+msgstr ""
+
+msgctxt "songPage.deleteVersions.one"
+msgid "{count} version"
+msgstr ""
+
+msgctxt "songPage.deleteVersions.other"
+msgid "{count} versions"
+msgstr ""
+
+msgctxt "songPage.deleteHistory"
+msgid "All scores, ratings, and chat history"
+msgstr ""
+
+msgctxt "songPage.deleteConfirm"
+msgid "Delete Song"
+msgstr ""
+
+msgctxt "songPage.expiry.one"
+msgid "{count} take expires {when} — pick or keep to preserve."
+msgstr ""
+
+msgctxt "songPage.expiry.other"
+msgid "{count} takes expire {when} — pick or keep to preserve."
+msgstr ""
+
+msgctxt "songPage.expirySoon"
+msgid "soon"
+msgstr ""
+
+msgctxt "songPage.expiryDays.one"
+msgid "in {count} day"
+msgstr ""
+
+msgctxt "songPage.expiryDays.other"
+msgid "in {count} days"
+msgstr ""
+
+msgctxt "songHeader.title"
+msgid "Song title"
+msgstr ""
+
+msgctxt "songHeader.editTitle"
+msgid "Edit song title"
+msgstr ""
+
+msgctxt "songHeader.albumNavigation"
+msgid "Album navigation"
+msgstr ""
+
+msgctxt "songHeader.previous"
+msgid "Previous song"
+msgstr ""
+
+msgctxt "songHeader.next"
+msgid "Next song"
+msgstr ""
+
+msgctxt "songHeader.removeCover"
+msgid "Remove song cover"
+msgstr ""
+
+msgctxt "songTabs.label"
+msgid "Editor tabs"
+msgstr ""
+
+msgctxt "songTabs.edit"
+msgid "Edit"
+msgstr ""
+
+msgctxt "songTabs.takes"
+msgid "Takes"
+msgstr ""
+
+msgctxt "songTabs.cowriter"
+msgid "Co-writer"
+msgstr ""
+
+msgctxt "writeColumn.lyrics"
+msgid "Lyrics"
+msgstr ""
+
+msgctxt "writeColumn.stylePrompt"
+msgid "Style Prompt"
+msgstr ""
+
+msgctxt "writeColumn.loadedFrom"
+msgid "Loaded from v{number}"
+msgstr ""
+
+msgctxt "versions.name"
+msgid "v{number}"
+msgstr ""
+
+msgctxt "versions.chipDraft"
+msgid "v{number} · draft"
+msgstr ""
+
+msgctxt "versions.chipName"
+msgid "Versions: {chip}"
+msgstr ""
+
+msgctxt "versions.heading"
+msgid "Versions"
+msgstr ""
+
+msgctxt "versions.close"
+msgid "Close versions"
+msgstr ""
+
+msgctxt "versions.current"
+msgid "current"
+msgstr ""
+
+msgctxt "versions.picked"
+msgid "picked"
+msgstr ""
+
+msgctxt "versions.noLyrics"
+msgid "No lyrics"
+msgstr ""
+
+msgctxt "versions.noTakes"
+msgid "no takes"
+msgstr ""
+
+msgctxt "versions.takes.one"
+msgid "{count} take"
+msgstr ""
+
+msgctxt "versions.takes.other"
+msgid "{count} takes"
+msgstr ""
+
+msgctxt "versions.deleteName"
+msgid "Delete v{number}"
+msgstr ""
+
+msgctxt "versions.deleteTitle"
+msgid "Delete v{number}?"
+msgstr ""
+
+msgctxt "versions.deleteTitleTakes.one"
+msgid "Delete v{number} and its {count} take?"
+msgstr ""
+
+msgctxt "versions.deleteTitleTakes.other"
+msgid "Delete v{number} and its {count} takes?"
+msgstr ""
+
+msgctxt "versions.deleteConfirm"
+msgid "Delete version"
+msgstr ""
+
+msgctxt "versions.deletePick.one"
+msgid "It is the album pick."
+msgstr ""
+
+msgctxt "versions.deletePick.other"
+msgid "The album pick is one of them."
+msgstr ""
+
+msgctxt "versions.deleteDraftGoes"
+msgid "Your unsaved draft goes too."
+msgstr ""
+
+msgctxt "versions.deleteEmptiesEditor"
+msgid "Its lyrics leave the editor, which will be empty."
+msgstr ""
+
+msgctxt "versions.deleteLoadUndoGoes"
+msgid "Undo for your earlier draft goes too."
+msgstr ""
+
+msgctxt "versions.deleteReplacedBy"
+msgid "Its lyrics leave the editor; v{number} replaces them."
+msgstr ""
+
+msgctxt "versions.deleteLoadedDraftGoes"
+msgid "The draft loaded from v{number} goes too."
+msgstr ""
+
+msgctxt "versions.deleteLoadedDraftReplaced"
+msgid "The draft loaded from v{loadedFrom} leaves the editor; v{replacedBy} replaces it."
+msgstr ""
+
+msgctxt "versions.deleted"
+msgid "Deleted v{number}"
+msgstr ""
+
+msgctxt "versions.replaceTitle"
+msgid "Replace your unsaved draft?"
+msgstr ""
+
+msgctxt "versions.replaceMessage"
+msgid "Your draft has changes that are not in any version. Loading v{number} replaces them. You can undo right after."
+msgstr ""
+
+msgctxt "versions.replaceConfirm"
+msgid "Replace"
+msgstr ""
+
+msgctxt "versions.loaded"
+msgid "v{number} loaded"
+msgstr ""
+
+msgctxt "versions.alreadyDraft"
+msgid "v{number} is already the draft"
+msgstr ""
+
+msgctxt "versions.undo"
+msgid "Undo"
+msgstr ""
+
+msgctxt "editableTitle.hint"
+msgid "Click to edit"
+msgstr ""
+
+msgctxt "collectionHeader.titleAlbum"
+msgid "album title"
+msgstr ""
+
+msgctxt "collectionHeader.titlePlaylist"
+msgid "playlist title"
+msgstr ""
+
+msgctxt "collectionHeader.editTitleAlbum"
+msgid "Edit album title"
+msgstr ""
+
+msgctxt "collectionHeader.editTitlePlaylist"
+msgid "Edit playlist title"
+msgstr ""

@@ -10,6 +10,7 @@
 	import type { CoverMark } from './CoverActivityMark.svelte';
 	import { songCountLabel } from '#lib/utils/format.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
+	import type { TextKey } from '#lib/utils/page-words.ts';
 	import { collectionTransport, toggleOrStartCollection, setShuffle } from '#lib/stores/player.ts';
 
 	interface Props {
@@ -85,6 +86,14 @@
 		coverEditor,
 		coverMark
 	}: Props = $props();
+
+	const titleKeys = {
+		album: { label: 'collectionHeader.titleAlbum', edit: 'collectionHeader.editTitleAlbum' },
+		playlist: {
+			label: 'collectionHeader.titlePlaylist',
+			edit: 'collectionHeader.editTitlePlaylist'
+		}
+	} as const satisfies Record<'album' | 'playlist', Record<string, TextKey>>;
 
 	let editableTitle: EditableTitle | undefined = $state();
 	let coverFailed = $state(false);
@@ -168,7 +177,8 @@
 					bind:this={editableTitle}
 					value={title}
 					onsave={onrename}
-					ariaLabel={`${kind} title`}
+					labelKey={titleKeys[kind].label}
+					editLabelKey={titleKeys[kind].edit}
 				/>
 			{:else}
 				{title}

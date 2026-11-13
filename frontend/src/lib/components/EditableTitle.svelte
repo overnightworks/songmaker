@@ -1,13 +1,17 @@
 <script lang="ts">
+	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
+
 	const MAX_TITLE_LENGTH = 200;
 
 	interface Props {
 		value: string;
 		onsave: (newValue: string) => Promise<void>;
-		ariaLabel?: string;
+		/** The key of the field's name, and of the name of the button that starts the edit. */
+		labelKey: TextKey;
+		editLabelKey: TextKey;
 	}
 
-	let { value, onsave, ariaLabel = 'Title' }: Props = $props();
+	let { value, onsave, labelKey, editLabelKey }: Props = $props();
 
 	let editing = $state(false);
 	let draft = $state('');
@@ -65,7 +69,7 @@
 		class="editable-title-input"
 		type="text"
 		maxlength={MAX_TITLE_LENGTH}
-		aria-label={ariaLabel}
+		aria-label={pageText(labelKey)}
 		disabled={saving}
 		onblur={commit}
 		onkeydown={onKeyDown}
@@ -75,8 +79,8 @@
 		type="button"
 		class="editable-title-display"
 		onclick={startEdit}
-		aria-label={`Edit ${ariaLabel.toLowerCase()}`}
-		title="Click to edit"
+		aria-label={pageText(editLabelKey)}
+		title={pageText('editableTitle.hint')}
 	>
 		{value}
 	</button>
