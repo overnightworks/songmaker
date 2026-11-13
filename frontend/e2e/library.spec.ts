@@ -14,12 +14,7 @@ import {
 	type LibraryWallOrder
 } from '../src/lib/constants/library';
 import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
-import { TAKE_OVERFLOW_LABEL, TAKE_PLAYLIST_LABEL } from '../src/lib/constants/take';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
-import {
-	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
-	COLLECTION_MENU_LABEL
-} from '../src/lib/constants/collection-menu';
 import {
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
@@ -493,10 +488,10 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 
 	if (shell === 'desktop') {
 		const takeRow = surface.locator('.take-row').filter({ hasText: library.takeLabel });
-		await takeRow.getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
+		await takeRow.getByRole('button', { name: words['takeMenu.label'] }).click();
 		await surface
-			.getByRole('dialog', { name: TAKE_OVERFLOW_LABEL, exact: true })
-			.getByRole('button', { name: TAKE_PLAYLIST_LABEL })
+			.getByRole('dialog', { name: words['takeMenu.label'], exact: true })
+			.getByRole('button', { name: words['takeMenu.addToPlaylist'] })
 			.click();
 		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
@@ -664,9 +659,9 @@ test(
 		}
 
 		// Adding the album puts the playlist's first take in it a second time.
-		await surface.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+		await surface.getByRole('button', { name: words['collectionMenu.label'], exact: true }).click();
 		await surface
-			.getByRole('button', { name: COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL, exact: true })
+			.getByRole('button', { name: words['collectionMenu.addToPlaylist'], exact: true })
 			.click();
 		const albumAdded = page.waitForResponse(
 			(response) =>

@@ -9,20 +9,10 @@ import {
 import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
-	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
-	SONG_MENU_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants/song';
-import {
-	TAKE_DELETE_LABEL,
-	TAKE_DELETE_TITLE_TEMPLATE,
-	TAKE_OVERFLOW_LABEL
-} from '../src/lib/constants/take';
+import { TAKE_DELETE_TITLE_TEMPLATE } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
-import {
-	COLLECTION_MENU_LABEL,
-	COLLECTION_MENU_SHARE_LABEL
-} from '../src/lib/constants/collection-menu';
 import { playlistEntryOverflowLabel } from '../src/lib/constants/playlist';
 import { words } from '../src/lib/words/en';
 import {
@@ -196,7 +186,7 @@ function seededTakeRow(takes: Locator): Locator {
 }
 
 function takeMenu(page: Page): Locator {
-	return page.getByRole('dialog', { name: TAKE_OVERFLOW_LABEL, exact: true });
+	return page.getByRole('dialog', { name: words['takeMenu.label'], exact: true });
 }
 
 function deleteConfirm(page: Page): Locator {
@@ -212,8 +202,8 @@ async function openDeleteConfirm(
 ): Promise<void> {
 	await openSong(page, shell, playlist);
 	const takes = await songsTakes(page, shell);
-	await takes.getByRole('button', { name: TAKE_OVERFLOW_LABEL, exact: true }).first().click();
-	await takeMenu(page).getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+	await takes.getByRole('button', { name: words['takeMenu.label'], exact: true }).first().click();
+	await takeMenu(page).getByRole('button', { name: words['takeMenu.delete'], exact: true }).click();
 	await expect(deleteConfirm(page)).toBeVisible();
 }
 
@@ -284,10 +274,10 @@ const PLAYLIST_PICKER_ROW: OverlayRow = {
 	shell: 'mobile',
 	open: async (page, playlist) => {
 		await openSong(page, 'mobile', playlist);
-		await appBar(page).getByRole('button', { name: SONG_MENU_LABEL }).click();
+		await appBar(page).getByRole('button', { name: words['songMenu.label'] }).click();
 		await page
-			.getByRole('dialog', { name: SONG_MENU_LABEL })
-			.getByRole('button', { name: SONG_MENU_ADD_TO_PLAYLIST_LABEL })
+			.getByRole('dialog', { name: words['songMenu.label'] })
+			.getByRole('button', { name: words['songMenu.addToPlaylist'] })
 			.click();
 		await expect(playlistPicker(page)).toBeVisible();
 	},
@@ -309,12 +299,12 @@ function songMenuRow(shell: Shell): OverlayRow {
 		open: async (page, playlist) => {
 			await openSongFromEntryPencil(page, playlist);
 			await expectSongStands(page, shell, firstSong(playlist));
-			await songBar(page, shell).getByRole('button', { name: SONG_MENU_LABEL }).click();
-			await expect(page.getByRole('dialog', { name: SONG_MENU_LABEL })).toBeVisible();
+			await songBar(page, shell).getByRole('button', { name: words['songMenu.label'] }).click();
+			await expect(page.getByRole('dialog', { name: words['songMenu.label'] })).toBeVisible();
 		},
 		leave: goBack,
 		expectLeft: async (page, _pages, playlist) => {
-			await expect(page.getByRole('dialog', { name: SONG_MENU_LABEL })).toBeHidden();
+			await expect(page.getByRole('dialog', { name: words['songMenu.label'] })).toBeHidden();
 			await expectSongStands(page, shell, firstSong(playlist));
 		},
 		afterwards: backReaches('playlist')
@@ -422,7 +412,10 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		shell: 'mobile',
 		open: async (page, playlist) => {
 			const takes = await openSongsTakes(page, playlist);
-			await takes.getByRole('button', { name: TAKE_OVERFLOW_LABEL, exact: true }).first().click();
+			await takes
+				.getByRole('button', { name: words['takeMenu.label'], exact: true })
+				.first()
+				.click();
 			await expect(takeMenu(page)).toBeVisible();
 		},
 		leave: goBack,
@@ -1027,10 +1020,10 @@ test(
 			await expect(albumHeading).toBeVisible();
 			const albumAddress = page.url();
 
-			await page.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+			await page.getByRole('button', { name: words['collectionMenu.label'], exact: true }).click();
 			await page
-				.getByRole('dialog', { name: COLLECTION_MENU_LABEL })
-				.getByRole('button', { name: COLLECTION_MENU_SHARE_LABEL, exact: true })
+				.getByRole('dialog', { name: words['collectionMenu.label'] })
+				.getByRole('button', { name: words['collectionMenu.albumShare'], exact: true })
 				.click();
 			const warning = page.getByRole('dialog', { name: SHARE_WARNING_LABEL });
 			await expect(warning).toBeVisible();

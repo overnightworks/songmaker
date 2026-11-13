@@ -1,13 +1,4 @@
 <script lang="ts">
-	import {
-		SONG_MENU_ADD_TO_PLAYLIST_LABEL,
-		SONG_MENU_DELETE_LABEL,
-		SONG_MENU_MOVE_LABEL,
-		SONG_MENU_RENAME_LABEL,
-		SONG_MENU_SAVE_LABEL,
-		SONG_MENU_LABEL
-	} from '#lib/constants/song.ts';
-	import { COLLECTION_MENU_CLOSE_LABEL } from '#lib/constants/collection-menu.ts';
 	import { onDestroy } from 'svelte';
 	import Icon from '../Icon.svelte';
 	import {
@@ -61,32 +52,32 @@
 	<MenuPopover
 		bind:this={popover}
 		layer="song-menu"
-		label={SONG_MENU_LABEL}
-		closeLabel={COLLECTION_MENU_CLOSE_LABEL}
+		label={pageText('songMenu.label')}
+		closeLabel={pageText('songMenu.close')}
 	>
 		{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
 		{#if $songMovePicker.status === 'closed'}
-			<p class="menu-heading">Song · {title}</p>
+			<p class="menu-heading">{pageText('songMenu.heading', { title })}</p>
 			<button class="menu-item" disabled={saveDisabled} onclick={() => runAndClose(onsave)}>
 				<Icon name="check" size={14} />
-				{SONG_MENU_SAVE_LABEL}
+				{pageText('songMenu.save')}
 			</button>
 			<!-- The title field takes the focus the closing menu would give back to its trigger. -->
 			<button class="menu-item" onclick={() => runAndClose(onrename, false)}>
 				<Icon name="pencil" size={14} />
-				{SONG_MENU_RENAME_LABEL}
+				{pageText('songMenu.rename')}
 			</button>
 			<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
 				<Icon name="list-plus" size={14} />
-				{SONG_MENU_ADD_TO_PLAYLIST_LABEL}
+				{pageText('songMenu.addToPlaylist')}
 			</button>
 			<button class="menu-item opens-list" onclick={() => void openSongMovePicker()}>
 				<Icon name="library" size={14} />
-				{SONG_MENU_MOVE_LABEL}
+				{pageText('songMenu.move')}
 			</button>
 			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
 				<Icon name="trash" size={14} />
-				{SONG_MENU_DELETE_LABEL}
+				{pageText('songMenu.delete')}
 			</button>
 		{:else}
 			<SongMovePicker onclose={() => popover?.close()} />

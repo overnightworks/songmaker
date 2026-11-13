@@ -1,10 +1,5 @@
 import type { SongItem, PaginatedResponse } from '../src/lib/api/types';
 import { expect, test, type APIRequestContext, type Page } from './coverage-test';
-import {
-	COLLECTION_MENU_LABEL,
-	COLLECTION_MENU_DELETE_LABEL,
-	COLLECTION_MENU_ARCHIVE_LABEL
-} from '../src/lib/constants/collection-menu';
 import { words } from '../src/lib/words/en';
 import {
 	sameOriginHeaders,
@@ -123,9 +118,11 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 
 		await listenRegion(page).getByRole('button', { name: titles[0], exact: true }).click();
 		await expect(page).toHaveURL(/\/playlist\//);
-		await workspace(page).getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+		await workspace(page)
+			.getByRole('button', { name: words['collectionMenu.label'], exact: true })
+			.click();
 		await page
-			.getByRole('button', { name: `${COLLECTION_MENU_DELETE_LABEL} playlist`, exact: true })
+			.getByRole('button', { name: words['collectionMenu.playlistDelete'], exact: true })
 			.click();
 		await page.getByRole('button', { name: 'Delete Playlist', exact: true }).click();
 		await expect(
@@ -144,14 +141,14 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 		await expect(albumRow).toHaveCount(1);
 		const albumLabel = await albumRow.getAttribute('aria-label');
 		if (!albumLabel) throw new Error('Listen album has no accessible name');
-		for (const action of [COLLECTION_MENU_DELETE_LABEL, COLLECTION_MENU_ARCHIVE_LABEL]) {
+		for (const action of [words['collectionMenu.albumDelete'], words['collectionMenu.archive']]) {
 			await listenRegion(page).getByRole('button', { name: albumLabel, exact: true }).click();
 			await expect(page).toHaveURL(/\/album\//);
 			await workspace(page)
-				.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true })
+				.getByRole('button', { name: words['collectionMenu.label'], exact: true })
 				.click();
 			await page.getByRole('button', { name: action, exact: true }).click();
-			if (action === COLLECTION_MENU_DELETE_LABEL)
+			if (action === words['collectionMenu.albumDelete'])
 				await page.getByRole('button', { name: 'Delete Album', exact: true }).click();
 			await openHome(page, shellOf(testInfo));
 			await expect(

@@ -1,21 +1,7 @@
 <script lang="ts">
 	import type { GenerationItem, ShareResult } from '#lib/api/types.ts';
-	import {
-		TAKE_COVER_LABEL,
-		TAKE_DELETE_LABEL,
-		TAKE_OVERFLOW_LABEL,
-		TAKE_PLAYLIST_LABEL,
-		TAKE_REPAINT_LABEL,
-		TAKE_RESTORE_LABEL,
-		TAKE_SHARE_LABEL
-	} from '#lib/constants/take.ts';
-	import {
-		COLLECTION_MENU_CLOSE_LABEL,
-		COLLECTION_MENU_SHARE_OFF_HINT,
-		COLLECTION_MENU_SHARE_ON_HINT
-	} from '#lib/constants/collection-menu.ts';
-	import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
 	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
 
@@ -45,8 +31,11 @@
 
 	const takeLabel = $derived(
 		gen.version_number !== null
-			? `Take · v${gen.version_number} · ${gen.generation_number}`
-			: `Take · ${gen.generation_number}`
+			? pageText('takeMenu.headingWithVersion', {
+					version: String(gen.version_number),
+					take: String(gen.generation_number)
+				})
+			: pageText('takeMenu.heading', { take: String(gen.generation_number) })
 	);
 
 	const shareToggle = createShareToggle(() => ({
@@ -68,36 +57,36 @@
 <MenuPopover
 	bind:this={popover}
 	layer="take-menu"
-	label={TAKE_OVERFLOW_LABEL}
-	closeLabel={COLLECTION_MENU_CLOSE_LABEL}
+	label={pageText('takeMenu.label')}
+	closeLabel={pageText('takeMenu.close')}
 	hitboxFace
 >
 	{#snippet trigger()}<Icon name="more-horizontal" size={16} />{/snippet}
 	<p class="menu-heading">{takeLabel}</p>
 	<button class="menu-item" onclick={() => runAndClose(onrepaint)}>
 		<Icon name="paintbrush" size={14} />
-		{TAKE_REPAINT_LABEL}
+		{pageText('takeMenu.repaint')}
 	</button>
 	<button class="menu-item" onclick={() => runAndClose(oncover)}>
 		<Icon name="layers" size={14} />
-		{TAKE_COVER_LABEL}
+		{pageText('takeMenu.cover')}
 	</button>
 	{#if gen.seed != null}
 		<button class="menu-item" onclick={() => runAndClose(onuseseed)}>
 			<Icon name="pin" size={14} />
-			{TAKE_USE_SEED_LABEL}
+			{pageText('takeMenu.useSeed')}
 			<span class="menu-item-hint">{gen.seed}</span>
 		</button>
 	{/if}
 	{#if gen.is_archived}
 		<button class="menu-item" onclick={() => runAndClose(onrestore)}>
 			<Icon name="refresh-cw" size={14} />
-			{TAKE_RESTORE_LABEL}
+			{pageText('takeMenu.restore')}
 		</button>
 	{:else}
 		<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
 			<Icon name="list-plus" size={14} />
-			{TAKE_PLAYLIST_LABEL}
+			{pageText('takeMenu.addToPlaylist')}
 		</button>
 	{/if}
 	{#if !gen.is_archived || gen.is_shared}
@@ -108,15 +97,15 @@
 			onclick={shareToggle.toggle}
 		>
 			<Icon name={shareToggle.iconName} size={14} />
-			{TAKE_SHARE_LABEL}
+			{pageText('takeMenu.share')}
 			<span class="menu-item-hint" aria-hidden="true">
-				{gen.is_shared ? COLLECTION_MENU_SHARE_ON_HINT : COLLECTION_MENU_SHARE_OFF_HINT}
+				{pageText(gen.is_shared ? 'takeMenu.shareOn' : 'takeMenu.shareOff')}
 			</span>
 		</button>
 	{/if}
 	<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
 		<Icon name="trash" size={14} />
-		{TAKE_DELETE_LABEL}
+		{pageText('takeMenu.delete')}
 	</button>
 </MenuPopover>
 

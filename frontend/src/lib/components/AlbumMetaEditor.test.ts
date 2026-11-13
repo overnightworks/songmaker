@@ -1,3 +1,4 @@
+import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,7 +50,9 @@ describe('AlbumMetaEditor', () => {
 	it('opens as Edit details on the current title, subtitle and year, the title in focus', async () => {
 		const target = await render(baseProps());
 
-		expect(target.querySelector('form')?.getAttribute('aria-label')).toBe('Edit details');
+		expect(target.querySelector('form')?.getAttribute('aria-label')).toBe(
+			words['collectionMenu.editDetails']
+		);
 		expect(field(target, 'Title').value).toBe('Night Drive');
 		expect(field(target, 'Subtitle').value).toBe('Live at the Roxy');
 		expect(field(target, 'Year').value).toBe('1994');

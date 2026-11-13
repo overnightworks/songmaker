@@ -6,12 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
-import {
-	TAKE_DELETE_LABEL,
-	TAKE_OVERFLOW_LABEL,
-	TAKES_EMPTY,
-	takesDraftBanner
-} from '#lib/constants/take.ts';
+import { TAKE_DELETE_LABEL, TAKES_EMPTY, takesDraftBanner } from '#lib/constants/take.ts';
 import {
 	EARLIER_VERSIONS_LABEL,
 	bulkDeleteTitle,
@@ -42,6 +37,7 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
 
 import { bulkDeleteGenerations } from '#lib/api/client.ts';
 import { jumpToTake } from '#lib/stores/navigation.ts';
+import { words } from '#lib/words/en.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 let songCounter = 0;
@@ -274,7 +270,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 		expect(row?.textContent).toContain('1:01');
 		expect(row?.querySelector('.play-btn, .pick-btn, .keep-btn, .score-badge')).toBeNull();
 		expect(row?.querySelector('.take-origin, .take-voice')).toBeNull();
-		expect(row?.querySelector('[aria-label="' + TAKE_OVERFLOW_LABEL + '"]')).not.toBeNull();
+		expect(row?.querySelector('[aria-label="' + words['takeMenu.label'] + '"]')).not.toBeNull();
 	});
 
 	it('shows the empty current version with its head, the empty text and the folded rows', async () => {
@@ -510,11 +506,11 @@ describe('Delete sends rendered takes only, checked at confirm time (rule 8, cel
 
 	async function askToDelete(target: HTMLElement, id: string): Promise<void> {
 		const trigger = target.querySelector<HTMLButtonElement>(
-			`#take-${id} [aria-label="${TAKE_OVERFLOW_LABEL}"]`
+			`#take-${id} [aria-label="${words['takeMenu.label']}"]`
 		);
 		await clickThenTick(trigger as HTMLElement);
 		const item = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-			(button) => button.textContent?.trim() === TAKE_DELETE_LABEL
+			(button) => button.textContent?.trim() === words['takeMenu.delete']
 		);
 		await clickThenTick(item as HTMLElement);
 	}

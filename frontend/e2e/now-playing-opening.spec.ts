@@ -5,10 +5,6 @@
 
 import { expect, test, type Page, type TestInfo } from './coverage-test';
 import {
-	COLLECTION_MENU_CURATE_LABEL,
-	COLLECTION_MENU_LABEL
-} from '../src/lib/constants/collection-menu';
-import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
@@ -23,6 +19,7 @@ import {
 } from '../src/lib/constants/now-playing';
 import { FlowGuard, ONLY_IN_SHELL, openAlbumFromRail, shellOf, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
+import { words } from '../src/lib/words/en';
 
 let guard: FlowGuard;
 
@@ -142,10 +139,12 @@ test('the album walk is "Pick album takes" and ends with "Done"', async ({ page 
 	const library = readSeededLibrary();
 	await page.goto(`/album/${library.albumId}`);
 
-	await workspace(page).getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+	await workspace(page)
+		.getByRole('button', { name: words['collectionMenu.label'], exact: true })
+		.click();
 	await page
-		.getByRole('dialog', { name: COLLECTION_MENU_LABEL })
-		.getByRole('button', { name: COLLECTION_MENU_CURATE_LABEL, exact: true })
+		.getByRole('dialog', { name: words['collectionMenu.label'] })
+		.getByRole('button', { name: words['collectionMenu.curate'], exact: true })
 		.click();
 
 	const walk = page.getByRole('group', { name: NOW_PLAYING_CURATE_GROUP_LABEL });

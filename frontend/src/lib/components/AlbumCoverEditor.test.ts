@@ -17,11 +17,7 @@ import { ALBUM_COVER_THROTTLED_FALLBACK } from '#lib/constants/album.ts';
 import { words } from '#lib/words/en.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { dropLayersFrom, stackedLayers } from '#lib/stores/layers.ts';
-import {
-	createComponentMount,
-	openCollectionMenu,
-	requireElement
-} from './shell/rail-test-fixtures';
+import { createComponentMount, requireElement } from './shell/rail-test-fixtures';
 import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
 import { selectedAlbumId } from '#lib/stores/player.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
@@ -546,24 +542,6 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(accessibleName(requireElement(target, 'button.header-cover'))).toBe('Add cover');
 	});
 
-	it('Upload picks a file, and the uploaded cover closes the editor', async () => {
-		albumList.set([coveredAlbum()]);
-		uploadAlbumCover.mockResolvedValue(coveredAlbum(UPLOADED));
-		const target = await renderDetail();
-		await openCoverEditing(target);
-		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-		const picker = vi.spyOn(input, 'click').mockImplementation(() => undefined);
-
-		pressEditorButton(target, 'Upload');
-		expect(picker).toHaveBeenCalledTimes(1);
-		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
-		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-		input.dispatchEvent(new Event('change', { bubbles: true }));
-
-		await editingClosed(target);
-		expect(target.querySelector('.header-cover img')?.getAttribute('src')).toBe(UPLOADED.detail);
-	});
-
 	it('another album closes the editor', async () => {
 		albumList.set([coveredAlbum(), album({ id: 'a-other', title: 'Other Night' })]);
 		const target = await renderDetail();
@@ -573,18 +551,6 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		await editingClosed(target);
 		expect(target.querySelector('.header-title')?.textContent).toContain('Other Night');
-	});
-
-	it('Cover in the menu opens the cover editing without making anything', async () => {
-		albumList.set([coveredAlbum()]);
-		const target = await renderDetail();
-		const menu = await openCollectionMenu(target);
-		const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'));
-
-		items.find((item) => item.textContent?.trim().startsWith('Cover'))?.click();
-
-		await vi.waitFor(() => expect(editor(target)).not.toBeNull());
-		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
 	it('shows the elapsed time only while the suggestion runs and names a run that hit its time limit unavailable', async () => {

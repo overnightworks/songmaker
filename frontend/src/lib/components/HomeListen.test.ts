@@ -3,10 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LibraryListenItem } from '#lib/api/library.ts';
 import { get } from 'svelte/store';
 import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
-import {
-	COLLECTION_MENU_ARCHIVE_LABEL,
-	COLLECTION_MENU_DELETE_LABEL
-} from '#lib/constants/collection-menu.ts';
 import { albumList, allAlbumsLoad, songList } from '#lib/stores/libraryData.ts';
 import { deletePlaylist, playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import {
@@ -101,7 +97,7 @@ async function removeOnAlbumPage(action: string): Promise<void> {
 	await tick();
 	requireButtonContainingText(await openCollectionMenu(page), action).click();
 	await tick();
-	if (action === COLLECTION_MENU_DELETE_LABEL)
+	if (action === words['collectionMenu.albumDelete'])
 		getByRoleButton(document.body, 'Delete Album').click();
 	await vi.waitFor(() => expect(get(toasts).some((toast) => toast.action)).toBe(true));
 	await unmount(albumPage);
@@ -193,7 +189,7 @@ describe('1354_rule_14 Listen', () => {
 		}
 	);
 
-	const deleteAlbumHere = () => removeOnAlbumPage(COLLECTION_MENU_DELETE_LABEL);
+	const deleteAlbumHere = () => removeOnAlbumPage(words['collectionMenu.albumDelete']);
 	const deletePlaylistHere = () => deletePlaylist('place-1');
 	const album = words['homeListen.openAlbum']({ title: 'Place 0' });
 	const playlist = words['homeListen.openPlaylist']({ title: 'Place 1' });
@@ -274,12 +270,12 @@ describe('1354_rule_14 Listen', () => {
 	// A post-Undo read that `fails` leaves Home to rank the album on its next
 	// opening, so Home opens once more before the row must be back.
 	it.each([
-		[COLLECTION_MENU_DELETE_LABEL, 'before', 'answers'],
-		[COLLECTION_MENU_DELETE_LABEL, 'after', 'answers'],
-		[COLLECTION_MENU_ARCHIVE_LABEL, 'before', 'answers'],
-		[COLLECTION_MENU_ARCHIVE_LABEL, 'after', 'answers'],
-		[COLLECTION_MENU_DELETE_LABEL, 'around', 'fails'],
-		[COLLECTION_MENU_DELETE_LABEL, 'before', 'fails']
+		[words['collectionMenu.albumDelete'], 'before', 'answers'],
+		[words['collectionMenu.albumDelete'], 'after', 'answers'],
+		[words['collectionMenu.archive'], 'before', 'answers'],
+		[words['collectionMenu.archive'], 'after', 'answers'],
+		[words['collectionMenu.albumDelete'], 'around', 'fails'],
+		[words['collectionMenu.albumDelete'], 'before', 'fails']
 	] as const)(
 		'1354_rule_20 %s on the album page, a Listen read on Home answering %s the Undo, the read after the Undo %s, then the row is back',
 		async (action, answered, readAfterUndo) => {

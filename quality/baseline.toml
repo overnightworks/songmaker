@@ -11,14 +11,14 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1225
+"frontend/e2e/back-closes-overlay.spec.ts" = 1218
 "frontend/e2e/helpers.ts" = 822
-"frontend/e2e/library.spec.ts" = 1277
+"frontend/e2e/library.spec.ts" = 1272
 "frontend/e2e/offline.spec.ts" = 804
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-versions.spec.ts" = 860
-"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 884
-"frontend/src/lib/components/AlbumDetailView.test.ts" = 1104
+"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 850
+"frontend/src/lib/components/AlbumDetailView.test.ts" = 988
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1480
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1813
 "frontend/src/lib/components/LibraryWall.test.ts" = 925
@@ -26,11 +26,11 @@
 "frontend/src/lib/components/NowPlaying.test.ts" = 1092
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1101
 "frontend/src/lib/components/PlayerBar.test.ts" = 1621
-"frontend/src/lib/components/PlaylistDetailView.test.ts" = 780
+"frontend/src/lib/components/PlaylistDetailView.test.ts" = 659
 "frontend/src/lib/components/SongDetailView.svelte" = 1020
-"frontend/src/lib/components/SongDetailView.test.ts" = 2246
+"frontend/src/lib/components/SongDetailView.test.ts" = 2239
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
-"frontend/src/lib/components/editor/TakesList.test.ts" = 1303
+"frontend/src/lib/components/editor/TakesList.test.ts" = 1170
 "frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657

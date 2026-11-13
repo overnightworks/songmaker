@@ -3,7 +3,6 @@ export const ALBUM_ART_EMPTY_INITIALS = '?';
 export const ALBUM_ART_INITIAL_COUNT = 2;
 export const ALBUM_COVER_ACCEPT = 'image/jpeg,image/png';
 export const ALBUM_COVER_ALT_TYPE = 'Album';
-export const ALBUM_COVER_UPLOAD_LABEL = 'Upload…';
 export const ALBUM_COVER_ADD_LABEL = 'Add cover';
 export const ALBUM_COVER_EDIT_LABEL = 'Edit cover';
 export const ALBUM_COVER_EDITING_LABEL = 'Cover editing';

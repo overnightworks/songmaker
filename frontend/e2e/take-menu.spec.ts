@@ -8,17 +8,8 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { EDITOR_UNSAVED_TITLE } from '../src/lib/constants/song';
-import {
-	TAKE_COVER_LABEL,
-	TAKE_DELETE_LABEL,
-	TAKE_OVERFLOW_LABEL,
-	TAKE_PLAYLIST_LABEL,
-	TAKE_REPAINT_LABEL,
-	TAKE_SHARE_LABEL
-} from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
-import { TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import {
 	boundingBoxes,
 	sameOriginHeaders,
@@ -31,6 +22,7 @@ import {
 import { contrastRatio, expectEmulatedTheme, tokenColor } from './contrast';
 import { bottomOf, expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
 import { archiveOwnedAlbum, seedSongPhoneSong, seedTakeStripSong } from './seed';
+import { words } from '../src/lib/words/en';
 
 const VIEWPORT_HEIGHT_PX = 844;
 const ALBUM_FORM_MENU_WIDTH_PX = 238;
@@ -41,11 +33,11 @@ const FIRST_TAKE_SEED = 4127730;
 const FOOT_OF_LIST_REACH_PX = HITBOX_FREQUENT_PX;
 const SAME_PLACE_TOLERANCE_PX = 0.5;
 const ROW_LABELS_IN_ORDER = [
-	TAKE_REPAINT_LABEL,
-	TAKE_COVER_LABEL,
-	TAKE_PLAYLIST_LABEL,
-	TAKE_SHARE_LABEL,
-	TAKE_DELETE_LABEL
+	words['takeMenu.repaint'],
+	words['takeMenu.cover'],
+	words['takeMenu.addToPlaylist'],
+	words['takeMenu.share'],
+	words['takeMenu.delete']
 ];
 
 /**
@@ -127,11 +119,13 @@ async function onOwnTakes(
 }
 
 function takeMenuTriggers(page: Page): Locator {
-	return page.locator('.take-row').getByRole('button', { name: TAKE_OVERFLOW_LABEL, exact: true });
+	return page
+		.locator('.take-row')
+		.getByRole('button', { name: words['takeMenu.label'], exact: true });
 }
 
 function takeMenu(page: Page): Locator {
-	return page.getByRole('dialog', { name: TAKE_OVERFLOW_LABEL, exact: true });
+	return page.getByRole('dialog', { name: words['takeMenu.label'], exact: true });
 }
 
 /**
@@ -183,7 +177,7 @@ async function expectAlbumForm(page: Page, menu: Locator): Promise<void> {
 	expect(panel.width).toBeCloseTo(ALBUM_FORM_MENU_WIDTH_PX, 0);
 
 	const danger = await tokenColor(page, '--fail');
-	await expect(rows.last()).toHaveText(TAKE_DELETE_LABEL);
+	await expect(rows.last()).toHaveText(words['takeMenu.delete']);
 	await expect(rows.last()).toHaveCSS('color', danger);
 	await expect(rows.first()).not.toHaveCSS('color', danger);
 }
@@ -271,7 +265,7 @@ test.describe('Use seed row', () => {
 							await trigger.click();
 							const rows = takeMenu(page).getByRole('button');
 							await expect(rows).toHaveCount(ROW_LABELS_IN_ORDER.length + 1);
-							await expect(rows.nth(2)).toContainText(TAKE_USE_SEED_LABEL);
+							await expect(rows.nth(2)).toContainText(words['takeMenu.useSeed']);
 							await expect(rows.nth(2).locator('.menu-item-hint')).toHaveText(
 								String(FIRST_TAKE_SEED + TAKE_COUNT - 1 - index)
 							);
@@ -292,7 +286,9 @@ test(
 	async ({ page }) => {
 		await onOwnTakes(page, CELLS[0], async () => {
 			await takeMenuTriggers(page).first().click();
-			await takeMenu(page).getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+			await takeMenu(page)
+				.getByRole('button', { name: words['takeMenu.delete'], exact: true })
+				.click();
 
 			const confirm = page.getByRole('dialog', { name: /^Delete take \d+\?$/ });
 			await expect(confirm).toBeVisible();
@@ -312,7 +308,7 @@ test(
 		await onOwnTakes(page, CELLS[2], async () => {
 			await takeMenuTriggers(page).nth(MIDDLE_TAKE_INDEX).click();
 			const menu = takeMenu(page);
-			const share = menu.getByRole('button', { name: TAKE_SHARE_LABEL, exact: true });
+			const share = menu.getByRole('button', { name: words['takeMenu.share'], exact: true });
 			const hint = share.locator('.menu-item-hint');
 			await expect(share).toHaveAttribute('aria-pressed', 'false');
 			await expect(hint).toHaveText('off');
@@ -377,7 +373,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			await onOwnTakes(page, CELLS[1], async () => {
 				await expectEmulatedTheme(page, colorScheme);
 				await takeMenuTriggers(page).first().click();
-				await takeMenu(page).getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+				await takeMenu(page)
+					.getByRole('button', { name: words['takeMenu.delete'], exact: true })
+					.click();
 				const deleting = page.getByRole('dialog', { name: /^Delete take \d+\?$/ });
 				await expectConfirmFill(page, deleting, '--fail');
 				await deleting.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();

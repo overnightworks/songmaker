@@ -1,11 +1,11 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShareResult } from '#lib/api/types.ts';
-import { COLLECTION_MENU_RENAME_LABEL } from '#lib/constants/collection-menu.ts';
 import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import CollectionMenu from './CollectionMenu.svelte';
 import { openCollectionMenu } from './shell/rail-test-fixtures';
+import { words } from '#lib/words/en.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 const SHARE_WARNING_LABEL = 'Missing from the share page';
@@ -55,7 +55,10 @@ async function render(overrides: Partial<ComponentProps<typeof CollectionMenu>> 
 	return { target, props };
 }
 
-async function openMenuAndShare(target: HTMLElement, shareLabel = 'Share') {
+async function openMenuAndShare(
+	target: HTMLElement,
+	shareLabel = words['collectionMenu.albumShare']
+) {
 	await openCollectionMenu(target);
 	menuRow(target, shareLabel).click();
 	await tick();
@@ -122,7 +125,7 @@ describe('CollectionMenu share warning', () => {
 				)
 		});
 
-		await openMenuAndShare(target, 'Share playlist');
+		await openMenuAndShare(target, words['collectionMenu.playlistShare']);
 
 		expect(shareWarningDialog(target)).toBeNull();
 	});
@@ -130,8 +133,8 @@ describe('CollectionMenu share warning', () => {
 
 describe('CollectionMenu Share row', () => {
 	const shareRowKinds = [
-		{ kind: 'album', label: 'Share' },
-		{ kind: 'playlist', label: 'Share playlist' }
+		{ kind: 'album', label: words['collectionMenu.albumShare'] },
+		{ kind: 'playlist', label: words['collectionMenu.playlistShare'] }
 	] as const;
 
 	it.each([
@@ -143,7 +146,7 @@ describe('CollectionMenu Share row', () => {
 			const { target } = await render({ isShared: row.isShared });
 			await openCollectionMenu(target);
 
-			const share = menuRow(target, 'Share');
+			const share = menuRow(target, words['collectionMenu.albumShare']);
 
 			expect(share.querySelector('.menu-item-hint')?.textContent).toBe(row.state);
 			expect(share.getAttribute('aria-pressed')).toBe(String(row.isShared));
@@ -152,8 +155,8 @@ describe('CollectionMenu Share row', () => {
 	);
 
 	it.each([
-		{ kind: 'album', label: 'Share', path: '/share/abc' },
-		{ kind: 'playlist', label: 'Share playlist', path: '/share/playlist/abc' }
+		{ kind: 'album', label: words['collectionMenu.albumShare'], path: '/share/abc' },
+		{ kind: 'playlist', label: words['collectionMenu.playlistShare'], path: '/share/playlist/abc' }
 	] as const)('names the $kind share page in the shared tooltip', async (row) => {
 		const { target } = await render({ kind: row.kind, isShared: true, shareSlug: 'abc' });
 		await openCollectionMenu(target);
@@ -165,7 +168,9 @@ describe('CollectionMenu Share row', () => {
 		const iconOf = async (isShared: boolean) => {
 			const { target } = await render({ isShared });
 			await openCollectionMenu(target);
-			const icon = menuRow(target, 'Share').querySelector('svg')?.innerHTML;
+			const icon = menuRow(target, words['collectionMenu.albumShare']).querySelector(
+				'svg'
+			)?.innerHTML;
 			await unmount(mounted.pop() as ReturnType<typeof mount>);
 			return icon;
 		};
@@ -211,8 +216,8 @@ describe('CollectionMenu Share row', () => {
 		const { target } = await render({ onshare });
 		await openCollectionMenu(target);
 
-		menuRow(target, 'Share').click();
-		menuRow(target, 'Share').click();
+		menuRow(target, words['collectionMenu.albumShare']).click();
+		menuRow(target, words['collectionMenu.albumShare']).click();
 		finishShare(shareResult());
 
 		await vi.waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1));
@@ -240,25 +245,25 @@ describe('CollectionMenu album rows', () => {
 		await tick();
 
 		expect(menuRowLabels(target)).toEqual([
-			'Edit details',
-			'Cover',
-			'Pick album takes',
-			'Add to playlist',
-			'Share',
-			'Archive',
-			'Delete'
+			words['collectionMenu.editDetails'],
+			words['collectionMenu.cover'],
+			words['collectionMenu.curate'],
+			words['collectionMenu.addToPlaylist'],
+			words['collectionMenu.albumShare'],
+			words['collectionMenu.archive'],
+			words['collectionMenu.albumDelete']
 		]);
 		const items = target.querySelectorAll('.menu-item');
 		expect(items[items.length - 1].classList.contains('destructive')).toBe(true);
 	});
 
-	it('tells on the Cover row what the cover editor offers: upload · suggest', async () => {
+	it('tells on the Cover row what the cover editor offers', async () => {
 		const { target } = await render(albumMenuProps());
 		await openCollectionMenu(target);
 
-		expect(menuRow(target, 'Cover').querySelector('.menu-item-hint')?.textContent).toBe(
-			'upload · suggest'
-		);
+		expect(
+			menuRow(target, words['collectionMenu.cover']).querySelector('.menu-item-hint')?.textContent
+		).toBe(words['collectionMenu.coverHint']);
 	});
 
 	it('opens the cover editor from Cover and closes the menu, leaving upload and remove to it', async () => {
@@ -268,7 +273,7 @@ describe('CollectionMenu album rows', () => {
 		await tick();
 
 		Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'))
-			.find((item) => item.textContent?.trim().startsWith('Cover'))
+			.find((item) => item.textContent?.trim().startsWith(words['collectionMenu.cover']))
 			?.click();
 		await tick();
 
@@ -286,11 +291,11 @@ describe('CollectionMenu Edit details', () => {
 		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
 
-		expect(menuRowLabels(target)).toContain('Edit details');
-		expect(menuRowLabels(target)).not.toContain('Rename');
+		expect(menuRowLabels(target)).toContain(words['collectionMenu.editDetails']);
+		expect(menuRowLabels(target)).not.toContain(words['collectionMenu.rename']);
 
 		Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'))
-			.find((item) => item.textContent?.trim() === 'Edit details')
+			.find((item) => item.textContent?.trim() === words['collectionMenu.editDetails'])
 			?.click();
 		await tick();
 
@@ -304,8 +309,8 @@ describe('CollectionMenu Edit details', () => {
 		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
 
-		expect(menuRowLabels(target)).toContain('Rename');
-		expect(menuRowLabels(target)).not.toContain('Edit details');
+		expect(menuRowLabels(target)).toContain(words['collectionMenu.rename']);
+		expect(menuRowLabels(target)).not.toContain(words['collectionMenu.editDetails']);
 	});
 });
 
@@ -338,7 +343,7 @@ describeBackClosesOverlay({
 			way: 'choosing Rename',
 			close: (target) =>
 				Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'))
-					.find((item) => item.textContent?.trim() === COLLECTION_MENU_RENAME_LABEL)
+					.find((item) => item.textContent?.trim() === words['collectionMenu.rename'])
 					?.click(),
 			actionSawHistoryAt: () => renameSawHistoryAt
 		}

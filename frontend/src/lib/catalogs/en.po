@@ -742,3 +742,163 @@ msgstr ""
 msgctxt "newPlace.heading"
 msgid "New in {#strong}{library}{/strong}"
 msgstr ""
+
+msgctxt "songMenu.label"
+msgid "Song menu"
+msgstr ""
+
+msgctxt "songMenu.close"
+msgid "Close menu"
+msgstr ""
+
+msgctxt "songMenu.heading"
+msgid "Song · {title}"
+msgstr ""
+
+msgctxt "songMenu.save"
+msgid "Save version"
+msgstr ""
+
+msgctxt "songMenu.rename"
+msgid "Rename"
+msgstr ""
+
+msgctxt "songMenu.addToPlaylist"
+msgid "Add to playlist"
+msgstr ""
+
+msgctxt "songMenu.move"
+msgid "Move"
+msgstr ""
+
+msgctxt "songMenu.delete"
+msgid "Delete song"
+msgstr ""
+
+msgctxt "takeMenu.label"
+msgid "More"
+msgstr ""
+
+msgctxt "takeMenu.close"
+msgid "Close menu"
+msgstr ""
+
+msgctxt "takeMenu.headingWithVersion"
+msgid "Take · v{version} · {take}"
+msgstr ""
+
+msgctxt "takeMenu.heading"
+msgid "Take · {take}"
+msgstr ""
+
+msgctxt "takeMenu.repaint"
+msgid "Repaint"
+msgstr ""
+
+msgctxt "takeMenu.cover"
+msgid "Cover"
+msgstr ""
+
+msgctxt "takeMenu.useSeed"
+msgid "Use seed"
+msgstr ""
+
+msgctxt "takeMenu.restore"
+msgid "Restore"
+msgstr ""
+
+msgctxt "takeMenu.addToPlaylist"
+msgid "Add to playlist"
+msgstr ""
+
+msgctxt "takeMenu.share"
+msgid "Share"
+msgstr ""
+
+msgctxt "takeMenu.shareOn"
+msgid "on"
+msgstr ""
+
+msgctxt "takeMenu.shareOff"
+msgid "off"
+msgstr ""
+
+msgctxt "takeMenu.delete"
+msgid "Delete"
+msgstr ""
+
+msgctxt "collectionMenu.label"
+msgid "More"
+msgstr ""
+
+msgctxt "collectionMenu.close"
+msgid "Close menu"
+msgstr ""
+
+msgctxt "collectionMenu.albumHeading"
+msgid "Album · {title}"
+msgstr ""
+
+msgctxt "collectionMenu.playlistHeading"
+msgid "Playlist · {title}"
+msgstr ""
+
+msgctxt "collectionMenu.editDetails"
+msgid "Edit details"
+msgstr ""
+
+msgctxt "collectionMenu.cover"
+msgid "Cover"
+msgstr ""
+
+msgctxt "collectionMenu.coverHint"
+msgid "upload · suggest"
+msgstr ""
+
+msgctxt "collectionMenu.curate"
+msgid "Pick album takes"
+msgstr ""
+
+msgctxt "collectionMenu.addToPlaylist"
+msgid "Add to playlist"
+msgstr ""
+
+msgctxt "collectionMenu.archive"
+msgid "Archive"
+msgstr ""
+
+msgctxt "collectionMenu.albumShare"
+msgid "Share"
+msgstr ""
+
+msgctxt "collectionMenu.playlistShare"
+msgid "Share playlist"
+msgstr ""
+
+msgctxt "collectionMenu.shareOn"
+msgid "on"
+msgstr ""
+
+msgctxt "collectionMenu.shareOff"
+msgid "off"
+msgstr ""
+
+msgctxt "collectionMenu.upload"
+msgid "Upload…"
+msgstr ""
+
+msgctxt "collectionMenu.removeCover"
+msgid "Remove cover"
+msgstr ""
+
+msgctxt "collectionMenu.rename"
+msgid "Rename"
+msgstr ""
+
+msgctxt "collectionMenu.albumDelete"
+msgid "Delete"
+msgstr ""
+
+msgctxt "collectionMenu.playlistDelete"
+msgid "Delete playlist"
+msgstr ""

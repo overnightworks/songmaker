@@ -16,7 +16,7 @@ import {
 } from '#lib/stores/connectivity.ts';
 import { PLAYING_MARK_LABEL, songEditorOpenLabel } from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import { ALBUM_COVER_ALT_TYPE, ALBUM_NO_SONGS } from '#lib/constants/album.ts';
+import { ALBUM_NO_SONGS } from '#lib/constants/album.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
@@ -29,7 +29,6 @@ import {
 	getByRoleButton,
 	getByRoleHeading
 } from '#lib/test-utils/accessible-name.ts';
-import { menuRowLabels } from '#lib/test-utils/collection-menu.ts';
 import { shownTransportFace } from '#lib/test-utils/transport-face.ts';
 import {
 	describeBackClosesOverlay,
@@ -546,139 +545,24 @@ describe('AlbumDetailView header', () => {
 
 		expect(minHeightPx(button, label)).toBe(HITBOX_FREQUENT_PX);
 	});
-
-	it('915_C3: names the album and lists Edit details, Cover, Pick album takes, Add to playlist, Share, Archive, Delete in the menu', async () => {
-		const target = await renderDetail();
-		const menu = await openCollectionMenu(target);
-		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
-		expect(menuRowLabels(menu)).toEqual([
-			'Edit details',
-			'Cover',
-			'Pick album takes',
-			'Add to playlist',
-			'Share',
-			'Archive',
-			'Delete'
-		]);
-	});
-
-	it('opens curation mode from the menu', async () => {
-		songList.set([
-			song({
-				id: 's-local',
-				album_id: 'a-local',
-				album_title: 'Night Drive',
-				generation_count: 1,
-				generations: [generation({ song_id: 's-local' })]
-			})
-		]);
-		const target = await renderDetail();
-		const menu = await openCollectionMenu(target);
-		const curateItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Pick album takes'
-		);
-		curateItem?.click();
-		await tick();
-
-		await vi.waitFor(() => expect(get(curationActive)).toBe(true));
-	});
-
-	it('uploads a cover through the cover editor the menu opens', async () => {
-		uploadAlbumCover.mockResolvedValue(
-			album({
-				id: 'a-local',
-				title: 'Night Drive',
-				cover: {
-					card: '/api/albums/a-local/cover?variant=card&v=abc.jpg',
-					detail: '/api/albums/a-local/cover?variant=detail&v=abc.jpg'
-				}
-			})
-		);
-		const target = await renderDetail();
-		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-		await uploadFromCoverEditor(target);
-		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
-		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-		input.dispatchEvent(new Event('change', { bubbles: true }));
-		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledTimes(1));
-		await vi.waitFor(() =>
-			expect(target.querySelector('img')?.getAttribute('alt')).toBe(
-				`${ALBUM_COVER_ALT_TYPE} Night Drive`
-			)
-		);
-	});
-
-	it.each([
-		{ failure: lostNetwork(), toast: 'Cover upload failed' },
-		{ failure: serverRefusal('Cover must be an image'), toast: 'Cover must be an image' }
-	])('toasts $toast when a cover upload fails', async ({ failure, toast }) => {
-		uploadAlbumCover.mockRejectedValue(failure);
-		const target = await renderDetail();
-		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-		await uploadFromCoverEditor(target);
-		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
-		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-		input.dispatchEvent(new Event('change', { bubbles: true }));
-
-		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith(toast, 'error'));
-	});
-
-	it('clears the open collection on delete so the wall takes over instead of a blank panel', async () => {
-		openCollection.set({ kind: 'album', id: 'a-local' });
-		const target = await renderDetail();
-		const menu = await openCollectionMenu(target);
-		requireElement<HTMLButtonElement>(menu, '.menu-item.destructive').click();
-		await tick();
-		requireElement<HTMLButtonElement>(document.body, '.confirm-btn').click();
-		await tick();
-		await Promise.resolve();
-		await tick();
-
-		expect(get(openCollection)).toBeNull();
-	});
-
-	it('archives the album through the menu without a confirmation dialog', async () => {
-		archiveAlbum.mockResolvedValue(
-			album({ id: 'a-local', title: 'Night Drive', is_archived: true })
-		);
-		openCollection.set({ kind: 'album', id: 'a-local' });
-		const target = await renderDetail();
-		const menu = await openCollectionMenu(target);
-		const archiveItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Archive'
-		);
-		archiveItem?.click();
-		await tick();
-		await Promise.resolve();
-		await tick();
-
-		expect(archiveAlbum).toHaveBeenCalledWith('a-local');
-		expect(document.body.querySelector('.confirm-btn')).toBeNull();
-		expect(get(albumList).some((a) => a.id === 'a-local')).toBe(false);
-		expect(get(openCollection)).toBeNull();
-	});
 });
-
-async function uploadFromCoverEditor(target: HTMLElement): Promise<void> {
-	const menu = await openCollectionMenu(target);
-	Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
-		.find((item) => item.textContent?.trim().startsWith('Cover'))
-		?.click();
-	await vi.waitFor(() => expect(target.querySelector('.cover-editor')).not.toBeNull());
-	getByRoleButton(requireElement(target, '.cover-editor'), 'Upload').click();
-}
 
 async function openEditDetails(target: HTMLElement): Promise<HTMLFormElement> {
 	const menu = await openCollectionMenu(target);
 	Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
-		.find((item) => item.textContent?.trim() === 'Edit details')
+		.find((item) => item.textContent?.trim() === words['collectionMenu.editDetails'])
 		?.click();
 	await tick();
-	return requireElement<HTMLFormElement>(target, 'form[aria-label="Edit details"]');
+	return requireElement<HTMLFormElement>(
+		target,
+		`form[aria-label="${words['collectionMenu.editDetails']}"]`
+	);
 }
 
 function detailsForm(target: HTMLElement): HTMLFormElement | null {
-	return target.querySelector<HTMLFormElement>('form[aria-label="Edit details"]');
+	return target.querySelector<HTMLFormElement>(
+		`form[aria-label="${words['collectionMenu.editDetails']}"]`
+	);
 }
 
 async function saveDetails(form: HTMLFormElement): Promise<void> {
