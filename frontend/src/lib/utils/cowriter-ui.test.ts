@@ -23,7 +23,7 @@ import {
 
 describe('co-writer copy', () => {
 	it('A-thinking names no vendor in the thinking line', () => {
-		expect(cowriterThinkingLabel()).toBe('Co-writer is thinking…');
+		expect(cowriterThinkingLabel()).toBe(words['cowriter.thinking']);
 	});
 
 	it.each([
@@ -243,7 +243,8 @@ describe('conversation day and line copy', () => {
 	it.each([
 		[1, '1 msg'],
 		[4, '4 msgs'],
-		[0, '0 msgs']
+		[0, '0 msgs'],
+		[1000, '1,000 msgs']
 	])('counts %i message(s) as “%s”', (count, label) => {
 		expect(conversationMessageCountLabel(count)).toBe(label);
 	});

@@ -4,11 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '#lib/api/client.ts';
 import type { ChatMessageItem } from '#lib/api/types.ts';
 import {
-	COWRITER_CONVERSATION_MENU_LABEL,
-	COWRITER_DELETE_CONVERSATION_TITLE,
-	COWRITER_DELETE_CONVERSATION_WARNING,
-	COWRITER_MEMORY_LABEL,
-	COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
 	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 	COWRITER_RUNNING_TURN_POLL_MS
 } from '#lib/constants/cowriter.ts';
@@ -210,7 +205,7 @@ function userMemoryField(target: HTMLElement): HTMLTextAreaElement | null {
 }
 
 function focusedConversationMenuTrigger(): boolean {
-	return document.activeElement?.getAttribute('aria-label') === COWRITER_CONVERSATION_MENU_LABEL;
+	return document.activeElement?.getAttribute('aria-label') === words['cowriter.conversationMenu'];
 }
 
 function conversationStartedAt(createdAt: string) {
@@ -298,7 +293,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			Array.from(line?.querySelectorAll('button') ?? [], (button) =>
 				button.getAttribute('aria-label')
 			)
-		).toEqual([COWRITER_CONVERSATION_MENU_LABEL]);
+		).toEqual([words['cowriter.conversationMenu']]);
 	});
 
 	it('keeps a new conversation and switching conversations in its ⋯ menu', async () => {
@@ -536,7 +531,9 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			target.querySelector('section[aria-label="Memory"]')?.contains(document.activeElement)
 		).toBe(true);
 
-		target.querySelector<HTMLButtonElement>('button[aria-label="Close memory"]')?.click();
+		target
+			.querySelector<HTMLButtonElement>(`button[aria-label="${words['memory.close']}"]`)
+			?.click();
 		await tick();
 		expect(userMemoryField(target)).toBeNull();
 		expect(focusedConversationMenuTrigger()).toBe(true);
@@ -635,18 +632,13 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 	it('marks ⋯ and its Memory item while a memory proposal waits, and says so in their names until it is answered', async () => {
 		const target = await renderWithOneWaitingProposal();
 		const trigger = target.querySelector<HTMLButtonElement>('button.convo-menu-btn');
-		const waitingName = (label: string) =>
-			`${label}, ${COWRITER_MEMORY_PROPOSAL_WAITING_LABEL.toLowerCase()}`;
-
 		await vi.waitFor(() =>
-			expect(trigger?.getAttribute('aria-label')).toBe(
-				waitingName(COWRITER_CONVERSATION_MENU_LABEL)
-			)
+			expect(trigger?.getAttribute('aria-label')).toBe(words['cowriter.conversationMenuWaiting'])
 		);
 		expect(trigger?.querySelectorAll('.proposal-waiting')).toHaveLength(1);
 		const menu = await openConversationMenu(target);
 		const memoryItem = menu.querySelector<HTMLButtonElement>('.convo-memory');
-		expect(memoryItem?.getAttribute('aria-label')).toBe(waitingName(COWRITER_MEMORY_LABEL));
+		expect(memoryItem?.getAttribute('aria-label')).toBe(words['cowriter.memoryWaiting']);
 		expect(memoryItem?.querySelector('.proposal-waiting')).not.toBeNull();
 
 		memoryItem?.click();
@@ -656,7 +648,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await tick();
 
 		expect(target.querySelectorAll('.proposal-waiting')).toHaveLength(0);
-		expect(trigger?.getAttribute('aria-label')).toBe(COWRITER_CONVERSATION_MENU_LABEL);
+		expect(trigger?.getAttribute('aria-label')).toBe(words['cowriter.conversationMenu']);
 	});
 
 	it('shows the waiting proposal above the memory fields when Memory opens from its marked item', async () => {
@@ -709,9 +701,9 @@ describe('CoWriterPanel deleting a conversation', () => {
 
 		const dialog = await openDeleteConfirm(target);
 
-		expect(dialog.querySelector('h3')?.textContent).toBe(COWRITER_DELETE_CONVERSATION_TITLE);
+		expect(dialog.querySelector('h3')?.textContent).toBe(words['cowriter.deleteConversationTitle']);
 		expect(dialog.querySelector('.warning')?.textContent).toBe(
-			COWRITER_DELETE_CONVERSATION_WARNING
+			words['cowriter.deleteConversationWarning']
 		);
 		expect(dialogButton(dialog, 'Delete')).toBeDefined();
 		expect(dialogButton(dialog, 'Cancel')).toBeDefined();
@@ -727,7 +719,7 @@ describe('CoWriterPanel deleting a conversation', () => {
 
 		expect(labelId).toBeTruthy();
 		expect(document.getElementById(labelId ?? '')?.textContent).toBe(
-			COWRITER_DELETE_CONVERSATION_TITLE
+			words['cowriter.deleteConversationTitle']
 		);
 	});
 
@@ -1788,7 +1780,9 @@ describeBackClosesOverlay({
 		{
 			way: 'its close button',
 			close: (target) =>
-				target.querySelector<HTMLButtonElement>('button[aria-label="Close memory"]')?.click()
+				target
+					.querySelector<HTMLButtonElement>(`button[aria-label="${words['memory.close']}"]`)
+					?.click()
 		},
 		{ way: 'Escape', close: (target) => pressEscapeIn(userMemoryField(target)) }
 	]

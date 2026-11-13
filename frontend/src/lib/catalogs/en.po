@@ -2940,3 +2940,215 @@ msgstr ""
 msgctxt "takeRecipe.off"
 msgid "Off"
 msgstr ""
+
+msgctxt "cowriter.title"
+msgid "Co-writer"
+msgstr ""
+
+msgctxt "cowriter.thinking"
+msgid "Co-writer is thinking…"
+msgstr ""
+
+msgctxt "cowriter.conversationMenu"
+msgid "Conversation menu"
+msgstr ""
+
+msgctxt "cowriter.conversationMenuWaiting"
+msgid "Conversation menu, memory proposal waiting"
+msgstr ""
+
+msgctxt "cowriter.composerPlaceholder"
+msgid "Ask for a rewrite…"
+msgstr ""
+
+msgctxt "cowriter.send"
+msgid "Send"
+msgstr ""
+
+msgctxt "cowriter.newConversation"
+msgid "New conversation"
+msgstr ""
+
+msgctxt "cowriter.memory"
+msgid "Memory"
+msgstr ""
+
+msgctxt "cowriter.memoryWaiting"
+msgid "Memory, memory proposal waiting"
+msgstr ""
+
+msgctxt "cowriter.deleteConversationTitle"
+msgid "Delete conversation?"
+msgstr ""
+
+msgctxt "cowriter.deleteConversationWarning"
+msgid "This can't be undone."
+msgstr ""
+
+msgctxt "cowriter.deleteConversation"
+msgid "Delete conversation"
+msgstr ""
+
+msgctxt "cowriter.newConversationLine"
+msgid "new conversation"
+msgstr ""
+
+msgctxt "cowriter.lineSince"
+msgid "conversation since {day}"
+msgstr ""
+
+msgctxt "cowriter.lineArchived"
+msgid "archived conversation from {day}"
+msgstr ""
+
+msgctxt "cowriter.conversationSince"
+msgid "Conversation since {day} {time}"
+msgstr ""
+
+msgctxt "cowriter.archivedRow"
+msgid "Archived · {day} {time}"
+msgstr ""
+
+msgctxt "cowriter.confirmRow"
+msgid "{name} · {messages}"
+msgstr ""
+
+msgctxt "cowriter.messageCount.one"
+msgid "{count} msg"
+msgstr ""
+
+msgctxt "cowriter.messageCount.other"
+msgid "{count} msgs"
+msgstr ""
+
+msgctxt "cowriter.today"
+msgid "today"
+msgstr ""
+
+msgctxt "cowriter.toolRan"
+msgid "ran tool: {name}"
+msgstr ""
+
+msgctxt "cowriter.toolTarget"
+msgid "for: {title}"
+msgstr ""
+
+msgctxt "cowriter.toolForeignTarget"
+msgid "This proposal applies to a different song than the one you have open"
+msgstr ""
+
+msgctxt "cowriter.historyUnavailable"
+msgid "Conversation history unavailable"
+msgstr ""
+
+msgctxt "cowriter.loadingChat"
+msgid "Loading chat…"
+msgstr ""
+
+msgctxt "cowriter.startFailed"
+msgid "Failed to start new conversation"
+msgstr ""
+
+msgctxt "cowriter.deleteFailed"
+msgid "Failed to delete conversation"
+msgstr ""
+
+msgctxt "cowriter.archivedToast"
+msgid "Viewing an archived conversation — start a new one to reply"
+msgstr ""
+
+msgctxt "cowriter.archivedBanner"
+msgid "Archived — {#link}start a new conversation{/link} to reply."
+msgstr ""
+
+msgctxt "cowriter.albumFallback"
+msgid "Album"
+msgstr ""
+
+msgctxt "cowriter.noMatches"
+msgid "No matches"
+msgstr ""
+
+msgctxt "cowriter.memoryUnavailable"
+msgid "Memory unavailable"
+msgstr ""
+
+msgctxt "cowriter.memorySaveFailed"
+msgid "Failed to save memory"
+msgstr ""
+
+msgctxt "cowriter.proposalStale"
+msgid "Memory proposal is stale or belongs elsewhere"
+msgstr ""
+
+msgctxt "memory.close"
+msgid "Close memory"
+msgstr ""
+
+msgctxt "memory.loading"
+msgid "Loading memory…"
+msgstr ""
+
+msgctxt "memory.you"
+msgid "You"
+msgstr ""
+
+msgctxt "memory.thisSong"
+msgid "This song"
+msgstr ""
+
+msgctxt "memory.albumNotes"
+msgid "Album notes"
+msgstr ""
+
+msgctxt "memory.hintUser"
+msgid "Taste, language, standing rules"
+msgstr ""
+
+msgctxt "memory.hintSong"
+msgid "Concept, locked vs open decisions, names, open questions"
+msgstr ""
+
+msgctxt "memory.hintAlbum"
+msgid "Album-level notes — not lyrics"
+msgstr ""
+
+msgctxt "memory.proposedUser"
+msgid "Proposed You"
+msgstr ""
+
+msgctxt "memory.proposedSong"
+msgid "Proposed This song"
+msgstr ""
+
+msgctxt "memory.proposedAlbum"
+msgid "Proposed Album notes"
+msgstr ""
+
+msgctxt "memory.accept"
+msgid "Accept"
+msgstr ""
+
+msgctxt "memory.reject"
+msgid "Reject"
+msgstr ""
+
+msgctxt "memory.userField"
+msgid "User memory"
+msgstr ""
+
+msgctxt "memory.songField"
+msgid "Song memory"
+msgstr ""
+
+msgctxt "memory.albumField"
+msgid "Album notes"
+msgstr ""
+
+msgctxt "memory.save"
+msgid "Save"
+msgstr ""
+
+msgctxt "memory.saving"
+msgid "Saving..."
+msgstr ""

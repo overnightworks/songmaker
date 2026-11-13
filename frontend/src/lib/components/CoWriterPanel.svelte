@@ -24,18 +24,11 @@
 	} from '#lib/api/types.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import {
-		COWRITER_CONVERSATION_MENU_LABEL,
-		COWRITER_DELETE_CONVERSATION_TITLE,
-		COWRITER_DELETE_CONVERSATION_WARNING,
-		COWRITER_MEMORY_LABEL,
-		COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
-		COWRITER_NEW_CONVERSATION_LABEL,
 		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
-		COWRITER_RUNNING_TURN_POLL_MS,
-		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
-		COWRITER_TOOL_CALL_TARGET_PREFIX
+		COWRITER_RUNNING_TURN_POLL_MS
 	} from '#lib/constants/cowriter.ts';
-	import { EDITOR_VIEW_COWRITER_LABEL } from '#lib/constants/song.ts';
+	import { Marked } from 'overnightworks-design';
+	import { pageParts, pageText } from '#lib/utils/page-words.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '#lib/utils/focus-trap.ts';
 	import {
@@ -173,7 +166,7 @@
 				}
 			}
 		} catch {
-			historyError = 'Conversation history unavailable';
+			historyError = pageText('cowriter.historyUnavailable');
 		}
 	}
 
@@ -199,7 +192,7 @@
 		try {
 			conversation = await fetchConversationMessages(conversationId);
 		} catch {
-			historyError = 'Conversation history unavailable';
+			historyError = pageText('cowriter.historyUnavailable');
 		} finally {
 			historyLoading = false;
 		}
@@ -370,7 +363,7 @@
 				return;
 			}
 			messages = messages.slice(0, placeholderIndex);
-			historyError = 'Conversation history unavailable';
+			historyError = pageText('cowriter.historyUnavailable');
 		} finally {
 			loading = false;
 			void keepLatestInView();
@@ -414,7 +407,7 @@
 			viewingConversationId = conv.id;
 			messages = [];
 		} catch {
-			addToast('Failed to start new conversation', 'error');
+			addToast(pageText('cowriter.startFailed'), 'error');
 		}
 	}
 
@@ -449,7 +442,7 @@
 				}
 			}
 		} catch {
-			addToast('Failed to delete conversation', 'error');
+			addToast(pageText('cowriter.deleteFailed'), 'error');
 		}
 	}
 
@@ -464,7 +457,7 @@
 	async function sendMessage(msg: string): Promise<void> {
 		if (!msg || loading) return;
 		if (viewingConversationId !== null && viewingConversationId !== activeConversationId) {
-			addToast('Viewing an archived conversation — start a new one to reply', 'info');
+			addToast(pageText('cowriter.archivedToast'), 'info');
 			return;
 		}
 		latestTurn = runTurn(msg);
@@ -687,7 +680,7 @@
 		} catch {
 			if (requestId === memoryRequestId) {
 				memoryBundle = null;
-				memoryError = 'Memory unavailable';
+				memoryError = pageText('cowriter.memoryUnavailable');
 			}
 		} finally {
 			if (requestId === memoryRequestId) memoryLoading = false;
@@ -704,9 +697,9 @@
 	const memoryProposalWaiting = $derived(pendingProposals.length > 0);
 
 	// The waiting dot is only drawn, so the controls that carry it say it in their names.
-	function announcingProposalWaiting(label: string): string {
-		if (!memoryProposalWaiting) return label;
-		return `${label}, ${COWRITER_MEMORY_PROPOSAL_WAITING_LABEL.toLowerCase()}`;
+	function announcingProposalWaiting(control: 'conversationMenu' | 'memory'): string {
+		const waiting = control === 'memory' ? 'memoryWaiting' : 'conversationMenuWaiting';
+		return pageText(memoryProposalWaiting ? `cowriter.${waiting}` : `cowriter.${control}`);
 	}
 
 	async function saveMemoryScope(
@@ -728,7 +721,7 @@
 			}
 			return true;
 		} catch {
-			addToast('Failed to save memory', 'error');
+			addToast(pageText('cowriter.memorySaveFailed'), 'error');
 			return false;
 		} finally {
 			savingScope = null;
@@ -738,7 +731,7 @@
 	async function acceptProposal(proposal: MemoryProposal): Promise<void> {
 		const targetId = proposalTargetForMemory(proposal, memoryBundle);
 		if (!targetId) {
-			addToast('Memory proposal is stale or belongs elsewhere', 'error');
+			addToast(pageText('cowriter.proposalStale'), 'error');
 			return;
 		}
 		const saved = await saveMemoryScope(proposal.scope, targetId, proposal.proposedBody);
@@ -899,6 +892,10 @@
 	);
 </script>
 
+{#snippet link({ text }: { text: string })}
+	<button class="link" onclick={startNew}>{text}</button>
+{/snippet}
+
 {#snippet proposalWaitingMark()}
 	<span class="proposal-waiting" aria-hidden="true"></span>
 {/snippet}
@@ -906,7 +903,7 @@
 <div class="cowriter">
 	<div class="convo">
 		<span class="convo-line">
-			<b>{EDITOR_VIEW_COWRITER_LABEL}</b> ·
+			<b>{pageText('cowriter.title')}</b> ·
 			{conversationLine}
 		</span>
 		<div class="convo-menu-anchor">
@@ -917,8 +914,8 @@
 				data-hitbox="frequent"
 				aria-haspopup="menu"
 				aria-expanded={$conversationMenuOpen}
-				aria-label={announcingProposalWaiting(COWRITER_CONVERSATION_MENU_LABEL)}
-				title={COWRITER_CONVERSATION_MENU_LABEL}
+				aria-label={announcingProposalWaiting('conversationMenu')}
+				title={pageText('cowriter.conversationMenu')}
 				onclick={toggleConversationMenu}
 			>
 				<Icon name="more-horizontal" size={18} />
@@ -939,15 +936,17 @@
 						class="convo-new"
 						data-hitbox="text"
 						onclick={() => chooseFromConversationMenu(startNew)}
-						>{COWRITER_NEW_CONVERSATION_LABEL}</button
+						>{pageText('cowriter.newConversation')}</button
 					>
 					<button
 						type="button"
 						role="menuitem"
 						class="convo-memory"
-						aria-label={announcingProposalWaiting(COWRITER_MEMORY_LABEL)}
+						aria-label={announcingProposalWaiting('memory')}
 						onclick={() => chooseFromConversationMenu(openMemory)}
-						>{COWRITER_MEMORY_LABEL}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}</button
+						>{pageText(
+							'cowriter.memory'
+						)}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}</button
 					>
 					{#each menuConversations as conv (conv.id)}
 						<div class="conv-row" role="none" class:active={conv.id === viewingConversationId}>
@@ -966,7 +965,7 @@
 								class="conv-del"
 								data-hitbox="frequent"
 								onclick={() => chooseFromConversationMenu(() => askToDelete(conv))}
-								aria-label="Delete conversation">&#x2715;</button
+								aria-label={pageText('cowriter.deleteConversation')}>&#x2715;</button
 							>
 						</div>
 					{/each}
@@ -978,9 +977,9 @@
 
 	{#if conversationAwaitingDelete}
 		<ConfirmDeleteDialog
-			title={COWRITER_DELETE_CONVERSATION_TITLE}
+			title={pageText('cowriter.deleteConversationTitle')}
 			items={[conversationConfirmLabel(conversationAwaitingDelete, new Date())]}
-			warning={COWRITER_DELETE_CONVERSATION_WARNING}
+			warning={pageText('cowriter.deleteConversationWarning')}
 			onconfirm={confirmDelete}
 			oncancel={closeDeleteConfirm}
 		/>
@@ -1000,7 +999,7 @@
 	/>
 
 	{#if historyLoading}
-		<div class="history-loading">Loading chat…</div>
+		<div class="history-loading">{pageText('cowriter.loadingChat')}</div>
 	{:else if historyError}
 		<div class="history-error" role="alert">{historyError}</div>
 	{:else}
@@ -1028,13 +1027,13 @@
 								)}
 								<div class="tool-call" title={JSON.stringify(call.input)}>
 									<span class="tool-dot" aria-hidden="true">▸</span>
-									<span class="tool-name">ran tool: {call.name}</span>
+									<span class="tool-name">{pageText('cowriter.toolRan', { name: call.name })}</span>
 									{#if target}
 										<span
 											class="tool-target"
 											class:foreign={target.foreign}
-											title={target.foreign ? COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE : undefined}
-											>{COWRITER_TOOL_CALL_TARGET_PREFIX} {target.title}</span
+											title={target.foreign ? pageText('cowriter.toolForeignTarget') : undefined}
+											>{pageText('cowriter.toolTarget', { title: target.title })}</span
 										>
 									{/if}
 								</div>
@@ -1061,7 +1060,7 @@
 
 	{#if readOnly}
 		<div class="readonly-banner">
-			Archived — <button class="link" onclick={startNew}>start a new conversation</button> to reply.
+			<Marked parts={pageParts('cowriter.archivedBanner')} marked={{ link }} />
 		</div>
 	{/if}
 
@@ -1069,7 +1068,7 @@
 		<div class="mentions-bar">
 			{#if mentionedAlbumId}
 				<span class="mention-tag album">
-					{currentAlbumTitle || 'Album'}
+					{currentAlbumTitle || pageText('cowriter.albumFallback')}
 					<button class="mention-remove" onclick={() => (mentionedAlbumId = null)}>&#x2715;</button>
 				</span>
 			{/if}

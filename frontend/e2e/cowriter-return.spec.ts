@@ -36,11 +36,7 @@
 // (#1090).
 
 import { expect, test, type Page, type Route } from './coverage-test';
-import {
-	COWRITER_CONVERSATION_MENU_LABEL,
-	COWRITER_DELETE_CONVERSATION_TITLE,
-	COWRITER_TURN_PATH
-} from '../src/lib/constants/cowriter';
+import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import { nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
@@ -403,7 +399,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 				})
 			});
 		});
-		const menuButton = page.getByRole('button', { name: COWRITER_CONVERSATION_MENU_LABEL });
+		const menuButton = page.getByRole('button', { name: words['cowriter.conversationMenu'] });
 		const rowNames = page.locator('.convo-menu .conv-title');
 		const sameDayNames = [/^Conversation since .+ \d\d:\d\d$/, /^Archived · .+ \d\d:\d\d$/];
 
@@ -422,7 +418,9 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await expect(rowNames).toHaveText(firstNames);
 		await page.getByRole('menuitem', { name: 'Delete conversation' }).last().click();
 		await expect(
-			page.getByRole('dialog', { name: COWRITER_DELETE_CONVERSATION_TITLE }).getByRole('listitem')
+			page
+				.getByRole('dialog', { name: words['cowriter.deleteConversationTitle'] })
+				.getByRole('listitem')
 		).toHaveText(`${firstNames[1]} · 2 msgs`);
 	});
 	for (const { musician, scrolledUp, inView, outOfView } of [
