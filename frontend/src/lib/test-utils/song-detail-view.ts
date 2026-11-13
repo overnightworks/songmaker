@@ -87,15 +87,15 @@ export function clickNamed(target: HTMLElement, name: string): void {
 }
 
 export function stubLibraryMedia(options: { narrow: boolean; compact?: boolean }): void {
+	const matchesQuery = (query: string): boolean => {
+		if (query === LIBRARY_NARROW_MEDIA) return options.narrow;
+		if (query === COMPACT_LAYOUT_MEDIA) return options.compact ?? options.narrow;
+		return false;
+	};
 	vi.stubGlobal(
 		'matchMedia',
 		vi.fn((query: string) => ({
-			matches:
-				query === LIBRARY_NARROW_MEDIA
-					? options.narrow
-					: query === COMPACT_LAYOUT_MEDIA
-						? (options.compact ?? options.narrow)
-						: false,
+			matches: matchesQuery(query),
 			media: query,
 			onchange: null,
 			addEventListener: vi.fn(),
@@ -144,7 +144,7 @@ export function resetSongDetailState(): void {
 }
 
 export async function clearSongDetailState(): Promise<void> {
-	for (const component of mounted.splice(0)) await unmount(component);
+	await Promise.all(mounted.splice(0).map((component) => unmount(component)));
 	document.body.replaceChildren();
 	resetNavigationForTests();
 	pendingVersionLoad.set(null);

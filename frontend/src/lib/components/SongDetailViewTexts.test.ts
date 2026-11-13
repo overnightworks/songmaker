@@ -56,7 +56,7 @@ describe('SongDetailView expiry digest', () => {
 	const [soonLabel, daysLabel] = [
 		{ branch: 'soon', expiresInMs: -dayMs, when: () => words['songPage.expirySoon'] },
 		{ branch: 'days', expiresInMs: 2 * dayMs - 1000, when: () => words['songPage.expiryDays'](2) }
-	].map((entry) => entry);
+	];
 
 	it.each([
 		{ takes: 1, ...soonLabel },
