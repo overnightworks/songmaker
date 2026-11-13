@@ -67,21 +67,21 @@ refuse_while_another_worker_runs() {
 }
 refuse_while_another_worker_runs
 
-work_dir="$(mktemp -d)"
-secrets_dir="$work_dir/secrets"
+WORK_DIR="$(mktemp -d)"
+secrets_dir="$WORK_DIR/secrets"
 mkdir "$secrets_dir"
 echo gpu-probe-postgres-password > "$secrets_dir/postgres-password"
 echo gpu-probe-session-secret-do-not-reuse-anywhere-else > "$secrets_dir/session-secret"
 echo gpu-probe-internal-token > "$secrets_dir/internal-token"
 echo gpu-probe-monitoring-token > "$secrets_dir/monitoring-token"
-echo gpu-probe-client-secret > "$work_dir/client-secret"
-echo gpu-probe-gateway-key > "$work_dir/gateway-key"
+echo gpu-probe-client-secret > "$WORK_DIR/client-secret"
+echo gpu-probe-gateway-key > "$WORK_DIR/gateway-key"
 # Compose reads the checkout's `.env` unless it is handed another file.
-: > "$work_dir/empty.env"
+: > "$WORK_DIR/empty.env"
 unset COMPOSE_ENV_FILES
 
 # Compose merges a volume by its container path: only the checkpoints entry changes.
-cat > "$work_dir/checkpoints-readonly.yml" <<'EOF'
+cat > "$WORK_DIR/checkpoints-readonly.yml" <<'EOF'
 services:
   songmaker-acestep-worker-0:
     volumes:
@@ -92,8 +92,8 @@ export COMPOSE_PROJECT_NAME="$PROJECT"
 export WEB_PORT="$PROBE_PORT"
 export GPU_PROBE_CHECKPOINTS="$checkpoints"
 export SONGMAKER_SECRETS_DIR="$secrets_dir"
-export KEYCLOAK_CLIENT_SECRET_FILE="$work_dir/client-secret"
-export GATEWAY_KEY_FILE="$work_dir/gateway-key"
+export KEYCLOAK_CLIENT_SECRET_FILE="$WORK_DIR/client-secret"
+export GATEWAY_KEY_FILE="$WORK_DIR/gateway-key"
 export OIDC_ISSUER=https://keycloak.invalid/realms/gpu-probe
 export PUBLIC_BASE_URL="http://localhost:$PROBE_PORT"
 export LORA_TRAINING_EPOCHS="$LORA_EPOCHS"
@@ -101,11 +101,11 @@ export LORA_TRAINING_SAVE_EVERY_N_EPOCHS="$LORA_EPOCHS"
 
 cd "$PROJECT_ROOT"
 compose() {
-    docker compose --env-file "$work_dir/empty.env" \
+    docker compose --env-file "$WORK_DIR/empty.env" \
         --project-directory . -f docker/docker-compose.test.yml \
-        -f "$work_dir/checkpoints-readonly.yml" "$@"
+        -f "$WORK_DIR/checkpoints-readonly.yml" "$@"
 }
-base="http://127.0.0.1:$PROBE_PORT"
+API_BASE="http://127.0.0.1:$PROBE_PORT"
 cookie=""
 
 teardown() {
@@ -115,7 +115,7 @@ teardown() {
     # the profile, down leaves them running. The images it built go too: the
     # worker's alone is about 9 GB.
     compose --profile gpu down -v --remove-orphans --rmi local || status=1
-    rm -rf "$work_dir"
+    rm -rf "$WORK_DIR"
     local left
     left="$(docker ps -a -q --filter "label=com.docker.compose.project=$PROJECT")$(
         docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT")"
@@ -142,7 +142,7 @@ trap stop_drive TERM
 api() { # api METHOD PATH [curl args...]; the Origin passes the app's same-origin CSRF check
     local method="$1" path="$2"
     shift 2
-    curl -fsS -X "$method" -b "$cookie" -H "Origin: $base" "$base$path" "$@"
+    curl -fsS -X "$method" -b "$cookie" -H "Origin: $API_BASE" "$API_BASE$path" "$@"
 }
 
 api_json() { # api_json METHOD PATH JSON
@@ -234,8 +234,8 @@ drive() {
     source_id="$(jq -r .id <<<"$source_take")"
 
     # 2. Reference: the first take, uploaded as the song's reference recording
-    api GET "/audio/$(jq -r .wav_path <<<"$source_take")" -o "$work_dir/reference.wav"
-    reference="$(api POST /api/references -F "file=@$work_dir/reference.wav;filename=reference.wav" | jq -r .id)"
+    api GET "/audio/$(jq -r .wav_path <<<"$source_take")" -o "$WORK_DIR/reference.wav"
+    reference="$(api POST /api/references -F "file=@$WORK_DIR/reference.wav;filename=reference.wav" | jq -r .id)"
     api_json PUT "/api/songs/$song" "$(jq -nc --arg id "$reference" '{reference_recording_id: $id}')" > /dev/null
     generate_kind reference "/api/songs/$song/generate" "$generate_body" "$song"
     [[ "$(newest_take "$song" | jq -r '.reference.id // empty')" == "$reference" ]] \
@@ -290,7 +290,7 @@ drive() {
     echo "PROOF all five job kinds held"
 }
 
-export base work_dir PROJECT WORKER_SERVICE TAKE_SECONDS JOB_TIMEOUT_SECONDS LORA_TIMEOUT_SECONDS
+export API_BASE WORK_DIR PROJECT WORKER_SERVICE TAKE_SECONDS JOB_TIMEOUT_SECONDS LORA_TIMEOUT_SECONDS
 export -f compose api api_json fail wait_for_job newest_take audio_file_exists prove_take generate_kind drive
 probe-run -k 30 1700 bash -c 'set -euo pipefail; drive' &
 drive_pid=$!
