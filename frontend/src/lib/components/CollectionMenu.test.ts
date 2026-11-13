@@ -261,9 +261,9 @@ describe('CollectionMenu album rows', () => {
 		const { target } = await render(albumMenuProps());
 		await openCollectionMenu(target);
 
-		expect(menuRow(target, words['collectionMenu.cover']).querySelector('.menu-item-hint')?.textContent).toBe(
-			words['collectionMenu.coverHint']
-		);
+		expect(
+			menuRow(target, words['collectionMenu.cover']).querySelector('.menu-item-hint')?.textContent
+		).toBe(words['collectionMenu.coverHint']);
 	});
 
 	it('opens the cover editor from Cover and closes the menu, leaving upload and remove to it', async () => {
