@@ -535,6 +535,33 @@ export type Words = {
     readonly "cowriterRefusal.turnRunning": string;
     readonly "cowriterRefusal.takeNotInSong": string;
     readonly "takeRefusal.notPlayable": string;
+    readonly "settingsRefusal.modelUnavailable": (gaps: { readonly mode: string }) => string;
+    readonly "settingsRefusal.invalidDefaultConfig": string;
+    readonly "settingsRefusal.tailBudgetRange": (gaps: { readonly maximum: string; readonly minimum: string }) => string;
+    readonly "settingsRefusal.unknownKeys": (gaps: { readonly keys: string }) => string;
+    readonly "settingsRefusal.negativeValue": (gaps: { readonly key: string }) => string;
+    readonly "presetRefusal.nameTaken": string;
+    readonly "adminRefusal.unknownModelMode": (gaps: { readonly mode: string }) => string;
+    readonly "adminRefusal.noOnlineWorkers": string;
+    readonly "adminRefusal.alreadyDownloaded": (gaps: { readonly mode: string }) => string;
+    readonly "adminRefusal.alreadyDownloading": (gaps: { readonly jobId: string; readonly mode: string }) => string;
+    readonly "workerRefusal.unreachable": (gaps: { readonly reason: string }) => string;
+    readonly "workerRefusal.relayed": (gaps: { readonly cause: string }) => string;
+    readonly "workerRefusal.notResponding": (gaps: { readonly workerId: string }) => string;
+    readonly "workerRefusal.returnedStatus": (gaps: { readonly status: string }) => string;
+    readonly "coverRefusal.tooLarge": string;
+    readonly "coverRefusal.unreadable": string;
+    readonly "coverRefusal.unsupportedType": string;
+    readonly "coverRefusal.tooManyPixels": string;
+    readonly "coverRefusal.variantUnknown": string;
+    readonly "coverRefusal.invalidAlbumId": string;
+    readonly "coverRefusal.invalidSongId": string;
+    readonly "coverRefusal.invalidPlaylistId": string;
+    readonly "coverSuggestionRefusal.alreadyRunning": string;
+    readonly "referenceRefusal.quotaReached": string;
+    readonly "referenceRefusal.storage": string;
+    readonly "albumRefusal.restoreWindowPassed": (gaps: { readonly days: string; readonly id: string; readonly window: string }) => string;
+    readonly "songRefusal.restoreWindowPassed": (gaps: { readonly days: string; readonly id: string; readonly window: string }) => string;
     readonly "takesList.loading": string;
     readonly "takesList.error": string;
     readonly "takesList.retry": string;
@@ -1343,6 +1370,33 @@ export const words: Words = {
     "cowriterRefusal.turnRunning": "A co-writer reply is still being written",
     "cowriterRefusal.takeNotInSong": "Generation does not belong to the current song",
     "takeRefusal.notPlayable": "Generation is not playable",
+    "settingsRefusal.modelUnavailable": (gaps: { readonly mode: string }) => "Model '" + gaps.mode + "' is not available",
+    "settingsRefusal.invalidDefaultConfig": "Invalid config: must be null, 'sft', 'turbo', or a preset ID",
+    "settingsRefusal.tailBudgetRange": (gaps: { readonly maximum: string; readonly minimum: string }) => "tail_token_budget must be between " + gaps.minimum + " and " + gaps.maximum,
+    "settingsRefusal.unknownKeys": (gaps: { readonly keys: string }) => "Unknown setting keys: " + gaps.keys,
+    "settingsRefusal.negativeValue": (gaps: { readonly key: string }) => "Value for " + gaps.key + " must be non-negative",
+    "presetRefusal.nameTaken": "A preset with that name already exists",
+    "adminRefusal.unknownModelMode": (gaps: { readonly mode: string }) => "Unknown model mode '" + gaps.mode + "'",
+    "adminRefusal.noOnlineWorkers": "No online workers available to download",
+    "adminRefusal.alreadyDownloaded": (gaps: { readonly mode: string }) => "Model '" + gaps.mode + "' is already downloaded",
+    "adminRefusal.alreadyDownloading": (gaps: { readonly jobId: string; readonly mode: string }) => "Model '" + gaps.mode + "' is already being downloaded (job " + gaps.jobId + ")",
+    "workerRefusal.unreachable": (gaps: { readonly reason: string }) => "Worker unreachable: " + gaps.reason,
+    "workerRefusal.relayed": (gaps: { readonly cause: string }) => gaps.cause,
+    "workerRefusal.notResponding": (gaps: { readonly workerId: string }) => "Worker '" + gaps.workerId + "' isn't responding, so it can't be asked to restart itself. Its container is likely stopped or crashed — restart the container directly.",
+    "workerRefusal.returnedStatus": (gaps: { readonly status: string }) => "Worker returned " + gaps.status,
+    "coverRefusal.tooLarge": "Cover file is too large",
+    "coverRefusal.unreadable": "Cover image could not be read",
+    "coverRefusal.unsupportedType": "Cover must be a JPEG or PNG image",
+    "coverRefusal.tooManyPixels": "Cover image is too large",
+    "coverRefusal.variantUnknown": "Unknown cover variant",
+    "coverRefusal.invalidAlbumId": "Invalid album id for cover storage",
+    "coverRefusal.invalidSongId": "Invalid song id for cover storage",
+    "coverRefusal.invalidPlaylistId": "Invalid playlist id for cover storage",
+    "coverSuggestionRefusal.alreadyRunning": "Cover suggestions are already being generated",
+    "referenceRefusal.quotaReached": "Reference audio storage limit reached.",
+    "referenceRefusal.storage": "Reference audio storage could not be checked.",
+    "albumRefusal.restoreWindowPassed": (gaps: { readonly days: string; readonly id: string; readonly window: string }) => "Album " + gaps.id + " was deleted " + gaps.days + " days ago, past the " + gaps.window + "-day restore window",
+    "songRefusal.restoreWindowPassed": (gaps: { readonly days: string; readonly id: string; readonly window: string }) => "Song " + gaps.id + " was deleted " + gaps.days + " days ago, past the " + gaps.window + "-day restore window",
     "takesList.loading": "Loading takes…",
     "takesList.error": "Failed to load takes",
     "takesList.retry": "Try again",

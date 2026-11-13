@@ -33,7 +33,12 @@ from songmaker_cli.constants import (
     SETTING_SCORING_RATE_LIMIT,
     LimiterFailurePolicy,
 )
-from songmaker_cli.covers import COVER_RESPONSE_HEADERS, CoverRejectedError, cover_media_type
+from songmaker_cli.covers import (
+    COVER_RESPONSE_HEADERS,
+    CoverRejectedError,
+    CoverRejection,
+    cover_media_type,
+)
 from songmaker_cli.db.advisory_locks import AdvisoryLock, lock_until_transaction_ends
 from songmaker_cli.db.models import (
     ALBUM_SLUG_MAX_LENGTH,
@@ -115,6 +120,27 @@ def audio_file_response(audio_path: Path) -> FileResponse:
     return audio_response(audio_path, AUDIO_FILE_CACHE_CONTROL)
 
 
+def raise_cover_refusal(exc: CoverRejectedError) -> NoReturn:
+    """Answer a refused cover with the status and catalog key of its reason."""
+    match exc.reason:
+        case CoverRejection.TOO_LARGE:
+            raise Refusal(413, "coverRefusal.tooLarge") from exc
+        case CoverRejection.UNREADABLE:
+            raise Refusal(422, "coverRefusal.unreadable") from exc
+        case CoverRejection.UNSUPPORTED_TYPE:
+            raise Refusal(422, "coverRefusal.unsupportedType") from exc
+        case CoverRejection.TOO_MANY_PIXELS:
+            raise Refusal(422, "coverRefusal.tooManyPixels") from exc
+        case CoverRejection.VARIANT_UNKNOWN:
+            raise Refusal(422, "coverRefusal.variantUnknown") from exc
+        case CoverRejection.INVALID_ALBUM_ID:
+            raise Refusal(422, "coverRefusal.invalidAlbumId") from exc
+        case CoverRejection.INVALID_SONG_ID:
+            raise Refusal(422, "coverRefusal.invalidSongId") from exc
+        case CoverRejection.INVALID_PLAYLIST_ID:
+            raise Refusal(422, "coverRefusal.invalidPlaylistId") from exc
+
+
 def cover_file_response(
     resolve_file: Callable[[Path, str, str | None, str], Path],
     audio_dir: Path,
@@ -128,7 +154,7 @@ def cover_file_response(
     try:
         path = resolve_file(audio_dir, entity.id, entity.cover_key, variant)
     except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
+        raise_cover_refusal(exc)
     except FileNotFoundError:
         raise HTTPException(404, COVER_NOT_FOUND)
     return FileResponse(

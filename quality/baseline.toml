@@ -61,7 +61,7 @@
 "tests/songmaker_cli/test_jobs.py" = 3102
 "tests/songmaker_cli/test_library_api.py" = 1626
 "tests/songmaker_cli/test_lora_api.py" = 1188
-"tests/songmaker_cli/test_playlist_api.py" = 1101
+"tests/songmaker_cli/test_playlist_api.py" = 1100
 "tests/songmaker_cli/test_queue_streams.py" = 2311
 "tests/songmaker_cli/test_resource_event_api.py" = 1155
 "tests/songmaker_cli/test_scheduler.py" = 1283
@@ -127,7 +127,7 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"create_app" = 125
+"create_app" = 124
 
 [function_lines."tests/acestep_worker/test_wrapper_train_lora.py"]
 "test_default_train_lora_runner_dispatches" = 140

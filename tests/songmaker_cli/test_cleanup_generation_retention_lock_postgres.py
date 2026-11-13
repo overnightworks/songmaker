@@ -13,6 +13,7 @@ from sqlalchemy import event
 from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.web_app import make_test_app, refusal_body, seed_session, seed_user
 
+from songmaker_cli.api_helpers import GENERATION_NOT_FOUND_DETAIL
 from songmaker_cli.constants import AuditAction
 from songmaker_cli.db.models import (
     Album,
@@ -29,7 +30,7 @@ ADMIN = "admin-1"
 RETENTION_RUN = "/api/admin/generation-retention/run"
 LONG_AGO = timedelta(days=90)
 ARCHIVED_LONG_AGO = timedelta(days=60)
-NOT_FOUND = {"detail": "Not Found"}
+NOT_FOUND = {"detail": GENERATION_NOT_FOUND_DETAIL}
 RESTORE_FIRST = refusal_body("takeRefusal.archived")
 PLAYLIST = "playlist-1"
 

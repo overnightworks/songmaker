@@ -13,9 +13,8 @@ It walks `src/songmaker_cli` for every `Refusal(...)` call and every call of
   family;
 * the keywords are exactly the sentence's gaps, with no `**` spread.
 
-A `Refusal` call also needs an int literal status other than 404 and a key of the form
-`<resource>Refusal.<reason>`: the server answers 404 through its own handler, which
-would drop the message.
+A `Refusal` call also needs an int literal status and a key of the form
+`<resource>Refusal.<reason>`.
 
 `words.py` (generated) and `refusals.py` (which forwards the key of its caller to `text`)
 are not walked.
@@ -42,7 +41,6 @@ PACKAGE_MODULE: Final = "songmaker_cli"
 WORDS_NAME: Final = "words"
 TEXT_NAME: Final = "text"
 REFUSAL_NAME: Final = "Refusal"
-NOT_FOUND_STATUS: Final = 404
 REFUSAL_KEY_PATTERN: Final = re.compile(r"^[a-z][A-Za-z0-9]*Refusal\.[a-z][A-Za-z0-9]*$")
 KEY_INDEX_OF_TEXT: Final = 1
 KEY_INDEX_OF_REFUSAL: Final = 1
@@ -152,8 +150,6 @@ def _refusal_problem(call: ast.Call, key: str) -> str | None:
     status = call.args[0]
     if not (isinstance(status, ast.Constant) and type(status.value) is int):
         return "the status is not an int literal"
-    if status.value == NOT_FOUND_STATUS:
-        return "status 404 is answered by the server's not-found handler, which drops the message"
     if not REFUSAL_KEY_PATTERN.match(key):
         return f"{key!r} does not match <resource>Refusal.<reason>"
     return None

@@ -216,13 +216,20 @@ def get_cowriter_tail_token_budget(session: Session) -> int:
     return row.value
 
 
+class TailTokenBudgetOutOfRangeError(ValueError):
+    """The co-writer tail token budget lies outside the allowed bounds."""
+
+    def __init__(self, minimum: int, maximum: int) -> None:
+        super().__init__(minimum, maximum)
+        self.minimum = minimum
+        self.maximum = maximum
+
+
 def set_cowriter_tail_token_budget(session: Session, budget: int) -> None:
     if budget < COWRITER_MIN_TAIL_TOKEN_BUDGET or budget > COWRITER_MAX_TAIL_TOKEN_BUDGET:
-        msg = (
-            f"tail_token_budget must be between "
-            f"{COWRITER_MIN_TAIL_TOKEN_BUDGET} and {COWRITER_MAX_TAIL_TOKEN_BUDGET}"
+        raise TailTokenBudgetOutOfRangeError(
+            COWRITER_MIN_TAIL_TOKEN_BUDGET, COWRITER_MAX_TAIL_TOKEN_BUDGET,
         )
-        raise ValueError(msg)
     row = (
         session.query(RateLimitSetting)
         .filter(

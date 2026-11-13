@@ -12,7 +12,11 @@ from support.setting_rows import store_setting_row
 from support.web_app import make_authenticated_user, make_test_app, seed_user
 
 from songmaker_cli.auth_dependencies import get_current_user
-from songmaker_cli.constants import COWRITER_DEFAULT_TAIL_TOKEN_BUDGET
+from songmaker_cli.constants import (
+    COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
+    COWRITER_MAX_TAIL_TOKEN_BUDGET,
+    COWRITER_MIN_TAIL_TOKEN_BUDGET,
+)
 from songmaker_cli.cowriter.tools import execute_cowriter_tool
 from songmaker_cli.db.models import (
     Album,
@@ -156,6 +160,13 @@ def test_c15_put_cowriter_settings_refuses_a_budget_out_of_range(admin_client):
     response = client.put("/api/settings/cowriter", json={"tail_token_budget": 1_000_000})
 
     assert response.status_code == 422
+    assert response.json()["message"] == {
+        "key": "settingsRefusal.tailBudgetRange",
+        "values": {
+            "minimum": str(COWRITER_MIN_TAIL_TOKEN_BUDGET),
+            "maximum": str(COWRITER_MAX_TAIL_TOKEN_BUDGET),
+        },
+    }
 
 
 def test_cowriter_put_requires_an_admin(admin_client):

@@ -22,6 +22,7 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     page_has_more,
     parse_optional_search_query,
+    raise_cover_refusal,
     unique_song_slug,
 )
 from songmaker_cli.api_models import (
@@ -89,6 +90,7 @@ from songmaker_cli.db.queries.songs import (
 from songmaker_cli.db.queries.versions import VersionInUseError, delete_version
 from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
 from songmaker_cli.reference_audio import commit_unused_stamps
+from songmaker_cli.refusals import Refusal
 
 
 def _attach_reference(session: Session, user_id: str, reference_id: str | None) -> None:
@@ -111,6 +113,7 @@ def _song_response(song: Song) -> SongResponse:
     return SongResponse.from_orm(song, has_pick=has_playable_pick(song.generations))
 
 SONG_NOT_FOUND_DETAIL: Final = "Song not found"
+VERSION_NOT_FOUND_DETAIL: Final = "Version not found"
 VERSION_IN_USE_DETAIL: Final = (
     "This version has a take rendering; wait for it to finish or cancel it."
 )
@@ -393,8 +396,11 @@ def api_restore_song(
     check_song_access_including_deleted(session, song_id, user)
     try:
         restored = restore_song(session, song_id)
-    except RestoreWindowExpiredError as e:
-        raise HTTPException(410, str(e))
+    except RestoreWindowExpiredError as exc:
+        raise Refusal(
+            410, "songRefusal.restoreWindowPassed",
+            id=exc.row_id, days=str(exc.days_ago), window=str(exc.window_days),
+        ) from exc
     except ValueError as e:
         raise HTTPException(404, str(e))
     record_audit(session, user.id, AuditAction.RESTORE, ResourceType.SONG, song_id)
@@ -497,7 +503,7 @@ async def api_upload_song_cover(
     try:
         cover_key = write_song_cover(ctx.audio_dir, song.id, payload)
     except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
+        raise_cover_refusal(exc)
     song = set_song_cover_key(session, song.id, cover_key)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song.id)
     session.commit()
@@ -568,7 +574,7 @@ def api_song_versions(
 @router.delete(
     "/versions/{version_id}",
     responses={
-        404: {"description": "Version not found"},
+        404: {"description": VERSION_NOT_FOUND_DETAIL},
         409: {"description": "A queued or running job renders this version"},
     },
     openapi_extra=exclude_route(Exclusion.FINAL_DELETION),
@@ -584,8 +590,12 @@ def api_delete_version(
 
     ver = session.query(VersionModel).filter_by(id=version_id).first()
     if not ver:
-        raise HTTPException(404, "Version not found")
-    check_song_access(session, ver.song_id, user)
+        raise HTTPException(404, VERSION_NOT_FOUND_DETAIL)
+    try:
+        check_song_access(session, ver.song_id, user)
+    except HTTPException as refusal:
+        # A version the caller cannot reach reads like a missing one.
+        raise HTTPException(404, VERSION_NOT_FOUND_DETAIL) from refusal
     candidates = linked_reference_ids(session, [ver.song_id])
     try:
         paths = delete_version(
@@ -595,7 +605,7 @@ def api_delete_version(
     except VersionInUseError:
         raise HTTPException(409, VERSION_IN_USE_DETAIL)
     except ValueError:
-        raise HTTPException(404, "Version not found")
+        raise HTTPException(404, VERSION_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.VERSION, version_id)
     session.commit()
     commit_unused_stamps(session, candidates)

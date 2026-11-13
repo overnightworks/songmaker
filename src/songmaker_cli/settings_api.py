@@ -45,6 +45,7 @@ from songmaker_cli.db.queries.rate_limits import (
     upsert_rate_limit_setting,
 )
 from songmaker_cli.db.queries.settings import (
+    TailTokenBudgetOutOfRangeError,
     create_preset,
     delete_preset,
     effective_default_config,
@@ -60,6 +61,7 @@ from songmaker_cli.db.queries.settings import (
     toggle_model,
     update_preset,
 )
+from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()
@@ -150,9 +152,9 @@ def api_create_preset(
 ) -> PresetResponse:
     active_ids = {m.id for m in list_active_models(session)}
     if req.model_mode not in active_ids:
-        raise HTTPException(400, f"Model '{req.model_mode}' is not available")
+        raise Refusal(400, "settingsRefusal.modelUnavailable", mode=req.model_mode)
     if name_exists(session, user.id, req.model_mode, req.name):
-        raise HTTPException(409, PRESET_NAME_EXISTS_DETAIL)
+        raise Refusal(409, "presetRefusal.nameTaken")
     preset = create_preset(
         session,
         name=req.name,
@@ -186,7 +188,7 @@ def api_update_preset(
         raise HTTPException(404, PRESET_NOT_FOUND_DETAIL)
     if req.name is not None and req.name != preset.name:
         if name_exists(session, user.id, preset.model_mode, req.name):
-            raise HTTPException(409, PRESET_NAME_EXISTS_DETAIL)
+            raise Refusal(409, "presetRefusal.nameTaken")
     params_dict = gen_params_to_json(req.params) if req.params is not None else None
     update_preset(session, preset, name=req.name, params=params_dict, is_default=req.is_default)
     session.commit()
@@ -384,9 +386,7 @@ def api_set_default_config(
             from songmaker_cli.db.queries.settings import list_shared_presets as _shared
             shared_ids = {p.id for p in _shared(session)}
             if req.config not in shared_ids:
-                raise HTTPException(
-                    400, "Invalid config: must be null, 'sft', 'turbo', or a preset ID",
-                )
+                raise Refusal(400, "settingsRefusal.invalidDefaultConfig")
     db_user = session.query(User).filter_by(id=user.id).one()
     db_user.default_generation_config = req.config
     record_audit(
@@ -445,8 +445,11 @@ def api_set_cowriter_settings(
 ) -> CowriterSettingsResponse:
     try:
         set_cowriter_tail_token_budget(session, req.tail_token_budget)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+    except TailTokenBudgetOutOfRangeError as exc:
+        raise Refusal(
+            422, "settingsRefusal.tailBudgetRange",
+            minimum=str(exc.minimum), maximum=str(exc.maximum),
+        ) from exc
     record_audit(
         session, admin.id, AuditAction.UPDATE, ResourceType.COWRITER,
         detail=f"tail_token_budget={req.tail_token_budget}",
@@ -504,10 +507,10 @@ def api_update_rate_limits(
 ) -> RateLimitsResponse:
     invalid = set(req.settings.keys()) - _get_env_defaults().keys()
     if invalid:
-        raise HTTPException(400, f"Unknown setting keys: {sorted(invalid)}")
+        raise Refusal(400, "settingsRefusal.unknownKeys", keys=str(sorted(invalid)))
     for key, value in req.settings.items():
         if value < 0:
-            raise HTTPException(400, f"Value for {key} must be non-negative")
+            raise Refusal(400, "settingsRefusal.negativeValue", key=key)
         upsert_rate_limit_setting(session, key, value)
     record_audit(session, admin.id, AuditAction.UPDATE, ResourceType.RATE_LIMITS, detail="global")
     session.commit()
