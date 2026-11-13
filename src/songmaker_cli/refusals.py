@@ -41,5 +41,10 @@ def not_found_response(request: Request, exc: HTTPException) -> JSONResponse:
 
 
 def install_refusal_handler(app: FastAPI) -> None:
+    """Register the refusal and 404 handlers.
+
+    A handler registered later for 404 replaces this one; the SPA fallback in ``create_app``
+    does and hands every /api/ and /audio/ 404 back to ``not_found_response``.
+    """
     app.add_exception_handler(Refusal, refusal_handler)
     app.add_exception_handler(404, not_found_response)
