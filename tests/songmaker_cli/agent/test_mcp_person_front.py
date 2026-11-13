@@ -163,8 +163,8 @@ def test_an_admins_agent_cannot_write_into_or_generate_for_another_persons_conte
         )
 
     assert (into.is_error, generated.is_error) == (True, True)
-    assert "Not Found" in into.text
-    assert "Not Found" in generated.text
+    assert "Album not found" in into.text
+    assert "Song not found" in generated.text
     assert world.rows_of(Job, "id") == []
     pool.enqueue_job.assert_not_called()
 
@@ -251,7 +251,7 @@ def test_a_progress_tool_for_another_persons_song_is_not_found_and_reveals_nothi
     others = mcp.call(tool, {"song_id": "song-bobs"})
 
     assert others.is_error
-    assert "Not Found" in others.text
+    assert "Song not found" in others.text
     assert "generate" not in others.text
 
 
@@ -328,7 +328,7 @@ def test_an_admins_agent_asking_for_another_persons_lora_gets_not_found_and_noth
     reply = world.call("get_lora", {"lora_id": "lora-bobs"}, groups=groups)
 
     assert reply.is_error
-    assert "Not Found" in reply.text
+    assert "LoRA not found" in reply.text
     assert "bobs" not in reply.text.replace("lora-bobs", "")
 
 
@@ -570,7 +570,7 @@ def test_generate_for_another_persons_song_or_a_song_without_lyrics_queues_nothi
         others = mcp.call("generate_song", {"song_id": "song-bobs", "model": "sft"})
         empty = mcp.call("generate_song", {"song_id": bare, "model": "sft"})
 
-    assert "Not Found" in others.text
+    assert "Song not found" in others.text
     assert "lyrics" in empty.text
     assert (others.is_error, empty.is_error) == (True, True)
     assert mcp.rows_of(Job, "id") == []

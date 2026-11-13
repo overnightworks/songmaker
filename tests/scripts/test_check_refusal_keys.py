@@ -45,6 +45,7 @@ def _scan(
     "source",
     [
         REFUSAL_IMPORT + 'Refusal(409, "takeRefusal.archived")\n',
+        REFUSAL_IMPORT + 'Refusal(404, "takeRefusal.archived")\n',
         REFUSAL_IMPORT + 'Refusal(400, "modelRefusal.unavailable", model=name)\n',
         WORDS_IMPORT + 'text("en", "takeRefusal.archived")\n',
         WORDS_IMPORT.replace("text", "text as sentence") + 'sentence("en", "plainSentence")\n',
@@ -54,6 +55,7 @@ def _scan(
     ],
     ids=[
         "refusal",
+        "not-found-refusal",
         "refusal-with-gap",
         "text-by-import",
         "text-by-alias",
@@ -80,7 +82,6 @@ def test_a_call_with_a_plain_key_and_its_gaps_passes(
         (REFUSAL_IMPORT + 'Refusal(409, f"take{kind}")\n', "not a string literal"),
         (REFUSAL_IMPORT + "Refusal(409)\n", "not a string literal"),
         (REFUSAL_IMPORT + 'Refusal(409, "plainSentence")\n', "does not match"),
-        (REFUSAL_IMPORT + 'Refusal(404, "takeRefusal.archived")\n', "404"),
         (REFUSAL_IMPORT + 'Refusal(code, "takeRefusal.archived")\n', "not an int literal"),
         (REFUSAL_IMPORT + 'Refusal(True, "takeRefusal.archived")\n', "not an int literal"),
         (REFUSAL_IMPORT + 'Refusal(400, "modelRefusal.unavailable")\n', "missing ['model']"),
@@ -105,7 +106,6 @@ def test_a_call_with_a_plain_key_and_its_gaps_passes(
         "formatted-key",
         "key-missing",
         "key-without-refusal-suffix",
-        "status-404",
         "non-literal-status",
         "bool-status",
         "missing-gap",

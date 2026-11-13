@@ -29,5 +29,17 @@ def refusal_handler(request: Request, exc: Refusal) -> JSONResponse:
     return JSONResponse(body.model_dump(), status_code=exc.status_code, headers=exc.headers)
 
 
+def not_found_response(request: Request, exc: HTTPException) -> JSONResponse:
+    """Answer a 404 with the sentence its route raised; a path with no route says "Not Found".
+
+    A status handler runs before a class handler, so a 404 `Refusal` reaches this function
+    and keeps its message.
+    """
+    if isinstance(exc, Refusal):
+        return refusal_handler(request, exc)
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers)
+
+
 def install_refusal_handler(app: FastAPI) -> None:
     app.add_exception_handler(Refusal, refusal_handler)
+    app.add_exception_handler(404, not_found_response)

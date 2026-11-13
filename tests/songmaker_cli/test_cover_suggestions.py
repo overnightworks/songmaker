@@ -488,7 +488,7 @@ def test_foreign_cover_suggestion_routes_are_not_found(
     foreign = getattr(client, method)(path, **kwargs)
 
     assert foreign.status_code == 404
-    assert foreign.json() == {"detail": "Not Found"}
+    assert foreign.json() == {"detail": "Album not found"}
 
 
 def test_cover_suggestions_have_no_public_share_route(
@@ -528,10 +528,10 @@ def test_full_app_answers_a_suggestion_outside_the_audio_root_like_a_missing_one
     missing = getattr(client, method)(path_for(missing_id), **kwargs_for(missing_id))
 
     assert rejected.status_code == missing.status_code == 404
-    assert rejected.json() == missing.json() == {"detail": "Not Found"}
+    assert rejected.json() == missing.json() == {"detail": "Album not found"}
 
 
-def test_owner_cannot_distinguish_missing_and_traversal_suggestions(
+def test_a_traversal_suggestion_id_matches_no_route_and_a_missing_one_keeps_its_sentence(
     cover_album_app: tuple[TestClient, object],
 ) -> None:
     client, factory = cover_album_app
@@ -542,7 +542,8 @@ def test_owner_cannot_distinguish_missing_and_traversal_suggestions(
     )
 
     assert missing.status_code == traversal.status_code == 404
-    assert missing.json() == traversal.json() == {"detail": "Not Found"}
+    assert missing.json() == {"detail": "Album not found"}
+    assert traversal.json() == {"detail": "Not Found"}
     with factory() as session:
         assert session.query(AlbumCoverSuggestion).count() == 0
 
@@ -612,7 +613,7 @@ def test_a_suggestion_whose_row_and_file_disagree_answers_like_a_missing_one(
     response = getattr(client, method)(path_for(suggestion_id), **kwargs_for(suggestion_id))
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Not Found"}
+    assert response.json() == {"detail": "Album not found"}
 
 
 def test_discarding_a_suggestion_whose_file_is_already_gone_removes_its_row(
