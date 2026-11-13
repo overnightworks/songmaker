@@ -65,6 +65,7 @@ from songmaker_cli.db.queries.songs import record_playlist_listen
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.lora_api import api_create_lora
+from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 
 
@@ -334,8 +335,10 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
                 session.execute(text("SET lock_timeout = '10s'"))
                 session.commit()
                 barrier.wait(timeout=10)
-                result = api_create_lora(UserLoraCreateRequest(name=name), user, session)
-                statuses.append(result.status_code if hasattr(result, "status_code") else 200)
+                api_create_lora(UserLoraCreateRequest(name=name), user, session)
+                statuses.append(200)
+        except Refusal as refusal:
+            statuses.append(refusal.status_code)
         except Exception as exc:
             errors.append(exc)
 
