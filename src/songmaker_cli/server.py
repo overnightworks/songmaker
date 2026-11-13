@@ -64,6 +64,7 @@ from songmaker_cli.middleware.access_log import AccessLogMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
+from songmaker_cli.refusals import install_refusal_handler
 from songmaker_cli.request_policies import (
     SIGN_IN_PATHS,
     SPA_SHELL_HEADERS,
@@ -313,6 +314,7 @@ def create_app(
     app.state.mcp_front = mount_mcp_front(app, agent_tools, mcp_resource, app.state.oidc_sign_in)
 
     app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
+    install_refusal_handler(app)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(

@@ -80,7 +80,7 @@ layers =
     agent
     cowriter
     mcp_server
-    (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (queue_streams) : (reference_audio) : (scheduler) : (app_context) : (arq_pool) : (covers) : (generate) : (logging_config) : (middleware) : (redis_client) : (request_policies) : (library_cursor) : (shared_access)
+    (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (queue_streams) : (reference_audio) : (refusals) : (scheduler) : (app_context) : (arq_pool) : (covers) : (generate) : (logging_config) : (middleware) : (redis_client) : (request_policies) : (library_cursor) : (shared_access)
     api_models
     (health_types) | (scoring)
     db
