@@ -133,7 +133,7 @@ async function openSongAs(
 	await page.goto(HOME_PATH);
 	await page.goto(`/album/${albumId}/${song.slug}`);
 	await expect(page.getByRole('heading', { name: SONG_TITLE, exact: true })).toBeVisible();
-	const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+	const lyrics = page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 	await expect(lyrics).toBeEnabled();
 	await expect(lyrics).toHaveValue(SAVED_LYRICS);
 }
@@ -181,7 +181,9 @@ for (const shell of ['desktop', 'mobile'] as const) {
 			const otherId = await ownAlbum(person, 'Other');
 			const song = await ownSong(person, currentId);
 			await openSongAs(page, shell, cookies, currentId, song);
-			const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+			const lyrics = page.getByRole('textbox', {
+				name: new RegExp(`^${words['writeColumn.lyrics']}`)
+			});
 			await lyrics.fill(DRAFT_LYRICS);
 			const otherTitle = await titleOf(person, otherId);
 

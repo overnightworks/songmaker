@@ -5,69 +5,42 @@ import {
 	makeSong as song,
 	makeVersion as version
 } from '#lib/test-utils/factories.ts';
-import { flushSync, mount, tick, unmount } from 'svelte';
+import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { songDetailApi } from '#lib/test-utils/song-detail-mocks.ts';
+import {
+	clearSongDetailState,
+	clickNamed,
+	editableSongDefaults,
+	jobStatus,
+	mounted,
+	renderView,
+	resetSongDetailState,
+	settleRender,
+	sourceRecipeDefaults,
+	stubLibraryMedia,
+	writeSaveButton
+} from '#lib/test-utils/song-detail-view.ts';
 import { phoneAppBar } from '#lib/stores/ui.ts';
 import PhoneAppBar from './PhoneAppBar.svelte';
 
-import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
-import {
-	EDITOR_GENERATE_LABEL,
-	EDITOR_GENERATING_LABEL,
-	EDITOR_SAVE_ACCESSIBLE_LABEL,
-	EDITOR_SAVE_FAILED,
-	EDITOR_SAVE_LABEL,
-	EDITOR_UNSAVED_SAVE_LABEL,
-	EDITOR_UNSAVED_TITLE,
-	EDITOR_VIEW_COWRITER_LABEL,
-	SONG_COVER_ALT_TYPE,
-	SONG_COVER_REMOVE_LABEL,
-	SONG_COVER_REPLACE_LABEL,
-	SONG_COVER_UPLOAD_LABEL,
-	SONG_NEXT_LABEL,
-	SONG_PREVIOUS_LABEL
-} from '#lib/constants/song.ts';
+import type { JobItem, SongItem } from '#lib/api/types.ts';
+import { EDITOR_GENERATE_LABEL, EDITOR_GENERATING_LABEL } from '#lib/constants/song.ts';
 import { TAKES_ERROR, TAKES_LOADING, TAKES_RETRY_LABEL } from '#lib/constants/take.ts';
-import {
-	COMPACT_LAYOUT_MAX_PX,
-	COMPACT_LAYOUT_MEDIA,
-	LIBRARY_NARROW_MEDIA
-} from '#lib/constants/media.ts';
-import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
-import {
-	TOAST_UNDO_LABEL,
-	VERSIONS_SHEET_LABEL,
-	VERSION_DELETE_CONFIRM_LABEL,
-	VERSION_DELETE_DRAFT_GOES,
-	VERSION_DELETE_EMPTIES_EDITOR,
-	VERSION_DELETE_LOAD_UNDO_GOES,
-	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
-	VERSION_REPLACE_DRAFT_TITLE,
-	versionDeleteLabel,
-	versionDeleteTitle,
-	versionLoadedFromLabel,
-	versionLoadedToastLabel,
-	versionReplaceDraftMessage
-} from '#lib/constants/versions.ts';
-import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
+import { COMPACT_LAYOUT_MAX_PX } from '#lib/constants/media.ts';
 import { RECIPE_PANEL_LABEL } from '#lib/constants/recipe.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
-import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '#lib/test-utils/hitbox.ts';
+import { injectHitboxStyles } from '#lib/test-utils/hitbox.ts';
 import { PHONE_APP_BAR_PROPS } from '#lib/test-utils/phone-app-bar.ts';
 import {
-	discardDraft,
 	editLyrics,
 	pendingVersionLoad,
-	versionDeleteRequest,
 	setDraftBpm,
 	setDraftLyrics,
-	loadVersionAsDraft,
-	setDraftPrompt,
-	versions
+	setDraftPrompt
 } from '#lib/stores/editor.ts';
-import { openVersionLabel } from '#lib/constants/now-playing.ts';
 import { activeJobs, generationFailures } from '#lib/stores/jobs.ts';
 import {
 	detailTab,
@@ -75,13 +48,12 @@ import {
 	initNavigation,
 	navigateToSongTab,
 	persistLibraryHistory,
-	resetNavigationForTests,
 	selectSong,
 	openEditTab
 } from '#lib/stores/navigation.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
-import { clearSelection, toggleSelection } from '#lib/stores/selection.ts';
+import { toggleSelection } from '#lib/stores/selection.ts';
 import {
 	pendingTakeUse,
 	recipeModel,
@@ -92,12 +64,8 @@ import {
 	sourceMode
 } from '#lib/stores/recipe.ts';
 
-const fetchAlbum = vi.fn();
-const uploadSongCover = vi.fn();
-const deleteSongCover = vi.fn();
-const deleteAlbumCover = vi.fn();
-const generateSong = vi.fn();
-const listLoras = vi.fn();
+const { fetchAlbum, uploadSongCover, deleteSongCover, deleteAlbumCover, generateSong, listLoras } =
+	songDetailApi;
 
 // Stands in for the router the way the real one behaves for this app (issue
 // #275): a song selection can now cross from the wall's `/` into the song's
@@ -110,79 +78,28 @@ vi.mock('$app/navigation', async () =>
 vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn()
 }));
-vi.mock('#lib/api/albums.ts', () => ({
-	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
-	fetchAlbums: vi.fn()
-}));
-vi.mock('#lib/api/loras.ts', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('#lib/api/loras.ts')>();
-	return { ...actual, listLoras: (...args: unknown[]) => listLoras(...args) };
-});
+vi.mock('#lib/api/albums.ts', async () =>
+	(await import('#lib/test-utils/song-detail-mocks.ts')).albumsApiMock()
+);
+vi.mock('#lib/api/loras.ts', async (importOriginal) =>
+	(await import('#lib/test-utils/song-detail-mocks.ts')).lorasApiMock(
+		await importOriginal<typeof import('#lib/api/loras.ts')>()
+	)
+);
 vi.mock('#lib/api/songs.ts', () => ({
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn()
 }));
-vi.mock('#lib/api/client.ts', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
-	return {
-		...actual,
-		fetchVersions: vi.fn().mockResolvedValue([]),
-		fetchSong: vi.fn(async (id: string) => ({
-			id,
-			title: 'Local Only',
-			album_id: 'a-local',
-			album_title: 'Local Album',
-			artist: 'Artist',
-			track_number: 1,
-			vocal_language: 'en',
-			lyrics: 'verse',
-			prompt: 'dark folk',
-			bpm: 120,
-			audio_duration: 180,
-			key_scale: 'Am',
-			generation_params: null,
-			version_count: 1,
-			generation_count: 0,
-			best_scores: null,
-			best_rating: null,
-			generations: [],
-			created_at: '2026-01-01T00:00:00+00:00',
-			is_shared: false,
-			share_slug: null
-		})),
-		fetchSongs: vi.fn().mockResolvedValue({
-			items: [],
-			total: 0,
-			offset: 0,
-			limit: 200,
-			has_more: false
-		}),
-		fetchConversations: vi.fn().mockResolvedValue([]),
-		fetchMemory: vi.fn().mockResolvedValue(null),
-		fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
-		fetchActiveModels: vi.fn().mockResolvedValue([]),
-		fetchPresets: vi.fn().mockResolvedValue([]),
-		fetchBuiltinDefaults: vi.fn().mockResolvedValue({}),
-		bulkDeleteGenerations: vi.fn().mockResolvedValue({ deleted: 1 }),
-		uploadSongCover: (...args: unknown[]) => uploadSongCover(...args),
-		deleteSongCover: (...args: unknown[]) => deleteSongCover(...args),
-		deleteAlbumCover: (...args: unknown[]) => deleteAlbumCover(...args),
-		generateSong: (...args: unknown[]) => generateSong(...args),
-		updateSong: vi.fn(),
-		renameSong: vi.fn(),
-		deleteSong: vi.fn(),
-		deleteVersion: vi.fn(),
-		deleteGeneration: vi.fn().mockResolvedValue(undefined),
-		addGenerationToPlaylist: vi.fn().mockResolvedValue(undefined),
-		fetchPlaylists: vi.fn().mockResolvedValue([])
-	};
-});
+vi.mock('#lib/api/client.ts', async (importOriginal) =>
+	(await import('#lib/test-utils/song-detail-mocks.ts')).clientApiMock(
+		await importOriginal<typeof import('#lib/api/client.ts')>()
+	)
+);
 vi.mock('#lib/stores/toast.ts', () => ({
 	addToast: vi.fn(),
 	addUndoToast: vi.fn()
 }));
 
-import SongDetailView from './SongDetailView.svelte';
 import songDetailViewSource from './SongDetailView.svelte?raw';
 import editorHeaderSource from './editor/EditorHeader.svelte?raw';
 import recipeLineSource from './editor/RecipeLine.svelte?raw';
@@ -199,67 +116,9 @@ import {
 	updateSong
 } from '#lib/api/client.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
-import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
-import { addToast, addUndoToast } from '#lib/stores/toast.ts';
-import { loras } from '#lib/stores/loras.ts';
+import { addToast } from '#lib/stores/toast.ts';
 import { words } from '#lib/words/en.ts';
-import {
-	reportResourceStreamReachable,
-	resetConnectivityForTests
-} from '#lib/stores/connectivity.ts';
-
-function sourceRecipeDefaults(): Partial<GenerationItem> {
-	return { generation_params: { inference_steps: 8, guidance_scale: 1.5 } };
-}
-
-function editableSongDefaults(): Partial<SongItem> {
-	return {
-		album_id: 'a-local',
-		album_title: 'Local Album',
-		lyrics: 'verse',
-		prompt: 'dark folk',
-		generations: [generation(sourceRecipeDefaults())]
-	};
-}
-
-const mounted: Array<ReturnType<typeof mount>> = [];
-
-function jobStatus(overrides: Partial<JobItem> = {}): JobItem {
-	return {
-		id: 'job1',
-		type: 'generate',
-		status: 'completed',
-		progress: 1,
-		...overrides
-	};
-}
-
-// trackJob() opens a real EventSource once a generate call resolves; jsdom
-// ships none, so a click that lets its promise settle needs a stand-in.
-class MockEventSource {
-	closed = false;
-	close(): void {
-		this.closed = true;
-	}
-}
-
-async function settleRender(): Promise<void> {
-	await tick();
-	await Promise.resolve();
-	await tick();
-}
-
-async function renderView(options: { widthPx?: number } = {}): Promise<HTMLElement> {
-	const target = document.createElement('div');
-	if (options.widthPx !== undefined) {
-		target.style.width = `${options.widthPx}px`;
-		target.style.maxWidth = `${options.widthPx}px`;
-	}
-	document.body.append(target);
-	mounted.push(mount(SongDetailView, { target }));
-	await settleRender();
-	return target;
-}
+import { reportResourceStreamReachable } from '#lib/stores/connectivity.ts';
 
 function header(target: HTMLElement): HTMLElement {
 	const el = target.querySelector<HTMLElement>('.detail-header');
@@ -267,43 +126,8 @@ function header(target: HTMLElement): HTMLElement {
 	return el;
 }
 
-function writeSaveButton(target: HTMLElement): HTMLButtonElement {
-	const button = target.querySelector<HTMLButtonElement>('.write-save .save-btn');
-	if (!button) throw new Error('Expected the write-surface Save button');
-	return button;
-}
-
 function visibleText(el: HTMLElement): string {
 	return (el.textContent ?? '').replace(/\s+/g, ' ');
-}
-
-function clickNamed(target: HTMLElement, name: string): void {
-	const button = Array.from(target.querySelectorAll('button')).find(
-		(el) => el.textContent?.replace(/\s+/g, ' ').trim() === name
-	);
-	if (!button) throw new Error(`Expected button "${name}"`);
-	button.click();
-}
-
-function stubLibraryMedia(options: { narrow: boolean; compact?: boolean }): void {
-	vi.stubGlobal(
-		'matchMedia',
-		vi.fn((query: string) => ({
-			matches:
-				query === LIBRARY_NARROW_MEDIA
-					? options.narrow
-					: query === COMPACT_LAYOUT_MEDIA
-						? (options.compact ?? options.narrow)
-						: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			addListener: vi.fn(),
-			removeListener: vi.fn(),
-			dispatchEvent: vi.fn()
-		}))
-	);
 }
 
 function albumSongs(): SongItem[] {
@@ -322,73 +146,16 @@ async function renderWithDirtyDraft(): Promise<HTMLElement> {
 	return target;
 }
 
-beforeEach(() => {
-	Element.prototype.scrollIntoView = vi.fn();
-	// defect:#1598: a background load preserves dirty drafts; reset through the owner.
-	discardDraft();
-	resetNavigationForTests();
-	pendingTakeUse.set(null);
-	seedFromTake.set(null);
-	recipeOpen.set(false);
-	recipeModel.set(null);
-	clearSelection();
-	songList.set([song(editableSongDefaults())]);
-	selectedSongId.set('s1');
-	selectedGenerationId.set(null);
-	fetchAlbum.mockReset();
-	fetchAlbum.mockResolvedValue(album({ id: 'a-local', title: 'Local Album', song_count: 3 }));
-	playlistList.set([
-		{
-			id: 'p1',
-			title: 'Night Drive',
-			slug: 'night-drive',
-			entry_count: 0,
-			is_shared: false,
-			share_slug: null,
-			album_covers: [],
-			created_at: '2026-01-01T00:00:00+00:00'
-		}
-	]);
-	playlistLoad.set({ status: 'ready', error: null });
-	vi.mocked(addGenerationToPlaylist).mockClear();
-	uploadSongCover.mockReset();
-	deleteSongCover.mockReset();
-	deleteAlbumCover.mockReset();
-	generateSong.mockReset();
-	listLoras.mockReset();
-	listLoras.mockResolvedValue([]);
-	loras.set([]);
-	activeJobs.set([]);
-	generationFailures.set({});
-	vi.stubGlobal('EventSource', MockEventSource);
-	vi.mocked(addToast).mockClear();
-});
+beforeEach(resetSongDetailState);
 
-afterEach(async () => {
-	for (const component of mounted.splice(0)) await unmount(component);
-	document.body.replaceChildren();
-	resetNavigationForTests();
-	pendingVersionLoad.set(null);
-	versionDeleteRequest.set(null);
-	recipeOpen.set(false);
-	clearSelection();
-	selectedSongId.set(null);
-	selectedAlbumId.set(null);
-	songList.set([]);
-	albumList.set([]);
-	clearHitboxStyles();
-	clearPointer();
-	resetConnectivityForTests();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-});
+afterEach(clearSongDetailState);
 
 describe('SongDetailView header — one row, every state', () => {
 	it('shows Generate alone, no Recipe toggle or Co-writer button, never a second toolbar row (C4, #1935 acceptance 6)', async () => {
 		const target = await renderView();
 		const actions = header(target).querySelector<HTMLElement>('.editor-header-actions');
 		if (!actions) throw new Error('Expected header actions');
-		expect(visibleText(actions)).not.toContain(EDITOR_VIEW_COWRITER_LABEL);
+		expect(visibleText(actions)).not.toContain(words['songTabs.cowriter']);
 		expect(visibleText(actions)).not.toContain(RECIPE_PANEL_LABEL);
 		expect(target.querySelectorAll('.generate-action .primary-button')).toHaveLength(1);
 		expect(target.querySelector('.generate-action .primary-button')?.textContent).toContain(
@@ -445,8 +212,8 @@ describe('SongDetailView desktop vs compact layout', () => {
 		expect(target.querySelector('.editor-columns')).not.toBeNull();
 		const tabs = target.querySelectorAll('.editor-columns [role="tab"]');
 		expect(Array.from(tabs, (tab) => tab.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
-			'Takes 1',
-			'Co-writer'
+			`${words['songTabs.takes']} 1`,
+			words['songTabs.cowriter']
 		]);
 		expect(target.querySelector('.lyrics-area')).not.toBeNull();
 		expect(target.querySelector('.take-row')).not.toBeNull();
@@ -491,9 +258,9 @@ describe('SongDetailView desktop vs compact layout', () => {
 		await tick();
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		expect(Array.from(tabs, (tab) => tab.textContent?.trim())).toEqual([
-			'Edit',
-			'Co-writer',
-			'Takes (1)'
+			words['songTabs.edit'],
+			words['songTabs.cowriter'],
+			`${words['songTabs.takes']} (1)`
 		]);
 		tabs[2].click();
 		await tick();
@@ -526,7 +293,9 @@ describe('SongDetailView adding a take to a playlist', () => {
 		await vi.waitFor(() => expect(row.querySelector('.picker')).toBeNull());
 
 		expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1');
-		expect(vi.mocked(addToast).mock.calls).toEqual([['Added to playlist', 'success']]);
+		expect(vi.mocked(addToast).mock.calls).toEqual([
+			[words['songPage.addedToPlaylist'], 'success']
+		]);
 	});
 });
 
@@ -553,7 +322,7 @@ describe('SongDetailView failure wording', () => {
 	const actions = [
 		{
 			action: 'renaming the song',
-			fallback: 'Rename failed',
+			fallback: words['songPage.renameFailed'],
 			fail: (error: Error) => vi.mocked(renameSong).mockRejectedValueOnce(error),
 			run: () =>
 				appBar()
@@ -562,13 +331,13 @@ describe('SongDetailView failure wording', () => {
 		},
 		{
 			action: 'uploading a cover',
-			fallback: 'Cover upload failed',
+			fallback: words['songPage.coverUploadFailed'],
 			fail: (error: Error) => uploadSongCover.mockRejectedValueOnce(error),
 			run: (target: HTMLElement) => chooseCoverFile(target)
 		},
 		{
 			action: 'removing the cover',
-			fallback: 'Cover remove failed',
+			fallback: words['songPage.coverRemoveFailed'],
 			ownCover: true,
 			fail: (error: Error) => deleteSongCover.mockRejectedValueOnce(error),
 			run: (target: HTMLElement) =>
@@ -576,13 +345,13 @@ describe('SongDetailView failure wording', () => {
 		},
 		{
 			action: 'saving a version',
-			fallback: EDITOR_SAVE_FAILED,
+			fallback: words['songPage.saveFailed'],
 			fail: (error: Error) => vi.mocked(updateSong).mockRejectedValueOnce(error),
 			run: () => appBar().menu.onsave()
 		},
 		{
 			action: 'deleting a version from its Versions row',
-			fallback: 'Delete failed',
+			fallback: words['songPage.deleteFailed'],
 			versions: [version({ id: 'v1', version_number: 1 })],
 			fail: (error: Error) => vi.mocked(deleteVersion).mockRejectedValueOnce(error),
 			run: async (target: HTMLElement) => {
@@ -593,14 +362,14 @@ describe('SongDetailView failure wording', () => {
 				});
 				chip.click();
 				await tick();
-				getByRoleButton(document.body, versionDeleteLabel(1)).click();
+				getByRoleButton(document.body, words['versions.deleteName']({ number: '1' })).click();
 				await tick();
 				document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
 			}
 		},
 		{
 			action: 'deleting the song',
-			fallback: 'Delete failed',
+			fallback: words['songPage.deleteFailed'],
 			fail: (error: Error) => vi.mocked(deleteSong).mockRejectedValueOnce(error),
 			run: async () => {
 				appBar().menu.ondelete();
@@ -1062,7 +831,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		selectSong('s-last', song({ ...editableSongDefaults(), id: 's-last', title: 'Last' }));
 		await tick();
 
-		expect(target.querySelector('.dialog h3')?.textContent).toBe(EDITOR_UNSAVED_TITLE);
+		expect(target.querySelector('.dialog h3')?.textContent).toBe(words['songPage.unsavedTitle']);
 		expect(get(selectedSongId)).toBe('s1');
 
 		clickNamed(target, 'Cancel');
@@ -1077,7 +846,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		selectSong('s-last', song({ ...editableSongDefaults(), id: 's-last', title: 'Last' }));
 		await tick();
-		clickNamed(target, 'Discard');
+		clickNamed(target, words['songPage.unsavedDiscard']);
 		await tick();
 
 		expect(get(selectedSongId)).toBe('s-last');
@@ -1094,7 +863,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		await tick();
 		const dialog = target.querySelector<HTMLElement>('.dialog');
 		if (!dialog) throw new Error('Expected the unsaved-changes dialog');
-		clickNamed(dialog, EDITOR_UNSAVED_SAVE_LABEL);
+		clickNamed(dialog, words['songPage.unsavedSave']);
 
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s-last'));
 		expect(updateSong).toHaveBeenCalled();
@@ -1110,20 +879,17 @@ describe('SongDetailView unsaved-draft guard', () => {
 		if (!dialog) throw new Error('Expected the unsaved-changes dialog');
 
 		const buttons = Array.from(target.querySelectorAll('button'));
-		expect(buttons.filter((el) => accessibleName(el) === EDITOR_UNSAVED_SAVE_LABEL)).toHaveLength(
-			1
-		);
-		expect(
-			buttons.filter((el) => accessibleName(el) === EDITOR_SAVE_ACCESSIBLE_LABEL)
-		).toHaveLength(1);
-		expect(EDITOR_SAVE_ACCESSIBLE_LABEL).not.toBe(EDITOR_UNSAVED_SAVE_LABEL);
+		const named = (name: string) => buttons.filter((el) => accessibleName(el) === name);
+		expect(named(words['songPage.unsavedSave'])).toHaveLength(1);
+		expect(named(words['songPage.saveName'])).toHaveLength(1);
+		expect(words['songPage.saveName']).not.toBe(words['songPage.unsavedSave']);
 	});
 
 	it('makes unsaved changes visible on the write surface before you hunt for them', async () => {
 		const target = await renderView();
 		const save = writeSaveButton(target);
 		expect(save.disabled).toBe(true);
-		expect(save.textContent?.trim()).toBe(EDITOR_SAVE_LABEL);
+		expect(save.textContent?.trim()).toBe(words['songPage.save']);
 		expect(target.querySelector('.write-save [role="status"]')?.textContent?.trim()).toBe('');
 		expect(header(target).querySelector('.save-btn')).toBeNull();
 
@@ -1132,7 +898,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		expect(save.disabled).toBe(false);
 		expect(target.querySelector('.write-save [role="status"]')?.textContent?.trim()).toBe(
-			EDITOR_UNSAVED_TITLE
+			words['songPage.unsavedTitle']
 		);
 	});
 
@@ -1188,14 +954,22 @@ describe('SongDetailView unsaved-draft guard', () => {
 		writeSaveButton(target).click();
 		await settleRender();
 
-		expect(addToast).toHaveBeenCalledWith('Saved version 5', 'success');
+		expect(addToast).toHaveBeenCalledWith(
+			words['songPage.savedVersion']({ number: '5' }),
+			'success'
+		);
 	});
 
 	it.each([
 		{ choice: 'Cancel', button: 'Cancel', saveFails: false, use: 'repaint' },
 		{ choice: 'Cancel', button: 'Cancel', saveFails: false, use: 'seed' },
-		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true, use: 'repaint' },
-		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true, use: 'seed' }
+		{
+			choice: 'a failed Save',
+			button: words['songPage.unsavedSave'],
+			saveFails: true,
+			use: 'repaint'
+		},
+		{ choice: 'a failed Save', button: words['songPage.unsavedSave'], saveFails: true, use: 'seed' }
 	] as const)(
 		'C4: cross-song $use or Open vN: $choice leaves it unapplied, the seed unset, and drops what was pending',
 		async ({ button, saveFails, use }) => {
@@ -1255,7 +1029,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 			})
 		);
 		await tick();
-		clickNamed(target, 'Discard');
+		clickNamed(target, words['songPage.unsavedDiscard']);
 		await tick();
 		await tick();
 
@@ -1340,6 +1114,10 @@ describe('SongDetailView phone Co-writer is a tab', () => {
 });
 
 describe('song header album rail', () => {
+	function neighborButton(target: HTMLElement, key: 'songHeader.previous' | 'songHeader.next') {
+		return target.querySelector<HTMLButtonElement>(`[aria-label="${words[key]}"]`);
+	}
+
 	beforeEach(() => {
 		injectHitboxStyles();
 	});
@@ -1349,8 +1127,8 @@ describe('song header album rail', () => {
 		songList.set(albumSongs());
 		const target = await renderView();
 		expect(target.querySelector('.song-rail')).toBeNull();
-		expect(target.querySelector(`[aria-label="${SONG_PREVIOUS_LABEL}"]`)).toBeNull();
-		expect(target.querySelector(`[aria-label="${SONG_NEXT_LABEL}"]`)).toBeNull();
+		expect(neighborButton(target, 'songHeader.previous')).toBeNull();
+		expect(neighborButton(target, 'songHeader.next')).toBeNull();
 		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
 		expect(crumbs.slice(0, 2)).toEqual([words['places.library'], 'Local Album']);
 	});
@@ -1361,8 +1139,8 @@ describe('song header album rail', () => {
 		songList.set(albumSongs());
 		selectedSongId.set('s1');
 		const target = await renderView();
-		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
-		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		const prev = neighborButton(target, 'songHeader.previous');
+		const next = neighborButton(target, 'songHeader.next');
 		const albumLine = target.querySelector('.mobile-album-line');
 		if (!prev || !next || !albumLine) throw new Error('Expected mobile album navigation');
 		expect(albumLine.textContent).toContain('Local Album · 3 songs');
@@ -1388,8 +1166,8 @@ describe('song header album rail', () => {
 	it('keeps previous and next present and disabled on a one-song album', async () => {
 		stubLibraryMedia({ narrow: true, compact: false });
 		const target = await renderView();
-		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
-		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		const prev = neighborButton(target, 'songHeader.previous');
+		const next = neighborButton(target, 'songHeader.next');
 		if (!prev || !next) throw new Error('Expected previous and next');
 		expect(prev.disabled).toBe(true);
 		expect(next.disabled).toBe(true);
@@ -1406,7 +1184,7 @@ describe('song header album rail', () => {
 		navigateToSongTab('takes');
 		const before = { length: historyLength(), index: historyEntry().index };
 		const target = await renderView();
-		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		const next = neighborButton(target, 'songHeader.next');
 		if (!next) throw new Error('Expected next');
 		next.click();
 		await tick();
@@ -1425,8 +1203,8 @@ describe('song header album rail', () => {
 		const target = await renderView({ widthPx: 320 });
 		const headerEl = target.querySelector('.detail-header');
 		const rail = target.querySelector('.mobile-album-line');
-		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
-		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		const prev = neighborButton(target, 'songHeader.previous');
+		const next = neighborButton(target, 'songHeader.next');
 		if (!(headerEl instanceof HTMLElement) || !(rail instanceof HTMLElement) || !prev || !next) {
 			throw new Error('Expected header song rail');
 		}
@@ -1444,7 +1222,10 @@ describe('song header album rail', () => {
 		const target = await renderView();
 		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
 		expect(crumbs.slice(0, 2)).toEqual([words['places.library'], 'Local Album']);
-		expect(crumbs[2]).toBe(`Track ${songs.findIndex((s) => s.id === 's1') + 1} of ${songs.length}`);
+		const position = songs.findIndex((s) => s.id === 's1') + 1;
+		expect(crumbs[2]).toBe(
+			words['songPage.trackOf']({ position: String(position), total: String(songs.length) })
+		);
 	});
 
 	it('removes the album line and breadcrumbs on mobile', async () => {
@@ -1479,10 +1260,12 @@ describe('SongDetailView cover hero', () => {
 		const target = await renderView();
 		const img = target.querySelector<HTMLImageElement>('img');
 		expect(img?.getAttribute('src')).toContain('/api/albums/a-local/cover?variant=detail');
-		expect(img?.getAttribute('alt')).toBe(`${ALBUM_COVER_ALT_TYPE} Local Album`);
+		expect(img?.getAttribute('alt')).toBe(
+			words['songPage.coverAltAlbum']({ title: 'Local Album' })
+		);
 		expect(target.querySelector('.cover-remove')).toBeNull();
 		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
-			SONG_COVER_UPLOAD_LABEL
+			words['songPage.coverUpload']
 		);
 		expect(fetchAlbum).not.toHaveBeenCalled();
 	});
@@ -1533,12 +1316,12 @@ describe('SongDetailView cover hero', () => {
 		const target = await renderView();
 		const img = target.querySelector<HTMLImageElement>('img');
 		expect(img?.getAttribute('src')).toContain('/api/songs/s1/cover?variant=detail');
-		expect(img?.getAttribute('alt')).toBe(`${SONG_COVER_ALT_TYPE} Local Only`);
+		expect(img?.getAttribute('alt')).toBe(words['songPage.coverAlt']({ title: 'Local Only' }));
 		expect(
 			target.querySelector<HTMLButtonElement>('.cover-remove')?.getAttribute('aria-label')
-		).toBe(SONG_COVER_REMOVE_LABEL);
+		).toBe(words['songHeader.removeCover']);
 		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
-			SONG_COVER_REPLACE_LABEL
+			words['songPage.coverReplace']
 		);
 	});
 
@@ -1636,604 +1419,5 @@ describe('the editor answers to its own width, not the viewport', () => {
 				widthQueries.map(() => `@media (max-width: ${COMPACT_LAYOUT_MAX_PX}px)`)
 			);
 		}
-	});
-});
-
-describe.each([false, true])('SongDetailView loading a version, phone layout %s', (phone) => {
-	const LATEST = version({
-		id: 'v2',
-		version_number: 2,
-		lyrics: 'verse',
-		prompt: 'dark folk',
-		created_at: '2026-10-02T12:00:00+00:00'
-	});
-	const FIRST = version({
-		id: 'v1',
-		version_number: 1,
-		lyrics: 'first draft',
-		prompt: 'slow ballad',
-		bpm: 84,
-		created_at: '2026-09-24T12:00:00+00:00'
-	});
-
-	beforeEach(async () => {
-		recipeModel.set('turbo');
-		stubLibraryMedia({ narrow: phone });
-		openEditTab();
-		const { fetchVersions } = await import('#lib/api/client.ts');
-		vi.mocked(fetchVersions).mockResolvedValueOnce([LATEST, FIRST]);
-		const shown = await shownToasts();
-		shown.toasts.set([]);
-		vi.mocked(addUndoToast).mockClear().mockImplementation(shown.addUndoToast);
-		vi.mocked(updateSong).mockClear();
-		vi.mocked(deleteVersion).mockReset();
-	});
-
-	afterEach(() => {
-		vi.mocked(addUndoToast).mockReset();
-	});
-
-	function shownToasts(): Promise<typeof import('#lib/stores/toast.ts')> {
-		return vi.importActual<typeof import('#lib/stores/toast.ts')>('#lib/stores/toast.ts');
-	}
-
-	function versionChip(target: HTMLElement): HTMLButtonElement {
-		const chip = target.querySelector<HTMLButtonElement>('.version-chip');
-		if (!chip) throw new Error('Expected the version chip');
-		return chip;
-	}
-
-	function versionsSheet(): HTMLElement | null {
-		return document.querySelector<HTMLElement>(
-			`[role="dialog"][aria-label="${VERSIONS_SHEET_LABEL}"]`
-		);
-	}
-
-	function replaceDialog(): HTMLElement | null {
-		return document.querySelector<HTMLElement>(
-			`[role="dialog"][aria-label="${VERSION_REPLACE_DRAFT_TITLE}"]`
-		);
-	}
-
-	async function tapVersion(target: HTMLElement, versionNumber: number): Promise<void> {
-		await vi.waitFor(() => expect(versionChip(target).textContent).toContain('v2'));
-		versionChip(target).click();
-		await tick();
-		const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.version-row')).find(
-			(el) => el.textContent?.trim().startsWith(`v${versionNumber}`)
-		);
-		if (!row) throw new Error(`Expected the v${versionNumber} row`);
-		row.click();
-		await settleRender();
-	}
-
-	function undoLastLoad(): void {
-		const [, action] = vi.mocked(addUndoToast).mock.calls.at(-1) ?? [];
-		if (!action) throw new Error('Expected an undo toast');
-		void action.handler();
-	}
-
-	it('a clean draft loads the tapped version without asking; the chip stays on the latest', async () => {
-		const target = await renderView();
-		await tapVersion(target, 1);
-
-		expect(replaceDialog()).toBeNull();
-		expect(versionsSheet()).toBeNull();
-		expect(get(editLyrics)).toBe('first draft');
-		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
-		expect(target.textContent).toContain(versionLoadedFromLabel(1));
-		expect(addUndoToast).toHaveBeenCalledWith(
-			versionLoadedToastLabel(1),
-			expect.objectContaining({ label: TOAST_UNDO_LABEL }),
-			'brief'
-		);
-		expect(updateSong).not.toHaveBeenCalled();
-	});
-
-	it.runIf(!phone)(
-		'an untouched load says how it differs, not that it is unsaved; a typed edit says it is unsaved',
-		async () => {
-			const target = await renderView();
-			const statusLine = () => target.querySelector('.write-save-hint')?.textContent?.trim();
-			await tapVersion(target, 1);
-
-			expect(statusLine()).toBe('');
-			expect(writeSaveButton(target).disabled).toBe(false);
-			expect(target.querySelector('.draft-banner')?.textContent?.trim()).toMatch(
-				/^Draft — differs from v2\. Generate creates v\d+\.$/
-			);
-
-			setDraftLyrics('first draft, edited');
-			await tick();
-
-			expect(statusLine()).toBe('Unsaved changes');
-		}
-	);
-
-	it.each([
-		{ next: 2, lyrics: 'verse' },
-		{ next: 1, lyrics: 'first draft' }
-	])(
-		'a draft equal to a saved version is clean: after an untouched v1, v$next loads without asking',
-		async ({ next, lyrics }) => {
-			const target = await renderView();
-			await tapVersion(target, 1);
-			await tapVersion(target, next);
-
-			expect(replaceDialog()).toBeNull();
-			expect(versionsSheet()).toBeNull();
-			expect(get(editLyrics)).toBe(lyrics);
-		}
-	);
-
-	async function openFromTakeGroup(target: HTMLElement, n: number): Promise<void> {
-		const buttons = (css: string) => [...target.querySelectorAll<HTMLButtonElement>(css)];
-		const named = (css: string, text: string) =>
-			buttons(css).find((button) => button.textContent?.includes(text));
-		named('button[aria-expanded="false"]', `v${n} ·`)?.click();
-		flushSync();
-		named('.version-link', openVersionLabel(n))?.click();
-		await settleRender();
-	}
-
-	it('Open v1 on a take group loads v1 as the draft and shows it on Edit', async () => {
-		navigateToSongTab('takes');
-		const target = await renderView();
-		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
-
-		await openFromTakeGroup(target, 1);
-
-		expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe('first draft');
-		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
-		expect(target.textContent).toContain(versionLoadedFromLabel(1));
-		expect(addUndoToast).toHaveBeenCalledWith(
-			versionLoadedToastLabel(1),
-			expect.objectContaining({ label: TOAST_UNDO_LABEL }),
-			'brief'
-		);
-	});
-
-	it('Open on the clean current version answers: "v2 is already the draft" and the focus moves to the lyrics', async () => {
-		const takeOfV2 = generation({ ...sourceRecipeDefaults(), version_id: 'v2', version_number: 2 });
-		songList.set([song({ ...editableSongDefaults(), generations: [takeOfV2] })]);
-		navigateToSongTab('takes');
-		const target = await renderView();
-		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
-
-		await openFromTakeGroup(target, 2);
-		await vi.waitFor(() =>
-			expect(document.activeElement).toBe(target.querySelector('textarea.lyrics-area'))
-		);
-
-		expect(addToast).toHaveBeenCalledWith('v2 is already the draft', 'info');
-		expect(addUndoToast).not.toHaveBeenCalled();
-		expect(get(editLyrics)).toBe('verse');
-	});
-
-	it('an Open from Now Playing loads that version on arrival and shows it on Edit', async () => {
-		navigateToSongTab('takes');
-		pendingVersionLoad.set({ songId: 's1', versionId: 'v1' });
-		const target = await renderView();
-
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe('first draft')
-		);
-		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
-		expect(target.textContent).toContain(versionLoadedFromLabel(1));
-		expect(get(pendingVersionLoad)).toBeNull();
-	});
-
-	it('an Open from Now Playing over a dirty draft asks first', async () => {
-		const target = await renderView();
-		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
-		setDraftLyrics('unsaved edit');
-		pendingVersionLoad.set({ songId: 's1', versionId: 'v1' });
-		await tick();
-
-		const dialog = replaceDialog();
-		if (!dialog) throw new Error('Expected the replace-draft confirm');
-		expect(dialog.textContent).toContain(versionReplaceDraftMessage(1));
-		expect(get(editLyrics)).toBe('unsaved edit');
-		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
-	});
-
-	it('over a dirty draft asks first, and Cancel keeps the edit and the sheet', async () => {
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
-		await tapVersion(target, 1);
-
-		const dialog = replaceDialog();
-		if (!dialog) throw new Error('Expected the replace-draft confirm');
-		expect(dialog.textContent).toContain(versionReplaceDraftMessage(1));
-		clickNamed(dialog, DIALOG_CANCEL_LABEL);
-		await settleRender();
-
-		expect(replaceDialog()).toBeNull();
-		expect(versionsSheet()).not.toBeNull();
-		expect(get(editLyrics)).toBe('unsaved edit');
-		expect(addUndoToast).not.toHaveBeenCalled();
-	});
-
-	const BRIEF_UNDO_TOAST_MS = 5000;
-
-	async function replaceTypedDraftWith(target: HTMLElement, versionNumber: number): Promise<void> {
-		setDraftLyrics('unsaved edit');
-		await tick();
-		await tapVersion(target, versionNumber);
-		const dialog = replaceDialog();
-		if (!dialog) throw new Error('Expected the replace-draft confirm');
-		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
-		await settleRender();
-	}
-
-	it('Replace loads the version, and Undo brings the replaced edit back', async () => {
-		const target = await renderView();
-		await replaceTypedDraftWith(target, 1);
-
-		expect(versionsSheet()).toBeNull();
-		expect(get(editLyrics)).toBe('first draft');
-
-		undoLastLoad();
-		await tick();
-		expect(get(editLyrics)).toBe('unsaved edit');
-		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
-		expect(updateSong).not.toHaveBeenCalled();
-	});
-
-	it.each([
-		{ again: 'its row in the sheet', reload: (target: HTMLElement) => tapVersion(target, 1) },
-		{
-			again: 'its Open link on the take group',
-			reload: async (target: HTMLElement) => {
-				navigateToSongTab('takes');
-				await tick();
-				await openFromTakeGroup(target, 1);
-			}
-		}
-	])(
-		'loading the version the draft already holds changes nothing, and its Undo still brings the edit back: $again',
-		async ({ reload }) => {
-			const target = await renderView();
-			await replaceTypedDraftWith(target, 1);
-
-			await reload(target);
-
-			expect(replaceDialog()).toBeNull();
-			expect(versionsSheet()).toBeNull();
-			expect(get(editLyrics)).toBe('first draft');
-			const { toasts } = await shownToasts();
-			const [loaded, ...others] = get(toasts);
-			expect(others).toEqual([]);
-			expect(loaded?.message).toBe(versionLoadedToastLabel(1));
-			await loaded?.action?.handler();
-			await tick();
-			expect(get(editLyrics)).toBe('unsaved edit');
-		}
-	);
-
-	it('loading the version the draft already holds brings back no Undo toast once its Undo timed out', async () => {
-		const target = await renderView();
-		vi.useFakeTimers();
-		await replaceTypedDraftWith(target, 1);
-
-		vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS);
-		const { toasts } = await shownToasts();
-		expect(get(toasts)).toEqual([]);
-		await tapVersion(target, 1);
-
-		expect(get(editLyrics)).toBe('first draft');
-		expect(get(toasts)).toEqual([]);
-	});
-
-	async function toggleVersionsChip(target: HTMLElement): Promise<void> {
-		versionChip(target).click();
-		await tick();
-	}
-
-	function versionRowButton(versionNumber: number): HTMLButtonElement {
-		const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.version-row')).find(
-			(el) => el.textContent?.trim().startsWith(`v${versionNumber}`)
-		);
-		if (!row) throw new Error(`Expected the v${versionNumber} row`);
-		return row;
-	}
-
-	it('a peek at the Versions list keeps the Undo: its toast leaves while the list is open and comes back once it closes', async () => {
-		const target = await renderView();
-		await replaceTypedDraftWith(target, 1);
-		const { toasts } = await shownToasts();
-
-		await toggleVersionsChip(target);
-		expect(get(toasts)).toEqual([]);
-		await toggleVersionsChip(target);
-
-		expect(versionsSheet()).toBeNull();
-		const [loaded, ...others] = get(toasts);
-		expect(others).toEqual([]);
-		expect(loaded?.message).toBe(versionLoadedToastLabel(1));
-		await loaded?.action?.handler();
-		await tick();
-		expect(get(editLyrics)).toBe('unsaved edit');
-	});
-
-	it('the Undo toast keeps its time while the list is open: a tap on the loaded version brings it back with the time it had left', async () => {
-		const target = await renderView();
-		vi.useFakeTimers();
-		await replaceTypedDraftWith(target, 1);
-		vi.advanceTimersByTime(1000);
-		await toggleVersionsChip(target);
-		vi.advanceTimersByTime(4 * BRIEF_UNDO_TOAST_MS);
-
-		versionRowButton(1).click();
-		await settleRender();
-
-		const { toasts } = await shownToasts();
-		expect(get(toasts).map((toast) => toast.message)).toEqual([versionLoadedToastLabel(1)]);
-		vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS - 1001);
-		expect(get(toasts)).toHaveLength(1);
-		vi.advanceTimersByTime(1);
-		expect(get(toasts)).toEqual([]);
-	});
-
-	it('loading another version from the opened list retires the Undo of the last load', async () => {
-		const target = await renderView();
-		await replaceTypedDraftWith(target, 1);
-
-		await tapVersion(target, 2);
-
-		const { toasts } = await shownToasts();
-		expect(get(toasts).map((toast) => toast.message)).toEqual([versionLoadedToastLabel(2)]);
-		const [, firstLoadUndo] = vi.mocked(addUndoToast).mock.calls[0] ?? [];
-		await firstLoadUndo?.handler();
-		expect(get(editLyrics)).toBe('verse');
-	});
-
-	it('the current version over a dirty draft goes back to the saved state behind the same confirm', async () => {
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
-		await tapVersion(target, 2);
-		const dialog = replaceDialog();
-		if (!dialog) throw new Error('Expected the replace-draft confirm');
-		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
-		await tick();
-
-		expect(get(editLyrics)).toBe('verse');
-		expect(versionChip(target).textContent?.trim()).toBe('v2');
-	});
-
-	async function askToDeleteVersion(
-		target: HTMLElement,
-		versionNumber: number,
-		latestNumber = 2
-	): Promise<void> {
-		await vi.waitFor(() => expect(versionChip(target).textContent).toContain(`v${latestNumber}`));
-		versionChip(target).click();
-		await tick();
-		const trash = document.querySelector<HTMLButtonElement>(
-			`button[aria-label="${versionDeleteLabel(versionNumber)}"]`
-		);
-		if (!trash) throw new Error(`Expected the delete on the v${versionNumber} row`);
-		trash.click();
-		await tick();
-	}
-
-	function deleteConfirm(): HTMLElement | null {
-		return (
-			Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).find((dialog) =>
-				dialog.querySelector('h3')?.textContent?.startsWith('Delete v')
-			) ?? null
-		);
-	}
-
-	function confirmLines(dialog: HTMLElement): string[] {
-		return [dialog.querySelector('h3'), ...dialog.querySelectorAll('li')].map(
-			(line) => line?.textContent?.trim() ?? ''
-		);
-	}
-
-	function versionRowNumbers(): string[] {
-		return Array.from(document.querySelectorAll('.version-number'), (el) => el.textContent ?? '');
-	}
-
-	it.each([
-		{ takes: 1, picked: false, shown: ['Delete v1 and its 1 take?'] },
-		{ takes: 1, picked: true, shown: [versionDeleteTitle(1, 1), 'It is the album pick.'] },
-		{ takes: 2, picked: true, shown: [versionDeleteTitle(1, 2), 'The album pick is one of them.'] }
-	])(
-		'the delete on a row names its $takes take(s) (album pick among them: $picked), and Cancel deletes nothing',
-		async ({ takes, picked, shown }) => {
-			const takesOfV1 = Array.from({ length: takes }, (_, index) =>
-				generation({
-					...sourceRecipeDefaults(),
-					id: `g${index + 1}`,
-					generation_number: index + 1,
-					is_picked: picked && index === 0
-				})
-			);
-			songList.set([song({ ...editableSongDefaults(), generations: takesOfV1 })]);
-			const target = await renderView();
-			await askToDeleteVersion(target, 1);
-
-			const dialog = deleteConfirm();
-			if (!dialog) throw new Error('Expected the version delete confirm');
-			expect(confirmLines(dialog)).toEqual(shown);
-			clickNamed(dialog, DIALOG_CANCEL_LABEL);
-			await tick();
-
-			expect(deleteConfirm()).toBeNull();
-			expect(deleteVersion).not.toHaveBeenCalled();
-			expect(versionsSheet()).not.toBeNull();
-			expect(versionRowNumbers()).toEqual(['v2', 'v1']);
-		}
-	);
-
-	const THIRD = version({ id: 'v3', version_number: 3, lyrics: 'chorus', prompt: 'dark folk' });
-	const typeAnEdit = () => setDraftLyrics('unsaved edit');
-	const loadV1Untouched = () => void loadVersionAsDraft(FIRST);
-	const loadV1WithItsUndoTimedOut = () => loadVersionAsDraft(FIRST)?.expire();
-	const leaveTheCurrentVersion = () => undefined;
-
-	it.each([
-		{
-			deleted: 1,
-			draft: 'an unsaved edit',
-			prepare: typeAnEdit,
-			held: [LATEST, FIRST],
-			shown: [versionDeleteTitle(1, 1), VERSION_DELETE_DRAFT_GOES]
-		},
-		{
-			deleted: 1,
-			draft: 'an untouched load of v1',
-			prepare: loadV1Untouched,
-			held: [LATEST, FIRST],
-			shown: [
-				versionDeleteTitle(1, 1),
-				'The draft loaded from v1 goes too.',
-				'Undo for your earlier draft goes too.'
-			]
-		},
-		{
-			deleted: 2,
-			draft: 'an untouched load of v1',
-			prepare: loadV1Untouched,
-			held: [THIRD, LATEST, FIRST],
-			shown: [
-				'Delete v2?',
-				'The draft loaded from v1 leaves the editor; v3 replaces it.',
-				VERSION_DELETE_LOAD_UNDO_GOES
-			]
-		},
-		{
-			deleted: 2,
-			draft: 'an untouched load of v1 whose Undo timed out',
-			prepare: loadV1WithItsUndoTimedOut,
-			held: [THIRD, LATEST, FIRST],
-			shown: ['Delete v2?', 'The draft loaded from v1 leaves the editor; v3 replaces it.']
-		},
-		{
-			deleted: 2,
-			draft: 'the current version',
-			prepare: leaveTheCurrentVersion,
-			held: [LATEST, FIRST],
-			shown: ['Delete v2?', 'Its lyrics leave the editor; v1 replaces them.']
-		},
-		{
-			deleted: 2,
-			draft: 'the current version',
-			prepare: leaveTheCurrentVersion,
-			held: [LATEST],
-			shown: ['Delete v2?', VERSION_DELETE_EMPTIES_EDITOR]
-		},
-		{
-			deleted: 2,
-			draft: 'an unsaved edit',
-			prepare: typeAnEdit,
-			held: [LATEST],
-			shown: ['Delete v2?', VERSION_DELETE_DRAFT_GOES, VERSION_DELETE_EMPTIES_EDITOR]
-		}
-	])(
-		'the delete on v$deleted under $draft says what leaves the editor ($held.length versions)',
-		async ({ deleted, prepare, held, shown }) => {
-			vi.mocked(fetchVersions).mockReset().mockResolvedValue([]).mockResolvedValueOnce(held);
-			const target = await renderView();
-			await vi.waitFor(() => expect(get(versions)).toHaveLength(held.length));
-			prepare();
-			await tick();
-			await askToDeleteVersion(target, deleted, held[0].version_number);
-
-			const dialog = deleteConfirm();
-			if (!dialog) throw new Error('Expected the version delete confirm');
-			expect(confirmLines(dialog)).toEqual(shown);
-		}
-	);
-
-	it('Delete removes the version with its takes; the sheet stays open on the rest and keeps the focus', async () => {
-		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
-		vi.mocked(fetchVersions).mockResolvedValueOnce([LATEST]);
-		const target = await renderView();
-		await askToDeleteVersion(target, 1);
-		const dialog = deleteConfirm();
-		if (!dialog) throw new Error('Expected the version delete confirm');
-		clickNamed(dialog, VERSION_DELETE_CONFIRM_LABEL);
-
-		await vi.waitFor(() => expect(get(versions)).toEqual([LATEST]));
-		await tick();
-		expect(deleteVersion).toHaveBeenCalledExactlyOnceWith('v1', true);
-		expect(addToast).toHaveBeenCalledWith('Deleted v1', 'success');
-		expect(deleteConfirm()).toBeNull();
-		const sheet = versionsSheet();
-		expect(sheet).not.toBeNull();
-		expect(versionRowNumbers()).toEqual(['v2']);
-		expect(sheet?.contains(document.activeElement)).toBe(true);
-	});
-
-	function typeInLyrics(target: HTMLElement): void {
-		const lyrics = target.querySelector<HTMLTextAreaElement>('textarea.lyrics-area');
-		if (!lyrics) throw new Error('Expected the lyrics field');
-		lyrics.value = `${lyrics.value}\na typed line`;
-		lyrics.dispatchEvent(new Event('input', { bubbles: true }));
-	}
-
-	it.each([
-		{ action: 'typing in the draft', act: typeInLyrics },
-		{
-			action: 'Generate',
-			act: (target: HTMLElement) =>
-				getByRoleButton(
-					target.querySelector<HTMLElement>('.generate-action') ?? target,
-					EDITOR_GENERATE_LABEL
-				).click()
-		}
-	])('the Undo toast of a load goes with the next action: $action', async ({ act }) => {
-		generateSong.mockResolvedValue(jobStatus({ status: 'queued' }));
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
-		await tapVersion(target, 2);
-		const dialog = replaceDialog();
-		if (!dialog) throw new Error('Expected the replace-draft confirm');
-		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
-		await settleRender();
-		const { toasts } = await shownToasts();
-		expect(get(toasts).map((t) => t.message)).toEqual([versionLoadedToastLabel(2)]);
-
-		act(target);
-		await tick();
-
-		expect(get(toasts)).toEqual([]);
-		undoLastLoad();
-		await tick();
-		expect(get(editLyrics)).not.toBe('unsaved edit');
-	});
-
-	it('Generate after a load saves the loaded text as the next version; the hint and the Undo toast go', async () => {
-		const { fetchVersions } = await import('#lib/api/client.ts');
-		const next = version({ id: 'v3', version_number: 3, lyrics: 'first draft' });
-		vi.mocked(updateSong).mockResolvedValueOnce(
-			song({ ...editableSongDefaults(), lyrics: 'first draft', version_count: 3 })
-		);
-		vi.mocked(fetchVersions).mockResolvedValueOnce([next, LATEST, FIRST]);
-		generateSong.mockResolvedValue(jobStatus({ status: 'queued' }));
-		const target = await renderView();
-		await tapVersion(target, 1);
-		const { toasts } = await shownToasts();
-		expect(get(toasts).map((t) => t.message)).toEqual([versionLoadedToastLabel(1)]);
-
-		getByRoleButton(
-			target.querySelector<HTMLElement>('.generate-action') ?? target,
-			EDITOR_GENERATE_LABEL
-		).click();
-		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(1));
-
-		expect(vi.mocked(updateSong).mock.calls[0]?.[1]).toEqual(
-			expect.objectContaining({ lyrics: 'first draft', prompt: 'slow ballad', bpm: 84 })
-		);
-		expect(generateSong.mock.calls[0]?.[3]).toBe('v3');
-		await tick();
-		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
-		expect(versionChip(target).textContent?.trim()).toBe('v3');
-		expect(get(toasts)).toEqual([]);
 	});
 });

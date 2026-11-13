@@ -19,11 +19,7 @@ import {
 	versions
 } from '#lib/stores/editor.ts';
 import { closeTopLayer, resetLayersForTests } from '#lib/stores/layers.ts';
-import {
-	VERSIONS_SHEET_LABEL,
-	versionDeleteLabel,
-	versionsChipAccessibleLabel
-} from '#lib/constants/versions.ts';
+import { words } from '#lib/words/en.ts';
 import VersionsSheet from './VersionsSheet.svelte';
 
 const NOW = new Date(2026, 9, 2, 15, 0);
@@ -100,7 +96,7 @@ function versionChip(target: HTMLElement): HTMLButtonElement {
 
 function sheet(): HTMLElement | null {
 	return document.querySelector<HTMLElement>(
-		`[role="dialog"][aria-label="${VERSIONS_SHEET_LABEL}"]`
+		`[role="dialog"][aria-label="${words['versions.heading']}"]`
 	);
 }
 
@@ -135,7 +131,7 @@ function deleteButtons(open: HTMLElement): string[] {
 
 async function askToDelete(open: HTMLElement, versionNumber: number): Promise<void> {
 	const button = open.querySelector<HTMLButtonElement>(
-		`button[aria-label="${versionDeleteLabel(versionNumber)}"]`
+		`button[aria-label="${words['versions.deleteName']({ number: String(versionNumber) })}"]`
 	);
 	if (!button) throw new Error(`Expected the delete on the v${versionNumber} row`);
 	button.click();
@@ -145,22 +141,27 @@ async function askToDelete(open: HTMLElement, versionNumber: number): Promise<vo
 describe('VersionsSheet', () => {
 	it('names the latest version on the chip, and the draft once it differs', async () => {
 		const target = await renderSheet(vi.fn());
-		expect(versionChip(target).textContent?.trim()).toBe('v7');
-		expect(versionChip(target).getAttribute('aria-label')).toBe(versionsChipAccessibleLabel('v7'));
+		expect(versionChip(target).textContent?.trim()).toBe(words['versions.name']({ number: '7' }));
+		expect(versionChip(target).getAttribute('aria-label')).toBe(
+			words['versions.chipName']({ chip: words['versions.name']({ number: '7' }) })
+		);
 
 		setDraftLyrics('an unsaved line');
 		await tick();
-		expect(versionChip(target).textContent?.trim()).toBe('v7 · draft');
+		expect(versionChip(target).textContent?.trim()).toBe(
+			words['versions.chipDraft']({ number: '7' })
+		);
 	});
 
 	it('lists every version newest first with its takes, the pick, its day and first sung line, or that it has no lyrics', async () => {
 		const target = await renderSheet(vi.fn());
 		await openSheet(target);
+		const name = (number: string) => words['versions.name']({ number });
 		expect(versionRowTexts()).toEqual([
-			'v7 2 takes current today 14:02 · Headlights cut the rain in two',
-			'v6 1 take · ★ picked yesterday 09:30 · Headlights cut the rain in two',
-			'v4 no takes 20 Sep · Rain on the window, the city asleep',
-			'v3 no takes 18 Sep · No lyrics'
+			`${name('7')} ${words['versions.takes'](2)} ${words['versions.current']} today 14:02 · Headlights cut the rain in two`,
+			`${name('6')} ${words['versions.takes'](1)} · ★ ${words['versions.picked']} yesterday 09:30 · Headlights cut the rain in two`,
+			`${name('4')} ${words['versions.noTakes']} 20 Sep · Rain on the window, the city asleep`,
+			`${name('3')} ${words['versions.noTakes']} 18 Sep · ${words['versions.noLyrics']}`
 		]);
 	});
 
@@ -203,7 +204,9 @@ describe('VersionsSheet', () => {
 	it('offers a delete on every row, the current one included', async () => {
 		const target = await renderSheet(vi.fn());
 		const open = await openSheet(target);
-		expect(deleteButtons(open)).toEqual([7, 6, 4, 3].map(versionDeleteLabel));
+		expect(deleteButtons(open)).toEqual(
+			[7, 6, 4, 3].map((number) => words['versions.deleteName']({ number: String(number) }))
+		);
 	});
 
 	it.each([

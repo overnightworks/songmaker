@@ -45,7 +45,6 @@ frontend render 44
 frontend renderAfterPageRead 2
 frontend renderPage 4
 frontend renderRow 3
-frontend renderView 2
 frontend request 3
 frontend requireElement 14
 frontend shareResult 2

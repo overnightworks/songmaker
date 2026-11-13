@@ -1,4 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
+import { words } from '#lib/words/en.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { detailTab, type DetailTab } from '#lib/stores/navigation.ts';
@@ -54,9 +55,9 @@ describe('DetailTabs', () => {
 		async (count) => {
 			const tabs = await render(count);
 			expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
-				'Edit',
-				'Co-writer',
-				`Takes (${count})`
+				words['songTabs.edit'],
+				words['songTabs.cowriter'],
+				`${words['songTabs.takes']} (${count})`
 			]);
 			expect(tabs[0].getAttribute('aria-selected')).toBe('true');
 			tabs[1].click();

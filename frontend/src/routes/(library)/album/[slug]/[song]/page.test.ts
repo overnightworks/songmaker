@@ -7,7 +7,6 @@ import { get } from 'svelte/store';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { browserReportsOnline } from '#lib/test-utils/network.ts';
-import { EDITOR_LYRICS_LABEL } from '#lib/constants/song.ts';
 import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
@@ -209,7 +208,7 @@ describe('/album/<slug>/<song-slug> opened cold', () => {
 		const target = openAddress();
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
-		expect(target.textContent).toContain(EDITOR_LYRICS_LABEL);
+		expect(target.textContent).toContain(words['writeColumn.lyrics']);
 		expect(get(detailTab)).toBe('edit');
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
 	});

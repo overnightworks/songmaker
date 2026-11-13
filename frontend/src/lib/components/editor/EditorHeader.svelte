@@ -1,11 +1,7 @@
 <script lang="ts">
 	import type { ShareResult, SongItem } from '#lib/api/types.ts';
-	import {
-		SONG_COVER_REMOVE_LABEL,
-		SONG_NEXT_LABEL,
-		SONG_PREVIOUS_LABEL
-	} from '#lib/constants/song.ts';
 	import { ALBUM_COVER_ACCEPT } from '#lib/constants/album.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Breadcrumb from '../Breadcrumb.svelte';
 	import EditableTitle from '../EditableTitle.svelte';
 	import Icon from '../Icon.svelte';
@@ -122,7 +118,7 @@
 					class="cover-remove"
 					onclick={oncoverremove}
 					disabled={coverBusy}
-					aria-label={SONG_COVER_REMOVE_LABEL}
+					aria-label={pageText('songHeader.removeCover')}
 				>
 					×
 				</button>
@@ -135,7 +131,8 @@
 						bind:this={titleEditor}
 						value={song.title}
 						onsave={onrenamesong}
-						ariaLabel="Song title"
+						labelKey="songHeader.title"
+						editLabelKey="songHeader.editTitle"
 					/>
 				</h2>
 				<ShareButton {isShared} {shareSlug} {onshare} {onunshare} />
@@ -149,7 +146,7 @@
 				/>
 			</div>
 			{#if songRail}
-				<div class="mobile-album-line" aria-label="Album navigation">
+				<div class="mobile-album-line" aria-label={pageText('songHeader.albumNavigation')}>
 					<span class="album-line-cover" aria-hidden="true">
 						{#if albumCoverUrl}
 							<img src={albumCoverUrl} alt="" />
@@ -168,7 +165,7 @@
 							class="song-neighbor"
 							data-hitbox="frequent"
 							data-hitbox-face
-							aria-label={SONG_PREVIOUS_LABEL}
+							aria-label={pageText('songHeader.previous')}
 							disabled={previousDisabled}
 							onclick={onselectprevious}
 						>
@@ -179,7 +176,7 @@
 							class="song-neighbor"
 							data-hitbox="frequent"
 							data-hitbox-face
-							aria-label={SONG_NEXT_LABEL}
+							aria-label={pageText('songHeader.next')}
 							disabled={nextDisabled}
 							onclick={onselectnext}
 						>

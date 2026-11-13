@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { SONG_TITLE_LABEL } from '#lib/constants/song.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
 	import { backLabel, backTargetName, pageBackShown } from '#lib/routes/pageBack.ts';
 	import { standingPage } from '#lib/routes/standingAddress.ts';
@@ -119,7 +118,8 @@
 				bind:this={titleEditor}
 				value={$phoneAppBar.title}
 				onsave={$phoneAppBar.onrename}
-				ariaLabel={SONG_TITLE_LABEL}
+				labelKey="songHeader.title"
+				editLabelKey="songHeader.editTitle"
 			/>
 		</h1>
 		{@render searchButton()}

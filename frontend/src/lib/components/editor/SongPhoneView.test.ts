@@ -14,6 +14,7 @@ import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
 import { EDITOR_GENERATE_LABEL, EDITOR_MISSING_CONTENT_TITLE } from '#lib/constants/song.ts';
 import { TAKES_EMPTY } from '#lib/constants/take.ts';
 import type { GenerateState } from '#lib/stores/generateAction.ts';
+import { words } from '#lib/words/en.ts';
 
 const IDLE_GENERATE: GenerateState = { kind: 'idle' };
 const generateAction = await vi.hoisted(async () => {
@@ -160,7 +161,7 @@ describe('SongPhoneView', () => {
 			const target = await render({ loadStatus });
 			expect(target.textContent).toContain(text);
 			expect(target.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim()).toBe(
-				'Takes (0)'
+				`${words['songTabs.takes']} (0)`
 			);
 			expect(target.querySelector('textarea')).toBeNull();
 			expect(target.querySelector('.generate-action')).toBeNull();

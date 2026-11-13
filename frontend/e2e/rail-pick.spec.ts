@@ -1,5 +1,4 @@
 import { expect, test, type Page } from './coverage-test';
-import { EDITOR_LYRICS_LABEL } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
 import { NOW_PLAYING_UNPICK_LABEL } from '../src/lib/constants/now-playing';
 import { archiveOwnedAlbum, seedTake } from './seed';
@@ -76,7 +75,7 @@ test(`${ONLY_IN_SHELL.desktop} rail rows show a song's pick while only its album
 		// detail response itself must carry the pick for the rail check below to prove it.
 		expect(((await detail.json()) as { has_pick: boolean }).has_pick).toBe(true);
 		await expect(
-			page.getByRole('textbox', { name: new RegExp(`^${EDITOR_LYRICS_LABEL}`) })
+			page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) })
 		).toBeVisible();
 		await expect(page).toHaveURL(/\/album\/[^/]+\/[^/]+/);
 		await expect(pickedRow).toContainText(words['rail.trackTakesPick'](1));

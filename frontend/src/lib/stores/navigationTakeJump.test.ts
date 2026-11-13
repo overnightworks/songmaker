@@ -20,7 +20,7 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import { EDITOR_UNSAVED_DISCARD_LABEL, EDITOR_UNSAVED_TITLE } from '#lib/constants/song.ts';
+import { words } from '#lib/words/en.ts';
 import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { activeJobs, removeJob, resetGenerationFailuresForTests } from '#lib/stores/jobs.ts';
 import { toasts } from '#lib/stores/toast.ts';
@@ -248,7 +248,9 @@ describe('Back and Forward with a draft nobody saved (rule 15, cells J6, J8)', (
 	});
 
 	function unsavedChangesDialog(): HTMLElement | null {
-		return document.querySelector(`[role="dialog"][aria-label="${EDITOR_UNSAVED_TITLE}"]`);
+		return document.querySelector(
+			`[role="dialog"][aria-label="${words['songPage.unsavedTitle']}"]`
+		);
 	}
 
 	function answer(label: string): void {
@@ -301,7 +303,7 @@ describe('Back and Forward with a draft nobody saved (rule 15, cells J6, J8)', (
 		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
 		await historyComesToRest();
 
-		answer(EDITOR_UNSAVED_DISCARD_LABEL);
+		answer(words['songPage.unsavedDiscard']);
 
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 		expect(location.pathname).toBe('/album/a1');

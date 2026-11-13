@@ -6,7 +6,6 @@ import {
 	PLAYLIST_API,
 	PLAYLIST_URL
 } from './share-playlist-fixtures';
-import { EDITOR_TAB_EDIT_LABEL, EDITOR_UNSAVED_TITLE } from '../src/lib/constants/song';
 import { TAKE_DELETE_TITLE_TEMPLATE } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { words } from '../src/lib/words/en';
@@ -171,7 +170,7 @@ async function openSong(page: Page, shell: Shell, playlist: SeededPlaylist): Pro
 // The phone lists takes under their tab; the desktop shows them beside the lyrics.
 async function songsTakes(page: Page, shell: Shell): Promise<Locator> {
 	if (shell === 'desktop') return workspace(page);
-	await page.getByRole('tab', { name: /Takes/ }).click();
+	await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	return page.getByRole('tabpanel');
 }
 
@@ -217,18 +216,18 @@ function deleteConfirmRow(shell: Shell): OverlayRow {
 }
 
 function lyricsField(page: Page): Locator {
-	return page.getByRole('textbox', { name: /^Lyrics/ });
+	return page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 }
 
 function unsavedDraftDialog(page: Page): Locator {
-	return page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+	return page.getByRole('dialog', { name: words['songPage.unsavedTitle'] });
 }
 
 // Escape takes the song one level up to its collection, which a dirty draft
 // holds back with the unsaved-draft dialog.
 async function leaveWithADirtyDraft(page: Page, playlist: SeededPlaylist): Promise<string> {
 	await openSong(page, 'mobile', playlist);
-	await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
+	await page.getByRole('tab', { name: words['songTabs.edit'], exact: true }).click();
 	const lyrics = lyricsField(page);
 	const saved = await lyrics.inputValue();
 	await lyrics.fill(`${saved}\n${DRAFT_LINE}`);

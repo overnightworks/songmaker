@@ -76,7 +76,7 @@ const NOW_PLAYING_ORIGINS: {
 				.click();
 			const origin = page.getByRole('heading', { name: playing });
 			await expect(origin).toBeVisible();
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			await page
 				.getByRole('tabpanel')
 				.getByRole('button', { name: nameStartingWith(takeRowLabel(SEEDED_TAKE_NUMBER)) })

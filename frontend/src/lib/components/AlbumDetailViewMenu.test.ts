@@ -9,7 +9,6 @@ import { get } from 'svelte/store';
 
 import { lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
 import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
-import { ALBUM_COVER_ALT_TYPE } from '#lib/constants/album.ts';
 import { words } from '#lib/words/en.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRowLabels } from '#lib/test-utils/collection-menu.ts';
@@ -204,7 +203,7 @@ describe('AlbumDetailView menu', () => {
 		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledTimes(1));
 		await vi.waitFor(() =>
 			expect(target.querySelector('img')?.getAttribute('alt')).toBe(
-				`${ALBUM_COVER_ALT_TYPE} Night Drive`
+				words['albumPage.coverAlt']({ title: 'Night Drive' })
 			)
 		);
 	});

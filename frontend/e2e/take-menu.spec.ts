@@ -7,7 +7,6 @@
 // in the desktop one (the takes column beside the lyrics).
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
-import { EDITOR_UNSAVED_TITLE } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import {
@@ -109,7 +108,7 @@ async function onOwnTakes(
 		const { slug } = (await song.json()) as { slug: string };
 		await page.goto(`/album/${albumId}/${slug}`);
 		await expect(page.getByRole('heading', { name: SONG_TITLE, exact: true })).toBeVisible();
-		if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
+		if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 		await expect(takeMenuTriggers(page)).toHaveCount(TAKE_COUNT);
 		await flow();
 	} finally {
@@ -381,13 +380,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
 				await deleting.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
 				await expect(deleting).toBeHidden();
 
-				const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+				const lyrics = page.getByRole('textbox', {
+					name: new RegExp(`^${words['writeColumn.lyrics']}`)
+				});
 				await lyrics.fill(`${await lyrics.inputValue()}\nan unsaved line`);
 				await lyrics.blur();
 				await page.keyboard.press('Escape');
 				await expectConfirmFill(
 					page,
-					page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE }),
+					page.getByRole('dialog', { name: words['songPage.unsavedTitle'] }),
 					'--accent'
 				);
 			});

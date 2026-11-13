@@ -26,34 +26,10 @@
 // Generate saved before it.
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
-import {
-	EDITOR_GENERATE_LABEL,
-	EDITOR_UNSAVED_TITLE,
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_TAB_TAKES_LABEL
-} from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
+import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { takesDraftBanner } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
-import {
-	TOAST_UNDO_LABEL,
-	VERSIONS_SHEET_CLOSE_LABEL,
-	VERSIONS_SHEET_LABEL,
-	VERSION_DELETE_CONFIRM_LABEL,
-	VERSION_DELETE_DRAFT_GOES,
-	VERSION_DELETE_LOAD_UNDO_GOES,
-	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
-	VERSION_REPLACE_DRAFT_TITLE,
-	versionAlreadyTheDraftLabel,
-	versionChipLabel,
-	versionDeleteLabel,
-	versionDeleteLoadedDraftGoes,
-	versionDeleteLoadedDraftReplacedBy,
-	versionDeleteTitle,
-	versionLoadedFromLabel,
-	versionLoadedToastLabel,
-	versionsChipAccessibleLabel
-} from '../src/lib/constants/versions';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	NOW_PLAYING_IMPORTED_TAKE_HEADING,
@@ -79,6 +55,12 @@ import {
 	seedSongPhoneSong
 } from './seed';
 
+const versionGap = (number: number) => ({ number: String(number) });
+const versionName = (number: number) => words['versions.name'](versionGap(number));
+const versionDraftName = (number: number) => words['versions.chipDraft'](versionGap(number));
+const loadedFromHint = (number: number) => words['writeColumn.loadedFrom'](versionGap(number));
+const deleteName = (number: number) => words['versions.deleteName'](versionGap(number));
+const deleteTitle = (number: number) => words['versions.deleteTitleTakes'](1, versionGap(number));
 const SONG_TITLE = 'Song Versions';
 // seedSongPhoneSong's own first-version lyrics, which v1 keeps.
 const FIRST_VERSION_LYRICS = 'Song Phone Takes seeded lyrics';
@@ -175,7 +157,7 @@ async function openSongEditor(page: Page, song: SeededVersions): Promise<void> {
 	await workspace(page)
 		.getByRole('button', { name: words['songRow.openInEditor']({ title: song.title }) })
 		.click();
-	const editTab = page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true });
+	const editTab = page.getByRole('tab', { name: words['songTabs.edit'], exact: true });
 	if (await editTab.isVisible()) await editTab.click();
 	await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
 	await holdTheClock(page);
@@ -212,34 +194,38 @@ async function pickTheTakeOf(page: Page, songId: string, versionNumber: number):
 }
 
 function lyricsField(page: Page): Locator {
-	return page.getByRole('textbox', { name: /^Lyrics/ });
+	return page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 }
 
 function versionChip(page: Page): Locator {
 	return workspace(page).getByRole('button', {
-		name: nameStartingWith(versionsChipAccessibleLabel(''))
+		name: nameStartingWith(words['versions.chipName']({ chip: '' }))
 	});
 }
 
 function versionsSheet(page: Page): Locator {
-	return page.getByRole('dialog', { name: VERSIONS_SHEET_LABEL });
+	return page.getByRole('dialog', { name: words['versions.heading'] });
 }
 
 function versionRow(page: Page, versionNumber: number): Locator {
-	return versionsSheet(page).getByRole('button', { name: nameStartingWith(`v${versionNumber} `) });
+	return versionsSheet(page).getByRole('button', {
+		name: nameStartingWith(`${versionName(versionNumber)} `)
+	});
 }
 
 function loadedToast(page: Page, versionNumber = 1): Locator {
-	return page.getByRole('alert').filter({ hasText: versionLoadedToastLabel(versionNumber) });
+	return page
+		.getByRole('alert')
+		.filter({ hasText: words['versions.loaded'](versionGap(versionNumber)) });
 }
 
 function replaceDraftDialog(page: Page): Locator {
-	return page.getByRole('dialog', { name: VERSION_REPLACE_DRAFT_TITLE });
+	return page.getByRole('dialog', { name: words['versions.replaceTitle'] });
 }
 
 async function confirmReplace(page: Page): Promise<void> {
 	await replaceDraftDialog(page)
-		.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
+		.getByRole('button', { name: words['versions.replaceConfirm'] })
 		.click();
 }
 
@@ -252,7 +238,7 @@ function boxesOverlap(a: Box | null, b: Box | null): boolean {
 
 // The phone shows the takes on their own tab, the desktop beside the editor; every folded version unfolds.
 async function showTakes(page: Page): Promise<void> {
-	const takesTab = page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) });
+	const takesTab = page.getByRole('tab', { name: nameStartingWith(words['songTabs.takes']) });
 	if (await takesTab.isVisible()) await takesTab.click();
 	for (const fold of await page.locator('.version-toggle[aria-expanded=false]').all())
 		await fold.click();
@@ -374,14 +360,14 @@ test.describe('the versions of a song', () => {
 		}, testInfo) => {
 			const song = await seedTwoVersions(page, testInfo, secondVersionTaken);
 			await openSongEditor(page, song);
-			await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
+			await expect(versionChip(page)).toHaveText(versionName(2));
 
 			await tapVersion(page, 1);
 
 			await expect(versionsSheet(page)).toBeHidden();
 			await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
-			await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
-			await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
+			await expect(workspace(page).getByText(loadedFromHint(1))).toBeVisible();
+			await expect(versionChip(page)).toHaveText(versionDraftName(2));
 			await expect(loadedToast(page)).toBeVisible();
 			const generate = workspace(page).getByRole('button', {
 				name: nameStartingWith(EDITOR_GENERATE_LABEL)
@@ -403,8 +389,8 @@ test.describe('the versions of a song', () => {
 			// the version Generate saved before it asked for one.
 			await queued;
 
-			await expect(versionChip(page)).toHaveText(versionChipLabel(3, false));
-			await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeHidden();
+			await expect(versionChip(page)).toHaveText(versionName(3));
+			await expect(workspace(page).getByText(loadedFromHint(1))).toBeHidden();
 			await expect(loadedToast(page)).toBeHidden();
 			const [newest, second, first] = await readVersions(page, song.songId);
 			expect(newest?.version_number).toBe(3);
@@ -422,7 +408,7 @@ test.describe('the versions of a song', () => {
 		await openSongEditor(page, song);
 		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
 		await lyricsField(page).fill(editedLyrics);
-		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
+		await expect(versionChip(page)).toHaveText(versionDraftName(2));
 
 		await tapVersion(page, 1);
 		await expect(replaceDraftDialog(page)).toBeVisible();
@@ -436,9 +422,9 @@ test.describe('the versions of a song', () => {
 		await expect(versionsSheet(page)).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 
-		await loadedToast(page).getByRole('button', { name: TOAST_UNDO_LABEL }).click();
+		await loadedToast(page).getByRole('button', { name: words['versions.undo'] }).click();
 		await expect(lyricsField(page)).toHaveValue(editedLyrics);
-		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeHidden();
+		await expect(workspace(page).getByText(loadedFromHint(1))).toBeHidden();
 
 		await versionChip(page).click();
 		await expect(versionsSheet(page)).toBeVisible();
@@ -489,7 +475,7 @@ test.describe('the versions of a song', () => {
 		await expect(versionsSheet(page)).toBeHidden();
 		await expect(replaceDraftDialog(page)).toHaveCount(0);
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
-		await loadedToast(page).getByRole('button', { name: TOAST_UNDO_LABEL }).click();
+		await loadedToast(page).getByRole('button', { name: words['versions.undo'] }).click();
 		await expect(lyricsField(page)).toHaveValue(editedLyrics);
 	});
 
@@ -506,7 +492,7 @@ test.describe('the versions of a song', () => {
 		await expect(versionsSheet(page)).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
 		await expect(replaceDraftDialog(page)).toHaveCount(0);
-		await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
+		await expect(versionChip(page)).toHaveText(versionName(2));
 	});
 
 	test('an untouched load says how it differs, not that it is unsaved; a typed edit says it is unsaved', async ({
@@ -517,13 +503,15 @@ test.describe('the versions of a song', () => {
 		await tapVersion(page, 1);
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 
-		await expect(page.getByText(EDITOR_UNSAVED_TITLE, { exact: true })).toHaveCount(0);
+		await expect(page.getByText(words['songPage.unsavedTitle'], { exact: true })).toHaveCount(0);
 		await showTakes(page);
 		await expect(workspace(page).getByText(takesDraftBanner(2, 3), { exact: true })).toBeVisible();
 		if (shellOf(testInfo) === 'mobile') return;
 
 		await lyricsField(page).fill(`${FIRST_VERSION_LYRICS}\n${UNSAVED_LINE}`);
-		await expect(workspace(page).getByText(EDITOR_UNSAVED_TITLE, { exact: true })).toBeVisible();
+		await expect(
+			workspace(page).getByText(words['songPage.unsavedTitle'], { exact: true })
+		).toBeVisible();
 	});
 
 	test('leaving an untouched load asks nothing: Escape goes to the album without the unsaved-changes question', async ({
@@ -542,7 +530,7 @@ test.describe('the versions of a song', () => {
 		await expect(
 			workspace(page).getByRole('button', { name: nameStartingWith(song.title) })
 		).toBeVisible();
-		await expect(page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE })).toHaveCount(0);
+		await expect(page.getByRole('dialog', { name: words['songPage.unsavedTitle'] })).toHaveCount(0);
 	});
 
 	test('a peek at the sheet keeps the Undo: its toast leaves while the sheet is open and comes back once it closes', async ({
@@ -556,10 +544,10 @@ test.describe('the versions of a song', () => {
 		await versionChip(page).click();
 		await expect(versionsSheet(page)).toBeVisible();
 		await expect(loadedToast(page)).toBeHidden();
-		await versionsSheet(page).getByRole('button', { name: VERSIONS_SHEET_CLOSE_LABEL }).click();
+		await versionsSheet(page).getByRole('button', { name: words['versions.close'] }).click();
 
 		await expect(versionsSheet(page)).toBeHidden();
-		await loadedToast(page).getByRole('button', { name: TOAST_UNDO_LABEL }).click();
+		await loadedToast(page).getByRole('button', { name: words['versions.undo'] }).click();
 		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
 	});
 
@@ -583,7 +571,7 @@ test.describe('the versions of a song', () => {
 		await expect(loadedToast(page)).toBeVisible();
 		await page.clock.fastForward(2000);
 
-		await loadedToast(page).getByRole('button', { name: TOAST_UNDO_LABEL }).click();
+		await loadedToast(page).getByRole('button', { name: words['versions.undo'] }).click();
 		await expect(lyricsField(page)).toHaveValue(editedLyrics);
 	});
 
@@ -604,7 +592,7 @@ test.describe('the versions of a song', () => {
 					background: hit ? getComputedStyle(hit).backgroundColor : null
 				};
 			});
-			expect(topOfThePage.label).toBe(VERSIONS_SHEET_CLOSE_LABEL);
+			expect(topOfThePage.label).toBe(words['versions.close']);
 			expect(topOfThePage.background).not.toBe('rgba(0, 0, 0, 0)');
 			return;
 		}
@@ -647,8 +635,8 @@ test.describe('the versions of a song', () => {
 		await page.getByRole('button', { name: openVersionLabel(1) }).click();
 
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
-		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
-		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
+		await expect(versionChip(page)).toHaveText(versionDraftName(2));
+		await expect(workspace(page).getByText(loadedFromHint(1))).toBeVisible();
 		await expect(loadedToast(page)).toBeVisible();
 		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
 	});
@@ -665,9 +653,9 @@ test.describe('the versions of a song', () => {
 		await expect(lyricsField(page)).toBeFocused();
 		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
 		await expect(
-			page.getByRole('alert').filter({ hasText: versionAlreadyTheDraftLabel(2) })
+			page.getByRole('alert').filter({ hasText: words['versions.alreadyDraft'](versionGap(2)) })
 		).toBeVisible();
-		await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
+		await expect(versionChip(page)).toHaveText(versionName(2));
 	});
 
 	test('Open v1 in Now Playing lands on Edit with v1 loaded while the take plays on', async ({
@@ -687,8 +675,8 @@ test.describe('the versions of a song', () => {
 
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
-		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
-		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
+		await expect(versionChip(page)).toHaveText(versionDraftName(2));
+		await expect(workspace(page).getByText(loadedFromHint(1))).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 	});
 
@@ -743,7 +731,7 @@ test.describe('the versions of a song', () => {
 		await openV1.click();
 
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
-		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
+		await expect(versionChip(page)).toHaveText(versionDraftName(2));
 		await expect(
 			page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
 		).toBeVisible();
@@ -760,18 +748,18 @@ test.describe('the versions of a song', () => {
 
 		await versionChip(page).click();
 		await versionsSheet(page)
-			.getByRole('button', { name: versionDeleteLabel(1), exact: true })
+			.getByRole('button', { name: deleteName(1), exact: true })
 			.click();
-		const confirm = page.getByRole('dialog', { name: versionDeleteTitle(1, 1) });
-		await expect(confirm.getByRole('listitem')).toHaveText(['It is the album pick.']);
-		await confirm.getByRole('button', { name: VERSION_DELETE_CONFIRM_LABEL }).click();
+		const confirm = page.getByRole('dialog', { name: deleteTitle(1) });
+		await expect(confirm.getByRole('listitem')).toHaveText([words['versions.deletePick'](1)]);
+		await confirm.getByRole('button', { name: words['versions.deleteConfirm'] }).click();
 
 		await expect(confirm).toBeHidden();
 		await expect(versionRow(page, 1)).toHaveCount(0);
 		await expect(versionRow(page, 2)).toBeVisible();
 		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2]);
 
-		await versionsSheet(page).getByRole('button', { name: VERSIONS_SHEET_CLOSE_LABEL }).click();
+		await versionsSheet(page).getByRole('button', { name: words['versions.close'] }).click();
 		await expect(versionsSheet(page)).toBeHidden();
 		await showTakes(page);
 		await expect(page.getByText(currentVersionHeadLabel(2, 1))).toBeVisible();
@@ -788,10 +776,10 @@ test.describe('the versions of a song', () => {
 
 		await versionChip(page).click();
 		await versionsSheet(page)
-			.getByRole('button', { name: versionDeleteLabel(1), exact: true })
+			.getByRole('button', { name: deleteName(1), exact: true })
 			.click();
-		const confirm = page.getByRole('dialog', { name: versionDeleteTitle(1, 1) });
-		await expect(confirm).toContainText(VERSION_DELETE_DRAFT_GOES);
+		const confirm = page.getByRole('dialog', { name: deleteTitle(1) });
+		await expect(confirm).toContainText(words['versions.deleteDraftGoes']);
 		await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
 
 		await expect(confirm).toBeHidden();
@@ -811,24 +799,30 @@ test.describe('the versions of a song', () => {
 		for (const { deleted, title, line } of [
 			{
 				deleted: 1,
-				title: versionDeleteTitle(1, 1),
-				line: versionDeleteLoadedDraftGoes(1)
+				title: deleteTitle(1),
+				line: words['versions.deleteLoadedDraftGoes'](versionGap(1))
 			},
 			{
 				deleted: 2,
-				title: versionDeleteTitle(2, 1),
-				line: versionDeleteLoadedDraftReplacedBy(1, 3)
+				title: deleteTitle(2),
+				line: words['versions.deleteLoadedDraftReplaced']({
+					loadedFrom: '1',
+					replacedBy: '3'
+				})
 			}
 		]) {
 			await versionChip(page).click();
 			await versionsSheet(page)
-				.getByRole('button', { name: versionDeleteLabel(deleted), exact: true })
+				.getByRole('button', { name: deleteName(deleted), exact: true })
 				.click();
 			const confirm = page.getByRole('dialog', { name: title });
-			await expect(confirm.getByRole('listitem')).toHaveText([line, VERSION_DELETE_LOAD_UNDO_GOES]);
+			await expect(confirm.getByRole('listitem')).toHaveText([
+				line,
+				words['versions.deleteLoadUndoGoes']
+			]);
 			await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
 			await expect(confirm).toBeHidden();
-			await versionsSheet(page).getByRole('button', { name: VERSIONS_SHEET_CLOSE_LABEL }).click();
+			await versionsSheet(page).getByRole('button', { name: words['versions.close'] }).click();
 			await expect(versionsSheet(page)).toBeHidden();
 		}
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);

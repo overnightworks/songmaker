@@ -2,10 +2,6 @@ export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been de
 
 export const EDITOR_QUEUED_LABEL = 'Queued';
 
-export const EDITOR_TAB_TAKES_LABEL = 'Takes';
-export const EDITOR_TAB_EDIT_LABEL = 'Edit';
-export const EDITOR_TABS_LABEL = 'Editor tabs';
-
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-writer';
 
 export const EDITOR_GENERATE_LABEL = 'Generate';
@@ -21,29 +17,14 @@ export const EDITOR_GENERATE_LAST_SEEN_TEMPLATE = 'last seen at {percent}%';
 export const EDITOR_GENERATE_CANCEL_OFFLINE_LABEL = 'Cancel generation (unavailable while offline)';
 export const EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL = 'Last known progress';
 export const EDITOR_GENERATE_CANCEL_FAILED = 'Could not cancel generation';
-export const EDITOR_SAVE_LABEL = 'Save';
-export const EDITOR_SAVE_ACCESSIBLE_LABEL = 'Save changes';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
 export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable one.';
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';
-export const EDITOR_LYRICS_LABEL = 'Lyrics';
-export const EDITOR_STYLE_PROMPT_LABEL = 'Style Prompt';
-export const EDITOR_UNSAVED_TITLE = 'Unsaved changes';
-export const EDITOR_UNSAVED_MESSAGE =
-	'Save this draft as a new version before leaving, or discard it?';
-export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
-export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
-export const EDITOR_SAVE_FAILED = 'Save failed';
 
 export const SONG_PREVIOUS_LABEL = 'Previous song';
 export const SONG_NEXT_LABEL = 'Next song';
 export const SONG_SHARE_LABEL = 'Share song';
-export const SONG_TITLE_LABEL = 'Song title';
-export const SONG_COVER_ALT_TYPE = 'Song';
-export const SONG_COVER_UPLOAD_LABEL = 'Upload song cover';
-export const SONG_COVER_REPLACE_LABEL = 'Replace song cover';
-export const SONG_COVER_REMOVE_LABEL = 'Remove song cover';
 
 // Every row's PlayingMark reads this, in the rail, the detail views and the shared page.
 export const PLAYING_MARK_LABEL = 'Playing';

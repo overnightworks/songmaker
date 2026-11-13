@@ -7,12 +7,7 @@
 // teardown, because a dirty page raises the browser's unload prompt.
 
 import { expect, test, type Page, type Route } from './coverage-test';
-import {
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_TAB_TAKES_LABEL,
-	EDITOR_UNSAVED_DISCARD_LABEL,
-	EDITOR_UNSAVED_TITLE
-} from '../src/lib/constants/song';
+import { words } from '../src/lib/words/en';
 import { TAKE_PROVENANCE_REPAINT_PREFIX } from '../src/lib/constants/take';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { foldedGroupLabel, openNowPlayingLabel } from '../src/lib/constants/now-playing';
@@ -104,8 +99,9 @@ const provenanceLink = (page: Page, song: JumpSong) =>
 		name: new RegExp(TAKE_PROVENANCE_REPAINT_PREFIX)
 	});
 const unsavedChangesDialog = (page: Page) =>
-	page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
-const lyricsField = (page: Page) => page.getByRole('textbox', { name: /^Lyrics/ });
+	page.getByRole('dialog', { name: words['songPage.unsavedTitle'] });
+const lyricsField = (page: Page) =>
+	page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 const entriesOf = (page: Page) => page.evaluate(() => history.length);
 // Chromium's Navigation API: the index of the entry on screen, which every Back lowers by one.
 const historyIndex = (page: Page) =>
@@ -129,13 +125,13 @@ async function expectOnTheSong(page: Page, song: JumpSong, hash: string): Promis
 const anchorOf = (id: string) => `#take-${id}`;
 
 async function startDirtyDraft(page: Page): Promise<void> {
-	await showTab(page, EDITOR_TAB_EDIT_LABEL);
+	await showTab(page, words['songTabs.edit']);
 	await lyricsField(page).fill(EDITED_LYRICS);
-	await showTab(page, EDITOR_TAB_TAKES_LABEL);
+	await showTab(page, words['songTabs.takes']);
 }
 
 async function revertDraft(page: Page): Promise<void> {
-	await showTab(page, EDITOR_TAB_EDIT_LABEL);
+	await showTab(page, words['songTabs.edit']);
 	await lyricsField(page).fill(SECOND_VERSION_LYRICS);
 }
 
@@ -221,7 +217,7 @@ test.describe('a link to a take inside a folded version', () => {
 
 		await expect(unsavedChangesDialog(page)).toHaveCount(0);
 		await expectOnTheSong(page, song, anchorOf(song.source));
-		await showTab(page, EDITOR_TAB_EDIT_LABEL);
+		await showTab(page, words['songTabs.edit']);
 		await expect(lyricsField(page)).toHaveValue(EDITED_LYRICS);
 		await revertDraft(page);
 	});
@@ -238,7 +234,7 @@ test.describe('a link to a take inside a folded version', () => {
 
 		await expect(unsavedChangesDialog(page)).toBeVisible();
 		await unsavedChangesDialog(page)
-			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+			.getByRole('button', { name: words['songPage.unsavedDiscard'], exact: true })
 			.click();
 		await expect(unsavedChangesDialog(page)).toHaveCount(0);
 		await expect.poll(() => new URL(page.url()).pathname).toBe(`/album/${song.albumId}`);
@@ -261,7 +257,7 @@ test.describe('a link to a take inside a folded version', () => {
 		await unsavedChangesDialog(page).getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
 		await expect(unsavedChangesDialog(page)).toHaveCount(0);
 		await expectOnTheSong(page, song, '');
-		await showTab(page, EDITOR_TAB_EDIT_LABEL);
+		await showTab(page, words['songTabs.edit']);
 		await expect(lyricsField(page)).toHaveValue(EDITED_LYRICS);
 		await revertDraft(page);
 	});
@@ -298,7 +294,7 @@ test.describe(
 			await expect(nowPlaying).toHaveCount(0);
 			await expectOnTheSong(page, song, anchorOf(song.source));
 
-			await showTab(page, EDITOR_TAB_EDIT_LABEL);
+			await showTab(page, words['songTabs.edit']);
 			await expectOnTheSong(page, song, '');
 
 			await page.goBack();

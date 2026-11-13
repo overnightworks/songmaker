@@ -21,7 +21,6 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { resetCollectionForTests, setOpenCollection } from '#lib/stores/collection.ts';
 import { selectedPlaylistDetail } from '#lib/stores/playlists.ts';
-import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '#lib/constants/song.ts';
 
 vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn()
@@ -133,8 +132,8 @@ describe('detail views own no content back', () => {
 			currentVersionHeadLabel(1, 1)
 		);
 		expect(generationTarget.querySelector('.take-label')?.textContent?.trim()).toBe('Take 1');
-		expect(generationTarget.textContent).toContain(EDITOR_STYLE_PROMPT_LABEL);
-		expect(generationTarget.textContent).toContain(EDITOR_LYRICS_LABEL);
+		expect(generationTarget.textContent).toContain(words['writeColumn.stylePrompt']);
+		expect(generationTarget.textContent).toContain(words['writeColumn.lyrics']);
 	});
 
 	it('does not render a settings content back beside the shell', async () => {

@@ -502,7 +502,7 @@ describe('CollectionHeader', () => {
 		const target = await render(baseProps());
 		const heading = getByRoleHeading(target, 'Night Drive');
 		expect(heading.tagName).toBe('H2');
-		const editButton = getByRoleButton(heading, 'Edit album title');
+		const editButton = getByRoleButton(heading, words['collectionHeader.editTitleAlbum']);
 		expect(editButton.textContent?.trim()).toBe('Night Drive');
 	});
 
@@ -514,7 +514,7 @@ describe('CollectionHeader', () => {
 		});
 		const heading = getByRoleHeading(target, 'Late Night Mix');
 		expect(heading.tagName).toBe('H2');
-		const editButton = getByRoleButton(heading, 'Edit playlist title');
+		const editButton = getByRoleButton(heading, words['collectionHeader.editTitlePlaylist']);
 		expect(editButton.textContent?.trim()).toBe('Late Night Mix');
 	});
 

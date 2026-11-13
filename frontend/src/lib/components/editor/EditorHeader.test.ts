@@ -1,4 +1,5 @@
 import { makeSong as song } from '#lib/test-utils/factories.ts';
+import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -40,7 +41,7 @@ function defaultProps() {
 		initials: 'SO',
 		hasOwnCover: false,
 		coverBusy: false,
-		coverActionLabel: 'Upload song cover',
+		coverActionLabel: words['songPage.coverUpload'],
 		onrenamesong: vi.fn(async () => undefined),
 		oncoverfile: vi.fn(),
 		oncoverremove: vi.fn(),
@@ -132,8 +133,10 @@ describe('EditorHeader', () => {
 		expect(line.textContent).toContain('Anfield · 2 songs');
 		expect(line.querySelector('.album-line-cover')).not.toBeNull();
 		expect(line.querySelector('.breadcrumb')).toBeNull();
-		line.querySelector<HTMLButtonElement>(`[aria-label="Previous song"]`)?.click();
-		line.querySelector<HTMLButtonElement>(`[aria-label="Next song"]`)?.click();
+		line
+			.querySelector<HTMLButtonElement>(`[aria-label="${words['songHeader.previous']}"]`)
+			?.click();
+		line.querySelector<HTMLButtonElement>(`[aria-label="${words['songHeader.next']}"]`)?.click();
 		expect(onselectprevious).toHaveBeenCalledTimes(1);
 		expect(onselectnext).toHaveBeenCalledTimes(1);
 	});
@@ -173,7 +176,7 @@ describe('EditorHeader', () => {
 		});
 		const heading = getByRoleHeading(target, 'Sommerlicht');
 		expect(heading.tagName).toBe('H2');
-		const editButton = getByRoleButton(heading, 'Edit song title');
+		const editButton = getByRoleButton(heading, words['songHeader.editTitle']);
 		expect(editButton.textContent?.trim()).toBe('Sommerlicht');
 	});
 });

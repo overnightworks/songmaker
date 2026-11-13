@@ -20,7 +20,6 @@ import { expect, test, type Locator, type Page, type TestInfo } from './coverage
 
 import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
 import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '../src/lib/constants/cowriter';
-import { EDITOR_VIEW_COWRITER_LABEL } from '../src/lib/constants/song';
 import {
 	MODELS_ADVANCED_LABEL,
 	MODELS_COLUMN_MODEL_LABEL,
@@ -202,7 +201,7 @@ test(
 				name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
 			})
 			.click();
-		await surface.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+		await surface.getByRole('tab', { name: words['songTabs.cowriter'], exact: true }).click();
 
 		const ask = surface.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
 		await ask.fill('Write me a second verse.');
