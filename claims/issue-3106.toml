@@ -1,7 +1,0 @@
-claim_id = "c07236fb22404508847d01dc8dd95d4d"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "b8e5d2ff973018fc61105778b918bf3f083cd677"
-branch = "claude/issue-3106-the-generated-words-module-matches-the-c"
-scope = ["src/songmaker_cli/words.py"]
-opened_commit = "0be8017a058377d7b1c16a5cb0b51b1d9bddd7cc"
