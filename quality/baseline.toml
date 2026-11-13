@@ -17,8 +17,8 @@
 "frontend/e2e/offline.spec.ts" = 804
 "frontend/e2e/seed.ts" = 1174
 "frontend/e2e/song-versions.spec.ts" = 860
-"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 884
-"frontend/src/lib/components/AlbumDetailView.test.ts" = 1104
+"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 850
+"frontend/src/lib/components/AlbumDetailView.test.ts" = 988
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1480
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1813
 "frontend/src/lib/components/LibraryWall.test.ts" = 925
@@ -26,11 +26,11 @@
 "frontend/src/lib/components/NowPlaying.test.ts" = 1092
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1101
 "frontend/src/lib/components/PlayerBar.test.ts" = 1621
-"frontend/src/lib/components/PlaylistDetailView.test.ts" = 780
+"frontend/src/lib/components/PlaylistDetailView.test.ts" = 689
 "frontend/src/lib/components/SongDetailView.svelte" = 1020
-"frontend/src/lib/components/SongDetailView.test.ts" = 2245
+"frontend/src/lib/components/SongDetailView.test.ts" = 2239
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
-"frontend/src/lib/components/editor/TakesList.test.ts" = 1303
+"frontend/src/lib/components/editor/TakesList.test.ts" = 1255
 "frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
