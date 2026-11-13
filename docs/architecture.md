@@ -50,7 +50,7 @@ The platform runs these services; the test stack (`docker/docker-compose.test.ym
 │             │ HTTP /load_model, /generate, SSE                       │
 │             ▼                                                        │
 │  ┌──────────────────────┐  ┌──────────────────────┐                  │
-│  │  acestep-worker-0    │  │  acestep-worker-1    │ ← future GPU      │
+│  │  acestep-worker      │  │  acestep-worker-1    │ ← test stack, per │
 │  │  GPU + ACE-Step      │  │  (added later, no    │                   │
 │  │  subprocess          │  │   code change)       │                   │
 │  │  /load_model         │  └──────────────────────┘                   │
@@ -60,8 +60,9 @@ The platform runs these services; the test stack (`docker/docker-compose.test.ym
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-ACE-Step worker pool: each `acestep-worker-N` is a peer container with its
-own GPU. Workers self-register with the web container at startup
+ACE-Step worker pool design: each `acestep-worker-N` (as in the test stack) is a peer
+container with its own GPU; the live shape is the platform Deployment `acestep-worker`
+(`apps/songmaker/acestep-worker.yaml` in the platform repository). Workers self-register with the web container at startup
 (`POST /api/internal/workers/register`) and heartbeat ephemeral state to
 Redis with a 15s TTL. The music-worker is now a thin orchestrator: its
 arq `generate` job calls the scheduler (`scheduler.py`), which picks an
@@ -1757,7 +1758,7 @@ faster-whisper:   ~3 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 AudioBox:         ~1 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 ```
 
-ACE-Step VRAM is owned by `acestep-worker-N` containers, one per GPU. Each worker
+ACE-Step VRAM is owned by the `acestep-worker` (the platform Deployment live; `acestep-worker-N`, one per GPU, in the test stack). Each worker
 holds an LRU cache of loaded models bounded by `VRAM_BUDGET_GB` and reports
 its current usage via heartbeat. The music-worker has no GPU access at all.
 
@@ -1807,7 +1808,7 @@ The platform's Prometheus is the only alert source. Its rules cover the conditio
 
 ## Backup & Restore
 
-The platform owns songmaker's backup: its schedule, retention and restore (platform `docs/app.md` and `docs/runbooks/restore-a-database.md`). hal does not back songmaker up and `hal restore songmaker` refuses.
+The platform owns songmaker's backup: its schedule, retention and restore (platform `docs/runbooks/restore-a-database.md`, which names songmaker's audio files).
 
 DB and audio must be backed up and restored together — one without the other leaves orphaned records or unreachable files.
 

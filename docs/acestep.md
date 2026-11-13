@@ -4,7 +4,7 @@ Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored
 
 ## How Songmaker Uses ACE-Step
 
-ACE-Step runs in a dedicated `acestep-worker` container per GPU (`acestep-worker-N` in the test stack). Each
+ACE-Step runs in the platform Deployment `acestep-worker` (`apps/songmaker/acestep-worker.yaml` in the platform repository); the test stack runs one `acestep-worker-N` per GPU. Each
 worker hosts a FastAPI wrapper (`src/acestep_worker/wrapper.py`) that manages
 an LRU cache of loaded models and exposes:
 
