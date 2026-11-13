@@ -718,7 +718,7 @@ root.
 | Components | Editor (`components/editor/`: `EditorHeader`, `SongMenu`, `RecipeLine`, `RecipeTabs`, `WriteColumn`, `ListenTabs`, `TakesList`, `TakeMenu`), `ConfirmDialog` (generic Save/Discard/Cancel-style confirm), PlayerBar/`TransportBarFrame`, `NowPlaying`/`NowPlayingFrame`/`NowPlayingQueue`/`NowPlayingTake`, LibraryWall, `CollectionHeader`/`CollectionHeaderFrame`/Menu, shell/Rail, CoWriterPanel, `components/share/` (`SharedCollection`, `SharedFooter`), etc. | `src/lib/components/` |
 | Stores | Reactive state: player, collection, libraryContext, navigation, editor, recipe, filter, jobs, auth, settings, ui | `src/lib/stores/` |
 | API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |
-| Words | The interface's texts: `catalogs/en.po` as source, `words/en.ts` written by design-catalogs, read through `utils/page-words.ts`. The root layout's `load` decides the language once and loads the app's words and the design kit's words (`utils/kit-words.ts`, passed as `words` to every kit component) before any route renders; the kit's words never enter the catalog | `src/lib/catalogs/`, `src/lib/words/`, `src/lib/utils/page-words.ts`, `src/lib/utils/kit-words.ts`, `src/routes/+layout.ts` |
+| Words | The interface's texts: `catalogs/en.po` as source, `words/en.ts` and the server's `songmaker_cli/words.py` written by design-catalogs, read through `utils/page-words.ts`. The root layout's `load` decides the language once and loads the app's words and the design kit's words (`utils/kit-words.ts`, passed as `words` to every kit component) before any route renders; the kit's words never enter the catalog | `src/lib/catalogs/`, `src/lib/words/`, `src/lib/utils/page-words.ts`, `src/lib/utils/kit-words.ts`, `src/routes/+layout.ts` |
 
 The API client and `types.ts` are the frontend's contract with the backend.
 `scripts/generate_types.py --check` derives the browser-facing models from the
@@ -1299,8 +1299,14 @@ Playing, and goes by itself once back online; the root layout marks
 `html[data-offline]` so `app.css` adds the strip's height to `--player-height`
 and the page (the phone's Generate bar included) stays above it; and Generate is
 disabled with no reason text of its own. A failure becomes text in one place,
-`describeFailure` in `api/fetch.ts`: the server's own reason, otherwise the
-caller's named fallback — never a browser error's text. While the strip shows,
+`describeFailure` in `api/fetch.ts`: the page's words for the key a refusal
+names (`refusalText`; a key the page does not know is logged and shows the
+fallback, never the server's sentence), the server's own reason when it names no
+key, otherwise the caller's named fallback — never a browser error's text. A
+server `Refusal` (`refusals.py`, installed by `install_refusal_handler` on the
+live and the test app) answers `{detail, message: {key, values}}`: `detail` is the
+catalog's English sentence for agents and API clients, `message` the key and gap
+values the page words itself; any other error keeps `{detail}`. While the strip shows,
 a list the network swallowed (the rail's albums and playlists, rail search, Now
 Playing's take details) shows nothing of its own, keeps what it listed and loads
 again through the owner's `whenBackOnline`. Without the strip (a timeout, a
