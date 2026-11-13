@@ -121,7 +121,6 @@ _CREATE_LORA_DESCRIPTION = (
     "/loras",
     description=_CREATE_LORA_DESCRIPTION,
     openapi_extra=agent_tool(name="create_lora", effect=ToolEffect.SIDE_EFFECTING),
-    response_model=UserLoraResponse,
     responses={
         409: {"description": "LoRA capacity is unavailable", "model": RefusalResponse},
         422: {"description": "LoRA request is invalid"},
@@ -447,7 +446,6 @@ def api_delete_sample(
 
 @router.post(
     "/loras/{lora_id}/train",
-    response_model=UserLoraResponse,
     responses={
         409: {"description": "LoRA capacity is unavailable", "model": RefusalResponse},
         422: {"description": "LoRA training request is invalid"},
