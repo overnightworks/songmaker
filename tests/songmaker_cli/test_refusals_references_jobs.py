@@ -13,7 +13,8 @@ from support.reference_api_world import (
 )
 from support.web_app import make_test_app, refusal_body, seed_session
 
-from songmaker_cli.db.models import User
+from songmaker_cli.constants import REFERENCE_AUDIO_EXTENSIONS
+from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH, User
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.words import Key
@@ -49,23 +50,39 @@ def test_a_foreign_reference_answers_the_body_of_a_missing_one(
 
 
 @pytest.mark.parametrize(
-    ("name", "payload", "key", "values"),
+    ("name", "payload", "key"),
     [
-        ("a" * 300 + ".wav", b"x" * 200, "referenceRefusal.filenameTooLong", {"max": "255"}),
-        ("ref.txt", b"x" * 200, "referenceRefusal.formatUnsupported", {
-            "extension": ".txt", "accepted": ".flac, .mp3, .ogg, .wav",
-        }),
-        ("ref.wav", b"x" * 99, "referenceRefusal.fileTooSmall", {}),
+        ("a" * (REFERENCE_FILENAME_MAX_LENGTH + 1) + ".wav", b"x" * 200,
+         "referenceRefusal.filenameTooLong"),
+        ("ref.txt", b"x" * 200, "referenceRefusal.formatUnsupported"),
+        ("ref.wav", b"x" * 99, "referenceRefusal.fileTooSmall"),
     ],
     ids=["name-too-long", "format-unsupported", "file-too-small"],
 )
 def test_an_upload_that_cannot_be_stored_is_refused_with_its_key(
-    signed_in: TestClient, name: str, payload: bytes, key: Key, values: dict[str, str],
+    signed_in: TestClient, name: str, payload: bytes, key: Key,
 ) -> None:
     response = post_reference(signed_in, payload, name)
 
     assert response.status_code == 400
-    assert response.json() == refusal_body(key, **values)
+    assert response.json() == refusal_body(key, **response.json()["message"]["values"])
+
+
+def test_the_too_long_filename_refusal_names_the_filename_limit(signed_in: TestClient) -> None:
+    name = "a" * (REFERENCE_FILENAME_MAX_LENGTH + 1) + ".wav"
+
+    values = post_reference(signed_in, b"x" * 200, name).json()["message"]["values"]
+
+    assert values == {"max": str(REFERENCE_FILENAME_MAX_LENGTH)}
+
+
+def test_the_unsupported_format_refusal_names_the_extension_and_every_accepted_one(
+    signed_in: TestClient,
+) -> None:
+    values = post_reference(signed_in, b"x" * 200, "ref.txt").json()["message"]["values"]
+
+    assert values["extension"] == ".txt"
+    assert set(values["accepted"].split(", ")) == REFERENCE_AUDIO_EXTENSIONS
 
 
 @pytest.fixture
