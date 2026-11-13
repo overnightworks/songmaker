@@ -6,10 +6,7 @@ import {
 	makeSong,
 	makeAuthUser
 } from '#lib/test-utils/factories.ts';
-import {
-	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
-	QUEUE_TAKE_MISSING_TOAST
-} from '#lib/constants/now-playing.ts';
+import { QUEUE_TAKE_MISSING_TOAST } from '#lib/constants/now-playing.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
@@ -207,6 +204,9 @@ const playlistDefaults = {
 function playlistQueue(entries: PlaylistEntryItem[], index: number): QueueContext {
 	return { type: 'playlist', playlist: QUEUE_PLAYLIST, entries, index };
 }
+
+const poolQueueRefusal = (key: string, values: Record<string, string> = {}) =>
+	new ApiError(422, '', '/api/library/pool-queue', null, '', null, null, { key, values });
 
 function makePoolTake(overrides: Partial<LibraryPoolTakeItem> = {}): LibraryPoolTakeItem {
 	return {
@@ -1662,7 +1662,7 @@ describe('starting library playback from a take', () => {
 
 	it('unplayable start take is not labeled as an empty pool', async () => {
 		vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(
-			new ApiError(422, QUEUE_STREAM_UNPLAYABLE_START_DETAIL, '/api/library/pool-queue')
+			poolQueueRefusal('libraryQueueRefusal.startUnplayable')
 		);
 
 		await playTake(makeGen({ ...genDefaults, id: 'g-dead' }), makeSong(queuedSongDefaults()));
@@ -1670,7 +1670,7 @@ describe('starting library playback from a take', () => {
 		expect(get(playStartNotice)).toBe('error');
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
+				message: words['libraryQueueRefusal.startUnplayable'],
 				type: 'error'
 			})
 		]);
@@ -3322,7 +3322,7 @@ describe('library take pool', () => {
 		setLibraryTakePool('mix');
 		libraryQueueSkipped.set([{ song_id: 'stale', generation_id: 'stale', reason: 'missing_file' }]);
 		vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(
-			new ApiError(422, "No playable takes in pool 'mix'", '/api/library/pool-queue')
+			poolQueueRefusal('libraryQueueRefusal.emptyPool', { pool: 'mix' })
 		);
 
 		await playIdleStart();

@@ -18,7 +18,7 @@ from starlette.types import Receive, Scope, Send
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
-from songmaker_cli.api_helpers import can_access_album
+from songmaker_cli.api_helpers import can_access_album, reference_not_found
 from songmaker_cli.api_models import (
     ReferenceCountdownShownRequest,
     ReferenceListResponse,
@@ -73,9 +73,6 @@ from songmaker_cli.timestamps import utcnow
 log = logging.getLogger(__name__)
 router = APIRouter()
 
-REFERENCE_IN_USE_DETAIL: Final = "Reference audio is in use."
-INVALID_FILENAME_DETAIL: Final = "Invalid filename."
-STALE_COUNTDOWN_EPOCH_DETAIL: Final = "The countdown epoch is no longer current."
 _CONTROL_CHARACTER: Final = re.compile(r"[\x00-\x1f]")
 
 
@@ -154,7 +151,7 @@ def api_countdown_shown(
     session: Annotated[Session, Depends(get_db_session)],
 ) -> Response:
     if not acknowledge_countdown_shown(session, body.epoch, utcnow()):
-        raise HTTPException(409, STALE_COUNTDOWN_EPOCH_DETAIL)
+        raise Refusal(409, "referenceRefusal.countdownStale")
     session.commit()
     return Response(status_code=204)
 
@@ -174,7 +171,7 @@ def api_reference_uses(
     session: Annotated[Session, Depends(get_db_session)],
 ) -> ReferenceUsesResponse:
     if get_owned_reference_recording(session, user.id, reference_id) is None:
-        raise HTTPException(404)
+        raise reference_not_found()
     uses = reference_uses(session, reference_id)
     return ReferenceUsesResponse.from_orm(_uses_in_albums_the_caller_reaches(session, user, uses))
 
@@ -271,7 +268,7 @@ def api_delete_reference(
 ) -> Response:
     recording = get_owned_reference_recording(session, user.id, reference_id, lock=True)
     if recording is None:
-        raise HTTPException(404)
+        raise reference_not_found()
     recording_id = recording.id
     if not is_owner_storage_path(user.id, recording.storage_path):
         log.error("Reference %s of user %s kept: corrupt_path", recording_id, user.id)
@@ -281,7 +278,7 @@ def api_delete_reference(
     except IntegrityError:
         session.rollback()
         log.info("Reference %s of user %s kept: in_use", recording_id, user.id)
-        raise HTTPException(409, REFERENCE_IN_USE_DETAIL) from None
+        raise Refusal(409, "referenceRefusal.inUse") from None
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.REFERENCE, recording_id)
     session.commit()
     outcome = remove_reference_file(ctx.audio_dir, user.id, storage_path)
@@ -297,7 +294,7 @@ def _toggle_keep(
     action: Callable[[Session, str, str], ReferenceRecording | None],
 ) -> StatusResponse:
     if action(session, user.id, reference_id) is None:
-        raise HTTPException(404)
+        raise reference_not_found()
     session.commit()
     return StatusResponse()
 
@@ -356,26 +353,26 @@ async def api_upload_reference(
     ctx: Annotated[AppContext, Depends(get_app_context)],
 ) -> ReferenceRecordingResponse:
     if not file.filename:
-        raise HTTPException(400, "No filename provided")
+        raise Refusal(400, "referenceRefusal.noFilename")
 
     original_filename = Path(file.filename).name
     if _CONTROL_CHARACTER.search(original_filename):
-        raise HTTPException(400, INVALID_FILENAME_DETAIL)
+        raise Refusal(400, "referenceRefusal.filenameInvalid")
     if len(original_filename) > REFERENCE_FILENAME_MAX_LENGTH:
-        raise HTTPException(
-            400, f"Filename too long (max {REFERENCE_FILENAME_MAX_LENGTH} characters)",
+        raise Refusal(
+            400, "referenceRefusal.filenameTooLong", max=str(REFERENCE_FILENAME_MAX_LENGTH),
         )
     ext = Path(original_filename).suffix.lower()
     if ext not in REFERENCE_AUDIO_EXTENSIONS:
         accepted = ", ".join(sorted(REFERENCE_AUDIO_EXTENSIONS))
-        raise HTTPException(400, f"Unsupported format '{ext}'. Accepted: {accepted}")
+        raise Refusal(400, "referenceRefusal.formatUnsupported", extension=ext, accepted=accepted)
 
     content = await file.read()
     if len(content) > REFERENCE_AUDIO_MAX_BYTES:
         max_mb = REFERENCE_AUDIO_MAX_BYTES // 1024 // 1024
-        raise HTTPException(400, f"File too large (max {max_mb}MB)")
+        raise Refusal(400, "referenceRefusal.fileTooLarge", max=str(max_mb))
     if len(content) < 100:
-        raise HTTPException(400, "File is empty or too small")
+        raise Refusal(400, "referenceRefusal.fileTooSmall")
 
     try:
         stored = await run_in_threadpool(

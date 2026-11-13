@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -15,8 +17,20 @@ class Refusal(HTTPException):
     `scripts/check_refusal_keys.py` holds every call to a plain key, with exactly its gaps.
     """
 
-    def __init__(self, status_code: int, key: Key, /, **gaps: str) -> None:
-        super().__init__(status_code, text(SOURCE_LANGUAGE, key, **gaps))
+    def __init__(
+        self,
+        status_code: int,
+        key: Key,
+        /,
+        *,
+        headers: Mapping[str, str] | None = None,
+        **gaps: str,
+    ) -> None:
+        super().__init__(
+            status_code,
+            text(SOURCE_LANGUAGE, key, **gaps),
+            headers=None if headers is None else dict(headers),
+        )
         self.key = key
         self.gaps = gaps
 

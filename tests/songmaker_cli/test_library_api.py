@@ -14,8 +14,6 @@ from sqlalchemy import event, select
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import (
-    LIBRARY_CURSOR_INVALID,
-    LIBRARY_CURSOR_MISMATCH,
     LIBRARY_ITEM_ALBUM,
     LIBRARY_ITEM_SONG,
     LIBRARY_SORT_NEWEST,
@@ -1306,14 +1304,14 @@ def test_cursor_mismatch_and_tampering_are_rejected(alice: TestClient) -> None:
         params={"q": "tide", "sort": LIBRARY_SORT_NEWEST, "cursor": cursor},
     )
     assert mismatch.status_code == 422
-    assert mismatch.json()["detail"] == LIBRARY_CURSOR_MISMATCH
+    assert mismatch.json()["message"]["key"] == "libraryRefusal.cursorMismatch"
 
     sort_mismatch = alice.get(
         "/api/library/search",
         params={"q": "nachtstrom", "sort": LIBRARY_SORT_TITLE, "cursor": cursor},
     )
     assert sort_mismatch.status_code == 422
-    assert sort_mismatch.json()["detail"] == LIBRARY_CURSOR_MISMATCH
+    assert sort_mismatch.json()["message"]["key"] == "libraryRefusal.cursorMismatch"
 
     for invalid_cursor in (
         cursor[:-1] + ("0" if cursor[-1] != "0" else "1"),
@@ -1325,7 +1323,7 @@ def test_cursor_mismatch_and_tampering_are_rejected(alice: TestClient) -> None:
             params={"q": "nachtstrom", "cursor": invalid_cursor},
         )
         assert response.status_code == 422
-        assert response.json() == {"detail": LIBRARY_CURSOR_INVALID}
+        assert response.json()["message"]["key"] == "libraryRefusal.cursorInvalid"
 
 
 def test_like_metacharacters_are_literal(alice: TestClient) -> None:

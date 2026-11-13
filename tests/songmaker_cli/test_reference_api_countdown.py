@@ -15,13 +15,12 @@ from support.reference_api_world import (
     seed_reference,
     signed_in_as,
 )
-from support.web_app import TEST_ORIGIN
+from support.web_app import TEST_ORIGIN, refusal_body
 
 from songmaker_cli import reference_api
 from songmaker_cli.cleanup import DAILY_CLEANUP_HOUR_UTC
 from songmaker_cli.constants import SETTING_REFERENCE_COUNTDOWN_VISIBLE_SINCE
 from songmaker_cli.db.models import RateLimitSetting, ReferenceRecording
-from songmaker_cli.reference_api import STALE_COUNTDOWN_EPOCH_DETAIL
 from songmaker_cli.reference_audio import reference_deletes_at
 from songmaker_cli.settings import get_settings
 
@@ -330,7 +329,7 @@ def test_a_stale_epoch_answers_409_with_the_named_body_and_writes_nothing(
     response = _post_epoch(signed_in, "an-epoch-from-before-a-rollback")
 
     assert response.status_code == 409
-    assert response.json() == {"detail": STALE_COUNTDOWN_EPOCH_DETAIL}
+    assert response.json() == refusal_body("referenceRefusal.countdownStale")
     assert _published_text(signed_in) is None
 
 

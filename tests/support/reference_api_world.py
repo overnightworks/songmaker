@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 from support.reference_rows import a_reference
-from support.web_app import make_test_app, seed_session, web_client
+from support.web_app import make_test_app, refusal_body, seed_session, web_client
 
 from songmaker_cli.db.models import (
     Album,
@@ -26,6 +26,7 @@ WAV_BYTES = b"RIFF" + b"\x00" * 200
 AUDIO_BYTES = bytes(range(256)) * 4
 SECRET_FILENAME = "private-take-name.wav"
 NOT_FOUND = {"detail": "Not Found"}
+REFERENCE_NOT_FOUND = refusal_body("referenceRefusal.notFound")
 
 
 def _seed_owner_other_and_admin_accounts(session) -> None:

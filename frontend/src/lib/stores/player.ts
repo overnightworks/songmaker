@@ -69,13 +69,12 @@ import {
 } from '#lib/stores/playbackResume.ts';
 import { LIBRARY_QUEUE_EMPTY_TITLE, PLAYLIST_LOADING_LABEL } from '#lib/constants/queue.ts';
 import { pageText } from '#lib/utils/page-words.ts';
+import type { Key } from '#lib/words/en.ts';
 import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 	type NowPlayingSurfaceKind,
 	type PlaybackSource,
-	QUEUE_STREAM_EMPTY_POOL_PREFIX,
-	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
 	QUEUE_TAKE_MISSING_TOAST,
 	SHUFFLE_SCOPE_ALBUM,
 	SHUFFLE_SCOPE_LIBRARY,
@@ -274,20 +273,15 @@ function poolLabel(): string {
 	return LIBRARY_TAKE_POOL_LABELS[get(libraryTakePool)];
 }
 
+const EMPTY_POOL_REFUSAL: Key = 'libraryQueueRefusal.emptyPool';
+const UNPLAYABLE_START_REFUSAL: Key = 'libraryQueueRefusal.startUnplayable';
+
 function isEmptyPoolError(err: unknown): boolean {
-	return (
-		err instanceof ApiError &&
-		err.status === 422 &&
-		err.message.startsWith(QUEUE_STREAM_EMPTY_POOL_PREFIX)
-	);
+	return err instanceof ApiError && err.refusal?.key === EMPTY_POOL_REFUSAL;
 }
 
 function isUnplayableStartError(err: unknown): boolean {
-	return (
-		err instanceof ApiError &&
-		err.status === 422 &&
-		err.message === QUEUE_STREAM_UNPLAYABLE_START_DETAIL
-	);
+	return err instanceof ApiError && err.refusal?.key === UNPLAYABLE_START_REFUSAL;
 }
 
 function reportNothingPlayable(retry: () => Promise<void>): void {
@@ -309,8 +303,8 @@ function toastAlbumSongsFailure(err: unknown): void {
 
 function libraryStreamFailureToast(err: unknown): string {
 	if (isEmptyPoolError(err)) return LIBRARY_QUEUE_EMPTY_TITLE;
-	if (isUnplayableStartError(err)) return QUEUE_STREAM_UNPLAYABLE_START_DETAIL;
-	return `${poolLabel()} queue failed. Press play to retry.`;
+	const queueFailed = `${poolLabel()} queue failed. Press play to retry.`;
+	return isUnplayableStartError(err) ? describeFailure(err, queueFailed) : queueFailed;
 }
 
 // --- Playback dispatch ---

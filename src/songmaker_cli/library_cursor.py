@@ -9,14 +9,12 @@ from datetime import datetime
 from hashlib import sha256
 
 from songmaker_cli.constants import (
-    LIBRARY_CURSOR_INVALID,
     LIBRARY_CURSOR_KEY_ID,
     LIBRARY_CURSOR_KEY_Q,
     LIBRARY_CURSOR_KEY_SORT,
     LIBRARY_CURSOR_KEY_SORT_VALUE,
     LIBRARY_CURSOR_KEY_TYPE,
     LIBRARY_CURSOR_KEY_VERSION,
-    LIBRARY_CURSOR_MISMATCH,
     LIBRARY_CURSOR_VERSION,
     LIBRARY_ITEM_ALBUM,
     LIBRARY_ITEM_SONG,
@@ -66,33 +64,33 @@ def decode_library_cursor(
 ) -> LibraryCursor:
     parsed = _parse_signed_cursor(cursor, secret)
     if parsed.q != q or parsed.sort != sort:
-        raise LibraryCursorMismatchError(LIBRARY_CURSOR_MISMATCH)
+        raise LibraryCursorMismatchError()
     return parsed
 
 
 def _parse_signed_cursor(cursor: str, secret: bytes) -> LibraryCursor:
     if "." not in cursor:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     packed, signature = cursor.rsplit(".", 1)
     if not packed or not signature:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     try:
         raw = _b64url_decode(packed)
     except ValueError as exc:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID) from exc
+        raise LibraryCursorInvalidError() from exc
     expected = hmac.new(secret, raw, sha256).hexdigest()
     if not hmac.compare_digest(signature.encode("utf-8"), expected.encode("utf-8")):
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID) from exc
+        raise LibraryCursorInvalidError() from exc
     return _cursor_from_payload(payload)
 
 
 def _cursor_from_payload(payload: object) -> LibraryCursor:
     if not isinstance(payload, dict) or set(payload) != _CURSOR_KEYS:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     version = payload[LIBRARY_CURSOR_KEY_VERSION]
     q = payload[LIBRARY_CURSOR_KEY_Q]
     sort = payload[LIBRARY_CURSOR_KEY_SORT]
@@ -100,17 +98,17 @@ def _cursor_from_payload(payload: object) -> LibraryCursor:
     sort_value = payload[LIBRARY_CURSOR_KEY_SORT_VALUE]
     item_id = payload[LIBRARY_CURSOR_KEY_ID]
     if version != LIBRARY_CURSOR_VERSION:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     if not isinstance(q, str) or not q:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     if not isinstance(sort, str) or sort not in LIBRARY_SORTS:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     if not isinstance(item_type, str) or item_type not in _ITEM_TYPES:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     if not isinstance(sort_value, str):
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     if not isinstance(item_id, str) or not item_id:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
+        raise LibraryCursorInvalidError()
     if sort in _TIME_SORTS:
         _parse_cursor_datetime(sort_value)
     return LibraryCursor(
@@ -126,7 +124,7 @@ def _parse_cursor_datetime(value: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError as exc:
-        raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID) from exc
+        raise LibraryCursorInvalidError() from exc
     return parsed
 
 

@@ -732,6 +732,24 @@ export type Words = {
     readonly "coverSuggestionRefusal.browserLogin": string;
     readonly "shareRefusal.personsAgent": string;
     readonly "libraryRefusal.queryRequired": string;
+    readonly "referenceRefusal.notFound": string;
+    readonly "referenceRefusal.noFilename": string;
+    readonly "referenceRefusal.filenameInvalid": string;
+    readonly "referenceRefusal.filenameTooLong": (gaps: { readonly max: string }) => string;
+    readonly "referenceRefusal.formatUnsupported": (gaps: { readonly accepted: string; readonly extension: string }) => string;
+    readonly "referenceRefusal.fileTooLarge": (gaps: { readonly max: string }) => string;
+    readonly "referenceRefusal.fileTooSmall": string;
+    readonly "referenceRefusal.inUse": string;
+    readonly "referenceRefusal.countdownStale": string;
+    readonly "jobRefusal.notFound": string;
+    readonly "jobRefusal.notCancellable": string;
+    readonly "libraryQueueRefusal.startUnplayable": string;
+    readonly "libraryQueueRefusal.emptyPool": (gaps: { readonly pool: string }) => string;
+    readonly "libraryQueueRefusal.emptyWindow": string;
+    readonly "libraryQueueRefusal.tooManyRequests": string;
+    readonly "libraryQueueRefusal.limiterUnavailable": string;
+    readonly "libraryRefusal.cursorInvalid": string;
+    readonly "libraryRefusal.cursorMismatch": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -1658,5 +1676,23 @@ export const words: Words = {
     "coverSuggestionRefusal.browserLogin": "Cover suggestions need a browser login.",
     "shareRefusal.personsAgent": "A person's own agent cannot share; the person shares in the app.",
     "libraryRefusal.queryRequired": "Search query is required",
+    "referenceRefusal.notFound": "Not Found",
+    "referenceRefusal.noFilename": "No filename provided",
+    "referenceRefusal.filenameInvalid": "Invalid filename.",
+    "referenceRefusal.filenameTooLong": (gaps: { readonly max: string }) => "Filename too long (max " + gaps.max + " characters)",
+    "referenceRefusal.formatUnsupported": (gaps: { readonly accepted: string; readonly extension: string }) => "Unsupported format '" + gaps.extension + "'. Accepted: " + gaps.accepted,
+    "referenceRefusal.fileTooLarge": (gaps: { readonly max: string }) => "File too large (max " + gaps.max + "MB)",
+    "referenceRefusal.fileTooSmall": "File is empty or too small",
+    "referenceRefusal.inUse": "Reference audio is in use.",
+    "referenceRefusal.countdownStale": "The countdown epoch is no longer current.",
+    "jobRefusal.notFound": "Job not found",
+    "jobRefusal.notCancellable": "Only queued or running jobs can be cancelled",
+    "libraryQueueRefusal.startUnplayable": "Requested take is not playable",
+    "libraryQueueRefusal.emptyPool": (gaps: { readonly pool: string }) => "No playable takes in pool '" + gaps.pool + "'",
+    "libraryQueueRefusal.emptyWindow": "No playable takes in scanned library window",
+    "libraryQueueRefusal.tooManyRequests": "Too many queue stream requests",
+    "libraryQueueRefusal.limiterUnavailable": "Queue stream rate limiter unavailable",
+    "libraryRefusal.cursorInvalid": "Invalid library cursor",
+    "libraryRefusal.cursorMismatch": "Library cursor does not match query and sort",
 };
 export type Key = keyof Words;

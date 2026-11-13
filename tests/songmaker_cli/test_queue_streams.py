@@ -15,7 +15,6 @@ from support.route_budget import queries_without_session_auth
 from support.web_app import make_authenticated_user, make_test_app, seed_session, web_client
 
 from songmaker_cli import audio_files
-from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 from songmaker_cli.queue_streams import (
     QUEUE_STREAM_DURATION_LIMIT_DETAIL,
@@ -1147,7 +1146,7 @@ def test_library_scan_refuses_a_start_take_escaping_the_audio_root(
     response = client.get("/api/library/pool-queue", params={"start_generation_id": "g2"})
 
     assert response.status_code == 422
-    assert response.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
+    assert response.json()["message"]["key"] == "libraryQueueRefusal.startUnplayable"
 
 
 def test_library_pool_queue_start_generation_id_not_found_returns_404(
@@ -1190,7 +1189,7 @@ def test_library_pool_queue_archived_start_generation_returns_422(
     resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g3"})
 
     assert resp.status_code == 422
-    assert resp.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
+    assert resp.json()["message"]["key"] == "libraryQueueRefusal.startUnplayable"
 
 
 def test_library_pool_queue_returns_one_more_than_track_limit(tmp_path, monkeypatch, pg_factory):
@@ -1860,7 +1859,7 @@ def test_library_pool_queue_unplayable_start_is_scanned_once_with_small_budget(
     )
 
     assert resp.status_code == 422
-    assert resp.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
+    assert resp.json()["message"]["key"] == "libraryQueueRefusal.startUnplayable"
     assert scanned == ["g4"]
 
 

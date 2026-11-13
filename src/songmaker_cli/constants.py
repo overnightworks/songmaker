@@ -82,8 +82,6 @@ LIBRARY_CURSOR_KEY_SORT: Final[str] = "sort"
 LIBRARY_CURSOR_KEY_TYPE: Final[str] = "type"
 LIBRARY_CURSOR_KEY_SORT_VALUE: Final[str] = "sort_value"
 LIBRARY_CURSOR_KEY_ID: Final[str] = "id"
-LIBRARY_CURSOR_INVALID: Final[str] = "Invalid library cursor"
-LIBRARY_CURSOR_MISMATCH: Final[str] = "Library cursor does not match query and sort"
 LIKE_ESCAPE_CHAR: Final[str] = "\\"
 
 
@@ -176,8 +174,6 @@ SHARING_STREAM_RATE_LIMIT = 6
 SHARING_STREAM_RATE_WINDOW_SECONDS = 60
 QUEUE_STREAM_AUTH_RATE_LIMIT = 12
 QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS = 60
-QUEUE_STREAM_EMPTY_POOL_DETAIL = "No playable takes in pool"
-QUEUE_STREAM_UNPLAYABLE_START_DETAIL = "Requested take is not playable"
 
 # Redis key prefixes
 REDIS_KEY_PREFIX = "songmaker"
