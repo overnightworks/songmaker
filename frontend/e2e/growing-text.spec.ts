@@ -83,7 +83,9 @@ test.describe('text that is never clipped', () => {
 		const guard = new FlowGuard(page);
 		await openSeededSong(page, songTitle);
 
-		const style = page.getByRole('textbox', { name: /^Style/ });
+		const style = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.stylePrompt']}`)
+		});
 		const lyrics = page.getByRole('textbox', {
 			name: new RegExp(`^${words['writeColumn.lyrics']}`)
 		});
@@ -125,7 +127,9 @@ test.describe('text that is never clipped', () => {
 		const guard = new FlowGuard(page);
 		await openSeededSong(page, songTitle);
 
-		const style = page.getByRole('textbox', { name: /^Style/ });
+		const style = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.stylePrompt']}`)
+		});
 		const lyrics = page.getByRole('textbox', {
 			name: new RegExp(`^${words['writeColumn.lyrics']}`)
 		});

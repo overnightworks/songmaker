@@ -306,7 +306,7 @@ test.describe('song page at phone width', () => {
 			await seedSongPhoneSong(library.songPhoneAlbumId, firstTitle, 1, 1);
 			await seedSongPhoneSong(library.songPhoneAlbumId, secondTitle, 1, 1);
 			const editTab = page.getByRole('tab', { name: words['songTabs.edit'] });
-			const takesTab = page.getByRole('tab', { name: /^Takes/ });
+			const takesTab = page.getByRole('tab', { name: new RegExp(`^${words['songTabs.takes']}`) });
 			const openFromAlbum = async (title: string) => {
 				await workspace(page)
 					.getByRole('button', { name: songEditorOpenLabel(title) })

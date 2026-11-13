@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
+import { words } from '../src/lib/words/en';
 
 import {
 	deleteVoiceProofData,
@@ -328,7 +329,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await expect(deletedVoiceOption).toBeDisabled();
 		await deletedPicker.click();
 		if (isMobile) {
-			await page.getByRole('tab', { name: /^Takes/ }).click();
+			await page.getByRole('tab', { name: new RegExp(`^${words['songTabs.takes']}`) }).click();
 			const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
 			await expect(deletedVoiceTake).toBeVisible();
 			await deletedVoiceTake.getByRole('button', { name: 'Play v1 · take 1', exact: true }).click();
