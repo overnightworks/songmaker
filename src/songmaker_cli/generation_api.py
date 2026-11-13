@@ -318,8 +318,7 @@ async def api_generate_song(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        _fail_job(ctx, job.id)
-        raise Refusal(503, "jobRefusal.queueUnavailable")
+        raise _queue_unavailable_refusal(ctx, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -448,8 +447,7 @@ async def api_repaint_generation(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        _fail_job(ctx, job.id)
-        raise Refusal(503, "jobRefusal.queueUnavailable")
+        raise _queue_unavailable_refusal(ctx, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -522,8 +520,7 @@ async def api_cover_generation(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        _fail_job(ctx, job.id)
-        raise Refusal(503, "jobRefusal.queueUnavailable")
+        raise _queue_unavailable_refusal(ctx, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -564,8 +561,7 @@ async def api_score_generation(
             _queue_name=ARQ_SCORING_QUEUE_NAME,
         )
     except ConnectionError:
-        _fail_job(ctx, job.id)
-        raise Refusal(503, "jobRefusal.queueUnavailable")
+        raise _queue_unavailable_refusal(ctx, job.id)
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
@@ -642,6 +638,11 @@ async def _generation_capacity_error(
         )
         return JSONResponse(status_code=503, content=response.model_dump())
     return None
+
+
+def _queue_unavailable_refusal(ctx: AppContext, job_id: str) -> Refusal:
+    _fail_job(ctx, job_id)
+    return Refusal(503, "jobRefusal.queueUnavailable")
 
 
 def _fail_job(
