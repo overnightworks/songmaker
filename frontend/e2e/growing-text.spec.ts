@@ -8,7 +8,7 @@
 // request to that spec's API budget (SONG_PHONE_FLOW_API_REQUEST_BUDGET).
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
+import { words } from '../src/lib/words/en';
 import { FlowGuard, workspace } from './helpers';
 import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
 
@@ -24,7 +24,7 @@ async function openSeededSong(page: Page, songTitle: string): Promise<void> {
 	const library = readSeededLibrary();
 	await page.goto(`/album/${library.songPhoneAlbumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 		.click();
 	await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 	await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));

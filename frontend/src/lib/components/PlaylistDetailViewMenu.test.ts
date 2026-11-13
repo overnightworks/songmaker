@@ -122,7 +122,7 @@ describe('PlaylistDetailView menu', () => {
 			menuItem: words['collectionMenu.upload'],
 			picksFile: true,
 			failure: new NetworkError('/api/playlists/p1/cover', new TypeError('Failed to fetch')),
-			toast: 'Cover upload failed'
+			toast: words['playlistPage.coverSaveFailed']
 		},
 		{
 			action: 'a cover upload',

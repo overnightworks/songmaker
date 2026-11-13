@@ -10,8 +10,7 @@ import {
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
-	EDITOR_UNSAVED_TITLE,
-	songEditorOpenLabel
+	EDITOR_UNSAVED_TITLE
 } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { GENERATION_PHASE_LABELS } from '../src/lib/constants/jobs';
@@ -140,7 +139,7 @@ async function openSongWithAnUnsavedDraft(
 	const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(title) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 		.click();
 	await expect(songHeading).toBeVisible();
 	expectSongAddressStands(page, albumId, title);
@@ -317,7 +316,7 @@ test.describe('song page at phone width', () => {
 			const takesTab = page.getByRole('tab', { name: /^Takes/ });
 			const openFromAlbum = async (title: string) => {
 				await workspace(page)
-					.getByRole('button', { name: songEditorOpenLabel(title) })
+					.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
 					.click();
 				await expect(page.getByRole('heading', { name: title })).toBeVisible();
 				expectSongAddressStands(page, library.songPhoneAlbumId, title);
@@ -491,7 +490,10 @@ test.describe('song page at phone width', () => {
 						await page.goto('/');
 						await page
 							.getByRole('region', { name: words['homeWrite.label'], exact: true })
-							.getByRole('button', { name: songEditorOpenLabel(title), exact: true })
+							.getByRole('button', {
+								name: words['songRow.openInEditor']({ title: title }),
+								exact: true
+							})
 							.click();
 						await expect(songHeading).toBeVisible();
 						name = words['pageBack.backTo']({ page: words['places.home'] });

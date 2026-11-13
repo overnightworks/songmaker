@@ -9,7 +9,7 @@
 // real track change happens inside the flow's own time.
 
 import { expect, request, test, type APIRequestContext, type Page } from './coverage-test';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
+import { words } from '../src/lib/words/en';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
@@ -561,7 +561,9 @@ test.describe('on a fresh account', () => {
 		const surface = workspace(page);
 
 		await page.goto(`/album/${unpicked.albumId}`);
-		await surface.getByRole('button', { name: songEditorOpenLabel(first.songTitle) }).click();
+		await surface
+			.getByRole('button', { name: words['songRow.openInEditor']({ title: first.songTitle }) })
+			.click();
 		if (shellOf(testInfo) === 'mobile') await surface.getByRole('tab', { name: /Takes/ }).click();
 		const take = surface.locator('.take-row');
 		await expect(take).toHaveCount(1);

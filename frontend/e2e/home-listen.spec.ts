@@ -124,9 +124,11 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 		await page
 			.getByRole('button', { name: words['collectionMenu.playlistDelete'], exact: true })
 			.click();
-		await page.getByRole('button', { name: 'Delete Playlist', exact: true }).click();
+		await page
+			.getByRole('button', { name: words['playlistPage.deleteConfirm'], exact: true })
+			.click();
 		await expect(
-			page.getByRole('alert').getByText('Playlist deleted', { exact: true })
+			page.getByRole('alert').getByText(words['playlistPage.deleted'], { exact: true })
 		).toBeVisible();
 		await openHome(page, shellOf(testInfo));
 		await expect(

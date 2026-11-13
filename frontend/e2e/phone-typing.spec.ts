@@ -24,8 +24,7 @@ import {
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
-	SONG_TITLE_LABEL,
-	songEditorOpenLabel
+	SONG_TITLE_LABEL
 } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
@@ -124,7 +123,7 @@ async function openSeededSongFromItsAlbum(
 	await arrange(await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1));
 	await page.goto(`/album/${library.songPhoneAlbumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
+		.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 		.click();
 	await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 	// The song shows before its route module has loaded, and only then does

@@ -5,7 +5,8 @@
 
 import { expect, test, type Locator, type Page } from './coverage-test';
 import { NOW_PLAYING_LABEL, openNowPlayingLabel } from '../src/lib/constants/now-playing';
-import { EDITOR_VIEW_COWRITER_LABEL, songEditorOpenLabel } from '../src/lib/constants/song';
+import { EDITOR_VIEW_COWRITER_LABEL } from '../src/lib/constants/song';
+import { words } from '../src/lib/words/en';
 import {
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
@@ -74,7 +75,9 @@ test('1906_E3: the co-writer says Du schreibst mit einer KI under its header', a
 	const library = readSeededLibrary();
 	await page.goto(`/album/${library.albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
+		.getByRole('button', {
+			name: words['songRow.openInEditor']({ title: library.pickedSongTitle })
+		})
 		.click();
 	await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
 	await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();

@@ -1,6 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
@@ -73,7 +72,7 @@ const NOW_PLAYING_ORIGINS: {
 			const playing = library.pickedSongTitle;
 			await page.goto(`/album/${library.albumId}`);
 			await workspace(page)
-				.getByRole('button', { name: songEditorOpenLabel(playing) })
+				.getByRole('button', { name: words['songRow.openInEditor']({ title: playing }) })
 				.click();
 			const origin = page.getByRole('heading', { name: playing });
 			await expect(origin).toBeVisible();

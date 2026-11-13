@@ -2,7 +2,6 @@ import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { LibraryWriteItem } from '#lib/api/types.ts';
-import { songEditorOpenLabel } from '#lib/constants/song.ts';
 import {
 	ensureLibraryWriteRead,
 	outdateLibraryWrite,
@@ -218,7 +217,7 @@ it.each(['foreground', 'reconnect'] as const)(
 
 it.each([
 	{ selector: '.wall-tile-body', name: words['homeWrite.openSong']({ title: 'Quiet Fire' }) },
-	{ selector: '.row-editor', name: songEditorOpenLabel('Quiet Fire') }
+	{ selector: '.row-editor', name: words['homeWrite.openInEditor']({ title: 'Quiet Fire' }) }
 ])(
 	'1354_rule_16 defect:#1575 $selector, named apart as $name, selects the song without changing playback',
 	async ({ selector, name }) => {

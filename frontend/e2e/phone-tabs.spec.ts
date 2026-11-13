@@ -2,7 +2,6 @@ import { expect, test, type Page } from './coverage-test';
 import { PHONE_TABS } from '../src/lib/constants/phone-tabs';
 import { words } from '../src/lib/words/en';
 import { NOW_PLAYING_CLOSE, openNowPlayingLabel } from '../src/lib/constants/now-playing';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
@@ -156,7 +155,10 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		const library = readSeededLibrary();
 		await page.goto(`/album/${library.albumId}`);
 		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle), exact: true })
+			.getByRole('button', {
+				name: words['songRow.openInEditor']({ title: library.pickedSongTitle }),
+				exact: true
+			})
 			.click();
 		await expect(
 			appBar(page).getByRole('heading', { name: library.pickedSongTitle })

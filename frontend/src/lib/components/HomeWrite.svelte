@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { songEditorOpenLabel } from '#lib/constants/song.ts';
 	import {
 		libraryWriteItems,
 		libraryWriteState,
@@ -70,7 +69,7 @@
 				openLabel={pageText('homeWrite.openSong', { title: item.song_title })}
 				onopen={() => void selectSong(item.song_id)}
 				edit={{
-					label: songEditorOpenLabel(item.song_title),
+					label: pageText('homeWrite.openInEditor', { title: item.song_title }),
 					onclick: () => void selectSong(item.song_id)
 				}}
 			/>

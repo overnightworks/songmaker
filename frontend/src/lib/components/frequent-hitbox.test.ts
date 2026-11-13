@@ -9,11 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 
 import { LIBRARY_NARROW_MEDIA } from '#lib/constants/media.ts';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import {
-	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
-	PLAYLIST_ENTRY_MOVE_UP_LABEL,
-	PLAYLIST_ENTRY_REMOVE_LABEL
-} from '#lib/constants/playlist.ts';
 import { resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
@@ -111,6 +106,7 @@ vi.mock('#lib/stores/auth.ts', async (importOriginal) => {
 
 import { removeFromPlaylist, reorderPlaylistEntry } from '#lib/api/client.ts';
 import { backToCollection, openLibraryWall } from '#lib/stores/navigation.ts';
+import { words } from '#lib/words/en.ts';
 import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
@@ -156,19 +152,19 @@ const INVENTORY = [
 	{
 		name: 'playlist-move-up',
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
-		text: PLAYLIST_ENTRY_MOVE_UP_LABEL,
+		text: words['playlistPage.moveUp'],
 		component: 'PlaylistDetailView'
 	},
 	{
 		name: 'playlist-move-down',
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
-		text: PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
+		text: words['playlistPage.moveDown'],
 		component: 'PlaylistDetailView'
 	},
 	{
 		name: 'playlist-remove',
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
-		text: PLAYLIST_ENTRY_REMOVE_LABEL,
+		text: words['playlistPage.remove'],
 		component: 'PlaylistDetailView'
 	},
 	{
@@ -553,7 +549,7 @@ describe('frequent action hitboxes', () => {
 					middleRow,
 					'playlist-move-up',
 					'.entry-overflow-item[data-hitbox="frequent"]',
-					PLAYLIST_ENTRY_MOVE_UP_LABEL
+					words['playlistPage.moveUp']
 				)
 			},
 			{
@@ -562,7 +558,7 @@ describe('frequent action hitboxes', () => {
 					middleRow,
 					'playlist-move-down',
 					'.entry-overflow-item[data-hitbox="frequent"]',
-					PLAYLIST_ENTRY_MOVE_DOWN_LABEL
+					words['playlistPage.moveDown']
 				)
 			}
 		]);
@@ -608,19 +604,19 @@ describe('frequent action hitboxes', () => {
 			secondRow,
 			'playlist-move-up',
 			'.entry-overflow-item[data-hitbox="frequent"]',
-			PLAYLIST_ENTRY_MOVE_UP_LABEL
+			words['playlistPage.moveUp']
 		);
 		const downBtn = requireButton(
 			secondRow,
 			'playlist-move-down',
 			'.entry-overflow-item[data-hitbox="frequent"]',
-			PLAYLIST_ENTRY_MOVE_DOWN_LABEL
+			words['playlistPage.moveDown']
 		);
 		const removeBtn = requireButton(
 			secondRow,
 			'playlist-remove',
 			'.entry-overflow-item[data-hitbox="frequent"]',
-			PLAYLIST_ENTRY_REMOVE_LABEL
+			words['playlistPage.remove']
 		);
 
 		upBtn.focus();
@@ -639,7 +635,7 @@ describe('frequent action hitboxes', () => {
 			secondRow,
 			'playlist-remove',
 			'.entry-overflow-item[data-hitbox="frequent"]',
-			PLAYLIST_ENTRY_REMOVE_LABEL
+			words['playlistPage.remove']
 		);
 		removeBtnAfterMove.click();
 		await tick();

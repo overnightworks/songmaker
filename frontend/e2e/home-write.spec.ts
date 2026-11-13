@@ -1,7 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import type { LibraryWriteResponse, PaginatedResponse, SongItem } from '../src/lib/api/types';
-import { songEditorOpenLabel } from '../src/lib/constants/song';
 import { words } from '../src/lib/words/en';
 import { songRoutePath } from '../src/lib/routes/addresses';
 import {
@@ -65,7 +64,7 @@ async function expectWrittenOrder(page: Page, answer: LibraryWriteResponse): Pro
 		answer.items.map((item) => words['homeWrite.openSong']({ title: item.song_title }))
 	);
 	expect(await ariaLabels(writeRegion(page).locator('.row-editor'))).toEqual(
-		answer.items.map((item) => songEditorOpenLabel(item.song_title))
+		answer.items.map((item) => words['homeWrite.openInEditor']({ title: item.song_title }))
 	);
 }
 async function editorPathOf(page: Page, songId: string): Promise<string> {
