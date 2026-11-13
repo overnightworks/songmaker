@@ -323,6 +323,88 @@ export type Words = {
     readonly "playlistPicker.createFailed": string;
     readonly "songRow.openInEditor": (gaps: { readonly title: string }) => string;
     readonly "homeWrite.openInEditor": (gaps: { readonly title: string }) => string;
+    readonly "songPage.coverAlt": (gaps: { readonly title: string }) => string;
+    readonly "songPage.coverAltAlbum": (gaps: { readonly title: string }) => string;
+    readonly "songPage.coverAltBare": string;
+    readonly "songPage.coverUpload": string;
+    readonly "songPage.coverReplace": string;
+    readonly "songPage.trackOf": (gaps: { readonly position: string; readonly total: string }) => string;
+    readonly "songPage.save": string;
+    readonly "songPage.saveName": string;
+    readonly "songPage.unsavedTitle": string;
+    readonly "songPage.unsavedMessage": string;
+    readonly "songPage.unsavedSave": string;
+    readonly "songPage.unsavedDiscard": string;
+    readonly "songPage.coverSaved": string;
+    readonly "songPage.coverUploadFailed": string;
+    readonly "songPage.coverRemoved": string;
+    readonly "songPage.coverRemoveFailed": string;
+    readonly "songPage.renamed": string;
+    readonly "songPage.renameFailed": string;
+    readonly "songPage.deleted": string;
+    readonly "songPage.undo": string;
+    readonly "songPage.restored": string;
+    readonly "songPage.restoreFailed": string;
+    readonly "songPage.deleteFailed": string;
+    readonly "songPage.takeDeleted": string;
+    readonly "songPage.addedToPlaylist": string;
+    readonly "songPage.addToPlaylistFailed": string;
+    readonly "songPage.savedVersion": (gaps: { readonly number: string }) => string;
+    readonly "songPage.saveFailed": string;
+    readonly "songPage.deleteTitle": (gaps: { readonly title: string }) => string;
+    readonly "songPage.deleteTakes": (count: number) => string;
+    readonly "songPage.deleteVersions": (count: number) => string;
+    readonly "songPage.deleteHistory": string;
+    readonly "songPage.deleteConfirm": string;
+    readonly "songPage.expiry": (count: number, gaps: { readonly when: string }) => string;
+    readonly "songPage.expirySoon": string;
+    readonly "songPage.expiryDays": (count: number) => string;
+    readonly "songHeader.title": string;
+    readonly "songHeader.editTitle": string;
+    readonly "songHeader.albumNavigation": string;
+    readonly "songHeader.previous": string;
+    readonly "songHeader.next": string;
+    readonly "songHeader.removeCover": string;
+    readonly "songTabs.label": string;
+    readonly "songTabs.edit": string;
+    readonly "songTabs.takes": string;
+    readonly "songTabs.cowriter": string;
+    readonly "writeColumn.lyrics": string;
+    readonly "writeColumn.stylePrompt": string;
+    readonly "writeColumn.loadedFrom": (gaps: { readonly number: string }) => string;
+    readonly "versions.name": (gaps: { readonly number: string }) => string;
+    readonly "versions.chipDraft": (gaps: { readonly number: string }) => string;
+    readonly "versions.chipName": (gaps: { readonly chip: string }) => string;
+    readonly "versions.heading": string;
+    readonly "versions.close": string;
+    readonly "versions.current": string;
+    readonly "versions.picked": string;
+    readonly "versions.noLyrics": string;
+    readonly "versions.noTakes": string;
+    readonly "versions.takes": (count: number) => string;
+    readonly "versions.deleteName": (gaps: { readonly number: string }) => string;
+    readonly "versions.deleteTitle": (gaps: { readonly number: string }) => string;
+    readonly "versions.deleteTitleTakes": (count: number, gaps: { readonly number: string }) => string;
+    readonly "versions.deleteConfirm": string;
+    readonly "versions.deletePick": (count: number) => string;
+    readonly "versions.deleteDraftGoes": string;
+    readonly "versions.deleteEmptiesEditor": string;
+    readonly "versions.deleteLoadUndoGoes": string;
+    readonly "versions.deleteReplacedBy": (gaps: { readonly number: string }) => string;
+    readonly "versions.deleteLoadedDraftGoes": (gaps: { readonly number: string }) => string;
+    readonly "versions.deleteLoadedDraftReplaced": (gaps: { readonly loadedFrom: string; readonly replacedBy: string }) => string;
+    readonly "versions.deleted": (gaps: { readonly number: string }) => string;
+    readonly "versions.replaceTitle": string;
+    readonly "versions.replaceMessage": (gaps: { readonly number: string }) => string;
+    readonly "versions.replaceConfirm": string;
+    readonly "versions.loaded": (gaps: { readonly number: string }) => string;
+    readonly "versions.alreadyDraft": (gaps: { readonly number: string }) => string;
+    readonly "versions.undo": string;
+    readonly "editableTitle.hint": string;
+    readonly "collectionHeader.titleAlbum": string;
+    readonly "collectionHeader.titlePlaylist": string;
+    readonly "collectionHeader.editTitleAlbum": string;
+    readonly "collectionHeader.editTitlePlaylist": string;
     readonly "voiceRefusal.deleted": string;
     readonly "voiceRefusal.modifyDuringTraining": (gaps: { readonly status: string }) => string;
     readonly "voiceRefusal.deleteDuringTraining": (gaps: { readonly status: string }) => string;
@@ -748,6 +830,137 @@ export const words: Words = {
     "playlistPicker.createFailed": "Failed to create playlist",
     "songRow.openInEditor": (gaps: { readonly title: string }) => "Open " + gaps.title + " in the song editor",
     "homeWrite.openInEditor": (gaps: { readonly title: string }) => "Open " + gaps.title + " in the song editor",
+    "songPage.coverAlt": (gaps: { readonly title: string }) => "Song " + gaps.title,
+    "songPage.coverAltAlbum": (gaps: { readonly title: string }) => "Album " + gaps.title,
+    "songPage.coverAltBare": "Song",
+    "songPage.coverUpload": "Upload song cover",
+    "songPage.coverReplace": "Replace song cover",
+    "songPage.trackOf": (gaps: { readonly position: string; readonly total: string }) => "Track " + gaps.position + " of " + gaps.total,
+    "songPage.save": "Save",
+    "songPage.saveName": "Save changes",
+    "songPage.unsavedTitle": "Unsaved changes",
+    "songPage.unsavedMessage": "Save this draft as a new version before leaving, or discard it?",
+    "songPage.unsavedSave": "Save",
+    "songPage.unsavedDiscard": "Discard",
+    "songPage.coverSaved": "Cover saved",
+    "songPage.coverUploadFailed": "Cover upload failed",
+    "songPage.coverRemoved": "Cover removed",
+    "songPage.coverRemoveFailed": "Cover remove failed",
+    "songPage.renamed": "Song renamed",
+    "songPage.renameFailed": "Rename failed",
+    "songPage.deleted": "Song deleted",
+    "songPage.undo": "Undo",
+    "songPage.restored": "Song restored",
+    "songPage.restoreFailed": "Restore failed",
+    "songPage.deleteFailed": "Delete failed",
+    "songPage.takeDeleted": "Take deleted",
+    "songPage.addedToPlaylist": "Added to playlist",
+    "songPage.addToPlaylistFailed": "Failed to add",
+    "songPage.savedVersion": (gaps: { readonly number: string }) => "Saved version " + gaps.number,
+    "songPage.saveFailed": "Save failed",
+    "songPage.deleteTitle": (gaps: { readonly title: string }) => "Delete \"" + gaps.title + "\"?",
+    "songPage.deleteTakes": (count: number) => ({
+        zero: numberFormat.format(count) + " takes",
+        one: numberFormat.format(count) + " take",
+        two: numberFormat.format(count) + " takes",
+        few: numberFormat.format(count) + " takes",
+        many: numberFormat.format(count) + " takes",
+        other: numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "songPage.deleteVersions": (count: number) => ({
+        zero: numberFormat.format(count) + " versions",
+        one: numberFormat.format(count) + " version",
+        two: numberFormat.format(count) + " versions",
+        few: numberFormat.format(count) + " versions",
+        many: numberFormat.format(count) + " versions",
+        other: numberFormat.format(count) + " versions",
+    })[pluralRules.select(count)],
+    "songPage.deleteHistory": "All scores, ratings, and chat history",
+    "songPage.deleteConfirm": "Delete Song",
+    "songPage.expiry": (count: number, gaps: { readonly when: string }) => ({
+        zero: numberFormat.format(count) + " takes expire " + gaps.when + " — pick or keep to preserve.",
+        one: numberFormat.format(count) + " take expires " + gaps.when + " — pick or keep to preserve.",
+        two: numberFormat.format(count) + " takes expire " + gaps.when + " — pick or keep to preserve.",
+        few: numberFormat.format(count) + " takes expire " + gaps.when + " — pick or keep to preserve.",
+        many: numberFormat.format(count) + " takes expire " + gaps.when + " — pick or keep to preserve.",
+        other: numberFormat.format(count) + " takes expire " + gaps.when + " — pick or keep to preserve.",
+    })[pluralRules.select(count)],
+    "songPage.expirySoon": "soon",
+    "songPage.expiryDays": (count: number) => ({
+        zero: "in " + numberFormat.format(count) + " days",
+        one: "in " + numberFormat.format(count) + " day",
+        two: "in " + numberFormat.format(count) + " days",
+        few: "in " + numberFormat.format(count) + " days",
+        many: "in " + numberFormat.format(count) + " days",
+        other: "in " + numberFormat.format(count) + " days",
+    })[pluralRules.select(count)],
+    "songHeader.title": "Song title",
+    "songHeader.editTitle": "Edit song title",
+    "songHeader.albumNavigation": "Album navigation",
+    "songHeader.previous": "Previous song",
+    "songHeader.next": "Next song",
+    "songHeader.removeCover": "Remove song cover",
+    "songTabs.label": "Editor tabs",
+    "songTabs.edit": "Edit",
+    "songTabs.takes": "Takes",
+    "songTabs.cowriter": "Co-writer",
+    "writeColumn.lyrics": "Lyrics",
+    "writeColumn.stylePrompt": "Style Prompt",
+    "writeColumn.loadedFrom": (gaps: { readonly number: string }) => "Loaded from v" + gaps.number,
+    "versions.name": (gaps: { readonly number: string }) => "v" + gaps.number,
+    "versions.chipDraft": (gaps: { readonly number: string }) => "v" + gaps.number + " · draft",
+    "versions.chipName": (gaps: { readonly chip: string }) => "Versions: " + gaps.chip,
+    "versions.heading": "Versions",
+    "versions.close": "Close versions",
+    "versions.current": "current",
+    "versions.picked": "picked",
+    "versions.noLyrics": "No lyrics",
+    "versions.noTakes": "no takes",
+    "versions.takes": (count: number) => ({
+        zero: numberFormat.format(count) + " takes",
+        one: numberFormat.format(count) + " take",
+        two: numberFormat.format(count) + " takes",
+        few: numberFormat.format(count) + " takes",
+        many: numberFormat.format(count) + " takes",
+        other: numberFormat.format(count) + " takes",
+    })[pluralRules.select(count)],
+    "versions.deleteName": (gaps: { readonly number: string }) => "Delete v" + gaps.number,
+    "versions.deleteTitle": (gaps: { readonly number: string }) => "Delete v" + gaps.number + "?",
+    "versions.deleteTitleTakes": (count: number, gaps: { readonly number: string }) => ({
+        zero: "Delete v" + gaps.number + " and its " + numberFormat.format(count) + " takes?",
+        one: "Delete v" + gaps.number + " and its " + numberFormat.format(count) + " take?",
+        two: "Delete v" + gaps.number + " and its " + numberFormat.format(count) + " takes?",
+        few: "Delete v" + gaps.number + " and its " + numberFormat.format(count) + " takes?",
+        many: "Delete v" + gaps.number + " and its " + numberFormat.format(count) + " takes?",
+        other: "Delete v" + gaps.number + " and its " + numberFormat.format(count) + " takes?",
+    })[pluralRules.select(count)],
+    "versions.deleteConfirm": "Delete version",
+    "versions.deletePick": (count: number) => ({
+        zero: "The album pick is one of them.",
+        one: "It is the album pick.",
+        two: "The album pick is one of them.",
+        few: "The album pick is one of them.",
+        many: "The album pick is one of them.",
+        other: "The album pick is one of them.",
+    })[pluralRules.select(count)],
+    "versions.deleteDraftGoes": "Your unsaved draft goes too.",
+    "versions.deleteEmptiesEditor": "Its lyrics leave the editor, which will be empty.",
+    "versions.deleteLoadUndoGoes": "Undo for your earlier draft goes too.",
+    "versions.deleteReplacedBy": (gaps: { readonly number: string }) => "Its lyrics leave the editor; v" + gaps.number + " replaces them.",
+    "versions.deleteLoadedDraftGoes": (gaps: { readonly number: string }) => "The draft loaded from v" + gaps.number + " goes too.",
+    "versions.deleteLoadedDraftReplaced": (gaps: { readonly loadedFrom: string; readonly replacedBy: string }) => "The draft loaded from v" + gaps.loadedFrom + " leaves the editor; v" + gaps.replacedBy + " replaces it.",
+    "versions.deleted": (gaps: { readonly number: string }) => "Deleted v" + gaps.number,
+    "versions.replaceTitle": "Replace your unsaved draft?",
+    "versions.replaceMessage": (gaps: { readonly number: string }) => "Your draft has changes that are not in any version. Loading v" + gaps.number + " replaces them. You can undo right after.",
+    "versions.replaceConfirm": "Replace",
+    "versions.loaded": (gaps: { readonly number: string }) => "v" + gaps.number + " loaded",
+    "versions.alreadyDraft": (gaps: { readonly number: string }) => "v" + gaps.number + " is already the draft",
+    "versions.undo": "Undo",
+    "editableTitle.hint": "Click to edit",
+    "collectionHeader.titleAlbum": "album title",
+    "collectionHeader.titlePlaylist": "playlist title",
+    "collectionHeader.editTitleAlbum": "Edit album title",
+    "collectionHeader.editTitlePlaylist": "Edit playlist title",
     "voiceRefusal.deleted": "LoRA is deleted",
     "voiceRefusal.modifyDuringTraining": (gaps: { readonly status: string }) => "LoRA is " + gaps.status + " — cannot modify during training",
     "voiceRefusal.deleteDuringTraining": (gaps: { readonly status: string }) => "LoRA is " + gaps.status + " — cannot delete during training",

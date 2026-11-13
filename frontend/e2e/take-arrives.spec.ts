@@ -12,8 +12,8 @@
 // through the job's own terminal refresh — the path this flow pins.
 
 import { expect, test, type Page } from './coverage-test';
-import { JOB_TYPE_GENERATE } from '../src/lib/constants/jobs';
 import { words } from '../src/lib/words/en';
+import { JOB_TYPE_GENERATE } from '../src/lib/constants/jobs';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import { RESOURCE_SYNC_ERROR } from '../src/lib/constants/resource-sync';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
@@ -95,7 +95,7 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 		await workspace(page)
 			.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 			.click();
-		await page.getByRole('tab', { name: /Takes/ }).click();
+		await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 		await expect(panel.getByRole('progressbar')).toBeVisible();
 		await expect(
 			panel.getByText(currentVersionHeadLabel(seeded.versionNumber, SEEDED_TAKE_COUNT))
@@ -112,7 +112,10 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 		).toBeVisible();
 		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT + 2);
 		await expect(panel.getByRole('progressbar')).toHaveCount(0);
-		await expect(page.getByRole('tab', { name: /Takes/ })).toHaveAttribute('aria-selected', 'true');
+		await expect(page.getByRole('tab', { name: words['songTabs.takes'] })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
 
 		console.log(`Take-arrives flow /api requests: ${guard.apiRequestCount}`);
 		guard.assertClean();
@@ -158,7 +161,7 @@ test.describe(
 			await workspace(page)
 				.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 				.click();
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			await expect(panel.getByRole('progressbar')).toBeVisible();
 
 			await completeGenerationJobWithoutEvent(jobId);

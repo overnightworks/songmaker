@@ -82,8 +82,12 @@ test.describe('text that is never clipped', () => {
 		const guard = new FlowGuard(page);
 		await openSeededSong(page, songTitle);
 
-		const style = page.getByRole('textbox', { name: /^Style/ });
-		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+		const style = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.stylePrompt']}`)
+		});
+		const lyrics = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.lyrics']}`)
+		});
 		await style.fill(STYLE);
 		await lyrics.fill(LYRICS);
 
@@ -104,7 +108,9 @@ test.describe('text that is never clipped', () => {
 		const guard = new FlowGuard(page);
 		await openSeededSong(page, songTitle);
 
-		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+		const lyrics = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.lyrics']}`)
+		});
 		await lyrics.fill('[Intro]\nla la');
 		await lyrics.pressSequentially('\n[Verse 1]');
 
@@ -120,8 +126,12 @@ test.describe('text that is never clipped', () => {
 		const guard = new FlowGuard(page);
 		await openSeededSong(page, songTitle);
 
-		const style = page.getByRole('textbox', { name: /^Style/ });
-		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+		const style = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.stylePrompt']}`)
+		});
+		const lyrics = page.getByRole('textbox', {
+			name: new RegExp(`^${words['writeColumn.lyrics']}`)
+		});
 		// Letters such as v, w and y are wider bold: a tag styled that way moves a line
 		// break somewhere; sweeping the length finds one.
 		for (let tags = 30; tags < 70; tags += 1) {

@@ -6,11 +6,7 @@
 // plain (#1923, S4 and S8). Both projects run it: 390 px (Takes tab) and 1440 px.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
-import {
-	EDITOR_GENERATE_LABEL,
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_TAB_TAKES_LABEL
-} from '../src/lib/constants/song';
+import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
 import { TAKE_COVER_LABEL, TAKE_REPAINT_LABEL } from '../src/lib/constants/take';
 import { TAKE_TASK_CLOSE_LABEL } from '../src/lib/constants/take-task';
 import { sameOriginHeaders, shellOf } from './helpers';
@@ -64,7 +60,7 @@ test('Repaint opens a card under the take and its button sends the range (S4, #1
 }, testInfo) => {
 	await onOwnTakes(page, async () => {
 		if (shellOf(testInfo) === 'mobile') {
-			await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_TAKES_LABEL) }).click();
+			await page.getByRole('tab', { name: new RegExp(words['songTabs.takes']) }).click();
 		}
 		await openVerb(page, TAKE_REPAINT_LABEL);
 		await expect(card(page)).toHaveCount(1);
@@ -97,7 +93,7 @@ test('Cover swaps the card and its button sends the cover request (S4, #1912 acc
 }, testInfo) => {
 	await onOwnTakes(page, async () => {
 		if (shellOf(testInfo) === 'mobile') {
-			await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_TAKES_LABEL) }).click();
+			await page.getByRole('tab', { name: new RegExp(words['songTabs.takes']) }).click();
 		}
 		await openVerb(page, TAKE_REPAINT_LABEL);
 		await openVerb(page, TAKE_COVER_LABEL);
@@ -127,10 +123,10 @@ test('With a card open the Recipe holds no Repaint row, no Off and no Source bar
 }, testInfo) => {
 	const mobile = shellOf(testInfo) === 'mobile';
 	await onOwnTakes(page, async () => {
-		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_TAKES_LABEL) }).click();
+		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.takes']) }).click();
 		await openVerb(page, TAKE_REPAINT_LABEL);
 		await expect(card(page)).toHaveCount(1);
-		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_EDIT_LABEL) }).click();
+		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.edit']) }).click();
 		await page.locator('.recipe-line').click();
 		const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
 		await expect(recipe).toBeVisible();
@@ -145,10 +141,10 @@ test('The header Generate stays plain with a card open and sends no repaint (S4,
 }, testInfo) => {
 	const mobile = shellOf(testInfo) === 'mobile';
 	await onOwnTakes(page, async () => {
-		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_TAKES_LABEL) }).click();
+		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.takes']) }).click();
 		await openVerb(page, TAKE_REPAINT_LABEL);
 		await expect(card(page)).toHaveCount(1);
-		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_EDIT_LABEL) }).click();
+		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.edit']) }).click();
 
 		const sent: string[] = [];
 		page.on('request', (request) => {
@@ -163,7 +159,7 @@ test('The header Generate stays plain with a card open and sends no repaint (S4,
 		await generate.click();
 		await request;
 		expect(sent.filter((path) => /\/(repaint|cover)$/.test(path))).toEqual([]);
-		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_TAKES_LABEL) }).click();
+		if (mobile) await page.getByRole('tab', { name: new RegExp(words['songTabs.takes']) }).click();
 		await expect(card(page)).toHaveCount(1);
 	});
 });

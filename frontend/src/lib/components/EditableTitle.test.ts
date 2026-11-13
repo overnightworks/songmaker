@@ -1,6 +1,7 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { words } from '#lib/words/en.ts';
 import EditableTitle from './EditableTitle.svelte';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 
@@ -14,10 +15,19 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 
 type EditableTitleProps = ComponentProps<typeof EditableTitle>;
 
-async function render(props: EditableTitleProps): Promise<HTMLElement> {
+async function render(
+	props: Pick<EditableTitleProps, 'value' | 'onsave'> & Partial<EditableTitleProps>
+): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(EditableTitle, { target, props });
+	mounted = mount(EditableTitle, {
+		target,
+		props: {
+			labelKey: 'songHeader.title',
+			editLabelKey: 'songHeader.editTitle',
+			...props
+		}
+	});
 	await tick();
 	return target;
 }
@@ -33,11 +43,27 @@ describe('EditableTitle', () => {
 		const target = await render({
 			value: 'Night Drive',
 			onsave: vi.fn().mockResolvedValue(undefined),
-			ariaLabel: 'Album title'
+			labelKey: 'collectionHeader.titleAlbum',
+			editLabelKey: 'collectionHeader.editTitleAlbum'
 		});
 		const display = requireElement<HTMLButtonElement>(target, '.editable-title-display');
 		expect(display.textContent?.trim()).toBe('Night Drive');
-		expect(getByRoleButton(target, 'Edit album title')).toBe(display);
+		expect(getByRoleButton(target, words['collectionHeader.editTitleAlbum'])).toBe(display);
+		expect(display.title).toBe(words['editableTitle.hint']);
+	});
+
+	it('names the field by its own key while editing', async () => {
+		const target = await render({
+			value: 'Night Drive',
+			onsave: vi.fn().mockResolvedValue(undefined),
+			labelKey: 'collectionHeader.titlePlaylist',
+			editLabelKey: 'collectionHeader.editTitlePlaylist'
+		});
+		requireElement<HTMLButtonElement>(target, '.editable-title-display').click();
+		await tick();
+		expect(requireElement<HTMLInputElement>(target, '.editable-title-input').ariaLabel).toBe(
+			words['collectionHeader.titlePlaylist']
+		);
 	});
 
 	it('enters edit mode on click and keyboard activation alike', async () => {
@@ -80,14 +106,6 @@ describe('EditableTitle', () => {
 		await tick();
 		expect(onsave).not.toHaveBeenCalled();
 		expect(target.querySelector('.editable-title-input')).toBeNull();
-	});
-
-	it('defaults the edit affordance name to "Edit title" when no ariaLabel is given', async () => {
-		const target = await render({
-			value: 'Untitled',
-			onsave: vi.fn().mockResolvedValue(undefined)
-		});
-		expect(getByRoleButton(target, 'Edit title')).not.toBeNull();
 	});
 
 	it('reverts an emptied field by default instead of committing an empty value', async () => {

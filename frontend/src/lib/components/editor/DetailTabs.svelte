@@ -1,12 +1,7 @@
 <script lang="ts">
 	import { detailTab, navigateToSongTab, type DetailTab } from '#lib/stores/navigation.ts';
 	import { DETAIL_TABS } from '#lib/stores/libraryContext.ts';
-	import {
-		EDITOR_TAB_EDIT_LABEL,
-		EDITOR_TAB_TAKES_LABEL,
-		EDITOR_TABS_LABEL,
-		EDITOR_VIEW_COWRITER_LABEL
-	} from '#lib/constants/song.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { generateAction, isGenerateBusy } from '#lib/stores/generateAction.ts';
 	import { typingOnPhone } from '#lib/stores/ui.ts';
 
@@ -53,7 +48,7 @@
 	class="detail-tabs"
 	class:pinned={!$typingOnPhone}
 	role="tablist"
-	aria-label={EDITOR_TABS_LABEL}
+	aria-label={pageText('songTabs.label')}
 >
 	{#each DETAIL_TABS as tab (tab)}
 		<button
@@ -70,11 +65,11 @@
 			onkeydown={onKeydown}
 		>
 			{#if tab === 'edit'}
-				{EDITOR_TAB_EDIT_LABEL}
+				{pageText('songTabs.edit')}
 			{:else if tab === 'cowriter'}
-				{EDITOR_VIEW_COWRITER_LABEL}
+				{pageText('songTabs.cowriter')}
 			{:else}
-				{EDITOR_TAB_TAKES_LABEL} <span class="count">({takeCount})</span>
+				{pageText('songTabs.takes')} <span class="count">({takeCount})</span>
 				{#if jobRunning}<span class="ring" class:stale={jobReconnecting} aria-hidden="true"
 					></span>{/if}
 			{/if}

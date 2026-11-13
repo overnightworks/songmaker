@@ -8,8 +8,7 @@
 	} from '#lib/stores/editor.ts';
 	import { getGenerationActions } from '#lib/contexts/generation-actions.ts';
 	import type { SongItem } from '#lib/api/types.ts';
-	import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '#lib/constants/song.ts';
-	import { versionLoadedFromLabel } from '#lib/constants/versions.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 	import GrowingTextarea from './GrowingTextarea.svelte';
 	import RecipeLine from './RecipeLine.svelte';
@@ -32,12 +31,12 @@
 <div class="write-mode">
 	<RecipeLine />
 	<label class="edit-field">
-		<span>{EDITOR_STYLE_PROMPT_LABEL}</span>
+		<span>{pageText('writeColumn.stylePrompt')}</span>
 		<GrowingTextarea value={$editPrompt} oninput={setDraftPrompt} minimumLines={4} />
 	</label>
 	<div class="edit-field">
 		<span>
-			<label for={lyricsFieldId}>{EDITOR_LYRICS_LABEL}</label>
+			<label for={lyricsFieldId}>{pageText('writeColumn.lyrics')}</label>
 			<VersionsSheet {song} onload={loadVersion} />
 		</span>
 		{@render loadedFromHint()}
@@ -56,7 +55,7 @@
 	{#if $draftLoadedFrom !== null}
 		<span class="loaded-hint">
 			<Icon name="refresh-cw" size={13} />
-			{versionLoadedFromLabel($draftLoadedFrom)}
+			{pageText('writeColumn.loadedFrom', { number: String($draftLoadedFrom) })}
 		</span>
 	{/if}
 {/snippet}

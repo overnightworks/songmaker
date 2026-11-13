@@ -1,4 +1,5 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
+import { words } from '#lib/words/en.ts';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detailTab, type DetailTab } from '#lib/stores/navigation.ts';
@@ -77,7 +78,7 @@ describe('ListenTabs', () => {
 		const labels = Array.from(target.querySelectorAll('[role="tab"]')).map((tab) =>
 			tab.textContent?.replace(/\s+/g, ' ').trim()
 		);
-		expect(labels).toEqual(['Takes 11', 'Co-writer']);
+		expect(labels).toEqual([`${words['songTabs.takes']} 11`, words['songTabs.cowriter']]);
 	});
 
 	it('writes the clicked tab to the detail tab (S9, #1927 acceptance 5)', async () => {

@@ -4,14 +4,7 @@
 import { GROUPS, phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from './coverage-test';
 import type { VersionItem } from '../src/lib/api/types';
-import {
-	EDITOR_GENERATE_TAKE_TEMPLATE,
-	EDITOR_TAB_EDIT_LABEL,
-	EDITOR_VIEW_COWRITER_LABEL,
-	EDITOR_UNSAVED_SAVE_LABEL,
-	EDITOR_UNSAVED_DISCARD_LABEL,
-	EDITOR_UNSAVED_TITLE
-} from '../src/lib/constants/song';
+import { EDITOR_GENERATE_TAKE_TEMPLATE } from '../src/lib/constants/song';
 import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { GENERATION_PHASE_LABELS } from '../src/lib/constants/jobs';
 import { formatTime } from '../src/lib/utils/format';
@@ -136,7 +129,7 @@ async function openSongWithAnUnsavedDraft(
 ): Promise<SongWithAnUnsavedDraft> {
 	await seedSongPhoneSong(albumId, title, 1, 1);
 	const songHeading = page.getByRole('heading', { name: title });
-	const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+	const lyrics = page.getByRole('textbox', { name: new RegExp(`^${words['writeColumn.lyrics']}`) });
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
 		.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
@@ -149,7 +142,7 @@ async function openSongWithAnUnsavedDraft(
 		songHeading,
 		lyrics,
 		savedLyrics,
-		unsavedDraftDialog: page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE })
+		unsavedDraftDialog: page.getByRole('dialog', { name: words['songPage.unsavedTitle'] })
 	};
 }
 
@@ -193,7 +186,7 @@ test.describe('song page at phone width', () => {
 			await page.goto(songAddress);
 			await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			const { versionNumber } = await seededTakeVersion(page, songId);
 			await expect(
 				panel.getByText(currentVersionHeadLabel(versionNumber, SONG_PHONE_TAKE_COUNT))
@@ -238,7 +231,7 @@ test.describe('song page at phone width', () => {
 			await page.goto(songAddress);
 			// The song comes back on the Takes tab it was left on (#1047); the
 			// Generate status lives on Edit.
-			await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
+			await page.getByRole('tab', { name: words['songTabs.edit'] }).click();
 			const generateStatus = panel.getByRole('status');
 			await expect(generateStatus).toHaveText(
 				new RegExp(
@@ -247,7 +240,7 @@ test.describe('song page at phone width', () => {
 			);
 			await page.clock.pauseAt(Date.now() + CLOCK_HOLD_LEAD_MS);
 
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			await expect(panel.getByRole('progressbar')).toBeVisible();
 			await expect(panel.getByText(LOADING_JOB_PHASE_LABEL)).toBeVisible();
 			await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: true })).toBeVisible();
@@ -260,9 +253,9 @@ test.describe('song page at phone width', () => {
 			const elapsedAfterRun = formatTime(minutes * 60 + seconds + CLOCK_RUN_SECONDS);
 			await page.clock.runFor(CLOCK_RUN_SECONDS * 1000);
 			await expect(panel.locator('.status-title')).toContainText(elapsedAfterRun);
-			await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
+			await page.getByRole('tab', { name: words['songTabs.edit'] }).click();
 			await expect(generateStatus).toContainText(`Loading model… ${elapsedAfterRun}`);
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 			await page.clock.resume();
 
 			// Leaving the model load live, over the same job's still-open SSE
@@ -276,7 +269,7 @@ test.describe('song page at phone width', () => {
 			await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: false })).toBeVisible();
 			await expect(panel.getByText(REMAINING_TIME_PATTERN)).toBeVisible();
 
-			await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
+			await page.getByRole('tab', { name: words['songTabs.edit'] }).click();
 			await expect(generateStatus).toContainText(
 				new RegExp(
 					`${RUNNING_JOB_TAKE_COUNTER} · ${RUNNING_JOB_PHASE_LABEL} · ${Math.round(RUNNING_JOB_PROGRESS * 100)}% · ${REMAINING_TIME_PATTERN.source}`
@@ -312,8 +305,8 @@ test.describe('song page at phone width', () => {
 			const secondTitle = `${SONG_PHONE_SONG_TITLE} ${marker} second`;
 			await seedSongPhoneSong(library.songPhoneAlbumId, firstTitle, 1, 1);
 			await seedSongPhoneSong(library.songPhoneAlbumId, secondTitle, 1, 1);
-			const editTab = page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL });
-			const takesTab = page.getByRole('tab', { name: /^Takes/ });
+			const editTab = page.getByRole('tab', { name: words['songTabs.edit'] });
+			const takesTab = page.getByRole('tab', { name: new RegExp(`^${words['songTabs.takes']}`) });
 			const openFromAlbum = async (title: string) => {
 				await workspace(page)
 					.getByRole('button', { name: words['songRow.openInEditor']({ title: title }) })
@@ -376,7 +369,7 @@ test.describe('song page at phone width', () => {
 
 			await selectTheOtherAlbumFromSearch();
 			await unsavedDraftDialog
-				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+				.getByRole('button', { name: words['songPage.unsavedDiscard'], exact: true })
 				.click();
 			await expect(
 				workspace(page).getByRole('heading', { name: library.secondAlbumTitle })
@@ -401,7 +394,7 @@ test.describe('song page at phone width', () => {
 			await openPageFromSearch(page, SETTINGS_SECTION);
 			await expect(unsavedDraftDialog).toBeVisible();
 			await unsavedDraftDialog
-				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+				.getByRole('button', { name: words['songPage.unsavedDiscard'], exact: true })
 				.click();
 
 			const settingsHeading = page.getByRole('heading', { name: 'Generation', level: 1 });
@@ -449,7 +442,7 @@ test.describe('song page at phone width', () => {
 			await expect(phoneTabs(page)).toHaveCount(0);
 			await page.evaluate(() => Reflect.set(window, 'phoneTabWindow', 'discard-confirmed'));
 			await unsavedDraftDialog
-				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+				.getByRole('button', { name: words['songPage.unsavedDiscard'], exact: true })
 				.click();
 			await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}$`));
 			await expect(songHeading).toBeHidden();
@@ -513,7 +506,7 @@ test.describe('song page at phone width', () => {
 					await expect(bar.getByRole('button', { name: 'Open menu' })).toHaveCount(0);
 					const address = page.url();
 					const length = await page.evaluate(() => history.length);
-					for (const tab of [EDITOR_VIEW_COWRITER_LABEL, EDITOR_TAB_EDIT_LABEL]) {
+					for (const tab of [words['songTabs.cowriter'], words['songTabs.edit']]) {
 						await page.getByRole('tab', { name: tab, exact: true }).click();
 						await expect(page).toHaveURL(address);
 						await expect(back).toBeVisible();
@@ -533,11 +526,11 @@ test.describe('song page at phone width', () => {
 
 		for (const choice of [
 			DIALOG_CANCEL_LABEL,
-			EDITOR_UNSAVED_DISCARD_LABEL,
-			EDITOR_UNSAVED_SAVE_LABEL
+			words['songPage.unsavedDiscard'],
+			words['songPage.unsavedSave']
 		]) {
 			test(
-				`1354_61_C${choice === DIALOG_CANCEL_LABEL ? '13' : choice === EDITOR_UNSAVED_SAVE_LABEL ? '14' : '15'} 1354_rule_32: song ‹ asks first and honors ${choice}`,
+				`1354_61_C${choice === DIALOG_CANCEL_LABEL ? '13' : choice === words['songPage.unsavedSave'] ? '14' : '15'} 1354_rule_32: song ‹ asks first and honors ${choice}`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
 					const { songPhoneAlbumId } = readSeededLibrary();
@@ -563,7 +556,7 @@ test.describe('song page at phone width', () => {
 						await page.goForward();
 						await expect(songHeading).toBeVisible();
 						await expect(lyrics).toHaveValue(
-							choice === EDITOR_UNSAVED_SAVE_LABEL ? draft : savedLyrics
+							choice === words['songPage.unsavedSave'] ? draft : savedLyrics
 						);
 					}
 				}
@@ -590,7 +583,9 @@ test.describe('song page at phone width', () => {
 					const cold = await coldContext.newPage();
 					await observeTabAttachments(cold);
 					await cold.goto(address);
-					const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
+					const coldLyrics = cold.getByRole('textbox', {
+						name: new RegExp(`^${words['writeColumn.lyrics']}`)
+					});
 					await expect(coldLyrics).toHaveValue(savedLyrics);
 					expect(await cold.evaluate(() => Reflect.get(window, 'phoneTabAttachments'))).toEqual([]);
 					await expect(cold.locator('.workspace-wrapper')).not.toHaveAttribute('inert');
@@ -604,11 +599,11 @@ test.describe('song page at phone width', () => {
 						.locator('.mobile-strip')
 						.getByRole('button', { name: expectedName, exact: true })
 						.click();
-					const question = cold.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+					const question = cold.getByRole('dialog', { name: words['songPage.unsavedTitle'] });
 					await expect(question).toBeVisible();
 					await expect(cold).toHaveURL(address);
 					await question
-						.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+						.getByRole('button', { name: words['songPage.unsavedDiscard'], exact: true })
 						.click();
 					await expect(cold).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
 					expect(await cold.evaluate(readHistoryIndex)).toBe(index);
@@ -648,7 +643,9 @@ test.describe('song page at phone width', () => {
 					const draft = `${await lyrics.inputValue()}\nmore typing during save`;
 					await lyrics.fill(draft);
 					releaseSave();
-					await expect(page.getByText(/^Saved version \d+$/)).toBeVisible();
+					await expect(
+						page.getByText(new RegExp(`^${words['songPage.savedVersion']({ number: '\\d+' })}$`))
+					).toBeVisible();
 					await expect(lyrics).toHaveValue(draft);
 					await songBackButton(page).click();
 					await expect(unsavedDraftDialog).toBeVisible();
@@ -722,7 +719,7 @@ test.describe('song page at phone width', () => {
 			await openSettingsSection(page, 'desktop', SETTINGS_SECTION);
 			await expect(unsavedDraftDialog).toBeVisible();
 			await unsavedDraftDialog
-				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+				.getByRole('button', { name: words['songPage.unsavedDiscard'], exact: true })
 				.click();
 
 			await expect(page).toHaveURL(/\/settings\/generation$/);

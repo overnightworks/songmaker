@@ -564,7 +564,8 @@ test.describe('on a fresh account', () => {
 		await surface
 			.getByRole('button', { name: words['songRow.openInEditor']({ title: first.songTitle }) })
 			.click();
-		if (shellOf(testInfo) === 'mobile') await surface.getByRole('tab', { name: /Takes/ }).click();
+		if (shellOf(testInfo) === 'mobile')
+			await surface.getByRole('tab', { name: words['songTabs.takes'] }).click();
 		const take = surface.locator('.take-row');
 		await expect(take).toHaveCount(1);
 		await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();

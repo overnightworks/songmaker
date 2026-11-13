@@ -209,7 +209,7 @@ async function playTheSongsTake(
 	await workspace(page)
 		.getByRole('button', { name: words['songRow.openInEditor']({ title: songTitle }) })
 		.click();
-	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
+	if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	const take = workspace(page).locator('.take-row');
 	await expect(take).toHaveCount(1);
 	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from './coverage-test';
-import { EDITOR_OPEN_WORKER_POOL_LABEL, EDITOR_TAB_EDIT_LABEL } from '../src/lib/constants/song';
+import { words } from '../src/lib/words/en';
+import { EDITOR_OPEN_WORKER_POOL_LABEL } from '../src/lib/constants/song';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL } from './helpers';
 import {
 	archiveAlbumOfAddress,
@@ -81,7 +82,7 @@ for (const width of WIDTHS) {
 				try {
 					await expect(page.getByRole('heading', { name: title })).toBeVisible();
 					if (width === 390) {
-						await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
+						await page.getByRole('tab', { name: words['songTabs.edit'], exact: true }).click();
 					}
 
 					const action = page.locator('.generate-action:visible');
