@@ -15,7 +15,6 @@ import {
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
 import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
-import { songEditorOpenName } from '#lib/test-utils/song-row.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import {
 	collectionActionLabel,
@@ -650,7 +649,7 @@ describe('AlbumDetailView song row', () => {
 		async (title) => {
 			const target = await renderSongs();
 
-			getByRoleButton(rowOf(target, title), songEditorOpenName(title)).click();
+			getByRoleButton(rowOf(target, title), words['songRow.openInEditor']({ title })).click();
 			await tick();
 
 			expect(selectSong).toHaveBeenCalledExactlyOnceWith(`s-${title.toLowerCase()}`);
@@ -679,7 +678,7 @@ describe('AlbumDetailView song row', () => {
 			[...rowOf(target, 'Tide').querySelectorAll('button')].map((button) => accessibleName(button))
 		).toEqual([
 			expect.stringMatching(new RegExp(`^Tide\\s+${words['albumPage.songTakes'](2)}$`)),
-			songEditorOpenName('Tide')
+			words['songRow.openInEditor']({ title: 'Tide' })
 		]);
 	});
 

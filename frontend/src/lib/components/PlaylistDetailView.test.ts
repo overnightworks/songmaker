@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import type { PlaylistDetailItem, PlaylistEntryItem } from '#lib/api/types.ts';
 import { ApiError } from '#lib/api/fetch.ts';
 import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
-import { songEditorOpenName } from '#lib/test-utils/song-row.ts';
 import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
@@ -469,7 +468,8 @@ describe('PlaylistDetailView row actions', () => {
 			expect.stringContaining('overflow-btn')
 		]);
 		expect(requireElement(row, '.song-row-body').textContent).toContain('Tide');
-		expect(accessibleName(requireElement(row, '.song-row-edit'))).toBe(songEditorOpenName('Tide'));
+		const editName = accessibleName(requireElement(row, '.song-row-edit'));
+		expect(editName).toBe(words['songRow.openInEditor']({ title: 'Tide' }));
 		expect(requireElement(row, '.overflow-btn').getAttribute('aria-label')).toBe(
 			words['playlistPage.entryMore']({ title: 'Tide' })
 		);
@@ -480,7 +480,7 @@ describe('PlaylistDetailView row actions', () => {
 
 		getByRoleButton(
 			target.querySelectorAll<HTMLElement>('.entry-row')[1],
-			songEditorOpenName('Ebb')
+			words['songRow.openInEditor']({ title: 'Ebb' })
 		).click();
 		await tick();
 
