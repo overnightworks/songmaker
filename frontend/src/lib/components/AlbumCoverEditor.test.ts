@@ -3,7 +3,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { CoverSuggestionsResponse, JobItem } from '#lib/api/types.ts';
+import type { CoverSuggestionsResponse } from '#lib/api/types.ts';
 import { ApiError } from '#lib/api/fetch.ts';
 import { lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
 import { getByRoleButton, accessibleName } from '#lib/test-utils/accessible-name.ts';
@@ -12,7 +12,6 @@ import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 import { ALBUM_COVER_THROTTLED_FALLBACK } from '#lib/constants/album.ts';
 import { words } from '#lib/words/en.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
@@ -23,6 +22,8 @@ import { selectedAlbumId } from '#lib/stores/player.ts';
 import { activeJobs } from '#lib/stores/jobs.ts';
 import {
 	FakeJobEventSource,
+	PAST_EVERY_RELOAD_MS,
+	reachSuggestionsLoads,
 	coverSuggestions,
 	coverJob,
 	ONE_SUGGESTION,
@@ -108,13 +109,6 @@ function swipe(target: HTMLElement, travel: number): void {
 			clientY: 104
 		})
 	);
-}
-const RELOAD_ATTEMPTS = UNREACHABLE_RELOAD_DELAYS_MS.length;
-const PAST_EVERY_RELOAD_MS = UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0) * 2;
-
-async function reachSuggestionsLoads(count: number): Promise<void> {
-	await vi.waitFor(() => expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(count));
-	await tick();
 }
 const renderAfterPageRead = () => afterPageRead(renderDetail, fetchAlbumCoverSuggestions);
 
@@ -478,7 +472,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		const target = await renderAfterPageRead();
 		fetchAlbumCoverSuggestions.mockReturnValueOnce(firstLoad.promise);
 		await openCoverEditing(target);
-		await reachSuggestionsLoads(1);
+		await reachSuggestionsLoads(fetchAlbumCoverSuggestions, 1);
 		pressEditorButton(target, 'Close cover editing');
 		await editingClosed(target);
 		firstLoad.resolve(coverSuggestions());
@@ -618,7 +612,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 			await pressSuggestOnceLoaded(target);
 
-			await reachSuggestionsLoads(2);
+			await reachSuggestionsLoads(fetchAlbumCoverSuggestions, 2);
 			shows(target);
 			expect(failureAlert(target)).toBeNull();
 			expect(target.textContent).not.toContain('already being');
@@ -659,7 +653,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 			await pressSuggestOnceLoaded(target);
 
-			await reachSuggestionsLoads(2);
+			await reachSuggestionsLoads(fetchAlbumCoverSuggestions, 2);
 			shows(target);
 			expect(target.textContent).not.toContain('already being');
 		}
@@ -701,7 +695,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		const target = await renderAfterPageRead();
 		arrange();
 		await openCoverEditing(target);
-		await reachSuggestionsLoads(1);
+		await reachSuggestionsLoads(fetchAlbumCoverSuggestions, 1);
 		if (suggests) {
 			await pressSuggestOnceLoaded(target);
 			await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledTimes(1));
@@ -721,7 +715,7 @@ describe('AlbumCoverEditor in the album header', () => {
 			const pending = deferred<CoverSuggestionsResponse>();
 			fetchAlbumCoverSuggestions.mockImplementation(() => pending.promise);
 			await renderDetail();
-			await reachSuggestionsLoads(1);
+			await reachSuggestionsLoads(fetchAlbumCoverSuggestions, 1);
 			const settle = () =>
 				settlement.startsWith('success')
 					? pending.resolve(coverSuggestions())
@@ -740,73 +734,6 @@ describe('AlbumCoverEditor in the album header', () => {
 			expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 		}
 	);
-
-	it('reloads the suggestions once the connection is back', async () => {
-		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-		const target = await renderAfterPageRead();
-		reportResourceStreamReachable(false);
-		fetchAlbumCoverSuggestions.mockRejectedValue(lostNetwork());
-		await openCoverEditing(target);
-		await reachSuggestionsLoads(1);
-		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
-		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
-
-		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
-		reportResourceStreamReachable(true);
-
-		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
-		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
-		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
-	});
-
-	it('offers a quiet Try again once the bounded reloads still find no network while online', async () => {
-		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-		const target = await renderAfterPageRead();
-		fetchAlbumCoverSuggestions.mockRejectedValue(lostNetwork());
-		await openCoverEditing(target);
-		await reachSuggestionsLoads(1);
-		for (const [attempt, delay] of UNREACHABLE_RELOAD_DELAYS_MS.entries()) {
-			expect(target.querySelector('.cover-suggestions-retry')).toBeNull();
-			await vi.advanceTimersByTimeAsync(delay);
-			await reachSuggestionsLoads(attempt + 2);
-		}
-
-		await vi.waitFor(() =>
-			expect(target.querySelector('.cover-suggestions-retry')?.textContent?.trim()).toBe(
-				'Try again'
-			)
-		);
-		expect(target.querySelector('[role="alert"]')).toBeNull();
-		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
-		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1 + RELOAD_ATTEMPTS);
-
-		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
-		requireElement<HTMLButtonElement>(target, '.cover-suggestions-retry').click();
-
-		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
-	});
-
-	it('Suggest another stops a pending reload of the suggestions', async () => {
-		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-		vi.stubGlobal('EventSource', FakeJobEventSource);
-		albumList.set([coveredAlbum()]);
-		const suggestionJob = deferred<JobItem>();
-		createAlbumCoverSuggestions.mockImplementation(() => suggestionJob.promise);
-		const target = await renderAfterPageRead();
-		fetchAlbumCoverSuggestions
-			.mockRejectedValueOnce(lostNetwork())
-			.mockResolvedValue(coverSuggestions({ job: coverJob({ status: 'running' }) }));
-		await openCoverEditing(target);
-		await reachSuggestionsLoads(1);
-
-		pressEditorButton(target, 'Suggest');
-		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
-		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
-
-		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
-		suggestionJob.resolve(coverJob());
-		await vi.waitFor(() => expect(stageText(target)).toContain('Making a cover'));
-	});
 });
 
 describeBackClosesOverlay({

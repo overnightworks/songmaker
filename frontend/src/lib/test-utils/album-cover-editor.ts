@@ -5,6 +5,7 @@ import { makeAlbum as album } from '#lib/test-utils/factories.ts';
 import { announcedText, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { requireElement } from '#lib/components/shell/rail-test-fixtures.ts';
 import type { CoverSuggestionsResponse, JobItem } from '#lib/api/types.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
 
 // What the album cover editor tests share: the editor is reached through the
 // album header, so these helpers drive the page as a person does.
@@ -122,4 +123,12 @@ export async function afterPageRead(
 	await tick();
 	readSuggestions.mockClear();
 	return target;
+}
+
+export const RELOAD_ATTEMPTS = UNREACHABLE_RELOAD_DELAYS_MS.length;
+export const PAST_EVERY_RELOAD_MS = UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0) * 2;
+
+export async function reachSuggestionsLoads(readSuggestions: Mock, count: number): Promise<void> {
+	await vi.waitFor(() => expect(readSuggestions).toHaveBeenCalledTimes(count));
+	await tick();
 }
