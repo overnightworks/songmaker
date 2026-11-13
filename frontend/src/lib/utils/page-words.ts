@@ -47,7 +47,7 @@ export function pageParts<K extends MarkedKey>(key: K, ...gaps: PartsGaps<K>): P
 
 /**
  * The text of the catalog key a server refusal names, filled with the refusal's values, or null when the page has no such
- * entry or the entry is not a sentence (a plural family, a marked sentence). The caller shows its own fallback and names the key.
+ * entry or the entry does not yield a sentence (a marked sentence returns parts). The caller shows its own fallback and names the key.
  */
 export function refusalText(key: string, values: Readonly<Record<string, string>>): string | null {
 	if (loadedWords === undefined) throw new PageWordsNotLoadedError();
