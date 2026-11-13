@@ -1,4 +1,3 @@
-import { words } from '../src/lib/words/en';
 // A shared album opens as the player view with its songs (#1443, #1374
 // slice 6), signed out, at the desktop and the phone width. The real seeded
 // album (three three-second songs) carries the flows that need a real song

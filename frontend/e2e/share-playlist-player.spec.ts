@@ -1,4 +1,3 @@
-import { words } from '../src/lib/words/en';
 import { expect, test as base, type Page } from './coverage-test';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
