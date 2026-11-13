@@ -21,7 +21,9 @@ from songmaker_cli.api_helpers import (
     page_has_more,
     parse_optional_search_query,
     raise_cover_refusal,
+    song_not_found,
     unique_song_slug,
+    version_not_found,
 )
 from songmaker_cli.api_models import (
     LibrarySort,
@@ -266,7 +268,7 @@ def api_update_song(
             session, song_id, force_new_version=req.new_version, edited_by=user.id, **kwargs,
         )
     except ValueError:
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     commit_unused_stamps(session, candidates)
@@ -300,7 +302,7 @@ def api_rename_song(
             session, song_id, title, slug=slug, edited_by=user.id,
         )
     except ValueError:
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return _song_response(song)
@@ -363,7 +365,7 @@ def api_delete_song(
     try:
         soft_delete_song(session, song_id)
     except ValueError:
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.SONG, song_id)
     session.commit()
     return StatusResponse()
@@ -399,7 +401,7 @@ def api_restore_song(
     except RestoreParentDeletedError as exc:
         raise Refusal(404, "songRefusal.restoreAlbumDeleted", id=exc.song_id) from exc
     except ValueError:
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.RESTORE, ResourceType.SONG, song_id)
     session.commit()
     return _song_response(restored)
@@ -458,7 +460,7 @@ def api_share_song(
     try:
         song = enable_song_sharing(session, song_id)
     except ValueError as exc:
-        raise Refusal(404, "songRefusal.notFound") from exc
+        raise song_not_found() from exc
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.SONG, song_id)
     share_url = public_share_url(ShareKind.SONG, song.share_slug)
     session.commit()
@@ -543,7 +545,7 @@ def api_unshare_song(
     try:
         disable_song_sharing(session, song_id)
     except ValueError:
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.SONG, song_id)
     session.commit()
     return StatusResponse()
@@ -587,12 +589,12 @@ def api_delete_version(
 
     ver = session.query(VersionModel).filter_by(id=version_id).first()
     if not ver:
-        raise Refusal(404, "versionRefusal.notFound")
+        raise version_not_found()
     try:
         check_song_access(session, ver.song_id, user)
     except HTTPException as refusal:
         # A version the caller cannot reach reads like a missing one.
-        raise Refusal(404, "versionRefusal.notFound") from refusal
+        raise version_not_found() from refusal
     candidates = linked_reference_ids(session, [ver.song_id])
     try:
         paths = delete_version(
@@ -602,7 +604,7 @@ def api_delete_version(
     except VersionInUseError:
         raise Refusal(409, "versionRefusal.inUse")
     except ValueError:
-        raise Refusal(404, "versionRefusal.notFound")
+        raise version_not_found()
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.VERSION, version_id)
     session.commit()
     commit_unused_stamps(session, candidates)
