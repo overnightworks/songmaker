@@ -679,7 +679,10 @@ def test_active_cover_job_blocks_a_new_request_before_unavailable_response(
     response = client.post("/api/albums/alice-album/cover-suggestions")
 
     assert response.status_code == 409
-    assert response.json() == {"detail": "Cover suggestions are already being generated"}
+    assert response.json() == {
+        "detail": "Cover suggestions are already being generated",
+        "message": {"key": "coverSuggestionRefusal.alreadyRunning", "values": {}},
+    }
     with factory() as session:
         assert session.query(Job).filter_by(album_id="alice-album").count() == 1
 

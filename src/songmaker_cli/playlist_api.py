@@ -19,6 +19,7 @@ from songmaker_cli.api_helpers import (
     check_playlist_access,
     check_song_access,
     cover_file_response,
+    raise_cover_refusal,
     unique_playlist_slug,
 )
 from songmaker_cli.api_models import (
@@ -227,7 +228,7 @@ async def api_upload_playlist_cover(
     try:
         cover_key = write_playlist_cover(ctx.audio_dir, playlist.id, payload)
     except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
+        raise_cover_refusal(exc)
     playlist = set_playlist_cover_key(session, playlist.id, cover_key)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.PLAYLIST, playlist.id)
     session.commit()

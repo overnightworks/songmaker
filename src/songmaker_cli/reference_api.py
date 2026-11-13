@@ -56,7 +56,6 @@ from songmaker_cli.db.queries.reference_recordings import (
     unkeep_reference,
 )
 from songmaker_cli.reference_audio import (
-    REFERENCE_AUDIO_STORAGE_DETAIL,
     ReferenceAudioQuotaExceeded,
     ReferenceAudioRejected,
     ReferenceAudioStorageError,
@@ -67,6 +66,7 @@ from songmaker_cli.reference_audio import (
     resolve_owned_reference_audio,
     store_reference_audio,
 )
+from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import utcnow
 
@@ -275,7 +275,7 @@ def api_delete_reference(
     recording_id = recording.id
     if not is_owner_storage_path(user.id, recording.storage_path):
         log.error("Reference %s of user %s kept: corrupt_path", recording_id, user.id)
-        raise HTTPException(500, REFERENCE_AUDIO_STORAGE_DETAIL)
+        raise Refusal(500, "referenceRefusal.storage")
     try:
         storage_path = delete_reference_recording(session, recording)
     except IntegrityError:
@@ -389,9 +389,9 @@ async def api_upload_reference(
             original_filename,
         )
     except ReferenceAudioQuotaExceeded as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise Refusal(409, "referenceRefusal.quotaReached") from exc
     except ReferenceAudioStorageError as exc:
-        raise HTTPException(500, str(exc)) from exc
+        raise Refusal(500, "referenceRefusal.storage") from exc
 
     return await run_in_threadpool(_stored_reference_response, ctx, user.id, stored.id)
 

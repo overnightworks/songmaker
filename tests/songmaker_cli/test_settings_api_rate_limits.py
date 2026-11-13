@@ -22,30 +22,37 @@ def _stored_limits(factory) -> dict[str, int]:
 
 
 @pytest.mark.parametrize(
-    ("settings", "detail"),
+    ("settings", "detail", "message"),
     [
         (
             {SETTING_GENERATION_RATE_LIMIT: 5, "bogus": 1},
             "Unknown setting keys: ['bogus']",
+            {"key": "settingsRefusal.unknownKeys", "values": {"keys": "['bogus']"}},
         ),
         (
             {SETTING_GENERATION_RATE_LIMIT: 5, "chat_rate_limit": 1},
             "Unknown setting keys: ['chat_rate_limit']",
+            {"key": "settingsRefusal.unknownKeys", "values": {"keys": "['chat_rate_limit']"}},
         ),
         (
             {SETTING_GENERATION_RATE_LIMIT: 5, SETTING_SCORING_RATE_LIMIT: -1},
             f"Value for {SETTING_SCORING_RATE_LIMIT} must be non-negative",
+            {
+                "key": "settingsRefusal.negativeValue",
+                "values": {"key": SETTING_SCORING_RATE_LIMIT},
+            },
         ),
     ],
     ids=["unknown-key", "removed-chat-key", "negative-value-after-a-valid-key"],
 )
-def test_a_refused_rate_limit_update_saves_none_of_its_keys(admin, settings, detail):
+def test_a_refused_rate_limit_update_saves_none_of_its_keys(admin, settings, detail, message):
     client, factory = admin
     before = _stored_limits(factory)
 
     response = client.put(RATE_LIMITS_URL, json={"settings": settings})
 
     assert (response.status_code, response.json()["detail"]) == (400, detail)
+    assert response.json()["message"] == message
     assert _stored_limits(factory) == before
 
 

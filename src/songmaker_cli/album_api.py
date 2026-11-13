@@ -21,6 +21,7 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     page_has_more,
     parse_optional_search_query,
+    raise_cover_refusal,
     unique_album_id,
 )
 from songmaker_cli.api_models import (
@@ -54,6 +55,7 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.cover_suggestions import (
+    CoverSuggestionAlreadyRunningError,
     CoverSuggestionRequestError,
     remove_cover_suggestion_files,
     request_cover_suggestions,
@@ -94,6 +96,7 @@ from songmaker_cli.db.queries.jobs import get_last_cover_job_for_album
 from songmaker_cli.db.queries.sentinels import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
 from songmaker_cli.db.soft_delete import RestoreWindowExpiredError
+from songmaker_cli.refusals import Refusal
 
 log = logging.getLogger(__name__)
 
@@ -309,8 +312,11 @@ def api_restore_album(
     check_album_access(album, user)
     try:
         restored = restore_album(session, album_id)
-    except RestoreWindowExpiredError as e:
-        raise HTTPException(410, str(e))
+    except RestoreWindowExpiredError as exc:
+        raise Refusal(
+            410, "albumRefusal.restoreWindowPassed",
+            id=exc.row_id, days=str(exc.days_ago), window=str(exc.window_days),
+        ) from exc
     record_audit(session, user.id, AuditAction.RESTORE, ResourceType.ALBUM, album_id)
     session.commit()
     return _single_album_response(session, restored)
@@ -444,7 +450,7 @@ async def api_upload_album_cover(
     try:
         cover_key = write_album_cover(ctx.audio_dir, album.id, payload)
     except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
+        raise_cover_refusal(exc)
     album = set_album_cover_key(session, album.id, cover_key)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album.id)
     session.commit()
@@ -488,6 +494,9 @@ def api_create_cover_suggestions(
         job = request_cover_suggestions(session, album_id, user, session_id=session_id)
         record_audit(session, user.id, AuditAction.GENERATE, ResourceType.ALBUM, job.album_id)
         session.commit()
+    except CoverSuggestionAlreadyRunningError as exc:
+        session.rollback()
+        raise Refusal(409, "coverSuggestionRefusal.alreadyRunning") from exc
     except CoverSuggestionRequestError as exc:
         session.rollback()
         raise HTTPException(exc.status_code, str(exc)) from exc
@@ -571,7 +580,7 @@ def api_select_album_cover_suggestion(
     except (FileNotFoundError, AudioPathRejectedError):
         raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND) from None
     except CoverRejectedError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise_cover_refusal(exc)
     album = set_album_cover_key(session, album.id, cover_key)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album.id)
     session.commit()

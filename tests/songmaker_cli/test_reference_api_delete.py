@@ -174,7 +174,10 @@ def test_d8_a_row_with_a_corrupt_path_answers_500_and_keeps_the_row_and_the_file
         response = _delete(signed_in, reference_id)
 
     assert response.status_code == 500
-    assert response.json() == {"detail": "Reference audio storage could not be checked."}
+    assert response.json() == {
+        "detail": "Reference audio storage could not be checked.",
+        "message": {"key": "referenceRefusal.storage", "values": {}},
+    }
     assert [row.id for row in reference_rows(signed_in)] == [reference_id]
     assert target.exists()
     assert stored_path not in caplog.text
