@@ -27,12 +27,13 @@ const TRANSPORT_MAY_IMPORT = [
 	String.raw`#lib/constants/${PATH}`,
 	String.raw`#lib/routes/${PATH}`,
 	String.raw`#lib/utils/recency\.ts`,
+	String.raw`#lib/utils/page-words\.ts`,
 	String.raw`(?:@[a-z0-9][\w.-]*/)?[a-z0-9][\w.-]*(?:/${PATH})?`
 ];
 const OUTSIDE_THE_TRANSPORT = `^(?!(?:${TRANSPORT_MAY_IMPORT.join('|')})$)`;
 const TRANSPORT_LAYER_MESSAGE =
 	'lib/api is the transport (#925 G2): import only from ./, #lib/api, #lib/constants/, ' +
-	'#lib/routes/, #lib/utils/recency or a package, with no "." or ".." path segment ' +
+	'#lib/routes/, #lib/utils/recency, #lib/utils/page-words or a package, with no "." or ".." path segment ' +
 	'after a leading "./". Hand the app what it needs through a reaction it installs.';
 const TRANSPORT_LOADS_NOTHING_LAZILY =
 	'lib/api is the transport (#925 G2): import() hides its target from lint. ' +
