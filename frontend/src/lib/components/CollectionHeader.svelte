@@ -5,10 +5,8 @@
 	import CollectionMenu from './CollectionMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
-	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '#lib/constants/album.ts';
-	import { albumCoverMarkedLabel } from '#lib/constants/album-cover-mark.ts';
 	import type { CoverMark } from './CoverActivityMark.svelte';
-	import { songCountLabel } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { collectionTransport, toggleOrStartCollection, setShuffle } from '#lib/stores/player.ts';
 
@@ -106,12 +104,23 @@
 	});
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
-	const coverLabel = $derived(showCover ? ALBUM_COVER_EDIT_LABEL : ALBUM_COVER_ADD_LABEL);
+	const coverLabel = $derived(pageText(showCover ? 'albumCover.edit' : 'albumCover.add'));
+	// The running time is left out so the name does not change every second.
+	const coverMarkedLabel = $derived(
+		coverMark?.running
+			? pageText('coverMark.runningName', { label: coverLabel })
+			: coverMark && coverMark.waiting > 0
+				? pageText('coverMark.waitingName', {
+						label: coverLabel,
+						waiting: pageText('coverMark.waiting', coverMark.waiting)
+					})
+				: coverLabel
+	);
 	const coverOpening = $derived(
 		coverEditor
 			? {
 					label: coverLabel,
-					name: albumCoverMarkedLabel(coverLabel, coverMark),
+					name: coverMarkedLabel,
 					onopen: openCoverEditing
 				}
 			: undefined
@@ -176,7 +185,7 @@
 		</h2>
 		{#if meta}<p class="header-meta">{meta}</p>{/if}
 	{/if}
-	<p class="header-count">{songCountLabel(songCount)}</p>
+	<p class="header-count">{pageText('collectionHeader.songCount', songCount)}</p>
 {/snippet}
 
 {#snippet actions()}

@@ -902,3 +902,275 @@ msgstr ""
 msgctxt "collectionMenu.playlistDelete"
 msgid "Delete playlist"
 msgstr ""
+
+msgctxt "albumPage.loading"
+msgid "Loading albums…"
+msgstr ""
+
+msgctxt "albumPage.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "albumPage.noSongs"
+msgid "No songs yet."
+msgstr ""
+
+msgctxt "albumPage.coverAlt"
+msgid "Album {title}"
+msgstr ""
+
+msgctxt "albumPage.coverAltFallback"
+msgid "Album"
+msgstr ""
+
+msgctxt "albumPage.songTakes.one"
+msgid "{count} take"
+msgstr ""
+
+msgctxt "albumPage.songTakes.other"
+msgid "{count} takes"
+msgstr ""
+
+msgctxt "albumPage.coverUploadFailed"
+msgid "Cover upload failed"
+msgstr ""
+
+msgctxt "albumPage.coverDiscardFailed"
+msgid "Cover suggestions could not be discarded"
+msgstr ""
+
+msgctxt "albumPage.coverRemoved"
+msgid "Cover removed"
+msgstr ""
+
+msgctxt "albumPage.coverRemoveFailed"
+msgid "Cover remove failed"
+msgstr ""
+
+msgctxt "albumPage.yearWhole"
+msgid "Year must be a whole number"
+msgstr ""
+
+msgctxt "albumPage.yearRange"
+msgid "Year must be between {min} and {max}"
+msgstr ""
+
+msgctxt "albumPage.deleted"
+msgid "Album deleted"
+msgstr ""
+
+msgctxt "albumPage.restored"
+msgid "Album restored"
+msgstr ""
+
+msgctxt "albumPage.restoreFailed"
+msgid "Restore failed"
+msgstr ""
+
+msgctxt "albumPage.deleteFailed"
+msgid "Delete failed"
+msgstr ""
+
+msgctxt "albumPage.archived"
+msgid "Album archived"
+msgstr ""
+
+msgctxt "albumPage.unarchived"
+msgid "Album unarchived"
+msgstr ""
+
+msgctxt "albumPage.unarchiveFailed"
+msgid "Unarchive failed"
+msgstr ""
+
+msgctxt "albumPage.archiveFailed"
+msgid "Archive failed"
+msgstr ""
+
+msgctxt "albumPage.addedSkipped"
+msgid "Added {added}, skipped {skipped}"
+msgstr ""
+
+msgctxt "albumPage.addedToPlaylist"
+msgid "Added to playlist"
+msgstr ""
+
+msgctxt "albumPage.addFailed"
+msgid "Failed to add"
+msgstr ""
+
+msgctxt "albumPage.songsLoadFailed"
+msgid "Failed to load songs"
+msgstr ""
+
+msgctxt "albumPage.deleteTitle"
+msgid "Delete \"{title}\"?"
+msgstr ""
+
+msgctxt "albumPage.deleteSongs.one"
+msgid "{count} song ({titles})"
+msgstr ""
+
+msgctxt "albumPage.deleteSongs.other"
+msgid "{count} songs ({titles})"
+msgstr ""
+
+msgctxt "albumPage.deleteTakes.one"
+msgid "{count} take"
+msgstr ""
+
+msgctxt "albumPage.deleteTakes.other"
+msgid "{count} takes"
+msgstr ""
+
+msgctxt "albumPage.deleteHistory"
+msgid "All versions, scores, and chat history"
+msgstr ""
+
+msgctxt "albumPage.deleteConfirm"
+msgid "Delete Album"
+msgstr ""
+
+msgctxt "albumCover.add"
+msgid "Add cover"
+msgstr ""
+
+msgctxt "albumCover.edit"
+msgid "Edit cover"
+msgstr ""
+
+msgctxt "albumCover.editing"
+msgid "Cover editing"
+msgstr ""
+
+msgctxt "albumCover.editingClose"
+msgid "Close cover editing"
+msgstr ""
+
+msgctxt "albumCover.upload"
+msgid "Upload"
+msgstr ""
+
+msgctxt "albumCover.suggest"
+msgid "Suggest"
+msgstr ""
+
+msgctxt "albumCover.suggestAnother"
+msgid "Suggest another"
+msgstr ""
+
+msgctxt "albumCover.use"
+msgid "Use"
+msgstr ""
+
+msgctxt "albumCover.remove"
+msgid "Remove"
+msgstr ""
+
+msgctxt "albumCover.previousSuggestion"
+msgid "Previous suggestion"
+msgstr ""
+
+msgctxt "albumCover.nextSuggestion"
+msgid "Next suggestion"
+msgstr ""
+
+msgctxt "albumCover.suggestionsLoading"
+msgid "Loading cover suggestion…"
+msgstr ""
+
+msgctxt "albumCover.suggesting"
+msgid "Making a cover"
+msgstr ""
+
+msgctxt "albumCover.suggestionFailedTitle"
+msgid "Couldn’t make a cover suggestion"
+msgstr ""
+
+msgctxt "albumCover.suggestionFailedFallback"
+msgid "The cover suggestion failed. Try again."
+msgstr ""
+
+msgctxt "albumCover.throttledFallback"
+msgid "Too many requests right now. Press Suggest again in a moment."
+msgstr ""
+
+msgctxt "albumCover.suggestionsRetry"
+msgid "Try again"
+msgstr ""
+
+msgctxt "albumCover.alt"
+msgid "Album {title}"
+msgstr ""
+
+msgctxt "albumCover.suggestionAlt"
+msgid "Cover suggestion for {title}"
+msgstr ""
+
+msgctxt "albumCover.suggestionPosition"
+msgid "{shown} / {total}"
+msgstr ""
+
+msgctxt "albumCover.stageLabel"
+msgid "Cover suggestion {shown} of {total}"
+msgstr ""
+
+msgctxt "albumCover.saved"
+msgid "Cover saved"
+msgstr ""
+
+msgctxt "albumDetails.close"
+msgid "Close edit details"
+msgstr ""
+
+msgctxt "albumDetails.title"
+msgid "Title"
+msgstr ""
+
+msgctxt "albumDetails.subtitle"
+msgid "Subtitle"
+msgstr ""
+
+msgctxt "albumDetails.year"
+msgid "Year"
+msgstr ""
+
+msgctxt "albumDetails.save"
+msgid "Save"
+msgstr ""
+
+msgctxt "albumDetails.titleRequired"
+msgid "Title cannot be empty"
+msgstr ""
+
+msgctxt "albumDetails.saved"
+msgid "Details saved"
+msgstr ""
+
+msgctxt "albumDetails.saveFailed"
+msgid "Saving the details failed"
+msgstr ""
+
+msgctxt "coverMark.waiting.one"
+msgid "{count} waiting"
+msgstr ""
+
+msgctxt "coverMark.waiting.other"
+msgid "{count} waiting"
+msgstr ""
+
+msgctxt "coverMark.runningName"
+msgid "{label} · making a suggestion"
+msgstr ""
+
+msgctxt "coverMark.waitingName"
+msgid "{label} · {waiting}"
+msgstr ""
+
+msgctxt "collectionHeader.songCount.one"
+msgid "{count} song"
+msgstr ""
+
+msgctxt "collectionHeader.songCount.other"
+msgid "{count} songs"
+msgstr ""

@@ -188,12 +188,12 @@ describe('song list mutations', () => {
 		{
 			failure: 'a server answer without a reason',
 			err: new ApiError(500, '', '/api/x'),
-			error: 'Failed to load songs'
+			error: words['albumPage.songsLoadFailed']
 		},
 		{
 			failure: 'a browser error',
 			err: new Error('Failed to fetch'),
-			error: 'Failed to load songs'
+			error: words['albumPage.songsLoadFailed']
 		},
 		{
 			failure: 'a server reason',
@@ -241,7 +241,7 @@ describe('song list mutations', () => {
 		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
 
 		expect(fetchSongs).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
-		expect(get(albumSongsLoadFailure('a1'))).toBe('Failed to load songs');
+		expect(get(albumSongsLoadFailure('a1'))).toBe(words['albumPage.songsLoadFailed']);
 	});
 
 	it('loadSongsForAlbum merges album tracks that were outside the browse slice', async () => {

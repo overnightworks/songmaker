@@ -16,12 +16,9 @@ import { failCoverJob, seedRunningCoverJob } from './seed-cover';
 import { sameOriginHeaders, workspace } from './helpers';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '../src/lib/constants/connectivity';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
-import {
-	ALBUM_COVER_EDITING_LABEL,
-	ALBUM_COVER_SUGGESTIONS_RETRY_LABEL
-} from '../src/lib/constants/album';
 import { words, type Key } from '../src/lib/words/en';
 
+const addOrEditCover = new RegExp(`^(${words['albumCover.add']}|${words['albumCover.edit']})$`);
 const PHONE_VIEWPORT = { width: 375, height: 844 };
 // What a cover job's row may hold and no page may show (#2055 matrix cell 26).
 const STORED_ERROR_CANARY = 'gateway detail sk-e2e-canary for session e2e-canary';
@@ -74,19 +71,21 @@ test('Add cover asks for nothing until Suggest, whose refused click says log in 
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 	await expect(surface.getByText('Choose a cover')).toHaveCount(0);
 
-	const editing = surface.getByRole('group', { name: 'Cover editing' });
-	await surface.getByRole('button', { name: 'Add cover' }).click();
-	await expect(editing.getByRole('button', { name: 'Suggest', exact: true })).toBeEnabled();
-	await editing.getByRole('button', { name: 'Close cover editing' }).click();
+	const editing = surface.getByRole('group', { name: words['albumCover.editing'] });
+	await surface.getByRole('button', { name: words['albumCover.add'] }).click();
+	await expect(
+		editing.getByRole('button', { name: words['albumCover.suggest'], exact: true })
+	).toBeEnabled();
+	await editing.getByRole('button', { name: words['albumCover.editingClose'] }).click();
 	await expect(editing).toHaveCount(0);
-	await surface.getByRole('button', { name: 'Add cover' }).click();
+	await surface.getByRole('button', { name: words['albumCover.add'] }).click();
 	expect(suggestionAsks).toBe(0);
 	const latestJobBefore = await latestCoverJobId(page, library.albumId);
 
 	const refused = page.waitForResponse((response) =>
 		isSuggestionAsk(response.request().method(), response.url())
 	);
-	await editing.getByRole('button', { name: 'Suggest', exact: true }).click();
+	await editing.getByRole('button', { name: words['albumCover.suggest'], exact: true }).click();
 	const response = await refused;
 	expect(response.status()).toBe(403);
 	expect(await response.json()).toEqual({ detail: { problem: 'sign_in_again' } });
@@ -95,16 +94,19 @@ test('Add cover asks for nothing until Suggest, whose refused click says log in 
 	await expect(line).toContainText(words['coverProblem.signInAgain']);
 	await expect(line.getByRole('link', { name: words['problemLine.logIn'] })).toBeVisible();
 	await expect(suggestButton(editing)).toBeDisabled();
-	await expect(editing.getByRole('button', { name: 'Upload', exact: true })).toBeEnabled();
+	await expect(
+		editing.getByRole('button', { name: words['albumCover.upload'], exact: true })
+	).toBeEnabled();
 	expect(await latestCoverJobId(page, library.albumId)).toBe(latestJobBefore);
 	expect(suggestionAsks).toBe(1);
 
 	const albumAddress = page.url();
-	if (isMobile) await editing.getByRole('button', { name: 'Close cover editing' }).click();
+	if (isMobile)
+		await editing.getByRole('button', { name: words['albumCover.editingClose'] }).click();
 	else await page.keyboard.press('Escape');
 	await expect(editing).toHaveCount(0);
 	await expect(page).toHaveURL(albumAddress);
-	await expect(surface.getByRole('button', { name: 'Add cover' })).toBeVisible();
+	await expect(surface.getByRole('button', { name: words['albumCover.add'] })).toBeVisible();
 });
 
 test('a run that ends busy, budget spent, not enabled or unavailable shows its own line in its own look, and only busy and a followed refusal close Suggest', async ({
@@ -118,8 +120,8 @@ test('a run that ends busy, budget spent, not enabled or unavailable shows its o
 		try {
 			const jobId = await seedRunningCoverJob(album.id);
 			await page.goto(`/album/${album.id}`);
-			await workspace(page).getByRole('button', { name: 'Add cover' }).click();
-			const editing = workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
+			await workspace(page).getByRole('button', { name: words['albumCover.add'] }).click();
+			const editing = workspace(page).getByRole('group', { name: words['albumCover.editing'] });
 			await expect(suggestButton(editing)).toBeDisabled();
 
 			await failCoverJob(
@@ -139,7 +141,7 @@ test('a run that ends busy, budget spent, not enabled or unavailable shows its o
 
 			// A reload is a new view: busy keeps its wait, a refusal of the person asks again.
 			await page.reload();
-			await workspace(page).getByRole('button', { name: 'Add cover' }).click();
+			await workspace(page).getByRole('button', { name: words['albumCover.add'] }).click();
 			if (problem === 'not_enabled') {
 				await expect(suggestButton(editing)).toBeEnabled();
 				await expect(problemLine(editing)).toHaveCount(0);
@@ -200,11 +202,9 @@ test.describe('cover suggestions retry', () => {
 			route.request().method() === 'GET' ? route.abort('failed') : route.continue()
 		);
 		await page.goto(`/album/${library.albumId}`);
-		await workspace(page)
-			.getByRole('button', { name: /^(Add|Edit) cover$/ })
-			.click();
-		const editing = workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
-		const retry = editing.getByRole('button', { name: ALBUM_COVER_SUGGESTIONS_RETRY_LABEL });
+		await workspace(page).getByRole('button', { name: addOrEditCover }).click();
+		const editing = workspace(page).getByRole('group', { name: words['albumCover.editing'] });
+		const retry = editing.getByRole('button', { name: words['albumCover.suggestionsRetry'] });
 		await expect(retry).toBeVisible({ timeout: retryBudget });
 		const box = await retry.boundingBox();
 		if (!box) throw new Error('retry button has no bounding box');
@@ -250,9 +250,9 @@ test('an API-seeded suggestion can be chosen and its selected cover removed', as
 
 	const surface = workspace(page);
 	await page.goto(`/album/${library.albumId}`);
-	await surface.getByRole('button', { name: /^(Add|Edit) cover$/ }).click();
-	const editing = surface.getByRole('group', { name: 'Cover editing' });
-	const use = editing.getByRole('button', { name: 'Use', exact: true });
+	await surface.getByRole('button', { name: addOrEditCover }).click();
+	const editing = surface.getByRole('group', { name: words['albumCover.editing'] });
+	const use = editing.getByRole('button', { name: words['albumCover.use'], exact: true });
 	await expect(use).toBeEnabled();
 	await use.click();
 	await expect(editing).toHaveCount(0);
@@ -260,6 +260,6 @@ test('an API-seeded suggestion can be chosen and its selected cover removed', as
 
 	await surface.getByRole('button', { name: 'More' }).click();
 	await surface.getByRole('button', { name: 'Cover', exact: true }).click();
-	await editing.getByRole('button', { name: 'Remove', exact: true }).click();
+	await editing.getByRole('button', { name: words['albumCover.remove'], exact: true }).click();
 	await expect(surface.locator('.header-cover img')).toHaveCount(0);
 });

@@ -210,7 +210,7 @@ describe('AlbumDetailView menu', () => {
 	});
 
 	it.each([
-		{ failure: lostNetwork(), toast: 'Cover upload failed' },
+		{ failure: lostNetwork(), toast: words['albumPage.coverUploadFailed'] },
 		{ failure: serverRefusal('Cover must be an image'), toast: 'Cover must be an image' }
 	])('toasts $toast when a cover upload fails', async ({ failure, toast }) => {
 		uploadAlbumCover.mockRejectedValue(failure);
@@ -266,5 +266,5 @@ async function uploadFromCoverEditor(target: HTMLElement): Promise<void> {
 		.find((item) => item.textContent?.trim().startsWith(words['collectionMenu.cover']))
 		?.click();
 	await vi.waitFor(() => expect(target.querySelector('.cover-editor')).not.toBeNull());
-	getByRoleButton(requireElement(target, '.cover-editor'), 'Upload').click();
+	getByRoleButton(requireElement(target, '.cover-editor'), words['albumCover.upload']).click();
 }

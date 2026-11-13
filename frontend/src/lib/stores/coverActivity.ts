@@ -2,8 +2,8 @@ import { derived, get, writable } from 'svelte/store';
 import { fetchAlbumCoverSuggestions, type CoverSuggestionDiscard } from '#lib/api/albums.ts';
 import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
 import type { CoverSuggestionsResponse, JobItem } from '#lib/api/types.ts';
-import { ALBUM_COVER_SUGGESTION_FAILED_FALLBACK } from '#lib/constants/album.ts';
 import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import {
 	discardMarkOf,
 	markCoverSuggestionsDiscarded,
@@ -189,7 +189,7 @@ export function showCoverActivityFailure(
 			? { ...COVER_ACTIVITY_SETTLED, unreachable: true }
 			: {
 					...COVER_ACTIVITY_SETTLED,
-					failure: describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
+					failure: describeFailure(error, pageText('albumCover.suggestionFailedFallback'))
 				};
 	updateCoverActivity(albumId, (state) => ({
 		...state,

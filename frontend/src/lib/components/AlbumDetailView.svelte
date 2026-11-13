@@ -45,15 +45,10 @@
 		knownCoverSuggestions,
 		watchCoverActivity
 	} from '#lib/stores/coverActivity.ts';
-	import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '#lib/constants/library.ts';
 	import {
 		PLACE_LINE_SEPARATOR,
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
-		ALBUM_COVER_ALT_TYPE,
-		ALBUM_DETAILS_SAVED,
-		ALBUM_DETAILS_SAVE_FAILED,
-		ALBUM_NO_SONGS,
 		ALBUM_YEAR_MAX,
 		ALBUM_YEAR_MIN
 	} from '#lib/constants/album.ts';
@@ -106,7 +101,9 @@
 	const albumLoadFailure = $derived(currentAlbumId ? albumSongsLoadFailure(currentAlbumId) : null);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
 	const coverAlt = $derived(
-		selectedAlbum ? `${ALBUM_COVER_ALT_TYPE} ${selectedAlbum.title}` : ALBUM_COVER_ALT_TYPE
+		selectedAlbum
+			? pageText('albumPage.coverAlt', { title: selectedAlbum.title })
+			: pageText('albumPage.coverAltFallback')
 	);
 	const artFill = $derived(selectedAlbum ? usableAlbumPrimary(selectedAlbum.colors) : null);
 	const initials = $derived(
@@ -170,10 +167,10 @@
 		try {
 			const updated = await holdOpenWhile('cover-saving', uploadAlbumCover(uploadedAlbumId, file));
 			updateAlbumInList(uploadedAlbumId, () => updated);
-			addToast('Cover saved', 'success');
+			addToast(pageText('albumCover.saved'), 'success');
 			await discardSuggestionsAfterUpload(uploadedAlbumId, knownAfterSave(uploadedAlbumId, known));
 		} catch (e) {
-			addToast(describeFailure(e, 'Cover upload failed'), 'error');
+			addToast(describeFailure(e, pageText('albumPage.coverUploadFailed')), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -188,7 +185,7 @@
 		try {
 			await discardCoverSuggestions(albumId, known);
 		} catch (error) {
-			addToast(describeFailure(error, 'Cover suggestions could not be discarded'), 'error');
+			addToast(describeFailure(error, pageText('albumPage.coverDiscardFailed')), 'error');
 		}
 	}
 
@@ -203,9 +200,9 @@
 		try {
 			const updated = await holdOpenWhile('cover-saving', deleteAlbumCover(selectedAlbum.id));
 			updateAlbumInList(selectedAlbum.id, () => updated);
-			addToast('Cover removed', 'success');
+			addToast(pageText('albumPage.coverRemoved'), 'success');
 		} catch (e) {
-			addToast(describeFailure(e, 'Cover remove failed'), 'error');
+			addToast(describeFailure(e, pageText('albumPage.coverRemoveFailed')), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -216,11 +213,17 @@
 		const albumId = selectedAlbum.id;
 		const year = details.year ? Number(details.year) : null;
 		if (details.year && !Number.isInteger(year)) {
-			addToast('Year must be a whole number', 'error');
+			addToast(pageText('albumPage.yearWhole'), 'error');
 			throw new Error('Year must be a whole number');
 		}
 		if (year !== null && (year < ALBUM_YEAR_MIN || year > ALBUM_YEAR_MAX)) {
-			addToast(`Year must be between ${ALBUM_YEAR_MIN} and ${ALBUM_YEAR_MAX}`, 'error');
+			addToast(
+				pageText('albumPage.yearRange', {
+					min: String(ALBUM_YEAR_MIN),
+					max: String(ALBUM_YEAR_MAX)
+				}),
+				'error'
+			);
 			throw new Error('Year out of range');
 		}
 		try {
@@ -230,9 +233,9 @@
 				year
 			});
 			updateAlbumInList(albumId, () => updated);
-			addToast(ALBUM_DETAILS_SAVED, 'success');
+			addToast(pageText('albumDetails.saved'), 'success');
 		} catch (e) {
-			addToast(describeFailure(e, ALBUM_DETAILS_SAVE_FAILED), 'error');
+			addToast(describeFailure(e, pageText('albumDetails.saveFailed')), 'error');
 			throw e;
 		}
 	}
@@ -262,7 +265,7 @@
 			forgetListenedPlace('album', albumId);
 			removeSongsForAlbum(albumId);
 			setOpenCollection(null);
-			addUndoToast('Album deleted', {
+			addUndoToast(pageText('albumPage.deleted'), {
 				label: 'Undo',
 				handler: async () => {
 					try {
@@ -271,14 +274,14 @@
 						void readRestoredPlace('album', albumId);
 						const resp = await fetchSongs(albumId);
 						addSongsToList(resp.items);
-						addToast('Album restored', 'success');
+						addToast(pageText('albumPage.restored'), 'success');
 					} catch {
-						addToast('Restore failed', 'error');
+						addToast(pageText('albumPage.restoreFailed'), 'error');
 					}
 				}
 			});
 		} catch {
-			addToast('Delete failed', 'error');
+			addToast(pageText('albumPage.deleteFailed'), 'error');
 		}
 	}
 
@@ -292,7 +295,7 @@
 			forgetListenedPlace('album', albumId);
 			removeSongsForAlbum(albumId);
 			setOpenCollection(null);
-			addUndoToast('Album archived', {
+			addUndoToast(pageText('albumPage.archived'), {
 				label: 'Undo',
 				handler: async () => {
 					try {
@@ -301,14 +304,14 @@
 						void readRestoredPlace('album', albumId);
 						const resp = await fetchSongs(albumId);
 						addSongsToList(resp.items);
-						addToast('Album unarchived', 'success');
+						addToast(pageText('albumPage.unarchived'), 'success');
 					} catch {
-						addToast('Unarchive failed', 'error');
+						addToast(pageText('albumPage.unarchiveFailed'), 'error');
 					}
 				}
 			});
 		} catch {
-			addToast('Archive failed', 'error');
+			addToast(pageText('albumPage.archiveFailed'), 'error');
 		}
 	}
 
@@ -317,12 +320,18 @@
 		try {
 			const result = await addAlbumToPlaylist(playlistId, currentAlbumId);
 			if (result.skipped.length > 0) {
-				addToast(`Added ${result.added_count}, skipped ${result.skipped.length}`, 'info');
+				addToast(
+					pageText('albumPage.addedSkipped', {
+						added: String(result.added_count),
+						skipped: String(result.skipped.length)
+					}),
+					'info'
+				);
 			} else {
-				addToast('Added to playlist', 'success');
+				addToast(pageText('albumPage.addedToPlaylist'), 'success');
 			}
 		} catch (e) {
-			addToast(describeFailure(e, 'Failed to add'), 'error');
+			addToast(describeFailure(e, pageText('albumPage.addFailed')), 'error');
 		} finally {
 			playlistPickerOpen = false;
 		}
@@ -402,22 +411,22 @@
 
 		<div class="item-list">
 			{#if albumLoad === 'loading' && albumSongs.length === 0}
-				<p class="empty-tab" role="status">{LIBRARY_ALBUMS_LOADING}</p>
+				<p class="empty-tab" role="status">{pageText('albumPage.loading')}</p>
 			{:else if $albumLoadFailure && albumSongs.length === 0}
 				<p class="empty-tab" role="alert">{$albumLoadFailure}</p>
 				<button
 					class="retry-btn"
 					onclick={() => currentAlbumId && loadSongsForAlbum(currentAlbumId)}
-					>{LIBRARY_RETRY_LABEL}</button
+					>{pageText('albumPage.retry')}</button
 				>
 			{:else if albumSongs.length > 0 || albumLoad !== 'unreachable'}
 				{#if albumSongs.length === 0}
-					<p class="empty-tab">{ALBUM_NO_SONGS}</p>
+					<p class="empty-tab">{pageText('albumPage.noSongs')}</p>
 				{/if}
 				{#each albumSongs as s (s.id)}
 					<SongRow
 						title={s.title}
-						meta={`${s.generation_count} take${s.generation_count !== 1 ? 's' : ''}`}
+						meta={pageText('albumPage.songTakes', s.generation_count)}
 						current={isSongCurrent(s.id)}
 						onclick={() => onSongTap(s)}
 						onedit={() => selectSong(s.id)}
@@ -446,13 +455,15 @@
 {#if showDeleteConfirm && selectedAlbum}
 	{@const totalGens = albumSongs.reduce((sum, s) => sum + s.generation_count, 0)}
 	<ConfirmDeleteDialog
-		title={`Delete "${selectedAlbum.title}"?`}
+		title={pageText('albumPage.deleteTitle', { title: selectedAlbum.title })}
 		items={[
-			`${albumSongs.length} song${albumSongs.length !== 1 ? 's' : ''} (${albumSongs.map((s) => s.title).join(', ')})`,
-			`${totalGens} take${totalGens !== 1 ? 's' : ''}`,
-			'All versions, scores, and chat history'
+			pageText('albumPage.deleteSongs', albumSongs.length, {
+				titles: albumSongs.map((s) => s.title).join(', ')
+			}),
+			pageText('albumPage.deleteTakes', totalGens),
+			pageText('albumPage.deleteHistory')
 		]}
-		confirmLabel="Delete Album"
+		confirmLabel={pageText('albumPage.deleteConfirm')}
 		onconfirm={() => {
 			showDeleteConfirm = false;
 			onAlbumDelete();
