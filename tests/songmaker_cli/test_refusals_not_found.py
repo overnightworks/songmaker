@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from support.mcp_tool_table import ALICE, BOB
 from support.mcp_world import McpWorld
+from support.postgres_lock_harness import WAIT_SECONDS, StatementPause, in_thread, stop_workers
 from support.web_app import (
     make_authenticated_user,
     make_router_app,
@@ -118,32 +119,46 @@ def test_a_foreign_take_answers_the_body_of_a_missing_one(
     assert foreign.json()["detail"] == "Generation not found"
 
 
+def _after_the_take_is_read(statement: str) -> bool:
+    return "FROM generations" in statement
+
+
 @pytest.mark.parametrize(
-    ("method", "path", "arguments", "module", "query"),
+    ("method", "path", "arguments"),
     [
-        ("post", "/api/generations/take/rate", {"json": {"rating": 80}},
-         "take_judging_api", "save_rating"),
-        ("post", "/api/generations/take/pick", {}, "take_judging_api", "pick_generation"),
-        ("post", "/api/generations/take/keep", {}, "take_judging_api", "keep_generation"),
-        ("post", "/api/generations/take/share", {}, "generation_api", "enable_generation_sharing"),
-        ("delete", "/api/generations/take/share", {}, "generation_api",
-         "disable_generation_sharing"),
-        ("delete", "/api/generations/take", {}, "generation_api", "delete_generation"),
+        ("post", "/api/generations/take/rate", {"json": {"rating": 80}}),
+        ("post", "/api/generations/take/pick", {}),
+        ("post", "/api/generations/take/keep", {}),
+        ("post", "/api/generations/take/share", {}),
+        ("delete", "/api/generations/take/share", {}),
+        ("delete", "/api/generations/take", {}),
         ("post", "/api/playlists/playlist/entries/generation",
-         {"json": {"generation_id": "take"}}, "playlist_api", "add_generation_to_playlist"),
+         {"json": {"generation_id": "take"}}),
     ],
     ids=["rate", "pick", "keep", "share", "unshare", "delete", "playlist-add"],
 )
-def test_a_take_that_vanishes_after_the_access_check_reads_like_a_missing_one(
-    world: dict[str, TestClient], monkeypatch: pytest.MonkeyPatch,
-    method: str, path: str, arguments: dict, module: str, query: str,
+def test_a_take_deleted_after_the_access_check_reads_like_a_missing_one(
+    world: dict[str, TestClient], pg_factory, method: str, path: str, arguments: dict,
 ) -> None:
-    def vanished(*args: object, **kwargs: object) -> None:
-        raise ValueError("Generation not found: take")
+    pause = StatementPause(_after_the_take_is_read)
+    answers: dict[str, object] = {}
+    request = in_thread(answers, "request", lambda: getattr(world[OWNER_ID], method)(
+        path, **arguments,
+    ))
+    pause.install(pg_factory)
+    try:
+        request.start()
+        assert pause.reached.wait(WAIT_SECONDS), "The request never read the take"
+        with pg_factory() as deleter:
+            deleter.delete(deleter.get(Generation, "take"))
+            deleter.commit()
+    finally:
+        pause.release.set()
+        assert not stop_workers(pg_factory, (request,), (pause.backend_pid,))
+        pause.remove(pg_factory)
 
-    monkeypatch.setattr(f"songmaker_cli.{module}.{query}", vanished)
-    response = getattr(world[OWNER_ID], method)(path, **arguments)
-
+    response = answers["request"]
+    assert not isinstance(response, BaseException), response
     assert response.status_code == 404
     assert response.json() == refusal_body("generationRefusal.notFound")
 
