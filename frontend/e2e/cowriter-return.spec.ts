@@ -46,7 +46,8 @@ const CONVERSATION_ID = 'e2e-cowriter-return';
 const SENT = 'Ja bitte, schreib den Refrain neu';
 const REPLY = 'Erledigt. Der neue Refrain steht als neue Version.';
 const THINKING = kitWords['helperChat.thinking']({ name: words['cowriter.title'] });
-const AI_MARK = 'AI';
+// The mark and the reply sit in separate elements; their spacing varies with the layout.
+const ANSWER_SHOWN = new RegExp(`^\\s*AI\\s*${REPLY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`);
 
 // The problem frame the server ends a turn with when the agent did not
 // run it; the panel words the named problem.
@@ -339,7 +340,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await composer.press('Enter');
 
 		const chat = page.locator('.cowriter .message');
-		const shown = [failed, SENT, `${AI_MARK}${REPLY}`];
+		const shown = [failed, SENT, ANSWER_SHOWN];
 		await expect(chat).toHaveText(shown);
 		await expect(tryAgain).toHaveCount(0);
 
@@ -412,7 +413,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		const composer = page.getByPlaceholder(/Ask for a rewrite/);
 		await composer.fill(SENT);
 		await composer.press('Enter');
-		await expect(page.locator('.cowriter .message').last()).toHaveText(`${AI_MARK}${REPLY}`);
+		await expect(page.locator('.cowriter .message').last()).toHaveText(ANSWER_SHOWN);
 		await expect.poll(() => listReads).toBeGreaterThan(1);
 		await menuButton.click();
 
