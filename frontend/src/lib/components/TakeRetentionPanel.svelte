@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
+	import { Marked } from 'overnightworks-design';
 	import { describeFailure } from '#lib/api/fetch.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { addToast } from '#lib/stores/toast.ts';
@@ -8,9 +9,8 @@
 		runGenerationRetention,
 		type GenerationRetentionReport
 	} from '#lib/api/client.ts';
-
-	const RETENTION_EXPLANATION =
-		'Takes that are neither picked nor kept are archived after the retention window, then permanently deleted after the hard-delete window.';
+	import { formatDecimal } from '#lib/utils/format.ts';
+	import { pageParts, pageText } from '#lib/utils/page-words.ts';
 
 	let report = $state<GenerationRetentionReport | null>(null);
 	let loading = $state(false);
@@ -27,10 +27,6 @@
 	onMount(() => void refreshPreview());
 	onDestroy(() => previewReloads.stop());
 
-	function takes(count: number): string {
-		return `${count} take${count === 1 ? '' : 's'}`;
-	}
-
 	async function refreshPreview(): Promise<boolean> {
 		loading = true;
 		try {
@@ -38,7 +34,7 @@
 			previewReloads.stop();
 			return true;
 		} catch (e) {
-			const failure = previewReloads.nameLoadFailure(e, 'Preview failed');
+			const failure = previewReloads.nameLoadFailure(e, pageText('takeRetention.previewFailed'));
 			if (failure !== null) addToast(failure, 'error');
 			return false;
 		} finally {
@@ -54,10 +50,16 @@
 		running = true;
 		try {
 			const outcome = await runGenerationRetention();
-			addToast(`Archived ${outcome.archived_count}, deleted ${outcome.deleted_count}`, 'success');
+			addToast(
+				pageText('takeRetention.outcome', {
+					archived: formatDecimal(outcome.archived_count, 0),
+					deleted: formatDecimal(outcome.deleted_count, 0)
+				}),
+				'success'
+			);
 			await refreshPreview();
 		} catch (e) {
-			addToast(describeFailure(e, 'Cleanup failed'), 'error');
+			addToast(describeFailure(e, pageText('takeRetention.runFailed')), 'error');
 		} finally {
 			running = false;
 			confirming = false;
@@ -67,7 +69,7 @@
 
 <section class="retention">
 	<div class="head">
-		<h2>Take Retention</h2>
+		<h2>{pageText('takeRetention.heading')}</h2>
 		<span
 			class="info-wrap"
 			onmouseenter={() => (explaining = true)}
@@ -77,73 +79,84 @@
 			<button
 				type="button"
 				class="info"
-				aria-label="What this does"
+				aria-label={pageText('takeRetention.whatThisDoes')}
 				aria-expanded={explaining}
 				aria-describedby={explaining ? 'retention-explanation' : undefined}
 				onclick={() => (explaining = !explaining)}>i</button
 			>
 			{#if explaining}
 				<span id="retention-explanation" role="tooltip" class="explanation"
-					>{RETENTION_EXPLANATION}</span
+					>{pageText('takeRetention.explanation')}</span
 				>
 			{/if}
 		</span>
 		{#if report}
-			<span class="auto">↻ Auto · daily {scheduleHour}:00 UTC</span>
+			<span class="auto">↻ {pageText('takeRetention.schedule', { hour: scheduleHour })}</span>
 		{/if}
 	</div>
 
 	{#if loading && !report}
-		<p class="dim">Loading preview…</p>
+		<p class="dim">{pageText('takeRetention.loading')}</p>
 	{:else if report}
 		<div class="cards">
 			<div class="card">
-				<div class="number">{report.retention_days} days</div>
-				<div class="label">Archive after</div>
+				<div class="number">{pageText('takeRetention.days', report.retention_days)}</div>
+				<div class="label">{pageText('takeRetention.archiveAfter')}</div>
 			</div>
 			<div class="card">
-				<div class="number">{report.hard_delete_days} days</div>
-				<div class="label">Hard-delete after archive</div>
+				<div class="number">{pageText('takeRetention.days', report.hard_delete_days)}</div>
+				<div class="label">{pageText('takeRetention.hardDeleteAfter')}</div>
 			</div>
 			<div class="card">
-				<div class="number">{report.archived_count}</div>
-				<div class="label">to archive now</div>
+				<div class="number">{formatDecimal(report.archived_count, 0)}</div>
+				<div class="label">{pageText('takeRetention.toArchive')}</div>
 			</div>
 			<div class="card danger">
-				<div class="number"><span aria-hidden="true">▲</span> {report.deleted_count}</div>
-				<div class="label">to hard-delete now</div>
+				<div class="number">
+					<span aria-hidden="true">▲</span>
+					{formatDecimal(report.deleted_count, 0)}
+				</div>
+				<div class="label">{pageText('takeRetention.toHardDelete')}</div>
 			</div>
 		</div>
 
 		{#if nothingDue}
-			<p class="dim"><span aria-hidden="true">✓</span> Nothing to clean up right now</p>
+			<p class="dim"><span aria-hidden="true">✓</span> {pageText('takeRetention.nothingDue')}</p>
 		{:else if !confirming}
 			<div class="actions">
 				<button type="button" class="btn" onclick={refreshPreview} disabled={loading}
-					>Refresh</button
+					>{pageText('takeRetention.refresh')}</button
 				>
 				<button type="button" class="btn danger" onclick={askToRun} disabled={loading}
-					>Run now</button
+					>{pageText('takeRetention.runNow')}</button
 				>
 			</div>
 		{:else}
 			<div class="confirm">
 				<p>
-					Archive <strong>{takes(report.archived_count)}</strong> and permanently delete
-					<strong>{report.deleted_count}</strong>. Deleting cannot be undone.
+					<Marked
+						parts={pageParts('takeRetention.confirm', report.archived_count, {
+							deleted: formatDecimal(report.deleted_count, 0)
+						})}
+						marked={{ strong }}
+					/>
 				</p>
 				<div class="actions">
 					<button type="button" class="btn" onclick={() => (confirming = false)} disabled={running}>
-						Cancel
+						{pageText('takeRetention.cancel')}
 					</button>
 					<button type="button" class="btn danger solid" onclick={execute} disabled={running}>
-						{running ? 'Running…' : `Delete ${report.deleted_count}`}
+						{running
+							? pageText('takeRetention.running')
+							: pageText('takeRetention.delete', { count: report.deleted_count })}
 					</button>
 				</div>
 			</div>
 		{/if}
 	{/if}
 </section>
+
+{#snippet strong({ text }: { text: string })}<strong>{text}</strong>{/snippet}
 
 <style>
 	.head {

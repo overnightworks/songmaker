@@ -9,7 +9,6 @@
 import { expect, test, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 
-import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
 import {
 	accountCircle,
 	accountMenu,
@@ -127,29 +126,37 @@ test('Cleanup is the last Admin tab; Run now asks before anything is deleted, an
 
 	await page.goto('/settings/users');
 	if (shell === 'mobile') {
-		const select = page.getByRole('combobox', { name: ADMIN_TABS_LABEL });
-		await expect(select.locator('option').last()).toHaveText('Cleanup');
-		await select.selectOption({ label: 'Cleanup' });
+		const select = page.getByRole('combobox', { name: words['adminPage.sections'] });
+		await expect(select.locator('option').last()).toHaveText(words['adminPage.tabCleanup']);
+		await select.selectOption({ label: words['adminPage.tabCleanup'] });
 	} else {
 		const tabs = page.locator('.tabs button');
-		await expect(tabs.last()).toHaveText('Cleanup');
+		await expect(tabs.last()).toHaveText(words['adminPage.tabCleanup']);
 		await tabs.last().click();
 	}
 
-	await expect(page.getByRole('heading', { name: 'Take Retention' })).toBeVisible();
-	await expect(page.getByText('Auto · daily 03:00 UTC')).toBeVisible();
-	await page.getByRole('button', { name: 'Run now', exact: true }).click();
+	await expect(page.getByRole('heading', { name: words['takeRetention.heading'] })).toBeVisible();
+	await expect(page.getByText(words['takeRetention.schedule']({ hour: '03' }))).toBeVisible();
+	await page.getByRole('button', { name: words['takeRetention.runNow'], exact: true }).click();
 	await expect(
-		page.getByText('Archive 12 takes and permanently delete 3. Deleting cannot be undone.')
+		page.getByText(
+			words['takeRetention.confirm'](12, { deleted: '3' })
+				.map((part) => (typeof part === 'string' ? part : part.text))
+				.join('')
+		)
 	).toBeVisible();
 	expect(runs).toBe(0);
 
-	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: words['takeRetention.cancel'], exact: true }).click();
+	await expect(
+		page.getByRole('button', { name: words['takeRetention.runNow'], exact: true })
+	).toBeVisible();
 	expect(runs).toBe(0);
 
-	await page.getByRole('button', { name: 'Run now', exact: true }).click();
-	await page.getByRole('button', { name: 'Delete 3', exact: true }).click();
+	await page.getByRole('button', { name: words['takeRetention.runNow'], exact: true }).click();
+	await page
+		.getByRole('button', { name: words['takeRetention.delete']({ count: 3 }), exact: true })
+		.click();
 	await expect.poll(() => runs).toBe(1);
 	guard.assertClean();
 });
@@ -160,9 +167,13 @@ test('Cleanup with nothing due says so and offers no buttons', async ({ page }) 
 
 	await page.goto('/settings/users?tab=cleanup');
 
-	await expect(page.getByText('Nothing to clean up right now')).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Run now', exact: true })).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toHaveCount(0);
+	await expect(page.getByText(words['takeRetention.nothingDue'])).toBeVisible();
+	await expect(
+		page.getByRole('button', { name: words['takeRetention.runNow'], exact: true })
+	).toHaveCount(0);
+	await expect(
+		page.getByRole('button', { name: words['takeRetention.refresh'], exact: true })
+	).toHaveCount(0);
 	guard.assertClean();
 });
 
@@ -175,6 +186,8 @@ test('the old Account and Cleanup addresses behave like any unknown address', as
 		await page.goto(oldAddress);
 		await expect(page).toHaveURL(new RegExp(`${oldAddress}$`));
 		await expect(unknownAnswer).toBeVisible();
-		await expect(page.getByRole('heading', { name: /Account|Take Retention/ })).toHaveCount(0);
+		await expect(
+			page.getByRole('heading', { name: new RegExp(`Account|${words['takeRetention.heading']}`) })
+		).toHaveCount(0);
 	}
 });

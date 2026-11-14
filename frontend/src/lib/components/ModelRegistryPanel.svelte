@@ -6,7 +6,8 @@
 	import { addToast } from '#lib/stores/toast.ts';
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 	import type { RegistryResponse } from '#lib/api/types.ts';
-	import { MODEL_REGISTRY_LOAD_FAILED } from '#lib/constants/models.ts';
+	import { formatPercent } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
 	import { COMPACT_STACK_CLASS, ensureCompactUiStyles } from '#lib/styles/compact-ui.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
@@ -83,9 +84,9 @@
 		try {
 			const job = await downloadModel(mode);
 			trackJob(job, { mode });
-			addToast(`Downloading ${mode}…`, 'info');
+			addToast(pageText('modelRegistry.downloadingToast', { mode }), 'info');
 		} catch (e) {
-			actionError = describeFailure(e, 'Failed to start download');
+			actionError = describeFailure(e, pageText('modelRegistry.downloadFailed'));
 		} finally {
 			busyMode = { ...busyMode, [mode]: false };
 		}
@@ -96,16 +97,16 @@
 </script>
 
 <section class="panel">
-	<h2>Model Registry</h2>
+	<h2>{pageText('modelRegistry.heading')}</h2>
 
 	{#if forbidden}
-		<p class="panel-error">Admin access required.</p>
+		<p class="panel-error">{pageText('adminPage.accessRequired')}</p>
 	{:else if $error && models.length === 0}
 		{#if !$offline}
-			<p class="panel-error">{describeFailure($error, MODEL_REGISTRY_LOAD_FAILED)}</p>
+			<p class="panel-error">{describeFailure($error, pageText('modelRegistry.loadFailed'))}</p>
 		{/if}
 	{:else if models.length === 0}
-		<p class="hint">Loading registry…</p>
+		<p class="hint">{pageText('modelRegistry.loading')}</p>
 	{:else}
 		{#if actionError}
 			<p class="panel-error">{actionError}</p>
@@ -113,29 +114,32 @@
 		<table class="registry-table {compact ? COMPACT_STACK_CLASS : ''}">
 			<thead>
 				<tr>
-					<th>Mode</th>
-					<th>Status</th>
-					<th>Loaded</th>
-					<th>Loading</th>
-					<th class="actions-col">Actions</th>
+					<th>{pageText('modelRegistry.columnMode')}</th>
+					<th>{pageText('modelRegistry.columnStatus')}</th>
+					<th>{pageText('modelRegistry.columnLoaded')}</th>
+					<th>{pageText('modelRegistry.columnLoading')}</th>
+					<th class="actions-col">{pageText('modelRegistry.columnActions')}</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each models as model (model.mode)}
 					{@const dlJob = downloadingByMode.get(model.mode)}
 					<tr>
-						<td class="mode-cell" data-label="Mode">{model.mode}</td>
-						<td data-label="Status">
+						<td class="mode-cell" data-label={pageText('modelRegistry.columnMode')}>{model.mode}</td
+						>
+						<td data-label={pageText('modelRegistry.columnStatus')}>
 							{#if model.availability === 'downloaded'}
-								<span class="badge ok">downloaded</span>
+								<span class="badge ok">{pageText('modelRegistry.downloaded')}</span>
 							{:else if model.availability === 'unknown_no_worker'}
-								<span class="badge unknown">no worker running — download state unknown</span>
+								<span class="badge unknown">{pageText('modelRegistry.stateUnknown')}</span>
 							{:else}
-								<span class="badge missing">not downloaded</span>
+								<span class="badge missing">{pageText('modelRegistry.notDownloaded')}</span>
 							{/if}
 						</td>
-						<td class="count-cell" data-label="Loaded">×{model.loaded_on.length}</td>
-						<td class="count-cell" data-label="Loading">
+						<td class="count-cell" data-label={pageText('modelRegistry.columnLoaded')}
+							>×{model.loaded_on.length}</td
+						>
+						<td class="count-cell" data-label={pageText('modelRegistry.columnLoading')}>
 							{#if model.loading_on.length > 0}
 								×{model.loading_on.length}
 							{:else}
@@ -145,19 +149,23 @@
 						<td class="actions-col">
 							{#if dlJob}
 								<span class="dl-progress">
-									Downloading… {Math.round((dlJob.job.progress ?? 0) * 100)}%
+									{pageText('modelRegistry.downloadingProgress', {
+										percent: formatPercent(dlJob.job.progress ?? 0)
+									})}
 								</span>
 							{:else if model.availability === 'downloaded'}
 								<span class="dim">—</span>
 							{:else if model.availability === 'unknown_no_worker'}
-								<span class="dim">No worker online to download it</span>
+								<span class="dim">{pageText('modelRegistry.noWorkerOnline')}</span>
 							{:else}
 								<button
 									class="action-btn"
 									onclick={() => handleDownload(model.mode)}
 									disabled={busyMode[model.mode]}
 								>
-									{busyMode[model.mode] ? 'Starting…' : 'Download'}
+									{busyMode[model.mode]
+										? pageText('modelRegistry.starting')
+										: pageText('modelRegistry.download')}
 								</button>
 							{/if}
 						</td>
@@ -166,7 +174,7 @@
 			</tbody>
 		</table>
 		{#if $error && !$offline}
-			<p class="banner-error">⚠ Connection lost — retrying…</p>
+			<p class="banner-error">⚠ {pageText('modelRegistry.connectionLost')}</p>
 		{/if}
 	{/if}
 </section>

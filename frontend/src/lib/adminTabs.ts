@@ -1,12 +1,10 @@
-import { ADMIN_VOICES_TAB_LABEL } from '#lib/constants/voice.ts';
-
 export const ADMIN_TABS = [
-	{ id: 'voices', label: ADMIN_VOICES_TAB_LABEL },
-	{ id: 'ratelimits', label: 'Rate Limits' },
-	{ id: 'generation', label: 'Generation' },
-	{ id: 'models', label: 'Models' },
-	{ id: 'acestep', label: 'ACE-Step' },
-	{ id: 'cleanup', label: 'Cleanup' }
+	{ id: 'voices', labelKey: 'adminPage.tabVoices' },
+	{ id: 'ratelimits', labelKey: 'adminPage.tabRateLimits' },
+	{ id: 'generation', labelKey: 'adminPage.tabGeneration' },
+	{ id: 'models', labelKey: 'adminPage.tabModels' },
+	{ id: 'acestep', labelKey: 'adminPage.tabAcestep' },
+	{ id: 'cleanup', labelKey: 'adminPage.tabCleanup' }
 ] as const;
 
 export type AdminTab = (typeof ADMIN_TABS)[number]['id'];

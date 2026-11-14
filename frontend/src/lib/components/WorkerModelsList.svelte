@@ -1,14 +1,7 @@
 <script lang="ts">
 	import type { LoadedModelDetailItem } from '#lib/api/types.ts';
-	import {
-		WORKER_POOL_MODELS_LABEL,
-		WORKER_POOL_MODELS_LOADING_TEMPLATE,
-		WORKER_POOL_MODELS_OFFLINE_LABEL,
-		WORKER_POOL_NO_MODEL_LABEL,
-		WORKER_POOL_KEEP_LOADED_LABEL,
-		WORKER_POOL_KEEP_LOADED_HINT,
-		WORKER_POOL_UNLOAD_LABEL
-	} from '#lib/constants/worker.ts';
+	import { formatDecimal } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	interface Props {
 		loaded: LoadedModelDetailItem[];
@@ -32,44 +25,46 @@
 	}: Props = $props();
 </script>
 
-<div class="models" role="group" aria-label={WORKER_POOL_MODELS_LABEL}>
+<div class="models" role="group" aria-label={pageText('workerPool.models')}>
 	<div class="heading">
-		<span class="title">{WORKER_POOL_MODELS_LABEL}</span>
+		<span class="title">{pageText('workerPool.models')}</span>
 		{#if !offline && loaded.length > 0}
-			<span class="hint">{WORKER_POOL_KEEP_LOADED_HINT}</span>
+			<span class="hint">{pageText('workerPool.keepLoadedHint')}</span>
 		{/if}
 	</div>
 	{#if offline}
-		<p>{WORKER_POOL_MODELS_OFFLINE_LABEL}</p>
+		<p>{pageText('workerPool.modelsOffline')}</p>
 	{:else}
 		{#each loaded as model (model.mode)}
 			{@const kept = pinned.includes(model.mode)}
 			<div class="model" role="group" aria-label={model.mode}>
 				<span class="name">{model.mode}</span>
-				<span class="size">~{model.size_gb.toFixed(0)} GB</span>
+				<span class="size"
+					>{pageText('workerPool.modelSize', { size: formatDecimal(model.size_gb, 0) })}</span
+				>
 				<button
 					class="keep"
 					role="switch"
 					aria-checked={kept}
-					aria-label={`${WORKER_POOL_KEEP_LOADED_LABEL} ${model.mode}`}
+					aria-label={pageText('workerPool.keepLoadedModel', { mode: model.mode })}
 					disabled={isPinDisabled(model.mode)}
 					onclick={() => onTogglePin(model.mode, kept)}
 				>
 					<span class="check" class:kept aria-hidden="true">{kept ? '✓' : ''}</span>
-					{WORKER_POOL_KEEP_LOADED_LABEL}
+					{pageText('workerPool.keepLoaded')}
 				</button>
 				<button
 					class="unload"
-					aria-label={`${WORKER_POOL_UNLOAD_LABEL} ${model.mode}`}
+					aria-label={pageText('workerPool.unloadModel', { mode: model.mode })}
 					disabled={isUnloadDisabled(model.mode)}
-					onclick={() => onUnload(model.mode)}>{WORKER_POOL_UNLOAD_LABEL}</button
+					onclick={() => onUnload(model.mode)}>{pageText('workerPool.unload')}</button
 				>
 			</div>
 		{:else}
 			<p>
 				{loadingMode
-					? WORKER_POOL_MODELS_LOADING_TEMPLATE.replace('{mode}', loadingMode)
-					: WORKER_POOL_NO_MODEL_LABEL}
+					? pageText('workerPool.modelsLoading', { mode: loadingMode })
+					: pageText('workerPool.statusNoModel')}
 			</p>
 		{/each}
 	{/if}

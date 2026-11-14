@@ -2,10 +2,9 @@ import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { toasts } from '#lib/stores/toast.ts';
 import { closeTopLayer, dropLayersFrom } from '#lib/stores/layers.ts';
-import { localClockTime } from '#lib/utils/format.ts';
+import { formatDecimal, localClockTime } from '#lib/utils/format.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkerPoolResponse } from '#lib/api/types.ts';
-import { WORKER_POOL_LOAD_FAILED, WORKER_POOL_REFRESH_FAILED } from '#lib/constants/worker.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
@@ -21,6 +20,14 @@ function fetchWorkers(): Promise<Response> {
 	return Promise.resolve(poolFailure ?? Response.json(poolResponse));
 }
 
+const KEEP_LOADED = words['workerPool.keepLoaded'];
+const UNLOAD = words['workerPool.unload'];
+const labelled = (label: string) => `[aria-label="${label}"]`;
+const restartTitle = (worker: string) => words['workerPool.restartTitle']({ worker });
+const MODELS_LIST = labelled(words['workerPool.models']);
+const keepLoadedSwitch = (mode: string) => labelled(words['workerPool.keepLoadedModel']({ mode }));
+const unloadButton = (mode: string) => labelled(words['workerPool.unloadModel']({ mode }));
+
 let mounted: ReturnType<typeof mount> | undefined;
 
 function findButtonByText(root: HTMLElement, text: string): HTMLButtonElement | undefined {
@@ -30,7 +37,7 @@ function findButtonByText(root: HTMLElement, text: string): HTMLButtonElement | 
 }
 
 async function openRestartConfirmation(root: HTMLElement) {
-	const opener = findButtonByText(root, 'Restart worker…');
+	const opener = findButtonByText(root, words['workerPool.restart']);
 	if (!opener) throw new Error('Expected restart opener');
 	opener.focus();
 	opener.click();
@@ -39,41 +46,17 @@ async function openRestartConfirmation(root: HTMLElement) {
 	if (!dialog) throw new Error('Expected confirmation');
 	const cancel = findButtonByText(dialog, words['dialog.cancel']);
 	if (!cancel) throw new Error('Expected Cancel');
-	const restart = findButtonByText(dialog, 'Restart');
+	const restart = findButtonByText(dialog, words['workerPool.restartConfirm']);
 	if (!restart) throw new Error('Expected Restart');
 	return { opener, dialog, cancel, restart };
 }
 
 function workerPool(vramMeasured: boolean | null): WorkerPoolResponse {
-	return {
-		workers: [
-			{
-				identity: {
-					id: 'acestep-worker-0',
-					host: 'worker',
-					port: 8100,
-					gpu_id: 0,
-					vram_total_gb: 24,
-					registered_at: '2026-09-01T10:00:00Z',
-					last_register_at: '2026-09-01T10:00:00Z'
-				},
-				state: {
-					loaded: [],
-					target_loading: null,
-					loading_started_at: null,
-					loading_last_log_line: null,
-					queue_depth: 0,
-					vram_used_gb: 12.4,
-					vram_total_gb: 24,
-					vram_measured: vramMeasured,
-					available_modes: [],
-					pinned: [],
-					last_heartbeat_at: '2026-09-01T10:00:00Z'
-				},
-				status: 'online'
-			}
-		]
-	};
+	const pool = onlineWorkerPool();
+	const state = pool.workers[0].state;
+	if (state === null) throw new Error('Expected a heartbeating worker');
+	Object.assign(state, { loaded: [], available_modes: [], vram_measured: vramMeasured });
+	return pool;
 }
 
 async function renderWorkerPool(
@@ -140,9 +123,7 @@ describe('WorkerPoolPanel with no heartbeat', () => {
 	it('defect:#1593 explains why Restart cannot help instead of leaving it clickable into a 502', async () => {
 		const target = await renderWorkerPool(offlineWorkerPool(new Date().toISOString()), []);
 
-		const restartButton = Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
-			(button) => button.textContent?.includes('Restart')
-		);
+		const restartButton = findButtonByText(target, words['workerPool.restart']);
 		if (!restartButton) throw new Error('Expected a Restart button to be rendered');
 
 		expect(restartButton.disabled).toBe(true);
@@ -158,37 +139,17 @@ function heartbeatingButOfflineWorkerPool(
 	gpuHealthy: boolean | null,
 	gpuHealthDetail: string | null
 ): WorkerPoolResponse {
-	return {
-		workers: [
-			{
-				identity: {
-					id: 'acestep-worker-0',
-					host: 'worker',
-					port: 8100,
-					gpu_id: 0,
-					vram_total_gb: 24,
-					registered_at: '2026-08-24T11:10:00Z',
-					last_register_at: '2026-09-02T09:00:00Z'
-				},
-				state: {
-					loaded: [{ mode: 'sft', size_gb: 6 }],
-					target_loading: null,
-					loading_started_at: null,
-					loading_last_log_line: null,
-					queue_depth: 0,
-					vram_used_gb: null,
-					vram_total_gb: 24,
-					vram_measured: null,
-					available_modes: ['sft'],
-					pinned: [],
-					last_heartbeat_at: new Date().toISOString(),
-					gpu_healthy: gpuHealthy,
-					gpu_health_detail: gpuHealthDetail
-				},
-				status: 'offline'
-			}
-		]
-	};
+	const pool = onlineWorkerPool();
+	const worker = pool.workers[0];
+	if (worker.state === null) throw new Error('Expected a heartbeating worker');
+	worker.status = 'offline';
+	Object.assign(worker.state, {
+		vram_used_gb: null,
+		vram_measured: null,
+		gpu_healthy: gpuHealthy,
+		gpu_health_detail: gpuHealthDetail
+	});
+	return pool;
 }
 
 describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
@@ -198,21 +159,18 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 	// status icon and the row text must agree, and nothing must be
 	// clickable.
 	it('defect:#1573 names the GPU failure from the heartbeat and disables every action', async () => {
-		const target = await renderWorkerPool(
-			heartbeatingButOfflineWorkerPool(false, 'Driver/library version mismatch')
-		);
+		const detail = 'Driver/library version mismatch';
+		const target = await renderWorkerPool(heartbeatingButOfflineWorkerPool(false, detail));
 
-		expect(target.textContent).toContain('GPU unavailable — Driver/library version mismatch');
-		expect(target.textContent).not.toContain('Idle');
-		expect(target.textContent).not.toContain('just now');
+		expect(target.textContent).toContain(words['workerPool.gpuUnavailableDetail']({ detail }));
+		expect(target.textContent).not.toContain(words['workerPool.statusIdle']);
+		expect(target.textContent).not.toContain(words['workerPool.seenJustNow']);
 
 		const buttons = Array.from(target.querySelectorAll<HTMLButtonElement>('button'));
 		expect(buttons.length).toBeGreaterThan(0);
-		for (const button of buttons) {
-			expect(button.disabled).toBe(true);
-		}
+		expect(buttons.every((button) => button.disabled)).toBe(true);
 		expect(target.querySelector('[role="switch"]')).toBeNull();
-		expect(findButtonByText(target, 'Unload')).toBeUndefined();
+		expect(findButtonByText(target, UNLOAD)).toBeUndefined();
 		const select = target.querySelector<HTMLSelectElement>('select.mode-select');
 		expect(select?.disabled).toBe(true);
 	});
@@ -220,15 +178,14 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 	it('defect:#1593 names an old worker build that never learned to report GPU health', async () => {
 		const target = await renderWorkerPool(heartbeatingButOfflineWorkerPool(null, null));
 
-		expect(target.textContent).toContain('GPU health not reported');
-		expect(target.textContent).toContain('container running worker');
-		expect(target.textContent).not.toContain('Idle');
+		expect(target.textContent).toContain(words['workerPool.gpuHealthNotReported']);
+		const worker = 'acestep-worker-0';
+		expect(target.textContent).toContain(words['workerPool.restartNoGpuHealth']({ worker }));
+		expect(target.textContent).not.toContain(words['workerPool.statusIdle']);
 
 		const buttons = Array.from(target.querySelectorAll<HTMLButtonElement>('button'));
 		expect(buttons.length).toBeGreaterThan(0);
-		for (const button of buttons) {
-			expect(button.disabled).toBe(true);
-		}
+		expect(buttons.every((button) => button.disabled)).toBe(true);
 		const select = target.querySelector<HTMLSelectElement>('select.mode-select');
 		expect(select?.disabled).toBe(true);
 	});
@@ -277,6 +234,21 @@ function trainingWorkerPool(): WorkerPoolResponse {
 }
 
 describe('WorkerPoolPanel with a healthy online worker', () => {
+	it.each([
+		[1, '1 job'],
+		[2, '2 jobs'],
+		[1200, '1,200 jobs']
+	])('counts a queue of %i as "%s"', async (depth, expected) => {
+		const pool = onlineWorkerPool();
+		const state = pool.workers[0].state;
+		if (state === null) throw new Error('Expected a heartbeating worker');
+		state.queue_depth = depth;
+
+		const target = await renderWorkerPool(pool);
+
+		expect(target.textContent).toContain(`${words['workerPool.queueLabel']} ${expected}`);
+	});
+
 	// The counter-proof to the offline-guard tests above: nothing about
 	// this change may make a genuinely healthy worker's actions
 	// unreachable. Without this, a guard that fails "always disabled" would
@@ -292,14 +264,14 @@ describe('WorkerPoolPanel with a healthy online worker', () => {
 		select.dispatchEvent(new Event('change', { bubbles: true }));
 		await tick();
 
-		const loadButton = findButtonByText(target, 'Load');
+		const loadButton = findButtonByText(target, words['workerPool.load']);
 		if (!loadButton) throw new Error('Expected a Load button to be rendered');
 		expect(loadButton.disabled).toBe(false);
 
-		expect(target.querySelector('[role="switch"][aria-label="Keep loaded sft"]')).toBeEnabled();
-		expect(target.querySelector('[aria-label="Unload sft"]')).toBeEnabled();
+		expect(target.querySelector(`[role="switch"]${keepLoadedSwitch('sft')}`)).toBeEnabled();
+		expect(target.querySelector(unloadButton('sft'))).toBeEnabled();
 
-		const restartButton = findButtonByText(target, 'Restart');
+		const restartButton = findButtonByText(target, words['workerPool.restart']);
 		if (!restartButton) throw new Error('Expected a Restart button to be rendered');
 		expect(restartButton.disabled).toBe(false);
 	});
@@ -307,8 +279,8 @@ describe('WorkerPoolPanel with a healthy online worker', () => {
 	it('defect:#1593 shows a held online worker as training with the remaining lease', async () => {
 		const target = await renderWorkerPool(trainingWorkerPool(), ['sft']);
 
-		expect(target.textContent).toContain('Training (12s remaining)');
-		expect(target.textContent).not.toContain('Idle');
+		expect(target.textContent).toContain(words['workerPool.statusTraining']({ seconds: '12' }));
+		expect(target.textContent).not.toContain(words['workerPool.statusIdle']);
 		expect(target.querySelector('.status-online')).not.toBeNull();
 	});
 });
@@ -342,23 +314,31 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 			const target = await renderWorkerPool(pool);
 			const row = target.querySelector('[role="group"][aria-label="VRAM"]');
 			expect(row).toHaveTextContent(
-				`${measured === false ? '~' : ''}${used.toFixed(1)} / 24.0 GB${measured === false ? ' est.' : ''}`
+				words[measured === false ? 'workerPool.vramUsedEstimated' : 'workerPool.vramUsed']({
+					used: formatDecimal(used, 1),
+					total: formatDecimal(24, 1)
+				})
 			);
-			expect(row).not.toHaveTextContent('unknown');
-			expect(row).toHaveTextContent('VRAM:');
-			expect(target.textContent).toMatch(/Queue:.*VRAM:.*Last seen:/s);
+			expect(row).not.toHaveTextContent(words['workerPool.vramUnknown']);
+			expect(row).toHaveTextContent(words['workerPool.vramLabel']);
+			const rowLabels = [
+				'workerPool.queueLabel',
+				'workerPool.vramLabel',
+				'workerPool.lastSeenLabel'
+			] as const;
+			expect(target.textContent).toMatch(
+				new RegExp(rowLabels.map((key) => words[key]).join('.*'), 's')
+			);
 			const bar = row?.querySelector('.bar');
 			const numbers = row?.querySelector('.numbers');
 			if (!bar || !numbers) throw new Error('Expected a VRAM bar and numbers');
 			expect(bar.compareDocumentPosition(numbers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 			if (free) expect(row).toHaveTextContent(free);
 			else {
-				expect(row).not.toHaveTextContent('GB free');
-				expect(row).toHaveTextContent(
-					'No GPU reading — the sizes of the loaded models, not a measurement'
-				);
+				expect(row).not.toHaveTextContent(words['workerPool.vramFree']({ free: '' }).trim());
+				expect(row).toHaveTextContent(words['workerPool.vramEstimateReason']);
 			}
-			const load = findButtonByText(target, 'Load');
+			const load = findButtonByText(target, words['workerPool.load']);
 			if (!load) throw new Error('Expected a Load button');
 			expect(load.disabled).toBe(true);
 			const select = target.querySelector('select');
@@ -371,10 +351,10 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 	);
 
 	it.each([
-		{ missing: 'heartbeat', reason: 'No heartbeat — nothing to read' },
-		{ missing: 'used', reason: 'Worker build does not report VRAM fields' },
-		{ missing: 'total', reason: 'Worker does not report total VRAM' },
-		{ missing: 'both', reason: 'Worker build does not report VRAM fields' }
+		{ missing: 'heartbeat', reason: words['workerPool.vramNoHeartbeat'] },
+		{ missing: 'used', reason: words['workerPool.vramNoFields'] },
+		{ missing: 'total', reason: words['workerPool.vramNoTotal'] },
+		{ missing: 'both', reason: words['workerPool.vramNoFields'] }
 	])(
 		'defect:#1567 shows unknown when missing $missing without borrowing identity capacity',
 		async ({ missing, reason }) => {
@@ -390,10 +370,10 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 			}
 			const target = await renderWorkerPool(pool);
 			const row = target.querySelector('[role="group"][aria-label="VRAM"]');
-			expect(row).toHaveTextContent('unknown');
+			expect(row).toHaveTextContent(words['workerPool.vramUnknown']);
 			expect(row).toHaveTextContent(reason);
 			expect(row).not.toHaveTextContent('GB');
-			expect(findButtonByText(target, 'Load')).toBeDisabled();
+			expect(findButtonByText(target, words['workerPool.load'])).toBeDisabled();
 		}
 	);
 });
@@ -408,7 +388,7 @@ describe('WorkerPoolPanel failures', () => {
 		{
 			failure: 'a lost network with no strip',
 			err: new TypeError('Failed to fetch'),
-			shown: WORKER_POOL_LOAD_FAILED
+			shown: words['workerPool.loadFailed']
 		}
 	])('defect:#1593 names $failure without browser text', async ({ err, shown }) => {
 		poolFailure = err;
@@ -429,7 +409,7 @@ describe('WorkerPoolPanel failures', () => {
 		await vi.advanceTimersByTimeAsync(60_000);
 		expect(target.querySelector('.card')).not.toBeNull();
 		expect(target.querySelector('.banner-error')).toBeNull();
-		expect(target.textContent).not.toContain(WORKER_POOL_REFRESH_FAILED);
+		expect(target.textContent).not.toContain(words['workerPool.refreshFailed']);
 
 		poolFailure = undefined;
 		poolResponse = workerPool(true);
@@ -457,23 +437,25 @@ describe('WorkerPoolPanel model rows', () => {
 
 	it.each([0, 1, 3])('defect:#1573 renders %i model rows from the heartbeat', async (count) => {
 		const target = await renderWorkerPool(modelsPool(count));
-		const list = target.querySelector('[aria-label="Models on this GPU"]');
+		const list = target.querySelector(MODELS_LIST);
 		expect(list).not.toBeNull();
-		expect(list).toHaveTextContent('Models on this GPU');
-		if (count === 0) expect(list).toHaveTextContent('No model loaded');
-		else expect(list).not.toHaveTextContent('No model loaded');
+		expect(list).toHaveTextContent(words['workerPool.models']);
+		if (count === 0) expect(list).toHaveTextContent(words['workerPool.statusNoModel']);
+		else expect(list).not.toHaveTextContent(words['workerPool.statusNoModel']);
 		expect(list?.querySelectorAll('[role="group"]')).toHaveLength(count);
 		for (const model of models.slice(0, count)) {
 			const row = list?.querySelector(`[aria-label="${model.mode}"]`);
-			expect(row).toHaveTextContent(`${model.mode} ~${model.size_gb.toFixed(0)} GB`);
+			expect(row).toHaveTextContent(
+				`${model.mode} ${words['workerPool.modelSize']({ size: formatDecimal(model.size_gb, 0) })}`
+			);
 			expect(row?.querySelector('[role="switch"]')).toHaveAttribute(
 				'aria-checked',
 				String(model.mode !== 'turbo')
 			);
-			expect(row?.querySelector(`[aria-label="Unload ${model.mode}"]`)).toBeEnabled();
+			expect(row?.querySelector(unloadButton(model.mode))).toBeEnabled();
 		}
 		expect(
-			target.textContent?.match(/Keep loaded — never unloaded to make room/g) ?? []
+			target.textContent?.match(new RegExp(words['workerPool.keepLoadedHint'], 'g')) ?? []
 		).toHaveLength(count > 0 ? 1 : 0);
 		expect(target.textContent).not.toContain('Loaded:');
 		expect(target.textContent).not.toMatch(/\b(?:Pin|Unpin|Evict)\b/);
@@ -481,10 +463,10 @@ describe('WorkerPoolPanel model rows', () => {
 
 	it.each(
 		[
-			{ action: 'pin_model', mode: 'turbo', label: 'Keep loaded', kept: false, count: 3 },
-			{ action: 'unpin_model', mode: 'sft', label: 'Keep loaded', kept: true, count: 3 },
-			{ action: 'evict_model', mode: 'sft', label: 'Unload', kept: true, count: 3 },
-			{ action: 'evict_model', mode: 'sft', label: 'Unload', kept: true, count: 1 }
+			{ action: 'pin_model', mode: 'turbo', label: KEEP_LOADED, kept: false, count: 3 },
+			{ action: 'unpin_model', mode: 'sft', label: KEEP_LOADED, kept: true, count: 3 },
+			{ action: 'evict_model', mode: 'sft', label: UNLOAD, kept: true, count: 3 },
+			{ action: 'evict_model', mode: 'sft', label: UNLOAD, kept: true, count: 1 }
 		].flatMap((action) => [false, true].map((refused) => ({ ...action, refused })))
 	)(
 		'defect:#1573 $action with $count models targets its model, waits for refresh, and handles refusal=$refused',
@@ -516,7 +498,7 @@ describe('WorkerPoolPanel model rows', () => {
 				}
 			]);
 			expect(target.querySelector(`[aria-label="${mode}"]`)).not.toBeNull();
-			if (label === 'Keep loaded') expect(button).toHaveAttribute('aria-checked', String(kept));
+			if (label === KEEP_LOADED) expect(button).toHaveAttribute('aria-checked', String(kept));
 			const updated = modelsPool(count);
 			const state = updated.workers[0].state;
 			if (!state) throw new Error('Expected a heartbeat');
@@ -532,13 +514,13 @@ describe('WorkerPoolPanel model rows', () => {
 					expect(target.querySelector('.panel-error')).toHaveTextContent(refusal);
 					expect(button).toBeEnabled();
 					expect(target.querySelector(`[aria-label="${mode}"]`)).not.toBeNull();
-					if (label === 'Keep loaded') expect(button).toHaveAttribute('aria-checked', String(kept));
+					if (label === KEEP_LOADED) expect(button).toHaveAttribute('aria-checked', String(kept));
 				} else if (action === 'evict_model') {
 					expect(target.querySelector(`[aria-label="${mode}"]`)).toBeNull();
 					if (count === 1) {
-						const list = target.querySelector('[aria-label="Models on this GPU"]');
-						expect(list).toHaveTextContent('Models on this GPU');
-						expect(list).toHaveTextContent('No model loaded');
+						const list = target.querySelector(MODELS_LIST);
+						expect(list).toHaveTextContent(words['workerPool.models']);
+						expect(list).toHaveTextContent(words['workerPool.statusNoModel']);
 						expect(list?.querySelectorAll('[role="group"]')).toHaveLength(0);
 					}
 				} else {
@@ -548,10 +530,8 @@ describe('WorkerPoolPanel model rows', () => {
 			});
 			if (count > 1) {
 				expect(target.querySelector('[aria-label="xl-turbo"]')).toHaveTextContent('~12 GB');
-				expect(target.querySelector('[aria-label="Keep loaded xl-turbo"]')).toHaveAttribute(
-					'aria-checked',
-					'true'
-				);
+				const turbo = target.querySelector(keepLoadedSwitch('xl-turbo'));
+				expect(turbo).toHaveAttribute('aria-checked', 'true');
 			}
 		}
 	);
@@ -565,7 +545,7 @@ describe('WorkerPoolPanel model rows', () => {
 			if (busy === 'loading') state.target_loading = 'base';
 			else state.training_hold_seconds = 12;
 			const target = await renderWorkerPool(pool);
-			const buttons = target.querySelectorAll('[aria-label="Models on this GPU"] button');
+			const buttons = target.querySelectorAll(`${MODELS_LIST} button`);
 			expect(buttons).toHaveLength(6);
 			for (const button of buttons) expect(button).toBeDisabled();
 		}
@@ -580,7 +560,7 @@ describe('WorkerPoolPanel load row', () => {
 			loading: false,
 			offline: false,
 			heartbeat: true,
-			expected: 'No model loaded'
+			expected: words['workerPool.statusNoModel']
 		},
 		{
 			name: 'empty loading',
@@ -588,7 +568,7 @@ describe('WorkerPoolPanel load row', () => {
 			loading: true,
 			offline: false,
 			heartbeat: true,
-			expected: 'None yet — xl-turbo is loading.'
+			expected: words['workerPool.modelsLoading']({ mode: 'xl-turbo' })
 		},
 		{
 			name: 'loaded loading',
@@ -604,7 +584,7 @@ describe('WorkerPoolPanel load row', () => {
 			loading: false,
 			offline: true,
 			heartbeat: false,
-			expected: 'Unknown while the worker is offline.'
+			expected: words['workerPool.modelsOffline']
 		},
 		{
 			name: 'offline with stale models',
@@ -612,7 +592,7 @@ describe('WorkerPoolPanel load row', () => {
 			loading: true,
 			offline: true,
 			heartbeat: true,
-			expected: 'Unknown while the worker is offline.'
+			expected: words['workerPool.modelsOffline']
 		}
 	])('S19-1 S19-2 shows an honest $name list above its load row', async (scenario) => {
 		const pool = onlineWorkerPool();
@@ -623,19 +603,19 @@ describe('WorkerPoolPanel load row', () => {
 		if (!scenario.heartbeat) worker.state = null;
 		worker.status = scenario.offline ? 'offline' : scenario.loading ? 'loading' : 'online';
 		const target = await renderWorkerPool(pool);
-		const list = target.querySelector('[aria-label="Models on this GPU"]');
-		expect(list).toHaveTextContent('Models on this GPU');
+		const list = target.querySelector(MODELS_LIST);
+		expect(list).toHaveTextContent(words['workerPool.models']);
 		expect(list).toHaveTextContent(scenario.expected);
 		expect(list?.querySelectorAll('[role="switch"]')).toHaveLength(
 			scenario.loaded && !scenario.offline ? 1 : 0
 		);
-		if (scenario.offline || !scenario.loaded) expect(list).not.toHaveTextContent('Keep loaded');
+		if (scenario.offline || !scenario.loaded) expect(list).not.toHaveTextContent(KEEP_LOADED);
 		if (scenario.offline) expect(list).not.toHaveTextContent('sft');
 		const row = list?.nextElementSibling;
 		expect(row?.querySelector('select')).not.toBeNull();
-		expect(row?.querySelector('button')).toHaveTextContent('Load');
-		expect(row).not.toHaveTextContent('Restart');
-		expect(row?.nextElementSibling).toHaveTextContent('Restart');
+		expect(row?.querySelector('button')).toHaveTextContent(words['workerPool.load']);
+		expect(row).not.toHaveTextContent(words['workerPool.restartConfirm']);
+		expect(row?.nextElementSibling).toHaveTextContent(words['workerPool.restartConfirm']);
 	});
 
 	it.each(['idle', 'loading', 'offline', 'training', 'queued', 'full GPU'])(
@@ -650,7 +630,7 @@ describe('WorkerPoolPanel load row', () => {
 			if (stateName === 'queued') worker.state.queue_depth = 10;
 			if (stateName === 'full GPU') worker.state.vram_used_gb = 24;
 			const target = await renderWorkerPool(pool);
-			const load = findButtonByText(target, 'Load');
+			const load = findButtonByText(target, words['workerPool.load']);
 			const select = target.querySelector('select');
 			if (!select) throw new Error('Expected selection');
 			expect(load).toBeDisabled();
@@ -660,8 +640,8 @@ describe('WorkerPoolPanel load row', () => {
 			expect(select.disabled).toBe(['loading', 'offline'].includes(stateName));
 			expect(load?.disabled).toBe(['loading', 'offline'].includes(stateName));
 			if (stateName === 'training') {
-				expect(target.querySelector('[aria-label="Keep loaded sft"]')).toBeDisabled();
-				expect(target.querySelector('[aria-label="Unload sft"]')).toBeDisabled();
+				expect(target.querySelector(keepLoadedSwitch('sft'))).toBeDisabled();
+				expect(target.querySelector(unloadButton('sft'))).toBeDisabled();
 			}
 		}
 	);
@@ -698,7 +678,7 @@ describe('WorkerPoolPanel load row', () => {
 				}
 			);
 			const select = target.querySelector('select');
-			const load = findButtonByText(target, 'Load');
+			const load = findButtonByText(target, words['workerPool.load']);
 			if (!select || !load) throw new Error('Expected load controls');
 			select.value = 'turbo';
 			select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -725,18 +705,15 @@ describe('WorkerPoolPanel load row', () => {
 					expect(target.querySelector('.panel-error')).toHaveTextContent('Worker refused load')
 				);
 			} else {
+				const models = () => expect(target.querySelector(MODELS_LIST));
 				await vi.waitFor(() =>
-					expect(target.querySelector('[aria-label="Models on this GPU"]')).toHaveTextContent(
-						'None yet — turbo is loading.'
-					)
+					models().toHaveTextContent(words['workerPool.modelsLoading']({ mode: 'turbo' }))
 				);
 				expect(load).toBeDisabled();
 				expect(select).toBeDisabled();
 				poolResponse = onlineWorkerPool();
 				sendJob('completed');
-				await vi.waitFor(() =>
-					expect(target.querySelector('[aria-label="Models on this GPU"]')).toHaveTextContent('sft')
-				);
+				await vi.waitFor(() => models().toHaveTextContent('sft'));
 			}
 			await vi.waitFor(() => expect(load).toBeEnabled());
 			expect(select).toBeEnabled();
@@ -756,8 +733,8 @@ describe('WorkerPoolPanel restart confirmation', () => {
 			});
 			for (let attempt = 0; attempt < 2; attempt++) {
 				const { opener, dialog, cancel, restart } = await openRestartConfirmation(target);
-				expect(dialog).toHaveAttribute('aria-label', 'Restart acestep-worker-0?');
-				expect(dialog).toHaveTextContent('Running takes will stop.');
+				expect(dialog).toHaveAttribute('aria-label', restartTitle('acestep-worker-0'));
+				expect(dialog).toHaveTextContent(words['workerPool.restartWarning']);
 				expect(cancel).toHaveFocus();
 				cancel.dispatchEvent(
 					new KeyboardEvent('keydown', {
@@ -810,7 +787,7 @@ describe('WorkerPoolPanel restart confirmation', () => {
 			expect(target.querySelectorAll('[role="dialog"]')).toHaveLength(1);
 			expect(card.querySelector('[role="dialog"]')).toHaveAttribute(
 				'aria-label',
-				'Restart acestep-worker-1?'
+				restartTitle('acestep-worker-1')
 			);
 			expect(requests).toEqual([]);
 			restart.click();
@@ -868,7 +845,7 @@ describe('WorkerPoolPanel restart confirmation', () => {
 			if (change === 'offline') {
 				expect(restart).toBeDisabled();
 				restart.click();
-				expect(target).toHaveTextContent('VRAM unavailable while the worker is offline.');
+				expect(target).toHaveTextContent(words['workerPool.vramOffline']);
 				cancel.click();
 				await tick();
 			}
@@ -902,12 +879,16 @@ describe('WorkerPoolPanel last error', () => {
 			expect(box).toBeNull();
 			return;
 		}
-		expect(box).toHaveTextContent('Last error');
+		expect(box).toHaveTextContent(words['workerPool.lastError']);
 		expect(box).toHaveTextContent(error);
-		expect(box).toHaveTextContent('Full logs: docker compose logs acestep-worker-0');
+		expect(box).toHaveTextContent(
+			words['workerPool.fullLogs']({ command: 'docker compose logs acestep-worker-0' })
+				.map((part) => (typeof part === 'string' ? part : part.text))
+				.join('')
+		);
 		expect(box?.querySelector('img')).toBeNull();
 		expect(box?.previousElementSibling).toHaveClass('load-row');
-		expect(box?.nextElementSibling).toHaveTextContent('Restart worker…');
+		expect(box?.nextElementSibling).toHaveTextContent(words['workerPool.restart']);
 		if (timestamp && timestamp !== 'invalid') {
 			expect(box?.querySelector('time')).toHaveAttribute('datetime', timestamp);
 			expect(box?.querySelector('time')).toHaveTextContent(
@@ -924,15 +905,15 @@ describe('WorkerPoolPanel last error', () => {
 			pool.workers[0].status = 'offline';
 			const target = await renderWorkerPool(pool);
 			const row = target.querySelector('[aria-label="VRAM"]');
-			expect(row).toHaveTextContent('unknown');
-			expect(row).toHaveTextContent('VRAM unavailable while the worker is offline.');
+			expect(row).toHaveTextContent(words['workerPool.vramUnknown']);
+			expect(row).toHaveTextContent(words['workerPool.vramOffline']);
 			expect(row).not.toHaveTextContent('GB');
-			expect(row).not.toHaveTextContent('No heartbeat');
+			expect(row).not.toHaveTextContent(words['workerPool.vramNoHeartbeat'].split(' —')[0]);
 			expect(row?.querySelector('.bar span')).toBeNull();
 			poolResponse.workers[0].status = 'online';
 			await vi.advanceTimersByTimeAsync(3000);
 			expect(row).toHaveTextContent('12.4 / 24.0 GB');
-			expect(row).not.toHaveTextContent('unknown');
+			expect(row).not.toHaveTextContent(words['workerPool.vramUnknown']);
 		}
 	);
 });
