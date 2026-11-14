@@ -1,0 +1,125 @@
+"""Git merge driver that merges a gettext PO catalog entry by entry.
+
+Registered by ``scripts/setup_git.sh`` as ``python3 scripts/merge_po.py %O %A %B``: ancestor,
+ours, theirs. The merged catalog replaces ours. An entry is a blank-line separated block
+(its comments, ``msgctxt``, ``msgid``, ``msgid_plural``, ``msgstr`` lines) identified by its
+``msgctxt`` and ``msgid``. An entry changed or added on either side is kept; one is dropped
+only where one side deleted it and the other left it unchanged. An entry with different
+texts on the two sides is written between conflict markers and the exit status is 1.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+EntryKey = tuple[str, str]
+CONFLICT_OURS = "<<<<<<< ours"
+CONFLICT_SEPARATOR = "======="
+CONFLICT_THEIRS = ">>>>>>> theirs"
+IDENTITY_FIELDS = ("msgctxt", "msgid")
+FIELDS = ("msgctxt", "msgid_plural", "msgid", "msgstr")
+
+
+def split_blocks(text: str) -> list[str]:
+    blocks: list[str] = []
+    current: list[str] = []
+    for line in text.splitlines():
+        if line.strip():
+            current.append(line)
+        elif current:
+            blocks.append("\n".join(current))
+            current = []
+    if current:
+        blocks.append("\n".join(current))
+    return blocks
+
+
+def entry_key(block: str) -> EntryKey:
+    parts = {field: "" for field in IDENTITY_FIELDS}
+    current_field = ""
+    for line in block.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('"'):
+            if current_field in parts:
+                parts[current_field] += stripped
+            continue
+        current_field = next(
+            (field for field in FIELDS if stripped.startswith((f"{field} ", f"{field}["))), ""
+        )
+        if current_field in parts:
+            parts[current_field] += stripped[len(current_field) :].strip()
+    return parts["msgctxt"], parts["msgid"]
+
+
+def parse_catalog(text: str) -> dict[EntryKey, str]:
+    entries: dict[EntryKey, str] = {}
+    for block in split_blocks(text):
+        entries[entry_key(block)] = block
+    return entries
+
+
+def conflict_block(ours: str | None, theirs: str | None) -> str:
+    return "\n".join(
+        [CONFLICT_OURS, ours or "", CONFLICT_SEPARATOR, theirs or "", CONFLICT_THEIRS]
+    )
+
+
+def merge_order(
+    base: dict[EntryKey, str], ours: dict[EntryKey, str], theirs: dict[EntryKey, str]
+) -> list[EntryKey]:
+    """Our order, with each entry only theirs has placed after its predecessor in theirs."""
+    order = list(ours)
+    seen = set(order)
+    anchor: EntryKey | None = None
+    for key in theirs:
+        if key in seen:
+            anchor = key
+            continue
+        position = 0 if anchor is None else order.index(anchor) + 1
+        # Entries only ours added sit after the anchor too; ours stays first.
+        while position < len(order) and order[position] not in base and order[position] not in theirs:
+            position += 1
+        order.insert(position, key)
+        seen.add(key)
+        anchor = key
+    for key in base:
+        if key not in seen:
+            order.append(key)
+    return order
+
+
+def merge_catalogs(base_text: str, ours_text: str, theirs_text: str) -> tuple[str, bool]:
+    base = parse_catalog(base_text)
+    ours = parse_catalog(ours_text)
+    theirs = parse_catalog(theirs_text)
+    blocks: list[str] = []
+    conflicted = False
+    for key in merge_order(base, ours, theirs):
+        base_block, our_block, their_block = base.get(key), ours.get(key), theirs.get(key)
+        if our_block == their_block or their_block == base_block:
+            chosen = our_block
+        elif our_block == base_block:
+            chosen = their_block
+        else:
+            blocks.append(conflict_block(our_block, their_block))
+            conflicted = True
+            continue
+        if chosen is not None:
+            blocks.append(chosen)
+    return "\n\n".join(blocks) + "\n", conflicted
+
+
+def main(argv: list[str]) -> int:
+    base_path, ours_path, theirs_path = (Path(argument) for argument in argv[1:4])
+    merged, conflicted = merge_catalogs(
+        base_path.read_text(encoding="utf-8"),
+        ours_path.read_text(encoding="utf-8"),
+        theirs_path.read_text(encoding="utf-8"),
+    )
+    ours_path.write_text(merged, encoding="utf-8")
+    return 1 if conflicted else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

@@ -7,6 +7,7 @@
 - `scripts/test_postgresql.sh <files>`: targeted tests against throwaway PostgreSQL and Redis containers (the database tests and the Redis wire tests).
 - `pnpm exec vitest run <file>`: one frontend test file, from `frontend/`.
 - `python scripts/generate_types.py`: regenerates the frontend's API types from `src/songmaker_cli/api_models/` after a model change.
+- `bash scripts/setup_git.sh`: once per clone, registers the merge driver that merges `en.po` entry by entry (worktrees share it); without it git merges the catalog line by line.
 - `design-catalogs`: regenerates `frontend/src/lib/words/` and `src/songmaker_cli/words.py` from `frontend/src/lib/catalogs/`; `--check` runs in the static checks.
 
 ## Rules
