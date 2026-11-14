@@ -123,11 +123,66 @@ def test_deletion_against_a_change_conflicts(tmp_path: Path, deleting_side: str)
 def test_a_merge_file_outside_the_working_tree_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    working_tree = tmp_path / "tree"
-    working_tree.mkdir()
+    tree = tmp_path / "tree"
+    tree.mkdir()
     outside = tmp_path / "outside.po"
     outside.write_text(catalog(), encoding="utf-8")
-    monkeypatch.chdir(working_tree)
+    monkeypatch.chdir(tree)
 
     with pytest.raises(SystemExit):
         merge_po.main(["merge_po.py", str(outside), str(outside), str(outside)])
+
+
+def reworded(name: str, source: str) -> str:
+    return f'msgctxt "{name}"\nmsgid "{source}"\nmsgstr ""'
+
+
+def test_a_msgctxt_reworded_differently_on_both_sides_conflicts(tmp_path: Path) -> None:
+    base = catalog(entry("a"))
+    ours = catalog(reworded("a", "Ours wording"))
+    theirs = catalog(reworded("a", "Theirs wording"))
+
+    status, merged = merge_files(tmp_path, base, ours, theirs)
+
+    assert status == 1
+    assert merge_po.CONFLICT_OURS in merged
+    assert 'msgid "Ours wording"' in merged
+    assert 'msgid "Theirs wording"' in merged
+    assert merged.count('msgctxt "a"') == 2
+
+
+def test_a_msgctxt_reworded_the_same_way_on_both_sides_merges(tmp_path: Path) -> None:
+    base = catalog(entry("a"))
+    both = catalog(reworded("a", "Shared wording"))
+
+    status, merged = merge_files(tmp_path, base, both, both)
+
+    assert status == 0
+    assert merged == both
+
+
+def test_a_msgctxt_reworded_on_one_side_only_takes_the_new_wording(tmp_path: Path) -> None:
+    base = catalog(entry("a"))
+    theirs = catalog(reworded("a", "New wording"))
+
+    status, merged = merge_files(tmp_path, base, base, theirs)
+
+    assert status == 0
+    assert merged == theirs
+
+
+@pytest.mark.parametrize("side", ["base", "ours", "theirs"])
+def test_a_repeated_key_inside_one_input_fails_loud_naming_it(tmp_path: Path, side: str) -> None:
+    corrupt = catalog(entry("dup.key"), entry("dup.key", "Again"))
+    clean = catalog(entry("dup.key"))
+    inputs = {name: clean for name in ("base", "ours", "theirs")} | {side: corrupt}
+
+    with pytest.raises(SystemExit, match="dup.key"):
+        merge_files(tmp_path, inputs["base"], inputs["ours"], inputs["theirs"])
+
+
+def test_a_comment_only_block_without_a_msgid_fails_loud(tmp_path: Path) -> None:
+    corrupt = catalog("# stray comment")
+
+    with pytest.raises(SystemExit):
+        merge_files(tmp_path, catalog(), corrupt, catalog())

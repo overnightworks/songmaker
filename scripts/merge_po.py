@@ -3,9 +3,11 @@
 Registered by ``scripts/setup_git.sh`` as ``python3 scripts/merge_po.py %O %A %B``: ancestor,
 ours, theirs. The merged catalog replaces ours. An entry is a blank-line separated block
 (its comments, ``msgctxt``, ``msgid``, ``msgid_plural``, ``msgstr`` lines) identified by its
-``msgctxt`` and ``msgid``. An entry changed or added on either side is kept; one is dropped
-only where one side deleted it and the other left it unchanged. An entry with different
-texts on the two sides is written between conflict markers and the exit status is 1.
+``msgctxt`` and ``msgid``; a key repeated inside one input stops the driver. An entry changed
+or added on either side is kept; one is dropped only where one side deleted it and the other
+left it unchanged. An entry with different texts on the two sides, or a ``msgctxt`` with
+different new ``msgid`` texts on the two sides, is written between conflict markers and the
+exit status is 1.
 """
 
 from __future__ import annotations
@@ -49,14 +51,45 @@ def entry_key(block: str) -> EntryKey:
         )
         if current_field in parts:
             parts[current_field] += stripped[len(current_field) :].strip()
+    if not parts["msgid"]:
+        raise SystemExit(f"merge_po: block without a msgid: {block.splitlines()[0]!r}")
     return parts["msgctxt"], parts["msgid"]
 
 
 def parse_catalog(text: str) -> dict[EntryKey, str]:
     entries: dict[EntryKey, str] = {}
     for block in split_blocks(text):
-        entries[entry_key(block)] = block
+        key = entry_key(block)
+        if key in entries:
+            raise SystemExit(f"merge_po: repeated entry in one input: {key[0]!r} / {key[1]!r}")
+        entries[key] = block
     return entries
+
+
+def reworded_contexts(
+    base: dict[EntryKey, str], ours: dict[EntryKey, str], theirs: dict[EntryKey, str]
+) -> set[str]:
+    """Contexts where each side has an entry new against base, with different msgids."""
+
+    def new_msgids(side: dict[EntryKey, str]) -> dict[str, set[str]]:
+        by_context: dict[str, set[str]] = {}
+        for context, msgid in side:
+            if context and (context, msgid) not in base:
+                by_context.setdefault(context, set()).add(msgid)
+        return by_context
+
+    our_new, their_new = new_msgids(ours), new_msgids(theirs)
+    return {
+        context
+        for context in our_new.keys() & their_new.keys()
+        if our_new[context] != their_new[context]
+    }
+
+
+def context_blocks(catalog: dict[EntryKey, str], context: str) -> str:
+    return "\n\n".join(
+        block for (block_context, _), block in catalog.items() if block_context == context
+    )
 
 
 def conflict_block(ours: str | None, theirs: str | None) -> str:
@@ -95,7 +128,18 @@ def merge_catalogs(base_text: str, ours_text: str, theirs_text: str) -> tuple[st
     theirs = parse_catalog(theirs_text)
     blocks: list[str] = []
     conflicted = False
+    rewordings = reworded_contexts(base, ours, theirs)
+    reported: set[str] = set()
     for key in merge_order(base, ours, theirs):
+        context = key[0]
+        if context in rewordings:
+            if context not in reported:
+                reported.add(context)
+                blocks.append(
+                    conflict_block(context_blocks(ours, context), context_blocks(theirs, context))
+                )
+                conflicted = True
+            continue
         base_block, our_block, their_block = base.get(key), ours.get(key), theirs.get(key)
         if our_block == their_block or their_block == base_block:
             chosen = our_block
