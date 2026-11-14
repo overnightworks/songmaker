@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { words } from '#lib/words/en.ts';
+import { sourceLanguage } from '#lib/words/index.ts';
 import {
 	PHONE_VIEWPORT_HEIGHT_PX,
 	phoneViewport,
@@ -13,11 +15,14 @@ vi.mock('#lib/api/settings.ts', () => ({
 	updateTheme: (...args: unknown[]) => mockUpdateTheme(...args)
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
 	mockFetchTheme.mockReset();
 	mockUpdateTheme.mockReset();
 	localStorage.clear();
 	vi.resetModules();
+	// The reset drops the loaded words with the modules; the stores read them afresh.
+	const { loadPageWords } = await import('#lib/utils/page-words.ts');
+	await loadPageWords(sourceLanguage);
 });
 
 describe('railCollapsed', () => {
@@ -598,6 +603,7 @@ describe('theme', () => {
 			expect(localStorage.getItem(COPY_KEY)).toBe('light');
 			expect(document.documentElement.dataset.theme).toBe('light');
 			expect(get(toasts).map((toast) => toast.type)).toEqual(['error']);
+			expect(get(toasts).map((toast) => toast.message)).toEqual([words['account.themeSaveFailed']]);
 		});
 	});
 

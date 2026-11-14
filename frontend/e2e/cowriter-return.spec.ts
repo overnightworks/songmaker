@@ -206,7 +206,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await showCowriterTab(page);
 		await expect(page.getByText(SENT)).toBeVisible();
 		await expect(page.getByText(THINKING)).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
+		await expect(page.getByRole('button', { name: words['cowriter.send'] })).toBeDisabled();
 
 		turnState = 'answered';
 		completeTurn();

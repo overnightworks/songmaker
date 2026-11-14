@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { SongItem, VersionItem } from '#lib/api/types.ts';
+	import { cowriterMentionToken } from '#lib/constants/cowriter.ts';
 	import { pageLanguage } from '#lib/utils/page-language.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 
@@ -27,10 +28,10 @@
 			onclick={() => onselect(result)}
 		>
 			{#if result.type === 'album'}
-				<span class="mention-title">@album</span>
+				<span class="mention-title">{cowriterMentionToken(result)}</span>
 				<span class="mention-album">{albumTitle}</span>
 			{:else if result.type === 'version'}
-				<span class="mention-title">@v{result.item.version_number}</span>
+				<span class="mention-title">{cowriterMentionToken(result)}</span>
 				<span class="mention-album">
 					{result.item.created_at
 						? new Date(result.item.created_at).toLocaleDateString(pageLanguage())

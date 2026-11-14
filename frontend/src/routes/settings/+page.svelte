@@ -4,7 +4,6 @@
 	import { navigating } from '$app/state';
 	import { historyComesToRest, standingPageEntryId } from '#lib/history/historyController.ts';
 	import Icon from '#lib/components/Icon.svelte';
-	import { APP_NAME } from '#lib/constants/app.ts';
 	import { visibleSettingsSections } from '#lib/settingsSections.ts';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
@@ -48,7 +47,7 @@
 </script>
 
 <svelte:head>
-	<title>{pageText('settingsPage.documentTitle', { app: APP_NAME })}</title>
+	<title>{pageText('settingsPage.documentTitle', { app: pageText('app.name') })}</title>
 </svelte:head>
 
 {#if compact}

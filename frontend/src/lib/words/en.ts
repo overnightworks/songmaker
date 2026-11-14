@@ -898,8 +898,6 @@ export type Words = {
     readonly "dialog.cancel": string;
     readonly "dialog.confirm": string;
     readonly "toast.dismiss": string;
-    readonly "loading.plain": string;
-    readonly "adminPage.heading": string;
     readonly "adminPage.accessRequired": string;
     readonly "adminPage.sections": string;
     readonly "adminPage.tabVoices": string;
@@ -1371,6 +1369,30 @@ export type Words = {
     readonly "nowPlaying.streamUnreadable": (gaps: { readonly count: number }) => string;
     readonly "nowPlaying.streamMoreNotChecked": string;
     readonly "nowPlaying.streamMoreNotLoaded": string;
+    readonly "app.name": string;
+    readonly "breadcrumb.label": string;
+    readonly "deleteDialog.warning": string;
+    readonly "deleteDialog.confirm": string;
+    readonly "deleteDialog.cancel": string;
+    readonly "sharedFooter.poweredBy": (gaps: { readonly app: string }) => readonly (string | { readonly marker: "home"; readonly text: string })[];
+    readonly "songHeader.albumLine": (count: number, gaps: { readonly album: string }) => string;
+    readonly "cowriter.versionChip": (gaps: { readonly number: string }) => string;
+    readonly "albumPage.undo": string;
+    readonly "versions.loadFailed": string;
+    readonly "account.themeSaveFailed": string;
+    readonly "routeError.offline": string;
+    readonly "aiNotice.generated": string;
+    readonly "aiNotice.writing": string;
+    readonly "player.detailLoading": string;
+    readonly "aboutPage.loading": string;
+    readonly "workerPool.cancel": string;
+    readonly "adminPage.voiceStatusDraft": string;
+    readonly "adminPage.voiceStatusQueued": string;
+    readonly "adminPage.voiceStatusPreprocessing": string;
+    readonly "adminPage.voiceStatusTraining": string;
+    readonly "adminPage.voiceStatusExporting": string;
+    readonly "adminPage.voiceStatusReady": string;
+    readonly "adminPage.voiceStatusFailed": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -2477,8 +2499,6 @@ export const words: Words = {
     "dialog.cancel": "Cancel",
     "dialog.confirm": "Confirm",
     "toast.dismiss": "Dismiss",
-    "loading.plain": "Loading...",
-    "adminPage.heading": "Admin",
     "adminPage.accessRequired": "Admin access required.",
     "adminPage.sections": "Admin sections",
     "adminPage.tabVoices": "Voices",
@@ -3020,5 +3040,36 @@ export const words: Words = {
     "nowPlaying.streamUnreadable": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + " file unreadable",
     "nowPlaying.streamMoreNotChecked": "More takes not checked",
     "nowPlaying.streamMoreNotLoaded": "More takes not loaded",
+    "app.name": "Hallucinai",
+    "breadcrumb.label": "Breadcrumb",
+    "deleteDialog.warning": "This cannot be undone.",
+    "deleteDialog.confirm": "Delete",
+    "deleteDialog.cancel": "Cancel",
+    "sharedFooter.poweredBy": (gaps: { readonly app: string }): readonly (string | { readonly marker: "home"; readonly text: string })[] => ["Powered by ", { marker: "home", text: gaps.app }],
+    "songHeader.albumLine": (count: number, gaps: { readonly album: string }) => ({
+        zero: gaps.album + " · " + numberFormat.format(count) + " songs",
+        one: gaps.album + " · " + numberFormat.format(count) + " song",
+        two: gaps.album + " · " + numberFormat.format(count) + " songs",
+        few: gaps.album + " · " + numberFormat.format(count) + " songs",
+        many: gaps.album + " · " + numberFormat.format(count) + " songs",
+        other: gaps.album + " · " + numberFormat.format(count) + " songs",
+    })[pluralRules.select(count)],
+    "cowriter.versionChip": (gaps: { readonly number: string }) => "v" + gaps.number,
+    "albumPage.undo": "Undo",
+    "versions.loadFailed": "Could not load versions",
+    "account.themeSaveFailed": "Saving the theme failed",
+    "routeError.offline": "This page needs the network. It opens by itself when you are back online.",
+    "aiNotice.generated": "KI-generiert",
+    "aiNotice.writing": "Du schreibst mit einer KI",
+    "player.detailLoading": "Loading...",
+    "aboutPage.loading": "Loading...",
+    "workerPool.cancel": "Cancel",
+    "adminPage.voiceStatusDraft": "draft",
+    "adminPage.voiceStatusQueued": "queued",
+    "adminPage.voiceStatusPreprocessing": "preprocessing",
+    "adminPage.voiceStatusTraining": "training",
+    "adminPage.voiceStatusExporting": "exporting",
+    "adminPage.voiceStatusReady": "ready",
+    "adminPage.voiceStatusFailed": "failed",
 };
 export type Key = keyof Words;

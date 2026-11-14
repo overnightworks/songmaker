@@ -44,7 +44,7 @@ async function openRestartConfirmation(root: HTMLElement) {
 	await tick();
 	const dialog = root.querySelector<HTMLElement>('[role="dialog"]');
 	if (!dialog) throw new Error('Expected confirmation');
-	const cancel = findButtonByText(dialog, words['dialog.cancel']);
+	const cancel = findButtonByText(dialog, words['workerPool.cancel']);
 	if (!cancel) throw new Error('Expected Cancel');
 	const restart = findButtonByText(dialog, words['workerPool.restartConfirm']);
 	if (!restart) throw new Error('Expected Restart');

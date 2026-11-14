@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { words } from '#lib/words/en.ts';
 import Breadcrumb from './Breadcrumb.svelte';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
@@ -34,6 +35,11 @@ describe('Breadcrumb', () => {
 		]);
 		const crumbs = Array.from(root.querySelectorAll('.crumb')).map((el) => el.textContent);
 		expect(crumbs).toEqual(['Library', 'Sommerlicht', 'Track 2 of 3']);
+	});
+
+	it('names its navigation landmark', async () => {
+		const root = await render([{ label: 'Library', onclick: vi.fn() }, { label: 'Album' }]);
+		expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe(words['breadcrumb.label']);
 	});
 
 	it('marks only the last crumb as the current page', async () => {

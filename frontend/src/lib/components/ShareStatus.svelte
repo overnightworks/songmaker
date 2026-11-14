@@ -1,7 +1,6 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import type { SharedCollectionKind } from '#lib/api/shared.ts';
-	import { APP_NAME } from '#lib/constants/app.ts';
 	import type { Key } from '#lib/words/en.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
@@ -65,7 +64,9 @@
 	<h1 bind:this={headingElement} tabindex="-1">{heading}</h1>
 	{#if kind === 'missing'}
 		<p>{pageText('shareStatus.invalidLink')}</p>
-		<a class="primary" href="/login">{pageText('shareStatus.openApp', { app: APP_NAME })}</a>
+		<a class="primary" href="/login"
+			>{pageText('shareStatus.openApp', { app: pageText('app.name') })}</a
+		>
 	{:else if kind === 'error'}
 		<p>{pageText(SHARE_STATUS_ERROR_BODIES[resource])}</p>
 		{#if onretry}
@@ -73,7 +74,7 @@
 				>{pageText('shareStatus.retry')}</button
 			>
 		{/if}
-		<a href="/login">{pageText('shareStatus.openApp', { app: APP_NAME })}</a>
+		<a href="/login">{pageText('shareStatus.openApp', { app: pageText('app.name') })}</a>
 	{/if}
 </section>
 

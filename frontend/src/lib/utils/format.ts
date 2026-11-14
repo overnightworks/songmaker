@@ -1,4 +1,3 @@
-import { DAY_LABEL_TODAY, DAY_LABEL_YESTERDAY } from '#lib/constants/day-label.ts';
 import { ALBUM_ART_EMPTY_INITIALS, ALBUM_ART_INITIAL_COUNT } from '#lib/constants/album.ts';
 import { pageLanguage } from './page-language.ts';
 import { pageText } from './page-words.ts';
@@ -86,13 +85,18 @@ export function releaseDayLabel(tag: string): string | null {
 	return isRealDay ? `${dayAndMonth(moment)} ${year}` : null;
 }
 
+/** The page language's word for a day offset from today: English reads "today" for 0 and "yesterday" for -1. */
+function relativeDayWord(dayOffset: 0 | -1): string {
+	return new Intl.RelativeTimeFormat(pageLanguage(), { numeric: 'auto' }).format(dayOffset, 'day');
+}
+
 /** When a place was last worked in: "today 05:47", "yesterday 23:40", "Thu 20:31", "21 Sep". */
 export function activityTimeLabel(activityAt: string, now: Date): string {
 	const moment = new Date(activityAt);
 	const daysAgo = localDaysBetween(moment, now);
 	const clock = localClockTime(moment);
-	if (daysAgo <= 0) return `${DAY_LABEL_TODAY} ${clock}`;
-	if (daysAgo === 1) return `${DAY_LABEL_YESTERDAY} ${clock}`;
+	if (daysAgo <= 0) return `${relativeDayWord(0)} ${clock}`;
+	if (daysAgo === 1) return `${relativeDayWord(-1)} ${clock}`;
 	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) return `${localWeekday(moment)} ${clock}`;
 	return localDayAndMonth(moment, now);
 }

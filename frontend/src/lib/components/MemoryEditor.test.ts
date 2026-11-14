@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MemoryBundle } from '#lib/api/types.ts';
 import type { MemoryProposal } from '#lib/utils/memory-proposals.ts';
+import { words } from '#lib/words/en.ts';
 import MemoryEditor from './MemoryEditor.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -65,9 +66,9 @@ function saveButtonOf(textarea: HTMLTextAreaElement | null): HTMLButtonElement {
 describe('MemoryEditor', () => {
 	// Spec: REQ-COWRITER-15 -- each memory field shows its stored text and saves the musician's edit.
 	it.each([
-		['User memory', 'user', 'u1', 'Prefers short lines'],
-		['Song memory', 'song', 's1', 'Chorus is locked'],
-		['Album notes', 'album', 'a1', 'A night-city album']
+		[words['memory.userField'], 'user', 'u1', 'Prefers short lines'],
+		[words['memory.songField'], 'song', 's1', 'Chorus is locked'],
+		[words['memory.albumField'], 'album', 'a1', 'A night-city album']
 	])('shows %s and saves the edit of it', async (label, scope, targetId, stored) => {
 		const { target, onSave } = await renderEditor(fullBundle);
 		expect(field(target, label)?.value).toBe(stored);
@@ -83,9 +84,9 @@ describe('MemoryEditor', () => {
 	it('shows no album field when the album has no notes', async () => {
 		const { target } = await renderEditor({ user: fullBundle.user, song: fullBundle.song });
 
-		expect(field(target, 'User memory')).not.toBeNull();
+		expect(field(target, words['memory.userField'])).not.toBeNull();
 		expect(field(target, 'Song memory')).not.toBeNull();
-		expect(field(target, 'Album notes')).toBeNull();
+		expect(field(target, words['memory.albumField'])).toBeNull();
 	});
 
 	const proposal: MemoryProposal = {

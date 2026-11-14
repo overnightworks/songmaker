@@ -2,7 +2,6 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto, replaceState } from '$app/navigation';
-import { APP_NAME } from '#lib/constants/app.ts';
 import {
 	installHistoryController,
 	resetHistoryControllerForTests,
@@ -127,7 +126,7 @@ describe('settings index on the phone', () => {
 	it('names the tab after the Settings list', async () => {
 		await render();
 
-		expect(document.title).toBe(words['settingsPage.documentTitle']({ app: APP_NAME }));
+		expect(document.title).toBe(words['settingsPage.documentTitle']({ app: words['app.name'] }));
 	});
 });
 

@@ -17,8 +17,8 @@
 		updateCowriterSettings
 	} from '#lib/api/client.ts';
 	import type { AvailableModel } from '#lib/api/client.ts';
-	import type { CowriterSettings } from '#lib/api/types.ts';
-	import type { VersionGenerationParams } from '#lib/api/types.ts';
+	import type { CowriterSettings, VersionGenerationParams } from '#lib/api/types.ts';
+	import { ADMIN_VOICE_STATUS_TEXT_KEYS } from '#lib/constants/admin.ts';
 	import ParamControls from '#lib/components/ParamControls.svelte';
 	import { ADMIN_TABS, parseAdminTab, type AdminTab } from '#lib/adminTabs.ts';
 	import WorkerPoolPanel from '#lib/components/WorkerPoolPanel.svelte';
@@ -301,7 +301,7 @@
 	<div class="denied">{pageText('adminPage.accessRequired')}</div>
 {:else}
 	<div class="settings-page">
-		<h1>{pageText('adminPage.heading')}</h1>
+		<h1>{pageText('settingsSections.admin')}</h1>
 
 		{#if compact}
 			<select
@@ -366,7 +366,7 @@
 											].includes(voice.status)}
 											class:voice-status-failed={voice.status === 'failed'}
 										>
-											{voice.status}
+											{pageText(ADMIN_VOICE_STATUS_TEXT_KEYS[voice.status])}
 										</span>
 									</td>
 								</tr>

@@ -1,16 +1,23 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { APP_NAME } from '#lib/constants/app.ts';
 	import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
-	import { LegalLinks } from 'overnightworks-design';
+	import { LegalLinks, Marked } from 'overnightworks-design';
 	import { legalLinks } from '#lib/utils/legal-links.ts';
+	import { pageParts, pageText } from '#lib/utils/page-words.ts';
 	import { kitWords } from '#lib/utils/kit-words.ts';
 </script>
 
 <footer class="powered">
-	<p class="lead">Powered by <a href={HOME_ROUTE_PATH}>{APP_NAME}</a></p>
+	<p class="lead">
+		<Marked
+			parts={pageParts('sharedFooter.poweredBy', { app: pageText('app.name') })}
+			marked={{ home }}
+		/>
+	</p>
 	<LegalLinks links={legalLinks()} words={kitWords()} newTab />
 </footer>
+
+{#snippet home({ text }: { text: string })}<a href={HOME_ROUTE_PATH}>{text}</a>{/snippet}
 
 <style>
 	.powered {

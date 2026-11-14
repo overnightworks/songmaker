@@ -63,7 +63,7 @@ const TASKS = [words['modelsTable.taskCowriter'], words['modelsTable.taskCover']
 async function openModelsTab(page: Page): Promise<void> {
 	await page.goto('/settings/users');
 	await expect(
-		page.getByRole('heading', { name: words['adminPage.heading'], exact: true })
+		page.getByRole('heading', { name: words['settingsSections.admin'], exact: true })
 	).toBeVisible();
 
 	const compactTabs = page.getByRole('combobox', {

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { APP_NAME } from '#lib/constants/app.ts';
 	import { backLabel, backTargetName, pageBackShown } from '#lib/routes/pageBack.ts';
 	import { standingPage } from '#lib/routes/standingAddress.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
@@ -146,8 +145,8 @@
 		</button>
 		{@render searchButton()}
 	{:else}
-		<button type="button" class="brand" onclick={() => openHome()} data-text={APP_NAME}
-			>{APP_NAME}</button
+		<button type="button" class="brand" onclick={() => openHome()} data-text={pageText('app.name')}
+			>{pageText('app.name')}</button
 		>
 		{@render searchButton()}
 		<AccountMenu {username} {accountHref} {onlogout} />

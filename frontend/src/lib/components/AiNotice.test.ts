@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
+import { words } from '#lib/words/en.ts';
 import AiNotice from './AiNotice.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -22,13 +23,13 @@ async function render(look: 'badge' | 'line'): Promise<HTMLElement> {
 
 describe('1906_E3 AiNotice (Art. 50 AI Act)', () => {
 	it.each([
-		{ look: 'badge' as const, words: 'KI-generiert' },
-		{ look: 'line' as const, words: 'Du schreibst mit einer KI' }
+		{ look: 'badge' as const, sentence: words['aiNotice.generated'] },
+		{ look: 'line' as const, sentence: words['aiNotice.writing'] }
 	])(
 		'1906_E3: the $look says exactly the ruled German words, marked as German',
-		async ({ look, words }) => {
+		async ({ look, sentence }) => {
 			const notice = await render(look);
-			expect(notice.textContent?.trim()).toBe(words);
+			expect(notice.textContent?.trim()).toBe(sentence);
 			expect(notice).toHaveAttribute('lang', 'de');
 		}
 	);

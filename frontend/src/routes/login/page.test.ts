@@ -1,7 +1,6 @@
 import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
-import { APP_NAME } from '#lib/constants/app.ts';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import { kitWords } from '#lib/utils/kit-words.ts';
 import Page from './+page.svelte';
@@ -57,7 +56,7 @@ describe('signed-out page', () => {
 		renderPage();
 		await tick();
 
-		expect(document.title).toBe(APP_NAME);
+		expect(document.title).toBe(words['app.name']);
 	});
 
 	it('links every legal text the shared pages link', async () => {

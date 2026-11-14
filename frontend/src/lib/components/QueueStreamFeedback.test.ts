@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { QueueStreamSkipItem } from '#lib/api/types.ts';
+import { formatList } from '#lib/utils/format.ts';
 import { words } from '#lib/words/en.ts';
 import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 
@@ -42,7 +43,11 @@ describe('QueueStreamFeedback', () => {
 
 		const summary = details.querySelector('summary') as HTMLElement;
 		expect(summary.getAttribute('aria-label')).toBe(
-			`${words['nowPlaying.streamSkipped'](3)}, ${words['nowPlaying.streamCheckIncomplete']}, ${words['nowPlaying.streamEnded']}`
+			formatList([
+				words['nowPlaying.streamSkipped'](3),
+				words['nowPlaying.streamCheckIncomplete'],
+				words['nowPlaying.streamEnded']
+			])
 		);
 		summary.focus();
 		expect(document.activeElement).toBe(summary);

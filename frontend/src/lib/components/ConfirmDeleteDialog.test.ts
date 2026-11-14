@@ -1,3 +1,4 @@
+import { words } from '#lib/words/en.ts';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
@@ -88,12 +89,12 @@ function pressKey(target: EventTarget, key: string, shiftKey = false): void {
 describe('ConfirmDeleteDialog', () => {
 	it('moves focus onto Cancel when it opens', async () => {
 		const dialog = await openFrom(renderOpener());
-		expect(document.activeElement).toBe(button(dialog, 'Cancel'));
+		expect(document.activeElement).toBe(button(dialog, words['deleteDialog.cancel']));
 	});
 
 	it.each([
-		['Tab from Delete', 'Delete', false, 'Cancel'],
-		['Shift+Tab from Cancel', 'Cancel', true, 'Delete']
+		['Tab from Delete', words['deleteDialog.confirm'], false, words['deleteDialog.cancel']],
+		['Shift+Tab from Cancel', words['deleteDialog.cancel'], true, words['deleteDialog.confirm']]
 	])('keeps focus inside the dialog on %s', async (_case, from, shiftKey, to) => {
 		const dialog = await openFrom(renderOpener());
 		button(dialog, from).focus();
@@ -102,9 +103,12 @@ describe('ConfirmDeleteDialog', () => {
 	});
 
 	it.each([
-		['Cancel', (dialog: HTMLElement) => button(dialog, 'Cancel').click()],
-		['Delete', (dialog: HTMLElement) => button(dialog, 'Delete').click()],
-		['Escape', (dialog: HTMLElement) => pressKey(button(dialog, 'Cancel'), 'Escape')]
+		['Cancel', (dialog: HTMLElement) => button(dialog, words['deleteDialog.cancel']).click()],
+		['Delete', (dialog: HTMLElement) => button(dialog, words['deleteDialog.confirm']).click()],
+		[
+			'Escape',
+			(dialog: HTMLElement) => pressKey(button(dialog, words['deleteDialog.cancel']), 'Escape')
+		]
 	])('returns focus to the control that opened it after %s', async (_case, close) => {
 		const opener = renderOpener();
 		const dialog = await openFrom(opener);
@@ -117,8 +121,8 @@ describe('ConfirmDeleteDialog', () => {
 	it('takes focus and later returns it to the menu trigger when a closing menu opened it', async () => {
 		const trigger = renderOpener();
 		const dialog = await openFromMenu(trigger);
-		expect(document.activeElement).toBe(button(dialog, 'Cancel'));
-		pressKey(button(dialog, 'Cancel'), 'Escape');
+		expect(document.activeElement).toBe(button(dialog, words['deleteDialog.cancel']));
+		pressKey(button(dialog, words['deleteDialog.cancel']), 'Escape');
 		await tick();
 		expect(document.activeElement).toBe(trigger);
 	});
@@ -127,9 +131,15 @@ describe('ConfirmDeleteDialog', () => {
 		const levelUp = vi.fn();
 		stopListeningForEscape = listenForGlobalEscape(levelUp);
 		const dialog = await openFrom(renderOpener());
-		pressKey(button(dialog, 'Cancel'), 'Escape');
+		pressKey(button(dialog, words['deleteDialog.cancel']), 'Escape');
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
 		expect(levelUp).not.toHaveBeenCalled();
+	});
+
+	it('shows the default warning and confirm label when the caller passes neither', async () => {
+		const dialog = await openFrom(renderOpener());
+		expect(dialog.querySelector('.warning')?.textContent).toBe(words['deleteDialog.warning']);
+		expect(dialog.querySelector('.confirm-btn')?.textContent).toBe(words['deleteDialog.confirm']);
 	});
 
 	it('is labelled by its title', async () => {

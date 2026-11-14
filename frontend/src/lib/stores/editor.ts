@@ -11,6 +11,7 @@ import { selectedSong, selectedSongId } from '#lib/stores/player.ts';
 import { activeJobs, isActiveJobStatus } from '#lib/stores/jobs.ts';
 import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 import { addToast } from '#lib/stores/toast.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import type {
 	GenerationItem,
 	ReferenceResponse,
@@ -18,8 +19,6 @@ import type {
 	VersionGenerationParams,
 	VersionItem
 } from '#lib/api/types.ts';
-
-const VERSIONS_LOAD_FAILED = 'Could not load versions';
 
 interface SongData {
 	lyrics: string;
@@ -291,7 +290,7 @@ async function loadVersions(songId: string, recover = false): Promise<void> {
 		if (request !== versionLoad || get(editorState)?.songId !== songId) return;
 		if (isNotFound(err)) return;
 		reloadingSongId = songId;
-		const message = versionReloads.nameLoadFailure(err, VERSIONS_LOAD_FAILED);
+		const message = versionReloads.nameLoadFailure(err, pageText('versions.loadFailed'));
 		if (message) addToast(message, 'error');
 	}
 }

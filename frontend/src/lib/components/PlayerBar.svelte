@@ -257,7 +257,8 @@
 				{/if}
 			{/if}
 			<span class="track-detail" id={detailId}
-				>{detailLine}{#if isLoading}<span class="loading-text">{pageText('loading.plain')}</span
+				>{detailLine}{#if isLoading}<span class="loading-text"
+						>{pageText('player.detailLoading')}</span
 					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
 			>
 		{:else if waitingSong}

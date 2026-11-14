@@ -6,7 +6,7 @@
 	import type { ReleaseInfo } from '#lib/api/types.ts';
 	import BusyState from '#lib/components/BusyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
-	import { APP_NAME, APP_REPOSITORY_URL } from '#lib/constants/app.ts';
+	import { APP_REPOSITORY_URL } from '#lib/constants/app.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import { releaseDayLabel } from '#lib/utils/format.ts';
 
@@ -42,7 +42,7 @@
 </script>
 
 <svelte:head>
-	<title>{pageText('aboutPage.documentTitle', { app: APP_NAME })}</title>
+	<title>{pageText('aboutPage.documentTitle', { app: pageText('app.name') })}</title>
 </svelte:head>
 
 <h1>{pageText('settingsSections.about')}</h1>
@@ -50,12 +50,12 @@
 {#if $loadFailure}
 	<p class="error">{$loadFailure}</p>
 {:else if release === null}
-	<BusyState text={pageText('loading.plain')} />
+	<BusyState text={pageText('aboutPage.loading')} />
 {:else}
 	<div class="about-list">
 		<div class="about-row">
 			<span class="about-label">{pageText('aboutPage.app')}</span>
-			<span class="about-value">{APP_NAME}</span>
+			<span class="about-value">{pageText('app.name')}</span>
 		</div>
 		<div class="about-row">
 			<span class="about-label">{pageText('aboutPage.version')}</span>

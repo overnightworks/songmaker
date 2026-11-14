@@ -1,6 +1,7 @@
 import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
+import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import SharedFooter from './SharedFooter.svelte';
 
@@ -34,4 +35,17 @@ describe('SharedFooter legal links', () => {
 			expect(target.querySelector('[role="dialog"]')).toBeNull();
 		}
 	);
+});
+
+describe('SharedFooter brand line', () => {
+	it('links the app name to the home page inside the powered-by sentence', async () => {
+		const target = await render();
+
+		const lead = target.querySelector('.lead');
+		const link = lead?.querySelector('a');
+		const [leadText] = words['sharedFooter.poweredBy']({ app: words['app.name'] });
+		expect(lead?.textContent?.startsWith(leadText as string)).toBe(true);
+		expect(link?.textContent).toBe(words['app.name']);
+		expect(link?.getAttribute('href')).toBe(HOME_ROUTE_PATH);
+	});
 });

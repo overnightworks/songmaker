@@ -266,7 +266,7 @@
 			removeSongsForAlbum(albumId);
 			setOpenCollection(null);
 			addUndoToast(pageText('albumPage.deleted'), {
-				label: 'Undo',
+				label: pageText('albumPage.undo'),
 				handler: async () => {
 					try {
 						const restored = await restoreAlbum(albumId);
@@ -296,7 +296,7 @@
 			removeSongsForAlbum(albumId);
 			setOpenCollection(null);
 			addUndoToast(pageText('albumPage.archived'), {
-				label: 'Undo',
+				label: pageText('albumPage.undo'),
 				handler: async () => {
 					try {
 						const restored = await unarchiveAlbum(albumId);

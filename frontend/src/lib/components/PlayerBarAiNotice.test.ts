@@ -1,3 +1,4 @@
+import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeGeneration } from '#lib/test-utils/factories.ts';
@@ -65,6 +66,6 @@ describe('1906_P5 PlayerBar', () => {
 
 		expect(target.querySelector('.track-title')).toHaveTextContent('Opening Move');
 		expect(target.querySelector('.ai-notice')).toBeNull();
-		expect(target).not.toHaveTextContent('KI-generiert');
+		expect(target).not.toHaveTextContent(words['aiNotice.generated']);
 	});
 });

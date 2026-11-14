@@ -3697,14 +3697,6 @@ msgctxt "toast.dismiss"
 msgid "Dismiss"
 msgstr ""
 
-msgctxt "loading.plain"
-msgid "Loading..."
-msgstr ""
-
-msgctxt "adminPage.heading"
-msgid "Admin"
-msgstr ""
-
 msgctxt "adminPage.accessRequired"
 msgid "Admin access required."
 msgstr ""
@@ -5627,4 +5619,104 @@ msgstr ""
 
 msgctxt "nowPlaying.streamMoreNotLoaded"
 msgid "More takes not loaded"
+msgstr ""
+
+msgctxt "app.name"
+msgid "Hallucinai"
+msgstr ""
+
+msgctxt "breadcrumb.label"
+msgid "Breadcrumb"
+msgstr ""
+
+msgctxt "deleteDialog.warning"
+msgid "This cannot be undone."
+msgstr ""
+
+msgctxt "deleteDialog.confirm"
+msgid "Delete"
+msgstr ""
+
+msgctxt "deleteDialog.cancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "sharedFooter.poweredBy"
+msgid "Powered by {#home}{app}{/home}"
+msgstr ""
+
+msgctxt "songHeader.albumLine.one"
+msgid "{album} · {count} song"
+msgstr ""
+
+msgctxt "songHeader.albumLine.other"
+msgid "{album} · {count} songs"
+msgstr ""
+
+msgctxt "cowriter.versionChip"
+msgid "v{number}"
+msgstr ""
+
+msgctxt "albumPage.undo"
+msgid "Undo"
+msgstr ""
+
+msgctxt "versions.loadFailed"
+msgid "Could not load versions"
+msgstr ""
+
+msgctxt "account.themeSaveFailed"
+msgid "Saving the theme failed"
+msgstr ""
+
+msgctxt "routeError.offline"
+msgid "This page needs the network. It opens by itself when you are back online."
+msgstr ""
+
+msgctxt "aiNotice.generated"
+msgid "KI-generiert"
+msgstr ""
+
+msgctxt "aiNotice.writing"
+msgid "Du schreibst mit einer KI"
+msgstr ""
+
+msgctxt "player.detailLoading"
+msgid "Loading..."
+msgstr ""
+
+msgctxt "aboutPage.loading"
+msgid "Loading..."
+msgstr ""
+
+msgctxt "workerPool.cancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "adminPage.voiceStatusDraft"
+msgid "draft"
+msgstr ""
+
+msgctxt "adminPage.voiceStatusQueued"
+msgid "queued"
+msgstr ""
+
+msgctxt "adminPage.voiceStatusPreprocessing"
+msgid "preprocessing"
+msgstr ""
+
+msgctxt "adminPage.voiceStatusTraining"
+msgid "training"
+msgstr ""
+
+msgctxt "adminPage.voiceStatusExporting"
+msgid "exporting"
+msgstr ""
+
+msgctxt "adminPage.voiceStatusReady"
+msgid "ready"
+msgstr ""
+
+msgctxt "adminPage.voiceStatusFailed"
+msgid "failed"
 msgstr ""
