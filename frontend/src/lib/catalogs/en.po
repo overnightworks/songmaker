@@ -5149,6 +5149,70 @@ msgctxt "jobWait.queuedGenerations"
 msgid "Waiting for queued generations on this GPU."
 msgstr ""
 
+msgctxt "jobFailure.audioDownloadFailed"
+msgid "Failed to download generated audio"
+msgstr ""
+
+msgctxt "jobFailure.serverUnreachable"
+msgid "ACE-Step server not reachable"
+msgstr ""
+
+msgctxt "jobFailure.generationTimedOut"
+msgid "Generation timed out"
+msgstr ""
+
+msgctxt "jobFailure.noWorkers"
+msgid "No ACE-Step workers available"
+msgstr ""
+
+msgctxt "jobFailure.internal"
+msgid "Internal error during processing"
+msgstr ""
+
+msgctxt "jobFailure.unexpected"
+msgid "An unexpected error occurred"
+msgstr ""
+
+msgctxt "jobFailure.generationFailed"
+msgid "Generating failed — try again."
+msgstr ""
+
+msgctxt "jobFailure.generationUnavailable"
+msgid "Generating isn't available right now."
+msgstr ""
+
+msgctxt "jobFailure.gpuOutOfMemory"
+msgid "Too long for the GPU right now — try a shorter duration."
+msgstr ""
+
+msgctxt "voiceFailure.workerTrainingFailed"
+msgid "Worker training failed"
+msgstr ""
+
+msgctxt "voiceFailure.crashed"
+msgid "Training crashed or was interrupted"
+msgstr ""
+
+msgctxt "voiceFailure.drainTimeout"
+msgid "Generation queue did not drain before LoRA training could start"
+msgstr ""
+
+msgctxt "voiceFailure.cancelled"
+msgid "Job cancelled: exceeded LORA_TRAINING_JOB_TIMEOUT or worker shutdown"
+msgstr ""
+
+msgctxt "voiceFailure.modeUnsupported"
+msgid "Worker completed LoRA training with unsupported model mode: {workerMode}"
+msgstr ""
+
+msgctxt "voiceFailure.modeMismatch"
+msgid "Worker completed LoRA training with model mode {workerMode}, expected {requestedMode}"
+msgstr ""
+
+msgctxt "voiceFailure.recorded"
+msgid "{cause}"
+msgstr ""
+
 msgctxt "jobEnd.serverRestart"
 msgid "Server restarted — please retry"
 msgstr ""
