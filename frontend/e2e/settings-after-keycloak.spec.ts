@@ -65,7 +65,7 @@ test('the account circle opens a menu with the name, Settings, the theme, Log ou
 		await expect(themeChoiceRadio(menu, choice)).toBeVisible();
 	}
 	await expect(menu.getByRole('button', { name: LOG_OUT_NAME, exact: true })).toBeVisible();
-	for (const legal of ['Impressum', 'Datenschutz', 'Nutzungsbedingungen']) {
+	for (const legal of [words['legal.imprint'], words['legal.privacy'], words['legal.terms']]) {
 		const link = menu.getByRole('link', { name: legal, exact: true });
 		await expect(link).toBeVisible();
 		await expect(link).toHaveAttribute('target', '_blank');

@@ -833,6 +833,17 @@ export type Words = {
     readonly "shareDialog.intro": string;
     readonly "shareDialog.close": string;
     readonly "libraryShares.copyLink": string;
+    readonly "legal.imprint": string;
+    readonly "legal.privacy": string;
+    readonly "legal.terms": string;
+    readonly "account.menu": (gaps: { readonly username: string }) => string;
+    readonly "account.menuClose": string;
+    readonly "account.signOutFailed": string;
+    readonly "auth.loading": string;
+    readonly "auth.retry": string;
+    readonly "auth.checkRateLimited": string;
+    readonly "auth.checkServerError": string;
+    readonly "auth.checkNetworkError": string;
     readonly "referenceRefusal.notFound": string;
     readonly "referenceRefusal.noFilename": string;
     readonly "referenceRefusal.filenameInvalid": string;
@@ -1892,6 +1903,17 @@ export const words: Words = {
     "shareDialog.intro": "These songs have no playable take and won't appear when shared:",
     "shareDialog.close": "Got it",
     "libraryShares.copyLink": "Copy link",
+    "legal.imprint": "Legal notice",
+    "legal.privacy": "Privacy",
+    "legal.terms": "Terms of use",
+    "account.menu": (gaps: { readonly username: string }) => "Account · " + gaps.username,
+    "account.menuClose": "Close account menu",
+    "account.signOutFailed": "Couldn't log out. Check your connection and try again.",
+    "auth.loading": "Loading...",
+    "auth.retry": "Retry",
+    "auth.checkRateLimited": "Too many requests. Retry in a moment to check your session.",
+    "auth.checkServerError": "Could not verify your session. Retry to try again.",
+    "auth.checkNetworkError": "Network error. Retry to check your session.",
     "referenceRefusal.notFound": "Not Found",
     "referenceRefusal.noFilename": "No filename provided",
     "referenceRefusal.filenameInvalid": "Invalid filename.",

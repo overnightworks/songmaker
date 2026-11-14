@@ -3,13 +3,13 @@
 	import { APP_NAME } from '#lib/constants/app.ts';
 	import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
 	import { LegalLinks } from 'overnightworks-design';
-	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
+	import { legalLinks } from '#lib/utils/legal-links.ts';
 	import { kitWords } from '#lib/utils/kit-words.ts';
 </script>
 
 <footer class="powered">
 	<p class="lead">Powered by <a href={HOME_ROUTE_PATH}>{APP_NAME}</a></p>
-	<LegalLinks links={LEGAL_SECTIONS} words={kitWords()} newTab />
+	<LegalLinks links={legalLinks()} words={kitWords()} newTab />
 </footer>
 
 <style>
