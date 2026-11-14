@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from songmaker_cli.constants import LoraStatus
+
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Generation, UserLora, UserLoraSample
 
@@ -55,7 +57,7 @@ class UserLoraResponse(BaseModel):
     user_id: str
     name: str
     slug: str
-    status: str
+    status: LoraStatus
     model_mode: str
     storage_path: str | None = None
     tensor_path: str | None = None
@@ -91,7 +93,7 @@ class AdminUserLoraResponse(BaseModel):
     id: str
     name: str
     owner_username: str
-    status: str
+    status: LoraStatus
 
     @classmethod
     def from_orm(cls, lora: UserLora, owner_username: str) -> AdminUserLoraResponse:
