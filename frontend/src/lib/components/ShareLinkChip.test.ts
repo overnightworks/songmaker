@@ -1,6 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LIBRARY_SHARES_COPY_KEY } from '#lib/constants/library.ts';
 import { words } from '#lib/words/en.ts';
 
 const addToast = vi.hoisted(() => vi.fn());
@@ -38,7 +37,7 @@ describe('ShareLinkChip', () => {
 		const { target, url } = await render();
 
 		const button = chipButton(target);
-		expect(button.textContent?.trim()).toBe(words[LIBRARY_SHARES_COPY_KEY]);
+		expect(button.textContent?.trim()).toBe(words['libraryShares.copyLink']);
 		expect(target.textContent).not.toContain(url);
 		expect(button.title).toBe(url);
 	});

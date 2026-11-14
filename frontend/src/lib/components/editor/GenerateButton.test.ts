@@ -89,7 +89,7 @@ describe('GenerateButton', () => {
 
 	it('C3: shows no seed chip without a seed', async () => {
 		await render({ kind: 'idle' });
-		expect(document.body.textContent).not.toContain(words['seedChip.label']({ number: '' }));
+		expect(document.body.querySelector('.seed-chip')).toBeNull();
 	});
 
 	it.each([

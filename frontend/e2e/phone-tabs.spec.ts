@@ -15,7 +15,12 @@ import {
 import { openSearchSheet } from './phone-search';
 import { readSeededLibrary } from './seed';
 
-const TAB_LABELS = [words['places.home'], words['places.library'], words['places.playlists']];
+const TAB_LABEL_BY_PLACE = {
+	home: words['places.home'],
+	library: words['places.library'],
+	playlists: words['places.playlists']
+};
+const TAB_LABELS = Object.values(TAB_LABEL_BY_PLACE);
 
 const tabs = (page: Page) => page.getByRole('navigation', { name: words['phoneTabs.nav'] });
 
@@ -65,8 +70,8 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await page.setViewportSize(MOBILE_VIEWPORT);
 		await page.goto(HOME_PATH);
 		await expectCurrent(page, words['places.home']);
-		for (const { labelKey, place } of PHONE_TABS) {
-			const label = words[labelKey];
+		for (const { place } of PHONE_TABS) {
+			const label = TAB_LABEL_BY_PLACE[place];
 			const tab = tabs(page).getByRole('button', { name: label, exact: true });
 			await expect(tab.locator('svg')).toBeVisible();
 			await tab.click();
