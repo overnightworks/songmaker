@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
@@ -67,7 +67,10 @@ from songmaker_cli.settings import get_settings
 router = APIRouter()
 
 PRESET_NAME_EXISTS_DETAIL = "A preset with that name already exists"
-PRESET_NOT_FOUND_DETAIL = "Preset not found"
+
+
+def _preset_not_found() -> Refusal:
+    return Refusal(404, "presetRefusal.notFound")
 
 
 _GET_GENERATION_BUILTINS_DESCRIPTION = (
@@ -185,7 +188,7 @@ def api_update_preset(
 ) -> PresetResponse:
     preset = get_preset(session, preset_id, user.id)
     if not preset:
-        raise HTTPException(404, PRESET_NOT_FOUND_DETAIL)
+        raise _preset_not_found()
     if req.name is not None and req.name != preset.name:
         if name_exists(session, user.id, preset.model_mode, req.name):
             raise Refusal(409, "presetRefusal.nameTaken")
@@ -206,7 +209,7 @@ def api_delete_preset(
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     if not delete_preset(session, preset_id, user.id):
-        raise HTTPException(404, PRESET_NOT_FOUND_DETAIL)
+        raise _preset_not_found()
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.PRESET, preset_id)
     session.commit()
     return StatusResponse()
@@ -228,7 +231,7 @@ def api_set_default_preset(
 ) -> PresetResponse:
     preset = get_preset(session, preset_id, user.id)
     if not preset:
-        raise HTTPException(404, PRESET_NOT_FOUND_DETAIL)
+        raise _preset_not_found()
     set_default_preset(session, preset)
     session.commit()
     return PresetResponse.from_orm(preset)
@@ -300,7 +303,7 @@ def api_toggle_model(
 ) -> AvailableModelResponse:
     model = toggle_model(session, model_id, active)
     if not model:
-        raise HTTPException(404, "Model not found")
+        raise Refusal(404, "modelRefusal.notFound")
     record_audit(
         session, admin.id, AuditAction.UPDATE, ResourceType.MODEL,
         model_id, f"active={active}",

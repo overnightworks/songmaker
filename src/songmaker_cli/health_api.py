@@ -278,10 +278,10 @@ def require_monitoring_token(
     # Prometheus trims its credentials file, so the configured value is trimmed alike.
     expected = configured.get_secret_value().strip() if configured else ""
     if not expected:
-        raise HTTPException(503, "Monitoring not configured")
+        raise HTTPException(503, "Monitoring not configured")  # unread: machine
     presented = credentials.credentials if credentials else ""
     if not hmac.compare_digest(presented.encode(), expected.encode()):
-        raise HTTPException(
+        raise HTTPException(  # unread: machine
             401, "Not authenticated", headers={"WWW-Authenticate": "Bearer"},
         )
 

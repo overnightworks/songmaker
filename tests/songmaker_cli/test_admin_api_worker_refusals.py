@@ -147,6 +147,24 @@ def test_a_model_mode_nobody_knows_is_named_on_a_worker_route(
     }
 
 
+@pytest.mark.parametrize(
+    ("route", "body"),
+    [
+        ("load_model", {"mode": "sft"}),
+        ("evict_model", {"mode": "sft"}),
+        ("restart", None),
+    ],
+)
+def test_a_worker_nobody_registered_is_named_on_each_worker_route(
+    admin_client: TestClient, route: str, body: dict[str, str] | None,
+) -> None:
+    response = admin_client.post(f"/api/admin/workers/ghost/{route}", json=body)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Worker 'ghost' not found"
+    assert _message(response) == {"key": "workerRefusal.notFound", "values": {"workerId": "ghost"}}
+
+
 def test_a_load_without_a_job_queue_names_the_queue_refusal(admin_client: TestClient) -> None:
     pool = AsyncMock()
     pool.enqueue_job = AsyncMock(side_effect=ConnectionError("redis down"))

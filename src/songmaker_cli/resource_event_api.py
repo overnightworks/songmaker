@@ -86,14 +86,14 @@ def parse_last_event_id(raw: str | None) -> int | None:
     if raw is None or raw == "":
         return None
     if not raw.isascii() or not raw.isdecimal():
-        raise HTTPException(400, LAST_EVENT_ID_INVALID)
+        raise HTTPException(400, LAST_EVENT_ID_INVALID)  # unread: sse
 
     canonical = raw.lstrip("0") or "0"
     max_bigint = str(POSTGRES_BIGINT_MAX)
     if len(canonical) > len(max_bigint) or (
         len(canonical) == len(max_bigint) and canonical > max_bigint
     ):
-        raise HTTPException(400, LAST_EVENT_ID_OUT_OF_RANGE)
+        raise HTTPException(400, LAST_EVENT_ID_OUT_OF_RANGE)  # unread: sse
     return int(canonical)
 
 
@@ -349,7 +349,7 @@ def _get_lease_limiter(request: Request) -> RedisConcurrentLeaseLimiter:
         pool_capacity = settings.database_pool_size + settings.database_max_overflow
         spare_capacity = pool_capacity - 1
         if spare_capacity <= 0:
-            raise HTTPException(503, RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE)
+            raise HTTPException(503, RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE)  # unread: sse
         global_limit = min(RESOURCE_EVENT_STREAM_MAX_GLOBAL, spare_capacity)
         return RedisConcurrentLeaseLimiter(
             ctx.redis,
@@ -378,7 +378,7 @@ def _acquire_stream_lease(
             limit=get_settings().resource_event_stream_open_limit,
             window_seconds=RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS,
         ):
-            raise HTTPException(
+            raise HTTPException(  # unread: sse
                 429,
                 RESOURCE_EVENT_STREAM_LIMIT_DETAIL,
                 headers={"Retry-After": str(RESOURCE_EVENT_STREAM_OPEN_WINDOW_SECONDS)},
@@ -389,9 +389,9 @@ def _acquire_stream_lease(
         raise
     except Exception as exc:
         log.warning("Resource stream limiter unavailable")
-        raise HTTPException(503, RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE) from exc
+        raise HTTPException(503, RESOURCE_EVENT_STREAM_LIMITER_UNAVAILABLE) from exc  # unread: sse
     if token is None:
-        raise HTTPException(
+        raise HTTPException(  # unread: sse
             429,
             RESOURCE_EVENT_STREAM_LIMIT_DETAIL,
             headers={"Retry-After": "5"},

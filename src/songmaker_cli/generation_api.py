@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Final
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
@@ -16,13 +16,14 @@ from webauth.ports import AuthenticatedUser
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
 from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
-    GENERATION_NOT_FOUND_DETAIL,
     check_generation_access,
     check_generations_access,
     check_lora_ready_for_generation,
     check_song_access,
     cleanup_generation_files,
     create_job_with_rate_limit,
+    generation_not_found,
+    vanished_take_is_not_found,
     version_not_found,
 )
 from songmaker_cli.api_models import (
@@ -224,10 +225,8 @@ def api_delete_generation(
 ) -> StatusResponse:
     gen = check_generation_access(session, gen_id, user)
     candidates = {gen.reference_recording_id} if gen.reference_recording_id else set()
-    try:
+    with vanished_take_is_not_found():
         paths = delete_generation(session, gen_id)
-    except ValueError:
-        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
     session.commit()
     commit_unused_stamps(session, candidates)
@@ -584,7 +583,7 @@ def api_share_generation(
     try:
         gen = enable_generation_sharing(session, gen_id)
     except ValueError:
-        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
+        raise generation_not_found()
     except ArchivedTakeError:
         raise Refusal(409, "takeRefusal.archived")
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
@@ -614,10 +613,8 @@ def api_unshare_generation(
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     check_generation_access(session, gen_id, user)
-    try:
+    with vanished_take_is_not_found():
         disable_generation_sharing(session, gen_id)
-    except ValueError:
-        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.GENERATION, gen_id)
     session.commit()
     return StatusResponse()

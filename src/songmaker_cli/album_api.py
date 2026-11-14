@@ -487,7 +487,7 @@ def api_create_cover_suggestions(
         raise Refusal(403, "coverSuggestionRefusal.browserLogin")
     refusal = cover_admission(TurnCaller(request.app, session_id, user))
     if refusal is not None:
-        raise HTTPException(
+        raise HTTPException(  # unread: token
             503 if refusal.problem is AgentProblem.UNAVAILABLE else 403,
             CoverSuggestionRefusal(problem=refusal.problem).model_dump(),
         )
@@ -503,7 +503,7 @@ def api_create_cover_suggestions(
         raise Refusal(404, "albumRefusal.notFound") from exc
     except CoverSuggestionRequestError as exc:
         session.rollback()
-        raise HTTPException(exc.status_code, str(exc)) from exc
+        raise HTTPException(exc.status_code, str(exc)) from exc  # unread: session
     return JobResponse.from_orm(job)
 
 

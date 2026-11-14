@@ -871,6 +871,15 @@ export type Words = {
     readonly "dialog.confirm": string;
     readonly "toast.dismiss": string;
     readonly "loading.plain": string;
+    readonly "generationRefusal.notFound": string;
+    readonly "generationRefusal.someNotFound": string;
+    readonly "generationRefusal.audioMissing": string;
+    readonly "voiceRefusal.notFound": string;
+    readonly "voiceRefusal.sampleNotFound": string;
+    readonly "conversationRefusal.notFound": string;
+    readonly "presetRefusal.notFound": string;
+    readonly "modelRefusal.notFound": string;
+    readonly "workerRefusal.notFound": (gaps: { readonly workerId: string }) => string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -1950,5 +1959,14 @@ export const words: Words = {
     "dialog.confirm": "Confirm",
     "toast.dismiss": "Dismiss",
     "loading.plain": "Loading...",
+    "generationRefusal.notFound": "Generation not found",
+    "generationRefusal.someNotFound": "One or more generations not found",
+    "generationRefusal.audioMissing": "Audio file not found",
+    "voiceRefusal.notFound": "LoRA not found",
+    "voiceRefusal.sampleNotFound": "LoRA sample not found",
+    "conversationRefusal.notFound": "Conversation not found",
+    "presetRefusal.notFound": "Preset not found",
+    "modelRefusal.notFound": "Model not found",
+    "workerRefusal.notFound": (gaps: { readonly workerId: string }) => "Worker '" + gaps.workerId + "' not found",
 };
 export type Key = keyof Words;

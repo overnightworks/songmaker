@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from support.signed_in_people import sign_in_people
+from support.web_app import refusal_body
 
 from songmaker_cli.config import get_builtin_defaults
 from songmaker_cli.constants import AuditAction, ResourceType
@@ -109,6 +110,6 @@ def test_an_unknown_model_id_is_not_found_and_nothing_is_audited(clients, factor
 
     response = clients["root"].put(f"{ACTIVE_MODELS_URL}/nope", params={"active": False})
 
-    assert (response.status_code, response.json()["detail"]) == (404, "Model not found")
+    assert (response.status_code, response.json()) == (404, refusal_body("modelRefusal.notFound"))
     assert _stored_activity(factory) == before
     assert _model_audits(factory) == []

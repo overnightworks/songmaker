@@ -2218,18 +2218,18 @@ def test_library_pool_queue_matches_collect_without_ffmpeg(tmp_path, monkeypatch
     assert take_ids == [generation.id for generation in collected]
 
 
-def test_library_pool_queue_foreign_start_generation_is_404(tmp_path, monkeypatch, pg_factory):
+def test_library_pool_queue_foreign_start_generation_answers_like_a_missing_one(
+    tmp_path, monkeypatch, pg_factory,
+):
     stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     seed_session(client, "usera")
+    start = "/api/library/pool-queue?pool=mix&start_generation_id="
+    foreign, missing = (client.get(start + take_id) for take_id in ("g5", "no-such-take"))
 
-    resp = client.get(
-        "/api/library/pool-queue",
-        params={"pool": "mix", "start_generation_id": "g5"},
-    )
-
-    assert resp.status_code == 404
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json() == missing.json() == refusal_body("generationRefusal.notFound")
 
 
 def test_library_pool_queue_empty_pool_is_422(tmp_path: Path, monkeypatch, pg_factory) -> None:

@@ -10,7 +10,13 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from support.cowriter_gateway import CowriterStack, attach_cowriter_gateway
-from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from support.web_app import (
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    refusal_body,
+    web_client,
+)
 
 from songmaker_cli.api_models import ChatTurnV2Request
 from songmaker_cli.db.models import Album, AvailableModel, Song, User, Version
@@ -214,8 +220,18 @@ def test_unknown_or_foreign_mention_is_404_before_provider(client, stranger_clie
         "mentioned_version_ids": ["v2"],
     })
     assert resp.status_code == 404
+    assert resp.json() == refusal_body("versionRefusal.notFound")
     assert not client.run_started
     assert not stranger_client.run_started
+
+    resp = client.turn({
+        "message": "x",
+        "current_song_id": "s1",
+        "mentioned_version_ids": ["no-such-version"],
+    })
+    assert resp.status_code == 404
+    assert resp.json() == refusal_body("versionRefusal.notFound")
+    assert not client.run_started
 
     resp = client.turn({
         "message": "x",
@@ -241,6 +257,7 @@ def test_a_version_mention_without_a_current_song_is_404_before_provider(client)
     none refuses it before any run starts."""
     resp = client.turn({"message": "x", "mentioned_version_ids": ["v1"]})
     assert resp.status_code == 404
+    assert resp.json() == refusal_body("versionRefusal.notFound")
     assert not client.run_started
 
 

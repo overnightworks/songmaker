@@ -105,7 +105,7 @@ def get_shared_album(
 
     album = get_album_by_slug(db, slug)
     if not album:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
     ctx: AppContext = request.app.state.ctx
     songs = sorted(album.songs, key=lambda s: s.track_number)
     picked_by_song = {s.id: presented_take(s.generations) for s in songs}
@@ -165,7 +165,7 @@ def get_shared_album_stream(
     _check_shared_stream_rate_limit(request)
     album = get_album_by_slug(db, slug)
     if not album:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
     sources = []
     songs = sorted(album.songs, key=lambda s: s.track_number)
     for index, song in enumerate(songs):
@@ -201,7 +201,7 @@ def get_shared_song(
     check_shared_rate_limit(request)
     song = get_song_by_slug(db, slug)
     if not song:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
     gen = presented_take(song.generations)
     media = share_pick_media(gen)
     cover = _offered_cover(
@@ -240,7 +240,7 @@ def get_shared_generation(
     check_shared_rate_limit(request)
     gen = get_presented_generation(db, slug)
     if not gen:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
     media = share_pick_media(gen)
     album = gen.song.album
     album_cover = _offered_cover(
@@ -273,7 +273,7 @@ def get_shared_playlist(
     check_shared_rate_limit(request)
     playlist = get_playlist_by_slug(db, slug)
     if not playlist:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
     entries = presented_playlist_entries(playlist)
     entry_items = _shared_playlist_entries(ctx, entries, slug)
     cover = _shared_playlist_cover(ctx, playlist, slug)
@@ -350,7 +350,7 @@ def get_shared_playlist_stream(
     _check_shared_stream_rate_limit(request)
     playlist = get_playlist_by_slug(db, slug)
     if not playlist:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise HTTPException(404, NOT_FOUND_DETAIL)  # unread: share
     sources = []
     for entry in presented_playlist_entries(playlist):
         gen = entry.generation

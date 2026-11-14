@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
@@ -18,9 +18,10 @@ from songmaker_cli.api_helpers import (
     check_lora_access,
     check_lora_sample_access,
     check_own_generation_access,
+    generation_not_found,
     lock_lora_capacity,
-    raise_audio_file_http_error,
     unique_lora_slug_under_capacity_lock,
+    voice_sample_not_found,
 )
 from songmaker_cli.api_models import (
     OwnPlayableTakeListResponse,
@@ -38,6 +39,7 @@ from songmaker_cli.app_context import AppContext, get_app_context, get_db_sessio
 from songmaker_cli.arq_pool import get_arq_pool
 from songmaker_cli.audio_paths import (
     AudioFileNotFoundError,
+    AudioPathRejectedError,
     canonical_audio_path,
     resolve_audio_path,
 )
@@ -265,10 +267,10 @@ def api_add_sample_from_generation(
 
     try:
         source = resolve_audio_path(ctx.audio_dir, generation.mp3_path)
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=False)
+    except (AudioFileNotFoundError, AudioPathRejectedError) as exc:
+        raise Refusal(404, "generationRefusal.audioMissing") from exc
     if not source.is_file():
-        raise HTTPException(404, "Generation not found")
+        raise generation_not_found()
 
     if count_user_lora_samples(session, lora_id) >= USER_LORA_MAX_SAMPLES:
         raise Refusal(409, "voiceRefusal.sampleLimit", maximum=str(USER_LORA_MAX_SAMPLES))
@@ -393,7 +395,7 @@ def api_patch_sample(
     sample = get_user_lora_sample(session, sample_id)
     check_lora_sample_access(sample, user)
     if sample.user_lora_id != lora_id:
-        raise HTTPException(404, "LoRA sample not found")
+        raise voice_sample_not_found()
     _reject_if_active_or_deleted(sample.user_lora)
 
     caption = data.caption.strip() if data.caption is not None else None
@@ -429,7 +431,7 @@ def api_delete_sample(
     sample = get_user_lora_sample(session, sample_id)
     check_lora_sample_access(sample, user)
     if sample.user_lora_id != lora_id:
-        raise HTTPException(404, "LoRA sample not found")
+        raise voice_sample_not_found()
     _reject_if_active_or_deleted(sample.user_lora)
 
     rel_path = delete_user_lora_sample(session, sample_id)
