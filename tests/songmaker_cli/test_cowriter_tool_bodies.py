@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy.orm import Session
+from support.session_ids import a_session_id
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.tools import cowriter_hand_tools
@@ -550,7 +551,8 @@ def test_co_writer_writes_leave_their_audit_row(
     db_session.get(Generation, "gen1").whisper_text = "sung words"
     db_session.commit()
 
-    asking = create_session(db_session, owner.id, datetime.now(timezone.utc) + timedelta(hours=1))
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    asking = create_session(db_session, owner.id, expires_at, session_id=a_session_id())
     db_session.commit()
 
     outcome = execute_cowriter_tool(db_session, owner, tool_name, arguments, session_id=asking.id)

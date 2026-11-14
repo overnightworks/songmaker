@@ -92,8 +92,11 @@ def create_session(
     refresh_token: SecretStr | None = None,
     id_token: SecretStr | None = None,
     account_language: str | None = None,
+    *,
+    session_id: str,
 ) -> UserSession:
     user_session = UserSession(
+        id=session_id,
         user_id=user_id,
         expires_at=expires_at,
         stored_refresh_token=None if refresh_token is None else refresh_token.get_secret_value(),

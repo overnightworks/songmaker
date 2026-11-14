@@ -2725,7 +2725,7 @@ def _sign_job_stream_session(ctx: AppContext, user_id: str) -> str:
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=1)
     with ctx.db() as session:
-        user_session = create_session(session, user_id, expires_at)
+        user_session = create_session(session, user_id, expires_at, session_id="signed-in")
         session.commit()
         session_id = user_session.id
     return sign_session_id(session_id, ctx.signing_key)

@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import delete, text
 from sqlalchemy.exc import OperationalError
+from support.session_ids import a_session_id
 from support.web_app import make_authenticated_user
 
 from songmaker_cli import cover_suggestions
@@ -36,7 +37,9 @@ def test_a_reaper_that_loses_its_race_leaves_the_competitors_row_and_session(
     with pg_factory() as session:
         session.add(User(id="reaper-user", username="reaper-user"))
         session.flush()
-        asking_session = UserSession(user_id="reaper-user", expires_at=now + timedelta(days=1))
+        asking_session = UserSession(
+            id=a_session_id(), user_id="reaper-user", expires_at=now + timedelta(days=1),
+        )
         session.add(asking_session)
         session.flush()
         job = create_job(session, JobType.COVER, session_id=asking_session.id)
@@ -95,7 +98,8 @@ def _seed_asker_with_a_live_session(pg_factory) -> str:
         session.flush()
         session.add(Album(id="pg-album", title="T", artist="A", created_by="asker"))
         asking = UserSession(
-            user_id="asker", expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+            id=a_session_id(), user_id="asker",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=1),
         )
         session.add(asking)
         session.commit()

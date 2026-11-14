@@ -247,6 +247,7 @@ request budget per shell.
   relying party; only the token request and the key set come from
   `tests/support/fake_oidc_issuer.py`, which signs ID tokens with a test RSA key, so
   every token is verified as in production.
+- **The stores keep webauth's store contract.** `tests/songmaker_cli/test_auth_stores_contract_postgres.py` runs every check of `webauth.store_contract.STORE_CHECKS` against the account and session stores on PostgreSQL, the cross-process sign-in check included (it spawns a second process on the same database). Run it with `scripts/test_postgresql.sh`.
 - **Selectors are roles and accessible names** from the domain modules under `frontend/src/lib/constants/`.
   No `data-testid`. A row that cannot be found by its accessible name is an
   accessibility defect, not a selector problem.

@@ -27,6 +27,7 @@ from agents.backend.gateway import GatewayBackend
 from agents.config import BackendKind, ChatGateway
 from agents.turn_events import AssistantTextEvent, FinalEvent
 from support.fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
+from support.session_ids import a_session_id
 from support.web_app import issued_cookies
 
 from songmaker_cli.agent.settings import AgentSettings
@@ -264,6 +265,7 @@ def open_session(app, factory, user_id: str, refresh_token: str | None = A_REFRE
     with factory() as session:
         record = DatabaseSessionRecordStore(session).create(
             user_id,
+            session_id=a_session_id(),
             now=now,
             expires_at=now + timedelta(seconds=config.session_lifetime.idle_seconds),
             refresh_token=None if refresh_token is None else SecretStr(refresh_token),

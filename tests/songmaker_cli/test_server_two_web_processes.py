@@ -21,6 +21,7 @@ from support.app_processes import (
     die_with_parent,
     web_processes,
 )
+from support.session_ids import a_session_id
 from support.web_app import issued_cookies, seed_user
 
 from songmaker_cli.app_context import AppContext, build_web_auth_config
@@ -50,6 +51,7 @@ def _signed_in_cookies(cluster: WebProcesses, factory, redis_url: str) -> dict[s
         person = seed_user(session, PERSON_NAME)
         record = DatabaseSessionRecordStore(session).create(
             person.id,
+            session_id=a_session_id(),
             now=now,
             expires_at=now + timedelta(seconds=settings.session_idle_seconds),
             refresh_token=None,
