@@ -11,6 +11,7 @@
 		signInAddress
 	} from '#lib/api/fetch.ts';
 	import BusyState from '#lib/components/BusyState.svelte';
+	import ToastContainer from '#lib/components/ToastContainer.svelte';
 	import AccountMenu from '#lib/components/AccountMenu.svelte';
 	import PhoneAppBar from '#lib/components/PhoneAppBar.svelte';
 	import Rail from '#lib/components/shell/Rail.svelte';
@@ -347,6 +348,9 @@
 	{#if hasPrivatePlayer}
 		<PlayerBar />
 	{/if}
+
+	<!-- The one toast surface of every signed-in page. -->
+	<ToastContainer />
 {/if}
 
 <style>

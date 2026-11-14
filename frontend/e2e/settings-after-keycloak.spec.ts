@@ -158,6 +158,7 @@ test('Cleanup is the last Admin tab; Run now asks before anything is deleted, an
 		.getByRole('button', { name: words['takeRetention.delete']({ count: 3 }), exact: true })
 		.click();
 	await expect.poll(() => runs).toBe(1);
+	await expect(page.locator('.toast-success')).toBeVisible();
 	guard.assertClean();
 });
 

@@ -12,7 +12,6 @@
 		softDeleteLora
 	} from '#lib/stores/loras.ts';
 	import { addToast } from '#lib/stores/toast.ts';
-	import ToastContainer from '#lib/components/ToastContainer.svelte';
 	import LoraDetail from '#lib/components/LoraDetail.svelte';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import { LORA_POLL_INTERVAL_MS } from '#lib/constants/lora.ts';
@@ -233,8 +232,6 @@
 		oncancel={() => (loraPendingDelete = null)}
 	/>
 {/if}
-
-<ToastContainer />
 
 <style>
 	.page-head {

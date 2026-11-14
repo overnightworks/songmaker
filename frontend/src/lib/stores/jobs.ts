@@ -4,7 +4,8 @@ import {
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
 	JOB_TYPE_CHAT,
 	JOB_TYPE_COVER,
-	JOB_TYPE_GENERATE
+	JOB_TYPE_GENERATE,
+	JOB_TYPE_LORA_TRAINING
 } from '#lib/constants/jobs.ts';
 import {
 	fetchActiveGeneration,
@@ -29,7 +30,12 @@ import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 
 // A cover's end is shown in place and a chat is never tracked, so neither has a toast.
 type TrackedJobType = Exclude<JobStatus['type'], typeof JOB_TYPE_COVER | typeof JOB_TYPE_CHAT>;
-type JobEnd = 'completed' | 'partial' | 'cancelled' | 'failed';
+type JobEnd = 'completed' | 'partial' | 'failed';
+// A cancelled voice training says nothing, so it has no cancelled text.
+type CancellableJobType = Exclude<TrackedJobType, typeof JOB_TYPE_LORA_TRAINING>;
+type JobEndTexts = { [T in TrackedJobType]: Record<JobEnd, TextKey> } & {
+	[T in CancellableJobType]: { cancelled: TextKey };
+};
 
 const JOB_END_TEXT = {
 	generate: {
@@ -47,7 +53,6 @@ const JOB_END_TEXT = {
 	lora_training: {
 		completed: 'jobEnd.voiceTrainingCompleted',
 		partial: 'jobEnd.voiceTrainingPartial',
-		cancelled: 'jobEnd.voiceTrainingCancelled',
 		failed: 'jobEnd.voiceTrainingFailed'
 	},
 	load_model_on_worker: {
@@ -62,10 +67,14 @@ const JOB_END_TEXT = {
 		cancelled: 'jobEnd.modelDownloadCancelled',
 		failed: 'jobEnd.modelDownloadFailed'
 	}
-} as const satisfies Record<TrackedJobType, Record<JobEnd, TextKey>>;
+} as const satisfies JobEndTexts;
 
 function jobEndText(type: TrackedJobType, end: JobEnd): string {
 	return pageText(JOB_END_TEXT[type][end]);
+}
+
+function jobCancelledText(type: CancellableJobType): string {
+	return pageText(JOB_END_TEXT[type].cancelled);
 }
 
 export interface ActiveJob {
@@ -234,7 +243,8 @@ function endedWithTakes(job: JobStatus): boolean {
 
 // A cover job's end is shown in place -- by the cover editor, or by the closed
 // cover's mark, which coverActivity rereads when the run leaves activeJobs --
-// so a toast would only announce the same outcome a second time.
+// so a toast would only announce the same outcome a second time. A cancelled
+// voice training is silent too: the voice page shows it.
 function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	if (job.type === JOB_TYPE_COVER || job.type === JOB_TYPE_CHAT) return;
 	if (job.status === 'completed') {
@@ -246,7 +256,8 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 		return;
 	}
 	if (job.status === 'cancelled') {
-		addToast(jobEndText(job.type, 'cancelled'), 'info');
+		if (job.type === JOB_TYPE_LORA_TRAINING) return;
+		addToast(jobCancelledText(job.type), 'info');
 		return;
 	}
 	const message = failureMessage(job, job.type);

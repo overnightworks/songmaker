@@ -1261,7 +1261,6 @@ export type Words = {
     readonly "jobEnd.scoreFailed": string;
     readonly "jobEnd.voiceTrainingCompleted": string;
     readonly "jobEnd.voiceTrainingPartial": string;
-    readonly "jobEnd.voiceTrainingCancelled": string;
     readonly "jobEnd.voiceTrainingFailed": string;
     readonly "jobEnd.modelLoadCompleted": string;
     readonly "jobEnd.modelLoadPartial": string;
@@ -2920,7 +2919,6 @@ export const words: Words = {
     "jobEnd.scoreFailed": "score failed",
     "jobEnd.voiceTrainingCompleted": "lora_training completed",
     "jobEnd.voiceTrainingPartial": "lora_training partially completed",
-    "jobEnd.voiceTrainingCancelled": "lora_training cancelled",
     "jobEnd.voiceTrainingFailed": "lora_training failed",
     "jobEnd.modelLoadCompleted": "load_model_on_worker completed",
     "jobEnd.modelLoadPartial": "load_model_on_worker partially completed",
