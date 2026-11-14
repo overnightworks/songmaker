@@ -1,0 +1,8 @@
+claim_id = "f3698ce6ef754403aa85b1d40a2532d0"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "2b709e685150e9ebfdc6f843ddad8ca485a356e8"
+branch = "claude/issue-3195-the-platform-pin-check-reads-redis-from"
+scope = ["scripts/check_pinned_images_match.py", "tests/scripts"]
+opened_commit = "6c3544f3f7bdb6eb0cdc27abcab6fae32a3720ec"
+whole_reason = "One path constant."
