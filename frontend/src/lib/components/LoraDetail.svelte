@@ -210,6 +210,11 @@
 		}
 	}
 
+	function save(field: { value: string }, sample: UserLoraSampleItem, key: 'caption' | 'lyrics') {
+		field.value = field.value.trim() || sample[key];
+		if (field.value !== sample[key]) saveSample(sample.id, { [key]: field.value });
+	}
+
 	async function removeSample(sample: UserLoraSampleItem) {
 		if (!confirm(pageText('voiceDetail.removeConfirm', { position: String(sample.position + 1) })))
 			return;
@@ -322,10 +327,7 @@
 							rows="2"
 							disabled={active || deleted}
 							value={sample.caption}
-							onblur={(e) => {
-								const v = (e.target as HTMLTextAreaElement).value.trim();
-								if (v && v !== sample.caption) saveSample(sample.id, { caption: v });
-							}}></textarea>
+							onblur={(e) => save(e.currentTarget, sample, 'caption')}></textarea>
 					</label>
 					<label class="field">
 						<span class="field-label">{pageText('voiceDetail.lyricsLabel')}</span>
@@ -334,10 +336,7 @@
 							rows="4"
 							disabled={active || deleted}
 							value={sample.lyrics}
-							onblur={(e) => {
-								const v = (e.target as HTMLTextAreaElement).value.trim();
-								if (v && v !== sample.lyrics) saveSample(sample.id, { lyrics: v });
-							}}></textarea>
+							onblur={(e) => save(e.currentTarget, sample, 'lyrics')}></textarea>
 					</label>
 				</li>
 			{/each}
