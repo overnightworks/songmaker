@@ -55,6 +55,7 @@ def world(tmp_path: Path, pg_factory) -> dict[str, TestClient]:
     audio.mkdir(parents=True)
     (audio / "take.mp3").write_bytes(b"audio")
     (audio / "folder.mp3").mkdir()
+    (ctx.audio_dir.parent / "outside.mp3").write_bytes(b"audio")
     with pg_factory() as session:
         for user_id in (OWNER_ID, STRANGER_ID):
             session.add(User(id=user_id, username=user_id, role="user"))
@@ -62,13 +63,13 @@ def world(tmp_path: Path, pg_factory) -> dict[str, TestClient]:
         session.add(Album(id="album", title="Album", artist="Band", created_by=OWNER_ID))
         session.add(Song(id="song", title="Song", album_id="album", slug="song"))
         session.add(Version(id="version", song_id="song", version_number=1))
-        for number, (take_id, file_name) in enumerate((
-            ("take", "take.mp3"), ("take-without-file", "gone.mp3"),
-            ("take-on-a-folder", "folder.mp3"), ("take-outside", "../outside.mp3"),
+        for number, (take_id, stored_path) in enumerate((
+            ("take", f"{OWNER_ID}/take.mp3"), ("take-without-file", f"{OWNER_ID}/gone.mp3"),
+            ("take-on-a-folder", f"{OWNER_ID}/folder.mp3"), ("take-outside", "../outside.mp3"),
         ), start=1):
             session.add(Generation(
                 id=take_id, song_id="song", version_id="version", generation_number=number,
-                mp3_path=f"{OWNER_ID}/{file_name}",
+                mp3_path=stored_path,
             ))
         session.add(
             Album(id="stranger-album", title="Theirs", artist="Band", created_by=STRANGER_ID),
