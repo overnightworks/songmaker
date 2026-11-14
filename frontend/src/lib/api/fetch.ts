@@ -2,7 +2,7 @@ import type { JobItem, Message } from './types';
 import { SIGN_IN_NEXT_PARAM } from '#lib/constants/auth.ts';
 import { RATE_LIMITED_STATUS, SERVER_ERROR_STATUS_FLOOR } from '#lib/constants/http.ts';
 import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import { pageText, reportedMessageText } from '#lib/utils/page-words.ts';
+import { pageText, messageText } from '#lib/utils/page-words.ts';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -98,7 +98,7 @@ export function describeFailure(
 ): string {
 	if (err instanceof NetworkError && wording.offline) return wording.offline;
 	if (err instanceof ApiError && !wording.withholdServerDetail) {
-		if (err.refusal) return reportedMessageText(err.refusal) ?? fallback;
+		if (err.refusal) return messageText(err.refusal) ?? fallback;
 		if (err.detail) return err.detail;
 	}
 	return fallback;

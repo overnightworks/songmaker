@@ -19,7 +19,7 @@
 		LORA_MIN_SAMPLES_FOR_TRAINING
 	} from '#lib/constants/lora.ts';
 	import { formatDecimal, formatList, formatRemainingTime } from '#lib/utils/format.ts';
-	import { pageParts, pageText, reportedMessageText } from '#lib/utils/page-words.ts';
+	import { pageParts, pageText, messageText } from '#lib/utils/page-words.ts';
 
 	const ACTIVE_STATUS_KEYS = {
 		queued: { banner: 'voiceDetail.lockedQueued', button: 'voiceDetail.trainButtonQueued' },
@@ -450,7 +450,7 @@
 			{#if trainingCancelled}
 				<p>{pageText('voiceDetail.trainingCancelled')}</p>
 			{:else if waitingForWorker}
-				{@const wait = reportedMessageText(displayedTrainingJob.queue_reason_message)}
+				{@const wait = messageText(displayedTrainingJob.queue_reason_message)}
 				<p>{wait ?? pageText('voiceDetail.waitingDefault')}</p>
 				{#if displayedTrainingJob.queue_position !== null && displayedTrainingJob.queue_position !== undefined}
 					<p class="training-detail">
