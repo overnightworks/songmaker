@@ -184,7 +184,7 @@ async function openAdminVoices(page: Page): Promise<Locator> {
 	else await page.getByRole('button', { name: words['adminPage.tabVoices'], exact: true }).click();
 	const section = page
 		.locator('section')
-		.filter({ has: page.getByRole('heading', { name: 'Voice operations' }) });
+		.filter({ has: page.getByRole('heading', { name: words['adminVoices.heading'] }) });
 	await expect(section).toBeVisible();
 	return section;
 }

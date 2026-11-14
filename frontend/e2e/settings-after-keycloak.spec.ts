@@ -186,6 +186,8 @@ test('the old Account and Cleanup addresses behave like any unknown address', as
 		await page.goto(oldAddress);
 		await expect(page).toHaveURL(new RegExp(`${oldAddress}$`));
 		await expect(unknownAnswer).toBeVisible();
-		await expect(page.getByRole('heading', { name: /Account|Take Retention/ })).toHaveCount(0);
+		await expect(
+			page.getByRole('heading', { name: new RegExp(`Account|${words['takeRetention.heading']}`) })
+		).toHaveCount(0);
 	}
 });
