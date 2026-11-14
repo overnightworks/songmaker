@@ -80,14 +80,13 @@
 	const canTrain = $derived(
 		!active && !deleted && sampleValidationProblems.length === 0 && !training
 	);
-	const trainingJob = $derived.by(() => {
-		const jobId = lora.training_job_id;
-		if (!jobId) return null;
-		return $activeJobs.find((entry) => entry.job.id === jobId)?.job ?? null;
-	});
+	const trainingJob = $derived(
+		$activeJobs.find((entry) => entry.job.id === lora.training_job_id)?.job ?? null
+	);
 	const displayedTrainingJob = $derived(
 		trainingJob ?? (cancelledTrainingJob?.id === lora.training_job_id ? cancelledTrainingJob : null)
 	);
+	const trainingCancelled = $derived(displayedTrainingJob?.status === 'cancelled');
 	const waitingForWorker = $derived(
 		displayedTrainingJob?.status === 'queued' &&
 			(displayedTrainingJob.queue_reason !== null || displayedTrainingJob.queue_position !== null)
@@ -273,11 +272,9 @@
 <div class="lora-detail" class:deleted>
 	{#if deleted}
 		<p class="banner warn">{pageText('voiceDetail.deletedBanner')}</p>
-	{:else if displayedTrainingJob?.status === 'cancelled'}
-		<p class="banner info">{pageText('voiceDetail.trainingCancelled')}</p>
-	{:else if lockedStatus}
+	{:else if lockedStatus && !trainingCancelled}
 		<p class="banner info">{pageText(ACTIVE_STATUS_KEYS[lockedStatus].banner)}</p>
-	{:else if lora.status === 'failed' && lora.error}
+	{:else if lora.status === 'failed' && lora.error && !trainingCancelled}
 		<p class="banner error">
 			<strong>{pageText('voiceDetail.trainingFailed')}</strong><br />{lora.error}
 		</p>
@@ -452,7 +449,7 @@
 					</button>
 				{/if}
 			</div>
-			{#if displayedTrainingJob.status === 'cancelled'}
+			{#if trainingCancelled}
 				<p>{pageText('voiceDetail.trainingCancelled')}</p>
 			{:else if waitingForWorker}
 				<p>{displayedTrainingJob.queue_reason || pageText('voiceDetail.waitingDefault')}</p>
