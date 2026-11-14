@@ -25,12 +25,19 @@ import songmaker_cli.cover_runner as cover_runner
 from songmaker_cli.constants import COVER_PROMPT_MAX_CHARS, COVER_PROMPT_SONG_FIELD_MAX_CHARS
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
 from songmaker_cli.db.queries.albums import soft_delete_album
-from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
+from songmaker_cli.db.queries.jobs import (
+    JobStatusUpdate,
+    recover_jobs_of_dead_owners,
+    update_job_status,
+)
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.job_types import JobStatus, JobType
+from songmaker_cli.worker_liveness import WorkerLiveness
 
 HANG_GUARD_SECONDS: Final = 30
 OWNER: Final = "u1"
+
+DEAD_OWNER: Final = "dead-owner"
 
 
 def _png_bytes() -> bytes:
@@ -149,7 +156,7 @@ def _leave_suggestion_and_staging(factory, audio_dir: Path, job_id: str) -> tupl
     png = audio_dir / "cover-suggestions" / "album" / f"{job_id}.png"
     png.parent.mkdir(parents=True, exist_ok=True)
     png.write_bytes(_png_bytes())
-    staging_dir = cover_runner._staging_path(audio_dir, "album", job_id)
+    staging_dir = cover_runner.cover_staging_path(audio_dir, job_id)
     staging_dir.mkdir(parents=True, exist_ok=True)
     (staging_dir / "partial.png").write_bytes(_png_bytes())
     with factory() as session:
@@ -167,15 +174,20 @@ def _end_job(factory, job_id: str, status: str) -> None:
         session.commit()
 
 
-def test_web_recovery_fails_interrupted_work_and_leaves_queue_for_runner(
+def test_recovering_a_dead_owner_fails_its_cover_and_leaves_the_queue_for_the_runner(
     tmp_path: Path, pg_factory,
 ) -> None:
     app, factory, _audio_dir, stack = _cover_world(tmp_path, pg_factory)
     running_job_id = _queue(factory, stack)
     _end_job(factory, running_job_id, JobStatus.RUNNING)
+    _own_by(factory, running_job_id, DEAD_OWNER)
     _queue(factory, stack, "queued")
 
-    assert cover_runner.recover_web_cover_jobs(factory) == 1
+    with factory() as session:
+        assert recover_jobs_of_dead_owners(session, {DEAD_OWNER: WorkerLiveness.DEAD}) == {
+            JobType.COVER: 1,
+        }
+        session.commit()
 
     with factory() as session:
         interrupted = session.get(Job, running_job_id)
@@ -185,7 +197,14 @@ def test_web_recovery_fails_interrupted_work_and_leaves_queue_for_runner(
 
     assert asyncio.run(cover_runner.run_next_cover_job(app))
     with factory() as session:
-        assert session.get(Job, "queued").status == JobStatus.COMPLETED
+        claimed = session.get(Job, "queued")
+        assert (claimed.status, claimed.owner_id) == (JobStatus.COMPLETED, app.state.ctx.owner_id)
+
+
+def _own_by(factory, job_id: str, owner_id: str) -> None:
+    with factory() as session:
+        session.get(Job, job_id).owner_id = owner_id
+        session.commit()
 
 
 @pytest.mark.parametrize("ended_status", [JobStatus.FAILED, JobStatus.CANCELLED])
@@ -199,7 +218,7 @@ def test_reconciling_removes_what_an_ended_cover_left_and_keeps_every_other_job_
     _end_job(factory, ended_job_id, ended_status)
     running_job_id = _queue(factory, stack, "running")
     _end_job(factory, running_job_id, JobStatus.RUNNING)
-    running_staging = cover_runner._staging_path(audio_dir, "album", running_job_id)
+    running_staging = cover_runner.cover_staging_path(audio_dir, running_job_id)
     running_staging.mkdir()
 
     assert cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir) == 1
@@ -213,7 +232,7 @@ def test_reconciling_removes_what_an_ended_cover_left_and_keeps_every_other_job_
     assert cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir) == 0
 
 
-def test_a_start_leaves_an_interrupted_cover_without_suggestion_and_staging_directory(
+def test_a_dead_owners_cover_leaves_no_suggestion_and_no_staging_directory_even_without_album(
     tmp_path: Path, pg_factory,
 ) -> None:
     _app, factory, audio_dir, stack = _cover_world(tmp_path, pg_factory)
@@ -223,8 +242,14 @@ def test_a_start_leaves_an_interrupted_cover_without_suggestion_and_staging_dire
         factory, audio_dir, job_id,
     )
     _end_job(factory, job_id, JobStatus.RUNNING)
+    _own_by(factory, job_id, DEAD_OWNER)
+    with factory() as session:
+        session.get(Job, job_id).album_id = None
+        session.commit()
 
-    cover_runner.recover_web_cover_jobs(factory)
+    with factory() as session:
+        recover_jobs_of_dead_owners(session, {DEAD_OWNER: WorkerLiveness.DEAD})
+        session.commit()
     cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir)
 
     with factory() as session:
@@ -286,7 +311,7 @@ def test_reconciling_a_job_whose_staging_directory_is_gone_counts_it_and_raises_
     _app, factory, audio_dir, stack = _cover_world(tmp_path, pg_factory)
     job_id = _queue(factory, stack)
     png, _staging = _leave_suggestion_and_staging(factory, audio_dir, job_id)
-    shutil.rmtree(cover_runner._staging_path(audio_dir, "album", job_id))
+    shutil.rmtree(cover_runner.cover_staging_path(audio_dir, job_id))
     _end_job(factory, job_id, JobStatus.FAILED)
 
     assert cover_runner.reconcile_reaped_cover_jobs(factory, audio_dir) == 1

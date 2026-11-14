@@ -1189,7 +1189,7 @@ User (id = Keycloak subject, username, role: admin|user)
   ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?, is_kept — the owner keeps the reference: keep clears the stamp and unkeep of a kept row starts a fresh full countdown, stamping at once unless a link holds the row, both under the row lock, unused_since? — when it last became unused: set at upload and when a take delete, an in-place version edit, a version delete, a song cleanup, an album cleanup, the trash expiry's hard delete of an album or song or retention's final take deletion leaves it without a link (never overwritten, kept rows skipped), cleared under the row lock when a version or take links it; the daily unused-stamp reconciliation stamps unstamped, unkept, unlinked rows late and clears the stamps of kept or linked rows, each half under the rows' locks in its own transaction; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row; the list hands out `deletes_at` for each stamped row — the next daily run (`DAILY_CLEANUP_HOUR_UTC`) at or after the later of `unused_since` and the publication instant (`now` until published) plus `final_deletion_days`, none for a kept or linked row — and `countdown_epoch` when any row carries a date; the daily run deletes exactly the stamped, unkept, unlinked rows whose listed date has passed, under that same formula, each in its own transaction under its row lock (the row, then its file) and holding neither the owner lock nor the purge lock, so it adds no edge to the lock order. The publication instant lives in one global `rate_limit_settings` row (`reference_countdown_visible_since`, seeded by its migration with a fresh uuid4 `id` as the epoch, `value_text` empty): `POST /api/references/countdown-shown` with that epoch writes the server's instant into it once, answers 204 for the current epoch whether or not it wrote, and 409 for any other; nothing is published until a page posts the epoch, and a reader that finds the row missing, duplicated or malformed fails the list)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
-  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start)
+  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion and makes a save that changes it create a new version; the job answer carries it as `version_id`, session? → UserSession, ON DELETE SET NULL — the session that asked for a cover job, cleared at every terminal state, never carried by an answer, frame or log; one future reader: the cover job at its start, owner_id? — the web process that runs a chat or cover job, never carried by an answer)
   └── AuditLog (action, resource_type, resource_id, detail)
 
 Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,
@@ -1382,7 +1382,7 @@ close the stream.
 | POST | `/api/generations/{id}/pick` | user | Pick best generation. 409 "Restore this take first." on an archived take; `keep` and the take share and playlist add routes answer the same. |
 | GET | `/api/jobs/{id}` | user | Poll job status (includes queue_position; a running generate job also its `phase`, take counters and `remaining_time_estimate`) |
 | POST | `/api/jobs/{id}/cancel` | user | Cancel a queued or running job (409 if not active). Terminal; later progress/finalize cannot overwrite. Does not stop in-flight GPU inference. |
-| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. The user message is persisted when the turn starts; the turn then runs as a task of its own, so a client that disconnects only stops listening, and the reply and any song edits persist when the turn completes. A turn that ends without a reply keeps the message it was started with (never withdrawn), and a turn that resends that unanswered message's exact text answers it instead of repeating it. Songmaker counts no turns against a limit of its own; the gateway's per-person and per-app budgets bound them. One turn runs per user at a time: a turn sent while another still runs is refused with 409, checked under the rate-limit lock, and the panel that is refused follows the running turn. `GET /api/conversations/{id}` reports `turn_running` from the user's active chat job; the web process fails every active chat job when it starts, since no turn survives a restart, and the stale-job reaper ends one whose heartbeat stops; the panel follows a turn only while it is true and shows a trailing user message of a turn that no longer runs as unanswered, with Try again. A panel whose stream drops without the server's own error frame (network loss, timeout, an early end) re-reads the conversation and follows or shows that turn; it names a failure only when the message never reached the server — decided by the persisted message ids, not by text alone, so a repeated "ok" is never mistaken for the answered one before it. The turn runs through the gateway ("The co-writer turn" above); a refused or failed run emits exactly one error frame with a `problem` (`unavailable` 503, `busy` 429 with `retry_after_seconds`, `not_enabled` 403, `sign_in_again` 401) and never a local provider. |
+| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. The user message is persisted when the turn starts; the turn then runs as a task of its own, so a client that disconnects only stops listening, and the reply and any song edits persist when the turn completes. A turn that ends without a reply keeps the message it was started with (never withdrawn), and a turn that resends that unanswered message's exact text answers it instead of repeating it. Songmaker counts no turns against a limit of its own; the gateway's per-person and per-app budgets bound them. One turn runs per user at a time: a turn sent while another still runs is refused with 409, checked under the rate-limit lock, and the panel that is refused follows the running turn. `GET /api/conversations/{id}` reports `turn_running` from the user's active chat job; a chat job whose web process is gone fails within one tick of a clean stop, or within the lease TTL plus a tick of a crash ("Stale-job recovery"), since no turn survives its process, and the stale-job reaper ends one whose heartbeat stops; the panel follows a turn only while it is true and shows a trailing user message of a turn that no longer runs as unanswered, with Try again. A panel whose stream drops without the server's own error frame (network loss, timeout, an early end) re-reads the conversation and follows or shows that turn; it names a failure only when the message never reached the server — decided by the persisted message ids, not by text alone, so a repeated "ok" is never mistaken for the answered one before it. The turn runs through the gateway ("The co-writer turn" above); a refused or failed run emits exactly one error frame with a `problem` (`unavailable` 503, `busy` 429 with `retry_after_seconds`, `not_enabled` 403, `sign_in_again` 401) and never a local provider. |
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
 | GET | `/api/settings/generation-builtins` | user | The built-in generation parameters of every model, keyed by model. |
@@ -1591,6 +1591,36 @@ The request path supplies the same Redis-derived liveness map before it
 reclaims a submitting user's stale jobs, so admission and lifecycle recovery
 apply the same queued-job rule.
 
+**Owner liveness** (web processes). Every web process has an owner id
+(`AppContext.owner_id`, a uuid) and writes it on the jobs it runs: a chat job when
+the turn starts, a cover job when it claims it (`jobs.owner_id`, nullable; worker
+jobs and older rows have none and get no owner verdict). Its lease is the Redis key
+`worker_liveness.owner_lease_key(owner_id)`, set for `OWNER_LEASE_TTL_SECONDS` (15 s)
+and renewed every `OWNER_LEASE_REFRESH_SECONDS` (5 s) by the `owner_lease` loop, and
+deleted at the end of `_lifespan`. The `owner_gone_reaper` loop of every web process
+runs `lifecycle.fail_jobs_of_dead_owners` every `OWNER_GONE_CHECK_INTERVAL_SECONDS`
+(5 s) and once at start: it reads the leases of the owners of active jobs
+(`read_owner_liveness`: a present key is `alive`, an absent one `dead`) and fails the
+active jobs of every `dead` owner with the one restart verdict
+`JOB_ERROR_SERVER_RESTARTED` (`error_type` `server_restart`), then removes the
+suggestion and staging directory of the covers it ended. No lock orders the
+processes: the failing update is conditional on the row it read. A web start leaves a
+live sibling's jobs alone; a clean stop ends the stopped process's jobs within one
+tick after its lifespan ends, a crash within the lease TTL plus a tick. After a clean
+restart the panel shows "Try again" at once; after a crash within 20 s.
+
+`unknown` never fails a job. A Redis that cannot be read fails the pass, which the
+`owner_gone_reaper` loop health shows in `/health/details`, and fails nothing. A
+Redis whose `INFO server` `uptime_in_seconds` is below the lease TTL may have
+restarted empty, so an absent key reads `unknown` there until the pods have renewed
+their leases; an owner id the reading lacks is `unknown`, and a pass never asks about
+its own process. A pod that lost its lease while alive (a Redis outage longer than the
+TTL) may see a sibling fail its jobs; every later write of that job then refuses, as
+for any terminal job. A cover's staging directory is named by its job id alone, so it
+is removed also when the album was deleted. The workers keep their own
+startup/shutdown recovery (`recover_stale_jobs_by_type`, which uses the same restart
+verdict) until they get an owner of their own.
+
 The liveness owner maps each type to the signal that can execute it. It writes
 the last observed `alive` state for each signal to Redis with a seven-day TTL.
 When the ephemeral signal disappears, a missing signal within the 300-second
@@ -1620,8 +1650,7 @@ heartbeat, while its container still reads as starting. An empty ACE-Step regist
 - `chat` runs in the web process rather than a worker queue, so it has no
   worker liveness signal and queued chat can only use the age guard.
   A client that disconnects does not end its chat turn; the turn runs to
-  completion. A turn whose web process dies is failed when the web process
-  starts again, before it serves a request.
+  completion. A turn whose web process dies is failed by the owner pass below.
 
 - `STALE_JOB_THRESHOLDS` in `job_timing.py` is the single policy table:
 

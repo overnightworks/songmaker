@@ -21,7 +21,6 @@ from support.web_app import (
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
-    seed_user,
     web_client,
 )
 
@@ -257,32 +256,15 @@ def test_the_chat_job_decides_whether_a_turn_is_running(
     assert body["turn_running"] is turn_running
 
 
-@pytest.mark.parametrize("chat_job_status", ["queued", "running"])
-def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
-    tmp_path, mock_arq_pool, chat_job_status, pg_factory,
-):
-    """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
-    from support.web_app import make_test_app, seed_session
+def test_a_chat_turn_names_this_process_as_the_owner_of_its_job(client, service):
+    c, factory = client
+    service.replies(completion("ok"))
 
-    def _seed_a_turn_the_restart_interrupted(session) -> None:
-        musician = seed_user(session, "musician", role="user")
-        session.add(Conversation(id="conv-1", user_id=musician.id))
-        session.add(ChatMessage(conversation_id="conv-1", role="user", content="Ja bitte"))
-        session.add(Job(type="chat", user_id=musician.id, status=chat_job_status))
+    assert c.post("/api/chat/turn", json={"message": "hey"}).status_code == 200
 
-    c, factory = make_test_app(
-        tmp_path, factory=pg_factory, seed_db=_seed_a_turn_the_restart_interrupted
-    )
-    with c:
-        seed_session(c, "musician")
-        body = c.get("/api/conversations/conv-1").json()
-
-    assert [m["content"] for m in body["messages"]] == ["Ja bitte"]
-    assert body["turn_running"] is False
     with factory() as session:
-        assert [job.error_type for job in session.query(Job).filter_by(type="chat")] == [
-            "server_restart",
-        ]
+        [job] = session.query(Job).filter_by(type="chat")
+        assert job.owner_id == c.app.state.ctx.owner_id
 
 
 def test_chat_turn_completes_when_its_heartbeat_task_fails(client, service):

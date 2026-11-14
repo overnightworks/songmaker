@@ -674,7 +674,7 @@ def test_entering_running_starts_without_a_generation_start(
     seeded_session.commit()
 
     if claim_cover:
-        assert job_queries.claim_next_cover_job(seeded_session).id == job.id
+        assert job_queries.claim_next_cover_job(seeded_session, "owner").id == job.id
     else:
         update_job_status(
             seeded_session,

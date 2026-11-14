@@ -278,6 +278,8 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
         BackgroundLoopName.RESOURCE_EVENT_CLEANUP: BackgroundLoopStatus.OK,
         BackgroundLoopName.SCORE_BACKFILL: BackgroundLoopStatus.OK,
         BackgroundLoopName.STALE_JOB_REAPER: BackgroundLoopStatus.OK,
+        BackgroundLoopName.OWNER_LEASE: BackgroundLoopStatus.OK,
+        BackgroundLoopName.OWNER_GONE_REAPER: BackgroundLoopStatus.OK,
         BackgroundLoopName.COVER_RUNNER: BackgroundLoopStatus.OK,
     }
 
@@ -317,12 +319,12 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
         assert health[BackgroundLoopName.COVER_RUNNER]["state"] == BackgroundLoopStatus.OK
 
 
-def test_a_web_start_leaves_an_interrupted_cover_without_suggestion_file_and_staging_directory(
+def test_a_web_start_removes_the_suggestion_file_and_staging_directory_a_failed_cover_left(
     tmp_path, mock_arq_pool, pg_factory,
 ) -> None:
     audio_dir = tmp_path / "audio"
     png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
-    staging_dir = cover_runner._staging_path(audio_dir, "album", "cover-job")
+    staging_dir = cover_runner.cover_staging_path(audio_dir, "cover-job")
 
     def seed_interrupted_cover(session) -> None:
         png.parent.mkdir(parents=True)
@@ -333,7 +335,7 @@ def test_a_web_start_leaves_an_interrupted_cover_without_suggestion_file_and_sta
         session.add(Album(id="album", title="Album", artist="Artist", created_by="u1"))
         session.flush()
         session.add(Job(
-            id="cover-job", type=JobType.COVER, status=JobStatus.RUNNING, album_id="album",
+            id="cover-job", type=JobType.COVER, status=JobStatus.FAILED, album_id="album",
         ))
         session.flush()
         session.add(AlbumCoverSuggestion(

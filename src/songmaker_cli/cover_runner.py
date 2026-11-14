@@ -35,7 +35,6 @@ from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     claim_next_cover_job,
     get_job,
-    recover_stale_jobs_by_type,
     update_job_status,
 )
 from songmaker_cli.db.queries.songs import list_songs
@@ -88,19 +87,9 @@ def abort_web_cover_job(job_id: str) -> bool:
     return True
 
 
-def recover_web_cover_jobs(db_factory) -> int:
-    """Fail interrupted web covers; `reconcile_reaped_cover_jobs` removes what they left."""
-    with db_factory() as session:
-        recovered = recover_stale_jobs_by_type(
-            session,
-            {JobType.COVER: frozenset({JobStatus.RUNNING})},
-        )
-        session.commit()
-    return recovered.get(JobType.COVER, 0)
-
-
 _ENDED_WITHOUT_COVER: Final = (JobStatus.FAILED, JobStatus.CANCELLED)
-_STAGING_DIRECTORY_PATTERN: Final = ".*.staging"
+_STAGING_SUFFIX: Final = ".staging"
+_STAGING_DIRECTORY_PATTERN: Final = f".*{_STAGING_SUFFIX}"
 
 
 def reconcile_reaped_cover_jobs(db_factory, audio_dir: Path) -> int:
@@ -112,7 +101,7 @@ def reconcile_reaped_cover_jobs(db_factory, audio_dir: Path) -> int:
     Returns the number of cover jobs cleaned.
     """
     staged_job_ids = [
-        path.name.removeprefix(".").removesuffix(".staging")
+        path.name.removeprefix(".").removesuffix(_STAGING_SUFFIX)
         for path in (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).glob(_STAGING_DIRECTORY_PATTERN)
     ]
     with db_factory() as session:
@@ -130,13 +119,7 @@ def reconcile_reaped_cover_jobs(db_factory, audio_dir: Path) -> int:
                 ),
             )
         }
-        staging_dirs = [
-            _staging_path(audio_dir, album_id, job_id)
-            for job_id, album_id in session.query(Job.id, Job.album_id).filter(
-                Job.id.in_(ended_job_ids),
-            )
-            if album_id is not None
-        ]
+        staging_dirs = [cover_staging_path(audio_dir, job_id) for job_id in ended_job_ids]
         suggestion_paths = delete_job_cover_suggestions(session, list(ended_job_ids))
         session.commit()
     remove_cover_suggestion_files(audio_dir, suggestion_paths)
@@ -147,7 +130,8 @@ def reconcile_reaped_cover_jobs(db_factory, audio_dir: Path) -> int:
 
 async def run_next_cover_job(app) -> bool:
     """Claim and run one queued cover job."""
-    job_id = await asyncio.to_thread(_claim_next_cover_job, app.state.ctx.db)
+    ctx = app.state.ctx
+    job_id = await asyncio.to_thread(_claim_next_cover_job, ctx.db, ctx.owner_id)
     if job_id is None:
         return False
     await run_claimed_cover_suggestion_job(app, job_id)
@@ -189,9 +173,7 @@ async def run_claimed_cover_suggestion_job(app, job_id: str) -> None:
             await asyncio.to_thread(_end_with_problem, db_factory, job_id, image)
             return
         suggestion_id = str(uuid.uuid4())
-        staging_dir = await asyncio.to_thread(
-            _staging_directory, audio_dir, start.album_id, job_id,
-        )
+        staging_dir = await asyncio.to_thread(_staging_directory, audio_dir, job_id)
         await asyncio.to_thread(_write_staged_png, staging_dir, suggestion_id, image)
         await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
 
@@ -316,9 +298,9 @@ def build_cover_prompt(album, songs) -> str:
     return header + json.dumps(album_data, ensure_ascii=False, separators=(",", ":"))
 
 
-def _claim_next_cover_job(db_factory) -> str | None:
+def _claim_next_cover_job(db_factory, owner_id: str) -> str | None:
     with db_factory() as session:
-        job = claim_next_cover_job(session)
+        job = claim_next_cover_job(session, owner_id)
         session.commit()
         return None if job is None else job.id
 
@@ -354,16 +336,16 @@ def _user_or_none(session, user_id: str | None) -> AuthenticatedUser | None:
     return AuthenticatedUser(id=user.id, username=user.username, role=user.role, agent=None)
 
 
-def _staging_directory(audio_dir: Path, album_id: str, job_id: str) -> Path:
-    staging_dir = _staging_path(audio_dir, album_id, job_id)
+def _staging_directory(audio_dir: Path, job_id: str) -> Path:
+    staging_dir = cover_staging_path(audio_dir, job_id)
     staging_dir.parent.mkdir(parents=True, exist_ok=True)
     staging_dir.mkdir()
     return staging_dir
 
 
-def _staging_path(audio_dir: Path, album_id: str, job_id: str) -> Path:
-    root = suggestion_png_path(audio_dir, album_id, "staging").parent.parent
-    return root / f".{job_id}.staging"
+def cover_staging_path(audio_dir: Path, job_id: str) -> Path:
+    """The directory a cover job draws into; its name holds the job id alone."""
+    return audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / f".{job_id}{_STAGING_SUFFIX}"
 
 
 def _write_staged_png(staging_dir: Path, suggestion_id: str, image: Image.Image) -> None:

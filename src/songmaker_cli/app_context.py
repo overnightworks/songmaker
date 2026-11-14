@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -31,6 +32,8 @@ class AppContext:
     signing_key: bytes
     redis: Redis
     trusted_proxies: TrustedProxies = field(default_factory=TrustedProxies)
+    owner_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    """Names this process on the jobs it runs; its lease in Redis says whether it lives."""
 
 
 def parse_trusted_proxies(settings: Settings) -> TrustedProxies:
