@@ -345,7 +345,7 @@ and proves the auth surface it builds on it through `test_auth_api_sign_in.py`,
 
 ## Two-process tests
 
-`tests/support/app_processes.py` starts real `songmaker server` processes for a test that needs more than one. Each gets a free port, its own worker id and data directory, one shared audio directory, throwaway secrets, and the case's database and Redis; the test waits for `/health` with a deadline. Every process is ended when the case ends, and the children die with the test process even if it is killed. `tests/songmaker_cli/test_server_two_web_processes.py` is the first caller. Run it locally with `scripts/test_postgresql.sh tests/songmaker_cli/test_two_web_processes.py`.
+`tests/support/app_processes.py` starts real `songmaker server` processes for a test that needs more than one. Each gets a free port, its own worker id and data directory, one shared audio directory, throwaway secrets, and the case's database and Redis; the test waits for `/health` with a deadline. Every process is ended when the case ends, and the children die with the test process even if it is killed. `tests/songmaker_cli/test_server_two_web_processes.py` is the first caller. Run it locally with `scripts/test_postgresql.sh tests/songmaker_cli/test_server_two_web_processes.py`.
 
 `patch = subprocess` in `.github/workflows/coveragerc-ci.ini` makes the children measure into the shard's combine.
 
