@@ -1,8 +1,0 @@
-claim_id = "4024aa591c474a8c8fc44ea8fa33c013"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "167f8f79fff81ea300a52887ff6e8c3a08184617"
-branch = "claude/issue-3169-take-design-v0-31-0"
-scope = ["frontend/e2e/cowriter-return.spec.ts", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/components/CoWriterPanelMemoryProposals.test.ts", "frontend/src/lib/test-utils/cowriter-composer.ts", "pyproject.toml", "uv.lock"]
-opened_commit = "d71881123a099ef2d23c88bbe1632a674537ae04"
-whole_reason = "The pins and the locators that need the new markup land together, with the shared chat locator helper they use."
