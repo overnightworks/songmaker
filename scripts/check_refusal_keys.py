@@ -219,8 +219,9 @@ def _unread_problem(
             f"a raw {HTTP_EXCEPTION_NAME} answers English only; raise a Refusal, or mark a "
             "no-reader answer with '# unread: <tag>'"
         )
-    if tags[0] not in UNREAD_TAGS:
-        return None, f"unknown unread tag {tags[0]!r}; the tags are {list(UNREAD_TAGS)}"
+    unknown = next((tag for tag in tags if tag not in UNREAD_TAGS), None)
+    if unknown is not None:
+        return None, f"unknown unread tag {unknown!r}; the tags are {list(UNREAD_TAGS)}"
     return tags[0], None
 
 

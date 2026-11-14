@@ -211,13 +211,17 @@ def test_the_summary_counts_every_tag(
         (RAW_IMPORT + 'raise HTTPException(404)  # unread: whatever\n', "unknown unread tag"),
         (RAW_IMPORT + 'raise HTTPException(404, "Gone")  # unread:\n', "unknown unread tag"),
         (
+            RAW_IMPORT + 'raise HTTPException(  # unread: media\n    404  # unread: typo\n)\n',
+            "unknown unread tag 'typo'",
+        ),
+        (
             RAW_IMPORT + 'raise HTTPException(\n    404, "Gone",\n)\n# unread: media\n',
             "answers English only",
         ),
         (RAW_IMPORT + 'x = 1  # unread: media\n' + 'raise HTTPException(404)  # unread: sse\n',
          "marks no raw HTTPException call"),
     ],
-    ids=["unmarked", "unknown-tag", "empty-tag", "marker-below-the-call", "orphan-marker"],
+    ids=["unmarked", "unknown-tag", "empty-tag", "second-marker-unknown", "marker-below-the-call", "orphan-marker"],
 )
 def test_a_raw_exception_without_a_known_tag_or_a_marker_without_a_call_is_reported(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], source: str, problem: str
