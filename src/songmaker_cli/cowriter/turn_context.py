@@ -13,6 +13,7 @@ from songmaker_cli.api_helpers import (
     check_generation_access,
     check_song_access,
     owner_filter,
+    version_not_found,
 )
 from songmaker_cli.api_models import ChatTurnV2Request
 from songmaker_cli.api_models.songs import score_values
@@ -247,10 +248,10 @@ def _mentioned_version_block(
     if not version_ids:
         return None
     if current_song is None:
-        raise Refusal(404, "versionRefusal.notFound")
+        raise version_not_found()
     versions = [get_version(session, version_id, current_song.id) for version_id in version_ids]
     if any(version is None for version in versions):
-        raise Refusal(404, "versionRefusal.notFound")
+        raise version_not_found()
     body = "\n\n".join(_format_version(version, current_song) for version in versions)
     return TurnContextBlock(TURN_BLOCK_MENTIONED_VERSIONS, body)
 

@@ -18,3 +18,23 @@ def test_a_second_preset_of_the_same_name_is_refused_with_its_sentence_and_key(
         "detail": "A preset with that name already exists",
         "message": {"key": "presetRefusal.nameTaken", "values": {}},
     }
+
+
+def test_a_take_nobody_owns_is_refused_with_its_sentence_and_key(household: McpWorld) -> None:
+    reply = household.call("get_take", {"gen_id": "no-such-take"})
+
+    assert reply.is_error
+    assert reply.json() == {
+        "detail": "Generation not found",
+        "message": {"key": "generationRefusal.notFound", "values": {}},
+    }
+
+
+def test_a_preset_nobody_owns_is_refused_with_its_sentence_and_key(household: McpWorld) -> None:
+    reply = household.call("update_preset", {"preset_id": "no-such-preset", "name": "Fresh"})
+
+    assert reply.is_error
+    assert reply.json() == {
+        "detail": "Preset not found",
+        "message": {"key": "presetRefusal.notFound", "values": {}},
+    }

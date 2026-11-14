@@ -4,22 +4,23 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.mcp import Exclusion, ToolEffect, agent_tool, exclude_route
 from songmaker_cli.api_helpers import (
-    GENERATION_NOT_FOUND_DETAIL,
     can_access_album,
     check_album_access,
     check_generation_access,
     check_playlist_access,
     check_song_access,
     cover_file_response,
+    generation_not_found,
     playlist_not_found,
     raise_cover_refusal,
+    song_not_found,
     unique_playlist_slug,
 )
 from songmaker_cli.api_models import (
@@ -280,7 +281,7 @@ def api_add_generation_to_playlist(
     try:
         entry = add_generation_to_playlist(session, playlist_id, req.generation_id)
     except ValueError:
-        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
+        raise generation_not_found()
     except ArchivedTakeError:
         raise Refusal(409, "takeRefusal.archived")
     session.commit()
@@ -325,7 +326,7 @@ def api_add_song_to_playlist(
     try:
         add_song_to_playlist(session, playlist_id, req.song_id)
     except ValueError:
-        raise Refusal(404, "songRefusal.notFound")
+        raise song_not_found()
     except ArchivedTakeError:
         raise Refusal(409, "takeRefusal.archived")
     session.commit()

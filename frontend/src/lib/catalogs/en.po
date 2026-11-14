@@ -3552,3 +3552,39 @@ msgstr ""
 msgctxt "libraryRefusal.cursorMismatch"
 msgid "Library cursor does not match query and sort"
 msgstr ""
+
+msgctxt "generationRefusal.notFound"
+msgid "Generation not found"
+msgstr ""
+
+msgctxt "generationRefusal.someNotFound"
+msgid "One or more generations not found"
+msgstr ""
+
+msgctxt "generationRefusal.audioMissing"
+msgid "Audio file not found"
+msgstr ""
+
+msgctxt "voiceRefusal.notFound"
+msgid "LoRA not found"
+msgstr ""
+
+msgctxt "voiceRefusal.sampleNotFound"
+msgid "LoRA sample not found"
+msgstr ""
+
+msgctxt "conversationRefusal.notFound"
+msgid "Conversation not found"
+msgstr ""
+
+msgctxt "presetRefusal.notFound"
+msgid "Preset not found"
+msgstr ""
+
+msgctxt "modelRefusal.notFound"
+msgid "Model not found"
+msgstr ""
+
+msgctxt "workerRefusal.notFound"
+msgid "Worker '{workerId}' not found"
+msgstr ""

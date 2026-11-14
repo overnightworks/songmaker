@@ -78,9 +78,6 @@ if TYPE_CHECKING:
 
     from songmaker_cli.settings import Settings
 
-LORA_NOT_FOUND_DETAIL: Final = "LoRA not found"
-LORA_SAMPLE_NOT_FOUND_DETAIL: Final = "LoRA sample not found"
-GENERATION_NOT_FOUND_DETAIL: Final = "Generation not found"
 DEFAULT_AUDIO_MEDIA_TYPE: Final = "application/octet-stream"
 # A take's file is written once under its name and never changes, so a browser
 # may keep it for good; "private" forbids any shared cache (CDN, proxy) from
@@ -102,7 +99,7 @@ def raise_audio_file_http_error(
 ) -> NoReturn:
     """Map a missing stored audio file at the caller's HTTP boundary."""
     detail = HTTP_NOT_FOUND if public else AUDIO_FILE_NOT_FOUND
-    raise HTTPException(404, detail) from error
+    raise HTTPException(404, detail) from error  # unread: media
 
 
 def audio_response(audio_path: Path, cache_control: str) -> FileResponse:
@@ -147,13 +144,13 @@ def cover_file_response(
 ) -> FileResponse:
     """Serve an entity's stored cover, mapping resolver refusals to HTTP errors."""
     if version is not None and version != entity.cover_key:
-        raise HTTPException(404, COVER_NOT_FOUND)
+        raise HTTPException(404, COVER_NOT_FOUND)  # unread: media
     try:
         path = resolve_file(audio_dir, entity.id, entity.cover_key, variant)
     except CoverRejectedError as exc:
         raise_cover_refusal(exc)
     except FileNotFoundError:
-        raise HTTPException(404, COVER_NOT_FOUND)
+        raise HTTPException(404, COVER_NOT_FOUND)  # unread: media
     return FileResponse(
         path,
         media_type=cover_media_type(variant, entity.cover_key or ""),
@@ -480,6 +477,18 @@ def reference_not_found() -> Refusal:
     return Refusal(404, "referenceRefusal.notFound")
 
 
+def generation_not_found() -> Refusal:
+    return Refusal(404, "generationRefusal.notFound")
+
+
+def voice_not_found() -> Refusal:
+    return Refusal(404, "voiceRefusal.notFound")
+
+
+def voice_sample_not_found() -> Refusal:
+    return Refusal(404, "voiceRefusal.sampleNotFound")
+
+
 def check_album_access(
     album: Album | None, user: AuthenticatedUser, *, require_owner: bool = False,
 ) -> Album:
@@ -546,9 +555,9 @@ def check_own_playlist_access(
 
 def check_lora_access(lora: UserLora | None, user: AuthenticatedUser) -> UserLora:
     if not lora:
-        raise HTTPException(404, LORA_NOT_FOUND_DETAIL)
+        raise voice_not_found()
     if lora.user_id != user.id:
-        raise HTTPException(404, LORA_NOT_FOUND_DETAIL)
+        raise voice_not_found()
     return lora
 
 
@@ -568,9 +577,9 @@ def check_lora_ready_for_generation(
         return None
     lora = get_user_lora(session, user_lora_id, include_deleted_rows=True)
     if not lora:
-        raise HTTPException(404, LORA_NOT_FOUND_DETAIL)
+        raise voice_not_found()
     if lora.user_id != user.id:
-        raise HTTPException(404, LORA_NOT_FOUND_DETAIL)
+        raise voice_not_found()
     if lora.deleted_at is not None:
         raise Refusal(422, "voiceRefusal.deleted")
     if lora.status != LoraStatus.READY:
@@ -582,12 +591,12 @@ def check_lora_sample_access(
     sample: UserLoraSample | None, user: AuthenticatedUser,
 ) -> UserLoraSample:
     if not sample:
-        raise HTTPException(404, LORA_SAMPLE_NOT_FOUND_DETAIL)
+        raise voice_sample_not_found()
     parent = sample.user_lora
     if not parent:
-        raise HTTPException(404, LORA_SAMPLE_NOT_FOUND_DETAIL)
+        raise voice_sample_not_found()
     if parent.user_id != user.id:
-        raise HTTPException(404, LORA_SAMPLE_NOT_FOUND_DETAIL)
+        raise voice_sample_not_found()
     return sample
 
 
@@ -598,10 +607,10 @@ def check_generation_access(
     """Load a generation and verify ownership. Returns the generation or raises 404."""
     gen = get_generation(session, gen_id)
     if not gen:
-        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
+        raise generation_not_found()
     album = gen.song.album if gen.song else None
     if not can_access_album(album, user, require_owner=require_owner):
-        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
+        raise generation_not_found()
     return gen
 
 
@@ -619,7 +628,7 @@ def check_generations_access(
         if can_access_album(gen.song.album if gen.song else None, user)
     ]
     if len(reachable) != len(set(gen_ids)):
-        raise HTTPException(404, "One or more generations not found")
+        raise Refusal(404, "generationRefusal.someNotFound")
     return reachable
 
 

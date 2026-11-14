@@ -864,6 +864,15 @@ type Key = Literal[
     'libraryQueueRefusal.limiterUnavailable',
     'libraryRefusal.cursorInvalid',
     'libraryRefusal.cursorMismatch',
+    'generationRefusal.notFound',
+    'generationRefusal.someNotFound',
+    'generationRefusal.audioMissing',
+    'voiceRefusal.notFound',
+    'voiceRefusal.sampleNotFound',
+    'conversationRefusal.notFound',
+    'presetRefusal.notFound',
+    'modelRefusal.notFound',
+    'workerRefusal.notFound',
 ]
 type Language = Literal[
     'en',
@@ -1830,6 +1839,15 @@ WORDS: Mapping[Language, Mapping[Key, str | Mapping[Category, str]]] = {
         'libraryQueueRefusal.limiterUnavailable': 'Queue stream rate limiter unavailable',
         'libraryRefusal.cursorInvalid': 'Invalid library cursor',
         'libraryRefusal.cursorMismatch': 'Library cursor does not match query and sort',
+        'generationRefusal.notFound': 'Generation not found',
+        'generationRefusal.someNotFound': 'One or more generations not found',
+        'generationRefusal.audioMissing': 'Audio file not found',
+        'voiceRefusal.notFound': 'LoRA not found',
+        'voiceRefusal.sampleNotFound': 'LoRA sample not found',
+        'conversationRefusal.notFound': 'Conversation not found',
+        'presetRefusal.notFound': 'Preset not found',
+        'modelRefusal.notFound': 'Model not found',
+        'workerRefusal.notFound': "Worker '{workerId}' not found",
     },
 }
 

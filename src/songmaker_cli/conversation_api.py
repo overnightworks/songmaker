@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from agents.turn import TurnMessage
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
@@ -481,7 +481,7 @@ def _verify_owns_conversation(
 ):
     conv = get_conversation(session, conversation_id)
     if conv is None or conv.user_id != user.id:
-        raise HTTPException(404, "Conversation not found")
+        raise Refusal(404, "conversationRefusal.notFound")
     return conv
 
 

@@ -74,10 +74,10 @@ JOB_STREAM_LIMIT_DETAIL: Final[str] = "Too many job streams"
 JOB_STREAM_LIMITER_UNAVAILABLE: Final[str] = "Job stream limiter unavailable"
 
 # The job SSE stream fails closed, same as the resource-event stream's lease
-# (see resource_event_api.py): an unenforced concurrency lease could let a
-# runaway client open unbounded streams. Enforced by hand in
-# _acquire_job_stream_lease's try/except below, not via api_helpers'
-# enforce_rate_limit -- see that function's own docstring for why.
+# (resource_event_api._acquire_stream_lease): an unenforced concurrency lease
+# could let a runaway client open unbounded streams. Enforced by hand in
+# _acquire_job_stream_lease's try/except below; api_helpers' enforce_rate_limit
+# meters a request budget, not a concurrency lease.
 
 
 _GET_JOB_DESCRIPTION = (
