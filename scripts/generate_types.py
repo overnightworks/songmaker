@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -181,6 +181,10 @@ MODEL_HOME_EXEMPTIONS = (
     ModelHomeExemption(
         packages=frozenset({"songmaker_cli.generation_params", "songmaker_cli.whisper_cues"}),
         reason="persistence-owned value objects that api_models re-exports (docs/architecture.md)",
+    ),
+    ModelHomeExemption(
+        packages=frozenset({"songmaker_cli.messages"}),
+        reason="a leaf below api_models that the server's refusals and stored texts share, which api_models re-exports",
     ),
 )
 
@@ -453,7 +457,7 @@ def _py_type_to_ts(annotation: Any) -> str:
         return _py_type_to_ts(get_args(annotation)[0])
     if origin is list:
         return _list_to_ts(annotation)
-    if origin is dict:
+    if origin in (dict, Mapping):
         return _dict_to_ts(annotation)
     if _is_union(annotation):
         return _union_to_ts(annotation)

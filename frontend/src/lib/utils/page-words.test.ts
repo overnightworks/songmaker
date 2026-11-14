@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { pageParts, pageText, refusalText } from '#lib/utils/page-words.ts';
+import { pageParts, pageText, messageText } from '#lib/utils/page-words.ts';
 import { words } from '#lib/words/en.ts';
 import { sourceLanguage } from '#lib/words/index.ts';
 
@@ -29,13 +29,13 @@ it('reads a gapless marked sentence as its parts', () => {
 	expect(pageParts('cowriter.archivedBanner')).toEqual(words['cowriter.archivedBanner']);
 });
 
-describe('refusalText', () => {
+describe('messageText', () => {
 	it('reads a plain key as its text', () => {
-		expect(refusalText('takeRefusal.archived', {})).toBe(words['takeRefusal.archived']);
+		expect(messageText({ key: 'takeRefusal.archived', values: {} })).toBe(words['takeRefusal.archived']);
 	});
 
 	it('fills the gaps of a key with the refusal values', () => {
-		expect(refusalText('modelRefusal.unavailable', { model: 'turbo' })).toBe(
+		expect(messageText({ key: 'modelRefusal.unavailable', values: { model: 'turbo' } })).toBe(
 			words['modelRefusal.unavailable']({ model: 'turbo' })
 		);
 	});
@@ -46,7 +46,7 @@ describe('refusalText', () => {
 		{ key: '__proto__', why: 'the name is the prototype, not an entry' },
 		{ key: 'newPlace.heading', why: 'the entry is a marked sentence, not text' }
 	])('gives null when $why', ({ key }) => {
-		expect(refusalText(key, { library: 'Library' })).toBeNull();
+		expect(messageText({ key, values: { library: 'Library' } })).toBeNull();
 	});
 });
 

@@ -7,8 +7,9 @@ from collections.abc import Mapping
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from songmaker_cli.api_models.refusals import RefusalMessage, RefusalResponse
-from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
+from songmaker_cli.api_models.refusals import RefusalResponse
+from songmaker_cli.messages import Message, message
+from songmaker_cli.words import Key
 
 
 class Refusal(HTTPException):
@@ -26,20 +27,16 @@ class Refusal(HTTPException):
         headers: Mapping[str, str] | None = None,
         **gaps: str,
     ) -> None:
+        self.message: Message = message(key, **gaps)
         super().__init__(
             status_code,
-            text(SOURCE_LANGUAGE, key, **gaps),
+            self.message.sentence(),
             headers=None if headers is None else dict(headers),
         )
-        self.key = key
-        self.gaps = gaps
 
 
 def refusal_handler(request: Request, exc: Refusal) -> JSONResponse:
-    body = RefusalResponse(
-        detail=exc.detail,
-        message=RefusalMessage(key=exc.key, values=exc.gaps),
-    )
+    body = RefusalResponse(detail=exc.detail, message=exc.message)
     return JSONResponse(body.model_dump(), status_code=exc.status_code, headers=exc.headers)
 
 

@@ -50,4 +50,4 @@ def test_each_cover_rejection_is_refused_with_its_status_sentence_and_key(
         raise_cover_refusal(CoverRejectedError(reason))
 
     assert (refused.value.status_code, refused.value.detail) == (status, sentence)
-    assert (refused.value.key, refused.value.gaps) == (key, {})
+    assert (refused.value.message.key, dict(refused.value.message.values)) == (key, {})
