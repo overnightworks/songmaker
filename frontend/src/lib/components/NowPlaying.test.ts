@@ -724,8 +724,8 @@ describe('NowPlaying when the take details cannot load', () => {
 		await tick();
 
 		expect(fetch).toHaveBeenCalledWith('/api/songs/s1', expect.anything());
-		const shown = [...get(toasts).map((toast) => toast.message), target.textContent];
-		expect(shown.join(' ')).not.toMatch(new RegExp(`Failed to fetch|${words['nowPlaying.takeDetailsFailed']}`));
+		const shown = [...get(toasts).map((toast) => toast.message), target.textContent].join(' ');
+		expect(shown).not.toMatch(RegExp(`Failed to fetch|${words['nowPlaying.takeDetailsFailed']}`));
 	});
 
 	type PendingFetch = { resolve: (response: unknown) => void; reject: (error: Error) => void };
@@ -927,9 +927,9 @@ describe('NowPlaying curation mode (#228)', () => {
 	}
 
 	it('shows the album progress while curating', async () => {
-		const takes = setupAlbumCuration();
-		await renderSurface(takes[0]);
-		expect(target.textContent).toContain(words['nowPlaying.curateProgress']({ index: '1', total: '2' }));
+		await renderSurface(setupAlbumCuration()[0]);
+		const progress = words['nowPlaying.curateProgress']({ index: '1', total: '2' });
+		expect(target.textContent).toContain(progress);
 	});
 
 	it('does not render the curation bar outside curation mode', async () => {

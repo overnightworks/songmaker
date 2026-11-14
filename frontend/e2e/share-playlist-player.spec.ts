@@ -600,7 +600,9 @@ async function rights(page: Page, payload: SharedPlaylistPayload) {
 		page.getByRole('button', { name: /edit|pencil|source|take|library|account/i })
 	).toHaveCount(0);
 	await expect(page.locator('.queue-take')).toHaveCount(0);
-	await expect(page.getByText(new RegExp(`${words['nowPlaying.goToSong']}|\\bTake\\b|\\bv\\d+\\b`))).toHaveCount(0);
+	await expect(
+		page.getByText(new RegExp(`${words['nowPlaying.goToSong']}|\\bTake\\b|\\bv\\d+\\b`))
+	).toHaveCount(0);
 	await expect(page.locator('.queue-title')).toHaveText(
 		payload.entries.map((entry) => entry.song_title)
 	);
