@@ -3436,3 +3436,47 @@ msgstr ""
 msgctxt "libraryShares.copyLink"
 msgid "Copy link"
 msgstr ""
+
+msgctxt "legal.imprint"
+msgid "Legal notice"
+msgstr ""
+
+msgctxt "legal.privacy"
+msgid "Privacy"
+msgstr ""
+
+msgctxt "legal.terms"
+msgid "Terms of use"
+msgstr ""
+
+msgctxt "account.menu"
+msgid "Account · {username}"
+msgstr ""
+
+msgctxt "account.menuClose"
+msgid "Close account menu"
+msgstr ""
+
+msgctxt "account.signOutFailed"
+msgid "Couldn't log out. Check your connection and try again."
+msgstr ""
+
+msgctxt "auth.loading"
+msgid "Loading..."
+msgstr ""
+
+msgctxt "auth.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "auth.checkRateLimited"
+msgid "Too many requests. Retry in a moment to check your session."
+msgstr ""
+
+msgctxt "auth.checkServerError"
+msgid "Could not verify your session. Retry to try again."
+msgstr ""
+
+msgctxt "auth.checkNetworkError"
+msgid "Network error. Retry to check your session."
+msgstr ""

@@ -1,3 +1,4 @@
+import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import { APP_NAME } from '#lib/constants/app.ts';
@@ -64,7 +65,7 @@ describe('signed-out page', () => {
 		await tick();
 
 		expect(Array.from(target.querySelectorAll('nav a')).map((a) => a.textContent)).toEqual(
-			LEGAL_SECTIONS.map((section) => section.label)
+			LEGAL_SECTIONS.map((section) => words[section.labelKey])
 		);
 	});
 });

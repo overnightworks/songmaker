@@ -25,7 +25,6 @@
 	import NowPlaying from '#lib/components/NowPlaying.svelte';
 	import PlayerBar from '#lib/components/PlayerBar.svelte';
 	import { APP_NAME } from '#lib/constants/app.ts';
-	import { AUTH_CHECK_RETRY_LABEL } from '#lib/constants/auth.ts';
 	import { HITBOX_STYLE } from '#lib/styles/hitbox.ts';
 	import OfflineStrip from '#lib/components/OfflineStrip.svelte';
 	import {
@@ -78,6 +77,7 @@
 	} from '#lib/stores/ui.ts';
 	import { transportBarHidden } from '#lib/stores/transportBar.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import { escapeLevelUpTarget, handleGlobalEscape } from '#lib/utils/escape-level-up.ts';
 	import { dev, browser } from '$app/env';
@@ -307,11 +307,11 @@
 		<OfflineStrip />
 	</div>
 {:else if $authLoading}
-	<div class="auth-gate"><BusyState text="Loading..." /></div>
+	<div class="auth-gate"><BusyState text={pageText('auth.loading')} /></div>
 {:else if authRetryable}
 	<div class="auth-retry">
 		<p>{$authCheckError}</p>
-		<button type="button" onclick={initAuth}>{AUTH_CHECK_RETRY_LABEL}</button>
+		<button type="button" onclick={initAuth}>{pageText('auth.retry')}</button>
 	</div>
 {:else if me}
 	{#if compact}

@@ -9,7 +9,6 @@ import {
 	type Response,
 	type TestInfo
 } from '@playwright/test';
-import { ACCOUNT_MENU_LABEL } from '../src/lib/constants/auth';
 import { APP_NAME } from '../src/lib/constants/app';
 import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
@@ -418,7 +417,7 @@ export async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
 	return page.getByRole('navigation', { name: words['rail.nav'] });
 }
 
-const ACCOUNT_MENU_NAME = new RegExp(`^${ACCOUNT_MENU_LABEL} · `);
+const ACCOUNT_MENU_NAME = nameStartingWith(words['account.menu']({ username: '' }));
 
 /** The phone's account circle and, once it is tapped, its menu (#1158). */
 export function accountCircle(page: Page): Locator {
