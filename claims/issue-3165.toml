@@ -1,0 +1,8 @@
+claim_id = "d1673daece1c4a6d857ddf320656c149"
+agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
+role = "builder"
+base = "45597011c44fe05d3ace8fe6439c165fb79a549e"
+branch = "claude/issue-3165-take-design-v0-30-0"
+scope = ["frontend/package.json", "frontend/pnpm-lock.yaml", "pyproject.toml", "uv.lock"]
+opened_commit = "5a3531821faf123079cfe8c265d7190e77ae78ea"
+whole_reason = "one dependency bump: the two pins and their two locks"
