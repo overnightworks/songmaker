@@ -14,6 +14,7 @@ from threading import Lock
 from typing import Final
 
 from PIL import Image
+from sqlalchemy import or_
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.agent.backend import TurnCaller, TurnProblem, run_cover_picture
@@ -87,38 +88,61 @@ def abort_web_cover_job(job_id: str) -> bool:
     return True
 
 
-def recover_web_cover_jobs(
-    db_factory,
-    audio_dir: Path,
-) -> int:
-    """Fail interrupted web covers, then remove only their own suggestion.
-
-    Suggestions of earlier jobs stay pending; a restart must not discard them.
-    """
+def recover_web_cover_jobs(db_factory) -> int:
+    """Fail interrupted web covers; `reconcile_reaped_cover_jobs` removes what they left."""
     with db_factory() as session:
-        interrupted_jobs = session.query(Job.id, Job.album_id).filter(
-            Job.type == JobType.COVER,
-            Job.status == JobStatus.RUNNING,
-        ).all()
-        interrupted_job_ids = [job_id for job_id, _album_id in interrupted_jobs]
-        staging_dirs = [
-            _staging_path(audio_dir, album_id, job_id)
-            for job_id, album_id in interrupted_jobs
-            if album_id is not None
-        ]
-        interrupted_suggestion_paths = delete_job_cover_suggestions(
-            session, interrupted_job_ids,
-        )
         recovered = recover_stale_jobs_by_type(
             session,
             {JobType.COVER: frozenset({JobStatus.RUNNING})},
         )
         session.commit()
-    remove_cover_suggestion_files(audio_dir, interrupted_suggestion_paths)
-    for staging_dir in staging_dirs:
-        if staging_dir.exists():
-            shutil.rmtree(staging_dir)
     return recovered.get(JobType.COVER, 0)
+
+
+_ENDED_WITHOUT_COVER: Final = (JobStatus.FAILED, JobStatus.CANCELLED)
+_STAGING_DIRECTORY_PATTERN: Final = ".*.staging"
+
+
+def reconcile_reaped_cover_jobs(db_factory, audio_dir: Path) -> int:
+    """Remove the suggestion and staging directory a failed or cancelled cover left.
+
+    A COMPLETED job's suggestion stays pending. The rows are deleted and
+    committed before the files go, so a crash between the two leaves files no
+    row points to and the next run removes them.
+    Returns the number of cover jobs cleaned.
+    """
+    staged_job_ids = [
+        path.name.removeprefix(".").removesuffix(".staging")
+        for path in (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).glob(_STAGING_DIRECTORY_PATTERN)
+    ]
+    with db_factory() as session:
+        ended_job_ids = {
+            job_id for (job_id,) in session.query(Job.id).filter(
+                Job.type == JobType.COVER,
+                Job.status.in_(_ENDED_WITHOUT_COVER),
+                or_(
+                    Job.id.in_(staged_job_ids),
+                    Job.id.in_(
+                        session.query(AlbumCoverSuggestion.job_id).filter(
+                            AlbumCoverSuggestion.job_id.isnot(None),
+                        ),
+                    ),
+                ),
+            )
+        }
+        staging_dirs = [
+            _staging_path(audio_dir, album_id, job_id)
+            for job_id, album_id in session.query(Job.id, Job.album_id).filter(
+                Job.id.in_(ended_job_ids),
+            )
+            if album_id is not None
+        ]
+        suggestion_paths = delete_job_cover_suggestions(session, list(ended_job_ids))
+        session.commit()
+    remove_cover_suggestion_files(audio_dir, suggestion_paths)
+    for staging_dir in staging_dirs:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+    return len(ended_job_ids)
 
 
 async def run_next_cover_job(app) -> bool:

@@ -12,13 +12,14 @@ import pytest
 from support.loop_ticks import run_ticks_observing_status
 from support.web_app import TEST_SECRET, make_fake_redis
 
+import songmaker_cli.cover_runner as cover_runner
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     ARQ_MUSIC_HEALTH_KEY,
     BACKGROUND_LOOP_FAILURE_THRESHOLD,
     LoraStatus,
 )
-from songmaker_cli.db.models import Job, User, UserLora
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User, UserLora
 from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
 from songmaker_cli.job_timing import (
@@ -461,3 +462,36 @@ def test_reaper_tick_reaps_chat_and_resolves_the_lora_reconciliation_loop(ctx) -
     assert _job_status(ctx, "lora-3") == JobStatus.FAILED
     with ctx.db() as s:
         assert get_user_lora(s, "L-tick", include_deleted_rows=True).status == LoraStatus.FAILED
+
+
+def test_reaper_tick_leaves_a_stalled_cover_without_suggestion_and_staging_directory(ctx) -> None:
+    now = datetime.now(timezone.utc)
+    stalled = _dead_process_time(now, STALE_JOB_THRESHOLDS[JobType.COVER].heartbeat_seconds)
+    png = ctx.audio_dir / "cover-suggestions" / "album" / "stalled.png"
+    png.parent.mkdir(parents=True)
+    png.write_bytes(b"png")
+    staging_dir = cover_runner._staging_path(ctx.audio_dir, "album", "cover-job")
+    staging_dir.mkdir()
+    with ctx.db() as session:
+        session.add(User(id="u1", username="u1"))
+        session.flush()
+        session.add(Album(id="album", title="Album", artist="Artist", created_by="u1"))
+        session.flush()
+        session.add(Job(
+            id="cover-job", type=JobType.COVER, status=JobStatus.RUNNING, album_id="album",
+            started_at=stalled, heartbeat_at=stalled,
+        ))
+        session.flush()
+        session.add(AlbumCoverSuggestion(
+            id="stalled", album_id="album", job_id="cover-job",
+            png_path="cover-suggestions/album/stalled.png",
+        ))
+        session.commit()
+
+    _run_stale_job_reaper_tick(ctx, now=now)
+
+    assert _job_status(ctx, "cover-job") == JobStatus.FAILED
+    with ctx.db() as session:
+        assert session.query(AlbumCoverSuggestion).count() == 0
+    assert not png.exists()
+    assert not staging_dir.exists()

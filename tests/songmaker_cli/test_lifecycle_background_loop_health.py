@@ -13,10 +13,13 @@ import pytest
 from support.loop_ticks import run_ticks_observing_status
 from support.web_app import make_test_app
 
+import songmaker_cli.cover_runner as cover_runner
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.server as server
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
+from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
 from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.lifecycle import (
     BackfillResult,
     BackgroundLoopName,
@@ -297,14 +300,12 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
     monitoring_headers, pg_factory,
 ) -> None:
     started = threading.Event()
-    recovered = []
 
     async def idle_cover_runner(app, registry) -> None:
         registry.record_success(BackgroundLoopName.COVER_RUNNER)
         started.set()
         await asyncio.Future()
 
-    monkeypatch.setattr(server, "recover_web_cover_jobs", lambda *_args: recovered.append(True))
     monkeypatch.setattr(server, "cover_runner_loop", idle_cover_runner)
     client, _ = make_test_app(tmp_path, factory=pg_factory)
 
@@ -314,7 +315,41 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
             "/health/details", headers=monitoring_headers,
         ).json()["background_loops"]
         assert health[BackgroundLoopName.COVER_RUNNER]["state"] == BackgroundLoopStatus.OK
-    assert recovered == [True]
+
+
+def test_a_web_start_leaves_an_interrupted_cover_without_suggestion_file_and_staging_directory(
+    tmp_path, mock_arq_pool, pg_factory,
+) -> None:
+    audio_dir = tmp_path / "audio"
+    png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
+    staging_dir = cover_runner._staging_path(audio_dir, "album", "cover-job")
+
+    def seed_interrupted_cover(session) -> None:
+        png.parent.mkdir(parents=True)
+        png.write_bytes(b"png")
+        staging_dir.mkdir()
+        session.add(User(id="u1", username="u1"))
+        session.flush()
+        session.add(Album(id="album", title="Album", artist="Artist", created_by="u1"))
+        session.flush()
+        session.add(Job(
+            id="cover-job", type=JobType.COVER, status=JobStatus.RUNNING, album_id="album",
+        ))
+        session.flush()
+        session.add(AlbumCoverSuggestion(
+            id="interrupted", album_id="album", job_id="cover-job",
+            png_path="cover-suggestions/album/interrupted.png",
+        ))
+
+    client, factory = make_test_app(tmp_path, seed_db=seed_interrupted_cover, factory=pg_factory)
+    with client:
+        pass
+
+    with factory() as session:
+        assert session.get(Job, "cover-job").status == JobStatus.FAILED
+        assert session.query(AlbumCoverSuggestion).count() == 0
+    assert not png.exists()
+    assert not staging_dir.exists()
 
 
 def test_booting_the_web_reports_every_loop_ok_and_starts_no_agent_cli(
