@@ -36,7 +36,7 @@ def split_blocks(text: str) -> list[str]:
 
 
 def entry_key(block: str) -> EntryKey:
-    parts = {field: "" for field in IDENTITY_FIELDS}
+    parts = dict.fromkeys(IDENTITY_FIELDS, "")
     current_field = ""
     for line in block.splitlines():
         stripped = line.strip()
