@@ -1,9 +1,13 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { words } from '#lib/words/en.ts';
+import { sendToCowriter } from '#lib/test-utils/cowriter-composer.ts';
+import { kitWords } from '#lib/utils/kit-words.ts';
+import type { CoWriterStreamEvent } from '#lib/api/client.ts';
 
 const fetchConversations = vi.hoisted(() => vi.fn());
 const fetchConversationMessages = vi.hoisted(() => vi.fn());
+const streamCoWriterTurn = vi.hoisted(() => vi.fn());
 
 vi.mock('#lib/api/client.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
@@ -13,6 +17,8 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 			fetchConversations(...args),
 		fetchConversationMessages: (...args: Parameters<typeof fetchConversationMessages>) =>
 			fetchConversationMessages(...args),
+		streamCoWriterTurn: (...args: Parameters<typeof streamCoWriterTurn>) =>
+			streamCoWriterTurn(...args),
 		fetchMemory: vi.fn().mockResolvedValue({
 			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
 		}),
@@ -59,7 +65,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
-async function openPanelWithWaitingProposal(): Promise<HTMLElement> {
+async function mountPanel(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted.push(
@@ -71,6 +77,11 @@ async function openPanelWithWaitingProposal(): Promise<HTMLElement> {
 	await tick();
 	await Promise.resolve();
 	await tick();
+	return target;
+}
+
+async function openPanelWithWaitingProposal(): Promise<HTMLElement> {
+	const target = await mountPanel();
 	target.querySelector<HTMLButtonElement>('button.convo-menu-btn')?.click();
 	await tick();
 	Array.from(target.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
@@ -102,5 +113,49 @@ describe('CoWriterPanel memory proposals', () => {
 
 		await vi.waitFor(() => expect(target.querySelector('.proposal')).toBeNull());
 		expect(saveUserMemory).not.toHaveBeenCalled();
+	});
+
+	it('shows the thinking line for a reply that is only a proposal and no bubble once it ends', async () => {
+		const proposalOnly =
+			'<memory_proposal scope="user"><current>Prefers short lines</current>' +
+			'<proposed>Prefers short lines, no rhymes</proposed></memory_proposal>';
+		const stored = (id: string, role: 'user' | 'assistant', content: string) => ({
+			id,
+			role,
+			content,
+			created_at: '2026-09-26T15:21:00+00:00'
+		});
+		fetchConversationMessages.mockResolvedValue({
+			conversation_id: 'c1',
+			title: null,
+			archived_at: null,
+			turn_running: false,
+			messages: []
+		});
+		let finishTurn: () => void = () => undefined;
+		const turnFinished = new Promise<void>((resolve) => (finishTurn = resolve));
+		streamCoWriterTurn.mockReturnValue(
+			(async function* (): AsyncGenerator<CoWriterStreamEvent> {
+				yield { type: 'assistant_text', text: proposalOnly } as CoWriterStreamEvent;
+				await turnFinished;
+				yield {
+					type: 'final',
+					conversation_id: 'c1',
+					user_message: stored('u1', 'user', 'Remember this'),
+					assistant_message: stored('a1', 'assistant', proposalOnly)
+				} as CoWriterStreamEvent;
+			})()
+		);
+		const target = await mountPanel();
+		await sendToCowriter(target, 'Remember this');
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('[role="status"]')?.textContent).toBe(
+				kitWords()['helperChat.thinking']({ name: words['cowriter.title'] })
+			)
+		);
+		finishTurn();
+		await vi.waitFor(() => expect(target.querySelector('[role="status"]')?.textContent).toBe(''));
+		expect(target.querySelectorAll('.message.assistant .bubble')).toHaveLength(0);
 	});
 });

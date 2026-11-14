@@ -3141,10 +3141,6 @@ msgctxt "cowriter.title"
 msgid "Co-writer"
 msgstr ""
 
-msgctxt "cowriter.thinking"
-msgid "Co-writer is thinking…"
-msgstr ""
-
 msgctxt "cowriter.conversationMenu"
 msgid "Conversation menu"
 msgstr ""
@@ -3155,10 +3151,6 @@ msgstr ""
 
 msgctxt "cowriter.composerPlaceholder"
 msgid "Ask for a rewrite…"
-msgstr ""
-
-msgctxt "cowriter.send"
-msgid "Send"
 msgstr ""
 
 msgctxt "cowriter.newConversation"
@@ -3221,10 +3213,6 @@ msgctxt "cowriter.today"
 msgid "today"
 msgstr ""
 
-msgctxt "cowriter.toolRan"
-msgid "ran tool: {name}"
-msgstr ""
-
 msgctxt "cowriter.toolTarget"
 msgid "for: {title}"
 msgstr ""
@@ -3237,20 +3225,12 @@ msgctxt "cowriter.historyUnavailable"
 msgid "Conversation history unavailable"
 msgstr ""
 
-msgctxt "cowriter.loadingChat"
-msgid "Loading chat…"
-msgstr ""
-
 msgctxt "cowriter.startFailed"
 msgid "Failed to start new conversation"
 msgstr ""
 
 msgctxt "cowriter.deleteFailed"
 msgid "Failed to delete conversation"
-msgstr ""
-
-msgctxt "cowriter.archivedToast"
-msgid "Viewing an archived conversation — start a new one to reply"
 msgstr ""
 
 msgctxt "cowriter.archivedBanner"

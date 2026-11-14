@@ -52,10 +52,6 @@ export function cowriterToolCallTarget(
 	return { title: song.title, foreign: songId !== currentSongId };
 }
 
-export function cowriterThinkingLabel(): string {
-	return pageText('cowriter.thinking');
-}
-
 export type CowriterProblem = ChatTurnProblemFrame['problem'];
 
 /** How a turn that could not run reads in the panel; `problem` is null for the endpoint's own failure message. */

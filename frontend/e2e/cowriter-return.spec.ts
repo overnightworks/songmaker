@@ -37,14 +37,18 @@
 
 import { expect, test, type Page, type Route } from './coverage-test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
-import { nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
+import { boundingBoxes, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
+import { bottomOf } from './menu-viewport';
 import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
+import { kitWords } from './account-menu-words';
 
 const CONVERSATION_ID = 'e2e-cowriter-return';
 const SENT = 'Ja bitte, schreib den Refrain neu';
 const REPLY = 'Erledigt. Der neue Refrain steht als neue Version.';
-const THINKING = /is thinking/;
+const THINKING = kitWords['helperChat.thinking']({ name: words['cowriter.title'] });
+// The mark and the reply sit in separate elements; their spacing varies with the layout.
+const ANSWER_SHOWN = new RegExp(`^\\s*AI\\s*${REPLY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`);
 
 // The problem frame the server ends a turn with when the agent did not
 // run it; the panel words the named problem.
@@ -156,7 +160,7 @@ async function lookAtEditAndTakes(page: Page): Promise<void> {
 
 /** Scrolls the chat the way a finger does: the panel hears it before the next step. */
 async function scrollChatToTop(page: Page): Promise<void> {
-	await page.locator('.cowriter .messages').evaluate(
+	await page.locator('.cowriter .list').evaluate(
 		(chat) =>
 			new Promise<void>((resolve) => {
 				chat.addEventListener('scroll', () => resolve(), { once: true });
@@ -198,21 +202,21 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		const composer = page.getByPlaceholder(/Ask for a rewrite/);
 		await composer.fill(SENT);
 		await composer.press('Enter');
-		await expect(page.getByText(THINKING)).toBeVisible();
+		await expect(page.locator('.cowriter').getByRole('status')).toHaveText(THINKING);
 		await expect.poll(() => turnState).toBe('running');
 
 		await lookAtEditAndTakes(page);
 
 		await showCowriterTab(page);
 		await expect(page.getByText(SENT)).toBeVisible();
-		await expect(page.getByText(THINKING)).toBeVisible();
-		await expect(page.getByRole('button', { name: words['cowriter.send'] })).toBeDisabled();
+		await expect(page.locator('.cowriter').getByRole('status')).toHaveText(THINKING);
+		await expect(page.getByRole('button', { name: kitWords['helperChat.send'] })).toBeDisabled();
 
 		turnState = 'answered';
 		completeTurn();
 
 		await expect(page.getByText(REPLY)).toBeVisible();
-		await expect(page.getByText(THINKING)).toHaveCount(0);
+		await expect(page.locator('.cowriter').getByRole('status')).toHaveText('');
 		await expect(page.getByText(SENT)).toHaveCount(1);
 	});
 
@@ -228,6 +232,26 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await showCowriterTab(page);
 
 		await expect(page.getByPlaceholder(/Ask for a rewrite/)).toHaveValue(draft);
+	});
+
+	test('a conversation list that cannot be read still leaves the composer at the bottom of the column', async ({
+		page
+	}) => {
+		await page.route('**/api/conversations', (route: Route) =>
+			route.fulfill({ status: 500, json: { detail: 'unavailable' } })
+		);
+
+		await openCowriterOnPickedSong(page);
+		await expect(
+			page.getByRole('alert').filter({ hasText: words['cowriter.historyUnavailable'] })
+		).toBeVisible();
+
+		const [column, field] = await boundingBoxes(
+			page.locator('.cowriter'),
+			page.getByPlaceholder(/Ask for a rewrite/)
+		);
+		const composerPadding = 8;
+		expect(bottomOf(column) - bottomOf(field)).toBeLessThanOrEqual(composerPadding);
 	});
 
 	test('retrying the unanswered message it came back to shows it once when the retry fails too', async ({
@@ -293,8 +317,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await composer.fill(newer);
 		await composer.press('Enter');
 
-		const errorRowBelow = (text: string) =>
-			page.locator('.message', { hasText: text }).locator('xpath=following-sibling::*[1]');
+		const errorRowBelow = (text: string) => page.locator('.message', { hasText: text });
 		await expect(errorRowBelow(newer).getByRole('button', { name: TRY_AGAIN })).toHaveCount(1);
 		await expect(errorRowBelow(older).getByRole('button', { name: TRY_AGAIN })).toHaveCount(0);
 		await expect(tryAgain).toHaveCount(1);
@@ -338,7 +361,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await composer.press('Enter');
 
 		const chat = page.locator('.cowriter .message');
-		const shown = [failed, SENT, REPLY];
+		const shown = [failed, SENT, ANSWER_SHOWN];
 		await expect(chat).toHaveText(shown);
 		await expect(tryAgain).toHaveCount(0);
 
@@ -411,7 +434,7 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		const composer = page.getByPlaceholder(/Ask for a rewrite/);
 		await composer.fill(SENT);
 		await composer.press('Enter');
-		await expect(page.locator('.cowriter .message').last()).toHaveText(REPLY);
+		await expect(page.locator('.cowriter .message').last()).toHaveText(ANSWER_SHOWN);
 		await expect.poll(() => listReads).toBeGreaterThan(1);
 		await menuButton.click();
 

@@ -21,6 +21,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from './coverage
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
+import { kitWords } from './account-menu-words';
 
 /**
  * What each test costs the API, measured on a green run against the CI recipe:
@@ -197,7 +198,7 @@ test(
 
 		const ask = surface.getByPlaceholder(words['cowriter.composerPlaceholder']);
 		await ask.fill('Write me a second verse.');
-		await surface.getByRole('button', { name: words['cowriter.send'], exact: true }).click();
+		await surface.getByRole('button', { name: kitWords['helperChat.send'], exact: true }).click();
 
 		// The turn ends with the problem the service could not run it for -- never
 		// with a quiet switch to a provider that would have worked (#820, line 8; #1069).

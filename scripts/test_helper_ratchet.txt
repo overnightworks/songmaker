@@ -41,7 +41,7 @@ frontend page 5
 frontend press 2
 frontend pressEscape 2
 frontend px 2
-frontend render 44
+frontend render 43
 frontend renderAfterPageRead 2
 frontend renderPage 4
 frontend renderRow 3

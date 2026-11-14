@@ -19,6 +19,7 @@ import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import { words } from '../src/lib/words/en';
+import { kitWords } from './account-menu-words';
 import {
 	appBar,
 	FlowGuard,
@@ -169,7 +170,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await composer.click();
 		await expect(miniPlayer).toBeHidden();
 		await expect(
-			page.getByRole('button', { name: words['cowriter.send'], exact: true })
+			page.getByRole('button', { name: kitWords['helperChat.send'], exact: true })
 		).toBeVisible();
 
 		await composer.blur();
@@ -352,7 +353,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await composer.fill(COWRITER_MESSAGE);
 		await expect(miniPlayer).toBeHidden();
 
-		await page.getByRole('button', { name: words['cowriter.send'], exact: true }).tap();
+		await page.getByRole('button', { name: kitWords['helperChat.send'], exact: true }).tap();
 
 		await expect.poll(() => sentMessages).toEqual([COWRITER_MESSAGE]);
 		await expect(page.getByText(COWRITER_TURN_REFUSAL)).toBeVisible();
