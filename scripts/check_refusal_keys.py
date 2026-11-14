@@ -225,6 +225,22 @@ def _unread_problem(
     return tags[0], None
 
 
+def _listed(value: str | None) -> list[str]:
+    """The value as a list of zero or one entry."""
+    return [] if value is None else [value]
+
+
+def _key_problem(
+    call: ast.Call, bindings: WordsBindings, plain: dict[str, frozenset[str]]
+) -> tuple[bool, str | None]:
+    """Whether the call is a refusal or text call, and the problem with its key."""
+    if _is_refusal_call(call):
+        return True, call_problem(call, KEY_INDEX_OF_REFUSAL, plain, is_refusal=True)
+    if bindings.is_text_call(call):
+        return True, call_problem(call, KEY_INDEX_OF_TEXT, plain, is_refusal=False)
+    return False, None
+
+
 def check_file(
     path: Path, shown: str, plain: dict[str, frozenset[str]]
 ) -> tuple[list[Violation], int, Counter[str]]:
@@ -242,16 +258,11 @@ def check_file(
         if _is_http_exception_call(node):
             raw_lines.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
             tag, problem = _unread_problem(node, markers)
-            if tag is not None:
-                unread[tag] += 1
-            if problem is not None:
-                violations.append(Violation(shown, node.lineno, problem))
+            unread.update(_listed(tag))
+            violations.extend(Violation(shown, node.lineno, text) for text in _listed(problem))
             continue
-        if _is_refusal_call(node):
-            problem = call_problem(node, KEY_INDEX_OF_REFUSAL, plain, is_refusal=True)
-        elif bindings.is_text_call(node):
-            problem = call_problem(node, KEY_INDEX_OF_TEXT, plain, is_refusal=False)
-        else:
+        is_checked, problem = _key_problem(node, bindings, plain)
+        if not is_checked:
             continue
         checked += 1
         if problem is not None:
