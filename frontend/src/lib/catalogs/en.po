@@ -3497,6 +3497,10 @@ msgctxt "http.genericError"
 msgid "Something went wrong. Try again."
 msgstr ""
 
+msgctxt "navigation.songLinkNotFound"
+msgid "Song not found — it may have been deleted"
+msgstr ""
+
 msgctxt "dialog.cancel"
 msgid "Cancel"
 msgstr ""

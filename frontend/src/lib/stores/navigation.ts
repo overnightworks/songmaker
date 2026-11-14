@@ -40,7 +40,6 @@ import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
 import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
 import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
 import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';
-import { SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants/song.ts';
 import { pageText } from '#lib/utils/page-words.ts';
 import {
 	isPlaylistRoutePath,
@@ -508,7 +507,7 @@ export function leaveGoneSong(songId: string): void {
 	selectedGenerationId.set(null);
 	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
 	void replaceLibraryHistory();
-	addToast(SONG_LINK_NOT_FOUND_TOAST, 'error');
+	addToast(pageText('navigation.songLinkNotFound'), 'error');
 }
 
 function applySelectedSong(

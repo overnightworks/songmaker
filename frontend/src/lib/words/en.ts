@@ -848,6 +848,7 @@ export type Words = {
     readonly "resourceSync.error": string;
     readonly "http.rateLimited": string;
     readonly "http.genericError": string;
+    readonly "navigation.songLinkNotFound": string;
     readonly "dialog.cancel": string;
     readonly "dialog.confirm": string;
     readonly "toast.dismiss": string;
@@ -1908,6 +1909,7 @@ export const words: Words = {
     "resourceSync.error": "Couldn't reach your library",
     "http.rateLimited": "Too many requests — hang on, it will continue in a moment.",
     "http.genericError": "Something went wrong. Try again.",
+    "navigation.songLinkNotFound": "Song not found — it may have been deleted",
     "dialog.cancel": "Cancel",
     "dialog.confirm": "Confirm",
     "toast.dismiss": "Dismiss",
