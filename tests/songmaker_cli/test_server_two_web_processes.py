@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import signal
+import subprocess
+import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -19,6 +23,16 @@ from songmaker_cli.request_policies import build_rate_limit_policy
 SIGNED_IN_PATH = "/api/auth/me"
 PERSON_NAME = "pat"
 REQUEST_TIMEOUT_SECONDS = 10.0
+CHILD_DEATH_DEADLINE_SECONDS = 10.0
+_HOLDER_SCRIPT = """
+import sys, time
+from pathlib import Path
+from support.app_processes import web_processes
+root, database_url, redis_url = sys.argv[1:]
+with web_processes(Path(root), database_url=database_url, redis_url=redis_url) as cluster:
+    print(cluster.start("a").process.pid, flush=True)
+    time.sleep(600)
+"""
 
 
 @pytest.fixture
@@ -63,6 +77,15 @@ def _signed_in_cookies(cluster: WebProcesses, factory, redis_url: str) -> dict[s
     return issued_cookies(session_id, build_web_auth_config(context, settings))
 
 
+def _is_alive(pid: int) -> bool:
+    """A zombie awaiting its reaper no longer runs."""
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except FileNotFoundError:
+        return False
+    return state != "Z"
+
+
 def _get(web_process: WebProcess, path: str, **kwargs) -> httpx.Response:
     return httpx.get(f"{web_process.url}{path}", timeout=REQUEST_TIMEOUT_SECONDS, **kwargs)
 
@@ -91,7 +114,7 @@ def test_an_ip_rate_window_spent_on_one_process_refuses_on_the_other(two_process
     assert (statuses_on_a[-1], answer_on_b.status_code) == (429, 429)
 
 
-def test_a_killed_process_leaves_the_other_serving_and_no_child_behind(two_processes) -> None:
+def test_a_killed_process_leaves_the_other_serving(two_processes) -> None:
     _, _, process_a, process_b = two_processes
 
     process_a.kill()
@@ -102,11 +125,38 @@ def test_a_killed_process_leaves_the_other_serving_and_no_child_behind(two_proce
     )
 
 
-def test_a_process_killed_before_the_case_ends_leaves_no_child(web_cluster) -> None:
-    cluster, _ = web_cluster
-    started = [cluster.start("a"), cluster.start("b")]
-    started[0].kill()
+def test_a_failing_case_leaves_no_child_behind(tmp_path: Path, extra_pg_factory, redis_url: str) -> None:
+    database_url = extra_pg_factory().kw["bind"].url.render_as_string(hide_password=False)
+    started: list[WebProcess] = []
 
-    cluster.stop_all()
+    with pytest.raises(AssertionError):
+        with web_processes(tmp_path, database_url=database_url, redis_url=redis_url) as cluster:
+            started.extend([cluster.start("a"), cluster.start("b")])
+            started[0].kill()
+            raise AssertionError("the case fails")
 
     assert [each.process.poll() is not None for each in started] == [True, True]
+
+
+def test_the_children_die_with_a_test_process_that_is_killed(
+    tmp_path: Path, extra_pg_factory, redis_url: str,
+) -> None:
+    database_url = extra_pg_factory().kw["bind"].url.render_as_string(hide_password=False)
+    holder = subprocess.Popen(
+        [sys.executable, "-c", _HOLDER_SCRIPT, str(tmp_path), database_url, redis_url],
+        stdout=subprocess.PIPE,
+        env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+    )
+    try:
+        child_pid = int(holder.stdout.readline())
+        holder.kill()
+        holder.wait()
+        deadline = time.monotonic() + CHILD_DEATH_DEADLINE_SECONDS
+        while _is_alive(child_pid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert not _is_alive(child_pid)
+    finally:
+        if holder.poll() is None:
+            holder.kill()
+            holder.wait()
+        holder.stdout.close()
