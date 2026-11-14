@@ -1,8 +1,0 @@
-claim_id = "b81a3964fd6f4fd9a0f84ad07a0fa94c"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "c4d5f47b6834503b7f529ccffa9b3222721aca2f"
-branch = "claude/issue-3146-sharing-a-take-deleted-mid-request-answe"
-scope = ["src/songmaker_cli/generation_api.py", "src/songmaker_cli/playlist_api.py", "tests/songmaker_cli/test_playlist_api.py", "tests/songmaker_cli/test_refusals_not_found.py"]
-opened_commit = "bff65445845a009f01e2b840ecb50aab6e86dd15"
-whole_reason = "Two routes with the same post-commit read, each with its test module."
