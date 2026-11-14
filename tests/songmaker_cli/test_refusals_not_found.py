@@ -220,6 +220,30 @@ def test_a_take_deleted_right_after_the_commit_reads_like_a_missing_one(
     assert response.json() == refusal_body("generationRefusal.notFound")
 
 
+def test_a_take_deleted_right_after_measuring_its_length_still_answers_with_what_was_read(
+    world: dict[str, TestClient], pg_factory,
+) -> None:
+    deleted = threading.Event()
+
+    def delete_the_take_once(_session: Session) -> None:
+        if deleted.is_set():
+            return
+        deleted.set()
+        with pg_factory() as deleter:
+            deleter.delete(deleter.get(Generation, "take"))
+            deleter.commit()
+
+    event.listen(pg_factory, "after_commit", delete_the_take_once)
+    try:
+        response = world[OWNER_ID].get("/api/generations/take")
+    finally:
+        event.remove(pg_factory, "after_commit", delete_the_take_once)
+
+    assert deleted.is_set()
+    assert response.status_code == 200
+    assert response.json()["id"] == "take"
+
+
 @pytest.mark.parametrize("foreign_id", ["stranger-take", "no-such-id"])
 def test_a_bulk_delete_with_one_foreign_or_missing_take_names_none(
     world: dict[str, TestClient], foreign_id: str,
