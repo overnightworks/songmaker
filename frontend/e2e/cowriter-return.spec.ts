@@ -48,8 +48,8 @@ const SENT = 'Ja bitte, schreib den Refrain neu';
 const REPLY = 'Erledigt. Der neue Refrain steht als neue Version.';
 const CHAT_LIST_NAME = kitWords['helperChat.listLabel']({ name: words['cowriter.title'] });
 const THINKING = kitWords['helperChat.thinking']({ name: words['cowriter.title'] });
-// The mark and the reply sit in separate elements; their spacing varies with the layout.
-const ANSWER_SHOWN = new RegExp(`^\\s*AI\\s*${REPLY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`);
+// The speaker word, the mark and the reply sit in separate elements; the list item text starts with the speaker word.
+const ANSWER_SHOWN = new RegExp(`AI\\s*${REPLY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`);
 
 // The problem frame the server ends a turn with when the agent did not
 // run it; the panel words the named problem.
