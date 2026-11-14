@@ -31,7 +31,9 @@ it('reads a gapless marked sentence as its parts', () => {
 
 describe('messageText', () => {
 	it('reads a plain key as its text', () => {
-		expect(messageText({ key: 'takeRefusal.archived', values: {} })).toBe(words['takeRefusal.archived']);
+		expect(messageText({ key: 'takeRefusal.archived', values: {} })).toBe(
+			words['takeRefusal.archived']
+		);
 	});
 
 	it('fills the gaps of a key with the refusal values', () => {

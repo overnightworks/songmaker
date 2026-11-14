@@ -184,7 +184,7 @@ MODEL_HOME_EXEMPTIONS = (
     ),
     ModelHomeExemption(
         packages=frozenset({"songmaker_cli.messages"}),
-        reason="a leaf below api_models that the server's refusals and stored texts share, which api_models re-exports",
+        reason="a leaf below api_models that every server message shares and api_models re-exports",
     ),
 )
 

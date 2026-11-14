@@ -79,7 +79,6 @@ from songmaker_cli.api_models.references import (
     ReferenceVersionUseResponse,
 )
 from songmaker_cli.api_models.refusals import RefusalResponse
-from songmaker_cli.messages import Message
 from songmaker_cli.api_models.resource_events import (
     GenerationCreatedResourceEvent,
     ResourceHelloEvent,
@@ -163,6 +162,7 @@ from songmaker_cli.generation_params import (
     RepaintTaskParams,
     StoredGenerationParams,
 )
+from songmaker_cli.messages import Message
 from songmaker_cli.whisper_cues import (
     WhisperCue,
     WhisperWordCue,

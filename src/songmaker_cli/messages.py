@@ -14,7 +14,8 @@ from songmaker_cli.words import SOURCE_LANGUAGE, Key, text
 class Message(BaseModel):
     """A catalog key with the values of its gaps, held immutable.
 
-    `scripts/check_refusal_keys.py` holds every `message(...)` call to a plain key, with exactly its gaps.
+    `scripts/check_refusal_keys.py` holds every `message(...)` call to a plain key, with exactly
+    its gaps.
     """
 
     model_config = ConfigDict(frozen=True)
