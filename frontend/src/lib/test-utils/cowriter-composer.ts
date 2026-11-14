@@ -68,3 +68,16 @@ export function archivedBannerButtonOf(target: ParentNode): HTMLButtonElement | 
 		(button) => button.textContent?.trim() === link.text
 	);
 }
+
+/** The chat as the musician reads it: one entry per message, including a failure note. */
+export function chatViewOf(target: ParentNode): string[] {
+	const list = chatListOf(target);
+	return Array.from(target.querySelectorAll<HTMLElement>('li, .turn-error'))
+		.filter((entry) => !(entry instanceof HTMLLIElement) || list?.contains(entry))
+		.map((entry) =>
+			entry instanceof HTMLLIElement
+				? messageTextOf(entry)
+				: (entry.textContent ?? '').replace(/\s+/g, ' ').trim()
+		)
+		.filter((text) => text !== '');
+}

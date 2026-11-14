@@ -49,9 +49,9 @@ import { words } from '#lib/words/en.ts';
 import {
 	archivedBannerButtonOf,
 	chatListOf,
+	chatViewOf,
 	chatMessagesOf,
 	composerOf,
-	messageTextOf,
 	sendButtonOf,
 	sendToCowriter
 } from '#lib/test-utils/cowriter-composer.ts';
@@ -140,18 +140,6 @@ function conversation(turnRunning: boolean, ...messages: ChatMessageItem[]) {
 /** Each page answers one read of the conversation, in order. */
 function conversationPages(...pages: ReturnType<typeof conversation>[]): void {
 	for (const page of pages) fetchConversationMessages.mockResolvedValueOnce(page);
-}
-
-/** The chat as the musician reads it: one entry per bubble, including a failure note. */
-function chatView(target: HTMLElement): string[] {
-	return Array.from(target.querySelectorAll<HTMLElement>('li, .turn-error'))
-		.filter((entry) => !(entry instanceof HTMLLIElement) || chatListOf(target)?.contains(entry))
-		.map((entry) =>
-			entry instanceof HTMLLIElement
-				? messageTextOf(entry)
-				: (entry.textContent ?? '').replace(/\s+/g, ' ').trim()
-		)
-		.filter((text) => text !== '');
 }
 
 async function render(overrides: Partial<Record<string, unknown>> = {}) {
@@ -882,7 +870,7 @@ describe('CoWriterPanel chat scroll across tab switches (#1063)', () => {
 				})()
 			);
 			const target = await render();
-			await vi.waitFor(() => expect(chatView(target)).toHaveLength(2));
+			await vi.waitFor(() => expect(chatViewOf(target)).toHaveLength(2));
 			const list = chatListOf(target)?.parentElement;
 			if (!list) throw new Error('Expected the message list');
 			const chat = chatBox(list);
@@ -893,7 +881,7 @@ describe('CoWriterPanel chat scroll across tab switches (#1063)', () => {
 			if (scrolledUpTo !== null) chat.scrollTo(scrolledUpTo);
 			chat.hide();
 			deliverReply();
-			await vi.waitFor(() => expect(chatView(target)).toHaveLength(4));
+			await vi.waitFor(() => expect(chatViewOf(target)).toHaveLength(4));
 
 			chat.show(1200);
 
@@ -993,9 +981,7 @@ describe('CoWriterPanel failed turns', () => {
 
 		const retries = target.querySelectorAll<HTMLButtonElement>('.retry-turn');
 		expect(retries).toHaveLength(1);
-		expect(retries[0].closest('li')?.textContent).toContain(
-			'newer message'
-		);
+		expect(retries[0].closest('li')?.textContent).toContain('newer message');
 	});
 
 	it.each(droppedStreams)(
@@ -1069,7 +1055,7 @@ describe('CoWriterPanel failed turns', () => {
 		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
 		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
 		await vi.waitFor(() =>
-			expect(chatView(target)).toEqual(['write a chorus', 'Here is a chorus'])
+			expect(chatViewOf(target)).toEqual(['write a chorus', 'Here is a chorus'])
 		);
 	});
 });
@@ -1352,9 +1338,9 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		await sendTurn(live, 'Ja bitte');
 
 		const expected = ['Refrain kürzer', 'Ja bitte', 'Erledigt.'];
-		await vi.waitFor(() => expect(chatView(live)).toEqual(expected));
+		await vi.waitFor(() => expect(chatViewOf(live)).toEqual(expected));
 		const reloaded = await render();
-		await vi.waitFor(() => expect(chatView(reloaded)).toEqual(expected));
+		await vi.waitFor(() => expect(chatViewOf(reloaded)).toEqual(expected));
 		expect(live.querySelector('.retry-turn')).toBeNull();
 	});
 
@@ -1508,7 +1494,7 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 			firstRead.resolve(conversation(false, ...lateHistory));
 
 			await vi.waitFor(() =>
-				expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...exchange])
+				expect(chatViewOf(target)).toEqual(['earlier', 'earlier reply', ...exchange])
 			);
 		}
 	);
@@ -1530,7 +1516,7 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 			listRead.resolve([activeConversation('c1')]);
 
 			await vi.waitFor(() =>
-				expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...exchange])
+				expect(chatViewOf(target)).toEqual(['earlier', 'earlier reply', ...exchange])
 			);
 		}
 	);
@@ -1551,12 +1537,12 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 		const turnEnded = Promise.withResolvers<undefined>();
 		streamCoWriterTurn.mockReturnValue(endingWith(refused(), () => turnEnded.resolve(undefined)));
 		const target = await render();
-		await vi.waitFor(() => expect(chatView(target)).toEqual(['earlier', 'earlier reply']));
+		await vi.waitFor(() => expect(chatViewOf(target)).toEqual(['earlier', 'earlier reply']));
 
 		(await openConversationMenu(target))
 			.querySelectorAll<HTMLButtonElement>('.conv-pick')[1]
 			.click();
-		await vi.waitFor(() => expect(chatView(target)).toEqual(['archived question']));
+		await vi.waitFor(() => expect(chatViewOf(target)).toEqual(['archived question']));
 		(await openConversationMenu(target))
 			.querySelectorAll<HTMLButtonElement>('.conv-pick')[0]
 			.click();
@@ -1567,7 +1553,7 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 		activeRead.resolve(conversation(false, ...earlier));
 
 		await vi.waitFor(() =>
-			expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...refusedExchange])
+			expect(chatViewOf(target)).toEqual(['earlier', 'earlier reply', ...refusedExchange])
 		);
 	});
 });
@@ -1743,7 +1729,7 @@ describe('CoWriterPanel proposal target (#238)', () => {
 		await sendTurn(target, 'thanks');
 		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(3));
 		await tick();
-		expect(chatView(target)).toHaveLength(4);
+		expect(chatViewOf(target)).toHaveLength(4);
 
 		const badge = target.querySelector<HTMLElement>('.tool-target');
 		expect(badge?.textContent?.trim()).toBe('for: Other Song');
