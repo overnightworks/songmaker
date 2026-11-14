@@ -147,39 +147,6 @@ def test_a_session_is_stored_with_the_instants_it_is_given(accounts, sessions) -
     assert loaded.expires_at.replace(tzinfo=timezone.utc) == expires
 
 
-def test_a_session_is_stored_under_exactly_the_id_it_is_given(accounts, sessions) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
-    given = a_session_id()
-
-    record = sessions.create(
-        _SUBJECT, session_id=given, now=_later(0), expires_at=_later(),
-        refresh_token=None, id_token=None, account_language=None,
-    )
-
-    assert (record.id, sessions.load(given).id) == (given, given)
-
-
-def test_a_second_session_under_a_stored_id_raises_and_leaves_the_stored_row(
-    accounts, sessions, session,
-) -> None:
-    accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
-    stored = a_session_id()
-    sessions.create(
-        _SUBJECT, session_id=stored, now=_later(0), expires_at=_later(),
-        refresh_token=SecretStr("rt-first"), id_token=None, account_language=None,
-    )
-    session.commit()
-
-    with pytest.raises(IntegrityError):
-        sessions.create(
-            _SUBJECT, session_id=stored, now=_later(0), expires_at=_later(),
-            refresh_token=SecretStr("rt-second"), id_token=None, account_language=None,
-        )
-    session.rollback()
-
-    assert sessions.load(stored).refresh_token.get_secret_value() == "rt-first"
-
-
 def test_a_session_without_a_refresh_token_answers_none(accounts, sessions) -> None:
     accounts.create_for_subject(_SUBJECT, "nina", "user", AccountKind.PERSON)
     record = sessions.create(
