@@ -366,6 +366,7 @@ export interface JobItem {
 	error_type?: string | null;
 	retry_after_seconds?: number | null;
 	queue_reason?: string | null;
+	queue_reason_message?: Message | null;
 	queue_position?: number | null;
 	started_at?: string | null;
 	completed_at?: string | null;

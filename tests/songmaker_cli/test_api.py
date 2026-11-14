@@ -37,6 +37,7 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.job_types import JobStatus
 from songmaker_cli.jobs.generation import _load_song_meta
+from songmaker_cli.messages import message
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 
 _DEFAULT_USER_ID = "u-test"
@@ -2829,8 +2830,8 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
     [
         (
             "queued",
-            {"queue_reason": "Waiting for LoRA training on this GPU."},
-            {"queue_reason": "Waiting for the next GPU slot."},
+            {"queue_reason_message": message("jobWait.voiceTraining")},
+            {"queue_reason_message": message("jobWait.queuedGenerations")},
         ),
         ("running", {"phase": "loading_model"}, {"phase": "writing"}),
         (
@@ -2839,7 +2840,7 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
             {"take_index": 2, "take_count": 2},
         ),
     ],
-    ids=["queue_reason", "phase", "take"],
+    ids=["queue_reason_message", "phase", "take"],
 )
 def test_stream_job_emits_a_change_without_a_status_or_progress_change(
     client: TestClient, status: str, before: dict, after: dict,
@@ -2873,8 +2874,11 @@ def test_stream_job_emits_a_change_without_a_status_or_progress_change(
     assert first["status"] == second["status"] == status
     assert first["progress"] == second["progress"]
     assert first["queue_position"] == second["queue_position"]
-    assert {key: first[key] for key in before} == before
-    assert {key: second[key] for key in after} == after
+    def as_json(fields: dict) -> dict:
+        return json.loads(json.dumps(fields, default=lambda wait: wait.model_dump()))
+
+    assert {key: first[key] for key in before} == as_json(before)
+    assert {key: second[key] for key in after} == as_json(after)
 
 
 def test_stream_job_sends_heartbeat_without_status_change(
@@ -4563,7 +4567,7 @@ def test_get_job_preserves_queue_position_with_projected_error(client, stored_mu
     with client.app.state.ctx.db() as session:
         job = session.get(Job, stored_musician_job)
         job.status = "queued"
-        job.queue_reason = "Waiting for the next GPU slot."
+        job.queue_reason_message = message("jobWait.queuedGenerations")
         session.add(
             Job(
                 id="ahead",
@@ -4578,4 +4582,7 @@ def test_get_job_preserves_queue_position_with_projected_error(client, stored_mu
     assert response.status_code == 200
     assert response.json()["error"] == "Generating failed — try again."
     assert response.json()["queue_position"] == 2
-    assert response.json()["queue_reason"] == "Waiting for the next GPU slot."
+    assert response.json()["queue_reason"] == "Waiting for queued generations on this GPU."
+    assert response.json()["queue_reason_message"] == {
+        "key": "jobWait.queuedGenerations", "values": {},
+    }

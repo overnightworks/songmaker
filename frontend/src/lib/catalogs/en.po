@@ -5141,6 +5141,14 @@ msgctxt "generate.startFailed"
 msgid "Generation failed"
 msgstr ""
 
+msgctxt "jobWait.voiceTraining"
+msgid "Waiting for LoRA training on this GPU."
+msgstr ""
+
+msgctxt "jobWait.queuedGenerations"
+msgid "Waiting for queued generations on this GPU."
+msgstr ""
+
 msgctxt "jobEnd.serverRestart"
 msgid "Server restarted — please retry"
 msgstr ""

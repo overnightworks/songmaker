@@ -34,6 +34,7 @@ from songmaker_cli.lifecycle import (
     reap_stale_jobs,
     stale_job_reaper_loop,
 )
+from songmaker_cli.messages import Message, message
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import (
     ACESTEP_LAST_ALIVE_KEY,
@@ -63,7 +64,7 @@ def _dead_process_time(now: datetime, threshold_seconds: int) -> datetime:
 def _add_job(
     ctx: AppContext, *, job_id: str, job_type: str, status: str,
     started_at: datetime | None = None, heartbeat_at: datetime | None = None,
-    queue_reason: str | None = None,
+    queue_reason_message: Message | None = None,
 ) -> None:
     with ctx.db() as session:
         kwargs = {}
@@ -72,7 +73,10 @@ def _add_job(
         if heartbeat_at is not None:
             kwargs["heartbeat_at"] = heartbeat_at
         session.add(
-            Job(id=job_id, type=job_type, status=status, queue_reason=queue_reason, **kwargs)
+            Job(
+                id=job_id, type=job_type, status=status,
+                queue_reason_message=queue_reason_message, **kwargs,
+            )
         )
         session.commit()
 
@@ -109,7 +113,7 @@ class TestLifecycleReaper:
             ctx, job_id="chat-1", job_type=JobType.CHAT, status=JobStatus.QUEUED,
             started_at=dead,
             heartbeat_at=dead,
-            queue_reason="Waiting for LoRA training on this GPU.",
+            queue_reason_message=message("jobWait.voiceTraining"),
         )
 
         recovered = reap_stale_jobs(ctx, now=now)
@@ -120,7 +124,7 @@ class TestLifecycleReaper:
             assert job.status == JobStatus.FAILED
             assert job.error == "Queued too long — please retry."
             assert job.error_type == "queued_too_long"
-            assert job.queue_reason is None
+            assert job.queue_reason_message is None
 
     def test_fails_a_silenced_running_chat_job_by_heartbeat(self, ctx) -> None:
         now = datetime(2030, 1, 1, tzinfo=timezone.utc)

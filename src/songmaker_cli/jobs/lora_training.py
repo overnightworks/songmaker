@@ -23,7 +23,6 @@ from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     JOB_ERROR_WORKER_TRAINING_FAILED,
     LORA_TRAINING_MODEL_MODES,
-    LORA_WAITING_FOR_GENERATION_QUEUE_REASON,
     MODEL_DEFAULT_MODE,
     USER_LORA_DATASET_DIRNAME,
     USER_LORA_OUTPUT_DIRNAME,
@@ -40,6 +39,7 @@ from songmaker_cli.db.queries.loras import list_active_user_loras, update_user_l
 from songmaker_cli.db.queries.sentinels import unset_if_none
 from songmaker_cli.job_timing import GPU_HOLD_POLL_INTERVAL_SECONDS, STALE_JOB_THRESHOLDS
 from songmaker_cli.job_types import JobFunction, JobStatus, JobType
+from songmaker_cli.messages import message
 from songmaker_cli.scheduler import (
     AllWorkersHeld,
     DispatchOptions,
@@ -1214,7 +1214,7 @@ async def _defer_lora_training_for_generation(
         db_factory,
         job_id,
         JobStatus.QUEUED,
-        queue_reason=LORA_WAITING_FOR_GENERATION_QUEUE_REASON,
+        queue_reason_message=message("jobWait.queuedGenerations"),
     )
     await redis.enqueue_job(
         JobFunction.LORA_TRAINING,

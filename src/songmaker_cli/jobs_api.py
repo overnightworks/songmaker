@@ -204,7 +204,7 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
             response.phase,
             response.take_index,
             response.take_count,
-            response.queue_reason,
+            response.queue_reason_message,
             response.queue_position,
             response.error,
             response.error_type,

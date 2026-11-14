@@ -35,11 +35,13 @@ from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
 )
+from songmaker_cli.db.message_column import MessageColumn
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
 from songmaker_cli.job_types import JobStatus
+from songmaker_cli.messages import Message
 from songmaker_cli.theme_types import ThemeChoice
 from songmaker_cli.timestamps import utcnow
 from songmaker_cli.whisper_cues import stored_whisper_cues
@@ -361,6 +363,14 @@ class GenerationPreset(Base):
 
 class Job(Base):
     __tablename__ = "jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "queue_reason_message IS NULL OR ("
+            "COALESCE(json_typeof(queue_reason_message->'key'), '') = 'string' "
+            "AND COALESCE(json_typeof(queue_reason_message->'values'), '') = 'object')",
+            name="ck_jobs_queue_reason_message_shape",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     type: Mapped[str] = mapped_column(String(40))
@@ -376,7 +386,7 @@ class Job(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     retry_after_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    queue_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    queue_reason_message: Mapped[Message | None] = mapped_column(MessageColumn, nullable=True)
     user_id: Mapped[str | None] = mapped_column(
         ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )

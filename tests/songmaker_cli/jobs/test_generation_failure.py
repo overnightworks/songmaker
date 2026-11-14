@@ -11,6 +11,7 @@ from songmaker_cli.jobs.generation_failure import (
     running_failure_pair,
     select_generation_failure,
 )
+from songmaker_cli.messages import message
 from songmaker_cli.scheduler import (
     WorkerGenerationFailed,
     WorkerGenerationUnavailable,
@@ -198,7 +199,7 @@ def test_response_preserves_fields_queue_position_and_stored_error(job_type):
         progress=0.0,
         error="need 18.5 GB",
         error_type="generation_error",
-        queue_reason="queued_full",
+        queue_reason_message=message("jobWait.queuedGenerations"),
         take_index=1,
         take_count=2,
     )

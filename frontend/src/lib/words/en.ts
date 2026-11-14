@@ -1250,6 +1250,8 @@ export type Words = {
     readonly "generate.noModels": string;
     readonly "generate.selectModel": string;
     readonly "generate.startFailed": string;
+    readonly "jobWait.voiceTraining": string;
+    readonly "jobWait.queuedGenerations": string;
     readonly "jobEnd.serverRestart": string;
     readonly "jobEnd.generateCompleted": string;
     readonly "jobEnd.generatePartial": string;
@@ -2908,6 +2910,8 @@ export const words: Words = {
     "generate.noModels": "No models enabled. Ask admin to enable one.",
     "generate.selectModel": "Select a model first",
     "generate.startFailed": "Generation failed",
+    "jobWait.voiceTraining": "Waiting for LoRA training on this GPU.",
+    "jobWait.queuedGenerations": "Waiting for queued generations on this GPU.",
     "jobEnd.serverRestart": "Server restarted — please retry",
     "jobEnd.generateCompleted": "generate completed",
     "jobEnd.generatePartial": "generate partially completed",
