@@ -3,8 +3,7 @@
 		JobItem,
 		OwnPlayableTakeResponse,
 		UserLoraItem,
-		UserLoraSampleItem,
-		UserLoraSamplePatchRequest
+		UserLoraSampleItem
 	} from '#lib/api/types.ts';
 	import { addLoraSample, patchLoraSample, deleteLoraSample } from '#lib/api/client.ts';
 	import { describeFailure } from '#lib/api/fetch.ts';
@@ -202,9 +201,9 @@
 		}
 	}
 
-	async function saveSample(sample: UserLoraSampleItem, patch: UserLoraSamplePatchRequest) {
+	async function saveSample(sampleId: string, patch: { caption?: string; lyrics?: string }) {
 		try {
-			await patchLoraSample(lora.id, sample.id, patch);
+			await patchLoraSample(lora.id, sampleId, patch);
 			await refreshLora(lora.id);
 		} catch (e) {
 			addToast(describeFailure(e, pageText('voiceDetail.saveFailed')), 'error');
@@ -325,7 +324,7 @@
 							value={sample.caption}
 							onblur={(e) => {
 								const v = (e.target as HTMLTextAreaElement).value.trim();
-								if (v && v !== sample.caption) saveSample(sample, { caption: v });
+								if (v && v !== sample.caption) saveSample(sample.id, { caption: v });
 							}}></textarea>
 					</label>
 					<label class="field">
@@ -337,7 +336,7 @@
 							value={sample.lyrics}
 							onblur={(e) => {
 								const v = (e.target as HTMLTextAreaElement).value.trim();
-								if (v && v !== sample.lyrics) saveSample(sample, { lyrics: v });
+								if (v && v !== sample.lyrics) saveSample(sample.id, { lyrics: v });
 							}}></textarea>
 					</label>
 				</li>
