@@ -506,25 +506,23 @@ def recover_jobs_of_dead_owners(
     session: Session, owner_liveness: Mapping[str, WorkerLiveness],
 ) -> dict[str, int]:
     """Fail the active jobs of every owner read as DEAD and return counts keyed by type."""
-    dead_owner_ids = [
-        owner_id for owner_id, liveness in owner_liveness.items()
-        if liveness is WorkerLiveness.DEAD
-    ]
-    if not dead_owner_ids:
+    if not owner_liveness:
         return {}
     now = datetime.now(timezone.utc)
     jobs = (
         session.query(Job)
-        .filter(Job.owner_id.in_(dead_owner_ids), Job.status.in_(JOB_ACTIVE_STATUSES))
+        .filter(Job.owner_id.in_(list(owner_liveness)), Job.status.in_(JOB_ACTIVE_STATUSES))
         .all()
     )
     recovered: dict[str, int] = {}
     for job in jobs:
+        verdict = _owner_gone_verdict(job, owner_liveness)
+        if verdict is None:
+            continue
         job_type = job.type
         if _recover_stale_job_if_unchanged(
             session, job, status=job.status, heartbeat_at=job.heartbeat_at,
-            error=JOB_ERROR_SERVER_RESTARTED.error,
-            error_type=JOB_ERROR_SERVER_RESTARTED.error_type,
+            error=verdict.error, error_type=verdict.error_type,
             completed_at=now,
         ):
             recovered[job_type] = recovered.get(job_type, 0) + 1
