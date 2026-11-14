@@ -11,6 +11,7 @@ from typing import Final
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import ObjectDeletedError
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
@@ -589,10 +590,11 @@ def api_share_generation(
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
     share_url = public_share_url(ShareKind.GENERATION, gen.share_slug)
     session.commit()
-    return ShareResponse(
-        share_url=share_url,
-        share_slug=gen.share_slug,
-    )
+    try:
+        share_slug = gen.share_slug
+    except ObjectDeletedError as exc:
+        raise generation_not_found() from exc
+    return ShareResponse(share_url=share_url, share_slug=share_slug)
 
 
 _UNSHARE_TAKE_DESCRIPTION = (

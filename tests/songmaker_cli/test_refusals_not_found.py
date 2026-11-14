@@ -3,13 +3,24 @@ as a missing one."""
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
+from sqlalchemy.orm import Session
 from support.mcp_tool_table import ALICE, BOB
 from support.mcp_world import McpWorld
-from support.postgres_lock_harness import WAIT_SECONDS, StatementPause, in_thread, stop_workers
+from support.postgres_lock_harness import (
+    WAIT_SECONDS,
+    CommitPause,
+    StatementPause,
+    in_thread,
+    race,
+    stop_workers,
+    wrote_to_tables,
+)
 from support.web_app import (
     make_authenticated_user,
     make_router_app,
@@ -159,6 +170,52 @@ def test_a_take_deleted_after_the_access_check_reads_like_a_missing_one(
 
     response = answers["request"]
     assert not isinstance(response, BaseException), response
+    assert response.status_code == 404
+    assert response.json() == refusal_body("generationRefusal.notFound")
+
+
+@pytest.mark.parametrize(
+    ("path", "arguments"),
+    [
+        ("/api/generations/take/share", {}),
+        ("/api/playlists/playlist/entries/generation", {"json": {"generation_id": "take"}}),
+    ],
+    ids=["share", "playlist-add"],
+)
+def test_a_take_deleted_right_after_the_commit_reads_like_a_missing_one(
+    world: dict[str, TestClient], pg_factory, path: str, arguments: dict,
+) -> None:
+    take_deleted = threading.Event()
+    request_sessions: list[Session] = []
+
+    def delete_the_take() -> None:
+        with pg_factory() as deleter:
+            deleter.delete(deleter.get(Generation, "take"))
+            deleter.commit()
+        take_deleted.set()
+
+    def is_the_request_commit(session: Session) -> bool:
+        if not wrote_to_tables(session, "generations", "playlist_entries"):
+            return False
+        request_sessions.append(session)
+        return True
+
+    def hold_the_request_until_the_take_is_gone(session: Session) -> None:
+        if session in request_sessions:
+            assert take_deleted.wait(WAIT_SECONDS), "The take was never deleted"
+
+    event.listen(pg_factory, "after_commit", hold_the_request_until_the_take_is_gone)
+    try:
+        answers = race(
+            pg_factory,
+            lambda: world[OWNER_ID].post(path, **arguments),
+            delete_the_take,
+            CommitPause(is_the_request_commit),
+        )
+    finally:
+        event.remove(pg_factory, "after_commit", hold_the_request_until_the_take_is_gone)
+
+    response = answers["first"]
     assert response.status_code == 404
     assert response.json() == refusal_body("generationRefusal.notFound")
 
