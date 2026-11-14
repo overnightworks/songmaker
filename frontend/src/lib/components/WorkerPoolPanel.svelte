@@ -14,23 +14,12 @@
 	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
 	import type { WorkerPoolResponse, WorkerInfoItem } from '#lib/api/types.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
-	import { pageText } from '#lib/utils/page-words.ts';
-	import {
-		WORKER_POOL_RESTART_LABEL,
-		WORKER_POOL_RESTART_CONFIRM,
-		WORKER_POOL_RESTART_TITLE,
-		WORKER_POOL_RESTART_WARNING,
-		WORKER_POOL_LAST_ERROR_LABEL,
-		WORKER_POOL_FULL_LOGS_LABEL,
-		WORKER_POOL_LOAD_FAILED,
-		WORKER_POOL_NO_MODEL_LABEL,
-		WORKER_POOL_REFRESH_FAILED,
-		WORKER_TRAINING_REMAINING_TEMPLATE
-	} from '#lib/constants/worker.ts';
+	import { Marked } from 'overnightworks-design';
+	import { pageParts, pageText } from '#lib/utils/page-words.ts';
 
 	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
 	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '#lib/utils/focus-trap.ts';
-	import { localClockTime } from '#lib/utils/format.ts';
+	import { formatDecimal, localClockTime } from '#lib/utils/format.ts';
 
 	import WorkerVramLine from './WorkerVramLine.svelte';
 	import WorkerModelsList from './WorkerModelsList.svelte';
@@ -141,13 +130,23 @@
 		const then = new Date(iso).getTime();
 		if (Number.isNaN(then)) return null;
 		const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
-		if (seconds < 60) return `${seconds}s`;
+		if (seconds < 60) {
+			return pageText('workerPool.elapsedSeconds', { seconds: formatDecimal(seconds, 0) });
+		}
 		const minutes = Math.floor(seconds / 60);
 		const remSeconds = seconds % 60;
-		if (minutes < 60) return `${minutes}m ${remSeconds}s`;
+		if (minutes < 60) {
+			return pageText('workerPool.elapsedMinutes', {
+				minutes: formatDecimal(minutes, 0),
+				seconds: formatDecimal(remSeconds, 0)
+			});
+		}
 		const hours = Math.floor(minutes / 60);
 		const remMinutes = minutes % 60;
-		return `${hours}h ${remMinutes}m`;
+		return pageText('workerPool.elapsedHours', {
+			hours: formatDecimal(hours, 0),
+			minutes: formatDecimal(remMinutes, 0)
+		});
 	}
 
 	// Three ways a worker can be non-operable, each needing its own honest
@@ -157,14 +156,16 @@
 	function describeOffline(worker: WorkerInfoItem): string {
 		const state = worker.state;
 		if (!state) {
-			return `Offline — last registered ${formatLastSeen(worker.identity.last_register_at)}`;
+			return pageText('workerPool.offlineSince', {
+				lastSeen: formatLastSeen(worker.identity.last_register_at)
+			});
 		}
 		if (state.gpu_healthy === false) {
 			return state.gpu_health_detail
-				? `GPU unavailable — ${state.gpu_health_detail}`
-				: 'GPU unavailable';
+				? pageText('workerPool.gpuUnavailableDetail', { detail: state.gpu_health_detail })
+				: pageText('workerPool.gpuUnavailable');
 		}
-		return 'GPU health not reported — worker build predates GPU health checks';
+		return pageText('workerPool.gpuHealthNotReported');
 	}
 
 	// Nothing is listening for /restart once the worker process is gone; a
@@ -178,12 +179,12 @@
 		const workerId = worker.identity.id;
 		const state = worker.state;
 		if (!state) {
-			return `Can't restart — no worker process is running to ask. Restart the container running worker "${workerId}" directly.`;
+			return pageText('workerPool.restartNoProcess', { worker: workerId });
 		}
 		if (state.gpu_healthy === false) {
-			return `Can't restart — its GPU is the problem, not the process. Restart the container running worker "${workerId}" directly, or check the host's NVIDIA driver.`;
+			return pageText('workerPool.restartBrokenGpu', { worker: workerId });
 		}
-		return `Can't restart — this worker build doesn't report GPU health, so it can't be trusted as healthy. Restarting the same process won't add that; update the container running worker "${workerId}" to the current image.`;
+		return pageText('workerPool.restartNoGpuHealth', { worker: workerId });
 	}
 
 	function describeStatus(worker: WorkerInfoItem): string {
@@ -192,34 +193,35 @@
 		if (state.target_loading) {
 			const elapsed = formatElapsed(state.loading_started_at);
 			return elapsed
-				? `Loading ${state.target_loading}… (${elapsed} elapsed)`
-				: `Loading ${state.target_loading}…`;
+				? pageText('workerPool.statusLoadingElapsed', { mode: state.target_loading, elapsed })
+				: pageText('workerPool.statusLoading', { mode: state.target_loading });
 		}
 		if (state.training_hold_seconds != null) {
-			return WORKER_TRAINING_REMAINING_TEMPLATE.replace(
-				'{seconds}',
-				String(state.training_hold_seconds)
-			);
+			return pageText('workerPool.statusTraining', {
+				seconds: formatDecimal(state.training_hold_seconds, 0)
+			});
 		}
-		if (state.loaded.length === 0) return WORKER_POOL_NO_MODEL_LABEL;
-		if (state.queue_depth > 0) return `Busy (${state.queue_depth} in queue)`;
-		return 'Idle';
+		if (state.loaded.length === 0) return pageText('workerPool.statusNoModel');
+		if (state.queue_depth > 0) {
+			return pageText('workerPool.statusBusy', { count: state.queue_depth });
+		}
+		return pageText('workerPool.statusIdle');
 	}
 
 	function formatLastSeen(iso: string | null | undefined): string {
-		if (!iso) return 'never';
+		if (!iso) return pageText('workerPool.seenNever');
 		const then = new Date(iso).getTime();
 		if (Number.isNaN(then)) return iso;
 		const deltaMs = Date.now() - then;
-		if (deltaMs < 0) return 'just now';
+		if (deltaMs < 0) return pageText('workerPool.seenJustNow');
 		const seconds = Math.floor(deltaMs / 1000);
-		if (seconds < 60) return `${seconds}s ago`;
+		if (seconds < 60) return pageText('workerPool.secondsAgo', { count: seconds });
 		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return `${minutes}m ago`;
+		if (minutes < 60) return pageText('workerPool.minutesAgo', { count: minutes });
 		const hours = Math.floor(minutes / 60);
-		if (hours < 24) return `${hours}h ago`;
+		if (hours < 24) return pageText('workerPool.hoursAgo', { count: hours });
 		const days = Math.floor(hours / 24);
-		return `${days}d ago`;
+		return pageText('workerPool.daysAgo', { count: days });
 	}
 
 	function formatVram(
@@ -228,7 +230,7 @@
 	): string {
 		const total = state?.vram_total_gb ?? identity.vram_total_gb;
 		if (total == null) return '?';
-		return `${total.toFixed(0)} GB`;
+		return pageText('workerPool.vramTotal', { total: formatDecimal(total, 0) });
 	}
 
 	function isWorkerLoading(worker: WorkerInfoItem): boolean {
@@ -242,7 +244,7 @@
 	async function handleLoad(workerId: string): Promise<void> {
 		const mode = selectedMode[workerId];
 		if (!mode) {
-			actionError = 'Select a model to load';
+			actionError = pageText('workerPool.selectModel');
 			return;
 		}
 		actionError = '';
@@ -250,9 +252,9 @@
 		try {
 			const job = await loadModelOnWorker(workerId, mode);
 			trackJob(job, { workerId, mode });
-			addToast(`Loading ${mode} on ${workerId}…`, 'info');
+			addToast(pageText('workerPool.loadingToast', { mode, worker: workerId }), 'info');
 		} catch (e) {
-			actionError = describeFailure(e, 'Failed to enqueue load');
+			actionError = describeFailure(e, pageText('workerPool.enqueueFailed'));
 		} finally {
 			busyAction = { ...busyAction, [workerId]: false };
 		}
@@ -264,10 +266,10 @@
 		busyAction = { ...busyAction, [key]: true };
 		try {
 			await evictModelOnWorker(workerId, mode);
-			addToast(`Unloaded ${mode} from ${workerId}`, 'success');
+			addToast(pageText('workerPool.unloadedToast', { mode, worker: workerId }), 'success');
 			await store.refresh();
 		} catch (e) {
-			actionError = describeFailure(e, 'Failed to unload model');
+			actionError = describeFailure(e, pageText('workerPool.unloadFailed'));
 		} finally {
 			busyAction = { ...busyAction, [key]: false };
 		}
@@ -290,9 +292,9 @@
 		busyAction = { ...busyAction, [key]: true };
 		try {
 			await restartWorker(workerId);
-			addToast(`Restart requested for ${workerId}`, 'info');
+			addToast(pageText('workerPool.restartRequested', { worker: workerId }), 'info');
 		} catch (e) {
-			actionError = describeFailure(e, 'Restart failed');
+			actionError = describeFailure(e, pageText('workerPool.restartFailed'));
 		} finally {
 			busyAction = { ...busyAction, [key]: false };
 		}
@@ -305,14 +307,14 @@
 		try {
 			if (isPinned) {
 				await unpinModelOnWorker(workerId, mode);
-				addToast(`Keep loaded disabled for ${mode} on ${workerId}`, 'success');
+				addToast(pageText('workerPool.keepLoadedOff', { mode, worker: workerId }), 'success');
 			} else {
 				await pinModelOnWorker(workerId, mode);
-				addToast(`Keep loaded enabled for ${mode} on ${workerId}`, 'success');
+				addToast(pageText('workerPool.keepLoadedOn', { mode, worker: workerId }), 'success');
 			}
 			await store.refresh();
 		} catch (e) {
-			actionError = describeFailure(e, 'Failed to change Keep loaded');
+			actionError = describeFailure(e, pageText('workerPool.keepLoadedFailed'));
 		} finally {
 			busyAction = { ...busyAction, [key]: false };
 		}
@@ -320,25 +322,27 @@
 </script>
 
 <section class="panel">
-	<h2>Worker Pool</h2>
+	<h2>{pageText('workerPool.heading')}</h2>
 
 	{#if forbidden}
-		<p class="panel-error">Admin access required.</p>
+		<p class="panel-error">{pageText('adminPage.accessRequired')}</p>
 	{:else if $error && workers.length === 0}
 		{#if !$offline}
-			<p class="panel-error">{describeFailure($error, WORKER_POOL_LOAD_FAILED)}</p>
+			<p class="panel-error">{describeFailure($error, pageText('workerPool.loadFailed'))}</p>
 		{/if}
 	{:else if workers.length === 0}
 		<p class="hint">
-			No workers registered. Start the <code>songmaker-acestep-worker-0</code> container and wait a few
-			seconds.
+			<Marked
+				parts={pageParts('workerPool.noWorkers', { container: 'songmaker-acestep-worker-0' })}
+				marked={{ code }}
+			/>
 		</p>
 	{:else}
 		{#if actionError}
 			<p class="panel-error">{actionError}</p>
 		{/if}
 		{#if $error && !$offline}
-			<p class="banner-error">{describeFailure($error, WORKER_POOL_REFRESH_FAILED)}</p>
+			<p class="banner-error">{describeFailure($error, pageText('workerPool.refreshFailed'))}</p>
 		{/if}
 
 		<div class="cards">
@@ -353,29 +357,34 @@
 						<span class={statusClass(worker.status)}>{statusIcon(worker.status)}</span>
 						<span class="worker-id">{worker.identity.id}</span>
 						<span class="header-meta">
-							GPU {worker.identity.gpu_id ?? '?'} • {formatVram(worker.state, worker.identity)}
+							{pageText('workerPool.cardHeader', {
+								gpu: String(worker.identity.gpu_id ?? '?'),
+								vram: formatVram(worker.state, worker.identity)
+							})}
 						</span>
 					</div>
 
 					{#if worker.state && !offline}
 						<div class="card-row">
-							<span class="row-label">Status:</span>
+							<span class="row-label">{pageText('workerPool.statusLabel')}</span>
 							<span class="row-value">
 								{describeStatus(worker)}
 								{#if trackedJob || worker.state.target_loading || worker.state.training_hold_seconds != null}
-									<span class="spinner" aria-label="loading">⏳</span>
+									<span class="spinner" aria-label={pageText('workerPool.loadingSpinner')}>⏳</span>
 								{/if}
 							</span>
 						</div>
 						{#if worker.state.target_loading && worker.state.loading_last_log_line}
 							<div class="card-row">
-								<span class="row-label">Log:</span>
+								<span class="row-label">{pageText('workerPool.logLabel')}</span>
 								<span class="row-value log-line">{worker.state.loading_last_log_line}</span>
 							</div>
 						{/if}
 						<div class="card-row">
-							<span class="row-label">Queue:</span>
-							<span class="row-value">{worker.state.queue_depth} jobs</span>
+							<span class="row-label">{pageText('workerPool.queueLabel')}</span>
+							<span class="row-value"
+								>{pageText('workerPool.queueJobs', worker.state.queue_depth)}</span
+							>
 						</div>
 					{:else}
 						<div class="card-row">
@@ -389,7 +398,7 @@
 					<WorkerVramLine state={worker.state} {offline} />
 					{#if worker.state && !offline}
 						<div class="card-row">
-							<span class="row-label">Last seen:</span>
+							<span class="row-label">{pageText('workerPool.lastSeenLabel')}</span>
 							<span class="row-value">{formatLastSeen(worker.state.last_heartbeat_at)}</span>
 						</div>
 					{/if}
@@ -411,7 +420,7 @@
 							bind:value={selectedMode[worker.identity.id]}
 							disabled={loading || offline || availableModes.length === 0}
 						>
-							<option value="" disabled selected>Load model…</option>
+							<option value="" disabled selected>{pageText('workerPool.loadModel')}</option>
 							{#each availableModes as mode (mode)}
 								<option value={mode}>{mode}</option>
 							{/each}
@@ -423,7 +432,9 @@
 								offline ||
 								!availableModes.includes(selectedMode[worker.identity.id])}
 						>
-							{busyAction[worker.identity.id] ? 'Loading…' : 'Load'}
+							{busyAction[worker.identity.id]
+								? pageText('workerPool.loadingAction')
+								: pageText('workerPool.load')}
 						</button>
 					</div>
 					{#if worker.state?.last_error}
@@ -432,7 +443,8 @@
 							: null}
 						<div class="last-error">
 							<div class="last-error-heading">
-								<strong><span aria-hidden="true">✕</span> {WORKER_POOL_LAST_ERROR_LABEL}</strong>
+								<strong><span aria-hidden="true">✕</span> {pageText('workerPool.lastError')}</strong
+								>
 								{#if errorAt && !Number.isNaN(errorAt.getTime())}
 									<time datetime={worker.state.last_error_at ?? undefined}
 										>{localClockTime(errorAt)} · {formatLastSeen(worker.state.last_error_at)}</time
@@ -441,7 +453,12 @@
 							</div>
 							<p class="error-text">{worker.state.last_error}</p>
 							<p class="logs">
-								{WORKER_POOL_FULL_LOGS_LABEL} <code>docker compose logs {worker.identity.id}</code>
+								<Marked
+									parts={pageParts('workerPool.fullLogs', {
+										command: `docker compose logs ${worker.identity.id}`
+									})}
+									marked={{ code }}
+								/>
 							</p>
 						</div>
 					{/if}
@@ -453,13 +470,13 @@
 							title={offline ? restartDisabledHint(worker) : undefined}
 						>
 							{busyAction[`${worker.identity.id}:restart`]
-								? 'Restarting…'
-								: WORKER_POOL_RESTART_LABEL}
+								? pageText('workerPool.restarting')
+								: pageText('workerPool.restart')}
 						</button>
 					</div>
 					{#if confirmation?.workerId === worker.identity.id}
 						{@const current = confirmation}
-						{@const title = WORKER_POOL_RESTART_TITLE.replace('{id}', worker.identity.id)}
+						{@const title = pageText('workerPool.restartTitle', { worker: worker.identity.id })}
 						<div
 							class="restart-confirmation"
 							role="dialog"
@@ -470,7 +487,7 @@
 							onkeydown={(event) => handleFocusTrapKeydown(event.currentTarget, event)}
 						>
 							<strong>{title}</strong>
-							<p>{WORKER_POOL_RESTART_WARNING}</p>
+							<p>{pageText('workerPool.restartWarning')}</p>
 							<div class="confirmation-actions">
 								<button class="action-btn" onclick={current.layer.answer(closeConfirmation)}
 									>{pageText('dialog.cancel')}</button
@@ -481,7 +498,7 @@
 									onclick={current.layer.answer(() => {
 										closeConfirmation();
 										void handleRestart(worker.identity.id);
-									})}>{WORKER_POOL_RESTART_CONFIRM}</button
+									})}>{pageText('workerPool.restartConfirm')}</button
 								>
 							</div>
 						</div>
@@ -491,6 +508,8 @@
 		</div>
 	{/if}
 </section>
+
+{#snippet code({ text }: { text: string })}<code>{text}</code>{/snippet}
 
 <style>
 	.panel {

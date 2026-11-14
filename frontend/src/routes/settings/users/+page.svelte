@@ -26,32 +26,7 @@
 	import TakeRetentionPanel from '#lib/components/TakeRetentionPanel.svelte';
 	import ModelsCowriterRow from '#lib/components/ModelsCowriterRow.svelte';
 	import ModelsServiceRow from '#lib/components/ModelsServiceRow.svelte';
-	import { ADMIN_TABS_LABEL } from '#lib/constants/admin.ts';
-	import {
-		ADMIN_VOICES_EMPTY,
-		ADMIN_VOICES_HEADING,
-		VOICES_LOAD_FAILED,
-		ADMIN_VOICES_LOADING,
-		ADMIN_VOICES_NAME_LABEL,
-		ADMIN_VOICES_OWNER_LABEL,
-		ADMIN_VOICES_STATUS_LABEL
-	} from '#lib/constants/voice.ts';
-	import {
-		MODELS_HEADING,
-		MODELS_COLUMN_MODEL_LABEL,
-		MODELS_COLUMN_PROVIDER_LABEL,
-		MODELS_COLUMN_ROUTE_LABEL,
-		MODELS_COLUMN_STATUS_LABEL,
-		MODELS_COLUMN_TASK_LABEL,
-		MODELS_HISTORY_TAIL_LABEL,
-		MODELS_RETRY_LABEL,
-		MODELS_SAVED_LABEL,
-		MODELS_SAVE_FAILED_FALLBACK,
-		MODELS_ROUTE_GATEWAY_LABEL,
-		MODELS_SET_BY_AGENT_FILE_LABEL,
-		MODELS_TASK_COVER_LABEL,
-		modelsRowStatus
-	} from '#lib/constants/models.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import {
 		COMPACT_SELECT_CLASS,
 		COMPACT_STACK_CLASS,
@@ -107,10 +82,10 @@
 	let savingGlobal = $state(false);
 
 	const SETTING_LABELS: Record<string, string> = {
-		generation_rate_limit: 'Generations / hour',
-		scoring_rate_limit: 'Scorings / hour',
-		max_queue_depth: 'Max queue depth',
-		max_user_active_jobs: 'Max active jobs'
+		generation_rate_limit: pageText('rateLimits.generations'),
+		scoring_rate_limit: pageText('rateLimits.scorings'),
+		max_queue_depth: pageText('rateLimits.maxQueueDepth'),
+		max_user_active_jobs: pageText('rateLimits.maxActiveJobs')
 	};
 
 	// The co-writer runs through the gateway; its row offers no choice until the Models row replaces it.
@@ -136,10 +111,10 @@
 	type AdminLoad = (typeof ADMIN_LOADS)[number];
 
 	const LOAD_FAILURE_FALLBACKS: Record<AdminLoad, string> = {
-		voices: VOICES_LOAD_FAILED,
-		rateLimits: 'Failed to load rate limits',
-		cowriter: 'Failed to load co-writer settings',
-		genDefaults: 'Failed to load generation defaults'
+		voices: pageText('adminVoices.loadFailed'),
+		rateLimits: pageText('rateLimits.loadFailed'),
+		cowriter: pageText('modelsTable.loadFailed'),
+		genDefaults: pageText('generationDefaults.loadFailed')
 	};
 	const PAGE_WIDE_LOADS = {
 		rateLimits: ['ratelimits'],
@@ -229,7 +204,7 @@
 			globalLimits = res.settings;
 			globalEdits = Object.fromEntries(res.settings.map((s) => [s.setting_key, String(s.value)]));
 		} catch (e) {
-			reportError(describeFailure(e, 'Failed to save'));
+			reportError(describeFailure(e, pageText('adminPage.saveFailed')));
 		} finally {
 			savingGlobal = false;
 		}
@@ -258,7 +233,7 @@
 			cowriterBudget = cowriterSettings.tail_token_budget;
 			cowriterBudgetSaved = true;
 		} catch (e) {
-			cowriterBudgetFailure = describeFailure(e, MODELS_SAVE_FAILED_FALLBACK);
+			cowriterBudgetFailure = describeFailure(e, pageText('modelsTable.saveFailed'));
 		}
 	}
 
@@ -287,7 +262,7 @@
 			const updated = await toggleModelApi(modelId, !currentActive);
 			allModels = allModels.map((m) => (m.id === updated.id ? updated : m));
 		} catch {
-			reportError('Failed to toggle model');
+			reportError(pageText('availableModels.toggleFailed'));
 		}
 	}
 
@@ -311,7 +286,7 @@
 			settleLoad('genDefaults');
 			genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
 		} catch {
-			reportError('Failed to save generation defaults');
+			reportError(pageText('generationDefaults.saveFailed'));
 		} finally {
 			genSaving = false;
 		}
@@ -323,27 +298,27 @@
 </script>
 
 {#if !$isAdmin}
-	<div class="denied">Admin access required.</div>
+	<div class="denied">{pageText('adminPage.accessRequired')}</div>
 {:else}
 	<div class="settings-page">
-		<h1>Admin</h1>
+		<h1>{pageText('adminPage.heading')}</h1>
 
 		{#if compact}
 			<select
 				class="tab-select {COMPACT_SELECT_CLASS}"
-				aria-label={ADMIN_TABS_LABEL}
+				aria-label={pageText('adminPage.sections')}
 				value={tab}
 				onchange={onTabChange}
 			>
 				{#each ADMIN_TABS as item (item.id)}
-					<option value={item.id}>{item.label}</option>
+					<option value={item.id}>{pageText(item.labelKey)}</option>
 				{/each}
 			</select>
 		{:else}
 			<div class="tabs">
 				{#each ADMIN_TABS as item (item.id)}
 					<button class:active={tab === item.id} onclick={() => selectTab(item.id)}>
-						{item.label}
+						{pageText(item.labelKey)}
 					</button>
 				{/each}
 			</div>
@@ -358,28 +333,28 @@
 
 		{#if tab === 'voices'}
 			<section>
-				<h2>{ADMIN_VOICES_HEADING}</h2>
+				<h2>{pageText('adminVoices.heading')}</h2>
 				{#if loadingVoices}
-					<p class="text-muted">{ADMIN_VOICES_LOADING}</p>
+					<p class="text-muted">{pageText('adminVoices.loading')}</p>
 				{:else if $loadFailures.voices}
 					<p class="error">{$loadFailures.voices}</p>
 				{:else if voicesLoaded && voices.length === 0}
-					<p class="text-muted">{ADMIN_VOICES_EMPTY}</p>
+					<p class="text-muted">{pageText('adminVoices.empty')}</p>
 				{:else if voices.length > 0}
 					<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
 						<thead>
 							<tr>
-								<th>{ADMIN_VOICES_NAME_LABEL}</th>
-								<th>{ADMIN_VOICES_OWNER_LABEL}</th>
-								<th>{ADMIN_VOICES_STATUS_LABEL}</th>
+								<th>{pageText('adminVoices.columnVoice')}</th>
+								<th>{pageText('adminVoices.columnOwner')}</th>
+								<th>{pageText('adminVoices.columnStatus')}</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each voices as voice (voice.id)}
 								<tr>
-									<td data-label={ADMIN_VOICES_NAME_LABEL}>{voice.name}</td>
-									<td data-label={ADMIN_VOICES_OWNER_LABEL}>{voice.owner_username}</td>
-									<td data-label={ADMIN_VOICES_STATUS_LABEL}>
+									<td data-label={pageText('adminVoices.columnVoice')}>{voice.name}</td>
+									<td data-label={pageText('adminVoices.columnOwner')}>{voice.owner_username}</td>
+									<td data-label={pageText('adminVoices.columnStatus')}>
 										<span
 											class="badge voice-status"
 											class:voice-status-ready={voice.status === 'ready'}
@@ -404,8 +379,8 @@
 
 		{#if tab === 'ratelimits'}
 			<section>
-				<h2>Global Defaults</h2>
-				<p class="hint">These apply to all users.</p>
+				<h2>{pageText('rateLimits.heading')}</h2>
+				<p class="hint">{pageText('rateLimits.hint')}</p>
 				<div class="limits-grid">
 					{#each globalLimits as item (item.setting_key)}
 						<label class="limit-row">
@@ -422,7 +397,7 @@
 				</div>
 				{#if globalLimits.length > 0}
 					<button class="save-btn" onclick={handleSaveGlobal} disabled={savingGlobal}>
-						{savingGlobal ? 'Saving...' : 'Save Defaults'}
+						{savingGlobal ? pageText('adminPage.saving') : pageText('adminPage.saveDefaults')}
 					</button>
 				{/if}
 			</section>
@@ -430,10 +405,8 @@
 
 		{#if tab === 'generation'}
 			<section>
-				<h2>Generation Defaults</h2>
-				<p class="hint">
-					Default generation parameters for all users. Per-song overrides take precedence.
-				</p>
+				<h2>{pageText('generationDefaults.heading')}</h2>
+				<p class="hint">{pageText('generationDefaults.hint')}</p>
 
 				{#if $loadFailures.genDefaults}
 					<p class="error">{$loadFailures.genDefaults}</p>
@@ -467,9 +440,11 @@
 							onclick={handleSaveGenDefaults}
 							disabled={genSaving || !genDefaultsLoaded}
 						>
-							{genSaving ? 'Saving...' : 'Save Defaults'}
+							{genSaving ? pageText('adminPage.saving') : pageText('adminPage.saveDefaults')}
 						</button>
-						<button class="clear-btn" onclick={handleResetGenDefaults}>Reset</button>
+						<button class="clear-btn" onclick={handleResetGenDefaults}
+							>{pageText('generationDefaults.reset')}</button
+						>
 					</div>
 				{/if}
 			</section>
@@ -477,25 +452,29 @@
 
 		{#if tab === 'models'}
 			<section class="models-table-frame">
-				<h2>{MODELS_HEADING}</h2>
+				<h2>{pageText('modelsTable.heading')}</h2>
 				<div class="tt">
 					<div class="tt-head">
-						<span>{MODELS_COLUMN_TASK_LABEL}</span>
-						<span>{MODELS_COLUMN_PROVIDER_LABEL}</span>
-						<span>{MODELS_COLUMN_ROUTE_LABEL}</span>
-						<span>{MODELS_COLUMN_MODEL_LABEL}</span>
-						<span>{MODELS_COLUMN_STATUS_LABEL}</span>
+						<span>{pageText('modelsTable.columnTask')}</span>
+						<span>{pageText('modelsTable.columnProvider')}</span>
+						<span>{pageText('modelsTable.columnRoute')}</span>
+						<span>{pageText('modelsTable.columnModel')}</span>
+						<span>{pageText('modelsTable.columnStatus')}</span>
 					</div>
 					{#if cowriterSettings}
 						<ModelsCowriterRow advanced={cowriterAdvanced} />
 					{:else}
-						<p class="hint">{modelsRowStatus($loadFailures.cowriter)}</p>
+						<p class="hint">
+							{$loadFailures.cowriter
+								? pageText('modelsTable.unavailable')
+								: pageText('modelsTable.loading')}
+						</p>
 					{/if}
 					<ModelsServiceRow
-						task={MODELS_TASK_COVER_LABEL}
-						provider={MODELS_SET_BY_AGENT_FILE_LABEL}
-						route={MODELS_ROUTE_GATEWAY_LABEL}
-						model={MODELS_SET_BY_AGENT_FILE_LABEL}
+						task={pageText('modelsTable.taskCover')}
+						provider={pageText('modelsTable.setByAgentFile')}
+						route={pageText('modelsTable.routeGateway')}
+						model={pageText('modelsTable.setByAgentFile')}
 					/>
 				</div>
 			</section>
@@ -506,8 +485,8 @@
 			<ModelRegistryPanel onModesChange={(modes) => (registryModes = modes)} />
 
 			<section>
-				<h2>Available Models</h2>
-				<p class="hint">Toggle which models users can create presets for.</p>
+				<h2>{pageText('availableModels.heading')}</h2>
+				<p class="hint">{pageText('availableModels.hint')}</p>
 				<div class="model-toggles">
 					{#each allModels as model (model.id)}
 						<button
@@ -516,7 +495,11 @@
 							onclick={() => handleToggleModel(model.id, model.is_active)}
 						>
 							{model.id.toUpperCase()}
-							<span class="model-status">{model.is_active ? 'ON' : 'OFF'}</span>
+							<span class="model-status"
+								>{model.is_active
+									? pageText('availableModels.on')
+									: pageText('availableModels.off')}</span
+							>
 						</button>
 					{/each}
 				</div>
@@ -530,7 +513,7 @@
 {/if}
 
 {#snippet cowriterAdvanced()}
-	<label class="field-label" for="cowriter-budget">{MODELS_HISTORY_TAIL_LABEL}</label>
+	<label class="field-label" for="cowriter-budget">{pageText('modelsTable.historyTail')}</label>
 	<input
 		id="cowriter-budget"
 		type="number"
@@ -540,12 +523,12 @@
 		onchange={(event) => saveCowriterBudget(Number(event.currentTarget.value))}
 	/>
 	<span class="saved" aria-live="polite"
-		>{cowriterBudgetSaved ? `✓ ${MODELS_SAVED_LABEL}` : ''}</span
+		>{cowriterBudgetSaved ? `✓ ${pageText('modelsTable.saved')}` : ''}</span
 	>
 	{#if cowriterBudgetFailure !== null}
 		<span class="budget-error" role="alert">{cowriterBudgetFailure}</span>
 		<button type="button" class="retry" onclick={() => saveCowriterBudget(cowriterBudget)}
-			>{MODELS_RETRY_LABEL}</button
+			>{pageText('modelsTable.retry')}</button
 		>
 	{/if}
 {/snippet}

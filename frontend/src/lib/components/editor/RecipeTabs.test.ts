@@ -286,10 +286,12 @@ describe('RecipeTabs', () => {
 	});
 
 	it('shows the models load failure in the Model row with Retry', async () => {
-		activeModelsError.set('Failed to load models');
+		activeModelsError.set(words['recipe.modelsLoadFailed']);
 		const target = await renderTabs();
 		await clickSettled(recipeTabNamed(target, words['recipe.tabGenerate']));
-		expect(target.querySelector('[role="alert"]')?.textContent).toBe('Failed to load models');
+		expect(target.querySelector('[role="alert"]')?.textContent).toBe(
+			words['recipe.modelsLoadFailed']
+		);
 		vi.mocked(fetchActiveModels).mockResolvedValueOnce([{ id: 'turbo', is_active: true }]);
 		await clickSettled(getByRoleButton(target, words['recipe.retry']));
 		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
