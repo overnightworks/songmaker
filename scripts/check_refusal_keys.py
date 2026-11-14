@@ -365,12 +365,12 @@ def _literal(tree: ast.Module, name: str) -> object:
         return None
 
 
-def _strings(value: object) -> tuple[str, ...]:
+def _strings(value: object) -> list[str]:
     if isinstance(value, str):
-        return (value,)
+        return [value]
     if isinstance(value, (tuple, list, set, frozenset)):
-        return tuple(item for item in value if isinstance(item, str))
-    return ()
+        return [item for item in value if isinstance(item, str)]
+    return []
 
 
 def read_migration(path: Path) -> Migration:
