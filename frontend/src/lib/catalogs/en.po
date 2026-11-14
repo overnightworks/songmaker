@@ -4304,3 +4304,371 @@ msgstr ""
 msgctxt "workerRefusal.notFound"
 msgid "Worker '{workerId}' not found"
 msgstr ""
+
+msgctxt "voicesPage.documentTitle"
+msgid "My Voices — {app}"
+msgstr ""
+
+msgctxt "voicesPage.heading"
+msgid "My Voices"
+msgstr ""
+
+msgctxt "voicesPage.showDeleted"
+msgid "Show deleted"
+msgstr ""
+
+msgctxt "voicesPage.newVoice"
+msgid "New Voice"
+msgstr ""
+
+msgctxt "voicesPage.cancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "voicesPage.namePlaceholder"
+msgid "Voice name (e.g. My Tenor)"
+msgstr ""
+
+msgctxt "voicesPage.creating"
+msgid "Creating..."
+msgstr ""
+
+msgctxt "voicesPage.create"
+msgid "Create"
+msgstr ""
+
+msgctxt "voicesPage.loading"
+msgid "Loading voices..."
+msgstr ""
+
+msgctxt "voicesPage.loadFailed"
+msgid "Failed to load voices"
+msgstr ""
+
+msgctxt "voicesPage.empty"
+msgid "No voices yet. Create one to upload samples and train your own vocal style."
+msgstr ""
+
+msgctxt "voicesPage.sampleCount.one"
+msgid "{count} sample"
+msgstr ""
+
+msgctxt "voicesPage.sampleCount.other"
+msgid "{count} samples"
+msgstr ""
+
+msgctxt "voicesPage.delete"
+msgid "Delete"
+msgstr ""
+
+msgctxt "voicesPage.deletedTag"
+msgid "deleted"
+msgstr ""
+
+msgctxt "voicesPage.statusDraft"
+msgid "draft"
+msgstr ""
+
+msgctxt "voicesPage.statusQueued"
+msgid "queued"
+msgstr ""
+
+msgctxt "voicesPage.statusPreprocessing"
+msgid "preprocessing"
+msgstr ""
+
+msgctxt "voicesPage.statusTraining"
+msgid "training"
+msgstr ""
+
+msgctxt "voicesPage.statusExporting"
+msgid "exporting"
+msgstr ""
+
+msgctxt "voicesPage.statusReady"
+msgid "ready"
+msgstr ""
+
+msgctxt "voicesPage.statusFailed"
+msgid "failed"
+msgstr ""
+
+msgctxt "voicesPage.created"
+msgid "Voice created"
+msgstr ""
+
+msgctxt "voicesPage.createFailed"
+msgid "Could not create voice"
+msgstr ""
+
+msgctxt "voicesPage.deletedToast"
+msgid "Deleted {name}"
+msgstr ""
+
+msgctxt "voicesPage.deleteFailed"
+msgid "Delete failed"
+msgstr ""
+
+msgctxt "voicesPage.deleteTitle"
+msgid "Delete voice?"
+msgstr ""
+
+msgctxt "voicesPage.deleteWarning"
+msgid "{name} will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”."
+msgstr ""
+
+msgctxt "voiceDetail.deletedBanner"
+msgid "This voice has been deleted. Editing is disabled."
+msgstr ""
+
+msgctxt "voiceDetail.trainingCancelled"
+msgid "Training cancelled"
+msgstr ""
+
+msgctxt "voiceDetail.lockedQueued"
+msgid "Voice is queued — editing is locked until training finishes."
+msgstr ""
+
+msgctxt "voiceDetail.lockedPreprocessing"
+msgid "Voice is preprocessing — editing is locked until training finishes."
+msgstr ""
+
+msgctxt "voiceDetail.lockedTraining"
+msgid "Voice is training — editing is locked until training finishes."
+msgstr ""
+
+msgctxt "voiceDetail.lockedExporting"
+msgid "Voice is exporting — editing is locked until training finishes."
+msgstr ""
+
+msgctxt "voiceDetail.trainingFailed"
+msgid "Training failed"
+msgstr ""
+
+msgctxt "voiceDetail.samples"
+msgid "Samples"
+msgstr ""
+
+msgctxt "voiceDetail.sampleCapacity"
+msgid "{used} / {max}"
+msgstr ""
+
+msgctxt "voiceDetail.noSamples"
+msgid "No samples yet. Add at least {count} to train."
+msgstr ""
+
+msgctxt "voiceDetail.samplePosition"
+msgid "#{position}"
+msgstr ""
+
+msgctxt "voiceDetail.removeLabel"
+msgid "Remove sample"
+msgstr ""
+
+msgctxt "voiceDetail.remove"
+msgid "Remove"
+msgstr ""
+
+msgctxt "voiceDetail.removeConfirm"
+msgid "Remove sample at position {position}?"
+msgstr ""
+
+msgctxt "voiceDetail.captionLabel"
+msgid "Caption (style prompt)"
+msgstr ""
+
+msgctxt "voiceDetail.lyricsLabel"
+msgid "Lyrics"
+msgstr ""
+
+msgctxt "voiceDetail.addSample"
+msgid "Add sample"
+msgstr ""
+
+msgctxt "voiceDetail.dropHint"
+msgid "Drag audio here, or {#browse}browse{/browse}"
+msgstr ""
+
+msgctxt "voiceDetail.sources"
+msgid "Your takes and uploads only."
+msgstr ""
+
+msgctxt "voiceDetail.captionPlaceholder"
+msgid "e.g. warm male vocal, folk guitar"
+msgstr ""
+
+msgctxt "voiceDetail.lyricsPlaceholder"
+msgid "Lyrics present in this audio clip"
+msgstr ""
+
+msgctxt "voiceDetail.uploading"
+msgid "Uploading..."
+msgstr ""
+
+msgctxt "voiceDetail.sampleLimit"
+msgid "Sample limit reached."
+msgstr ""
+
+msgctxt "voiceDetail.ownTakesOpen"
+msgid "Use a take"
+msgstr ""
+
+msgctxt "voiceDetail.ownTakesClose"
+msgid "Close takes"
+msgstr ""
+
+msgctxt "voiceDetail.ownTakes"
+msgid "Your takes"
+msgstr ""
+
+msgctxt "voiceDetail.ownTakesLoading"
+msgid "Loading your takes..."
+msgstr ""
+
+msgctxt "voiceDetail.ownTakesEmpty"
+msgid "No playable takes yet."
+msgstr ""
+
+msgctxt "voiceDetail.takeNumber"
+msgid "Take {number}"
+msgstr ""
+
+msgctxt "voiceDetail.adding"
+msgid "Adding..."
+msgstr ""
+
+msgctxt "voiceDetail.useTake"
+msgid "Use as sample"
+msgstr ""
+
+msgctxt "voiceDetail.waiting"
+msgid "Waiting"
+msgstr ""
+
+msgctxt "voiceDetail.training"
+msgid "Training"
+msgstr ""
+
+msgctxt "voiceDetail.cancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "voiceDetail.waitingDefault"
+msgid "Waiting for the worker."
+msgstr ""
+
+msgctxt "voiceDetail.queuePosition"
+msgid "Position {position} in the queue"
+msgstr ""
+
+msgctxt "voiceDetail.progressLabel"
+msgid "Training progress"
+msgstr ""
+
+msgctxt "voiceDetail.epoch"
+msgid "Epoch {current} of {total}"
+msgstr ""
+
+msgctxt "voiceDetail.remainingCalculating"
+msgid "Calculating remaining time..."
+msgstr ""
+
+msgctxt "voiceDetail.remainingMinutes"
+msgid "~ {minutes}m remaining"
+msgstr ""
+
+msgctxt "voiceDetail.remainingHours"
+msgid "~ {hours}h {minutes}m remaining"
+msgstr ""
+
+msgctxt "voiceDetail.trainVoice"
+msgid "Train voice"
+msgstr ""
+
+msgctxt "voiceDetail.trainAgain"
+msgid "Train again"
+msgstr ""
+
+msgctxt "voiceDetail.starting"
+msgid "Starting..."
+msgstr ""
+
+msgctxt "voiceDetail.trainButtonQueued"
+msgid "Training (queued)"
+msgstr ""
+
+msgctxt "voiceDetail.trainButtonPreprocessing"
+msgid "Training (preprocessing)"
+msgstr ""
+
+msgctxt "voiceDetail.trainButtonTraining"
+msgid "Training (training)"
+msgstr ""
+
+msgctxt "voiceDetail.trainButtonExporting"
+msgid "Training (exporting)"
+msgstr ""
+
+msgctxt "voiceDetail.needSamples.one"
+msgid "Need at least {count} sample (have {have})"
+msgstr ""
+
+msgctxt "voiceDetail.needSamples.other"
+msgid "Need at least {count} samples (have {have})"
+msgstr ""
+
+msgctxt "voiceDetail.sampleTextsMissing"
+msgid "Every sample needs a non-empty caption and lyrics"
+msgstr ""
+
+msgctxt "voiceDetail.progressLoadFailed"
+msgid "Could not load training progress"
+msgstr ""
+
+msgctxt "voiceDetail.unsupportedFormat"
+msgid "Unsupported format. Accepted: {formats}"
+msgstr ""
+
+msgctxt "voiceDetail.pickFileFirst"
+msgid "Pick an audio file first"
+msgstr ""
+
+msgctxt "voiceDetail.captionLyricsRequired"
+msgid "Caption and lyrics are required"
+msgstr ""
+
+msgctxt "voiceDetail.sampleAdded"
+msgid "Sample added"
+msgstr ""
+
+msgctxt "voiceDetail.uploadFailed"
+msgid "Upload failed"
+msgstr ""
+
+msgctxt "voiceDetail.ownTakesLoadFailed"
+msgid "Could not load takes"
+msgstr ""
+
+msgctxt "voiceDetail.copyFailed"
+msgid "Could not add take"
+msgstr ""
+
+msgctxt "voiceDetail.saveFailed"
+msgid "Save failed"
+msgstr ""
+
+msgctxt "voiceDetail.deleteFailed"
+msgid "Delete failed"
+msgstr ""
+
+msgctxt "voiceDetail.queuedToast"
+msgid "Training queued"
+msgstr ""
+
+msgctxt "voiceDetail.startFailed"
+msgid "Training failed to start"
+msgstr ""
+
+msgctxt "voiceDetail.cancelFailed"
+msgid "Could not cancel training"
+msgstr ""

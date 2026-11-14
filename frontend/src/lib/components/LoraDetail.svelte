@@ -12,39 +12,29 @@
 	import { activeJobs, isActiveJobStatus, removeJob, trackJob } from '#lib/stores/jobs.ts';
 	import { refreshLora, trainLora, isLoraActive } from '#lib/stores/loras.ts';
 	import { addToast } from '#lib/stores/toast.ts';
+	import { Marked } from 'overnightworks-design';
 	import {
 		LORA_AUDIO_EXTENSIONS,
 		LORA_MAX_SAMPLES,
-		LORA_MIN_SAMPLES_FOR_TRAINING,
-		LORA_OWN_TAKES_CLOSE,
-		LORA_OWN_TAKES_EMPTY,
-		LORA_OWN_TAKES_LABEL,
-		LORA_OWN_TAKES_LOAD_FAILED,
-		LORA_OWN_TAKES_LOADING,
-		LORA_OWN_TAKES_OPEN,
-		LORA_OWN_TAKES_USE,
-		LORA_SAMPLE_ADDING,
-		LORA_SAMPLE_COPY_FAILED,
-		LORA_SAMPLE_UPLOAD_FAILED,
-		LORA_TAKE_LABEL_PREFIX,
-		LORA_TRAINING_CANCEL_FAILED,
-		LORA_TRAINING_CANCEL_LABEL,
-		LORA_TRAINING_CANCELLED,
-		LORA_TRAINING_FAILED_LABEL,
-		LORA_TRAINING_PROGRESS_LOAD_FAILED,
-		LORA_TRAINING_RETRY_LABEL,
-		LORA_TRAINING_START_FAILED,
-		LORA_TRAINING_PROGRESS_LABEL,
-		LORA_TRAINING_QUEUED_TOAST,
-		LORA_TRAINING_REMAINING_CALCULATING,
-		LORA_TRAINING_STARTING,
-		LORA_TRAINING_STATUS_LABEL,
-		LORA_TRAINING_WAITING_DEFAULT_REASON,
-		LORA_TRAINING_WAITING_LABEL,
-		loraTrainingEpochLabel,
-		loraTrainingQueuePositionLabel,
-		loraTrainingRemainingLabel
+		LORA_MIN_SAMPLES_FOR_TRAINING
 	} from '#lib/constants/lora.ts';
+	import { formatDecimal, formatList, formatRemainingTime } from '#lib/utils/format.ts';
+	import { pageParts, pageText, type TextKey } from '#lib/utils/page-words.ts';
+
+	type ActiveStatus = Exclude<UserLoraItem['status'], 'draft' | 'ready' | 'failed'>;
+
+	const ACTIVE_STATUS_KEYS = {
+		queued: { banner: 'voiceDetail.lockedQueued', button: 'voiceDetail.trainButtonQueued' },
+		preprocessing: {
+			banner: 'voiceDetail.lockedPreprocessing',
+			button: 'voiceDetail.trainButtonPreprocessing'
+		},
+		training: { banner: 'voiceDetail.lockedTraining', button: 'voiceDetail.trainButtonTraining' },
+		exporting: {
+			banner: 'voiceDetail.lockedExporting',
+			button: 'voiceDetail.trainButtonExporting'
+		}
+	} as const satisfies Record<ActiveStatus, { banner: TextKey; button: TextKey }>;
 
 	interface Props {
 		lora: UserLoraItem;
@@ -72,24 +62,22 @@
 	const samples = $derived([...lora.samples].sort((a, b) => a.position - b.position));
 	const active = $derived(isLoraActive(lora.status));
 	const deleted = $derived(lora.deleted_at !== null);
+	const lockedStatus = $derived(active ? (lora.status as ActiveStatus) : null);
 	const atCapacity = $derived(samples.length >= LORA_MAX_SAMPLES);
 	const canAddSample = $derived(!active && !deleted && !atCapacity);
 
-	const sampleValidationProblems = $derived.by(() => {
-		const problems: string[] = [];
-		if (samples.length < LORA_MIN_SAMPLES_FOR_TRAINING) {
-			problems.push(
-				`Need at least ${LORA_MIN_SAMPLES_FOR_TRAINING} samples (have ${samples.length})`
-			);
-		}
-		for (const s of samples) {
-			if (!s.caption.trim() || !s.lyrics.trim()) {
-				problems.push('Every sample needs a non-empty caption and lyrics');
-				break;
-			}
-		}
-		return problems;
-	});
+	const sampleValidationProblems = $derived([
+		...(samples.length < LORA_MIN_SAMPLES_FOR_TRAINING
+			? [
+					pageText('voiceDetail.needSamples', LORA_MIN_SAMPLES_FOR_TRAINING, {
+						have: formatDecimal(samples.length, 0)
+					})
+				]
+			: []),
+		...(samples.some((s) => !s.caption.trim() || !s.lyrics.trim())
+			? [pageText('voiceDetail.sampleTextsMissing')]
+			: [])
+	]);
 
 	const canTrain = $derived(
 		!active && !deleted && sampleValidationProblems.length === 0 && !training
@@ -129,55 +117,45 @@
 			}
 			if (isActiveJobStatus(job.status)) trackJob(job, {});
 		} catch {
-			addToast(LORA_TRAINING_PROGRESS_LOAD_FAILED, 'error');
+			addToast(pageText('voiceDetail.progressLoadFailed'), 'error');
 		}
 	}
 
 	function acceptsAudio(file: File): boolean {
 		const name = file.name.toLowerCase();
-		return LORA_AUDIO_EXTENSIONS.some((ext) => name.endsWith(ext));
+		const accepted = LORA_AUDIO_EXTENSIONS.some((ext) => name.endsWith(ext));
+		if (!accepted) {
+			const formats = formatList(LORA_AUDIO_EXTENSIONS);
+			addToast(pageText('voiceDetail.unsupportedFormat', { formats }), 'error');
+		}
+		return accepted;
+	}
+
+	function showSampleFailure(e: unknown, fallback: string) {
+		sampleError = describeFailure(e, fallback);
+		addToast(sampleError, 'error');
 	}
 
 	function onFilePicked(e: Event) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0] ?? null;
-		if (file && !acceptsAudio(file)) {
-			addToast(`Unsupported format. Accepted: ${LORA_AUDIO_EXTENSIONS.join(', ')}`, 'error');
-			newFile = null;
-			input.value = '';
-			return;
-		}
-		newFile = file;
+		newFile = file && acceptsAudio(file) ? file : null;
+		if (file && !newFile) input.value = '';
 	}
 
 	function onDrop(e: DragEvent) {
 		e.preventDefault();
 		dragOver = false;
 		const file = e.dataTransfer?.files?.[0] ?? null;
-		if (!file) return;
-		if (!acceptsAudio(file)) {
-			addToast(`Unsupported format. Accepted: ${LORA_AUDIO_EXTENSIONS.join(', ')}`, 'error');
-			return;
-		}
-		newFile = file;
-	}
-
-	function onDragOver(e: DragEvent) {
-		e.preventDefault();
-		dragOver = true;
-	}
-
-	function onDragLeave() {
-		dragOver = false;
+		if (file && acceptsAudio(file)) newFile = file;
 	}
 
 	async function submitNewSample() {
-		if (!newFile) {
-			addToast('Pick an audio file first', 'error');
-			return;
-		}
-		if (!newCaption.trim() || !newLyrics.trim()) {
-			addToast('Caption and lyrics are required', 'error');
+		if (!newFile || !newCaption.trim() || !newLyrics.trim()) {
+			addToast(
+				pageText(newFile ? 'voiceDetail.captionLyricsRequired' : 'voiceDetail.pickFileFirst'),
+				'error'
+			);
 			return;
 		}
 		sampleError = null;
@@ -189,11 +167,9 @@
 			newCaption = '';
 			newLyrics = '';
 			if (fileInputEl) fileInputEl.value = '';
-			addToast('Sample added', 'success');
+			addToast(pageText('voiceDetail.sampleAdded'), 'success');
 		} catch (e) {
-			const message = describeFailure(e, LORA_SAMPLE_UPLOAD_FAILED);
-			sampleError = message;
-			addToast(message, 'error');
+			showSampleFailure(e, pageText('voiceDetail.uploadFailed'));
 		} finally {
 			uploading = false;
 		}
@@ -208,9 +184,7 @@
 		try {
 			ownTakes = await listOwnPlayableTakes();
 		} catch (e) {
-			const message = describeFailure(e, LORA_OWN_TAKES_LOAD_FAILED);
-			sampleError = message;
-			addToast(message, 'error');
+			showSampleFailure(e, pageText('voiceDetail.ownTakesLoadFailed'));
 		} finally {
 			ownTakesLoading = false;
 		}
@@ -222,11 +196,9 @@
 		try {
 			await addLoraSampleFromGeneration(lora.id, take.generation_id);
 			await refreshLora(lora.id);
-			addToast('Sample added', 'success');
+			addToast(pageText('voiceDetail.sampleAdded'), 'success');
 		} catch (e) {
-			const message = describeFailure(e, LORA_SAMPLE_COPY_FAILED);
-			sampleError = message;
-			addToast(message, 'error');
+			showSampleFailure(e, pageText('voiceDetail.copyFailed'));
 		} finally {
 			addingGenerationId = null;
 		}
@@ -237,17 +209,18 @@
 			await patchLoraSample(lora.id, sample.id, { caption, lyrics });
 			await refreshLora(lora.id);
 		} catch (e) {
-			addToast(describeFailure(e, 'Save failed'), 'error');
+			addToast(describeFailure(e, pageText('voiceDetail.saveFailed')), 'error');
 		}
 	}
 
 	async function removeSample(sample: UserLoraSampleItem) {
-		if (!confirm(`Remove sample at position ${sample.position + 1}?`)) return;
+		if (!confirm(pageText('voiceDetail.removeConfirm', { position: String(sample.position + 1) })))
+			return;
 		try {
 			await deleteLoraSample(lora.id, sample.id);
 			await refreshLora(lora.id);
 		} catch (e) {
-			addToast(describeFailure(e, 'Delete failed'), 'error');
+			addToast(describeFailure(e, pageText('voiceDetail.deleteFailed')), 'error');
 		}
 	}
 
@@ -261,9 +234,9 @@
 				fetchedTrainingJobId = updated.training_job_id;
 				void beginTrainingJobStream(updated.training_job_id);
 			}
-			addToast(LORA_TRAINING_QUEUED_TOAST, 'success');
+			addToast(pageText('voiceDetail.queuedToast'), 'success');
 		} catch (e) {
-			const message = describeFailure(e, LORA_TRAINING_START_FAILED);
+			const message = describeFailure(e, pageText('voiceDetail.startFailed'));
 			trainingError = message;
 			addToast(message, 'error');
 		} finally {
@@ -280,53 +253,75 @@
 			cancelledTrainingJob = cancelled;
 			removeJob(job.id);
 		} catch (e) {
-			addToast(describeFailure(e, LORA_TRAINING_CANCEL_FAILED), 'error');
+			addToast(describeFailure(e, pageText('voiceDetail.cancelFailed')), 'error');
 		} finally {
 			cancellingTraining = false;
 		}
 	}
 </script>
 
+{#snippet browse({ text }: { text: string })}
+	<label class="file-pick">
+		<input
+			type="file"
+			accept={LORA_AUDIO_EXTENSIONS.join(',')}
+			onchange={onFilePicked}
+			bind:this={fileInputEl}
+		/>
+		{text}
+	</label>
+{/snippet}
+
 <div class="lora-detail" class:deleted>
 	{#if deleted}
-		<p class="banner warn">This voice has been deleted. Editing is disabled.</p>
+		<p class="banner warn">{pageText('voiceDetail.deletedBanner')}</p>
 	{:else if displayedTrainingJob?.status === 'cancelled'}
-		<p class="banner info">{LORA_TRAINING_CANCELLED}</p>
-	{:else if active}
-		<p class="banner info">Voice is {lora.status} — editing is locked until training finishes.</p>
+		<p class="banner info">{pageText('voiceDetail.trainingCancelled')}</p>
+	{:else if lockedStatus}
+		<p class="banner info">{pageText(ACTIVE_STATUS_KEYS[lockedStatus].banner)}</p>
 	{:else if lora.status === 'failed' && lora.error}
-		<p class="banner error"><strong>{LORA_TRAINING_FAILED_LABEL}</strong><br />{lora.error}</p>
+		<p class="banner error">
+			<strong>{pageText('voiceDetail.trainingFailed')}</strong><br />{lora.error}
+		</p>
 	{/if}
 
 	<section class="samples-section">
 		<header class="section-head">
-			<h3>Samples</h3>
-			<span class="count">{samples.length} / {LORA_MAX_SAMPLES}</span>
+			<h3>{pageText('voiceDetail.samples')}</h3>
+			<span class="count"
+				>{pageText('voiceDetail.sampleCapacity', {
+					used: formatDecimal(samples.length, 0),
+					max: formatDecimal(LORA_MAX_SAMPLES, 0)
+				})}</span
+			>
 		</header>
 
 		{#if samples.length === 0}
-			<p class="empty">No samples yet. Add at least {LORA_MIN_SAMPLES_FOR_TRAINING} to train.</p>
+			<p class="empty">
+				{pageText('voiceDetail.noSamples', { count: LORA_MIN_SAMPLES_FOR_TRAINING })}
+			</p>
 		{/if}
 
 		<ul class="sample-list">
 			{#each samples as sample, i (sample.id)}
 				{@const captionId = `caption-${sample.id}`}
 				{@const lyricsId = `lyrics-${sample.id}`}
+				{@const position = String(i + 1)}
 				<li class="sample-row">
 					<div class="sample-head">
-						<span class="pos">#{i + 1}</span>
+						<span class="pos">{pageText('voiceDetail.samplePosition', { position })}</span>
 						<audio controls preload="none" src={`/audio/${sample.audio_path}`}></audio>
 						<button
 							class="remove-btn"
 							disabled={active || deleted}
 							onclick={() => removeSample(sample)}
-							aria-label="Remove sample"
+							aria-label={pageText('voiceDetail.removeLabel')}
 						>
-							Remove
+							{pageText('voiceDetail.remove')}
 						</button>
 					</div>
 					<label class="field">
-						<span class="field-label">Caption (style prompt)</span>
+						<span class="field-label">{pageText('voiceDetail.captionLabel')}</span>
 						<textarea
 							id={captionId}
 							rows="2"
@@ -338,7 +333,7 @@
 							}}></textarea>
 					</label>
 					<label class="field">
-						<span class="field-label">Lyrics</span>
+						<span class="field-label">{pageText('voiceDetail.lyricsLabel')}</span>
 						<textarea
 							id={lyricsId}
 							rows="4"
@@ -359,77 +354,78 @@
 				class:drag-over={dragOver}
 				onsubmit={(e) => e.preventDefault()}
 				ondrop={onDrop}
-				ondragover={onDragOver}
-				ondragleave={onDragLeave}
+				ondragover={(e) => {
+					e.preventDefault();
+					dragOver = true;
+				}}
+				ondragleave={() => (dragOver = false)}
 				role="region"
-				aria-label="Add sample"
+				aria-label={pageText('voiceDetail.addSample')}
 			>
 				<div class="drop-head">
-					<strong>Add sample</strong>
+					<strong>{pageText('voiceDetail.addSample')}</strong>
 					<span class="drop-hint">
-						Drag audio here, or
-						<label class="file-pick">
-							<input
-								type="file"
-								accept={LORA_AUDIO_EXTENSIONS.join(',')}
-								onchange={onFilePicked}
-								bind:this={fileInputEl}
-							/>
-							browse
-						</label>
+						<Marked parts={pageParts('voiceDetail.dropHint')} marked={{ browse }} />
 					</span>
 				</div>
-				<p class="sample-sources">Your takes and uploads only.</p>
+				<p class="sample-sources">{pageText('voiceDetail.sources')}</p>
 				{#if newFile}
 					<p class="file-name">{newFile.name}</p>
 				{/if}
 				<label class="field">
-					<span class="field-label">Caption (style prompt)</span>
-					<textarea rows="2" placeholder="e.g. warm male vocal, folk guitar" bind:value={newCaption}
-					></textarea>
+					<span class="field-label">{pageText('voiceDetail.captionLabel')}</span>
+					<textarea
+						rows="2"
+						placeholder={pageText('voiceDetail.captionPlaceholder')}
+						bind:value={newCaption}></textarea>
 				</label>
 				<label class="field">
-					<span class="field-label">Lyrics</span>
-					<textarea rows="4" placeholder="Lyrics present in this audio clip" bind:value={newLyrics}
-					></textarea>
+					<span class="field-label">{pageText('voiceDetail.lyricsLabel')}</span>
+					<textarea
+						rows="4"
+						placeholder={pageText('voiceDetail.lyricsPlaceholder')}
+						bind:value={newLyrics}></textarea>
 				</label>
 				<button
 					class="add-sample-btn"
 					disabled={uploading || !newFile || !newCaption.trim() || !newLyrics.trim()}
 					onclick={submitNewSample}
 				>
-					{uploading ? 'Uploading...' : 'Add sample'}
+					{pageText(uploading ? 'voiceDetail.uploading' : 'voiceDetail.addSample')}
 				</button>
 				<button class="own-takes-toggle" aria-expanded={showOwnTakes} onclick={toggleOwnTakes}>
-					{showOwnTakes ? LORA_OWN_TAKES_CLOSE : LORA_OWN_TAKES_OPEN}
+					{pageText(showOwnTakes ? 'voiceDetail.ownTakesClose' : 'voiceDetail.ownTakesOpen')}
 				</button>
 			</div>
 			{#if sampleError}
 				<p class="sample-error" role="alert">{sampleError}</p>
 			{/if}
 			{#if showOwnTakes}
-				<section class="own-takes" aria-label={LORA_OWN_TAKES_LABEL}>
-					<h4>{LORA_OWN_TAKES_LABEL}</h4>
+				<section class="own-takes" aria-label={pageText('voiceDetail.ownTakes')}>
+					<h4>{pageText('voiceDetail.ownTakes')}</h4>
 					{#if ownTakesLoading}
-						<p class="empty">{LORA_OWN_TAKES_LOADING}</p>
+						<p class="empty">{pageText('voiceDetail.ownTakesLoading')}</p>
 					{:else if ownTakes.length === 0}
-						<p class="empty">{LORA_OWN_TAKES_EMPTY}</p>
+						<p class="empty">{pageText('voiceDetail.ownTakesEmpty')}</p>
 					{:else}
 						<ul>
 							{#each ownTakes as take (take.generation_id)}
+								{@const number = String(take.generation_number)}
 								<li>
 									<div>
 										<strong>{take.song_title}</strong>
-										<span>{LORA_TAKE_LABEL_PREFIX} {take.generation_number}</span>
+										<span>{pageText('voiceDetail.takeNumber', { number })}</span>
 									</div>
 									<button
 										class="use-take-btn"
 										disabled={addingGenerationId !== null}
 										onclick={() => addOwnTake(take)}
 									>
-										{addingGenerationId === take.generation_id
-											? LORA_SAMPLE_ADDING
-											: LORA_OWN_TAKES_USE}
+										{pageText(
+											addingGenerationId === take.generation_id
+												? 'voiceDetail.adding'
+												: 'voiceDetail.useTake'
+										)}
 									</button>
 								</li>
 							{/each}
@@ -438,7 +434,7 @@
 				</section>
 			{/if}
 		{:else if atCapacity && !deleted}
-			<p class="hint">Sample limit reached.</p>
+			<p class="hint">{pageText('voiceDetail.sampleLimit')}</p>
 		{/if}
 	</section>
 
@@ -446,7 +442,7 @@
 		<section class="training-progress" aria-live="polite">
 			<div class="training-progress-head">
 				<strong
-					>{waitingForWorker ? LORA_TRAINING_WAITING_LABEL : LORA_TRAINING_STATUS_LABEL}</strong
+					>{pageText(waitingForWorker ? 'voiceDetail.waiting' : 'voiceDetail.training')}</strong
 				>
 				{#if trainingJob}
 					<button
@@ -454,36 +450,38 @@
 						disabled={cancellingTraining}
 						onclick={cancelTraining}
 					>
-						{LORA_TRAINING_CANCEL_LABEL}
+						{pageText('voiceDetail.cancel')}
 					</button>
 				{/if}
 			</div>
 			{#if displayedTrainingJob.status === 'cancelled'}
-				<p>{LORA_TRAINING_CANCELLED}</p>
+				<p>{pageText('voiceDetail.trainingCancelled')}</p>
 			{:else if waitingForWorker}
-				<p>{displayedTrainingJob.queue_reason || LORA_TRAINING_WAITING_DEFAULT_REASON}</p>
+				<p>{displayedTrainingJob.queue_reason || pageText('voiceDetail.waitingDefault')}</p>
 				{#if displayedTrainingJob.queue_position !== null && displayedTrainingJob.queue_position !== undefined}
 					<p class="training-detail">
-						{loraTrainingQueuePositionLabel(displayedTrainingJob.queue_position)}
+						{pageText('voiceDetail.queuePosition', {
+							position: formatDecimal(displayedTrainingJob.queue_position, 0)
+						})}
 					</p>
 				{/if}
 			{:else}
-				<div class="progress-track" aria-label={LORA_TRAINING_PROGRESS_LABEL}>
+				<div class="progress-track" aria-label={pageText('voiceDetail.progressLabel')}>
 					<span style:width={`${epochProgress}%`}></span>
 				</div>
 				<div class="training-progress-meta">
 					{#if displayedTrainingJob.current_epoch !== null && displayedTrainingJob.current_epoch !== undefined && displayedTrainingJob.train_epochs}
 						<strong>
-							{loraTrainingEpochLabel(
-								displayedTrainingJob.current_epoch,
-								displayedTrainingJob.train_epochs
-							)}
+							{pageText('voiceDetail.epoch', {
+								current: formatDecimal(displayedTrainingJob.current_epoch, 0),
+								total: formatDecimal(displayedTrainingJob.train_epochs, 0)
+							})}
 						</strong>
 					{/if}
 					{#if displayedTrainingJob.remaining_time_estimate === 'calculating'}
-						<span>{LORA_TRAINING_REMAINING_CALCULATING}</span>
+						<span>{pageText('voiceDetail.remainingCalculating')}</span>
 					{:else if typeof displayedTrainingJob.remaining_time_estimate === 'number'}
-						<span>{loraTrainingRemainingLabel(displayedTrainingJob.remaining_time_estimate)}</span>
+						<span>{formatRemainingTime(displayedTrainingJob.remaining_time_estimate)}</span>
 					{/if}
 				</div>
 			{/if}
@@ -493,12 +491,12 @@
 	<section class="train-section">
 		<button class="train-btn" disabled={!canTrain} onclick={startTraining}>
 			{training
-				? LORA_TRAINING_STARTING
-				: active
-					? `Training (${lora.status})`
+				? pageText('voiceDetail.starting')
+				: lockedStatus
+					? pageText(ACTIVE_STATUS_KEYS[lockedStatus].button)
 					: lora.status === 'failed'
-						? LORA_TRAINING_RETRY_LABEL
-						: 'Train voice'}
+						? pageText('voiceDetail.trainAgain')
+						: pageText('voiceDetail.trainVoice')}
 		</button>
 		{#if trainingError}
 			<p class="training-error" role="alert">{trainingError}</p>

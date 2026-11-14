@@ -1,6 +1,7 @@
 import { DAY_LABEL_TODAY, DAY_LABEL_YESTERDAY } from '#lib/constants/day-label.ts';
 import { ALBUM_ART_EMPTY_INITIALS, ALBUM_ART_INITIAL_COUNT } from '#lib/constants/album.ts';
 import { pageLanguage } from './page-language.ts';
+import { pageText } from './page-words.ts';
 
 const DAY_MS = 86_400_000;
 export const DAYS_NAMED_BY_WEEKDAY = 7;
@@ -112,4 +113,14 @@ export function formatPercent(fraction: number): string {
 /** Items as a unit list in the page language: English reads "2 takes, 1 version". */
 export function formatList(items: readonly string[]): string {
 	return new Intl.ListFormat(pageLanguage(), { type: 'unit', style: 'long' }).format(items);
+}
+
+/** Seconds as whole minutes rounded up, at least one: "~ 9m remaining" or "~ 2h 0m remaining". */
+export function formatRemainingTime(seconds: number): string {
+	const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
+	const hours = formatDecimal(Math.floor(totalMinutes / 60), 0);
+	const minutes = formatDecimal(totalMinutes % 60, 0);
+	return totalMinutes >= 60
+		? pageText('voiceDetail.remainingHours', { hours, minutes })
+		: pageText('voiceDetail.remainingMinutes', { minutes });
 }

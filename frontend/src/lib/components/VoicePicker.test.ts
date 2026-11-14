@@ -135,12 +135,12 @@ describe('VoicePicker', () => {
 	});
 
 	it.each([
-		{ status: 'draft', state: words['voicePicker.stateDraft'] },
-		{ status: 'failed', state: words['voicePicker.stateFailed'] },
-		{ status: 'queued', state: words['voicePicker.stateTraining'] },
-		{ status: 'preprocessing', state: words['voicePicker.stateTraining'] },
-		{ status: 'training', state: words['voicePicker.stateTraining'] },
-		{ status: 'exporting', state: words['voicePicker.stateTraining'] }
+		{ status: 'draft' as const, state: words['voicePicker.stateDraft'] },
+		{ status: 'failed' as const, state: words['voicePicker.stateFailed'] },
+		{ status: 'queued' as const, state: words['voicePicker.stateTraining'] },
+		{ status: 'preprocessing' as const, state: words['voicePicker.stateTraining'] },
+		{ status: 'training' as const, state: words['voicePicker.stateTraining'] },
+		{ status: 'exporting' as const, state: words['voicePicker.stateTraining'] }
 	])('names a $status voice by its state and keeps it disabled', async ({ status, state }) => {
 		setDraftGenParams({ user_lora_id: 'lora-sft' });
 		loras.set([lora({ status })]);

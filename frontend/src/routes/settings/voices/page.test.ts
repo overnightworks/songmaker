@@ -5,6 +5,8 @@ import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
+import type { UserLoraItem } from '#lib/api/types.ts';
+import { words } from '#lib/words/en.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 
 const mocks = vi.hoisted(() => ({
@@ -47,7 +49,7 @@ import { loras, lorasLoading } from '#lib/stores/loras.ts';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
-const VOICE = {
+const VOICE: UserLoraItem = {
 	id: 'l1',
 	user_id: 'u1',
 	name: 'My Tenor',
@@ -78,7 +80,7 @@ afterEach(async () => {
 	resetConnectivityForTests();
 });
 
-const NO_VOICES_YET = 'No voices yet.';
+const NO_VOICES_YET = words['voicesPage.empty'];
 
 async function renderVoicesPage(): Promise<HTMLElement> {
 	const target = document.createElement('div');
@@ -176,7 +178,7 @@ describe('voices page', () => {
 	});
 
 	it('explains what remains when deleting a used voice', async () => {
-		const voice = {
+		const voice: UserLoraItem = {
 			id: 'ready-sft',
 			user_id: 'u1',
 			name: 'My Tenor',
@@ -195,9 +197,9 @@ describe('voices page', () => {
 
 		target.querySelector<HTMLButtonElement>('.danger')?.click();
 		await tick();
-		expect(target.querySelector('.dialog h3')?.textContent).toBe('Delete voice?');
+		expect(target.querySelector('.dialog h3')?.textContent).toBe(words['voicesPage.deleteTitle']);
 		expect(target.querySelector('.warning')?.textContent).toBe(
-			'My Tenor will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.'
+			words['voicesPage.deleteWarning']({ name: 'My Tenor' })
 		);
 		expect(target.querySelectorAll('.dialog li')).toHaveLength(0);
 
@@ -206,7 +208,7 @@ describe('voices page', () => {
 	});
 
 	it('shows the copied take metadata after the voice refreshes', async () => {
-		const voice = {
+		const voice: UserLoraItem = {
 			id: 'l1',
 			user_id: 'u1',
 			name: 'My Tenor',
@@ -290,7 +292,7 @@ describe('voices page', () => {
 	it('shows the server-stored failure reason and retry after a voices-page reload', async () => {
 		const failureReason =
 			'The worker restarted before epoch 31 could finish. Your samples are unchanged.';
-		const failedVoice = {
+		const failedVoice: UserLoraItem = {
 			id: 'l1',
 			user_id: 'u1',
 			name: 'My Tenor',
@@ -323,7 +325,7 @@ describe('voices page', () => {
 		firstTarget.querySelector<HTMLButtonElement>('.lora-row')?.click();
 		await vi.waitFor(() => expect(firstTarget.textContent).toContain(failureReason));
 		expect(firstTarget.querySelector<HTMLButtonElement>('.train-btn')?.textContent).toBe(
-			'Train again'
+			words['voiceDetail.trainAgain']
 		);
 		expect(firstTarget.querySelector<HTMLButtonElement>('.train-btn')).not.toBeDisabled();
 
@@ -338,7 +340,7 @@ describe('voices page', () => {
 		reloadedTarget.querySelector<HTMLButtonElement>('.lora-row')?.click();
 		await vi.waitFor(() => expect(reloadedTarget.textContent).toContain(failureReason));
 		expect(reloadedTarget.querySelector<HTMLButtonElement>('.train-btn')?.textContent).toBe(
-			'Train again'
+			words['voiceDetail.trainAgain']
 		);
 		expect(reloadedTarget.querySelector<HTMLButtonElement>('.train-btn')).not.toBeDisabled();
 	});
@@ -374,7 +376,41 @@ describe('voices page', () => {
 		expect(errorStyle.overflow).not.toBe('hidden');
 		expect(errorStyle.textOverflow).not.toBe('ellipsis');
 		expect(target.querySelector<HTMLButtonElement>('.create-panel .primary')?.textContent).toBe(
-			'Create'
+			words['voicesPage.create']
+		);
+	});
+
+	it.each([
+		{ status: 'draft' as const, word: words['voicesPage.statusDraft'] },
+		{ status: 'queued' as const, word: words['voicesPage.statusQueued'] },
+		{ status: 'preprocessing' as const, word: words['voicesPage.statusPreprocessing'] },
+		{ status: 'training' as const, word: words['voicesPage.statusTraining'] },
+		{ status: 'exporting' as const, word: words['voicesPage.statusExporting'] },
+		{ status: 'ready' as const, word: words['voicesPage.statusReady'] },
+		{ status: 'failed' as const, word: words['voicesPage.statusFailed'] }
+	])('words a $status voice as "$word" in its badge', async ({ status, word }) => {
+		loras.set([{ ...VOICE, status }]);
+		const target = await renderVoicesPage();
+
+		expect(target.querySelector('.status-badge')?.textContent).toBe(word);
+	});
+
+	it.each([1, 3])('counts %i samples in the plural of its row', async (count) => {
+		const samples = Array.from({ length: count }, (_, position) => ({
+			id: `s${position}`,
+			user_lora_id: VOICE.id,
+			audio_path: `user_loras/u1/l1/samples/s${position}.wav`,
+			caption: 'caption',
+			lyrics: 'lyrics',
+			position,
+			created_at: '2026-09-05T00:00:00Z',
+			updated_at: '2026-09-05T00:00:00Z'
+		}));
+		loras.set([{ ...VOICE, samples }]);
+		const target = await renderVoicesPage();
+
+		expect(target.querySelector('.sample-count')?.textContent).toBe(
+			words['voicesPage.sampleCount'](count)
 		);
 	});
 });

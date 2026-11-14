@@ -1047,6 +1047,96 @@ export type Words = {
     readonly "presetRefusal.notFound": string;
     readonly "modelRefusal.notFound": string;
     readonly "workerRefusal.notFound": (gaps: { readonly workerId: string }) => string;
+    readonly "voicesPage.documentTitle": (gaps: { readonly app: string }) => string;
+    readonly "voicesPage.heading": string;
+    readonly "voicesPage.showDeleted": string;
+    readonly "voicesPage.newVoice": string;
+    readonly "voicesPage.cancel": string;
+    readonly "voicesPage.namePlaceholder": string;
+    readonly "voicesPage.creating": string;
+    readonly "voicesPage.create": string;
+    readonly "voicesPage.loading": string;
+    readonly "voicesPage.loadFailed": string;
+    readonly "voicesPage.empty": string;
+    readonly "voicesPage.sampleCount": (count: number) => string;
+    readonly "voicesPage.delete": string;
+    readonly "voicesPage.deletedTag": string;
+    readonly "voicesPage.statusDraft": string;
+    readonly "voicesPage.statusQueued": string;
+    readonly "voicesPage.statusPreprocessing": string;
+    readonly "voicesPage.statusTraining": string;
+    readonly "voicesPage.statusExporting": string;
+    readonly "voicesPage.statusReady": string;
+    readonly "voicesPage.statusFailed": string;
+    readonly "voicesPage.created": string;
+    readonly "voicesPage.createFailed": string;
+    readonly "voicesPage.deletedToast": (gaps: { readonly name: string }) => string;
+    readonly "voicesPage.deleteFailed": string;
+    readonly "voicesPage.deleteTitle": string;
+    readonly "voicesPage.deleteWarning": (gaps: { readonly name: string }) => string;
+    readonly "voiceDetail.deletedBanner": string;
+    readonly "voiceDetail.trainingCancelled": string;
+    readonly "voiceDetail.lockedQueued": string;
+    readonly "voiceDetail.lockedPreprocessing": string;
+    readonly "voiceDetail.lockedTraining": string;
+    readonly "voiceDetail.lockedExporting": string;
+    readonly "voiceDetail.trainingFailed": string;
+    readonly "voiceDetail.samples": string;
+    readonly "voiceDetail.sampleCapacity": (gaps: { readonly max: string; readonly used: string }) => string;
+    readonly "voiceDetail.noSamples": (gaps: { readonly count: number }) => string;
+    readonly "voiceDetail.samplePosition": (gaps: { readonly position: string }) => string;
+    readonly "voiceDetail.removeLabel": string;
+    readonly "voiceDetail.remove": string;
+    readonly "voiceDetail.removeConfirm": (gaps: { readonly position: string }) => string;
+    readonly "voiceDetail.captionLabel": string;
+    readonly "voiceDetail.lyricsLabel": string;
+    readonly "voiceDetail.addSample": string;
+    readonly "voiceDetail.dropHint": readonly (string | { readonly marker: "browse"; readonly text: string })[];
+    readonly "voiceDetail.sources": string;
+    readonly "voiceDetail.captionPlaceholder": string;
+    readonly "voiceDetail.lyricsPlaceholder": string;
+    readonly "voiceDetail.uploading": string;
+    readonly "voiceDetail.sampleLimit": string;
+    readonly "voiceDetail.ownTakesOpen": string;
+    readonly "voiceDetail.ownTakesClose": string;
+    readonly "voiceDetail.ownTakes": string;
+    readonly "voiceDetail.ownTakesLoading": string;
+    readonly "voiceDetail.ownTakesEmpty": string;
+    readonly "voiceDetail.takeNumber": (gaps: { readonly number: string }) => string;
+    readonly "voiceDetail.adding": string;
+    readonly "voiceDetail.useTake": string;
+    readonly "voiceDetail.waiting": string;
+    readonly "voiceDetail.training": string;
+    readonly "voiceDetail.cancel": string;
+    readonly "voiceDetail.waitingDefault": string;
+    readonly "voiceDetail.queuePosition": (gaps: { readonly position: string }) => string;
+    readonly "voiceDetail.progressLabel": string;
+    readonly "voiceDetail.epoch": (gaps: { readonly current: string; readonly total: string }) => string;
+    readonly "voiceDetail.remainingCalculating": string;
+    readonly "voiceDetail.remainingMinutes": (gaps: { readonly minutes: string }) => string;
+    readonly "voiceDetail.remainingHours": (gaps: { readonly hours: string; readonly minutes: string }) => string;
+    readonly "voiceDetail.trainVoice": string;
+    readonly "voiceDetail.trainAgain": string;
+    readonly "voiceDetail.starting": string;
+    readonly "voiceDetail.trainButtonQueued": string;
+    readonly "voiceDetail.trainButtonPreprocessing": string;
+    readonly "voiceDetail.trainButtonTraining": string;
+    readonly "voiceDetail.trainButtonExporting": string;
+    readonly "voiceDetail.needSamples": (count: number, gaps: { readonly have: string }) => string;
+    readonly "voiceDetail.sampleTextsMissing": string;
+    readonly "voiceDetail.progressLoadFailed": string;
+    readonly "voiceDetail.unsupportedFormat": (gaps: { readonly formats: string }) => string;
+    readonly "voiceDetail.pickFileFirst": string;
+    readonly "voiceDetail.captionLyricsRequired": string;
+    readonly "voiceDetail.sampleAdded": string;
+    readonly "voiceDetail.uploadFailed": string;
+    readonly "voiceDetail.ownTakesLoadFailed": string;
+    readonly "voiceDetail.copyFailed": string;
+    readonly "voiceDetail.saveFailed": string;
+    readonly "voiceDetail.deleteFailed": string;
+    readonly "voiceDetail.queuedToast": string;
+    readonly "voiceDetail.startFailed": string;
+    readonly "voiceDetail.cancelFailed": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -2323,5 +2413,109 @@ export const words: Words = {
     "presetRefusal.notFound": "Preset not found",
     "modelRefusal.notFound": "Model not found",
     "workerRefusal.notFound": (gaps: { readonly workerId: string }) => "Worker '" + gaps.workerId + "' not found",
+    "voicesPage.documentTitle": (gaps: { readonly app: string }) => "My Voices — " + gaps.app,
+    "voicesPage.heading": "My Voices",
+    "voicesPage.showDeleted": "Show deleted",
+    "voicesPage.newVoice": "New Voice",
+    "voicesPage.cancel": "Cancel",
+    "voicesPage.namePlaceholder": "Voice name (e.g. My Tenor)",
+    "voicesPage.creating": "Creating...",
+    "voicesPage.create": "Create",
+    "voicesPage.loading": "Loading voices...",
+    "voicesPage.loadFailed": "Failed to load voices",
+    "voicesPage.empty": "No voices yet. Create one to upload samples and train your own vocal style.",
+    "voicesPage.sampleCount": (count: number) => ({
+        zero: numberFormat.format(count) + " samples",
+        one: numberFormat.format(count) + " sample",
+        two: numberFormat.format(count) + " samples",
+        few: numberFormat.format(count) + " samples",
+        many: numberFormat.format(count) + " samples",
+        other: numberFormat.format(count) + " samples",
+    })[pluralRules.select(count)],
+    "voicesPage.delete": "Delete",
+    "voicesPage.deletedTag": "deleted",
+    "voicesPage.statusDraft": "draft",
+    "voicesPage.statusQueued": "queued",
+    "voicesPage.statusPreprocessing": "preprocessing",
+    "voicesPage.statusTraining": "training",
+    "voicesPage.statusExporting": "exporting",
+    "voicesPage.statusReady": "ready",
+    "voicesPage.statusFailed": "failed",
+    "voicesPage.created": "Voice created",
+    "voicesPage.createFailed": "Could not create voice",
+    "voicesPage.deletedToast": (gaps: { readonly name: string }) => "Deleted " + gaps.name,
+    "voicesPage.deleteFailed": "Delete failed",
+    "voicesPage.deleteTitle": "Delete voice?",
+    "voicesPage.deleteWarning": (gaps: { readonly name: string }) => gaps.name + " will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.",
+    "voiceDetail.deletedBanner": "This voice has been deleted. Editing is disabled.",
+    "voiceDetail.trainingCancelled": "Training cancelled",
+    "voiceDetail.lockedQueued": "Voice is queued — editing is locked until training finishes.",
+    "voiceDetail.lockedPreprocessing": "Voice is preprocessing — editing is locked until training finishes.",
+    "voiceDetail.lockedTraining": "Voice is training — editing is locked until training finishes.",
+    "voiceDetail.lockedExporting": "Voice is exporting — editing is locked until training finishes.",
+    "voiceDetail.trainingFailed": "Training failed",
+    "voiceDetail.samples": "Samples",
+    "voiceDetail.sampleCapacity": (gaps: { readonly max: string; readonly used: string }) => gaps.used + " / " + gaps.max,
+    "voiceDetail.noSamples": (gaps: { readonly count: number }) => "No samples yet. Add at least " + numberFormat.format(gaps.count) + " to train.",
+    "voiceDetail.samplePosition": (gaps: { readonly position: string }) => "#" + gaps.position,
+    "voiceDetail.removeLabel": "Remove sample",
+    "voiceDetail.remove": "Remove",
+    "voiceDetail.removeConfirm": (gaps: { readonly position: string }) => "Remove sample at position " + gaps.position + "?",
+    "voiceDetail.captionLabel": "Caption (style prompt)",
+    "voiceDetail.lyricsLabel": "Lyrics",
+    "voiceDetail.addSample": "Add sample",
+    "voiceDetail.dropHint": ["Drag audio here, or ", { marker: "browse", text: "browse" }] as readonly (string | { readonly marker: "browse"; readonly text: string })[],
+    "voiceDetail.sources": "Your takes and uploads only.",
+    "voiceDetail.captionPlaceholder": "e.g. warm male vocal, folk guitar",
+    "voiceDetail.lyricsPlaceholder": "Lyrics present in this audio clip",
+    "voiceDetail.uploading": "Uploading...",
+    "voiceDetail.sampleLimit": "Sample limit reached.",
+    "voiceDetail.ownTakesOpen": "Use a take",
+    "voiceDetail.ownTakesClose": "Close takes",
+    "voiceDetail.ownTakes": "Your takes",
+    "voiceDetail.ownTakesLoading": "Loading your takes...",
+    "voiceDetail.ownTakesEmpty": "No playable takes yet.",
+    "voiceDetail.takeNumber": (gaps: { readonly number: string }) => "Take " + gaps.number,
+    "voiceDetail.adding": "Adding...",
+    "voiceDetail.useTake": "Use as sample",
+    "voiceDetail.waiting": "Waiting",
+    "voiceDetail.training": "Training",
+    "voiceDetail.cancel": "Cancel",
+    "voiceDetail.waitingDefault": "Waiting for the worker.",
+    "voiceDetail.queuePosition": (gaps: { readonly position: string }) => "Position " + gaps.position + " in the queue",
+    "voiceDetail.progressLabel": "Training progress",
+    "voiceDetail.epoch": (gaps: { readonly current: string; readonly total: string }) => "Epoch " + gaps.current + " of " + gaps.total,
+    "voiceDetail.remainingCalculating": "Calculating remaining time...",
+    "voiceDetail.remainingMinutes": (gaps: { readonly minutes: string }) => "~ " + gaps.minutes + "m remaining",
+    "voiceDetail.remainingHours": (gaps: { readonly hours: string; readonly minutes: string }) => "~ " + gaps.hours + "h " + gaps.minutes + "m remaining",
+    "voiceDetail.trainVoice": "Train voice",
+    "voiceDetail.trainAgain": "Train again",
+    "voiceDetail.starting": "Starting...",
+    "voiceDetail.trainButtonQueued": "Training (queued)",
+    "voiceDetail.trainButtonPreprocessing": "Training (preprocessing)",
+    "voiceDetail.trainButtonTraining": "Training (training)",
+    "voiceDetail.trainButtonExporting": "Training (exporting)",
+    "voiceDetail.needSamples": (count: number, gaps: { readonly have: string }) => ({
+        zero: "Need at least " + numberFormat.format(count) + " samples (have " + gaps.have + ")",
+        one: "Need at least " + numberFormat.format(count) + " sample (have " + gaps.have + ")",
+        two: "Need at least " + numberFormat.format(count) + " samples (have " + gaps.have + ")",
+        few: "Need at least " + numberFormat.format(count) + " samples (have " + gaps.have + ")",
+        many: "Need at least " + numberFormat.format(count) + " samples (have " + gaps.have + ")",
+        other: "Need at least " + numberFormat.format(count) + " samples (have " + gaps.have + ")",
+    })[pluralRules.select(count)],
+    "voiceDetail.sampleTextsMissing": "Every sample needs a non-empty caption and lyrics",
+    "voiceDetail.progressLoadFailed": "Could not load training progress",
+    "voiceDetail.unsupportedFormat": (gaps: { readonly formats: string }) => "Unsupported format. Accepted: " + gaps.formats,
+    "voiceDetail.pickFileFirst": "Pick an audio file first",
+    "voiceDetail.captionLyricsRequired": "Caption and lyrics are required",
+    "voiceDetail.sampleAdded": "Sample added",
+    "voiceDetail.uploadFailed": "Upload failed",
+    "voiceDetail.ownTakesLoadFailed": "Could not load takes",
+    "voiceDetail.copyFailed": "Could not add take",
+    "voiceDetail.saveFailed": "Save failed",
+    "voiceDetail.deleteFailed": "Delete failed",
+    "voiceDetail.queuedToast": "Training queued",
+    "voiceDetail.startFailed": "Training failed to start",
+    "voiceDetail.cancelFailed": "Could not cancel training",
 };
 export type Key = keyof Words;

@@ -26,8 +26,9 @@ import {
 	trainLora,
 	refreshLora
 } from './loras';
+import type { UserLoraItem } from '#lib/api/types.ts';
 
-function makeLora(over: Record<string, unknown> = {}) {
+function makeLora(over: Partial<UserLoraItem> = {}): UserLoraItem {
 	return {
 		id: 'l1',
 		user_id: 'u1',
