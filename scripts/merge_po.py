@@ -73,7 +73,7 @@ def reworded_contexts(
 
     def new_msgids(side: dict[EntryKey, str]) -> dict[str, set[str]]:
         by_context: dict[str, set[str]] = {}
-        for context, msgid in side:
+        for context, msgid in side.keys():
             if context and (context, msgid) not in base:
                 by_context.setdefault(context, set()).add(msgid)
         return by_context
