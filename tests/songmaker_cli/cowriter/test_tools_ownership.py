@@ -9,6 +9,7 @@ import pytest
 from agents.backend.fake_gateway import completion
 from agents.tools import Principal
 from support.cowriter_gateway import attach_cowriter_gateway
+from support.session_ids import a_session_id
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.agent.tools import CallingTurn, bound_to_turn, cowriter_hand_tools
@@ -57,7 +58,7 @@ def ownership_factory(pg_factory):
             ))
         now = datetime.now(timezone.utc)
         DatabaseSessionRecordStore(session).create(
-            "actor", now=now, expires_at=now + timedelta(hours=1),
+            "actor", session_id=a_session_id(), now=now, expires_at=now + timedelta(hours=1),
             refresh_token=None, id_token=None, account_language=None,
         )
         session.commit()

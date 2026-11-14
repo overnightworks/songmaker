@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from support.session_ids import a_session_id
 from support.web_app import TEST_SECRET, make_test_app, seed_user, web_client
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 
@@ -31,7 +32,7 @@ def _authenticated_clients(tmp_path: Path, pg_factory):
         for username in ("alice", "bob", "admin"):
             user = session.query(User).filter_by(username=username).one()
             user_ids[username] = user.id
-            user_session = create_session(session, user.id, expires_at)
+            user_session = create_session(session, user.id, expires_at, session_id=a_session_id())
             session.flush()
             client = (
                 base_client

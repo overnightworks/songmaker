@@ -1594,7 +1594,7 @@ def test_create_and_get_session(db_session: Session) -> None:
 
     user = _make_user(db_session)
     expires = datetime.now(timezone.utc) + timedelta(days=30)
-    sess = create_session(db_session, user.id, expires)
+    sess = create_session(db_session, user.id, expires, session_id="stored")
     db_session.commit()
 
     fetched = get_session_with_user(db_session, sess.id)
@@ -1615,7 +1615,7 @@ def test_session_renewal_is_owned_by_the_callers_transaction(db_session: Session
 
     user = _make_user(db_session)
     old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
-    record = create_session(db_session, user.id, old_expiry)
+    record = create_session(db_session, user.id, old_expiry, session_id="renewed")
     session_id = record.id
     db_session.commit()
     new_expiry = old_expiry + timedelta(hours=1)
@@ -1634,7 +1634,7 @@ def test_delete_session(db_session: Session) -> None:
 
     user = _make_user(db_session)
     expires = datetime.now(timezone.utc) + timedelta(days=30)
-    sess = create_session(db_session, user.id, expires)
+    sess = create_session(db_session, user.id, expires, session_id="deleted")
     db_session.commit()
 
     delete_session(db_session, sess.id)
@@ -1647,12 +1647,10 @@ def test_delete_session_not_found(db_session: Session) -> None:
 
 
 def test_delete_expired_sessions(db_session: Session) -> None:
-    from datetime import datetime, timedelta, timezone
-
     user = _make_user(db_session)
     now = datetime.now(timezone.utc)
-    create_session(db_session, user.id, now + timedelta(days=30))
-    create_session(db_session, user.id, now - timedelta(days=1))
+    create_session(db_session, user.id, now + timedelta(days=30), session_id="live")
+    create_session(db_session, user.id, now - timedelta(days=1), session_id="expired")
     db_session.commit()
 
     deleted = delete_expired_sessions(db_session)
@@ -1661,10 +1659,11 @@ def test_delete_expired_sessions(db_session: Session) -> None:
 
 
 def _sessions_created_in_order(db_session: Session, user: User, count: int) -> list[str]:
-    from datetime import datetime, timedelta, timezone
-
     now = datetime.now(timezone.utc)
-    sessions = [create_session(db_session, user.id, now + timedelta(days=30)) for _ in range(count)]
+    sessions = [
+        create_session(db_session, user.id, now + timedelta(days=30), session_id=f"{user.id}{n:02}")
+        for n in range(count)
+    ]
     for index, row in enumerate(sessions):
         row.created_at = now - timedelta(seconds=count - index)
     db_session.flush()
@@ -1712,7 +1711,7 @@ def test_delete_user_cascades_sessions(db_session: Session) -> None:
 
     user = _make_user(db_session)
     expires = datetime.now(timezone.utc) + timedelta(days=30)
-    sess = create_session(db_session, user.id, expires)
+    sess = create_session(db_session, user.id, expires, session_id="with-user")
     db_session.commit()
 
     db_session.delete(user)

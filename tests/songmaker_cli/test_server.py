@@ -271,8 +271,8 @@ def auth_server_app(tmp_path: Path, pg_factory):
         session.flush()
 
         expires = datetime.now(timezone.utc) + timedelta(days=1)
-        owner_session = create_session(session, owner.id, expires)
-        other_session = create_session(session, other.id, expires)
+        owner_session = create_session(session, owner.id, expires, session_id="owner-session")
+        other_session = create_session(session, other.id, expires, session_id="other-session")
         session.commit()
         owner_sid = owner_session.id
         other_sid = other_session.id
@@ -323,7 +323,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool, pg_facto
         session.add(user)
         session.flush()
         expired = datetime.now(timezone.utc) - timedelta(days=1)
-        create_db_session(session, user.id, expired)
+        create_db_session(session, user.id, expired, session_id="expired")
         session.commit()
 
     with pg_factory() as session:

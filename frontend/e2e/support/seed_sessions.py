@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -78,6 +79,7 @@ def _seed(session, config: WebAuthConfig, entry: dict[str, str]) -> dict[str, st
     now = datetime.now(timezone.utc).replace(microsecond=0)
     record = DatabaseSessionRecordStore(session).create(
         user.id,
+        session_id=secrets.token_urlsafe(32),
         now=now,
         expires_at=now + timedelta(seconds=config.session_lifetime.idle_seconds),
         refresh_token=None,

@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from support.cover_album_world import album_owner, declared_suggest_refusal, seed_cover_albums
 from support.cowriter_gateway import attach_cowriter_gateway
+from support.session_ids import a_session_id
 from support.web_app import (
     make_authenticated_user,
     make_router_app,
@@ -75,7 +76,8 @@ def _add_cover_job(
 
 def _add_live_session(session, user_id: str) -> str:
     asking = UserSession(
-        user_id=user_id, expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+        id=a_session_id(), user_id=user_id,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
     )
     session.add(asking)
     session.flush()

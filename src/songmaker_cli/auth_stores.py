@@ -102,6 +102,7 @@ class DatabaseSessionRecordStore:
         self,
         user_id: str,
         *,
+        session_id: str,
         now: datetime,
         expires_at: datetime,
         refresh_token: SecretStr | None,
@@ -110,6 +111,7 @@ class DatabaseSessionRecordStore:
     ) -> UserSession:
         record = create_session(
             self.session, user_id, expires_at, refresh_token, id_token, account_language,
+            session_id=session_id,
         )
         record.created_at = now
         self.session.flush()
