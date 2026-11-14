@@ -37,7 +37,8 @@
 
 import { expect, test, type Page, type Route } from './coverage-test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
-import { nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
+import { boundingBoxes, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
+import { bottomOf } from './menu-viewport';
 import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
 import { kitWords } from './account-menu-words';
@@ -231,6 +232,26 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await showCowriterTab(page);
 
 		await expect(page.getByPlaceholder(/Ask for a rewrite/)).toHaveValue(draft);
+	});
+
+	test('a conversation list that cannot be read still leaves the composer at the bottom of the column', async ({
+		page
+	}) => {
+		await page.route('**/api/conversations', (route: Route) =>
+			route.fulfill({ status: 500, json: { detail: 'unavailable' } })
+		);
+
+		await openCowriterOnPickedSong(page);
+		await expect(
+			page.getByRole('alert').filter({ hasText: words['cowriter.historyUnavailable'] })
+		).toBeVisible();
+
+		const [column, field] = await boundingBoxes(
+			page.locator('.cowriter'),
+			page.getByPlaceholder(/Ask for a rewrite/)
+		);
+		const composerPadding = 8;
+		expect(bottomOf(column) - bottomOf(field)).toBeLessThanOrEqual(composerPadding);
 	});
 
 	test('retrying the unanswered message it came back to shows it once when the retry fails too', async ({

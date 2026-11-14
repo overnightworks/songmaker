@@ -1079,6 +1079,11 @@
 		background: var(--bg);
 	}
 
+	/* The kit's loading and failed lines do not grow: the composer keeps the column's bottom. */
+	.cowriter :global(.helper-chat > .composer) {
+		margin-top: auto;
+	}
+
 	.convo {
 		position: relative;
 		flex: none;
@@ -1282,11 +1287,6 @@
 		padding: 1px 8px;
 		border-radius: 10px;
 		font-size: 0.7rem;
-	}
-
-	.mention-tag.version {
-		border-color: var(--accent);
-		color: var(--accent);
 	}
 
 	.mention-tag.album {
