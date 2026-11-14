@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from support.cover_album_world import album_owner, seed_cover_albums
+from support.session_ids import a_session_id
 
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.auth import create_session
@@ -22,7 +23,8 @@ def db_session(pg_factory):
 
 def _signed_in(session, user_id: str) -> str:
     """A browser session of ``user_id``: the cover tool runs only as one."""
-    record = create_session(session, user_id, datetime.now(timezone.utc) + timedelta(hours=1))
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    record = create_session(session, user_id, expires_at, session_id=a_session_id())
     session.commit()
     return record.id
 

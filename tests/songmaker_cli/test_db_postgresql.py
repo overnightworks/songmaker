@@ -505,7 +505,7 @@ def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_opera
     now = datetime.now(timezone.utc)
     with pg_factory() as db:
         user = seed_user(db, "renew-revoke")
-        record = create_session(db, user.id, now + timedelta(hours=1))
+        record = create_session(db, user.id, now + timedelta(hours=1), session_id="stored")
         db.commit()
         session_id = record.id
         db.expunge(record)
@@ -570,7 +570,7 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
                 session.commit()
                 lock_until_transaction_ends(session, AdvisoryLock.USER_MANAGEMENT)
                 expires = datetime.now(timezone.utc) + timedelta(hours=1)
-                create_session(session, user_id, expires)
+                create_session(session, user_id, expires, session_id=str(threading.get_ident()))
                 prune_overflow_sessions(session, user_id, max_sessions)
                 session.commit()
         except Exception as exc:

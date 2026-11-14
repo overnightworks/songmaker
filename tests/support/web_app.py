@@ -11,6 +11,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.session_ids import a_session_id
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
@@ -217,7 +218,7 @@ def seed_session(client, username: str) -> None:
         user_id = session.query(User).filter_by(username=username).one().id
         idle = timedelta(seconds=config.session_lifetime.idle_seconds)
         record = DatabaseSessionRecordStore(session).create(
-            user_id, now=now, expires_at=now + idle,
+            user_id, session_id=a_session_id(), now=now, expires_at=now + idle,
             refresh_token=None, id_token=None, account_language=None,
         )
         session.commit()

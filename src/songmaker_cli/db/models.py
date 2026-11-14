@@ -5,7 +5,6 @@ Hierarchy: Song → Version (content snapshot) → Generation (MP3 output)
 
 from __future__ import annotations
 
-import secrets
 import uuid
 from datetime import datetime
 from typing import Final
@@ -70,10 +69,6 @@ def _validate_generation_params(
 
 def _uuid() -> str:
     return str(uuid.uuid4())
-
-
-def _session_token() -> str:
-    return secrets.token_urlsafe(32)
 
 
 TZDateTime = DateTime(timezone=True)
@@ -516,9 +511,7 @@ class ResourceEvent(Base):
 class UserSession(Base):
     __tablename__ = "user_sessions"
 
-    id: Mapped[str] = mapped_column(
-        String(SESSION_ID_LENGTH), primary_key=True, default=_session_token,
-    )
+    id: Mapped[str] = mapped_column(String(SESSION_ID_LENGTH), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey(USERS_ID), index=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(TZDateTime)

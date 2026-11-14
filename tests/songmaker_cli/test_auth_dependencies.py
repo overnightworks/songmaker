@@ -10,6 +10,7 @@ import pytest
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from support.session_ids import a_session_id
 from support.web_app import install_app_context, make_fake_redis, seed_user, web_client
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 from webauth.ports import AuthenticatedUser
@@ -79,7 +80,7 @@ def _make_user_and_session(
             expires = datetime.now(timezone.utc) - timedelta(days=1)
         else:
             expires = datetime.now(timezone.utc) + timedelta(days=1)
-        user_session = create_session(session, user.id, expires)
+        user_session = create_session(session, user.id, expires, session_id=a_session_id())
         if created_days_ago:
             user_session.created_at = datetime.now(timezone.utc) - timedelta(days=created_days_ago)
         session.commit()
