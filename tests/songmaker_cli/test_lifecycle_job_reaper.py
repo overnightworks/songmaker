@@ -12,6 +12,7 @@ import pytest
 from support.loop_ticks import run_ticks_observing_status
 from support.web_app import TEST_SECRET, make_fake_redis
 
+import songmaker_cli.cover_runner as cover_runner
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     ARQ_MUSIC_HEALTH_KEY,
@@ -469,7 +470,7 @@ def test_reaper_tick_leaves_a_stalled_cover_without_suggestion_and_staging_direc
     png = ctx.audio_dir / "cover-suggestions" / "album" / "stalled.png"
     png.parent.mkdir(parents=True)
     png.write_bytes(b"png")
-    staging_dir = ctx.audio_dir / "cover-suggestions" / ".cover-job.staging"
+    staging_dir = cover_runner._staging_path(ctx.audio_dir, "album", "cover-job")
     staging_dir.mkdir()
     with ctx.db() as session:
         session.add(User(id="u1", username="u1"))

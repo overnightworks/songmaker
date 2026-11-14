@@ -144,8 +144,7 @@ def reconcile_reaped_cover_jobs(db_factory, audio_dir: Path) -> int:
         session.commit()
     remove_cover_suggestion_files(audio_dir, suggestion_paths)
     for staging_dir in staging_dirs:
-        if staging_dir.exists():
-            shutil.rmtree(staging_dir)
+        shutil.rmtree(staging_dir, ignore_errors=True)
     return len(ended_job_ids)
 
 
