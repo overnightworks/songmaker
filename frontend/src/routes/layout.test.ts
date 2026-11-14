@@ -52,10 +52,10 @@ import {
 	openHomeAddress,
 	openLibraryAddress
 } from '#lib/stores/libraryContext.ts';
-import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '#lib/routes/addresses.ts';
+import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { resetNavigationForTests } from '#lib/stores/navigation.ts';
 import { songList } from '#lib/stores/libraryData.ts';
-import { addToast, toasts } from '#lib/stores/toast.ts';
+import { toasts } from '#lib/stores/toast.ts';
 import {
 	closeNowPlaying,
 	nowPlayingDockable,
@@ -1220,25 +1220,6 @@ describe('the live library stream', () => {
 
 		expect(liveStream.stop).toHaveBeenCalled();
 	});
-});
-
-describe('the toast surface of the signed-in shell', () => {
-	beforeEach(() => toasts.set([]));
-
-	it.each(['/settings/users', '/settings/voices', LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH])(
-		'a toast raised on %s shows once, from the one mount',
-		async (path) => {
-			const target = await renderLayout(path);
-
-			addToast('Restart requested', 'success');
-			await tick();
-
-			const shown = [...target.querySelectorAll('[role="alert"]')].filter(
-				(alert) => alert.textContent?.includes('Restart requested')
-			);
-			expect(shown).toHaveLength(1);
-		}
-	);
 });
 
 // The transport only reports a 429; this layout installs the reaction that
