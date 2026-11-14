@@ -1,8 +1,0 @@
-claim_id = "12713c9f66a645fcbf2ac80753871ed9"
-agent = "Claude 87552d9e-c082-4633-9576-2d2e460af979"
-role = "builder"
-base = "81c661deb03f65abc331a9f8ada8c68ff711569a"
-branch = "claude/issue-3145-toasts-show-on-every-page-the-admin-page"
-scope = ["frontend/e2e/settings-after-keycloak.spec.ts", "frontend/src/lib/catalogs/en.po", "frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/ToastContainer.svelte", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/constants/jobs.ts", "frontend/src/lib/stores/jobs.end.test.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/words/en.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.toasts.test.ts", "frontend/src/routes/settings/voices/+page.svelte", "src/songmaker_cli/words.py"]
-opened_commit = "780c0f9e7c81f0fb55edd221e74e8b4e3cc11b0b"
-whole_reason = "Moving the one toast mount into the shell, removing the page mounts and dropping the cancelled job-end toast with its word and tests land together."
