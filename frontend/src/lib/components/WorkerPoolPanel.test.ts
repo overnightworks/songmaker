@@ -123,9 +123,7 @@ describe('WorkerPoolPanel with no heartbeat', () => {
 	it('defect:#1593 explains why Restart cannot help instead of leaving it clickable into a 502', async () => {
 		const target = await renderWorkerPool(offlineWorkerPool(new Date().toISOString()), []);
 
-		const restartButton = Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
-			(button) => button.textContent?.includes(words['workerPool.restart'])
-		);
+		const restartButton = findButtonByText(target, words['workerPool.restart']);
 		if (!restartButton) throw new Error('Expected a Restart button to be rendered');
 
 		expect(restartButton.disabled).toBe(true);
@@ -170,9 +168,7 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 
 		const buttons = Array.from(target.querySelectorAll<HTMLButtonElement>('button'));
 		expect(buttons.length).toBeGreaterThan(0);
-		for (const button of buttons) {
-			expect(button.disabled).toBe(true);
-		}
+		expect(buttons.every((button) => button.disabled)).toBe(true);
 		expect(target.querySelector('[role="switch"]')).toBeNull();
 		expect(findButtonByText(target, UNLOAD)).toBeUndefined();
 		const select = target.querySelector<HTMLSelectElement>('select.mode-select');
@@ -189,9 +185,7 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 
 		const buttons = Array.from(target.querySelectorAll<HTMLButtonElement>('button'));
 		expect(buttons.length).toBeGreaterThan(0);
-		for (const button of buttons) {
-			expect(button.disabled).toBe(true);
-		}
+		expect(buttons.every((button) => button.disabled)).toBe(true);
 		const select = target.querySelector<HTMLSelectElement>('select.mode-select');
 		expect(select?.disabled).toBe(true);
 	});
@@ -341,7 +335,7 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 			expect(bar.compareDocumentPosition(numbers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 			if (free) expect(row).toHaveTextContent(free);
 			else {
-				expect(row).not.toHaveTextContent('GB free');
+				expect(row).not.toHaveTextContent(words['workerPool.vramFree']({ free: '' }).trim());
 				expect(row).toHaveTextContent(words['workerPool.vramEstimateReason']);
 			}
 			const load = findButtonByText(target, words['workerPool.load']);
@@ -574,7 +568,7 @@ describe('WorkerPoolPanel load row', () => {
 			loading: true,
 			offline: false,
 			heartbeat: true,
-			expected: 'None yet — xl-turbo is loading.'
+			expected: words['workerPool.modelsLoading']({ mode: 'xl-turbo' })
 		},
 		{
 			name: 'loaded loading',
@@ -712,7 +706,9 @@ describe('WorkerPoolPanel load row', () => {
 				);
 			} else {
 				const models = () => expect(target.querySelector(MODELS_LIST));
-				await vi.waitFor(() => models().toHaveTextContent('None yet — turbo is loading.'));
+				await vi.waitFor(() =>
+					models().toHaveTextContent(words['workerPool.modelsLoading']({ mode: 'turbo' }))
+				);
 				expect(load).toBeDisabled();
 				expect(select).toBeDisabled();
 				poolResponse = onlineWorkerPool();
@@ -885,7 +881,11 @@ describe('WorkerPoolPanel last error', () => {
 		}
 		expect(box).toHaveTextContent(words['workerPool.lastError']);
 		expect(box).toHaveTextContent(error);
-		expect(box).toHaveTextContent('Full logs: docker compose logs acestep-worker-0');
+		expect(box).toHaveTextContent(
+			words['workerPool.fullLogs']({ command: 'docker compose logs acestep-worker-0' })
+				.map((part) => (typeof part === 'string' ? part : part.text))
+				.join('')
+		);
 		expect(box?.querySelector('img')).toBeNull();
 		expect(box?.previousElementSibling).toHaveClass('load-row');
 		expect(box?.nextElementSibling).toHaveTextContent(words['workerPool.restart']);
@@ -908,7 +908,7 @@ describe('WorkerPoolPanel last error', () => {
 			expect(row).toHaveTextContent(words['workerPool.vramUnknown']);
 			expect(row).toHaveTextContent(words['workerPool.vramOffline']);
 			expect(row).not.toHaveTextContent('GB');
-			expect(row).not.toHaveTextContent('No heartbeat');
+			expect(row).not.toHaveTextContent(words['workerPool.vramNoHeartbeat'].split(' —')[0]);
 			expect(row?.querySelector('.bar span')).toBeNull();
 			poolResponse.workers[0].status = 'online';
 			await vi.advanceTimersByTimeAsync(3000);

@@ -118,7 +118,7 @@ describe('ModelRegistryPanel compact layout', () => {
 
 		api.getRegistry.mockRejectedValue(new Error('registry down'));
 		const failed = await renderPanel(true);
-		expect(failed.textContent).toContain('Cannot reach the registry API');
+		expect(failed.textContent).toContain(words['modelRegistry.loadFailed']);
 		expect(failed.querySelector('.registry-table')).toBeNull();
 	});
 
