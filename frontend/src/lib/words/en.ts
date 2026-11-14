@@ -1207,29 +1207,6 @@ export type Words = {
     readonly "aboutPage.unknown": string;
     readonly "aboutPage.whatsNew": string;
     readonly "aboutPage.licence": string;
-    readonly "paramField.inferenceStepsHelp": string;
-    readonly "paramField.guidanceScaleHelp": string;
-    readonly "paramField.shiftHelp": string;
-    readonly "paramField.cfgIntervalStartHelp": string;
-    readonly "paramField.cfgIntervalEndHelp": string;
-    readonly "paramField.velocityNormHelp": string;
-    readonly "paramField.velocityEmaHelp": string;
-    readonly "paramField.latentShiftHelp": string;
-    readonly "paramField.latentRescaleHelp": string;
-    readonly "paramField.lmCodeStrengthHelp": string;
-    readonly "paramField.inferMethodHelp": string;
-    readonly "paramField.samplerHelp": string;
-    readonly "paramField.adaptiveDualGuidanceHelp": string;
-    readonly "paramField.temperatureHelp": string;
-    readonly "paramField.topKHelp": string;
-    readonly "paramField.topPHelp": string;
-    readonly "paramField.cfgScaleHelp": string;
-    readonly "paramField.repetitionPenaltyHelp": string;
-    readonly "paramField.batchSizeHelp": string;
-    readonly "paramField.thinkingHelp": string;
-    readonly "paramField.cotCaptionHelp": string;
-    readonly "paramField.cotLanguageHelp": string;
-    readonly "paramField.negativePromptHelp": string;
 };
 // prettier-ignore
 export const words: Words = {
@@ -2708,28 +2685,5 @@ export const words: Words = {
     "aboutPage.unknown": "Unknown",
     "aboutPage.whatsNew": "What’s new",
     "aboutPage.licence": "Licence",
-    "paramField.inferenceStepsHelp": "Diffusion denoising steps. More = slower but more refined.",
-    "paramField.guidanceScaleHelp": "How strongly to follow your style prompt. Ignored on turbo models.",
-    "paramField.shiftHelp": "Biases denoising toward early structure or late detail. 3.0 is balanced.",
-    "paramField.cfgIntervalStartHelp": "Apply CFG starting from this point in the denoising trajectory (0.0–1.0).",
-    "paramField.cfgIntervalEndHelp": "Stop applying CFG at this point in the denoising trajectory (0.0–1.0).",
-    "paramField.velocityNormHelp": "DiT velocity normalization threshold. 0 = disabled.",
-    "paramField.velocityEmaHelp": "Exponential moving average smoothing for DiT velocity. 0 = disabled.",
-    "paramField.latentShiftHelp": "Shifts the latent space center. 0 = no shift.",
-    "paramField.latentRescaleHelp": "Rescales latent magnitude. 1.0 = no change.",
-    "paramField.lmCodeStrengthHelp": "How much the LM codes guide the DiT. 1.0 = full guidance, 0 = codes ignored.",
-    "paramField.inferMethodHelp": "ODE = deterministic, reproducible. SDE = adds randomness, sometimes more natural.",
-    "paramField.samplerHelp": "Diffusion sampler algorithm. heun is a second-order predictor-corrector.",
-    "paramField.adaptiveDualGuidanceHelp": "Smarter CFG that prevents over-saturation. Only matters when guidance_scale > 1.",
-    "paramField.temperatureHelp": "How creative the LM is when planning. Higher = more varied, lower = more predictable.",
-    "paramField.topKHelp": "Limit LM sampling to the K most-likely tokens. 0 = disabled.",
-    "paramField.topPHelp": "Nucleus sampling — sample only from tokens covering P of the probability mass.",
-    "paramField.cfgScaleHelp": "CFG strength for the LM's plan (separate from the DiT guidance_scale).",
-    "paramField.repetitionPenaltyHelp": "Discourages the LM from repeating itself. 1.0 = off.",
-    "paramField.batchSizeHelp": "Number of audio variations to generate from one request (1–8).",
-    "paramField.thinkingHelp": "Let the LM plan musical structure before audio generation.",
-    "paramField.cotCaptionHelp": "Let the LM rewrite your style caption to be more model-friendly.",
-    "paramField.cotLanguageHelp": "Let the LM auto-detect the language of your lyrics.",
-    "paramField.negativePromptHelp": "Tell the LM what NOT to include in its musical plan.",
 };
 export type Key = keyof Words;

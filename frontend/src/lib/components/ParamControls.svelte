@@ -13,6 +13,7 @@
 		type SelectParamField,
 		type TextParamField
 	} from '#lib/constants/acestep-param-fields.ts';
+	import { ACESTEP_PARAM_DESCRIPTIONS } from '#lib/constants/acestep-params.ts';
 	import { ensureCompactUiStyles } from '#lib/styles/compact-ui.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import { addToast } from '#lib/stores/toast.ts';
@@ -29,6 +30,10 @@
 		// them every field renders plain, as on the settings pages.
 		changedKeys?: ReadonlySet<string>;
 		onresetfield?: (key: keyof VersionGenerationParams) => void;
+	}
+
+	function tooltip(key: string): string {
+		return ACESTEP_PARAM_DESCRIPTIONS[key]?.short ?? '';
 	}
 
 	let {
@@ -129,12 +134,8 @@
 	>
 {/snippet}
 
-{#snippet fieldError(f: {
-	key: keyof VersionGenerationParams;
-	labelKey: TextKey;
-	helpKey: TextKey;
-})}
-	<div class="setting param-error" title={pageText(f.helpKey)}>
+{#snippet fieldError(f: { key: keyof VersionGenerationParams; labelKey: TextKey })}
+	<div class="setting param-error" title={tooltip(f.key)}>
 		<span>{pageText(f.labelKey)}</span>
 		<p class="param-error-text">{fieldErrorMessage(f.key)}</p>
 	</div>
@@ -142,7 +143,7 @@
 
 {#snippet numberField(f: NumberParamField)}
 	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
-		<div class="setting" title={pageText(f.helpKey)}>
+		<div class="setting" title={tooltip(f.key)}>
 			{@render fieldHead(f.key, pageText(f.labelKey))}
 			<input
 				id={fieldId(f.key)}
@@ -152,7 +153,7 @@
 				step={f.step}
 				value={values[f.key] ?? ''}
 				placeholder={defaultsLoaded ? String(resolvedPlaceholder(f.key)) : ''}
-				title={pageText(f.helpKey)}
+				title={tooltip(f.key)}
 				oninput={(e) => handleNumber(f.key, e.currentTarget.value)}
 			/>
 		</div>
@@ -164,12 +165,12 @@
 
 {#snippet selectField(f: SelectParamField)}
 	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
-		<div class="setting" title={pageText(f.helpKey)}>
+		<div class="setting" title={tooltip(f.key)}>
 			{@render fieldHead(f.key, pageText(f.labelKey))}
 			<select
 				id={fieldId(f.key)}
 				value={values[f.key] ?? ''}
-				title={pageText(f.helpKey)}
+				title={tooltip(f.key)}
 				onchange={(e) => setParam(f.key, e.currentTarget.value || undefined)}
 			>
 				<option value=""
@@ -191,27 +192,27 @@
 {/snippet}
 
 {#snippet textField(f: TextParamField)}
-	<div class="setting full-width" title={pageText(f.helpKey)}>
+	<div class="setting full-width" title={tooltip(f.key)}>
 		{@render fieldHead(f.key, pageText(f.labelKey))}
 		<input
 			id={fieldId(f.key)}
 			type="text"
 			value={(values[f.key] as string | null | undefined) ?? ''}
 			placeholder={pageText(f.placeholderKey)}
-			title={pageText(f.helpKey)}
+			title={tooltip(f.key)}
 			oninput={(e) => setParam(f.key, e.currentTarget.value || undefined)}
 		/>
 	</div>
 {/snippet}
 
 {#snippet boolField(f: BoolParamField)}
-	<div class="setting toggle" title={pageText(f.helpKey)}>
+	<div class="setting toggle" title={tooltip(f.key)}>
 		{@render fieldHead(f.key, pageText(f.labelKey))}
 		<input
 			id={fieldId(f.key)}
 			type="checkbox"
 			checked={(values[f.key] as boolean | null | undefined) ?? f.defaultValue}
-			title={pageText(f.helpKey)}
+			title={tooltip(f.key)}
 			onchange={(e) => {
 				const checked = e.currentTarget.checked;
 				setParam(f.key, checked === f.defaultValue ? undefined : checked);
