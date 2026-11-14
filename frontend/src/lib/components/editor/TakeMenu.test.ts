@@ -167,17 +167,17 @@ describe('TakeMenu', () => {
 		const { target } = await render();
 		const panel = target.querySelector('.menu-panel');
 		expect(panel?.getAttribute('role')).toBe('dialog');
-		expect(panel?.getAttribute('aria-label')).toBe('More');
+		expect(panel?.getAttribute('aria-label')).toBe(words['takeMenu.label']);
 		expect(target.querySelector('[role="menu"], [role="menuitem"]')).toBeNull();
 	});
 
 	it.each([
-		['Repaint', 'onrepaint'],
-		['Cover', 'oncover'],
-		['Use seed', 'onuseseed'],
-		['Add to playlist', 'onaddtoplaylist'],
-		['Delete', 'ondelete'],
-		['Restore', 'onrestore']
+		[words['takeMenu.repaint'], 'onrepaint'],
+		[words['takeMenu.cover'], 'oncover'],
+		[words['takeMenu.useSeed'], 'onuseseed'],
+		[words['takeMenu.addToPlaylist'], 'onaddtoplaylist'],
+		[words['takeMenu.delete'], 'ondelete'],
+		[words['takeMenu.restore'], 'onrestore']
 	] as const)(
 		'915_C3: runs %s and closes the menu, handing focus back to More',
 		async (label, callback) => {
@@ -236,7 +236,7 @@ describe('TakeMenu', () => {
 
 	it('915_C3: focuses the first action and returns focus on Escape', async () => {
 		const { target } = await render();
-		expect(document.activeElement?.textContent?.trim()).toBe('Repaint');
+		expect(document.activeElement?.textContent?.trim()).toBe(words['takeMenu.repaint']);
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		await vi.waitFor(() => expect(document.activeElement).toBe(moreButtonIn(target)));
 		expect(target.querySelector('.menu-panel')).toBeNull();

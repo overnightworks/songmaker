@@ -334,8 +334,8 @@ describe('TakesList', () => {
 
 	it('shows the running status slot with its phase while a generate job runs for this song', async () => {
 		generateState.set(RUNNING);
-		const { target } = await render();
-		expect(target.querySelector('.status-slot')?.textContent).toContain('Rendering');
+		const slot = (await render()).target.querySelector('.status-slot');
+		expect(slot?.textContent).toContain(words['generate.phaseRendering']);
 	});
 
 	it('shows a queued generation reason and position without treating it as a failure', async () => {

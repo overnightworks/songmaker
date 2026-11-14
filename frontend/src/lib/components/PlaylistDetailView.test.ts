@@ -111,7 +111,7 @@ describe('PlaylistDetailView header', () => {
 		expect(requireElement(header, '.header-count').textContent).toBe('2 songs');
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 		expect(target.querySelector('nav')).toBeNull();
-		expect(target.textContent).not.toContain('Playlists');
+		expect(target.textContent).not.toContain(words['places.playlists']);
 		expect(
 			[...target.querySelectorAll('button')].filter((button) =>
 				/shuffle/i.test(accessibleName(button))

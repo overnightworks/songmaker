@@ -150,8 +150,8 @@ describe('SongPhoneView', () => {
 
 	it.each([
 		['ready', words['takesList.empty']({ generate: words['generate.button'] })],
-		['loading', 'Loading takes…'],
-		['error', 'Failed to load takes']
+		['loading', words['takesList.loading']],
+		['error', words['takesList.error']]
 	] as const)(
 		'shows the real list’s %s state when navigation restores Takes',
 		async (loadStatus, text) => {

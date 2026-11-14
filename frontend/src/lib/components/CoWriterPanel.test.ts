@@ -340,7 +340,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		const menu = await openConversationMenu(target);
 
 		expect(Array.from(menu.querySelectorAll('.conv-title'), (title) => title.textContent)).toEqual([
-			'New conversation',
+			words['cowriter.newConversation'],
 			'Conversation since Tue 10:00',
 			'Archived · Sep 17 10:00'
 		]);
@@ -702,8 +702,8 @@ describe('CoWriterPanel deleting a conversation', () => {
 		expect(dialog.querySelector('.warning')?.textContent).toBe(
 			words['cowriter.deleteConversationWarning']
 		);
-		expect(dialogButton(dialog, 'Delete')).toBeDefined();
-		expect(dialogButton(dialog, 'Cancel')).toBeDefined();
+		expect(dialogButton(dialog, words['deleteDialog.confirm'])).toBeDefined();
+		expect(dialogButton(dialog, words['deleteDialog.cancel'])).toBeDefined();
 		expect(deleteConversation).not.toHaveBeenCalled();
 	});
 
@@ -725,7 +725,7 @@ describe('CoWriterPanel deleting a conversation', () => {
 		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
 		const dialog = await openDeleteConfirm(target);
 
-		dialogButton(dialog, 'Cancel')?.click();
+		dialogButton(dialog, words['deleteDialog.cancel'])?.click();
 		await tick();
 
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -753,7 +753,7 @@ describe('CoWriterPanel deleting a conversation', () => {
 		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
 		const dialog = await openDeleteConfirm(target);
 
-		dialogButton(dialog, 'Delete')?.click();
+		dialogButton(dialog, words['deleteDialog.confirm'])?.click();
 		await vi.waitFor(() => expect(deleteConversation).toHaveBeenCalledWith('c1'));
 		await tick();
 
@@ -761,7 +761,7 @@ describe('CoWriterPanel deleting a conversation', () => {
 		expect(await conversationRows(target)).toBe(0);
 	});
 
-	it.each(['Cancel', 'Delete'])(
+	it.each([words['deleteDialog.cancel'], words['deleteDialog.confirm']])(
 		'returns focus to ⋯ once %s answers the confirmation',
 		async (answer) => {
 			const target = await render();
@@ -1164,7 +1164,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 
 		await vi.waitFor(() =>
 			expect(target.querySelector<HTMLElement>('.history-error')?.textContent).toContain(
-				'Conversation history unavailable'
+				words['cowriter.historyUnavailable']
 			)
 		);
 		expect(target.querySelector('.typing')).toBeNull();

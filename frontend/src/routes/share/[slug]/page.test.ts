@@ -189,7 +189,7 @@ describe('shared album page', () => {
 		await vi.waitFor(() =>
 			expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.notFoundAlbum'])
 		);
-		expect(target.textContent).toContain('This share link is invalid or was removed.');
+		expect(target.textContent).toContain(words['shareStatus.invalidLink']);
 		expect(target.querySelector('.now-playing')).toBeNull();
 		expect(target.textContent).not.toContain('shared-album');
 		expect(target.textContent).not.toContain('/shared');
@@ -207,7 +207,7 @@ describe('shared album page', () => {
 		component = mount(Page, { target });
 
 		await vi.waitFor(() => {
-			expect(target.querySelector('h1')?.textContent).toBe('Could not load this album');
+			expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.errorAlbum']);
 		});
 
 		let finishRetry: ((response: unknown) => void) | undefined;
@@ -244,8 +244,8 @@ describe('shared album page', () => {
 
 		await vi.advanceTimersByTimeAsync(30_000);
 
-		expect(target.querySelector('h1')?.textContent).toBe('Could not load this album');
-		expect(target.querySelector('button')?.textContent).toBe('Try again');
+		expect(target.querySelector('h1')?.textContent).toBe(words['shareStatus.errorAlbum']);
+		expect(target.querySelector('button')?.textContent).toBe(words['shareStatus.retry']);
 	});
 
 	it('hides songs without a pick instead of showing a disabled row', async () => {
@@ -421,8 +421,6 @@ describe('shared album page', () => {
 });
 
 describe('shared album AI mark', () => {
-	const AI_MARK = 'KI-generiert';
-
 	async function openWith(response: unknown): Promise<HTMLElement> {
 		mockFetch.mockReturnValueOnce(response);
 		const target = document.createElement('div');
@@ -452,7 +450,7 @@ describe('shared album AI mark', () => {
 		);
 
 		await vi.waitFor(() => expect(target.textContent).toContain('Shared album'));
-		expect(target.textContent).toContain(AI_MARK);
+		expect(target.textContent).toContain(words['aiNotice.generated']);
 	});
 
 	it.each([
@@ -463,6 +461,6 @@ describe('shared album AI mark', () => {
 
 		await vi.waitFor(() => expect(target.querySelector('h1')).not.toBeNull());
 		expect(target.textContent).not.toContain('Shared album');
-		expect(target.textContent).not.toContain(AI_MARK);
+		expect(target.textContent).not.toContain(words['aiNotice.generated']);
 	});
 });

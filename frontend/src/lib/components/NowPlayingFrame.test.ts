@@ -2,6 +2,7 @@ import { createRawSnippet, mount, tick, unmount, type Snippet } from 'svelte';
 import { fromStore, writable } from 'svelte/store';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeGeneration } from '#lib/test-utils/factories.ts';
+import { words } from '#lib/words/en.ts';
 import NowPlayingFrame from './NowPlayingFrame.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -121,7 +122,7 @@ describe('NowPlayingFrame', () => {
 			await tick();
 			const badges = target.querySelectorAll('.ai-notice');
 			expect(badges).toHaveLength(1);
-			expect(badges[0]).toHaveTextContent('KI-generiert');
+			expect(badges[0]).toHaveTextContent(words['aiNotice.generated']);
 			const row = badges[0].closest('.cover-line');
 			expect(row).not.toBeNull();
 			if (line === 'take') {

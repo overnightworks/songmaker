@@ -463,7 +463,7 @@ describe('app shell', () => {
 		const brand = requireElement<HTMLButtonElement>(target, '.mobile-strip .brand');
 		// The wordmark is named after the app.
 		expect(brand.hasAttribute('aria-label')).toBe(false);
-		expect(brand.textContent).toBe('Hallucinai');
+		expect(brand.textContent).toBe(words['app.name']);
 		brand.click();
 		await tick();
 		await Promise.resolve();
@@ -490,7 +490,7 @@ describe('app shell', () => {
 		phoneAppBar.set(null);
 		await tick();
 		expect(strip.querySelector('.brand')).toBeNull();
-		expect(strip.querySelector('.back')?.textContent?.trim()).toBe('Album');
+		expect(strip.querySelector('.back')?.textContent?.trim()).toBe(words['pageBack.album']);
 	});
 
 	it('renders the rail inline on wide layouts, keeping its Settings group and no account row', async () => {

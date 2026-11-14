@@ -157,7 +157,7 @@ describe('conversation day and line copy', () => {
 	}
 
 	it.each([
-		['no conversation and an empty chat', undefined, false, 'new conversation'],
+		['no conversation and an empty chat', undefined, false, words['cowriter.newConversationLine']],
 		[
 			'a first message the conversation list does not know yet',
 			undefined,
@@ -168,7 +168,7 @@ describe('conversation day and line copy', () => {
 			'a new empty conversation',
 			conversationFrom('2026-09-27T08:00:00', { message_count: 0 }),
 			false,
-			'new conversation'
+			words['cowriter.newConversationLine']
 		],
 		[
 			'a new conversation whose first message is in the chat',
@@ -221,7 +221,7 @@ describe('conversation day and line copy', () => {
 		[
 			'an empty one as a new conversation, like the line above the chat',
 			conversationFrom('2026-09-22T10:00:00', { message_count: 0 }),
-			'New conversation'
+			words['cowriter.newConversation']
 		],
 		[
 			'an empty archived one by its day',

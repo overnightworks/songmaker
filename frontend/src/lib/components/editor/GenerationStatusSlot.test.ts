@@ -158,8 +158,8 @@ describe('GenerationStatusSlot', () => {
 
 	it('cancels the job through the shared cancelGeneration owner at a 44px hitbox', async () => {
 		await render(running);
-		const cancel = getByRoleButton(document.body, 'Cancel generation');
-		expect(minSquarePx(cancel, 'Cancel generation')).toEqual({
+		const cancel = getByRoleButton(document.body, words['generate.cancel']);
+		expect(minSquarePx(cancel, words['generate.cancel'])).toEqual({
 			width: HITBOX_FREQUENT_PX,
 			height: HITBOX_FREQUENT_PX
 		});
@@ -211,7 +211,7 @@ describe('GenerationStatusSlot', () => {
 			async ({ presentation }) => {
 				await render(presentation);
 				const slot = styledSlot();
-				const cancel = getByRoleButton(slot, 'Cancel generation (unavailable while offline)');
+				const cancel = getByRoleButton(slot, words['generate.cancelOffline']);
 				expect(cancel.getAttribute('aria-disabled')).toBe('true');
 				expect(getComputedStyle(cancel).color).toBe('var(--text-disabled)');
 				cancel.click();
@@ -224,7 +224,7 @@ describe('GenerationStatusSlot', () => {
 	it('keeps the cancel of a take whose stream is refused while the page is online', async () => {
 		await render({ ...reconnecting, offline: false });
 
-		getByRoleButton(document.body, 'Cancel generation').click();
+		getByRoleButton(document.body, words['generate.cancel']).click();
 		await tick();
 
 		expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');

@@ -81,7 +81,11 @@ describe('Repaint card (S4, #1912 acceptance 2)', () => {
 		const target = await renderCard('repaint');
 		expect(flatText(target)).toContain('Repaint take 11 · v6 · 3:13');
 		expect(target.querySelector('.waveform-picker')).not.toBeNull();
-		for (const name of ['Conservative', 'Balanced', 'Aggressive']) {
+		for (const name of [
+			words['takeTask.modeConservative'],
+			words['takeTask.modeBalanced'],
+			words['takeTask.modeAggressive']
+		]) {
 			expect(cardButton(target, name)).toBeDefined();
 		}
 		expect(flatText(target)).toContain(words['takeTask.promptHint']);
@@ -99,11 +103,11 @@ describe('Repaint card (S4, #1912 acceptance 2)', () => {
 
 	it('offers the strength slider only on Balanced', async () => {
 		const target = await renderCard('repaint');
-		cardButton(target, 'Balanced')?.click();
+		cardButton(target, words['takeTask.modeBalanced'])?.click();
 		await tick();
 		expect(get(repaintMode)).toBe('balanced');
 		expect(target.querySelectorAll('input[type="range"]')).toHaveLength(1);
-		cardButton(target, 'Aggressive')?.click();
+		cardButton(target, words['takeTask.modeAggressive'])?.click();
 		await tick();
 		expect(target.querySelector('input[type="range"]')).toBeNull();
 	});
@@ -119,7 +123,7 @@ describe('Cover card (S4, #1912 acceptance 3)', () => {
 		expect(sliders[1].max).toBe('1');
 		expect(flatText(target)).toContain(words['takeTask.promptHint']);
 		expect(flatText(target)).toContain(words['takeTask.landing']({ number: '7' }));
-		expect(cardButton(target, 'Cover')).toBeDefined();
+		expect(cardButton(target, words['takeTask.cover'])).toBeDefined();
 		expect(target.querySelector('.waveform-picker')).toBeNull();
 	});
 });
@@ -135,7 +139,7 @@ describe('the card reaches the frames (#1923 acceptance 5, 6)', () => {
 
 	it('captions Noise with what it does', async () => {
 		const target = await renderCard('cover');
-		expect(flatText(target)).toContain('Noise');
+		expect(flatText(target)).toContain(words['takeTask.noise']);
 		expect(flatText(target)).toContain('more noise, more surprise');
 		const ends = Array.from(target.querySelectorAll('.slider')[1].querySelectorAll('.end'));
 		expect(ends.map((end) => end.textContent)).toEqual(['0', '1']);

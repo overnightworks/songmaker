@@ -177,7 +177,7 @@ describe('generate action presentation', () => {
 				indeterminate: false,
 				elapsedLabel: null,
 				jobId: 'job1',
-				phase: 'Generating...',
+				phase: words['generate.generating'],
 				takeCounter: null,
 				progress: 0,
 				readout: '0%',
@@ -194,7 +194,7 @@ describe('generate action presentation', () => {
 				indeterminate: false,
 				elapsedLabel: null,
 				jobId: 'job1',
-				phase: 'Generating...',
+				phase: words['generate.generating'],
 				takeCounter: null,
 				progress: 0,
 				readout: '0%',
@@ -239,7 +239,7 @@ describe('generate action presentation', () => {
 				indeterminate: false,
 				elapsedLabel: null,
 				jobId: 'job1',
-				phase: 'Rendering',
+				phase: words['generate.phaseRendering'],
 				takeCounter: 'Take 1 of 2',
 				progress: 36,
 				readout,
@@ -255,7 +255,7 @@ describe('generate action presentation', () => {
 		{ phase: 'writing', label: 'Writing', readout: '36% · ~0:32' },
 		{ phase: 'rendering', label: 'Rendering', readout: '36% · ~0:32' },
 		{ phase: 'saving_take', label: 'Saving take', readout: '36% · ~0:32' },
-		{ phase: null, label: 'Generating...', readout: '36% · ~0:32' }
+		{ phase: null, label: words['generate.generating'], readout: '36% · ~0:32' }
 	] as const)(
 		'[defect:#1568] names the $phase phase "$label" with readout $readout',
 		({ phase, label, readout }) => {
@@ -336,7 +336,7 @@ describe('generate action presentation', () => {
 					indeterminate: false,
 					elapsedLabel: null,
 					jobId: 'job1',
-					phase: 'Reconnecting…',
+					phase: words['generate.reconnecting'],
 					takeCounter: 'Take 1 of 2',
 					progress: 40,
 					readout: 'last seen at 40%',
@@ -362,7 +362,7 @@ describe('generate action presentation', () => {
 				indeterminate: false,
 				elapsedLabel: null,
 				jobId: 'job1',
-				phase: 'Rendering',
+				phase: words['generate.phaseRendering'],
 				takeCounter: 'Take 1 of 2',
 				progress: 40,
 				readout: '40% · ~0:32',
@@ -605,7 +605,7 @@ describe('[defect:#1568] observed loading time', () => {
 					activeJobs.set([{ songId: 's1', job, streamStale: true }]);
 					vi.advanceTimersByTime(5000);
 					expect(get(generateAction)).toMatchObject({
-						phase: 'Reconnecting…',
+						phase: words['generate.reconnecting'],
 						elapsedLabel: null,
 						readout: null
 					});
@@ -654,7 +654,7 @@ describe('generate action execution', () => {
 			indeterminate: false,
 			elapsedLabel: null,
 			jobId: null,
-			phase: 'Generating...',
+			phase: words['generate.generating'],
 			progress: 0,
 			readout: '0%'
 		});
@@ -680,7 +680,7 @@ describe('generate action execution', () => {
 			await generate();
 			expect(get(generateAction)).toMatchObject({ kind: 'idle' });
 			expect(get(seedFromTake)).toEqual({ seed: 42, takeNumber: 3 });
-			expect(addToast).toHaveBeenCalledExactlyOnceWith('Generation failed', 'error');
+			expect(addToast).toHaveBeenCalledExactlyOnceWith(words['generate.startFailed'], 'error');
 			if (step === 'save') expect(generateSong).not.toHaveBeenCalled();
 			vi.mocked(updateSong).mockResolvedValue(makeSong({ lyrics: 'new verse', prompt: 'folk' }));
 			await generate();

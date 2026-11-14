@@ -147,7 +147,7 @@ describe('TakesList bulk delete asks first (S11)', () => {
 		deleteButton(target).click();
 		await tick();
 
-		expect(dialog()?.textContent).toContain('Delete 1 take?');
+		expect(dialog()?.textContent).toContain(words['takesList.bulkDeleteTitle'](1));
 	});
 
 	it('keeps the ticks and select mode and sends nothing on Cancel', async () => {
@@ -156,7 +156,7 @@ describe('TakesList bulk delete asks first (S11)', () => {
 		deleteButton(target).click();
 		await tick();
 
-		await press('Cancel');
+		await press(words['dialog.cancel']);
 
 		expect(dialog()).toBeNull();
 		expect([...get(selectedIds)]).toEqual(['g1', 'g2', 'g3']);

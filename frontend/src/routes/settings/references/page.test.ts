@@ -128,7 +128,7 @@ describe('references page', () => {
 		mocks.listReferences.mockReturnValue(new Promise(() => {}));
 		const target = await renderReferencesPage();
 
-		expect(target.querySelector('h1')?.textContent).toBe('References');
+		expect(target.querySelector('h1')?.textContent).toBe(words['settingsSections.references']);
 	});
 
 	it('shows a dash for a reference whose length is unknown', async () => {
@@ -526,7 +526,7 @@ describe('deleting a reference', () => {
 	}
 
 	async function confirmDelete(): Promise<void> {
-		await pressReferenceControl(buttonNamed(confirmDialog(), 'Delete'));
+		await pressReferenceControl(buttonNamed(confirmDialog(), words['deleteDialog.confirm']));
 	}
 
 	function faultOf(row: HTMLElement): string | undefined {
@@ -541,7 +541,7 @@ describe('deleting a reference', () => {
 		const text = confirmDialog().textContent ?? '';
 		expect(text).toContain(words['referencesPage.deleteTitle']);
 		expect(text).toContain(words['referencesPage.deleteItem']({ filename: 'voice-memo.mp3' }));
-		expect(text).toContain('This cannot be undone.');
+		expect(text).toContain(words['deleteDialog.warning']);
 		expect(mocks.deleteReference).not.toHaveBeenCalled();
 	});
 

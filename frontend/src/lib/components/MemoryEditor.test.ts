@@ -85,7 +85,7 @@ describe('MemoryEditor', () => {
 		const { target } = await renderEditor({ user: fullBundle.user, song: fullBundle.song });
 
 		expect(field(target, words['memory.userField'])).not.toBeNull();
-		expect(field(target, 'Song memory')).not.toBeNull();
+		expect(field(target, words['memory.songField'])).not.toBeNull();
 		expect(field(target, words['memory.albumField'])).toBeNull();
 	});
 

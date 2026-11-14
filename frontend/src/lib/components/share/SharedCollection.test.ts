@@ -416,7 +416,7 @@ describe('SharedCollection player page (#1391)', () => {
 			expect(getByRoleButton(target, words['transport.play']).disabled).toBe(true);
 			expect(target.querySelector('[role="status"]')?.textContent).toBe(words['share.noAudio']);
 			expect(target.querySelector('.np-page-lyrics')).toBeNull();
-			expect(target.textContent).not.toContain('No lyrics');
+			expect(target.textContent).not.toContain(words['share.noLyrics']);
 		}
 	);
 });
@@ -463,7 +463,7 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 			const target = await renderCollection({ tracks });
 			expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
 			expect(target.querySelector('[role="status"]')?.textContent).toBe(words['share.noAudio']);
-			expect(target.textContent).toContain('KI-generiert');
+			expect(target.textContent).toContain(words['aiNotice.generated']);
 			expect(target.querySelector('.now-playing, .np-lyrics, .np-queue')).toBeNull();
 			expect(audioPlayer.current).toBeNull();
 		}

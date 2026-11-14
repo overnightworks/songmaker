@@ -1,7 +1,6 @@
 import { words } from '#lib/words/en.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import { kitWords } from '#lib/utils/kit-words.ts';
 import Page from './+page.svelte';
 
@@ -63,8 +62,10 @@ describe('signed-out page', () => {
 		const target = renderPage();
 		await tick();
 
-		expect(Array.from(target.querySelectorAll('nav a')).map((a) => a.textContent)).toEqual(
-			LEGAL_SECTIONS.map((section) => words[section.labelKey])
-		);
+		expect(Array.from(target.querySelectorAll('nav a')).map((a) => a.textContent)).toEqual([
+			words['legal.imprint'],
+			words['legal.privacy'],
+			words['legal.terms']
+		]);
 	});
 });

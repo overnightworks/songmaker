@@ -109,7 +109,7 @@ describe('AccountMenu', () => {
 		getByRoleButton(panel, LOG_OUT_NAME);
 		expect(panel.querySelectorAll('input[type="radio"]')).toHaveLength(3);
 		expect(Array.from(panel.querySelectorAll(LEGAL_LINKS)).map((link) => link.textContent)).toEqual(
-			LEGAL_SECTIONS.map((section) => words[section.labelKey])
+			[words['legal.imprint'], words['legal.privacy'], words['legal.terms']]
 		);
 	});
 
@@ -229,7 +229,7 @@ describe('AccountMenu', () => {
 
 		expect(target.querySelector('[role="dialog"]')).toBe(panel);
 		expect(panel.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
-			"Couldn't log out. Check your connection and try again."
+			words['account.signOutFailed']
 		);
 	});
 

@@ -89,7 +89,7 @@ describe('GenerateButton', () => {
 
 	it('C3: shows no seed chip without a seed', async () => {
 		await render({ kind: 'idle' });
-		expect(document.body.textContent).not.toContain('Seed');
+		expect(document.body.textContent).not.toContain(words['seedChip.label']({ number: '' }));
 	});
 
 	it.each([
@@ -100,8 +100,10 @@ describe('GenerateButton', () => {
 		async ({ view }) => {
 			seedFromTake.set({ seed: 4127730, takeNumber: 11 });
 			await render(view);
-			expect(document.body.querySelector('.seed-chip')?.textContent?.trim()).toBe('Seed · take 11');
-			getByRoleButton(document.body, 'Clear seed').click();
+			expect(document.body.querySelector('.seed-chip')?.textContent?.trim()).toBe(
+				words['seedChip.label']({ number: '11' })
+			);
+			getByRoleButton(document.body, words['seedChip.clear']).click();
 			await tick();
 			expect(document.body.querySelector('.seed-chip')).toBeNull();
 			expect(get(seedFromTake)).toBeNull();
@@ -189,7 +191,7 @@ describe('GenerateButton', () => {
 		'disables generation as an outline button with its %s reason under ⓘ',
 		async (_state, reason) => {
 			await render({ kind: 'disabled', reason });
-			const button = getByRoleButton(document.body, 'Generate');
+			const button = getByRoleButton(document.body, words['generate.button']);
 			expect(button.disabled).toBe(true);
 			expect(button.title).toBe(reason);
 			expect(document.body.textContent).toContain(`ⓘ ${reason}`);
@@ -213,10 +215,10 @@ describe('GenerateButton', () => {
 		'keeps its label and shows no ⓘ when disabled without a reason of its own (reason inside: %s)',
 		async (reasonInside) => {
 			await render({ kind: 'disabled', reason: null }, { reasonInside });
-			const button = getByRoleButton(document.body, 'Generate');
+			const button = getByRoleButton(document.body, words['generate.button']);
 			expect(button.disabled).toBe(true);
 			expect(button.title).toBe('');
-			expect(document.body.textContent?.trim()).toBe('Generate');
+			expect(document.body.textContent?.trim()).toBe(words['generate.button']);
 		}
 	);
 
@@ -255,7 +257,7 @@ describe('GenerateButton', () => {
 		expect(getComputedStyle(sentence).overflow).not.toBe('hidden');
 		expect(getComputedStyle(sentence).textOverflow).not.toBe('ellipsis');
 		expect(document.body.querySelectorAll('button')).toHaveLength(1);
-		expect(getByRoleButton(document.body, 'Generate').disabled).toBe(false);
+		expect(getByRoleButton(document.body, words['generate.button']).disabled).toBe(false);
 	});
 
 	it.each([

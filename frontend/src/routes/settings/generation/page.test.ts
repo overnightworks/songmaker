@@ -257,17 +257,19 @@ describe('generation settings', () => {
 		it('asks first with the preset name and sends no delete', async () => {
 			const { deleted } = await openWithOnePreset();
 
-			expect(document.querySelector('[role="dialog"] h3')?.textContent).toBe('Delete preset?');
+			expect(document.querySelector('[role="dialog"] h3')?.textContent).toBe(
+				words['generationPage.deleteTitle']
+			);
 			expect(document.querySelector('[role="dialog"] li')?.textContent).toBe('Warm');
 			expect(deleted).toEqual([]);
 		});
 
 		it.each([
-			['Cancel', () => dialogButton('Cancel').click()],
+			['Cancel', () => dialogButton(words['deleteDialog.cancel']).click()],
 			[
 				'Escape',
 				() =>
-					dialogButton('Cancel').dispatchEvent(
+					dialogButton(words['deleteDialog.cancel']).dispatchEvent(
 						new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
 					)
 			]
@@ -287,7 +289,7 @@ describe('generation settings', () => {
 		it('deletes the preset and drops its row only on Delete', async () => {
 			const { target, deleted } = await openWithOnePreset();
 
-			dialogButton('Delete').click();
+			dialogButton(words['deleteDialog.confirm']).click();
 
 			await vi.waitFor(() => expect(deleted).toEqual([DELETE_PATH]));
 			await vi.waitFor(() => expect(target.querySelector('.preset-name')).toBeNull());

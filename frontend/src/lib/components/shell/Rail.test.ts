@@ -155,7 +155,7 @@ describe('Rail', () => {
 	it('renders the brand, the LIBRARY and PLAYLISTS groups, and the settings disclosure, and no account row', async () => {
 		albumList.set([album({ id: 'a1', title: 'A' })]);
 		const target = await render();
-		expect(requireElement(target, '.brand').textContent).toBe('Hallucinai');
+		expect(requireElement(target, '.brand').textContent).toBe(words['app.name']);
 		// Scoped to the top-level group toggles: a nested album row is also a
 		// `button.disclose` (RailLibraryGroup's per-album disclosure), so an
 		// unscoped query would pick it up between Library, Playlists, and
@@ -364,7 +364,7 @@ describe('Rail', () => {
 		// logo pattern -- so it never collides with the LIBRARY group's own
 		// "Library" name in an accessible-name lookup.
 		expect(brand.hasAttribute('aria-label')).toBe(false);
-		expect(brand.textContent).toBe('Hallucinai');
+		expect(brand.textContent).toBe(words['app.name']);
 		brand.click();
 		await tick();
 		await Promise.resolve();
