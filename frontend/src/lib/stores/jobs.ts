@@ -30,7 +30,12 @@ import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 
 // A cover's end is shown in place and a chat is never tracked, so neither has a toast.
 type TrackedJobType = Exclude<JobStatus['type'], typeof JOB_TYPE_COVER | typeof JOB_TYPE_CHAT>;
-type JobEnd = 'completed' | 'partial' | 'cancelled' | 'failed';
+type JobEnd = 'completed' | 'partial' | 'failed';
+// A cancelled voice training says nothing, so it has no cancelled text.
+type CancellableJobType = Exclude<TrackedJobType, typeof JOB_TYPE_LORA_TRAINING>;
+type JobEndTexts = { [T in TrackedJobType]: Record<JobEnd, TextKey> } & {
+	[T in CancellableJobType]: { cancelled: TextKey };
+};
 
 const JOB_END_TEXT = {
 	generate: {
@@ -62,12 +67,14 @@ const JOB_END_TEXT = {
 		cancelled: 'jobEnd.modelDownloadCancelled',
 		failed: 'jobEnd.modelDownloadFailed'
 	}
-} as const satisfies Record<TrackedJobType, Partial<Record<JobEnd, TextKey>>>;
+} as const satisfies JobEndTexts;
 
 function jobEndText(type: TrackedJobType, end: JobEnd): string {
-	const key = (JOB_END_TEXT[type] as Partial<Record<JobEnd, TextKey>>)[end];
-	if (key === undefined) throw new Error(`${type} has no job-end text for ${end}`);
-	return pageText(key);
+	return pageText(JOB_END_TEXT[type][end]);
+}
+
+function jobCancelledText(type: CancellableJobType): string {
+	return pageText(JOB_END_TEXT[type].cancelled);
 }
 
 export interface ActiveJob {
@@ -236,7 +243,8 @@ function endedWithTakes(job: JobStatus): boolean {
 
 // A cover job's end is shown in place -- by the cover editor, or by the closed
 // cover's mark, which coverActivity rereads when the run leaves activeJobs --
-// so a toast would only announce the same outcome a second time.
+// so a toast would only announce the same outcome a second time. A cancelled
+// voice training is silent too: the voice page shows it.
 function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	if (job.type === JOB_TYPE_COVER || job.type === JOB_TYPE_CHAT) return;
 	if (job.status === 'completed') {
@@ -249,7 +257,7 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	}
 	if (job.status === 'cancelled') {
 		if (job.type === JOB_TYPE_LORA_TRAINING) return;
-		addToast(jobEndText(job.type, 'cancelled'), 'info');
+		addToast(jobCancelledText(job.type), 'info');
 		return;
 	}
 	const message = failureMessage(job, job.type);
