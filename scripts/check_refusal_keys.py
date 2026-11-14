@@ -14,7 +14,8 @@ It walks `src/songmaker_cli` for every `Refusal(...)` call and every call of
 * the keywords are exactly the sentence's gaps, with no `**` spread.
 
 A `Refusal` call also needs an int literal status and a key of the form
-`<resource>Refusal.<reason>`.
+`<resource>Refusal.<reason>`. It may add the keyword `headers=` for response headers, which is
+no gap, so a sentence may not name a gap `headers`.
 
 `words.py` (generated) and `refusals.py` (which forwards the key of its caller to `text`)
 are not walked.
@@ -44,6 +45,7 @@ REFUSAL_NAME: Final = "Refusal"
 REFUSAL_KEY_PATTERN: Final = re.compile(r"^[a-z][A-Za-z0-9]*Refusal\.[a-z][A-Za-z0-9]*$")
 KEY_INDEX_OF_TEXT: Final = 1
 KEY_INDEX_OF_REFUSAL: Final = 1
+REFUSAL_HEADERS_KEYWORD: Final = "headers"
 
 
 @dataclass(frozen=True)
@@ -136,10 +138,14 @@ def _literal_key(call: ast.Call, key_index: int) -> str | None:
     return None
 
 
-def _gap_problem(call: ast.Call, expected: frozenset[str]) -> str | None:
+def _gap_problem(call: ast.Call, expected: frozenset[str], *, is_refusal: bool) -> str | None:
     if any(keyword.arg is None for keyword in call.keywords):
         return "gaps are passed with a ** spread; name each one"
     given = {keyword.arg for keyword in call.keywords}
+    if is_refusal:
+        if REFUSAL_HEADERS_KEYWORD in expected:
+            return f"a gap may not be named {REFUSAL_HEADERS_KEYWORD}: Refusal takes it as headers"
+        given.discard(REFUSAL_HEADERS_KEYWORD)
     missing, unexpected = sorted(expected - given), sorted(given - expected)
     if missing or unexpected:
         return f"gaps differ from the sentence's: missing {missing}, unexpected {unexpected}"
@@ -163,7 +169,7 @@ def call_problem(
         return "the key is not a string literal passed as a positional argument"
     if key not in plain:
         return f"{key!r} is not a plain entry of words.py (a plural family is not a refusal key)"
-    problem = _gap_problem(call, plain[key])
+    problem = _gap_problem(call, plain[key], is_refusal=is_refusal)
     if problem is not None or not is_refusal:
         return problem
     return _refusal_problem(call, key)

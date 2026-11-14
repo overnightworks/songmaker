@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Final
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from webauth.proxies import resolve_client_ip
 from webauth.rate_limit import RedisRateLimitBackend
 
 import songmaker_cli.constants as _consts
-from songmaker_cli.api_helpers import enforce_rate_limit, get_cached_limiter
+from songmaker_cli.api_helpers import RateLimitRejected, enforce_rate_limit, get_cached_limiter
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.audio_paths import AudioPathRejectedError, require_canonical_audio_filename
 from songmaker_cli.constants import (
@@ -59,14 +59,19 @@ def check_rate_limit(
     limit: int,
     window_seconds: int,
 ) -> None:
-    enforce_rate_limit(
-        limiter, resolve_client_ip(request),
-        policy=_SHARED_LIMITER_FAILURE_POLICY,
-        reject_detail="Too many requests",
-        limit=limit,
-        window_seconds=window_seconds,
-        unavailable_log_message="Shared rate limiter unavailable -- allowing request",
-    )
+    try:
+        enforce_rate_limit(
+            limiter, resolve_client_ip(request),
+            policy=_SHARED_LIMITER_FAILURE_POLICY,
+            limit=limit,
+            window_seconds=window_seconds,
+            unavailable_log_message="Shared rate limiter unavailable -- allowing request",
+        )
+    except RateLimitRejected as rejected:
+        raise HTTPException(
+            429, "Too many requests",
+            headers={"Retry-After": str(rejected.retry_after_seconds)},
+        ) from rejected
 
 
 def shared_audio_url_for_take(route: str, generation: Generation) -> str | None:

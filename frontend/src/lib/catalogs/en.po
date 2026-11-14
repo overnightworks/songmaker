@@ -3480,3 +3480,75 @@ msgstr ""
 msgctxt "auth.checkNetworkError"
 msgid "Network error. Retry to check your session."
 msgstr ""
+
+msgctxt "referenceRefusal.notFound"
+msgid "Not Found"
+msgstr ""
+
+msgctxt "referenceRefusal.noFilename"
+msgid "No filename provided"
+msgstr ""
+
+msgctxt "referenceRefusal.filenameInvalid"
+msgid "Invalid filename."
+msgstr ""
+
+msgctxt "referenceRefusal.filenameTooLong"
+msgid "Filename too long (max {max} characters)"
+msgstr ""
+
+msgctxt "referenceRefusal.formatUnsupported"
+msgid "Unsupported format '{extension}'. Accepted: {accepted}"
+msgstr ""
+
+msgctxt "referenceRefusal.fileTooLarge"
+msgid "File too large (max {max}MB)"
+msgstr ""
+
+msgctxt "referenceRefusal.fileTooSmall"
+msgid "File is empty or too small"
+msgstr ""
+
+msgctxt "referenceRefusal.inUse"
+msgid "Reference audio is in use."
+msgstr ""
+
+msgctxt "referenceRefusal.countdownStale"
+msgid "The countdown epoch is no longer current."
+msgstr ""
+
+msgctxt "jobRefusal.notFound"
+msgid "Job not found"
+msgstr ""
+
+msgctxt "jobRefusal.notCancellable"
+msgid "Only queued or running jobs can be cancelled"
+msgstr ""
+
+msgctxt "libraryQueueRefusal.startUnplayable"
+msgid "Requested take is not playable"
+msgstr ""
+
+msgctxt "libraryQueueRefusal.emptyPool"
+msgid "No playable takes in pool '{pool}'"
+msgstr ""
+
+msgctxt "libraryQueueRefusal.emptyWindow"
+msgid "No playable takes in scanned library window"
+msgstr ""
+
+msgctxt "libraryQueueRefusal.tooManyRequests"
+msgid "Too many queue stream requests"
+msgstr ""
+
+msgctxt "libraryQueueRefusal.limiterUnavailable"
+msgid "Queue stream rate limiter unavailable"
+msgstr ""
+
+msgctxt "libraryRefusal.cursorInvalid"
+msgid "Invalid library cursor"
+msgstr ""
+
+msgctxt "libraryRefusal.cursorMismatch"
+msgid "Library cursor does not match query and sort"
+msgstr ""

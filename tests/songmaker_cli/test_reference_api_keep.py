@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from support import reference_api_world
 from support.reference_api_world import (
-    NOT_FOUND,
+    REFERENCE_NOT_FOUND,
     REFERENCES_PATH,
     link_reference,
     reference_rows,
@@ -123,7 +123,7 @@ def test_a_foreign_or_missing_reference_answers_the_global_404_and_stays(
     response = _post(caller, target, action)
 
     assert response.status_code == 404
-    assert response.json() == NOT_FOUND
+    assert response.json() == REFERENCE_NOT_FOUND
     assert _kept_and_stamp(signed_in, reference_id) == (kept, None if kept else OLD_STAMP)
 
 
