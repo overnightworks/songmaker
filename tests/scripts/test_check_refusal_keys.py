@@ -30,6 +30,7 @@ WORDS = {
 REFUSAL_IMPORT = "from songmaker_cli.refusals import Refusal\n"
 WORDS_IMPORT = "from songmaker_cli.words import text\n"
 WORDS_MODULE_IMPORT = "from songmaker_cli import words\n"
+MESSAGE_IMPORT = "from songmaker_cli.messages import message\n"
 
 
 def _scan(
@@ -56,6 +57,9 @@ def _scan(
         "from songmaker_cli import words\n" + 'words.text("en", "takeRefusal.archived")\n',
         "import songmaker_cli.words as w\n" + 'w.text("en", "takeRefusal.archived")\n',
         "import songmaker_cli.words\n" + 'songmaker_cli.words.text("en", "takeRefusal.archived")\n',
+        MESSAGE_IMPORT + 'message("takeRefusal.archived")\n',
+        MESSAGE_IMPORT + 'message("modelRefusal.unavailable", model=name)\n',
+        "from songmaker_cli import messages\n" + 'messages.message("takeRefusal.archived")\n',
     ],
     ids=[
         "refusal",
@@ -68,6 +72,9 @@ def _scan(
         "text-on-words-module",
         "text-on-aliased-module",
         "text-on-dotted-module",
+        "message-by-import",
+        "message-with-gap",
+        "message-on-messages-module",
     ],
 )
 def test_a_call_with_a_plain_key_and_its_gaps_passes(
@@ -108,6 +115,11 @@ def test_a_call_with_a_plain_key_and_its_gaps_passes(
         (WORDS_IMPORT + 'text("en", key)\n', "not a string literal"),
         (WORDS_IMPORT + 'text("en", "modelRefusal.unavailable")\n', "missing ['model']"),
         (WORDS_MODULE_IMPORT + 'words.text("en", "songCount", count=2)\n', "plain entry"),
+        (MESSAGE_IMPORT + "message(key)\n", "not a string literal"),
+        (MESSAGE_IMPORT + 'message("takeRefusal.gone")\n', "not a plain entry"),
+        (MESSAGE_IMPORT + 'message("modelRefusal.unavailable")\n', "missing ['model']"),
+        (MESSAGE_IMPORT + 'message("takeRefusal.archived", count=2)\n', "unexpected ['count']"),
+        (MESSAGE_IMPORT + 'message("modelRefusal.unavailable", **gaps)\n', "** spread"),
     ],
     ids=[
         "unknown-key",
@@ -127,6 +139,11 @@ def test_a_call_with_a_plain_key_and_its_gaps_passes(
         "text-non-literal-key",
         "text-missing-gap",
         "text-plural-family-key",
+        "message-non-literal-key",
+        "message-unknown-key",
+        "message-missing-gap",
+        "message-extra-gap",
+        "message-gap-spread",
     ],
 )
 def test_a_call_breaking_the_contract_is_reported_with_its_line(

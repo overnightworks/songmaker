@@ -1302,7 +1302,7 @@ Playing, and goes by itself once back online; the root layout marks
 and the page (the phone's Generate bar included) stays above it; and Generate is
 disabled with no reason text of its own. A failure becomes text in one place,
 `describeFailure` in `api/fetch.ts`: the page's words for the key a refusal
-names (`refusalText`; a key the page does not know is logged and shows the
+names (`messageText`; a key the page does not know is logged and shows the
 fallback, never the server's sentence), the server's own reason when it names no
 key, otherwise the caller's named fallback — never a browser error's text. A
 server `Refusal` (`refusals.py`, installed by `install_refusal_handler` on the

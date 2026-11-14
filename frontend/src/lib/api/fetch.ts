@@ -1,8 +1,8 @@
-import type { JobItem, RefusalMessage } from './types';
+import type { JobItem, Message } from './types';
 import { SIGN_IN_NEXT_PARAM } from '#lib/constants/auth.ts';
 import { RATE_LIMITED_STATUS, SERVER_ERROR_STATUS_FLOOR } from '#lib/constants/http.ts';
 import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import { pageText, refusalText } from '#lib/utils/page-words.ts';
+import { pageText, messageText } from '#lib/utils/page-words.ts';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -45,7 +45,7 @@ export class ApiError extends Error {
 		public readonly responseDetail: unknown = detail,
 		public readonly errorType: string | null = null,
 		public readonly jobId: string | null = null,
-		public readonly refusal: RefusalMessage | null = null
+		public readonly refusal: Message | null = null
 	) {
 		super(detail || pageText('http.genericError'));
 		this.name = 'ApiError';
@@ -104,8 +104,8 @@ export function describeFailure(
 	return fallback;
 }
 
-function refusalSentence(refusal: RefusalMessage): string | null {
-	const sentence = refusalText(refusal.key, refusal.values);
+function refusalSentence(refusal: Message): string | null {
+	const sentence = messageText(refusal);
 	if (sentence === null) console.error(`The page has no words for the refusal key ${refusal.key}`);
 	return sentence;
 }
@@ -128,7 +128,7 @@ interface ErrorBody {
 	responseDetail: unknown;
 	errorType: string | null;
 	jobId: string | null;
-	refusal: RefusalMessage | null;
+	refusal: Message | null;
 }
 
 const EMPTY_ERROR_BODY: ErrorBody = {
@@ -144,7 +144,7 @@ function stringField(body: object, key: string): string | null {
 	return typeof value === 'string' ? value : null;
 }
 
-function refusalField(body: object): RefusalMessage | null {
+function refusalField(body: object): Message | null {
 	const message: unknown = (body as Record<string, unknown>).message;
 	if (typeof message !== 'object' || message === null) return null;
 	const { key, values } = message as Record<string, unknown>;
