@@ -56,8 +56,10 @@ def test_a_server_that_cannot_be_read_raises_so_that_the_caller_sees_the_failure
         def mget(self, keys):
             raise RedisConnectionError("down")
 
+    server = Unreachable()
+
     with pytest.raises(RedisConnectionError):
-        read_owner_liveness(Unreachable(), [LEASED])
+        read_owner_liveness(server, [LEASED])
 
 
 def test_no_owner_to_read_asks_the_server_nothing() -> None:
