@@ -7,13 +7,22 @@ import sqlalchemy as sa
 from sqlalchemy.exc import StatementError
 
 from songmaker_cli.db.models import Job
-from songmaker_cli.db.queries.jobs import get_job
+from songmaker_cli.db.queries.jobs import JobStatusUpdate, get_job, update_job_status
+from songmaker_cli.job_types import JobStatus
 from songmaker_cli.messages import Message, message
 
 
 def _add_queued_job(session, job_id: str, wait: Message | None) -> None:
     session.add(Job(id=job_id, type="generate", status="queued", queue_reason_message=wait))
     session.flush()
+
+
+def _insert_job_with_retired_key(session, job_id: str) -> None:
+    session.execute(sa.text(
+        "INSERT INTO jobs (id, type, status, progress, heartbeat_at, started_at, "
+        "queue_reason_message) VALUES (:id, 'generate', 'queued', 0, CURRENT_TIMESTAMP, "
+        "CURRENT_TIMESTAMP, CAST('{\"key\": \"jobWait.retired\", \"values\": {}}' AS json))"
+    ), {"id": job_id})
 
 
 def _stored_as_sql_null(session, job_id: str) -> bool:
@@ -51,16 +60,24 @@ def test_a_wrong_key_or_wrong_gaps_raise_on_write_and_store_nothing(pg_factory, 
 
 def test_reading_an_unknown_key_only_checks_the_shape(pg_factory):
     with pg_factory() as session:
-        session.execute(sa.text(
-            "INSERT INTO jobs (id, type, status, progress, heartbeat_at, started_at, "
-            "queue_reason_message) VALUES ('old', 'generate', 'queued', 0, CURRENT_TIMESTAMP, "
-            "CURRENT_TIMESTAMP, CAST('{\"key\": \"jobWait.retired\", \"values\": {}}' AS json))"
-        ))
+        _insert_job_with_retired_key(session, "old")
         session.commit()
     with pg_factory() as session:
         assert get_job(session, "old").queue_reason_message == Message(
             key="jobWait.retired", values={},
         )
+
+
+def test_a_status_update_of_a_job_holding_an_unknown_key_clears_the_wait(pg_factory):
+    with pg_factory() as session:
+        _insert_job_with_retired_key(session, "old")
+        session.commit()
+    with pg_factory() as session:
+        assert update_job_status(session, "old", JobStatusUpdate(JobStatus.RUNNING))
+        session.commit()
+    with pg_factory() as session:
+        assert get_job(session, "old").status == JobStatus.RUNNING
+        assert _stored_as_sql_null(session, "old")
 
 
 def test_no_message_is_sql_null_when_added_without_one_and_when_cleared(pg_factory):

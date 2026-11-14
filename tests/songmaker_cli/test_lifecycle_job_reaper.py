@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+import sqlalchemy as sa
 from support.loop_ticks import run_ticks_observing_status
 from support.web_app import TEST_SECRET, make_fake_redis
 
@@ -124,6 +125,25 @@ class TestLifecycleReaper:
             assert job.status == JobStatus.FAILED
             assert job.error == "Queued too long — please retry."
             assert job.error_type == "queued_too_long"
+            assert job.queue_reason_message is None
+
+    def test_fails_an_old_queued_job_whose_wait_names_an_unknown_key(self, ctx) -> None:
+        now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        dead = _dead_process_time(now, QUEUED_JOB_STALE_THRESHOLD_SECONDS)
+        with ctx.db() as session:
+            session.execute(sa.text(
+                "INSERT INTO jobs (id, type, status, progress, heartbeat_at, started_at, "
+                "queue_reason_message) VALUES ('retired-wait', 'chat', 'queued', 0, :dead, "
+                ":dead, CAST('{\"key\": \"jobWait.retired\", \"values\": {}}' AS json))"
+            ), {"dead": dead})
+            session.commit()
+
+        recovered = reap_stale_jobs(ctx, now=now)
+
+        assert recovered == 1
+        with ctx.db() as session:
+            job = session.query(Job).filter_by(id="retired-wait").one()
+            assert job.status == JobStatus.FAILED
             assert job.queue_reason_message is None
 
     def test_fails_a_silenced_running_chat_job_by_heartbeat(self, ctx) -> None:
