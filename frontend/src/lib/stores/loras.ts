@@ -8,22 +8,19 @@ import {
 } from '#lib/api/loras.ts';
 import type { UserLoraItem } from '#lib/api/types.ts';
 
-const LORA_STATUS_QUEUED = 'queued';
-const LORA_STATUS_PREPROCESSING = 'preprocessing';
-const LORA_STATUS_TRAINING = 'training';
-const LORA_STATUS_EXPORTING = 'exporting';
+const LORA_ACTIVE_STATUSES = [
+	'queued',
+	'preprocessing',
+	'training',
+	'exporting'
+] as const satisfies readonly UserLoraItem['status'][];
 
-const LORA_ACTIVE_STATUSES: ReadonlySet<string> = new Set([
-	LORA_STATUS_QUEUED,
-	LORA_STATUS_PREPROCESSING,
-	LORA_STATUS_TRAINING,
-	LORA_STATUS_EXPORTING
-]);
+type LoraActiveStatus = (typeof LORA_ACTIVE_STATUSES)[number];
 
-type LoraActiveStatus = Exclude<UserLoraItem['status'], 'draft' | 'ready' | 'failed'>;
+const LORA_ACTIVE_STATUS_SET: ReadonlySet<string> = new Set(LORA_ACTIVE_STATUSES);
 
 export function isLoraActive(status: string): status is LoraActiveStatus {
-	return LORA_ACTIVE_STATUSES.has(status);
+	return LORA_ACTIVE_STATUS_SET.has(status);
 }
 
 export const loras = writable<UserLoraItem[]>([]);
