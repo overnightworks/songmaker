@@ -346,6 +346,22 @@ describe('LoraDetail', () => {
 		expect(target.querySelector('.training-progress')?.textContent).toContain(cancelledLine);
 	});
 
+	it('shows no failure banner next to the cancelled line when the reconciler marks the cancelled voice failed', async () => {
+		const cancelledJob = job({ status: 'cancelled', completed_at: '2026-09-05T12:00:00Z' });
+		jobStore.activeJobs.set([{ job: cancelledJob }]);
+		const target = await render(
+			lora({
+				status: 'failed',
+				training_job_id: cancelledJob.id,
+				error: 'Training crashed or was interrupted'
+			})
+		);
+
+		expect(target.textContent).toContain(words['voiceDetail.trainingCancelled']);
+		expect(target.textContent).not.toContain('Training crashed or was interrupted');
+		expect(target.querySelector('.banner.error')).toBeNull();
+	});
+
 	it('wraps the complete queue-limit sentence without truncation in a 375 px container', async () => {
 		const sentence = words['voiceRefusal.trainingQueueFull']({ waiting: '2' });
 		trainLora.mockRejectedValueOnce(
