@@ -14,6 +14,7 @@ import {
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import { toasts } from '#lib/stores/toast.ts';
 
+import { pageText } from '#lib/utils/page-words.ts';
 import { words } from '#lib/words/en.ts';
 import ParamControls from './ParamControls.svelte';
 
@@ -237,11 +238,11 @@ describe('ParamControls change marks', () => {
 			...LM_BOOL_FIELDS,
 			...LM_TEXT_FIELDS
 		];
-		const shown = fields.filter((field) => titleByLabel.has(words[field.labelKey]));
+		const shown = fields.filter((field) => titleByLabel.has(pageText(field.labelKey)));
 
 		expect(shown.length).toBeGreaterThan(0);
 		for (const field of shown) {
-			expect(titleByLabel.get(words[field.labelKey])).toBe(words[field.helpKey]);
+			expect(titleByLabel.get(pageText(field.labelKey))).toBe(pageText(field.helpKey));
 		}
 	});
 });
