@@ -879,7 +879,7 @@
 			text={message.error}
 			problem={message.problem ?? null}
 			waitSeconds={message.waitSeconds ?? 0}
-			onretry={() => retry(message.text)}
+			onretry={() => retry(messages[index].text)}
 		/>
 	{/if}
 {/snippet}
