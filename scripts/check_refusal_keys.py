@@ -460,6 +460,13 @@ def _set_problems(
     return problems
 
 
+def _commit_id(text: str) -> str | None:
+    """The full commit id ``text`` spells, rebuilt from its number so no raw argument reaches git."""
+    if not re.fullmatch(COMMIT_ID_PATTERN, text):
+        return None
+    return f"{int(text, 16):0{len(text)}x}"
+
+
 def _git(directory: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - fixed git subcommands; the only input is a full commit id
         ["git", *arguments],  # noqa: S607 - git is found on PATH like in every other CI step
@@ -473,18 +480,19 @@ def _base_problems(
     """Rule (c): a key the set lost since the base commit, and no added migration retires."""
     shown = str(stored_file)
     directory = stored_file.parent
-    if not re.fullmatch(COMMIT_ID_PATTERN, base_sha) or _git(
-        directory, "rev-parse", "--verify", "--quiet", f"{base_sha}^{{commit}}"
+    commit_id = _commit_id(base_sha)
+    if commit_id is None or _git(
+        directory, "rev-parse", "--verify", "--quiet", f"{commit_id}^{{commit}}"
     ).returncode:
         problem = f"the base commit {base_sha} cannot be resolved; fetch the history"
         return [Violation(shown, 1, problem)]
-    base = _git(directory, "show", f"{base_sha}:./{stored_file.name}")
+    base = _git(directory, "show", f"{commit_id}:./{stored_file.name}")
     dropped = (read_stored_keys(base.stdout) if base.returncode == 0 else set()) - stored
     if not dropped:
         return []
     added = _git(
         migrations_directory, "diff", "--name-only", "--relative", "--diff-filter=A",
-        base_sha, "HEAD", "--", ".",
+        commit_id, "HEAD", "--", ".",
     )
     retired = {
         key
