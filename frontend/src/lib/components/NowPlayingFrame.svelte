@@ -5,33 +5,23 @@
 	import {
 		audioPlayer,
 		transportButtonFace,
-		transportButtonLabel,
+		transportAction,
+		TRANSPORT_ACTION_KEYS,
 		transportIsBusy,
 		transportWaitingNotice
 	} from '#lib/services/audioPlayer.svelte.ts';
-	import { SONG_NEXT_LABEL, SONG_PREVIOUS_LABEL } from '#lib/constants/song.ts';
 	import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 	import {
-		NOW_PLAYING_COLLAPSE_LABEL,
 		NOW_PLAYING_DOCKED_WIDTH_PX,
-		NOW_PLAYING_EXPAND_LABEL,
-		NOW_PLAYING_PLAY_AGAIN_LABEL,
-		NOW_PLAYING_RIGHT_PANEL_LABEL,
 		NOW_PLAYING_STACKED_MEDIA,
-		NOW_PLAYING_UP_NEXT_PREFIX,
 		NOW_PLAYING_Z_INDEX,
 		nowPlayingFromLabel,
-		nowPlayingOpenSourceLabel,
-		nowPlayingSheetCloseLabel,
 		nowPlayingTakeLabel,
 		type NowPlayingSource,
-		type NowPlayingSurfaceKind,
-		NOW_PLAYING_CLOSE,
-		NOW_PLAYING_GO_TO_SONG,
-		NOW_PLAYING_NO_LYRICS,
-		NOW_PLAYING_LABEL
+		type NowPlayingSurfaceKind
 	} from '#lib/constants/now-playing.ts';
 	import { formatTime } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { historyLayerState } from '#lib/stores/layers.ts';
 	import { focusFirstIn, handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
@@ -67,10 +57,10 @@
 		onGoToSong,
 		upNextTitle = null,
 		rightPanelLabel,
-		sheetLabel = NOW_PLAYING_RIGHT_PANEL_LABEL,
+		sheetLabel = pageText('nowPlaying.rightPanel'),
 		rightPanelOpenOnMount = false,
 		showTakeLabel = true,
-		lyricsEmptyLabel = NOW_PLAYING_NO_LYRICS,
+		lyricsEmptyLabel = pageText('nowPlaying.noLyrics'),
 		// #45: the fully-resolved take's cues/transcript, distinct from `info`
 		// (whose `generation` can still be a thin library-pool stub with no
 		// whisper data). Absent/null means "no cues yet" — static lyrics.
@@ -256,8 +246,10 @@
 				class="from-link"
 				data-hitbox="text"
 				onclick={source.open}
-				aria-label={nowPlayingOpenSourceLabel(source.kind, source.title)}
-				>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
+				aria-label={pageText(
+					source.kind === 'album' ? 'nowPlaying.openAlbumSource' : 'nowPlaying.openPlaylistSource',
+					{ title: source.title }
+				)}>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
 			>
 		{:else if albumLine && showTakeLabel}<span class="cover-line">{albumLine}</span>{/if}
 		<span class="cover-line"><AiNotice look="badge" lead={noticeLead} /></span>
@@ -277,7 +269,7 @@
 {#snippet playButton()}
 	{#if ended}
 		<button type="button" class="play-again" onclick={onTogglePlay}
-			><span aria-hidden="true">↻</span> {NOW_PLAYING_PLAY_AGAIN_LABEL}</button
+			><span aria-hidden="true">↻</span> {pageText('nowPlaying.playAgain')}</button
 		>
 	{:else}
 		<button
@@ -285,7 +277,7 @@
 			class="play-btn"
 			onclick={onTogglePlay}
 			disabled={unplayableNotice !== null}
-			aria-label={transportButtonLabel(transport)}
+			aria-label={pageText(TRANSPORT_ACTION_KEYS[transportAction(transport)])}
 			aria-busy={transportIsBusy(transport)}
 		>
 			<TransportButtonIcon face={transportButtonFace(transport)} size={26} />
@@ -328,13 +320,13 @@
 					</button>
 				{/if}
 				{#if onprev}
-					{@render iconButton('skip-back', SONG_PREVIOUS_LABEL, onprev, !canPrev)}
+					{@render iconButton('skip-back', pageText('nowPlaying.previousSong'), onprev, !canPrev)}
 				{/if}
 			</div>
 			{@render playButton()}
 			<div class="transport-side after">
 				{#if onnext}
-					{@render iconButton('skip-forward', SONG_NEXT_LABEL, onnext, !canNext)}
+					{@render iconButton('skip-forward', pageText('nowPlaying.nextSong'), onnext, !canNext)}
 				{/if}
 				<span class="transport-slot" style={frequentHitbox} aria-hidden="true"></span>
 			</div>
@@ -373,7 +365,7 @@
 {#snippet goToSongButton()}
 	{#if onGoToSong}
 		<button type="button" class="go-song" style={frequentHitbox} onclick={onGoToSong}
-			>{NOW_PLAYING_GO_TO_SONG}</button
+			>{pageText('nowPlaying.goToSong')}</button
 		>
 	{/if}
 {/snippet}
@@ -424,21 +416,21 @@
 		{:else}
 			<header class="np-header">
 				<div class="np-heading">
-					<p class="np-kicker">{NOW_PLAYING_LABEL}</p>
+					<p class="np-kicker">{pageText('nowPlaying.kicker')}</p>
 					<h2 id="now-playing-title" class="np-title">{info.songTitle}</h2>
 				</div>
 				<div class="np-header-actions">
 					{#if stacked}{@render goToSongButton()}{/if}
 					{#if isDocked && onExpand}
 						<button type="button" class="surface-btn" onclick={onExpand}
-							>{NOW_PLAYING_EXPAND_LABEL}</button
+							>{pageText('nowPlaying.expand')}</button
 						>
 					{:else if !isDocked && onCollapse}
 						<button type="button" class="surface-btn" onclick={onCollapse}
-							>{NOW_PLAYING_COLLAPSE_LABEL}</button
+							>{pageText('nowPlaying.collapse')}</button
 						>
 					{/if}
-					{@render iconButton('x', NOW_PLAYING_CLOSE, onclose)}
+					{@render iconButton('x', pageText('nowPlaying.close'), onclose)}
 				</div>
 			</header>
 
@@ -476,7 +468,9 @@
 					aria-expanded={$sheetOpen}
 				>
 					{#if upNextTitle}
-						<span class="trigger-up-next">{NOW_PLAYING_UP_NEXT_PREFIX} {upNextTitle}</span>
+						<span class="trigger-up-next"
+							>{pageText('nowPlaying.upNext', { title: upNextTitle })}</span
+						>
 					{/if}
 					<span class="trigger-label"
 						>{rightPanelLabel}
@@ -488,7 +482,7 @@
 						type="button"
 						class="mobile-sheet-backdrop"
 						tabindex="-1"
-						aria-label={nowPlayingSheetCloseLabel(sheetLabel)}
+						aria-label={pageText('nowPlaying.closeSheet', { sheet: sheetLabel })}
 						onclick={() => ($sheetOpen = false)}
 					></button>
 					<div

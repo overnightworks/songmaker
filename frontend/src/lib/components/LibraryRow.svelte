@@ -6,12 +6,20 @@
 	import { onMount, type ComponentProps } from 'svelte';
 	import {
 		transportButtonFace,
-		transportButtonLabel,
+		transportAction,
+		type TransportAction,
 		type TransportState
 	} from '#lib/services/audioPlayer.svelte.ts';
+	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
+
+	const PLAY_LABEL_KEYS = {
+		play: 'libraryWall.playTitle',
+		pause: 'libraryWall.pauseTitle',
+		retry: 'libraryWall.retryTitle'
+	} as const satisfies Record<TransportAction, TextKey>;
 
 	type Props = Omit<ComponentProps<typeof LibraryTileContent>, 'presentation'> & {
 		openLabel: string;
@@ -59,7 +67,7 @@
 		<button
 			type="button"
 			class="row-play"
-			aria-label={`${transportButtonLabel(transport)} ${content.title}`}
+			aria-label={pageText(PLAY_LABEL_KEYS[transportAction(transport)], { title: content.title })}
 			onclick={onplay}
 		>
 			<TransportButtonIcon face={transportButtonFace(transport)} size={20} />

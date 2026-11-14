@@ -10,26 +10,7 @@ import { get } from 'svelte/store';
 import type { SongItem } from '#lib/api/types.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
-import {
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL,
-	PLAYER_WAITING_FOR_NETWORK
-} from '#lib/constants/transport.ts';
-import {
-	NOW_PLAYING_CURATE_DONE_LABEL,
-	NOW_PLAYING_RIGHT_PANEL_LABEL,
-	NOW_PLAYING_TAKE_TAB,
-	nowPlayingFromLabel,
-	nowPlayingOpenSourceLabel,
-	nowPlayingSheetCloseLabel,
-	nowPlayingTakeLabel,
-	NOW_PLAYING_CLOSE,
-	NOW_PLAYING_GO_TO_SONG,
-	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
-	NOW_PLAYING_NO_LYRICS,
-	NOW_PLAYING_LABEL
-} from '#lib/constants/now-playing.ts';
+import { nowPlayingFromLabel, nowPlayingTakeLabel } from '#lib/constants/now-playing.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
 import {
@@ -93,6 +74,7 @@ vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
 
 import { setKeep, setPick } from '#lib/stores/takeActions.ts';
 import NowPlaying from './NowPlaying.svelte';
+import { words } from '#lib/words/en.ts';
 
 function playingSongDefaults(): Partial<SongItem> {
 	return {
@@ -236,7 +218,7 @@ describe('NowPlaying', () => {
 	it('shows the playing take and its version lyrics, not a later draft', async () => {
 		songList.set([song(playingSongDefaults())]);
 		await renderSurface(info({ lyrics: 'old verse' }));
-		expect(target.textContent).toContain(NOW_PLAYING_LABEL);
+		expect(target.textContent).toContain(words['transport.nowPlaying']);
 		expect(target.textContent).toContain('Tide');
 		expect(target.textContent).toContain('Nachtstrom · Artist');
 		expect(target.textContent).toContain(nowPlayingTakeLabel(1, 2));
@@ -245,8 +227,8 @@ describe('NowPlaying', () => {
 	});
 
 	it.each([
-		{ take: 'a take of a version', versioned: true, empty: NOW_PLAYING_NO_LYRICS },
-		{ take: 'an imported take', versioned: false, empty: NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS }
+		{ take: 'a take of a version', versioned: true, empty: words['nowPlaying.noLyrics'] },
+		{ take: 'an imported take', versioned: false, empty: words['nowPlaying.importedNoLyrics'] }
 	])('names why $take shows no lyrics', async ({ versioned, empty }) => {
 		const take = generation({
 			generation_number: 2,
@@ -290,7 +272,9 @@ describe('NowPlaying', () => {
 	it('closes on the close button', async () => {
 		await renderSurface(info());
 
-		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_CLOSE}"]`)?.click();
+		target
+			.querySelector<HTMLButtonElement>(`button[aria-label="${words['nowPlaying.close']}"]`)
+			?.click();
 
 		expect(get(nowPlayingSurface)).toBe('closed');
 	});
@@ -333,7 +317,7 @@ describe('NowPlaying', () => {
 		await renderSurface(info());
 
 		const go = Array.from(target.querySelectorAll('button')).find(
-			(button) => button.textContent === NOW_PLAYING_GO_TO_SONG
+			(button) => button.textContent === words['nowPlaying.goToSong']
 		);
 		go?.click();
 
@@ -439,11 +423,11 @@ describe('NowPlaying', () => {
 	});
 
 	it.each([
-		{ transport: 'loading', named: TRANSPORT_PAUSE_LABEL, busy: true },
-		{ transport: 'recovering', named: TRANSPORT_PAUSE_LABEL, busy: true },
-		{ transport: 'waiting-for-network', named: TRANSPORT_PAUSE_LABEL, busy: false },
-		{ transport: 'failed', named: TRANSPORT_RETRY_LABEL, busy: false },
-		{ transport: 'paused', named: TRANSPORT_PLAY_LABEL, busy: false }
+		{ transport: 'loading', named: words['transport.pause'], busy: true },
+		{ transport: 'recovering', named: words['transport.pause'], busy: true },
+		{ transport: 'waiting-for-network', named: words['transport.pause'], busy: false },
+		{ transport: 'failed', named: words['transport.retry'], busy: false },
+		{ transport: 'paused', named: words['transport.play'], busy: false }
 	] as const)(
 		'names its play button $named, busy $busy, while the take is $transport, as the bar does (#1234, #1312)',
 		async ({ transport, named, busy }) => {
@@ -474,7 +458,7 @@ describe('NowPlaying', () => {
 	});
 
 	it.each([
-		{ transport: 'waiting-for-network', words: PLAYER_WAITING_FOR_NETWORK },
+		{ transport: 'waiting-for-network', words: words['transport.waitingForNetwork'] },
 		{ transport: 'recovering', words: null }
 	] as const)(
 		'says why it waits once given up offline, as the bar does, and not while $transport (#1330)',
@@ -551,7 +535,7 @@ describe('NowPlaying', () => {
 		nowPlayingPanel.set('take');
 		await renderSurface(info());
 		const takeTab = Array.from(target.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
-			(tab) => tab.textContent?.trim() === NOW_PLAYING_TAKE_TAB
+			(tab) => tab.textContent?.trim() === words['nowPlaying.takeTab']
 		);
 		expect(takeTab).toBeDefined();
 		expect(takeTab?.getAttribute('aria-selected')).toBe('true');
@@ -629,11 +613,13 @@ describe('NowPlaying', () => {
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).not.toBeNull();
 		// Only × is named Close: the backdrop around the sheet closes the sheet.
-		expect(target.querySelectorAll(`button[aria-label="${NOW_PLAYING_CLOSE}"]`)).toHaveLength(1);
+		expect(
+			target.querySelectorAll(`button[aria-label="${words['nowPlaying.close']}"]`)
+		).toHaveLength(1);
 
 		target
 			.querySelector<HTMLButtonElement>(
-				`button[aria-label="${nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL)}"]`
+				`button[aria-label="${words['nowPlaying.closeSheet']({ sheet: words['nowPlaying.rightPanel'] })}"]`
 			)
 			?.click();
 		await tick();
@@ -690,7 +676,7 @@ describe('NowPlaying', () => {
 
 function sheetBackdrop(target: HTMLElement): HTMLButtonElement | null {
 	return target.querySelector<HTMLButtonElement>(
-		`button[aria-label="${nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL)}"]`
+		`button[aria-label="${words['nowPlaying.closeSheet']({ sheet: words['nowPlaying.rightPanel'] })}"]`
 	);
 }
 
@@ -837,6 +823,7 @@ describe('NowPlaying source line on the phone (#1052)', () => {
 			name: 'an album',
 			kind: 'album' as const,
 			title: 'Nachtstrom',
+			openLabel: words['nowPlaying.openAlbumSource']({ title: 'Nachtstrom' }),
 			arrange: () => {
 				albumList.set([album({ created_at: '' })]);
 				queueContext.set({ type: 'album', albumId: 'a1' });
@@ -847,6 +834,7 @@ describe('NowPlaying source line on the phone (#1052)', () => {
 			name: 'a playlist',
 			kind: 'playlist' as const,
 			title: 'Night Drive',
+			openLabel: words['nowPlaying.openPlaylistSource']({ title: 'Night Drive' }),
 			arrange: () => {
 				queueContext.set({
 					type: 'playlist',
@@ -861,13 +849,11 @@ describe('NowPlaying source line on the phone (#1052)', () => {
 
 	it.each(sources)(
 		'says where $name playing comes from and opens it, leaving Now Playing',
-		async ({ kind, title, arrange, opens }) => {
+		async ({ title, openLabel, arrange, opens }) => {
 			arrange();
 			await renderSurface(info());
 
-			const from = target.querySelector<HTMLButtonElement>(
-				`button[aria-label="${nowPlayingOpenSourceLabel(kind, title)}"]`
-			);
+			const from = target.querySelector<HTMLButtonElement>(`button[aria-label="${openLabel}"]`);
 			expect(from?.textContent).toContain(`${nowPlayingFromLabel(title)} ›`);
 			expect(from?.getAttribute('aria-label')?.startsWith(`${nowPlayingFromLabel(title)} `)).toBe(
 				true
@@ -1024,7 +1010,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		await renderSurface(takes[0]);
 
 		const done = Array.from(target.querySelectorAll('button')).find(
-			(button) => button.textContent === NOW_PLAYING_CURATE_DONE_LABEL
+			(button) => button.textContent === words['nowPlaying.done']
 		);
 		done?.click();
 

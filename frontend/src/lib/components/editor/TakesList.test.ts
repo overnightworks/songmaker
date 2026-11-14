@@ -99,7 +99,9 @@ const repaintFromOne = words['takeRow.provenanceRepaint']({ take: takeOne });
 const takeTwo = words['takeRow.takeVersioned']({ version: '3', take: '2' });
 const takeThree = words['takeRow.takeVersioned']({ version: '3', take: '3' });
 const noVocals = `⚠ ${words['takeRow.flagNoVocals']}`;
-const playTakeLabel = (action: string) => words['takeRow.playTake']({ action, take: takeThree });
+const playTakeLabel = words['takeRow.playTake']({ take: takeThree });
+const pauseTakeLabel = words['takeRow.pauseTake']({ take: takeThree });
+const retryTakeLabel = words['takeRow.retryTake']({ take: takeThree });
 // defect:#1568 — these fixtures retain determinate progress and no elapsed phase.
 const RUNNING: GenerateState = {
 	kind: 'generating',
@@ -822,7 +824,7 @@ describe('TakesList', () => {
 	it('plays only from its named play control, independently of the pick and menu', async () => {
 		const { target } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
-		const play = row?.querySelector<HTMLButtonElement>(`[aria-label="${playTakeLabel('Play')}"]`);
+		const play = row?.querySelector<HTMLButtonElement>(`[aria-label="${playTakeLabel}"]`);
 		expect(play).not.toBeNull();
 		expect(play?.contains(row?.querySelector('.pick-btn') ?? null)).toBe(false);
 		expect(play?.contains(row?.querySelector('.keep-btn') ?? null)).toBe(false);
@@ -838,10 +840,10 @@ describe('TakesList', () => {
 	});
 
 	it.each([
-		{ status: 'playing', label: 'Pause', busy: 'false', face: 'pause' },
-		{ status: 'paused', label: 'Play', busy: 'false', face: 'play' },
-		{ status: 'buffering', label: 'Pause', busy: 'true', face: 'spinner' },
-		{ status: 'error', label: 'Retry', busy: 'false', face: 'refresh-cw' }
+		{ status: 'playing', label: pauseTakeLabel, busy: 'false', face: 'pause' },
+		{ status: 'paused', label: playTakeLabel, busy: 'false', face: 'play' },
+		{ status: 'buffering', label: pauseTakeLabel, busy: 'true', face: 'spinner' },
+		{ status: 'error', label: retryTakeLabel, busy: 'false', face: 'refresh-cw' }
 	] as const)(
 		'names the transport action for a $status take and shows the face the bar shows (#1330)',
 		async ({ status, label, busy, face }) => {
@@ -856,9 +858,7 @@ describe('TakesList', () => {
 			};
 			audioPlayer.status = status;
 			const { target } = await render({ song: currentSong });
-			const button = target.querySelector<HTMLButtonElement>(
-				`[aria-label="${playTakeLabel(label)}"]`
-			);
+			const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
 			expect({ busy: button?.getAttribute('aria-busy'), face: shownTransportFace(button) }).toEqual(
 				{
 					busy,

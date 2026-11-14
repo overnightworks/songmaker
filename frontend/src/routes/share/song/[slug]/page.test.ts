@@ -1,8 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_NAME } from '#lib/constants/app.ts';
-import { SEEK_PLAYBACK_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
-import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '#lib/constants/now-playing.ts';
 import { words } from '#lib/words/en.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
@@ -105,7 +103,9 @@ function sharedSong(media: Record<string, unknown> = {}): Record<string, unknown
 }
 
 function seekLine(target: HTMLElement): HTMLInputElement {
-	const line = target.querySelector<HTMLInputElement>(`input[aria-label="${SEEK_PLAYBACK_LABEL}"]`);
+	const line = target.querySelector<HTMLInputElement>(
+		`input[aria-label="${words['transport.seek']}"]`
+	);
 	if (!line) throw new Error('Expected the seek line');
 	return line;
 }
@@ -122,7 +122,7 @@ describe('shared song page', () => {
 
 		expect(target.querySelector('h1')?.textContent).toBe('Solo Track');
 		expect(target.querySelectorAll('.track-row')).toHaveLength(0);
-		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		getByRoleButton(target, words['transport.play']).click();
 
 		await vi.waitFor(() => expect(audio.src).toBe('/audio/solo.mp3'));
 		expect(document.querySelector('.player-bar')).toBeNull();
@@ -130,14 +130,14 @@ describe('shared song page', () => {
 
 	it('offers Play again at the end and keeps the slider there', async () => {
 		const target = await openSharedSong(sharedSong());
-		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		getByRoleButton(target, words['transport.play']).click();
 		await vi.waitFor(() => expect(audio.src).toBe('/audio/solo.mp3'));
 		audio.fire('playing');
 
 		audio.fire('ended');
 
 		const playAgain = await vi.waitFor(() =>
-			getByRoleButton(target, `↻ ${NOW_PLAYING_PLAY_AGAIN_LABEL}`)
+			getByRoleButton(target, `↻ ${words['nowPlaying.playAgain']}`)
 		);
 		expect(Number(seekLine(target).value)).toBe(SONG_DURATION_SEC);
 		expect(target.querySelector('.progress-times')?.textContent).toMatch(/3:07\s*3:07/);
@@ -152,7 +152,7 @@ describe('shared song page', () => {
 		const target = await openSharedSong(sharedSong({ audio_url: null, generation_id: null }));
 
 		expect(target.textContent).toContain(words['share.noAudio']);
-		expect(getByRoleButton(target, TRANSPORT_PLAY_LABEL).disabled).toBe(true);
+		expect(getByRoleButton(target, words['transport.play']).disabled).toBe(true);
 	});
 
 	it('says in one line that a link is no longer shared, with a way back and no player', async () => {

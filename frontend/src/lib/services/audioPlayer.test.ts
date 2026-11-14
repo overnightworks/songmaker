@@ -1,11 +1,10 @@
 import { makeGeneration as makeGen } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '#lib/api/types.ts';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 import {
 	audioPlayer,
 	STALL_RECOVERY_MS,
-	transportButtonLabel,
+	transportAction,
 	transportIsBusy,
 	type AudioPlayerCallbacks,
 	type PlaybackInfo
@@ -2080,18 +2079,18 @@ describe('toggle / play / pause', () => {
 	});
 
 	it.each([
-		{ moment: 'nobody pressed yet', presses: 0, label: TRANSPORT_PLAY_LABEL, busy: false },
-		{ moment: 'a press asked for sound', presses: 1, label: TRANSPORT_PAUSE_LABEL, busy: true },
-		{ moment: 'a second press withdrew it', presses: 2, label: TRANSPORT_PLAY_LABEL, busy: false }
+		{ moment: 'nobody pressed yet', presses: 0, action: 'play', busy: false },
+		{ moment: 'a press asked for sound', presses: 1, action: 'pause', busy: true },
+		{ moment: 'a second press withdrew it', presses: 2, action: 'play', busy: false }
 	])(
-		'names a loading take $label, busy $busy, once $moment (#1312)',
-		({ presses, label, busy }) => {
+		'names a loading take $action, busy $busy, once $moment (#1312)',
+		({ presses, action, busy }) => {
 			for (let press = 0; press < presses; press++) audioPlayer.toggle();
 
 			expect({
-				label: transportButtonLabel(audioPlayer.transport),
+				action: transportAction(audioPlayer.transport),
 				busy: transportIsBusy(audioPlayer.transport)
-			}).toEqual({ label, busy });
+			}).toEqual({ action, busy });
 		}
 	);
 
@@ -2243,13 +2242,13 @@ describe('a loading take whose bytes never come, past the stall check (#1312)', 
 
 		vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
 		const shown = {
-			label: transportButtonLabel(audioPlayer.transport),
+			action: transportAction(audioPlayer.transport),
 			busy: transportIsBusy(audioPlayer.transport)
 		};
 		fakeAudio.fire('canplay');
 
 		expect({ shown, played: fakeAudio.playMock.mock.calls.length > 0 }).toEqual({
-			shown: { label: TRANSPORT_PLAY_LABEL, busy: false },
+			shown: { action: 'play', busy: false },
 			played: false
 		});
 	});
@@ -2260,9 +2259,9 @@ describe('a loading take whose bytes never come, past the stall check (#1312)', 
 		vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
 
 		expect({
-			label: transportButtonLabel(audioPlayer.transport),
+			action: transportAction(audioPlayer.transport),
 			busy: transportIsBusy(audioPlayer.transport)
-		}).toEqual({ label: TRANSPORT_PAUSE_LABEL, busy: true });
+		}).toEqual({ action: 'pause', busy: true });
 	});
 });
 

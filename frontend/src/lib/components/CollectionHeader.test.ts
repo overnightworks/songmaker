@@ -4,11 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 
 import { get } from 'svelte/store';
-import {
-	collectionActionLabel,
-	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_PAUSE_LABEL
-} from '#lib/constants/transport.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import {
 	reportResourceStreamReachable,
@@ -130,6 +125,19 @@ afterEach(async () => {
 
 type HeaderKind = CollectionHeaderProps['kind'];
 
+const HEADER_LABELS = {
+	album: {
+		play: words['collectionHeader.playAlbum'],
+		pause: words['collectionHeader.pauseAlbum'],
+		retry: words['collectionHeader.retryAlbum']
+	},
+	playlist: {
+		play: words['collectionHeader.playPlaylist'],
+		pause: words['collectionHeader.pausePlaylist'],
+		retry: words['collectionHeader.retryPlaylist']
+	}
+} as const satisfies Record<HeaderKind, Record<'play' | 'pause' | 'retry', string>>;
+
 // The queue plays `collectionId` of `kind`, sounding or paused. jsdom gives the
 // player no media element, so pause and play are stubbed to move the status
 // the way a real element does and a click's effect reads as state.
@@ -190,7 +198,7 @@ describe('CollectionHeader', () => {
 			const props = { ...baseProps(), kind };
 			const target = await render(props);
 
-			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind)).click();
+			getByRoleButton(target, HEADER_LABELS[kind].play).click();
 
 			expect(props.onplay).toHaveBeenCalledOnce();
 			expect(get(shuffleEnabled)).toBe(false);
@@ -205,17 +213,15 @@ describe('CollectionHeader', () => {
 			queuePlays(kind, props.collectionId, 'playing');
 			const target = await render(props);
 
-			getByRoleButton(target, collectionActionLabel(TRANSPORT_PAUSE_LABEL, kind)).click();
+			getByRoleButton(target, HEADER_LABELS[kind].pause).click();
 			await tick();
 
 			expect(audioPlayer.status).toBe('paused');
-			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind)).click();
+			getByRoleButton(target, HEADER_LABELS[kind].play).click();
 			await tick();
 
 			expect(audioPlayer.status).toBe('playing');
-			expect(
-				getByRoleButton(target, collectionActionLabel(TRANSPORT_PAUSE_LABEL, kind))
-			).not.toBeNull();
+			expect(getByRoleButton(target, HEADER_LABELS[kind].pause)).not.toBeNull();
 			expect(props.onplay).not.toHaveBeenCalled();
 			expect(get(shuffleEnabled)).toBe(true);
 		}
@@ -228,7 +234,7 @@ describe('CollectionHeader', () => {
 			queuePlays(kind, 'c-other', 'playing');
 			const target = await render(props);
 
-			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind)).click();
+			getByRoleButton(target, HEADER_LABELS[kind].play).click();
 
 			expect(props.onplay).toHaveBeenCalledOnce();
 			expect(audioPlayer.status).toBe('playing');
@@ -242,7 +248,7 @@ describe('CollectionHeader', () => {
 			queuePlays(kind, props.collectionId, 'playing');
 			const target = await render(props);
 
-			getByRoleButton(target, collectionActionLabel(TRANSPORT_PAUSE_LABEL, kind)).click();
+			getByRoleButton(target, HEADER_LABELS[kind].pause).click();
 			await tick();
 
 			expect(audioPlayer.status).toBe('paused');
@@ -254,7 +260,7 @@ describe('CollectionHeader', () => {
 		async (kind) => {
 			setShuffle(true);
 			const target = await render({ ...baseProps(), kind, onplay: null });
-			const circle = getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind));
+			const circle = getByRoleButton(target, HEADER_LABELS[kind].play);
 
 			circle.click();
 
@@ -493,7 +499,7 @@ describe('CollectionHeader', () => {
 
 		const actions = [...requireElement(target, '.header-actions').querySelectorAll('button')];
 		expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual([
-			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+			words['collectionHeader.playAlbum'],
 			words['collectionMenu.label']
 		]);
 	});
@@ -600,15 +606,13 @@ describe('CollectionHeader', () => {
 			await playAlbum(props.collectionId);
 			playStartNotice.set(notice);
 			const root = await render(props);
-			const pause = getByRoleButton(root, collectionActionLabel(TRANSPORT_PAUSE_LABEL, props.kind));
+			const pause = getByRoleButton(root, HEADER_LABELS[props.kind].pause);
 			expect(pause).toBeEnabled();
 			pause.click();
 			await tick();
 			expect(get(pendingStart)).toBeNull();
 			expect(get(playStartNotice)).toBe('idle');
-			expect(
-				getByRoleButton(root, collectionActionLabel(TRANSPORT_PLAY_LABEL, props.kind))
-			).toBeDisabled();
+			expect(getByRoleButton(root, HEADER_LABELS[props.kind].play)).toBeDisabled();
 		}
 	);
 });

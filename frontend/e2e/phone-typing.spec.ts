@@ -19,7 +19,6 @@ import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import { words } from '../src/lib/words/en';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
 	FlowGuard,
@@ -191,11 +190,11 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		);
 		const panel = page.getByRole('tabpanel');
 		const miniPlayer = page.getByRole('contentinfo');
-		const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+		const pause = miniPlayer.getByRole('button', { name: words['transport.pause'], exact: true });
 		const editTab = page.getByRole('tab', { name: words['songTabs.edit'] });
 
 		await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
-		await panel.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) }).click();
+		await panel.getByRole('button', { name: new RegExp(`^${words['transport.play']} v`) }).click();
 		await expect(pause).toBeVisible();
 		await editTab.click();
 		const progress = panel.getByRole('status');

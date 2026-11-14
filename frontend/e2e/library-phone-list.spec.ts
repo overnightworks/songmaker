@@ -4,7 +4,6 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { LIBRARY_WALL_ORDER_KEYS, type LibraryWallOrder } from '../src/lib/constants/library';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { words } from '../src/lib/words/en';
 import {
 	sameOriginHeaders,
@@ -620,7 +619,7 @@ async function playFirstTakeFromTheWall(
 	if (shell === 'mobile') await page.getByRole('tab', { name: words['songTabs.takes'] }).click();
 	const take = workspace(page).locator('.take-row');
 	await expect(take).toHaveCount(1);
-	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
+	await take.getByRole('button', { name: nameStartingWith(words['transport.play']) }).click();
 	expect((await listenRecorded).ok()).toBe(true);
 }
 
@@ -635,9 +634,9 @@ async function pauseATakeToRestore(
 	await playFirstTakeFromTheWall(page, shell, album);
 	await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(0);
 	const transport = page.getByRole('contentinfo');
-	await transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }).click();
+	await transport.getByRole('button', { name: words['transport.pause'], exact: true }).click();
 	await expect(
-		transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
+		transport.getByRole('button', { name: words['transport.play'], exact: true })
 	).toBeVisible();
 }
 

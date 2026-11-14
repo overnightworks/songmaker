@@ -1,12 +1,12 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import PlayingMark from './PlayingMark.svelte';
 import playingMarkSource from './PlayingMark.svelte?raw';
+import { words } from '#lib/words/en.ts';
 
 type PlayerStatus = typeof audioPlayer.status;
 
@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 function requireMark(target: HTMLElement): Element {
-	const mark = findElementByRoleAndName(target, 'img', PLAYING_MARK_LABEL);
+	const mark = findElementByRoleAndName(target, 'img', words['playingMark.playing']);
 	if (!mark) throw new Error('Expected the playing mark');
 	return mark;
 }
@@ -50,7 +50,9 @@ describe('PlayingMark', () => {
 
 		const target = await render(current);
 
-		expect(findElementByRoleAndName(target, 'img', PLAYING_MARK_LABEL) !== null).toBe(shown);
+		expect(findElementByRoleAndName(target, 'img', words['playingMark.playing']) !== null).toBe(
+			shown
+		);
 	});
 
 	it('moves while its take sounds', async () => {

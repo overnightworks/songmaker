@@ -1,12 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
 import {
-	NOW_PLAYING_CLOSE,
-	NOW_PLAYING_RIGHT_PANEL_LABEL,
-	NOW_PLAYING_TAKE_TAB,
-	openNowPlayingLabel
-} from '../src/lib/constants/now-playing';
-import {
 	FlowGuard,
 	nameStartingWith,
 	ONLY_IN_SHELL,
@@ -51,10 +45,13 @@ const NOW_PLAYING_ORIGINS: {
 			await playedCard.tap({ position: { x: 4, y: playedCardBox.height - 4 } });
 			await expect(page.getByRole('contentinfo').getByText(playing)).toBeVisible();
 			await expect(origin).toBeVisible();
-			await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
+			await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeHidden();
 			await page
 				.getByRole('contentinfo')
-				.getByRole('button', { name: openNowPlayingLabel(playing), exact: true })
+				.getByRole('button', {
+					name: words['player.openNowPlaying']({ title: playing }),
+					exact: true
+				})
 				.click();
 			return {
 				playing,
@@ -82,7 +79,7 @@ const NOW_PLAYING_ORIGINS: {
 					name: nameStartingWith(words['takeRow.takeLabel']({ number: String(SEEDED_TAKE_NUMBER) }))
 				})
 				.click();
-			await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
+			await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeVisible();
 			return {
 				playing,
 				origin,
@@ -103,7 +100,7 @@ const NOW_PLAYING_LEAVES: {
 			if (opensOnTakeSheet) {
 				await page.goBack();
 				await expect(
-					page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL })
+					page.getByRole('dialog', { name: words['nowPlaying.rightPanel'] })
 				).toBeHidden();
 				await expect(page.getByRole('dialog', { name: playing })).toBeVisible();
 			}
@@ -125,11 +122,11 @@ const NOW_PLAYING_LEAVES: {
 	{
 		name: '× right after open',
 		leave: async (page, { playing, opensOnTakeSheet }) => {
-			const takeSheet = page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL });
+			const takeSheet = page.getByRole('dialog', { name: words['nowPlaying.rightPanel'] });
 			if (opensOnTakeSheet) await expect(takeSheet).toBeVisible();
 			await page
 				.getByRole('dialog', { name: playing })
-				.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true })
+				.getByRole('button', { name: words['nowPlaying.close'], exact: true })
 				.tap();
 		}
 	}

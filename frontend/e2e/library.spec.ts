@@ -13,25 +13,10 @@ import {
 	LIBRARY_WALL_ORDER_KEYS,
 	type LibraryWallOrder
 } from '../src/lib/constants/library';
-import { PLAYING_MARK_LABEL } from '../src/lib/constants/song';
 import { HITBOX_FREQUENT_PX } from '../src/lib/constants/hitbox';
 import { words } from '../src/lib/words/en';
-import {
-	collectionActionLabel,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
-} from '../src/lib/constants/transport';
 import { pageTitleOrder, titledInPageOrder } from './support/page-title-order';
-import {
-	nowPlayingFromLabel,
-	NOW_PLAYING_RIGHT_PANEL_LABEL,
-	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
-	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
-	NOW_PLAYING_TAKE_TAB,
-	NOW_PLAYING_CLOSE,
-	NOW_PLAYING_SWIPE_RISE_PX,
-	openNowPlayingLabel
-} from '../src/lib/constants/now-playing';
+import { NOW_PLAYING_SWIPE_RISE_PX } from '../src/lib/constants/now-playing';
 import {
 	accountCircle,
 	accountMenu,
@@ -126,6 +111,10 @@ async function expectHeaderReadsAtNarrowest(page: Page, albumTitle: string): Pro
 	await page.setViewportSize(MOBILE_VIEWPORT);
 }
 
+function playingMarkIn(row: Locator): Locator {
+	return row.getByRole('img', { name: words['playingMark.playing'], exact: true });
+}
+
 function wallOrderChoice(surface: Locator, group: string) {
 	return (order: LibraryWallOrder) =>
 		surface
@@ -150,7 +139,7 @@ async function openWallTile(page: Page, title: string): Promise<void> {
 }
 
 function judgingSheet(page: Page): Locator {
-	return page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL });
+	return page.getByRole('dialog', { name: words['nowPlaying.rightPanel'] });
 }
 
 /**
@@ -165,7 +154,7 @@ async function expectTakeShownInNowPlaying(
 	shell: Shell,
 	playingSongTitle: string
 ): Promise<void> {
-	await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -190,13 +179,13 @@ function shellTransport(page: Page, shell: Shell, playingSongTitle: string): Loc
 /** Leaves Now Playing. On mobile its sheet takes the first Escape, the overlay the second. */
 async function closeNowPlaying(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'desktop') {
-		await page.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
+		await page.getByRole('button', { name: words['nowPlaying.close'], exact: true }).click();
 	} else {
 		await page.keyboard.press('Escape');
 		await expect(judgingSheet(page)).toBeHidden();
 		await page.keyboard.press('Escape');
 	}
-	await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
+	await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toBeHidden();
 }
 
 async function openAlbumFromNavigation(page: Page, shell: Shell, title: string): Promise<void> {
@@ -269,7 +258,7 @@ async function expectSettingsRailRoundTrip(
 }
 
 function pauseButton(transport: Locator): Locator {
-	return transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+	return transport.getByRole('button', { name: words['transport.pause'], exact: true });
 }
 
 /**
@@ -284,7 +273,7 @@ async function expectCompactTransport(transport: Locator, playingSongTitle: stri
 	const previous = transport.getByRole('button', { name: 'Previous', exact: true });
 	const next = transport.getByRole('button', { name: 'Next', exact: true });
 	const titleTarget = transport.getByRole('button', {
-		name: openNowPlayingLabel(playingSongTitle),
+		name: words['player.openNowPlaying']({ title: playingSongTitle }),
 		exact: true
 	});
 	const rightSide = transport.locator('.phone-side').last();
@@ -311,7 +300,7 @@ async function expectCompactTransport(transport: Locator, playingSongTitle: stri
 	expect(edges(rightBox)).toEqual([edges(nextBox)[1], edges(bar)[1]]);
 	await expect(
 		transport.getByRole('button', {
-			name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+			name: nameStartingWith(words['share.shuffle'], words['share.disableShuffle'])
 		})
 	).toHaveCount(0);
 }
@@ -406,7 +395,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	await expect(pickedSongRow.getByRole('button')).toHaveCount(2);
 	await surface
 		.getByRole('button', {
-			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+			name: words['collectionHeader.playAlbum'],
 			exact: true
 		})
 		.click();
@@ -416,7 +405,9 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	// The phone names where the music comes from; the desktop row names the take.
 	await expect(
 		transport.getByText(
-			shell === 'mobile' ? nowPlayingFromLabel(library.albumTitle) : library.takeLabel
+			shell === 'mobile'
+				? words['nowPlaying.fromSource']({ title: library.albumTitle })
+				: library.takeLabel
 		)
 	).toBeVisible();
 	// The pick is audible, not merely selected: the button offers to pause it.
@@ -425,25 +416,25 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 		await expectCompactTransport(transport, library.pickedSongTitle);
 		await expectMiniPlayerOpensNowPlaying(page, transport, library.pickedSongTitle);
 	}
-	const playingMark = pickedSongRow.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true });
+	const playingMark = playingMarkIn(pickedSongRow);
 	await expect(playingMark).toBeVisible();
 
 	// While the album plays, its circle pauses it and the next tap resumes it
 	// (#1082); the paused row keeps its mark, standing still.
 	await surface
 		.getByRole('button', {
-			name: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+			name: words['collectionHeader.pauseAlbum'],
 			exact: true
 		})
 		.click();
 	await expect(
-		transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
+		transport.getByRole('button', { name: words['transport.play'], exact: true })
 	).toBeVisible();
 	await expect(playingMark).toBeVisible();
 	await expect(playingMark.locator('span').first()).toHaveCSS('animation-name', 'none');
 	await surface
 		.getByRole('button', {
-			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+			name: words['collectionHeader.playAlbum'],
 			exact: true
 		})
 		.click();
@@ -469,7 +460,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 		// playing is still playing after it.
 		await expect(
 			shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
-				name: TRANSPORT_PAUSE_LABEL,
+				name: words['transport.pause'],
 				exact: true
 			})
 		).toBeVisible();
@@ -477,7 +468,7 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	} else {
 		await expect(takeControl).toHaveClass(/playing/);
 		await expect(
-			takeControl.getByRole('button', { name: nameStartingWith(TRANSPORT_PAUSE_LABEL) })
+			takeControl.getByRole('button', { name: nameStartingWith(words['transport.pause']) })
 		).toBeVisible();
 	}
 
@@ -528,28 +519,27 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 		if (!playedCardBox) throw new Error('Expected a visible playlist row');
 		await playedCard.click({ position: { x: 4, y: playedCardBox.height - 4 } });
 		await expect(pauseButton(transport)).toBeVisible();
-		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toHaveCount(0);
+		await expect(page.getByRole('tab', { name: words['nowPlaying.takeTab'] })).toHaveCount(0);
 		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
 		await expect(entryRows).toHaveText([
 			containing(secondPlaylistSong),
 			containing(firstPlaylistSong)
 		]);
-		await expect(
-			entryRows.last().getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-		).toBeVisible();
-		await expect(
-			entryRows.first().getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-		).toHaveCount(0);
+		await expect(playingMarkIn(entryRows.last())).toBeVisible();
+		await expect(playingMarkIn(entryRows.first())).toHaveCount(0);
 	}
 
 	// On the phone shuffle lives in Now Playing, opened from the mini player's title.
 	if (shell === 'mobile') {
 		await transport
-			.getByRole('button', { name: openNowPlayingLabel(library.pickedSongTitle), exact: true })
+			.getByRole('button', {
+				name: words['player.openNowPlaying']({ title: library.pickedSongTitle }),
+				exact: true
+			})
 			.click();
 	}
 	const shuffle = shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
-		name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+		name: nameStartingWith(words['share.shuffle'], words['share.disableShuffle'])
 	});
 	await expect(shuffle).toHaveAttribute('aria-pressed', 'false');
 	await shuffle.click();
@@ -647,10 +637,8 @@ test(
 					row.getByRole('button', { name: nameStartingWith(played.songTitle) }),
 					edge
 				);
-				await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
-				await expect(
-					songBox(other.songTitle).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-				).toHaveCount(0);
+				await expect(playingMarkIn(row)).toBeVisible();
+				await expect(playingMarkIn(songBox(other.songTitle))).toHaveCount(0);
 				await expect(albumHeading).toBeVisible();
 			});
 		}
@@ -691,10 +679,8 @@ test(
 					edge
 				);
 				await expect(pause).toBeVisible();
-				await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
-				await expect(
-					heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-				).toHaveCount(0);
+				await expect(playingMarkIn(row)).toBeVisible();
+				await expect(playingMarkIn(heldTwice.nth(other))).toHaveCount(0);
 			});
 		}
 	}
@@ -762,7 +748,7 @@ test('1354_37b_64: an album with nothing to play dims its circle and leaves the 
 	const surface = workspace(page);
 	const transport = page.getByRole('contentinfo');
 	const albumCircle = surface.getByRole('button', {
-		name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+		name: words['collectionHeader.playAlbum'],
 		exact: true
 	});
 
@@ -779,17 +765,19 @@ test('1354_37b_64: an album with nothing to play dims its circle and leaves the 
 
 	await expect(pauseButton(transport)).toBeVisible();
 	if (shell === 'mobile') {
-		await expect(transport.getByText(nowPlayingFromLabel(library.albumTitle))).toBeVisible();
+		await expect(
+			transport.getByText(words['nowPlaying.fromSource']({ title: library.albumTitle }))
+		).toBeVisible();
 	} else {
 		await expect(
 			transport.getByRole('button', {
-				name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+				name: nameStartingWith(words['share.shuffle'], words['share.disableShuffle'])
 			})
 		).toHaveAttribute('aria-pressed', 'false');
 	}
 	await expect(
 		surface.getByRole('button', {
-			name: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+			name: words['collectionHeader.pauseAlbum'],
 			exact: true
 		})
 	).toHaveCount(0);
@@ -892,7 +880,7 @@ test(
 		await expectTakeShownInNowPlaying(page, shell, firstPlaylistSongTitle);
 		await expect(
 			shellTransport(page, shell, firstPlaylistSongTitle).getByRole('button', {
-				name: TRANSPORT_PAUSE_LABEL,
+				name: words['transport.pause'],
 				exact: true
 			})
 		).toBeVisible();

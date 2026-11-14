@@ -6,7 +6,6 @@
 // makes v3, which folds v2.
 
 import { expect, test, type Page, type Route } from './coverage-test';
-import { NOW_PLAYING_CLOSE, openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import { appBar, BACK_BUTTON_NAME, sameOriginHeaders, ONLY_IN_SHELL, workspace } from './helpers';
 import {
 	createAlbum,
@@ -538,11 +537,13 @@ test.describe('folding the takes on the phone', { tag: ONLY_IN_SHELL.mobile }, (
 
 		await page
 			.getByRole('contentinfo')
-			.getByRole('button', { name: new RegExp(`${openNowPlayingLabel('')}$`) })
+			.getByRole('button', {
+				name: new RegExp(`${words['player.openNowPlaying']({ title: '' })}$`)
+			})
 			.click();
 		const nowPlaying = page.getByRole('dialog', { name: song.title });
 		await expect(nowPlaying).toBeVisible();
-		await nowPlaying.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
+		await nowPlaying.getByRole('button', { name: words['nowPlaying.close'], exact: true }).click();
 		await expect(nowPlaying).toHaveCount(0);
 
 		await expectSelected(page, 1);

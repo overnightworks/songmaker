@@ -65,7 +65,6 @@ import {
 } from '#lib/stores/player.ts';
 import {
 	NOW_PLAYING_DOCKED_WIDTH_PX,
-	NOW_PLAYING_EXPAND_LABEL,
 	NOW_PLAYING_STACKED_MAX_PX
 } from '#lib/constants/now-playing.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
@@ -709,7 +708,7 @@ describe('docked Now Playing', () => {
 		await tick();
 
 		const expand = Array.from(target.querySelectorAll('button')).find(
-			(button) => button.textContent?.trim() === NOW_PLAYING_EXPAND_LABEL
+			(button) => button.textContent?.trim() === words['nowPlaying.expand']
 		);
 		expand?.click();
 		await tick();

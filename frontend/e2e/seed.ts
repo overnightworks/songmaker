@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { expect, request, type APIRequestContext, type Cookie } from '@playwright/test';
 import type { JobItem } from '../src/lib/api/types';
-import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
+import { words } from '../src/lib/words/en';
 import { PROBE_STACK_TARGET, requiredAdminUsername, requiredEnv } from './required-env';
 
 const execFileAsync = promisify(execFile);
@@ -497,7 +497,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 			songTitle,
 			takeId: takeId(takeBySongTitle, songTitle)
 		})),
-		takeLabel: nowPlayingTakeLabel(null, 1)
+		takeLabel: words['nowPlaying.takeUnversioned']({ take: '1' })
 	};
 }
 

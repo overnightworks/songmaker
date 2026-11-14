@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { QueueStreamSkipItem } from '#lib/api/types.ts';
+import { words } from '#lib/words/en.ts';
 import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -41,15 +42,26 @@ describe('QueueStreamFeedback', () => {
 
 		const summary = details.querySelector('summary') as HTMLElement;
 		expect(summary.getAttribute('aria-label')).toBe(
-			'3 takes skipped, Check incomplete, End of stream'
+			`${words['nowPlaying.streamSkipped'](3)}, ${words['nowPlaying.streamCheckIncomplete']}, ${words['nowPlaying.streamEnded']}`
 		);
 		summary.focus();
 		expect(document.activeElement).toBe(summary);
 		summary.click();
 		expect(details.open).toBe(true);
-		expect(details.textContent).toContain('2 file not found');
-		expect(details.textContent).toContain('1 file unreadable');
-		expect(details.textContent).toContain('More takes not checked');
-		expect(details.textContent).toContain('More takes not loaded');
+		expect(details.textContent).toContain(words['nowPlaying.streamMissingFile']({ count: 2 }));
+		expect(details.textContent).toContain(words['nowPlaying.streamUnreadable']({ count: 1 }));
+		expect(details.textContent).toContain(words['nowPlaying.streamMoreNotChecked']);
+		expect(details.textContent).toContain(words['nowPlaying.streamMoreNotLoaded']);
+	});
+
+	it('names one skipped take in the singular', async () => {
+		const target = render({
+			skipped: [{ song_id: 's1', generation_id: 'g1', reason: 'missing_path' }]
+		});
+		await tick();
+
+		expect(target.querySelector('summary')?.getAttribute('aria-label')).toBe(
+			words['nowPlaying.streamSkipped'](1)
+		);
 	});
 });

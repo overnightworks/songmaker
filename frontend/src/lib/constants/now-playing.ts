@@ -1,28 +1,11 @@
 import { formatTime } from '#lib/utils/format.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 
-// Now Playing copy and layout constants.
-
-export const NOW_PLAYING_LABEL = 'Now Playing';
-
-// The phone's mini player opens Now Playing from its cover and title. The
-// name starts with the visible title so a voice command naming what is on
-// screen reaches it (WCAG 2.5.3), then says what the tap opens.
-export function openNowPlayingLabel(songTitle: string): string {
-	return `${songTitle} — open ${NOW_PLAYING_LABEL}`;
-}
+// Now Playing layout constants and the take descriptions its surfaces share.
 
 // Swiping the mini player up opens Now Playing once the finger has risen
 // this far, and further up than sideways; anything less is a tap or a slip.
 export const NOW_PLAYING_SWIPE_RISE_PX = 40;
-export const NOW_PLAYING_QUEUE_TAB = 'Queue';
-export const NOW_PLAYING_TAKE_TAB = 'This take';
-export const NOW_PLAYING_RIGHT_PANEL_LABEL = 'Now Playing panel';
-
-// The backdrop around the stacked layout's sheet closes the sheet, not Now
-// Playing, so it never carries the name of the × that does.
-export function nowPlayingSheetCloseLabel(sheetLabel: string): string {
-	return `Close ${sheetLabel}`;
-}
 
 // What separates the parts of a take's one-line description, everywhere one
 // is written out.
@@ -35,8 +18,10 @@ export function nowPlayingTakeLabel(
 	versionNumber: number | null,
 	generationNumber: number
 ): string {
-	const takePart = `take ${generationNumber}`;
-	return versionNumber != null ? `v${versionNumber}${META_SEPARATOR}${takePart}` : takePart;
+	const take = String(generationNumber);
+	return versionNumber != null
+		? pageText('nowPlaying.takeVersioned', { version: String(versionNumber), take })
+		: pageText('nowPlaying.takeUnversioned', { take });
 }
 
 export interface TakeVersion {
@@ -100,45 +85,7 @@ export interface NowPlayingSource extends PlaybackSource {
 }
 
 export function nowPlayingFromLabel(title: string): string {
-	return `from ${title}`;
-}
-
-// Starts with the visible "from …" text so a voice command naming what is
-// on screen reaches the link (WCAG 2.5.3), then says what it opens.
-export function nowPlayingOpenSourceLabel(kind: PlaybackSourceKind, title: string): string {
-	return `${nowPlayingFromLabel(title)} — open ${kind}`;
-}
-
-export const NOW_PLAYING_UP_NEXT_PREFIX = 'Up next:';
-export const NOW_PLAYING_SHUFFLE_LABEL_PREFIX = 'Shuffle';
-export const NOW_PLAYING_SHUFFLE_DISABLE_PREFIX = 'Disable shuffle';
-
-export function nowPlayingQueueHeading(contextLabel: string | null): string {
-	return contextLabel
-		? `${NOW_PLAYING_QUEUE_TAB}${META_SEPARATOR}${contextLabel}`
-		: NOW_PLAYING_QUEUE_TAB;
-}
-
-export const NOW_PLAYING_LYRICS_ROW_LABEL = 'Lyrics';
-// A take scored before its cues were recorded has whisper_text but no whisper_cues,
-// so its lyrics stay static instead of following the audio. The lyrics panel
-// only names that state — it also renders for a public share listener, who
-// cannot re-score anything. The take panel owns the action that fixes it.
-export const NOW_PLAYING_LYRICS_UNSYNCED_NOTE = "Lyrics aren't synced for this take.";
-
-export const NOW_PLAYING_PICK_LABEL = 'Pick';
-export const NOW_PLAYING_KEEP_LABEL = 'Keep';
-export const NOW_PLAYING_UNKEEP_LABEL = 'Unkeep';
-
-// Curation mode: walking an album's per-song candidate takes
-// one after another, right from the cover column's transport row so it never
-// hides behind the mobile sheet tap the queue/take tabs otherwise need.
-export const NOW_PLAYING_CURATE_GROUP_LABEL = 'Pick album takes';
-export const NOW_PLAYING_CURATE_SKIP_LABEL = 'Skip';
-export const NOW_PLAYING_CURATE_DONE_LABEL = 'Done';
-
-export function nowPlayingCurateProgress(index: number, total: number): string {
-	return `${NOW_PLAYING_CURATE_GROUP_LABEL} · Song ${index + 1} of ${total}`;
+	return pageText('nowPlaying.fromSource', { title });
 }
 
 export const NOW_PLAYING_Z_INDEX = 350;
@@ -155,36 +102,8 @@ export const NOW_PLAYING_SURFACE_KINDS = ['docked', 'full'] as const;
 export type NowPlayingSurfaceKind = (typeof NOW_PLAYING_SURFACE_KINDS)[number];
 
 export const NOW_PLAYING_DOCKED_WIDTH_PX = 400;
-export const NOW_PLAYING_EXPAND_LABEL = 'Expand';
-export const NOW_PLAYING_COLLAPSE_LABEL = 'Collapse';
-// Play's face once the playback ran out with nothing after it.
-export const NOW_PLAYING_PLAY_AGAIN_LABEL = 'Play again';
-
-// Queue-stream skip/progress feedback (QueueStreamFeedback). One owner for
-// this surface's copy, kept alongside the rest of Now Playing's strings.
-export const NOW_PLAYING_STREAM_SKIPPED_SUFFIX = 'takes skipped';
-export const NOW_PLAYING_STREAM_CHECK_INCOMPLETE = 'Check incomplete';
-export const NOW_PLAYING_STREAM_ENDED = 'End of stream';
-export const NOW_PLAYING_STREAM_MISSING_PATH_SUFFIX = 'no audio file';
-export const NOW_PLAYING_STREAM_MISSING_FILE_SUFFIX = 'file not found';
-export const NOW_PLAYING_STREAM_UNREADABLE_FILE_SUFFIX = 'file unreadable';
-export const NOW_PLAYING_STREAM_MORE_NOT_CHECKED = 'More takes not checked';
-export const NOW_PLAYING_STREAM_MORE_NOT_LOADED = 'More takes not loaded';
-
-export const SHUFFLE_SCOPE_PLAYLIST = 'this playlist';
-export const SHUFFLE_SCOPE_ALBUM = 'this album';
-export const SHUFFLE_SCOPE_LIBRARY = 'all albums';
-
-export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
-
 // A cut mini-player title scrolls once, slowly: it rests, travels to its end
 // at this pace, rests again, and glides back to its start.
 export const MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND = 30;
 export const MINI_PLAYER_TITLE_SCROLL_REST_MS = 1500;
 export const MINI_PLAYER_TITLE_SCROLL_RETURN_MS = 600;
-export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
-export const NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS = 'Imported take — no lyrics were saved with it.';
-// Brings back lyrics that follow the song once the reader scrolled away.
-export const NOW_PLAYING_LYRICS_FOLLOW_LABEL = 'Follow';
-export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
-export const NOW_PLAYING_CLOSE = 'Close';

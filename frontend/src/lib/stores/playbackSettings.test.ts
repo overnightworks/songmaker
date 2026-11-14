@@ -6,6 +6,7 @@ import {
 	setDesktopNowPlayingSurface,
 	setLibraryTakePool
 } from './playbackSettings';
+import { words } from '#lib/words/en.ts';
 
 const POOL_STORAGE_KEY = 'libraryTakePool';
 const DESKTOP_SURFACE_STORAGE_KEY = 'nowPlayingDesktopSurface';
@@ -23,9 +24,9 @@ describe('library take pool trio', () => {
 
 	// Spec: REQ-LIBRARY-01 -- the choices carry the labels Picks, + Keeps and All takes.
 	it('labels mix as "+ Keeps"', () => {
-		expect(LIBRARY_TAKE_POOL_LABELS.mix).toBe('+ Keeps');
-		expect(LIBRARY_TAKE_POOL_LABELS.picks).toBe('Picks');
-		expect(LIBRARY_TAKE_POOL_LABELS.all).toBe('All takes');
+		expect(words[LIBRARY_TAKE_POOL_LABELS.mix]).toBe('+ Keeps');
+		expect(words[LIBRARY_TAKE_POOL_LABELS.picks]).toBe('Picks');
+		expect(words[LIBRARY_TAKE_POOL_LABELS.all]).toBe('All takes');
 	});
 
 	// Spec: REQ-LIBRARY-02 -- with nothing stored in the browser profile the pool is Picks.

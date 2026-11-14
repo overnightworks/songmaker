@@ -1,6 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import { nowPlayingSurface } from '#lib/stores/player.ts';
@@ -9,6 +8,7 @@ import { makeGeneration } from '#lib/test-utils/factories.ts';
 import NowPlaying from './NowPlaying.svelte';
 import PlayerBar from './PlayerBar.svelte';
 import SharedCollection from './share/SharedCollection.svelte';
+import { words } from '#lib/words/en.ts';
 
 class FakeAudio {
 	paused = true;
@@ -171,9 +171,9 @@ describe('Play while the audio loads', () => {
 		const playSpy = vi.spyOn(audio, 'play');
 
 		await pressPlay();
-		expect(playLabel()).toBe(TRANSPORT_PAUSE_LABEL);
+		expect(playLabel()).toBe(words['transport.pause']);
 		await pressPlay();
-		expect(playLabel()).toBe(TRANSPORT_PLAY_LABEL);
+		expect(playLabel()).toBe(words['transport.play']);
 
 		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
 		audio.fire('canplay');

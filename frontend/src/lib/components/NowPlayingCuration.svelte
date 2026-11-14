@@ -1,14 +1,6 @@
 <script lang="ts">
-	import { SONG_NEXT_LABEL } from '#lib/constants/song.ts';
 	import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-	import {
-		NOW_PLAYING_CURATE_DONE_LABEL,
-		NOW_PLAYING_CURATE_GROUP_LABEL,
-		NOW_PLAYING_CURATE_SKIP_LABEL,
-		NOW_PLAYING_KEEP_LABEL,
-		NOW_PLAYING_PICK_LABEL,
-		NOW_PLAYING_UNKEEP_LABEL
-	} from '#lib/constants/now-playing.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -32,7 +24,7 @@
 	} = $props();
 </script>
 
-<div class="curation-bar" role="group" aria-label={NOW_PLAYING_CURATE_GROUP_LABEL}>
+<div class="curation-bar" role="group" aria-label={pageText('nowPlaying.curateGroup')}>
 	<p class="curation-progress">{progressLabel}</p>
 	<div class="curation-actions">
 		<button
@@ -41,8 +33,8 @@
 			class:on={kept}
 			onclick={onkeep}
 			aria-pressed={kept}
-			aria-label={kept ? NOW_PLAYING_UNKEEP_LABEL : NOW_PLAYING_KEEP_LABEL}
-			title={kept ? NOW_PLAYING_UNKEEP_LABEL : NOW_PLAYING_KEEP_LABEL}
+			aria-label={pageText(kept ? 'nowPlaying.unkeep' : 'nowPlaying.keep')}
+			title={pageText(kept ? 'nowPlaying.unkeep' : 'nowPlaying.keep')}
 		>
 			<Icon name={kept ? 'heart-filled' : 'heart'} size={22} />
 		</button>
@@ -51,8 +43,8 @@
 			class="curate-btn pick"
 			class:on={picked}
 			onclick={onpick}
-			aria-label={NOW_PLAYING_PICK_LABEL}
-			title={NOW_PLAYING_PICK_LABEL}
+			aria-label={pageText('nowPlaying.pick')}
+			title={pageText('nowPlaying.pick')}
 		>
 			<Icon name={picked ? 'star-filled' : 'star'} size={26} />
 		</button>
@@ -61,8 +53,8 @@
 			class="curate-btn skip"
 			onclick={onskip}
 			disabled={!canSkip}
-			aria-label={`${NOW_PLAYING_CURATE_SKIP_LABEL} — ${SONG_NEXT_LABEL}`}
-			title={NOW_PLAYING_CURATE_SKIP_LABEL}
+			aria-label={pageText('nowPlaying.skipName')}
+			title={pageText('nowPlaying.skip')}
 		>
 			<Icon name="skip-forward" size={22} />
 		</button>
@@ -73,7 +65,7 @@
 		style:min-height="{HITBOX_FREQUENT_PX}px"
 		onclick={ondone}
 	>
-		{NOW_PLAYING_CURATE_DONE_LABEL}
+		{pageText('nowPlaying.done')}
 	</button>
 </div>
 

@@ -7,12 +7,6 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { PlaylistDetailItem, PlaylistEntryItem } from '#lib/api/types.ts';
 import { ApiError } from '#lib/api/fetch.ts';
-import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
-import {
-	collectionActionLabel,
-	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_PAUSE_LABEL
-} from '#lib/constants/transport.ts';
 import { setOpenCollection } from '#lib/stores/collection.ts';
 import {
 	closeNowPlaying,
@@ -112,7 +106,7 @@ describe('PlaylistDetailView header', () => {
 		const target = await renderTwoEntryPlaylist();
 		const header = requireElement(target, '.collection-header');
 		expect(header.querySelector('.play-circle')?.getAttribute('aria-label')).toBe(
-			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')
+			words['collectionHeader.playPlaylist']
 		);
 		expect(requireElement(header, '.header-count').textContent).toBe('2 songs');
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
@@ -303,24 +297,26 @@ describe('PlaylistDetailView header play', () => {
 		});
 		const target = await renderTwoEntryPlaylist();
 		const header = requireElement(target, '.collection-header');
-		getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')).click();
+		getByRoleButton(header, words['collectionHeader.playPlaylist']).click();
 		await tick();
 		const queueBeforePause = get(queueContext);
 
-		getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'playlist')).click();
+		getByRoleButton(header, words['collectionHeader.pausePlaylist']).click();
 		await tick();
 
 		expect(audioPlayer.status).toBe('paused');
 		expect(
-			findElementByRoleAndName(target.querySelectorAll('.entry-row')[0], 'img', PLAYING_MARK_LABEL)
+			findElementByRoleAndName(
+				target.querySelectorAll('.entry-row')[0],
+				'img',
+				words['playingMark.playing']
+			)
 		).not.toBeNull();
-		getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')).click();
+		getByRoleButton(header, words['collectionHeader.playPlaylist']).click();
 		await tick();
 
 		expect(audioPlayer.status).toBe('playing');
-		expect(
-			getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'playlist'))
-		).not.toBeNull();
+		expect(getByRoleButton(header, words['collectionHeader.pausePlaylist'])).not.toBeNull();
 		expect(get(queueContext)).toBe(queueBeforePause);
 	});
 
@@ -331,7 +327,7 @@ describe('PlaylistDetailView header play', () => {
 		const target = await renderPlaylist([]);
 		const circle = getByRoleButton(
 			requireElement(target, '.collection-header'),
-			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')
+			words['collectionHeader.playPlaylist']
 		);
 
 		circle.click();
@@ -402,9 +398,9 @@ describe('PlaylistDetailView row actions', () => {
 			audioPlayer.status = status;
 			await tick();
 
-			expect(findElementByRoleAndName(ebb, 'img', PLAYING_MARK_LABEL)).not.toBeNull();
+			expect(findElementByRoleAndName(ebb, 'img', words['playingMark.playing'])).not.toBeNull();
 			expect(requireElement(ebb, '.song-row').classList.contains('current')).toBe(true);
-			expect(findElementByRoleAndName(tide, 'img', PLAYING_MARK_LABEL)).toBeNull();
+			expect(findElementByRoleAndName(tide, 'img', words['playingMark.playing'])).toBeNull();
 			expect(requireElement(tide, '.song-row').classList.contains('current')).toBe(false);
 		}
 	);
@@ -414,7 +410,9 @@ describe('PlaylistDetailView row actions', () => {
 		const target = await renderPlaylist([tide, entry({ ...tide, id: 'pe2', position: 1 })]);
 		const rows = Array.from(target.querySelectorAll<HTMLElement>('.entry-row'));
 		const marks = (): boolean[] =>
-			rows.map((row) => findElementByRoleAndName(row, 'img', PLAYING_MARK_LABEL) !== null);
+			rows.map(
+				(row) => findElementByRoleAndName(row, 'img', words['playingMark.playing']) !== null
+			);
 
 		requireElement<HTMLButtonElement>(rows[1], '.song-row-body').click();
 		await tick();

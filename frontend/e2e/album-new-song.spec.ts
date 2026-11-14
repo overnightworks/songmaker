@@ -7,7 +7,6 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { collectionActionLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
 	boundingBoxes,
@@ -71,9 +70,7 @@ test('a filled album ends its track list with + New song, under a header of Play
 
 	const actions = surface.locator('.collection-header .header-actions').getByRole('button');
 	await expect(actions).toHaveCount(2);
-	await expect(actions.nth(0)).toHaveAccessibleName(
-		collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
-	);
+	await expect(actions.nth(0)).toHaveAccessibleName(words['collectionHeader.playAlbum']);
 	await expect(actions.nth(1)).toHaveAccessibleName(words['collectionMenu.label']);
 
 	const rows = surface.locator('.item-list > *');

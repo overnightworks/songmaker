@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SEEK_PLAYBACK_LABEL, seekPositionLabel } from '#lib/constants/transport.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	interface Props {
 		currentTime: number;
@@ -30,7 +30,12 @@
 	const seekable = $derived(duration > 0);
 	const playedRatio = $derived(seekable ? clampRatio(currentTime / duration) : 0);
 	const shownRatio = $derived(dragRatio ?? playedRatio);
-	const valueText = $derived(seekPositionLabel(formatTime(currentTime), formatTime(duration)));
+	const valueText = $derived(
+		pageText('transport.seekPosition', {
+			position: formatTime(currentTime),
+			length: formatTime(duration)
+		})
+	);
 
 	function clampRatio(ratio: number): number {
 		return Math.max(0, Math.min(1, ratio));
@@ -127,7 +132,7 @@
 		onkeydown={seekFromKey}
 		oninput={seekFromInput}
 		disabled={!seekable}
-		aria-label={SEEK_PLAYBACK_LABEL}
+		aria-label={pageText('transport.seek')}
 		aria-valuetext={valueText}
 	/>
 	<span class="seek-line" aria-hidden="true"><span class="seek-played"></span></span>

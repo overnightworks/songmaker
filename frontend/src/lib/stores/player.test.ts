@@ -6,7 +6,6 @@ import {
 	makeSong,
 	makeAuthUser
 } from '#lib/test-utils/factories.ts';
-import { QUEUE_TAKE_MISSING_TOAST } from '#lib/constants/now-playing.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
@@ -27,7 +26,6 @@ import {
 	fetchSongs
 } from '#lib/api/client.ts';
 import { toasts } from '#lib/stores/toast.ts';
-import { LIBRARY_QUEUE_EMPTY_TITLE, PLAYLIST_LOADING_LABEL } from '#lib/constants/queue.ts';
 
 vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
@@ -1443,7 +1441,7 @@ describe('starting a queue loads its first take on its own or reports an empty o
 		expect(get(playStartNotice)).toBe('empty');
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: LIBRARY_QUEUE_EMPTY_TITLE,
+				message: words['player.nothingToPlay'],
 				type: 'error'
 			})
 		]);
@@ -1467,7 +1465,7 @@ describe('starting a queue loads its first take on its own or reports an empty o
 		expect(get(playStartNotice)).toBe('empty');
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: LIBRARY_QUEUE_EMPTY_TITLE,
+				message: words['player.nothingToPlay'],
 				type: 'error'
 			})
 		]);
@@ -1654,7 +1652,7 @@ describe('starting library playback from a take', () => {
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: QUEUE_TAKE_MISSING_TOAST,
+				message: words['player.takeNotInQueue'],
 				type: 'error'
 			})
 		]);
@@ -3013,7 +3011,7 @@ describe('curateAlbum', () => {
 		expect(get(curationActive)).toBe(false);
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: LIBRARY_QUEUE_EMPTY_TITLE,
+				message: words['player.nothingToPlay'],
 				type: 'error'
 			})
 		]);
@@ -3166,7 +3164,9 @@ describe('shuffle rebuilds the playing queue', () => {
 			);
 			await rebuilding;
 
-			expect(get(toasts).map((toast) => toast.message)).not.toContain(QUEUE_TAKE_MISSING_TOAST);
+			expect(get(toasts).map((toast) => toast.message)).not.toContain(
+				words['player.takeNotInQueue']
+			);
 			expect(audioPlayer.load).toHaveBeenLastCalledWith(
 				expect.objectContaining({ generation: expect.objectContaining({ id: second.id }) }),
 				expect.objectContaining({ startAt: 72.125 })
@@ -3331,7 +3331,7 @@ describe('library take pool', () => {
 		expect(get(libraryQueueSkipped)).toEqual([]);
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: LIBRARY_QUEUE_EMPTY_TITLE,
+				message: words['player.nothingToPlay'],
 				type: 'error'
 			})
 		]);
@@ -3426,7 +3426,7 @@ describe('idlePlayTarget', () => {
 			'playlist: says it is loading when the opened playlist is not listed yet',
 			{ kind: 'playlist' as const, id: 'p2' },
 			{ playlist: null, listedPlaylist: null, playlistLoading: true },
-			{ type: 'playlist', label: PLAYLIST_LOADING_LABEL, playlistId: 'p2' }
+			{ type: 'playlist', label: words['player.playlistLoading'], playlistId: 'p2' }
 		],
 		[
 			// A playlist whose detail failed to load has nothing to natively

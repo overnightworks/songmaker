@@ -2,10 +2,6 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { WhisperCue } from '#lib/api/types.ts';
 import type { AlignmentRequest, AlignmentResult } from '#lib/services/lyricsAlignment.svelte.ts';
-import {
-	NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
-	NOW_PLAYING_LYRICS_FOLLOW_LABEL
-} from '#lib/constants/now-playing.ts';
 import { words as pageWords } from '#lib/words/en.ts';
 import { alignLyricsToCues } from '#lib/utils/lyrics-align.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
@@ -166,7 +162,7 @@ async function singTo(seconds: number | null) {
 
 function followButton(): HTMLButtonElement | null {
 	const button = target.querySelector('button');
-	return button?.textContent?.includes(NOW_PLAYING_LYRICS_FOLLOW_LABEL) ? button : null;
+	return button?.textContent?.includes(pageWords['nowPlaying.lyricsFollow']) ? button : null;
 }
 
 function lyricsBox(): HTMLElement {
@@ -261,18 +257,18 @@ describe('NowPlayingLyrics', () => {
 	it('names the unsynced state only when a transcript exists without cues', async () => {
 		const lyrics = LINE_1;
 		await render({ lyrics, cues: null, whisperText: 'a rough transcript' });
-		expect(target.textContent).toContain(NOW_PLAYING_LYRICS_UNSYNCED_NOTE);
+		expect(target.textContent).toContain(pageWords['nowPlaying.lyricsUnsynced']);
 	});
 
 	it('stops naming the unsynced state once cues exist', async () => {
 		const lyrics = LINE_1;
 		await render({ lyrics, cues: [cue(0, 1, LINE_1)], whisperText: 'a rough transcript' });
-		expect(target.textContent).not.toContain(NOW_PLAYING_LYRICS_UNSYNCED_NOTE);
+		expect(target.textContent).not.toContain(pageWords['nowPlaying.lyricsUnsynced']);
 	});
 
 	it('stays silent about syncing without a transcript either', async () => {
 		await render({ lyrics: LINE_1, cues: null, whisperText: null });
-		expect(target.textContent).not.toContain(NOW_PLAYING_LYRICS_UNSYNCED_NOTE);
+		expect(target.textContent).not.toContain(pageWords['nowPlaying.lyricsUnsynced']);
 	});
 
 	it('never asks the reader to re-score, having no take to act on', async () => {

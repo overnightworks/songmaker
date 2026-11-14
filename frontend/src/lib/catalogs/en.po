@@ -2570,7 +2570,15 @@ msgid "Select {take}"
 msgstr ""
 
 msgctxt "takeRow.playTake"
-msgid "{action} {take}"
+msgid "Play {take}"
+msgstr ""
+
+msgctxt "takeRow.pauseTake"
+msgid "Pause {take}"
+msgstr ""
+
+msgctxt "takeRow.retryTake"
+msgid "Retry {take}"
 msgstr ""
 
 msgctxt "takeRow.pickTake"
@@ -5243,4 +5251,380 @@ msgstr ""
 
 msgctxt "jobEnd.modelDownloadFailed"
 msgid "download_model_on_worker failed"
+msgstr ""
+
+msgctxt "transport.play"
+msgid "Play"
+msgstr ""
+
+msgctxt "transport.pause"
+msgid "Pause"
+msgstr ""
+
+msgctxt "transport.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "transport.previous"
+msgid "Previous"
+msgstr ""
+
+msgctxt "transport.next"
+msgid "Next"
+msgstr ""
+
+msgctxt "transport.nowPlaying"
+msgid "Now Playing"
+msgstr ""
+
+msgctxt "transport.seek"
+msgid "Seek playback"
+msgstr ""
+
+msgctxt "transport.seekPosition"
+msgid "{position} of {length}"
+msgstr ""
+
+msgctxt "transport.waitingForNetwork"
+msgid "Waiting for the network."
+msgstr ""
+
+msgctxt "transport.playbackFailed"
+msgid "Playback failed. Press Retry."
+msgstr ""
+
+msgctxt "transport.fileNotFound"
+msgid "Audio file not found."
+msgstr ""
+
+msgctxt "transport.stalled"
+msgid "Playback stalled. Press Retry."
+msgstr ""
+
+msgctxt "transport.autoplayBlocked"
+msgid "Autoplay blocked. Press Play to start."
+msgstr ""
+
+msgctxt "transport.aborted"
+msgid "Playback aborted."
+msgstr ""
+
+msgctxt "transport.fileCorrupted"
+msgid "Audio file is corrupted."
+msgstr ""
+
+msgctxt "transport.formatUnsupported"
+msgid "Audio format not supported by this browser."
+msgstr ""
+
+msgctxt "transport.shuffleLibrary"
+msgid "Shuffle all albums"
+msgstr ""
+
+msgctxt "transport.shuffleAlbum"
+msgid "Shuffle this album"
+msgstr ""
+
+msgctxt "transport.shufflePlaylist"
+msgid "Shuffle this playlist"
+msgstr ""
+
+msgctxt "transport.unshuffleLibrary"
+msgid "Disable shuffle (all albums)"
+msgstr ""
+
+msgctxt "transport.unshuffleAlbum"
+msgid "Disable shuffle (this album)"
+msgstr ""
+
+msgctxt "transport.unshufflePlaylist"
+msgid "Disable shuffle (this playlist)"
+msgstr ""
+
+msgctxt "player.openNowPlaying"
+msgid "{title} — open Now Playing"
+msgstr ""
+
+msgctxt "player.loading"
+msgid "Loading"
+msgstr ""
+
+msgctxt "player.nothingToPlay"
+msgid "Nothing to play yet"
+msgstr ""
+
+msgctxt "player.startFailed"
+msgid "{source} failed"
+msgstr ""
+
+msgctxt "player.pressPlayToRetry"
+msgid "Press play to retry"
+msgstr ""
+
+msgctxt "player.play"
+msgid "Play"
+msgstr ""
+
+msgctxt "player.playlistLoading"
+msgid "Loading playlist…"
+msgstr ""
+
+msgctxt "player.picksQueueFailed"
+msgid "Picks queue failed. Press play to retry."
+msgstr ""
+
+msgctxt "player.keepsQueueFailed"
+msgid "+ Keeps queue failed. Press play to retry."
+msgstr ""
+
+msgctxt "player.allTakesQueueFailed"
+msgid "All takes queue failed. Press play to retry."
+msgstr ""
+
+msgctxt "player.takeNotInQueue"
+msgid "This take is not in the queue"
+msgstr ""
+
+msgctxt "player.playTakeFailed"
+msgid "Playback failed"
+msgstr ""
+
+msgctxt "player.takeSkipped"
+msgid "{title} couldn't be loaded, skipped."
+msgstr ""
+
+msgctxt "collectionHeader.playAlbum"
+msgid "Play album"
+msgstr ""
+
+msgctxt "collectionHeader.pauseAlbum"
+msgid "Pause album"
+msgstr ""
+
+msgctxt "collectionHeader.retryAlbum"
+msgid "Retry album"
+msgstr ""
+
+msgctxt "collectionHeader.playPlaylist"
+msgid "Play playlist"
+msgstr ""
+
+msgctxt "collectionHeader.pausePlaylist"
+msgid "Pause playlist"
+msgstr ""
+
+msgctxt "collectionHeader.retryPlaylist"
+msgid "Retry playlist"
+msgstr ""
+
+msgctxt "libraryWall.playTitle"
+msgid "Play {title}"
+msgstr ""
+
+msgctxt "libraryWall.pauseTitle"
+msgid "Pause {title}"
+msgstr ""
+
+msgctxt "libraryWall.retryTitle"
+msgid "Retry {title}"
+msgstr ""
+
+msgctxt "playingMark.playing"
+msgid "Playing"
+msgstr ""
+
+msgctxt "share.shuffle"
+msgid "Shuffle"
+msgstr ""
+
+msgctxt "share.disableShuffle"
+msgid "Disable shuffle"
+msgstr ""
+
+msgctxt "nowPlaying.kicker"
+msgid "Now Playing"
+msgstr ""
+
+msgctxt "nowPlaying.close"
+msgid "Close"
+msgstr ""
+
+msgctxt "nowPlaying.expand"
+msgid "Expand"
+msgstr ""
+
+msgctxt "nowPlaying.collapse"
+msgid "Collapse"
+msgstr ""
+
+msgctxt "nowPlaying.goToSong"
+msgid "Go to song"
+msgstr ""
+
+msgctxt "nowPlaying.playAgain"
+msgid "Play again"
+msgstr ""
+
+msgctxt "nowPlaying.previousSong"
+msgid "Previous song"
+msgstr ""
+
+msgctxt "nowPlaying.nextSong"
+msgid "Next song"
+msgstr ""
+
+msgctxt "nowPlaying.rightPanel"
+msgid "Now Playing panel"
+msgstr ""
+
+msgctxt "nowPlaying.closeSheet"
+msgid "Close {sheet}"
+msgstr ""
+
+msgctxt "nowPlaying.queueTab"
+msgid "Queue"
+msgstr ""
+
+msgctxt "nowPlaying.takeTab"
+msgid "This take"
+msgstr ""
+
+msgctxt "nowPlaying.queueHeading"
+msgid "Queue · {source}"
+msgstr ""
+
+msgctxt "nowPlaying.upNext"
+msgid "Up next: {title}"
+msgstr ""
+
+msgctxt "nowPlaying.fromSource"
+msgid "from {title}"
+msgstr ""
+
+msgctxt "nowPlaying.openAlbumSource"
+msgid "from {title} — open album"
+msgstr ""
+
+msgctxt "nowPlaying.openPlaylistSource"
+msgid "from {title} — open playlist"
+msgstr ""
+
+msgctxt "nowPlaying.takeVersioned"
+msgid "v{version} · take {take}"
+msgstr ""
+
+msgctxt "nowPlaying.takeUnversioned"
+msgid "take {take}"
+msgstr ""
+
+msgctxt "nowPlaying.takeDetailsFailed"
+msgid "Failed to load take details"
+msgstr ""
+
+msgctxt "nowPlaying.lyricsHeading"
+msgid "Lyrics"
+msgstr ""
+
+msgctxt "nowPlaying.lyricsHeadingTitled"
+msgid "Lyrics · {title}"
+msgstr ""
+
+msgctxt "nowPlaying.lyricsFollow"
+msgid "Follow"
+msgstr ""
+
+msgctxt "nowPlaying.lyricsUnsynced"
+msgid "Lyrics aren't synced for this take."
+msgstr ""
+
+msgctxt "nowPlaying.noLyrics"
+msgid "No lyrics for this take"
+msgstr ""
+
+msgctxt "nowPlaying.importedNoLyrics"
+msgid "Imported take — no lyrics were saved with it."
+msgstr ""
+
+msgctxt "nowPlaying.curateGroup"
+msgid "Pick album takes"
+msgstr ""
+
+msgctxt "nowPlaying.curateProgress"
+msgid "Pick album takes · Song {index} of {total}"
+msgstr ""
+
+msgctxt "nowPlaying.pick"
+msgid "Pick"
+msgstr ""
+
+msgctxt "nowPlaying.keep"
+msgid "Keep"
+msgstr ""
+
+msgctxt "nowPlaying.unkeep"
+msgid "Unkeep"
+msgstr ""
+
+msgctxt "nowPlaying.skip"
+msgid "Skip"
+msgstr ""
+
+msgctxt "nowPlaying.skipName"
+msgid "Skip — Next song"
+msgstr ""
+
+msgctxt "nowPlaying.done"
+msgid "Done"
+msgstr ""
+
+msgctxt "nowPlaying.takePool"
+msgid "Take pool"
+msgstr ""
+
+msgctxt "nowPlaying.poolPicks"
+msgid "Picks"
+msgstr ""
+
+msgctxt "nowPlaying.poolKeeps"
+msgid "+ Keeps"
+msgstr ""
+
+msgctxt "nowPlaying.poolAll"
+msgid "All takes"
+msgstr ""
+
+msgctxt "nowPlaying.streamSkipped.one"
+msgid "{count} take skipped"
+msgstr ""
+
+msgctxt "nowPlaying.streamSkipped.other"
+msgid "{count} takes skipped"
+msgstr ""
+
+msgctxt "nowPlaying.streamCheckIncomplete"
+msgid "Check incomplete"
+msgstr ""
+
+msgctxt "nowPlaying.streamEnded"
+msgid "End of stream"
+msgstr ""
+
+msgctxt "nowPlaying.streamMissingPath"
+msgid "{count} no audio file"
+msgstr ""
+
+msgctxt "nowPlaying.streamMissingFile"
+msgid "{count} file not found"
+msgstr ""
+
+msgctxt "nowPlaying.streamUnreadable"
+msgid "{count} file unreadable"
+msgstr ""
+
+msgctxt "nowPlaying.streamMoreNotChecked"
+msgid "More takes not checked"
+msgstr ""
+
+msgctxt "nowPlaying.streamMoreNotLoaded"
+msgid "More takes not loaded"
 msgstr ""

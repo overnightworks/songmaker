@@ -3,6 +3,7 @@ import {
 	NOW_PLAYING_SURFACE_KINDS,
 	type NowPlayingSurfaceKind
 } from '#lib/constants/now-playing.ts';
+import type { TextKey } from '#lib/utils/page-words.ts';
 import { readStorage, removeStorage, writeStorage } from '#lib/utils/storage.ts';
 
 // The stream/classic queue choice is gone: a take row always starts a queue
@@ -24,11 +25,11 @@ export const LIBRARY_TAKE_POOLS = ['picks', 'mix', 'all'] as const;
 export type LibraryTakePool = (typeof LIBRARY_TAKE_POOLS)[number];
 const DEFAULT_LIBRARY_TAKE_POOL: LibraryTakePool = 'picks';
 
-export const LIBRARY_TAKE_POOL_LABELS: Record<LibraryTakePool, string> = {
-	picks: 'Picks',
-	mix: '+ Keeps',
-	all: 'All takes'
-};
+export const LIBRARY_TAKE_POOL_LABELS = {
+	picks: 'nowPlaying.poolPicks',
+	mix: 'nowPlaying.poolKeeps',
+	all: 'nowPlaying.poolAll'
+} as const satisfies Record<LibraryTakePool, TextKey>;
 
 const POOL_STORAGE_KEY = 'libraryTakePool';
 const VALID_POOLS: ReadonlySet<string> = new Set<string>(LIBRARY_TAKE_POOLS);

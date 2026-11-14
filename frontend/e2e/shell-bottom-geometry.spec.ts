@@ -1,7 +1,6 @@
 import { words } from '../src/lib/words/en';
 import { readSeededLibrary } from './seed';
 import { expect, test, type Page } from './coverage-test';
-import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	boundingBoxes,
 	DESKTOP_VIEWPORT,
@@ -86,7 +85,7 @@ const CASES = [
 			open: async (page: Page) => {
 				if (!signedIn) await page.context().clearCookies();
 				await openMockSharedAlbum(page, mockSongs(40));
-				await control(page, TRANSPORT_PLAY_LABEL).click();
+				await control(page, words['transport.play']).click();
 			},
 			lastContent: (page: Page) =>
 				page.getByRole('link', { name: words['legal.imprint'], exact: true }),

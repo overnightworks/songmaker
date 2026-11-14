@@ -1,11 +1,5 @@
 import type { QueueStreamManifest } from '#lib/api/types.ts';
-import {
-	PLAYER_WAITING_FOR_NETWORK,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL,
-	type TransportLabel
-} from '#lib/constants/transport.ts';
+import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 import { ContinuousDeck, TakeNotAppended, type DeckEntry } from './continuousDeck';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
@@ -40,15 +34,24 @@ export function transportIsBusy(transport: TransportState): boolean {
 	return transport === 'loading' || transport === 'recovering';
 }
 
-export function transportButtonLabel(transport: TransportState): TransportLabel {
-	if (transport === 'failed') return TRANSPORT_RETRY_LABEL;
-	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
+export type TransportAction = 'play' | 'pause' | 'retry';
+
+// The play button's name on the bar and in Now Playing.
+export const TRANSPORT_ACTION_KEYS = {
+	play: 'transport.play',
+	pause: 'transport.pause',
+	retry: 'transport.retry'
+} as const satisfies Record<TransportAction, TextKey>;
+
+export function transportAction(transport: TransportState): TransportAction {
+	if (transport === 'failed') return 'retry';
+	return transportOffersPause(transport) ? 'pause' : 'play';
 }
 
 // The calm words every surface shows for a take, or a start, given up while
 // the network is gone (#1312, #1330).
 export function transportWaitingNotice(transport: TransportState): string | null {
-	return transport === 'waiting-for-network' ? PLAYER_WAITING_FOR_NETWORK : null;
+	return transport === 'waiting-for-network' ? pageText('transport.waitingForNetwork') : null;
 }
 
 export type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
@@ -151,9 +154,6 @@ const NO_CALLBACKS: AudioPlayerCallbacks = {
 };
 
 const AUDIO_URL_PREFIX = '/audio/';
-const ERROR_MSG_GENERIC = 'Playback failed. Press Retry.';
-const ERROR_MSG_NOT_FOUND = 'Audio file not found.';
-const ERROR_MSG_STALLED = 'Playback stalled. Press Retry.';
 // A deck whose playhead is this close to the end of what it holds, with
 // nothing more on its way, has played its last take.
 const END_OF_DECK_SLACK_SECONDS = 0.5;
@@ -1088,8 +1088,8 @@ class AudioPlayer {
 		this.recoveryStartedAt = null;
 		this.fail(
 			this.callbacks.networkFailureIsAnnounced()
-				? { kind: 'awaiting-network', message: PLAYER_WAITING_FOR_NETWORK }
-				: { kind: 'stalled', message: ERROR_MSG_STALLED }
+				? { kind: 'awaiting-network', message: pageText('transport.waitingForNetwork') }
+				: { kind: 'stalled', message: pageText('transport.stalled') }
 		);
 		this.autoplayPending = listenerWantsSound;
 	}
@@ -1098,7 +1098,7 @@ class AudioPlayer {
 	// the take keeps its Retry, now under the plain stalled words.
 	private retryAfterWaitingForNetwork(): void {
 		if (this.autoplayPending) this.play();
-		else this.failure = { kind: 'stalled', message: ERROR_MSG_STALLED };
+		else this.failure = { kind: 'stalled', message: pageText('transport.stalled') };
 	}
 
 	// A failed take is no longer watched: only Retry, the network's return
@@ -1518,7 +1518,7 @@ class AudioPlayer {
 			this.status = 'paused';
 			this.failure = {
 				kind: 'autoplay-blocked',
-				message: 'Autoplay blocked. Press Play to start.'
+				message: pageText('transport.autoplayBlocked')
 			};
 			return;
 		}
@@ -1550,7 +1550,7 @@ class AudioPlayer {
 			return true;
 		}
 		if (probe.status === 404) {
-			this.fail({ kind: 'failed', message: ERROR_MSG_NOT_FOUND });
+			this.fail({ kind: 'failed', message: pageText('transport.fileNotFound') });
 			return true;
 		}
 		return false;
@@ -1560,7 +1560,7 @@ class AudioPlayer {
 		this.fail(
 			this.callbacks.networkFailureIsAnnounced()
 				? { kind: 'unreachable' }
-				: { kind: 'failed', message: ERROR_MSG_GENERIC }
+				: { kind: 'failed', message: pageText('transport.playbackFailed') }
 		);
 	}
 
@@ -1644,13 +1644,13 @@ function unfreezesInPlace(reason: RecoveryReason, el: HTMLAudioElement): boolean
 function decodeMediaError(err: MediaError): string {
 	switch (err.code) {
 		case MediaError.MEDIA_ERR_ABORTED:
-			return 'Playback aborted.';
+			return pageText('transport.aborted');
 		case MediaError.MEDIA_ERR_DECODE:
-			return 'Audio file is corrupted.';
+			return pageText('transport.fileCorrupted');
 		case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-			return 'Audio format not supported by this browser.';
+			return pageText('transport.formatUnsupported');
 		default:
-			return ERROR_MSG_GENERIC;
+			return pageText('transport.playbackFailed');
 	}
 }
 

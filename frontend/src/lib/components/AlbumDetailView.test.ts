@@ -14,14 +14,7 @@ import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
 } from '#lib/stores/connectivity.ts';
-import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import {
-	collectionActionLabel,
-	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_RETRY_LABEL
-} from '#lib/constants/transport.ts';
 import { words } from '#lib/words/en.ts';
 import {
 	accessibleName,
@@ -202,7 +195,7 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 function playAlbumCircle(target: HTMLElement): HTMLButtonElement {
 	return getByRoleButton(
 		requireElement(target, '.collection-header'),
-		collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
+		words['collectionHeader.playAlbum']
 	);
 }
 
@@ -287,9 +280,7 @@ describe('AlbumDetailView header', () => {
 		expect(requireElement(header, '.header-count').textContent).toBe(
 			words['collectionHeader.songCount'](1)
 		);
-		expect(
-			getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'))
-		).not.toBeNull();
+		expect(getByRoleButton(header, words['collectionHeader.playAlbum'])).not.toBeNull();
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 		expect(target.querySelectorAll('.song-row')).toHaveLength(1);
 		expect(target.querySelector('nav')).toBeNull();
@@ -342,7 +333,7 @@ describe('AlbumDetailView header', () => {
 
 	describe('while a start of this album waits (#1330)', () => {
 		const readsBusyPause = {
-			label: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+			label: words['collectionHeader.pauseAlbum'],
 			busy: 'true',
 			face: 'spinner'
 		};
@@ -384,7 +375,7 @@ describe('AlbumDetailView header', () => {
 				}).toEqual({
 					whileWaiting: readsBusyPause,
 					afterTheTap: {
-						label: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+						label: words['collectionHeader.playAlbum'],
 						busy: 'false',
 						face: 'play'
 					},
@@ -421,12 +412,12 @@ describe('AlbumDetailView header', () => {
 	it.each([
 		{
 			status: 'playing',
-			label: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+			label: words['collectionHeader.pauseAlbum'],
 			face: 'pause'
 		},
 		{
 			status: 'error',
-			label: collectionActionLabel(TRANSPORT_RETRY_LABEL, 'album'),
+			label: words['collectionHeader.retryAlbum'],
 			face: 'refresh-cw'
 		}
 	] as const)(
@@ -529,15 +520,13 @@ describe('AlbumDetailView header', () => {
 		const target = await renderDetail();
 		const header = requireElement(target, '.collection-header');
 
-		expect(
-			getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album')).disabled
-		).toBe(false);
+		expect(getByRoleButton(header, words['collectionHeader.pauseAlbum']).disabled).toBe(false);
 	});
 
 	it('sizes Play album to the frequent hitbox on a coarse pointer', async () => {
 		// #163/6: the album header's play is the shortest path to hearing the
 		// album, and on a phone it has to be reachable with a thumb.
-		const label = collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album');
+		const label = words['collectionHeader.playAlbum'];
 		injectHitboxStyles();
 		const target = await renderDetail();
 		const button = getByRoleButton(requireElement(target, '.collection-header'), label);
@@ -694,10 +683,12 @@ describe('AlbumDetailView song row', () => {
 			const target = await renderSongs();
 
 			expect(
-				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', PLAYING_MARK_LABEL)
+				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', words['playingMark.playing'])
 			).not.toBeNull();
 			expect(rowOf(target, 'Tide').classList.contains('current')).toBe(true);
-			expect(findElementByRoleAndName(rowOf(target, 'Ebb'), 'img', PLAYING_MARK_LABEL)).toBeNull();
+			expect(
+				findElementByRoleAndName(rowOf(target, 'Ebb'), 'img', words['playingMark.playing'])
+			).toBeNull();
 			expect(rowOf(target, 'Ebb').classList.contains('current')).toBe(false);
 		}
 	);

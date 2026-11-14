@@ -12,12 +12,6 @@ import {
 	SSE_RECONNECT_MAX_DELAY_MS
 } from '../src/lib/constants/sse-reconnect';
 import {
-	collectionActionLabel,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL
-} from '../src/lib/constants/transport';
-import {
 	boundingBoxes,
 	sameOriginHeaders,
 	FlowGuard,
@@ -88,7 +82,7 @@ function generateButton(page: Page): Locator {
 }
 
 function playTakeButton(scope: Locator): Locator {
-	return scope.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) });
+	return scope.getByRole('button', { name: new RegExp(`^${words['transport.play']} v`) });
 }
 
 /** What a colour token resolves to on the page right now, as `getComputedStyle` reports it. */
@@ -318,7 +312,7 @@ test.describe(
 			const songTitle = `${OFFLINE_SONG_TITLE} Playing ${runMarker()}`;
 			await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
 			const miniPlayer = page.getByRole('contentinfo');
-			const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+			const pause = miniPlayer.getByRole('button', { name: words['transport.pause'], exact: true });
 
 			await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
 			await playTakeButton(page.getByRole('tabpanel')).click();
@@ -364,8 +358,8 @@ test.describe('tapping a take row Play while the network is gone', () => {
 		const songTitle = `${OFFLINE_SONG_TITLE} Tapped ${runMarker()}`;
 		await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
 		const transport = page.getByRole('contentinfo');
-		const pause = transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
-		const retry = transport.getByRole('button', { name: TRANSPORT_RETRY_LABEL, exact: true });
+		const pause = transport.getByRole('button', { name: words['transport.pause'], exact: true });
+		const retry = transport.getByRole('button', { name: words['transport.retry'], exact: true });
 		const spinner = transport.locator('.play-btn .spinner');
 		const waitingSpinner = pause.locator('.spinner');
 		const takeRowPlay = playTakeButton(workspace(page).locator('.take-row'));
@@ -408,13 +402,13 @@ test.describe('pressing the album header Play while the network is gone', () => 
 		const transport = page.getByRole('contentinfo');
 		return {
 			transport,
-			barPause: transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }),
+			barPause: transport.getByRole('button', { name: words['transport.pause'], exact: true }),
 			play: workspace(page).getByRole('button', {
-				name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+				name: words['collectionHeader.playAlbum'],
 				exact: true
 			}),
 			headerPause: workspace(page).getByRole('button', {
-				name: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+				name: words['collectionHeader.pauseAlbum'],
 				exact: true
 			}),
 			songTakesRefused: () =>
@@ -503,7 +497,7 @@ test.describe('pressing the album header Play while the network is gone', () => 
 		await expect(barPause.locator('.spinner')).toHaveCount(0);
 		await barPause.click();
 		await expect(
-			transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
+			transport.getByRole('button', { name: words['transport.play'], exact: true })
 		).toBeVisible();
 		await page.goto(`/album/${library.albumId}`);
 		await expect(transport.getByText(loadedTitle, { exact: true })).toBeVisible();
@@ -583,7 +577,7 @@ test.describe(
 				const panel = page.getByRole('tabpanel');
 				const takesTab = page.getByRole('tab', { name: words['songTabs.takes'] });
 				const runningRing = takesTab.locator('.ring');
-				const playTakePrefix = `${TRANSPORT_PLAY_LABEL} v`;
+				const playTakePrefix = `${words['transport.play']} v`;
 				const playButtons = panel.getByRole('button', { name: new RegExp(`^${playTakePrefix}`) });
 				const lastSeenBar = panel.getByRole('progressbar', {
 					name: words['generate.lastKnownProgress']

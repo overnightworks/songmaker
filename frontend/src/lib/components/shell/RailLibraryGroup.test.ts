@@ -6,7 +6,6 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants/connectivity.ts';
-import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import { words } from '#lib/words/en.ts';
 import { LIBRARY_ROUTE_ID, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { openCollection } from '#lib/stores/collection.ts';
@@ -584,7 +583,7 @@ describe('RailLibraryGroup', () => {
 
 			for (const trackTitle of ['Tide', 'Ebb']) {
 				const track = requireButtonContainingText(target, trackTitle);
-				expect(findElementByRoleAndName(track, 'img', PLAYING_MARK_LABEL) !== null).toBe(
+				expect(findElementByRoleAndName(track, 'img', words['playingMark.playing']) !== null).toBe(
 					trackTitle === markedTrack
 				);
 			}

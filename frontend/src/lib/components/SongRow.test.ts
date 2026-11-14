@@ -1,7 +1,6 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { PLAYING_MARK_LABEL } from '#lib/constants/song.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { accessibleName } from '#lib/test-utils/accessible-name.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
@@ -64,6 +63,6 @@ describe('SongRow', () => {
 		const title = row.querySelector('.song-row-title');
 		if (!title) throw new Error('Expected the song title');
 		expect(getComputedStyle(title).color).toBe('var(--accent)');
-		expect(findElementByRoleAndName(row, 'img', PLAYING_MARK_LABEL)).not.toBeNull();
+		expect(findElementByRoleAndName(row, 'img', words['playingMark.playing'])).not.toBeNull();
 	});
 });

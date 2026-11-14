@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	nowPlayingFromLabel,
-	nowPlayingOpenSourceLabel,
-	nowPlayingSheetCloseLabel,
 	nowPlayingTakeLabel,
 	nowPlayingTakeMeta,
 	takeVersion
@@ -70,23 +68,8 @@ describe('nowPlayingTakeMeta', () => {
 	});
 });
 
-describe('the names Now Playing gives its ways out (#1052)', () => {
-	it('closes the sheet by its own name, never as ×', () => {
-		expect(nowPlayingSheetCloseLabel('Now Playing panel')).toBe('Close Now Playing panel');
-	});
-
+describe('the name Now Playing gives where the music comes from', () => {
 	it('says where the music comes from', () => {
 		expect(nowPlayingFromLabel('Nightdrive')).toBe('from Nightdrive');
-	});
-
-	it.each([
-		{ kind: 'album' as const, title: 'Nightdrive', label: 'from Nightdrive — open album' },
-		{
-			kind: 'playlist' as const,
-			title: 'Late Drives',
-			label: 'from Late Drives — open playlist'
-		}
-	])('names opening the $kind, starting with the text it shows', ({ kind, title, label }) => {
-		expect(nowPlayingOpenSourceLabel(kind, title)).toBe(label);
 	});
 });
