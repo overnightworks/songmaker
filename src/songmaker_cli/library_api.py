@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
 
@@ -26,8 +26,6 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
-    LIBRARY_CURSOR_INVALID,
-    LIBRARY_CURSOR_MISMATCH,
     LIBRARY_SORT_NEWEST,
     PAGE_DEFAULT_LIMIT,
     PAGE_MAX_LIMIT,
@@ -51,6 +49,7 @@ from songmaker_cli.queue_streams import (
     check_queue_stream_rate_limit,
     resolve_library_pool_membership,
 )
+from songmaker_cli.refusals import Refusal
 
 router = APIRouter()
 
@@ -132,10 +131,10 @@ def api_library_search(
             after = decode_library_cursor(
                 cursor, ctx.signing_key, q=query, sort=sort,
             )
-        except LibraryCursorInvalidError:
-            raise HTTPException(422, LIBRARY_CURSOR_INVALID)
-        except LibraryCursorMismatchError:
-            raise HTTPException(422, LIBRARY_CURSOR_MISMATCH)
+        except LibraryCursorInvalidError as exc:
+            raise Refusal(422, "libraryRefusal.cursorInvalid") from exc
+        except LibraryCursorMismatchError as exc:
+            raise Refusal(422, "libraryRefusal.cursorMismatch") from exc
     page = search_library(
         session,
         owner_id=owner_filter(user),

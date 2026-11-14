@@ -171,13 +171,9 @@ export const NOW_PLAYING_STREAM_UNREADABLE_FILE_SUFFIX = 'file unreadable';
 export const NOW_PLAYING_STREAM_MORE_NOT_CHECKED = 'More takes not checked';
 export const NOW_PLAYING_STREAM_MORE_NOT_LOADED = 'More takes not loaded';
 
-export const QUEUE_STREAM_EMPTY_POOL_PREFIX = 'No playable takes in pool';
-
 export const SHUFFLE_SCOPE_PLAYLIST = 'this playlist';
 export const SHUFFLE_SCOPE_ALBUM = 'this album';
 export const SHUFFLE_SCOPE_LIBRARY = 'all albums';
-
-export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playable';
 
 export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
 

@@ -35,6 +35,8 @@ from webauth.rate_limit import RedisRateLimitBackend
 import songmaker_cli.constants as _consts
 from songmaker_cli import audio_files
 from songmaker_cli.api_helpers import (
+    RateLimiterUnavailable,
+    RateLimitRejected,
     check_generation_access,
     enforce_rate_limit,
     get_cached_limiter,
@@ -57,6 +59,7 @@ from songmaker_cli.audio_paths import (
 from songmaker_cli.constants import REDIS_RL_QUEUE_STREAM_PREFIX, LimiterFailurePolicy
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
+from songmaker_cli.refusals import Refusal
 
 log = logging.getLogger(__name__)
 
@@ -678,16 +681,22 @@ def _get_queue_stream_limiter(request: Request) -> RedisRateLimitBackend:
 
 
 def check_queue_stream_rate_limit(request: Request, user: AuthenticatedUser) -> None:
-    enforce_rate_limit(
-        _get_queue_stream_limiter(request),
-        user.id,
-        policy=_QUEUE_STREAM_LIMITER_FAILURE_POLICY,
-        reject_detail="Too many queue stream requests",
-        limit=_consts.QUEUE_STREAM_AUTH_RATE_LIMIT,
-        window_seconds=_consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS,
-        unavailable_log_message="Queue stream rate limiter unavailable -- rejecting request",
-        unavailable_detail="Queue stream rate limiter unavailable",
-    )
+    try:
+        enforce_rate_limit(
+            _get_queue_stream_limiter(request),
+            user.id,
+            policy=_QUEUE_STREAM_LIMITER_FAILURE_POLICY,
+            limit=_consts.QUEUE_STREAM_AUTH_RATE_LIMIT,
+            window_seconds=_consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS,
+            unavailable_log_message="Queue stream rate limiter unavailable -- rejecting request",
+        )
+    except RateLimitRejected as rejected:
+        raise Refusal(
+            429, "libraryQueueRefusal.tooManyRequests",
+            headers={"Retry-After": str(rejected.retry_after_seconds)},
+        ) from rejected
+    except RateLimiterUnavailable as unavailable:
+        raise Refusal(503, "libraryQueueRefusal.limiterUnavailable") from unavailable
 
 
 def generation_matches_pool(generation: Generation, pool: LibraryTakePool) -> bool:
@@ -817,25 +826,15 @@ def resolve_library_pool_membership(
     if start_generation_id is not None:
         start_gen = check_generation_access(session, start_generation_id, user)
         if start_gen.is_archived:
-            raise HTTPException(422, _consts.QUEUE_STREAM_UNPLAYABLE_START_DETAIL)
+            raise Refusal(422, "libraryQueueRefusal.startUnplayable")
 
-    pool_generations = collect_library_pool_generations(
-        songs,
-        pool,
-        start_gen,
-    )
+    pool_generations = collect_library_pool_generations(songs, pool, start_gen)
     candidate_sources = _library_candidate_sources(pool_generations)
     canonical_rank = {source.generation.id: rank for rank, source in enumerate(candidate_sources)}
-    candidate_sources = _order_library_candidates(
-        candidate_sources,
-        start_gen,
-        shuffle,
-    )
+    candidate_sources = _order_library_candidates(candidate_sources, start_gen, shuffle)
 
     skipped, playable_sources, unscanned_tail = _scan_library_candidates(
-        ctx,
-        candidate_sources,
-        start_gen,
+        ctx, candidate_sources, start_gen,
     )
     if not playable_sources:
         _raise_empty_library_pool(pool, unscanned_tail)
@@ -906,7 +905,7 @@ def _scan_library_candidates(
         skip = _library_skip(ctx, source.generation)
         if skip is not None:
             if start_gen is not None and source.generation.id == start_gen.id:
-                raise HTTPException(422, _consts.QUEUE_STREAM_UNPLAYABLE_START_DETAIL)
+                raise Refusal(422, "libraryQueueRefusal.startUnplayable")
             skipped.append(skip)
         else:
             playable_sources.append(source)
@@ -915,5 +914,5 @@ def _scan_library_candidates(
 
 def _raise_empty_library_pool(pool: LibraryTakePool, unscanned_tail: bool) -> None:
     if unscanned_tail:
-        raise HTTPException(422, "No playable takes in scanned library window")
-    raise HTTPException(422, f"{_consts.QUEUE_STREAM_EMPTY_POOL_DETAIL} '{pool}'")
+        raise Refusal(422, "libraryQueueRefusal.emptyWindow")
+    raise Refusal(422, "libraryQueueRefusal.emptyPool", pool=pool)

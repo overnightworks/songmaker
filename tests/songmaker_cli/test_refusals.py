@@ -41,9 +41,7 @@ def client(tmp_path: Path) -> TestClient:
 
     @app.get("/probe/headers")
     def headers() -> None:
-        refusal = Refusal(409, "takeRefusal.archived")
-        refusal.headers = {"Retry-After": "7"}
-        raise refusal
+        raise Refusal(409, "takeRefusal.archived", headers={"Retry-After": "7"})
 
     @app.get("/probe/missing")
     def missing() -> None:

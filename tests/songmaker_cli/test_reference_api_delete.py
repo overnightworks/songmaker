@@ -13,7 +13,7 @@ from support import reference_api_world
 from support.reference_api_world import (
     AUDIO_BYTES,
     LINKS,
-    NOT_FOUND,
+    REFERENCE_NOT_FOUND,
     REFERENCES_PATH,
     SECRET_FILENAME,
     link_reference,
@@ -25,7 +25,7 @@ from support.reference_api_world import (
 )
 from support.reference_rows import a_reference
 from support.token_world import TokenWorld, make_token_world
-from support.web_app import web_client
+from support.web_app import refusal_body, web_client
 
 from songmaker_cli.db.models import AuditLog, ReferenceRecording
 
@@ -75,7 +75,7 @@ def test_d3_a_foreign_or_missing_reference_answers_the_global_404_and_stays(
     response = _delete(caller, target)
 
     assert response.status_code == 404
-    assert response.json() == NOT_FOUND
+    assert response.json() == REFERENCE_NOT_FOUND
     assert len(reference_rows(signed_in)) == 1
     assert len(reference_files(signed_in)) == 1
     assert _audit_records(signed_in) == []
@@ -101,7 +101,7 @@ def test_d5_a_linked_reference_answers_409_and_stays(signed_in: TestClient, link
     response = _delete(signed_in, reference_id)
 
     assert response.status_code == 409
-    assert response.json() == {"detail": "Reference audio is in use."}
+    assert response.json() == refusal_body("referenceRefusal.inUse")
     assert [row.id for row in reference_rows(signed_in)] == [reference_id]
     assert len(reference_files(signed_in)) == 1
     assert _audit_records(signed_in) == []

@@ -20,6 +20,7 @@ from songmaker_cli.api_helpers import (
     can_access_album,
     check_song_access_including_deleted,
     get_cached_limiter,
+    job_not_found,
 )
 from songmaker_cli.api_models import JobResponse
 from songmaker_cli.app_context import AppContext, get_db_session
@@ -49,6 +50,7 @@ from songmaker_cli.job_types import (
 )
 from songmaker_cli.jobs.generation_failure import musician_job_response
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
+from songmaker_cli.refusals import Refusal
 from songmaker_cli.settings import get_settings
 
 router = APIRouter()
@@ -288,9 +290,9 @@ def api_cancel_job(
 ) -> JobResponse:
     job = _check_job_access(session, job_id, user)
     if job.status not in JOB_ACTIVE_STATUSES:
-        raise HTTPException(409, "Only queued or running jobs can be cancelled")
+        raise Refusal(409, "jobRefusal.notCancellable")
     if not update_job_status(session, job_id, JobStatusUpdate(JobStatus.CANCELLED)):
-        raise HTTPException(409, "Only queued or running jobs can be cancelled")
+        raise Refusal(409, "jobRefusal.notCancellable")
     record_audit(session, user.id, AuditAction.CANCEL, ResourceType.JOB, job_id)
     session.commit()
     from songmaker_cli.cover_runner import abort_web_cover_job
@@ -325,11 +327,11 @@ def _reaches_job_content(session: Session, job: Job, user: AuthenticatedUser) ->
 def _check_job_access(session: Session, job_id: str, user: AuthenticatedUser) -> Job:
     job = get_job(session, job_id)
     if not job:
-        raise HTTPException(404, "Job not found")
+        raise job_not_found()
     if user.role != AppRole.ADMIN and (
         job.user_id != user.id
         or job.type in ADMIN_ONLY_JOB_TYPES
         or not _reaches_job_content(session, job, user)
     ):
-        raise HTTPException(404, "Job not found")
+        raise job_not_found()
     return job

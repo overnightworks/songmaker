@@ -25,7 +25,7 @@ from songmaker_cli.timestamps import utcnow
 OWNER = "u1"
 REFERENCE_ID = "reference-1"
 NOT_FOUND = refusal_body("songRefusal.referenceMissing")
-IN_USE = {"detail": "Reference audio is in use."}
+IN_USE = refusal_body("referenceRefusal.inUse")
 
 
 def _seed(session) -> None:

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import type { ReferenceRecordingResponse, ReferenceUsageResponse } from '#lib/api/types.ts';
 import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
+import { words } from '#lib/words/en.ts';
 
 const mocks = vi.hoisted(() => ({ listReferences: vi.fn(), uploadReference: vi.fn() }));
 
@@ -323,6 +324,14 @@ describe('references page uploads', () => {
 				case: "the server's detail",
 				error: new ApiError(400, 'Unsupported format', '/api/references'),
 				reason: 'Unsupported format'
+			},
+			{
+				case: 'the page words of the key a refusal names',
+				error: new ApiError(400, 'Unsupported format', '/api/references', null, '', null, null, {
+					key: 'referenceRefusal.formatUnsupported',
+					values: { extension: '.exe', accepted: '.mp3' }
+				}),
+				reason: words['referenceRefusal.formatUnsupported']({ extension: '.exe', accepted: '.mp3' })
 			},
 			{
 				case: 'the fallback for a server without detail',

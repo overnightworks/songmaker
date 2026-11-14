@@ -8,7 +8,7 @@ import pytest
 from support.postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.reference_rows import a_reference
 from support.reference_take_world import persist_take_linking, seed_owner_song_and_running_job
-from support.web_app import make_test_app, seed_session
+from support.web_app import make_test_app, refusal_body, seed_session
 
 from songmaker_cli import reference_api
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
@@ -21,8 +21,8 @@ from songmaker_cli.reference_audio import RemovalOutcome
 OWNER = "u1"
 REFERENCE_ID = "reference-1"
 STORED_NAME = "F.wav"
-IN_USE = {"detail": "Reference audio is in use."}
-NOT_FOUND = {"detail": "Not Found"}
+IN_USE = refusal_body("referenceRefusal.inUse")
+NOT_FOUND = refusal_body("referenceRefusal.notFound")
 
 
 def _seed_take_and_reference(session) -> None:

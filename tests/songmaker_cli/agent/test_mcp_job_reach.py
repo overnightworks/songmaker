@@ -10,6 +10,7 @@ from support.cowriter_gateway import attach_cowriter_gateway
 from support.mcp_tool_table import ALICE, BOB
 from support.mcp_world import ADMIN_GROUPS, SAME_ORIGIN, McpWorld, worker_ready
 from support.token_world import TokenWorld
+from support.web_app import refusal_body
 
 from songmaker_cli.db.models import Job
 from songmaker_cli.job_types import JobStatus
@@ -41,9 +42,15 @@ def test_an_admins_agent_is_refused_the_job_the_admin_started_on_another_persons
 
     job = admins_household.call("get_job", {"job_id": job_id}, groups=ADMIN_GROUPS)
     cancel = admins_household.call("cancel_job", {"job_id": job_id}, groups=ADMIN_GROUPS)
+    missing_job = admins_household.call("get_job", {"job_id": "no-such-job"}, groups=ADMIN_GROUPS)
+    missing_cancel = admins_household.call(
+        "cancel_job", {"job_id": "no-such-job"}, groups=ADMIN_GROUPS,
+    )
     browser = admins_household.world.client.get(f"/api/jobs/{job_id}")
 
     assert (job.is_error, cancel.is_error) == (True, True)
+    assert job.json() == missing_job.json() == refusal_body("jobRefusal.notFound")
+    assert cancel.json() == missing_cancel.json() == refusal_body("jobRefusal.notFound")
     statuses = dict(admins_household.rows_of(Job, "id", "status"))
     assert statuses[job_id] != JobStatus.CANCELLED
     assert browser.status_code == 200

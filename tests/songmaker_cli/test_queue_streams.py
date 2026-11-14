@@ -12,10 +12,15 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from support.queue_stream_audio import stub_audio_build
 from support.route_budget import queries_without_session_auth
-from support.web_app import make_authenticated_user, make_test_app, seed_session, web_client
+from support.web_app import (
+    make_authenticated_user,
+    make_test_app,
+    refusal_body,
+    seed_session,
+    web_client,
+)
 
 from songmaker_cli import audio_files
-from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 from songmaker_cli.queue_streams import (
     QUEUE_STREAM_DURATION_LIMIT_DETAIL,
@@ -1147,7 +1152,7 @@ def test_library_scan_refuses_a_start_take_escaping_the_audio_root(
     response = client.get("/api/library/pool-queue", params={"start_generation_id": "g2"})
 
     assert response.status_code == 422
-    assert response.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
+    assert response.json()["message"]["key"] == "libraryQueueRefusal.startUnplayable"
 
 
 def test_library_pool_queue_start_generation_id_not_found_returns_404(
@@ -1190,7 +1195,7 @@ def test_library_pool_queue_archived_start_generation_returns_422(
     resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g3"})
 
     assert resp.status_code == 422
-    assert resp.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
+    assert resp.json()["message"]["key"] == "libraryQueueRefusal.startUnplayable"
 
 
 def test_library_pool_queue_returns_one_more_than_track_limit(tmp_path, monkeypatch, pg_factory):
@@ -1860,7 +1865,7 @@ def test_library_pool_queue_unplayable_start_is_scanned_once_with_small_budget(
     )
 
     assert resp.status_code == 422
-    assert resp.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
+    assert resp.json()["message"]["key"] == "libraryQueueRefusal.startUnplayable"
     assert scanned == ["g4"]
 
 
@@ -2207,14 +2212,8 @@ def test_library_pool_queue_matches_collect_without_ffmpeg(tmp_path, monkeypatch
 
     with factory() as session:
         songs = list_songs(session, user_id="user-a", light=False)
-        songs = sorted(
-            songs,
-            key=lambda song: (
-                song.album.title if song.album is not None else "",
-                song.track_number,
-                song.id,
-            ),
-        )
+        songs = sorted(songs, key=lambda song: (
+            song.album.title if song.album is not None else "", song.track_number, song.id))
         collected = collect_library_pool_generations(songs, "mix", None)
     assert take_ids == [generation.id for generation in collected]
 
@@ -2266,6 +2265,7 @@ def test_library_pool_queue_rate_limited(tmp_path: Path, monkeypatch, pg_factory
 
     assert first.status_code == 200
     assert second.status_code == 429
+    assert second.json() == refusal_body("libraryQueueRefusal.tooManyRequests")
     assert second.headers["Retry-After"] == str(consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS)
 
 
@@ -2274,17 +2274,16 @@ def test_library_pool_queue_rate_limiter_failure_is_503(tmp_path, monkeypatch, p
         def is_allowed(self, _user_id, *, limit: int, window_seconds: int):
             raise RuntimeError("down")
 
-    stub_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, factory=pg_factory, seed_db=_seed_library_data)
     seed_session(client, "usera")
     monkeypatch.setattr(
-        "songmaker_cli.queue_streams._get_queue_stream_limiter",
-        lambda _request: BrokenLimiter(),
+        "songmaker_cli.queue_streams._get_queue_stream_limiter", lambda _request: BrokenLimiter(),
     )
 
     resp = client.get("/api/library/pool-queue", params={"pool": "mix"})
 
     assert resp.status_code == 503
+    assert resp.json() == refusal_body("libraryQueueRefusal.limiterUnavailable")
 
 
 @pytest.mark.parametrize("authenticated", [False, True])

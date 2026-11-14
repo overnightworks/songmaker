@@ -185,7 +185,10 @@ def test_a_file_without_a_row_is_not_counted_and_stays_untouched(quota_context):
         ),
         (
             "invalid", 400, "Unsupported format '.txt'. Accepted: .flac, .mp3, .ogg, .wav",
-            None,
+            {
+                "key": "referenceRefusal.formatUnsupported",
+                "values": {"extension": ".txt", "accepted": ".flac, .mp3, .ogg, .wav"},
+            },
         ),
     ],
 )

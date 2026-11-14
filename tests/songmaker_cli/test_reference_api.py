@@ -32,7 +32,7 @@ from support.reference_api_world import (
 from support.reference_rows import a_reference
 from support.token_world import TokenWorld, make_token_world
 from support.wav_files import write_wav
-from support.web_app import TEST_ORIGIN, web_client
+from support.web_app import TEST_ORIGIN, refusal_body, web_client
 
 from songmaker_cli import reference_api
 from songmaker_cli.constants import (
@@ -637,7 +637,7 @@ def test_f1_a_filename_with_a_control_character_is_refused_and_stores_nothing(
     )
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Invalid filename."}
+    assert response.json() == refusal_body("referenceRefusal.filenameInvalid")
     assert reference_rows(signed_in) == []
     assert reference_files(signed_in) == []
 

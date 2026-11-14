@@ -472,6 +472,14 @@ def version_not_found() -> Refusal:
     return Refusal(404, "versionRefusal.notFound")
 
 
+def job_not_found() -> Refusal:
+    return Refusal(404, "jobRefusal.notFound")
+
+
+def reference_not_found() -> Refusal:
+    return Refusal(404, "referenceRefusal.notFound")
+
+
 def check_album_access(
     album: Album | None, user: AuthenticatedUser, *, require_owner: bool = False,
 ) -> Album:
@@ -663,23 +671,32 @@ def get_cached_limiter[LimiterT](
     return limiter
 
 
+class RateLimitRejected(Exception):
+    """The request budget is spent; the caller words its own refusal."""
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__(retry_after_seconds)
+        self.retry_after_seconds = retry_after_seconds
+
+
+class RateLimiterUnavailable(Exception):
+    """The limiter's backend errored under a fail-closed policy."""
+
+
 def enforce_rate_limit(
     limiter: RedisRateLimitBackend,
     key: str,
     *,
     policy: LimiterFailurePolicy,
-    reject_detail: str,
     limit: int,
     window_seconds: int,
     unavailable_log_message: str,
-    unavailable_detail: str | None = None,
 ) -> None:
-    """Check the request budget and enforce the result as a 429.
+    """Check the request budget; raise ``RateLimitRejected`` when it is spent.
 
     ``policy`` names what happens when the limiter's Redis backend itself
     errors out: FAIL_OPEN logs and lets the request through, FAIL_CLOSED
-    logs and rejects it with 503 (``unavailable_detail`` defaults to
-    ``reject_detail`` if not given separately).
+    logs and raises ``RateLimiterUnavailable``.
     """
     try:
         allowed = limiter.is_allowed(key, limit=limit, window_seconds=window_seconds)
@@ -687,12 +704,9 @@ def enforce_rate_limit(
         _log.warning(unavailable_log_message)
         if policy is LimiterFailurePolicy.FAIL_OPEN:
             return
-        raise HTTPException(503, unavailable_detail or reject_detail) from exc
+        raise RateLimiterUnavailable from exc
     if not allowed:
-        raise HTTPException(
-            429, reject_detail,
-            headers={"Retry-After": str(window_seconds)},
-        )
+        raise RateLimitRejected(window_seconds)
 
 
 # ── Pagination ───────────────────────────────────────────────────────

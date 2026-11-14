@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from support import reference_api_world
 from support.reference_api_world import (
     LINKS,
-    NOT_FOUND,
+    REFERENCE_NOT_FOUND,
     REFERENCES_PATH,
     link_reference,
     post_reference,
@@ -153,14 +153,14 @@ def test_a_foreign_reference_is_not_found_even_for_an_admin(
     response = signed_in_as(signed_in, caller).get(_uses_path(reference_id))
 
     assert response.status_code == 404
-    assert response.json() == NOT_FOUND
+    assert response.json() == REFERENCE_NOT_FOUND
 
 
 def test_an_unknown_id_is_not_found(signed_in: TestClient) -> None:
     response = signed_in.get(_uses_path("no-such-id"))
 
     assert response.status_code == 404
-    assert response.json() == NOT_FOUND
+    assert response.json() == REFERENCE_NOT_FOUND
 
 
 def test_without_a_session_the_uses_are_unauthenticated(signed_in: TestClient) -> None:

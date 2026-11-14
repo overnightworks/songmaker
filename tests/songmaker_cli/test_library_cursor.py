@@ -11,14 +11,12 @@ import pytest
 from support.web_app import TEST_SECRET
 
 from songmaker_cli.constants import (
-    LIBRARY_CURSOR_INVALID,
     LIBRARY_CURSOR_KEY_ID,
     LIBRARY_CURSOR_KEY_Q,
     LIBRARY_CURSOR_KEY_SORT,
     LIBRARY_CURSOR_KEY_SORT_VALUE,
     LIBRARY_CURSOR_KEY_TYPE,
     LIBRARY_CURSOR_KEY_VERSION,
-    LIBRARY_CURSOR_MISMATCH,
     LIBRARY_CURSOR_VERSION,
     LIBRARY_ITEM_ALBUM,
     LIBRARY_SORT_NEWEST,
@@ -57,7 +55,7 @@ def test_cursor_rejects_query_mismatch() -> None:
         id="nachtstrom",
     )
     encoded = encode_library_cursor(cursor, TEST_SECRET)
-    with pytest.raises(LibraryCursorMismatchError, match=LIBRARY_CURSOR_MISMATCH):
+    with pytest.raises(LibraryCursorMismatchError):
         decode_library_cursor(encoded, TEST_SECRET, q="tide", sort=LIBRARY_SORT_NEWEST)
 
 
@@ -70,7 +68,7 @@ def test_cursor_rejects_sort_mismatch() -> None:
         id="nachtstrom",
     )
     encoded = encode_library_cursor(cursor, TEST_SECRET)
-    with pytest.raises(LibraryCursorMismatchError, match=LIBRARY_CURSOR_MISMATCH):
+    with pytest.raises(LibraryCursorMismatchError):
         decode_library_cursor(
             encoded, TEST_SECRET, q="nachtstrom", sort=LIBRARY_SORT_TITLE,
         )
@@ -87,7 +85,7 @@ def test_cursor_rejects_bad_signature(suffix: str) -> None:
         id="nachtstrom",
     )
     encoded = encode_library_cursor(cursor, TEST_SECRET)
-    with pytest.raises(LibraryCursorInvalidError, match=LIBRARY_CURSOR_INVALID):
+    with pytest.raises(LibraryCursorInvalidError):
         decode_library_cursor(
             encoded + suffix, TEST_SECRET, q="nachtstrom", sort=LIBRARY_SORT_NEWEST,
         )
@@ -102,7 +100,7 @@ def test_cursor_rejects_other_secret() -> None:
         id="nachtstrom",
     )
     encoded = encode_library_cursor(cursor, TEST_SECRET)
-    with pytest.raises(LibraryCursorInvalidError, match=LIBRARY_CURSOR_INVALID):
+    with pytest.raises(LibraryCursorInvalidError):
         decode_library_cursor(
             encoded, b"b" * 64, q="nachtstrom", sort=LIBRARY_SORT_NEWEST,
         )
@@ -156,7 +154,7 @@ def _signed_payload(**overrides: object) -> str:
     ],
 )
 def test_cursor_rejects_a_malformed_cursor_even_when_signed(cursor: str) -> None:
-    with pytest.raises(LibraryCursorInvalidError, match=LIBRARY_CURSOR_INVALID):
+    with pytest.raises(LibraryCursorInvalidError):
         decode_library_cursor(cursor, TEST_SECRET, q="nachtstrom", sort=LIBRARY_SORT_NEWEST)
 
 
