@@ -110,8 +110,15 @@ def merge_catalogs(base_text: str, ours_text: str, theirs_text: str) -> tuple[st
     return "\n\n".join(blocks) + "\n", conflicted
 
 
+def merge_file_path(argument: str) -> Path:
+    resolved = Path(argument).resolve()
+    if not resolved.is_relative_to(Path.cwd().resolve()):
+        raise SystemExit(f"merge file outside the working tree: {argument}")
+    return resolved
+
+
 def main(argv: list[str]) -> int:
-    base_path, ours_path, theirs_path = (Path(argument) for argument in argv[1:4])
+    base_path, ours_path, theirs_path = (merge_file_path(argument) for argument in argv[1:4])
     merged, conflicted = merge_catalogs(
         base_path.read_text(encoding="utf-8"),
         ours_path.read_text(encoding="utf-8"),
