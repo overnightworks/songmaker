@@ -40,10 +40,11 @@ def create_job(
     album_id: str | None = None,
     version_id: str | None = None,
     session_id: str | None = None,
+    owner_id: str | None = None,
 ) -> Job:
     job = Job(
         type=job_type, user_id=user_id, song_id=song_id, album_id=album_id,
-        version_id=version_id, session_id=session_id,
+        version_id=version_id, session_id=session_id, owner_id=owner_id,
     )
     session.add(job)
     session.flush()
@@ -146,8 +147,8 @@ def count_queued_lora_training_jobs(session: Session) -> int:
     )
 
 
-def claim_next_cover_job(session: Session) -> Job | None:
-    """Atomically move the oldest queued cover job to running.
+def claim_next_cover_job(session: Session, owner_id: str) -> Job | None:
+    """Atomically move the oldest queued cover job to running, owned by ``owner_id``.
 
     The status predicate is deliberately repeated on the UPDATE.  Competing
     web processes may select the same candidate, but only one can change its
@@ -168,7 +169,7 @@ def claim_next_cover_job(session: Session) -> Job | None:
             Job.type == JobType.COVER,
             Job.status == JobStatus.QUEUED,
         )
-        .values(status=JobStatus.RUNNING, heartbeat_at=now)
+        .values(status=JobStatus.RUNNING, heartbeat_at=now, owner_id=owner_id)
         .returning(Job.id),
     ).scalar_one_or_none()
     if claimed_id is None:
@@ -364,9 +365,14 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
 
 
 @dataclass(frozen=True)
-class QueuedJobVerdict:
+class JobVerdict:
     error: str
     error_type: str
+
+
+JOB_ERROR_SERVER_RESTARTED: Final = JobVerdict(
+    error="Server restarted while job was in progress", error_type="server_restart",
+)
 
 
 def _queued_verdict(
@@ -375,11 +381,11 @@ def _queued_verdict(
     liveness: WorkerLiveness,
     now: datetime,
     max_queue_depth: int | None,
-) -> QueuedJobVerdict | None:
+) -> JobVerdict | None:
     if thresholds.liveness_signal is None:
         liveness = WorkerLiveness.UNKNOWN
     if liveness is WorkerLiveness.DEAD:
-        return QueuedJobVerdict(
+        return JobVerdict(
             error="No worker alive for this job type — please retry.",
             error_type="no_worker_alive",
         )
@@ -390,14 +396,14 @@ def _queued_verdict(
             seconds=thresholds.full_queue_bound_seconds(max_queue_depth),
         )
         if _is_started_stale(job, full_queue_cutoff):
-            return QueuedJobVerdict(
+            return JobVerdict(
                 error="Queued longer than a full queue could take — please retry.",
                 error_type="queued_full_queue_bound",
             )
         return None
     age_cutoff = now - timedelta(seconds=thresholds.queued_seconds)
     if _is_started_stale(job, age_cutoff):
-        return QueuedJobVerdict(
+        return JobVerdict(
             error="Queued too long — please retry.",
             error_type="queued_too_long",
         )
@@ -464,8 +470,8 @@ def recover_stale_jobs_by_type(
         )
         for job in stale:
             job.status = JobStatus.FAILED
-            job.error = "Server restarted while job was in progress"
-            job.error_type = "server_restart"
+            job.error = JOB_ERROR_SERVER_RESTARTED.error
+            job.error_type = JOB_ERROR_SERVER_RESTARTED.error_type
             _apply_terminal_values(job, now)
         if stale:
             recovered[job_type] = len(stale)
@@ -475,12 +481,64 @@ def recover_stale_jobs_by_type(
     return recovered
 
 
+def active_job_owner_ids(session: Session) -> set[str]:
+    """The processes that own a queued or running job; a job without an owner names none."""
+    return {
+        owner_id
+        for (owner_id,) in session.query(Job.owner_id)
+        .filter(Job.owner_id.is_not(None), Job.status.in_(JOB_ACTIVE_STATUSES))
+        .distinct()
+    }
+
+
+def _owner_gone_verdict(
+    job: Job, owner_liveness: Mapping[str, WorkerLiveness] | None,
+) -> JobVerdict | None:
+    """Fail a job only for an owner read as DEAD; an owner the map lacks reads UNKNOWN."""
+    if job.owner_id is None or owner_liveness is None:
+        return None
+    if owner_liveness.get(job.owner_id, WorkerLiveness.UNKNOWN) is WorkerLiveness.DEAD:
+        return JOB_ERROR_SERVER_RESTARTED
+    return None
+
+
+def recover_jobs_of_dead_owners(
+    session: Session, owner_liveness: Mapping[str, WorkerLiveness],
+) -> dict[str, int]:
+    """Fail the active jobs of every owner read as DEAD and return counts keyed by type."""
+    if not owner_liveness:
+        return {}
+    now = datetime.now(timezone.utc)
+    jobs = (
+        session.query(Job)
+        .filter(Job.owner_id.in_(list(owner_liveness)), Job.status.in_(JOB_ACTIVE_STATUSES))
+        .all()
+    )
+    recovered: dict[str, int] = {}
+    for job in jobs:
+        verdict = _owner_gone_verdict(job, owner_liveness)
+        if verdict is None:
+            continue
+        job_type = job.type
+        if _recover_stale_job_if_unchanged(
+            session, job, status=job.status, heartbeat_at=job.heartbeat_at,
+            error=verdict.error, error_type=verdict.error_type,
+            completed_at=now,
+        ):
+            recovered[job_type] = recovered.get(job_type, 0) + 1
+    session.flush()
+    if recovered:
+        log.warning("Failed the jobs of owners that are gone: %s", recovered)
+    return recovered
+
+
 def recover_stale_jobs_by_age_and_type(
     session: Session,
     *,
     user_id: str | None = None,
     now: datetime | None = None,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
+    owner_liveness: Mapping[str, WorkerLiveness] | None = None,
     max_queue_depth: int | None = None,
 ) -> dict[str, int]:
     """Recover stale jobs using the one per-type liveness policy.
@@ -489,7 +547,8 @@ def recover_stale_jobs_by_age_and_type(
     Unknown signals use the #446 age guard; alive signals allow one full queue
     before failing. The lifecycle reaper uses the configured global queue
     depth; a submission supplies its resolved per-user queue depth. Running
-    jobs fail only when their heartbeat is old.
+    jobs fail only when their heartbeat is old. A job whose owner ``owner_liveness``
+    reads as DEAD fails at once.
     ``user_id`` lets the submission path apply that exact policy before
     enforcing an active-job limit, without defining a second freshness bound.
     """
@@ -501,7 +560,7 @@ def recover_stale_jobs_by_age_and_type(
     recovered_by_type: dict[str, int] = {}
     for job, thresholds in _active_jobs_with_thresholds(session, user_id):
         if _recover_stale_job(
-            session, job, thresholds, now, worker_liveness, max_queue_depth,
+            session, job, thresholds, now, worker_liveness, owner_liveness, max_queue_depth,
         ):
             recovered_by_type[job.type] = recovered_by_type.get(job.type, 0) + 1
     session.flush()
@@ -539,11 +598,14 @@ def _recover_stale_job(
     thresholds: JobStaleThresholds,
     now: datetime,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None,
+    owner_liveness: Mapping[str, WorkerLiveness] | None,
     max_queue_depth: int | None,
 ) -> bool:
     status = job.status
     heartbeat_at = job.heartbeat_at
-    verdict = _stale_job_verdict(job, thresholds, now, worker_liveness, max_queue_depth)
+    verdict = _owner_gone_verdict(job, owner_liveness) or _stale_job_verdict(
+        job, thresholds, now, worker_liveness, max_queue_depth,
+    )
     if verdict is None:
         return False
     _before_stale_job_recovery_update(job)
@@ -564,14 +626,14 @@ def _stale_job_verdict(
     now: datetime,
     worker_liveness: Mapping[JobType, WorkerLiveness] | None,
     max_queue_depth: int | None,
-) -> QueuedJobVerdict | None:
+) -> JobVerdict | None:
     if job.status == JobStatus.QUEUED:
         liveness = liveness_for_job_type(JobType(job.type), worker_liveness)
         return _queued_verdict(job, thresholds, liveness, now, max_queue_depth)
     cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
     if not _is_heartbeat_stale(job, cutoff):
         return None
-    return QueuedJobVerdict("Took too long to finish — please retry.", "heartbeat_lost")
+    return JobVerdict("Took too long to finish — please retry.", "heartbeat_lost")
 
 
 def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:

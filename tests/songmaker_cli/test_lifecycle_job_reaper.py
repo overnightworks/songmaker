@@ -470,7 +470,7 @@ def test_reaper_tick_leaves_a_stalled_cover_without_suggestion_and_staging_direc
     png = ctx.audio_dir / "cover-suggestions" / "album" / "stalled.png"
     png.parent.mkdir(parents=True)
     png.write_bytes(b"png")
-    staging_dir = cover_runner._staging_path(ctx.audio_dir, "album", "cover-job")
+    staging_dir = cover_runner.cover_staging_path(ctx.audio_dir, "cover-job")
     staging_dir.mkdir()
     with ctx.db() as session:
         session.add(User(id="u1", username="u1"))

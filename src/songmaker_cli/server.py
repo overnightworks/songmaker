@@ -20,6 +20,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from redis.exceptions import RedisError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.middleware import install_web_auth_middleware
 
@@ -44,16 +45,14 @@ from songmaker_cli.constants import (
     HTTP_NOT_FOUND,
     PWA_ICON_PATHS,
 )
-from songmaker_cli.conversation_api import fail_chat_turns_ended_by_restart
-from songmaker_cli.cover_runner import (
-    cover_runner_loop,
-    reconcile_reaped_cover_jobs,
-    recover_web_cover_jobs,
-)
+from songmaker_cli.cover_runner import cover_runner_loop, reconcile_reaped_cover_jobs
 from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.lifecycle import (
     cleanup_expired_resource_events,
+    fail_jobs_of_dead_owners,
+    owner_gone_reaper_loop,
+    owner_lease_loop,
     reap_stale_jobs,
     reconcile_crashed_loras,
     resource_event_cleanup_loop,
@@ -75,6 +74,7 @@ from songmaker_cli.request_policies import (
     build_security_headers_policy,
 )
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, Settings, get_settings
+from songmaker_cli.worker_liveness import drop_owner_lease, refresh_owner_lease
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +97,47 @@ def _record_background_loop_completion(
     log.error("Background loop %s ended", name)
 
 
+def _start_background_loops(
+    app: FastAPI, registry: BackgroundLoopRegistry,
+) -> list[tuple[BackgroundLoopName, asyncio.Task]]:
+    loop_tasks = [
+        (BackgroundLoopName.SESSION_CLEANUP, asyncio.create_task(session_cleanup_loop(app))),
+        (
+            BackgroundLoopName.RESOURCE_EVENT_CLEANUP,
+            asyncio.create_task(resource_event_cleanup_loop(app)),
+        ),
+        (BackgroundLoopName.SCORE_BACKFILL, asyncio.create_task(score_backfill_loop(app))),
+        (BackgroundLoopName.STALE_JOB_REAPER, asyncio.create_task(stale_job_reaper_loop(app))),
+        (BackgroundLoopName.OWNER_LEASE, asyncio.create_task(owner_lease_loop(app))),
+        (
+            BackgroundLoopName.OWNER_GONE_REAPER,
+            asyncio.create_task(owner_gone_reaper_loop(app)),
+        ),
+        (
+            BackgroundLoopName.COVER_RUNNER,
+            asyncio.create_task(cover_runner_loop(app, registry)),
+        ),
+    ]
+    app.state.background_loop_tasks = dict(loop_tasks)
+    for name, task in loop_tasks:
+        task.add_done_callback(
+            lambda completed, loop_name=name: _record_background_loop_completion(
+                completed,
+                loop_name,
+                registry,
+            ),
+        )
+    return loop_tasks
+
+
+async def _drop_owner_lease(ctx: AppContext) -> None:
+    """End this process's lease so a sibling fails its jobs within one tick."""
+    try:
+        await asyncio.to_thread(drop_owner_lease, ctx.redis, ctx.owner_id)
+    except RedisError:
+        log.warning("Could not drop the owner lease; it lapses by itself", exc_info=True)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
@@ -114,9 +155,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             log.info("Startup: cleaned up %d expired sessions", deleted)
         session.commit()
 
-    await asyncio.to_thread(recover_web_cover_jobs, ctx.db)
+    await asyncio.to_thread(fail_jobs_of_dead_owners, ctx)
     await asyncio.to_thread(reconcile_reaped_cover_jobs, ctx.db, ctx.audio_dir)
-    fail_chat_turns_ended_by_restart(ctx.db)
     reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
@@ -125,28 +165,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     log.info("arq pool connected")
 
     app.state.startup_time = datetime.now(timezone.utc)
-    loop_tasks = [
-        (BackgroundLoopName.SESSION_CLEANUP, asyncio.create_task(session_cleanup_loop(app))),
-        (
-            BackgroundLoopName.RESOURCE_EVENT_CLEANUP,
-            asyncio.create_task(resource_event_cleanup_loop(app)),
-        ),
-        (BackgroundLoopName.SCORE_BACKFILL, asyncio.create_task(score_backfill_loop(app))),
-        (BackgroundLoopName.STALE_JOB_REAPER, asyncio.create_task(stale_job_reaper_loop(app))),
-        (
-            BackgroundLoopName.COVER_RUNNER,
-            asyncio.create_task(cover_runner_loop(app, registry)),
-        ),
-    ]
-    app.state.background_loop_tasks = dict(loop_tasks)
-    for name, task in loop_tasks:
-        task.add_done_callback(
-            lambda completed, loop_name=name: _record_background_loop_completion(
-                completed,
-                loop_name,
-                registry,
-            ),
-        )
+    await asyncio.to_thread(refresh_owner_lease, ctx.redis, ctx.owner_id)
+    loop_tasks = _start_background_loops(app, registry)
     try:
         async with running_mcp_front(app):
             yield
@@ -155,6 +175,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         for _name, task in loop_tasks:
             task.cancel()
         await asyncio.gather(*(task for _name, task in loop_tasks), return_exceptions=True)
+        await _drop_owner_lease(ctx)
         await drain_lease_releases()
         await close_arq_pool()
 

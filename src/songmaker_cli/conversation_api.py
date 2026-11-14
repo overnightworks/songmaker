@@ -67,11 +67,10 @@ from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     count_user_active_jobs,
     lock_active_job,
-    recover_stale_jobs_by_type,
     update_job_status,
 )
 from songmaker_cli.db.queries.settings import get_cowriter_tail_token_budget
-from songmaker_cli.job_types import JOB_ACTIVE_STATUSES, JobStatus, JobType
+from songmaker_cli.job_types import JobStatus, JobType
 from songmaker_cli.refusals import Refusal
 
 log = logging.getLogger(__name__)
@@ -140,20 +139,6 @@ class ChatTurnFrames:
 
 
 _running_chat_turns: set[asyncio.Task[None]] = set()
-
-
-def fail_chat_turns_ended_by_restart(db_factory: sessionmaker[Session]) -> None:
-    """At web-process startup, fail every chat job a previous process left active.
-
-    A turn runs only as a task of the web process that started it, so none
-    survives a restart. Failing its job at once lets the returning panel show
-    the unanswered message with Try again and accept a new one, instead of
-    following a turn that no longer runs until the stale-job reaper notices
-    (#1014).
-    """
-    with db_factory() as session:
-        recover_stale_jobs_by_type(session, {JobType.CHAT: JOB_ACTIVE_STATUSES})
-        session.commit()
 
 
 def _start_chat_turn(
@@ -246,11 +231,13 @@ def _prepare_chat_turn(
     session: Session,
 ) -> PreparedChatTurn:
     envelope = load_turn_context(req, user, session)
+    ctx = request.app.state.ctx
     job = create_job_with_rate_limit(
         session,
         user,
         JobType.CHAT,
-        redis=request.app.state.ctx.redis,
+        redis=ctx.redis,
+        owner_id=ctx.owner_id,
     )
     _refuse_while_another_turn_runs(session, user)
     update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))

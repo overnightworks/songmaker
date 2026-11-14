@@ -343,6 +343,12 @@ in #879 and run in that repository's CI; songmaker installs its pinned git tag
 and proves the auth surface it builds on it through `test_auth_api_sign_in.py`,
 `test_auth_api.py`, `test_auth_dependencies.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
 
+## Two-process tests
+
+`tests/support/app_processes.py` starts real `songmaker server` processes for a test that needs more than one. Each gets a free port, its own worker id and data directory, one shared audio directory, throwaway secrets, and the case's database and Redis; the test waits for `/health` with a deadline. Every process is ended when the case ends, and the children die with the test process even if it is killed. `tests/songmaker_cli/test_server_two_web_processes.py` (shared sessions and rate window) and `tests/songmaker_cli/test_server_owner_recovery.py` (a process fails only the jobs of an owner that is gone) are the callers; `tests/support/web_cluster_world.py` holds their fixtures. Run one locally with `scripts/test_postgresql.sh tests/songmaker_cli/test_server_owner_recovery.py`. `tests/support/redis_proxy.py` puts a TCP hop between the processes and the case's Redis so a case can cut the line or pose as a Redis that restarted empty (its reported uptime restarts from zero); the case waits with `poll_until` and never sleeps.
+
+`patch = subprocess` in `.github/workflows/coveragerc-ci.ini` makes the children measure into the shard's combine.
+
 ## Testing Patterns
 
 The frontend CI job runs `python3 ../scripts/check_style_literals.py` (from

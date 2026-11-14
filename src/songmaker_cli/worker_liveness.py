@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from typing import Any
@@ -18,7 +18,7 @@ from songmaker_cli.constants import (
     REDIS_KEY_PREFIX,
     WORKER_LAST_ALIVE_TTL_SECONDS,
 )
-from songmaker_cli.job_timing import worker_restart_grace_seconds
+from songmaker_cli.job_timing import OWNER_LEASE_TTL_SECONDS, worker_restart_grace_seconds
 from songmaker_cli.job_types import JobType, WorkerLivenessSignal
 from songmaker_cli.timestamps import aware_timestamp, utcnow
 
@@ -40,6 +40,39 @@ def _last_alive_key(signal: str) -> str:
 ACESTEP_LAST_ALIVE_KEY = _last_alive_key("acestep")
 MUSIC_LAST_ALIVE_KEY = _last_alive_key("music")
 SCORING_LAST_ALIVE_KEY = _last_alive_key("scoring")
+
+
+def owner_lease_key(owner_id: str) -> str:
+    return f"{REDIS_KEY_PREFIX}:owner:{owner_id}"
+
+
+def refresh_owner_lease(redis: Any, owner_id: str) -> None:
+    """Say, for the lease TTL, that the process named ``owner_id`` lives."""
+    redis.set(owner_lease_key(owner_id), "1", ex=OWNER_LEASE_TTL_SECONDS)
+
+
+def drop_owner_lease(redis: Any, owner_id: str) -> None:
+    redis.delete(owner_lease_key(owner_id))
+
+
+def read_owner_liveness(redis: Any, owner_ids: Collection[str]) -> dict[str, WorkerLiveness]:
+    """Read which owners hold a lease; a ``RedisError`` reaches the caller.
+
+    A server that has run for less than the lease TTL may have restarted empty,
+    so an absent lease there proves nothing: it reads UNKNOWN, never DEAD.
+    """
+    if not owner_ids:
+        return {}
+    ordered = sorted(owner_ids)
+    leases = redis.mget([owner_lease_key(owner_id) for owner_id in ordered])
+    # The uptime is read after the leases: a restart between the two reads then shows as young.
+    absent = WorkerLiveness.DEAD
+    if redis.info("server")["uptime_in_seconds"] < OWNER_LEASE_TTL_SECONDS:
+        absent = WorkerLiveness.UNKNOWN
+    return {
+        owner_id: WorkerLiveness.ALIVE if lease is not None else absent
+        for owner_id, lease in zip(ordered, leases, strict=True)
+    }
 
 
 def _record_alive(redis: Any, key: str, now: datetime) -> None:
