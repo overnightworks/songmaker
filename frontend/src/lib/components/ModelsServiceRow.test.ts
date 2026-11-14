@@ -2,6 +2,7 @@ import { createRawSnippet, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import ModelsServiceRow from './ModelsServiceRow.svelte';
+import { words } from '#lib/words/en.ts';
 
 const mounted: ReturnType<typeof mount>[] = [];
 
@@ -17,7 +18,7 @@ function renderRow(props: Record<string, unknown> = {}): HTMLElement {
 		mount(ModelsServiceRow, {
 			target,
 			props: {
-				task: 'Co-Writer',
+				task: words['modelsTable.taskCowriter'],
 				provider: 'Claude',
 				route: 'Agent service',
 				model: 'opus',
@@ -39,10 +40,10 @@ describe('C16 ModelsServiceRow', () => {
 		const target = renderRow();
 
 		expect(cellTexts(target)).toEqual([
-			'Co-Writer',
-			'Provider Claude',
-			'Route Agent service',
-			'Model opus'
+			words['modelsTable.taskCowriter'],
+			`${words['modelsTable.columnProvider']} Claude`,
+			`${words['modelsTable.columnRoute']} Agent service`,
+			`${words['modelsTable.columnModel']} opus`
 		]);
 	});
 
@@ -58,7 +59,7 @@ describe('C16 ModelsServiceRow', () => {
 		const target = renderRow({ advanced });
 
 		const details = target.querySelector('details');
-		expect(details?.querySelector('summary')?.textContent).toBe('Advanced');
+		expect(details?.querySelector('summary')?.textContent).toBe(words['modelsTable.advanced']);
 		expect(details?.open).toBe(false);
 		expect(details?.querySelector('#budget')?.textContent).toBe('24000');
 	});

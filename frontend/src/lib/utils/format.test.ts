@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
 	accountInitial,
 	activityTimeLabel,
+	formatDecimal,
+	formatPercent,
 	formatTime,
 	localDayAndMonth,
 	localWeekday,
@@ -135,5 +137,26 @@ describe('releaseDayLabel', () => {
 		['unreleased', null]
 	])('turns the tag %j into %j', (tag, expected) => {
 		expect(releaseDayLabel(tag)).toBe(expected);
+	});
+});
+
+describe('formatDecimal', () => {
+	it.each([
+		{ value: 7.25, digits: 1, expected: '7.3' },
+		{ value: 24, digits: 1, expected: '24.0' },
+		{ value: 23.6, digits: 0, expected: '24' },
+		{ value: 1234.5, digits: 1, expected: '1,234.5' }
+	])('writes $value with $digits decimals as "$expected"', ({ value, digits, expected }) => {
+		expect(formatDecimal(value, digits)).toBe(expected);
+	});
+});
+
+describe('formatPercent', () => {
+	it.each([
+		{ fraction: 0, expected: '0%' },
+		{ fraction: 0.424, expected: '42%' },
+		{ fraction: 1, expected: '100%' }
+	])('writes $fraction as "$expected"', ({ fraction, expected }) => {
+		expect(formatPercent(fraction)).toBe(expected);
 	});
 });

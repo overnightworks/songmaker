@@ -43,6 +43,7 @@ import {
 	updateExistingPreset,
 	userPresets
 } from './presets';
+import { words } from '#lib/words/en.ts';
 
 function preset(id: string, overrides: Partial<PresetItem> = {}): PresetItem {
 	return {
@@ -78,7 +79,7 @@ describe('preset store', () => {
 		else response.resolve([]);
 		await request;
 		expect(get(activeModelsLoading)).toBe(false);
-		expect(get(activeModelsError)).toBe(fails ? 'Failed to load models' : null);
+		expect(get(activeModelsError)).toBe(fails ? words['recipe.modelsLoadFailed'] : null);
 		api.fetchActiveModels.mockResolvedValueOnce([]);
 		await loadActiveModels();
 		expect(get(activeModelsError)).toBeNull();

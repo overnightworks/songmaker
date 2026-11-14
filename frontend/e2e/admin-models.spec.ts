@@ -18,20 +18,6 @@
 
 import { expect, test, type Locator, type Page, type TestInfo } from './coverage-test';
 
-import { ADMIN_TABS_LABEL } from '../src/lib/constants/admin';
-import {
-	MODELS_ADVANCED_LABEL,
-	MODELS_COLUMN_MODEL_LABEL,
-	MODELS_COLUMN_PROVIDER_LABEL,
-	MODELS_COLUMN_ROUTE_LABEL,
-	MODELS_COLUMN_STATUS_LABEL,
-	MODELS_COLUMN_TASK_LABEL,
-	MODELS_HISTORY_TAIL_LABEL,
-	MODELS_ROUTE_GATEWAY_LABEL,
-	MODELS_SET_BY_AGENT_FILE_LABEL,
-	MODELS_TASK_COVER_LABEL,
-	MODELS_TASK_COWRITER_LABEL
-} from '../src/lib/constants/models';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 import { words } from '../src/lib/words/en';
@@ -71,14 +57,19 @@ const NAMED_TURN_FAILURES = new RegExp(
 
 // Every row of the Models table: words, no control, no model and no status (#1949, #2055):
 // the agent file names the model, so the row says so.
-const SERVICE_ROW_WORDS = [MODELS_SET_BY_AGENT_FILE_LABEL, MODELS_ROUTE_GATEWAY_LABEL];
-const TASKS = [MODELS_TASK_COWRITER_LABEL, MODELS_TASK_COVER_LABEL];
+const SERVICE_ROW_WORDS = [words['modelsTable.setByAgentFile'], words['modelsTable.routeGateway']];
+const TASKS = [words['modelsTable.taskCowriter'], words['modelsTable.taskCover']];
 
 async function openModelsTab(page: Page): Promise<void> {
 	await page.goto('/settings/users');
-	await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: words['adminPage.heading'], exact: true })
+	).toBeVisible();
 
-	const compactTabs = page.getByRole('combobox', { name: ADMIN_TABS_LABEL, exact: true });
+	const compactTabs = page.getByRole('combobox', {
+		name: words['adminPage.sections'],
+		exact: true
+	});
 	if (await compactTabs.count()) {
 		await compactTabs.selectOption('models');
 	} else {
@@ -160,26 +151,26 @@ test(
 
 		// The row-level extra sits under a collapsed Advanced, in the Co-Writer row
 		// alone (line 13).
-		const advanced = page.getByText(MODELS_ADVANCED_LABEL, { exact: true });
+		const advanced = page.getByText(words['modelsTable.advanced'], { exact: true });
 		await expect(advanced).toHaveCount(1);
-		await expect(page.getByText(MODELS_HISTORY_TAIL_LABEL)).toBeHidden();
+		await expect(page.getByText(words['modelsTable.historyTail'])).toBeHidden();
 		await advanced.click();
-		await expect(page.getByText(MODELS_HISTORY_TAIL_LABEL)).toBeVisible();
+		await expect(page.getByText(words['modelsTable.historyTail'])).toBeVisible();
 
 		// The columns are the picture's five, and every one of them stays on
 		// screen at every width, without the page ever scrolling sideways.
 		for (const width of DESKTOP_WIDTHS) {
 			await page.setViewportSize({ width, height: DESKTOP_HEIGHT });
 			for (const column of [
-				MODELS_COLUMN_TASK_LABEL,
-				MODELS_COLUMN_PROVIDER_LABEL,
-				MODELS_COLUMN_ROUTE_LABEL,
-				MODELS_COLUMN_MODEL_LABEL,
-				MODELS_COLUMN_STATUS_LABEL
+				words['modelsTable.columnTask'],
+				words['modelsTable.columnProvider'],
+				words['modelsTable.columnRoute'],
+				words['modelsTable.columnModel'],
+				words['modelsTable.columnStatus']
 			]) {
 				await expect(columnHeader(page, column)).toBeInViewport();
 			}
-			await expect(taskRow(page, MODELS_TASK_COVER_LABEL)).toBeInViewport();
+			await expect(taskRow(page, words['modelsTable.taskCover'])).toBeInViewport();
 			await expectNoSidewaysScroll(page);
 			await attachShot(page, testInfo, `admin-models-${width}`);
 		}
@@ -228,22 +219,24 @@ test(
 		// The table's one header row gives way to a label on every line of every
 		// card, so each value still says what it is (#820, line 12). No card has
 		// a Status line: nothing is checked for a row the agent file decides (#1949).
-		await expect(columnHeader(page, MODELS_COLUMN_TASK_LABEL)).toBeHidden();
+		await expect(columnHeader(page, words['modelsTable.columnTask'])).toBeHidden();
 		await expectRowsReadOnly(page);
 		for (const task of TASKS) {
 			const card = taskRow(page, task);
 			for (const column of [
-				MODELS_COLUMN_PROVIDER_LABEL,
-				MODELS_COLUMN_ROUTE_LABEL,
-				MODELS_COLUMN_MODEL_LABEL
+				words['modelsTable.columnProvider'],
+				words['modelsTable.columnRoute'],
+				words['modelsTable.columnModel']
 			]) {
 				await expect(card.getByText(column, { exact: true })).toBeVisible();
 			}
-			await expect(card.getByText(MODELS_COLUMN_STATUS_LABEL, { exact: true })).toHaveCount(0);
+			await expect(card.getByText(words['modelsTable.columnStatus'], { exact: true })).toHaveCount(
+				0
+			);
 		}
 		// The cards stack, so the last task is reached by scrolling down --
 		// never by scrolling sideways.
-		const cover = taskRow(page, MODELS_TASK_COVER_LABEL);
+		const cover = taskRow(page, words['modelsTable.taskCover']);
 		await cover.scrollIntoViewIfNeeded();
 		await expect(cover).toBeInViewport();
 

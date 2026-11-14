@@ -95,3 +95,16 @@ export function activityTimeLabel(activityAt: string, now: Date): string {
 	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) return `${localWeekday(moment)} ${clock}`;
 	return localDayAndMonth(moment, now);
 }
+
+/** A number with a fixed count of decimals and the page language's separators: "1,234.5". */
+export function formatDecimal(value: number, fractionDigits: number): string {
+	return value.toLocaleString(pageLanguage(), {
+		minimumFractionDigits: fractionDigits,
+		maximumFractionDigits: fractionDigits
+	});
+}
+
+/** A fraction as a whole percent in the page language: 0.42 reads "42%". */
+export function formatPercent(fraction: number): string {
+	return fraction.toLocaleString(pageLanguage(), { style: 'percent', maximumFractionDigits: 0 });
+}

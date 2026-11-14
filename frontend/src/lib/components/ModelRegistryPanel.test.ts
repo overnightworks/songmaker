@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api/fetch.ts';
 import { lostNetwork } from '#lib/test-utils/network.ts';
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
-import { MODEL_REGISTRY_LOAD_FAILED } from '#lib/constants/models.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
@@ -22,6 +21,7 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => {
 });
 
 import ModelRegistryPanel from './ModelRegistryPanel.svelte';
+import { words } from '#lib/words/en.ts';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -102,7 +102,7 @@ describe('ModelRegistryPanel compact layout', () => {
 		expect(getComputedStyle(row).display).toBe('flex');
 		expect(getComputedStyle(actions).flexWrap).toBe('wrap');
 		expect(target.textContent).toContain('turbo');
-		expect(target.textContent).toContain('Download');
+		expect(target.textContent).toContain(words['modelRegistry.download']);
 		expect(target.querySelector('.registry-table tbody tr:nth-child(2)')?.textContent).toContain(
 			'sft'
 		);
@@ -111,14 +111,14 @@ describe('ModelRegistryPanel compact layout', () => {
 	it('still renders empty and error states', async () => {
 		api.getRegistry.mockResolvedValue({ models: [] });
 		const empty = await renderPanel(true);
-		expect(empty.textContent).toContain('Loading registry…');
+		expect(empty.textContent).toContain(words['modelRegistry.loading']);
 		if (mounted) await unmount(mounted);
 		mounted = undefined;
 		document.body.replaceChildren();
 
 		api.getRegistry.mockRejectedValue(new Error('registry down'));
 		const failed = await renderPanel(true);
-		expect(failed.textContent).toContain('Cannot reach the registry API');
+		expect(failed.textContent).toContain(words['modelRegistry.loadFailed']);
 		expect(failed.querySelector('.registry-table')).toBeNull();
 	});
 
@@ -128,7 +128,7 @@ describe('ModelRegistryPanel compact layout', () => {
 		});
 		const target = await renderPanel(false);
 		expect(getComputedStyle(requireElement(target, '.registry-table')).display).not.toBe('block');
-		expect(target.textContent).toContain('Download');
+		expect(target.textContent).toContain(words['modelRegistry.download']);
 	});
 });
 
@@ -146,7 +146,7 @@ describe('ModelRegistryPanel with no worker online', () => {
 		const target = await renderPanel(false);
 
 		expect(target.textContent).toContain('no worker running');
-		expect(target.textContent).not.toContain('not downloaded');
+		expect(target.textContent).not.toContain(words['modelRegistry.notDownloaded']);
 		expect(target.querySelector('button.action-btn')).toBeNull();
 	});
 });
@@ -161,7 +161,7 @@ describe('ModelRegistryPanel failures', () => {
 		{
 			failure: 'a lost network with no strip',
 			err: lostNetwork(),
-			shown: MODEL_REGISTRY_LOAD_FAILED
+			shown: words['modelRegistry.loadFailed']
 		}
 	])('names $failure without browser text', async ({ err, shown }) => {
 		api.getRegistry.mockRejectedValue(err);
@@ -199,11 +199,13 @@ describe('ModelRegistryPanel failures', () => {
 			await flush();
 			expect(target.querySelector('.banner-error, .panel-error')).toBeNull();
 			expect(target.querySelector('.registry-table') !== null).toBe(hasData);
-			if (!hasData) expect(target.textContent).toContain('Loading registry…');
+			if (!hasData) expect(target.textContent).toContain(words['modelRegistry.loading']);
 
 			reload.reject(new ApiError(403, 'Forbidden', '/api/admin/registry'));
 			await flush();
-			expect(requireElement(target, '.panel-error').textContent).toBe('Admin access required.');
+			expect(requireElement(target, '.panel-error').textContent).toBe(
+				words['adminPage.accessRequired']
+			);
 			expect(target.querySelector('.registry-table')).toBeNull();
 		}
 	);

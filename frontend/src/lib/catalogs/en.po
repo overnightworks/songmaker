@@ -3589,6 +3589,686 @@ msgctxt "loading.plain"
 msgid "Loading..."
 msgstr ""
 
+msgctxt "adminPage.heading"
+msgid "Admin"
+msgstr ""
+
+msgctxt "adminPage.accessRequired"
+msgid "Admin access required."
+msgstr ""
+
+msgctxt "adminPage.sections"
+msgid "Admin sections"
+msgstr ""
+
+msgctxt "adminPage.tabVoices"
+msgid "Voices"
+msgstr ""
+
+msgctxt "adminPage.tabRateLimits"
+msgid "Rate Limits"
+msgstr ""
+
+msgctxt "adminPage.tabGeneration"
+msgid "Generation"
+msgstr ""
+
+msgctxt "adminPage.tabModels"
+msgid "Models"
+msgstr ""
+
+msgctxt "adminPage.tabAcestep"
+msgid "ACE-Step"
+msgstr ""
+
+msgctxt "adminPage.tabCleanup"
+msgid "Cleanup"
+msgstr ""
+
+msgctxt "adminPage.saving"
+msgid "Saving..."
+msgstr ""
+
+msgctxt "adminPage.saveDefaults"
+msgid "Save Defaults"
+msgstr ""
+
+msgctxt "adminPage.saveFailed"
+msgid "Failed to save"
+msgstr ""
+
+msgctxt "adminVoices.heading"
+msgid "Voice operations"
+msgstr ""
+
+msgctxt "adminVoices.loading"
+msgid "Loading voices..."
+msgstr ""
+
+msgctxt "adminVoices.empty"
+msgid "No voices have been created."
+msgstr ""
+
+msgctxt "adminVoices.loadFailed"
+msgid "Failed to load voices"
+msgstr ""
+
+msgctxt "adminVoices.columnVoice"
+msgid "Voice"
+msgstr ""
+
+msgctxt "adminVoices.columnOwner"
+msgid "Owner"
+msgstr ""
+
+msgctxt "adminVoices.columnStatus"
+msgid "Status"
+msgstr ""
+
+msgctxt "rateLimits.heading"
+msgid "Global Defaults"
+msgstr ""
+
+msgctxt "rateLimits.hint"
+msgid "These apply to all users."
+msgstr ""
+
+msgctxt "rateLimits.generations"
+msgid "Generations / hour"
+msgstr ""
+
+msgctxt "rateLimits.scorings"
+msgid "Scorings / hour"
+msgstr ""
+
+msgctxt "rateLimits.maxQueueDepth"
+msgid "Max queue depth"
+msgstr ""
+
+msgctxt "rateLimits.maxActiveJobs"
+msgid "Max active jobs"
+msgstr ""
+
+msgctxt "rateLimits.loadFailed"
+msgid "Failed to load rate limits"
+msgstr ""
+
+msgctxt "generationDefaults.heading"
+msgid "Generation Defaults"
+msgstr ""
+
+msgctxt "generationDefaults.hint"
+msgid "Default generation parameters for all users. Per-song overrides take precedence."
+msgstr ""
+
+msgctxt "generationDefaults.reset"
+msgid "Reset"
+msgstr ""
+
+msgctxt "generationDefaults.loadFailed"
+msgid "Failed to load generation defaults"
+msgstr ""
+
+msgctxt "generationDefaults.saveFailed"
+msgid "Failed to save generation defaults"
+msgstr ""
+
+msgctxt "availableModels.heading"
+msgid "Available Models"
+msgstr ""
+
+msgctxt "availableModels.hint"
+msgid "Toggle which models users can create presets for."
+msgstr ""
+
+msgctxt "availableModels.on"
+msgid "ON"
+msgstr ""
+
+msgctxt "availableModels.off"
+msgid "OFF"
+msgstr ""
+
+msgctxt "availableModels.toggleFailed"
+msgid "Failed to toggle model"
+msgstr ""
+
+msgctxt "modelsTable.heading"
+msgid "Models"
+msgstr ""
+
+msgctxt "modelsTable.columnTask"
+msgid "Task"
+msgstr ""
+
+msgctxt "modelsTable.columnProvider"
+msgid "Provider"
+msgstr ""
+
+msgctxt "modelsTable.columnRoute"
+msgid "Route"
+msgstr ""
+
+msgctxt "modelsTable.columnModel"
+msgid "Model"
+msgstr ""
+
+msgctxt "modelsTable.columnStatus"
+msgid "Status"
+msgstr ""
+
+msgctxt "modelsTable.taskCowriter"
+msgid "Co-Writer"
+msgstr ""
+
+msgctxt "modelsTable.taskCover"
+msgid "Cover"
+msgstr ""
+
+msgctxt "modelsTable.setByAgentFile"
+msgid "Set by the agent file"
+msgstr ""
+
+msgctxt "modelsTable.routeGateway"
+msgid "Gateway"
+msgstr ""
+
+msgctxt "modelsTable.advanced"
+msgid "Advanced"
+msgstr ""
+
+msgctxt "modelsTable.historyTail"
+msgid "History tail (tokens)"
+msgstr ""
+
+msgctxt "modelsTable.saved"
+msgid "Saved."
+msgstr ""
+
+msgctxt "modelsTable.retry"
+msgid "Retry"
+msgstr ""
+
+msgctxt "modelsTable.saveFailed"
+msgid "The server rejected the change."
+msgstr ""
+
+msgctxt "modelsTable.loading"
+msgid "Loading…"
+msgstr ""
+
+msgctxt "modelsTable.unavailable"
+msgid "Unavailable"
+msgstr ""
+
+msgctxt "modelsTable.loadFailed"
+msgid "Failed to load co-writer settings"
+msgstr ""
+
+msgctxt "recipe.modelsLoadFailed"
+msgid "Failed to load models"
+msgstr ""
+
+msgctxt "workerPool.heading"
+msgid "Worker Pool"
+msgstr ""
+
+msgctxt "workerPool.loadFailed"
+msgid "Cannot reach the worker pool API."
+msgstr ""
+
+msgctxt "workerPool.refreshFailed"
+msgid "Worker pool not updating — retrying…"
+msgstr ""
+
+msgctxt "workerPool.noWorkers"
+msgid "No workers registered. Start the {#code}{container}{/code} container and wait a few seconds."
+msgstr ""
+
+msgctxt "workerPool.cardHeader"
+msgid "GPU {gpu} • {vram}"
+msgstr ""
+
+msgctxt "workerPool.vramTotal"
+msgid "{total} GB"
+msgstr ""
+
+msgctxt "workerPool.statusLabel"
+msgid "Status:"
+msgstr ""
+
+msgctxt "workerPool.logLabel"
+msgid "Log:"
+msgstr ""
+
+msgctxt "workerPool.queueLabel"
+msgid "Queue:"
+msgstr ""
+
+msgctxt "workerPool.lastSeenLabel"
+msgid "Last seen:"
+msgstr ""
+
+msgctxt "workerPool.queueJobs.one"
+msgid "{count} job"
+msgstr ""
+
+msgctxt "workerPool.queueJobs.other"
+msgid "{count} jobs"
+msgstr ""
+
+msgctxt "workerPool.loadingSpinner"
+msgid "loading"
+msgstr ""
+
+msgctxt "workerPool.statusLoading"
+msgid "Loading {mode}…"
+msgstr ""
+
+msgctxt "workerPool.statusLoadingElapsed"
+msgid "Loading {mode}… ({elapsed} elapsed)"
+msgstr ""
+
+msgctxt "workerPool.statusTraining"
+msgid "Training ({seconds}s remaining)"
+msgstr ""
+
+msgctxt "workerPool.statusNoModel"
+msgid "No model loaded"
+msgstr ""
+
+msgctxt "workerPool.statusBusy"
+msgid "Busy ({count} in queue)"
+msgstr ""
+
+msgctxt "workerPool.statusIdle"
+msgid "Idle"
+msgstr ""
+
+msgctxt "workerPool.offlineSince"
+msgid "Offline — last registered {lastSeen}"
+msgstr ""
+
+msgctxt "workerPool.gpuUnavailableDetail"
+msgid "GPU unavailable — {detail}"
+msgstr ""
+
+msgctxt "workerPool.gpuUnavailable"
+msgid "GPU unavailable"
+msgstr ""
+
+msgctxt "workerPool.gpuHealthNotReported"
+msgid "GPU health not reported — worker build predates GPU health checks"
+msgstr ""
+
+msgctxt "workerPool.restartNoProcess"
+msgid "Can't restart — no worker process is running to ask. Restart the container running worker \"{worker}\" directly."
+msgstr ""
+
+msgctxt "workerPool.restartBrokenGpu"
+msgid "Can't restart — its GPU is the problem, not the process. Restart the container running worker \"{worker}\" directly, or check the host's NVIDIA driver."
+msgstr ""
+
+msgctxt "workerPool.restartNoGpuHealth"
+msgid "Can't restart — this worker build doesn't report GPU health, so it can't be trusted as healthy. Restarting the same process won't add that; update the container running worker \"{worker}\" to the current image."
+msgstr ""
+
+msgctxt "workerPool.seenNever"
+msgid "never"
+msgstr ""
+
+msgctxt "workerPool.seenJustNow"
+msgid "just now"
+msgstr ""
+
+msgctxt "workerPool.secondsAgo"
+msgid "{count}s ago"
+msgstr ""
+
+msgctxt "workerPool.minutesAgo"
+msgid "{count}m ago"
+msgstr ""
+
+msgctxt "workerPool.hoursAgo"
+msgid "{count}h ago"
+msgstr ""
+
+msgctxt "workerPool.daysAgo"
+msgid "{count}d ago"
+msgstr ""
+
+msgctxt "workerPool.elapsedSeconds"
+msgid "{seconds}s"
+msgstr ""
+
+msgctxt "workerPool.elapsedMinutes"
+msgid "{minutes}m {seconds}s"
+msgstr ""
+
+msgctxt "workerPool.elapsedHours"
+msgid "{hours}h {minutes}m"
+msgstr ""
+
+msgctxt "workerPool.loadModel"
+msgid "Load model…"
+msgstr ""
+
+msgctxt "workerPool.load"
+msgid "Load"
+msgstr ""
+
+msgctxt "workerPool.loadingAction"
+msgid "Loading…"
+msgstr ""
+
+msgctxt "workerPool.selectModel"
+msgid "Select a model to load"
+msgstr ""
+
+msgctxt "workerPool.enqueueFailed"
+msgid "Failed to enqueue load"
+msgstr ""
+
+msgctxt "workerPool.unloadFailed"
+msgid "Failed to unload model"
+msgstr ""
+
+msgctxt "workerPool.restartFailed"
+msgid "Restart failed"
+msgstr ""
+
+msgctxt "workerPool.keepLoadedFailed"
+msgid "Failed to change Keep loaded"
+msgstr ""
+
+msgctxt "workerPool.loadingToast"
+msgid "Loading {mode} on {worker}…"
+msgstr ""
+
+msgctxt "workerPool.unloadedToast"
+msgid "Unloaded {mode} from {worker}"
+msgstr ""
+
+msgctxt "workerPool.restartRequested"
+msgid "Restart requested for {worker}"
+msgstr ""
+
+msgctxt "workerPool.keepLoadedOff"
+msgid "Keep loaded disabled for {mode} on {worker}"
+msgstr ""
+
+msgctxt "workerPool.keepLoadedOn"
+msgid "Keep loaded enabled for {mode} on {worker}"
+msgstr ""
+
+msgctxt "workerPool.lastError"
+msgid "Last error"
+msgstr ""
+
+msgctxt "workerPool.fullLogs"
+msgid "Full logs: {#code}{command}{/code}"
+msgstr ""
+
+msgctxt "workerPool.restart"
+msgid "Restart worker…"
+msgstr ""
+
+msgctxt "workerPool.restarting"
+msgid "Restarting…"
+msgstr ""
+
+msgctxt "workerPool.restartTitle"
+msgid "Restart {worker}?"
+msgstr ""
+
+msgctxt "workerPool.restartWarning"
+msgid "Running takes will stop."
+msgstr ""
+
+msgctxt "workerPool.restartConfirm"
+msgid "Restart"
+msgstr ""
+
+msgctxt "workerPool.models"
+msgid "Models on this GPU"
+msgstr ""
+
+msgctxt "workerPool.modelsLoading"
+msgid "None yet — {mode} is loading."
+msgstr ""
+
+msgctxt "workerPool.modelsOffline"
+msgid "Unknown while the worker is offline."
+msgstr ""
+
+msgctxt "workerPool.keepLoaded"
+msgid "Keep loaded"
+msgstr ""
+
+msgctxt "workerPool.keepLoadedHint"
+msgid "Keep loaded — never unloaded to make room"
+msgstr ""
+
+msgctxt "workerPool.keepLoadedModel"
+msgid "Keep loaded {mode}"
+msgstr ""
+
+msgctxt "workerPool.unload"
+msgid "Unload"
+msgstr ""
+
+msgctxt "workerPool.unloadModel"
+msgid "Unload {mode}"
+msgstr ""
+
+msgctxt "workerPool.modelSize"
+msgid "~{size} GB"
+msgstr ""
+
+msgctxt "workerPool.vram"
+msgid "VRAM"
+msgstr ""
+
+msgctxt "workerPool.vramLabel"
+msgid "VRAM:"
+msgstr ""
+
+msgctxt "workerPool.vramUsed"
+msgid "{used} / {total} GB"
+msgstr ""
+
+msgctxt "workerPool.vramUsedEstimated"
+msgid "~{used} / {total} GB est."
+msgstr ""
+
+msgctxt "workerPool.vramFree"
+msgid "{free} GB free"
+msgstr ""
+
+msgctxt "workerPool.vramEstimateReason"
+msgid "No GPU reading — the sizes of the loaded models, not a measurement"
+msgstr ""
+
+msgctxt "workerPool.vramUnknown"
+msgid "unknown"
+msgstr ""
+
+msgctxt "workerPool.vramOffline"
+msgid "VRAM unavailable while the worker is offline."
+msgstr ""
+
+msgctxt "workerPool.vramNoHeartbeat"
+msgid "No heartbeat — nothing to read"
+msgstr ""
+
+msgctxt "workerPool.vramNoTotal"
+msgid "Worker does not report total VRAM"
+msgstr ""
+
+msgctxt "workerPool.vramNoFields"
+msgid "Worker build does not report VRAM fields"
+msgstr ""
+
+msgctxt "modelRegistry.heading"
+msgid "Model Registry"
+msgstr ""
+
+msgctxt "modelRegistry.loading"
+msgid "Loading registry…"
+msgstr ""
+
+msgctxt "modelRegistry.loadFailed"
+msgid "Cannot reach the registry API."
+msgstr ""
+
+msgctxt "modelRegistry.columnMode"
+msgid "Mode"
+msgstr ""
+
+msgctxt "modelRegistry.columnStatus"
+msgid "Status"
+msgstr ""
+
+msgctxt "modelRegistry.columnLoaded"
+msgid "Loaded"
+msgstr ""
+
+msgctxt "modelRegistry.columnLoading"
+msgid "Loading"
+msgstr ""
+
+msgctxt "modelRegistry.columnActions"
+msgid "Actions"
+msgstr ""
+
+msgctxt "modelRegistry.downloaded"
+msgid "downloaded"
+msgstr ""
+
+msgctxt "modelRegistry.stateUnknown"
+msgid "no worker running — download state unknown"
+msgstr ""
+
+msgctxt "modelRegistry.notDownloaded"
+msgid "not downloaded"
+msgstr ""
+
+msgctxt "modelRegistry.downloadingProgress"
+msgid "Downloading… {percent}"
+msgstr ""
+
+msgctxt "modelRegistry.noWorkerOnline"
+msgid "No worker online to download it"
+msgstr ""
+
+msgctxt "modelRegistry.starting"
+msgid "Starting…"
+msgstr ""
+
+msgctxt "modelRegistry.download"
+msgid "Download"
+msgstr ""
+
+msgctxt "modelRegistry.connectionLost"
+msgid "Connection lost — retrying…"
+msgstr ""
+
+msgctxt "modelRegistry.downloadingToast"
+msgid "Downloading {mode}…"
+msgstr ""
+
+msgctxt "modelRegistry.downloadFailed"
+msgid "Failed to start download"
+msgstr ""
+
+msgctxt "takeRetention.heading"
+msgid "Take Retention"
+msgstr ""
+
+msgctxt "takeRetention.explanation"
+msgid "Takes that are neither picked nor kept are archived after the retention window, then permanently deleted after the hard-delete window."
+msgstr ""
+
+msgctxt "takeRetention.whatThisDoes"
+msgid "What this does"
+msgstr ""
+
+msgctxt "takeRetention.schedule"
+msgid "Auto · daily {hour}:00 UTC"
+msgstr ""
+
+msgctxt "takeRetention.loading"
+msgid "Loading preview…"
+msgstr ""
+
+msgctxt "takeRetention.days.one"
+msgid "{count} day"
+msgstr ""
+
+msgctxt "takeRetention.days.other"
+msgid "{count} days"
+msgstr ""
+
+msgctxt "takeRetention.archiveAfter"
+msgid "Archive after"
+msgstr ""
+
+msgctxt "takeRetention.hardDeleteAfter"
+msgid "Hard-delete after archive"
+msgstr ""
+
+msgctxt "takeRetention.toArchive"
+msgid "to archive now"
+msgstr ""
+
+msgctxt "takeRetention.toHardDelete"
+msgid "to hard-delete now"
+msgstr ""
+
+msgctxt "takeRetention.nothingDue"
+msgid "Nothing to clean up right now"
+msgstr ""
+
+msgctxt "takeRetention.refresh"
+msgid "Refresh"
+msgstr ""
+
+msgctxt "takeRetention.runNow"
+msgid "Run now"
+msgstr ""
+
+msgctxt "takeRetention.confirm.one"
+msgid "Archive {#strong}{count} take{/strong} and permanently delete {#strong}{deleted}{/strong}. Deleting cannot be undone."
+msgstr ""
+
+msgctxt "takeRetention.confirm.other"
+msgid "Archive {#strong}{count} takes{/strong} and permanently delete {#strong}{deleted}{/strong}. Deleting cannot be undone."
+msgstr ""
+
+msgctxt "takeRetention.cancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "takeRetention.running"
+msgid "Running…"
+msgstr ""
+
+msgctxt "takeRetention.delete"
+msgid "Delete {count}"
+msgstr ""
+
+msgctxt "takeRetention.previewFailed"
+msgid "Preview failed"
+msgstr ""
+
+msgctxt "takeRetention.runFailed"
+msgid "Cleanup failed"
+msgstr ""
+
+msgctxt "takeRetention.outcome"
+msgid "Archived {archived}, deleted {deleted}"
+msgstr ""
+
 msgctxt "generationRefusal.notFound"
 msgid "Generation not found"
 msgstr ""

@@ -1,22 +1,17 @@
 <script lang="ts">
 	import type { WorkerInfoItem } from '#lib/api/types.ts';
-	import {
-		WORKER_POOL_VRAM_LABEL,
-		WORKER_POOL_VRAM_OFFLINE,
-		WORKER_POOL_VRAM_UNKNOWN,
-		WORKER_POOL_VRAM_ESTIMATE,
-		WORKER_POOL_VRAM_FREE,
-		WORKER_POOL_VRAM_ESTIMATE_REASON,
-		WORKER_POOL_VRAM_NO_HEARTBEAT,
-		WORKER_POOL_VRAM_NO_FIELDS,
-		WORKER_POOL_VRAM_NO_TOTAL
-	} from '#lib/constants/worker.ts';
+	import { formatDecimal } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	let { state, offline }: { state: WorkerInfoItem['state']; offline: boolean } = $props();
 	const used = $derived(state?.vram_used_gb);
 	const total = $derived(state?.vram_total_gb);
 	const estimated = $derived(state?.vram_measured === false);
 	const unknown = $derived(offline || used == null || total == null);
+	const gigabytes = (usedGb: number, totalGb: number) => ({
+		used: formatDecimal(usedGb, 1),
+		total: formatDecimal(totalGb, 1)
+	});
 	const percentage = $derived(
 		used != null && total != null && total > 0
 			? Math.min(100, Math.max(0, (used / total) * 100))
@@ -24,8 +19,8 @@
 	);
 </script>
 
-<div class="vram-row" role="group" aria-label={WORKER_POOL_VRAM_LABEL}>
-	<span class="label">{WORKER_POOL_VRAM_LABEL}:</span>
+<div class="vram-row" role="group" aria-label={pageText('workerPool.vram')}>
+	<span class="label">{pageText('workerPool.vramLabel')}</span>
 	<div class="vram">
 		<div class="bar" class:estimated class:unknown aria-hidden="true">
 			{#if !unknown}<span style:width={`${percentage}%`}></span>{/if}
@@ -33,27 +28,30 @@
 		{#if !unknown && used != null && total != null}
 			<div class="numbers">
 				<span
-					>{estimated ? '~' : ''}{used.toFixed(1)} / {total.toFixed(1)} GB{estimated
-						? ` ${WORKER_POOL_VRAM_ESTIMATE}`
-						: ''}</span
+					>{pageText(
+						estimated ? 'workerPool.vramUsedEstimated' : 'workerPool.vramUsed',
+						gigabytes(used, total)
+					)}</span
 				>
 				{#if !estimated}<span class="free"
-						>{Math.max(0, total - used).toFixed(1)} {WORKER_POOL_VRAM_FREE}</span
+						>{pageText('workerPool.vramFree', {
+							free: formatDecimal(Math.max(0, total - used), 1)
+						})}</span
 					>{/if}
 			</div>
-			{#if estimated}<span class="reason">{WORKER_POOL_VRAM_ESTIMATE_REASON}</span>{/if}
+			{#if estimated}<span class="reason">{pageText('workerPool.vramEstimateReason')}</span>{/if}
 		{:else}
 			<span class="unknown-text"
-				><span class="ring" aria-hidden="true"></span>{WORKER_POOL_VRAM_UNKNOWN}</span
+				><span class="ring" aria-hidden="true"></span>{pageText('workerPool.vramUnknown')}</span
 			>
 			<span class="reason"
 				>{!state
-					? WORKER_POOL_VRAM_NO_HEARTBEAT
+					? pageText('workerPool.vramNoHeartbeat')
 					: offline
-						? WORKER_POOL_VRAM_OFFLINE
+						? pageText('workerPool.vramOffline')
 						: used != null && total == null
-							? WORKER_POOL_VRAM_NO_TOTAL
-							: WORKER_POOL_VRAM_NO_FIELDS}</span
+							? pageText('workerPool.vramNoTotal')
+							: pageText('workerPool.vramNoFields')}</span
 			>
 		{/if}
 	</div>

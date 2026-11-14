@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import { MODELS_LOAD_ERROR } from '#lib/constants/models.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import type { PresetItem, VersionGenerationParams } from '#lib/api/types.ts';
 import type { AvailableModel } from '#lib/api/client.ts';
 import {
@@ -55,7 +55,7 @@ export async function loadActiveModels(): Promise<void> {
 		const data = await fetchActiveModels();
 		activeModels.set(data);
 	} catch {
-		activeModelsError.set(MODELS_LOAD_ERROR);
+		activeModelsError.set(pageText('recipe.modelsLoadFailed'));
 	} finally {
 		activeModelLoads -= 1;
 		activeModelsLoading.set(activeModelLoads > 0);

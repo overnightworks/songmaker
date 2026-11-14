@@ -871,6 +871,173 @@ export type Words = {
     readonly "dialog.confirm": string;
     readonly "toast.dismiss": string;
     readonly "loading.plain": string;
+    readonly "adminPage.heading": string;
+    readonly "adminPage.accessRequired": string;
+    readonly "adminPage.sections": string;
+    readonly "adminPage.tabVoices": string;
+    readonly "adminPage.tabRateLimits": string;
+    readonly "adminPage.tabGeneration": string;
+    readonly "adminPage.tabModels": string;
+    readonly "adminPage.tabAcestep": string;
+    readonly "adminPage.tabCleanup": string;
+    readonly "adminPage.saving": string;
+    readonly "adminPage.saveDefaults": string;
+    readonly "adminPage.saveFailed": string;
+    readonly "adminVoices.heading": string;
+    readonly "adminVoices.loading": string;
+    readonly "adminVoices.empty": string;
+    readonly "adminVoices.loadFailed": string;
+    readonly "adminVoices.columnVoice": string;
+    readonly "adminVoices.columnOwner": string;
+    readonly "adminVoices.columnStatus": string;
+    readonly "rateLimits.heading": string;
+    readonly "rateLimits.hint": string;
+    readonly "rateLimits.generations": string;
+    readonly "rateLimits.scorings": string;
+    readonly "rateLimits.maxQueueDepth": string;
+    readonly "rateLimits.maxActiveJobs": string;
+    readonly "rateLimits.loadFailed": string;
+    readonly "generationDefaults.heading": string;
+    readonly "generationDefaults.hint": string;
+    readonly "generationDefaults.reset": string;
+    readonly "generationDefaults.loadFailed": string;
+    readonly "generationDefaults.saveFailed": string;
+    readonly "availableModels.heading": string;
+    readonly "availableModels.hint": string;
+    readonly "availableModels.on": string;
+    readonly "availableModels.off": string;
+    readonly "availableModels.toggleFailed": string;
+    readonly "modelsTable.heading": string;
+    readonly "modelsTable.columnTask": string;
+    readonly "modelsTable.columnProvider": string;
+    readonly "modelsTable.columnRoute": string;
+    readonly "modelsTable.columnModel": string;
+    readonly "modelsTable.columnStatus": string;
+    readonly "modelsTable.taskCowriter": string;
+    readonly "modelsTable.taskCover": string;
+    readonly "modelsTable.setByAgentFile": string;
+    readonly "modelsTable.routeGateway": string;
+    readonly "modelsTable.advanced": string;
+    readonly "modelsTable.historyTail": string;
+    readonly "modelsTable.saved": string;
+    readonly "modelsTable.retry": string;
+    readonly "modelsTable.saveFailed": string;
+    readonly "modelsTable.loading": string;
+    readonly "modelsTable.unavailable": string;
+    readonly "modelsTable.loadFailed": string;
+    readonly "recipe.modelsLoadFailed": string;
+    readonly "workerPool.heading": string;
+    readonly "workerPool.loadFailed": string;
+    readonly "workerPool.refreshFailed": string;
+    readonly "workerPool.noWorkers": (gaps: { readonly container: string }) => readonly (string | { readonly marker: "code"; readonly text: string })[];
+    readonly "workerPool.cardHeader": (gaps: { readonly gpu: string; readonly vram: string }) => string;
+    readonly "workerPool.vramTotal": (gaps: { readonly total: string }) => string;
+    readonly "workerPool.statusLabel": string;
+    readonly "workerPool.logLabel": string;
+    readonly "workerPool.queueLabel": string;
+    readonly "workerPool.lastSeenLabel": string;
+    readonly "workerPool.queueJobs": (count: number) => string;
+    readonly "workerPool.loadingSpinner": string;
+    readonly "workerPool.statusLoading": (gaps: { readonly mode: string }) => string;
+    readonly "workerPool.statusLoadingElapsed": (gaps: { readonly elapsed: string; readonly mode: string }) => string;
+    readonly "workerPool.statusTraining": (gaps: { readonly seconds: string }) => string;
+    readonly "workerPool.statusNoModel": string;
+    readonly "workerPool.statusBusy": (gaps: { readonly count: number }) => string;
+    readonly "workerPool.statusIdle": string;
+    readonly "workerPool.offlineSince": (gaps: { readonly lastSeen: string }) => string;
+    readonly "workerPool.gpuUnavailableDetail": (gaps: { readonly detail: string }) => string;
+    readonly "workerPool.gpuUnavailable": string;
+    readonly "workerPool.gpuHealthNotReported": string;
+    readonly "workerPool.restartNoProcess": (gaps: { readonly worker: string }) => string;
+    readonly "workerPool.restartBrokenGpu": (gaps: { readonly worker: string }) => string;
+    readonly "workerPool.restartNoGpuHealth": (gaps: { readonly worker: string }) => string;
+    readonly "workerPool.seenNever": string;
+    readonly "workerPool.seenJustNow": string;
+    readonly "workerPool.secondsAgo": (gaps: { readonly count: number }) => string;
+    readonly "workerPool.minutesAgo": (gaps: { readonly count: number }) => string;
+    readonly "workerPool.hoursAgo": (gaps: { readonly count: number }) => string;
+    readonly "workerPool.daysAgo": (gaps: { readonly count: number }) => string;
+    readonly "workerPool.elapsedSeconds": (gaps: { readonly seconds: string }) => string;
+    readonly "workerPool.elapsedMinutes": (gaps: { readonly minutes: string; readonly seconds: string }) => string;
+    readonly "workerPool.elapsedHours": (gaps: { readonly hours: string; readonly minutes: string }) => string;
+    readonly "workerPool.loadModel": string;
+    readonly "workerPool.load": string;
+    readonly "workerPool.loadingAction": string;
+    readonly "workerPool.selectModel": string;
+    readonly "workerPool.enqueueFailed": string;
+    readonly "workerPool.unloadFailed": string;
+    readonly "workerPool.restartFailed": string;
+    readonly "workerPool.keepLoadedFailed": string;
+    readonly "workerPool.loadingToast": (gaps: { readonly mode: string; readonly worker: string }) => string;
+    readonly "workerPool.unloadedToast": (gaps: { readonly mode: string; readonly worker: string }) => string;
+    readonly "workerPool.restartRequested": (gaps: { readonly worker: string }) => string;
+    readonly "workerPool.keepLoadedOff": (gaps: { readonly mode: string; readonly worker: string }) => string;
+    readonly "workerPool.keepLoadedOn": (gaps: { readonly mode: string; readonly worker: string }) => string;
+    readonly "workerPool.lastError": string;
+    readonly "workerPool.fullLogs": (gaps: { readonly command: string }) => readonly (string | { readonly marker: "code"; readonly text: string })[];
+    readonly "workerPool.restart": string;
+    readonly "workerPool.restarting": string;
+    readonly "workerPool.restartTitle": (gaps: { readonly worker: string }) => string;
+    readonly "workerPool.restartWarning": string;
+    readonly "workerPool.restartConfirm": string;
+    readonly "workerPool.models": string;
+    readonly "workerPool.modelsLoading": (gaps: { readonly mode: string }) => string;
+    readonly "workerPool.modelsOffline": string;
+    readonly "workerPool.keepLoaded": string;
+    readonly "workerPool.keepLoadedHint": string;
+    readonly "workerPool.keepLoadedModel": (gaps: { readonly mode: string }) => string;
+    readonly "workerPool.unload": string;
+    readonly "workerPool.unloadModel": (gaps: { readonly mode: string }) => string;
+    readonly "workerPool.modelSize": (gaps: { readonly size: string }) => string;
+    readonly "workerPool.vram": string;
+    readonly "workerPool.vramLabel": string;
+    readonly "workerPool.vramUsed": (gaps: { readonly total: string; readonly used: string }) => string;
+    readonly "workerPool.vramUsedEstimated": (gaps: { readonly total: string; readonly used: string }) => string;
+    readonly "workerPool.vramFree": (gaps: { readonly free: string }) => string;
+    readonly "workerPool.vramEstimateReason": string;
+    readonly "workerPool.vramUnknown": string;
+    readonly "workerPool.vramOffline": string;
+    readonly "workerPool.vramNoHeartbeat": string;
+    readonly "workerPool.vramNoTotal": string;
+    readonly "workerPool.vramNoFields": string;
+    readonly "modelRegistry.heading": string;
+    readonly "modelRegistry.loading": string;
+    readonly "modelRegistry.loadFailed": string;
+    readonly "modelRegistry.columnMode": string;
+    readonly "modelRegistry.columnStatus": string;
+    readonly "modelRegistry.columnLoaded": string;
+    readonly "modelRegistry.columnLoading": string;
+    readonly "modelRegistry.columnActions": string;
+    readonly "modelRegistry.downloaded": string;
+    readonly "modelRegistry.stateUnknown": string;
+    readonly "modelRegistry.notDownloaded": string;
+    readonly "modelRegistry.downloadingProgress": (gaps: { readonly percent: string }) => string;
+    readonly "modelRegistry.noWorkerOnline": string;
+    readonly "modelRegistry.starting": string;
+    readonly "modelRegistry.download": string;
+    readonly "modelRegistry.connectionLost": string;
+    readonly "modelRegistry.downloadingToast": (gaps: { readonly mode: string }) => string;
+    readonly "modelRegistry.downloadFailed": string;
+    readonly "takeRetention.heading": string;
+    readonly "takeRetention.explanation": string;
+    readonly "takeRetention.whatThisDoes": string;
+    readonly "takeRetention.schedule": (gaps: { readonly hour: string }) => string;
+    readonly "takeRetention.loading": string;
+    readonly "takeRetention.days": (count: number) => string;
+    readonly "takeRetention.archiveAfter": string;
+    readonly "takeRetention.hardDeleteAfter": string;
+    readonly "takeRetention.toArchive": string;
+    readonly "takeRetention.toHardDelete": string;
+    readonly "takeRetention.nothingDue": string;
+    readonly "takeRetention.refresh": string;
+    readonly "takeRetention.runNow": string;
+    readonly "takeRetention.confirm": (count: number, gaps: { readonly deleted: string }) => readonly (string | { readonly marker: "strong"; readonly text: string })[];
+    readonly "takeRetention.cancel": string;
+    readonly "takeRetention.running": string;
+    readonly "takeRetention.delete": (gaps: { readonly count: number }) => string;
+    readonly "takeRetention.previewFailed": string;
+    readonly "takeRetention.runFailed": string;
+    readonly "takeRetention.outcome": (gaps: { readonly archived: string; readonly deleted: string }) => string;
     readonly "generationRefusal.notFound": string;
     readonly "generationRefusal.someNotFound": string;
     readonly "generationRefusal.audioMissing": string;
@@ -1959,6 +2126,194 @@ export const words: Words = {
     "dialog.confirm": "Confirm",
     "toast.dismiss": "Dismiss",
     "loading.plain": "Loading...",
+    "adminPage.heading": "Admin",
+    "adminPage.accessRequired": "Admin access required.",
+    "adminPage.sections": "Admin sections",
+    "adminPage.tabVoices": "Voices",
+    "adminPage.tabRateLimits": "Rate Limits",
+    "adminPage.tabGeneration": "Generation",
+    "adminPage.tabModels": "Models",
+    "adminPage.tabAcestep": "ACE-Step",
+    "adminPage.tabCleanup": "Cleanup",
+    "adminPage.saving": "Saving...",
+    "adminPage.saveDefaults": "Save Defaults",
+    "adminPage.saveFailed": "Failed to save",
+    "adminVoices.heading": "Voice operations",
+    "adminVoices.loading": "Loading voices...",
+    "adminVoices.empty": "No voices have been created.",
+    "adminVoices.loadFailed": "Failed to load voices",
+    "adminVoices.columnVoice": "Voice",
+    "adminVoices.columnOwner": "Owner",
+    "adminVoices.columnStatus": "Status",
+    "rateLimits.heading": "Global Defaults",
+    "rateLimits.hint": "These apply to all users.",
+    "rateLimits.generations": "Generations / hour",
+    "rateLimits.scorings": "Scorings / hour",
+    "rateLimits.maxQueueDepth": "Max queue depth",
+    "rateLimits.maxActiveJobs": "Max active jobs",
+    "rateLimits.loadFailed": "Failed to load rate limits",
+    "generationDefaults.heading": "Generation Defaults",
+    "generationDefaults.hint": "Default generation parameters for all users. Per-song overrides take precedence.",
+    "generationDefaults.reset": "Reset",
+    "generationDefaults.loadFailed": "Failed to load generation defaults",
+    "generationDefaults.saveFailed": "Failed to save generation defaults",
+    "availableModels.heading": "Available Models",
+    "availableModels.hint": "Toggle which models users can create presets for.",
+    "availableModels.on": "ON",
+    "availableModels.off": "OFF",
+    "availableModels.toggleFailed": "Failed to toggle model",
+    "modelsTable.heading": "Models",
+    "modelsTable.columnTask": "Task",
+    "modelsTable.columnProvider": "Provider",
+    "modelsTable.columnRoute": "Route",
+    "modelsTable.columnModel": "Model",
+    "modelsTable.columnStatus": "Status",
+    "modelsTable.taskCowriter": "Co-Writer",
+    "modelsTable.taskCover": "Cover",
+    "modelsTable.setByAgentFile": "Set by the agent file",
+    "modelsTable.routeGateway": "Gateway",
+    "modelsTable.advanced": "Advanced",
+    "modelsTable.historyTail": "History tail (tokens)",
+    "modelsTable.saved": "Saved.",
+    "modelsTable.retry": "Retry",
+    "modelsTable.saveFailed": "The server rejected the change.",
+    "modelsTable.loading": "Loading…",
+    "modelsTable.unavailable": "Unavailable",
+    "modelsTable.loadFailed": "Failed to load co-writer settings",
+    "recipe.modelsLoadFailed": "Failed to load models",
+    "workerPool.heading": "Worker Pool",
+    "workerPool.loadFailed": "Cannot reach the worker pool API.",
+    "workerPool.refreshFailed": "Worker pool not updating — retrying…",
+    "workerPool.noWorkers": (gaps: { readonly container: string }): readonly (string | { readonly marker: "code"; readonly text: string })[] => ["No workers registered. Start the ", { marker: "code", text: gaps.container }, " container and wait a few seconds."],
+    "workerPool.cardHeader": (gaps: { readonly gpu: string; readonly vram: string }) => "GPU " + gaps.gpu + " • " + gaps.vram,
+    "workerPool.vramTotal": (gaps: { readonly total: string }) => gaps.total + " GB",
+    "workerPool.statusLabel": "Status:",
+    "workerPool.logLabel": "Log:",
+    "workerPool.queueLabel": "Queue:",
+    "workerPool.lastSeenLabel": "Last seen:",
+    "workerPool.queueJobs": (count: number) => ({
+        zero: numberFormat.format(count) + " jobs",
+        one: numberFormat.format(count) + " job",
+        two: numberFormat.format(count) + " jobs",
+        few: numberFormat.format(count) + " jobs",
+        many: numberFormat.format(count) + " jobs",
+        other: numberFormat.format(count) + " jobs",
+    })[pluralRules.select(count)],
+    "workerPool.loadingSpinner": "loading",
+    "workerPool.statusLoading": (gaps: { readonly mode: string }) => "Loading " + gaps.mode + "…",
+    "workerPool.statusLoadingElapsed": (gaps: { readonly elapsed: string; readonly mode: string }) => "Loading " + gaps.mode + "… (" + gaps.elapsed + " elapsed)",
+    "workerPool.statusTraining": (gaps: { readonly seconds: string }) => "Training (" + gaps.seconds + "s remaining)",
+    "workerPool.statusNoModel": "No model loaded",
+    "workerPool.statusBusy": (gaps: { readonly count: number }) => "Busy (" + numberFormat.format(gaps.count) + " in queue)",
+    "workerPool.statusIdle": "Idle",
+    "workerPool.offlineSince": (gaps: { readonly lastSeen: string }) => "Offline — last registered " + gaps.lastSeen,
+    "workerPool.gpuUnavailableDetail": (gaps: { readonly detail: string }) => "GPU unavailable — " + gaps.detail,
+    "workerPool.gpuUnavailable": "GPU unavailable",
+    "workerPool.gpuHealthNotReported": "GPU health not reported — worker build predates GPU health checks",
+    "workerPool.restartNoProcess": (gaps: { readonly worker: string }) => "Can't restart — no worker process is running to ask. Restart the container running worker \"" + gaps.worker + "\" directly.",
+    "workerPool.restartBrokenGpu": (gaps: { readonly worker: string }) => "Can't restart — its GPU is the problem, not the process. Restart the container running worker \"" + gaps.worker + "\" directly, or check the host's NVIDIA driver.",
+    "workerPool.restartNoGpuHealth": (gaps: { readonly worker: string }) => "Can't restart — this worker build doesn't report GPU health, so it can't be trusted as healthy. Restarting the same process won't add that; update the container running worker \"" + gaps.worker + "\" to the current image.",
+    "workerPool.seenNever": "never",
+    "workerPool.seenJustNow": "just now",
+    "workerPool.secondsAgo": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + "s ago",
+    "workerPool.minutesAgo": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + "m ago",
+    "workerPool.hoursAgo": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + "h ago",
+    "workerPool.daysAgo": (gaps: { readonly count: number }) => numberFormat.format(gaps.count) + "d ago",
+    "workerPool.elapsedSeconds": (gaps: { readonly seconds: string }) => gaps.seconds + "s",
+    "workerPool.elapsedMinutes": (gaps: { readonly minutes: string; readonly seconds: string }) => gaps.minutes + "m " + gaps.seconds + "s",
+    "workerPool.elapsedHours": (gaps: { readonly hours: string; readonly minutes: string }) => gaps.hours + "h " + gaps.minutes + "m",
+    "workerPool.loadModel": "Load model…",
+    "workerPool.load": "Load",
+    "workerPool.loadingAction": "Loading…",
+    "workerPool.selectModel": "Select a model to load",
+    "workerPool.enqueueFailed": "Failed to enqueue load",
+    "workerPool.unloadFailed": "Failed to unload model",
+    "workerPool.restartFailed": "Restart failed",
+    "workerPool.keepLoadedFailed": "Failed to change Keep loaded",
+    "workerPool.loadingToast": (gaps: { readonly mode: string; readonly worker: string }) => "Loading " + gaps.mode + " on " + gaps.worker + "…",
+    "workerPool.unloadedToast": (gaps: { readonly mode: string; readonly worker: string }) => "Unloaded " + gaps.mode + " from " + gaps.worker,
+    "workerPool.restartRequested": (gaps: { readonly worker: string }) => "Restart requested for " + gaps.worker,
+    "workerPool.keepLoadedOff": (gaps: { readonly mode: string; readonly worker: string }) => "Keep loaded disabled for " + gaps.mode + " on " + gaps.worker,
+    "workerPool.keepLoadedOn": (gaps: { readonly mode: string; readonly worker: string }) => "Keep loaded enabled for " + gaps.mode + " on " + gaps.worker,
+    "workerPool.lastError": "Last error",
+    "workerPool.fullLogs": (gaps: { readonly command: string }): readonly (string | { readonly marker: "code"; readonly text: string })[] => ["Full logs: ", { marker: "code", text: gaps.command }],
+    "workerPool.restart": "Restart worker…",
+    "workerPool.restarting": "Restarting…",
+    "workerPool.restartTitle": (gaps: { readonly worker: string }) => "Restart " + gaps.worker + "?",
+    "workerPool.restartWarning": "Running takes will stop.",
+    "workerPool.restartConfirm": "Restart",
+    "workerPool.models": "Models on this GPU",
+    "workerPool.modelsLoading": (gaps: { readonly mode: string }) => "None yet — " + gaps.mode + " is loading.",
+    "workerPool.modelsOffline": "Unknown while the worker is offline.",
+    "workerPool.keepLoaded": "Keep loaded",
+    "workerPool.keepLoadedHint": "Keep loaded — never unloaded to make room",
+    "workerPool.keepLoadedModel": (gaps: { readonly mode: string }) => "Keep loaded " + gaps.mode,
+    "workerPool.unload": "Unload",
+    "workerPool.unloadModel": (gaps: { readonly mode: string }) => "Unload " + gaps.mode,
+    "workerPool.modelSize": (gaps: { readonly size: string }) => "~" + gaps.size + " GB",
+    "workerPool.vram": "VRAM",
+    "workerPool.vramLabel": "VRAM:",
+    "workerPool.vramUsed": (gaps: { readonly total: string; readonly used: string }) => gaps.used + " / " + gaps.total + " GB",
+    "workerPool.vramUsedEstimated": (gaps: { readonly total: string; readonly used: string }) => "~" + gaps.used + " / " + gaps.total + " GB est.",
+    "workerPool.vramFree": (gaps: { readonly free: string }) => gaps.free + " GB free",
+    "workerPool.vramEstimateReason": "No GPU reading — the sizes of the loaded models, not a measurement",
+    "workerPool.vramUnknown": "unknown",
+    "workerPool.vramOffline": "VRAM unavailable while the worker is offline.",
+    "workerPool.vramNoHeartbeat": "No heartbeat — nothing to read",
+    "workerPool.vramNoTotal": "Worker does not report total VRAM",
+    "workerPool.vramNoFields": "Worker build does not report VRAM fields",
+    "modelRegistry.heading": "Model Registry",
+    "modelRegistry.loading": "Loading registry…",
+    "modelRegistry.loadFailed": "Cannot reach the registry API.",
+    "modelRegistry.columnMode": "Mode",
+    "modelRegistry.columnStatus": "Status",
+    "modelRegistry.columnLoaded": "Loaded",
+    "modelRegistry.columnLoading": "Loading",
+    "modelRegistry.columnActions": "Actions",
+    "modelRegistry.downloaded": "downloaded",
+    "modelRegistry.stateUnknown": "no worker running — download state unknown",
+    "modelRegistry.notDownloaded": "not downloaded",
+    "modelRegistry.downloadingProgress": (gaps: { readonly percent: string }) => "Downloading… " + gaps.percent,
+    "modelRegistry.noWorkerOnline": "No worker online to download it",
+    "modelRegistry.starting": "Starting…",
+    "modelRegistry.download": "Download",
+    "modelRegistry.connectionLost": "Connection lost — retrying…",
+    "modelRegistry.downloadingToast": (gaps: { readonly mode: string }) => "Downloading " + gaps.mode + "…",
+    "modelRegistry.downloadFailed": "Failed to start download",
+    "takeRetention.heading": "Take Retention",
+    "takeRetention.explanation": "Takes that are neither picked nor kept are archived after the retention window, then permanently deleted after the hard-delete window.",
+    "takeRetention.whatThisDoes": "What this does",
+    "takeRetention.schedule": (gaps: { readonly hour: string }) => "Auto · daily " + gaps.hour + ":00 UTC",
+    "takeRetention.loading": "Loading preview…",
+    "takeRetention.days": (count: number) => ({
+        zero: numberFormat.format(count) + " days",
+        one: numberFormat.format(count) + " day",
+        two: numberFormat.format(count) + " days",
+        few: numberFormat.format(count) + " days",
+        many: numberFormat.format(count) + " days",
+        other: numberFormat.format(count) + " days",
+    })[pluralRules.select(count)],
+    "takeRetention.archiveAfter": "Archive after",
+    "takeRetention.hardDeleteAfter": "Hard-delete after archive",
+    "takeRetention.toArchive": "to archive now",
+    "takeRetention.toHardDelete": "to hard-delete now",
+    "takeRetention.nothingDue": "Nothing to clean up right now",
+    "takeRetention.refresh": "Refresh",
+    "takeRetention.runNow": "Run now",
+    "takeRetention.confirm": (count: number, gaps: { readonly deleted: string }): readonly (string | { readonly marker: "strong"; readonly text: string })[] => ({
+        zero: ["Archive ", { marker: "strong", text: numberFormat.format(count) + " takes" }, " and permanently delete ", { marker: "strong", text: gaps.deleted }, ". Deleting cannot be undone."],
+        one: ["Archive ", { marker: "strong", text: numberFormat.format(count) + " take" }, " and permanently delete ", { marker: "strong", text: gaps.deleted }, ". Deleting cannot be undone."],
+        two: ["Archive ", { marker: "strong", text: numberFormat.format(count) + " takes" }, " and permanently delete ", { marker: "strong", text: gaps.deleted }, ". Deleting cannot be undone."],
+        few: ["Archive ", { marker: "strong", text: numberFormat.format(count) + " takes" }, " and permanently delete ", { marker: "strong", text: gaps.deleted }, ". Deleting cannot be undone."],
+        many: ["Archive ", { marker: "strong", text: numberFormat.format(count) + " takes" }, " and permanently delete ", { marker: "strong", text: gaps.deleted }, ". Deleting cannot be undone."],
+        other: ["Archive ", { marker: "strong", text: numberFormat.format(count) + " takes" }, " and permanently delete ", { marker: "strong", text: gaps.deleted }, ". Deleting cannot be undone."],
+    } as const)[pluralRules.select(count)],
+    "takeRetention.cancel": "Cancel",
+    "takeRetention.running": "Running…",
+    "takeRetention.delete": (gaps: { readonly count: number }) => "Delete " + numberFormat.format(gaps.count),
+    "takeRetention.previewFailed": "Preview failed",
+    "takeRetention.runFailed": "Cleanup failed",
+    "takeRetention.outcome": (gaps: { readonly archived: string; readonly deleted: string }) => "Archived " + gaps.archived + ", deleted " + gaps.deleted,
     "generationRefusal.notFound": "Generation not found",
     "generationRefusal.someNotFound": "One or more generations not found",
     "generationRefusal.audioMissing": "Audio file not found",
