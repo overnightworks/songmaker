@@ -24,7 +24,7 @@ docker compose --project-directory . -f docker/docker-compose.test.yml up -d --b
 
 ## Development
 
-The commands for local tests and the static checks are in [AGENTS.md](AGENTS.md#commands); the lint and type checks CI runs, test structure and coverage gates are in [docs/testing.md](docs/testing.md). The live app never runs from the local `.venv`.
+The commands for local tests and the static checks are in [AGENTS.md](AGENTS.md#commands); the lint and type checks CI runs, test structure and coverage gates are in [docs/testing.md](docs/testing.md). The live app never runs from the local `.venv`. Run `bash scripts/setup_git.sh` once per clone: it registers the git merge driver that merges `en.po` entry by entry (worktrees share it); without it git merges the catalog line by line.
 
 ## Docs
 
