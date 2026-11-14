@@ -137,6 +137,17 @@ fetches), `sse` (EventSource streams), `machine` (health and internal answers), 
 words from the catalog). The summary line prints the count per tag. A raw answer a person
 reads is raised as a `Refusal` instead.
 
+A `message(...)` key is a stored one, since a database row may hold it after its writer has
+changed. `scripts/stored_message_keys.txt` lists every stored key, and the same check holds it:
+every key a `message(...)` call or a migration's `STORED_MESSAGE_KEYS` table (sentence to key) can
+store is in the set, except a migration key that a later migration lists in its
+`RETIRED_STORED_KEYS`; every key in the set is a plain source-language entry of the form
+`<resource>(Failure|Wait|Refusal).<reason>` or `coverProblem.<reason>`; and in CI, where the
+static job checks out the history and passes `--base-sha` (the pull request's base commit, the
+one the quality gate compares against), a key the set lost since that commit is in the
+`RETIRED_STORED_KEYS` of a migration the pull request adds. An unresolvable base commit is red.
+A stored key leaves the set only with that migration.
+
 `tests/scripts/test_check_refusal_keys.py` seeds a package for each rule and runs the check over
 the real tree.
 

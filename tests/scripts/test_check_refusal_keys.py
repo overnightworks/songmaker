@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -33,14 +34,30 @@ WORDS_MODULE_IMPORT = "from songmaker_cli import words\n"
 MESSAGE_IMPORT = "from songmaker_cli.messages import message\n"
 
 
+STORED_KEYS = ("takeRefusal.archived", "modelRefusal.unavailable")
+MIGRATIONS = "db/migrations/versions"
+
+
 def _scan(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], source: str
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    source: str,
+    *,
+    stored: tuple[str, ...] = STORED_KEYS,
+    migrations: dict[str, str] | None = None,
+    extra_arguments: tuple[str, ...] = (),
 ) -> tuple[int, str]:
     package = tmp_path / "songmaker_cli"
     package.mkdir(exist_ok=True)
     (package / "words.py").write_text(WORDS_MODULE, encoding="utf-8")
     (package / "route.py").write_text(source, encoding="utf-8")
-    code = checker.main([str(package)])
+    versions = package / MIGRATIONS
+    versions.mkdir(parents=True, exist_ok=True)
+    for name, content in (migrations or {}).items():
+        (versions / f"{name}.py").write_text(content, encoding="utf-8")
+    stored_file = tmp_path / "stored.txt"
+    stored_file.write_text("".join(f"{key}\n" for key in stored), encoding="utf-8")
+    code = checker.main([str(package), "--stored-keys", str(stored_file), *extra_arguments])
     return code, capsys.readouterr().out
 
 
@@ -266,3 +283,201 @@ def test_the_repository_source_passes(capsys: pytest.CaptureFixture[str]) -> Non
     code = checker.main([str(REPOSITORY_SOURCE)])
 
     assert code == 0, capsys.readouterr().out
+
+
+def _migration(revision: str, down: str | None, *, table: dict | None = None,
+               retired: tuple[str, ...] | None = None) -> str:
+    lines = [f'revision: str = "{revision}"', f"down_revision: str | None = {down!r}"]
+    if table is not None:
+        lines.append(f"STORED_MESSAGE_KEYS: dict[str, str] = {table!r}")
+    if retired is not None:
+        lines.append(f"RETIRED_STORED_KEYS = frozenset({set(retired)!r})")
+    return "\n".join(lines) + "\n"
+
+
+def test_a_message_key_missing_from_the_stored_set_is_reported_with_its_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, output = _scan(
+        tmp_path, capsys, MESSAGE_IMPORT + 'message("takeRefusal.archived")\n', stored=()
+    )
+
+    assert code == 1
+    assert "route.py:2:" in output
+    assert "'takeRefusal.archived' is stored by message() but not in stored.txt" in output
+
+
+def test_a_migration_key_missing_from_the_stored_set_is_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    migrations = {"a1": _migration("a1", None, table={"Wait.": "takeRefusal.archived"})}
+
+    code, output = _scan(tmp_path, capsys, "", stored=(), migrations=migrations)
+
+    assert code == 1
+    assert "'takeRefusal.archived' is stored by the migration but not in stored.txt" in output
+
+
+def test_a_migration_key_a_later_migration_retires_may_leave_the_stored_set(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    migrations = {
+        "a1": _migration("a1", None, table={"Wait.": "takeRefusal.archived"}),
+        "a2": _migration("a2", "a1", retired=("takeRefusal.archived",)),
+    }
+
+    code, output = _scan(tmp_path, capsys, "", stored=(), migrations=migrations)
+
+    assert code == 0, output
+
+
+def test_a_migration_key_retired_only_by_an_earlier_migration_is_still_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    migrations = {
+        "a1": _migration("a1", None, retired=("takeRefusal.archived",)),
+        "a2": _migration("a2", "a1", table={"Wait.": "takeRefusal.archived"}),
+    }
+
+    code, output = _scan(tmp_path, capsys, "", stored=(), migrations=migrations)
+
+    assert code == 1
+    assert "'takeRefusal.archived' is stored by the migration" in output
+
+
+def test_a_writer_key_a_migration_retires_is_still_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    migrations = {"a1": _migration("a1", None, retired=("takeRefusal.archived",))}
+
+    code, output = _scan(
+        tmp_path, capsys, MESSAGE_IMPORT + 'message("takeRefusal.archived")\n',
+        stored=(), migrations=migrations,
+    )
+
+    assert code == 1
+    assert "'takeRefusal.archived' is stored by message()" in output
+
+
+@pytest.mark.parametrize(
+    ("key", "problem"),
+    [
+        ("ghostWait.never", "is not a plain entry of words.py"),
+        ("plainSentence", "does not match <resource>(Failure|Wait|Refusal).<reason>"),
+        ("songCount", "is not a plain entry of words.py"),
+    ],
+    ids=["unknown-key", "key-of-another-form", "plural-family"],
+)
+def test_a_key_of_the_stored_set_must_be_a_plain_entry_of_the_stored_form(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], key: str, problem: str
+) -> None:
+    code, output = _scan(tmp_path, capsys, "", stored=(key,))
+
+    assert code == 1
+    assert f"{key!r} {problem}" in output
+
+
+def _git(directory: Path, *arguments: str) -> str:
+    return subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+         *arguments],
+        cwd=directory, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+
+def _commit_stored_keys(directory: Path, *keys: str) -> str:
+    if not (directory / ".git").exists():
+        _git(directory, "init", "-q")
+    (directory / "stored.txt").write_text("".join(f"{key}\n" for key in keys), encoding="utf-8")
+    _git(directory, "add", "-A")
+    _git(directory, "commit", "-q", "--allow-empty", "-m", "base")
+    return _git(directory, "rev-parse", "HEAD")
+
+
+def _scan_against(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], base_sha: str,
+    *, stored: tuple[str, ...], retiring: tuple[str, ...] | None = None,
+) -> tuple[int, str]:
+    migrations = None
+    if retiring is not None:
+        migrations = {"a2": _migration("a2", "a1", retired=retiring)}
+        versions = tmp_path / "songmaker_cli" / MIGRATIONS
+        versions.mkdir(parents=True)
+        (versions / "a2.py").write_text(migrations["a2"], encoding="utf-8")
+        _git(tmp_path, "add", "-A")
+        _git(tmp_path, "commit", "-q", "-m", "the pull request adds a migration")
+    return _scan(
+        tmp_path, capsys, "", stored=stored, migrations=migrations,
+        extra_arguments=("--base-sha", base_sha),
+    )
+
+
+def test_a_key_dropped_from_the_set_since_the_base_is_reported_without_a_retiring_migration(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    base = _commit_stored_keys(tmp_path, *STORED_KEYS)
+
+    code, output = _scan_against(tmp_path, capsys, base, stored=STORED_KEYS[:1])
+
+    assert code == 1
+    assert f"{STORED_KEYS[1]!r} left the set since" in output
+
+
+def test_a_key_dropped_from_the_set_passes_when_a_migration_the_diff_adds_retires_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    base = _commit_stored_keys(tmp_path, *STORED_KEYS)
+
+    code, output = _scan_against(
+        tmp_path, capsys, base, stored=STORED_KEYS[:1], retiring=STORED_KEYS[1:]
+    )
+
+    assert code == 0, output
+
+
+def test_a_key_dropped_by_a_migration_the_base_already_had_is_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    versions = tmp_path / "songmaker_cli" / MIGRATIONS
+    versions.mkdir(parents=True)
+    (versions / "a2.py").write_text(
+        _migration("a2", "a1", retired=STORED_KEYS[1:]), encoding="utf-8"
+    )
+    (tmp_path / "songmaker_cli" / "words.py").write_text(WORDS_MODULE, encoding="utf-8")
+    base = _commit_stored_keys(tmp_path, *STORED_KEYS)
+
+    code, output = _scan_against(tmp_path, capsys, base, stored=STORED_KEYS[:1])
+
+    assert code == 1
+    assert f"{STORED_KEYS[1]!r} left the set since" in output
+
+
+def test_a_base_without_a_stored_set_drops_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+
+    code, output = _scan_against(tmp_path, capsys, base, stored=STORED_KEYS)
+
+    assert code == 0, output
+
+
+def test_an_unresolvable_base_commit_is_red(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _commit_stored_keys(tmp_path, *STORED_KEYS)
+
+    code, output = _scan_against(tmp_path, capsys, "0" * 40, stored=STORED_KEYS)
+
+    assert code == 1
+    assert "cannot be resolved" in output
+
+
+def test_without_a_base_commit_only_the_local_rules_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, output = _scan(tmp_path, capsys, "", stored=STORED_KEYS)
+
+    assert code == 0, output

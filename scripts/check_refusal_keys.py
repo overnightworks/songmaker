@@ -25,6 +25,19 @@ unknown tag and a marker with no such call on its lines fail.
 
 `words.py` (generated), `messages.py` and `refusals.py` (which forward the key of their caller
 to `text` and `message`) are not walked.
+
+A `message(...)` key is a stored one: a row of the database may hold it long after the code that
+wrote it has changed. `scripts/stored_message_keys.txt` (`--stored-keys`) lists every stored key,
+one per line, and the check holds three rules over it:
+
+* (a) every key a `message(...)` call or a migration's `STORED_MESSAGE_KEYS` table (sentence to
+  key) can store is in the set; a key a later migration of the chain lists in its
+  `RETIRED_STORED_KEYS` is left out of the earlier migration's table;
+* (b) every key in the set is a plain entry of the source language of the form
+  `<resource>(Failure|Wait|Refusal).<reason>` or `coverProblem.<reason>`;
+* (c) with `--base-sha` (CI passes the pull request's base commit, as the quality gate reads it;
+  an unresolvable commit fails), a key the set lost since that commit is in the
+  `RETIRED_STORED_KEYS` of a migration the diff adds. Locally (a) and (b) run alone.
 """
 # ruff: noqa: T201 - this check reports its violations on stdout
 
@@ -35,10 +48,12 @@ import ast
 import importlib.util
 import io
 import re
+import subprocess
 import sys
 import tokenize
 from collections import Counter
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 from string import Formatter
 from typing import Final
@@ -57,6 +72,15 @@ REFUSAL_KEY_PATTERN: Final = re.compile(r"^[a-z][A-Za-z0-9]*Refusal\.[a-z][A-Za-
 KEY_INDEX_OF_TEXT: Final = 1
 KEY_INDEX_OF_MESSAGE: Final = 0
 KEY_INDEX_OF_REFUSAL: Final = 1
+STORED_KEYS_FILE: Final = Path(__file__).with_name("stored_message_keys.txt")
+MIGRATIONS_DIRECTORY: Final = "db/migrations/versions"
+STORED_TABLE_NAME: Final = "STORED_MESSAGE_KEYS"
+RETIRED_NAME: Final = "RETIRED_STORED_KEYS"
+# why: the stored keys of a failure, a wait or a refusal, and the cover problems the page already
+# words under `coverProblem`, which the cover job stores as they are.
+STORED_KEY_PATTERN: Final = re.compile(
+    r"^(?:[a-z][A-Za-z0-9]*(?:Failure|Wait|Refusal)|coverProblem)\.[a-z][A-Za-z0-9]*$"
+)
 REFUSAL_HEADERS_KEYWORD: Final = "headers"
 HTTP_EXCEPTION_NAME: Final = "HTTPException"
 UNREAD_MARKER: Final = re.compile(r"#\s*unread:\s*(?P<tag>\S*)")
@@ -75,6 +99,23 @@ class Violation:
     path: str
     line: int
     message: str
+
+
+@dataclass(frozen=True)
+class MessageKey:
+    """The literal key of one `message(...)` call."""
+
+    path: str
+    line: int
+    key: str
+
+
+@dataclass
+class FileScan:
+    violations: list[Violation] = field(default_factory=list)
+    checked: int = 0
+    unread: Counter[str] = field(default_factory=Counter)
+    message_keys: list[MessageKey] = field(default_factory=list)
 
 
 def load_plain_gaps(words_file: Path) -> dict[str, frozenset[str]]:
@@ -254,17 +295,13 @@ def _key_problem(
     return False, None
 
 
-def check_file(
-    path: Path, shown: str, plain: dict[str, frozenset[str]]
-) -> tuple[list[Violation], int, Counter[str]]:
+def check_file(path: Path, shown: str, plain: dict[str, frozenset[str]]) -> FileScan:
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=shown)
     text_bindings = function_bindings(tree, WORDS_NAME, TEXT_NAME)
     message_bindings = function_bindings(tree, MESSAGES_NAME, MESSAGE_NAME)
     markers = _unread_markers(source)
-    violations: list[Violation] = []
-    unread: Counter[str] = Counter()
-    checked = 0
+    scan = FileScan()
     raw_lines: set[int] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -272,48 +309,234 @@ def check_file(
         if _is_http_exception_call(node):
             raw_lines.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
             tag, problem = _unread_problem(node, markers)
-            unread.update(_listed(tag))
-            violations.extend(Violation(shown, node.lineno, text) for text in _listed(problem))
+            scan.unread.update(_listed(tag))
+            scan.violations.extend(Violation(shown, node.lineno, text) for text in _listed(problem))
             continue
         is_checked, problem = _key_problem(node, text_bindings, message_bindings, plain)
         if not is_checked:
             continue
-        checked += 1
+        scan.checked += 1
         if problem is not None:
-            violations.append(Violation(shown, node.lineno, problem))
-    violations.extend(
+            scan.violations.append(Violation(shown, node.lineno, problem))
+        key = _literal_key(node, KEY_INDEX_OF_MESSAGE)
+        if message_bindings.is_call(node) and key is not None:
+            scan.message_keys.append(MessageKey(shown, node.lineno, key))
+    scan.violations.extend(
         Violation(shown, line, f"'# unread: {tag}' marks no raw {HTTP_EXCEPTION_NAME} call")
         for line, tag in markers.items()
         if line not in raw_lines
     )
-    return violations, checked, unread
+    return scan
+
+
+@dataclass(frozen=True)
+class Migration:
+    """One migration: its place in the chain and the stored keys it names."""
+
+    path: Path
+    revision: str
+    down_revisions: tuple[str, ...]
+    table_keys: tuple[str, ...]
+    retired_keys: frozenset[str]
+
+
+def _module_value(tree: ast.Module, name: str) -> ast.expr | None:
+    """The value assigned to a module-level name, or None."""
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == name for target in node.targets
+        ):
+            return node.value
+        if isinstance(node, ast.AnnAssign) and _dotted(node.target) == name:
+            return node.value
+    return None
+
+
+def _literal(tree: ast.Module, name: str) -> object:
+    """The literal a module-level name is assigned, with `frozenset(...)` read as its argument."""
+    value = _module_value(tree, name)
+    if value is None:
+        return None
+    if isinstance(value, ast.Call) and _dotted(value.func) == "frozenset" and len(value.args) == 1:
+        value = value.args[0]
+    try:
+        return ast.literal_eval(value)
+    except ValueError:
+        return None
+
+
+def _strings(value: object) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, (tuple, list, set, frozenset)):
+        return tuple(item for item in value if isinstance(item, str))
+    return ()
+
+
+def read_migration(path: Path) -> Migration | None:
+    """The migration's chain place and stored keys, or None when it names no stored key."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    table = _literal(tree, STORED_TABLE_NAME)
+    retired = _literal(tree, RETIRED_NAME)
+    if table is None and retired is None:
+        return None
+    revision = _strings(_literal(tree, "revision"))
+    return Migration(
+        path=path,
+        revision=revision[0] if revision else path.stem,
+        down_revisions=_strings(_literal(tree, "down_revision")),
+        table_keys=_strings(list(table.values())) if isinstance(table, dict) else (),
+        retired_keys=frozenset(_strings(retired)),
+    )
+
+
+def _ancestors(migration: Migration, by_revision: dict[str, Migration]) -> set[str]:
+    """Every revision behind a migration on the chain."""
+    found: set[str] = set()
+    pending = list(migration.down_revisions)
+    while pending:
+        revision = pending.pop()
+        if revision in found:
+            continue
+        found.add(revision)
+        if revision in by_revision:
+            pending.extend(by_revision[revision].down_revisions)
+    return found
+
+
+def migrations_in(directory: Path) -> list[Migration]:
+    if not directory.is_dir():
+        return []
+    found = (read_migration(path) for path in sorted(directory.glob("*.py")))
+    return [migration for migration in found if migration is not None]
+
+
+def read_stored_keys(text: str) -> set[str]:
+    return {line.strip() for line in text.splitlines() if line.strip()}
+
+
+def _unlisted_problems(
+    keys: Iterable[MessageKey], migrations: list[Migration], stored: set[str], file_shown: str
+) -> list[Violation]:
+    """Rule (a): a key a writer or a migration can store, and the set lacks."""
+    by_revision = {migration.revision: migration for migration in migrations}
+    problems = [
+        Violation(key.path, key.line, f"{key.key!r} is stored by message() but not in {file_shown}")
+        for key in keys
+        if key.key not in stored
+    ]
+    for migration in migrations:
+        retired_later = {
+            key
+            for later in migrations
+            if migration.revision in _ancestors(later, by_revision)
+            for key in later.retired_keys
+        }
+        problems.extend(
+            Violation(
+                str(migration.path), 1,
+                f"{key!r} is stored by the migration but not in {file_shown}",
+            )
+            for key in migration.table_keys
+            if key not in stored and key not in retired_later
+        )
+    return problems
+
+
+def _set_problems(
+    stored: set[str], plain: dict[str, frozenset[str]], file_shown: str
+) -> list[Violation]:
+    """Rule (b): a key of the set that is no plain source-language entry of the stored form."""
+    problems = []
+    for key in sorted(stored):
+        if key not in plain:
+            problems.append(Violation(file_shown, 1, f"{key!r} is not a plain entry of words.py"))
+        elif not STORED_KEY_PATTERN.match(key):
+            problems.append(
+                Violation(
+                    file_shown, 1,
+                    f"{key!r} does not match <resource>(Failure|Wait|Refusal).<reason> "
+                    "or coverProblem.<reason>",
+                )
+            )
+    return problems
+
+
+def _git(directory: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603 - fixed git subcommands; the only input is the commit id of the pull request
+        ["git", *arguments], cwd=directory, capture_output=True, text=True, check=False
+    )
+
+
+def _base_problems(
+    base_sha: str, stored_file: Path, stored: set[str], migrations_directory: Path
+) -> list[Violation]:
+    """Rule (c): a key the set lost since the base commit, and no added migration retires."""
+    shown = str(stored_file)
+    directory = stored_file.parent
+    if _git(directory, "rev-parse", "--verify", "--quiet", f"{base_sha}^{{commit}}").returncode:
+        problem = f"the base commit {base_sha} cannot be resolved; fetch the history"
+        return [Violation(shown, 1, problem)]
+    base = _git(directory, "show", f"{base_sha}:./{stored_file.name}")
+    dropped = (read_stored_keys(base.stdout) if base.returncode == 0 else set()) - stored
+    if not dropped:
+        return []
+    added = _git(
+        migrations_directory, "diff", "--name-only", "--relative", "--diff-filter=A",
+        base_sha, "HEAD", "--", ".",
+    )
+    retired = {
+        key
+        for name in added.stdout.split()
+        if name.endswith(".py")
+        for migration in [read_migration(migrations_directory / name)]
+        if migration is not None
+        for key in migration.retired_keys
+    }
+    return [
+        Violation(shown, 1, f"{key!r} left the set since {base_sha[:12]}; "
+                  f"an added migration lists it in {RETIRED_NAME}")
+        for key in sorted(dropped - retired)
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", nargs="?", default=DEFAULT_SOURCE, help="package to scan")
-    source = Path(parser.parse_args(argv).source)
+    parser.add_argument("--stored-keys", type=Path, default=STORED_KEYS_FILE)
+    parser.add_argument("--base-sha", default="", help="the pull request's base commit (CI)")
+    arguments = parser.parse_args(argv)
+    source = Path(arguments.source)
     words_file = source / WORDS_FILE
     if not words_file.is_file():
         print(f"error: {words_file} does not exist", file=sys.stderr)
         return 2
     plain = load_plain_gaps(words_file)
-    violations: list[Violation] = []
+    scans = [
+        check_file(path, str(path), plain)
+        for path in sorted(source.rglob("*.py"))
+        if path not in (words_file, source / REFUSALS_FILE, source / MESSAGES_FILE)
+    ]
+    violations = [violation for scan in scans for violation in scan.violations]
     unread: Counter[str] = Counter()
-    checked = 0
-    for path in sorted(source.rglob("*.py")):
-        if path in (words_file, source / REFUSALS_FILE, source / MESSAGES_FILE):
-            continue
-        found, count, marked = check_file(path, str(path), plain)
-        violations.extend(found)
-        unread.update(marked)
-        checked += count
+    for scan in scans:
+        unread.update(scan.unread)
+    stored_file: Path = arguments.stored_keys
+    stored = read_stored_keys(stored_file.read_text(encoding="utf-8"))
+    migrations_directory = source / MIGRATIONS_DIRECTORY
+    violations += _unlisted_problems(
+        (key for scan in scans for key in scan.message_keys),
+        migrations_in(migrations_directory), stored, stored_file.name,
+    )
+    violations += _set_problems(stored, plain, stored_file.name)
+    if arguments.base_sha:
+        violations += _base_problems(arguments.base_sha, stored_file, stored, migrations_directory)
     for violation in violations:
         print(f"{violation.path}:{violation.line}: {violation.message}")
     per_tag = ", ".join(f"{tag}={unread[tag]}" for tag in UNREAD_TAGS)
     print(
-        f"checked: refusal, text and message calls={checked}, violations={len(violations)}; "
-        f"unread: {per_tag}"
+        f"checked: refusal, text and message calls={sum(scan.checked for scan in scans)}, "
+        f"violations={len(violations)}; unread: {per_tag}"
     )
     return 1 if violations else 0
 

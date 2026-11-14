@@ -33,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
+          fetch-depth: 0 # why: the stored-key check reads the pull request's base commit, as the quality gate does.
           persist-credentials: false
 
       # The one job that writes the uv cache is this one on main: an entry written for a pull request is
@@ -77,7 +78,9 @@ jobs:
         run: uv run --no-sync --frozen --no-build design-catalogs --check
 
       - name: Every refusal names a plain catalog key
-        run: uv run --no-sync --frozen --no-build python scripts/check_refusal_keys.py
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+        run: uv run --no-sync --frozen --no-build python scripts/check_refusal_keys.py ${BASE_SHA:+--base-sha "$BASE_SHA"}
 
   # One shard of the backend tests, on a runner and a PostgreSQL service of its own.
   backend-shard:
