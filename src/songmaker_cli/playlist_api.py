@@ -288,6 +288,8 @@ def api_add_generation_to_playlist(
     entry = session.merge(entry)
     playlist = get_playlist(session, playlist_id)
     entry_obj = next((e for e in playlist.entries if e.id == entry.id), None)
+    if entry_obj is None:
+        raise generation_not_found()
     return PlaylistEntryResponse.from_orm(entry_obj)
 
 
