@@ -20,27 +20,15 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import LoadFailure from '#lib/components/LoadFailure.svelte';
 	import ReferenceRow from '#lib/components/ReferenceRow.svelte';
-	import {
-		REFERENCE_AUDIO_ACCEPT,
-		REFERENCE_KEEP_FAILED,
-		REFERENCE_UNKEEP_FAILED
-	} from '#lib/constants/reference.ts';
+	import { REFERENCE_AUDIO_ACCEPT } from '#lib/constants/reference.ts';
 	import { APP_NAME } from '#lib/constants/app.ts';
 	import { createReferencePreview } from '#lib/services/referencePreview.svelte.ts';
 	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+	import { formatDecimal, formatPercent } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
-	const LOAD_FAILED = 'Failed to load references';
-	const LOADING = 'Loading references…';
-	const RETRY_LABEL = 'Try again';
 	const SKELETON_ROWS = 3;
-	const PLAY_FAULT = "Can't play this recording";
-	const IN_USE_FAULT = 'In use — not deleted.';
-	const DELETE_FAILED = "Couldn't delete this recording";
-	const DELETE_TITLE = 'Delete reference?';
-	const DELETE_CONSEQUENCE = 'its audio file';
-	const UPLOAD_LABEL = 'Upload';
 	const PROGRESS_SEPARATOR = ' · ';
-	const UPLOAD_FAILED = "Couldn't upload this file";
 	const METER_FROM_SHARE = 0.8;
 	const CONFLICT_STATUS = 409;
 	const BYTES_PER_MB = 1_000_000;
@@ -75,7 +63,7 @@
 		try {
 			answer = await listReferences();
 		} catch (e) {
-			referenceReloads.nameLoadFailure(e, LOAD_FAILED);
+			referenceReloads.nameLoadFailure(e, pageText('referencesPage.loadFailed'));
 			return;
 		}
 		now = new Date();
@@ -86,18 +74,23 @@
 	}
 
 	const megabytes = (bytes: number) => Math.floor(bytes / BYTES_PER_MB);
-	const filesFigure = (used: ReferenceUsageResponse) => `${used.files} of ${used.file_limit} files`;
-	const sizeFigure = (used: ReferenceUsageResponse) =>
-		`${megabytes(used.bytes)} of ${megabytes(used.byte_limit)} MB`;
+	const filesGaps = (used: ReferenceUsageResponse) => ({ files: formatDecimal(used.files, 0) });
+	const sizeGaps = (used: ReferenceUsageResponse) => ({
+		used: formatDecimal(megabytes(used.bytes), 0),
+		limit: formatDecimal(megabytes(used.byte_limit), 0)
+	});
 
 	const storageShare = $derived(
 		usage ? Math.max(usage.files / usage.file_limit, usage.bytes / usage.byte_limit) : 0
 	);
 	const meterShown = $derived(storageShare >= METER_FROM_SHARE);
 
-	function fullFigure(used: ReferenceUsageResponse): string | null {
-		if (used.files >= used.file_limit) return filesFigure(used);
-		if (used.bytes >= used.byte_limit) return sizeFigure(used);
+	function storageFullReason(used: ReferenceUsageResponse): string | null {
+		if (used.files >= used.file_limit) {
+			return pageText('referencesPage.storageFullFiles', used.file_limit, filesGaps(used));
+		}
+		if (used.bytes >= used.byte_limit)
+			return pageText('referencesPage.storageFullSize', sizeGaps(used));
 		return null;
 	}
 
@@ -110,11 +103,9 @@
 
 	function uploadReason(used: ReferenceUsageResponse): string | null {
 		if (uploadFailure?.kind === 'failed') return uploadFailure.words;
-		const full = fullFigure(used);
-		if (full !== null) return `Reference storage is full (${full}) — delete one first.`;
-		return uploadFailure === null
-			? null
-			: `That file doesn't fit (${sizeFigure(used)} used) — delete one first.`;
+		const full = storageFullReason(used);
+		if (full !== null) return full;
+		return uploadFailure === null ? null : pageText('referencesPage.doesNotFit', sizeGaps(used));
 	}
 
 	async function failureOf(error: unknown): Promise<UploadFailure> {
@@ -122,7 +113,10 @@
 			await load();
 			return { kind: 'refused' };
 		}
-		return { kind: 'failed', words: describeFailure(error, UPLOAD_FAILED) };
+		return {
+			kind: 'failed',
+			words: describeFailure(error, pageText('referencesPage.uploadFailed'))
+		};
 	}
 
 	async function upload(file: File) {
@@ -151,7 +145,7 @@
 	let rowFault = $state<{ id: string; words: string } | null>(null);
 	let pendingDelete = $state<ReferenceListRowResponse | null>(null);
 	const preview = createReferencePreview((referenceId) => {
-		rowFault = { id: referenceId, words: PLAY_FAULT };
+		rowFault = { id: referenceId, words: pageText('referencesPage.playFault') };
 	});
 
 	function toggle(referenceId: string) {
@@ -169,9 +163,12 @@
 		} catch (error) {
 			if (error instanceof ApiError && error.status === CONFLICT_STATUS) {
 				await load();
-				rowFault = { id: reference.id, words: IN_USE_FAULT };
+				rowFault = { id: reference.id, words: pageText('referencesPage.inUseFault') };
 			} else {
-				rowFault = { id: reference.id, words: describeFailure(error, DELETE_FAILED) };
+				rowFault = {
+					id: reference.id,
+					words: describeFailure(error, pageText('referencesPage.deleteFailed'))
+				};
 			}
 			return;
 		}
@@ -185,7 +182,9 @@
 		try {
 			await (reference.is_kept ? unkeepReference(reference.id) : keepReference(reference.id));
 		} catch (error) {
-			const failed = reference.is_kept ? REFERENCE_UNKEEP_FAILED : REFERENCE_KEEP_FAILED;
+			const failed = pageText(
+				reference.is_kept ? 'referencesPage.unkeepFailed' : 'referencesPage.keepFailed'
+			);
 			rowFault = { id: reference.id, words: describeFailure(error, failed) };
 			return;
 		}
@@ -216,12 +215,12 @@
 </script>
 
 <svelte:head>
-	<title>References — {APP_NAME}</title>
+	<title>{pageText('referencesPage.documentTitle', { app: APP_NAME })}</title>
 </svelte:head>
 
 <div class="page">
 	<header class="page-head">
-		<h1>References</h1>
+		<h1>{pageText('settingsSections.references')}</h1>
 	</header>
 
 	{#if usage}
@@ -237,11 +236,15 @@
 				onclick={() => fileInput?.click()}
 			>
 				{#if uploading}
-					<span class="upload-name">Uploading {uploading.name}</span><span class="upload-percent"
-						>{PROGRESS_SEPARATOR}{uploading.percent}%</span
+					<span class="upload-name"
+						>{pageText('referencesPage.uploadingName', { name: uploading.name })}</span
+					><span class="upload-percent"
+						>{PROGRESS_SEPARATOR}{formatPercent(uploading.percent / 100)}</span
 					>
 				{:else}
-					<Icon name={reason !== null ? 'triangle-alert' : 'arrow-up'} size={16} />{UPLOAD_LABEL}
+					<Icon name={reason !== null ? 'triangle-alert' : 'arrow-up'} size={16} />{pageText(
+						'referencesPage.upload'
+					)}
 				{/if}
 			</button>
 			<input
@@ -260,7 +263,8 @@
 	{#if usage && meterShown}
 		<div class="quota">
 			<div class="quota-figures">
-				<span>{filesFigure(usage)}</span><span>{sizeFigure(usage)}</span>
+				<span>{pageText('referencesPage.filesFigure', usage.file_limit, filesGaps(usage))}</span
+				><span>{pageText('referencesPage.sizeFigure', sizeGaps(usage))}</span>
 			</div>
 			<div class="quota-bar" aria-hidden="true">
 				<i style:width={`${Math.min(storageShare, 1) * 100}%`}></i>
@@ -269,7 +273,11 @@
 	{/if}
 
 	{#if $loadFailure}
-		<LoadFailure message={LOAD_FAILED} retryLabel={RETRY_LABEL} onretry={retry} />
+		<LoadFailure
+			message={pageText('referencesPage.loadFailed')}
+			retryLabel={pageText('referencesPage.retry')}
+			onretry={retry}
+		/>
 	{/if}
 
 	{#if references === null}
@@ -281,15 +289,12 @@
 						<span class="skeleton-bar skeleton-meta"></span>
 					</div>
 				{/each}
-				<p class="skeleton-caption">{LOADING}</p>
+				<p class="skeleton-caption">{pageText('referencesPage.loading')}</p>
 			</div>
 		{/if}
 	{:else if references.length === 0}
 		{#if !$loadFailure}
-			<EmptyState
-				icon="audio-lines"
-				text="No references yet — upload a recording to guide a song's sound."
-			/>
+			<EmptyState icon="audio-lines" text={pageText('referencesPage.empty')} />
 		{/if}
 	{:else}
 		<ul class="reference-list" bind:this={listElement}>
@@ -316,8 +321,8 @@
 {#if pendingDelete}
 	{@const doomed = pendingDelete}
 	<ConfirmDeleteDialog
-		title={DELETE_TITLE}
-		items={[`${doomed.filename} — ${DELETE_CONSEQUENCE}`]}
+		title={pageText('referencesPage.deleteTitle')}
+		items={[pageText('referencesPage.deleteItem', { filename: doomed.filename })]}
 		onconfirm={() => void confirmDelete(doomed)}
 		oncancel={() => (pendingDelete = null)}
 	/>

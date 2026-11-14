@@ -4,6 +4,7 @@
 
 import { expect, test } from './coverage-test';
 
+import { words } from '../src/lib/words/en';
 import { FlowGuard, loseNetwork, regainNetwork, shellOf, workspace } from './helpers';
 
 const BACK_ONLINE_MS = 10_000;
@@ -33,7 +34,9 @@ test('a section opened offline shows the offline state and opens by itself after
 
 	await regainNetwork(page, context);
 
-	await expect(workspace(page).getByRole('heading', { name: 'References' })).toBeVisible({
+	await expect(
+		workspace(page).getByRole('heading', { name: words['settingsSections.references'] })
+	).toBeVisible({
 		timeout: BACK_ONLINE_MS
 	});
 	await expect(page.getByRole('alert').filter({ hasText: OFFLINE_WORDS })).toHaveCount(0);

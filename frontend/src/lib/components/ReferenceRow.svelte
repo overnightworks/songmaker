@@ -4,9 +4,8 @@
 	import ReferenceExpiry from '#lib/components/ReferenceExpiry.svelte';
 	import ReferenceMenu from '#lib/components/ReferenceMenu.svelte';
 	import ReferenceUses from '#lib/components/ReferenceUses.svelte';
-	import { REFERENCE_KEEP_LABEL, REFERENCE_UNKEEP_LABEL } from '#lib/constants/reference.ts';
-	import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants/transport.ts';
-	import { formatTime, localDayAndMonth } from '#lib/utils/format.ts';
+	import { formatList, formatTime, localDayAndMonth } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	const NO_LENGTH = '—';
 	const META_SEPARATOR = ' · ';
@@ -48,14 +47,15 @@
 	}
 
 	function usedLabel(): string {
-		const counts = [
-			[reference.used_by_takes, 'take'],
-			[reference.used_by_versions, 'version']
-		] as const;
-		const kinds = counts
-			.filter(([count]) => count > 0)
-			.map(([count, noun]) => `${count} ${noun}${count === 1 ? '' : 's'}`);
-		return `Used in ${kinds.join(', ')}`;
+		const uses = [
+			...(reference.used_by_takes > 0
+				? [pageText('referenceRow.takes', reference.used_by_takes)]
+				: []),
+			...(reference.used_by_versions > 0
+				? [pageText('referenceRow.versions', reference.used_by_versions)]
+				: [])
+		];
+		return pageText('referenceRow.usedIn', { uses: formatList(uses) });
 	}
 </script>
 
@@ -74,7 +74,9 @@
 	<button
 		type="button"
 		class="reference-play"
-		aria-label={`${playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${reference.filename}`}
+		aria-label={pageText(playing ? 'referenceRow.pause' : 'referenceRow.play', {
+			filename: reference.filename
+		})}
 		onclick={(event) => {
 			event.stopPropagation();
 			ontoggle();
@@ -110,7 +112,9 @@
 		class:kept={reference.is_kept}
 		data-hitbox="frequent"
 		aria-pressed={reference.is_kept}
-		aria-label={`${reference.is_kept ? REFERENCE_UNKEEP_LABEL : REFERENCE_KEEP_LABEL} ${reference.filename}`}
+		aria-label={pageText(reference.is_kept ? 'referenceRow.unkeep' : 'referenceRow.keep', {
+			filename: reference.filename
+		})}
 		onclick={(event) => {
 			event.stopPropagation();
 			onkeeptoggle();

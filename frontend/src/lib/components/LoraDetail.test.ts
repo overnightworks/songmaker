@@ -1,6 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api/fetch.ts';
+import type { UserLoraItem, UserLoraSampleItem } from '#lib/api/types.ts';
+import { LORA_AUDIO_EXTENSIONS, LORA_MIN_SAMPLES_FOR_TRAINING } from '#lib/constants/lora.ts';
+import { formatList } from '#lib/utils/format.ts';
 import { words } from '#lib/words/en.ts';
 import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 
@@ -86,7 +89,7 @@ import loraDetailSource from './LoraDetail.svelte?raw';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
-function lora(overrides: Record<string, unknown> = {}) {
+function lora(overrides: Partial<UserLoraItem> = {}): UserLoraItem {
 	return {
 		id: 'l1',
 		user_id: 'u1',
@@ -98,6 +101,19 @@ function lora(overrides: Record<string, unknown> = {}) {
 		deleted_at: null,
 		samples: [],
 		...overrides
+	};
+}
+
+function sample(id: string, caption: string, lyrics: string, position: number): UserLoraSampleItem {
+	return {
+		id,
+		user_lora_id: 'l1',
+		audio_path: `user_loras/u1/l1/samples/${id}.wav`,
+		caption,
+		lyrics,
+		position,
+		created_at: '2026-09-05T00:00:00Z',
+		updated_at: '2026-09-05T00:00:00Z'
 	};
 }
 
@@ -169,7 +185,7 @@ describe('LoraDetail', () => {
 		addLoraSampleFromGeneration.mockResolvedValueOnce({ id: 's1' });
 		refreshLora.mockResolvedValueOnce({
 			...lora(),
-			samples: [{ id: 's1', caption: 'warm tenor', lyrics: 'A line from the take', position: 0 }]
+			samples: [sample('s1', 'warm tenor', 'A line from the take', 0)]
 		});
 		const target = await render();
 
@@ -251,9 +267,9 @@ describe('LoraDetail', () => {
 		jobStore.activeJobs.set([{ job: queuedJob }]);
 		await tick();
 
-		expect(target.textContent).toContain('Waiting');
+		expect(target.textContent).toContain(words['voiceDetail.waiting']);
 		expect(target.textContent).toContain('Waiting for queued generations on this GPU.');
-		expect(target.textContent).toContain('Position 2 in the queue');
+		expect(target.textContent).toContain(words['voiceDetail.queuePosition']({ position: '2' }));
 		await vi.waitFor(() => expect(trackJob).toHaveBeenCalledWith(queuedJob, {}));
 	});
 
@@ -270,8 +286,10 @@ describe('LoraDetail', () => {
 		jobStore.activeJobs.set([{ job: runningJob }]);
 		await tick();
 
-		expect(target.textContent).toContain('Epoch 31 of 50');
-		expect(target.textContent).toContain('~ 9m remaining');
+		expect(target.textContent).toContain(
+			words['voiceDetail.epoch']({ current: '31', total: '50' })
+		);
+		expect(target.textContent).toContain(words['voiceDetail.remainingMinutes']({ minutes: '9' }));
 		expect(target.querySelector<HTMLElement>('.progress-track span')?.style.width).toBe('62%');
 	});
 
@@ -288,7 +306,9 @@ describe('LoraDetail', () => {
 		jobStore.activeJobs.set([{ job: runningJob }]);
 		await tick();
 
-		expect(target.textContent).toContain('~ 2h 0m remaining');
+		expect(target.textContent).toContain(
+			words['voiceDetail.remainingHours']({ hours: '2', minutes: '0' })
+		);
 		expect(target.textContent).not.toContain('60m');
 	});
 
@@ -305,7 +325,7 @@ describe('LoraDetail', () => {
 		jobStore.activeJobs.set([{ job: runningJob }]);
 		await tick();
 
-		expect(target.textContent).toContain('Calculating remaining time...');
+		expect(target.textContent).toContain(words['voiceDetail.remainingCalculating']);
 	});
 
 	it('cancels the training job and names the cancelled state', async () => {
@@ -321,7 +341,7 @@ describe('LoraDetail', () => {
 
 		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith(runningJob.id));
 		await vi.waitFor(() => expect(removeJob).toHaveBeenCalledWith(runningJob.id));
-		expect(target.textContent).toContain('Training cancelled');
+		expect(target.textContent).toContain(words['voiceDetail.trainingCancelled']);
 	});
 
 	it('wraps the complete queue-limit sentence without truncation in a 375 px container', async () => {
@@ -337,9 +357,9 @@ describe('LoraDetail', () => {
 				status: 'failed',
 				error: 'The worker restarted before epoch 31 could finish.',
 				samples: [
-					{ id: 's1', caption: 'one', lyrics: 'one', position: 0 },
-					{ id: 's2', caption: 'two', lyrics: 'two', position: 1 },
-					{ id: 's3', caption: 'three', lyrics: 'three', position: 2 }
+					sample('s1', 'one', 'one', 0),
+					sample('s2', 'two', 'two', 1),
+					sample('s3', 'three', 'three', 2)
 				]
 			})
 		);
@@ -361,6 +381,87 @@ describe('LoraDetail', () => {
 		expect(target.querySelector('.banner.error')?.textContent).toContain(
 			'The worker restarted before epoch 31 could finish.'
 		);
-		expect(target.querySelector<HTMLButtonElement>('.train-btn')?.textContent).toBe('Train again');
+		expect(target.querySelector<HTMLButtonElement>('.train-btn')?.textContent).toBe(
+			words['voiceDetail.trainAgain']
+		);
+	});
+
+	it.each([
+		{
+			status: 'queued' as const,
+			banner: words['voiceDetail.lockedQueued'],
+			button: words['voiceDetail.trainButtonQueued']
+		},
+		{
+			status: 'preprocessing' as const,
+			banner: words['voiceDetail.lockedPreprocessing'],
+			button: words['voiceDetail.trainButtonPreprocessing']
+		},
+		{
+			status: 'training' as const,
+			banner: words['voiceDetail.lockedTraining'],
+			button: words['voiceDetail.trainButtonTraining']
+		},
+		{
+			status: 'exporting' as const,
+			banner: words['voiceDetail.lockedExporting'],
+			button: words['voiceDetail.trainButtonExporting']
+		}
+	])(
+		'words a $status voice in its lock banner and train button',
+		async ({ status, banner, button }) => {
+			const target = await render(lora({ status }));
+
+			expect(target.querySelector('.banner')?.textContent).toBe(banner);
+			expect(target.querySelector('.train-btn')?.textContent?.trim()).toBe(button);
+		}
+	);
+
+	it.each([
+		{
+			count: 0,
+			problem: words['voiceDetail.needSamples'](LORA_MIN_SAMPLES_FOR_TRAINING, { have: '0' })
+		},
+		{
+			count: 2,
+			problem: words['voiceDetail.needSamples'](LORA_MIN_SAMPLES_FOR_TRAINING, { have: '2' })
+		}
+	])('asks for the missing samples when a voice has $count', async ({ count, problem }) => {
+		const samples = Array.from({ length: count }, (_, i) =>
+			sample(`s${i}`, 'caption', 'lyrics', i)
+		);
+		const target = await render(lora({ samples }));
+
+		expect(target.querySelector('.problems')?.textContent).toContain(problem);
+	});
+
+	it.each([
+		{
+			entry: 'picked',
+			arrive: (target: HTMLElement, file: File) => {
+				const input = target.querySelector<HTMLInputElement>('input[type="file"]');
+				if (!input) throw new Error('Expected sample file input');
+				Object.defineProperty(input, 'files', { value: [file] });
+				input.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		},
+		{
+			entry: 'dropped',
+			arrive: (target: HTMLElement, file: File) => {
+				const zone = target.querySelector<HTMLElement>('.drop-zone');
+				if (!zone) throw new Error('Expected sample drop zone');
+				const drop = new Event('drop', { bubbles: true, cancelable: true });
+				Object.defineProperty(drop, 'dataTransfer', { value: { files: [file] } });
+				zone.dispatchEvent(drop);
+			}
+		}
+	])('names the accepted formats when a $entry file is not audio', async ({ arrive }) => {
+		const target = await render();
+		arrive(target, new File(['x'], 'notes.txt'));
+
+		expect(addToast).toHaveBeenCalledWith(
+			words['voiceDetail.unsupportedFormat']({ formats: formatList(LORA_AUDIO_EXTENSIONS) }),
+			'error'
+		);
 	});
 });

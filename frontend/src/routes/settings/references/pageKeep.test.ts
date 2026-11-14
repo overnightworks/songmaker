@@ -1,12 +1,7 @@
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api/fetch.ts';
-import {
-	REFERENCE_KEEP_FAILED,
-	REFERENCE_KEEP_LABEL,
-	REFERENCE_UNKEEP_FAILED,
-	REFERENCE_UNKEEP_LABEL
-} from '#lib/constants/reference.ts';
+import { words } from '#lib/words/en.ts';
 
 const mocks = vi.hoisted(() => ({
 	listReferences: vi.fn(),
@@ -69,7 +64,9 @@ afterEach(async () => {
 describe('the reference row heart', () => {
 	it('keeps an unkept reference and shows it pressed after the reload', async () => {
 		const target = await renderWith(false);
-		expect(heartOf(target).getAttribute('aria-label')).toBe(`${REFERENCE_KEEP_LABEL} ${FILENAME}`);
+		expect(heartOf(target).getAttribute('aria-label')).toBe(
+			words['referenceRow.keep']({ filename: FILENAME })
+		);
 		expect(heartOf(target).getAttribute('aria-pressed')).toBe('false');
 		mocks.keepReference.mockResolvedValue(undefined);
 		mocks.listReferences.mockResolvedValue(
@@ -82,7 +79,7 @@ describe('the reference row heart', () => {
 		await vi.waitFor(() => expect(heartOf(target).getAttribute('aria-pressed')).toBe('true'));
 		expect(mocks.keepReference).toHaveBeenCalledWith('a');
 		expect(heartOf(target).getAttribute('aria-label')).toBe(
-			`${REFERENCE_UNKEEP_LABEL} ${FILENAME}`
+			words['referenceRow.unkeep']({ filename: FILENAME })
 		);
 	});
 
@@ -102,8 +99,8 @@ describe('the reference row heart', () => {
 	});
 
 	it.each([
-		['keep', false, REFERENCE_KEEP_FAILED, 'keepReference'],
-		['unkeep', true, REFERENCE_UNKEEP_FAILED, 'unkeepReference']
+		['keep', false, words['referencesPage.keepFailed'], 'keepReference'],
+		['unkeep', true, words['referencesPage.unkeepFailed'], 'unkeepReference']
 	] as const)(
 		'shows the row fault and leaves the heart as it was when %s fails',
 		async (_action, isKept, sentence, call) => {

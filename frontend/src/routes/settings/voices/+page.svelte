@@ -16,9 +16,19 @@
 	import LoraDetail from '#lib/components/LoraDetail.svelte';
 	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import { APP_NAME } from '#lib/constants/app.ts';
-	import { VOICES_LOAD_FAILED } from '#lib/constants/voice.ts';
-	import { LORA_CREATE_FAILED, LORA_POLL_INTERVAL_MS } from '#lib/constants/lora.ts';
+	import { LORA_POLL_INTERVAL_MS } from '#lib/constants/lora.ts';
+	import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 	import type { UserLoraItem } from '#lib/api/types.ts';
+
+	const STATUS_WORD_KEY = {
+		draft: 'voicesPage.statusDraft',
+		queued: 'voicesPage.statusQueued',
+		preprocessing: 'voicesPage.statusPreprocessing',
+		training: 'voicesPage.statusTraining',
+		exporting: 'voicesPage.statusExporting',
+		ready: 'voicesPage.statusReady',
+		failed: 'voicesPage.statusFailed'
+	} as const satisfies Record<UserLoraItem['status'], TextKey>;
 
 	let showCreate = $state(false);
 	let creating = $state(false);
@@ -42,7 +52,7 @@
 			voicesLoaded = true;
 			voicesReloads.stop();
 		} catch (e) {
-			voicesReloads.nameLoadFailure(e, VOICES_LOAD_FAILED);
+			voicesReloads.nameLoadFailure(e, pageText('voicesPage.loadFailed'));
 		}
 	}
 
@@ -85,9 +95,9 @@
 			newName = '';
 			showCreate = false;
 			expandedId = created.id;
-			addToast('Voice created', 'success');
+			addToast(pageText('voicesPage.created'), 'success');
 		} catch (e) {
-			const message = describeFailure(e, LORA_CREATE_FAILED);
+			const message = describeFailure(e, pageText('voicesPage.createFailed'));
 			createError = message;
 			addToast(message, 'error');
 		} finally {
@@ -110,9 +120,9 @@
 		try {
 			await softDeleteLora(lora.id);
 			if (expandedId === lora.id) expandedId = null;
-			addToast(`Deleted ${lora.name}`, 'info');
+			addToast(pageText('voicesPage.deletedToast', { name: lora.name }), 'info');
 		} catch (e) {
-			addToast(describeFailure(e, 'Delete failed'), 'error');
+			addToast(describeFailure(e, pageText('voicesPage.deleteFailed')), 'error');
 		}
 	}
 
@@ -125,19 +135,19 @@
 </script>
 
 <svelte:head>
-	<title>My Voices — {APP_NAME}</title>
+	<title>{pageText('voicesPage.documentTitle', { app: APP_NAME })}</title>
 </svelte:head>
 
 <div class="page">
 	<header class="page-head">
-		<h1>My Voices</h1>
+		<h1>{pageText('voicesPage.heading')}</h1>
 		<div class="head-actions">
 			<label class="toggle-deleted">
 				<input type="checkbox" bind:checked={showDeleted} />
-				Show deleted
+				{pageText('voicesPage.showDeleted')}
 			</label>
 			<button class="create-btn" onclick={() => (showCreate = !showCreate)}>
-				{showCreate ? 'Cancel' : 'New Voice'}
+				{showCreate ? pageText('voicesPage.cancel') : pageText('voicesPage.newVoice')}
 			</button>
 		</div>
 	</header>
@@ -146,7 +156,7 @@
 		<div class="create-panel">
 			<input
 				type="text"
-				placeholder="Voice name (e.g. My Tenor)"
+				placeholder={pageText('voicesPage.namePlaceholder')}
 				bind:value={newName}
 				onkeydown={(e) => {
 					if (e.key === 'Enter') handleCreate();
@@ -154,7 +164,7 @@
 				}}
 			/>
 			<button class="primary" disabled={creating || !newName.trim()} onclick={handleCreate}>
-				{creating ? 'Creating...' : 'Create'}
+				{creating ? pageText('voicesPage.creating') : pageText('voicesPage.create')}
 			</button>
 		</div>
 		{#if createError}
@@ -167,9 +177,9 @@
 	{/if}
 
 	{#if $lorasLoading && list.length === 0}
-		<p class="loading">Loading voices...</p>
+		<p class="loading">{pageText('voicesPage.loading')}</p>
 	{:else if visible.length === 0 && voicesLoaded}
-		<p class="empty">No voices yet. Create one to upload samples and train your own vocal style.</p>
+		<p class="empty">{pageText('voicesPage.empty')}</p>
 	{:else if visible.length > 0}
 		<ul class="lora-list">
 			{#each visible as lora (lora.id)}
@@ -181,11 +191,13 @@
 						aria-expanded={expandedId === lora.id}
 					>
 						<span class="lora-name">{lora.name}</span>
-						<span class="status-badge {tone}">{lora.status}</span>
+						<span class="status-badge {tone}">{pageText(STATUS_WORD_KEY[lora.status])}</span>
 						{#if lora.status === 'ready'}
 							<span class="model-mode">{lora.model_mode}</span>
 						{/if}
-						<span class="sample-count">{lora.samples.length} samples</span>
+						<span class="sample-count"
+							>{pageText('voicesPage.sampleCount', lora.samples.length)}</span
+						>
 						<span class="arrow" class:open={expandedId === lora.id}>▸</span>
 					</button>
 					<div class="row-actions">
@@ -195,10 +207,10 @@
 								disabled={isLoraActive(lora.status)}
 								onclick={() => askDelete(lora)}
 							>
-								Delete
+								{pageText('voicesPage.delete')}
 							</button>
 						{:else}
-							<span class="deleted-tag">deleted</span>
+							<span class="deleted-tag">{pageText('voicesPage.deletedTag')}</span>
 						{/if}
 					</div>
 					{#if expandedId === lora.id}
@@ -214,10 +226,10 @@
 
 {#if loraPendingDelete}
 	<ConfirmDeleteDialog
-		title="Delete voice?"
+		title={pageText('voicesPage.deleteTitle')}
 		items={[]}
-		warning={`${loraPendingDelete.name} will be hidden from new generations. Existing takes keep their audio and remain playable; they will show “voice deleted”.`}
-		confirmLabel="Delete"
+		warning={pageText('voicesPage.deleteWarning', { name: loraPendingDelete.name })}
+		confirmLabel={pageText('voicesPage.delete')}
 		onconfirm={confirmDelete}
 		oncancel={() => (loraPendingDelete = null)}
 	/>

@@ -146,7 +146,7 @@ describe('references page', () => {
 		const target = await renderReferencesPage();
 
 		const status = target.querySelector('[role="status"]');
-		expect(status?.textContent?.trim()).toBe('Loading references…');
+		expect(status?.textContent?.trim()).toBe(words['referencesPage.loading']);
 		expect(status?.querySelectorAll('.skeleton-row').length).toBeGreaterThan(0);
 		expect(target.querySelector('.empty')).toBeNull();
 	});
@@ -157,7 +157,7 @@ describe('references page', () => {
 
 		await vi.waitFor(() =>
 			expect(target.querySelector('.empty')?.textContent?.trim()).toBe(
-				"No references yet — upload a recording to guide a song's sound."
+				words['referencesPage.empty']
 			)
 		);
 		expect(target.querySelector('[role="status"]')).toBeNull();
@@ -169,7 +169,7 @@ describe('references page', () => {
 
 		await vi.waitFor(() =>
 			expect(target.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
-				'Failed to load references'
+				words['referencesPage.loadFailed']
 			)
 		);
 		expect(target.textContent).not.toContain('boom');
@@ -179,7 +179,10 @@ describe('references page', () => {
 	it('reloads on "Try again", stays usable after a failed retry and lists once the read answers', async () => {
 		mocks.listReferences.mockRejectedValue(new ApiError(500, 'boom', '/api/references'));
 		const target = await renderReferencesPage();
-		const retry = () => target.querySelector<HTMLButtonElement>('button[aria-label="Try again"]');
+		const retry = () =>
+			target.querySelector<HTMLButtonElement>(
+				`button[aria-label="${words['referencesPage.retry']}"]`
+			);
 		const clickRetry = () => retry()?.click();
 		await vi.waitFor(() => expect(retry()).not.toBeNull());
 
@@ -213,7 +216,7 @@ describe('references page', () => {
 		for (const delay of UNREACHABLE_RELOAD_DELAYS_MS) await vi.advanceTimersByTimeAsync(delay);
 
 		expect(target.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
-			'Failed to load references'
+			words['referencesPage.loadFailed']
 		);
 		expect(target.querySelector('.empty')).toBeNull();
 
@@ -233,8 +236,8 @@ describe('references page', () => {
 
 			expect(referenceElement()?.src).toMatch(/\/api\/references\/a\/audio$/);
 			expect(referenceButtonLabels(target)).toEqual([
-				'Pause voice-memo.mp3',
-				'Play storytime-drums.wav'
+				words['referenceRow.pause']({ filename: 'voice-memo.mp3' }),
+				words['referenceRow.play']({ filename: 'storytime-drums.wav' })
 			]);
 			expect(target.querySelector('.reference-row.playing .reference-name')?.textContent).toBe(
 				'voice-memo.mp3'
@@ -243,8 +246,8 @@ describe('references page', () => {
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
 
 			expect(referenceButtonLabels(target)).toEqual([
-				'Play voice-memo.mp3',
-				'Play storytime-drums.wav'
+				words['referenceRow.play']({ filename: 'voice-memo.mp3' }),
+				words['referenceRow.play']({ filename: 'storytime-drums.wav' })
 			]);
 			expect(target.querySelector('.reference-row.playing')).toBeNull();
 		});
@@ -255,20 +258,20 @@ describe('references page', () => {
 
 			await pressReferenceControl(row);
 			expect(referenceButtonLabels(target)).toEqual([
-				'Play voice-memo.mp3',
-				'Pause storytime-drums.wav'
+				words['referenceRow.play']({ filename: 'voice-memo.mp3' }),
+				words['referenceRow.pause']({ filename: 'storytime-drums.wav' })
 			]);
 			await pressReferenceControl(row);
 			expect(referenceButtonLabels(target)).toEqual([
-				'Play voice-memo.mp3',
-				'Play storytime-drums.wav'
+				words['referenceRow.play']({ filename: 'voice-memo.mp3' }),
+				words['referenceRow.play']({ filename: 'storytime-drums.wav' })
 			]);
 
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
 
 			expect(referenceButtonLabels(target)).toEqual([
-				'Pause voice-memo.mp3',
-				'Play storytime-drums.wav'
+				words['referenceRow.pause']({ filename: 'voice-memo.mp3' }),
+				words['referenceRow.play']({ filename: 'storytime-drums.wav' })
 			]);
 			expect(playSpy).toHaveBeenCalledTimes(2);
 		});
@@ -289,8 +292,8 @@ describe('references page', () => {
 			await pressReferenceControl(referencePlayButton(target, 'storytime-drums.wav'));
 
 			expect(referenceButtonLabels(target)).toEqual([
-				'Play voice-memo.mp3',
-				'Pause storytime-drums.wav'
+				words['referenceRow.play']({ filename: 'voice-memo.mp3' }),
+				words['referenceRow.pause']({ filename: 'storytime-drums.wav' })
 			]);
 			expect(referenceElement()?.src).toMatch(/\/api\/references\/b\/audio$/);
 			expect(target.querySelectorAll('.reference-row.playing')).toHaveLength(1);
@@ -303,7 +306,9 @@ describe('references page', () => {
 			referenceElement()?.dispatchEvent(new Event('ended'));
 			await tick();
 
-			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
+			expect(referenceButtonLabels(target)[0]).toBe(
+				words['referenceRow.play']({ filename: 'voice-memo.mp3' })
+			);
 			expect(target.querySelector('.reference-row.playing')).toBeNull();
 		});
 
@@ -315,9 +320,11 @@ describe('references page', () => {
 			await tick();
 
 			const rows = target.querySelectorAll('.reference-row');
-			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
-			expect(rows[0].textContent).toContain("Can't play this recording");
-			expect(rows[1].textContent).not.toContain("Can't play this recording");
+			expect(referenceButtonLabels(target)[0]).toBe(
+				words['referenceRow.play']({ filename: 'voice-memo.mp3' })
+			);
+			expect(rows[0].textContent).toContain(words['referencesPage.playFault']);
+			expect(rows[1].textContent).not.toContain(words['referencesPage.playFault']);
 		});
 
 		it('resets the row and says it cannot play when the browser refuses to start it', async () => {
@@ -328,11 +335,13 @@ describe('references page', () => {
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
 			await vi.waitFor(() =>
 				expect(target.querySelector('.reference-row')?.textContent).toContain(
-					"Can't play this recording"
+					words['referencesPage.playFault']
 				)
 			);
 
-			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
+			expect(referenceButtonLabels(target)[0]).toBe(
+				words['referenceRow.play']({ filename: 'voice-memo.mp3' })
+			);
 		});
 
 		it('loads the source again when a failed row is tried again', async () => {
@@ -345,8 +354,10 @@ describe('references page', () => {
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
 
 			expect(sourceSet).toHaveBeenCalledWith(expect.stringMatching(/\/api\/references\/a\/audio$/));
-			expect(target.textContent).not.toContain("Can't play this recording");
-			expect(referenceButtonLabels(target)[0]).toBe('Pause voice-memo.mp3');
+			expect(target.textContent).not.toContain(words['referencesPage.playFault']);
+			expect(referenceButtonLabels(target)[0]).toBe(
+				words['referenceRow.pause']({ filename: 'voice-memo.mp3' })
+			);
 		});
 
 		it('loads the source again when a load fails after the person paused', async () => {
@@ -360,7 +371,9 @@ describe('references page', () => {
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
 
 			expect(sourceSet).toHaveBeenCalledWith(expect.stringMatching(/\/api\/references\/a\/audio$/));
-			expect(referenceButtonLabels(target)[0]).toBe('Pause voice-memo.mp3');
+			expect(referenceButtonLabels(target)[0]).toBe(
+				words['referenceRow.pause']({ filename: 'voice-memo.mp3' })
+			);
 		});
 
 		it('keeps the new row loaded when the play of the row before it is rejected late', async () => {
@@ -379,7 +392,9 @@ describe('references page', () => {
 			await pressReferenceControl(referencePlayButton(target, 'storytime-drums.wav'));
 
 			expect(sourceSet).not.toHaveBeenCalled();
-			expect(referenceButtonLabels(target)[1]).toBe('Pause storytime-drums.wav');
+			expect(referenceButtonLabels(target)[1]).toBe(
+				words['referenceRow.pause']({ filename: 'storytime-drums.wav' })
+			);
 		});
 
 		it('stops the sound when the person leaves the page', async () => {
@@ -423,7 +438,9 @@ describe('references page', () => {
 			await pressReferenceControl(referencePlayButton(target, 'voice-memo.mp3'));
 
 			expect(audioPlayer.transport).toBe('paused');
-			expect(referenceButtonLabels(target)[0]).toBe('Pause voice-memo.mp3');
+			expect(referenceButtonLabels(target)[0]).toBe(
+				words['referenceRow.pause']({ filename: 'voice-memo.mp3' })
+			);
 		});
 
 		it('stops the reference when the global player starts', async () => {
@@ -433,7 +450,9 @@ describe('references page', () => {
 			startGlobalPlayer();
 			await tick();
 
-			expect(referenceButtonLabels(target)[0]).toBe('Play voice-memo.mp3');
+			expect(referenceButtonLabels(target)[0]).toBe(
+				words['referenceRow.play']({ filename: 'voice-memo.mp3' })
+			);
 			expect(target.querySelector('.reference-row.playing')).toBeNull();
 		});
 	});
@@ -520,8 +539,8 @@ describe('deleting a reference', () => {
 		await chooseDelete(target, 'voice-memo.mp3');
 
 		const text = confirmDialog().textContent ?? '';
-		expect(text).toContain('Delete reference?');
-		expect(text).toContain('voice-memo.mp3 — its audio file');
+		expect(text).toContain(words['referencesPage.deleteTitle']);
+		expect(text).toContain(words['referencesPage.deleteItem']({ filename: 'voice-memo.mp3' }));
 		expect(text).toContain('This cannot be undone.');
 		expect(mocks.deleteReference).not.toHaveBeenCalled();
 	});
@@ -542,7 +561,7 @@ describe('deleting a reference', () => {
 		await vi.waitFor(() =>
 			expect(listedReferences(target).map((row) => row.name)).toEqual(['storytime-drums.wav'])
 		);
-		expect(target.textContent).toContain('49 of 50 files');
+		expect(target.textContent).toContain(words['referencesPage.filesFigure'](50, { files: '49' }));
 	});
 
 	it('shows the in-use notice on the row and greys Delete when the server refuses with 409', async () => {
@@ -561,12 +580,14 @@ describe('deleting a reference', () => {
 		await confirmDelete();
 
 		await vi.waitFor(() =>
-			expect(faultOf(rowOf(target, 'voice-memo.mp3'))).toBe('In use — not deleted.')
+			expect(faultOf(rowOf(target, 'voice-memo.mp3'))).toBe(words['referencesPage.inUseFault'])
 		);
 		expect(faultOf(rowOf(target, 'storytime-drums.wav'))).toBeUndefined();
 		await openMenuOf(target, 'voice-memo.mp3');
 		expect(buttonNamed(menuPanel(), words['referenceMenu.delete']).disabled).toBe(true);
-		expect(rowOf(target, 'voice-memo.mp3').textContent).toContain('Used in 2 takes');
+		expect(rowOf(target, 'voice-memo.mp3').textContent).toContain(
+			words['referenceRow.usedIn']({ uses: words['referenceRow.takes'](2) })
+		);
 	});
 
 	it('shows another failure in the same row slot and keeps the row', async () => {
@@ -679,7 +700,11 @@ describe('where a reference is used', () => {
 		const target = await renderUsedReference();
 
 		expect(listedReferences(target).map((row) => row.meta)).toEqual([
-			expect.stringContaining('Used in 2 takes, 1 version'),
+			expect.stringContaining(
+				words['referenceRow.usedIn']({
+					uses: `${words['referenceRow.takes'](2)}, ${words['referenceRow.versions'](1)}`
+				})
+			),
 			expect.not.stringContaining('Used')
 		]);
 	});

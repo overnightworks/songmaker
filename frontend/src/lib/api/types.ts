@@ -58,7 +58,7 @@ export interface AdminUserLoraItem {
 	id: string;
 	name: string;
 	owner_username: string;
-	status: string;
+	status: 'draft' | 'queued' | 'preprocessing' | 'training' | 'exporting' | 'ready' | 'failed';
 }
 
 export interface AlbumCoverUrls {
@@ -992,7 +992,7 @@ export interface UserLoraItem {
 	user_id: string;
 	name: string;
 	slug: string;
-	status: string;
+	status: 'draft' | 'queued' | 'preprocessing' | 'training' | 'exporting' | 'ready' | 'failed';
 	model_mode: string;
 	storage_path?: string | null;
 	tensor_path?: string | null;

@@ -5,6 +5,7 @@ import type { AuthUser, PresetItem } from '#lib/api/types.ts';
 import { currentUser } from '#lib/stores/auth.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';
+import { words } from '#lib/words/en.ts';
 
 import GenerationSettingsPage from './+page.svelte';
 
@@ -149,7 +150,9 @@ describe('generation settings', () => {
 		);
 
 		await vi.waitFor(() =>
-			expect(target.querySelector('.error')?.textContent).toBe('Failed to load generation defaults')
+			expect(target.querySelector('.error')?.textContent).toBe(
+				words['generationPage.loadDefaultsFailed']
+			)
 		);
 	});
 
@@ -170,7 +173,9 @@ describe('generation settings', () => {
 			});
 			const group = target.querySelector('[role="radiogroup"]');
 			const labelId = group?.getAttribute('aria-labelledby') ?? '';
-			expect(target.querySelector(`[id="${labelId}"]`)?.textContent).toBe('Default for New Songs');
+			expect(target.querySelector(`[id="${labelId}"]`)?.textContent).toBe(
+				words['generationPage.defaultHeading']
+			);
 			const chips = () => [...(group?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
 			const checked = () =>
 				chips()

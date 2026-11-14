@@ -9,13 +9,8 @@
 	} from '#lib/api/types.ts';
 	import { songRoutePath, takeRoutePath } from '#lib/routes/addresses.ts';
 	import { formatTime } from '#lib/utils/format.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from './Icon.svelte';
-
-	const LOADING = 'Loading…';
-	const LOAD_FAILED = "Couldn't load where it is used";
-	const STAYS_NOTE = 'It stays while a take or version uses it.';
-	const DELETED_TAG = 'Deleted';
-	const ARCHIVED_TAG = 'Archived';
 
 	type SongUses = {
 		songId: string;
@@ -63,25 +58,35 @@
 		return songs;
 	}
 
+	function versionLabel(version: ReferenceVersionUseResponse): string {
+		return pageText('referenceUses.version', { version: String(version.version_number) });
+	}
+
 	function takeLabel(take: ReferenceTakeUseResponse): string {
-		const parts = [`Take ${take.generation_number}`];
-		if (take.version_number !== null) parts.push(`v${take.version_number}`);
-		if (take.audio_duration_sec !== null) parts.push(formatTime(take.audio_duration_sec));
-		return parts.join(' · ');
+		const number = String(take.generation_number);
+		const version = take.version_number === null ? null : String(take.version_number);
+		const length = take.audio_duration_sec === null ? null : formatTime(take.audio_duration_sec);
+		if (version !== null && length !== null) {
+			return pageText('referenceUses.takeVersionLength', { number, version, length });
+		}
+		if (version !== null) return pageText('referenceUses.takeVersion', { number, version });
+		if (length !== null) return pageText('referenceUses.takeLength', { number, length });
+		return pageText('referenceUses.take', { number });
 	}
 </script>
 
 <div {id} class="uses">
 	{#if failed}
-		<p class="uses-note uses-fault" role="alert">{LOAD_FAILED}</p>
+		<p class="uses-note uses-fault" role="alert">{pageText('referenceUses.loadFailed')}</p>
 	{:else if uses === null}
-		<p class="uses-note" role="status">{LOADING}</p>
+		<p class="uses-note" role="status">{pageText('referenceUses.loading')}</p>
 	{:else}
 		{#each bySong(uses) as song (song.songId)}
 			<section class="uses-song">
 				<h3 class="uses-song-title">
 					{song.title}
-					{#if song.trashed}<span class="uses-tag">{DELETED_TAG}</span>{/if}
+					{#if song.trashed}<span class="uses-tag">{pageText('referenceUses.deletedTag')}</span
+						>{/if}
 				</h3>
 				<ul>
 					{#each song.takes as take (take.generation_number)}
@@ -89,7 +94,9 @@
 							{#if song.trashed}
 								<span class="uses-row">
 									{takeLabel(take)}
-									{#if take.is_archived}<span class="uses-tag">{ARCHIVED_TAG}</span>{/if}
+									{#if take.is_archived}<span class="uses-tag"
+											>{pageText('referenceUses.archivedTag')}</span
+										>{/if}
 								</span>
 							{:else}
 								<a
@@ -97,7 +104,9 @@
 									href={takeRoutePath(take.album_id, take.song_slug, take.generation_number)}
 								>
 									{takeLabel(take)}
-									{#if take.is_archived}<span class="uses-tag">{ARCHIVED_TAG}</span>{/if}
+									{#if take.is_archived}<span class="uses-tag"
+											>{pageText('referenceUses.archivedTag')}</span
+										>{/if}
 									<Icon name="chevron-right" size={16} />
 								</a>
 							{/if}
@@ -106,10 +115,10 @@
 					{#each song.versions as version (version.version_number)}
 						<li>
 							{#if song.trashed}
-								<span class="uses-row">Version v{version.version_number}</span>
+								<span class="uses-row">{versionLabel(version)}</span>
 							{:else}
 								<a class="uses-row" href={songRoutePath(version.album_id, version.song_slug)}>
-									Version v{version.version_number}
+									{versionLabel(version)}
 									<Icon name="chevron-right" size={16} />
 								</a>
 							{/if}
@@ -118,7 +127,7 @@
 				</ul>
 			</section>
 		{/each}
-		<p class="uses-note">{STAYS_NOTE}</p>
+		<p class="uses-note">{pageText('referenceUses.staysNote')}</p>
 	{/if}
 </div>
 
