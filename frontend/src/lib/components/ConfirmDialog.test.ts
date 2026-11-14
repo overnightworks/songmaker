@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
+import { words } from '#lib/words/en.ts';
 import ConfirmDialog from './ConfirmDialog.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -39,7 +40,12 @@ describe('ConfirmDialog', () => {
 		expect(target.querySelector('.message')?.textContent).toContain('Save this draft');
 		expect(target.querySelector('.confirm-btn')?.textContent).toBe('Save');
 		expect(target.querySelector('.secondary-btn')?.textContent).toBe('Discard');
-		expect(target.querySelector('.cancel-btn')?.textContent).toBe('Cancel');
+		expect(target.querySelector('.cancel-btn')?.textContent).toBe(words['dialog.cancel']);
+	});
+
+	it('names the primary action from the catalog when the caller gives none', async () => {
+		const { target } = await render({ confirmLabel: undefined });
+		expect(target.querySelector('.confirm-btn')?.textContent).toBe(words['dialog.confirm']);
 	});
 
 	it('calls onconfirm on the primary action', async () => {
@@ -56,7 +62,7 @@ describe('ConfirmDialog', () => {
 
 	it.each([
 		{
-			way: 'Cancel',
+			way: words['dialog.cancel'],
 			press: (target: HTMLElement) =>
 				target.querySelector<HTMLButtonElement>('.cancel-btn')?.click()
 		},
@@ -170,7 +176,7 @@ describeBackClosesOverlay({
 	afterBack: () => expect(dirtyDraft.answers).toEqual(['keep editing']),
 	closeWays: [
 		{
-			way: 'Cancel',
+			way: words['dialog.cancel'],
 			close: (target) => target.querySelector<HTMLButtonElement>('.cancel-btn')?.click()
 		},
 		{

@@ -1,4 +1,3 @@
-import { RATE_LIMITED_TOAST_MESSAGE } from '#lib/constants/http.ts';
 import {
 	historyEntry,
 	pressBack,
@@ -30,7 +29,6 @@ import { get } from 'svelte/store';
 
 import { COMPACT_LAYOUT_MEDIA } from '#lib/constants/media.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
-import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
 import { words } from '#lib/words/en.ts';
 import { kitWords } from '#lib/utils/kit-words.ts';
 import { apiFetch } from '#lib/api/fetch.ts';
@@ -873,7 +871,9 @@ describe('auth check failure', () => {
 
 		const target = mountLayout(LIBRARY_ROUTE_PATH);
 
-		await vi.waitFor(() => expect(target.textContent).toContain(OFFLINE_STRIP_MESSAGE));
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain(words['connectivity.offlineStrip'])
+		);
 		expect(target.textContent).not.toContain(words['auth.checkNetworkError']);
 		expect(target.querySelector('.auth-retry')).toBeNull();
 		expect(signInRedirects()).toEqual([]);
@@ -881,7 +881,7 @@ describe('auth check failure', () => {
 		await vi.waitFor(() => expect(target.querySelector('.app-shell')).not.toBeNull(), {
 			timeout: AUTH_CHECK_RETURN_PROBE_INTERVAL_MS * 3
 		});
-		expect(target.textContent).not.toContain(OFFLINE_STRIP_MESSAGE);
+		expect(target.textContent).not.toContain(words['connectivity.offlineStrip']);
 		expect(signInRedirects()).toEqual([]);
 	});
 
@@ -1227,7 +1227,7 @@ describe('the live library stream', () => {
 // tells the person (`stores/rateLimitNotice.ts`), and takes it away again.
 describe('a 429 under the mounted layout', () => {
 	function throttleToasts() {
-		return get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+		return get(toasts).filter((toast) => toast.message === words['http.rateLimited']);
 	}
 
 	function aThrottledRead() {

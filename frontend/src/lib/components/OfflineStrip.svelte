@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { OFFLINE_STRIP_MESSAGE } from '#lib/constants/connectivity.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import { offline } from '#lib/stores/connectivity.ts';
 	import Icon from './Icon.svelte';
 </script>
@@ -10,7 +10,7 @@
 	{#if $offline}
 		<div class="offline-strip">
 			<Icon name="cloud-off" size={14} class="offline-glyph" />
-			<span>{OFFLINE_STRIP_MESSAGE}</span>
+			<span>{pageText('connectivity.offlineStrip')}</span>
 		</div>
 	{/if}
 </div>

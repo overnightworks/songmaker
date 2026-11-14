@@ -862,6 +862,15 @@ export type Words = {
     readonly "libraryQueueRefusal.limiterUnavailable": string;
     readonly "libraryRefusal.cursorInvalid": string;
     readonly "libraryRefusal.cursorMismatch": string;
+    readonly "connectivity.offlineStrip": string;
+    readonly "resourceSync.error": string;
+    readonly "http.rateLimited": string;
+    readonly "http.genericError": string;
+    readonly "navigation.songLinkNotFound": string;
+    readonly "dialog.cancel": string;
+    readonly "dialog.confirm": string;
+    readonly "toast.dismiss": string;
+    readonly "loading.plain": string;
     readonly "generationRefusal.notFound": string;
     readonly "generationRefusal.someNotFound": string;
     readonly "generationRefusal.audioMissing": string;
@@ -1941,6 +1950,15 @@ export const words: Words = {
     "libraryQueueRefusal.limiterUnavailable": "Queue stream rate limiter unavailable",
     "libraryRefusal.cursorInvalid": "Invalid library cursor",
     "libraryRefusal.cursorMismatch": "Library cursor does not match query and sort",
+    "connectivity.offlineStrip": "You're offline — retrying",
+    "resourceSync.error": "Couldn't reach your library",
+    "http.rateLimited": "Too many requests — hang on, it will continue in a moment.",
+    "http.genericError": "Something went wrong. Try again.",
+    "navigation.songLinkNotFound": "Song not found — it may have been deleted",
+    "dialog.cancel": "Cancel",
+    "dialog.confirm": "Confirm",
+    "toast.dismiss": "Dismiss",
+    "loading.plain": "Loading...",
     "generationRefusal.notFound": "Generation not found",
     "generationRefusal.someNotFound": "One or more generations not found",
     "generationRefusal.audioMissing": "Audio file not found",

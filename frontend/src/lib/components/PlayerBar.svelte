@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageText } from '#lib/utils/page-words.ts';
 	import type { Attachment } from 'svelte/attachments';
 	import {
 		albumList,
@@ -263,7 +264,7 @@
 				{/if}
 			{/if}
 			<span class="track-detail" id={detailId}
-				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
+				>{detailLine}{#if isLoading}<span class="loading-text">{pageText('loading.plain')}</span
 					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
 			>
 		{:else if waitingSong}

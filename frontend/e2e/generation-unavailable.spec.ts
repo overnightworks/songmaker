@@ -3,7 +3,6 @@ import { words } from '../src/lib/words/en';
 import type { JobItem } from '../src/lib/api/types';
 import { ADMIN_TABS_LABEL, ADMIN_WORKER_POOL_HREF } from '../src/lib/constants/admin';
 import { EDITOR_OPEN_WORKER_POOL_LABEL } from '../src/lib/constants/song';
-import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import { sameOriginHeaders, ONLY_IN_SHELL } from './helpers';
 import {
@@ -145,7 +144,7 @@ for (const width of WIDTHS) {
 						await expect(failure).toContainText(UNAVAILABLE);
 
 						for (const outcome of [
-							DIALOG_CANCEL_LABEL,
+							words['dialog.cancel'],
 							words['songPage.unsavedSave'],
 							words['songPage.unsavedDiscard']
 						]) {
@@ -159,7 +158,7 @@ for (const width of WIDTHS) {
 							const dialog = page.getByRole('dialog', { name: words['songPage.unsavedTitle'] });
 							await expect(dialog).toBeVisible();
 							await dialog.getByRole('button', { name: outcome, exact: true }).click();
-							if (outcome === DIALOG_CANCEL_LABEL) {
+							if (outcome === words['dialog.cancel']) {
 								await expect(dialog).toBeHidden();
 								await expect(lyrics).toHaveValue(draft);
 								await expect(page).toHaveURL(new RegExp(`${address}$`));

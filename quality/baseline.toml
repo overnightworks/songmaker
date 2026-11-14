@@ -11,12 +11,12 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1215
-"frontend/e2e/helpers.ts" = 821
+"frontend/e2e/back-closes-overlay.spec.ts" = 1214
+"frontend/e2e/helpers.ts" = 820
 "frontend/e2e/library.spec.ts" = 1269
-"frontend/e2e/offline.spec.ts" = 803
+"frontend/e2e/offline.spec.ts" = 802
 "frontend/e2e/seed.ts" = 1174
-"frontend/e2e/song-versions.spec.ts" = 851
+"frontend/e2e/song-versions.spec.ts" = 850
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 805
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1472
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1804
@@ -24,7 +24,7 @@
 "frontend/src/lib/components/LoraDetail.svelte" = 960
 "frontend/src/lib/components/NowPlaying.test.ts" = 1092
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1101
-"frontend/src/lib/components/PlayerBar.test.ts" = 1621
+"frontend/src/lib/components/PlayerBar.test.ts" = 1620
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 659
 "frontend/src/lib/components/SongDetailView.svelte" = 1015
 "frontend/src/lib/components/SongDetailView.test.ts" = 1421
@@ -39,10 +39,10 @@
 "frontend/src/lib/stores/jobs.test.ts" = 900
 "frontend/src/lib/stores/libraryContext.test.ts" = 2085
 "frontend/src/lib/stores/libraryContext.ts" = 1178
-"frontend/src/lib/stores/navigation.test.ts" = 2966
+"frontend/src/lib/stores/navigation.test.ts" = 2964
 "frontend/src/lib/stores/player.test.ts" = 5277
 "frontend/src/lib/stores/player.ts" = 2227
-"frontend/src/lib/stores/resourceSync.test.ts" = 2022
+"frontend/src/lib/stores/resourceSync.test.ts" = 2019
 "frontend/src/lib/stores/resourceSync.ts" = 1054
 "frontend/src/routes/layout.test.ts" = 1396
 "frontend/src/routes/settings/users/+page.svelte" = 936
@@ -346,10 +346,9 @@ _make_worker = [["tests/songmaker_cli/test_scoring_worker.py", "_make_worker"]]
 "frontend/src/lib/components/MentionDropdown.svelte" = 2
 "frontend/src/lib/components/ModelRegistryPanel.svelte" = 14
 "frontend/src/lib/components/NowPlayingQueue.svelte" = 1
-"frontend/src/lib/components/PlayerBar.svelte" = 2
+"frontend/src/lib/components/PlayerBar.svelte" = 1
 "frontend/src/lib/components/ReferenceUses.svelte" = 2
 "frontend/src/lib/components/TakeRetentionPanel.svelte" = 18
-"frontend/src/lib/components/ToastContainer.svelte" = 1
 "frontend/src/lib/components/TransportBarFrame.svelte" = 4
 "frontend/src/lib/components/WaveformRangePicker.svelte" = 3
 "frontend/src/lib/components/WorkerModelsList.svelte" = 1

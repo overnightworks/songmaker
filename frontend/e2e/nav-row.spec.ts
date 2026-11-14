@@ -1,6 +1,5 @@
 import { expect, test, type Locator } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { API_ERROR_GENERIC_MESSAGE } from '../src/lib/constants/http';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_EVENT_HELLO
@@ -218,7 +217,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 					await (unreachable ? route.abort('internetdisconnected') : route.continue());
 				});
 				const reason =
-					failure === 'network' ? API_ERROR_GENERIC_MESSAGE : 'Generation service unavailable';
+					failure === 'network' ? words['http.genericError'] : 'Generation service unavailable';
 				await page.route('**/api/songs/*/active-generation', (route) =>
 					failure === 'network'
 						? route.abort('internetdisconnected')

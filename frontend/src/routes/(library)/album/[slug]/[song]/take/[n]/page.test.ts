@@ -16,7 +16,6 @@ import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { detailTab, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
-import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { words } from '#lib/words/en.ts';
 
@@ -379,7 +378,7 @@ describe('/album/<slug>/<song>/take/<n> after the library load failed', () => {
 		coldTabAt('/album/anfield/stadion-lauf-a/take/1');
 		const target = openAddress();
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
-		await vi.waitFor(() => expect(target.textContent).toContain(RESOURCE_SYNC_ERROR));
+		await vi.waitFor(() => expect(target.textContent).toContain(words['resourceSync.error']));
 
 		api.fetchSongs.mockImplementation(songsLoad);
 		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
@@ -390,7 +389,7 @@ describe('/album/<slug>/<song>/take/<n> after the library load failed', () => {
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
 		expect(target.querySelector('.address-overlay')).toBeNull();
-		expect(target.textContent).not.toContain(RESOURCE_SYNC_ERROR);
+		expect(target.textContent).not.toContain(words['resourceSync.error']);
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
 	});
 });

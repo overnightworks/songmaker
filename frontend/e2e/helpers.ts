@@ -10,7 +10,6 @@ import {
 	type TestInfo
 } from '@playwright/test';
 import { APP_NAME } from '../src/lib/constants/app';
-import { OFFLINE_STRIP_MESSAGE } from '../src/lib/constants/connectivity';
 import { RESOURCE_EVENT_STREAM_PATH } from '../src/lib/constants/resource-sync';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import {
@@ -302,7 +301,7 @@ export function workspace(page: Page): Locator {
 
 /** 1354_65_A3: the same offline status in the network and shell geometry proofs. */
 export function offlineStrip(page: Page): Locator {
-	return page.getByRole('status').filter({ hasText: OFFLINE_STRIP_MESSAGE });
+	return page.getByRole('status').filter({ hasText: words['connectivity.offlineStrip'] });
 }
 
 /** Home's Listen list (`HomeListen.svelte`): the places last played. */

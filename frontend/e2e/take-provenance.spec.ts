@@ -8,7 +8,6 @@
 
 import { expect, test, type Page, type Route } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { openNowPlayingLabel } from '../src/lib/constants/now-playing';
 import {
 	createAlbum,
@@ -253,7 +252,7 @@ test.describe('a link to a take inside a folded version', () => {
 		await page.goBack();
 
 		await expect(unsavedChangesDialog(page)).toBeVisible();
-		await unsavedChangesDialog(page).getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+		await unsavedChangesDialog(page).getByRole('button', { name: words['dialog.cancel'] }).click();
 		await expect(unsavedChangesDialog(page)).toHaveCount(0);
 		await expectOnTheSong(page, song, '');
 		await showTab(page, words['songTabs.edit']);

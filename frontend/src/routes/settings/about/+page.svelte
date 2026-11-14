@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageText } from '#lib/utils/page-words.ts';
 	/* eslint-disable svelte/no-navigation-without-resolve -- links leave the app for GitHub */
 	import { onDestroy, onMount } from 'svelte';
 	import { fetchRelease } from '#lib/api/settings.ts';
@@ -50,7 +51,7 @@
 {#if $loadFailure}
 	<p class="error">{$loadFailure}</p>
 {:else if release === null}
-	<BusyState text="Loading..." />
+	<BusyState text={pageText('loading.plain')} />
 {:else}
 	<div class="about-list">
 		<div class="about-row">

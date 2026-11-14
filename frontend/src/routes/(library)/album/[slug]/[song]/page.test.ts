@@ -7,7 +7,6 @@ import { get } from 'svelte/store';
 import type { AlbumItem, SongItem } from '#lib/api/types.ts';
 import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { browserReportsOnline } from '#lib/test-utils/network.ts';
-import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import {
@@ -400,7 +399,7 @@ describe('/album/<slug>/<song-slug> after the library load failed', () => {
 		failLibrary();
 		const target = openAddress();
 		await vi.waitFor(() => expect(target.textContent).toContain(ALBUM_DOWN));
-		await vi.waitFor(() => expect(target.textContent).toContain(RESOURCE_SYNC_ERROR));
+		await vi.waitFor(() => expect(target.textContent).toContain(words['resourceSync.error']));
 		return target;
 	}
 
@@ -415,7 +414,7 @@ describe('/album/<slug>/<song-slug> after the library load failed', () => {
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
 		expect(target.querySelector('.address-overlay')).toBeNull();
-		expect(target.textContent).not.toContain(RESOURCE_SYNC_ERROR);
+		expect(target.textContent).not.toContain(words['resourceSync.error']);
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
 	});
 

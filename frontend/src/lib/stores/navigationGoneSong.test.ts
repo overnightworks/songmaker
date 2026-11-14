@@ -21,7 +21,7 @@ import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { resetGenerationFailuresForTests } from '#lib/stores/jobs.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { resetResourceSyncForTests, resourceSync } from '#lib/stores/resourceSync.ts';
-import { SONG_LINK_NOT_FOUND_TOAST } from '#lib/constants/song.ts';
+import { words } from '#lib/words/en.ts';
 
 const fetchSong = vi.fn();
 
@@ -130,7 +130,7 @@ describe('a song deleted meanwhile', () => {
 			reportGone();
 
 			await vi.waitFor(() =>
-				expect(get(toasts).map((t) => t.message)).toContain(SONG_LINK_NOT_FOUND_TOAST)
+				expect(get(toasts).map((t) => t.message)).toContain(words['navigation.songLinkNotFound'])
 			);
 			expect(get(selectedSongId)).toBeNull();
 			expect(get(librarySurface)).toBe(surface);
@@ -159,7 +159,7 @@ describe('a song deleted elsewhere while open', () => {
 		forgetSyncedSong('gone');
 		leaveGoneSong('gone');
 
-		expect(get(toasts).map((t) => t.message)).toEqual([SONG_LINK_NOT_FOUND_TOAST]);
+		expect(get(toasts).map((t) => t.message)).toEqual([words['navigation.songLinkNotFound']]);
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(librarySurface)).toBe('detail');
 		await vi.waitFor(() =>
@@ -197,7 +197,7 @@ describe('a song deleted elsewhere while open', () => {
 		resourceSync.update((state) => ({ ...state, ready: true, status: 'live' }));
 
 		await vi.waitFor(() =>
-			expect(get(toasts).map((t) => t.message)).toEqual([SONG_LINK_NOT_FOUND_TOAST])
+			expect(get(toasts).map((t) => t.message)).toEqual([words['navigation.songLinkNotFound']])
 		);
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(librarySurface)).toBe('detail');

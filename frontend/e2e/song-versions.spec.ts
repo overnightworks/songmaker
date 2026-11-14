@@ -31,7 +31,6 @@ import { words } from '../src/lib/words/en';
 const openVersion = (number: number) => words['takesList.openVersion']({ number: String(number) });
 const firstTake = words['takeRow.takeLabel']({ number: '1' });
 import { EDITOR_GENERATE_LABEL } from '../src/lib/constants/song';
-import { DIALOG_CANCEL_LABEL } from '../src/lib/constants/dialog';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	NOW_PLAYING_QUEUE_TAB,
@@ -409,7 +408,7 @@ test.describe('the versions of a song', () => {
 
 		await tapVersion(page, 1);
 		await expect(replaceDraftDialog(page)).toBeVisible();
-		await replaceDraftDialog(page).getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+		await replaceDraftDialog(page).getByRole('button', { name: words['dialog.cancel'] }).click();
 		await expect(replaceDraftDialog(page)).toBeHidden();
 		await expect(versionsSheet(page)).toBeVisible();
 		await expect(lyricsField(page)).toHaveValue(editedLyrics);
@@ -778,7 +777,7 @@ test.describe('the versions of a song', () => {
 			.click();
 		const confirm = page.getByRole('dialog', { name: deleteTitle(1) });
 		await expect(confirm).toContainText(words['versions.deleteDraftGoes']);
-		await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+		await confirm.getByRole('button', { name: words['dialog.cancel'] }).click();
 
 		await expect(confirm).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(editedLyrics);
@@ -818,7 +817,7 @@ test.describe('the versions of a song', () => {
 				line,
 				words['versions.deleteLoadUndoGoes']
 			]);
-			await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+			await confirm.getByRole('button', { name: words['dialog.cancel'] }).click();
 			await expect(confirm).toBeHidden();
 			await versionsSheet(page).getByRole('button', { name: words['versions.close'] }).click();
 			await expect(versionsSheet(page)).toBeHidden();

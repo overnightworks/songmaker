@@ -8,7 +8,6 @@ import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RESOURCE_SYNC_ERROR } from '#lib/constants/resource-sync.ts';
 import { albumList, songList } from '#lib/stores/libraryData.ts';
 import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
 import { librarySurface, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
@@ -114,7 +113,9 @@ describe('the library workspace', () => {
 
 		const target = renderWorkspace();
 
-		expect(target.querySelector('[role="alert"]')?.textContent).toContain(RESOURCE_SYNC_ERROR);
+		expect(target.querySelector('[role="alert"]')?.textContent).toContain(
+			words['resourceSync.error']
+		);
 	});
 
 	it('waits under the offline strip instead of showing a failure when the stream could not come up offline', async () => {
@@ -127,7 +128,9 @@ describe('the library workspace', () => {
 
 		browserReportsOnline(true);
 		await tick();
-		expect(target.querySelector('[role="alert"]')?.textContent).toContain(RESOURCE_SYNC_ERROR);
+		expect(target.querySelector('[role="alert"]')?.textContent).toContain(
+			words['resourceSync.error']
+		);
 	});
 
 	it('shows no banner over a working library when a live refresh fails for lack of a network', async () => {

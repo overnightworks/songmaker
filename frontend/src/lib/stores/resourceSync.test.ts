@@ -21,7 +21,6 @@ import {
 	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
-	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
@@ -42,6 +41,8 @@ import {
 	startLibraryResourceSync,
 	stopLibraryResourceSync
 } from './resourceSync';
+import { words } from '#lib/words/en.ts';
+const SYNC_ERROR = words['resourceSync.error'];
 
 type ResourceSyncDeps = ConstructorParameters<typeof ResourceSyncController>[0];
 type ResourceEventSource = ReturnType<ResourceSyncDeps['openEventStream']>;
@@ -432,7 +433,7 @@ describe('resource sync owner', () => {
 		latestSource(sources).emit(type, data);
 		await flush();
 
-		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR, ready: false });
+		expect(get(store)).toMatchObject({ status: 'error', error: SYNC_ERROR, ready: false });
 		expect(latestSource(sources).closed).toBe(closesSource);
 	});
 
@@ -693,7 +694,7 @@ describe('resource sync owner', () => {
 		latestSource(sources).emit('hello', { high_water_mark: '1' });
 		await flush();
 
-		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR });
+		expect(get(store)).toMatchObject({ status: 'error', error: SYNC_ERROR });
 		unsubscribe();
 	});
 
@@ -715,7 +716,7 @@ describe('resource sync owner', () => {
 		latestSource(sources).emit('generation.created', created('1', 'g1'));
 		await flush();
 
-		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR, ready: false });
+		expect(get(store)).toMatchObject({ status: 'error', error: SYNC_ERROR, ready: false });
 		unsubscribe();
 	});
 
@@ -808,7 +809,7 @@ describe('resource sync owner', () => {
 		await flush();
 		await controller.waitForReady();
 		expect(get(store).status).toBe('error');
-		expect(get(store).error).toBe(RESOURCE_SYNC_ERROR);
+		expect(get(store).error).toBe(SYNC_ERROR);
 		expect(get(store).ready).toBe(false);
 		fail = false;
 		const ready = controller.retry();
@@ -1071,7 +1072,7 @@ describe('resource sync owner', () => {
 		await controller.waitForReady();
 		latestSource(sources).emit('generation.created', created('1', 'g1'));
 		await flush();
-		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR });
+		expect(get(store)).toMatchObject({ status: 'error', error: SYNC_ERROR });
 	});
 
 	it('restarts a bootstrap that failed offline once the network comes back', async () => {
@@ -1662,7 +1663,7 @@ describe('resource sync owner', () => {
 		await flush();
 		latestSource(sources).emit('resync', { high_water_mark: '1' });
 		await flush();
-		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR });
+		expect(get(store)).toMatchObject({ status: 'error', error: SYNC_ERROR });
 
 		window.dispatchEvent(new Event('focus'));
 
@@ -1798,14 +1799,10 @@ describe('resource sync owner', () => {
 		[
 			'its named fallback for a server answer without a reason',
 			new ApiError(500, '', '/api/songs/s1'),
-			RESOURCE_SYNC_ERROR
+			SYNC_ERROR
 		],
-		[
-			'its named fallback for a browser error',
-			new TypeError('undefined is not a function'),
-			RESOURCE_SYNC_ERROR
-		],
-		['its named fallback for an unknown failure', null, RESOURCE_SYNC_ERROR]
+		['its fallback for a browser error', new TypeError('undefined is not a function'), SYNC_ERROR],
+		['its named fallback for an unknown failure', null, SYNC_ERROR]
 	])('shows %s from a live refresh failure', async (_caseName, failure, error) => {
 		const { controller, sources, store } = setup({
 			fetchSong: async () => Promise.reject(failure)
@@ -1996,7 +1993,7 @@ describe('library resource sync wiring', () => {
 			);
 			onTestFinished(
 				resourceSync.subscribe((state) => {
-					if (state.error === RESOURCE_SYNC_ERROR) happened.push('sync error');
+					if (state.error === SYNC_ERROR) happened.push('sync error');
 				})
 			);
 			vi.stubGlobal('EventSource', MockEventSource);

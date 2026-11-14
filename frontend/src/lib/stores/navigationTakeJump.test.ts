@@ -21,7 +21,6 @@ import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { words } from '#lib/words/en.ts';
-import { DIALOG_CANCEL_LABEL } from '#lib/constants/dialog.ts';
 import { activeJobs, removeJob, resetGenerationFailuresForTests } from '#lib/stores/jobs.ts';
 import { toasts } from '#lib/stores/toast.ts';
 
@@ -287,7 +286,7 @@ describe('Back and Forward with a draft nobody saved (rule 15, cells J6, J8)', (
 		await pressBack();
 		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
 		await historyComesToRest();
-		answer(DIALOG_CANCEL_LABEL);
+		answer(words['dialog.cancel']);
 
 		await vi.waitFor(() => expect(unsavedChangesDialog()).toBeNull());
 		expect(location.pathname).toBe('/album/a1/s1');
@@ -321,7 +320,7 @@ describe('Back and Forward with a draft nobody saved (rule 15, cells J6, J8)', (
 		await pressBack();
 		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
 		await historyComesToRest();
-		answer(DIALOG_CANCEL_LABEL);
+		answer(words['dialog.cancel']);
 
 		await vi.waitFor(() => expect(unsavedChangesDialog()).toBeNull());
 		expect(get(selectedSongId)).toBe('s2');
