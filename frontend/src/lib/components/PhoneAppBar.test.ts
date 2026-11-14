@@ -1,4 +1,3 @@
-import { ACCOUNT_MENU_LABEL } from '#lib/constants/auth.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
@@ -64,7 +63,7 @@ vi.mock('#lib/api/client.ts', async (importOriginal) => ({
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 const LOG_OUT_NAME = kitWords()['account.logOut'];
-const ACCOUNT_CIRCLE_NAME = `${ACCOUNT_MENU_LABEL} · felix`;
+const ACCOUNT_CIRCLE_NAME = words['account.menu']({ username: 'felix' });
 
 function renderBar(onlogout = vi.fn()): HTMLElement {
 	const target = document.createElement('div');

@@ -3,14 +3,15 @@
 // served by another repository.
 
 import { expect, test, type Locator, type Page } from './coverage-test';
+import { words } from '../src/lib/words/en';
 import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
 import { FlowGuard } from './helpers';
 import { MOCK_STREAM_REFUSAL, openMockSharedAlbum } from './share-album-fixtures';
 
 const EXPECTED_ADDRESSES = [
-	['Impressum', 'https://hallucinai.de/impressum#songmaker'],
-	['Datenschutz', 'https://hallucinai.de/datenschutz#songmaker'],
-	['Nutzungsbedingungen', 'https://hallucinai.de/nutzungsbedingungen#songmaker']
+	[words['legal.imprint'], 'https://hallucinai.de/impressum#songmaker'],
+	[words['legal.privacy'], 'https://hallucinai.de/datenschutz#songmaker'],
+	[words['legal.terms'], 'https://hallucinai.de/nutzungsbedingungen#songmaker']
 ];
 
 function shareLegalLinks(page: Page): Locator {
@@ -28,7 +29,9 @@ async function legalLinks(links: Locator): Promise<(string | null)[][]> {
 }
 
 test('1785_rule_1 the legal links name the central addresses', () => {
-	expect(LEGAL_SECTIONS.map(({ label, href }) => [label, href])).toEqual(EXPECTED_ADDRESSES);
+	expect(LEGAL_SECTIONS.map(({ labelKey, href }) => [words[labelKey], href])).toEqual(
+		EXPECTED_ADDRESSES
+	);
 });
 
 test.describe('anonymous visitor', () => {

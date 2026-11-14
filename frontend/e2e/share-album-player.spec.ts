@@ -489,7 +489,7 @@ test.describe('a long album', () => {
 				await page.screenshot({ path: testInfo.outputPath('album-scroll-bar.png') });
 				const [barBox, footerBox] = await boundingBoxes(
 					bar,
-					page.getByRole('link', { name: 'Impressum' })
+					page.getByRole('link', { name: words['legal.imprint'] })
 				);
 				expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(barBox.y);
 

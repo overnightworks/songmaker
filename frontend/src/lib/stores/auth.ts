@@ -5,13 +5,8 @@ import { ApiError, fetchMe } from '#lib/api/client.ts';
 import { NetworkError } from '#lib/api/fetch.ts';
 import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { leaveByPostingForm, reloadAfresh } from '#lib/history/historyController.ts';
-import {
-	AUTH_CHECK_NETWORK_ERROR,
-	AUTH_CHECK_RATE_LIMITED_ERROR,
-	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
-	AUTH_CHECK_SERVER_ERROR,
-	LOGOUT_ADDRESS
-} from '#lib/constants/auth.ts';
+import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS, LOGOUT_ADDRESS } from '#lib/constants/auth.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import { reportSessionCheckReachable } from '#lib/stores/connectivity.ts';
 
 export const currentUser = writable<AuthUser | null>(null);
@@ -45,12 +40,12 @@ export function classifyAuthFailure(error: unknown): AuthFailureKind {
 
 function describeAuthCheckFailure(error: unknown): string {
 	if (error instanceof ApiError && error.status === RATE_LIMITED_STATUS) {
-		return AUTH_CHECK_RATE_LIMITED_ERROR;
+		return pageText('auth.checkRateLimited');
 	}
 	if (error instanceof ApiError) {
-		return AUTH_CHECK_SERVER_ERROR;
+		return pageText('auth.checkServerError');
 	}
-	return AUTH_CHECK_NETWORK_ERROR;
+	return pageText('auth.checkNetworkError');
 }
 
 /**

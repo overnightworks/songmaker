@@ -1,16 +1,11 @@
 <script lang="ts">
 	import { AccountMenu as AccountPanel, type ThemeChoice } from 'overnightworks-design';
-	import {
-		ACCOUNT_MENU_CLOSE_LABEL,
-		ACCOUNT_MENU_LABEL,
-		SIGN_OUT_FAILED_MESSAGE
-	} from '#lib/constants/auth.ts';
-	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 	import { page } from '$app/state';
 	import { signOutFailed } from '#lib/stores/auth.ts';
 	import { leaveForLogout, openAppPage } from '#lib/stores/navigation.ts';
 	import { chooseTheme, themeChoice } from '#lib/stores/ui.ts';
 	import { accountInitial } from '#lib/utils/format.ts';
+	import { legalLinks } from '#lib/utils/legal-links.ts';
 	import { kitWords } from '#lib/utils/kit-words.ts';
 	import { pageText } from '#lib/utils/page-words.ts';
 	import MenuPopover from './MenuPopover.svelte';
@@ -58,8 +53,8 @@
 	<MenuPopover
 		bind:this={popover}
 		layer="account-menu"
-		label="{ACCOUNT_MENU_LABEL} · {username}"
-		closeLabel={ACCOUNT_MENU_CLOSE_LABEL}
+		label={pageText('account.menu', { username })}
+		closeLabel={pageText('account.menuClose')}
 	>
 		{#snippet trigger()}<span class="account-initial">{initial}</span>{/snippet}
 		<div {@attach forgetFailureOnClose}>
@@ -69,10 +64,10 @@
 				onAccountOpen={() => popover?.close(false)}
 				appRows={[{ label: pageText('places.settings'), onSelect: openSettings }]}
 				theme={{ choice: KIT_CHOICE_BY_STORED[$themeChoice], onChange: chooseKitTheme }}
-				legalLinks={LEGAL_SECTIONS}
+				legalLinks={legalLinks()}
 				words={kitWords()}
 				onLogOut={() => void leaveForLogout(onlogout)}
-				logOutFailure={$signOutFailed ? SIGN_OUT_FAILED_MESSAGE : undefined}
+				logOutFailure={$signOutFailed ? pageText('account.signOutFailed') : undefined}
 			/>
 		</div>
 	</MenuPopover>

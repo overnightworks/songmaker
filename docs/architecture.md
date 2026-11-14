@@ -890,8 +890,8 @@ cover), a playable-song count, and each song’s album name beneath its queue
 title. The bar follows the current song’s album cover. On desktop the sticky
 transport remains in view, so the same observer keeps the bar hidden (#1462).
 Every share page ends in `SharedFooter.svelte`: "Powered by" and
-the design kit's `LegalLinks` with `newTab`, rendering the Impressum · Datenschutz ·
-Nutzungsbedingungen links that `lib/constants/legal.ts` owns (the account menu
+the design kit's `LegalLinks` with `newTab`, rendering the Legal notice · Privacy ·
+Terms of use links: `lib/constants/legal.ts` owns their label keys and addresses, and `lib/utils/legal-links.ts` builds the labelled links (the account menu
 and the sign-in pages hand the same list to the design kit's `AccountMenu` and `SignInPage`).
 They point to the central legal pages with songmaker's section anchor;
 `legal/` holds the app's own section of the central legal pages, and the share page opens them in a new
