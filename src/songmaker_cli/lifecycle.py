@@ -26,9 +26,17 @@ from songmaker_cli.health_types import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
 )
-from songmaker_cli.job_timing import JOB_REAPER_INTERVAL_SECONDS
+from songmaker_cli.job_timing import (
+    JOB_REAPER_INTERVAL_SECONDS,
+    OWNER_GONE_CHECK_INTERVAL_SECONDS,
+    OWNER_LEASE_REFRESH_SECONDS,
+)
 from songmaker_cli.job_types import JobType
-from songmaker_cli.worker_liveness import WorkerLiveness
+from songmaker_cli.worker_liveness import (
+    WorkerLiveness,
+    read_owner_liveness,
+    refresh_owner_lease,
+)
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
 log = logging.getLogger(__name__)
@@ -40,6 +48,7 @@ _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(
 # The web process owns stale-job recovery for every job type.
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
 JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
+OWNER_REAPER_FAILURE_MESSAGE: Final = "Owner-gone pass failed"
 
 
 def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
@@ -366,6 +375,70 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
             log.exception("Stale job reaper tick failed")
         else:
             registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
+
+
+def fail_jobs_of_dead_owners(ctx: AppContext) -> int:
+    """Fail the active jobs of every other process whose lease is gone, then clean its covers.
+
+    Only a DEAD owner's jobs fail: a Redis that cannot be read, or that may have
+    restarted empty, reads UNKNOWN. This process's own jobs are never orphaned.
+    """
+    from songmaker_cli.db.queries.jobs import active_job_owner_ids, recover_jobs_of_dead_owners
+
+    with ctx.db() as session:
+        owner_ids = active_job_owner_ids(session) - {ctx.owner_id}
+    owner_liveness = read_owner_liveness(ctx.redis, owner_ids)
+    with ctx.db() as session:
+        recovered = recover_jobs_of_dead_owners(session, owner_liveness)
+        session.commit()
+    recovered_count = sum(recovered.values())
+    if recovered_count:
+        reconcile_reaped_cover_jobs(ctx.db, ctx.audio_dir)
+    return recovered_count
+
+
+async def owner_lease_loop(app: FastAPI) -> None:
+    """Renew this process's owner lease for the server lifetime.
+
+    A cancel waits for the refresh in flight: a running thread cannot be cancelled,
+    and its SET must not land after the shutdown's DELETE of the lease.
+    """
+    ctx: AppContext = app.state.ctx
+    registry = background_loop_registry(app)
+    while True:
+        await asyncio.sleep(OWNER_LEASE_REFRESH_SECONDS)
+        refresh = asyncio.ensure_future(
+            asyncio.to_thread(refresh_owner_lease, ctx.redis, ctx.owner_id),
+        )
+        try:
+            await asyncio.shield(refresh)
+        except asyncio.CancelledError:
+            await asyncio.gather(refresh, return_exceptions=True)
+            raise
+        except Exception as exc:
+            registry.record_failure(BackgroundLoopName.OWNER_LEASE, exc)
+            log.exception("Owner lease refresh failed")
+        else:
+            registry.record_success(BackgroundLoopName.OWNER_LEASE)
+
+
+async def owner_gone_reaper_loop(app: FastAPI) -> None:
+    """Fail the jobs of processes that are gone, on every web process.
+
+    No lock orders the processes: each failing update is conditional on the row
+    it read, so the second one to reach a job changes nothing.
+    """
+    ctx: AppContext = app.state.ctx
+    registry = background_loop_registry(app)
+    while True:
+        await asyncio.sleep(OWNER_GONE_CHECK_INTERVAL_SECONDS)
+        try:
+            await asyncio.to_thread(fail_jobs_of_dead_owners, ctx)
+        except Exception as exc:
+            registry.record_failure(BackgroundLoopName.OWNER_GONE_REAPER, exc)
+            log.exception(OWNER_REAPER_FAILURE_MESSAGE)
+        else:
+            registry.record_success(BackgroundLoopName.OWNER_GONE_REAPER)
 
 
 def _cleanup_sessions(ctx: AppContext) -> int:

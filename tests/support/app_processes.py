@@ -17,7 +17,7 @@ import sys
 import threading
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from functools import partial
@@ -82,9 +82,12 @@ class WebProcess:
     def url(self) -> str:
         return f"http://{LOOPBACK}:{self.port}"
 
-    def log_tail(self) -> str:
+    def log_text(self) -> str:
         self.log.flush()
-        return self.log_path.read_bytes()[-LOG_TAIL_BYTES:].decode(errors="replace")
+        return self.log_path.read_text(encoding="utf-8", errors="replace")
+
+    def log_tail(self) -> str:
+        return self.log_text()[-LOG_TAIL_BYTES:]
 
     def kill(self) -> None:
         """End the process at once, as a crash does."""
@@ -181,6 +184,19 @@ def _inherited_environment() -> dict[str, str]:
         for key, value in os.environ.items()
         if key in INHERITED_VARIABLES or key.startswith(INHERITED_PREFIX)
     }
+
+
+def poll_until(
+    condition: Callable[[], bool], *, deadline_seconds: float, poll_seconds: float = 0.1,
+) -> bool:
+    """Whether `condition` held before the deadline; it is checked once more at the deadline."""
+    deadline = time.monotonic() + deadline_seconds
+    pause = threading.Event()
+    while not condition():
+        if time.monotonic() >= deadline:
+            return False
+        pause.wait(poll_seconds)
+    return True
 
 
 def _wait_until_ready(web_process: WebProcess) -> None:
