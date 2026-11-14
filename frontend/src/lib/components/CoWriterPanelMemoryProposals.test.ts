@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { words } from '#lib/words/en.ts';
-import { sendToCowriter } from '#lib/test-utils/cowriter-composer.ts';
+import { chatMessagesOf, sendToCowriter } from '#lib/test-utils/cowriter-composer.ts';
 import { kitWords } from '#lib/utils/kit-words.ts';
 import type { CoWriterStreamEvent } from '#lib/api/client.ts';
 
@@ -156,6 +156,6 @@ describe('CoWriterPanel memory proposals', () => {
 		);
 		finishTurn();
 		await vi.waitFor(() => expect(target.querySelector('[role="status"]')?.textContent).toBe(''));
-		expect(target.querySelectorAll('.message.assistant .bubble')).toHaveLength(0);
+		expect(chatMessagesOf(target, 'helper')).toHaveLength(0);
 	});
 });
