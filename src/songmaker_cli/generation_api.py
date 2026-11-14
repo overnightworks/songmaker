@@ -209,8 +209,9 @@ def api_get_generation(
 ) -> GenerationResponse:
     gen = check_generation_access(session, gen_id, user)
     measure_generation_audio_duration(session, ctx.audio_dir, gen)
+    response = GenerationResponse.from_orm(gen)
     session.commit()
-    return GenerationResponse.from_orm(gen)
+    return response
 
 
 @router.delete(
