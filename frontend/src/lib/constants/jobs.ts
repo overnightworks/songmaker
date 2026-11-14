@@ -1,8 +1,10 @@
 import type { JobItem } from '#lib/api/types.ts';
+import type { TextKey } from '#lib/utils/page-words.ts';
 
 export const JOB_TYPE_GENERATE = 'generate';
 export const JOB_TYPE_SCORE = 'score';
 export const JOB_TYPE_COVER = 'cover';
+export const JOB_TYPE_CHAT = 'chat';
 
 // A job stream reads the job over REST after this many consecutive connection
 // errors. At the delays in `constants/sse-reconnect.ts` that is about three
@@ -16,9 +18,9 @@ export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
 // long enough for the page to resync, short enough that a refresh that never
 // runs does not leave a card behind.
 export const GENERATE_TAKE_ARRIVAL_WAIT_MS = 30_000;
-export const GENERATION_PHASE_LABELS: Record<NonNullable<JobItem['phase']>, string> = {
-	loading_model: 'Loading model…',
-	writing: 'Writing',
-	rendering: 'Rendering',
-	saving_take: 'Saving take'
+export const GENERATION_PHASE_LABELS: Record<NonNullable<JobItem['phase']>, TextKey> = {
+	loading_model: 'generate.phaseLoadingModel',
+	writing: 'generate.phaseWriting',
+	rendering: 'generate.phaseRendering',
+	saving_take: 'generate.phaseSavingTake'
 };

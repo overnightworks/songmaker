@@ -3,6 +3,7 @@
 	import { fetchMediaBytes } from '#lib/api/fetch.ts';
 	import { readVizColors } from '#lib/utils/visualizer.ts';
 	import { theme } from '#lib/stores/ui.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 
 	interface Props {
 		audioUrl: string;
@@ -183,7 +184,7 @@
 		onpointermove={onPointerMove}
 		onpointerup={onPointerUp}
 		role="slider"
-		aria-label="Repaint start"
+		aria-label={pageText('takeTask.repaintStart')}
 		aria-valuenow={Math.round(startPercent * 100)}
 		tabindex="0"
 	></div>
@@ -194,14 +195,14 @@
 		onpointermove={onPointerMove}
 		onpointerup={onPointerUp}
 		role="slider"
-		aria-label="Repaint end"
+		aria-label={pageText('takeTask.repaintEnd')}
 		aria-valuenow={Math.round(endPercent * 100)}
 		tabindex="0"
 	></div>
 	<audio bind:this={audioEl} src={audioUrl} preload="auto" onended={stopPreview}></audio>
 	<div class="time-display">
 		<span>{startTime}</span>
-		<button class="preview-btn" onclick={togglePreview} title="Preview selected range">
+		<button class="preview-btn" onclick={togglePreview} title={pageText('takeTask.previewRange')}>
 			{playing ? '\u25A0' : '\u25B6'}
 		</button>
 		<span>{endTime}</span>

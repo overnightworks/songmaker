@@ -1,15 +1,11 @@
 <script lang="ts">
 	import {
-		EDITOR_GENERATE_CANCEL_LABEL,
-		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-		EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
-	} from '#lib/constants/song.ts';
-	import {
 		cancelGeneration,
 		generateAction,
 		isGenerateJobActive,
 		offersCancel
 	} from '#lib/stores/generateAction.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
@@ -34,7 +30,7 @@
 	<div class="status-slot" class:reconnecting>
 		<div class="status-head">
 			<span class="status-title">
-				v{latestVersionNumber} ·
+				{pageText('generate.versionLabel', { version: String(latestVersionNumber) })} ·
 				<b
 					>{presentation.kind === 'queued'
 						? presentation.label
@@ -50,8 +46,8 @@
 					class:unreachable={cancelUnreachable}
 					data-hitbox="frequent"
 					aria-label={cancelUnreachable
-						? EDITOR_GENERATE_CANCEL_OFFLINE_LABEL
-						: EDITOR_GENERATE_CANCEL_LABEL}
+						? pageText('generate.cancelOffline')
+						: pageText('generate.cancel')}
 					aria-disabled={cancelUnreachable}
 					onclick={() => {
 						if (!cancelUnreachable) void cancelGeneration(presentation.jobId);
@@ -64,7 +60,7 @@
 		<div
 			class="bar"
 			role="progressbar"
-			aria-label={reconnecting ? EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL : undefined}
+			aria-label={reconnecting ? pageText('generate.lastKnownProgress') : undefined}
 			aria-valuenow={indeterminate ? undefined : percent}
 			aria-valuetext={indeterminate && presentation.kind === 'generating'
 				? presentation.phase

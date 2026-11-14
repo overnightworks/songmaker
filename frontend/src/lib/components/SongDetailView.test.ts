@@ -26,7 +26,6 @@ import { phoneAppBar } from '#lib/stores/ui.ts';
 import PhoneAppBar from './PhoneAppBar.svelte';
 
 import type { JobItem, SongItem } from '#lib/api/types.ts';
-import { EDITOR_GENERATE_LABEL, EDITOR_GENERATING_LABEL } from '#lib/constants/song.ts';
 import { COMPACT_LAYOUT_MAX_PX } from '#lib/constants/media.ts';
 import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { menuRow } from '#lib/test-utils/collection-menu.ts';
@@ -157,7 +156,7 @@ describe('SongDetailView header — one row, every state', () => {
 		expect(visibleText(actions)).not.toContain(words['recipe.panel']);
 		expect(target.querySelectorAll('.generate-action .primary-button')).toHaveLength(1);
 		expect(target.querySelector('.generate-action .primary-button')?.textContent).toContain(
-			EDITOR_GENERATE_LABEL
+			words['generate.button']
 		);
 	});
 
@@ -640,7 +639,7 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 		const target = await renderView();
 		const generateBtn = () =>
 			Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
-				(el) => el.textContent?.trim() === EDITOR_GENERATE_LABEL
+				(el) => el.textContent?.trim() === words['generate.button']
 			);
 		expect(generateBtn()?.disabled).toBe(true);
 
@@ -660,7 +659,7 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 			await tick();
 
 			expect(target.querySelector('.generate-action .primary-button')?.textContent?.trim()).toBe(
-				EDITOR_GENERATE_LABEL
+				words['generate.button']
 			);
 		}
 	);
@@ -688,7 +687,7 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 		expect(action.textContent).toContain(cause);
 		expect(target.querySelector('.takes-list')?.textContent ?? '').not.toContain(cause);
 		expect(action.querySelectorAll('button')).toHaveLength(1);
-		getByRoleButton(action, EDITOR_GENERATE_LABEL).click();
+		getByRoleButton(action, words['generate.button']).click();
 		await vi.waitFor(() =>
 			expect(action.querySelector('[role="status"]')?.textContent).toContain('Queued')
 		);
@@ -771,7 +770,7 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 
 		expect(target.querySelector('.generate-action .primary-button')).toBeNull();
 		expect(target.querySelector('.generate-action [role="status"]')?.textContent).toContain(
-			EDITOR_GENERATING_LABEL
+			words['generate.generating']
 		);
 
 		resolveGenerate(jobStatus({ status: 'completed' }));

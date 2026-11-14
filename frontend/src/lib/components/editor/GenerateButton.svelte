@@ -2,12 +2,6 @@
 	import { resolve } from '$app/paths';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { followAppPageLink } from '#lib/stores/navigation.ts';
-	import {
-		EDITOR_GENERATE_CANCEL_LABEL,
-		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-		EDITOR_GENERATE_LABEL,
-		EDITOR_OPEN_WORKER_POOL_LABEL
-	} from '#lib/constants/song.ts';
 	import { ADMIN_WORKER_POOL_HREF } from '#lib/constants/admin.ts';
 	import {
 		cancelGeneration,
@@ -17,6 +11,7 @@
 		offersCancel,
 		type GenerateState
 	} from '#lib/stores/generateAction.ts';
+	import { pageText } from '#lib/utils/page-words.ts';
 	import Icon from '../Icon.svelte';
 	import SeedChip from './SeedChip.svelte';
 
@@ -78,8 +73,8 @@
 				class:unreachable={cancelUnreachable}
 				data-hitbox="frequent"
 				aria-label={cancelUnreachable
-					? EDITOR_GENERATE_CANCEL_OFFLINE_LABEL
-					: EDITOR_GENERATE_CANCEL_LABEL}
+					? pageText('generate.cancelOffline')
+					: pageText('generate.cancel')}
 				aria-disabled={cancelUnreachable}
 				onclick={() => {
 					if (!cancelUnreachable) void cancelGeneration(jobId);
@@ -100,14 +95,14 @@
 			title={presentation.kind === 'disabled' ? (presentation.reason ?? undefined) : undefined}
 			aria-label={reasonInsideButton === null
 				? undefined
-				: `${EDITOR_GENERATE_LABEL} — ${reasonInsideButton}`}
+				: pageText('generate.disabledButton', { reason: reasonInsideButton })}
 			onclick={() => void generate()}
 		>
 			{#if reasonInsideButton !== null}
 				{@render disabledReason(reasonInsideButton)}
 			{:else}
 				{#if presentation.kind === 'failed'}<Icon name="triangle-alert" />{/if}
-				{EDITOR_GENERATE_LABEL}
+				{pageText('generate.button')}
 			{/if}
 		</button>
 		{#if presentation.kind === 'disabled' && presentation.reason !== null && reasonInsideButton === null}
@@ -118,7 +113,7 @@
 					<a
 						href={resolve(ADMIN_WORKER_POOL_HREF)}
 						onclick={(event) => followAppPageLink(event, ADMIN_WORKER_POOL_HREF)}
-						>{EDITOR_OPEN_WORKER_POOL_LABEL}</a
+						>{pageText('generate.openWorkerPool')}</a
 					>
 				{/if}
 			</p>

@@ -19,7 +19,6 @@ import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from './coverage-test';
 import { COWRITER_TURN_PATH } from '../src/lib/constants/cowriter';
 import { words } from '../src/lib/words/en';
-import { EDITOR_GENERATE_LABEL, EDITOR_GENERATE_TAKE_TEMPLATE } from '../src/lib/constants/song';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants/transport';
 import {
 	appBar,
@@ -63,10 +62,10 @@ const RUNNING_JOB = {
 	phase: 'rendering',
 	generationStartedOffsetSeconds: 64
 } as const;
-const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
-	'{index}',
-	String(RUNNING_JOB.takeIndex)
-).replace('{count}', String(RUNNING_JOB.takeCount));
+const RUNNING_JOB_TAKE_COUNTER = words['generate.takeOfCount']({
+	index: String(RUNNING_JOB.takeIndex),
+	count: RUNNING_JOB.takeCount
+});
 const RUNNING_JOB_PERCENT = `${Math.round(RUNNING_JOB.progress * 100)}%`;
 
 async function showOnScreenKeyboard(page: Page, open: boolean): Promise<void> {
@@ -101,7 +100,7 @@ function reservedTransportBarRoom(page: Page): Promise<string> {
 function generateButton(page: Page): Locator {
 	return page
 		.getByRole('tabpanel')
-		.getByRole('button', { name: nameStartingWith(EDITOR_GENERATE_LABEL) });
+		.getByRole('button', { name: nameStartingWith(words['generate.button']) });
 }
 
 // Opens a freshly seeded song from its album row, the way a musician reaches

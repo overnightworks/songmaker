@@ -58,7 +58,7 @@ def _training_remaining_time(job, *, now: datetime) -> RemainingTimeEstimate:
 
 class JobResponse(BaseModel):
     id: str
-    type: str
+    type: JobType
     status: str
     version_id: str | None = None
     progress: float = 0.0

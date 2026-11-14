@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from './coverage-test';
 import { words } from '../src/lib/words/en';
-import { EDITOR_OPEN_WORKER_POOL_LABEL } from '../src/lib/constants/song';
 import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL } from './helpers';
 import {
 	archiveAlbumOfAddress,
@@ -108,7 +107,7 @@ for (const width of WIDTHS) {
 async function expectLine(page: Page, role: Role): Promise<void> {
 	const failure = page.locator('.generate-action:visible .failure');
 	await expect(failure).toContainText(UNAVAILABLE);
-	await expect(failure.getByRole('link', { name: EDITOR_OPEN_WORKER_POOL_LABEL })).toHaveCount(
+	await expect(failure.getByRole('link', { name: words['generate.openWorkerPool'] })).toHaveCount(
 		role === 'admin' ? 1 : 0
 	);
 }

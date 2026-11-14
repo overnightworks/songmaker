@@ -2,14 +2,6 @@ import { currentUser } from '#lib/stores/auth.ts';
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-	EDITOR_GENERATE_CANCEL_LABEL,
-	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-	EDITOR_GENERATE_LABEL,
-	EDITOR_MISSING_CONTENT_TITLE,
-	EDITOR_NO_MODELS_WARNING,
-	EDITOR_SELECT_MODEL_TITLE
-} from '#lib/constants/song.ts';
 import { HITBOX_FREQUENT_PX } from '#lib/constants/hitbox.ts';
 import { seedFromTake } from '#lib/stores/recipe.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';
@@ -38,6 +30,7 @@ vi.mock('#lib/stores/generateAction.ts', async (importOriginal) => ({
 import { cancelGeneration, generate, type GenerateState } from '#lib/stores/generateAction.ts';
 import GenerateButton from './GenerateButton.svelte';
 import generateButtonSource from './GenerateButton.svelte?raw';
+import { words } from '#lib/words/en.ts';
 
 let component: ReturnType<typeof mount>;
 
@@ -87,7 +80,7 @@ describe('GenerateButton', () => {
 
 	it('generates with a single word and no version (S4, #1923 acceptance 3)', async () => {
 		await render({ kind: 'idle' });
-		const button = getByRoleButton(document.body, EDITOR_GENERATE_LABEL);
+		const button = getByRoleButton(document.body, words['generate.button']);
 		expect(button.disabled).toBe(false);
 		expect(document.body.querySelectorAll('button')).toHaveLength(1);
 		button.click();
@@ -119,8 +112,8 @@ describe('GenerateButton', () => {
 		await render(queued);
 		expect(document.body.querySelector('[role="status"]')?.textContent?.trim()).toBe('Queued #3');
 		expect(document.body.textContent).toContain(queued.reason);
-		const cancel = getByRoleButton(document.body, EDITOR_GENERATE_CANCEL_LABEL);
-		expect(minSquarePx(cancel, EDITOR_GENERATE_CANCEL_LABEL)).toEqual({
+		const cancel = getByRoleButton(document.body, words['generate.cancel']);
+		expect(minSquarePx(cancel, words['generate.cancel'])).toEqual({
 			width: HITBOX_FREQUENT_PX,
 			height: HITBOX_FREQUENT_PX
 		});
@@ -162,7 +155,7 @@ describe('GenerateButton', () => {
 			expect(
 				document.body.querySelector('[role="status"]')?.textContent?.replace(/\s+/g, ' ').trim()
 			).toBe(expected);
-			getByRoleButton(document.body, EDITOR_GENERATE_CANCEL_LABEL).click();
+			getByRoleButton(document.body, words['generate.cancel']).click();
 			await tick();
 			expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');
 		}
@@ -189,9 +182,9 @@ describe('GenerateButton', () => {
 	});
 
 	it.each([
-		['no active models', EDITOR_NO_MODELS_WARNING],
-		['no model selected', EDITOR_SELECT_MODEL_TITLE],
-		['missing lyrics or style prompt', EDITOR_MISSING_CONTENT_TITLE]
+		['no active models', words['generate.noModels']],
+		['no model selected', words['generate.selectModel']],
+		['missing lyrics or style prompt', words['generate.needsContent']]
 	] as const)(
 		'disables generation as an outline button with its %s reason under ⓘ',
 		async (_state, reason) => {
@@ -207,12 +200,12 @@ describe('GenerateButton', () => {
 
 	it('carries the disabled reason inside the one outline button in the slim phone bar', async () => {
 		await render(
-			{ kind: 'disabled', reason: EDITOR_MISSING_CONTENT_TITLE },
+			{ kind: 'disabled', reason: words['generate.needsContent'] },
 			{ reasonInside: true }
 		);
-		const button = getByRoleButton(document.body, `Generate — ${EDITOR_MISSING_CONTENT_TITLE}`);
+		const button = getByRoleButton(document.body, `Generate — ${words['generate.needsContent']}`);
 		expect(button.disabled).toBe(true);
-		expect(button.textContent?.trim()).toBe(`ⓘ ${EDITOR_MISSING_CONTENT_TITLE}`);
+		expect(button.textContent?.trim()).toBe(`ⓘ ${words['generate.needsContent']}`);
 		expect(document.body.textContent?.trim()).toBe(button.textContent?.trim());
 	});
 
@@ -283,7 +276,7 @@ describe('GenerateButton', () => {
 			expect(fillBackgrounds).toEqual(
 				Array(fills).fill('color-mix(in srgb, var(--text-disabled) 20%, transparent)')
 			);
-			const cancel = getByRoleButton(document.body, EDITOR_GENERATE_CANCEL_OFFLINE_LABEL);
+			const cancel = getByRoleButton(document.body, words['generate.cancelOffline']);
 			expect(cancel.getAttribute('aria-disabled')).toBe('true');
 			expect(getComputedStyle(cancel).color).toBe('var(--text-disabled)');
 			cancel.click();
@@ -295,7 +288,7 @@ describe('GenerateButton', () => {
 	it('keeps the cancel of a take whose stream is refused while the page is online', async () => {
 		await render({ ...running, reconnecting: true, offline: false });
 
-		getByRoleButton(document.body, EDITOR_GENERATE_CANCEL_LABEL).click();
+		getByRoleButton(document.body, words['generate.cancel']).click();
 		await tick();
 
 		expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');

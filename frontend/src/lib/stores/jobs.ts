@@ -2,6 +2,7 @@ import { writable, get } from 'svelte/store';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
+	JOB_TYPE_CHAT,
 	JOB_TYPE_COVER,
 	JOB_TYPE_GENERATE
 } from '#lib/constants/jobs.ts';
@@ -21,11 +22,51 @@ import {
 	watchReconnectOpportunities
 } from '#lib/stores/sseReconnect.ts';
 import { addToast } from '#lib/stores/toast.ts';
+import { pageText, type TextKey } from '#lib/utils/page-words.ts';
 
 // Each job's update changes only that job, and cancelling one job's reconnect
 // leaves the other jobs' timers running.
 
-const SERVER_RESTART_MESSAGE = 'Server restarted — please retry';
+// A cover's end is shown in place and a chat is never tracked, so neither has a toast.
+type TrackedJobType = Exclude<JobStatus['type'], typeof JOB_TYPE_COVER | typeof JOB_TYPE_CHAT>;
+type JobEnd = 'completed' | 'partial' | 'cancelled' | 'failed';
+
+const JOB_END_TEXT = {
+	generate: {
+		completed: 'jobEnd.generateCompleted',
+		partial: 'jobEnd.generatePartial',
+		cancelled: 'jobEnd.generateCancelled',
+		failed: 'jobEnd.generateFailed'
+	},
+	score: {
+		completed: 'jobEnd.scoreCompleted',
+		partial: 'jobEnd.scorePartial',
+		cancelled: 'jobEnd.scoreCancelled',
+		failed: 'jobEnd.scoreFailed'
+	},
+	lora_training: {
+		completed: 'jobEnd.voiceTrainingCompleted',
+		partial: 'jobEnd.voiceTrainingPartial',
+		cancelled: 'jobEnd.voiceTrainingCancelled',
+		failed: 'jobEnd.voiceTrainingFailed'
+	},
+	load_model_on_worker: {
+		completed: 'jobEnd.modelLoadCompleted',
+		partial: 'jobEnd.modelLoadPartial',
+		cancelled: 'jobEnd.modelLoadCancelled',
+		failed: 'jobEnd.modelLoadFailed'
+	},
+	download_model_on_worker: {
+		completed: 'jobEnd.modelDownloadCompleted',
+		partial: 'jobEnd.modelDownloadPartial',
+		cancelled: 'jobEnd.modelDownloadCancelled',
+		failed: 'jobEnd.modelDownloadFailed'
+	}
+} as const satisfies Record<TrackedJobType, Record<JobEnd, TextKey>>;
+
+function jobEndText(type: TrackedJobType, end: JobEnd): string {
+	return pageText(JOB_END_TEXT[type][end]);
+}
 
 export interface ActiveJob {
 	job: JobStatus;
@@ -84,16 +125,16 @@ export function resetGenerationFailuresForTests(): void {
 
 const GENERATION_UNAVAILABLE_ERROR_TYPE = 'generation_unavailable';
 
-type FailureFields = Pick<JobStatus, 'error' | 'error_type' | 'type'>;
+type FailureFields = Pick<JobStatus, 'error' | 'error_type'>;
 
-function failureMessage(job: FailureFields): string {
-	if (job.error_type === 'server_restart') return SERVER_RESTART_MESSAGE;
-	return job.error || `${job.type} failed`;
+function failureMessage(job: FailureFields, type: TrackedJobType): string {
+	if (job.error_type === 'server_restart') return pageText('jobEnd.serverRestart');
+	return job.error || jobEndText(type, 'failed');
 }
 
 function generationFailure(job: FailureFields): GenerationFailure {
 	return {
-		message: failureMessage(job),
+		message: failureMessage(job, JOB_TYPE_GENERATE),
 		unavailable: job.error_type === GENERATION_UNAVAILABLE_ERROR_TYPE
 	};
 }
@@ -118,8 +159,7 @@ export function showGenerationUnavailableRefusal(songId: string, error: unknown)
 	}
 	const failure = generationFailure({
 		error: error.detail,
-		error_type: error.errorType,
-		type: 'generate'
+		error_type: error.errorType
 	});
 	generationFailures.update((failures) => ({ ...failures, [songId]: failure }));
 	return true;
@@ -196,20 +236,20 @@ function endedWithTakes(job: JobStatus): boolean {
 // cover's mark, which coverActivity rereads when the run leaves activeJobs --
 // so a toast would only announce the same outcome a second time.
 function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
-	if (job.type === JOB_TYPE_COVER) return;
+	if (job.type === JOB_TYPE_COVER || job.type === JOB_TYPE_CHAT) return;
 	if (job.status === 'completed') {
-		addToast(`${job.type} completed`, 'success');
+		addToast(jobEndText(job.type, 'completed'), 'success');
 		return;
 	}
 	if (job.status === 'partial') {
-		addToast(job.error || `${job.type} partially completed`, 'info');
+		addToast(job.error || jobEndText(job.type, 'partial'), 'info');
 		return;
 	}
 	if (job.status === 'cancelled') {
-		addToast(`${job.type} cancelled`, 'info');
+		addToast(jobEndText(job.type, 'cancelled'), 'info');
 		return;
 	}
-	const message = failureMessage(job);
+	const message = failureMessage(job, job.type);
 	if (songId && job.type === JOB_TYPE_GENERATE) {
 		generationFailures.update((failures) => ({ ...failures, [songId]: generationFailure(job) }));
 	}

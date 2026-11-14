@@ -2,20 +2,9 @@ import { derived, get, readable, writable } from 'svelte/store';
 import { JOB_TYPE_GENERATE, GENERATION_PHASE_LABELS } from '#lib/constants/jobs.ts';
 import { cancelJob, generateSong } from '#lib/api/client.ts';
 import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
-import {
-	EDITOR_GENERATE_CANCEL_FAILED,
-	EDITOR_GENERATE_LAST_SEEN_TEMPLATE,
-	EDITOR_GENERATE_QUEUED_TEMPLATE,
-	EDITOR_GENERATE_RECONNECTING_LABEL,
-	EDITOR_GENERATE_TAKE_TEMPLATE,
-	EDITOR_GENERATING_LABEL,
-	EDITOR_MISSING_CONTENT_TITLE,
-	EDITOR_NO_MODELS_WARNING,
-	EDITOR_QUEUED_LABEL,
-	EDITOR_SELECT_MODEL_TITLE
-} from '#lib/constants/song.ts';
 import { describeFailure } from '#lib/api/fetch.ts';
-import { formatTime } from '#lib/utils/format.ts';
+import { formatDecimal, formatPercent, formatTime } from '#lib/utils/format.ts';
+import { pageText } from '#lib/utils/page-words.ts';
 import { offline } from './connectivity';
 import {
 	currentVersionIndex,
@@ -59,7 +48,7 @@ function progressPercent(job: JobItem | null): number {
 }
 
 function phaseLabel(job: JobItem | null): string {
-	return job?.phase ? GENERATION_PHASE_LABELS[job.phase] : EDITOR_GENERATING_LABEL;
+	return pageText(job?.phase ? GENERATION_PHASE_LABELS[job.phase] : 'generate.generating');
 }
 
 /**
@@ -69,7 +58,7 @@ function phaseLabel(job: JobItem | null): string {
 function progressReadout(job: JobItem | null): string | null {
 	if (job?.phase === 'loading_model') return null;
 	const remaining = job?.remaining_time_estimate;
-	const parts = [`${progressPercent(job)}%`];
+	const parts = [formatPercent(job?.progress ?? 0)];
 	if (typeof remaining === 'number') parts.push(`~${formatTime(remaining)}`);
 	return parts.join(' · ');
 }
@@ -77,21 +66,21 @@ function progressReadout(job: JobItem | null): string | null {
 /** The progress the job last reported, while reconnecting; loading a model reports none (see `progressReadout`). */
 function lastSeenReadout(job: JobItem | null): string | null {
 	if (job?.phase === 'loading_model') return null;
-	return EDITOR_GENERATE_LAST_SEEN_TEMPLATE.replace('{percent}', String(progressPercent(job)));
+	return pageText('generate.lastSeen', { percent: formatPercent(job?.progress ?? 0) });
 }
 
 function queuedLabel(position: number | null): string {
 	return position === null
-		? EDITOR_QUEUED_LABEL
-		: EDITOR_GENERATE_QUEUED_TEMPLATE.replace('{position}', String(position));
+		? pageText('generate.queued')
+		: pageText('generate.queuedPosition', { position: formatDecimal(position, 0) });
 }
 
 function takeCounterLabel(job: JobItem | null): string | null {
 	if (job?.take_index == null || job.take_count == null || job.take_count <= 1) return null;
-	return EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', String(job.take_index)).replace(
-		'{count}',
-		String(job.take_count)
-	);
+	return pageText('generate.takeOfCount', {
+		index: String(job.take_index),
+		count: job.take_count
+	});
 }
 
 // A completed job made every take it announced; a partial one made fewer and
@@ -186,9 +175,9 @@ function disabledReasonFor(input: {
 	model: string | null;
 	models: unknown[];
 }): string {
-	if (!input.lyrics || !input.prompt) return EDITOR_MISSING_CONTENT_TITLE;
+	if (!input.lyrics || !input.prompt) return pageText('generate.needsContent');
 	if (input.model === null) {
-		return input.models.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
+		return pageText(input.models.length === 0 ? 'generate.noModels' : 'generate.selectModel');
 	}
 	return '';
 }
@@ -204,7 +193,7 @@ function queuedState(
 		kind: 'queued',
 		jobId: job.id,
 		label: reconnecting
-			? EDITOR_GENERATE_RECONNECTING_LABEL
+			? pageText('generate.reconnecting')
 			: queuedLabel(job.queue_position ?? null),
 		reason: job.queue_reason ?? null,
 		reconnecting,
@@ -222,7 +211,7 @@ function generatingState(
 		jobId: job?.id ?? null,
 		indeterminate: job?.phase === 'loading_model',
 		elapsedLabel: null,
-		phase: reconnecting ? EDITOR_GENERATE_RECONNECTING_LABEL : phaseLabel(job),
+		phase: reconnecting ? pageText('generate.reconnecting') : phaseLabel(job),
 		takeCounter: takeCounterLabel(job),
 		progress: progressPercent(job),
 		readout: reconnecting ? lastSeenReadout(job) : progressReadout(job),
@@ -352,7 +341,7 @@ async function startJobFromEditor(
 		trackJob(job, { songId: song.id });
 	} catch (e) {
 		if (!showGenerationUnavailableRefusal(song.id, e)) {
-			addToast(describeFailure(e, 'Generation failed'), 'error');
+			addToast(describeFailure(e, pageText('generate.startFailed')), 'error');
 		}
 	} finally {
 		requestInFlight.set(false);
@@ -404,6 +393,6 @@ export async function cancelGeneration(jobId: string): Promise<void> {
 	try {
 		await cancelJob(jobId);
 	} catch (error) {
-		addToast(describeFailure(error, EDITOR_GENERATE_CANCEL_FAILED), 'error');
+		addToast(describeFailure(error, pageText('generate.cancelFailed')), 'error');
 	}
 }

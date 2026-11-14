@@ -2789,6 +2789,18 @@ msgctxt "takeTask.repaintPress"
 msgid "Repaint {start} – {end}"
 msgstr ""
 
+msgctxt "takeTask.repaintStart"
+msgid "Repaint start"
+msgstr ""
+
+msgctxt "takeTask.repaintEnd"
+msgid "Repaint end"
+msgstr ""
+
+msgctxt "takeTask.previewRange"
+msgid "Preview selected range"
+msgstr ""
+
 msgctxt "seedChip.label"
 msgid "Seed · take {number}"
 msgstr ""
@@ -5059,4 +5071,176 @@ msgstr ""
 
 msgctxt "aboutPage.licence"
 msgid "Licence"
+msgstr ""
+
+msgctxt "generate.button"
+msgid "Generate"
+msgstr ""
+
+msgctxt "generate.disabledButton"
+msgid "Generate — {reason}"
+msgstr ""
+
+msgctxt "generate.openWorkerPool"
+msgid "Open worker pool"
+msgstr ""
+
+msgctxt "generate.cancel"
+msgid "Cancel generation"
+msgstr ""
+
+msgctxt "generate.cancelOffline"
+msgid "Cancel generation (unavailable while offline)"
+msgstr ""
+
+msgctxt "generate.cancelFailed"
+msgid "Could not cancel generation"
+msgstr ""
+
+msgctxt "generate.lastKnownProgress"
+msgid "Last known progress"
+msgstr ""
+
+msgctxt "generate.versionLabel"
+msgid "v{version}"
+msgstr ""
+
+msgctxt "generate.queued"
+msgid "Queued"
+msgstr ""
+
+msgctxt "generate.queuedPosition"
+msgid "Queued #{position}"
+msgstr ""
+
+msgctxt "generate.takeOfCount"
+msgid "Take {index} of {count}"
+msgstr ""
+
+msgctxt "generate.generating"
+msgid "Generating..."
+msgstr ""
+
+msgctxt "generate.reconnecting"
+msgid "Reconnecting…"
+msgstr ""
+
+msgctxt "generate.lastSeen"
+msgid "last seen at {percent}"
+msgstr ""
+
+msgctxt "generate.phaseLoadingModel"
+msgid "Loading model…"
+msgstr ""
+
+msgctxt "generate.phaseWriting"
+msgid "Writing"
+msgstr ""
+
+msgctxt "generate.phaseRendering"
+msgid "Rendering"
+msgstr ""
+
+msgctxt "generate.phaseSavingTake"
+msgid "Saving take"
+msgstr ""
+
+msgctxt "generate.needsContent"
+msgid "Add lyrics and style prompt first"
+msgstr ""
+
+msgctxt "generate.noModels"
+msgid "No models enabled. Ask admin to enable one."
+msgstr ""
+
+msgctxt "generate.selectModel"
+msgid "Select a model first"
+msgstr ""
+
+msgctxt "generate.startFailed"
+msgid "Generation failed"
+msgstr ""
+
+msgctxt "jobEnd.serverRestart"
+msgid "Server restarted — please retry"
+msgstr ""
+
+msgctxt "jobEnd.generateCompleted"
+msgid "generate completed"
+msgstr ""
+
+msgctxt "jobEnd.generatePartial"
+msgid "generate partially completed"
+msgstr ""
+
+msgctxt "jobEnd.generateCancelled"
+msgid "generate cancelled"
+msgstr ""
+
+msgctxt "jobEnd.generateFailed"
+msgid "generate failed"
+msgstr ""
+
+msgctxt "jobEnd.scoreCompleted"
+msgid "score completed"
+msgstr ""
+
+msgctxt "jobEnd.scorePartial"
+msgid "score partially completed"
+msgstr ""
+
+msgctxt "jobEnd.scoreCancelled"
+msgid "score cancelled"
+msgstr ""
+
+msgctxt "jobEnd.scoreFailed"
+msgid "score failed"
+msgstr ""
+
+msgctxt "jobEnd.voiceTrainingCompleted"
+msgid "lora_training completed"
+msgstr ""
+
+msgctxt "jobEnd.voiceTrainingPartial"
+msgid "lora_training partially completed"
+msgstr ""
+
+msgctxt "jobEnd.voiceTrainingCancelled"
+msgid "lora_training cancelled"
+msgstr ""
+
+msgctxt "jobEnd.voiceTrainingFailed"
+msgid "lora_training failed"
+msgstr ""
+
+msgctxt "jobEnd.modelLoadCompleted"
+msgid "load_model_on_worker completed"
+msgstr ""
+
+msgctxt "jobEnd.modelLoadPartial"
+msgid "load_model_on_worker partially completed"
+msgstr ""
+
+msgctxt "jobEnd.modelLoadCancelled"
+msgid "load_model_on_worker cancelled"
+msgstr ""
+
+msgctxt "jobEnd.modelLoadFailed"
+msgid "load_model_on_worker failed"
+msgstr ""
+
+msgctxt "jobEnd.modelDownloadCompleted"
+msgid "download_model_on_worker completed"
+msgstr ""
+
+msgctxt "jobEnd.modelDownloadPartial"
+msgid "download_model_on_worker partially completed"
+msgstr ""
+
+msgctxt "jobEnd.modelDownloadCancelled"
+msgid "download_model_on_worker cancelled"
+msgstr ""
+
+msgctxt "jobEnd.modelDownloadFailed"
+msgid "download_model_on_worker failed"
 msgstr ""
