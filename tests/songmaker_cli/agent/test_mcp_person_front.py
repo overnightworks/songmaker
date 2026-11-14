@@ -102,6 +102,28 @@ def test_the_description_of_generate_names_the_valid_models(mcp: McpWorld) -> No
     assert all(model in generate["description"] for model in MODEL_AVAILABLE_MODES)
 
 
+def _schema_titles(schema: object) -> list[str]:
+    """The ``title`` keywords of a JSON schema; a property that is named title is no keyword."""
+    if isinstance(schema, list):
+        return [found for item in schema for found in _schema_titles(item)]
+    if not isinstance(schema, dict):
+        return []
+    titles = [schema["title"]] if isinstance(schema.get("title"), str) else []
+    for key, value in schema.items():
+        if key == "properties" and isinstance(value, dict):
+            titles += [found for sub in value.values() for found in _schema_titles(sub)]
+        else:
+            titles += _schema_titles(value)
+    return titles
+
+
+def test_no_served_input_schema_carries_a_title(mcp: McpWorld) -> None:
+    reply = mcp.rpc("tools/list", headers=mcp.agent())
+
+    served = reply.json()["result"]["tools"]
+    assert [_schema_titles(tool["inputSchema"]) for tool in served] == [[]] * len(served)
+
+
 # -- only the person's own content -------------------------------------------
 
 
