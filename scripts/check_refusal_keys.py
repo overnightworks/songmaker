@@ -473,18 +473,19 @@ def _base_problems(
     """Rule (c): a key the set lost since the base commit, and no added migration retires."""
     shown = str(stored_file)
     directory = stored_file.parent
-    if not COMMIT_ID_PATTERN.fullmatch(base_sha) or _git(
-        directory, "rev-parse", "--verify", "--quiet", f"{base_sha}^{{commit}}"
+    commit_id = COMMIT_ID_PATTERN.fullmatch(base_sha)
+    if commit_id is None or _git(
+        directory, "rev-parse", "--verify", "--quiet", f"{commit_id[0]}^{{commit}}"
     ).returncode:
         problem = f"the base commit {base_sha} cannot be resolved; fetch the history"
         return [Violation(shown, 1, problem)]
-    base = _git(directory, "show", f"{base_sha}:./{stored_file.name}")
+    base = _git(directory, "show", f"{commit_id[0]}:./{stored_file.name}")
     dropped = (read_stored_keys(base.stdout) if base.returncode == 0 else set()) - stored
     if not dropped:
         return []
     added = _git(
         migrations_directory, "diff", "--name-only", "--relative", "--diff-filter=A",
-        base_sha, "HEAD", "--", ".",
+        commit_id[0], "HEAD", "--", ".",
     )
     retired = {
         key
