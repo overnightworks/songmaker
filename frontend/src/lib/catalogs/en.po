@@ -5185,10 +5185,6 @@ msgctxt "jobEnd.voiceTrainingPartial"
 msgid "lora_training partially completed"
 msgstr ""
 
-msgctxt "jobEnd.voiceTrainingCancelled"
-msgid "lora_training cancelled"
-msgstr ""
-
 msgctxt "jobEnd.voiceTrainingFailed"
 msgid "lora_training failed"
 msgstr ""

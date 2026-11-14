@@ -4,7 +4,8 @@ import {
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
 	JOB_TYPE_CHAT,
 	JOB_TYPE_COVER,
-	JOB_TYPE_GENERATE
+	JOB_TYPE_GENERATE,
+	JOB_TYPE_LORA_TRAINING
 } from '#lib/constants/jobs.ts';
 import {
 	fetchActiveGeneration,
@@ -47,7 +48,6 @@ const JOB_END_TEXT = {
 	lora_training: {
 		completed: 'jobEnd.voiceTrainingCompleted',
 		partial: 'jobEnd.voiceTrainingPartial',
-		cancelled: 'jobEnd.voiceTrainingCancelled',
 		failed: 'jobEnd.voiceTrainingFailed'
 	},
 	load_model_on_worker: {
@@ -62,10 +62,12 @@ const JOB_END_TEXT = {
 		cancelled: 'jobEnd.modelDownloadCancelled',
 		failed: 'jobEnd.modelDownloadFailed'
 	}
-} as const satisfies Record<TrackedJobType, Record<JobEnd, TextKey>>;
+} as const satisfies Record<TrackedJobType, Partial<Record<JobEnd, TextKey>>>;
 
 function jobEndText(type: TrackedJobType, end: JobEnd): string {
-	return pageText(JOB_END_TEXT[type][end]);
+	const key = (JOB_END_TEXT[type] as Partial<Record<JobEnd, TextKey>>)[end];
+	if (key === undefined) throw new Error(`${type} has no job-end text for ${end}`);
+	return pageText(key);
 }
 
 export interface ActiveJob {
@@ -246,6 +248,7 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 		return;
 	}
 	if (job.status === 'cancelled') {
+		if (job.type === JOB_TYPE_LORA_TRAINING) return;
 		addToast(jobEndText(job.type, 'cancelled'), 'info');
 		return;
 	}

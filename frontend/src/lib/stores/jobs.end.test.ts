@@ -83,7 +83,9 @@ describe('the sentence a tracked job shows when it ends', () => {
 				'download_model_on_worker'
 			] as const
 		).flatMap((type) =>
-			ENDS.map(([status, words]) => ({ type, status, sentence: `${type} ${words}` }))
+			ENDS.filter(([status]) => !(type === 'lora_training' && status === 'cancelled')).map(
+				([status, words]) => ({ type, status, sentence: `${type} ${words}` })
+			)
 		)
 	)(
 		'$type $status shows "$sentence" without a stored error',
@@ -100,6 +102,10 @@ describe('the sentence a tracked job shows when it ends', () => {
 			]);
 		}
 	);
+
+	it('a cancelled voice training raises no toast, the voice page says so in place', async () => {
+		expect(await endJob({ type: 'lora_training', status: 'cancelled' })).toEqual([]);
+	});
 
 	it('a chat job raises no toast', async () => {
 		expect(await endJob({ type: 'chat', status: 'completed' })).toEqual([]);

@@ -5,6 +5,7 @@ export const JOB_TYPE_GENERATE = 'generate';
 export const JOB_TYPE_SCORE = 'score';
 export const JOB_TYPE_COVER = 'cover';
 export const JOB_TYPE_CHAT = 'chat';
+export const JOB_TYPE_LORA_TRAINING = 'lora_training';
 
 // A job stream reads the job over REST after this many consecutive connection
 // errors. At the delays in `constants/sse-reconnect.ts` that is about three

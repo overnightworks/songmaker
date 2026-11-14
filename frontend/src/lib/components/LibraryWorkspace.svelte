@@ -32,7 +32,6 @@
 	import SongDetailView from './SongDetailView.svelte';
 	import AlbumDetailView from './AlbumDetailView.svelte';
 	import PlaylistDetailView from './PlaylistDetailView.svelte';
-	import ToastContainer from './ToastContainer.svelte';
 
 	let modelsReady = $state(activeModelsLoaded);
 
@@ -104,8 +103,6 @@
 		</main>
 	</div>
 {/if}
-
-<ToastContainer />
 
 <style>
 	.library-root {
