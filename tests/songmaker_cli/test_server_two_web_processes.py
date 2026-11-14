@@ -125,7 +125,9 @@ def test_a_killed_process_leaves_the_other_serving(two_processes) -> None:
     )
 
 
-def test_a_failing_case_leaves_no_child_behind(tmp_path: Path, extra_pg_factory, redis_url: str) -> None:
+def test_a_failing_case_leaves_no_child_behind(
+    tmp_path: Path, extra_pg_factory, redis_url: str,
+) -> None:
     database_url = extra_pg_factory().kw["bind"].url.render_as_string(hide_password=False)
     started: list[WebProcess] = []
 
