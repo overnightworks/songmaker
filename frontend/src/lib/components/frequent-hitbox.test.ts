@@ -70,7 +70,8 @@ vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
 		persistLibraryHistory: vi.fn()
 	};
 });
-vi.mock('#lib/stores/toast.ts', () => ({
+vi.mock('#lib/stores/toast.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/toast.ts')>()),
 	addToast: vi.fn()
 }));
 vi.mock('$app/navigation', async () =>
