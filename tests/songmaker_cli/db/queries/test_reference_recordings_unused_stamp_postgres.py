@@ -15,7 +15,7 @@ from support.postgres_lock_harness import (
     wrote_to_tables,
 )
 from support.reference_rows import a_reference
-from support.web_app import make_test_app, seed_session
+from support.web_app import make_test_app, refusal_body, seed_session
 
 from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, User, Version
 from songmaker_cli.db.queries.reference_recordings import (
@@ -215,5 +215,5 @@ def test_a_keep_request_that_waits_for_a_delete_that_commits_first_answers_not_f
 
     assert answers["first"].status_code == 204
     assert answers["second"].status_code == 404
-    assert answers["second"].json() == {"detail": "Not Found"}
+    assert answers["second"].json() == refusal_body("referenceRefusal.notFound")
     assert not world.exists()
